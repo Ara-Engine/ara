@@ -90,6 +90,9 @@ pub struct Setup {
 #[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq)]
 #[serde(rename_all = "camelCase", default)]
 pub struct Engine {
+    /// Hub owns the files and can uninstall them; external builds are unregister-only.
+    #[serde(skip_serializing)]
+    pub managed: bool,
     /// Version matched by project pins.
     pub version: String,
     /// Absolute `ara` CLI path.

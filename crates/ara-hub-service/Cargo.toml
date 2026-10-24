@@ -7,6 +7,7 @@ rust-version.workspace = true
 publish.workspace = true
 
 [dependencies]
+ara-update = { path = "../ara-update" }
 ara-diag.workspace = true
 ara-host.workspace = true
 ara-json.workspace = true
@@ -20,3 +21,6 @@ windows-sys = { workspace = true, features = ["Win32_Foundation", "Win32_System_
 
 [lints]
 workspace = true
+
+[dev-dependencies]
+ara-update = { path = "../ara-update", features = ["test-support"] }

@@ -2,3 +2,8 @@
 # Three heavy-target measurements and correctness gates: docs/dev/linking.md.
 [target.x86_64-pc-windows-msvc]
 linker = "rust-lld.exe"
+# Builds and tests run from a checkout never touch the real user profile
+# (%APPDATA%\Ara on Windows): `cargo run`/`cargo test` point Ara at a scratch
+# config under target/. An explicitly set ARA_CONFIG_DIR still wins.
+[env]
+ARA_CONFIG_DIR = { value = "target/ara-config", relative = true }

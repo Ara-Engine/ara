@@ -1,0 +1,33 @@
+[package]
+name = "ara-update"
+description = "Signed GitHub releases, resumable downloads and atomic Ara installs"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+ara-diag.workspace = true
+ara-json.workspace = true
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true, features = ["preserve_order", "float_roundtrip"] }
+reqwest = { version = "0.12", default-features = false, features = ["blocking", "rustls-tls"] }
+tokio = { version = "1", features = ["rt", "time", "net", "macros"] }
+ed25519-dalek = "2"
+sha2.workspace = true
+hex = "0.4"
+getrandom = { version = "0.3", optional = true }
+semver = { version = "1", features = ["serde"] }
+zip = { workspace = true, features = ["deflate"] }
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { workspace = true, features = ["Win32_Foundation", "Win32_System_Threading"] }
+
+[features]
+test-support = ["dep:getrandom"]
+
+[dev-dependencies]
+ara-update = { path = ".", features = ["test-support"] }
+
+[lints]
+workspace = true

@@ -8,6 +8,7 @@ pub mod cooked;
 pub mod descriptors;
 #[cfg(target_os = "macos")]
 pub mod metal;
+pub mod shared;
 pub mod vulkan;
 
 pub use ash::vk;
@@ -52,9 +53,17 @@ pub enum GpuError {
     /// Caller violated a typed API precondition.
     #[error("ARA_GPU_CONTRACT: {0}")]
     Contract(String),
+    /// A shared surface (cross-process GPU memory) cannot be exported or imported:
+    /// unsupported platform or extension, or a different GPU/driver on each side.
+    #[error("ARA_GPU_EXTERNAL: {0}")]
+    External(String),
 }
 /// GPU operations return structured failures.
 pub type Result<T> = std::result::Result<T, GpuError>;
+
+/// `ARA_GPU_EXTERNAL`: a shared surface cannot be exported or imported (named-code
+/// slot 6006, documented in `ara-diag/codes/gpu.md`).
+pub const GPU_EXTERNAL: ara_diag::Code = ara_diag::Code(6006);
 
 impl From<&GpuError> for ara_diag::Diagnostic {
     /// The error as a bus diagnostic under its `ARA_GPU_*` named code.
@@ -67,6 +76,7 @@ impl From<&GpuError> for ara_diag::Diagnostic {
             ),
             GpuError::Backend(err) => (codes::GPU_BACKEND, format!("{err:#}")),
             GpuError::Contract(m) => (codes::GPU_CONTRACT, m.clone()),
+            GpuError::External(m) => (GPU_EXTERNAL, m.clone()),
         };
         ara_diag::Diagnostic::error(code, message)
     }

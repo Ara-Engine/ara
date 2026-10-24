@@ -28,6 +28,26 @@ pub struct Options {
     pub verify_panels: bool,
     /// Run the Editor UX v2 capture route (menus, Settings, floating windows, tabs).
     pub verify_ux: bool,
+    /// Scene to open instead of the project's main scene (`levels/hangar.scene`).
+    pub scene: Option<String>,
+    /// Start Play (in the Game view) once the window is up.
+    pub play: bool,
+    /// Run the alpha journey route (open, import, place, prefab, C#, Play, failure,
+    /// undo/save/reopen, export) and capture every step.
+    pub verify_journey: bool,
+}
+impl Options {
+    /// Bounded and automated runs (a frame limit, captures, verification routes) keep
+    /// every window hidden and capture offscreen.
+    pub fn offscreen(&self) -> bool {
+        self.frames.is_some()
+            || self.screenshot
+            || self.verify
+            || self.verify_panels
+            || self.verify_ux
+            || self.verify_journey
+            || self.headless
+    }
 }
 impl Default for Options {
     fn default() -> Self {
@@ -44,10 +64,21 @@ impl Default for Options {
             screenshot: false,
             verify_panels: false,
             verify_ux: false,
+            scene: None,
+            play: false,
+            verify_journey: false,
         }
     }
 }
 pub(super) fn prepare(editor: &mut Editor, options: &Options) -> ara_ui::Result<()> {
+    if let Some(scene) = &options.scene {
+        editor.action("editor.scene.open", json!({"scene": scene}))?;
+    }
+    if options.play {
+        editor
+            .queued_commands
+            .push(("play.start".into(), crate::shell::commands::Target::None));
+    }
     if options.sample {
         sample(editor)?;
     }

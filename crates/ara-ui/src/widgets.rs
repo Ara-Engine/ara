@@ -40,7 +40,7 @@ impl Widget {
         let number = |key: &str, default: f64| -> Result<f64> {
             let v = e.attrs.get(key).map_or(Ok(default), |v| v.parse())?;
             if !v.is_finite() {
-                return Err("ARA7044: nonfinite widget number".into());
+                return Err("ARA4044: nonfinite widget number".into());
             }
             Ok(v)
         };
@@ -57,7 +57,7 @@ impl Widget {
                 let step = number("step", 0.01)?;
                 let value = number("value", min)?;
                 if min >= max || step <= 0.0 || value < min || value > max {
-                    return Err("ARA7044: invalid slider range, step or value".into());
+                    return Err("ARA4044: invalid slider range, step or value".into());
                 }
                 Some(Self::Slider {
                     value,
@@ -94,7 +94,7 @@ impl Ui {
         };
         let n = &self.nodes[index];
         let layout = self.tree.layout(n.layout_id)?;
-        let text = n.text.as_ref().ok_or("ARA7044: field text is absent")?;
+        let text = n.text.as_ref().ok_or("ARA4044: field text is absent")?;
         let scroll = input_scroll(
             input,
             text,
@@ -159,7 +159,7 @@ impl Ui {
     pub fn set_checked(&mut self, index: usize, value: bool) -> Result<()> {
         let id = self.node_id(index)?;
         let Some(Widget::Toggle(v)) = self.widgets.get_mut(&id) else {
-            return Err("ARA7044: bool binding requires a toggle".into());
+            return Err("ARA4044: bool binding requires a toggle".into());
         };
         if *v != value {
             *v = value;
@@ -170,7 +170,7 @@ impl Ui {
     /// Push a model value into a slider/splitter, clamping and snapping to its declared range.
     pub fn set_value(&mut self, index: usize, value: f64) -> Result<()> {
         if !value.is_finite() {
-            return Err("ARA7044: nonfinite widget value".into());
+            return Err("ARA4044: nonfinite widget value".into());
         }
         let id = self.node_id(index)?;
         match self.widgets.get_mut(&id) {
@@ -183,7 +183,7 @@ impl Ui {
                 *v = (*min + ((value - *min) / *step).round() * *step).clamp(*min, *max);
             }
             Some(Widget::Splitter(v)) => *v = value.clamp(0.1, 0.9),
-            _ => return Err("ARA7044: numeric binding requires a slider or splitter".into()),
+            _ => return Err("ARA4044: numeric binding requires a slider or splitter".into()),
         }
         if let Some(Widget::Splitter(ratio)) = self.widgets.get(&id) {
             let ratio = *ratio as f32;
@@ -219,10 +219,10 @@ impl Ui {
             open,
         }) = self.widgets.get_mut(&id)
         else {
-            return Err("ARA7044: control is not a choice".into());
+            return Err("ARA4044: control is not a choice".into());
         };
         if selected >= self.nodes[index].element.children.len() {
-            return Err("ARA7044: choice index out of range".into());
+            return Err("ARA4044: choice index out of range".into());
         }
         *value = selected;
         *open = false;
@@ -261,7 +261,7 @@ impl Ui {
     ) -> Result<()> {
         let id = self.node_id(index)?;
         let Some(Widget::Input(input)) = self.widgets.get_mut(&id) else {
-            return Err("ARA7044: control is not a text input".into());
+            return Err("ARA4044: control is not a text input".into());
         };
         let before = input.value().to_owned();
         let changed = input.event(event, clipboard)?;
@@ -287,12 +287,12 @@ impl Ui {
         use parley::{Affinity, Cursor};
         let id = self.node_id(index)?;
         let Some(Widget::Input(input)) = self.widgets.get(&id) else {
-            return Err("ARA7044: not a field".into());
+            return Err("ARA4044: not a field".into());
         };
         let text = self.nodes[index]
             .text
             .as_ref()
-            .ok_or("ARA7044: missing field text")?;
+            .ok_or("ARA4044: missing field text")?;
         let cursor = Cursor::from_byte_index(&text.layout, input.caret(), Affinity::Downstream);
         let next = if right {
             cursor.next_visual(&text.layout)
@@ -326,7 +326,7 @@ impl Ui {
         self.nodes
             .get(index)
             .map(|n| stable_id(&n.element.id))
-            .ok_or_else(|| "ARA7044: invalid node handle".into())
+            .ok_or_else(|| "ARA4044: invalid node handle".into())
     }
     pub(crate) fn emit(&mut self, index: usize, value: serde_json::Value) {
         if let Some(name) = self.nodes[index].element.attrs.get("action") {
@@ -340,11 +340,11 @@ impl Ui {
     /// Scroll retained content without changing its geometry or the viewport clip.
     pub fn scroll_to(&mut self, index: usize, position: [f32; 2]) -> Result<()> {
         if position.iter().any(|v| !v.is_finite()) {
-            return Err("ARA7044: invalid scroll position".into());
+            return Err("ARA4044: invalid scroll position".into());
         }
         let id = self.node_id(index)?;
         if !matches!(self.widgets.get(&id), Some(Widget::Scroll(_))) {
-            return Err("ARA7044: not a scroll view".into());
+            return Err("ARA4044: not a scroll view".into());
         }
         let node = &self.nodes[index];
         let viewport = self.tree.layout(node.layout_id)?;

@@ -6,6 +6,7 @@ mod call;
 mod create;
 pub mod engines;
 pub mod text;
+pub mod updates;
 mod wire;
 
 pub use call::Call;
@@ -37,15 +38,18 @@ pub enum View {
     Agents,
     /// Samples and docs.
     Learn,
+    /// Release channel, feed and Hub update controls.
+    Settings,
 }
 impl View {
     /// Sidebar order.
-    pub const ALL: [View; 5] = [
+    pub const ALL: [View; 6] = [
         View::Projects,
         View::Create,
         View::Installs,
         View::Agents,
         View::Learn,
+        View::Settings,
     ];
     /// Sidebar label and page title.
     pub fn title(self) -> &'static str {
@@ -55,6 +59,7 @@ impl View {
             View::Installs => "Installs",
             View::Agents => "Agents",
             View::Learn => "Learn",
+            View::Settings => "Settings",
         }
     }
     /// Lucide icon name.
@@ -65,6 +70,7 @@ impl View {
             View::Installs => "hard-drive",
             View::Agents => "bot",
             View::Learn => "graduation-cap",
+            View::Settings => "refresh-cw",
         }
     }
 }
@@ -206,6 +212,12 @@ pub enum Pick {
 /// Native work the window performs for the model.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Effect {
+    /// Launch the external updater and exit only this GUI.
+    ApplyUpdate {
+        archive: PathBuf,
+        manifest: String,
+        signature: String,
+    },
     /// Show a folder picker; the answer comes back as [`Intent::Picked`].
     Pick(Pick),
     /// Select a folder in Explorer.
@@ -219,6 +231,26 @@ pub enum Effect {
 /// Everything a person can do in the Hub.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Intent {
+    /// Refresh signed release metadata in the background.
+    CheckUpdates,
+    /// Refresh release jobs after a progress notification.
+    RefreshDownloads,
+    /// Stable or preview releases, persisted by the service.
+    ReleaseChannel(ara_update::Channel),
+    /// Edit the repository setting before saving.
+    ReleaseRepo(String),
+    /// Save the repository override.
+    SaveReleaseRepo,
+    /// Install a published engine version.
+    InstallEngine(String),
+    /// Cancel a release job.
+    CancelDownload(String),
+    /// Download the offered Hub update.
+    PrepareUpdate,
+    /// Restart this Hub through the verified external updater.
+    RestartUpdate,
+    /// Install a project's missing pin and then open it.
+    InstallAndOpen { project: String, headless: bool },
     /// Sidebar navigation.
     Navigate(View),
     /// Dark/light.
@@ -337,6 +369,8 @@ impl List {
 
 /// The Hub's whole UI state.
 pub struct Hub {
+    /// Available versions, transfer jobs and update offer.
+    pub releases: updates::Releases,
     /// Current page.
     pub view: View,
     /// Persisted preferences.
@@ -390,6 +424,7 @@ impl Hub {
     /// A disconnected model. `home` seeds the Create destination.
     pub fn new(prefs: Prefs, home: PathBuf, local_engine: Option<Engine>) -> Self {
         Self {
+            releases: updates::Releases::default(),
             view: View::Projects,
             prefs,
             link: Link::Connecting,
@@ -507,6 +542,41 @@ impl Hub {
     /// Apply one user intent.
     pub fn intent(&mut self, intent: Intent) {
         match intent {
+            Intent::CheckUpdates => self.check_updates(),
+            Intent::RefreshDownloads => self.release_call("hub.downloads", serde_json::json!({})),
+            Intent::ReleaseChannel(channel) => {
+                self.releases.channel = channel;
+                self.release_call(
+                    "hub.releases.configure",
+                    serde_json::json!({"channel":channel}),
+                );
+            }
+            Intent::ReleaseRepo(repo) => self.releases.repo = repo,
+            Intent::SaveReleaseRepo => self.release_call(
+                "hub.releases.configure",
+                serde_json::json!({"repo":self.releases.repo}),
+            ),
+            Intent::InstallEngine(version) => self.install_engine(version),
+            Intent::CancelDownload(job) => {
+                self.release_call("hub.download.cancel", serde_json::json!({"job":job}))
+            }
+            Intent::PrepareUpdate => {
+                if let Some(release) = &self.releases.hub {
+                    self.release_call("hub.update.prepare", serde_json::json!({"version":release.version,"hubVersion":env!("CARGO_PKG_VERSION")}));
+                }
+            }
+            Intent::RestartUpdate => self.restart_update(),
+            Intent::InstallAndOpen { project, headless } => {
+                if let Some(p) = self.project(&project) {
+                    let version = p.engine_version.clone();
+                    self.releases
+                        .open_after
+                        .entry(version.clone())
+                        .or_default()
+                        .insert(project, headless);
+                    self.install_engine(version);
+                }
+            }
             Intent::Navigate(view) => {
                 self.view = view;
                 self.menu = None;
@@ -614,7 +684,14 @@ impl Hub {
             Intent::RemoveEngine(index) => {
                 if let Some(engine) = self.engines.get(index).cloned() {
                     self.engine_errors.remove(&engine.version);
-                    self.send(Call::EngineRemove(engine));
+                    if engine.managed {
+                        self.release_call(
+                            "hub.engine.uninstall",
+                            serde_json::json!({"version":engine.version}),
+                        );
+                    } else {
+                        self.send(Call::EngineRemove(engine));
+                    }
                 }
             }
             Intent::Agent(client) => self.prefs.agent = client,
@@ -699,6 +776,8 @@ impl Hub {
                 self.stale.clear();
             }
             Event::Changed { kind, .. } => match kind.as_str() {
+                "releases" => self.refresh_releases(),
+                "progress" => self.release_call("hub.downloads", serde_json::json!({})),
                 "engine" => self.refresh([List::Engines]),
                 "activity" => self.refresh([List::Status, List::Activity]),
                 _ => self.refresh([List::Projects, List::Status, List::Activity]),
@@ -708,6 +787,10 @@ impl Hub {
     }
 
     fn reply(&mut self, call: Call, result: Result<Value, RpcError>) {
+        if let Call::Release { method, .. } = &call {
+            self.release_reply(method, result);
+            return;
+        }
         if let Some(list) = List::of(&call) {
             self.inflight.remove(&list);
             match result {
@@ -723,6 +806,7 @@ impl Hub {
             return;
         }
         match call {
+            Call::Release { .. } => unreachable!("handled above"),
             Call::Create { dry_run: true, .. } => {
                 let next = self.create.checked(&call, result);
                 self.calls.extend(next);

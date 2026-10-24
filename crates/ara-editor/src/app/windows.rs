@@ -22,6 +22,8 @@ pub(super) struct Float {
 #[derive(Default)]
 pub(super) struct Floats {
     pub windows: Vec<Float>,
+    /// Create floating windows hidden (offscreen runs).
+    pub hidden: bool,
     next_key: u32,
     light: Option<bool>,
 }
@@ -87,7 +89,11 @@ impl Floats {
                 )?;
             }
             let title = format!("{} · Ara", panel_titles(&spec.root));
-            let window = Window::floating(&title, rect, main)?;
+            let window = if self.hidden {
+                Window::floating_hidden(&title, rect, main)?
+            } else {
+                Window::floating(&title, rect, main)?
+            };
             crate::native::frame::style(window.raw(), editor.state.light);
             // SAFETY: The shared device and the new window outlive this presentation.
             let present = unsafe { Present::new(renderer.gpu().context(), &window)? };

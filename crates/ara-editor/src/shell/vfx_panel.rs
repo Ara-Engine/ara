@@ -1,5 +1,27 @@
-//! Ordered emitter/module stacks. Graph topology is never shown as a VFX UI.
+//! The VFX editor (Niagara / VFX Graph style): emitters as ordered module stacks
+//! (spawn, initialize, update, render) on the left, the live GPU preview with its
+//! timeline (restart, play/pause, step, rate, time, particles) in the middle, the
+//! selected module in the Inspector, and the compile status along the bottom.
+//! Hide and Isolate are preview-only; they never change the effect.
+use super::commands::Target;
 use super::*;
+
+/// Width of the emitter stack column, in logical pixels.
+const STACK: f32 = 320.;
+/// Timeline rates, in percent of real time.
+pub(super) const RATES: &[u32] = &[25, 50, 100, 200];
+
+/// The preview's latest GPU counters (updated in place, every preview frame).
+#[derive(Default)]
+pub(crate) struct VfxLive {
+    /// Completed ticks since the (re)start.
+    pub tick: u32,
+    /// Live particles, all emitters.
+    pub alive: u32,
+    /// Live particles per emitter.
+    pub emitters: Vec<(String, u32)>,
+}
+
 impl Shell {
     pub(super) fn vfx_panel(&mut self, editor: &Editor, out: &mut String) -> ara_ui::Result<()> {
         let resource = self.resource_for(editor, "vfx");
@@ -26,116 +48,312 @@ impl Shell {
         .map_err(|d| d.to_string())?;
         let effect = ara_vfx::Effect::from_graph(&graph).map_err(|d| d.to_string())?;
         self.vfx_visible = true;
-        self.vfx_stream
-            .show(effect.clone(), editor.state.preview_playing);
-        out.push_str("<panel id='vfx-content' style='flex-direction:row;flex-grow:1;flex-basis:0px;min-height:0px'><scroll id='vfx-stack-list' style='width:300px;flex-basis:300px;flex-shrink:0;padding:6px;gap:0px;background:var(--panel-header)'>");
-        for emitter in &effect.emitters {
-            out.push_str(&format!("<panel id='emitter-{}' class='row' style='padding-left:4px;height:26px;flex-shrink:0'>{}<text id='emitter-title-{}' class='heading' text='{}' /><panel id='emitter-fill-{}' class='fill' /><text id='emitter-capacity-{}' class='caption' text='{} max' /></panel>",escape(&emitter.name),icons::icon(&emitter.name,"sparkles"),escape(&emitter.name),escape(&emitter.name),escape(&emitter.name),escape(&emitter.name),emitter.capacity));
-            for stage in ara_vfx::Stacks::STAGES {
-                let stage_name = serde_json::to_value(stage)?
-                    .as_str()
-                    .ok_or("stage name")?
-                    .to_owned();
-                let modules = match stage {
-                    ara_vfx::Stage::Spawn => &emitter.stacks.spawn,
-                    ara_vfx::Stage::Initialize => &emitter.stacks.initialize,
-                    ara_vfx::Stage::Update => &emitter.stacks.update,
-                    ara_vfx::Stage::Render => &emitter.stacks.render,
-                };
-                let rail = match stage {
-                    ara_vfx::Stage::Spawn => "success-foreground",
-                    ara_vfx::Stage::Initialize => "chart-2",
-                    ara_vfx::Stage::Update => "warning-foreground",
-                    ara_vfx::Stage::Render => "chart-4",
-                };
-                let module = default_module(stage, editor.host.store().revision());
-                let add = format!("module-add-{}-{stage_name}", emitter.name);
-                self.bindings.insert(ara_ui::source::stable_id(&add), Binding::ResourceContent(doc.clone(),vec![json!({"cmd":"vfx.stack.edit","args":{"emitter":emitter.name,"stage":stage_name,"name":module.name,"operation":"insert","index":modules.len(),"module":module}})],"Add VFX module".into()));
-                out.push_str(&format!("<panel id='stage-{}-{stage_name}' class='stage-header'><panel id='stage-rail-{}-{stage_name}' class='stage-rail' style='background:var(--{rail})' /><text id='stage-label-{}-{stage_name}' class='caption' text='{}' /><panel id='stage-fill-{}-{stage_name}' class='fill' /><button id='{add}' class='ghost icon-button' label='Add module' description='Add a {} module' action='Dispatch'>{}</button></panel>",emitter.name,emitter.name,emitter.name,stage_name.to_uppercase(),emitter.name,stage_name,icons::icon(&add,"plus")));
-                for module in modules.iter() {
-                    let item = format!("{}|{stage_name}|{}", emitter.name, module.name);
-                    let id = format!("module-{}-{stage_name}-{}", emitter.name, module.name);
-                    let value = ara_json::to_value(&module.module)?;
-                    let kind = value["op"].as_str().unwrap_or("module");
-                    let selected = editor.state.resource_item.as_deref() == Some(&item);
-                    let summary = value
-                        .as_object()
-                        .map(|m| {
-                            m.iter()
-                                .filter(|(k, _)| *k != "op")
-                                .take(2)
-                                .map(|(k, v)| {
-                                    format!(
-                                        "{} {}",
-                                        super::inspector_panel::sentence(k).to_lowercase(),
-                                        short(v)
-                                    )
-                                })
-                                .collect::<Vec<_>>()
-                                .join(" · ")
-                        })
-                        .unwrap_or_default();
-                    self.bindings.insert(
-                        ara_ui::source::stable_id(&id),
-                        Binding::Protocol("editor.workspace", json!({"resource":doc,"item":item})),
-                    );
-                    let title = if module.name == kind {
-                        super::inspector_panel::sentence(kind)
-                    } else {
-                        format!(
-                            "{} · {}",
-                            module.name,
-                            super::inspector_panel::sentence(kind).to_lowercase()
-                        )
-                    };
-                    out.push_str(&format!("<panel id='{id}-card' class='module-row{}'><panel id='{id}-rail' class='stage-rail' style='height:14px;background:var(--{rail})' /><button id='{id}' class='module-title' label='{}' description='{}' action='Dispatch'><text id='{id}-name' class='{}' text='{}' /><panel id='{id}-gap' class='fill' /><text id='{id}-summary' class='{}' style='font-size:11px;flex-shrink:1;min-width:0px;overflow:hidden' text='{}' /></button>",if selected{" module-selected"}else{""},escape(&module.name),escape(ara_vfx::library::MODULES.iter().find(|k|k.name==kind).map(|k|k.doc).unwrap_or("Typed VFX module")),if selected{"on-selection"}else{"fg"},escape(&title),if selected{"on-selection"}else{"caption"},escape(&summary)));
-                    if selected {
-                        for (command, icon, label) in [
-                            ("vfx.module.up", "chevron-up", "Move up · Alt+Up"),
-                            ("vfx.module.down", "chevron-down", "Move down · Alt+Down"),
-                            ("vfx.module.duplicate", "copy", "Duplicate · Ctrl+D"),
-                            ("vfx.module.delete", "trash", "Delete · Del"),
-                        ] {
-                            let button =
-                                format!("{id}-{}", command.rsplit('.').next().unwrap_or(""));
-                            self.bind_command(
-                                &button,
-                                command,
-                                commands::Target::Text(item.clone()),
-                            );
-                            out.push_str(&format!("<button id='{button}' class='ghost icon-button' style='width:20px;height:20px;padding:2px' label='{label}' description='{label}' action='Dispatch'>{}</button>",icons::icon_in(&button,icon,"on-selection")));
-                        }
-                    }
-                    out.push_str("</panel>");
-                }
-            }
-        }
-        out.push_str("</scroll><panel id='vfx-preview-area' style='flex-grow:1;flex-basis:0px;padding:8px;gap:8px;background:var(--background)'><panel id='vfx-preview-tools' class='row'>");
-        self.bindings.insert(
-            ara_ui::source::stable_id("vfx-preview-play"),
-            Binding::VfxPlayback(!editor.state.preview_playing),
+        self.vfx_hz = effect.hz;
+        self.vfx_stream.show(
+            self.preview_effect(&effect),
+            editor.state.preview_playing,
+            self.vfx_rate,
         );
-        out.push_str(&format!("<button id='vfx-preview-play' class='ghost' label='{}' description='Run or pause the fixed-tick preview' action='Dispatch'>{}<text id='vfx-preview-play-label' text='{}' /></button>",if editor.state.preview_playing{"Pause"}else{"Play"},icons::icon("vfx-preview-play",if editor.state.preview_playing{"pause"}else{"play"}),if editor.state.preview_playing{"Pause"}else{"Play"}));
-        out.push_str(&format!("<text id='vfx-preview-title' class='heading' text='{}' /><panel id='vfx-preview-fill' class='fill' /><text id='vfx-preview-rate' class='chip-success' text='fixed {} Hz' /></panel>",escape(&effect.name),effect.hz));
+        out.push_str("<panel id='vfx-content' class='tool-body'>");
+        out.push_str(&format!(
+            "<panel id='vfx-side' class='tool-side' style='width:{STACK}px'>"
+        ));
+        out.push_str(&format!("<panel id='vfx-emitters-header' class='side-header'><text id='vfx-emitters-title' class='heading' text='Emitters' /><panel id='vfx-emitters-fill' class='fill' /><text id='vfx-emitters-count' class='caption' text='{} · {}' /></panel>",effect.emitters.len(),escape(&effect.name)));
+        out.push_str("<scroll id='vfx-stack-list' style='flex-grow:1;flex-basis:0px;min-height:0px;padding:4px;padding-top:0px;gap:0px'>");
+        for emitter in &effect.emitters {
+            self.emitter_header(emitter, out);
+            if self.vfx_collapsed.contains(&emitter.name) {
+                continue;
+            }
+            self.emitter_stack(editor, &doc, emitter, out)?;
+        }
+        out.push_str("</scroll></panel><panel id='vfx-side-edge' class='tool-edge' />");
+        out.push_str("<panel id='vfx-preview-area' class='tool-main' style='padding:8px;gap:8px'>");
         if self.vfx_ready {
             let size = self
                 .ui
                 .find("vfx-preview-area")
                 .map(|i| {
                     let r = self.ui.nodes[i].rect;
-                    (r.w - 24.).min(r.h - 100.)
+                    (r.w - 24.).min(r.h - 64.)
                 })
                 .unwrap_or(320.)
                 .max(96.);
-            out.push_str(&format!("<panel id='vfx-live-frame' style='flex-grow:1;flex-basis:0px;align-items:center;justify-content:center;overflow:hidden'><image id='vfx-live-image' src='vfx-live-preview' style='width:{size}px;height:{size}px' label='Live GPU particle preview' /></panel>"));
+            out.push_str(&format!("<panel id='vfx-live-frame' style='flex-grow:1;flex-basis:0px;min-height:0px;align-items:center;justify-content:center;overflow:hidden'><image id='vfx-live-image' src='vfx-live-preview' style='width:{size}px;height:{size}px' label='Live GPU particle preview' /></panel>"));
         } else {
-            out.push_str("<panel id='vfx-preview-loading' style='flex-grow:1;align-items:center;justify-content:center'><text id='vfx-preview-loading-title' class='muted' text='Preparing effect preview...' /></panel>");
+            out.push_str("<panel id='vfx-preview-loading' style='flex-grow:1;flex-basis:0px;align-items:center;justify-content:center'><text id='vfx-preview-loading-title' class='muted' text='Compiling the effect…' /></panel>");
         }
-        out.push_str("<text id='vfx-preview-detail' class='caption' text='Edits compile in the background; the last good preview stays visible.' style='white-space:normal' />");
-        if let Some(error) = &self.vfx_error {
-            out.push_str(&format!("<text id='vfx-preview-error' class='destructive' text='{}' style='white-space:normal' />",escape(error)));
-        }
+        self.vfx_timeline(editor, out);
         out.push_str("</panel></panel>");
+        self.vfx_status(&effect, out);
+        Ok(())
+    }
+
+    /// The effect the preview runs: hidden emitters removed, or only the isolated one.
+    fn preview_effect(&self, effect: &ara_vfx::Effect) -> ara_vfx::Effect {
+        let mut shown = effect.clone();
+        shown.emitters.retain(|e| match &self.vfx_solo {
+            Some(solo) => &e.name == solo,
+            None => !self.vfx_hidden.contains(&e.name),
+        });
+        if shown.emitters.is_empty() {
+            return effect.clone();
+        }
+        shown
+    }
+
+    /// An emitter's header: collapse, name, live particles / capacity, Hide, Isolate.
+    fn emitter_header(&mut self, emitter: &ara_vfx::Emitter, out: &mut String) {
+        let name = &emitter.name;
+        let collapsed = self.vfx_collapsed.contains(name);
+        let hidden = self.vfx_hidden.contains(name);
+        let solo = self.vfx_solo.as_deref() == Some(name.as_str());
+        let muted = hidden || self.vfx_solo.as_ref().is_some_and(|s| s != name);
+        let alive = self
+            .vfx_live
+            .as_ref()
+            .and_then(|l| l.emitters.iter().find(|(n, _)| n == name))
+            .map_or(0, |(_, a)| *a);
+        let id = format!("emitter-{name}");
+        out.push_str(&format!(
+            "<panel id='{id}' class='emitter-header{}'>",
+            if muted { " emitter-muted" } else { "" }
+        ));
+        let collapse = format!("{id}-collapse");
+        let (icon, label) = if collapsed {
+            ("chevron-right", "Expand")
+        } else {
+            ("chevron-down", "Collapse")
+        };
+        self.bind_command(
+            &collapse,
+            "vfx.emitter.collapse",
+            Target::Text(name.clone()),
+        );
+        out.push_str(&format!("<button id='{collapse}' class='ghost icon-button emitter-tool' label='{label}' description='{label} the emitter' action='Dispatch'>{}</button>",icons::icon(&collapse,icon)));
+        out.push_str(&format!("{}<text id='emitter-title-{name}' class='heading' text='{}' /><panel id='emitter-fill-{name}' class='fill' /><text id='emitter-alive-{name}' class='caption mono' text='{alive} / {}' />",icons::icon(&id,"sparkles"),escape(name),emitter.capacity));
+        for (button, command, icon, label, on) in [
+            (
+                format!("{id}-hide"),
+                "vfx.emitter.hide",
+                if hidden { "eye-off" } else { "eye" },
+                if hidden {
+                    "Show in the preview"
+                } else {
+                    "Hide in the preview"
+                },
+                hidden,
+            ),
+            (
+                format!("{id}-isolate"),
+                "vfx.emitter.isolate",
+                "scan-eye",
+                if solo {
+                    "Show every emitter"
+                } else {
+                    "Isolate in the preview"
+                },
+                solo,
+            ),
+        ] {
+            self.bind_command(&button, command, Target::Text(name.clone()));
+            out.push_str(&format!("<button id='{button}' class='{} icon-button emitter-tool' label='{label}' description='{label} (preview only)' action='Dispatch'>{}</button>",if on{"selected"}else{"ghost"},if on{icons::icon_in(&button,icon,"on-selection")}else{icons::icon(&button,icon)}));
+        }
+        out.push_str("</panel>");
+    }
+
+    /// An emitter's four stages and their modules.
+    fn emitter_stack(
+        &mut self,
+        editor: &Editor,
+        doc: &str,
+        emitter: &ara_vfx::Emitter,
+        out: &mut String,
+    ) -> ara_ui::Result<()> {
+        for stage in ara_vfx::Stacks::STAGES {
+            let stage_name = serde_json::to_value(stage)?
+                .as_str()
+                .ok_or("stage name")?
+                .to_owned();
+            let modules = match stage {
+                ara_vfx::Stage::Spawn => &emitter.stacks.spawn,
+                ara_vfx::Stage::Initialize => &emitter.stacks.initialize,
+                ara_vfx::Stage::Update => &emitter.stacks.update,
+                ara_vfx::Stage::Render => &emitter.stacks.render,
+            };
+            let rail = match stage {
+                ara_vfx::Stage::Spawn => "success-foreground",
+                ara_vfx::Stage::Initialize => "chart-2",
+                ara_vfx::Stage::Update => "warning-foreground",
+                ara_vfx::Stage::Render => "chart-4",
+            };
+            let module = default_module(stage, editor.host.store().revision());
+            let add = format!("module-add-{}-{stage_name}", emitter.name);
+            self.bindings.insert(ara_ui::source::stable_id(&add), Binding::ResourceContent(doc.into(),vec![json!({"cmd":"vfx.stack.edit","args":{"emitter":emitter.name,"stage":stage_name,"name":module.name,"operation":"insert","index":modules.len(),"module":module}})],"Add VFX module".into()));
+            out.push_str(&format!("<panel id='stage-{}-{stage_name}' class='stage-header'><panel id='stage-rail-{}-{stage_name}' class='stage-rail' style='background:var(--{rail})' /><text id='stage-label-{}-{stage_name}' class='caption' text='{}' /><panel id='stage-fill-{}-{stage_name}' class='fill' /><button id='{add}' class='ghost icon-button' label='Add module' description='Add a {} module' action='Dispatch'>{}</button></panel>",emitter.name,emitter.name,emitter.name,stage_name.to_uppercase(),emitter.name,stage_name,icons::icon(&add,"plus")));
+            for module in modules.iter() {
+                let item = format!("{}|{stage_name}|{}", emitter.name, module.name);
+                let id = format!("module-{}-{stage_name}-{}", emitter.name, module.name);
+                let value = ara_json::to_value(&module.module)?;
+                let kind = value["op"].as_str().unwrap_or("module");
+                let selected = editor.state.resource_item.as_deref() == Some(&item);
+                let summary = value
+                    .as_object()
+                    .map(|m| {
+                        m.iter()
+                            .filter(|(k, _)| *k != "op")
+                            .take(2)
+                            .map(|(k, v)| {
+                                format!(
+                                    "{} {}",
+                                    super::inspector_panel::sentence(k).to_lowercase(),
+                                    short(v)
+                                )
+                            })
+                            .collect::<Vec<_>>()
+                            .join(" · ")
+                    })
+                    .unwrap_or_default();
+                self.bindings.insert(
+                    ara_ui::source::stable_id(&id),
+                    Binding::Protocol("editor.workspace", json!({"resource":doc,"item":item})),
+                );
+                let title = if module.name == kind {
+                    super::inspector_panel::sentence(kind)
+                } else {
+                    format!(
+                        "{} · {}",
+                        module.name,
+                        super::inspector_panel::sentence(kind).to_lowercase()
+                    )
+                };
+                out.push_str(&format!("<panel id='{id}-card' class='module-row{}'><panel id='{id}-rail' class='stage-rail' style='height:14px;background:var(--{rail})' /><button id='{id}' class='module-title' label='{}' description='{}' action='Dispatch'><text id='{id}-name' class='{}' text='{}' /><panel id='{id}-gap' class='fill' /><text id='{id}-summary' class='{}' style='font-size:11px;flex-shrink:1;min-width:0px;overflow:hidden' text='{}' /></button>",if selected{" module-selected"}else{""},escape(&module.name),escape(ara_vfx::library::MODULES.iter().find(|k|k.name==kind).map(|k|k.doc).unwrap_or("Typed VFX module")),if selected{"on-selection"}else{"fg"},escape(&title),if selected{"on-selection"}else{"caption"},escape(&summary)));
+                if selected {
+                    for (command, icon, label) in [
+                        ("vfx.module.up", "chevron-up", "Move up · Alt+Up"),
+                        ("vfx.module.down", "chevron-down", "Move down · Alt+Down"),
+                        ("vfx.module.duplicate", "copy", "Duplicate · Ctrl+D"),
+                        ("vfx.module.delete", "trash", "Delete · Del"),
+                    ] {
+                        let button = format!("{id}-{}", command.rsplit('.').next().unwrap_or(""));
+                        self.bind_command(&button, command, Target::Text(item.clone()));
+                        out.push_str(&format!("<button id='{button}' class='ghost icon-button' style='width:20px;height:20px;padding:2px' label='{label}' description='{label}' action='Dispatch'>{}</button>",icons::icon_in(&button,icon,"on-selection")));
+                    }
+                }
+                out.push_str("</panel>");
+            }
+        }
+        Ok(())
+    }
+
+    /// The timeline: restart, play/pause, step, time and tick, rate, particles.
+    fn vfx_timeline(&mut self, editor: &Editor, out: &mut String) {
+        let playing = editor.state.preview_playing;
+        out.push_str("<panel id='vfx-timeline' class='timeline'>");
+        self.tool_icon(
+            out,
+            "vfx-restart",
+            "vfx.restart",
+            "rotate-ccw",
+            editor,
+            false,
+        );
+        self.bindings.insert(
+            ara_ui::source::stable_id("vfx-preview-play"),
+            Binding::VfxPlayback(!playing),
+        );
+        let label = if playing { "Pause" } else { "Play" };
+        out.push_str(&format!("<button id='vfx-preview-play' class='ghost icon-button' label='{label}' description='{label} the preview' action='Dispatch'>{}</button>",icons::icon("vfx-preview-play",if playing{"pause"}else{"play"})));
+        self.tool_icon(out, "vfx-step", "vfx.step", "step-forward", editor, false);
+        out.push_str(&format!(
+            "<panel id='vfx-timeline-sep' class='toolbar-sep' /><text id='vfx-time' class='mono' text='{}' />",
+            escape(&self.vfx_time_text())
+        ));
+        out.push_str(
+            "<panel id='vfx-timeline-fill' class='fill' /><panel id='vfx-rate' class='segment'>",
+        );
+        for rate in RATES {
+            let id = format!("vfx-rate-{rate}");
+            self.bind_command(&id, "vfx.rate", Target::Text(rate.to_string()));
+            let label = match rate {
+                25 => "¼×".to_owned(),
+                50 => "½×".to_owned(),
+                r => format!("{}×", r / 100),
+            };
+            out.push_str(&format!("<button id='{id}' class='segment-button{}' label='{label}' description='Preview at {rate} % speed' action='Dispatch'><text id='{id}-label' text='{label}' /></button>",if *rate==self.vfx_rate{" selected"}else{""}));
+        }
+        out.push_str(&format!(
+            "</panel><text id='vfx-particles' class='caption mono' text='{}' /></panel>",
+            escape(&self.vfx_particles_text())
+        ));
+    }
+
+    /// Compile status: a failed compile keeps the last good preview running.
+    fn vfx_status(&mut self, effect: &ara_vfx::Effect, out: &mut String) {
+        out.push_str("<panel id='vfx-status' class='tool-status'>");
+        if let Some(error) = &self.vfx_error {
+            out.push_str(&format!("{}<text id='vfx-status-state' class='destructive' text='Compile failed' /><text id='vfx-status-error' class='fg' text='{} · the last good preview keeps running' />",icons::icon_in("vfx-status-icon","circle-x","destructive"),escape(error)));
+        } else if !self.vfx_ready {
+            out.push_str(&format!(
+                "{}<text id='vfx-status-state' class='muted' text='Compiling…' />",
+                icons::icon_in("vfx-status-icon", "refresh-cw", "muted")
+            ));
+        } else {
+            out.push_str(&format!(
+                "{}<text id='vfx-status-state' class='success' text='Compiled' />",
+                icons::icon_in("vfx-status-icon", "circle-check", "success")
+            ));
+        }
+        let capacity: u32 = effect.emitters.iter().map(|e| e.capacity).sum();
+        let modules: usize = effect
+            .emitters
+            .iter()
+            .map(|e| {
+                e.stacks.spawn.len()
+                    + e.stacks.initialize.len()
+                    + e.stacks.update.len()
+                    + e.stacks.render.len()
+            })
+            .sum();
+        out.push_str(&format!("<panel id='vfx-status-fill' class='fill' /><text id='vfx-status-stats' class='caption' text='{} emitters · {modules} modules · capacity {capacity} · fixed {} Hz · seed {}' /></panel>",effect.emitters.len(),effect.hz,effect.seed));
+    }
+
+    fn vfx_time_text(&self) -> String {
+        let tick = self.vfx_live.as_ref().map_or(0, |l| l.tick);
+        let seconds = f64::from(tick) / f64::from(self.vfx_hz.max(1));
+        format!("{seconds:6.2} s · tick {tick}")
+    }
+
+    fn vfx_particles_text(&self) -> String {
+        format!(
+            "{} particles",
+            self.vfx_live.as_ref().map_or(0, |l| l.alive)
+        )
+    }
+
+    /// Refreshes the timeline and emitter counters in place (no rebuild per frame).
+    pub(super) fn vfx_live_text(&mut self) -> ara_ui::Result<()> {
+        let mut texts = vec![
+            ("vfx-time".to_owned(), self.vfx_time_text()),
+            ("vfx-particles".to_owned(), self.vfx_particles_text()),
+        ];
+        if let Some(live) = &self.vfx_live {
+            for (name, alive) in &live.emitters {
+                let id = format!("emitter-alive-{name}");
+                let capacity = self
+                    .ui
+                    .find(&id)
+                    .and_then(|i| self.ui.nodes[i].text.as_ref())
+                    .and_then(|t| t.value.rsplit(" / ").next().map(str::to_owned))
+                    .unwrap_or_default();
+                texts.push((id, format!("{alive} / {capacity}")));
+            }
+        }
+        for (id, text) in texts {
+            if let Some(i) = self.ui.find(&id) {
+                self.ui.set_text(i, &text)?;
+            }
+        }
         Ok(())
     }
     pub(super) fn vfx_inspector(

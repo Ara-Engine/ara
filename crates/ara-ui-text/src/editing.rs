@@ -177,7 +177,7 @@ impl TextInput {
                     || !text.is_char_boundary(selection.end)
                     || text.chars().any(char::is_control)
                 {
-                    return Err("ARA7031: invalid IME range or composition lifecycle".into());
+                    return Err("ARA4031: invalid IME range or composition lifecycle".into());
                 }
                 self.preedit = text;
                 self.preedit_selection = selection;
@@ -186,7 +186,7 @@ impl TextInput {
                 let r = self
                     .composition
                     .clone()
-                    .ok_or("ARA7031: commit without active composition")?;
+                    .ok_or("ARA4031: commit without active composition")?;
                 self.replace(r, &text);
             }
             EditEvent::ImeCancel => self.cancel(),
@@ -210,7 +210,7 @@ impl TextInput {
             }
             EditEvent::Select { anchor, caret } => {
                 if !boundary(&self.value, anchor) || !boundary(&self.value, caret) {
-                    return Err("ARA7032: selection splits a grapheme".into());
+                    return Err("ARA4032: selection splits a grapheme".into());
                 }
                 self.cancel();
                 self.anchor = anchor;

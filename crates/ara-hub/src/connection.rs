@@ -49,6 +49,7 @@ pub struct Connection {
     calls: Sender<Call>,
     events: Receiver<Event>,
     stop: Arc<AtomicBool>,
+    worker: Option<thread::JoinHandle<()>>,
 }
 
 const HEARTBEAT: Duration = Duration::from_secs(2);
@@ -60,17 +61,28 @@ impl Connection {
         let (outbox, events) = mpsc::channel();
         let stop = Arc::new(AtomicBool::new(false));
         let flag = stop.clone();
-        thread::Builder::new()
+        let worker = thread::Builder::new()
             .name("ara-hub-rpc".into())
             .spawn(move || worker(&directory, &executable, &inbox, &outbox, &flag))
             .map_or_else(
-                |error| eprintln!("ara-hub: cannot start the connection thread: {error}"),
-                |_| (),
+                |error| {
+                    eprintln!("ara-hub: cannot start the connection thread: {error}");
+                    None
+                },
+                Some,
             );
         Self {
             calls,
             events,
             stop,
+            worker,
+        }
+    }
+    /// Stop and join the reconnecting worker before a test shuts its service down.
+    pub fn stop(&mut self) {
+        self.stop.store(true, Ordering::Relaxed);
+        if let Some(worker) = self.worker.take() {
+            let _ = worker.join();
         }
     }
     /// Queue calls in order.
@@ -90,7 +102,7 @@ impl Connection {
 }
 impl Drop for Connection {
     fn drop(&mut self) {
-        self.stop.store(true, Ordering::Relaxed);
+        self.stop();
     }
 }
 

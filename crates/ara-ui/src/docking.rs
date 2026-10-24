@@ -106,7 +106,7 @@ impl DockLayout {
     pub fn float(&mut self, panel: &str, id: &str, rect: [i32; 4]) -> Result<()> {
         let (mut root, mut floating) = (self.root.clone(), self.floating.clone());
         if !remove_everywhere(&mut root, &mut floating, panel) {
-            return Err("ARA7042: dragged panel not found".into());
+            return Err("ARA4042: dragged panel not found".into());
         }
         floating.push(Floating {
             id: id.into(),
@@ -126,7 +126,7 @@ impl DockLayout {
     pub fn close(&mut self, panel: &str) -> Result<()> {
         let (mut root, mut floating) = (self.root.clone(), self.floating.clone());
         if !remove_everywhere(&mut root, &mut floating, panel) {
-            return Err("ARA7042: panel is not open".into());
+            return Err("ARA4042: panel is not open".into());
         }
         prune_all(&mut root, &mut floating);
         (self.root, self.floating) = (root, floating);
@@ -135,13 +135,13 @@ impl DockLayout {
     /// Record a floating window's new position or size.
     pub fn set_rect(&mut self, id: &str, rect: [i32; 4]) -> Result<()> {
         if rect[2] <= 0 || rect[3] <= 0 {
-            return Err("ARA7042: floating windows need a positive size".into());
+            return Err("ARA4042: floating windows need a positive size".into());
         }
         let window = self
             .floating
             .iter_mut()
             .find(|f| f.id == id)
-            .ok_or("ARA7042: floating window not found")?;
+            .ok_or("ARA4042: floating window not found")?;
         window.rect = rect;
         Ok(())
     }
@@ -158,7 +158,7 @@ impl DockLayout {
     /// Update a persisted split after dragging its runtime splitter; path entries choose first/second.
     pub fn resize_split(&mut self, path: &[bool], ratio: f32) -> Result<()> {
         if !ratio.is_finite() {
-            return Err("ARA7042: invalid split ratio".into());
+            return Err("ARA4042: invalid split ratio".into());
         }
         let mut node = &mut self.root;
         for second in path {
@@ -168,12 +168,12 @@ impl DockLayout {
                 ..
             } = node
             else {
-                return Err("ARA7042: split path crosses a tab area".into());
+                return Err("ARA4042: split path crosses a tab area".into());
             };
             node = if *second { other } else { first };
         }
         let DockNode::Split { ratio: value, .. } = node else {
-            return Err("ARA7042: resize target is not a split".into());
+            return Err("ARA4042: resize target is not a split".into());
         };
         *value = ratio.clamp(0.1, 0.9);
         Ok(())
@@ -227,7 +227,7 @@ impl DockLayout {
         if !visit(&mut self.root, panel)
             && !self.floating.iter_mut().any(|f| visit(&mut f.root, panel))
         {
-            return Err("ARA7042: unknown dock panel".into());
+            return Err("ARA4042: unknown dock panel".into());
         }
         Ok(())
     }
@@ -236,7 +236,7 @@ impl DockLayout {
     pub fn drop_tab(&mut self, panel: &str, target: DockDrop) -> Result<()> {
         let (mut candidate, mut floating) = (self.root.clone(), self.floating.clone());
         if !remove_everywhere(&mut candidate, &mut floating, panel) {
-            return Err("ARA7042: dragged panel not found".into());
+            return Err("ARA4042: dragged panel not found".into());
         }
         let area = match &target {
             DockDrop::Tab { area, .. } | DockDrop::Split { area, .. } => area,
@@ -255,7 +255,7 @@ impl DockLayout {
             None => floating
                 .iter_mut()
                 .find_map(|f| find(&mut f.root, area))
-                .ok_or("ARA7042: dock destination missing")?,
+                .ok_or("ARA4042: dock destination missing")?,
         };
         match target {
             DockDrop::Tab { index, .. } => {
@@ -389,7 +389,7 @@ fn validate_all(root: &DockNode, floating: &[Floating]) -> Result<()> {
         .iter()
         .all(|f| !f.id.is_empty() && windows.insert(&f.id) && f.rect[2] > 0 && f.rect[3] > 0)
     {
-        return Err("ARA7042: invalid or duplicate floating window".into());
+        return Err("ARA4042: invalid or duplicate floating window".into());
     }
     Ok(())
 }
@@ -430,7 +430,7 @@ fn validate_into(
         }
     }
     if !visit(root, areas, panels, 0) {
-        return Err("ARA7042: invalid dock IDs, active tab, split ratio or depth".into());
+        return Err("ARA4042: invalid dock IDs, active tab, split ratio or depth".into());
     }
     Ok(())
 }

@@ -133,7 +133,9 @@ impl Shell {
                 // Recently opened first, then the rest by path.
                 scenes.sort_by_key(|id| {
                     (
-                        self.recent_docs
+                        editor
+                            .state
+                            .recent_scenes
                             .iter()
                             .position(|r| r == id)
                             .unwrap_or(usize::MAX),

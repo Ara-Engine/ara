@@ -76,7 +76,7 @@ pub const PROPERTIES: &[&str] = &[
     "bottom",
 ];
 fn error(source: &str, bytes: Range<usize>, message: impl Into<String>, fix: &str) -> Diagnostic {
-    Diagnostic::new(7010, source, bytes, message, fix)
+    Diagnostic::new(crate::codes::STYLESHEET, source, bytes, message, fix)
 }
 fn mask_comments(source: &str) -> Result<String> {
     let mut bytes = source.as_bytes().to_vec();
@@ -197,7 +197,7 @@ impl Stylesheet {
             }
             let decl = declarations(&clean[open + 1..end], open + 1).map_err(|d| {
                 Diagnostic::new(
-                    7010,
+                    crate::codes::STYLESHEET,
                     source,
                     open + 1 + d.bytes.start..open + 1 + d.bytes.end,
                     d.message,
@@ -270,7 +270,7 @@ impl Stylesheet {
             for d in &rule.declarations {
                 if d.value.contains('#') || d.value.contains("rgb(") || d.value.contains("rgba(") {
                     return Err(Diagnostic::new(
-                        7018,
+                        crate::codes::RAW_COLOR,
                         source,
                         d.bytes.clone(),
                         "Raw colors are forbidden in editor styles",

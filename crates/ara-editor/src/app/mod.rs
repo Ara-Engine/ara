@@ -1,6 +1,8 @@
 //! SDL event loop and same-device native UI/scene composition.
 mod capture;
 mod controller;
+mod game;
+mod journey;
 mod panels_verify;
 mod setup;
 mod ux_verify;
@@ -63,7 +65,14 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
             .unwrap_or_default()
             .to_string_lossy()
     );
-    let window = Window::new(&title, options.size)?;
+    // Bounded runs (captures, verification routes) never put a window on the desktop:
+    // they render offscreen and read the UI target back.
+    let offscreen = options.offscreen();
+    let window = if offscreen {
+        Window::hidden(&title, options.size)?
+    } else {
+        Window::new(&title, options.size)?
+    };
     let mut native = Native::attach(&title)?;
     if options.verify || options.verify_panels || options.verify_ux || options.screenshot {
         native.verification_extent(options.size)?;
@@ -96,18 +105,23 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
     shell.device_info =
         serde_json::to_string_pretty(&renderer.gpu().context().info).unwrap_or_default();
     let mut floats = windows::Floats::default();
+    floats.hidden = offscreen;
+    let mut game = game::GameView::default();
     gpu.set_dpi(dpi)?;
     let mut ui_renderer = UiRenderer::default();
     crate::shell::icons::install(&mut ui_renderer, editor.state.light, dpi)?;
     let mut icon_state = (editor.state.light, dpi);
-    ui_renderer.image(
-        overlay::viewport_image(),
-        Image {
-            width: 1,
-            height: 1,
-            rgba: vec![0, 0, 0, 255],
-        },
-    )?;
+    // Placeholders for the GPU-fed images: the Scene view and the Game view.
+    for id in [overlay::viewport_image(), game::texture()] {
+        ui_renderer.image(
+            id,
+            Image {
+                width: 1,
+                height: 1,
+                rgba: vec![0, 0, 0, 255],
+            },
+        )?;
+    }
     // SAFETY: Both native owners are retained until explicit idle/destroy after the loop, including errors.
     let mut present = unsafe { Present::new(renderer.gpu().context(), &window)? };
     let mut scene_view = viewport::SceneView::default();
@@ -131,7 +145,12 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
     } else {
         None
     };
-    if panel_verification.is_some() || ux_verification.is_some() {
+    let mut journey = if options.verify_journey {
+        Some(journey::Journey::new(&mut editor, &options.output)?)
+    } else {
+        None
+    };
+    if panel_verification.is_some() || ux_verification.is_some() || journey.is_some() {
         shell.rebuild(&mut editor)?;
     }
 
@@ -205,7 +224,7 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                     }
                     Err(error) => {
                         shell.leave();
-                        editor.report_error(&error.to_string());
+                        editor.report_failure(&*error);
                         dirty = true;
                     }
                 }
@@ -219,6 +238,7 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                         .profiler()
                         .end_frame(Default::default(), Default::default());
                 }
+                game.close(&mut editor, &mut gpu)?;
                 break;
             }
             // IME text goes to the window with keyboard focus.
@@ -233,12 +253,12 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
             }
             match native.input(&mut shell.ui, &mut shell.input) {
                 Ok(changed) => dirty |= changed,
-                Err(error) => editor.report_error(&error.to_string()),
+                Err(error) => editor.report_failure(&*error),
             }
             shell.leave();
             match shell.dispatch(&mut editor) {
                 Ok(changed) => dirty |= changed,
-                Err(error) => editor.report_error(&error.to_string()),
+                Err(error) => editor.report_failure(&*error),
             }
             for id in floats
                 .windows
@@ -251,7 +271,7 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                     shell.leave();
                     match result {
                         Ok(changed) => dirty |= changed,
-                        Err(error) => editor.report_error(&error.to_string()),
+                        Err(error) => editor.report_failure(&*error),
                     }
                 }
             }
@@ -271,7 +291,7 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
             }
             for path in imports.try_iter() {
                 if let Err(error) = import_file(&mut editor, &path) {
-                    editor.report_error(&error.to_string());
+                    editor.report_failure(&*error);
                 }
                 dirty = true;
             }
@@ -285,7 +305,7 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                     dirty |= changed;
                     scene_dirty |= changed;
                 }
-                Err(error) => editor.report_error(&error.to_string()),
+                Err(error) => editor.report_failure(&*error),
             }
             if (verification.as_ref().is_some_and(|v| v.finished())
                 || ux_verification.as_ref().is_some_and(|v| v.finished()))
@@ -302,6 +322,39 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
             let authority_scope = profile_frame.map(|_| ara_profile::scope("editor.authority"));
             server.pump(&mut editor);
             editor.tick();
+            // The Game view: its size (physical pixels) is where embedded Play starts and
+            // what it resizes to; new frames redraw the UI.
+            if let Some(i) = shell.ui.find("game-surface") {
+                let r = shell.ui.nodes[i].rect;
+                let scale =
+                    options.dpi.unwrap_or_else(|| native.dpi()) * windows::ui_scale(&editor);
+                let frame = shell
+                    .ui
+                    .find("game-frame")
+                    .map(|f| shell.ui.nodes[f].rect)
+                    .filter(|f| f.w > 1. && f.h > 1.)
+                    .unwrap_or(r);
+                let size = [
+                    (frame.w * scale).round() as u32,
+                    (frame.h * scale).round() as u32,
+                ];
+                if size[0] >= 64 && size[1] >= 64 {
+                    shell.game_target = size;
+                    editor.game_size = size;
+                }
+            }
+            let was_live = shell.game_live;
+            let was_fault = shell.game_fault.clone();
+            if game.update(&mut editor, &mut shell, &mut gpu, renderer.gpu().context())? {
+                dirty = true;
+            }
+            if shell.game_live != was_live || shell.game_fault != was_fault {
+                if !shell.game_live {
+                    shell.game_captured = false;
+                }
+                shell.rebuild(&mut editor)?;
+                dirty = true;
+            }
             if shell.run_queued(&mut editor) {
                 dirty = true;
             }
@@ -331,7 +384,15 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                     last_dpi,
                 )?;
             }
-            if shell.poll_assets() {
+            if shell.poll_build(&mut editor) {
+                shell.rebuild(&mut editor)?;
+                dirty = true;
+            }
+            let assets_changed = shell.poll_assets();
+            for (kind, message) in std::mem::take(&mut shell.pending_reports) {
+                editor.report(kind, &message, None);
+            }
+            if assets_changed {
                 shell.rebuild(&mut editor)?;
                 dirty = true;
             }
@@ -397,6 +458,17 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                 }
                 dirty |= changed;
                 scene_dirty |= dirty;
+            }
+            if let Some(route) = &mut journey {
+                let changed = route.step(
+                    &mut editor,
+                    &mut shell,
+                    &mut gpu,
+                    &mut ui_renderer,
+                    &mut renderer,
+                )?;
+                dirty |= changed;
+                scene_dirty |= changed;
             }
             if let Some(suite) = &mut ux_verification {
                 let was_finished = suite.finished();
@@ -715,7 +787,9 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                 || ux_verification.as_ref().is_some_and(|v| {
                     v.finished() && idle_samples.len() >= 1500 && camera_samples.len() >= 240
                 })
+                || journey.as_ref().is_some_and(journey::Journey::finished)
             {
+                game.close(&mut editor, &mut gpu)?;
                 break;
             }
             if let Some(remaining) = frame_budget.checked_sub(frame_start.elapsed()) {
@@ -730,6 +804,9 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
         }
         if ux_verification.as_ref().is_some_and(|v| !v.finished()) {
             return Err("UX verification did not finish".into());
+        }
+        if journey.as_ref().is_some_and(|v| !v.finished()) {
+            return Err("the journey route did not finish".into());
         }
         editor.host.flush();
         if options.screenshot {
@@ -871,6 +948,9 @@ fn route_event(
     view: &crate::world::DocumentView,
     clipboard: &mut OsClipboard,
 ) -> ara_ui::Result<(bool, bool, bool)> {
+    if let Some(handled) = game_input(&event, editor, shell, dpi) {
+        return Ok((handled, false, false));
+    }
     // Tab drags follow the desktop pointer: preview in whichever window is under it.
     if shell.dragged_tab().is_some() {
         match &event {
@@ -1070,4 +1150,69 @@ fn import_file(editor: &mut Editor, source: &std::path::Path) -> ara_ui::Result<
     }
     editor.action("editor.asset.import", json!({"path": relative}))?;
     Ok(())
+}
+/// While the Game view holds the keyboard and mouse, raw input goes to the shown Play
+/// client (the player maps it exactly like its own window). Esc, or pressing outside
+/// the view, gives them back; F5-F8 (Play, Pause, Step, Stop) stay with the editor.
+/// `None` lets the editor handle the event; `Some(redraw)` consumed it.
+fn game_input(event: &Event, editor: &mut Editor, shell: &mut Shell, dpi: f32) -> Option<bool> {
+    use ara_play_host::embed::DeviceEvent;
+    if !shell.game_captured {
+        return None;
+    }
+    let release = |editor: &mut Editor, shell: &mut Shell| {
+        shell.game_captured = false;
+        if let (Some(world), Some(surfaces)) = (&editor.play_world, &editor.play_surfaces) {
+            surfaces.device(world, shell.game_client, vec![DeviceEvent::FocusLost]);
+        }
+        let _ = shell.rebuild(editor);
+    };
+    let events = match *event {
+        Event::Key {
+            scancode: 41,
+            pressed: true,
+            ..
+        } => {
+            release(editor, shell);
+            return Some(true);
+        }
+        // F5-F8: the editor's Play controls.
+        Event::Key {
+            scancode: 62..=65, ..
+        } => return None,
+        Event::Key { repeat: true, .. } => return Some(false),
+        Event::Key {
+            scancode, pressed, ..
+        } => vec![DeviceEvent::Key {
+            scancode,
+            down: pressed,
+        }],
+        Event::MouseButton { button, pressed } => {
+            let inside = shell.ui.find("game-frame").is_some_and(|i| {
+                shell.ui.nodes[i]
+                    .rect
+                    .contains(shell.pointer[0], shell.pointer[1])
+            });
+            if pressed && !inside {
+                release(editor, shell);
+                return None;
+            }
+            vec![DeviceEvent::MouseButton {
+                button,
+                down: pressed,
+            }]
+        }
+        Event::MouseMotion { position, delta } => {
+            shell.pointer = [position[0] / dpi, position[1] / dpi];
+            vec![DeviceEvent::MouseMotion {
+                dx: delta[0],
+                dy: delta[1],
+            }]
+        }
+        _ => return None,
+    };
+    if let (Some(world), Some(surfaces)) = (&editor.play_world, &editor.play_surfaces) {
+        surfaces.device(world, shell.game_client, events);
+    }
+    Some(false)
 }

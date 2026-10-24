@@ -8,6 +8,9 @@ publish.workspace = true
 default-run = "ara-release"
 
 [dependencies]
+ara-update = { path = "../ara-update" }
+getrandom = "0.3"
+hex = "0.4"
 anyhow.workspace = true
 ara-export-installer = { path = "../ara-export-installer" }
 ara-json = { path = "../ara-json" }
@@ -18,3 +21,6 @@ zip = { workspace = true, features = ["deflate"] }
 
 [lints]
 workspace = true
+
+[dev-dependencies]
+ara-update = { path = "../ara-update", features = ["test-support"] }

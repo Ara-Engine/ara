@@ -5,3 +5,13 @@
 
 /// Metal backend marker; no Vulkan fallback is selected on Apple platforms.
 pub struct MetalBackend;
+
+impl MetalBackend {
+    /// Shared surfaces ([`crate::shared`], D19 embedded Play) are not implemented on
+    /// Metal yet (IOSurface or `MTLSharedTextureHandle` are the candidates).
+    pub fn shared_surfaces(&self) -> crate::Result<()> {
+        Err(crate::GpuError::External(
+            "shared surfaces are unsupported on the Metal backend".into(),
+        ))
+    }
+}

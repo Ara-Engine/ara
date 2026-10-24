@@ -58,6 +58,14 @@ pub struct Editor {
     pub(crate) extraction_revision: u64,
     /// Registry commands requested over MCP, run by the shell at the next frame boundary.
     pub(crate) queued_commands: Vec<(String, crate::shell::commands::Target)>,
+    /// Agent activity seen by this window: glows, notices, overwrite reports (D24).
+    pub activity: crate::activity::Activity,
+    /// Embedded Play surfaces for the Game view (taken from the play service).
+    pub(crate) play_surfaces: Option<ara_play_host::embed::Surfaces>,
+    /// The Play world this window started (`play:3`).
+    pub(crate) play_world: Option<String>,
+    /// The Game view's size in physical pixels: the size embedded Play starts at.
+    pub(crate) game_size: [u32; 2],
 }
 impl Editor {
     /// Open the project with in-memory preferences (nothing is written outside it).
@@ -122,6 +130,7 @@ impl Editor {
             .map(|d| d.id.to_string())
             .ok_or_else(|| anyhow::anyhow!("project has no scene; run ara init first"))?;
         let settings = crate::settings::Settings::open(root, user_settings)?;
+        let activity = crate::activity::Activity::new(host.store().revision());
         let mut state = EditorState {
             doc,
             ..Default::default()
@@ -141,7 +150,10 @@ impl Editor {
         // Play runs in pooled ara-player processes; the toolbar binds play.* methods.
         let mut play = ara_play_host::PlayConfig::for_project(root);
         play.pool.headless = 1;
-        host.register(Box::new(ara_play_host::PlayService::new(root, play)))
+        let mut play = ara_play_host::PlayService::new(root, play);
+        // The Game view shows embedded players through shared GPU surfaces (D19).
+        let play_surfaces = Some(play.surfaces());
+        host.register(Box::new(play))
             .map_err(|d| anyhow::anyhow!(d.to_string()))?;
         let (tasks, captures) = mpsc::channel();
         let (completed, results) = mpsc::channel();
@@ -169,7 +181,7 @@ impl Editor {
             json!({"session":session,"topics":["diagnostics","history","jobs"]}),
         )
         .map_err(EditorError::from)?;
-        Ok(Self {
+        let mut editor = Self {
             asset_updates,
             host,
             state,
@@ -188,7 +200,18 @@ impl Editor {
             review_revision: 0,
             extraction_revision: 0,
             queued_commands: Vec::new(),
-        })
+            activity,
+            play_surfaces,
+            play_world: None,
+            game_size: [1280, 720],
+        };
+        // A scene seen for the first time is framed, like `editor.scene.open` does.
+        if editor.state.camera == crate::state::Camera::default()
+            && !editor.state.scene_cameras.contains_key(&editor.state.doc)
+        {
+            editor.action("editor.frame", json!({}))?;
+        }
+        Ok(editor)
     }
     /// Push native human activity into the non-disruption boundary.
     pub fn input_active(&mut self) {}
@@ -198,9 +221,33 @@ impl Editor {
         let result = self.call_for(ConnId::LOCAL, method, params)?;
         if method == "editor.play" {
             // Multi-player Play (palette): the service resolved the `play.start` params.
-            return self.action("play.start", result);
+            let mut start = result;
+            self.embed_play(&mut start);
+            return self.action("play.start", start);
+        }
+        if method == "play.start"
+            && let Some(world) = result["world"].as_str()
+        {
+            self.play_world = Some(world.to_owned());
+        } else if method == "play.stop" {
+            self.play_world = None;
         }
         Ok(result)
+    }
+    /// Play in the Game view (setting `play.inGameView`, on by default): no player
+    /// window, an embedded surface at the Game view's size instead.
+    pub(crate) fn embed_play(&self, params: &mut Value) {
+        if self
+            .state
+            .settings
+            .get("play.inGameView")
+            .and_then(Value::as_bool)
+            .unwrap_or(true)
+        {
+            let [w, h] = self.game_size;
+            params["window"] = false.into();
+            params["embed"] = json!({"width": w.clamp(64, 8192), "height": h.clamp(64, 8192)});
+        }
     }
     /// Commit an atomic list of content commands as the window's human author.
     pub fn apply(
@@ -246,6 +293,30 @@ impl Editor {
             self.view_revision += 1;
             changed = true;
         }
+        if changed {
+            let now = std::time::Instant::now();
+            let store = self.host.store();
+            let describe = |doc: &str, selection: &[String]| {
+                let scene = store
+                    .workspace()
+                    .path_of(doc)
+                    .map(|p| p.rsplit('/').next().unwrap_or(p).to_owned())
+                    .unwrap_or_else(|| doc.to_owned());
+                let entity = selection.first().and_then(|id| {
+                    crate::world::resolve(store, doc).ok().and_then(|r| {
+                        r.get(id)
+                            .and_then(|e| e.record.get("name"))
+                            .and_then(Value::as_str)
+                            .map(str::to_owned)
+                    })
+                });
+                match entity {
+                    Some(name) => format!("{scene} · {name}"),
+                    None => scene,
+                }
+            };
+            self.activity.observe_presence(&self.state, describe, now);
+        }
         while let Ok(control) = self.controls.try_recv() {
             match control {
                 Control::ProfileFreeze { baseline, job } => {
@@ -288,10 +359,34 @@ impl Editor {
     pub fn tick(&mut self) {
         self.host.tick();
         self.sync();
+        let now = std::time::Instant::now();
+        let mut activity = self.activity.observe_history(self.host.store(), now);
+        if let Some(since) = self.activity.log_poll(now) {
+            let logs = self
+                .action(
+                    "logs",
+                    json!({"since": since, "codes": ["ARA2503"], "limit": 20}),
+                )
+                .unwrap_or(Value::Null);
+            if let Some(cursor) = logs["cursor"].as_u64() {
+                let messages = logs["entries"]
+                    .as_array()
+                    .into_iter()
+                    .flatten()
+                    .filter_map(|e| e["diagnostic"]["message"].as_str().map(str::to_owned))
+                    .collect();
+                self.activity.logs_read(cursor, messages, now);
+            }
+        }
+        activity |= self.activity.expire(now);
+        if activity {
+            self.review_revision += 1;
+            self.panels_revision += 1;
+        }
     }
     /// Read-only current edit-world adapter.
     pub fn view(&self) -> anyhow::Result<DocumentView> {
-        let mut view = DocumentView::new(self.host.store(), &self.state.doc).map_err(|d| {
+        let view = DocumentView::new(self.host.store(), &self.state.doc).map_err(|d| {
             anyhow::anyhow!(
                 d.iter()
                     .map(ToString::to_string)
@@ -299,37 +394,6 @@ impl Editor {
                     .join("\n")
             )
         })?;
-        let document = self
-            .host
-            .store()
-            .workspace()
-            .doc(&self.state.doc)
-            .ok_or_else(|| anyhow::anyhow!("scene disappeared"))?;
-        let mut deleted = ara_doc::Document::new("scene", document.id.clone());
-        for op in self.unreviewed_ops() {
-            if let ara_doc::Op::Delete { doc, id, snapshot } = op
-                && doc.as_str() == self.state.doc
-            {
-                deleted.insert_unchecked(id.clone(), snapshot.clone());
-            }
-        }
-        if !deleted.records().is_empty() {
-            let mut diagnostics = Vec::new();
-            let ghosts = ara_doc::prefab::resolve(
-                &deleted,
-                self.host.store().schema(),
-                self.host.store().workspace(),
-                &Default::default(),
-                &mut diagnostics,
-            );
-            for (id, entity) in ghosts {
-                let mut record = entity.record;
-                if let Some(parent) = entity.parent {
-                    record.insert("parent".into(), parent.into());
-                }
-                view.ghost(id, record);
-            }
-        }
         Ok(view)
     }
     /// Start a spatial gesture at the current revision.
@@ -412,13 +476,45 @@ impl Editor {
         self.sync();
         result
     }
-    pub(crate) fn report_error(&mut self, message: &str) {
-        let _ = self.action("editor.report", json!({"message":message}));
+    /// Log a failed UI action: an engine error keeps its own diagnostics (code,
+    /// location, fixes, so Problems can explain it); anything else is `ARA4500`.
+    pub(crate) fn report_failure(&mut self, error: &(dyn std::error::Error + 'static)) {
+        if let Some(EditorError(rpc)) = error.downcast_ref::<EditorError>()
+            && let Some(diagnostics) = rpc
+                .data
+                .as_ref()
+                .and_then(|d| d.get("diagnostics"))
+                .and_then(Value::as_array)
+                .filter(|d| !d.is_empty())
+        {
+            let diagnostics = diagnostics.clone();
+            if self
+                .action("diag.report", json!({"diagnostics": diagnostics}))
+                .is_ok()
+            {
+                return;
+            }
+        }
+        self.report_error(&error.to_string());
     }
-    /// Applied agent field preimages for provenance and review overlays.
+    /// Log an editor action failure to the diagnostics bus (Console, Problems, `ara logs`).
+    pub(crate) fn report_error(&mut self, message: &str) {
+        self.report("action", message, None);
+    }
+    /// Log an editor failure of `kind` (see `editor.report`) about an optional subject.
+    pub(crate) fn report(&mut self, kind: &str, message: &str, subject: Option<&str>) {
+        let _ = self.action(
+            "editor.report",
+            json!({"message": message, "kind": kind, "subject": subject}),
+        );
+    }
+    /// Fields agents changed within the activity glow, with their previous values.
     pub fn agent_fields(&self) -> BTreeMap<(String, String), Value> {
         let mut fields = BTreeMap::new();
-        for op in self.unreviewed_ops() {
+        for op in self
+            .activity
+            .recent_ops(self.host.store(), std::time::Instant::now())
+        {
             if op.doc().as_str() != self.state.doc {
                 continue;
             }
@@ -453,35 +549,13 @@ impl Editor {
         }
         fields
     }
-    pub(crate) fn unreviewed_ops(&self) -> impl Iterator<Item = &ara_doc::Op> {
-        self.host
-            .store()
-            .history()
-            .iter()
-            .filter_map(|t| self.host.review_entities(&t.id).map(|review| (t, review)))
-            .flat_map(|(t, review)| {
-                t.ops.iter().filter(move |op| {
-                    review.get(&ara_host::review::entity_key(
-                        op.doc().as_str(),
-                        op.id().as_str(),
-                    )) == Some(&ara_host::params::ReviewStatus::Applied)
-                })
-            })
-    }
-    pub(crate) fn review_tints(&self) -> BTreeMap<u64, &'static str> {
-        self.unreviewed_ops()
-            .filter(|op| op.doc().as_str() == self.state.doc)
-            .map(|op| {
-                (
-                    crate::world::render_id(op.id().as_str()),
-                    match op {
-                        ara_doc::Op::Create { .. } => "success-foreground",
-                        ara_doc::Op::Delete { .. } => "destructive-foreground",
-                        _ => "warning-foreground",
-                    },
-                )
-            })
-            .collect()
+    /// Viewport/hierarchy tints of records agents changed in the open scene just now.
+    pub fn review_tints(&self) -> BTreeMap<u64, &'static str> {
+        self.activity.tints(
+            self.host.store(),
+            &self.state.doc,
+            std::time::Instant::now(),
+        )
     }
 }
 impl Endpoint for Editor {

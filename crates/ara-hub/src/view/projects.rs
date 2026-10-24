@@ -161,13 +161,29 @@ fn actions(p: &mut Page, hub: &Hub, project: &Project, compact: bool) {
     let busy = hub.busy.contains_key(id);
     let size = if compact { " compact" } else { "" };
     let enabled = |intent: Intent| (!busy).then_some(intent);
+    let missing = !hub
+        .engines
+        .iter()
+        .any(|e| e.version == project.engine_version);
+    let open_label = if missing {
+        format!("Install {} and open", project.engine_version)
+    } else {
+        "Open".into()
+    };
     match hub.state(id) {
         State::Closed => p.action(
             &format!("open-{id}"),
             &format!("primary{size}"),
             "play",
-            "Open",
-            enabled(Intent::Open(id.clone())),
+            &open_label,
+            enabled(if missing {
+                Intent::InstallAndOpen {
+                    project: id.clone(),
+                    headless: false,
+                }
+            } else {
+                Intent::Open(id.clone())
+            }),
         ),
         State::Headless => p.action(
             &format!("open-{id}"),
@@ -184,7 +200,7 @@ fn actions(p: &mut Page, hub: &Hub, project: &Project, compact: bool) {
             enabled(Intent::Close(id.clone())),
         ),
     }
-    if !compact && hub.state(id) == State::Closed {
+    if !compact && hub.state(id) == State::Closed && !missing {
         p.action(
             &format!("headless-{id}"),
             "",
@@ -376,21 +392,53 @@ pub(super) fn menu(p: &mut Page, hub: &Hub, ctx: &Ctx) {
     };
     let state = hub.state(id);
     let busy = hub.busy.contains_key(id);
+    let missing = !hub
+        .engines
+        .iter()
+        .any(|e| e.version == project.engine_version);
     let when = |ok: bool, intent: Intent| (ok && !busy).then_some(intent);
     p.panel_styled("menu", &format!("left:{left}px; top:{top}px"), |p| {
         p.action(
             "menu-open",
             "menu-item",
             "play",
-            "Open in editor",
-            when(state != State::Editor, Intent::Open(id.clone())),
+            if missing {
+                "Install and open in editor"
+            } else {
+                "Open in editor"
+            },
+            when(
+                state != State::Editor,
+                if missing {
+                    Intent::InstallAndOpen {
+                        project: id.clone(),
+                        headless: false,
+                    }
+                } else {
+                    Intent::Open(id.clone())
+                },
+            ),
         );
         p.action(
             "menu-headless",
             "menu-item",
             "server",
-            "Open headless",
-            when(state == State::Closed, Intent::OpenHeadless(id.clone())),
+            if missing {
+                "Install and open headless"
+            } else {
+                "Open headless"
+            },
+            when(
+                state == State::Closed,
+                if missing {
+                    Intent::InstallAndOpen {
+                        project: id.clone(),
+                        headless: true,
+                    }
+                } else {
+                    Intent::OpenHeadless(id.clone())
+                },
+            ),
         );
         p.action(
             "menu-close",

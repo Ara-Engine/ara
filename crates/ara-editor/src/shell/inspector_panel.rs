@@ -86,10 +86,50 @@ impl Shell {
                 editor.state.selection.len()
             ));
         }
-        if prefab {
-            out.push_str("<text id='entity-prefab' class='chip-warning' text='Prefab instance' />");
+        out.push_str("</panel>");
+        // Prefab instances (Unity's Overrides bar): which prefab, how many overrides,
+        // and Open / Apply all / Revert all.
+        if prefab
+            && let Some(entity) = editor.state.selection.first()
+            && let Some(found) =
+                super::prefab_ops::instance(editor.host.store(), &editor.state.doc, entity)
+        {
+            let file = found
+                .prefab_path
+                .rsplit('/')
+                .next()
+                .unwrap_or(&found.prefab_path)
+                .to_owned();
+            let detail = match (found.inner.is_some(), found.overrides.len()) {
+                (true, _) if found.overrides.is_empty() => "inside an instance".to_owned(),
+                (_, 0) => "no overrides".to_owned(),
+                (_, 1) => "1 override".to_owned(),
+                (_, n) => format!("{n} overrides"),
+            };
+            out.push_str(&format!("<panel id='prefab-bar' class='prefab-bar'>{}<text id='prefab-file' class='fg' text='{}' /><text id='prefab-overrides' class='caption' text='{}' /><panel id='prefab-fill' class='fill' />",icons::icon_in("prefab-bar","package","accent"),escape(&file),escape(&detail)));
+            for (id, command, label, show) in [
+                ("prefab-open", "prefab.open", "Open", true),
+                (
+                    "prefab-apply",
+                    "prefab.apply_all",
+                    "Apply all",
+                    !found.overrides.is_empty(),
+                ),
+                (
+                    "prefab-revert",
+                    "prefab.revert_all",
+                    "Revert all",
+                    !found.overrides.is_empty(),
+                ),
+            ] {
+                if show {
+                    self.bind_command(id, command, super::commands::Target::None);
+                    out.push_str(&format!("<button id='{id}' class='notice-action' label='{label}' description='{label}' action='Dispatch'><text id='{id}-label' text='{label}' /></button>"));
+                }
+            }
+            out.push_str("</panel>");
         }
-        out.push_str("</panel><panel id='inspector-filter-row' class='row'>");
+        out.push_str("<panel id='inspector-filter-row' class='row'>");
         self.search(out, "inspector", editor);
         out.push_str("</panel>");
         let changes = editor.agent_fields();

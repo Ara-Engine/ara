@@ -103,12 +103,12 @@ impl TextSystem {
                 .register_fonts(bytes.into(), None)
                 .is_empty()
             {
-                return Err("ARA7030: font bytes contain no valid font faces".into());
+                return Err("ARA4030: font bytes contain no valid font faces".into());
             }
             count += 1;
         }
         if count == 0 {
-            return Err("ARA7030: at least one explicit font is required".into());
+            return Err("ARA4030: at least one explicit font is required".into());
         }
         Ok(Self {
             fonts,

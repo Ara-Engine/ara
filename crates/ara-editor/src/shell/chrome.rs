@@ -14,7 +14,7 @@ fn mnemonic_width(c: char) -> f32 {
 }
 impl Shell {
     pub(super) fn menubar(&mut self, editor: &mut Editor, out: &mut String) {
-        out.push_str("<panel id='menubar' class='menubar'><panel id='brand' class='brand' label='Ara'><text id='brand-mark' text='a' /></panel><panel id='menu-titles' style='flex-direction:row;gap:0px;padding-left:4px'>");
+        out.push_str("<panel id='menubar' class='menubar'><panel id='brand' class='brand' label='Ara'><image id='brand-logo' class='brand-logo' src='brand-logo' /></panel><panel id='menu-titles' style='flex-direction:row;gap:0px;padding-left:4px'>");
         for (i, menu) in MENUS.iter().enumerate() {
             let open = matches!(&self.menu, Some(m) if m.bar() == Some(i));
             let id = format!("menu-title-{i}");
@@ -93,35 +93,40 @@ impl Shell {
                 _ => {}
             }
         }
-        let agent_changes = editor.unreviewed_ops().count();
+        // D24: agents present (and whether one edited just now), not a review count.
+        let agents = editor.state.presence.len();
+        let active = editor.activity.agent_active(std::time::Instant::now());
         out.push_str("<panel id='chips' style='flex-direction:row;align-items:center;gap:2px;padding-left:6px'>");
         if errors + warnings > 0 {
-            self.bind_command("chip-problems", "window.console", Target::None);
-            out.push_str(&format!("<button id='chip-problems' class='chip' label='Problems' description='{errors} errors, {warnings} warnings · open Console' action='Dispatch'>{}<text id='chip-problems-text' class='{}' text='{}' /></button>",icons::icon_in("chip-problems","triangle-alert",if errors>0{"destructive"}else{"warning"}),if errors>0{"destructive"}else{"warning"},errors+warnings));
+            self.bind_command("chip-problems", "window.problems", Target::None);
+            out.push_str(&format!("<button id='chip-problems' class='chip' label='Problems' description='{errors} errors, {warnings} warnings · open Problems' action='Dispatch'>{}<text id='chip-problems-text' class='{}' text='{}' /></button>",icons::icon_in("chip-problems","triangle-alert",if errors>0{"destructive"}else{"warning"}),if errors>0{"destructive"}else{"warning"},errors+warnings));
         }
-        if agent_changes > 0 {
+        if agents > 0 || active {
             self.bind_command("chip-agents", "window.agents", Target::None);
-            out.push_str(&format!("<button id='chip-agents' class='chip' label='Agent changes' description='{agent_changes} agent changes to review · open Agents' action='Dispatch'>{}<text id='chip-agents-text' class='warning' text='{agent_changes}' /></button>",icons::icon_in("chip-agents","bot","warning")));
+            let tint = if active { "accent" } else { "muted" };
+            out.push_str(&format!("<button id='chip-agents' class='chip' label='Agents' description='{agents} agents connected{} · open the activity feed' action='Dispatch'>{}<text id='chip-agents-text' class='{tint}' text='{}' /></button>",if active{" · editing now"}else{""},icons::icon_in("chip-agents","bot",tint),agents.max(1)));
         }
         self.bind_command("chip-settings", "edit.preferences", Target::None);
         out.push_str(&format!("<button id='chip-settings' class='ghost icon-button' label='Preferences' description='Preferences · Ctrl+,' action='Dispatch'>{}</button></panel></panel>",icons::icon("chip-settings","settings-2")));
     }
+    /// The status bar: connection and agents, Play state, job progress (imports,
+    /// cooks, script builds), save state, the focused panel's hint and frame time.
     pub(super) fn statusbar(&mut self, editor: &mut Editor, out: &mut String) {
         let jobs = editor.action("jobs.list", json!({})).unwrap_or(Value::Null);
-        let running = jobs["jobs"]
+        let active: Vec<&Value> = jobs["jobs"]
             .as_array()
-            .and_then(|j| j.iter().find(|j| j["status"] == "running"))
-            .map(|j| {
-                format!(
-                    "{} {:0.0}%",
-                    j["name"].as_str().unwrap_or("Job"),
-                    j["progress"].as_f64().unwrap_or(0.) * 100.
-                )
-            });
+            .into_iter()
+            .flatten()
+            .filter(|j| matches!(j["status"].as_str(), Some("running" | "queued")))
+            .collect();
         let hint = match editor.state.focus.as_str() {
             "material" | "animation" => "Space Add node · F Frame · drag pins to connect",
             "vfx" => "Click a module to edit it · right-click for actions",
             "settings" => "Type to search · Ctrl+Z undoes setting changes",
+            "console" | "problems" => "Click a message for details · the link goes to its source",
+            "game" => {
+                "Click the view to play · Esc gives the keyboard and mouse back · F5-F8 Play controls"
+            }
             _ => "W E R tools · F Frame · Alt+drag Orbit · RMB+WASD Fly · Ctrl+K Commands",
         };
         let saved = self.status_note.clone().unwrap_or_else(|| {
@@ -131,15 +136,35 @@ impl Shell {
                 "All changes saved".into()
             }
         });
+        let agents = editor.state.presence.len();
+        let active_agent = editor.activity.agent_active(std::time::Instant::now());
+        self.bind_command("status-connection", "window.agents", Target::None);
+        out.push_str(&format!("<panel id='statusbar' class='statusbar'><button id='status-connection' class='chip' label='Connection' description='This editor is the project authority; agents and the ara CLI connect to it' action='Dispatch'><panel id='connection-dot' class='status-dot' /><text id='status' class='caption' text='{}' /></button>",
+            match agents {
+                0 => "Connected".to_owned(),
+                1 => format!("Connected · 1 agent{}", if active_agent { " editing" } else { "" }),
+                n => format!("Connected · {n} agents{}", if active_agent { " editing" } else { "" }),
+            }));
+        if let Some(playing) = editor.state.playing {
+            self.bind_command("status-play", "window.game", Target::None);
+            out.push_str(&format!("<button id='status-play' class='chip' label='Play' description='Open the Game view' action='Dispatch'>{}<text id='status-play-text' class='{}' text='{}' /></button>",icons::icon_in("status-play",if playing{"play"}else{"pause"},if playing{"tint-play"}else{"warning"}),if playing{"fg"}else{"warning"},if playing{"Playing"}else{"Paused"}));
+        }
         self.bind_command("status-entities", "window.hierarchy", Target::None);
-        out.push_str(&format!("<panel id='statusbar' class='statusbar'><panel id='connection-dot' class='status-dot' /><text id='status' class='caption' text='Connected' style='padding-right:8px' /><button id='status-entities' class='chip' label='Entities' action='Dispatch'>{}<text id='status-docs' text='{} entities{}' /></button><text id='status-saved' class='caption' text='{}' style='padding-left:8px' /><panel id='status-fill' class='fill' /><text id='status-hint' class='caption' text='{}' style='padding-right:12px' />",
+        out.push_str(&format!("<button id='status-entities' class='chip' label='Entities' action='Dispatch'>{}<text id='status-docs' text='{} entities{}' /></button><text id='status-saved' class='caption' text='{}' style='padding-left:8px' /><panel id='status-fill' class='fill' /><text id='status-hint' class='caption' text='{}' style='padding-right:12px' />",
             icons::icon("status-entities","box"),
             self.hierarchy.items.len(),
             if editor.state.selection.is_empty(){String::new()}else{format!(" · {} selected",editor.state.selection.len())},
             escape(&saved),
             escape(hint)));
         self.bind_command("status-jobs", "window.assets", Target::None);
-        out.push_str(&format!("<button id='status-jobs' class='chip' label='Jobs' action='Dispatch'>{}<text id='status-jobs-text' text='{}' /></button>",icons::icon("status-jobs",if running.is_some(){"activity"}else{"circle-check"}),escape(running.as_deref().unwrap_or("Jobs idle"))));
+        match active.first() {
+            Some(job) => {
+                let progress = job["progress"].as_f64().unwrap_or(0.).clamp(0., 1.);
+                let more = if active.len() > 1 { format!(" · {} more", active.len() - 1) } else { String::new() };
+                out.push_str(&format!("<button id='status-jobs' class='chip' label='Jobs' description='{} running or queued' action='Dispatch'>{}<text id='status-jobs-text' text='{} {:0.0}%{more}' /><panel id='status-jobs-bar' class='progress'><panel id='status-jobs-fill' class='progress-fill' style='width:{:0.0}%' /></panel></button>",active.len(),icons::icon_in("status-jobs","activity","accent"),escape(job["name"].as_str().unwrap_or("Working")),progress*100.,progress*100.));
+            }
+            None => out.push_str(&format!("<button id='status-jobs' class='chip' label='Jobs' description='No imports, cooks or builds running' action='Dispatch'>{}<text id='status-jobs-text' text='Jobs idle' /></button>",icons::icon("status-jobs","circle-check"))),
+        }
         self.bind_command("status-frame", "window.profiler", Target::None);
         out.push_str(&format!("<button id='status-frame' class='chip' label='Frame time' description='Open the Profiler' action='Dispatch'>{}<text id='status-timing' text='144 FPS · 6.94 ms' /></button></panel>",icons::icon("status-frame","gauge")));
     }

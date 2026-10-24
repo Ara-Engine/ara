@@ -1,4 +1,8 @@
 //! Real global MCP -> user Hub -> two independent project daemon processes.
+#[path = "../../ara-hub-service/tests/config_isolation.rs"]
+mod isolation;
+#[path = "../../ara-hub-service/tests/support/mod.rs"]
+mod support;
 use ara_proto::Endpoint;
 use serde_json::{Value, json};
 use std::{
@@ -57,13 +61,12 @@ impl TestHub {
 }
 impl Drop for TestHub {
     fn drop(&mut self) {
-        if let Some(mut hub) = ara_rpc::Client::for_project(&self.config().join("hub")) {
-            if let Ok(projects) = hub.call("hub.projects", json!({})) {
-                for project in projects["projects"].as_array().into_iter().flatten() {
-                    let _ = hub.call("hub.close", json!({"project":project["id"]}));
-                }
+        if let Err(error) = support::shutdown(&self.config()) {
+            if thread::panicking() {
+                eprintln!("{error}");
+            } else {
+                panic!("{error}");
             }
-            let _ = hub.call("hub.shutdown", json!({}));
         }
     }
 }
@@ -275,6 +278,7 @@ fn registry_metadata_subscriptions_templates_and_global_install_configs() {
     let config = hub.cli(&["hub", "install-mcp", "--client", "claude"]);
     assert_eq!(config["mcpServers"]["ara"]["args"], json!(["mcp"]));
     let codex = Command::new(env!("CARGO_BIN_EXE_ara"))
+        .env("ARA_CONFIG_DIR", hub.config())
         .args(["hub", "install-mcp", "--client", "codex"])
         .output()
         .expect("config");

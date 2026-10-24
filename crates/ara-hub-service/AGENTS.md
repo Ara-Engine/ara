@@ -12,6 +12,9 @@ directory, enforced by an OS file lock; projects run in separate processes.
 - `config_dir()`: `ARA_CONFIG_DIR`, else `%APPDATA%/Ara` on Windows,
   `~/Library/Application Support/Ara` on macOS, `$XDG_CONFIG_HOME/ara` or
   `~/.config/ara` elsewhere.
+- Checkout/test binaries reject the real profile before discovery or writes;
+  installed services also reject worktree engine/editor registrations there.
+  Explicit overrides use `HubConfig::for_directory` and the same validation.
 - `TemplateSource { list, instantiate }`; default `DirectoryTemplates` lists
   built-in `blank` plus child directories containing `ara.project.json`. Names and
   `description` come from that marker; the preview is `thumbnail.png`, else
@@ -40,9 +43,18 @@ params/results use camelCase. No engine session is needed for `hub.*`.
 | `hub.open` | `{project,headless?}` | Status; false/default opens native editor, true starts headless |
 | `hub.close` | `{project}` | Closed status after graceful flush/shutdown |
 | `hub.status` | `{project?}` | One status or `{projects:[status],revision}` |
-| `hub.engines` | `{}` | `{engines:[{version,executable,editor}]}`; installed builds for each project's pin picker |
+| `hub.engines` | `{}` | `{engines:[{version,executable,editor,managed}]}`; installed builds for each project's pin picker; managed builds support Uninstall |
 | `hub.engine.register` | `{engine:{version,executable,editor}}` | Persist an installed version; executable paths must exist and be absolute |
 | `hub.engine.remove` | `{engine:{version,executable,editor}}` | Remove only that exact build; reject while pinned projects are open |
+| `hub.engines.available` | `{channel?:"stable"|"preview"}` | `{releases:[signed manifest],status,checking,repo,channel}`; first call starts a background check; preview includes stable |
+| `hub.engine.install` | `{version,hubVersion?}` | Job `{id,kind,version,state,progress:{received,total},result,error}` immediately; verification/extraction run off the authority thread |
+| `hub.engine.uninstall` | `{version}` | `{removed:version}`; Hub-managed files only, rejects open pins |
+| `hub.downloads` | `{}` | `{jobs:[job]}`; state is `running|complete|failed|cancelled`, error is a catalogued diagnostic |
+| `hub.download.cancel` | `{job:id}` | `{cancelling:id}`; removes partial data before commit |
+| `hub.releases.check` | `{}` | `{checking:true}`; refresh per-page ETags and signed cache |
+| `hub.releases.configure` | `{repo?,channel?}` | Persist update.json, clear prior feed and check; rejects changes during active work; ARA_RELEASE_REPO overrides repo |
+| `hub.updates` | `{channel?}` | Same feed snapshot, filtered to Hub releases; no process restart |
+| `hub.update.prepare` | `{version,hubVersion?}` | Hub download job; complete result `{archive,manifest,signature}` for independent external-updater verification |
 | `hub.activity` | `{project?}` | `{activity:[{project:id,participants,presence}]}`; attached human/editor and agent rows, current selection/camera/task |
 | `hub.subscribe` | `{}` | `{revision}`; subsequent `hub.changed {revision,kind,project}` notifications |
 | `hub.unsubscribe` | `{}` | `{ok:true}`; also automatic on socket close |
@@ -55,6 +67,12 @@ invalidates the appropriate view: refresh projects/status/activity; revision is 
 monotonic counter within this Hub run, not an on-disk revision. Subscribe before
 initial reads to avoid missing a change. No replay history is promised; refresh
 all views after reconnect. Do not render lifecycle calls as approval or review.
+
+`hub.changed` kinds `releases` and `progress` invalidate release/job snapshots.
+`hub.engines` adds `managed:bool` (external registrations are unregister-only).
+Offline/rate-limited feeds carry a clear status; signatures are reverified on cache
+reads. Install roots: LOCALAPPDATA/Ara/Engines/version. Cancelled/tampered extraction
+never registers. Imported project pins may name a missing semantic version.
 
 Render: project cards (name, thumbnail fallback, recent time, path, pinned engine,
 open/headless/editor badge), Create (template/name/destination/version), Open and
@@ -102,7 +120,13 @@ Per-project compatibility: `ara mcp --root <project>` and optional `.mcp.json`
 
 ## Tests and gates
 
-`CARGO_BUILD_JOBS=2 cargo test -p ara-hub-service` covers durable registry/templates.
+Every test/capture/manual check uses a scratch ARA_CONFIG_DIR under target/: the
+tracked `.cargo/config.toml` sets `target/ara-config` for `cargo test`/`cargo run`
+(an explicit value wins). Config-isolation tests fail if it resolves elsewhere. Test cleanup
+closes projects, shuts down the owned service and waits for discovery removal.
+Do not stop or alter another user's/service's profile.
+
+`CARGO_BUILD_JOBS=4 cargo test -p ara-hub-service` covers durable registry/templates and release jobs.
 `cargo test -p ara --test hub` runs real user Hub + global stdio MCP + two project
 daemons, concurrent clients, registry metadata, subscriptions, and install output.
 `cargo test -p ara --test engine` retains per-project MCP/HTTP coverage.

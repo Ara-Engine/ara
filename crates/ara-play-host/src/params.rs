@@ -18,6 +18,11 @@ pub struct PlayStartParams {
     pub clients: Option<u32>,
     /// Open windows (SDL3) for local/host/client players; headless otherwise.
     pub window: Option<bool>,
+    /// Show every rendering player (local, host, clients; not a dedicated server) in
+    /// the editor through a shared GPU surface of this size instead of a window
+    /// (implies no window). Each player in the result gets a `surface`; send input
+    /// with `play.device` and resize with `play.resize`.
+    pub embed: Option<crate::embed::EmbedParams>,
     /// Start paused at tick 0 (step explicitly); default runs at the fixed rate.
     pub start_paused: Option<bool>,
     /// Session seed for every deterministic random stream (default 0).
@@ -69,6 +74,46 @@ pub struct PlayInputParams {
     pub world: Option<String>,
     /// Action injections `{action, value, holdTicks, afterTicks, player}` for the next tick.
     pub inputs: Vec<Value>,
+}
+
+/// Params of `play.device`: raw input for one embedded player.
+#[derive(Debug, Schema, Deserialize)]
+#[ara(params)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PlayDeviceParams {
+    /// Session handle from `session.begin`.
+    pub session: String,
+    /// World ID from `play.start` (`play:1`); default: the most recent world.
+    pub world: Option<String>,
+    /// The one player that gets the events (0 = the local or host player, 1.. =
+    /// clients in launch order, player `index + 1`).
+    pub player: u32,
+    /// Events in order: `{kind: "key", scancode, down}` (SDL scancodes: W 26, A 4,
+    /// S 22, D 7, arrows 79-82, Space 44, Left Shift 225), `{kind: "mouseButton",
+    /// button, down}` (1 left, 2 middle, 3 right; hold 3 to look), `{kind:
+    /// "mouseMotion", dx, dy}` (relative pixels) or `{kind: "focusLost"}` (releases
+    /// every held key and stops looking). Mapped to Move/Jump/Sprint/Look exactly
+    /// like a windowed player's keyboard and mouse.
+    pub events: Vec<Value>,
+}
+
+/// Params of `play.resize`: a new size for one embedded player's surface.
+#[derive(Debug, Schema, Deserialize)]
+#[ara(params)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PlayResizeParams {
+    /// Session handle from `session.begin`.
+    pub session: String,
+    /// World ID from `play.start` (`play:1`); default: the most recent world.
+    pub world: Option<String>,
+    /// The embedded player (0 = the local or host player, 1.. = clients).
+    pub player: u32,
+    /// New width in pixels.
+    #[ara(range(min = 1, max = 8192))]
+    pub width: u32,
+    /// New height in pixels.
+    #[ara(range(min = 1, max = 8192))]
+    pub height: u32,
 }
 
 /// Params of `play.inspect`.
