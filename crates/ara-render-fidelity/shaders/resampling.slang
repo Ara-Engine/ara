@@ -267,29 +267,30 @@ void reservoirSpatial(uint3 tid:SV_DispatchThreadID){
     storeGI(reservoir.gi.z,index,gr);
 }
 // Full-resolution shading from the four nearest resolved grid blocks (bilinear,
-// on the same surface): each pixel evaluates its own BRDF for the blocks' DI light
-// samples (visibility from the block) and GI reconnections. Pixels with no
-// compatible block repair with RIS direct light and DDGI irradiance.
+// on the same surface): each pixel evaluates its own BRDF for every block's DI
+// light sample (visibility from the block) and GI reconnection. Pixels with no compatible block repair with RIS direct light
+// and DDGI irradiance.
 [shader("compute")][numthreads(8,8,1)]
 void reservoirShade(uint3 tid:SV_DispatchThreadID){
     Frame f=frame();ReservoirFrame reservoir=reservoirFrame();uint2 p=tid.xy;if(any(p>=f.sizes.xy))return;
     if(pixel(f,WORLD+f.control.x,p).w==0){extraStore(f,SPEC_RAW,p,float4(0,0,0,1));return;}
     float3 v;Surface s=primarySurface(f,p,v);uint rng=hash(p.y*f.sizes.x+p.x+f.control.w*9973);bool layered=layeredMaterial(s);
     int2 phase=int2(gridPhase(f));float2 g=float2(int2(p)-phase)*0.5;int2 b=int2(floor(g));float2 t=g-float2(b);
-    float3 direct=0,indirect=0;float directWeight=0,indirectWeight=0;DIReservoir pick=(DIReservoir)0;
+    float3 direct=0,indirect=0;float directWeight=0,indirectWeight=0;
     for(int k=0;k<4;k++){
         int2 o=int2(k&1,k>>1);int2 q=gridPointOf(f,(b+o)*2+phase,uint2(phase));
         if(!compatible(f,p,q,false))continue;
         float w=(o.x==1?t.x:1-t.x)*(o.y==1?t.y:1-t.y)+1e-3;uint owner=uint(q.y)*f.sizes.x+uint(q.x);
         DIReservoir d=readDI(reservoir.di.z,owner);
-        if(d.M>0){directWeight+=w;if(random(rng)*directWeight<w)pick=d;}
+        if(d.M>0){directWeight+=w;if(d.W>0 && d.visibility>0)direct+=w*lightAt(f,s,v,d.light,d.seed).value*d.W;}
         if(layered)continue;
         GIReservoir r=readGI(reservoir.gi.z,owner);
         if(r.stats.y>0){indirectWeight+=w;float3 direction;float distance;if(r.stats.x>0)indirect+=w*giValue(s,v,r,direction,distance)*r.stats.x;}
     }
-    if(directWeight>0 && pick.W>0 && pick.visibility>0)direct=lightAt(f,s,v,pick.light,pick.seed).value*pick.W;
-    if(directWeight==0)direct=risDirect(f,s,v,rng,true);
+    direct=directWeight>0?direct/directWeight:risDirect(f,s,v,rng,true);
+    // Only pixels with no compatible block at all repair from DDGI: probe irradiance
+    // includes emitters, so pairing it with reservoir DI would count them twice.
     if(indirectWeight>0)indirect/=indirectWeight;
-    else if(!layered && s.metal<1)indirect=irradiance(f,s.position,s.normal,f.probes.y)*diffuseValue(s,v,s.normal);
+    else if(directWeight==0 && !layered && s.metal<1)indirect=irradiance(f,s.position,s.normal,f.probes.y)*diffuseValue(s,v,s.normal);
     store(f,DIRECT,p,float4(pixel(f,DIRECT,p).rgb+direct,1));store(f,RAW,p,float4(indirect/demodulation(f,p),1));
 }

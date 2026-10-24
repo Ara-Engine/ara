@@ -5,20 +5,21 @@ use crate::{FidelityView, Mode, PostSettings, Settings, Tier, Upscaler};
 use anyhow::{Result, bail};
 use ara_gpu::vulkan::VulkanDevice;
 
-/// User-facing quality tier, from the cheapest baseline raster to native-resolution
-/// ray-traced many-light sampling.
+/// User-facing quality tier, from the cheapest baseline raster to ray-traced
+/// many-light sampling. Budgets follow D26 (1440p on an RTX 4070 SUPER: High GPU
+/// <= 6 ms, Medium <= 3.5, Epic <= 10). Every fidelity tier runs ReSTIR DI/GI with
+/// grid-resolution reuse; they differ in transport resolution and budgets.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum QualityPreset {
     /// Baseline raster renderer with live TAA; no ray tracing.
     Low,
-    /// Hybrid ray-traced lighting at half resolution: DDGI with one traced event,
-    /// probe-only rough reflections, no ReSTIR.
+    /// ReSTIR at 0.4 scale (1024x576 for 1440p), bounded budgets, rough reflections
+    /// from the probe field above roughness 0.35.
     Medium,
-    /// Hybrid ray-traced lighting at 0.625 scale (1600x900 for 1440p); ReSTIR in
-    /// scenes lit by emissive surfaces or many local lights, with reservoir paths
-    /// ending in the probe field after one traced event.
+    /// ReSTIR at half scale (1280x720 for 1440p), bounded budgets: reservoir paths
+    /// end in the probe field after one traced event.
     High,
-    /// Native-resolution ray tracing with ReSTIR DI/GI in every scene.
+    /// ReSTIR at two-thirds scale with two traced events before the probe field.
     Epic,
 }
 
@@ -245,37 +246,37 @@ impl Plan {
                 render_size: display_size,
             },
             QualityPreset::Medium => RenderPath::Fidelity(FidelityPlan {
-                render_size: scaled(0.5),
+                render_size: scaled(0.4),
                 display_size,
                 upscaler: Upscaler::Taau,
                 probe_ray_budget: 8192,
                 reflection_cutoff: 0.35,
                 gather_events: 1,
                 transport_stride: 4,
-                reservoirs: Reservoirs::Off,
+                reservoirs: Reservoirs::On,
                 bounded_reservoirs: true,
             }),
             QualityPreset::High => RenderPath::Fidelity(FidelityPlan {
-                render_size: scaled(0.625),
+                render_size: scaled(0.5),
                 display_size,
                 upscaler: Upscaler::Taau,
                 probe_ray_budget: 16384,
                 reflection_cutoff: 0.6,
                 gather_events: 1,
                 transport_stride: 4,
-                reservoirs: Reservoirs::ManyLights,
+                reservoirs: Reservoirs::On,
                 bounded_reservoirs: true,
             }),
             QualityPreset::Epic => RenderPath::Fidelity(FidelityPlan {
-                render_size: display_size,
+                render_size: scaled(2.0 / 3.0),
                 display_size,
                 upscaler: Upscaler::Taau,
                 probe_ray_budget: 32768,
                 reflection_cutoff: 0.8,
                 gather_events: 2,
-                transport_stride: 2,
+                transport_stride: 4,
                 reservoirs: Reservoirs::On,
-                bounded_reservoirs: false,
+                bounded_reservoirs: true,
             }),
         };
         Ok(Self {
@@ -335,7 +336,7 @@ mod tests {
             }
         }
         let high = Plan::resolve(QualityChoice::Auto, &RT, [2560, 1440]).unwrap();
-        assert!(matches!(high.path, RenderPath::Fidelity(f) if f.render_size == [1600, 900]));
+        assert!(matches!(high.path, RenderPath::Fidelity(f) if f.render_size == [1280, 720]));
     }
 
     #[test]
