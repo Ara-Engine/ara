@@ -60,6 +60,8 @@ to sharing `CARGO_TARGET_DIR`: final executable names collide across branches.
 Shared intermediate caches still serialize compilation and can rebuild when
 branches use different linkers or feature sets. Cleanup inspects local target
 directories; an external shared cache needs its own explicit cleanup policy.
+Keep independent build directories outside every checkout's target directory:
+cleaning a parent target can remove a nested cache while its Cargo build is active.
 Keep source changes and rebuilds out of an in-progress test/doctest run using that
 cache: replacing its dependencies can invalidate already-built Rust metadata.
 
