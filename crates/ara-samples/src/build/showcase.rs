@@ -185,7 +185,11 @@ pub fn build(ctx: &Ctx) -> Result<()> {
     s.entity(
         "e_env",
         "Studio",
-        json!({"Environment": {"sky": [0.5, 0.48, 0.45, 1], "horizon": [0.6, 0.55, 0.5, 1], "ground": [0.25, 0.22, 0.2, 1], "intensity": 900, "exposure": 0.002}}),
+        json!({
+            "Environment": {"sky": [0.5, 0.48, 0.45, 1], "horizon": [0.6, 0.55, 0.5, 1], "ground": [0.25, 0.22, 0.2, 1], "intensity": 900, "exposure": 0.002},
+            // Product lighting: Neutral keeps material colours accurate.
+            "PostProcess": {"toneMapping": "neutral", "bloom": 0.04}
+        }),
     );
     s.commands.extend(light(
         "e_key",

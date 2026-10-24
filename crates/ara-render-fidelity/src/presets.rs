@@ -242,7 +242,7 @@ impl Plan {
                 render_size: scaled(0.5),
                 display_size,
                 upscaler: Upscaler::Taau,
-                probe_ray_budget: 4096,
+                probe_ray_budget: 8192,
                 reflection_cutoff: 0.35,
                 gather_events: 1,
                 transport_stride: 4,
