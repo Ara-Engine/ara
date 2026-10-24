@@ -28,6 +28,10 @@ otherwise bundled tools beside the executable, VULKAN_SDK, then PATH are used.
 Run `cargo check -p ara-shader-cook`, `cargo test -p ara-shader-cook`,
 `cargo clippy -p ara-shader-cook --all-targets -- -D warnings`, and
 `cargo fmt -p ara-shader-cook -- --check`.
+Append `--watch` for 200 ms source/include watching. Successful whole-cohort cooks
+signal running dev devices; failures retain all last-good manifests. Per-pipeline
+literal include fingerprints reuse unaffected SPIR-V across cohort revisions.
+Experiment outputs belong under target/; refreshing tracked cooked files is explicit.
 The SDK-backed test checks reuse, corrupt-artifact recovery and preservation of
 the last good cook after compiler failure. It runs the real Slang/DXIL tools.
 

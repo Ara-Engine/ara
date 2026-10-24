@@ -11,6 +11,8 @@ mod image_copy;
 mod lifetime;
 mod pipeline;
 mod recording;
+mod reload;
+pub use reload::ShaderStatus;
 mod surface;
 
 pub use crate::commands::{Attachment, Command, CommandList, Draw, PassTiming, Recorder};
@@ -57,6 +59,7 @@ pub struct VulkanDevice {
     cache: vk::PipelineCache,
     cache_path: PathBuf,
     pending: Vec<recording::Pending>,
+    shader_worker: Option<reload::Worker>,
 }
 
 impl VulkanDevice {
@@ -116,6 +119,15 @@ impl VulkanDevice {
             guard.push(guard::Object::Semaphore(*semaphore));
         }
         let heap = Heap::new(&context)?;
+        let shader_worker = if std::env::var_os("ARA_SHADER_DIR").is_some() {
+            Some(reload::Worker::new(
+                context.device.clone(),
+                context.info.mesh_shading,
+                heap.layout,
+            )?)
+        } else {
+            None
+        };
         guard.disarm();
         Ok(Self {
             context,
@@ -130,6 +142,7 @@ impl VulkanDevice {
             cache,
             cache_path,
             pending: Vec::new(),
+            shader_worker,
         })
     }
 
@@ -321,10 +334,17 @@ impl VulkanDevice {
             cooked,
             artifacts,
         )?;
-        self.pipelines.insert(native)
+        let handle = self.pipelines.insert(native)?;
+        if let Some(worker) = &mut self.shader_worker {
+            worker.track(handle, cooked, artifacts)?;
+        }
+        Ok(handle)
     }
     /// Invalidate a cooked pipeline identity and defer native destruction until all queues complete.
     pub fn retire_pipeline(&mut self, pipeline: Pipeline) -> Result<()> {
+        if let Some(worker) = &self.shader_worker {
+            worker.forget(pipeline);
+        }
         self.retired.push(Retired::Pipeline(
             self.pipelines.remove(pipeline)?,
             self.submitted,

@@ -39,6 +39,15 @@ impl Drop for Tree {
 }
 
 pub(crate) fn run(command: &mut Command, deadline: Option<Instant>) -> Result<Outcome> {
+    run_observed(command, deadline, || Ok(()))
+}
+
+/// Observe bounded status files while retaining the same child-tree cleanup guarantees.
+pub(crate) fn run_observed(
+    command: &mut Command,
+    deadline: Option<Instant>,
+    mut observe: impl FnMut() -> Result<()>,
+) -> Result<Outcome> {
     if deadline.is_some_and(|limit| Instant::now() >= limit) {
         return Ok(Outcome::TimedOut);
     }
@@ -61,6 +70,7 @@ pub(crate) fn run(command: &mut Command, deadline: Option<Instant>) -> Result<Ou
         .expect("job exists until tree cleanup")
         .assign(&tree.child)?;
     loop {
+        observe()?;
         if let Some(status) = tree.child.try_wait()? {
             return Ok(Outcome::Exited(status));
         }

@@ -135,6 +135,8 @@ impl Device for VulkanDevice {
 
 impl Drop for VulkanDevice {
     fn drop(&mut self) {
+        // Join the compiler and destroy unpublished replacements before layout/device teardown.
+        drop(self.shader_worker.take());
         // SAFETY: Last owner. Idle covers descriptors, pipelines, queries and command buffers.
         unsafe {
             let _ = self.context.device.device_wait_idle();

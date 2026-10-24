@@ -18,6 +18,7 @@ use std::collections::BTreeMap;
 pub struct FidelityView {
     pub(crate) settings: Settings,
     pub(crate) shader_revision: String,
+    pub(crate) shader_epoch: u64,
     pub(crate) scene: GpuScene,
     pub(crate) targets: Targets,
     pub(crate) pipelines: BTreeMap<&'static str, Pipeline>,
@@ -202,6 +203,7 @@ impl FidelityView {
         Ok(Self {
             settings,
             shader_revision: cohort.expect("Every view loads cooked pipelines"),
+            shader_epoch: gpu.shader_epoch(),
             scene,
             targets: Targets::new(
                 gpu,

@@ -55,12 +55,15 @@ Local evidence is under `target/ara-dev/final-green3.json`, `final-workspace3.lo
 `final-capture3.log` and `verified-baseline/lit.png`. Disk reporting passed on all
 drives, and the live worktree cleanup dry-run completed without deletions.
 
-The gate compiles selected tests with Cargo's JSON artifact messages before
-execution, then builds any missing selected binary targets once. It exposes the
+The gate compiles selected tests and regular binaries together with
+`cargo build --lib --tests --bins --examples --profile test`, collecting Cargo's JSON
+artifact messages in one invocation over the entire selected package set. This
+keeps dev-dependency features unified, includes library-only feature owners, and
+retains the test profile even when it differs from dev. It exposes the
 exact regular executables as runtime CARGO_BIN_EXE_* variables for process-test
 helpers. This keeps final binaries separate from hashed test executables, handles
-custom build directories, and avoids nested builds with a different feature set.
-`test-build` and optional `test-binaries` rows account for compilation; `tests`
+custom build directories, and avoids a second build with a different feature set.
+`test-build` accounts for all compilation, including peer binaries; `tests`
 accounts for execution, including doctests. All phases share the same deadline.
 
 Cargo 1.99 can reuse intermediate artifacts through `CARGO_BUILD_BUILD_DIR` while
@@ -76,6 +79,128 @@ cache: replacing its dependencies can invalidate already-built Rust metadata.
 
 ## One gate
 
+For performance work, run `ara-dev perf` plus `cargo check` and focused tests on
+the touched crates during each iteration. Run `ara-dev check` at commit
+checkpoints. Repeating the full gate between measurements destroys iteration speed.
+
+## Performance iteration
+
+Choose a target directory unique to this worktree, for example:
+
+```powershell
+$env:CARGO_BUILD_JOBS='4'
+$env:CARGO_TARGET_DIR='D:\AraBuild\my-worktree-perf'
+$env:CARGO_BUILD_BUILD_DIR=$env:CARGO_TARGET_DIR
+cargo run -p ara-dev -- perf --preset high --frames 240
+cargo run -p ara-dev -- perf --preset high --keep-alive
+# From another shell, using the control directory printed by the first command:
+cargo run -p ara-dev -- perf control --session <control-dir> --preset medium
+cargo run -p ara-dev -- perf control --session <control-dir> --reload-shaders
+cargo run -p ara-dev -- perf control --session <control-dir> --stop
+# Attach an MCP client to the same warm player (stdio):
+cargo run -p ara-dev -- perf mcp --session <control-dir>
+```
+
+`perf` builds the same four tool/player roots with the optimized `perf` profile,
+then uses the machine GPU queue for the player. The profile inherits release,
+enables incremental compilation and 256 codegen units, disables LTO and keeps
+line tables. Dependencies remain at opt-level 3. Shipping and D26 confirmation
+use `--profile release`; perf timings are iteration evidence, not a release pass.
+The first cold build and initial content export are setup costs, not the warm loop.
+
+The default scene is a once-exported frozen copy of authored Outpost from
+`samples/outpost`, with the 144-tile scene from main. The production exporter
+cooks it once into `target/ara-dev/perf/outpost`; subsequent runs never reimport
+or repackage it. `--scene <export-folder>` selects another existing immutable pack.
+To refresh content, choose another frozen export folder explicitly. Each report
+records the pack's Git blob hash, camera, dimensions, preset, profile and active
+shader cohorts; comparisons reject incompatible named baselines. Automatic
+previous-run comparison starts a fresh baseline when identity changes.
+Prepare sample art and generated kit geometry once through the sample's fetch/build
+workflow (see `samples/README.md`), or supply an already exported `--scene`.
+The command checks for missing source assets before building; sidecars alone cannot produce a pack.
+
+The defaults are High, 2560x1440, 30 warm-up frames and 240 measured frames,
+with validation disabled by the optimized profile. `--warmup`, `--frames`,
+`--width` and `--height` override these. Reports contain GPU pass p50/p95/max,
+CPU phase quantiles, frame time and FPS p50/p95/max, startup/first-frame timings,
+build/total time, and previous-run deltas. JSON and command logs remain under
+`target/ara-dev/perf/run-*`; `--json` prints the report and `--baseline <report>`
+selects a named comparison. Keep-alive `--json` streams one compact JSON object per
+completed window (NDJSON). `--no-build` reuses prior Cargo artifact paths;
+`--player <exe>` can supply an explicit prebuilt player. The same selected package
+set is kept after initial setup, preserving the build feature union.
+
+`--keep-alive` holds the GPU lock while the player remains open. The control queue
+supports fresh measurement windows, preset swaps, shader reload, and stop. A plain
+`perf control --session <dir>` measures again. Raw player metrics are available
+while it runs in `player.json`; the perf process publishes each completed window
+and its comparison. Close the window or send stop to release the GPU for others.
+The local MCP bridge exposes `perf_status`, `perf_measure` (optional `quality`),
+`perf_reload_shaders`, and `perf_stop`; it neither rebuilds nor launches another player.
+Ordinary exported player behavior and `ARA_RESULT` remain unchanged without perf flags.
+
+Shaders already load cooked files at runtime. `ARA_SHADER_DIR=<workspace>` makes
+player/editor resource selection explicitly prefer that workspace's
+`crates/<package>/cooked` over executable-relative resources. A directory laid out
+as `resources/<package>` or `<package>` works too. For an arbitrary single cohort:
+
+```powershell
+$env:ARA_SHADER_DIR='D:\shader-iteration\fidelity'
+$env:ARA_SHADER_PACKAGE='ara-render-fidelity'
+& "$env:CARGO_TARGET_DIR\perf\ara-shader-cook.exe" crates/ara-render-fidelity/shaders/pipelines.json $env:ARA_SHADER_DIR --watch
+```
+
+Set those environment variables before starting the player/editor. The cooker
+watches sources/headers every 200 ms; successful cohorts publish a reload signal.
+Compilation errors retain every last-good manifest and shader. The GPU worker
+compiles changed native pipelines away from the frame thread, checks ABI/state
+compatibility, publishes at a submission boundary, and retires old native handles
+only after both queue timelines complete. Temporal fidelity histories reset on
+publication. Shader epoch/cohort hashes and reload errors appear in metrics.
+Layout/stage/render-state changes require a Rust rebuild. No Slang compiler is
+linked into the player, and the watch command adds no build prerequisite.
+
+Literal local include dependencies drive per-pipeline reuse; macro/system/module
+includes conservatively invalidate the source tree. Unchanged SPIR-V is reused
+across new cohort keys. A shader-only iteration needs neither Cargo nor a new
+player process. Cook into an ignored scratch directory for experiments; tracked
+cooked files are refreshed only deliberately.
+
+### Measured iteration loop
+
+On 2026-10-24, both profiles were warmed with the same four package roots, four
+build jobs and an independent D: target directory. Changing High's
+`reflection_cutoff` from 0.60 to 0.61 in `ara-render-fidelity/src/presets.rs`, then
+running the frozen 144-tile Outpost at 2560x1440, High, 30 warm-up and 240 measured
+frames gave:
+
+| Profile | Renderer rebuild | Rebuild plus native player run |
+| --- | ---: | ---: |
+| release | 28.03 s | 62.08 s |
+| perf | 30.22 s | 61.94 s |
+
+This sample shows no incremental compile advantage over release; both complete
+the inner loop in about a minute. Cold compilation and the first asset import/
+export are separate setup costs. The probe edit was restored afterwards.
+GPU medians were 15.64 and 15.61 ms respectively, and first-frame times were
+8.62 and 7.18 seconds: these measurements do not meet D26's release budget.
+Local evidence is `target/ara-dev/perf-rebuild-results.json`, with build and player
+logs beside it. A 60-frame run with a capture completed in 20.54 seconds once
+the frozen pack was available.
+
+On the final binary, editing `post.slang` in an isolated fidelity cohort produced
+a new 60-frame window in 6.25 seconds: three offline pipelines cooked in 3.29
+seconds and native replacement used 3.72 ms on the warm driver cache. The player
+PID and executable hash stayed identical. An incompatible binding-layout probe
+was rejected while retaining the last-good report/cohort; restoring the manifest
+then reloading recovered successfully. A live High-to-Medium swap and the stdio
+MCP status query passed on that same process. Evidence is
+`target/ara-dev/perf-final-probe-results.json` and its before/after/rejection/
+recovery reports. The final capture was visually inspected.
+
+## Gate usage
+
 ```
 cargo run -p ara-dev -- check
 cargo run -p ara-dev -- check --base main --json
@@ -87,7 +212,9 @@ includes committed, staged, unstaged and untracked changes. Cargo metadata suppl
 workspace paths and all dependency edges (including optional, build and test
 dependencies). Library/build changes and real dependency updates propagate through
 reverse dependencies. Integration tests, examples and benches select their own
-package; root documentation and AGENTS.md need hygiene and formatting. Crate
+package; root documentation and AGENTS.md need hygiene and formatting.
+Changes to `release/licenses/` select the `ara-release` inventory/packaging tests;
+an absent packager retains the conservative workspace fallback. Crate
 Markdown remains a build input because catalogs can use include_str!. Manifest comparisons resolve
 workspace inheritance, features, defaults and locked versions. Moving an unchanged
 dependency into workspace.dependencies, including a verified Rust import alias,

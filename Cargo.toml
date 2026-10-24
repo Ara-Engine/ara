@@ -101,6 +101,17 @@ debug = false
 opt-level = 3
 debug = false
 
+# Fast optimized iteration; release remains the shipping/performance-bar build.
+[profile.perf]
+inherits = "release"
+incremental = true
+codegen-units = 256
+lto = false
+debug = "line-tables-only"
+
+[profile.perf.package."*"]
+opt-level = 3
+
 # Deterministic transport clock patches: crates/ara-net/vendor/PATCHES.md.
 [patch.crates-io]
 lightyear_sync = { path = "crates/ara-net/vendor/lightyear_sync" }
