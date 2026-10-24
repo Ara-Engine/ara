@@ -138,6 +138,42 @@ also cannot inherit each caller's Cargo budget. Cross-worktree workspace crates 
 recompile because their source/package identities differ; registry dependency reuse is
 measured separately. We do not normalize embedded manifest paths or reuse branch binaries.
 
+### Gate measurements, 2026-10-24
+
+Measured on the shared 16-thread Windows PC with two build jobs:
+
+- The real infra-only batch against `38fbcd49` passed with main's existing runner in
+  **255.80s**, and the revised runner in **178.84s** (30.1% less wall time). Both select
+  ara-dev; the revised run includes two additional regressions. Formatting fell from
+  20.11s (101 crates) to 0.47s (one crate), test preparation 23.42s to 11.99s, and
+  execution 192.33s to 155.87s. Revised execution passed 23 unit, 17 CLI and two queue
+  tests, with a 2572 MiB admission budget. Strict clippy and unchanged-tree checks passed.
+- A valid catalog sentence edit on isolated main `7bc3ad5e` selected **83 compile
+  packages** with main's runner. The revised gate selected no compile/package-test
+  roots, retained diagnostic coverage, and passed in **13.09s / 6.43s** (first/warm).
+- A controlled four-crate dependency chain checked all four crates but tested two.
+  Matched warm runs improved **24.15s / 21.42s → 14.59s / 13.56s**; harness execution
+  improved **18.08s / 14.76s → 4.02s / 3.09s**. This separates selection/scheduling
+  from the infra batch's intrinsically serial Cargo transaction fixtures.
+- Three linked worktrees building the same three registry dependencies took
+  **58.84s / 12.35s / 9.24s** with separate intermediates and the existing sccache,
+  versus **3.04s / 0.568s / 0.572s** with shared intermediates. Both followers reused
+  **3/3 registry artifacts**; workspace roots compiled on their first visit. The
+  focused wrapper then reused all four artifacts with a deliberately missing optional
+  compiler-cache executable configured (Cargo reported 0.41s).
+
+The recorded main run `run-17344-1792844038180` reached **2402.21s** of observed wall
+time with incomplete test output: clippy 4m26s, test build 12m05s, then slow player
+failures/timeouts. It is an incomplete historical baseline, not a passing catalog-only
+timing. The measurements above identify the selected workload and preserve that distinction.
+Existing sccache counters showed 46.2% Rust hits and 19,401 incremental exclusions;
+the new reuse percentages are Cargo artifact hits, a separate metric.
+
+Evidence is retained under `target/ara-dev/infra-round/` (`infra-batch-before.json`,
+`infra-batch-after-fixed.json`, `catalog-*.json`, `cache-results.json`, and focused logs).
+The inherited fidelity shader cohort was re-cooked after the main merge: all 48 pipelines,
+296.63s, with no tracked output changes. No GPU timing run was needed for this round.
+
 ## Performance iteration
 
 Choose a target directory unique to this worktree, for example:
