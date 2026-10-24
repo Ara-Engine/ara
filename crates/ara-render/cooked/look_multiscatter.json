@@ -1,7 +1,7 @@
 {
   "binding_layout_hash": "35cd2a62b1ba741ce6823b3c8753d7b5aa97b54c5f0a837b56e542518013fd7e",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "de9f4e4068df5ff60741953f9ec4a50f9f90258f15ad33bdb3c7e212b25f89d3",
+  "key": "af5ddeb238f6d1b26945a2d6f497ecd0afa95311d75ea8b54745c2c4842b73c5",
   "stages": [
     {
       "dxil": "de9f4e4068df5ff60741953f9ec4a50f9f90258f15ad33bdb3c7e212b25f89d3/multiScatterMain.dxil",

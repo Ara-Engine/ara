@@ -206,6 +206,53 @@ impl NativeResidency {
         Ok(id)
     }
 
+    /// Mean linear RGBA of a registered map, decoded on the CPU from its coarsest
+    /// level of at least one whole block (sRGB maps are linearised per texel). For
+    /// one-time consumers such as probe GI bakes on a worker thread; residency
+    /// uploads never decode. `None` for unknown IDs or undecodable levels.
+    pub fn mean_texel(&self, id: u32) -> Option<[f32; 4]> {
+        let entry = self.entries.get(id as usize)?;
+        let source = &entry.source;
+        let level = (0..source.mip_count())
+            .rev()
+            .find(|&level| {
+                source
+                    .mip(level)
+                    .is_some_and(|m| m.size[0] >= 4 && m.size[1] >= 4)
+            })
+            .unwrap_or(0);
+        let mip = source.mip(level)?;
+        let [w, h] = mip.size.map(|v| v as usize);
+        let mut pixels = vec![0u32; w * h];
+        match source.format() {
+            TextureFormat::Bc4 => texture2ddecoder::decode_bc4(mip.bytes, w, h, &mut pixels),
+            TextureFormat::Bc5 => texture2ddecoder::decode_bc5(mip.bytes, w, h, &mut pixels),
+            TextureFormat::Bc7 | TextureFormat::Bc7Srgb => {
+                texture2ddecoder::decode_bc7(mip.bytes, w, h, &mut pixels)
+            }
+            _ => return None,
+        }
+        .ok()?;
+        let linear = |v: f64| {
+            if v <= 0.04045 {
+                v / 12.92
+            } else {
+                ((v + 0.055) / 1.055).powf(2.4)
+            }
+        };
+        let mut sum = [0f64; 4];
+        for p in &pixels {
+            // Decoded texels are 0xAARRGGBB.
+            let rgba = [(p >> 16) & 255, (p >> 8) & 255, p & 255, p >> 24];
+            for (i, v) in rgba.into_iter().enumerate() {
+                let v = f64::from(v) / 255.;
+                sum[i] += if entry.srgb && i < 3 { linear(v) } else { v };
+            }
+        }
+        let n = pixels.len().max(1) as f64;
+        Some(sum.map(|s| (s / n) as f32))
+    }
+
     /// Sets aggregated demand for a shared map. Callers combine the finest desired
     /// mip and greatest projected importance across its instances before calling.
     pub fn request(&mut self, id: NativeTextureId, first_mip: u32, priority: f32) -> Result<()> {

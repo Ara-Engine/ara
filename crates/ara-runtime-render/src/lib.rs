@@ -15,6 +15,7 @@ mod composite;
 pub mod fidelity;
 pub mod geometry;
 mod gi;
+mod gi_cpu;
 mod gpu_costs;
 pub use gpu_costs::GpuFrameCosts;
 pub mod landscape;
