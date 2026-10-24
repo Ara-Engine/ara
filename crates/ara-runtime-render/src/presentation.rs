@@ -89,6 +89,12 @@ impl Presenter {
         self.probe_gi = enabled.then(|| crate::gi::Acquisition::new(self.cache.clone()));
     }
 
+    /// Whether probe GI acquisition is still running or queued: a view that stops
+    /// redrawing once converged must keep presenting until the result arrives.
+    pub fn probe_gi_pending(&self) -> bool {
+        self.probe_gi.as_ref().is_some_and(|gi| gi.is_pending())
+    }
+
     /// Blocks until a pending probe GI acquisition is installed (captures and
     /// measurements that must not change lighting midway).
     pub fn wait_probe_gi(&mut self) -> Result<()> {
