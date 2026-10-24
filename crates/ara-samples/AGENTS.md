@@ -36,7 +36,8 @@ an empty dir, `VK_LAYER_PATH` = the SDK `Bin`).
   `place` (props with centered colliders and ground sampling), `native` (source-node
   prefabs and lamp emission), `bounds` (source-pivot bounds), `materials` (native
   surface graphs), `kits` (containers, hut, hangar shell, mast, embers, panels),
-  `anim` (locomotion controllers), `outpost`, `hangar`, `showcase`.
+  `anim` (locomotion controllers), `puddles` (original ripple normals and wet-edge
+  graphs), `outpost`, `hangar`, `showcase`.
 - `capture/`: `world` (play-host asset pipeline → `Runtime`), `convert` (resolves
   lock/look assets, then calls ara-runtime-render's engine-owned fidelity adapter),
   `render` (shots, upscaled pass, strip, timings), `look` (the per-scene look file).

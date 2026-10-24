@@ -417,15 +417,14 @@ pub fn cable(kit: &mut Kit, material: usize, a: Vec3, b: Vec3, sag: f32, thickne
     }
 }
 
-/// A puddle: a flat, irregular disc of still water 1.5 cm above y = 0.
+/// A puddle with a wet rim around its slightly raised water surface.
 pub fn puddle(project: &Path, lock: &Lock, name: &str, radius: f32, seed: u32) -> Result<String> {
-    let mut kit = Kit::new(vec![Material::flat(
-        "water",
-        [0.035, 0.032, 0.03],
-        0.02,
-        0.0,
-    )]);
+    let mut kit = Kit::new(vec![
+        Material::flat("wet_rim", [0.035, 0.032, 0.03], 0.65, 0.0),
+        Material::flat("water", [0.035, 0.032, 0.03], 0.08, 0.0),
+    ]);
     kit.disc(0, radius, seed, 0.015);
+    kit.disc(1, radius * 0.97, seed, 0.017);
     kit.write(project, lock, name)
 }
 

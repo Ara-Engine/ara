@@ -3910,7 +3910,16 @@
       "name": "Puddle",
       "order": "b1b",
       "MeshRenderer": {
-        "model": "@assets/kit/puddle_a.gltf#as_kitpuddlea"
+        "model": "@assets/kit/puddle_a.gltf#as_kitpuddlea",
+        "materialOverrides": [
+          {
+            "material": "@materials/puddlewetedge.graph#gr_puddlewetedge"
+          },
+          {
+            "primitive": 1,
+            "material": "@materials/puddlewater.graph#gr_puddlewater"
+          }
+        ]
       },
       "Transform": {
         "position": [101.8, 0.03, 44],
@@ -3921,7 +3930,16 @@
       "name": "Puddle",
       "order": "b1c",
       "MeshRenderer": {
-        "model": "@assets/kit/puddle_b.gltf#as_kitpuddleb"
+        "model": "@assets/kit/puddle_b.gltf#as_kitpuddleb",
+        "materialOverrides": [
+          {
+            "material": "@materials/puddlewetedge.graph#gr_puddlewetedge"
+          },
+          {
+            "primitive": 1,
+            "material": "@materials/puddlewater.graph#gr_puddlewater"
+          }
+        ]
       },
       "Transform": {
         "position": [99, 0.05, 84]
@@ -3931,7 +3949,16 @@
       "name": "Puddle",
       "order": "b1d",
       "MeshRenderer": {
-        "model": "@assets/kit/puddle_a.gltf#as_kitpuddlea"
+        "model": "@assets/kit/puddle_a.gltf#as_kitpuddlea",
+        "materialOverrides": [
+          {
+            "material": "@materials/puddlewetedge.graph#gr_puddlewetedge"
+          },
+          {
+            "primitive": 1,
+            "material": "@materials/puddlewater.graph#gr_puddlewater"
+          }
+        ]
       },
       "Transform": {
         "position": [106, 0.05, 101],

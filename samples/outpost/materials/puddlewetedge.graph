@@ -1,0 +1,113 @@
+{
+  "$schema": "ara://schema/graph/1",
+  "id": "gr_puddlewetedge",
+  "records": {
+    "g_meta": {
+      "domain": "material",
+      "payload": {
+        "domain": "surface",
+        "functions": {},
+        "name": "WetEdge",
+        "variantBudget": 1
+      }
+    },
+    "l_editor": {},
+    "n_1479231443e67def47dc": {
+      "kind": "material.literal",
+      "ports": {
+        "out": {
+          "ty": "ColorLinear",
+          "direction": "output",
+          "doc": "Typed expression result."
+        }
+      },
+      "params": {
+        "value": [0.008, 0.007, 0.006]
+      },
+      "payload": {
+        "name": "color",
+        "order": 0,
+        "ty": "ColorLinear"
+      }
+    },
+    "n_6b42fbf5d4ce3d015643": {
+      "kind": "material.literal",
+      "ports": {
+        "out": {
+          "ty": "float",
+          "direction": "output",
+          "doc": "Typed expression result."
+        }
+      },
+      "params": {
+        "value": [0.8]
+      },
+      "payload": {
+        "name": "roughness",
+        "order": 1,
+        "ty": "float"
+      }
+    },
+    "n_output": {
+      "kind": "material.output",
+      "ports": {
+        "baseColor": {
+          "ty": "ColorLinear",
+          "doc": "Material domain output."
+        },
+        "clearCoat": {
+          "ty": "float",
+          "doc": "Material domain output."
+        },
+        "clearCoatRoughness": {
+          "ty": "float",
+          "doc": "Material domain output."
+        },
+        "emissive": {
+          "ty": "ColorLinear",
+          "doc": "Material domain output."
+        },
+        "metallic": {
+          "ty": "float",
+          "doc": "Material domain output."
+        },
+        "normal": {
+          "ty": "vec3",
+          "doc": "Material domain output."
+        },
+        "opacityMask": {
+          "ty": "float",
+          "doc": "Material domain output."
+        },
+        "roughness": {
+          "ty": "float",
+          "doc": "Material domain output."
+        },
+        "transmission": {
+          "ty": "float",
+          "doc": "Material domain output."
+        }
+      }
+    },
+    "w_9671402b226db595804b": {
+      "from": {
+        "node": "n_6b42fbf5d4ce3d015643",
+        "port": "out"
+      },
+      "to": {
+        "node": "n_output",
+        "port": "roughness"
+      }
+    },
+    "w_b7ab1c23f4603bb6e959": {
+      "from": {
+        "node": "n_1479231443e67def47dc",
+        "port": "out"
+      },
+      "to": {
+        "node": "n_output",
+        "port": "baseColor"
+      }
+    }
+  }
+}

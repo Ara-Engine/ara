@@ -6,7 +6,8 @@ use super::{
 use anyhow::{Context, Result, ensure};
 use serde_json::json;
 
-fn graph(ctx: &Ctx, name: &str, text: String) -> Result<String> {
+/// Authors a canonical native surface graph through the shared text command.
+pub(super) fn graph(ctx: &Ctx, name: &str, text: String) -> Result<String> {
     let path = format!("materials/{name}.graph");
     let id = format!("gr_{}", short(name));
     ctx.new_document(&path, "material", &id)?;

@@ -11,6 +11,7 @@ mod materials;
 mod native;
 pub mod outpost;
 pub mod place;
+mod puddles;
 pub mod showcase;
 
 use crate::lock::Lock;

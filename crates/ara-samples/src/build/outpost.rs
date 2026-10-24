@@ -398,6 +398,7 @@ fn models(ctx: &Ctx) -> Result<Models> {
             &format!("as_kit{}", super::place::short(name)),
         )?;
     }
+    super::puddles::materials(ctx, &mut m)?;
     Ok(m)
 }
 
