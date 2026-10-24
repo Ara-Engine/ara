@@ -17,6 +17,20 @@ struct Environment {
     installed: PathBuf,
 }
 impl Environment {
+    fn stop_hub(&self) -> Result<()> {
+        let discovery = self.directory.join("config/hub/.ara/daemon.json");
+        if !discovery.is_file() {
+            return Ok(());
+        }
+        let _ = self.cli(&["hub", "close", "Release smoke"], "cleanup-close.log");
+        self.cli(&["hub", "shutdown"], "cleanup-shutdown.log")?;
+        let deadline = Instant::now() + Duration::from_secs(10);
+        while discovery.exists() {
+            ensure!(Instant::now() < deadline, "smoke Hub did not stop");
+            thread::sleep(Duration::from_millis(25));
+        }
+        Ok(())
+    }
     fn command(&self, executable: impl AsRef<std::ffi::OsStr>) -> Command {
         let mut command = Command::new(executable);
         let paths = std::env::split_paths(&std::env::var_os("PATH").unwrap_or_default())
@@ -48,6 +62,13 @@ impl Environment {
             self.command(self.installed.join("ara.exe")).args(args),
             &self.directory.join(log),
         )
+    }
+}
+impl Drop for Environment {
+    fn drop(&mut self) {
+        if let Err(error) = self.stop_hub() {
+            eprintln!("release smoke cleanup failed: {error:#}");
+        }
     }
 }
 pub fn smoke(root: &Path, version: &str) -> Result<()> {

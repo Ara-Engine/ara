@@ -55,11 +55,14 @@ impl GlobalAdapter {
                 tool["description"] = "Bind to a Hub project with action: open, project: <name or path>. Other session/history actions operate on that project. Agent changes apply immediately and each turn can be undone.".into();
             }
         }
-        tools.insert(0,json!({"name":"ara_projects","title":"Ara projects","description":"List, create, open headless, close, or inspect Hub-registered projects. Each project runs in an isolated daemon.","inputSchema":{"type":"object","additionalProperties":false,"properties":{
-            "action":{"type":"string","enum":["list","create","open","close","status"]},
+        tools.insert(0,json!({"name":"ara_projects","title":"Ara projects","description":"Manage Hub projects and engine versions. checkReleases refreshes the signed feed; available lists releases. installEngine returns an asynchronous job: poll downloads or cancelDownload. Engines install side by side; uninstallEngine rejects open project pins.","inputSchema":{"type":"object","additionalProperties":false,"properties":{
+            "action":{"type":"string","enum":["list","create","open","close","status","engines","checkReleases","available","installEngine","uninstallEngine","downloads","cancelDownload"]},
             "project":{"type":"string","description":"Registered project ID, unique name or path."},
             "template":{"type":"string","description":"Template ID, e.g. blank; see templates returned by list."},
-            "name":{"type":"string"},"path":{"type":"string"},"headless":{"type":"boolean","default":true}
+            "name":{"type":"string"},"path":{"type":"string"},"headless":{"type":"boolean","default":true},
+            "version":{"type":"string","description":"Published engine version for installEngine or uninstallEngine."},
+            "channel":{"type":"string","enum":["stable","preview"],"description":"Release channel for available; preview includes stable."},
+            "job":{"type":"string","description":"Download job ID for cancelDownload."}
         },"required":["action"]}}));
         Ok(complete(
             json!({"tools":tools,"ttlMs":5000,"cacheScope":"private"}),
@@ -83,6 +86,13 @@ impl GlobalAdapter {
                 "open" => "hub.open",
                 "close" => "hub.close",
                 "status" => "hub.status",
+                "engines" => "hub.engines",
+                "checkReleases" => "hub.releases.check",
+                "available" => "hub.engines.available",
+                "installEngine" => "hub.engine.install",
+                "uninstallEngine" => "hub.engine.uninstall",
+                "downloads" => "hub.downloads",
+                "cancelDownload" => "hub.download.cancel",
                 _ => return Err(invalid("unknown ara_projects action")),
             };
             if action == "open" {

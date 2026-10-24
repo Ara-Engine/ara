@@ -6,6 +6,7 @@ mod create;
 mod installs;
 mod learn;
 mod projects;
+mod settings;
 mod shell;
 
 use crate::model::{Hub, Intent};
@@ -236,12 +237,14 @@ pub fn page(hub: &Hub, ctx: &Ctx) -> Page {
             "<scroll id='{scroll}' class='content-scroll'><panel id='content' class='content'>"
         );
         shell::offline(p, hub);
+        shell::update(p, hub);
         match hub.view {
             crate::model::View::Projects => projects::body(p, hub, ctx),
             crate::model::View::Create => create::body(p, hub, ctx),
             crate::model::View::Installs => installs::body(p, hub),
             crate::model::View::Agents => agents::body(p, hub),
             crate::model::View::Learn => learn::body(p, hub, ctx),
+            crate::model::View::Settings => settings::body(p, hub),
         }
         p.markup.push_str("</panel></scroll>");
     });

@@ -1,7 +1,9 @@
-//! Explicit release engineering commands; never publishes or tags.
+//! Windows packages, signed manifests and explicit opt-in GitHub publication.
 mod archive;
+mod hub;
 mod notices;
 mod package;
+mod publish;
 mod smoke;
 mod support;
 
@@ -21,6 +23,8 @@ enum Command {
     Package {
         #[arg(long)]
         version: String,
+        #[arg(long, value_enum, default_value = "engine")]
+        kind: publish::ReleaseKind,
     },
     /// Generate release notes from decisions, git history and known issues.
     Notes {
@@ -34,6 +38,33 @@ enum Command {
     },
     /// Convert a private symbol archive using ara-crash (explicit opt-in).
     Symbols { directory: PathBuf },
+    /// Generate a private signing seed outside the checkout; print only its public key.
+    Keygen {
+        #[arg(long)]
+        output: PathBuf,
+    },
+    /// Sign an existing release manifest.
+    Sign {
+        manifest: PathBuf,
+        #[arg(long)]
+        key: Option<PathBuf>,
+    },
+    /// Prepare a signed release folder and optionally upload through the developer gh CLI.
+    Publish {
+        #[arg(long)]
+        repo: String,
+        #[arg(long)]
+        tag: String,
+        #[arg(long)]
+        prerelease: bool,
+        #[arg(long)]
+        dry_run: bool,
+        #[arg(long)]
+        key: Option<PathBuf>,
+        /// Existing packaged artifacts (default target/release-dist).
+        #[arg(long)]
+        artifacts: Option<PathBuf>,
+    },
 }
 fn main() -> Result<()> {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -42,9 +73,12 @@ fn main() -> Result<()> {
         .context("release crate must live under crates/")?
         .to_path_buf();
     match Cli::parse().command {
-        Command::Package { version } => {
+        Command::Package { version, kind } => {
             valid_version(&version)?;
-            package::package(&root, &version)
+            match kind {
+                publish::ReleaseKind::Hub => hub::package(&root, &version),
+                publish::ReleaseKind::Engine => package::package(&root, &version),
+            }
         }
         Command::Notes { version } => {
             valid_version(&version)?;
@@ -55,6 +89,24 @@ fn main() -> Result<()> {
             smoke::smoke(&root, &version)
         }
         Command::Symbols { directory } => package::symbols(&root, &directory),
+        Command::Keygen { output } => publish::keygen(&root, &output),
+        Command::Sign { manifest, key } => publish::sign_file(&manifest, key.as_deref()),
+        Command::Publish {
+            repo,
+            tag,
+            prerelease,
+            dry_run,
+            key,
+            artifacts,
+        } => publish::publish(
+            &root,
+            &repo,
+            &tag,
+            prerelease,
+            dry_run,
+            key.as_deref(),
+            artifacts.as_deref(),
+        ),
     }
 }
 fn valid_version(version: &str) -> Result<()> {
