@@ -4,7 +4,8 @@
   "records": {
     "i_settings": {
       "importer": "ara.gltf",
-      "version": "4-gltf14-meshopt070-ispc050-tiled-f32text-arag1"
+      "version": "5-gltf14-meshopt070-ispc050-tiled-f32text-arag1-khr-opacity",
+      "settings": {}
     }
   }
 }

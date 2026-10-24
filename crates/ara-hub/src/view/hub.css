@@ -19,6 +19,8 @@ text { flex-shrink:0; white-space:nowrap; color:inherit; }
 .row { flex-direction:row; align-items:center; gap:8px; }
 .col { flex-direction:column; gap:4px; }
 .wrap { white-space:normal; flex-shrink:1; }
+.download-track { height:4px; width:100%; background:var(--raised); border-radius:2px; }
+.download-fill { height:4px; background:var(--primary); border-radius:2px; }
 .mono { font-family:JetBrains Mono; }
 .small { font-size:12px; }
 .tiny { font-size:11px; }

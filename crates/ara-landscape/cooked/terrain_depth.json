@@ -1,22 +1,22 @@
 {
-  "binding_layout_hash": "1bb570eb9803435af351c803ea8ba5187b90052fdb0fc03c9f2140544242710f",
+  "binding_layout_hash": "35cd2a62b1ba741ce6823b3c8753d7b5aa97b54c5f0a837b56e542518013fd7e",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "c640c970dcc25f9365436c24b4b5bdaff2242fd3fe3f52c0688967fc25fd1326",
+  "key": "cf8bb916a71f18cdf74d7f87aad74c6b37a2b19fba21962329405cba708f1f1c",
   "stages": [
     {
-      "dxil": "c640c970dcc25f9365436c24b4b5bdaff2242fd3fe3f52c0688967fc25fd1326/terrainDepth.dxil",
+      "dxil": "cf8bb916a71f18cdf74d7f87aad74c6b37a2b19fba21962329405cba708f1f1c/terrainDepth.dxil",
       "dxil_hash": "8a65b8ff8c93dbe32c398655a7b0cf9096af2ab996709c03b1e302e63c113492",
       "source_entry": "terrainDepth",
-      "spirv": "c640c970dcc25f9365436c24b4b5bdaff2242fd3fe3f52c0688967fc25fd1326/terrainDepth.spv",
+      "spirv": "cf8bb916a71f18cdf74d7f87aad74c6b37a2b19fba21962329405cba708f1f1c/terrainDepth.spv",
       "spirv_entry": "main",
       "spirv_hash": "a8d73bf196a6c040922fe2d38d9cb7dc0a583255eff30ef5654a9333e60d52c3",
       "stage": "fragment"
     },
     {
-      "dxil": "c640c970dcc25f9365436c24b4b5bdaff2242fd3fe3f52c0688967fc25fd1326/terrainDepthVertex.dxil",
+      "dxil": "cf8bb916a71f18cdf74d7f87aad74c6b37a2b19fba21962329405cba708f1f1c/terrainDepthVertex.dxil",
       "dxil_hash": "dcf7cf9a8aa0a052abe6ed38e94b940952ae0a877f0cd1d819460781dbd74c22",
       "source_entry": "terrainDepthVertex",
-      "spirv": "c640c970dcc25f9365436c24b4b5bdaff2242fd3fe3f52c0688967fc25fd1326/terrainDepthVertex.spv",
+      "spirv": "cf8bb916a71f18cdf74d7f87aad74c6b37a2b19fba21962329405cba708f1f1c/terrainDepthVertex.spv",
       "spirv_entry": "main",
       "spirv_hash": "70a1242a26d21d63badd255739c99fdf55c8b5331a74f7dedf5f073087febd19",
       "stage": "vertex"

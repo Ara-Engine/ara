@@ -1,4 +1,10 @@
 # ara-render-fidelity
+Native entry: FidelityView::new_native consumes ara-render::instanced::Scene and
+NativeResidency. Model-space pools/LODs build once; TLAS carries real transforms.
+Native scene count bit31 selects 64B header / 16B mesh / 192B instance records;
+material stride is 320B and geometry rows are 32B. Never add world-space copies.
+The native helper include must exactly match ara-texture-stream's sampling source.
+Raw graph views decode colors after filtering; glTF retains hardware sRGB views.
 
 M3 lighting and post extension over ara-render's Graph and ara-gpu's device.
 Scene snapshots and physical units are exactly ara-render::scene's contract.

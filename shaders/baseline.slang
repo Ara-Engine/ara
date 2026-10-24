@@ -7,7 +7,7 @@ struct Root { uint frame; uint materials; uint material; uint entity; uint casca
 #define BIND(n)
 ConstantBuffer<Root> root : register(b0,space0);
 #endif
-BIND(0) Texture2D<float4> textures[128] : register(t0,space1);
+BIND(5) Texture2D<float4> textures[] : register(t0,space1);
 BIND(1) RWByteAddressBuffer buffers[64] : register(u0,space2);
 BIND(2) SamplerState samplers[3] : register(s0,space0);
 BIND(3) RWTexture2D<float4> images[64] : register(u0,space3);
@@ -49,15 +49,22 @@ Varying shadowVertex(Vertex v) {
     Varying o;Frame f=frame();o.clip=mul(f.shadows[root.cascade],float4(v.position,1));o.world=v.position;o.normal=v.normal;o.uv=v.uv;o.tangent=v.tangent;return o;
 }
 struct Surface {float3 albedo;float alpha;float3 normal;float roughness;float metal;float3 emissive;};
+// ara_render::scene::{BASE_COLOR_DECODE_SRGB,EMISSIVE_DECODE_SRGB}.
+// Native graph sampleColor filters raw UNORM, then decodes; glTF views decode in hardware.
+float3 materialLinear(float3 x){return lerp(x/12.92,pow((max(x,0)+0.055)/1.055,2.4),step(0.04045,x));}
 Surface surface(Varying v) {
     Material m=buffers[NonUniformResourceIndex(root.materials)].Load<Material>(root.material*80);
-    Surface s;float4 base=tex(m.textures.x,v.uv)*m.color;
+    Surface s;float4 base=tex(m.textures.x,v.uv);
+    if((m.flags.y&(1u<<25))!=0)base.rgb=materialLinear(base.rgb);
+    base*=m.color;
     if(m.flags.x==1 && base.a<m.surface.w)discard;
     s.albedo=base.rgb;s.alpha=base.a;
     float3 n=normalize(v.normal);float3 t=normalize(v.tangent.xyz-n*dot(v.tangent.xyz,n));float3 b=cross(n,t)*v.tangent.w;
     float3 normal=tex(m.textures.y,v.uv).xyz*2-1;normal.xy*=m.surface.y;s.normal=normalize(t*normal.x+b*normal.y+n*normal.z);
     float4 mr=tex(m.textures.z,v.uv);s.roughness=clamp(m.emissiveRoughness.w*mr.g,0.045,1);s.metal=saturate(m.surface.x*mr.b);
-    s.emissive=tex(m.textures.w,v.uv).rgb*m.emissiveRoughness.rgb;return s;
+    float3 emission=tex(m.textures.w,v.uv).rgb;
+    if((m.flags.y&(1u<<26))!=0)emission=materialLinear(emission);
+    s.emissive=emission*m.emissiveRoughness.rgb;return s;
 }
 struct GBuffer {float4 albedo:SV_Target0;float4 normal:SV_Target1;float4 material:SV_Target2;float4 world:SV_Target3;float id:SV_Target4;};
 [shader("fragment")]

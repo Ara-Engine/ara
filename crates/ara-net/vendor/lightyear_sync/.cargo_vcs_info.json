@@ -1,0 +1,6 @@
+{
+  "git": {
+    "sha1": "8a926d6fece6a0cf04c2747de90c01258524fe0d"
+  },
+  "path_in_vcs": "crates/core/sync"
+}

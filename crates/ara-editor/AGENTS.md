@@ -50,7 +50,7 @@ Raster IDs drive picking, silhouette outlines and GPU-only hover. Physical Scene
 extents and UI glyph raster scale change together. Keep the separate SDL window,
 editor logical, IME and physical UIA coordinate conversions. Motion is paint-only,
 bounded to 140 ms and disabled by editor.preferences. verify-polish.ps1 captures
-1440x900 at 1x and 2560x1440 at 2x, including palettes and review cards.
+1440x900 at 1x and 2560x1440 at 2x, including palettes and the Agents feed.
 
 Panel authoring: asset_tools owns isolated import jobs and cached off-thread
 thumbnails. authoring registers graph/material/VFX/animation commands; graph is

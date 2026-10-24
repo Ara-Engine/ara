@@ -25,6 +25,7 @@ impl Handler for Hub {
         self.subscribers.remove(&conn);
     }
     fn tick(&mut self) {
+        self.poll_updates();
         for child in self.children.values_mut() {
             let _ = child.try_wait();
         }
@@ -80,6 +81,8 @@ pub fn serve(config: HubConfig, port: u16) -> Result<(), RpcError> {
 
 /// Connect to the user Hub, auto-starting `ara hub serve` with a hidden process on demand.
 pub fn connect_or_start(directory: &Path, executable: &Path) -> Result<Client, RpcError> {
+    crate::validate_development_config(directory).map_err(io_error)?;
+    crate::isolation::validate_engine(directory, executable).map_err(io_error)?;
     let discovery = directory.join("hub");
     if let Some(client) = Client::for_project(&discovery) {
         return Ok(client);

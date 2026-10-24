@@ -10,10 +10,12 @@
 #![warn(missing_docs)]
 
 mod composite;
+pub mod fidelity;
 pub mod geometry;
 pub mod landscape;
 #[cfg(test)]
 mod landscape_tests;
+mod material;
 mod readback;
 pub mod terrain_mesh;
 pub mod two_d;
@@ -28,7 +30,6 @@ use ara_render::{
 use ara_runtime::{
     components::{Environment, LightKind},
     extract::{Draw, Geometry, RenderFrame},
-    model::Model,
 };
 use geometry::Source;
 use glam::Vec3;
@@ -124,6 +125,10 @@ fn material_key(draw: &Draw) -> u64 {
         for value in factor {
             h = fnv(h, &value.to_bits().to_le_bytes());
         }
+    }
+    h = fnv(h, &[u8::from(draw.material.is_some())]);
+    if let Some(material) = &draw.material {
+        h = fnv(h, &material.digest.0);
     }
     h
 }
@@ -379,12 +384,20 @@ impl Presenter {
         Ok(source)
     }
 
-    fn texture(&mut self, model: &Model, index: usize) -> Result<Arc<scene::Texture>> {
-        let key = (model.digest.to_string(), index);
+    fn texture(
+        &mut self,
+        source: material::Source<'_>,
+        index: usize,
+    ) -> Result<Arc<scene::Texture>> {
+        let key = source.key(index);
         if let Some(t) = self.textures.get(&key) {
             return Ok(Arc::clone(t));
         }
-        let texture = Arc::new(decode_texture(&model.textures[index].ktx2)?);
+        let mut texture = decode_texture(&source.texture(index).ktx2)?;
+        if source.raw() {
+            texture.srgb = false;
+        }
+        let texture = Arc::new(texture);
         self.textures.insert(key, Arc::clone(&texture));
         Ok(texture)
     }
@@ -437,14 +450,11 @@ impl Presenter {
         // metal/roughness and emissive maps while the budget lasts. Maps past it fold
         // into their material's factors (mean texel) instead of failing the upload.
         let budget = SCENE_TEXTURE_BUDGET.saturating_sub(2 + tiles.len());
-        let mut wanted: Vec<Vec<(Arc<Model>, usize)>> = vec![Vec::new(); 4];
+        let mut wanted: Vec<Vec<(material::Source<'_>, usize)>> = vec![Vec::new(); 4];
         let mut seen = std::collections::BTreeSet::new();
         for draw in &frame.draws {
-            if let Geometry::Model { model, primitive } = &draw.geometry
-                && let Some(m) = model.primitives[*primitive]
-                    .material
-                    .and_then(|m| model.materials.get(m))
-            {
+            if let Some(source) = material::Source::of(draw) {
+                let m = source.material();
                 for (slot, texture) in [
                     m.base_color_texture,
                     m.normal_texture,
@@ -455,16 +465,16 @@ impl Presenter {
                 .enumerate()
                 {
                     if let Some(t) = texture
-                        && seen.insert((slot, model.digest.to_string(), t))
+                        && seen.insert((slot, source.key(t)))
                     {
-                        wanted[slot].push((Arc::clone(model), t));
+                        wanted[slot].push((source, t));
                     }
                 }
             }
         }
         let mut accepted = std::collections::BTreeSet::new();
-        for (model, t) in wanted.iter().flatten() {
-            let key = (model.digest.to_string(), *t);
+        for (source, t) in wanted.iter().flatten() {
+            let key = source.key(*t);
             if accepted.len() < budget || accepted.contains(&key) {
                 accepted.insert(key);
             }
@@ -483,6 +493,14 @@ impl Presenter {
             let palette = draw.skin.clone().map(|r| &frame.palettes[r]);
             let mut vertices = Vec::new();
             geometry::transform(&source.vertices, draw.world, palette, &mut vertices);
+            // Basic has one UV stream; native overrides use the base-color affine
+            // coordinates. The fidelity consumer retains each slot's independent UVs.
+            if let Some(native) = draw.material.as_ref() {
+                let uv = native.material.base_color_uv;
+                for vertex in &mut vertices {
+                    vertex.uv = uv.apply(vertex.uv);
+                }
+            }
             // A model without a material has zero source emission; shapes use radiance.
             let default_emissive = if matches!(&draw.geometry, Geometry::Model { .. }) {
                 let factor = draw.emissive_factor.unwrap_or([0.; 3]);
@@ -502,11 +520,8 @@ impl Presenter {
                 textures: [0, 1, 0, 0],
                 flags: [u32::from(draw.color[3] < 1.0) * 2, 0, 0, 0],
             };
-            if let Geometry::Model { model, primitive } = &draw.geometry
-                && let Some(m) = model.primitives[*primitive]
-                    .material
-                    .and_then(|m| model.materials.get(m))
-            {
+            if let Some(source) = material::Source::of(draw) {
+                let m = source.material();
                 for (out, (a, b)) in material
                     .base_color
                     .iter_mut()
@@ -533,15 +548,39 @@ impl Presenter {
                 .enumerate()
                 {
                     let Some(t) = texture else { continue };
-                    let key = (model.digest.to_string(), t);
+                    let key = source.key(t);
                     if !accepted.contains(&key) {
-                        fold(&mut material, slot, mean_texel(&model.textures[t].ktx2)?);
+                        let mean = if source.raw() {
+                            let texture = self.texture(source, t)?;
+                            let mut mean = [0.; 4];
+                            for pixel in texture.rgba.as_chunks::<4>().0 {
+                                for i in 0..4 {
+                                    mean[i] += f32::from(pixel[i]) / 255.;
+                                }
+                            }
+                            for channel in &mut mean {
+                                *channel /= (texture.size[0] * texture.size[1]) as f32;
+                            }
+                            if source.decode(slot) {
+                                for channel in &mut mean[..3] {
+                                    *channel = if *channel <= 0.04045 {
+                                        *channel / 12.92
+                                    } else {
+                                        ((*channel + 0.055) / 1.055).powf(2.4)
+                                    };
+                                }
+                            }
+                            mean
+                        } else {
+                            mean_texel(&source.texture(t).ktx2)?
+                        };
+                        fold(&mut material, slot, mean);
                         continue;
                     }
                     let index = match texture_slots.get(&key) {
                         Some(&index) => index,
                         None => {
-                            let texture = self.texture(model, t)?;
+                            let texture = self.texture(source, t)?;
                             let index = scene.textures.len() as u32;
                             scene.textures.push(scene::Texture {
                                 size: texture.size,
@@ -553,6 +592,13 @@ impl Presenter {
                         }
                     };
                     material.textures[slot] = index;
+                    if source.decode(slot) {
+                        material.flags[1] |= if slot == 0 {
+                            scene::BASE_COLOR_DECODE_SRGB
+                        } else {
+                            scene::EMISSIVE_DECODE_SRGB
+                        };
+                    }
                 }
             }
             scene.materials.push(material);

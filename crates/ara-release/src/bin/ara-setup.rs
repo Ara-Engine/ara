@@ -1,4 +1,4 @@
-//! Engine SFX stub: validated extraction followed by per-user registration.
+//! Ara SFX stub: validated extraction followed by per-user engine or Hub setup.
 use anyhow::{Context, Result, ensure};
 use clap::Parser;
 use std::{path::PathBuf, process::Command};
@@ -6,7 +6,7 @@ use std::{path::PathBuf, process::Command};
 #[derive(Parser)]
 #[command(version, about = "Install Ara for this Windows user")]
 struct Args {
-    /// New per-version destination (default: LOCALAPPDATA/Programs/Ara/<version>).
+    /// New destination (default: Programs/Ara/<version>, or Programs/Ara Hub).
     #[arg(long)]
     destination: Option<PathBuf>,
     /// No UI or completion dialog.
@@ -22,17 +22,20 @@ struct Args {
 fn main() -> Result<()> {
     let args = Args::parse();
     let bytes = std::fs::read(std::env::current_exe()?)?;
+    let names = ara_export_installer::list(&bytes)?;
     if args.list {
-        for name in ara_export_installer::list(&bytes)? {
+        for name in &names {
             println!("{name}");
         }
         return Ok(());
     }
-    let destination = args.destination.unwrap_or(
-        PathBuf::from(std::env::var_os("LOCALAPPDATA").context("LOCALAPPDATA is missing")?)
-            .join("Programs/Ara")
-            .join(env!("CARGO_PKG_VERSION")),
-    );
+    let standalone = names.iter().any(|name| name == "hub.json");
+    let local = PathBuf::from(std::env::var_os("LOCALAPPDATA").context("LOCALAPPDATA is missing")?);
+    let destination = args.destination.unwrap_or(if standalone {
+        local.join("Programs/Ara Hub")
+    } else {
+        local.join("Programs/Ara").join(env!("CARGO_PKG_VERSION"))
+    });
     ara_export_installer::install(&bytes, &destination)?;
     let mut command = Command::new("powershell.exe");
     command

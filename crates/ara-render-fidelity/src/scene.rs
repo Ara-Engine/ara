@@ -13,6 +13,7 @@ use sha2::{Digest, Sha256};
 mod acceleration;
 mod emitters;
 mod mips;
+mod native;
 mod packing;
 mod upload;
 use packing::{content_hash, pack, texture_hash, validate};
@@ -44,6 +45,7 @@ pub struct AccelerationUpdate {
 
 /// Immutable GPU extraction, shared by hybrid and reference views.
 pub struct GpuScene {
+    native: Option<native::Native>,
     pub(crate) table: Buffer,
     pub(crate) table_index: u32,
     pub(crate) previous_table: Option<(Buffer, u32)>,
@@ -77,6 +79,7 @@ impl GpuScene {
             .map(|(i, m)| (m.entity, i as u32))
             .collect();
         let mut result = Self {
+            native: None,
             table: buffer(gpu, &[0; 16], vk::BufferUsageFlags::STORAGE_BUFFER)?,
             table_index: 0,
             previous_table: None,
@@ -139,6 +142,10 @@ impl GpuScene {
     /// replacement needs a new view; geometry, material parameters and lights update here.
     /// Shading tables retain the prior vertex positions for deformation motion vectors.
     pub fn update(&mut self, gpu: &mut VulkanDevice, scene: &Scene) -> Result<()> {
+        ensure!(
+            self.native.is_none(),
+            "native views require native scene updates"
+        );
         validate(scene)?;
         ensure!(
             texture_hash(scene) == self.texture_hash,
@@ -197,6 +204,9 @@ impl GpuScene {
     }
     pub(crate) fn resources(&self) -> Vec<(Resource, Access)> {
         let mut r = vec![(Resource::Buffer(self.table), Access::ShaderRead)];
+        if let Some(native) = &self.native {
+            r.extend(native.resources());
+        }
         if let Some((previous, _)) = self.previous_table {
             r.push((Resource::Buffer(previous), Access::ShaderRead));
         }
@@ -213,6 +223,9 @@ impl GpuScene {
     pub(crate) fn destroy(self, gpu: &mut VulkanDevice) -> Result<()> {
         if let Some(t) = self.tlas {
             gpu.retire(Resource::AccelerationStructure(t))?;
+        }
+        if let Some(native) = self.native {
+            native.destroy(gpu)?;
         }
         for g in self.geometry {
             gpu.retire(Resource::AccelerationStructure(g.blas))?;

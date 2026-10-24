@@ -33,7 +33,7 @@ impl Shell {
         let changed = editor.agent_fields();
         let changed_entities: std::collections::BTreeSet<_> =
             changed.keys().map(|(id, _)| id.as_str()).collect();
-        self.hierarchy_tints = editor.review_tints();
+        self.hierarchy_tints = editor.agent_tints();
         self.hierarchy_ghosts.clear();
         let mut children: BTreeMap<Option<&str>, Vec<&String>> = BTreeMap::new();
         for (id, e) in &resolved {

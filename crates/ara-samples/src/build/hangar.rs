@@ -96,7 +96,7 @@ pub fn build(ctx: &Ctx, models: &Models) -> Result<()> {
         "Night sky",
         json!({"Environment": {"sky": [0.01, 0.015, 0.035, 1], "horizon": [0.04, 0.045, 0.06, 1], "ground": [0.01, 0.01, 0.01, 1], "intensity": 30, "exposure": 0.02}}),
     );
-    s.commands.push(light(
+    s.commands.extend(light(
         "e_moon",
         "Moonlight",
         Vec3::new(0.0, 30.0, 0.0),
@@ -111,21 +111,19 @@ pub fn build(ctx: &Ctx, models: &Models) -> Result<()> {
     s.entity(
         "e_floorc",
         "Floor collider",
-        json!({"Transform": {"position": [0.0, -0.1, 0.0]}, "RigidBody": {}, "PhysicsId": {"value": 900}, "Collider": {"halfExtents": [11.0, 0.15, 14.0]}}),
+        json!({"Transform": {"position": [0.0, -0.1, 0.0]}, "RigidBody": {}, "Collider": {"halfExtents": [11.0, 0.15, 14.0]}}),
     );
     super::outpost::hangar_colliders_at(&mut s, Vec3::ZERO);
 
     // Player and camera at the door.
-    let physics = s.physics_id();
     s.entity(
         "e_player",
         "Salvager",
         json!({
             "Transform": super::place::transform(f(-5.5, -10.0), 30.0, 1.0),
-            "MeshRenderer": {"model": models.get("human").reference},
+            "MeshRenderer": models.get("human").renderer,
             "Animator": {"controller": "@anim/human.animation#an_locomotion"},
             "CharacterController": {},
-            "PhysicsId": {"value": physics},
             "PlayerControl": {"camera": "e_camera", "walkSpeed": 1.5, "runSpeed": 5.0},
             "AudioListener": {},
         }),
@@ -206,7 +204,7 @@ pub fn build(ctx: &Ctx, models: &Models) -> Result<()> {
             .decor()
             .renderer(json!({"emissive": [9000, 7600, 5600]})),
         );
-        s.commands.push(light(
+        s.commands.extend(light(
             &format!("e_hlampl{i}"),
             "Hanging lamp light",
             top - Vec3::Y * 1.45,
@@ -290,7 +288,7 @@ pub fn build(ctx: &Ctx, models: &Models) -> Result<()> {
         .decor()
         .renderer(json!({"emissive": [7000, 7000, 6600]})),
     );
-    s.commands.push(light(
+    s.commands.extend(light(
         "e_benchlightl",
         "Workbench task light",
         Vec3::new(9.2, 2.3, -3.3),
@@ -333,7 +331,7 @@ pub fn build(ctx: &Ctx, models: &Models) -> Result<()> {
         "Welding sparks",
         json!({"Transform": {"position": [5.0, 0.6, 7.6]}, "VisualEffect": {"effect": "sparks"}}),
     );
-    s.commands.push(light(
+    s.commands.extend(light(
         "e_weldlight",
         "Welding arc",
         Vec3::new(5.0, 0.7, 7.6),
@@ -460,7 +458,7 @@ pub fn build(ctx: &Ctx, models: &Models) -> Result<()> {
                 .decor()
                 .renderer(json!({"emissive": [6000, 5000, 3600]})),
         );
-        s.commands.push(light(
+        s.commands.extend(light(
             &format!("e_sconcel{i}"),
             "Sconce light",
             p + Vec3::new(0.35, -0.1, 0.0),

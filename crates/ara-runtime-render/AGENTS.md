@@ -20,6 +20,17 @@ renderer and per-draw upload state; no simulation, window or process code.
 - Window presentation merges landscape and scene depth on the GPU before particles,
   then runs the shared HDR post pass. `output()` is the final CopySource image.
 - `stats()`: rebuilt flag, meshes updated, CPU prepare time, render time.
+- `fidelity::scene(frame, Content)`: engine-owned scene conversion for fidelity.
+  `Content` holds already-resolved terrain layers, foliage rule models, material
+  detail and HDR environment overrides; it never reads sample locks or project paths.
+  `fidelity::vfx::Effects` composites cooked particles into FidelityView HDR before post.
+  The current upload ABI still needs world-space/material merging and atlas packing;
+  these are transitional until the descriptor and instancing migration lands.
+- `fidelity::native::{Content::resolve, prepare}` resolves real Header.materials
+  and model/prefab foliage at a control boundary, then prepares local shared geometry,
+  six independent UV slots and native BC residency. It consumes existing runtime
+  scatter/selector/material semantics; it does not scatter again, decode pixels or atlas.
+  Prepared owns the CPU scene and its resident set for FidelityView::new_native.
 - `geometry::{shape, transform}`: procedural shapes (box, sphere, capsule, plane;
   centred, planes at y = 0) and world-space transform with 8-influence linear-blend
   CPU skinning. `sky(env)`: 64×32 gradient environment. `decode_texture`: BC7 KTX2

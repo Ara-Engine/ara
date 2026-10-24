@@ -1,0 +1,16 @@
+{
+  "$schema": "ara://schema/import/1",
+  "id": "as_modularchainlinkfence",
+  "records": {
+    "i_settings": {
+      "importer": "ara.gltf",
+      "version": "5-gltf14-meshopt070-ispc050-tiled-f32text-arag1-khr-opacity",
+      "settings": {
+        "opacityMaps": {
+          "#1": "textures/modular_chainlink_fence_posts_alpha_1k.png",
+          "#4": "textures/modular_chainlink_fence_wire_alpha_1k.png"
+        }
+      }
+    }
+  }
+}

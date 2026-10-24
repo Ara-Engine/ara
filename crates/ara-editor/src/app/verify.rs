@@ -249,7 +249,7 @@ impl Verification {
             }
             scene_view.render(renderer, editor, &view, 64)?;
             scene_view.attach(gpu, renderer, editor.state.quality)?;
-            let changed = review_tints(editor);
+            let changed = editor.agent_tints();
             gpu.overlays(
                 rect,
                 overlay::ENTITY_IMAGE,

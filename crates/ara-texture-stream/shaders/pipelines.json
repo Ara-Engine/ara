@@ -1,4 +1,18 @@
 {
+  "texture_native_probe": {
+    "entries": {
+      "nativeProbe": "compute"
+    },
+    "source": "native_probe.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
   "texture_publish": {
     "entries": {
       "publishMain": "compute"

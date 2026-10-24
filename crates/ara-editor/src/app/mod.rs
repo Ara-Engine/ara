@@ -574,7 +574,7 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                         scene_view.render(&mut renderer, &editor, &view, 1)?;
                     }
                     scene_view.attach(&mut gpu, &renderer, editor.state.quality)?;
-                    let mut changed = review_tints(&editor);
+                    let mut changed = editor.agent_tints();
                     for id in view.ghosts().keys() {
                         changed.insert(crate::world::render_id(id), "destructive-foreground");
                     }
@@ -893,9 +893,6 @@ fn attach(gpu: &mut NativeUi, renderer: &Renderer) -> anyhow::Result<()> {
         )?;
     }
     Ok(())
-}
-fn review_tints(editor: &Editor) -> std::collections::BTreeMap<u64, &'static str> {
-    editor.review_tints()
 }
 
 fn statistics(samples: &[f64]) -> Value {

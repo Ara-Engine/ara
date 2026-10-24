@@ -95,6 +95,9 @@ target/release/ara-samples editor outpost levels/outpost.scene outpost --camera 
     **Cooked data fixed (`9f2813f`):** independent texture transforms/UV selectors,
     emissive strength, transmission and cook-time companion opacity maps. Renderer
     consumption is tracked by the renderer workstream.
+    **Sample workarounds removed (`44119d0`):** the original pinned Poly Haven
+    fence uses its source UV transforms and opacity maps; no generated fence or
+    build-time alpha merge remains.
 12. **Physical sky, fog, exposure and post cannot be authored in a scene.** `Environment`
     is a 3-colour gradient plus a linear exposure; the fidelity atmosphere, height fog,
     EV100/auto-exposure, tone mapper and bloom are view settings only. The samples keep
@@ -140,6 +143,15 @@ target/release/ara-samples editor outpost levels/outpost.scene outpost --camera 
 
 ## P2: authoring friction (CLI/MCP dogfood)
 
+The sample migration is committed in `44119d0`. Both `ara-samples build outpost`
+and `build showcase` pass `ara check`; repeating both changes none of 926 content
+hashes. Native prefabs, source-node selectors, emissive controls and surface graphs
+replace derived model variants. Centered colliders replace companion entities,
+automatic physics identities replace counters, and `transform.lookAt` replaces
+custom aiming. The terrain's signed origin replaces `outpost::SHIFT`.
+`doc.delete` (`b434883`) makes cleanup attributed and undoable; rebuilds retain
+their journals. Same-agent `ara accept --all` succeeds with no pending transactions.
+
 19. **No `doc.create`.** New scenes, terrains, foliage, animation and music documents
     must be written by hand as empty canonical skeletons before commands can fill them.
     `ara init` seeds `levels/main.scene` with a random ID; renaming it or pointing
@@ -161,9 +173,14 @@ target/release/ara-samples editor outpost levels/outpost.scene outpost --camera 
     with their bulbs off; each needs a derived glTF (`kit::variant`). There is no material
     asset slot on `MeshRenderer`, so a palette-textured character can't be recoloured
     without a derived texture.
+    **Fixed (`4ea00d6`, `81cd239`):** source-node/subtree primitive selection,
+    native graph/instance overrides per primitive, and targeted lamp emission
+    controls now reach Play. No derived model is needed for these controls.
 23. **Colliders have no offset and models can't be colliders in play.** Model origins sit
     at the base, box colliders at the entity origin; every solid prop needs a second
     entity at its bounds centre. `PhysicsId` defaults to 1 and must be made unique by hand.
+    **Fixed (`12f2942`):** body-local `Collider.center`, typed model hull/mesh
+    generation, and deterministic automatic PhysicsIds now work in Play and restore.
 24. **Aiming lights and cameras needs Euler math.** `Transform.rotation` is intrinsic XYZ
     degrees; there is no look-at helper or `direction` field, and the obvious
     pitch/yaw split yields upside-down cameras for targets behind −Z.
@@ -188,6 +205,8 @@ target/release/ara-samples editor outpost levels/outpost.scene outpost --camera 
     problem because `entity.create` accepts an ID.
     **Fixed (`27f3523`):** strokes/exclusions accept stable IDs and batch symbols;
     terrain tile IDs derive from coordinates. Sample builders supply these IDs.
+    **Rule metadata fixed (`600e8a1`):** runtime scatter retains qualified rule IDs
+    and stable catalog indices for resolving original assets and native prefabs.
 28. **What worked well:** typed batches with `@file` args, deterministic record IDs,
     exact diagnostics with JSON paths (`commands[6].args.components[NavMeshSurface].size`),
     `ara check`, terrain/foliage commands, the import worker (107 assets cook in 166 s

@@ -31,6 +31,10 @@ Depends on ara-proto, ara-diag.
   One per-project Adapter keeps each session/catalog separate; explicit sessions
   are checked against their bound project. Hub registration is the visibility
   boundary. `ara mcp --root` still uses the original per-project adapter.
+- Global `ara_projects` also has `engines`, `checkReleases`, `available {channel?}`,
+  `installEngine {version}`, `uninstallEngine {version}`, `downloads` and
+  `cancelDownload {job}`. These call the Hub service directly; no project/session
+  is needed and installs return asynchronous jobs.
 - `ara_logs` returns the bus grouped by code within a character `budget`;
   `ara_why` (the `why` method) returns ranked causes with runnable fixes. The
   server instructions tell agents to ask `ara_why` first when something is wrong.

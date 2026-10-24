@@ -129,7 +129,7 @@ fn native_hierarchy_inspector_gesture_and_author_undo_share_the_authority() {
 }
 
 #[test]
-fn mcp_actions_agent_review_provenance_and_revert_are_live() {
+fn mcp_agent_edits_apply_at_once_with_attribution_and_turn_undo() {
     let project = Project::new();
     let mut editor = project.open();
     let mut mcp = ara_mcp::Adapter::new();
@@ -368,14 +368,14 @@ fn agent_presence_does_not_take_the_human_camera_and_agent_deletes_apply_with_tu
         scene.meshes.iter().map(|m| &m.name).collect::<Vec<_>>()
     );
     editor.tick();
-    assert!(!editor.review_tints().is_empty(), "the agent's turn glows");
+    assert!(!editor.agent_tints().is_empty(), "the agent's turn glows");
     editor
         .action("review.revert", json!({"txn":result["txn"]}))
         .unwrap();
     assert_eq!(editor.view().unwrap().entities().len(), 2);
     editor.tick();
     assert!(
-        editor.review_tints().is_empty(),
+        editor.agent_tints().is_empty(),
         "an undone turn stops glowing"
     );
 }

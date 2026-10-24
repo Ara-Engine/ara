@@ -30,6 +30,13 @@
   <br><sub><b>Sponza, real-time hybrid RT at 1440p:</b> 4.6% error against a 32,768-spp path-traced reference; 8.7 ms native, 4.1 ms upscaled from 960p.</sub>
 </p>
 
+## Download
+
+Download **Ara Hub for Windows** from [GitHub Releases](https://github.com/Snowy7/ara/releases).
+The Hub installs engine versions side by side and keeps itself up to date.
+See [releases and signing](docs/releases.md). There is no Authenticode code signing yet;
+Windows SmartScreen warns when running the installer.
+
 ## Showcase
 
 Every image below is an unretouched engine capture; the measured number is under each one.

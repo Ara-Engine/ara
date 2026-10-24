@@ -90,8 +90,7 @@ impl Lock {
             asset.projects.dedup();
         }
         self.validate()?;
-        let mut text = serde_json::to_string_pretty(self)?;
-        text.push('\n');
+        let text = ara_json::to_canonical_string(&ara_json::to_value(self)?);
         std::fs::write(path, text).with_context(|| format!("writing {}", path.display()))
     }
 

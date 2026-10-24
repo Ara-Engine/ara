@@ -13,6 +13,9 @@ link Lightyear, Replicon, App, sockets, histories or network services.
 - `Client<F>` uses native Lightyear input histories, selective owner rollback and
   remote interpolation. Inject device/bot actions or attach an immutable input
   source. Sources run only when sampling new inputs, never during native replay.
+- `Server::advance` / `Client::advance` use caller-supplied elapsed time instead of
+  wall-clock polling. Advance all peers and `Link::pump` from the same clock;
+  do not mix these calls with `poll`. The first advance consumes its full duration.
 - `ActionCodec<F::Input>` optionally samples multiple declared actions into one
   history entry and validates/expands that entry on the authority. Install matching
   codecs through `Client::action_codec` / `Server::action_codec` before polling;
@@ -55,6 +58,11 @@ link Lightyear, Replicon, App, sockets, histories or network services.
 
 ## Transport seam
 
+Only Lightyear's `lightyear_sync` and `lightyear_transport` 0.31.0 are vendored.
+Root Cargo patches bind their RTT and quota clocks to Bevy `Time<Real>`, like
+transport timers. See `vendor/PATCHES.md` for the exact changes and upgrade steps.
+Keep every other Lightyear crate on crates.io at 0.31.0.
+
 Encrypted UDP/netcode is the default. JoinToken is private launch/auth data, never
 replay/log data. A Steam Networking Sockets adapter belongs inside runtime/: replace
 the Lightyear UDP I/O entities with a supported Link receiver/sender while retaining
@@ -80,6 +88,10 @@ dedicated authority plus three headless bots; success/failure always reaps child
 Field profiles count generated field-codec payload; Link counts encrypted datagrams.
 Do not compare rendered frames with authoritative same-tick checkpoints or repair
 client state from expected test snapshots.
+The adverse gate uses one virtual 60 Hz frame clock, a bounded virtual deadline,
+and a neutral input tail through tick 600; it checks the applied tail and waits
+until every owner has sampled beyond the final input history before asserting.
+The frame-size regression compares complete tick records and replay hashes.
 
 The composition root must call `ara_net::register(host, control)`; this optional
 crate never makes ara-host depend on networking. Workspace members are globbed,

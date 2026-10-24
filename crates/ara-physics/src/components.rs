@@ -4,18 +4,14 @@ use bevy_ecs::prelude::Component;
 use serde::{Deserialize, Serialize};
 
 /// Stable simulation identity; nonzero and unique within a physics world.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Component, Schema, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Component, Schema, Serialize, Deserialize)]
 #[ara(component, module = "physics")]
 #[serde(default, rename_all = "camelCase", deny_unknown_fields)]
 pub struct PhysicsId {
-    /// Stable scene/network identity, used to sort creation and inputs across peers.
-    #[ara(default = 1, range(min = 1))]
+    /// Stable scene/network identity. Zero asks Play to assign a unique value from
+    /// the entity identity; positive values explicitly reserve an identity.
+    #[ara(range(min = 0))]
     pub value: u64,
-}
-impl Default for PhysicsId {
-    fn default() -> Self {
-        Self { value: 1 }
-    }
 }
 
 /// Resolved world-space pose in meters. Hierarchy/scale resolution runs before physics.

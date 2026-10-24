@@ -16,7 +16,8 @@ pub enum Provenance {
     Override,
     /// Explicit ordinary authoring value.
     Authored,
-    /// Applied agent change awaiting review.
+    /// Changed by an agent within the last few seconds: attribution (D24 applies
+    /// agent edits at once; the Agents feed undoes a turn).
     AgentChanged,
 }
 /// A generated control's semantic kind.

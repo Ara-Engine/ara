@@ -8,7 +8,7 @@
     "r_branch": {
       "name": "Dead branches",
       "species": "rock",
-      "asset": "@assets/kit/branches.gltf#as_kitbranches",
+      "asset": "@prefabs/branches.prefab#pf_branches",
       "seed": 24,
       "cellSize": 8,
       "density": 0.008,
@@ -22,7 +22,7 @@
     },
     "r_iceplant": {
       "name": "Ice plant",
-      "asset": "@assets/kit/iceplant.gltf#as_kiticeplant",
+      "asset": "@prefabs/iceplant.prefab#pf_iceplant",
       "seed": 27,
       "cellSize": 2,
       "density": 0.08,
@@ -36,7 +36,7 @@
     "r_rocks": {
       "name": "Scree",
       "species": "rock",
-      "asset": "@assets/kit/rock_a.gltf#as_kitrocka",
+      "asset": "@prefabs/rock_a.prefab#pf_rocka",
       "seed": 25,
       "cellSize": 4,
       "density": 0.025,
@@ -50,7 +50,7 @@
     },
     "r_rooibos": {
       "name": "Rooibos bush",
-      "asset": "@assets/kit/rooibos_c.gltf#as_kitrooibosc",
+      "asset": "@prefabs/rooibos_c.prefab#pf_rooibosc",
       "seed": 23,
       "cellSize": 5,
       "density": 0.02,
@@ -64,7 +64,7 @@
     },
     "r_shrub": {
       "name": "Dry shrub",
-      "asset": "@assets/kit/shrub_a.gltf#as_kitshruba",
+      "asset": "@prefabs/shrub_a.prefab#pf_shruba",
       "seed": 21,
       "cellSize": 2,
       "density": 0.05,
@@ -78,7 +78,7 @@
     },
     "r_shrubb": {
       "name": "Dry shrub (sparse)",
-      "asset": "@assets/kit/shrub_b.gltf#as_kitshrubb",
+      "asset": "@prefabs/shrub_b.prefab#pf_shrubb",
       "seed": 22,
       "cellSize": 3,
       "density": 0.03,
@@ -93,7 +93,7 @@
     "r_stones": {
       "name": "Stones",
       "species": "rock",
-      "asset": "@assets/kit/rock_d.gltf#as_kitrockd",
+      "asset": "@prefabs/rock_d.prefab#pf_rockd",
       "seed": 26,
       "cellSize": 4,
       "density": 0.02,
@@ -105,45 +105,45 @@
       "scale": [1, 2.5],
       "enabled": true
     },
-    "x_3vn1": {
-      "center": [193, 56],
-      "radius": 5
-    },
-    "x_bwr8": {
-      "center": [202, 106],
-      "radius": 5
-    },
-    "x_dqv0": {
-      "center": [197, 82],
-      "radius": 5
-    },
-    "x_g8pc": {
-      "center": [203, 120],
-      "radius": 5
-    },
-    "x_n5vh": {
-      "center": [192, 175],
-      "radius": 5
-    },
-    "x_qhcc": {
-      "center": [195, 148],
-      "radius": 5
-    },
-    "x_rft4": {
-      "center": [192, 24],
-      "radius": 5
-    },
-    "x_skt1": {
-      "center": [200, 134],
-      "radius": 5
-    },
-    "x_we4y": {
-      "center": [192.5, 162],
-      "radius": 5
-    },
-    "x_zth5": {
-      "center": [192, 196],
+    "x_clear0": {
+      "center": [96, 100],
       "radius": 37
+    },
+    "x_clear1": {
+      "center": [96, 79],
+      "radius": 5
+    },
+    "x_clear2": {
+      "center": [96.5, 66],
+      "radius": 5
+    },
+    "x_clear3": {
+      "center": [99, 52],
+      "radius": 5
+    },
+    "x_clear4": {
+      "center": [104, 38],
+      "radius": 5
+    },
+    "x_clear5": {
+      "center": [107, 24],
+      "radius": 5
+    },
+    "x_clear6": {
+      "center": [106, 10],
+      "radius": 5
+    },
+    "x_clear7": {
+      "center": [101, -14],
+      "radius": 5
+    },
+    "x_clear8": {
+      "center": [97, -40],
+      "radius": 5
+    },
+    "x_clear9": {
+      "center": [96, -72],
+      "radius": 5
     }
   }
 }
