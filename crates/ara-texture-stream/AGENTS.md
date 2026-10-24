@@ -7,6 +7,9 @@ Public API: Source::{rgba8,from_cooked}, Catalog, Residency, Binding, Stats.
 `mip`, `resident_bytes` and `stage` expose complete native mip tails for residency.
 `NativeResidency` deduplicates caller-provided cooked content hashes, uploads
 BC tails in batches, and publishes a fresh mapping table after successful upload.
+Native renderer replacements borrow matching digest/view images while preparing
+their new table, then transfer ownership only at publication. Rejected candidates
+leave the previous set live; table IDs may reorder without re-uploading images.
 `NativeConfig` budgets compressed published payload and bytes per refinement;
 initialization and a single indivisible tail may exceed the refinement target.
 Temporary image/staging allocations and device alignment are outside payload stats.
@@ -35,4 +38,4 @@ parent was resident in an earlier frame; protect current requests and ancestors.
 Cold starts/camera cuts may initially be coarse. Record desired-vs-resident error
 and same-surface temporal mip delta; never infer pop-in quality from policy alone.
 Tests: cargo test -p ara-texture-stream; clippy --all-targets -- -D warnings;
-cargo fmt -p ara-texture-stream -- --check. Set CARGO_BUILD_JOBS=4.
+cargo fmt -p ara-texture-stream -- --check. Set CARGO_BUILD_JOBS=2 on the shared PC.
