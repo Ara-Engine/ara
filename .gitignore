@@ -7,6 +7,10 @@
 
 # Engine-local caches
 .sn/
+# Shader-cook reuse data and live reload signals; cooked manifests stay tracked.
+.ara-pipeline-inputs.json
+.ara-shader-reload
+.ara-shader-reload.tmp
 
 # OS / editor noise
 .DS_Store
