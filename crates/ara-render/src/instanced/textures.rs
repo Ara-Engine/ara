@@ -30,11 +30,27 @@ pub struct TextureStats {
 
 /// Owned native textures for a renderer. Implementations upload compressed blocks
 /// and publish only completed bindings; frame refinement does no asset IO or decode.
-pub trait Textures: Send {
+pub trait Textures: Send + std::any::Any {
     /// Address-independent cooked payload/view digest. Called at content publication.
     fn content_digest(&self) -> [u8; 32];
     /// Initialize every registered map before the first draw.
     fn initialize(&mut self, gpu: &mut VulkanDevice) -> Result<TextureStats>;
+    /// Prepare a replacement against the completed resident set. Borrowed images
+    /// must remain owned by `previous` until `publish_reuse`; destroying a rejected
+    /// candidate must leave that previous set fully usable.
+    fn initialize_reusing(
+        &mut self,
+        gpu: &mut VulkanDevice,
+        _previous: &dyn Textures,
+    ) -> Result<TextureStats> {
+        self.initialize(gpu)
+    }
+    /// Transfer borrowed image ownership immediately before publishing this set.
+    /// Errors must leave both sets unchanged; no rendering occurs between this
+    /// transfer and replacing the old content. Providers without reuse do nothing.
+    fn publish_reuse(&mut self, _previous: &mut dyn Textures) -> Result<()> {
+        Ok(())
+    }
     /// Refine mip tails at a completed frame boundary.
     fn refine(&mut self, gpu: &mut VulkanDevice) -> Result<TextureStats>;
     /// Last completed table, or none when no textures are registered.

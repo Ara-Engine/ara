@@ -26,6 +26,8 @@ ECS; `Scene` is an immutable render extraction snapshot, not authoritative state
   `update_native` updates transforms/skin poses; structural changes use
   `replace_native_scene`. Native draw lists cull and select cooked LODs, and the
   RG16F motion target carries unjittered current-minus-previous screen UV.
+  Texture providers can prepare against the last resident set and transfer reused
+  image ownership at publication; rejected content keeps its previous environment.
 - `update_native_changed(scene, instanced::Changes)` consumes exact instance,
   material and skin indices. Coherent writes/culling touch dirty groups only;
   idle frames retain visible lists and settle motion history once. `native_frame_work`
