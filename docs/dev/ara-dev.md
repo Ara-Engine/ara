@@ -77,11 +77,60 @@ cleaning a parent target can remove a nested cache while its Cargo build is acti
 Keep source changes and rebuilds out of an in-progress test/doctest run using that
 cache: replacing its dependencies can invalidate already-built Rust metadata.
 
-## One gate
+## Focused agents, one integration gate per batch
 
-For performance work, run `ara-dev perf` plus `cargo check` and focused tests on
-the touched crates during each iteration. Run `ara-dev check` at commit
-checkpoints. Repeating the full gate between measurements destroys iteration speed.
+Agents run fmt plus clippy/tests for touched crates, and the particular GPU/player/editor
+suites their change touches. Commit and hand over the SHA. The integrator runs `ara-dev check`
+once per merge batch on main; `--base` names the previous integrated checkpoint.
+`--full` is the nightly/dependency-update validation path. Performance iterations use
+`ara-dev perf` plus focused checks. Historical gate measurements above predate this policy.
+
+The normal gate tests source owners and **direct** consumers; clippy covers their full
+reverse dependency closure. Test/example/bench edits stay local. Markdown (including
+diagnostic catalog wording), docs and captures never cascade; fixture/golden changes
+test their owner. Catalog edits always run `ara-diag --test coverage`. Rust token comparison
+ignores formatting; Cargo.lock-only changes are reported without selecting source owners.
+Use `--full` for dependency-only version upgrades. JSON/`--plan` distinguish `affected`
+(compile) from `test_packages` (execution).
+
+Tests execute the compiled artifact paths directly, two harnesses at a time by default.
+Admission estimates reserve at most 4096 MiB and half the available physical RAM.
+`ARA_TEST_JOBS` (1–4), `ARA_TEST_RAM_MIB`, and `ARA_TEST_TIMEOUT_SECONDS` override these limits.
+The tracked `crates/ara-dev/test-tiers.toml` labels slow suites and exclusive GPU/.NET/process
+groups. Fast suites have a 120-second deadline; slow suites have explicit 180–240-second
+deadlines. Timeout kills the process tree and fails the gate. Separate suite logs and
+`test-execution.json` record results/times. Doctests remain checked through Cargo.
+No nextest installation is required; the built-in scheduler is used when that optional
+developer tool is absent. This is an admission estimate, not an OS memory sandbox.
+
+### Shared compilation on this PC
+
+Cargo 1.99 shared intermediates reuse registry builds across worktrees. Keep final targets
+separate and use the wrapper so builds **and tests** hold the common admission lock:
+
+```powershell
+$env:ARA_SHARED_BUILD_DIR='D:\AraBuild\ara-shared-dev'
+$env:CARGO_BUILD_BUILD_DIR=$env:ARA_SHARED_BUILD_DIR
+# Set CARGO_TARGET_DIR to YOUR worktree target, or leave it unset.
+.\crates\ara-dev\run.ps1 cargo -- clippy -p ara-schema --all-targets -- -D warnings
+.\crates\ara-dev\run.ps1 cargo -- test -p ara-schema
+.\crates\ara-dev\run.ps1 check --base <last-batch> --json
+```
+
+This lane uses two Cargo jobs, disables incremental output, and bypasses the optional Rust
+compiler wrapper. Cargo's shared fingerprints provide reuse without going through a second
+compiler jobserver. It does not stop or reset another agent's sccache server. The existing
+single disk cache is `D:\AraCache\sccache`; ordinary Cargo invocations keep their configured
+wrapper. Unset the two shared-directory variables to return to independent local builds.
+Never run an unwrapped Cargo build against this shared directory while tests use it.
+
+Why not just set `SCCACHE_BASEDIRS`? The installed
+[sccache 0.18 Rust implementation](https://github.com/mozilla/sccache/blob/v0.18.0/src/compiler/rust.rs)
+hashes the working directory and Cargo environment; its base-directory rewriting covers C/C++.
+Its [independent compiler jobserver](https://github.com/mozilla/sccache/blob/v0.18.0/src/jobserver.rs)
+also cannot inherit each caller's Cargo budget. Cross-worktree workspace crates can still
+recompile because their source/package identities differ; registry dependency reuse is
+measured separately. We do not normalize embedded manifest paths or reuse branch binaries.
 
 ## Performance iteration
 

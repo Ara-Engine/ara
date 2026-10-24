@@ -12,18 +12,19 @@ use crate::check::Logs;
 pub(crate) type Binaries = BTreeMap<String, PathBuf>;
 
 #[derive(Deserialize)]
-struct Message {
-    reason: String,
+pub(crate) struct Message {
+    pub(crate) reason: String,
     #[serde(default)]
     package_id: String,
-    executable: Option<PathBuf>,
-    target: Option<crate::workspace::Target>,
-    profile: Option<Profile>,
+    pub(crate) executable: Option<PathBuf>,
+    pub(crate) target: Option<crate::workspace::Target>,
+    pub(crate) profile: Option<Profile>,
+    pub(crate) manifest_path: Option<PathBuf>,
 }
 
 #[derive(Deserialize)]
-struct Profile {
-    test: bool,
+pub(crate) struct Profile {
+    pub(crate) test: bool,
 }
 
 pub(crate) fn artifacts(output: &str) -> Result<Binaries> {

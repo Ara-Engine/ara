@@ -33,6 +33,19 @@ pub(crate) struct Dependency {
 }
 
 impl Metadata {
+    pub(crate) fn direct_dependents(&self, roots: &BTreeSet<String>) -> BTreeSet<String> {
+        let mut selected = roots.clone();
+        for package in &self.packages {
+            if package
+                .dependencies
+                .iter()
+                .any(|d| d.path.is_some() && roots.contains(&d.name))
+            {
+                selected.insert(package.name.clone());
+            }
+        }
+        selected
+    }
     pub(crate) fn owner(&self, root: &Path, path: &Path) -> Option<&Package> {
         self.packages
             .iter()
@@ -105,5 +118,9 @@ mod tests {
             BTreeSet::from(["core".into(), "renderer".into(), "editor".into()])
         );
         assert!(m.reverse_closure(&BTreeSet::new()).is_empty());
+        assert_eq!(
+            m.direct_dependents(&BTreeSet::from(["core".into()])),
+            BTreeSet::from(["core".into(), "renderer".into()])
+        );
     }
 }
