@@ -52,6 +52,11 @@ device and per-view upload state; no simulation, window or process code.
   worker's persistent CPU tracer re-traces only nearby probes
   (`gi_cpu::affected`), which `Renderer::update_probe_surfaces` blends in.
   `tests/gi_edits.rs` checks a moved block's old spot against a fresh view.
+  Emissive surfaces (`emitters.rs`, above 5 cd/m2) light the scene directly: each
+  becomes a local light carrying its flux (flat ones hemispherical spots, sized by
+  area), small neighbours clustered only as far as the light budget needs; the
+  lights follow their instances and ride after the scene's own. Probe bakes zero
+  those materials' emission, so probes keep only their bounce.
   `stats().gpu: Option<GpuFrameCosts>` splits native scene updates, compressed
   texture uploads, VFX simulation/draw, raster/fidelity passes and publication.
   Residency counters accompany that same frame, including native Low. The legacy
@@ -99,7 +104,8 @@ device and per-view upload state; no simulation, window or process code.
 - Native material/draw-set generations replace scene resources while retaining
   pipelines and targets. Light/transform/skin edits stream; native texture uploads
   never decode to RGBA8 or build an atlas, on any raster tier.
-- At most 64 local lights; one directional sun (a dim default if the world has none).
+- At most 256 local lights (scene lights plus emitter lights; 128 per 16x16 tile);
+  one directional sun (a dim default if the world has none).
 - Capture resizes the renderer to the request and back.
 - `Presenter2d::set_atlases` publishes textures once; `prepare` moves the atlas map
   through extraction without copying pixels; `present` draws without readbacks.

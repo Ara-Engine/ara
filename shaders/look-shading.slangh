@@ -143,16 +143,18 @@ float3 ibl(Frame f,Look l,Surface s,float3 world,float3 v,int2 p,bool gathered) 
 float3 shade(Frame f,Look l,Surface s,float3 world,int2 p,bool gathered) {
     float3 v=normalize(f.camera.xyz-world);float3 result=s.emissive+ibl(f,l,s,world,v,p,gathered);
     result+=brdf(s,v,f.sunDirection.xyz)*sunAt(f,l,world)*visibility(f,l,world,s.normal);
-    uint tilesX=(f.extent.x+15)/16;uint tile=(uint(p.y)/16*tilesX+uint(p.x)/16)*65;
+    uint tilesX=(f.extent.x+15)/16;uint tile=(uint(p.y)/16*tilesX+uint(p.x)/16)*TILE_STRIDE;
     uint count=buffers[NonUniformResourceIndex(f.lighting.z)].Load(tile*4);
     for(uint i=0;i<count;i++) {
         uint index=buffers[NonUniformResourceIndex(f.lighting.z)].Load((tile+1+i)*4);
         Light light=buffers[NonUniformResourceIndex(f.lighting.w)].Load<Light>(index*64);
-        float3 delta=light.positionRange.xyz-world;float d2=max(dot(delta,delta),0.01);float d=sqrt(d2);float3 toLight=delta/d;
+        float3 delta=light.positionRange.xyz-world;float d2=max(dot(delta,delta),max(0.01,light.parameters.z*light.parameters.z));float d=sqrt(d2);float3 toLight=normalize(delta);
         float fade=pow(saturate(1-pow(d/light.positionRange.w,4)),2);float spot=1;
         if(light.parameters.x>0.5)spot=smoothstep(light.directionOuter.w,light.parameters.y,dot(-toLight,light.directionOuter.xyz));
-        float solidAngle=light.parameters.x>0.5?2*PI*(1-light.directionOuter.w):4*PI;
-        float3 illuminance=light.colorLumens.rgb*(light.colorLumens.w/(solidAngle*d2))*fade*spot;
+        // Lumens are point-equivalent for spots too (the cone masks, it does not
+        // concentrate), as in the path tracer; inside a source's radius the near
+        // field softens instead of peaking.
+        float3 illuminance=light.colorLumens.rgb*(light.colorLumens.w/(4*PI*d2))*fade*spot;
         result+=brdf(s,v,toLight)*illuminance;
     }
     return result;

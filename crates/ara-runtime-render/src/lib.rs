@@ -8,6 +8,7 @@
 extern crate glam34 as glam;
 
 mod composite;
+mod emitters;
 pub mod fidelity;
 pub mod geometry;
 mod gi;

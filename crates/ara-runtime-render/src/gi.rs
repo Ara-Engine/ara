@@ -31,7 +31,7 @@ use std::{
 };
 
 /// Bumped whenever the bake or the cache layout changes.
-const VERSION: u32 = 2;
+const VERSION: u32 = 3;
 const MAGIC: &[u8; 8] = b"ARAGI\0\0\x01";
 
 /// Residency used only while baking (full-resolution albedo for the caches).
@@ -371,8 +371,8 @@ fn run(cache: &Path, cpu: bool, job: Job, worker: Option<Worker>, send: &Sender<
         let tracer = follow
             .prepared
             .map_or_else(|| prepare(&job), Ok)
-            .map(|prepared| {
-                let shading = shading(&prepared);
+            .map(|mut prepared| {
+                let shading = bake_shading(&mut prepared);
                 match follow.tracer {
                     Some(mut tracer) => {
                         tracer.adopt(&prepared.scene, &shading, &job.dynamic);
@@ -470,7 +470,7 @@ fn acquire(
         }
     }
     let mut prepared = prepare(job)?;
-    let shading = shading(&prepared);
+    let shading = bake_shading(&mut prepared);
     if let Some(adopting) = tracer.as_mut()
         && let Some(state) = worker.as_mut()
     {
@@ -591,11 +591,25 @@ fn decode(bytes: &[u8]) -> Result<ProbeSurfaces> {
     Ok(surfaces)
 }
 
+/// The shading a bake traces: [`shading`] with emitter materials' emission
+/// removed, here and in `prepared`'s materials (the ray-traced bake reads those).
+/// Emitters light the scene as direct lights (`emitters`); probes keep their bounce.
+fn bake_shading(prepared: &mut native::Prepared) -> Vec<crate::gi_cpu::Shading> {
+    let mut shading = shading(prepared);
+    for (material, s) in prepared.scene.materials.iter_mut().zip(&mut shading) {
+        if crate::emitters::is_emitter(*s) {
+            s.emissive = glam30::Vec3::ZERO;
+            material.pbr.emissive_roughness[..3].fill(0.);
+        }
+    }
+    shading
+}
+
 /// Bakes the probe surfaces of `frame`'s content on a ray-tracing device.
 /// Each material's diffuse albedo (metal removed) and emissive radiance for the
 /// CPU bake: factors times the mean texel of their maps; terrain splats average
 /// their layer materials.
-fn shading(prepared: &native::Prepared) -> Vec<crate::gi_cpu::Shading> {
+pub(crate) fn shading(prepared: &native::Prepared) -> Vec<crate::gi_cpu::Shading> {
     use ara_render::instanced::NO_TEXTURE;
     use glam30::Vec3;
     let missing = std::cell::Cell::new(0usize);

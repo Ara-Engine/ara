@@ -90,7 +90,9 @@ linear multiplier. See README.md for the exact tone mapper and GPU measurements.
 The TAA history alone is RGBA16F and pre-exposed (`look.slangh` exposureState):
 history readers decode with the state's previous multiplier; look passes learn
 whether their input is history or linear HDR from root word 7.
-Local light lists are tiled 16x16, with a checked scene capacity of 64 lights.
+Local light lists are tiled 16x16: `scene::MAX_LOCAL_LIGHTS` (256) per scene, the
+first `TILE_LIGHTS` (128) per tile. Spot lumens are point-equivalent (the cone
+masks), as in the path tracer; `Light::parameters.z` softens the near field.
 
 Capture determinism resets history, fixes host tick/seed, disables jitter/history
 blending, locks exposure and renders the explicit settle count. No wall clock or

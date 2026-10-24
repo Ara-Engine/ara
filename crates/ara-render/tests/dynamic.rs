@@ -82,7 +82,11 @@ fn dynamic_updates_and_scene_replacement_are_visible_and_validation_clean() -> R
         !compare(&relit.image, &lifted.image, 0.005)?.passed,
         "Light edits were not visible"
     );
-    ensure!(renderer.set_lights(&vec![lights[0]; 65]).is_err());
+    ensure!(
+        renderer
+            .set_lights(&vec![lights[0]; ara_render::scene::MAX_LOCAL_LIGHTS + 1])
+            .is_err()
+    );
 
     renderer.replace_scene(common::scene()?)?;
     let replaced = renderer.capture(&request)?;

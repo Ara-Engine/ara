@@ -484,7 +484,10 @@ impl Renderer {
                 gpu.storage_image(images[OUTPUT])?.index,
             ];
             let tiles = gpu.create_buffer(
-                u64::from(size[0].div_ceil(16)) * u64::from(size[1].div_ceil(16)) * 65 * 4,
+                u64::from(size[0].div_ceil(16))
+                    * u64::from(size[1].div_ceil(16))
+                    * (crate::scene::TILE_LIGHTS as u64 + 1)
+                    * 4,
                 vk::BufferUsageFlags::STORAGE_BUFFER,
                 false,
             )?;

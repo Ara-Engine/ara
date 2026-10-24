@@ -31,6 +31,10 @@ pub struct RasterView {
     mobility: crate::gi::Mobility,
     /// Delivered probe updates not applied yet (large ones go a slice per frame).
     gi_updates: std::collections::VecDeque<ProbeUpdate>,
+    /// Emissive surfaces of the current generation and their lights, uploaded
+    /// after the scene's own lights.
+    emitters: Option<crate::emitters::Emitters>,
+    emitter_lights: Vec<ara_render::scene::Light>,
     cache: PathBuf,
     key: u64,
     pending_gi: bool,
@@ -48,6 +52,8 @@ impl RasterView {
             gi: Some(crate::gi::Acquisition::new(cache.clone())),
             mobility: Default::default(),
             gi_updates: Default::default(),
+            emitters: None,
+            emitter_lights: Vec::new(),
             cache,
             key: crate::FNV,
             pending_gi: false,
@@ -153,6 +159,9 @@ impl RasterView {
                 let textures = prepared.textures.fork_sources(config)?;
                 renderer.replace_native_scene(&prepared.scene, Box::new(textures))?;
                 self.key = content_key(&prepared);
+                let emitters =
+                    crate::emitters::Emitters::new(&prepared.scene, &crate::gi::shading(&prepared));
+                self.emitters = (!emitters.is_empty()).then_some(emitters);
                 self.prepared = Some(prepared);
                 self.pending_gi = true;
                 update.rebuilt = true;
@@ -169,16 +178,42 @@ impl RasterView {
             if *renderer.look() != raster_look {
                 renderer.set_look(raster_look)?;
             }
-            let prepared = self.prepared.as_ref().context("native raster content")?;
+            let prepared = self.prepared.as_mut().context("native raster content")?;
+            // Emitter lights follow their instances and ride after the scene's
+            // lights, within the shared light budget.
+            match &mut self.emitters {
+                Some(emitters) => {
+                    let budget = ara_render::scene::MAX_LOCAL_LIGHTS
+                        .saturating_sub(prepared.scene.lights.len());
+                    if let Some(lights) = emitters.update(&prepared.scene, budget) {
+                        self.emitter_lights = lights;
+                        if update.rebuilt {
+                            eprintln!(
+                                "ara-runtime-render: {} emissive surfaces light the scene as {} lights",
+                                emitters.len(),
+                                self.emitter_lights.len()
+                            );
+                        }
+                    }
+                }
+                None => self.emitter_lights.clear(),
+            }
+            let own = prepared.scene.lights.len();
+            prepared
+                .scene
+                .lights
+                .extend_from_slice(&self.emitter_lights);
             let unchanged = ara_render::instanced::Changes::default();
-            renderer.update_native_changed(
+            let updated = renderer.update_native_changed(
                 &prepared.scene,
                 if snapshot_changed {
                     prepared.changes()
                 } else {
                     &unchanged
                 },
-            )?;
+            );
+            prepared.scene.lights.truncate(own);
+            updated?;
             self.look = Some(look);
             if plan.quality.gi_budget > 0
                 && let Some(gi) = &mut self.gi
