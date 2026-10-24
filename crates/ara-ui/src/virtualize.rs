@@ -391,6 +391,11 @@ impl VirtualView {
     pub fn visible_nodes(&self) -> &[usize] {
         &self.order
     }
+    /// The model keys of the rows on screen (a host binds just these: only they can
+    /// be clicked).
+    pub fn visible_keys(&self) -> impl Iterator<Item = u64> + '_ {
+        self.slots.iter().filter_map(|slot| slot.key)
+    }
     /// Stable identity for focus restoration, independent of pool reuse.
     pub fn identity(&self, key: u64) -> u64 {
         stable_id(&format!("{}/key-{key}", self.namespace))

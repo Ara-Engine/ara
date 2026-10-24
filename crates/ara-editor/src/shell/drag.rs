@@ -62,6 +62,7 @@ impl Shell {
                 self.asset_offset = (self.asset_offset + delta)
                     .clamp(0., (self.asset_rows.items.len() as f32 * 26. - r.h).max(0.));
                 view.scroll(&mut self.ui, &self.asset_rows, self.asset_offset, r.h)?;
+                self.bind_asset_rows();
                 return Ok(true);
             }
         }
@@ -78,6 +79,7 @@ impl Shell {
         self.hierarchy_offset = (self.hierarchy_offset + delta)
             .clamp(0., (self.hierarchy.items.len() as f32 * 26. - r.h).max(0.));
         view.scroll(&mut self.ui, &self.hierarchy, self.hierarchy_offset, r.h)?;
+        self.bind_hierarchy_rows();
         self.decorate_hierarchy();
         Ok(true)
     }
