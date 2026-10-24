@@ -47,6 +47,9 @@ impl Renderer {
             HISTORY0
         };
         let frame = self.frame_data(&camera, exposure, deterministic, mode, output_history);
+        if let Some(native) = &mut self.native {
+            native.prepare(&mut self.gpu, &frame, &camera)?;
+        }
         self.gpu.upload(self.frame, bytemuck::bytes_of(&frame))?;
         let mut compute_frame = frame;
         compute_frame.lighting[3] = self.content.compute_light_index;
@@ -106,6 +109,18 @@ impl Renderer {
                 (id, access)
             })
             .collect::<Vec<_>>();
+        if let Some(native) = &self.native {
+            native.resources(&mut |resource, access| {
+                let id = graph.import(
+                    resource,
+                    State {
+                        access,
+                        queue: Queue::Graphics,
+                    },
+                );
+                graphics.push((id, Access::ShaderRead));
+            });
+        }
         let frame_id = graph.import(
             Resource::Buffer(self.frame),
             State {
@@ -145,7 +160,9 @@ impl Renderer {
                 (ids[WORLD], Access::Color),
                 (ids[ID], Access::Color),
                 (ids[DEPTH], Access::Depth),
-            ],
+            ]
+            .into_iter()
+            .chain(self.native.as_ref().map(|_| (ids[MOTION], Access::Color))),
         );
         declare(gbuffer, Recipe::GBuffer);
         let mut sky_shared = graphics.clone();
@@ -192,7 +209,8 @@ impl Renderer {
                 (tile, Access::ShaderRead),
             ]
             .into_iter()
-            .chain(look_reads.iter().copied()),
+            .chain(look_reads.iter().copied())
+            .chain(self.native.as_ref().map(|_| (ids[MOTION], Access::Color))),
         );
         declare(forward, Recipe::Forward);
         let mut shaded = vec![shadow, gbuffer, lighting, forward];
@@ -207,6 +225,9 @@ impl Renderer {
             ];
             if let Some(history) = self.targets.history {
                 taa.push((ids[history], Access::ShaderRead));
+            }
+            if self.native.is_some() {
+                taa.push((ids[MOTION], Access::ShaderRead));
             }
             let temporal = graph.pass("TemporalResolve", Queue::Graphics, taa);
             declare(temporal, Recipe::Taa);
@@ -313,6 +334,11 @@ impl Renderer {
                             origin: [cascade % 2 * 512, cascade / 2 * 512],
                             size: [512, 512],
                         });
+                        if let Some(native) = &self.native {
+                            let mut constants = root;
+                            constants.words[4] = cascade;
+                            native.record(&mut recorder, constants, cascade as usize);
+                        }
                         for (index, mesh) in self
                             .content
                             .meshes
@@ -334,8 +360,9 @@ impl Renderer {
                     recorder.push(Command::Pipeline(self.pipelines.gbuffer));
                     recorder.push(Command::BeginRendering {
                         colors: [ALBEDO, NORMAL, MATERIAL, WORLD, ID]
-                            .iter()
-                            .map(|&i| Attachment {
+                            .into_iter()
+                            .chain(self.native.as_ref().map(|_| MOTION))
+                            .map(|i| Attachment {
                                 image: self.targets.images[i],
                                 clear: Some([0.; 4]),
                             })
@@ -346,6 +373,9 @@ impl Renderer {
                         }),
                         size: self.size,
                     });
+                    if let Some(native) = &self.native {
+                        native.record(&mut recorder, root, 4);
+                    }
                     for (index, mesh) in self
                         .content
                         .meshes
@@ -414,13 +444,22 @@ impl Renderer {
                                 image: self.targets.images[WORLD],
                                 clear: None,
                             },
-                        ],
+                        ]
+                        .into_iter()
+                        .chain(self.native.as_ref().map(|_| Attachment {
+                            image: self.targets.images[MOTION],
+                            clear: None,
+                        }))
+                        .collect(),
                         depth: Some(Attachment {
                             image: self.targets.images[DEPTH],
                             clear: None,
                         }),
                         size: self.size,
                     });
+                    if let Some(native) = &self.native {
+                        native.record(&mut recorder, root, 5);
+                    }
                     let mut transparent = self
                         .content
                         .meshes
@@ -489,6 +528,9 @@ impl Renderer {
         self.previous_vp = frame.vp;
         self.frame_number = self.frame_number.wrapping_add(1);
         self.gpu.assert_clean()?;
+        if let Some(native) = &mut self.native {
+            native.presented(&camera);
+        }
         Ok(())
     }
 }

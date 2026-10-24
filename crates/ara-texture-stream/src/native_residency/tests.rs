@@ -3,6 +3,7 @@ use ara_asset_format::{TextureFormat, write_ktx2};
 use ara_gpu::{Barrier, Queue, commands::Command, vk};
 use std::time::Instant;
 
+mod raster;
 mod views;
 
 enum Probe {

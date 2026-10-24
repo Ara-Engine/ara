@@ -16,9 +16,16 @@ ECS; `Scene` is an immutable render extraction snapshot, not authoritative state
   vertices and 320-byte materials with six independent map transforms, AO,
   transmission and authored terrain layer IDs. Texture IDs address the native
   residency table; u32::MAX means neutral texels. This input is separate from
-  the legacy `Scene` ABI; GPU consumers are being integrated.
+  the legacy `Scene` ABI.
   Validate only at content publication; do not hash/traverse static vertices
   when moving instances. Culling bounds handle mirrored/nonuniform transforms.
+- `Renderer::new_native` consumes this scene and an owned `instanced::Textures`
+  provider on a raster-only device. `ara-texture-stream::NativeResidency` implements
+  the provider without reversing its dependency on ara-render. Native fill uses
+  compressed images, six independent UV slots, authored splats and local instancing.
+  `update_native` updates transforms/skin poses; structural changes use
+  `replace_native_scene`. Native draw lists cull and select cooked LODs, and the
+  RG16F motion target carries unjittered current-minus-previous screen UV.
 - `instanced::GeometryGpu` uploads static local vertices/LOD indices once. Changed
   deforming revisions use `prepare_pose` then `commit_pose`/`cancel_pose`; retire
   the old dependent TLAS before committing. Three skin slots retain presented and

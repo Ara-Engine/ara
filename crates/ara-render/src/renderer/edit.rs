@@ -11,6 +11,7 @@ impl Renderer {
     /// change them). A rejected or failed update retains the last good geometry; targets
     /// and device identities never change here.
     pub fn update_geometry(&mut self, scene: Scene) -> Result<()> {
+        ensure!(!scene.meshes.is_empty(), "Scene has no geometry");
         ensure!(
             super::hash::static_hash(&scene) == self.content.static_hash,
             "Texture/environment replacement requires replace_scene"

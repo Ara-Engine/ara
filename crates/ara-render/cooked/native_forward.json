@@ -1,0 +1,42 @@
+{
+  "binding_layout_hash": "35cd2a62b1ba741ce6823b3c8753d7b5aa97b54c5f0a837b56e542518013fd7e",
+  "compiler": "2026.17-25-gc7954ebd1",
+  "key": "f99d62b02a33c81a3ced27017f631664b534d2d1e6d469924ba66d15ea1dd370",
+  "stages": [
+    {
+      "dxil": "f99d62b02a33c81a3ced27017f631664b534d2d1e6d469924ba66d15ea1dd370/nativeForwardFragment.dxil",
+      "dxil_hash": "e359f7d1901edd13578d558381b88f2920f6c564896b7b2391ee067808764400",
+      "source_entry": "nativeForwardFragment",
+      "spirv": "f99d62b02a33c81a3ced27017f631664b534d2d1e6d469924ba66d15ea1dd370/nativeForwardFragment.spv",
+      "spirv_entry": "main",
+      "spirv_hash": "be3fcabae468ae3c1a0186a57664a57f5a4b85116c76c4872f42328ce3878cfd",
+      "stage": "fragment"
+    },
+    {
+      "dxil": "f99d62b02a33c81a3ced27017f631664b534d2d1e6d469924ba66d15ea1dd370/nativeGeometryVertex.dxil",
+      "dxil_hash": "2aa683842aa85a3c215419ff5f39d806804721a726e6fb8f6b97b558ef89d67a",
+      "source_entry": "nativeGeometryVertex",
+      "spirv": "f99d62b02a33c81a3ced27017f631664b534d2d1e6d469924ba66d15ea1dd370/nativeGeometryVertex.spv",
+      "spirv_entry": "main",
+      "spirv_hash": "5950004334f3ad6486d6a474c186b97e0111ef8e9186464c5699cb3669e3f176",
+      "stage": "vertex"
+    }
+  ],
+  "state": {
+    "blend": true,
+    "color_formats": [
+      109,
+      100,
+      109,
+      109,
+      109,
+      109,
+      83
+    ],
+    "depth_format": 126,
+    "depth_test": true,
+    "depth_write": false,
+    "vertex_stride": 0
+  },
+  "version": 1
+}

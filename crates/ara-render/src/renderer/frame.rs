@@ -96,7 +96,16 @@ impl Renderer {
                 self.content.material_index,
             ],
             // w: sampled native motion (RG16F, unjittered UV delta); u32::MAX without.
-            look: [self.look.frame_index, 0, 0, u32::MAX],
+            look: [
+                self.look.frame_index,
+                0,
+                0,
+                if self.native.is_some() {
+                    self.targets.sampled[MOTION]
+                } else {
+                    u32::MAX
+                },
+            ],
         }
     }
 }

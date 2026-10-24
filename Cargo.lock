@@ -1965,8 +1965,10 @@ dependencies = [
  "ara-gpu",
  "ara-render",
  "bytemuck",
+ "glam 0.30.9",
  "serde",
  "serde_json",
+ "sha2 0.10.9",
  "texture2ddecoder",
 ]
 
