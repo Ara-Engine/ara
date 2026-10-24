@@ -18,6 +18,11 @@ fn live_root_factors_and_poses_do_not_change_shared_vertices_or_sibling_material
     );
     assert_eq!(prepared.scene.geometry[0].vertices.as_ptr(), pointer);
     assert_eq!(prepared.scene.instances[0].world.w_axis.x, 5.0);
+    assert_eq!(prepared.changes().instances, [0]);
+    assert_eq!(
+        prepared.changes().materials,
+        [prepared.scene.instances[0].material]
+    );
     let first = &prepared.scene.materials[prepared.scene.instances[0].material];
     let second = &prepared.scene.materials[prepared.scene.instances[1].material];
     assert_eq!(first.pbr.base_color, [0.25, 0.5, 0.75, 1.0]);
@@ -28,6 +33,9 @@ fn live_root_factors_and_poses_do_not_change_shared_vertices_or_sibling_material
         prepared.update_frame(&frame).unwrap(),
         FrameChange::Ready { poses: 0, skins: 0 }
     );
+    assert!(prepared.changes().instances.is_empty());
+    assert!(prepared.changes().materials.is_empty());
+    assert!(prepared.changes().geometries.is_empty());
     frame.draws[0].entity = 99;
     assert_eq!(prepared.update_frame(&frame).unwrap(), FrameChange::Rebuild);
 }

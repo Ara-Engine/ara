@@ -11,6 +11,7 @@ use ara_runtime_render::{PresentationImage, fidelity::vfx::Effects};
 pub(super) struct SceneView {
     raster: Option<ara_runtime_render::RasterView>,
     raster_frame: Option<ara_runtime::extract::RenderFrame>,
+    raster_snapshot_dirty: bool,
     fidelity: Option<FidelityView>,
     content: Option<crate::world::gltf::FidelityContent>,
     prepared: Option<Prepared>,
@@ -46,7 +47,6 @@ impl SceneView {
     }
     /// Update only `patch` on the retained native frame. A typed preview remains
     /// projected for later publication/resize rebuilds. False requests extraction.
-    #[allow(dead_code)] // SceneSync's companion wiring lands after this API checkpoint.
     pub(super) fn apply_patch(
         &mut self,
         renderer: &mut Renderer,
@@ -55,6 +55,7 @@ impl SceneView {
         preview: Option<crate::world::DocumentView>,
         patch: &crate::world::Patch,
     ) -> ara_ui::Result<bool> {
+        ara_gpu::cpu_scope!("SceneView.apply_patch");
         if !renderer.is_native() || self.failed.is_some() {
             return Ok(false);
         }
@@ -110,6 +111,7 @@ impl SceneView {
             renderer.reset_temporal_history();
         }
         self.preview_view = preview;
+        self.raster_snapshot_dirty = true;
         self.patched_pose = pose_key(editor.gesture.as_ref());
         self.revision = Some((
             store.revision(),
@@ -233,6 +235,7 @@ impl SceneView {
         view: &crate::world::DocumentView,
         settle: u32,
     ) -> ara_ui::Result<()> {
+        ara_gpu::cpu_scope!("SceneView.render_raster");
         let store = editor.host.store();
         let settings = crate::world::gltf::render_settings(store.workspace())?;
         let choice = editor
@@ -296,19 +299,21 @@ impl SceneView {
                 content.content(&frame, store.workspace(), store.schema())
             })?;
             self.raster_frame = Some(frame);
+            self.raster_snapshot_dirty = false;
             self.revision = Some(revision);
             self.failed = None;
             self.remaining = 64;
         } else {
             let frame = self.raster_frame.as_ref().ok_or("raster frame")?;
             let look = FrameEnvironment::resolve(&frame.look, frame.environment.exposure);
-            self.raster.as_mut().ok_or("raster view")?.prepare(
-                renderer,
-                frame,
-                plan,
-                look,
-                || content.content(frame, store.workspace(), store.schema()),
-            )?;
+            let raster = self.raster.as_mut().ok_or("raster view")?;
+            let resolve = || content.content(frame, store.workspace(), store.schema());
+            if self.raster_snapshot_dirty {
+                raster.prepare(renderer, frame, plan, look, resolve)?;
+            } else {
+                raster.prepare_unchanged(renderer, frame, plan, look, resolve)?;
+            }
+            self.raster_snapshot_dirty = false;
         }
         if self.camera != Some(editor.state.camera) {
             self.remaining = self.remaining.max(8);

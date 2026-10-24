@@ -16,6 +16,10 @@ device and per-view upload state; no simulation, window or process code.
   Presenter. `prepare` adopts published native generations, `render` draws native
   terrain/foliage and particles through the shared look. `capture` settles residency,
   probe acquisition and temporal history. It never discovers, cooks or imports.
+- `RasterView::prepare_unchanged` is for a retained immutable extraction (editor
+  accumulation/camera frames); it polls GI without revisiting root draws. Edits use
+  `prepare` and its exact dirty rows. Any failed preparation discards that candidate
+  CPU snapshot so retry cannot forget an accepted pose; GPU last-good stays live.
 - Probe GI is enabled by default, acquired asynchronously and disk-cached; live
   frames poll without waiting. `wait_probe_gi` is an explicit capture boundary.
 - `prepare_with(&frame, resolver)` / `present_with`: native local geometry, compressed

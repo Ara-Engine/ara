@@ -60,6 +60,8 @@ fn main() -> ara_ui::Result<()> {
     }
     // SAFETY: still single-threaded: nothing above starts a thread.
     unsafe { options.isolate_profile() };
+    #[cfg(feature = "tracy")]
+    let _tracy = ara_gpu::__tracy::Client::start();
     // Bounded runs never offer the crash folder or consume its "seen" marker.
     let _capture = match ara_crash::desktop::start("ara-editor", !options.offscreen()) {
         Ok(capture) => Some(capture),
