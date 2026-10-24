@@ -158,9 +158,10 @@ pub struct FidelityPlan {
     pub transport_stride: u32,
     /// ReSTIR policy.
     pub reservoirs: Reservoirs,
-    /// Reservoir secondary paths end in the DDGI terminal after `gather_events`
-    /// (see [`FidelityView::set_bounded_reservoir_paths`]); Epic traces full paths.
-    pub bounded_reservoir_paths: bool,
+    /// Bounded reservoir budgets: paths end in the DDGI terminal after
+    /// `gather_events` and glossy specular traces at half rate (see
+    /// [`FidelityView::set_bounded_reservoirs`]); Epic keeps full budgets.
+    pub bounded_reservoirs: bool,
 }
 
 impl FidelityPlan {
@@ -184,7 +185,7 @@ impl FidelityPlan {
         view.set_lighting_budget(self.probe_ray_budget, self.reflection_cutoff)?;
         view.set_gather_events(self.gather_events)?;
         view.set_transport_stride(self.transport_stride)?;
-        view.set_bounded_reservoir_paths(self.bounded_reservoir_paths);
+        view.set_bounded_reservoirs(self.bounded_reservoirs);
         let reservoirs = match self.reservoirs {
             Reservoirs::Off => false,
             Reservoirs::On => true,
@@ -252,7 +253,7 @@ impl Plan {
                 gather_events: 1,
                 transport_stride: 4,
                 reservoirs: Reservoirs::Off,
-                bounded_reservoir_paths: true,
+                bounded_reservoirs: true,
             }),
             QualityPreset::High => RenderPath::Fidelity(FidelityPlan {
                 render_size: scaled(0.625),
@@ -263,7 +264,7 @@ impl Plan {
                 gather_events: 1,
                 transport_stride: 4,
                 reservoirs: Reservoirs::ManyLights,
-                bounded_reservoir_paths: true,
+                bounded_reservoirs: true,
             }),
             QualityPreset::Epic => RenderPath::Fidelity(FidelityPlan {
                 render_size: display_size,
@@ -274,7 +275,7 @@ impl Plan {
                 gather_events: 2,
                 transport_stride: 2,
                 reservoirs: Reservoirs::On,
-                bounded_reservoir_paths: false,
+                bounded_reservoirs: false,
             }),
         };
         Ok(Self {

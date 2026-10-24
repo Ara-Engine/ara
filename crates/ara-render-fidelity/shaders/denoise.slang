@@ -26,10 +26,15 @@ float3 historyBox(Frame f,uint2 p,float3 history,uint signal,int spacing=1){
 // frame's lattice samples in the surrounding 3x3 grid blocks on the same surface,
 // as one ordinary sample (w = 1); w = 0 when no sample is near.
 float4 latticeSpecular(Frame f,uint2 p){
-    uint slot=f.control.x;float4 world=pixel(f,WORLD+slot,p);float3 n=pixel(f,NORMAL+slot,p).xyz;
+    uint slot=f.control.x;float4 world=pixel(f,WORLD+slot,p);float4 normal=pixel(f,NORMAL+slot,p);float3 n=normal.xyz;
     float tolerance=max(length(world.xyz-f.camera.xyz)*0.004,0.005);float3 sum=0;float total=0;
+    // Half-rate glossy pixels (roughness < 0.5) sit on a checkerboard: their four
+    // edge neighbours were traced this frame (or the pixel itself was). Rough
+    // pixels use the grid lattice.
+    bool glossy=normal.w<0.5;
     for(int y=-1;y<=1;y++)for(int x=-1;x<=1;x++){
-        int2 q=gridPoint(f,int2(p)+int2(x,y)*2);float4 lattice=extraPixel(f,SPEC_RAW,q);float4 w=pixel(f,WORLD+slot,q);
+        if(glossy && abs(x)+abs(y)>1)continue;
+        int2 q=glossy?clamp(int2(p)+int2(x,y),int2(0),int2(f.sizes.xy)-1):gridPoint(f,int2(p)+int2(x,y)*2);float4 lattice=extraPixel(f,SPEC_RAW,q);float4 w=pixel(f,WORLD+slot,q);
         if(lattice.w<=1 || w.w!=world.w)continue;
         float weight=pow(saturate(dot(pixel(f,NORMAL+slot,q).xyz,n)),8)*exp(-abs(dot(w.xyz-world.xyz,n))/tolerance);
         sum+=lattice.rgb*weight;total+=weight;

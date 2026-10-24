@@ -1,15 +1,15 @@
 {
   "binding_layout_hash": "35cd2a62b1ba741ce6823b3c8753d7b5aa97b54c5f0a837b56e542518013fd7e",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "c6261649c0a43bbe883ab0a8ed0ae0e28394179967a0d30b02a148ef6dce51c7",
+  "key": "2e1bc68ab2c4968b0c23ba23ad09bb02103a8be547943be94e30683979ba5519",
   "stages": [
     {
-      "dxil": "c6261649c0a43bbe883ab0a8ed0ae0e28394179967a0d30b02a148ef6dce51c7/specularTrace.dxil",
-      "dxil_hash": "0ababbbe4f549251ef465ae28d3f027e36edec922cd7c7519c450d3f828483a8",
+      "dxil": "2e1bc68ab2c4968b0c23ba23ad09bb02103a8be547943be94e30683979ba5519/specularTrace.dxil",
+      "dxil_hash": "b261da09ee444d4b3d0c68891f17a8c4b22068bfc0cea59aae5d96ea4e03fcd8",
       "source_entry": "specularTrace",
-      "spirv": "c6261649c0a43bbe883ab0a8ed0ae0e28394179967a0d30b02a148ef6dce51c7/specularTrace.spv",
+      "spirv": "2e1bc68ab2c4968b0c23ba23ad09bb02103a8be547943be94e30683979ba5519/specularTrace.spv",
       "spirv_entry": "main",
-      "spirv_hash": "15a7eb30852140341b34631943c46a92ee8af9ab1eaa05010a8c7dabfe803434",
+      "spirv_hash": "600709186cb85a5edcaa154341d042cef95f6a26b1bc8e104b313acf1843fee6",
       "stage": "compute"
     }
   ],

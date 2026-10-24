@@ -143,7 +143,8 @@ void reservoirInit(uint3 tid:SV_DispatchThreadID){
         LightCandidate light=lightAt(f,s,v,c.light,c.seed);updateDI(dr,c,lightTarget(light.value)/max(light.pdf,1e-20),1,rng);
     }
     float2 uv;int2 at=int2(p);bool history=false;
-    if(f.temporal.x==0 && f.temporal.y==0 && (reservoir.gi.w&1)==0){history=reproject(f,p,uv,at);if(history)history=compatible(f,p,at,true);}
+    // Last frame resolved reservoirs at its own grid points only.
+    if(f.temporal.x==0 && f.temporal.y==0 && (reservoir.gi.w&1)==0){history=reproject(f,p,uv,at);if(history){at=gridPointOf(f,at,gridPhaseOf(f.control.w-1));history=compatible(f,p,at,true);}}
     if(history){
         // Short temporal confidence: long-lived reused samples correlate frames, and
         // a still camera's 256-frame denoiser history then cannot average them out.
@@ -217,21 +218,29 @@ void reservoirTrace(uint3 tid:SV_DispatchThreadID){
 // Glossy primary pixels need their own full-rate samples; coarse diffuse-path
 // candidates cannot carry the view-dependent GGX lobe without visible speckles.
 [shader("compute")][numthreads(8,8,1)]
+// Bounded presets (frame bit 6) trace glossy pixels on a per-frame checkerboard
+// with weight 2; the denoiser rebuilds the others from their four neighbours.
 void specularTrace(uint3 tid:SV_DispatchThreadID){
     Frame f=frame();uint2 p=tid.xy;if(any(p>=f.sizes.xy) || pixel(f,WORLD+f.control.x,p).w==0 || pixel(f,NORMAL+f.control.x,p).w>=0.5)return;
+    bool half=(f.transport.z&64)!=0 && f.temporal.x==0 && f.temporal.y==0;
+    if(half && ((p.x+p.y+f.control.w)&1)!=0)return;
     uint rng=hash((p.y*f.sizes.x+p.x)^f.control.w*8737);float3 v;Surface s=primarySurface(f,p,v);if(layeredMaterial(s))return;
     float3 h=visibleGgx(s,v,rng),l=reflect(-v,h),result=0;float nl=dot(s.normal,l);
     if(nl>0)result=traceSecondaryRay(f,s,l,rng)*fresnel(max(dot(v,h),0),lerp(float3(0.04*s.specular),s.albedo,s.metal))*smith(nl,pow(s.roughness,4));
-    extraStore(f,SPEC_RAW,p,float4(clampSpecular(f,result),1));
+    extraStore(f,SPEC_RAW,p,float4(clampSpecular(f,result),half?2:1));
 }
 
-// Reconnect diffuse paths in area measure; cos(theta_secondary)/distance^2 is
-// evaluated at each receiver, providing the reconnection Jacobian automatically.
+// Spatial reuse and visibility run at grid points (one per 2x2 block): they
+// resolve each block's DI and GI reservoir, with DI visibility stored and occluded
+// GI samples stored with W = 0. `reservoirShade` then shades every pixel with its
+// own BRDF from the four nearest resolved blocks. Reconnection is in area measure;
+// cos(theta_secondary)/distance^2 at each receiver supplies the Jacobian.
 [shader("compute")][numthreads(8,8,1)]
 void reservoirSpatial(uint3 tid:SV_DispatchThreadID){
-    Frame f=frame();ReservoirFrame reservoir=reservoirFrame();uint2 p=tid.xy;if(any(p>=f.sizes.xy))return;uint index=p.y*f.sizes.x+p.x,rng=hash(index+f.control.w*4567);
-    if(pixel(f,WORLD+f.control.x,p).w==0){extraStore(f,SPEC_RAW,p,float4(0,0,0,1));return;}
-    float3 v;Surface s=primarySurface(f,p,v);DIReservoir dr=(DIReservoir)0;dr.light=0xffffffff;GIReservoir gr=(GIReservoir)0;
+    Frame f=frame();ReservoirFrame reservoir=reservoirFrame();uint2 p=tid.xy*2+gridPhase(f);if(any(p>=f.sizes.xy))return;uint index=p.y*f.sizes.x+p.x,rng=hash(index+f.control.w*4567);
+    DIReservoir dr=(DIReservoir)0;dr.light=0xffffffff;GIReservoir gr=(GIReservoir)0;
+    if(pixel(f,WORLD+f.control.x,p).w==0){storeDI(reservoir.di.z,index,dr);storeGI(reservoir.gi.z,index,gr);return;}
+    float3 v;Surface s=primarySurface(f,p,v);
     for(uint i=0;i<3;i++){
         int2 q=int2(p);if(i>0){float angle=random(rng)*2*PI;float radius=1+random(rng)*(i==1?3:8);q+=int2(cos(angle)*radius,sin(angle)*radius);}q=gridPoint(f,q);
         if(!compatible(f,p,q,false))continue;uint owner=uint(q.y)*f.sizes.x+uint(q.x);
@@ -244,24 +253,42 @@ void reservoirSpatial(uint3 tid:SV_DispatchThreadID){
         float3 direction;float distance;target=lightTarget(giValue(s,v,g,direction,distance));m=min(g.stats.y,16.);
         updateGI(gr,g,target*g.stats.x*m,m,rng);
     }
-    if(dr.M==0){
-        float3 local=risDirect(f,s,v,rng,true),indirect=0;
-        // Keep the specular channel's inclusion probability independent of repair.
-        // Pixels without any compatible reservoir (disocclusions, thin parts) take
-        // the DDGI irradiance: noise-free, and far cheaper than a full traced path.
-        if(!layeredMaterial(s) && s.metal<1)indirect=irradiance(f,s.position,s.normal,f.probes.y)*diffuseValue(s,v,s.normal);
-        store(f,DIRECT,p,float4(pixel(f,DIRECT,p).rgb+local,1));store(f,RAW,p,float4(indirect/demodulation(f,p),1));
-        storeDI(reservoir.di.z,index,dr);storeGI(reservoir.gi.z,index,gr);return;
-    }
+    // Blocks without any compatible reservoir stay empty; their pixels repair in
+    // `reservoirShade`.
+    if(dr.M==0){storeDI(reservoir.di.z,index,dr);storeGI(reservoir.gi.z,index,gr);return;}
     LightCandidate selected=lightAt(f,s,v,dr.light,dr.seed);float target=lightTarget(selected.value);
     dr.W=target>0?dr.W/max(dr.M*target,1e-20):0;
     if(dr.W>0 && dr.visibility<0){dr.visibility=occluded(f,rayOrigin(s,selected.direction),selected.direction,selected.distance,rng)?0:1;dr.age=0;}
     dr.owner=float(index);storeDI(reservoir.di.z,index,dr);
-    store(f,DIRECT,p,float4(pixel(f,DIRECT,p).rgb+selected.value*dr.W*max(dr.visibility,0),1));
-    float3 direction;float distance;float3 gi=giValue(s,v,gr,direction,distance);target=lightTarget(gi);
+    float3 direction;float distance;target=lightTarget(giValue(s,v,gr,direction,distance));
     gr.stats.x=target>0?gr.stats.x/max(gr.stats.y*target,1e-20):0;
     gr.stats.w=reconnectionGeometry(s,gr);
-    if(gr.stats.x>0 && occluded(f,rayOrigin(s,direction),direction,max(distance-0.003,0.001),rng))gi=0;
+    if(gr.stats.x>0 && occluded(f,rayOrigin(s,direction),direction,max(distance-0.003,0.001),rng))gr.stats.x=0;
     storeGI(reservoir.gi.z,index,gr);
-    store(f,RAW,p,float4(gi*gr.stats.x/demodulation(f,p),1));
+}
+// Full-resolution shading from the four nearest resolved grid blocks (bilinear,
+// on the same surface): each pixel evaluates its own BRDF for the blocks' DI light
+// samples (visibility from the block) and GI reconnections. Pixels with no
+// compatible block repair with RIS direct light and DDGI irradiance.
+[shader("compute")][numthreads(8,8,1)]
+void reservoirShade(uint3 tid:SV_DispatchThreadID){
+    Frame f=frame();ReservoirFrame reservoir=reservoirFrame();uint2 p=tid.xy;if(any(p>=f.sizes.xy))return;
+    if(pixel(f,WORLD+f.control.x,p).w==0){extraStore(f,SPEC_RAW,p,float4(0,0,0,1));return;}
+    float3 v;Surface s=primarySurface(f,p,v);uint rng=hash(p.y*f.sizes.x+p.x+f.control.w*9973);bool layered=layeredMaterial(s);
+    int2 phase=int2(gridPhase(f));float2 g=float2(int2(p)-phase)*0.5;int2 b=int2(floor(g));float2 t=g-float2(b);
+    float3 direct=0,indirect=0;float directWeight=0,indirectWeight=0;
+    for(int k=0;k<4;k++){
+        int2 o=int2(k&1,k>>1);int2 q=gridPointOf(f,(b+o)*2+phase,uint2(phase));
+        if(!compatible(f,p,q,false))continue;
+        float w=(o.x==1?t.x:1-t.x)*(o.y==1?t.y:1-t.y)+1e-3;uint owner=uint(q.y)*f.sizes.x+uint(q.x);
+        DIReservoir d=readDI(reservoir.di.z,owner);
+        if(d.M>0){directWeight+=w;if(d.W>0 && d.visibility>0)direct+=w*lightAt(f,s,v,d.light,d.seed).value*d.W;}
+        if(layered)continue;
+        GIReservoir r=readGI(reservoir.gi.z,owner);
+        if(r.stats.y>0){indirectWeight+=w;float3 direction;float distance;if(r.stats.x>0)indirect+=w*giValue(s,v,r,direction,distance)*r.stats.x;}
+    }
+    direct=directWeight>0?direct/directWeight:risDirect(f,s,v,rng,true);
+    if(indirectWeight>0)indirect/=indirectWeight;
+    else if(!layered && s.metal<1)indirect=irradiance(f,s.position,s.normal,f.probes.y)*diffuseValue(s,v,s.normal);
+    store(f,DIRECT,p,float4(pixel(f,DIRECT,p).rgb+direct,1));store(f,RAW,p,float4(indirect/demodulation(f,p),1));
 }

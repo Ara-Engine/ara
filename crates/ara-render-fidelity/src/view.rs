@@ -44,7 +44,7 @@ pub struct FidelityView {
     pub(crate) slot: usize,
     pub(crate) samples: u32,
     pub(crate) gather_events: u32,
-    pub(crate) bounded_reservoir_paths: bool,
+    pub(crate) bounded_reservoirs: bool,
     pub(crate) atmosphere: Option<crate::atmosphere::Atmosphere>,
     pub(crate) atmosphere_dirty: bool,
     pub(crate) texture_bias: f32,
@@ -233,7 +233,7 @@ impl FidelityView {
             slot: 0,
             samples: 0,
             gather_events: 2,
-            bounded_reservoir_paths: false,
+            bounded_reservoirs: false,
             atmosphere: None,
             atmosphere_dirty: true,
             texture_bias: 0.,
@@ -258,13 +258,14 @@ impl FidelityView {
         }
         Ok(())
     }
-    /// End reservoir secondary paths (GI candidates, glossy and layered samples) in
-    /// the DDGI terminal after the gather events, like the hybrid gather, instead of
-    /// reference-length paths (eleven events with roulette). Off by default; quality
-    /// presets bound them below Epic. Changing it resets accumulated transport.
-    pub fn set_bounded_reservoir_paths(&mut self, bounded: bool) {
-        if self.bounded_reservoir_paths != bounded {
-            self.bounded_reservoir_paths = bounded;
+    /// Bounded reservoir budgets: secondary paths (GI candidates, glossy and layered
+    /// samples) end in the DDGI terminal after the gather events instead of
+    /// reference-length paths (eleven events with roulette), and glossy specular is
+    /// traced at half rate on a checkerboard. Off by default; presets below Epic
+    /// enable it. Changing it resets accumulated transport.
+    pub fn set_bounded_reservoirs(&mut self, bounded: bool) {
+        if self.bounded_reservoirs != bounded {
+            self.bounded_reservoirs = bounded;
             self.history = false;
         }
     }

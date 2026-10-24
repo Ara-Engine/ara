@@ -296,23 +296,43 @@ impl FidelityView {
                 dispatch,
                 specular,
             )?;
-            guides.extend([
+            // Spatial reuse and visibility resolve one reservoir per 2x2 grid block;
+            // the shade pass lights every pixel from the four nearest blocks.
+            let mut spatial = guides.to_vec();
+            spatial.extend([
                 (r[2], Access::ShaderRead),
                 (r[5], Access::ShaderRead),
                 (r[slot], Access::Storage),
                 (r[3 + slot], Access::Storage),
-                (ids[RAW], Access::Storage),
-                (ids[DIRECT], Access::Storage),
-                (ids[SPEC_RAW], Access::Storage),
             ]);
             add(
-                "ReSTIR.Spatial.Visibility.Shade",
+                "ReSTIR.Spatial.Visibility",
                 if self.atmosphere.is_some() {
                     "reservoir_spatial_atmosphere"
                 } else if self.scene.has_layers {
                     "reservoir_spatial_layers"
                 } else {
                     "reservoir_spatial"
+                },
+                0,
+                [render[0].div_ceil(16), render[1].div_ceil(16), 1],
+                spatial,
+            )?;
+            guides.extend([
+                (r[slot], Access::ShaderRead),
+                (r[3 + slot], Access::ShaderRead),
+                (ids[RAW], Access::Storage),
+                (ids[DIRECT], Access::Storage),
+                (ids[SPEC_RAW], Access::Storage),
+            ]);
+            add(
+                "ReSTIR.Shade",
+                if self.atmosphere.is_some() {
+                    "reservoir_shade_atmosphere"
+                } else if self.scene.has_layers {
+                    "reservoir_shade_layers"
+                } else {
+                    "reservoir_shade"
                 },
                 0,
                 dispatch,
