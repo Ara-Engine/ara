@@ -17,7 +17,7 @@ Varying shadowVertex(Vertex v) {
 float3 materialLinear(float3 x){return lerp(x/12.92,pow((max(x,0)+0.055)/1.055,2.4),step(0.04045,x));}
 Surface surface(Varying v) {
     Material m=buffers[NonUniformResourceIndex(root.materials)].Load<Material>(root.material*80);
-    Surface s;s.ao=1;float4 base=tex(m.textures.x,v.uv);
+    Surface s;s.ao=1;s.transmission=0;float4 base=tex(m.textures.x,v.uv);
     if((m.flags.y&(1u<<25))!=0)base.rgb=materialLinear(base.rgb);
     base*=m.color;
     if(m.flags.x==1 && base.a<m.surface.w)discard;
@@ -47,12 +47,12 @@ FullscreenVarying fullscreenVertex(uint id:SV_VertexID){FullscreenVarying o;floa
 float4 lightingFragment(FullscreenVarying v):SV_Target0 {
     Frame f=frame();Look l=look(f);int2 p=int2(v.clip.xy);float2 uv=(float2(p)+0.5)/float2(f.extent.xy);float4 world=pixel(f.gbuffer.w,p);
     if(world.w==0)return float4(background(f,l,viewRay(f,float2(p)+0.5),uv),1);
-    Surface s;float4 a=pixel(f.gbuffer.x,p);float4 n=pixel(f.gbuffer.y,p);float4 m=pixel(f.gbuffer.z,p);s.albedo=a.rgb;s.alpha=1;s.ao=min(a.a,screenOcclusion(f,l,p,length(world.xyz-f.camera.xyz)));s.normal=n.xyz;s.roughness=n.w;s.metal=m.w;s.emissive=m.xyz;
+    Surface s;float4 a=pixel(f.gbuffer.x,p);float4 n=pixel(f.gbuffer.y,p);float4 m=pixel(f.gbuffer.z,p);s.albedo=a.rgb;s.alpha=1;s.transmission=0;s.ao=min(a.a,screenOcclusion(f,l,p,length(world.xyz-f.camera.xyz)));s.normal=n.xyz;s.roughness=n.w;s.metal=m.w;s.emissive=m.xyz;
     return float4(applyFog(f,l,shade(f,l,s,world.xyz,p,true),world.xyz,uv),1);
 }
 struct ForwardOut {float4 color:SV_Target0;float id:SV_Target1;float4 albedo:SV_Target2;float4 normal:SV_Target3;float4 material:SV_Target4;float4 world:SV_Target5;};
 [shader("fragment")]
-ForwardOut forwardFragment(Varying v){Frame f=frame();Surface s=surface(v);ForwardOut o;Look l=look(f);float2 uv=v.clip.xy/float2(f.extent.xy);o.color=float4(applyFog(f,l,shade(f,l,s,v.world,int2(v.clip.xy),false),v.world,uv)*s.alpha,s.alpha);o.id=float(root.entity);o.albedo=float4(s.albedo,s.alpha);o.normal=float4(s.normal,s.roughness);o.material=float4(s.emissive,s.metal);o.world=float4(v.world,1);return o;}
+ForwardOut forwardFragment(Varying v){Frame f=frame();Surface s=surface(v);ForwardOut o;Look l=look(f);o.color=forwardColour(f,l,s,v.world,int2(v.clip.xy));o.id=float(root.entity);o.albedo=float4(s.albedo,s.alpha);o.normal=float4(s.normal,s.roughness);o.material=float4(s.emissive,s.metal);o.world=float4(v.world,1);return o;}
 float radicalInverse(uint bits){bits=(bits<<16)|(bits>>16);bits=((bits&0x55555555)<<1)|((bits&0xAAAAAAAA)>>1);bits=((bits&0x33333333)<<2)|((bits&0xCCCCCCCC)>>2);bits=((bits&0x0F0F0F0F)<<4)|((bits&0xF0F0F0F0)>>4);bits=((bits&0x00FF00FF)<<8)|((bits&0xFF00FF00)>>8);return float(bits)*2.3283064365386963e-10;}
 float3 basisSample(float3 n,float3 local){float3 t=normalize(cross(abs(n.y)<0.99?float3(0,1,0):float3(1,0,0),n));return t*local.x+cross(n,t)*local.y+n*local.z;}
 [shader("compute")]

@@ -77,6 +77,12 @@ impl Acquisition {
         self.start(request)
     }
 
+    /// Whether a bake is running or queued: a view that otherwise stops redrawing
+    /// must keep polling until the result arrives.
+    pub(crate) fn is_pending(&self) -> bool {
+        self.active.is_some() || self.queued.is_some()
+    }
+
     fn start(&mut self, (key, frame, content): (u64, RenderFrame, Content)) -> Result<()> {
         let cache = self.cache.clone();
         let (send, receive) = channel();
@@ -308,9 +314,10 @@ mod tests {
         // Repeating the newest key resolves no content.
         acquisition.request(3, &frame, || anyhow::bail!("resolved twice"))?;
         assert!(acquisition.queued.is_some(), "requests during a bake queue");
+        assert!(acquisition.is_pending());
         let surfaces = acquisition.poll(true).context("the newest request")?;
         assert_eq!(surfaces.origin[0], 3.);
-        assert!(acquisition.active.is_none() && acquisition.queued.is_none());
+        assert!(!acquisition.is_pending());
         assert!(acquisition.poll(false).is_none());
         Ok(())
     }

@@ -44,7 +44,7 @@ float3 basisSample(float3 n,float3 local){float3 t=normalize(cross(abs(n.y)<0.99
 void skyIrradianceMain(uint3 tid:SV_DispatchThreadID){
     Frame f=frame();Look l=look(f);if(any(tid.xy>=uint2(32,16)))return;
     float3 n=environmentDirection((float2(tid.xy)+0.5)/float2(32,16)),sum=0;
-    for(uint i=0;i<256;i++){float2 u=float2((i+0.5)/256.,radicalInverse(i));float phi=2*PI*u.x,r=sqrt(u.y);sum+=lut(l.sampled0.z,environmentUv(basisSample(n,float3(cos(phi)*r,sin(phi)*r,sqrt(1-u.y))))).rgb;}
+    for(uint i=0;i<256;i++){float2 u=float2((i+0.5)/256.,radicalInverse(i));float phi=2*PI*u.x,r=sqrt(u.y);sum+=skyRadiance(f,l,basisSample(n,float3(cos(phi)*r,sin(phi)*r,sqrt(1-u.y))),false);}
     store(l.storage1.x,tid.xy,sum*PI/256);
 }
 // 256x640 GGX prefilter strip of the sky view, five 256x128 roughness levels.
@@ -53,12 +53,12 @@ void skyIrradianceMain(uint3 tid:SV_DispatchThreadID){
 void skyPrefilterMain(uint3 tid:SV_DispatchThreadID){
     Frame f=frame();Look l=look(f);if(any(tid.xy>=uint2(256,640)))return;
     uint level=tid.y/128;float3 n=environmentDirection((float2(tid.x,tid.y%128)+0.5)/float2(256,128));
-    if(level==0){store(l.storage1.y,tid.xy,lut(l.sampled0.z,environmentUv(n)).rgb);return;}
+    if(level==0){store(l.storage1.y,tid.xy,skyRadiance(f,l,n,false));return;}
     float a=float(level)/4;a*=a;float3 sum=0;float weight=0;
     for(uint i=0;i<48;i++){
         float2 u=float2((i+0.5)/48.,radicalInverse(i));float phi=2*PI*u.x;float cosine=sqrt((1-u.y)/(1+(a*a-1)*u.y)),sine=sqrt(max(0.,1-cosine*cosine));
         float3 h=basisSample(n,float3(cos(phi)*sine,sin(phi)*sine,cosine)),d=reflect(-n,h);float nl=saturate(dot(n,d));
-        if(nl>0){sum+=lut(l.sampled0.z,environmentUv(d)).rgb*nl;weight+=nl;}
+        if(nl>0){sum+=skyRadiance(f,l,d,false)*nl;weight+=nl;}
     }
     store(l.storage1.y,tid.xy,sum/max(weight,0.001));
 }

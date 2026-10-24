@@ -38,7 +38,7 @@ float3 brdf(Surface s,float3 v,float3 l) {
     float a=s.roughness*s.roughness;float a2=a*a;float d=a2/(PI*pow(nh*nh*(a2-1)+1,2));
     float k=pow(s.roughness+1,2)/8;float g=nv/(nv*(1-k)+k)*nl/(nl*(1-k)+k);
     float3 F=fresnel(vh,lerp(float3(0.04),s.albedo,s.metal));
-    return ((1-F)*(1-s.metal)*s.albedo/PI+d*g*F/max(4*nv*nl,0.001))*nl;
+    return ((1-F)*(1-s.metal)*(1-s.transmission)*s.albedo/PI+d*g*F/max(4*nv*nl,0.001))*nl;
 }
 // Screen-space ambient visibility at full-resolution pixel `p` (camera distance
 // `distance`): a depth-aware bilinear upsample of the denoised half-resolution GTAO.
@@ -110,7 +110,7 @@ float3 ibl(Frame f,Look l,Surface s,float3 world,float3 v,int2 p,bool gathered) 
         spec=lerp(spec,lerp(spec*occlusion,specularGi/PI,s.roughness),coverage);
     }
     if(gathered){float4 r=screenReflection(f,l,p);spec=lerp(spec,r.rgb,r.a);}
-    float3 diffuse=ambient*s.albedo*(1-s.metal)*(1-F)/PI*multiBounce(s.ao,s.albedo);
+    float3 diffuse=ambient*s.albedo*(1-s.metal)*(1-s.transmission)*(1-F)/PI*multiBounce(s.ao,s.albedo);
     // Analytic split-sum environment BRDF fit (Lazarov, Epic 2014).
     float4 r=s.roughness*float4(-1,-0.0275,-0.572,0.022)+float4(1,0.0425,1.04,-0.04);
     float a004=min(r.x*r.x,exp2(-9.28*nv))*r.x+r.y;float2 ab=float2(-1.04,1.04)*a004+r.zw;
@@ -134,6 +134,13 @@ float3 shade(Frame f,Look l,Surface s,float3 world,int2 p,bool gathered) {
         result+=brdf(s,v,toLight)*illuminance;
     }
     return result;
+}
+// Premultiplied forward colour of a transparent or transmissive surface: alpha is
+// coverage times the share of light it stops; reflections keep full strength
+// over what it transmits (blending ONE, ONE_MINUS_SRC_ALPHA).
+float4 forwardColour(Frame f,Look l,Surface s,float3 world,int2 p){
+    float2 uv=(float2(p)+0.5)/float2(f.extent.xy);
+    return float4(applyFog(f,l,shade(f,l,s,world,p,false),world,uv)*s.alpha,s.alpha*(1-s.transmission));
 }
 // World-space view ray through pixel centre `p`.
 float3 viewRay(Frame f,float2 p){
