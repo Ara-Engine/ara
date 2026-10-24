@@ -340,6 +340,12 @@ impl Gpu {
                 ),
                 vendor_id: properties.vendor_id,
                 device_id: properties.device_id,
+                discrete: properties.device_type == vk::PhysicalDeviceType::DISCRETE_GPU,
+                device_local_mib: memory.memory_heaps[..memory.memory_heap_count as usize]
+                    .iter()
+                    .filter(|heap| heap.flags.contains(vk::MemoryHeapFlags::DEVICE_LOCAL))
+                    .map(|heap| heap.size / (1024 * 1024))
+                    .sum(),
                 ray_tracing,
                 texture_compression_bc: core_supported.texture_compression_bc != 0,
                 sampled_image_capacity,

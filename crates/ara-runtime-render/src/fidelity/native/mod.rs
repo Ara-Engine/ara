@@ -14,6 +14,8 @@ mod document;
 mod geometry;
 pub use document::document_frame;
 mod material;
+mod pending;
+pub use pending::when_published;
 mod resolve;
 mod sync;
 pub use sync::FrameChange;

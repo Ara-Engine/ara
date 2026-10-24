@@ -12,6 +12,7 @@ use ara_runtime::{
 mod document;
 mod generations;
 mod geometry;
+mod publication;
 mod sync;
 mod terrain;
 

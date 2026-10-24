@@ -19,6 +19,7 @@ pub use crate::commands::{Attachment, Command, CommandList, Draw, PassTiming, Re
 use crate::{arena::Arena, *};
 use context::{BufferAllocation, ImageAllocation};
 pub use context::{DeviceInfo, Diagnostic, Gpu as Context, image_barrier};
+pub use heap::DescriptorUsage;
 use heap::Heap;
 use std::{ffi::CString, path::PathBuf};
 
@@ -63,6 +64,11 @@ pub struct VulkanDevice {
 }
 
 impl VulkanDevice {
+    /// Inspect reserved descriptor capacity at a content/test boundary. Collect
+    /// completed retirements first when checking a replacement for resource leaks.
+    pub fn descriptor_usage(&self) -> DescriptorUsage {
+        self.heap.usage(&self.context)
+    }
     /// Read-only native integration access; ownership remains with this device.
     pub fn context(&self) -> &Context {
         &self.context

@@ -56,6 +56,8 @@ mod tests {
             name: String::new(),
             vendor_id: 1,
             device_id: 2,
+            discrete: false,
+            device_local_mib: 0,
             ray_tracing: false,
             texture_compression_bc: false,
             sampled_image_capacity: 65_536,

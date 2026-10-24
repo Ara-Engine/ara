@@ -3,6 +3,19 @@ use super::{Context, Image};
 use crate::{GpuError, HeapIndex, Result};
 use ash::vk::{self, TaggedStructure};
 
+/// Currently reserved bindless slots, including resources awaiting retirement.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DescriptorUsage {
+    /// Sampled image descriptors reserved by live or retiring images.
+    pub sampled_images: usize,
+    /// Storage buffer descriptors reserved by live or retiring buffers.
+    pub storage_buffers: usize,
+    /// Storage image descriptors reserved by live or retiring images.
+    pub storage_images: usize,
+    /// Acceleration descriptors reserved by live or retiring structures.
+    pub acceleration_structures: usize,
+}
+
 pub(super) struct Heap {
     pub layout: vk::PipelineLayout,
     pub set: vk::DescriptorSet,
@@ -16,6 +29,15 @@ pub(super) struct Heap {
     storage: Vec<(Image, vk::ImageView, HeapIndex)>,
 }
 impl Heap {
+    pub fn usage(&self, gpu: &Context) -> DescriptorUsage {
+        DescriptorUsage {
+            sampled_images: gpu.info.sampled_image_capacity as usize - self.free_images.len(),
+            storage_buffers: 64 - self.free_buffers.len(),
+            storage_images: 64 - self.free_storage.len(),
+            acceleration_structures: if gpu.info.ray_tracing { 16 } else { 0 }
+                - self.free_acceleration.len(),
+        }
+    }
     pub fn new(gpu: &Context) -> Result<Self> {
         // SAFETY: The versioned binding ABI is validated at pipeline creation;
         // create-info backing slices remain live through their native calls.

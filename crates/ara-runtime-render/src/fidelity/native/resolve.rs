@@ -25,6 +25,30 @@ impl Content {
         library: &Library,
         source: &dyn AssetSource,
     ) -> Result<Self> {
+        Self::resolve_inner(frame, workspace, schema, library, source, false)
+    }
+
+    /// Editor-only incremental resolution: pending terrain maps use neutral
+    /// factors and pending foliage parts use the model placeholder. Strict Play
+    /// and export resolution still rejects missing generations.
+    pub fn resolve_available(
+        frame: &RenderFrame,
+        workspace: &Workspace,
+        schema: &SchemaDb,
+        library: &Library,
+        source: &dyn AssetSource,
+    ) -> Result<Self> {
+        Self::resolve_inner(frame, workspace, schema, library, source, true)
+    }
+
+    fn resolve_inner(
+        frame: &RenderFrame,
+        workspace: &Workspace,
+        schema: &SchemaDb,
+        library: &Library,
+        source: &dyn AssetSource,
+        available: bool,
+    ) -> Result<Self> {
         ara_gpu::cpu_scope!("Native.resolve_content");
         let mut content = Self::default();
         let Some(terrain) = &frame.terrain else {
@@ -34,6 +58,20 @@ impl Content {
             let id = asset_id(reference)?;
             let material = match library.materials.get(id) {
                 Some(material) => Arc::clone(material),
+                None if available => when_published(source, |source| {
+                    Ok(Arc::new(MaterialAsset::compile(workspace, source, id)?))
+                })?
+                .unwrap_or_else(|| {
+                    Arc::new(MaterialAsset {
+                        asset: id.to_owned(),
+                        digest: ara_asset::Digest::of(id.as_bytes()),
+                        material: Default::default(),
+                        textures: Vec::new(),
+                        texture_generations: Vec::new(),
+                        base_color_decode_srgb: false,
+                        emissive_decode_srgb: false,
+                    })
+                }),
                 None => Arc::new(MaterialAsset::compile(workspace, source, id)?),
             };
             content
@@ -56,7 +94,7 @@ impl Content {
             if !content.foliage_parts.contains_key(&reference.0) {
                 content.foliage_parts.insert(
                     reference.0.to_owned(),
-                    parts(reference, workspace, schema, library, source)?,
+                    parts(reference, workspace, schema, library, source, available)?,
                 );
             }
         }
@@ -70,6 +108,7 @@ fn parts(
     schema: &SchemaDb,
     library: &Library,
     source: &dyn AssetSource,
+    available: bool,
 ) -> Result<Vec<Draw>> {
     let id = asset_id(reference)?;
     let mut scratch = Library::default();
@@ -96,7 +135,7 @@ fn parts(
             let matrix = matrix(address, &entities, &mut matrices, &mut BTreeSet::new())?;
             if let Some(value) = entity.record.get("MeshRenderer") {
                 let renderer: MeshRenderer = serde_json::from_value(value.clone())?;
-                prepare_renderer(&mut scratch, &renderer, workspace, source)?;
+                prepare_part(&mut scratch, &renderer, workspace, source, available)?;
                 let name = entity
                     .record
                     .get("name")
@@ -118,7 +157,7 @@ fn parts(
             model: Some(reference.clone()),
             ..Default::default()
         };
-        prepare_renderer(&mut scratch, &renderer, workspace, source)?;
+        prepare_part(&mut scratch, &renderer, workspace, source, available)?;
         matrices.insert("e_source".into(), Mat4::IDENTITY);
         world.spawn((
             ara_sim::Identity("e_source".into()),
@@ -143,6 +182,23 @@ fn parts(
         "foliage asset {id} contains no MeshRenderer geometry"
     );
     Ok(frame.draws)
+}
+
+fn prepare_part(
+    library: &mut Library,
+    renderer: &MeshRenderer,
+    workspace: &Workspace,
+    source: &dyn AssetSource,
+    available: bool,
+) -> Result<()> {
+    if available {
+        when_published(source, |source| {
+            prepare_renderer(library, renderer, workspace, source)
+        })?;
+        Ok(())
+    } else {
+        prepare_renderer(library, renderer, workspace, source)
+    }
 }
 
 pub(super) fn prepare_renderer(

@@ -205,6 +205,14 @@ impl Renderer {
     pub fn output(&self) -> Image {
         self.targets.images[OUTPUT]
     }
+    /// Whether color and IDs belong to a completed frame and can be attached to
+    /// the editor. Fresh/failed/resized targets must never be sampled or copied.
+    pub fn presentation_ready(&self) -> bool {
+        [OUTPUT, ID].iter().all(|&slot| {
+            self.targets.states[slot].access == Access::CopySource
+                && self.targets.states[slot].queue == Queue::Graphics
+        })
+    }
     /// Last completed entity-ID texture, in CopySource layout after rendering.
     /// The editor samples this on the same device for selection/review outlines.
     pub fn entity_channel(&self) -> Image {
@@ -225,7 +233,20 @@ impl Renderer {
             return Ok(());
         }
         let replacement = Self::targets(&mut self.gpu, size, self.look.quality.shadows.resolution)?;
-        self.look.resize(&mut self.gpu, size)?;
+        if let Err(error) = self.look.resize(&mut self.gpu, size) {
+            for image in replacement.images {
+                self.gpu.retire(Resource::Image(image))?;
+            }
+            for buffer in [
+                replacement.tiles,
+                replacement.read_color,
+                replacement.read_ids,
+            ] {
+                self.gpu.retire(Resource::Buffer(buffer))?;
+            }
+            self.gpu.collect()?;
+            return Err(error);
+        }
         let previous = std::mem::replace(&mut self.targets, replacement);
         for image in previous.images {
             self.gpu.retire(Resource::Image(image))?;
@@ -266,7 +287,14 @@ impl Renderer {
                     | vk::ImageUsageFlags::TRANSFER_SRC
                     | vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT,
             )?;
-            let sampled = self.gpu.sampled_image(image, true)?.index;
+            let sampled = match self.gpu.sampled_image(image, true) {
+                Ok(sampled) => sampled.index,
+                Err(error) => {
+                    self.gpu.retire(Resource::Image(image))?;
+                    self.gpu.collect()?;
+                    return Err(error.into());
+                }
+            };
             let old = std::mem::replace(&mut self.targets.images[SHADOW], image);
             self.gpu.retire(Resource::Image(old))?;
             self.targets.sampled[SHADOW] = sampled;
@@ -410,76 +438,90 @@ impl Renderer {
     }
     /// View targets; the shadow atlas holds 2x2 cascades of `shadow` texels.
     fn targets(gpu: &mut VulkanDevice, size: [u32; 2], shadow: u32) -> Result<Targets> {
-        let mut graph = Graph::default();
-        let mut images = Vec::new();
-        let mut sampled = Vec::new();
-        for target in 0..TARGET_COUNT {
-            let format = match target {
-                ID => vk::Format::R32_SFLOAT,
-                DEPTH | SHADOW => vk::Format::D32_SFLOAT,
-                OUTPUT => vk::Format::R8G8B8A8_UNORM,
-                MOTION => vk::Format::R16G16_SFLOAT,
-                // Pre-exposed (look.slangh exposureState), so half floats suffice.
-                HISTORY0 | HISTORY1 => vk::Format::R16G16B16A16_SFLOAT,
-                _ => vk::Format::R32G32B32A32_SFLOAT,
-            };
-            let depth = target == DEPTH || target == SHADOW;
-            let usage = vk::ImageUsageFlags::SAMPLED
-                | vk::ImageUsageFlags::TRANSFER_SRC
-                | if depth {
-                    vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT
-                } else if (HISTORY0..=OUTPUT).contains(&target) {
-                    vk::ImageUsageFlags::STORAGE
+        let mut allocated = Vec::new();
+        let result = (|| {
+            let mut graph = Graph::default();
+            let mut images = Vec::new();
+            let mut sampled = Vec::new();
+            for target in 0..TARGET_COUNT {
+                let format = match target {
+                    ID => vk::Format::R32_SFLOAT,
+                    DEPTH | SHADOW => vk::Format::D32_SFLOAT,
+                    OUTPUT => vk::Format::R8G8B8A8_UNORM,
+                    MOTION => vk::Format::R16G16_SFLOAT,
+                    // Pre-exposed (look.slangh exposureState), so half floats suffice.
+                    HISTORY0 | HISTORY1 => vk::Format::R16G16B16A16_SFLOAT,
+                    _ => vk::Format::R32G32B32A32_SFLOAT,
+                };
+                let depth = target == DEPTH || target == SHADOW;
+                let usage = vk::ImageUsageFlags::SAMPLED
+                    | vk::ImageUsageFlags::TRANSFER_SRC
+                    | if depth {
+                        vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT
+                    } else if (HISTORY0..=OUTPUT).contains(&target) {
+                        vk::ImageUsageFlags::STORAGE
+                    } else {
+                        vk::ImageUsageFlags::COLOR_ATTACHMENT
+                    };
+                let extent = if target == SHADOW {
+                    [shadow * 2; 2]
                 } else {
-                    vk::ImageUsageFlags::COLOR_ATTACHMENT
+                    size
                 };
-            let extent = if target == SHADOW {
-                [shadow * 2; 2]
-            } else {
-                size
-            };
-            let (_, image) = graph.transient(
-                gpu,
-                TransientImage {
-                    size: extent,
-                    format,
-                    usage,
-                },
-                Queue::Graphics,
+                let (_, image) = graph.transient(
+                    gpu,
+                    TransientImage {
+                        size: extent,
+                        format,
+                        usage,
+                    },
+                    Queue::Graphics,
+                )?;
+                allocated.push(Resource::Image(image));
+                images.push(image);
+                sampled.push(gpu.sampled_image(image, depth)?.index);
+            }
+            let storage = [
+                gpu.storage_image(images[HISTORY0])?.index,
+                gpu.storage_image(images[HISTORY1])?.index,
+                gpu.storage_image(images[OUTPUT])?.index,
+            ];
+            let tiles = gpu.create_buffer(
+                u64::from(size[0].div_ceil(16)) * u64::from(size[1].div_ceil(16)) * 65 * 4,
+                vk::BufferUsageFlags::STORAGE_BUFFER,
+                false,
             )?;
-            images.push(image);
-            sampled.push(gpu.sampled_image(image, depth)?.index);
+            allocated.push(Resource::Buffer(tiles));
+            let tile_index = gpu.storage_buffer(tiles)?.index;
+            let bytes = u64::from(size[0]) * u64::from(size[1]) * 4;
+            let read_color = gpu.create_buffer(bytes, vk::BufferUsageFlags::TRANSFER_DST, true)?;
+            allocated.push(Resource::Buffer(read_color));
+            let read_ids = gpu.create_buffer(bytes, vk::BufferUsageFlags::TRANSFER_DST, true)?;
+            allocated.push(Resource::Buffer(read_ids));
+            Ok(Targets {
+                images,
+                sampled,
+                storage,
+                states: vec![
+                    State {
+                        access: Access::Undefined,
+                        queue: Queue::Graphics
+                    };
+                    TARGET_COUNT
+                ],
+                tiles,
+                tile_index,
+                read_color,
+                read_ids,
+                history: None,
+            })
+        })();
+        if result.is_err() {
+            for resource in allocated.into_iter().rev() {
+                gpu.retire(resource)?;
+            }
+            gpu.collect()?;
         }
-        let storage = [
-            gpu.storage_image(images[HISTORY0])?.index,
-            gpu.storage_image(images[HISTORY1])?.index,
-            gpu.storage_image(images[OUTPUT])?.index,
-        ];
-        let tiles = gpu.create_buffer(
-            u64::from(size[0].div_ceil(16)) * u64::from(size[1].div_ceil(16)) * 65 * 4,
-            vk::BufferUsageFlags::STORAGE_BUFFER,
-            false,
-        )?;
-        let tile_index = gpu.storage_buffer(tiles)?.index;
-        let bytes = u64::from(size[0]) * u64::from(size[1]) * 4;
-        let read_color = gpu.create_buffer(bytes, vk::BufferUsageFlags::TRANSFER_DST, true)?;
-        let read_ids = gpu.create_buffer(bytes, vk::BufferUsageFlags::TRANSFER_DST, true)?;
-        Ok(Targets {
-            images,
-            sampled,
-            storage,
-            states: vec![
-                State {
-                    access: Access::Undefined,
-                    queue: Queue::Graphics
-                };
-                TARGET_COUNT
-            ],
-            tiles,
-            tile_index,
-            read_color,
-            read_ids,
-            history: None,
-        })
+        result
     }
 }

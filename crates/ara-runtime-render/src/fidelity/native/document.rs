@@ -17,7 +17,8 @@ use std::collections::BTreeSet;
 /// Extracts resolved editor entities with runtime model selection, materials,
 /// lights and VFX semantics. `transforms` contains complete preview world matrices,
 /// including parent transforms. This is a content boundary, never a frame loop:
-/// imported generations must already be published by the project's asset owner.
+/// ready generations come from the project's asset owner. Unpublished models use
+/// extraction's placeholder until a later publication; bad published data errors.
 /// The caller retains `library` to reuse decoded models and native materials.
 /// Pass `terrain` only when its manifest, foliage and world translation still match;
 /// this reuses the evaluated generation during unrelated inspector edits/gestures.
@@ -80,7 +81,9 @@ pub fn document_frame(
         if let Some(value) = row.record.get("MeshRenderer") {
             let renderer: MeshRenderer = serde_json::from_value(value.to_owned())
                 .with_context(|| format!("{address}.MeshRenderer"))?;
-            resolve::prepare_renderer(library, &renderer, workspace, source)?;
+            when_published(source, |source| {
+                resolve::prepare_renderer(library, &renderer, workspace, source)
+            })?;
             entity.insert(renderer);
         }
     }
