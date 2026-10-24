@@ -895,3 +895,81 @@ fn tests_resolve_isolated_profile_directories_under_target() {
         }
     }
 }
+
+/// The Scene quality is a user preference: it round-trips through the isolated
+/// profile and never lands in the project. The project's default is
+/// `rendering.quality` in ara.project.json, edited through the typed settings command.
+#[test]
+fn scene_quality_persists_as_a_preference_and_the_project_default_in_its_manifest() {
+    use ara_render_fidelity::presets::{QualityChoice, QualityPreset};
+    let project = Project::new();
+    let profile = ara_editor::settings::config_dir()
+        .unwrap()
+        .join(format!("quality-roundtrip-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&profile);
+    let preferences = profile.join("editor-settings.json");
+    assert!(
+        preferences.components().any(|c| c.as_os_str() == "target"),
+        "{preferences:?}"
+    );
+    {
+        let mut editor = Editor::open_with(&project.0, Some(preferences.clone())).unwrap();
+        editor
+            .action("editor.preferences", json!({"renderQuality":"epic"}))
+            .unwrap();
+        editor
+            .action(
+                "editor.settings.set",
+                json!({"key":"rendering.quality","value":"medium"}),
+            )
+            .unwrap();
+    }
+    let saved: Value =
+        serde_json::from_str(&std::fs::read_to_string(&preferences).unwrap()).unwrap();
+    assert_eq!(saved["viewport.quality"], "epic");
+    let manifest: Value =
+        serde_json::from_str(&std::fs::read_to_string(project.0.join("ara.project.json")).unwrap())
+            .unwrap();
+    assert_eq!(manifest["rendering"]["quality"], "medium");
+    assert!(!manifest.to_string().contains("viewport"), "{manifest}");
+
+    let mut editor = Editor::open_with(&project.0, Some(preferences.clone())).unwrap();
+    assert_eq!(
+        editor.state.render_quality,
+        Some(QualityChoice::Preset(QualityPreset::Epic))
+    );
+    assert_eq!(
+        editor.state.project_quality(),
+        QualityChoice::Preset(QualityPreset::Medium)
+    );
+    // Clearing the override falls back to the project's default.
+    editor
+        .action("editor.preferences", json!({"renderQuality":"project"}))
+        .unwrap();
+    assert_eq!(
+        editor.state.render_choice(),
+        QualityChoice::Preset(QualityPreset::Medium)
+    );
+    assert!(editor.state.quality);
+    editor
+        .action(
+            "editor.settings.set",
+            json!({"key":"rendering.quality","value":"low"}),
+        )
+        .unwrap();
+    assert!(
+        !editor.state.quality,
+        "a Low project default is the raster view"
+    );
+    drop(editor);
+
+    // Preferences from before presets: Raster becomes Low.
+    std::fs::write(&preferences, r#"{"viewport.quality":"raster"}"#).unwrap();
+    let editor = Editor::open_with(&project.0, Some(preferences.clone())).unwrap();
+    assert_eq!(
+        editor.state.render_quality,
+        Some(QualityChoice::Preset(QualityPreset::Low))
+    );
+    drop(editor);
+    std::fs::remove_dir_all(&profile).unwrap();
+}

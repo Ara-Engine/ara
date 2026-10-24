@@ -96,6 +96,7 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
         &window.extensions()?,
         editor.host.root().join(".ara/gpu"),
     )?;
+    detect_quality(&mut editor, &renderer);
     // SAFETY: Renderer/device are declared before the UI adapter, and survive its destruction.
     let mut gpu = unsafe { NativeUi::new(renderer.gpu().context())? };
     shell.device_info =
@@ -866,6 +867,7 @@ fn headless(options: Options) -> ara_ui::Result<()> {
         &[],
         editor.host.root().join(".ara/gpu"),
     )?;
+    detect_quality(&mut editor, &renderer);
     let mut scene_view = viewport::SceneView::default();
     scene_view.render(&mut renderer, &editor, &view, 64)?;
     scene_view
@@ -1232,4 +1234,12 @@ fn game_input(event: &Event, editor: &mut Editor, shell: &mut Shell, dpi: f32) -
         surfaces.device(world, shell.game_client, events);
     }
     Some(false)
+}
+
+/// The GPU's automatic preset: what Auto (and an Auto project default) resolve to in
+/// the Scene view's menus, status bar and `quality` gating.
+fn detect_quality(editor: &mut Editor, renderer: &Renderer) {
+    use ara_render_fidelity::presets::{Capabilities, QualityPreset};
+    editor.state.detected_quality = Some(QualityPreset::detect(&Capabilities::of(renderer.gpu())));
+    editor.state.apply_settings();
 }

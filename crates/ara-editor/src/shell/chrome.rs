@@ -1,7 +1,10 @@
 //! The one in-app chrome row under the native title bar (D23): menus, the scene
 //! breadcrumb, the Play cluster, the command search box and status chips; plus
 //! the 24 px status bar. Every control runs a registry command.
-use super::commands::{Target, menus::MENUS};
+use super::commands::{
+    Target,
+    menus::{Context, MENUS},
+};
 use super::*;
 
 /// Approximate width of each menu's first letter at 13 px, for the mnemonic underline.
@@ -156,6 +159,20 @@ impl Shell {
             if editor.state.selection.is_empty(){String::new()}else{format!(" · {} selected",editor.state.selection.len())},
             escape(&saved),
             escape(hint)));
+        // Scene quality: the active preset and where it comes from; opens the Lit menu.
+        self.bindings.insert(
+            ara_ui::source::stable_id("status-quality"),
+            Binding::ContextMenu(Context::ViewModes, Target::None),
+        );
+        let state = &editor.state;
+        let quality = state.quality_label(state.render_choice());
+        let source = match state.render_quality {
+            None => "the project's default (Project Settings > Rendering)",
+            Some(ara_render_fidelity::presets::QualityChoice::Auto) => "detected from this GPU",
+            Some(_) => "your override",
+        };
+        let description = format!("Scene quality {quality}: {source}. Change it in the Lit menu");
+        out.push_str(&format!("<button id='status-quality' class='chip' label='Scene quality' description='{}' action='Dispatch'>{}<text id='status-quality-text' text='{}' /></button>",escape(&description),icons::icon("status-quality","sun-medium"),escape(&quality)));
         self.bind_command("status-jobs", "window.assets", Target::None);
         match active.first() {
             Some(job) => {

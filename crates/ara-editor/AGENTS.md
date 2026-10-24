@@ -89,6 +89,12 @@ Tests never touch the owner's profile: `.cargo/config.toml` gives every cargo-ru
 process `ARA_CONFIG_DIR`/`ARA_CRASH_DIR` under `target/`, `config_dir()` refuses the OS
 profile under tests and cargo, and bounded runs (`Options::isolate_profile`) start
 from a fresh `<output>/.ara-profile`. Never write user state anywhere else.
+Scene quality: `EditorState.render_quality: Option<QualityChoice>` mirrors the user
+preference `viewport.quality` (None = the project's `rendering.quality`, the
+Project Settings > Rendering page); `state.quality` is derived in `apply_settings`
+(false only for Low) and the window keeps `detected_quality` (GPU's Auto preset).
+Commands `view.quality.{project,auto,low,medium,high,epic}` feed the Lit menu,
+palette and `editor.commands`; agents may also use `editor.preferences.renderQuality`.
 Floating windows: `DockLayout` floating roots map to owned OS windows
 (`app/windows.rs`); each is a Shell `Surface` swapped into `self.ui` by
 `enter/leave`, and renders through `NativeUi::select_target`. Rects persist in

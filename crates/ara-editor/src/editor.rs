@@ -291,7 +291,12 @@ impl Editor {
             if self.state.panels_changed(&state) {
                 self.panels_revision += 1;
             }
+            // GPU detection belongs to this window, not to navigation history: keep
+            // it and re-derive `quality` from the incoming settings.
+            let detected = self.state.detected_quality;
             self.state = state;
+            self.state.detected_quality = detected;
+            self.state.apply_settings();
             self.view_revision += 1;
             changed = true;
         }

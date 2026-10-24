@@ -769,3 +769,103 @@ fn game_view_waits_for_play_and_play_starts_embedded_in_it() {
     ara_editor::testing_embed_play(&editor, &mut params);
     assert_eq!(params["window"], true);
 }
+
+/// The Scene view's Lit menu offers the project's default, Auto and the four presets
+/// with a check on the active one; menus, the palette and agents share the registry
+/// commands, and the toolbar and status bar show the active preset.
+#[test]
+fn scene_quality_menu_offers_project_auto_and_presets_from_the_registry() {
+    use ara_render_fidelity::presets::{QualityChoice, QualityPreset};
+    let project = Project::new();
+    let mut editor = Editor::open(&project.0).unwrap();
+    let mut shell = Shell::new(&mut editor, [1440., 900.]).unwrap();
+    let text = |shell: &Shell, id: &str| {
+        shell
+            .ui
+            .find(id)
+            .and_then(|i| shell.ui.nodes[i].text.as_ref())
+            .map(|t| t.value.clone())
+            .unwrap_or_default()
+    };
+    let mut clipboard = MemoryClipboard::default();
+    shell.click("view-mode", &mut clipboard).unwrap();
+    shell.dispatch(&mut editor).unwrap();
+    let rows: Vec<_> = shell
+        .open_menu_rows(&editor)
+        .into_iter()
+        .filter(|r| r.0.starts_with("view.quality."))
+        .collect();
+    let ids: Vec<_> = rows.iter().map(|r| r.0.as_str()).collect();
+    assert_eq!(
+        ids,
+        [
+            "view.quality.project",
+            "view.quality.auto",
+            "view.quality.low",
+            "view.quality.medium",
+            "view.quality.high",
+            "view.quality.epic"
+        ]
+    );
+    // An undetected Auto project default; only the active row is checked.
+    assert_eq!(rows[0].1, "Project Default (Auto)");
+    let checked: Vec<_> = rows.iter().map(|r| r.2).collect();
+    assert_eq!(
+        checked,
+        [
+            Some(true),
+            Some(false),
+            Some(false),
+            Some(false),
+            Some(false),
+            Some(false)
+        ]
+    );
+    assert_eq!(editor.state.render_quality, None);
+
+    // The row's command sets the override; `quality` is derived from it.
+    shell
+        .run_command(&mut editor, "view.quality.epic", &Default::default())
+        .unwrap();
+    assert_eq!(
+        editor.state.render_quality,
+        Some(QualityChoice::Preset(QualityPreset::Epic))
+    );
+    assert!(editor.state.quality);
+    shell.rebuild(&mut editor).unwrap();
+    assert_eq!(text(&shell, "status-quality-text"), "Epic");
+    assert_eq!(text(&shell, "view-mode-label"), "Lit · Epic");
+    shell
+        .run_command(&mut editor, "view.quality.low", &Default::default())
+        .unwrap();
+    assert!(!editor.state.quality, "Low is the raster view");
+    shell.rebuild(&mut editor).unwrap();
+    assert_eq!(text(&shell, "view-mode-label"), "Lit · Low");
+
+    // The palette and agents (editor.commands) see the same commands and state.
+    assert!(
+        shell
+            .palette_rows(&mut editor, "Epic")
+            .iter()
+            .any(|r| r.2 == Some("view.quality.epic"))
+    );
+    let exported = editor.action("editor.commands", json!({})).unwrap();
+    let low = exported["commands"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|c| c["id"] == "view.quality.low")
+        .unwrap();
+    assert_eq!(low["checked"], true);
+
+    // Agents can also set it as a preference.
+    editor
+        .action("editor.preferences", json!({"renderQuality": "project"}))
+        .unwrap();
+    assert_eq!(editor.state.render_quality, None);
+    assert!(
+        editor
+            .action("editor.preferences", json!({"renderQuality": "ultra"}))
+            .is_err()
+    );
+}

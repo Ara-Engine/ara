@@ -102,6 +102,30 @@ impl Shell {
         self.rebuild(editor)?;
         Ok(rows)
     }
+    /// The open menu's command rows (after clicking a toolbar dropdown) as
+    /// `(command id, title as shown, checked)`.
+    pub fn open_menu_rows(&self, editor: &Editor) -> Vec<(String, String, Option<bool>)> {
+        self.menu_levels(editor)
+            .first()
+            .into_iter()
+            .flatten()
+            .filter_map(|row| match row {
+                Row::Command {
+                    id, target, label, ..
+                } => {
+                    let spec = commands::get(id)?;
+                    let cx = self.ctx(editor, target);
+                    let checked = match spec.avail(&cx) {
+                        Avail::Checked(v) => Some(v),
+                        _ => None,
+                    };
+                    let title = label.clone().unwrap_or_else(|| spec.title(&cx));
+                    Some(((*id).to_owned(), title, checked))
+                }
+                _ => None,
+            })
+            .collect()
+    }
     fn rows(&self, editor: &Editor) -> Vec<MenuRow> {
         self.menu_levels(editor)
             .first()
