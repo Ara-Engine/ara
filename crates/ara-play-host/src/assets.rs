@@ -35,6 +35,10 @@ pub struct Assets {
     configurations: BTreeMap<String, (String, ara_doc::Record)>,
     revision: Option<u64>,
     published: crate::published::Publisher,
+    /// Sources were registered or removed since progress was last published.
+    progress_stale: bool,
+    /// The pipeline was importing at the last poll.
+    busy: bool,
     /// Cache directory shared with players.
     pub cache: PathBuf,
 }
@@ -202,7 +206,7 @@ impl Assets {
             }
             sources.insert(id);
         }
-        Ok(Self {
+        let mut assets = Self {
             pipeline,
             sources,
             failures,
@@ -211,8 +215,13 @@ impl Assets {
             configurations: BTreeMap::new(),
             revision: None,
             published,
+            progress_stale: false,
+            busy: true,
             cache: cache_dir,
-        })
+        };
+        // Views show every requested source as pending from the start.
+        assets.published.progress(assets.progress());
+        Ok(assets)
     }
 
     /// Synchronizes command-authored sidecars before Play or hot reload. In-memory
@@ -284,6 +293,7 @@ impl Assets {
                 if let Err(error) = self.pipeline.request(&id) {
                     self.failures.insert(id.clone(), error.to_string());
                 }
+                self.progress_stale = true;
             }
             current.insert(id, configuration);
         }
@@ -295,6 +305,7 @@ impl Assets {
             self.pipeline.unregister(id);
             self.sources.remove(id);
             self.failures.remove(id);
+            self.progress_stale = true;
         }
         self.configurations = current;
         self.published.retain(&self.sources);
@@ -309,10 +320,14 @@ impl Assets {
 
     /// Drains import events and publishes ready generations. `playing` blocks
     /// publication unless `allow` (the human's policy for agent/asset changes in Play).
+    /// Import progress is republished only after activity that can move a source
+    /// between pending, done and failed (not on worker progress messages or idle polls).
     pub fn poll(&mut self, playing: bool, allow: bool) -> Vec<AssetChanged> {
+        let mut settled = false;
         match self.pipeline.poll() {
             Ok(events) => {
                 for event in events {
+                    settled |= !matches!(event, ReloadEvent::Progress { .. });
                     if let ReloadEvent::Failed { asset, error } = event {
                         self.failures.insert(asset, error.to_string());
                     }
@@ -327,8 +342,43 @@ impl Assets {
             .pipeline
             .apply_boundary(true, playing, &BTreeSet::new())
             .unwrap_or_default();
+        // A newly published generation means that asset's latest import succeeded.
+        for change in &changes {
+            self.failures.remove(&change.asset);
+        }
         self.published.complete(&changes, &self.pipeline.reload);
+        let busy = self.pipeline.is_importing();
+        if self.progress_stale || settled || !changes.is_empty() || busy != self.busy {
+            self.published.progress(self.progress());
+            self.progress_stale = false;
+        }
+        self.busy = busy;
         changes
+    }
+
+    /// Where each registered source stands ([`crate::ImportProgress`]).
+    fn progress(&self) -> crate::ImportProgress {
+        let mut progress = crate::ImportProgress {
+            total: self.sources.len(),
+            ..Default::default()
+        };
+        for id in &self.sources {
+            if self.pipeline.is_importing_asset(id) {
+                progress.pending.insert(id.clone());
+            } else if let Some(error) = self.failures.get(id) {
+                progress.failed.insert(id.clone(), error.clone());
+            } else if self
+                .pipeline
+                .reload
+                .slot(id)
+                .is_some_and(|slot| slot.current.is_some())
+            {
+                progress.done += 1;
+            } else {
+                progress.pending.insert(id.clone());
+            }
+        }
+        progress
     }
 
     /// Published source generations (hex digests), waiting up to `timeout` for

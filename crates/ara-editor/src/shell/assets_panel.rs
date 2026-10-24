@@ -2,8 +2,8 @@
 use super::*;
 impl Shell {
     /// A digest of everything [`assets_panel`](Self::assets_panel) reads: the files,
-    /// the folder, search, view mode and selection, density, thumbnails, the content's
-    /// size and scroll, Show All and the keymap (the Import shortcut).
+    /// the folder, search, view mode and selection, density, thumbnails, import progress,
+    /// the content's size and scroll, Show All and the keymap (the Import shortcut).
     pub(super) fn assets_key(&self, editor: &Editor) -> u64 {
         let content = self.ui.find("assets-content").map(|i| {
             let rect = self.ui.nodes[i].rect;
@@ -16,7 +16,7 @@ impl Shell {
             editor.state.asset_grid,
             &editor.state.asset_path,
             editor.state.comfortable(),
-            self.thumbnail_revision,
+            (self.thumbnail_revision, self.imports.revision),
             content,
             self.ui.size.map(f32::to_bits),
             self.asset_offset.to_bits(),
@@ -302,6 +302,20 @@ impl Shell {
             );
             out.push_str(&format!("<button id='{id}' class='asset-card {}' style='position:absolute;left:{}px;top:{}px;width:{card_width}px;height:{card_height}px;flex-direction:{}' label='{}' description='{}' action='Dispatch'>",if editor.state.asset_path.as_deref()==Some(&asset.path){"asset-selected"}else{""},8.+(n%columns) as f32*column_step,8.+(n/columns-first_row) as f32*row_step,if compact{"row"}else{"column"},escape(&asset.path),escape(&asset.path)));
             self.asset_thumbnail(asset, out, &id, thumbnail);
+            // Importing and failed assets carry a badge and say so under their name.
+            let import = self.imports.of(asset);
+            let kind = match &import {
+                Some(imports::Import::Pending) => "Importing…",
+                Some(imports::Import::Failed(_)) => "Import failed",
+                None => asset.domain.as_deref().unwrap_or(&asset.kind),
+            };
+            if let Some(import) = &import {
+                let (icon, tint, why) = match import {
+                    imports::Import::Pending => ("loader-circle", "accent", "Importing"),
+                    imports::Import::Failed(error) => ("triangle-alert", "warning", *error),
+                };
+                out.push_str(&format!("<panel id='{id}-import' class='import-badge' style='left:{}px;top:6px' description='{}'>{}</panel>",if compact{thumbnail-16.}else{(card_width+thumbnail)*0.5-20.},escape(why),icons::icon_in(&format!("{id}-import"),icon,&format!("icon-sm {tint}"))));
+            }
             if compact {
                 out.push_str(&format!("<panel id='{id}-caption' style='flex-grow:1;flex-basis:0px;min-width:0px;gap:3px'>"));
             }
@@ -318,7 +332,7 @@ impl Shell {
             };
             out.push_str(&format!("<panel id='{id}-bar' class='type-bar' style='width:{}px;background:var(--{color})' />",if compact{40.}else{thumbnail}));
             let selected = editor.state.asset_path.as_deref() == Some(&asset.path);
-            out.push_str(&format!("<text id='{id}-name' style='width:{}px;font-size:11px;overflow:hidden' class='{}' text='{}' /><text id='{id}-kind' class='{}' style='font-size:10px' text='{}' />",card_width-8.,if selected{"on-selection"}else{"fg"},escape(asset.path.rsplit('/').next().unwrap_or(&asset.path)),if selected{"on-selection"}else{"caption"},escape(asset.domain.as_deref().unwrap_or(&asset.kind))));
+            out.push_str(&format!("<text id='{id}-name' style='width:{}px;font-size:11px;overflow:hidden' class='{}' text='{}' /><text id='{id}-kind' class='{}' style='font-size:10px' text='{}' />",card_width-8.,if selected{"on-selection"}else{"fg"},escape(asset.path.rsplit('/').next().unwrap_or(&asset.path)),if selected{"on-selection"}else if matches!(import,Some(imports::Import::Failed(_))){"warning"}else{"caption"},escape(kind)));
             if compact {
                 out.push_str("</panel>");
             }

@@ -493,6 +493,7 @@ impl Shell {
             self.axis_markup(editor, out);
         }
         self.notices_markup(editor, out);
+        self.loading_markup(editor, out);
         out.push_str("<panel id='gizmo-readout' class='readout' style='left:0px;top:0px'><text id='gizmo-readout-text' class='mono' text='' /></panel></panel>");
     }
 }

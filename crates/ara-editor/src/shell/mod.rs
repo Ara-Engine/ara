@@ -12,6 +12,7 @@ pub mod commands;
 mod dialog;
 mod drag;
 pub(crate) mod icons;
+mod imports;
 mod input;
 mod keyboard;
 mod menu;
@@ -145,6 +146,8 @@ pub struct Shell {
     /// Surface hosting the hierarchy's virtual rows (`None` is the main window).
     hierarchy_surface: Option<String>,
     browser: assets::Browser,
+    /// The asset pipeline's import progress (status chip, Assets badges, Scene notice).
+    imports: imports::Imports,
     asset_rows: VirtualList,
     asset_entries: BTreeMap<u64, assets::Asset>,
     asset_view: Option<VirtualView>,
@@ -383,6 +386,7 @@ impl Shell {
             hierarchy_view: None,
             hierarchy_surface: None,
             browser: assets::Browser::new(editor.host.root()),
+            imports: imports::Imports::new(editor.host.root()),
             asset_rows: VirtualList { items: Vec::new() },
             asset_entries: BTreeMap::new(),
             asset_view: None,
@@ -1133,6 +1137,7 @@ impl Shell {
                 .retain(|key, _| key.starts_with("live:"));
         }
         let mut changed = browser_changed || std::mem::take(&mut self.asset_grid_dirty);
+        changed |= self.imports.poll();
         let completed = self.thumbnails.poll().collect::<Vec<_>>();
         for result in completed {
             match result {

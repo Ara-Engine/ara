@@ -15,7 +15,7 @@ pub mod params;
 pub mod pool;
 mod published;
 mod rendering;
-pub use published::{PublishedAssets, PublishedGeneration, PublishedSnapshot};
+pub use published::{ImportProgress, PublishedAssets, PublishedGeneration, PublishedSnapshot};
 mod scripts;
 mod spec;
 

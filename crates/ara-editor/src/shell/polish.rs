@@ -190,6 +190,27 @@ impl Shell {
                         assets_panel::asset_icon(a),
                         muted,
                     );
+                    // Importing and failed assets: a status icon at the row's end.
+                    if let Some(import) = self.imports.of(a) {
+                        let (name, token) = match import {
+                            super::imports::Import::Pending => ("loader-circle", "--accent"),
+                            super::imports::Import::Failed(_) => {
+                                ("triangle-alert", "--warning-foreground")
+                            }
+                        };
+                        image(
+                            &mut draws,
+                            stable_id(&n.element.id) ^ 0x1,
+                            Box2 {
+                                x: n.rect.x + n.rect.w - 22.,
+                                y: n.rect.y + (n.rect.h - 14.) * 0.5,
+                                w: 14.,
+                                h: 14.,
+                            },
+                            name,
+                            color(token),
+                        );
+                    }
                     draws.push(Draw::PopClip);
                 }
             }

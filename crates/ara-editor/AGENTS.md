@@ -40,10 +40,9 @@ by asset ID/digest. `Editor::models` survives document edits; extraction selects
 the source node/primitive and pivot without reopening sidecars or decoding per
 entity. Unpublished models use placeholders; failed reloads retain last good.
 
-Set CARGO_BUILD_JOBS=2; gate with targeted cargo check/test/clippy. The GPU gate
-(`run.ps1 -Mode Verify`, `tests/native.rs --ignored`) needs validation layers, SDL3
-and this machine's GPU. Goldens live in `tests/goldens` (update only with
-`ARA_EDITOR_UPDATE_GOLDENS=1`); evidence lives in `evidence`.
+Gate with targeted check/test/clippy. The GPU gate (`run.ps1 -Mode Verify`, `tests/native.rs
+--ignored`) needs validation layers, SDL3 and this machine's GPU. Goldens live in
+`tests/goldens` (update only with `ARA_EDITOR_UPDATE_GOLDENS=1`); evidence in `evidence`.
 
 Polish assets: Lucide SVGs (ISC), Inter and JetBrains Mono (OFL; THIRD_PARTY_NOTICES).
 The fidelity view and its bounded settling live in app/viewport.rs; destroy it before
@@ -144,7 +143,8 @@ menubar, status bar, area headers and tab bodies as parts (`Ui::reconcile_parts`
 `panels::keep_alive` tabs stay mounted, hidden (geometry via `Shell::shown_node`). Memoized
 panels (`shell/memo.rs`: Assets) reuse markup+bindings while their input digest holds; `cargo
 test` sets `ARA_EDITOR_MEMO_CHECK=1`, which regenerates each reuse and fails on a difference.
-Only `scene_changed` state re-renders the Scene. Tools: `shell/material_panel.rs` (preview, Graph|Source, compile
+`shell/imports.rs` reads ara-play-host's `ImportProgress` (Importing chip, Assets badges,
+Scene loading notice; `tests/loading.rs`). Only `scene_changed` state re-renders the Scene. Tools: `shell/material_panel.rs` (preview, Graph|Source, compile
 status; swatches painted after layout, no raw colours in markup) and `shell/vfx_panel.rs`
 (emitter stacks, Hide/Isolate, timeline driving `asset_tools/vfx_stream.rs` in place).
 Imports use the shared `import.initialize`/`import.configure` commands.
