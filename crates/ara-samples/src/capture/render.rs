@@ -58,6 +58,9 @@ pub struct Options<'a> {
     pub pipeline_cache: &'a Path,
     /// Reference samples per pixel for RMSE/FLIP scoring; zero skips it.
     pub reference_samples: u32,
+    /// Resolves the frame's native content (terrain materials, foliage) for the
+    /// Low presenter, which bakes its probe GI from it.
+    pub content: &'a dyn Fn(&RenderFrame) -> Result<ara_runtime_render::fidelity::native::Content>,
 }
 
 pub(super) fn camera(shot: &Shot) -> CameraSpec {
@@ -502,7 +505,8 @@ fn baseline(
     let created = std::time::Instant::now();
     let mut presenter = Presenter::new(size, Vec::new(), options.pipeline_cache);
     presenter.set_quality(QualityChoice::Preset(QualityPreset::Low));
-    presenter.prepare(frame)?;
+    presenter.set_probe_gi(true);
+    presenter.prepare_with(frame, || (options.content)(frame))?;
     let create_ms = created.elapsed().as_secs_f64() * 1000.;
     let mut timing = Value::Null;
     let mut scores = Vec::new();

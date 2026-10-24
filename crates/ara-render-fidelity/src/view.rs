@@ -470,7 +470,7 @@ impl FidelityView {
             data,
         })
     }
-    fn read_buffer(
+    pub(crate) fn read_buffer(
         &self,
         gpu: &mut VulkanDevice,
         source: Buffer,

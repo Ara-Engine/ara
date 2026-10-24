@@ -71,6 +71,13 @@ impl Presenter {
         self.choice = quality;
     }
 
+    /// Opt in to probe GI on the raster path: each content change is ray-traced
+    /// once (blocking, on RT-capable devices) and relit every frame. Off by
+    /// default until acquisition is cached and runs off the frame thread.
+    pub fn set_probe_gi(&mut self, enabled: bool) {
+        self.probe_gi = enabled;
+    }
+
     /// Preset of the last successfully published frame, or the selected warm-up plan.
     pub fn quality(&self) -> Option<QualityPreset> {
         self.published_quality.or(self.plan.map(|plan| plan.preset))
@@ -155,7 +162,18 @@ impl Presenter {
                 if renderer.size() != self.size {
                     renderer.resize(self.size)?;
                 }
+                let ray_tracing = Capabilities::of(renderer.gpu()).ray_tracing;
                 self.prepare_baseline(frame)?;
+                // New content: acquire probe GI once (ray-traced where supported).
+                if self.stats.rebuilt && ray_tracing && self.probe_gi {
+                    let renderer = self.renderer.as_mut().context("baseline renderer")?;
+                    let surfaces = crate::gi::bake(renderer.gpu_mut(), frame, resolve()?)
+                        .inspect_err(|e| {
+                            eprintln!("ara-runtime-render: probe GI bake failed: {e:#}")
+                        })
+                        .ok();
+                    renderer.set_probe_surfaces(surfaces.as_ref())?;
+                }
             }
             RenderPath::Fidelity(settings) => {
                 let change = match &mut self.live {

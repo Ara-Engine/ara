@@ -123,6 +123,7 @@ pub fn run(samples: &Path, lock: &Lock, request: &Request<'_>) -> Result<()> {
             presets: request.presets,
             environment: &environment,
             pipeline_cache: &cache,
+            content: &|frame| world.content(frame),
             reference_samples: request.reference_samples,
         },
     )?;
