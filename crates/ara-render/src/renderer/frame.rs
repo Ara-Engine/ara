@@ -20,6 +20,8 @@ pub(super) struct Frame {
     pub lighting: [u32; 4],
     pub post: [u32; 4],
     pub temporal: [u32; 4],
+    /// x: look constants buffer (look::frame::LookFrame).
+    pub look: [u32; 4],
 }
 impl Renderer {
     pub(super) fn frame_data(
@@ -57,7 +59,7 @@ impl Renderer {
             // w selects the display curve (post::ToneCurve).
             forward: camera
                 .forward
-                .extend(self.tone_curve as u32 as f32)
+                .extend(self.look.look.curve as u32 as f32)
                 .to_array(),
             sun_direction: self.content.sun_direction.extend(0.).to_array(),
             sun_color_exposure: self.content.sun_lux.extend(exposure).to_array(),
@@ -93,6 +95,8 @@ impl Renderer {
                 mode as u32,
                 self.content.material_index,
             ],
+            // w: sampled native motion (RG16F, unjittered UV delta); u32::MAX without.
+            look: [self.look.frame_index, 0, 0, u32::MAX],
         }
     }
 }

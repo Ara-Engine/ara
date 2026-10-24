@@ -1,0 +1,46 @@
+// Ara raster core ABI: bindings, the frame record and scene records shared by every
+// raster shader. Column-major matrices, metres, linear HDR, reversed-Z.
+struct Root { uint frame; uint materials; uint material; uint entity; uint cascade; uint mode; uint sample; uint flags; };
+#ifdef VULKAN
+#define BIND(n) [[vk::binding(n,0)]]
+[[vk::push_constant]] ConstantBuffer<Root> root;
+#else
+#define BIND(n)
+ConstantBuffer<Root> root : register(b0,space0);
+#endif
+BIND(5) Texture2D<float4> textures[] : register(t0,space1);
+BIND(1) RWByteAddressBuffer buffers[64] : register(u0,space2);
+BIND(2) SamplerState samplers[3] : register(s0,space0);
+BIND(3) RWTexture2D<float4> images[64] : register(u0,space3);
+static const float PI=3.14159265359;
+struct Frame {
+    float4x4 vp;
+    float4x4 previousVp;
+    float4x4 inverseVp;
+    float4x4 shadows[4];
+    float4 camera;
+    float4 forward;
+    float4 sunDirection;
+    float4 sunColorExposure;
+    float4 splits;
+    uint4 extent;
+    uint4 gbuffer;
+    uint4 extra;
+    uint4 lighting;
+    uint4 post;
+    uint4 temporal;
+    // x: look constants buffer (look.slangh); w: sampled native motion (RG16F,
+    // unjittered current-minus-previous UV), u32::MAX without; yz reserved.
+    uint4 look;
+};
+// Shaded surface. `ao` is material ambient occlusion (opaque G-buffer albedo.a).
+struct Surface {float3 albedo;float alpha;float3 normal;float roughness;float metal;float3 emissive;float ao;};
+struct Material { float4 color; float4 emissiveRoughness; float4 surface; uint4 textures; uint4 flags; };
+struct Light {float4 positionRange;float4 colorLumens;float4 directionOuter;float4 parameters;};
+Frame frame() {return buffers[NonUniformResourceIndex(root.frame)].Load<Frame>(0);}
+float4 tex(uint index,float2 uv) {return textures[NonUniformResourceIndex(index)].SampleLevel(samplers[0],uv,0);}
+float4 envTex(uint index,float2 uv) {return textures[NonUniformResourceIndex(index)].SampleLevel(samplers[1],uv,0);}
+float4 historyTex(uint index,float2 uv) {return textures[NonUniformResourceIndex(index)].SampleLevel(samplers[2],uv,0);}
+float4 pixel(uint index,int2 p) {return textures[NonUniformResourceIndex(index)].Load(int3(p,0));}
+float2 environmentUv(float3 d) {return float2(atan2(d.z,d.x)/(2*PI)+0.5,acos(clamp(d.y,-1.,1.))/PI);}
+float3 environmentDirection(float2 uv) {float phi=(uv.x-0.5)*2*PI;float theta=uv.y*PI;return float3(cos(phi)*sin(theta),cos(theta),sin(phi)*sin(theta));}

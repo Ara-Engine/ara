@@ -1,0 +1,107 @@
+// Raster look constants and the physical atmosphere (look/frame.rs LookFrame).
+// Include after raster.slangh. Spherical Earth in metres: an independent
+// implementation of Hillaire (EGSR 2020), matching ara-render-fidelity's sky.
+struct Look {
+    float4 sunLux;     // rgb top-of-atmosphere sun illuminance (lux), w angular radius (rad)
+    float4 atmosphere; // x sea level (m), y fog extinction at base (1/m), z fog scale height (m), w fog albedo
+    float4 fog;        // rgb fog tint, w Henyey-Greenstein anisotropy
+    float4 look;       // x contrast, y vignette, z fog base altitude (m), w aerosols
+    float4 grading;    // rgb white-balance gain, w saturation
+    float4 exposure;   // x manual multiplier (0: automatic), y compensation gain, z adaptation (1/s), w frame seconds
+    float4 metering;   // x,y EV100 range, z,w trimmed histogram fractions
+    float4 bloom;      // x energy fraction
+    uint4 flags;       // x tone curve, y LOOK_* bits, z frame number
+    uint4 sampled0;    // transmittance, multiscatter, sky view, froxels
+    uint4 sampled1;    // sky irradiance, sky prefilter, bloom down, bloom up
+    uint4 storage0;    // as sampled0
+    uint4 storage1;    // as sampled1
+    uint4 state;       // x exposure state buffer
+    float4 giOrigin;   // xyz first probe centre, w irradiance hysteresis
+    float4 giSpacing;  // xyz probe separation, w surface bias (m)
+    uint4 giCounts;    // xyz lattice, w probe count (0: no probe GI)
+    uint4 giBuffers;   // surface caches, statics, irradiance read, irradiance write
+    uint4 giUpdate;    // x first relit probe, y relit probes this frame
+};
+static const uint LOOK_PHYSICAL_SKY=1,LOOK_FOG=2,LOOK_RESET=4;
+Look look(Frame f){return buffers[NonUniformResourceIndex(f.look.x)].Load<Look>(0);}
+bool physicalSky(Look l){return (l.flags.y&LOOK_PHYSICAL_SKY)!=0;}
+float4 lut(uint index,float2 uv){return textures[NonUniformResourceIndex(index)].SampleLevel(samplers[2],uv,0);}
+float luminance(float3 c){return dot(c,float3(0.2126,0.7152,0.0722));}
+
+float3 srgb(float3 x){return lerp(12.92*x,1.055*pow(max(x,0),1/2.4)-0.055,step(0.0031308,x));}
+// Display curves shared with the fidelity post pass (forward.w: 0 ACES fit, 1 PBR
+// Neutral, 2 fitted ACES filmic pre-scaled to keep 18% grey).
+float3 tonemap(float3 x){return saturate((x*(2.51*x+0.03))/(x*(2.43*x+0.59)+0.14));}
+float3 neutralCurve(float3 c){
+    float minimum=min(c.x,min(c.y,c.z));float offset=minimum<=0.08?minimum-6.25*minimum*minimum:0.04;c-=offset;
+    float peak=max(c.x,max(c.y,c.z));if(peak<=0.76)return c;
+    float compressed=1-0.0576/(peak-0.52);float blend=1-1/(1+0.15*(peak-compressed));return lerp(c*(compressed/peak),float3(compressed),blend);
+}
+float3 filmicCurve(float3 c){
+    c*=1.464;
+    float3 v=float3(dot(float3(0.59719,0.35458,0.04823),c),dot(float3(0.07600,0.90834,0.01566),c),dot(float3(0.02840,0.13383,0.83777),c));
+    v=(v*(v+0.0245786)-0.000090537)/(v*(0.983729*v+0.4329510)+0.238081);
+    return saturate(float3(dot(float3(1.60475,-0.53108,-0.07367),v),dot(float3(-0.10208,1.10813,-0.00605),v),dot(float3(-0.00327,-0.07276,1.07602),v)));
+}
+static const float PLANET=6360000,TOP=6460000;
+// Aerosols scale Mie density relative to clear Earth air.
+float3 extinction(float height,float aerosols,out float3 scatteringR,out float scatteringM){
+    height=max(height,0);scatteringR=float3(5.802e-6,13.558e-6,33.1e-6)*exp(-height/8000);
+    scatteringM=3.996e-6*exp(-height/1200)*aerosols;
+    float ozone=max(0,1-abs(height-25000)/15000);
+    return scatteringR+scatteringM/0.9+float3(0.650e-6,1.881e-6,0.085e-6)*ozone;
+}
+float sphereExit(float3 p,float3 d,float radius){float b=dot(p,d),q=b*b-dot(p,p)+radius*radius;return q<0?0:max(0,-b+sqrt(q));}
+float atmosphereLength(float3 p,float3 d){
+    float top=sphereExit(p,d,TOP),b=dot(p,d),q=b*b-dot(p,p)+PLANET*PLANET;
+    if(q>0 && -b-sqrt(q)>0)return min(top,-b-sqrt(q));return top;
+}
+float3 transmittance(Look l,float height,float cosine){return lut(l.sampled0.x,float2(cosine*0.5+0.5,sqrt(saturate(height/100000)))).rgb;}
+float3 multiScattering(Look l,float height,float cosine){return lut(l.sampled0.y,float2(cosine*0.5+0.5,sqrt(saturate(height/100000)))).rgb;}
+float phaseR(float cosine){return 3*(1+cosine*cosine)/(16*PI);}
+float phaseM(float cosine,float g){return (1-g*g)/(4*PI*pow(max(1+g*g-2*g*cosine,0.001),1.5));}
+// Single scattering towards `p` along `d` over `distance`, with optional multiple
+// scattering from the LUT. `sun` points towards the sun; result is per lux.
+float3 integrateSky(Look l,float3 sun,float3 p,float3 d,float distance,uint steps,bool multiple,out float3 throughput){
+    float3 sum=0;throughput=1;float previous=0;
+    for(uint i=0;i<steps;i++){
+        float end=distance*pow(float(i+1)/steps,2),ds=end-previous;
+        float3 at=p+d*(previous+ds*0.5);previous=end;float height=max(length(at)-PLANET,0),mu=dot(normalize(at),sun);
+        float3 sr;float sm;float3 e=extinction(height,l.look.w,sr,sm),segment=exp(-e*ds);
+        float3 source=transmittance(l,height,mu)*(sr*phaseR(dot(d,sun))+sm*phaseM(dot(d,sun),0.8));
+        if(multiple)source+=(sr+sm)*multiScattering(l,height,mu);
+        sum+=throughput*source*(1-segment)/max(e,float3(1e-9));throughput*=segment;
+    }return sum;
+}
+// Sun illuminance reaching `position` through the physical sky (lux).
+float3 sunAt(Frame f,Look l,float3 position){
+    float3 lux=f.sunColorExposure.rgb;
+    return physicalSky(l)?lux*transmittance(l,max(position.y-l.atmosphere.x,0),f.sunDirection.y):lux;
+}
+// Sky radiance along `d` (cd/m²): the sky-view LUT plus an analytic sun disk.
+float3 skyRadiance(Frame f,Look l,float3 d,bool disk){
+    float3 c=lut(l.sampled0.z,environmentUv(d)).rgb;
+    float radius=l.sunLux.w,angle=acos(clamp(dot(d,f.sunDirection.xyz),-1.,1.));
+    if(disk && angle<radius && d.y>0){
+        float mu=sqrt(saturate(1-angle*angle/(radius*radius)));float limb=1-0.6*(1-mu);
+        c+=l.sunLux.rgb*transmittance(l,max(f.camera.y-l.atmosphere.x,2),d.y)*limb/(PI*radius*radius*0.8);
+    }return c;
+}
+// Froxel fog: 64x36 columns, 32 logarithmic slices to 4 km; per slice the
+// cumulative in-scatter (x 0..63) and transmittance (x 64..127) of a 4096x36 atlas.
+static const float FOG_RANGE=4000;
+float froxelSlice(float distance){return log2(1+distance/2)/log2(1+FOG_RANGE/2)*32;}
+float3 sampleFroxel(Look l,float2 uv,float distance,out float3 trans){
+    float slice=froxelSlice(distance),z=clamp(slice-1,0.,31.);uint lo=uint(z),hi=min(lo+1,31);
+    float2 a=clamp(uv,float2(0.5/64,0.5/36),float2(63.5/64,35.5/36))*float2(64,36);
+    float3 x=lut(l.sampled0.w,float2((lo*128+a.x)/4096,a.y/36)).rgb,y=lut(l.sampled0.w,float2((hi*128+a.x)/4096,a.y/36)).rgb;
+    float3 tx=lut(l.sampled0.w,float2((lo*128+64+a.x)/4096,a.y/36)).rgb,ty=lut(l.sampled0.w,float2((hi*128+64+a.x)/4096,a.y/36)).rgb;
+    trans=lerp(tx,ty,frac(z));float3 light=lerp(x,y,frac(z));
+    if(slice<1){trans=lerp(float3(1),trans,slice);light*=slice;}
+    return light;
+}
+// Aerial perspective and height fog between the camera and `world`.
+float3 applyFog(Frame f,Look l,float3 colour,float3 world,float2 uv){
+    if((l.flags.y&(LOOK_PHYSICAL_SKY|LOOK_FOG))==0)return colour;
+    float3 trans;float3 light=sampleFroxel(l,uv,length(world-f.camera.xyz),trans);return colour*trans+light;
+}

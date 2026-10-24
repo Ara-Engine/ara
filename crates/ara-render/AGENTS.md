@@ -28,6 +28,17 @@ ECS; `Scene` is an immutable render extraction snapshot, not authoritative state
 - `update_geometry`: atomically replace meshes/materials/lights, retaining the
   device, targets and last good scene on failure. Textures/environment belong to
   asset integration. `entity_channel`, `entities`, `entity_at` expose picking.
+- `look::Look` (`Renderer::set_look`): D27 raster look after the G-buffer:
+  physical sky LUTs and their IBL, CSM-shadowed froxel fog, histogram or manual
+  exposure, bloom, grading and the display curve. Defaults reproduce M1. Hosts map
+  `SceneLook` with `FrameEnvironment::raster` (ara-render-fidelity).
+- `look::gi::ProbeSurfaces` (`Renderer::set_probe_surfaces`): probe GI. A one-time
+  acquisition (`FidelityView::bake_probe_surfaces` on RT devices) records 8x8 oct
+  surface caches; each frame `GI.Relight` relights them (sun via CSM, local lights,
+  sky, emissive, last frame's probes) into 6x6 irradiance, sampled DDGI-style.
+  No runtime rays, no per-pixel noise.
+- `set_deferred_post` + `finish(color, sampled, state)`: grade an externally
+  composited HDR frame (landscape, particles) with the same look post.
 - `CaptureRequest`, `Capture`: fixed tick/seed, settle frames, modes, PNG, picking,
   numbered marks, visible-pixel boxes, legends, content/compiler/driver provenance.
 - `compare`: local RGB SSIM, explicit tolerance and an amplified diff image.
@@ -39,6 +50,11 @@ reflection are committed under `cooked/`; no shader compiler is linked at runtim
 Use `../../shaders/pipelines.json`; changing the binding ABI requires a full cook.
 The renderer rejects mixed source cohorts. Byte-address frame/material/light
 records and 48-byte vertex records must match Slang's column-major ABI.
+
+Shaders: `raster.slangh` is the shared ABI (bindings, Frame, Surface; Frame.look.x
+is the look record, look.w the native motion texture). `look*.slang(h)` belong to
+the look; never use 16-bit intrinsics (f16tof32) there: the device enables no
+Int16/Float16 capability, so pack halves with bit math.
 
 Frames use reversed-Z, metres and linear HDR. Sun input is lux, point/spot flux
 is lumens and HDR environment input is radiance in cd/m?. Exposure is a positive

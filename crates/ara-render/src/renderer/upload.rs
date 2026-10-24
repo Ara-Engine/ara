@@ -67,6 +67,12 @@ impl Renderer {
         )?;
         let compute_frame_index = gpu.storage_buffer(compute_frame)?.index;
         let content = upload_content(&mut gpu, scene, artifacts, &shader_metadata, compute_frame)?;
+        let look = crate::look::gpu::LookGpu::new(
+            &mut gpu,
+            artifacts,
+            &shader_metadata.content_key,
+            size,
+        )?;
         Ok(Self {
             gpu,
             size,
@@ -82,7 +88,7 @@ impl Renderer {
             artifacts: artifacts.to_path_buf(),
             shader_metadata,
             last_timings: Vec::new(),
-            tone_curve: super::post::ToneCurve::AcesFit,
+            look,
         })
     }
 

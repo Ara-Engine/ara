@@ -1,6 +1,7 @@
 //! Renderer orchestration. Extraction snapshots are uploaded once; frames record handles.
 mod edit;
 mod frame;
+mod gi;
 mod hash;
 mod passes;
 pub mod post;
@@ -86,7 +87,8 @@ pub struct Renderer {
     artifacts: PathBuf,
     shader_metadata: crate::capture::ShaderMetadata,
     last_timings: Vec<PassTiming>,
-    tone_curve: post::ToneCurve,
+    /// Sky, fog, exposure, bloom and display grading after the G-buffer.
+    look: crate::look::gpu::LookGpu,
 }
 
 impl Renderer {
@@ -195,6 +197,7 @@ impl Renderer {
             return Ok(());
         }
         let replacement = Self::targets(&mut self.gpu, size)?;
+        self.look.resize(&mut self.gpu, size)?;
         let previous = std::mem::replace(&mut self.targets, replacement);
         for image in previous.images {
             self.gpu.retire(Resource::Image(image))?;
@@ -209,13 +212,30 @@ impl Renderer {
     }
     /// Select the display curve applied after exposure (Lit view only).
     pub fn set_tone_curve(&mut self, curve: post::ToneCurve) {
-        self.tone_curve = curve;
+        self.look.look.curve = curve;
     }
-    /// Render live with TAA jitter and camera reprojection at a locked physical exposure.
+    /// Apply an authored look (exposure, display, sky and fog) from the next frame.
+    pub fn set_look(&mut self, look: crate::look::Look) -> Result<()> {
+        look.validate()?;
+        self.look.look = look;
+        Ok(())
+    }
+    /// The look applied to rendered frames.
+    pub fn look(&self) -> &crate::look::Look {
+        &self.look.look
+    }
+    /// Render live with TAA jitter and camera reprojection. `exposure` is the linear
+    /// multiplier of a manual look; automatic looks meter instead.
     pub fn render(&mut self, camera: &CameraSpec, exposure: f32) -> Result<()> {
         #[cfg(feature = "profiling")]
         ara_profile::scope!("render.frame");
-        self.render_frame(camera, exposure, false, crate::capture::ViewMode::Lit)?;
+        self.render_frame(
+            camera,
+            exposure,
+            false,
+            crate::capture::ViewMode::Lit,
+            false,
+        )?;
         Ok(())
     }
     /// Render live in a debug view mode (base color, normals, depth, …), as captures do,
@@ -226,7 +246,7 @@ impl Renderer {
         exposure: f32,
         mode: crate::capture::ViewMode,
     ) -> Result<()> {
-        self.render_frame(camera, exposure, false, mode)?;
+        self.render_frame(camera, exposure, false, mode, false)?;
         Ok(())
     }
     /// Render an agent request, with reset history and an explicit settle frame count.
@@ -241,6 +261,7 @@ impl Renderer {
                 request.exposure,
                 request.deterministic,
                 request.mode,
+                true,
             )?;
         }
         let rgba = self.gpu.read(self.targets.read_color)?;

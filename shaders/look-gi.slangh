@@ -1,0 +1,69 @@
+// Probe-volume GI (look/gi.rs). Each probe owns a one-time 8x8 octahedral surface
+// cache (averaged hit albedo, normal, emissive, distance and sky fraction per
+// texel), static 8x8 distance moments and its relocation. Every frame the caches
+// are relit (sun, local lights, sky, emissive, last frame's probes for bounces)
+// into 6x6 octahedral irradiance and sampled DDGI-style with Chebyshev visibility.
+// Include after look.slangh. No rays are traced at runtime.
+static const uint GI_STATICS=66,GI_IRRADIANCE=36;
+float2 octEncode(float3 n){n/=abs(n.x)+abs(n.y)+abs(n.z);float2 p=n.xy;if(n.z<0)p=(1-abs(p.yx))*float2(p.x>=0?1:-1,p.y>=0?1:-1);return p*0.5+0.5;}
+float3 octDecode(float2 p){p=p*2-1;float3 n=float3(p,1-abs(p.x)-abs(p.y));float t=saturate(-n.z);n.xy+=float2(n.x>=0?-t:t,n.y>=0?-t:t);return normalize(n);}
+// Fold bilinear taps across octahedral edges, including the shared corner.
+uint octIndex(int2 p,int size){
+    if(p.x<0){p.x=-p.x-1;p.y=size-1-p.y;}else if(p.x>=size){p.x=2*size-1-p.x;p.y=size-1-p.y;}
+    if(p.y<0){p.y=-p.y-1;p.x=size-1-p.x;}else if(p.y>=size){p.y=2*size-1-p.y;p.x=size-1-p.x;}
+    return uint(p.y*size+p.x);
+}
+// IEEE half to float from bits; no 16-bit shader capabilities are required.
+float halfToFloat(uint h){uint e=(h>>10)&31,m=h&1023;float v=e==0?float(m)*exp2(-24.):exp2(float(e)-15.)*(1+float(m)/1024.);return (h&0x8000)!=0?-v:v;}
+bool giEnabled(Look l){return l.giCounts.w>0;}
+float3 giProbePosition(Look l,uint id){uint x=id%l.giCounts.x,y=(id/l.giCounts.x)%l.giCounts.y,z=id/(l.giCounts.x*l.giCounts.y);return l.giOrigin.xyz+float3(x,y,z)*l.giSpacing.xyz;}
+float4 giStatic(Look l,uint probe,uint texel){return buffers[NonUniformResourceIndex(l.giBuffers.y)].Load<float4>((probe*GI_STATICS+texel)*16);}
+float4 giTexel(uint buffer,uint probe,uint texel){return buffers[NonUniformResourceIndex(buffer)].Load<float4>((probe*GI_IRRADIANCE+texel)*16);}
+float3 giSampleIrradiance(uint buffer,uint probe,float3 direction){
+    float2 uv=octEncode(direction)*6-0.5;int2 p=int2(floor(uv));float2 a=frac(uv);
+    return lerp(lerp(giTexel(buffer,probe,octIndex(p,6)),giTexel(buffer,probe,octIndex(p+int2(1,0),6)),a.x),
+                lerp(giTexel(buffer,probe,octIndex(p+int2(0,1),6)),giTexel(buffer,probe,octIndex(p+1,6)),a.x),a.y).rgb;
+}
+float2 giSampleMoments(Look l,uint probe,float3 direction){
+    float2 uv=octEncode(direction)*8-0.5;int2 p=int2(floor(uv));float2 a=frac(uv);
+    return lerp(lerp(giStatic(l,probe,octIndex(p,8)),giStatic(l,probe,octIndex(p+int2(1,0),8)),a.x),
+                lerp(giStatic(l,probe,octIndex(p+int2(0,1),8)),giStatic(l,probe,octIndex(p+1,8)),a.x),a.y).xy;
+}
+// Weight of the volume at `p`: one inside, fading to zero over the outer half cell.
+float giCoverage(Look l,float3 p){
+    float3 grid=(p-l.giOrigin.xyz)/l.giSpacing.xyz,extent=float3(l.giCounts.xyz)-1;
+    float3 inside=saturate(min(grid+0.5,extent+0.5-grid)*2);return inside.x*inside.y*inside.z;
+}
+// Diffuse irradiance at `position` facing `normal` from `buffer` (DDGI weights:
+// trilinear, backface and Chebyshev visibility against the static moments).
+float3 giIrradiance(Look l,uint buffer,float3 position,float3 normal,float3 bias){
+    float3 biased=position+bias;float3 grid=(biased-l.giOrigin.xyz)/l.giSpacing.xyz;
+    int3 base=clamp(int3(floor(grid)),int3(0),int3(l.giCounts.xyz)-2);float3 alpha=saturate(grid-base);float3 sum=0;float total=0;
+    for(uint k=0;k<8;k++){
+        uint3 d=uint3(k&1,(k>>1)&1,(k>>2)&1);uint3 p=uint3(base)+d;uint id=(p.z*l.giCounts.y+p.y)*l.giCounts.x+p.x;
+        float4 meta=giStatic(l,id,64);if(meta.w<0.5)continue;
+        float3 delta=biased-giProbePosition(l,id)-meta.xyz;float distance=length(delta);float3 dir=delta/max(distance,1e-6);
+        float2 moments=giSampleMoments(l,id,dir);
+        float variance=max(moments.y-moments.x*moments.x,0.0001);float visibility=distance<=moments.x?1:pow(variance/(variance+pow(distance-moments.x,2)),3);
+        float3 trilinear=lerp(1-alpha,alpha,float3(d));float weight=trilinear.x*trilinear.y*trilinear.z*max(0.02,pow(saturate(dot(-dir,normal)*0.5+0.5),2))*visibility;
+        sum+=giSampleIrradiance(buffer,id,normal)*weight;total+=weight;
+    }return total>1e-6?sum/total:float3(0);
+}
+// Surface-side bias: along the normal and towards the viewer, bounded by spacing.
+float3 giBias(Look l,float3 normal,float3 v){return normal*l.giSpacing.w+v*(l.giSpacing.w*0.33);}
+// Irradiance facing `normal` and facing `reflection` from the same probes and
+// weights (the shading pass needs both lobes; this shares visibility work).
+void giLobes(Look l,uint buffer,float3 position,float3 normal,float3 reflection,float3 bias,out float3 diffuse,out float3 specular){
+    float3 biased=position+bias;float3 grid=(biased-l.giOrigin.xyz)/l.giSpacing.xyz;
+    int3 base=clamp(int3(floor(grid)),int3(0),int3(l.giCounts.xyz)-2);float3 alpha=saturate(grid-base);diffuse=0;specular=0;float total=0;
+    for(uint k=0;k<8;k++){
+        uint3 d=uint3(k&1,(k>>1)&1,(k>>2)&1);uint3 p=uint3(base)+d;uint id=(p.z*l.giCounts.y+p.y)*l.giCounts.x+p.x;
+        float4 meta=giStatic(l,id,64);if(meta.w<0.5)continue;
+        float3 delta=biased-giProbePosition(l,id)-meta.xyz;float distance=length(delta);float3 dir=delta/max(distance,1e-6);
+        float2 moments=giSampleMoments(l,id,dir);
+        float variance=max(moments.y-moments.x*moments.x,0.0001);float visibility=distance<=moments.x?1:pow(variance/(variance+pow(distance-moments.x,2)),3);
+        float3 trilinear=lerp(1-alpha,alpha,float3(d));float weight=trilinear.x*trilinear.y*trilinear.z*max(0.02,pow(saturate(dot(-dir,normal)*0.5+0.5),2))*visibility;
+        diffuse+=giSampleIrradiance(buffer,id,normal)*weight;specular+=giSampleIrradiance(buffer,id,reflection)*weight;total+=weight;
+    }
+    if(total>1e-6){diffuse/=total;specular/=total;}
+}

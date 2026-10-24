@@ -1,0 +1,86 @@
+// Raster surface shading shared by deferred lighting and forward transparency.
+// Include after raster.slangh and look.slangh.
+#include "look-gi.slangh"
+uint cascadeIndex(Frame f,float3 world){float d=dot(world-f.camera.xyz,f.forward.xyz);return d<f.splits.x?0:d<f.splits.y?1:d<f.splits.z?2:3;}
+float visibility(Frame f,float3 world,float3 normal) {
+    uint c=cascadeIndex(f,world);float4 p=mul(f.shadows[c],float4(world+normal*0.015,1));float3 q=p.xyz/p.w;
+    float2 uv=float2(q.x*0.5+0.5,0.5-q.y*0.5);
+    if(any(uv<0)||any(uv>1)||q.z<0||q.z>1)return 1;
+    int2 origin=int2(c%2,c/2)*512;int2 at=origin+int2(uv*511);float sum=0;
+    for(int y=-1;y<=1;y++)for(int x=-1;x<=1;x++){
+        int2 sample=clamp(at+int2(x,y),origin,origin+511);
+        float depth=pixel(f.extra.z,sample).x;sum+=(q.z+0.0015>=depth)?1.:0.;
+    }
+    return sum/9;
+}
+float3 fresnel(float cosine,float3 f0){return f0+(1-f0)*pow(1-saturate(cosine),5);}
+float3 brdf(Surface s,float3 v,float3 l) {
+    float3 h=normalize(v+l);float nl=saturate(dot(s.normal,l));float nv=max(dot(s.normal,v),0.001);float nh=saturate(dot(s.normal,h));float vh=saturate(dot(v,h));
+    float a=s.roughness*s.roughness;float a2=a*a;float d=a2/(PI*pow(nh*nh*(a2-1)+1,2));
+    float k=pow(s.roughness+1,2)/8;float g=nv/(nv*(1-k)+k)*nl/(nl*(1-k)+k);
+    float3 F=fresnel(vh,lerp(float3(0.04),s.albedo,s.metal));
+    return ((1-F)*(1-s.metal)*s.albedo/PI+d*g*F/max(4*nv*nl,0.001))*nl;
+}
+// Multi-bounce ambient occlusion (Jimenez et al. 2016): light inter-reflected
+// inside the occluded cavity brightens AO on bright albedo.
+float3 multiBounce(float ao,float3 albedo){
+    float3 a=2.0404*albedo-0.3324,b=-4.7951*albedo+0.6417,c=2.7552*albedo+0.6903;
+    return max(float3(ao),((ao*a+b)*ao+c)*ao);
+}
+// Specular occlusion from ambient occlusion (Lagarde & de Rousiers 2014).
+float specularOcclusion(float nv,float ao,float roughness){
+    return saturate(pow(nv+ao,exp2(-16*roughness*roughness-1))-1+ao);
+}
+// Ambient light: the physical sky's IBL under a sky atmosphere, otherwise the
+// environment map's (32x16 irradiance, five-level 256x640 GGX prefilter strip for
+// roughness 0, .25, .5, .75, 1). Inside the probe volume, probe irradiance replaces
+// the sky's diffuse light and occludes its reflections by the ratio of probe to
+// sky irradiance in the mirror direction; rough reflections use the probes.
+float3 ibl(Frame f,Look l,Surface s,float3 world,float3 v) {
+    uint irradiance=physicalSky(l)?l.sampled1.x:f.lighting.x,prefilter=physicalSky(l)?l.sampled1.y:f.lighting.y;
+    float nv=saturate(dot(s.normal,v));float3 F=fresnel(nv,lerp(float3(0.04),s.albedo,s.metal));
+    float3 reflected=reflect(-v,s.normal);float2 uv=environmentUv(reflected);float level=s.roughness*4;float low=floor(level);float high=min(low+1,4);
+    float3 spec=lerp(envTex(prefilter,float2(uv.x,(uv.y*127+0.5+low*128)/640)).rgb,envTex(prefilter,float2(uv.x,(uv.y*127+0.5+high*128)/640)).rgb,frac(level));
+    float3 ambient=envTex(irradiance,environmentUv(s.normal)).rgb;
+    float coverage=giEnabled(l)?giCoverage(l,world):0;
+    [branch]if(coverage>0){
+        float3 diffuseGi,specularGi;giLobes(l,l.giBuffers.w,world,s.normal,reflected,giBias(l,s.normal,v),diffuseGi,specularGi);
+        float occlusion=saturate(luminance(specularGi)/max(luminance(envTex(irradiance,uv).rgb),1e-4));
+        ambient=lerp(ambient,diffuseGi,coverage);
+        spec=lerp(spec,lerp(spec*occlusion,specularGi/PI,s.roughness),coverage);
+    }
+    float3 diffuse=ambient*s.albedo*(1-s.metal)*(1-F)/PI*multiBounce(s.ao,s.albedo);
+    // Analytic split-sum environment BRDF fit (Lazarov, Epic 2014).
+    float4 r=s.roughness*float4(-1,-0.0275,-0.572,0.022)+float4(1,0.0425,1.04,-0.04);
+    float a004=min(r.x*r.x,exp2(-9.28*nv))*r.x+r.y;float2 ab=float2(-1.04,1.04)*a004+r.zw;
+    return diffuse+spec*(F*ab.x+ab.y)*specularOcclusion(nv,s.ao,s.roughness);
+}
+// Linear HDR radiance leaving `world` towards the camera (before fog and exposure).
+float3 shade(Frame f,Look l,Surface s,float3 world,int2 p) {
+    float3 v=normalize(f.camera.xyz-world);float3 result=s.emissive+ibl(f,l,s,world,v);
+    result+=brdf(s,v,f.sunDirection.xyz)*sunAt(f,l,world)*visibility(f,world,s.normal);
+    uint tilesX=(f.extent.x+15)/16;uint tile=(uint(p.y)/16*tilesX+uint(p.x)/16)*65;
+    uint count=buffers[NonUniformResourceIndex(f.lighting.z)].Load(tile*4);
+    for(uint i=0;i<count;i++) {
+        uint index=buffers[NonUniformResourceIndex(f.lighting.z)].Load((tile+1+i)*4);
+        Light light=buffers[NonUniformResourceIndex(f.lighting.w)].Load<Light>(index*64);
+        float3 delta=light.positionRange.xyz-world;float d2=max(dot(delta,delta),0.01);float d=sqrt(d2);float3 toLight=delta/d;
+        float fade=pow(saturate(1-pow(d/light.positionRange.w,4)),2);float spot=1;
+        if(light.parameters.x>0.5)spot=smoothstep(light.directionOuter.w,light.parameters.y,dot(-toLight,light.directionOuter.xyz));
+        float solidAngle=light.parameters.x>0.5?2*PI*(1-light.directionOuter.w):4*PI;
+        float3 illuminance=light.colorLumens.rgb*(light.colorLumens.w/(solidAngle*d2))*fade*spot;
+        result+=brdf(s,v,toLight)*illuminance;
+    }
+    return result;
+}
+// World-space view ray through pixel centre `p`.
+float3 viewRay(Frame f,float2 p){
+    float2 uv=p/float2(f.extent.xy);float4 far=mul(f.inverseVp,float4(uv.x*2-1,1-uv.y*2,0.00001,1));
+    return normalize(far.xyz/far.w-f.camera.xyz);
+}
+// Background radiance: the physical sky (with sun disk) or the environment map,
+// the latter fogged over the whole froxel range.
+float3 background(Frame f,Look l,float3 d,float2 uv){
+    if(physicalSky(l))return skyRadiance(f,l,d,true);
+    return applyFog(f,l,envTex(f.extra.w,environmentUv(d)).rgb,f.camera.xyz+d*FOG_RANGE,uv);
+}
