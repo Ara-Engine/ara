@@ -213,6 +213,15 @@ measured medians 2.203 → 2.231 ns/call without an armed hook and 2.224 → 2.1
 with one. Sample ranges overlap on this shared machine. The normal movement
 kernel is unchanged.
 
+Repeated process-test diagnostics found correctly received authority state but
+stale owner predictions. No-input-delay mode permits 100 predicted ticks, while
+the default manager retained only 20 rollback ticks. Client startup now aligns
+history retention with the existing prediction budget. A fixed-clock regression
+with 250 ms one-way delay failed before the fix in 1.56 seconds (no checkpoints or
+rollback), then reconciled and replayed successfully in 1.06 seconds. Reconciliation
+uses native authority/history data; no test snapshot repairs or assertions were added
+to the runtime. Timeout reports retain mismatched state/view details for diagnosis.
+
 Serial test execution exposed a collaboration demo startup hang and a missing
 physics probe hash: libtest prefixes child output with its test name. Both child
 helpers now use quiet harness output so their protocols work with one test thread.

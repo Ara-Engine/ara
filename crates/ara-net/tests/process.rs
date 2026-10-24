@@ -263,9 +263,32 @@ fn bot(start: &Start) -> Result<()> {
             }
         }
         if boot.elapsed() > Duration::from_secs(30) {
+            let mut mismatches = Vec::new();
+            if start.directory.join("expected.json").exists() {
+                let expected: Expected = read(start.directory.join("expected.json"))?;
+                for spawn in client.spawns() {
+                    if let Some(motor) = expected.motors.get(&spawn.identity) {
+                        let confirmed = client.state(spawn.id);
+                        let view = client.view(spawn.id);
+                        let inventory = client.component(spawn.id, "Inventory")?;
+                        if confirmed.as_ref() != Some(motor)
+                            || (spawn.owner == Some(player) && view.as_ref() != Some(motor))
+                            || (spawn.owner == Some(player)
+                                && inventory.as_ref().map(|v| &v["items"])
+                                    != Some(&expected.inventory[&spawn.identity]["items"]))
+                        {
+                            mismatches.push(format!(
+                                "{}: expected={motor:?}, confirmed={confirmed:?}, view={view:?}, inventory={inventory:?}",
+                                spawn.identity
+                            ));
+                        }
+                    }
+                }
+            }
             return Err(NetError(format!(
-                "client {} convergence timeout: {status:?}",
-                start.player
+                "client {} convergence timeout: {status:?}; mismatches={mismatches:?}, spawns={}",
+                start.player,
+                client.spawns().len()
             )));
         }
         std::thread::sleep(Duration::from_millis(2));
