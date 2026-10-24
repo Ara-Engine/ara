@@ -14,6 +14,8 @@ mod atlas;
 mod content;
 #[cfg(test)]
 mod foliage_tests;
+/// Compressed, instanced scene preparation shared by runtime presentation paths.
+pub mod native;
 mod packing;
 mod terrain;
 #[cfg(test)]

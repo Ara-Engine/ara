@@ -1482,8 +1482,10 @@ name = "ara-render-fidelity"
 version = "0.0.1-alpha"
 dependencies = [
  "anyhow",
+ "ara-asset-format",
  "ara-gpu",
  "ara-render",
+ "ara-texture-stream",
  "bytemuck",
  "glam 0.30.9",
  "image",
@@ -1645,6 +1647,7 @@ dependencies = [
  "ara-2d",
  "ara-asset",
  "ara-asset-format",
+ "ara-components",
  "ara-doc",
  "ara-foliage",
  "ara-gpu",
@@ -1658,14 +1661,17 @@ dependencies = [
  "ara-schema",
  "ara-sim",
  "ara-terrain",
+ "ara-texture-stream",
  "ara-vfx",
  "ara-vfx-gpu",
  "bevy_ecs",
+ "bytemuck",
  "glam 0.30.9",
  "glam 0.34.1",
  "image",
  "serde",
  "serde_json",
+ "sha2 0.10.9",
  "texture2ddecoder",
 ]
 

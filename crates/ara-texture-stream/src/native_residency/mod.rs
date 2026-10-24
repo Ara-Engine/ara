@@ -1,6 +1,7 @@
 //! Budgeted native BC images. Publication happens at completed frame boundaries.
 use crate::NativeSource;
 use anyhow::{Result, ensure};
+use ara_asset_format::TextureFormat;
 use ara_gpu::{Access, Buffer, Device, Image, Resource, TimelinePoint, vulkan::VulkanDevice};
 use std::{collections::BTreeMap, sync::Arc};
 
@@ -10,6 +11,17 @@ mod plan;
 #[cfg(test)]
 mod tests;
 mod upload;
+
+/// Transfer-function interpretation of compressed material blocks.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub enum NativeView {
+    /// Honor the cooked format; BC7 sRGB decodes before hardware filtering.
+    #[default]
+    Cooked,
+    /// Sample raw UNORM, including BC7 sRGB payloads. Graph color slots decode
+    /// after filtering; graph data slots retain the raw sampled value.
+    Raw,
+}
 
 /// Stable texture identity within one native resident set.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -44,7 +56,7 @@ pub struct NativeBinding {
 /// Payload and refinement measurements; no pixel decoding or atlas memory is hidden.
 #[derive(Debug, Default, Clone, Copy, serde::Serialize)]
 pub struct NativeStats {
-    /// Distinct registered cooked texture payloads.
+    /// Distinct registered cooked payload/view identities.
     pub textures: usize,
     /// Published native compressed image payload.
     pub resident_bytes: u64,
@@ -73,6 +85,7 @@ struct Resident {
 
 struct Entry {
     source: Arc<NativeSource>,
+    srgb: bool,
     desired: u32,
     priority: f32,
     resident: Option<Resident>,
@@ -89,7 +102,7 @@ struct Table {
 pub struct NativeResidency {
     config: NativeConfig,
     entries: Vec<Entry>,
-    keys: BTreeMap<[u8; 32], NativeTextureId>,
+    keys: BTreeMap<([u8; 32], bool), NativeTextureId>,
     plan: Vec<u32>,
     rows: Vec<Row>,
     dirty: bool,
@@ -99,6 +112,12 @@ pub struct NativeResidency {
 }
 
 impl NativeResidency {
+    /// Address-independent cooked payload/view identities for capture provenance.
+    /// Hash these only when publishing content, never in per-frame presentation.
+    pub fn content_keys(&self) -> impl Iterator<Item = ([u8; 32], bool)> + '_ {
+        self.keys.keys().copied()
+    }
+
     /// Creates a resident set without allocating GPU resources.
     pub fn new(config: NativeConfig) -> Result<Self> {
         ensure!(
@@ -126,6 +145,20 @@ impl NativeResidency {
         key: [u8; 32],
         source: Arc<NativeSource>,
     ) -> Result<NativeTextureId> {
+        self.register_view(key, source, NativeView::Cooked)
+    }
+
+    /// Registers an explicit sampled interpretation without decoding/re-encoding
+    /// blocks. Dedup includes the effective view format so graph UNORM and glTF
+    /// sRGB cannot share an incompatible image interpretation.
+    pub fn register_view(
+        &mut self,
+        key: [u8; 32],
+        source: Arc<NativeSource>,
+        view: NativeView,
+    ) -> Result<NativeTextureId> {
+        let srgb = view == NativeView::Cooked && source.format() == TextureFormat::Bc7Srgb;
+        let key = (key, srgb);
         if let Some(&id) = self.keys.get(&key) {
             let current = &self.entries[id.0 as usize].source;
             ensure!(
@@ -139,6 +172,7 @@ impl NativeResidency {
         let id = NativeTextureId(u32::try_from(self.entries.len())?);
         self.entries.push(Entry {
             source,
+            srgb,
             desired: 0,
             priority: 1.0,
             resident: None,

@@ -14,8 +14,8 @@ BIND(2) SamplerState samplers[3] : register(s0,space0);
 void nativeProbe(uint3 id : SV_DispatchThreadID) {
     if(id.x >= root.count) return;
     uint textureId = root.first + id.x;
-    float4 value = root.normal != 0
+    float4 value = root.normal == 1
         ? float4(ntNormal(root.table, textureId, float2(0.5), asfloat(root.lod), asfloat(root.scale)), 1.0)
-        : ntSampleLevel(root.table, textureId, float2(0.5), asfloat(root.lod));
+        : ntSampleColorLevel(root.table, textureId, float2(0.5), asfloat(root.lod), root.normal == 2);
     buffers[NonUniformResourceIndex(root.output)].Store4(id.x * 16, asuint(value));
 }

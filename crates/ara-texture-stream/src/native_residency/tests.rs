@@ -3,14 +3,27 @@ use ara_asset_format::{TextureFormat, write_ktx2};
 use ara_gpu::{Barrier, Queue, commands::Command, vk};
 use std::time::Instant;
 
+mod views;
+
+enum Probe {
+    Color,
+    Normal(f32),
+    DecodeColor,
+}
+
 fn sample(
     gpu: &mut VulkanDevice,
     set: &mut NativeResidency,
     pipeline: ara_gpu::Pipeline,
     range: std::ops::Range<u32>,
     lod: f32,
-    normal_scale: Option<f32>,
+    probe: Probe,
 ) -> Vec<f32> {
+    let (mode, scale) = match probe {
+        Probe::Color => (0, 1.0f32),
+        Probe::Normal(scale) => (1, scale),
+        Probe::DecodeColor => (2, 1.0),
+    };
     let count = range.end - range.start;
     let output = gpu
         .create_buffer(
@@ -35,8 +48,8 @@ fn sample(
             count,
             lod.to_bits(),
             range.start,
-            u32::from(normal_scale.is_some()),
-            normal_scale.unwrap_or(1.0).to_bits(),
+            mode,
+            scale.to_bits(),
             0,
         ],
     }));
@@ -202,7 +215,7 @@ fn native_gpu_residency_exceeds_128_and_refines_without_losing_material_maps() {
             many.entries[index].source.stage(0).unwrap()
         );
     }
-    let pixels = sample(&mut gpu, &mut many, pipeline, 0..300, 0.0, None);
+    let pixels = sample(&mut gpu, &mut many, pipeline, 0..300, 0.0, Probe::Color);
     for (index, pixel) in pixels.as_chunks::<4>().0.iter().enumerate() {
         assert!(
             (pixel[0] - f32::from(index as u8) / 255.0).abs() < 1e-5,
@@ -314,13 +327,20 @@ fn native_gpu_residency_exceeds_128_and_refines_without_losing_material_maps() {
         .unwrap();
     levels.initialize(&mut gpu).unwrap();
     for (lod, expected) in [(0.0, 64.0), (1.5, 96.0), (20.0, 255.0)] {
-        let value = sample(&mut gpu, &mut levels, pipeline, 0..1, lod, None)[0];
+        let value = sample(&mut gpu, &mut levels, pipeline, 0..1, lod, Probe::Color)[0];
         assert!(
             (value - expected / 255.0).abs() < 1e-5,
             "resident mip LOD {lod}: {value}"
         );
     }
-    let actual = sample(&mut gpu, &mut levels, pipeline, 1..2, 0.0, Some(2.0));
+    let actual = sample(
+        &mut gpu,
+        &mut levels,
+        pipeline,
+        1..2,
+        0.0,
+        Probe::Normal(2.0),
+    );
     let xy = [192.0f32 / 255.0 * 2.0 - 1.0, 128.0 / 255.0 * 2.0 - 1.0];
     let expected = [
         xy[0] * 2.0,

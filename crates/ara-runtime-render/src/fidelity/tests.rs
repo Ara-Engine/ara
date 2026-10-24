@@ -18,6 +18,7 @@ fn draw(geometry: Geometry) -> Draw {
         metallic: 0.0,
         emissive: [2.0, 3.0, 4.0],
         emissive_factor: None,
+        material: None,
         skin: None,
     }
 }

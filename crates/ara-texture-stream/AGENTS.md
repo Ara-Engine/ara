@@ -19,6 +19,9 @@ NativeBinding rows are 32 bytes: slot, first mip, source width/height, encoding
 (0 BC7, 1 BC4, 2 BC5 XY), resident levels, two reserved words.
 Use native_shader_source() for offline consumers; it corrects resident LODs,
 uses hardware sRGB/trilinear filtering and reconstructs BC5 Z before normalScale.
+NativeView::Raw retains UNORM sampling for native material graphs; their color
+slots use ntSampleColorLevel for exact sRGB decoding after filtering. View policy
+participates in residency identity; raw and hardware-sRGB interpretations differ.
 The existing RGBA virtual page API remains separate.
 Preparation/decoding belongs on the extraction worker. Completed frame boundaries
 own feedback consumption, LRU planning and uploads; never wait in record().

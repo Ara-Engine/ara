@@ -26,6 +26,11 @@ renderer and per-draw upload state; no simulation, window or process code.
   `fidelity::vfx::Effects` composites cooked particles into FidelityView HDR before post.
   The current upload ABI still needs world-space/material merging and atlas packing;
   these are transitional until the descriptor and instancing migration lands.
+- `fidelity::native::{Content::resolve, prepare}` resolves real Header.materials
+  and model/prefab foliage at a control boundary, then prepares local shared geometry,
+  six independent UV slots and native BC residency. It consumes existing runtime
+  scatter/selector/material semantics; it does not scatter again, decode pixels or atlas.
+  Prepared owns the CPU scene and its resident set for FidelityView::new_native.
 - `geometry::{shape, transform}`: procedural shapes (box, sphere, capsule, plane;
   centred, planes at y = 0) and world-space transform with 8-influence linear-blend
   CPU skinning. `sky(env)`: 64×32 gradient environment. `decode_texture`: BC7 KTX2

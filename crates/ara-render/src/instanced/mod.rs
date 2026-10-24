@@ -2,10 +2,12 @@
 //! Gameplay state remains in ECS; these are derived content and motion snapshots.
 use glam::{Mat4, Vec3};
 
+mod geometry_gpu;
 mod material;
 #[cfg(test)]
 mod tests;
 mod validate;
+pub use geometry_gpu::{GeometryGpu, GeometryUpload, LodRange};
 pub use material::{Material, MaterialExtras, TextureSlot, TextureTransform};
 
 /// Absent native texture or unused material index. Sampling supplies neutral
@@ -42,8 +44,10 @@ pub struct Lod {
 
 /// Unique geometry uploaded once, independently of its number of instances.
 pub struct Geometry {
-    /// Source identity covering rest positions, attributes, selection pivots and
-    /// LOD topology. Compute when content changes; never hash per frame.
+    /// Source identity covering rest positions, attributes and LOD topology.
+    /// Include a selection pivot only if baked into these vertices; ordinary
+    /// source selections share geometry and retain their pivot in Instance.world.
+    /// Compute when content changes; never hash per frame.
     pub key: [u8; 32],
     /// Model-space source attributes; skinning updates only a deforming geometry.
     pub vertices: Vec<Vertex>,

@@ -10,7 +10,7 @@ mod types;
 pub use gpu::Residency;
 pub use native::{NativeMip, NativeSource};
 pub use native_residency::{
-    NativeBinding, NativeConfig, NativeResidency, NativeStats, NativeTextureId,
+    NativeBinding, NativeConfig, NativeResidency, NativeStats, NativeTextureId, NativeView,
 };
 pub use pool::{Pool, Upload};
 pub use source::{Catalog, Source};

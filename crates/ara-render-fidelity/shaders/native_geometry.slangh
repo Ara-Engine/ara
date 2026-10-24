@@ -1,0 +1,19 @@
+// Shared geometry rows are 32B, source vertices 64B, instance records 192B.
+bool nativeScene(Frame f){return (buffers[f.scene.x].Load(0)&0x80000000)!=0;}
+uint3 nativeIndices(Frame f,uint geometry,uint primitive){
+    uint table=buffers[f.scene.x].Load(32);uint4 row=buffers[table].Load4(geometry*32);
+    return buffers[NonUniformResourceIndex(row.z)].Load3(row.w+primitive*12);
+}
+Vertex nativeVertex(Frame f,uint instance,uint index,bool previous){
+    uint4 meta=buffers[f.scene.x].Load4(instance);
+    uint table=buffers[f.scene.x].Load(32);
+    uint4 row=buffers[table].Load4((previous?meta.w:meta.x)*32+(previous?16:0));
+    Vertex v=buffers[NonUniformResourceIndex(row.x)].Load<Vertex>(row.y+index*64);
+    float4x4 world=buffers[f.scene.x].Load<float4x4>(instance+(previous?80:16));
+    v.position=mul(world,float4(v.position,1)).xyz;
+    float3 n=v.normal;
+    v.normal=normalize(float3(dot(buffers[f.scene.x].Load<float4>(instance+144).xyz,n),dot(buffers[f.scene.x].Load<float4>(instance+160).xyz,n),dot(buffers[f.scene.x].Load<float4>(instance+176).xyz,n)));
+    float3 t=mul(world,float4(v.tangent.xyz,0)).xyz;
+    t-=v.normal*dot(t,v.normal);v.tangent=float4(normalize(t),v.tangent.w*asfloat(meta.z));
+    return v;
+}

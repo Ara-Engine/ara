@@ -137,7 +137,14 @@ impl NativeResidency {
                 TextureFormat::Bc4 => (vk::Format::BC4_UNORM_BLOCK, 1),
                 TextureFormat::Bc5 => (vk::Format::BC5_UNORM_BLOCK, 2),
                 TextureFormat::Bc7 => (vk::Format::BC7_UNORM_BLOCK, 0),
-                TextureFormat::Bc7Srgb => (vk::Format::BC7_SRGB_BLOCK, 0),
+                TextureFormat::Bc7Srgb => (
+                    if self.entries[index].srgb {
+                        vk::Format::BC7_SRGB_BLOCK
+                    } else {
+                        vk::Format::BC7_UNORM_BLOCK
+                    },
+                    0,
+                ),
                 _ => anyhow::bail!("unsupported native texture encoding"),
             };
             let image = gpu.create_mip_image(
