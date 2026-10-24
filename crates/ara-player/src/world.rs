@@ -118,10 +118,6 @@ impl World {
         source: Arc<dyn ara_runtime::assets::AssetSource>,
         windowed: bool,
     ) -> Result<(Self, f64)> {
-        anyhow::ensure!(
-            scene.scripts.is_none(),
-            "exported C# modules require a shipping script host"
-        );
         Self::build_with_source(
             scene,
             ara_play::Role::Local,
@@ -140,9 +136,16 @@ impl World {
         prewarmed: Option<(ScriptPlugin, std::sync::mpsc::Receiver<ScriptEvent>)>,
         packed: Option<Arc<dyn ara_runtime::assets::AssetSource>>,
     ) -> Result<(Self, f64)> {
+        ara_gpu::cpu_scope!("Player.world_build");
         let started = Instant::now();
-        let schema = ara_runtime::schema(&scene.types)?;
-        let (mut workspace, id) = scene.workspace().map_err(|e| anyhow!(e))?;
+        let schema = {
+            ara_gpu::cpu_scope!("Player.schema");
+            ara_runtime::schema(&scene.types)?
+        };
+        let (mut workspace, id) = {
+            ara_gpu::cpu_scope!("Player.scene_workspace");
+            scene.workspace().map_err(|e| anyhow!(e))?
+        };
         if let Some(net) = net {
             ara_runtime_net::avatars(&mut workspace, id.as_str(), net.players)
                 .map_err(|e| anyhow!(e))?;
@@ -165,10 +168,19 @@ impl World {
                 modules: s.modules.iter().map(PathBuf::from).collect(),
             };
             let (plugin, events) = match prewarmed {
-                Some((plugin, events)) if plugin.matches(&settings) => (plugin, events),
+                Some((plugin, events))
+                    if s.host == ara_play::ScriptHost::Development && plugin.matches(&settings) =>
+                {
+                    (plugin, events)
+                }
                 other => {
                     drop(other);
-                    ScriptPlugin::new(settings.clone())
+                    match &s.host {
+                        ara_play::ScriptHost::Development => ScriptPlugin::new(settings.clone()),
+                        ara_play::ScriptHost::NativeAot { manifest } => {
+                            ScriptPlugin::shipping(manifest)
+                        }
+                    }
                 }
             };
             plugins.push(Box::new(plugin));
@@ -200,22 +212,25 @@ impl World {
             Some(source) => Box::new(crate::packed::SharedAssets(Arc::clone(source))),
             None => Box::new(assets(&cache, &pins)?),
         };
-        let runtime = Runtime::new(
-            schema,
-            workspace,
-            id.clone(),
-            source,
-            RuntimeConfig {
-                tick: TickConfig {
-                    hz: scene.tick_hz,
+        let runtime = {
+            ara_gpu::cpu_scope!("Player.runtime_new");
+            Runtime::new(
+                schema,
+                workspace,
+                id.clone(),
+                source,
+                RuntimeConfig {
+                    tick: TickConfig {
+                        hz: scene.tick_hz,
+                        ..Default::default()
+                    },
+                    seed: scene.seed,
+                    nav_cache: scene.nav_cache.as_ref().map(PathBuf::from),
                     ..Default::default()
                 },
-                seed: scene.seed,
-                nav_cache: scene.nav_cache.as_ref().map(PathBuf::from),
-                ..Default::default()
-            },
-            plugins,
-        )?;
+                plugins,
+            )?
+        };
         let runtime = Play::new(runtime, role, net)?;
         for error in runtime.asset_errors() {
             eprintln!("{error}");
@@ -771,6 +786,7 @@ pub fn update_audio(
     listener: &ara_audio::AudioListener,
     inputs: &AudioInputs,
 ) -> Result<()> {
+    ara_gpu::cpu_scope!("Player.audio.update");
     audio.presenter.stream_cells(
         &inputs.resident,
         inputs.assets.as_ref().unwrap_or(&audio.assets),

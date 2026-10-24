@@ -62,6 +62,7 @@ impl Windowed {
         cache: &Path,
         quality: ara_runtime_render::QualityChoice,
     ) -> Result<(Self, Presenter)> {
+        ara_gpu::cpu_scope!("Player.device_and_warm_pipelines");
         let window = Window::new(&format!("Ara | {name}"), size)?;
         let mut presenter = Presenter::new(window.size()?, window.extensions()?, cache);
         presenter.set_quality(quality);
@@ -124,6 +125,7 @@ impl Windowed {
         frame: &RenderFrame,
         resolve: impl FnOnce() -> Result<ara_runtime_render::fidelity::native::Content>,
     ) -> Result<()> {
+        ara_gpu::cpu_scope!("Player.window_present");
         let started = Instant::now();
         let size = self.window.size()?;
         if size.contains(&0) {

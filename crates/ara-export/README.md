@@ -1,5 +1,34 @@
 # Ara export integration
 
+## Gameplay scripts in runtime exports
+
+`playerTemplate: "runtime"` builds every gameplay `ara.module.toml` module into
+one NativeAOT shared library using the real generated `ara_script_init` ABI
+(A12/A13), rather than the S7 conformance ABI. References are linked in dependency
+order; editor modules are excluded, and missing dependencies/cycles are errors.
+The export job generates isolated projects with the SDK generator and gameplay
+analyzers. It does not modify the game or require game-owned `.csproj` files.
+Runtime presets may omit `scriptProject`; it remains required by conformance presets.
+`ARA_DOTNET_SDK` selects the SDK's `dotnet/` sources, or
+`ARA_DOTNET_ARTIFACTS` its prebuilt `bin/` tools; these are export-time inputs only.
+
+The player folder contains `game/<assembly>.dll` (or `.so`) and
+`game/scripts.json`: format, ABI version, engine layout hash and linked modules.
+The packed `PlayScene` uses `ScriptScene::shipping("game/scripts.json")`; the
+standalone entry resolves this path against the player folder. The runtime checks
+metadata before loading and the native initializer independently checks compiled
+bindings. `ARA0921` means rebuild scripts and player with the same Ara SDK and
+export again; `ARA0920` reports missing images or an inconsistent module inventory.
+Generation, runtime binding and export hashes use `EngineBindings::builtin()`
+(`engine_bindings()` forwards to it);
+adding an authoring schema alone does not change the C# storage ABI.
+Shipping loads no author paths, CoreCLR installation, Roslyn, watcher or hot reload.
+Gameplay state remains ECS-owned and uses the usual snapshots and restore path.
+
+This runtime lane uses NativeAOT, as required by A12. The existing optional
+ReadyToRun and S7 fixture lanes remain available for conformance templates;
+ReadyToRun is diagnosed for runtime gameplay exports until its host is integrated.
+
 ## Distribution v2
 
 Export writes a plain `build/` folder, `distribution.json`, `report.json`, generic
@@ -358,6 +387,14 @@ $env:ARA_EXPORT_PRESETS = (Resolve-Path target/export-presets/release).Path
 $env:ARA_EXPORT_ARTIFACTS = Join-Path (Get-Location) 'target/export-validation'
 cargo test -p ara-export --test end_to_end -- --ignored --nocapture
 cargo test -p ara-export-player --features dev-bridge --test bridge -- --ignored --nocapture
+
+# Actual packed game with a NativeAOT behaviour, relocation and stale ABI rejection.
+# Keep the matching player/PDB pair if later builds overwrite target/debug outputs.
+cargo rustc -p ara-player --bin ara-player -- -C debuginfo=line-tables-only -C strip=none
+cargo build -p ara-import-worker
+$env:ARA_SHIPPING_E2E_PLAYER = (Resolve-Path target/debug/ara-player.exe).Path
+$env:ARA_SHIPPING_E2E_PDB = (Resolve-Path target/debug/ara_player.pdb).Path
+cargo test -p ara-export --test runtime_csharp -- --ignored --nocapture
 ```
 
 Use a new `ARA_EXPORT_ARTIFACTS` directory for each end-to-end run. This keeps

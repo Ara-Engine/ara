@@ -18,6 +18,26 @@ pub fn package_scene_with_progress(
     worker: &Path,
     report: impl FnMut(crate::assets::CookProgress) -> Result<(), String>,
 ) -> Result<PlayScene, String> {
+    package(root, worker, None, report)
+}
+
+/// Packages an export with its explicit precompiled host selection. Unlike Play,
+/// this never discovers an author-machine JIT host or compiler server.
+pub fn package_scene_for_export(
+    root: &Path,
+    worker: &Path,
+    scripts: Option<ara_play::ScriptScene>,
+    report: impl FnMut(crate::assets::CookProgress) -> Result<(), String>,
+) -> Result<PlayScene, String> {
+    package(root, worker, Some(scripts), report)
+}
+
+fn package(
+    root: &Path,
+    worker: &Path,
+    scripts: Option<Option<ara_play::ScriptScene>>,
+    report: impl FnMut(crate::assets::CookProgress) -> Result<(), String>,
+) -> Result<PlayScene, String> {
     let stall = std::env::var("ARA_EXPORT_COOK_STALL_SECONDS")
         .map(|value| {
             value
@@ -67,14 +87,18 @@ pub fn package_scene_with_progress(
     }
     let mut types = Vec::new();
     crate::types_files(root, root, &mut types);
-    let service = PlayService::new(root, PlayConfig::for_project(root));
-    let scripts = service.script_scene().map_err(|diagnostics| {
-        diagnostics
-            .iter()
-            .map(ToString::to_string)
-            .collect::<Vec<_>>()
-            .join("\n")
-    })?;
+    let scripts = if let Some(scripts) = scripts {
+        scripts
+    } else {
+        let service = PlayService::new(root, PlayConfig::for_project(root));
+        service.script_scene().map_err(|diagnostics| {
+            diagnostics
+                .iter()
+                .map(ToString::to_string)
+                .collect::<Vec<_>>()
+                .join("\n")
+        })?
+    };
     Ok(PlayScene {
         format: 1,
         scene,

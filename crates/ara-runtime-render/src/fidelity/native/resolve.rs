@@ -25,6 +25,7 @@ impl Content {
         library: &Library,
         source: &dyn AssetSource,
     ) -> Result<Self> {
+        ara_gpu::cpu_scope!("Native.resolve_content");
         let mut content = Self::default();
         let Some(terrain) = &frame.terrain else {
             return Ok(content);

@@ -174,6 +174,7 @@ impl Present {
     }
     /// Acquire the next image; OUT_OF_DATE is returned for caller recreation.
     fn acquire(&self) -> Result<u32> {
+        ara_gpu::cpu_scope!("Platform.acquire");
         // SAFETY: The prior frame timeline has completed, so acquire is reusable.
         unsafe {
             Ok(self
@@ -342,6 +343,7 @@ impl Present {
         size: [u32; 2],
         encoding: OutputMode,
     ) -> Result<()> {
+        ara_gpu::cpu_scope!("Platform.display");
         ensure!(
             encoding == self.output.mode,
             "Presentation/output encoding mismatch"
@@ -379,6 +381,7 @@ impl Present {
         let result = self.present(gpu, index);
         // SAFETY: Waiting includes the blit/present queue operations before command reuse/free.
         unsafe {
+            ara_gpu::cpu_scope!("Platform.present_queue_idle");
             gpu.device.queue_wait_idle(gpu.graphics)?;
             gpu.device.free_command_buffers(gpu.graphics_pool, &[cmd]);
         }

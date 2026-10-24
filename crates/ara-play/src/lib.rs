@@ -227,12 +227,50 @@ pub enum Event {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ScriptScene {
+    /// Development JIT by default; exports select a linked NativeAOT image.
+    #[serde(default)]
+    pub host: ScriptHost,
     /// `Ara.Host` JIT build output directory.
     pub host_dir: String,
     /// `Ara.CompileServer.dll` (hot reload); absent loads prebuilt assemblies.
     pub compile_server: Option<String>,
     /// Absolute module folders (each with `ara.module.toml`).
     pub modules: Vec<String>,
+}
+
+/// Script execution policy carried by a scene snapshot.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "mode", rename_all = "camelCase")]
+pub enum ScriptHost {
+    /// Author-machine compilation and hot reload for editor/Play.
+    #[default]
+    Development,
+    /// Precompiled gameplay modules; no development loader or source folders.
+    NativeAot {
+        /// Manifest path relative to the exported player folder.
+        manifest: String,
+    },
+}
+
+impl ScriptScene {
+    /// A portable exported script host without author paths or source modules.
+    pub fn shipping(manifest: impl Into<String>) -> Self {
+        Self {
+            host: ScriptHost::NativeAot {
+                manifest: manifest.into(),
+            },
+            host_dir: String::new(),
+            compile_server: None,
+            modules: Vec::new(),
+        }
+    }
+
+    /// Resolves shipping metadata against the standalone export folder.
+    pub fn resolve_shipping(&mut self, root: &std::path::Path) {
+        if let ScriptHost::NativeAot { manifest } = &mut self.host {
+            *manifest = root.join(&*manifest).to_string_lossy().into_owned();
+        }
+    }
 }
 
 /// `play.start` result.
@@ -751,4 +789,28 @@ pub fn unhex(text: &str) -> Result<[u8; 32], String> {
         *slot = u8::from_str_radix(&text[i * 2..i * 2 + 2], 16).map_err(|e| e.to_string())?;
     }
     Ok(out)
+}
+
+#[cfg(test)]
+mod script_tests {
+    use super::*;
+
+    #[test]
+    fn old_script_scenes_keep_development_and_shipping_has_no_author_paths() {
+        let old =
+            serde_json::json!({"hostDir":"dev/host","compileServer":null,"modules":["dev/game"]});
+        let development: ScriptScene = serde_json::from_value(old).expect("legacy script scene");
+        assert_eq!(development.host, ScriptHost::Development);
+        let shipping = ScriptScene::shipping("game/scripts.json");
+        assert!(
+            shipping.host_dir.is_empty()
+                && shipping.modules.is_empty()
+                && shipping.compile_server.is_none()
+        );
+        let mut encoded = Vec::new();
+        ciborium::ser::into_writer(&shipping, &mut encoded).expect("encode shipping host");
+        let decoded: ScriptScene =
+            ciborium::de::from_reader(encoded.as_slice()).expect("decode shipping host");
+        assert_eq!(decoded, shipping);
+    }
 }

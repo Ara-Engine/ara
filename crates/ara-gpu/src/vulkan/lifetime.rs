@@ -58,6 +58,7 @@ impl Device for VulkanDevice {
         }
     }
     fn wait(&self, point: TimelinePoint) -> Result<()> {
+        crate::cpu_scope!("GPU.timeline_wait");
         if point.value > self.submitted[point.queue.index()] {
             return Err(GpuError::Contract(
                 "Cannot wait on an unsubmitted timeline point".into(),

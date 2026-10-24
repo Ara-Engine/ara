@@ -83,6 +83,10 @@ and layout hashes are checked separately before pipeline creation.
 
 ## Verification
 
+Optional `tracy` enables literal `cpu_scope!` zones for submission, recording and
+timeline waits. The executable starts the client (`ara-player --features tracy`);
+without a running client library zones do nothing. Default builds erase them.
+
 Set `CARGO_BUILD_JOBS=4`. Use `../ara-render/run.ps1 -Mode Check` for all gates,
 or `cargo check -p ara-gpu`, `cargo test -p ara-gpu`,
 `cargo clippy -p ara-gpu --all-targets -- -D warnings`,

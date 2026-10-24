@@ -192,6 +192,10 @@ impl Destination<'_> {
             for (group, heading) in [
                 ("cpu", "CPU phases / frame time (ms), FPS"),
                 ("gpu_passes", "GPU timestamps per pass (ms)"),
+                (
+                    "gpu_other",
+                    "GPU frame accounting (ms, bytes, pending textures)",
+                ),
             ] {
                 println!("{heading}");
                 println!(
@@ -219,6 +223,9 @@ impl Destination<'_> {
                         );
                     }
                 }
+            }
+            if let Some(coverage) = report.player.get("gpu_coverage") {
+                println!("GPU coverage: {coverage}");
             }
             println!("Startup (ms): {}", report.player["startup"]);
             if let Some(error) = report.player["shaders"]["last_error"].as_str() {
@@ -252,13 +259,16 @@ mod tests {
         assert_eq!(diff["cpu"].percent, None);
         let mut metrics = BTreeMap::new();
         numbers(
-            &serde_json::json!({"passes":{"ReSTIR.Trace":{"p50":3.}},"samples":[1,2],"missing":null}),
+            &serde_json::json!({"passes":{"ReSTIR.Trace":{"p50":3.}},"gpu_other":{"texture_upload_ms":{"p50":2.5},"landscape_ms":null},"samples":[1,2],"missing":null}),
             "",
             &mut metrics,
         );
         assert_eq!(
             metrics,
-            BTreeMap::from([("passes.ReSTIR.Trace.p50".into(), 3.)])
+            BTreeMap::from([
+                ("passes.ReSTIR.Trace.p50".into(), 3.),
+                ("gpu_other.texture_upload_ms.p50".into(), 2.5),
+            ])
         );
     }
 }

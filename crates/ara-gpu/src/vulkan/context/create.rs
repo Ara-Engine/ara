@@ -5,6 +5,7 @@ use ash::vk::TaggedStructure;
 impl Gpu {
     /// Enables synchronization validation explicitly; failure to find it is fatal.
     pub fn new(window_extensions: &[std::ffi::CString]) -> Result<Self> {
+        crate::cpu_scope!("GPU.device_create");
         let mut validation = Box::<Validation>::default();
         // SAFETY: All create-info slices live through their calls; the entry,
         // instance, device and callback userdata are retained by Gpu.

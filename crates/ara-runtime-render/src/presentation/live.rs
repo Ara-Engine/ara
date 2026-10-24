@@ -2,13 +2,17 @@
 use super::*;
 
 impl Live {
-    pub(super) fn render(&mut self, gpu: &mut VulkanDevice, frame: &RenderFrame) -> Result<f64> {
+    pub(super) fn render(
+        &mut self,
+        gpu: &mut VulkanDevice,
+        frame: &RenderFrame,
+    ) -> Result<GpuFrameCosts> {
         let look = FrameEnvironment::resolve(&frame.look, frame.environment.exposure);
         if self.look != look || self.tick.is_none() {
             self.view.set_environment(&look)?;
             self.look = look;
         }
-        let uploaded = self.view.refine_native_textures(gpu)?.upload_gpu_ms;
+        let textures = self.view.refine_native_textures(gpu)?;
         let camera = camera(frame)?;
         self.temporal = self.temporal.wrapping_add(1);
         // Particle frames get their bloom/post/upscale from the composite below.
@@ -43,12 +47,24 @@ impl Live {
                 .composite_ticks(gpu, &mut self.view, &camera, self.temporal, ticks)?;
         }
         self.tick = Some(frame.tick);
-        Ok(uploaded
-            + if self.effects.is_empty() {
+        Ok(GpuFrameCosts {
+            texture_upload_ms: textures.upload_gpu_ms,
+            texture_uploaded_bytes: textures.uploaded_bytes,
+            texture_pending: textures.pending_textures,
+            texture_resident_bytes: textures.resident_bytes,
+            fidelity_ms: self
+                .view
+                .timings()
+                .iter()
+                .map(|pass| pass.milliseconds)
+                .sum(),
+            effects_ms: if self.effects.is_empty() {
                 0.
             } else {
                 self.effects.gpu_ms()
-            })
+            },
+            ..Default::default()
+        })
     }
     pub(super) fn destroy(self, gpu: &mut VulkanDevice) -> Result<()> {
         self.effects.destroy(gpu)?;
