@@ -17,21 +17,21 @@ ara-diag = { path = "../ara-diag" }
 ara-json = { path = "../ara-json" }
 kira = { version = "0.12.5", default-features = false }
 sdl3-sys = { package = "ara-sdl3-src", path = "../ara-sdl3-src" }
-libloading = "0.9"
+libloading = { workspace = true }
 symphonia = { version = "0.5.5", default-features = false, features = ["wav", "pcm", "adpcm", "flac", "vorbis", "ogg"] }
 ara-opus-sys = { path = "../ara-opus-sys" }
 ogg = "0.9"
-rtrb = "0.4"
+rtrb = { workspace = true }
 ebur128 = "0.1"
 rustfft = "6"
-serde = { workspace = true }
-serde_json = { workspace = true }
-thiserror = "2"
-blake3 = "1"
-bevy_ecs = { version = "0.20", default-features = false, features = ["std"], optional = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true, features = ["preserve_order", "float_roundtrip"] }
+thiserror = { workspace = true }
+blake3 = { workspace = true, default-features = true }
+bevy_ecs = { workspace = true, features = ["std"], optional = true }
 
 [target.'cfg(windows)'.dependencies]
-windows = { version = "0.62.2", features = ["Win32_Media_Audio", "Win32_System_Com", "Win32_Foundation", "Win32_System_Com_StructuredStorage", "Win32_System_Variant", "Win32_System_Threading"] }
+windows = { workspace = true, features = ["Win32_Media_Audio", "Win32_System_Com", "Win32_Foundation", "Win32_System_Com_StructuredStorage", "Win32_System_Variant", "Win32_System_Threading"] }
 
 [lints]
 workspace = true

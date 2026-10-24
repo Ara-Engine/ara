@@ -9,14 +9,13 @@ use ara_asset::{CacheBackend, Digest, FileCache};
 use ara_play_host::assets::Assets;
 use std::{
     collections::BTreeSet,
-    path::PathBuf,
     time::{Duration, Instant},
 };
 
 #[test]
 fn first_pins_are_persisted_final_generations() {
     let dir = support::demo_copy("pins");
-    let worker = support::import_worker(&PathBuf::from(env!("CARGO_BIN_EXE_ara-player")));
+    let worker = support::import_worker();
     let mut assets = Assets::new(&dir, &worker).unwrap();
     let wanted = BTreeSet::from(["as_fox".to_owned()]);
     let pins = assets.pins(&wanted, Duration::from_secs(180)).unwrap();

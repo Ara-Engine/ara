@@ -116,6 +116,7 @@ pub fn engine() -> (SchemaDb, EngineBindings) {
     let mut db = SchemaDb::new();
     ara_components::register(&mut db);
     let bindings = bind_component!(EngineBindings::new(), EcsTransform as "Transform" { position, rotation, scale });
+    assert_eq!(bindings.names(), EngineBindings::builtin().names());
     (db, bindings)
 }
 

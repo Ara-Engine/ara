@@ -50,7 +50,7 @@ renderer-neutral presentation extraction. No GPU, window or process code (see
   Optional `AssetSource::digest` reads immutable metadata without payload I/O;
   `Models::load` reuses an unchanged decoded generation. New prefab references
   prepare their reachable models at the live-edit control boundary before adoption.
-- Missing/broken model generations produce `asset_errors()` (`ARA7303`) and magenta
+- Missing/broken model generations produce `asset_errors()` (`ARA7310`) and magenta
   shape placeholders. Failed IDs remain eligible for a later hot-reload recovery.
 - `model::Model` decodes a glTF import generation (FORMAT.md v1); `skin::Skin` turns
   the cooked skeleton/clips into ara-anim data (parent-first reorder, `joint_map`).

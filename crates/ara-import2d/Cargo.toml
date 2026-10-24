@@ -10,9 +10,9 @@ publish.workspace = true
 ara-2d = { path = "../ara-2d" }
 ara-asset = { path = "../ara-asset" }
 ara-schema = { path = "../ara-schema" }
-serde.workspace = true
-serde_json.workspace = true
-image = { version = "0.25", default-features = false, features = ["png"] }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true, features = ["preserve_order", "float_roundtrip"] }
+image = { workspace = true, features = ["png"] }
 
 [lints]
 workspace = true

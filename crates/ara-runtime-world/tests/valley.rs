@@ -9,6 +9,7 @@
 //! under `ara-player/demo`. The other tests play the level in-process: streaming and
 //! grounding across cells, streamed navigation, the guard's brain, determinism, exact
 //! checkpoints and replay. `ara-player`'s `valley` test plays it networked over MCP.
+extern crate glam34 as glam;
 use ara_asset::{CachedImport, Cancellation, ImportContext, ImportInput, TargetPlatform};
 use ara_cmd::{Batch, Registry, Session as CmdSession};
 use ara_doc::{AssetId, Document, Record, RecordId, Workspace};

@@ -63,7 +63,8 @@ fn non_blittable_components_are_reported() {
 fn checked_in_bindings_are_fresh() {
     let mut db = SchemaDb::new();
     ara_components::register(&mut db);
-    let engine = csgen::blittable_components(&db);
+    let bindings = ara_script::EngineBindings::builtin();
+    let engine = bindings.names();
     let files = csgen::csharp(&db, &engine).expect("generates");
     let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../dotnet/src/Ara.Runtime/Generated");
     if std::env::var_os("ARA_UPDATE_GENERATED").is_some() {

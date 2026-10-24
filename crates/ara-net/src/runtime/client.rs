@@ -83,13 +83,18 @@ impl<F: SimulationFeature> Client<F> {
     /// Connects with a trusted short-lived token and matching schema registry.
     pub fn new(policies: PolicyRegistry, config: ClientConfig, token: JoinToken) -> Result<Self> {
         let mut app = base::<F>(false, policies, config.hz)?;
-        app.insert_resource(PredictionManager::default());
+        let input_delay = lightyear::prelude::client::InputDelayConfig::no_input_delay();
+        let mut prediction = PredictionManager::default();
+        // Retain every tick the input timeline is allowed to predict. Otherwise
+        // delayed confirmations arrive after native rollback has pruned their history.
+        prediction.rollback_policy.max_rollback_ticks = input_delay.maximum_predicted_ticks;
+        app.insert_resource(prediction);
         app.insert_resource(InputTimelineConfig::new(
             SyncConfig {
                 jitter_margin: 6.0,
                 ..Default::default()
             },
-            lightyear::prelude::client::InputDelayConfig::no_input_delay(),
+            input_delay,
         ));
         app.insert_resource(Owner {
             player: config.player,

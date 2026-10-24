@@ -16,13 +16,13 @@ ara-json.workspace = true
 ara-profile = { path = "../ara-profile", optional = true, features = ["instrumentation"] }
 ara-gpu = { path = "../ara-gpu" }
 ara-platform = { path = "../ara-platform" }
-anyhow = "1"
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
-bytemuck = { version = "1.24", features = ["derive"] }
-glam = { version = "0.30", features = ["bytemuck", "serde"] }
-image = { version = "0.25", default-features = false, features = ["png", "hdr", "jpeg"] }
-sha2 = "0.10"
+anyhow = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+bytemuck = { workspace = true, features = ["derive"] }
+glam = { workspace = true, features = ["bytemuck", "serde"] }
+image = { workspace = true, features = ["png", "hdr", "jpeg"] }
+sha2 = { workspace = true }
 
 [dev-dependencies]
-gltf = "1.4"
+gltf = { workspace = true, default-features = true }

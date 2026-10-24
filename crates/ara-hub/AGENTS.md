@@ -72,17 +72,17 @@ editor's panel rebuild lands.
 
 ## Tests
 
-Set `CARGO_BUILD_JOBS=4`, `VULKAN_SDK` and an explicit scratch profile for every
+Set `CARGO_BUILD_JOBS=2`, `VULKAN_SDK` and an explicit scratch profile for every
 test, capture and manual check (PowerShell, from the workspace root):
 `$env:ARA_CONFIG_DIR = (New-Item -ItemType Directory -Force "target/hub-checks/$([guid]::NewGuid())/config").FullName`.
 The config-isolation test fails without this. Checkout binaries reject the real
 user profile, even via --config-dir. Never register worktree builds there.
 
 - `cargo test -p ara-hub`: `tests/views.rs` lays out every page in both themes at
-  1440x900 and 1280x720 (no GPU); `tests/service.rs` drives the model against a
+  1440x900 and 1280x720 (no GPU). `cargo test -p ara --test hub_ui` drives the model against a
   real Hub service in `target/hub-ui-tests/<scratch>/config` (create with inline
-  validation, open headless, badge, close, remove, undo). It runs
-  `cargo build -p ara --bin ara` first so the service matches the checkout.
+  validation, open headless, badge, close, remove, undo). Cargo supplies the fresh
+  CLI executable; the fixture never starts a nested build.
 - Captures (GPU, windowless; debug builds need the validation layers):
   `VK_IMPLICIT_LAYER_PATH=<empty dir> VK_LAYER_PATH=$VULKAN_SDK/Bin`, then
   `target/debug/ara-hub --capture target/hub-captures --size 1440x900 --dpi 1`

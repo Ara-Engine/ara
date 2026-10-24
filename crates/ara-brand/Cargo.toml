@@ -10,7 +10,7 @@ publish.workspace = true
 workspace = true
 
 [dependencies]
-anyhow = "1"
-clap.workspace = true
-image = { version = "0.25", default-features = false, features = ["png", "jpeg", "ico"] }
-resvg = { version = "0.45", default-features = false }
+anyhow.workspace = true
+clap = { workspace = true, features = ["derive"] }
+image = { workspace = true, features = ["png", "jpeg", "ico"] }
+resvg.workspace = true

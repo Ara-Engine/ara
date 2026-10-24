@@ -7,10 +7,10 @@ rust-version.workspace = true
 publish.workspace = true
 
 [build-dependencies]
-embed-resource = "3"
+embed-resource.workspace = true
 
 [dependencies]
-anyhow = "1"
+anyhow = { workspace = true }
 ara-asset = { path = "../ara-asset" }
 ara-audio = { path = "../ara-audio" }
 ara-crash = { path = "../ara-crash" }
@@ -29,17 +29,17 @@ ara-runtime-render = { path = "../ara-runtime-render" }
 ara-runtime-script = { path = "../ara-runtime-script" }
 ara-sim = { path = "../ara-sim" }
 ara-doc.workspace = true
-clap.workspace = true
-ciborium = "0.2"
-serde.workspace = true
-glam = "0.34"
-serde_json.workspace = true
+clap = { workspace = true, features = ["derive"] }
+ciborium.workspace = true
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true, features = ["preserve_order", "float_roundtrip"] }
+glam34 = { workspace = true }
 
 [target.'cfg(windows)'.dependencies]
-windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_System_Diagnostics_Debug", "Win32_System_Kernel"] }
+windows-sys = { workspace = true, features = ["Win32_Foundation", "Win32_System_Diagnostics_Debug", "Win32_System_Kernel"] }
 
 [dev-dependencies]
-image = { version = "0.25", default-features = false, features = ["png"] }
+image = { workspace = true, features = ["png"] }
 ara-host.workspace = true
 ara-import2d = { path = "../ara-import2d" }
 ara-importers = { path = "../ara-importers" }

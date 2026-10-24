@@ -14,10 +14,10 @@ ara-doc = { path = "../ara-doc" }
 ara-graph = { path = "../ara-graph" }
 ara-json = { path = "../ara-json" }
 ara-schema = { path = "../ara-schema" }
-blake3 = "1"
-rtrb = "0.4"
-serde = { workspace = true }
-serde_json = { workspace = true }
+blake3 = { workspace = true, default-features = true }
+rtrb = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true, features = ["preserve_order", "float_roundtrip"] }
 
 [dev-dependencies]
 ara-ops = { path = "../ara-ops" }
