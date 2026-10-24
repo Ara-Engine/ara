@@ -37,6 +37,7 @@ mod import_panel;
 mod inspector_panel;
 mod log_panels;
 mod material_panel;
+mod memo;
 pub(crate) use log_panels::LogView;
 mod material_inspector;
 pub mod overlay;
@@ -151,6 +152,16 @@ pub struct Shell {
     asset_offset: f32,
     thumbnails: crate::asset_tools::thumbnails::Thumbnails,
     thumbnail_slots: BTreeMap<String, usize>,
+    /// Bumped whenever `thumbnail_slots` changes (memoized panels show thumbnails).
+    thumbnail_revision: u64,
+    /// Memoized panels' markup and bindings, by panel (`memo`).
+    memos: BTreeMap<&'static str, memo::Memo>,
+    /// Regenerate every reused memoized panel and compare (`ARA_EDITOR_MEMO_CHECK=1`,
+    /// set for `cargo test`): a difference means a digest misses an input.
+    pub memo_check: bool,
+    /// Reuse memoized panels at all (`ARA_EDITOR_MEMO=0` turns it off: to measure the
+    /// saving, or to rule out a stale panel).
+    memo_enabled: bool,
     thumbnail_next: usize,
     thumbnail_errors: BTreeMap<String, String>,
     material_previews: BTreeMap<String, String>,
@@ -241,6 +252,8 @@ pub struct Shell {
     key_search: bool,
     label_width: f32,
     keymap: commands::keys::Keymap,
+    /// Bumped whenever `keymap` is rebuilt (memoized panels show shortcuts).
+    keymap_revision: u64,
     /// The settings `keymap` was built from (`input.keymap`, `input.shortcuts`).
     keymap_settings: (Option<Value>, Option<Value>),
     /// Live tab drag target, painted as a lit region with an action label.
@@ -267,6 +280,7 @@ pub struct UiStats {
     /// Runtime work summed over every `Ui::frame` (rebuild mounts and the frame's own).
     pub work: ara_ui::Work,
 }
+#[derive(Clone, PartialEq)]
 pub(crate) enum Binding {
     Protocol(&'static str, Value),
     Command(&'static str, commands::Target),
@@ -294,6 +308,8 @@ pub(crate) enum Binding {
     GraphLabel(String, String),
     Fix(ara_diag::Diagnostic, usize),
     PickField(String),
+    /// An asset field's picker popup: the field's path and declared asset kind.
+    AssetPicker(String, Option<String>),
     RenameValue,
     ColorPicker(String),
     ComponentCollapse(String),
@@ -374,6 +390,10 @@ impl Shell {
             asset_offset: 0.,
             thumbnails: crate::asset_tools::thumbnails::Thumbnails::new(editor.host.root()),
             thumbnail_slots: BTreeMap::new(),
+            thumbnail_revision: 0,
+            memos: BTreeMap::new(),
+            memo_check: std::env::var_os("ARA_EDITOR_MEMO_CHECK").is_some_and(|v| v == "1"),
+            memo_enabled: std::env::var_os("ARA_EDITOR_MEMO").is_none_or(|v| v != "0"),
             thumbnail_next: 0,
             thumbnail_errors: BTreeMap::new(),
             material_previews: BTreeMap::new(),
@@ -443,6 +463,7 @@ impl Shell {
             key_search: false,
             label_width: 0.4,
             keymap: commands::keymap(&editor.state),
+            keymap_revision: 0,
             keymap_settings: keymap_settings(&editor.state),
             drop_preview: None,
             main_rect: [0, 0, size[0] as i32, size[1] as i32],
@@ -546,6 +567,7 @@ impl Shell {
         if settings != self.keymap_settings {
             self.keymap = commands::keymap(&editor.state);
             self.keymap_settings = settings;
+            self.keymap_revision += 1;
         }
         self.reduce_motion = editor.state.reduce_motion;
         self.version += 1;
@@ -1128,8 +1150,10 @@ impl Shell {
                         {
                             self.thumbnails.invalidate(&key);
                             self.thumbnail_slots.remove(&key);
+                            self.thumbnail_revision += 1;
                         }
                         self.thumbnail_slots.insert(thumb.key, slot);
+                        self.thumbnail_revision += 1;
                         slot
                     };
                     let name = crate::asset_tools::thumbnails::image_name(slot);

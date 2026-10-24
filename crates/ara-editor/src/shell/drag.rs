@@ -166,10 +166,12 @@ impl Shell {
             Drag::Asset { asset, .. } => {
                 let reference = asset.current_reference(editor.host.store().workspace());
                 let Some(reference) = reference else {
-                    return Err(
-                        "Mesh/prefab needs a stable asset ID from its document or import sidecar"
-                            .into(),
+                    let why = format!(
+                        "{} has no asset ID yet: it is still importing. Drop it again when it is ready",
+                        asset.name()
                     );
+                    self.status_note = Some(why.clone());
+                    return Err(why.into());
                 };
                 if let Some(i) = self.shown_node("animation-clip-field")
                     && self.ui.nodes[i]
@@ -201,6 +203,10 @@ impl Shell {
                     })
                     .map(|f| f.path.clone());
                 if let Some(field) = field {
+                    if let Err(why) = self.asset_for_field(editor, &asset, &field) {
+                        self.status_note = Some(why.clone());
+                        return Err(why.into());
+                    }
                     editor.apply(
                         crate::inspector::edit_commands(
                             &editor.state.selection,

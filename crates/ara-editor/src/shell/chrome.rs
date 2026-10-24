@@ -7,6 +7,32 @@ use super::commands::{
 };
 use super::*;
 
+/// Everything the menubar shows: the digest it is memoized on and its markup's only
+/// input (besides the keymap behind the search box's key caps, `keymap`).
+#[derive(Hash)]
+struct MenubarState {
+    /// The menu whose title is open.
+    open: Option<usize>,
+    /// Alt held: mnemonic underlines.
+    mnemonics: bool,
+    project: String,
+    /// The open scene's path.
+    scene: String,
+    /// Unsaved changes (the breadcrumb's dot).
+    dirty: bool,
+    playing: Option<bool>,
+    /// Pause, Step and Stop availability.
+    enabled: [bool; 3],
+    mode_label: String,
+    /// `Shell::keymap_revision`.
+    keymap: u64,
+    errors: u64,
+    warnings: u64,
+    agents: usize,
+    /// An agent edited just now.
+    active: bool,
+}
+
 /// Approximate width of each menu's first letter at 13 px, for the mnemonic underline.
 fn mnemonic_width(c: char) -> f32 {
     match c {
@@ -16,19 +42,17 @@ fn mnemonic_width(c: char) -> f32 {
     }
 }
 impl Shell {
+    /// The menu titles, breadcrumb, Play cluster, search box and chips, memoized on
+    /// everything they show ([`MenubarState`]).
     pub(super) fn menubar(&mut self, editor: &mut Editor, out: &mut String) {
-        out.push_str("<panel id='menubar' class='menubar'><panel id='brand' class='brand' label='Ara'><image id='brand-logo' class='brand-logo' src='brand-logo' /></panel><panel id='menu-titles' style='flex-direction:row;gap:0px;padding-left:4px'>");
-        for (i, menu) in MENUS.iter().enumerate() {
-            let open = matches!(&self.menu, Some(m) if m.bar() == Some(i));
-            let id = format!("menu-title-{i}");
-            self.bindings
-                .insert(ara_ui::source::stable_id(&id), Binding::MenuBar(i));
-            out.push_str(&format!("<button id='{id}' class='menu-title{}' label='{} menu' description='Alt+{}' action='Dispatch'><text id='{id}-text' text='{}' />",if open{" menu-title-open"}else{""},menu.title,menu.mnemonic,menu.title));
-            if self.mnemonics {
-                out.push_str(&format!("<panel id='{id}-mnemonic' class='mnemonic' style='position:absolute;left:8px;top:21px;width:{}px' />",mnemonic_width(menu.mnemonic)));
-            }
-            out.push_str("</button>");
-        }
+        let state = self.menubar_state(editor);
+        let key = memo::digest(&state);
+        self.memoized("menubar", key, out, |shell, out| {
+            shell.menubar_markup(&state, out);
+        });
+    }
+    /// What the menubar shows, read once per rebuild (the problem counts query the log).
+    fn menubar_state(&self, editor: &mut Editor) -> MenubarState {
         let scene = editor
             .host
             .store()
@@ -36,35 +60,9 @@ impl Shell {
             .path_of(&editor.state.doc)
             .unwrap_or("Scene")
             .to_owned();
-        let scene_name = scene.rsplit('/').next().unwrap_or(&scene).to_owned();
-        out.push_str(&format!("</panel><panel id='crumbs' class='crumbs'><text id='crumb-project' class='crumb-strong' text='{}' />{}<text id='crumb-scene' class='crumb' text='{}' description='{}' />",escape(&project_name(editor)),icons::icon("crumb-sep","chevron-right"),escape(&scene_name),escape(&scene)));
-        if self.status_note.is_none() && editor.host.store().revision() > 0 && self.unsaved(editor)
-        {
-            out.push_str("<panel id='crumb-dirty' class='dirty-dot' description='Unsaved changes; Ctrl+S saves now' />");
-        }
-        out.push_str("</panel><panel id='menubar-fill' class='fill' />");
-        // The Play cluster sits between flexible gaps: centred in the free space.
-        out.push_str(&format!(
-            "<panel id='play-controls' class='play-cluster{}'>",
-            if editor.state.playing.is_some() {
-                " play-live"
-            } else {
-                ""
-            }
-        ));
-        let resume = editor.state.playing == Some(false);
-        self.bind_command("play", "play.start", Target::None);
-        out.push_str(&format!("<button id='play' class='ghost{}' style='height:22px;padding-left:6px;padding-right:8px' label='{}' description='{} · F5' action='Dispatch'>{}<text id='play-label' text='{}' /></button>",if editor.state.playing==Some(true){" selected"}else{""},if resume{"Resume"}else{"Play"},if resume{"Resume"}else{"Play"},icons::icon_in("play","play","tint-play"),if editor.state.playing==Some(true){"Playing"}else if resume{"Resume"}else{"Play"}));
-        for (id, command, icon, label) in [
-            ("pause", "play.pause", "pause", "Pause · F6"),
-            ("step", "play.step", "step-forward", "Step one tick · F7"),
-            ("stop", "play.stop", "square", "Stop · Shift+F5"),
-        ] {
-            self.bind_command(id, command, Target::None);
-            let enabled = commands::get(command)
-                .is_some_and(|c| c.avail(&self.ctx(editor, &Target::None)).ready());
-            out.push_str(&format!("<button id='{id}' class='ghost icon-button' label='{label}' description='{label}' action='Dispatch'{}>{}</button>",if enabled{""}else{" disabled='true'"},icons::icon(id,icon)));
-        }
+        let ctx = self.ctx(editor, &Target::None);
+        let enabled = ["play.pause", "play.step", "play.stop"]
+            .map(|command| commands::get(command).is_some_and(|c| c.avail(&ctx).ready()));
         let mode = editor
             .state
             .settings
@@ -77,16 +75,11 @@ impl Shell {
             "dedicated" => format!("Server + {clients}"),
             _ => "Local".into(),
         };
-        self.bindings.insert(
-            ara_ui::source::stable_id("play-mode"),
-            Binding::ContextMenu(commands::menus::Context::Play, Target::None),
-        );
-        out.push_str(&format!("<panel id='play-sep' class='toolbar-sep' /><button id='play-mode' class='ghost' style='height:22px;padding-left:6px;padding-right:4px' label='Play mode' description='Play mode, clients and start options' action='Dispatch'><text id='play-mode-label' class='caption' text='{}' />{}</button></panel><panel id='menubar-fill-2' class='fill' />",escape(&mode_label),icons::icon("play-mode","chevron-down")));
-        self.bind_command("search-box", "edit.palette", Target::None);
-        out.push_str(&format!("<button id='search-box' class='search-box' label='Search or run a command' description='Search commands, entities and assets' action='Dispatch'>{}<text id='search-box-text' class='muted' text='Search or run a command…' /><panel id='search-box-fill' class='fill' />{}</button>",icons::icon("search-box","search"),self.keycaps("search-box","edit.palette")));
-        // Status chips: each opens the panel it summarizes. The counts are the log's
-        // totals (each query returns one entry), not a scan of fetched entries: this
-        // runs on every rebuild, and a long session's log holds hundreds.
+        let dirty = self.status_note.is_none()
+            && editor.host.store().revision() > 0
+            && self.unsaved(editor);
+        // The counts are the log's totals (each query returns one entry), not a scan of
+        // fetched entries: a long session's log holds hundreds.
         let mut total = |severity: &str| {
             editor
                 .action(
@@ -99,9 +92,75 @@ impl Shell {
         };
         let errors = total("error");
         let warnings = total("warning").saturating_sub(errors);
-        // D24: agents present (and whether one edited just now), not a review count.
-        let agents = editor.state.presence.len();
-        let active = editor.activity.agent_active(std::time::Instant::now());
+        MenubarState {
+            open: self.menu.as_ref().and_then(|m| m.bar()),
+            mnemonics: self.mnemonics,
+            project: project_name(editor),
+            scene,
+            dirty,
+            playing: editor.state.playing,
+            enabled,
+            mode_label,
+            keymap: self.keymap_revision,
+            errors,
+            warnings,
+            // D24: agents present (and whether one edited just now), not a review count.
+            agents: editor.state.presence.len(),
+            active: editor.activity.agent_active(std::time::Instant::now()),
+        }
+    }
+    fn menubar_markup(&mut self, s: &MenubarState, out: &mut String) {
+        out.push_str("<panel id='menubar' class='menubar'><panel id='brand' class='brand' label='Ara'><image id='brand-logo' class='brand-logo' src='brand-logo' /></panel><panel id='menu-titles' style='flex-direction:row;gap:0px;padding-left:4px'>");
+        for (i, menu) in MENUS.iter().enumerate() {
+            let open = s.open == Some(i);
+            let id = format!("menu-title-{i}");
+            self.bindings
+                .insert(ara_ui::source::stable_id(&id), Binding::MenuBar(i));
+            out.push_str(&format!("<button id='{id}' class='menu-title{}' label='{} menu' description='Alt+{}' action='Dispatch'><text id='{id}-text' text='{}' />",if open{" menu-title-open"}else{""},menu.title,menu.mnemonic,menu.title));
+            if s.mnemonics {
+                out.push_str(&format!("<panel id='{id}-mnemonic' class='mnemonic' style='position:absolute;left:8px;top:21px;width:{}px' />",mnemonic_width(menu.mnemonic)));
+            }
+            out.push_str("</button>");
+        }
+        let scene_name = s.scene.rsplit('/').next().unwrap_or(&s.scene);
+        out.push_str(&format!("</panel><panel id='crumbs' class='crumbs'><text id='crumb-project' class='crumb-strong' text='{}' />{}<text id='crumb-scene' class='crumb' text='{}' description='{}' />",escape(&s.project),icons::icon("crumb-sep","chevron-right"),escape(scene_name),escape(&s.scene)));
+        if s.dirty {
+            out.push_str("<panel id='crumb-dirty' class='dirty-dot' description='Unsaved changes; Ctrl+S saves now' />");
+        }
+        out.push_str("</panel><panel id='menubar-fill' class='fill' />");
+        // The Play cluster sits between flexible gaps: centred in the free space.
+        out.push_str(&format!(
+            "<panel id='play-controls' class='play-cluster{}'>",
+            if s.playing.is_some() {
+                " play-live"
+            } else {
+                ""
+            }
+        ));
+        let resume = s.playing == Some(false);
+        self.bind_command("play", "play.start", Target::None);
+        out.push_str(&format!("<button id='play' class='ghost{}' style='height:22px;padding-left:6px;padding-right:8px' label='{}' description='{} · F5' action='Dispatch'>{}<text id='play-label' text='{}' /></button>",if s.playing==Some(true){" selected"}else{""},if resume{"Resume"}else{"Play"},if resume{"Resume"}else{"Play"},icons::icon_in("play","play","tint-play"),if s.playing==Some(true){"Playing"}else if resume{"Resume"}else{"Play"}));
+        for ((id, command, icon, label), enabled) in [
+            ("pause", "play.pause", "pause", "Pause · F6"),
+            ("step", "play.step", "step-forward", "Step one tick · F7"),
+            ("stop", "play.stop", "square", "Stop · Shift+F5"),
+        ]
+        .into_iter()
+        .zip(s.enabled)
+        {
+            self.bind_command(id, command, Target::None);
+            out.push_str(&format!("<button id='{id}' class='ghost icon-button' label='{label}' description='{label}' action='Dispatch'{}>{}</button>",if enabled{""}else{" disabled='true'"},icons::icon(id,icon)));
+        }
+        let mode_label = &s.mode_label;
+        self.bindings.insert(
+            ara_ui::source::stable_id("play-mode"),
+            Binding::ContextMenu(commands::menus::Context::Play, Target::None),
+        );
+        out.push_str(&format!("<panel id='play-sep' class='toolbar-sep' /><button id='play-mode' class='ghost' style='height:22px;padding-left:6px;padding-right:4px' label='Play mode' description='Play mode, clients and start options' action='Dispatch'><text id='play-mode-label' class='caption' text='{}' />{}</button></panel><panel id='menubar-fill-2' class='fill' />",escape(mode_label),icons::icon("play-mode","chevron-down")));
+        self.bind_command("search-box", "edit.palette", Target::None);
+        out.push_str(&format!("<button id='search-box' class='search-box' label='Search or run a command' description='Search commands, entities and assets' action='Dispatch'>{}<text id='search-box-text' class='muted' text='Search or run a command…' /><panel id='search-box-fill' class='fill' />{}</button>",icons::icon("search-box","search"),self.keycaps("search-box","edit.palette")));
+        let (errors, warnings, agents, active) = (s.errors, s.warnings, s.agents, s.active);
+        // Status chips: each opens the panel it summarizes.
         out.push_str("<panel id='chips' style='flex-direction:row;align-items:center;gap:2px;padding-left:6px'>");
         if errors + warnings > 0 {
             self.bind_command("chip-problems", "window.problems", Target::None);

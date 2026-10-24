@@ -140,11 +140,11 @@ never add a capture route that shows a window. `--verify-journey` (`app/journey.
 writes `journey.json` after every step. `--verify-responsiveness` (`app/responsiveness.rs`) injects SDL-level clicks/moves into the
 real loop and writes per-frame costs, UI work, click results and Play click-to-first-Game-
 frame. Shell rebuilds reconcile into the retained `Ui` once per revision (`rebuild_if_stale`),
-area headers and tab bodies as parts (`Ui::reconcile_parts`: unchanged ones keep their rows);
-inactive `panels::keep_alive` tabs stay mounted, hidden (geometry via `Shell::shown_node`).
-Only `scene_changed` state re-renders the Scene; icons re-rasterize on DPI only.
-Tools: `shell/material_panel.rs` (preview + parameters, Graph|Source, compile
-status; swatches are painted after layout, never raw colours in markup) and
-`shell/vfx_panel.rs` (emitter stacks, preview-only Hide/Isolate, timeline driving
-`asset_tools/vfx_stream.rs`: rate, restart, step, GPU counters updated in place).
+menubar, status bar, area headers and tab bodies as parts (`Ui::reconcile_parts`); inactive
+`panels::keep_alive` tabs stay mounted, hidden (geometry via `Shell::shown_node`). Memoized
+panels (`shell/memo.rs`: Assets) reuse markup+bindings while their input digest holds; `cargo
+test` sets `ARA_EDITOR_MEMO_CHECK=1`, which regenerates each reuse and fails on a difference.
+Only `scene_changed` state re-renders the Scene. Tools: `shell/material_panel.rs` (preview, Graph|Source, compile
+status; swatches painted after layout, no raw colours in markup) and `shell/vfx_panel.rs`
+(emitter stacks, Hide/Isolate, timeline driving `asset_tools/vfx_stream.rs` in place).
 Imports use the shared `import.initialize`/`import.configure` commands.
