@@ -26,10 +26,15 @@ float3 historyBox(Frame f,uint2 p,float3 history,uint signal,int spacing=1){
 // frame's lattice samples in the surrounding 3x3 grid blocks on the same surface,
 // as one ordinary sample (w = 1); w = 0 when no sample is near.
 float4 latticeSpecular(Frame f,uint2 p){
-    uint slot=f.control.x;float4 world=pixel(f,WORLD+slot,p);float3 n=pixel(f,NORMAL+slot,p).xyz;
+    uint slot=f.control.x;float4 world=pixel(f,WORLD+slot,p);float4 normal=pixel(f,NORMAL+slot,p);float3 n=normal.xyz;
     float tolerance=max(length(world.xyz-f.camera.xyz)*0.004,0.005);float3 sum=0;float total=0;
+    // Half-rate glossy pixels (roughness < 0.5) sit on a checkerboard: their four
+    // edge neighbours were traced this frame (or the pixel itself was). Rough
+    // pixels use the grid lattice.
+    bool glossy=normal.w<0.5;
     for(int y=-1;y<=1;y++)for(int x=-1;x<=1;x++){
-        int2 q=gridPoint(f,int2(p)+int2(x,y)*2);float4 lattice=extraPixel(f,SPEC_RAW,q);float4 w=pixel(f,WORLD+slot,q);
+        if(glossy && abs(x)+abs(y)>1)continue;
+        int2 q=glossy?clamp(int2(p)+int2(x,y),int2(0),int2(f.sizes.xy)-1):gridPoint(f,int2(p)+int2(x,y)*2);float4 lattice=extraPixel(f,SPEC_RAW,q);float4 w=pixel(f,WORLD+slot,q);
         if(lattice.w<=1 || w.w!=world.w)continue;
         float weight=pow(saturate(dot(pixel(f,NORMAL+slot,q).xyz,n)),8)*exp(-abs(dot(w.xyz-world.xyz,n))/tolerance);
         sum+=lattice.rgb*weight;total+=weight;
@@ -108,6 +113,20 @@ void temporalMain(uint3 tid:SV_DispatchThreadID){
         }
     }
     if(f.transport.x==1){l=luminance(colour);moments=float2(l,l*l);}
+    // History fix: direct light is never spatially filtered, so pixels with little
+    // history (disocclusions, regions a turning camera just revealed) showed raw
+    // one-reservoir noise. They start from a geometry-weighted sparse 5x5 average of
+    // the current shading, demodulated so texture detail stays sharp; the blend fades
+    // out over the first eight frames as temporal accumulation takes over.
+    if(splitSignals && f.transport.x==0 && f.transport.w!=1 && directCount<8 && world.w>0){
+        float3 sum=0;float total=0;float tolerance=max(length(world.xyz-f.camera.xyz)*0.004,0.005);
+        for(int y=-1;y<=1;y++)for(int x=-1;x<=1;x++){
+            int2 q=int2(p)+int2(x,y)*2;float4 w=pixel(f,WORLD+slot,q);if(w.w!=world.w)continue;
+            float weight=pow(saturate(dot(pixel(f,NORMAL+slot,q).xyz,normal.xyz)),8)*exp(-abs(dot(w.xyz-world.xyz,normal.xyz))/tolerance);
+            sum+=pixel(f,DIRECT,q).rgb/demodulation(f,q)*weight;total+=weight;
+        }
+        if(total>0)directLight=lerp(sum/total*modulation,directLight,(directCount-1)/7.);
+    }
     uint directResidual=0,diffuseResidual=0;
     if(splitSignals){float3 rounded;directResidual=roundHistory(directLight,9,rounded);directLight=rounded;diffuseResidual=roundHistory(colour,10,rounded);colour=rounded;}
     store(f,DIRECT_HISTORY+slot,p,float4(directLight,directCount));
@@ -126,12 +145,14 @@ groupshared float3 filterSpecular[FILTER_CAPACITY];
 void atrousMain(uint3 tid:SV_DispatchThreadID,uint3 group:SV_GroupID,uint lane:SV_GroupIndex){
     Frame f=frame();uint2 p=tid.xy;uint slot=f.control.x;
     if(f.transport.x==1){if(all(p<f.sizes.xy))store(f,FILTER0,p,float4(pixel(f,HISTORY+slot,p).rgb+(f.transport.x==0?pixel(f,DIRECT_HISTORY+slot,p).rgb:float3(0)),1));return;}
-    uint source=root.pass==0?HISTORY+slot:root.pass==1?FILTER0:FILTER1;uint target=root.pass==1?FILTER1:FILTER0;
+    // Bounded budgets (frame bit 6) skip the finest wavelet: pass 1 reads history.
+    bool first=root.pass==0 || (splitSignals && root.pass==1 && (f.transport.z&64)!=0);
+    uint source=first?HISTORY+slot:root.pass==1?FILTER0:FILTER1;uint target=root.pass==1?FILTER1:FILTER0;
     int baseStep=splitSignals?(root.pass==0?1:root.pass==1?3:8):1<<root.pass;
     // Preserve the validated angular footprint at native/upscaled resolutions.
     // A fixed pixel radius hides noise in the 270p metric but leaves native walls mottled.
     int step=splitSignals?max(baseStep,int(float(baseStep)*f.sizes.y/270.+0.5)):baseStep;uint width=8+2*step;
-    uint specSource=root.pass==0?SPEC_HISTORY+slot:root.pass==1?SPEC_FILTER0:SPEC_FILTER1;
+    uint specSource=first?SPEC_HISTORY+slot:root.pass==1?SPEC_FILTER0:SPEC_FILTER1;
     // Wide footprints provide little group reuse and exceed the compact tile.
     // Coalesced texture gathers preserve occupancy without a large shared halo.
     bool wide=step>4;

@@ -24,10 +24,20 @@ No authoritative gameplay or authoring state lives here.
 - `FeatureInputs`, `ImageInput`: completed HDR/depth/probes for external features.
 - `feature_inputs`, `post_process`: compose feature HDR before the shared post stack.
 - `set_reservoir_sampling`: explicit RT DI/path reuse and split low-light histories.
+  Spatial reuse and visibility resolve one reservoir per 2x2 grid block
+  (`ReSTIR.Spatial.Visibility`); `ReSTIR.Shade` lights every pixel with its own BRDF
+  from the four nearest blocks.
+- `set_bounded_reservoirs`: presets below Epic end reservoir paths in the DDGI
+  terminal, trace glossy specular at half rate, use 4 DI candidates and skip the
+  finest wavelet (frame bit 6, transport.z).
+- `set_deferred_post`: live views with particles leave bloom/post/upscale/output to
+  `post_process` (otherwise the chain ran twice per frame).
 - `SunShadowSource`, `render_jitter`: completed VSM sun mask with RT residency fallback.
 - `presets`: `QualityPreset` (Low/Medium/High/Epic), `QualityChoice` (`--quality`),
   `Capabilities::of`, `Plan::resolve` → `RenderPath::Baseline` or `Fidelity(FidelityPlan)`;
   `FidelityPlan::settings` at creation, `configure` after new/resize/content swap.
+  D26 tiers: Medium 0.4, High 0.5, Epic 2/3 transport scale; measure with
+  `cargo run -p ara-dev -- perf` on the frozen 144-tile Outpost pack.
 - `environment::FrameEnvironment::resolve(&frame.look, env.exposure)`: the scene's
   `SkyAtmosphere`/`HeightFog`/`PostProcess` → `view.set_environment`; `baseline()`
   gives the raster sky map/exposure/curve, `ground_sun()` the attenuated sun.

@@ -11,6 +11,84 @@ impl Clipboard for Clip {
     }
 }
 #[test]
+fn plain_typing_is_a_sequence_of_commits() -> Result<()> {
+    let mut input = TextInput::new("");
+    let mut clip = Clip::default();
+    for text in ["O", "u", "t", "post"] {
+        input.event(EditEvent::ImeCommit(text.into()), &mut clip)?;
+    }
+    assert_eq!(input.value(), "Outpost");
+    assert_eq!(input.caret(), 7);
+    assert_eq!(input.preedit_range(), None);
+    Ok(())
+}
+
+#[test]
+fn empty_preedit_cancellation_then_commit_inserts_at_the_selection() -> Result<()> {
+    let mut input = TextInput::new("ab");
+    let mut clip = Clip::default();
+    input.event(
+        EditEvent::Select {
+            anchor: 1,
+            caret: 1,
+        },
+        &mut clip,
+    )?;
+    input.event(EditEvent::ImeStart, &mut clip)?;
+    input.event(
+        EditEvent::ImePreedit {
+            text: String::new(),
+            selection: 0..0,
+        },
+        &mut clip,
+    )?;
+    // SDL's empty TEXT_EDITING cancels preedit before its following TEXT_INPUT.
+    input.event(EditEvent::ImeCancel, &mut clip)?;
+    input.event(EditEvent::ImeCommit("x".into()), &mut clip)?;
+    assert_eq!(input.value(), "axb");
+    assert_eq!(input.caret(), 2);
+    Ok(())
+}
+
+#[test]
+fn commits_keep_mid_string_selection_caret_and_undo() -> Result<()> {
+    let mut input = TextInput::new("abcd");
+    let mut clip = Clip::default();
+    input.event(
+        EditEvent::Select {
+            anchor: 3,
+            caret: 1,
+        },
+        &mut clip,
+    )?;
+    input.event(EditEvent::ImeCommit("X".into()), &mut clip)?;
+    assert_eq!((input.value(), input.caret()), ("aXd", 2));
+    input.event(EditEvent::Undo, &mut clip)?;
+    assert_eq!(
+        (input.value(), input.anchor(), input.caret()),
+        ("abcd", 3, 1)
+    );
+    input.event(EditEvent::Redo, &mut clip)?;
+    assert_eq!((input.value(), input.caret()), ("aXd", 2));
+    input.event(EditEvent::ImeStart, &mut clip)?;
+    input.event(
+        EditEvent::ImePreedit {
+            text: "ni".into(),
+            selection: 0..2,
+        },
+        &mut clip,
+    )?;
+    assert_eq!(input.value(), "aXd");
+    assert_eq!(input.display(), "aXnid");
+    input.event(EditEvent::ImeCommit("\u{65e5}".into()), &mut clip)?;
+    assert_eq!((input.value(), input.caret()), ("aX\u{65e5}d", 5));
+    input.event(EditEvent::Undo, &mut clip)?;
+    assert_eq!((input.value(), input.caret()), ("aXd", 2));
+    assert_eq!(input.preedit_range(), None);
+    Ok(())
+}
+
+#[test]
 fn editing_selection_clipboard_graphemes_ime_and_undo() -> Result<()> {
     let mut input = TextInput::new("Cafe\u{301} 👩🏽‍🚀");
     let mut clip = Clip::default();

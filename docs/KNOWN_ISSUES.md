@@ -42,6 +42,7 @@ These measurements are on a shared RTX 4070 SUPER; the source files are linked.
 
 - **No scene passes "UE5 polish" in the renderer's own verdict.** The numeric error gates pass, but they are not visual parity ([`FIDELITY_ROUND3.md`](../crates/ara-pathtrace/FIDELITY_ROUND3.md)).
 - **The night-interior timing gate fails.** Its upscaled p95 is +1.29 ms over budget, against a +1 ms limit.
+- **Opt-in RT path (D27): night-interior accuracy is just over its target.** Grid-resolution ReSTIR reuse (one reservoir per 2x2 block, full-res shading) roughly halves RT High cost, but the night-interior surface ROI error rose from 7.06% to 8.09% against an 8% target. Display-space error is unchanged; the extra linear error sits in a few bright pixels.
 - **The 1000-light stress scene** has 17.4% surface error. It is a stress test, not a quality claim.
 - **Virtual geometry misses its 4 ms target.** The photogrammetry field (1.09 B triangles) takes 4.6–5.0 ms at native 1440p. The cold-cache first frame takes 97–126 ms, and only simple preview lighting is used.
 - **HDR output has never been checked on a real HDR display.**
