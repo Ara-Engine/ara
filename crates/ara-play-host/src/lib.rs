@@ -8,6 +8,8 @@
 pub mod assets;
 pub mod embed;
 mod keep;
+mod package;
+pub use package::package_scene;
 pub mod params;
 pub mod pool;
 mod published;

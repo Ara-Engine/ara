@@ -1,7 +1,7 @@
 # ara-player
 
-The S5 play process. The edit-world owner (`ara` daemon via `ara-play-host`, later the
-editor) pre-spawns it into a single-use pool; it initializes, connects back over
+The standalone game and S5 Play process. The edit-world owner (`ara` daemon via
+`ara-play-host`, or the editor) pre-spawns Play into a single-use pool; it connects over
 localhost WebSocket with the session token (`ARA_PLAY_TOKEN`), idles at zero CPU, and
 on `play.start` maps the shared-memory snapshot, builds an `ara_runtime::Runtime` and
 plays: windowed through SDL3 (`--window`) or headless. It exits on `play.stop`.
@@ -10,10 +10,18 @@ plays: windowed through SDL3 (`--window`) or headless. It exits on `play.stop`.
 
 `ara-player --owner <port> [--name slot] [--window] [--size 1280x720] [--gpu-cache dir]
 [--quality auto|low|medium|high|epic]`.
-Never run by hand: it needs an owner and the token. `build.rs` embeds the Ara
+Without `--owner`, loads `ara-launch.json` beside the executable (or `--root DIR`),
+reads the authored PlayScene/cooked generations from game.arapack, and opens a game
+window. `--headless [--capture PNG] [--ticks N]` captures without a window;
+`--frames N` bounds a windowed probe. Shipped assets never discover or import source
+files. The same World, input mapper, animation/physics and presenters run both modes.
+Only pooled Play requires the owner token. `build.rs` embeds the Ara
 exe icon (`assets/brand/ara.ico`); ara-platform sets the window icon.
 
 ## Modules
+
+- `packed.rs` and `standalone.rs`: immutable pack AssetSource and the exported entry;
+  `ara.player.runtime/1` launches the authored world, never the conformance fixture.
 
 - `main.rs`: pool lifecycle, the loop (link polling, host-time ticking with bounded
   catch-up, deferred patch acks, 250 ms `play.status` heartbeats, presentation),

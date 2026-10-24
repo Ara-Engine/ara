@@ -51,6 +51,7 @@ pub struct World {
     seed: u64,
     cache: PathBuf,
     pins: BTreeMap<String, Digest>,
+    packed: Option<Arc<dyn ara_runtime::assets::AssetSource>>,
     /// Patches acknowledged after their tick.
     pub pending: Vec<PendingPatch>,
     /// C# modules and their host's event channel, when the scene runs any.
@@ -77,7 +78,13 @@ impl World {
         &self,
         frame: &RenderFrame,
     ) -> Result<ara_runtime_render::fidelity::native::Content> {
-        let source = assets(&self.cache, &self.pins)?;
+        let cached;
+        let source = if let Some(source) = &self.packed {
+            source.as_ref()
+        } else {
+            cached = assets(&self.cache, &self.pins)?;
+            &cached
+        };
         let library = self
             .runtime
             .world()
@@ -88,7 +95,7 @@ impl World {
             self.runtime.documents(),
             self.runtime.schema(),
             library,
-            &source,
+            source,
         )
     }
     /// Builds the world from a decoded snapshot (tick 0, paused) in its role: networked
@@ -101,6 +108,37 @@ impl World {
         net: Option<&ara_play::NetStart>,
         windowed: bool,
         prewarmed: Option<(ScriptPlugin, std::sync::mpsc::Receiver<ScriptEvent>)>,
+    ) -> Result<(Self, f64)> {
+        Self::build_with_source(scene, role, net, windowed, prewarmed, None)
+    }
+
+    /// Builds the same local runtime over immutable shipped generations.
+    pub fn build_packed(
+        scene: &PlayScene,
+        source: Arc<dyn ara_runtime::assets::AssetSource>,
+        windowed: bool,
+    ) -> Result<(Self, f64)> {
+        anyhow::ensure!(
+            scene.scripts.is_none(),
+            "exported C# modules require a shipping script host"
+        );
+        Self::build_with_source(
+            scene,
+            ara_play::Role::Local,
+            None,
+            windowed,
+            None,
+            Some(source),
+        )
+    }
+
+    fn build_with_source(
+        scene: &PlayScene,
+        role: ara_play::Role,
+        net: Option<&ara_play::NetStart>,
+        windowed: bool,
+        prewarmed: Option<(ScriptPlugin, std::sync::mpsc::Receiver<ScriptEvent>)>,
+        packed: Option<Arc<dyn ara_runtime::assets::AssetSource>>,
     ) -> Result<(Self, f64)> {
         let started = Instant::now();
         let schema = ara_runtime::schema(&scene.types)?;
@@ -158,11 +196,15 @@ impl World {
                 resident: Default::default(),
             });
         }
+        let source: Box<dyn ara_runtime::assets::AssetSource> = match &packed {
+            Some(source) => Box::new(crate::packed::SharedAssets(Arc::clone(source))),
+            None => Box::new(assets(&cache, &pins)?),
+        };
         let runtime = Runtime::new(
             schema,
             workspace,
             id.clone(),
-            Box::new(assets(&cache, &pins)?),
+            source,
             RuntimeConfig {
                 tick: TickConfig {
                     hz: scene.tick_hz,
@@ -186,6 +228,7 @@ impl World {
                 seed: scene.seed,
                 cache,
                 pins,
+                packed,
                 pending: Vec::new(),
                 scripts,
                 cells,
@@ -205,6 +248,9 @@ impl World {
 
     /// The asset source of the current pins, shared with presentation workers.
     pub fn asset_source(&self) -> Result<Arc<dyn ara_runtime::assets::AssetSource>> {
+        if let Some(source) = &self.packed {
+            return Ok(Arc::clone(source));
+        }
         Ok(Arc::new(assets(&self.cache, &self.pins)?))
     }
 
@@ -241,15 +287,21 @@ impl World {
     pub fn audio_inputs(&mut self) -> Result<AudioInputs> {
         Ok(AudioInputs {
             resident: self.resident_acoustics(),
-            assets: self.asset_source()?,
+            assets: if self.packed.is_some() {
+                None
+            } else {
+                Some(self.asset_source()?)
+            },
         })
     }
 
     /// A fresh audio presenter for this world (its project mixer, room reverb).
     pub fn audio_presenter(&self) -> Result<Audio> {
+        let assets = self.asset_source()?;
         Ok(Audio {
             presenter: AudioPresenter::new(self.runtime.documents())?,
-            voices: AssetVoices::new(self.asset_source()?, StreamMode::Live, STREAM_BUDGET),
+            voices: AssetVoices::new(Arc::clone(&assets), StreamMode::Live, STREAM_BUDGET),
+            assets,
         })
     }
 
@@ -266,6 +318,10 @@ impl World {
         self.runtime.extract(frame);
         let listener = listener(frame);
         let AudioInputs { resident, assets } = self.audio_inputs()?;
+        let assets = match assets {
+            Some(assets) => assets,
+            None => self.asset_source()?,
+        };
         let probes = audio.stream_cells(&resident, &assets);
         audio.wait_cells(std::time::Duration::from_secs(5));
         let probes = probes.max(audio.stream_cells(&resident, &assets));
@@ -575,10 +631,11 @@ impl World {
             let size = [params.width, params.height];
             let marks_wanted = (params.marks > 0).then_some(params.marks);
             let tick = self.runtime.tick();
+            let source = self.asset_source()?;
             let world = self.runtime.play_mut().session_mut().world_mut();
             // A Camera2d makes it a 2D scene: ara-render2d draws it.
             let capture = if two_d::camera(world).is_some() {
-                let atlases = two_d::atlases(world, &assets(&self.cache, &self.pins)?)?;
+                let atlases = two_d::atlases(world, source.as_ref())?;
                 presenter2d.context("no 2D presenter")?.capture(
                     world,
                     atlases,
@@ -645,6 +702,10 @@ impl World {
 
     /// `play.assets`: pins new generations and reloads them at this boundary.
     pub fn assets(&mut self, pins: &BTreeMap<String, String>) -> Result<Value> {
+        anyhow::ensure!(
+            self.packed.is_none(),
+            "shipped asset generations are immutable"
+        );
         for (id, digest) in pins {
             self.pins
                 .insert(id.clone(), Digest(unhex(digest).map_err(|e| anyhow!(e))?));
@@ -679,7 +740,7 @@ pub struct AudioInputs {
     /// Resident streamed cells with baked acoustics (cell, `Cell.acoustics`).
     pub resident: Vec<(String, AssetRef)>,
     /// Clips, graphs and probes resolve through the current pins.
-    pub assets: Arc<dyn ara_runtime::assets::AssetSource>,
+    pub assets: Option<Arc<dyn ara_runtime::assets::AssetSource>>,
 }
 
 /// Live Play audio and its bounded compressed-asset producers. Dropped on the
@@ -687,6 +748,7 @@ pub struct AudioInputs {
 pub struct Audio {
     presenter: AudioPresenter,
     voices: AssetVoices,
+    assets: Arc<dyn ara_runtime::assets::AssetSource>,
 }
 
 impl Audio {
@@ -709,10 +771,13 @@ pub fn update_audio(
     listener: &ara_audio::AudioListener,
     inputs: &AudioInputs,
 ) -> Result<()> {
-    audio
-        .presenter
-        .stream_cells(&inputs.resident, &inputs.assets);
-    audio.voices.set_assets(Arc::clone(&inputs.assets));
+    audio.presenter.stream_cells(
+        &inputs.resident,
+        inputs.assets.as_ref().unwrap_or(&audio.assets),
+    );
+    if let Some(assets) = &inputs.assets {
+        audio.voices.set_assets(Arc::clone(assets));
+    }
     audio.voices.refill()?;
     audio
         .presenter
