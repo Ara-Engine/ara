@@ -770,7 +770,12 @@ impl Shell {
         self.parts.clear();
         self.hidden_bodies.clear();
         let mut markup = String::from("<ui id='editor'>");
-        self.menubar(editor, &mut markup);
+        // The menubar and status bar are parts too: their frequent changes (the play
+        // state, the focused panel's hint) update in place instead of the skeleton.
+        let mut menubar = String::new();
+        self.menubar(editor, &mut menubar);
+        markup.push_str("<panel id='menubar' />");
+        self.parts.push(("menubar".into(), menubar));
         if editor.state.playing.is_some() {
             markup.push_str("<panel id='play-line' class='play-line' />");
         }
@@ -794,7 +799,10 @@ impl Shell {
         {
             self.node_palette(editor, &mut markup, &doc)?;
         }
-        self.statusbar(editor, &mut markup);
+        let mut statusbar = String::new();
+        self.statusbar(editor, &mut statusbar);
+        markup.push_str("<panel id='statusbar' />");
+        self.parts.push(("statusbar".into(), statusbar));
         self.overlays(editor, &mut markup)?;
         if editor.state.palette {
             self.palette(editor, &mut markup)?;
