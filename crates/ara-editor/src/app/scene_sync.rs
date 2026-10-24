@@ -3,8 +3,8 @@
 //! light list, materials, labels); anything else extracts and uploads the whole
 //! scene, as does a new model publication (placeholders become models). A failed
 //! upload is reported and retried; it never closes the editor. A native Scene
-//! ([`native`]) extracts its own instanced content: changes only invalidate the
-//! Scene view, and typed drafts reach it as a projected view.
+//! ([`native`]) takes the same patches through `SceneView::apply_patch`; a change no
+//! patch covers invalidates it (it extracts its own instanced content again).
 use super::viewport::SceneView;
 use super::*;
 use crate::world::{DocumentView, Patch};
@@ -149,8 +149,11 @@ impl SceneSync {
         // views: when one changed, only a full update shows it.
         let scene_only =
             crate::world::scene_only(editor.host.store(), self.revision, &editor.state.doc);
-        if native(editor, renderer) || !scene_only {
+        if !scene_only {
             return self.rebuild(new, editor, renderer, scene_view);
+        }
+        if native(editor, renderer) {
+            return self.commit_native(old, new, editor, renderer, scene_view);
         }
         self.revision = editor.host.store().revision();
         if self.stale.is_none()
@@ -175,6 +178,39 @@ impl SceneSync {
                     };
                 }
                 Err(error) => eprintln!("Scene patch failed, uploading the scene: {error}"),
+            }
+        }
+        self.rebuild(new, editor, renderer, scene_view)
+    }
+
+    /// [`commit`](Self::commit) on a native Scene: the patch (with what a preview
+    /// still shows) updates it in place; anything else invalidates it.
+    fn commit_native(
+        &mut self,
+        old: &DocumentView,
+        new: &DocumentView,
+        editor: &mut Editor,
+        renderer: &mut Renderer,
+        scene_view: &mut SceneView,
+    ) -> Stages {
+        if self.stale.is_none()
+            && let Some(patch) = old.patch_to(new, &editor.state.hidden)
+        {
+            let patch = patch.union(&self.shown);
+            let at = Instant::now();
+            match scene_view.apply_patch(renderer, editor, new, None, &patch) {
+                Ok(true) => {
+                    self.revision = editor.host.store().revision();
+                    self.forget();
+                    return Stages {
+                        upload_ms: at.elapsed().as_secs_f64() * 1000.,
+                        patched: true,
+                        native: true,
+                        ..Default::default()
+                    };
+                }
+                Ok(false) => {}
+                Err(error) => eprintln!("Scene patch failed, extracting the scene: {error}"),
             }
         }
         self.rebuild(new, editor, renderer, scene_view)
@@ -256,7 +292,7 @@ impl SceneSync {
         scene_view: &mut SceneView,
     ) -> bool {
         if native(editor, renderer) {
-            return self.project(view, editor, shell, scene_view);
+            return self.project(view, editor, shell, renderer, scene_view);
         }
         if self.stale.is_some() {
             return false;
@@ -311,37 +347,90 @@ impl SceneSync {
         true
     }
 
-    /// The native preview: typed drafts (any field) as a projected view. A gizmo drag
-    /// reaches the native Scene through `editor.gesture`; each new pose (and the end
-    /// of the drag) only needs the Scene rendered again.
+    /// The native preview, patched in place (`SceneView::apply_patch`): each new
+    /// gizmo pose, or the typed drafts projected on `view`. What the last preview
+    /// moved is restored with the next patch. When the Scene cannot patch, a drag
+    /// re-extracts on the next render and drafts go through `set_preview_view`.
     fn project(
         &mut self,
         view: &DocumentView,
         editor: &Editor,
         shell: &Shell,
+        renderer: &mut Renderer,
         scene_view: &mut SceneView,
     ) -> bool {
+        let hidden = &editor.state.hidden;
         if let Some(gesture) = &editor.gesture {
             if self.pose.as_ref() == Some(&gesture.current) {
                 return false;
             }
             self.pose = Some(gesture.current.clone());
+            let moved = view.gesture_patch(gesture, hidden);
+            self.patch_native(view, None, moved, editor, renderer, scene_view);
             return true;
         }
         let dragged = self.pose.take().is_some();
-        if self.drafts.as_ref() == Some(shell.drafts()) {
-            return dragged;
+        if !dragged && self.drafts.as_ref() == Some(shell.drafts()) {
+            return false;
         }
         self.drafts = Some(shell.drafts().clone());
         let target = shell
             .draft_records(editor, view)
             .map(|records| view.with_records(records));
-        if target.is_none() && !self.projected {
+        if target.is_none() && !self.projected && self.shown.is_empty() {
             return dragged;
         }
-        self.projected = target.is_some();
+        let projected = target.is_some();
+        let shows = match &target {
+            Some(target) => view.patch_to(target, hidden),
+            None => Some(Patch::default()),
+        };
+        let target = match shows {
+            Some(shows) => {
+                if self.patch_native(view, target, shows, editor, renderer, scene_view) {
+                    self.projected = projected;
+                    return true;
+                }
+                // The patch took the projection; build it again for the fallback.
+                shell
+                    .draft_records(editor, view)
+                    .map(|records| view.with_records(records))
+            }
+            None => target,
+        };
+        self.shown = Patch::default();
+        self.projected = projected;
         scene_view.set_preview_view(target);
         true
+    }
+
+    /// Patch the native Scene to show `preview` (None: `view`), where `shows` is what
+    /// it changes from `view`; what the previous preview changed is restored too.
+    /// False when the Scene could not patch in place.
+    fn patch_native(
+        &mut self,
+        view: &DocumentView,
+        preview: Option<DocumentView>,
+        shows: Patch,
+        editor: &Editor,
+        renderer: &mut Renderer,
+        scene_view: &mut SceneView,
+    ) -> bool {
+        if self.stale.is_some() {
+            return false;
+        }
+        let patch = shows.clone().union(&self.shown);
+        match scene_view.apply_patch(renderer, editor, view, preview, &patch) {
+            Ok(true) => {
+                self.shown = shows;
+                true
+            }
+            Ok(false) => false,
+            Err(error) => {
+                eprintln!("Scene preview patch failed, extracting the scene: {error}");
+                false
+            }
+        }
     }
 
     fn forget(&mut self) {

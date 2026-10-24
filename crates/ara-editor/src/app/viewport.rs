@@ -46,7 +46,6 @@ impl SceneView {
     }
     /// Update only `patch` on the retained native frame. A typed preview remains
     /// projected for later publication/resize rebuilds. False requests extraction.
-    #[allow(dead_code)] // SceneSync's companion wiring lands after this API checkpoint.
     pub(super) fn apply_patch(
         &mut self,
         renderer: &mut Renderer,
