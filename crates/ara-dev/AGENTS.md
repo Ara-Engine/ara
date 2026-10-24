@@ -13,6 +13,7 @@ Local developer binary. No engine dependencies; uses git and cargo as subprocess
 - `clean-worktrees`: inspect targets; deletion requires `--yes`, merged branch,
   stale files, clean checkout, no symlinks/reparse points and no active Cargo lock.
 - `disk`: all mounted drive free-space report.
+  Also flags configured Cargo outputs inside another checkout's target.
 
 Run `cargo test -p ara-dev`, `cargo clippy -p ara-dev --all-targets -- -D warnings`
 and `cargo fmt --all -- --check`. Set CARGO_BUILD_JOBS=2 on the shared PC.
@@ -22,3 +23,5 @@ Known failures require an explicit JSON file and exact test/output matches; fail
 Keep safety predicates pure and test them. Never silently restore test mutations.
 See `docs/dev/ara-dev.md` for usage and recovery details.
 `run.ps1` keeps bootstrap compilation separate and final binaries worktree-local.
+Cargo outputs default to this checkout's target. Explicit directories in another
+checkout's target (including nested caches/junctions) are rejected before builds.

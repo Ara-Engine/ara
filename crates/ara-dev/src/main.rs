@@ -2,6 +2,7 @@
 #![cfg_attr(test, allow(clippy::unwrap_used))]
 
 mod binaries;
+mod build_paths;
 mod check;
 mod git;
 mod gpu;
@@ -96,7 +97,13 @@ enum Command {
 fn run() -> Result<bool> {
     let cli = Cli::parse();
     if let Command::Disk { warn_gib } = cli.command {
-        return platform::disk(warn_gib);
+        let mut healthy = platform::disk(warn_gib)?;
+        if let Ok(root) = git::text(std::path::Path::new("."), ["rev-parse", "--show-toplevel"])
+            && PathBuf::from(&root).join("Cargo.toml").is_file()
+        {
+            healthy &= build_paths::disk_check(std::path::Path::new(&root))?;
+        }
+        return Ok(healthy);
     }
     if let Command::Gpu { timeout, command } = cli.command {
         return gpu::run(timeout, &command);

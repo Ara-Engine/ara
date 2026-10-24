@@ -7,9 +7,11 @@ the checkout; no Python, CMake, service or extra build tool is required.
 On Windows, use `.\crates\ara-dev\run.ps1 check --no-compiler-cache --json` for the fast entry. It
 builds the small tool through `%LOCALAPPDATA%\ara\dev-build`, keeping bootstrap
 compilation out of engine Cargo locks. Final tool and engine executable names
-stay under the worktree's `target/`; hashed engine intermediates retain the
-configured `CARGO_BUILD_BUILD_DIR`, or the original Cargo target directory. The
-script restores the caller's environment afterwards. The ordinary `cargo run`
+default to the worktree's `target/`; explicit independent output directories remain
+supported. Both target and build directories inside another checkout's target are
+rejected, including nested caches and junctions. An unset build directory defaults
+to this worktree's target, overriding global Cargo configuration. The script
+restores the caller's environment afterwards. The ordinary `cargo run`
 entry remains supported.
 
 `check --no-compiler-cache` (also supported by `merge`) clears `RUSTC_WRAPPER`
@@ -193,7 +195,13 @@ cargo run -p ara-dev -- clean-worktrees --yes
 ```
 
 Disk reports every mounted drive and returns failure below the warning threshold
-(default 20 GiB). Cleanup lists registered worktrees and recursively measures each
+(default 20 GiB). In a Rust checkout it also inspects effective Cargo target/build
+directories, including global configuration, and flags another checkout's target.
+Inspection uses read-only Cargo metadata with a ten-second deadline. `check` and
+`merge` reject explicit foreign outputs before building or changing merge state;
+wrapped GPU commands use the same output guard. Use the Windows entry script to
+keep the tool's bootstrap itself independent of global Cargo target settings.
+Cleanup lists registered worktrees and recursively measures each
 local target directory. Inspection is the default. Deletion requires `--yes`, a
 branch already merged into local main (`--base` selects another ref), no tracked
 or untracked changes, and no file/directory writes within six hours (`--hours`).

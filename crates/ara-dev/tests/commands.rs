@@ -108,6 +108,95 @@ fn fixture() -> PathBuf {
 }
 
 #[test]
+fn cargo_outputs_stay_local_and_foreign_targets_are_reported_before_writes() {
+    let _serial = SERIAL.lock().unwrap_or_else(|p| p.into_inner());
+    let root = fixture();
+    let other = scratch("foreign-checkout");
+    fs::create_dir_all(other.join(".git")).unwrap();
+    let foreign = other.join("target/nested-cache");
+    let binary = env!("CARGO_BIN_EXE_ara-dev");
+    for args in [
+        vec!["check", "--base", "HEAD", "--plan", "--json"],
+        vec!["merge", "HEAD"],
+        vec!["disk", "--warn-gib", "0"],
+        vec![
+            "gpu",
+            "--timeout",
+            "1",
+            "--",
+            binary,
+            "disk",
+            "--warn-gib",
+            "0",
+        ],
+    ] {
+        let output = configured_command(&root, binary, &args)
+            .env("LOCALAPPDATA", root.join("target/gpu-path-test"))
+            .env("CARGO_BUILD_BUILD_DIR", &foreign)
+            .output()
+            .unwrap();
+        assert!(!output.status.success());
+        let text = format!(
+            "{}{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert!(text.contains("another checkout's target"), "{text}");
+        assert!(!foreign.exists());
+        assert!(!root.join(".git/MERGE_HEAD").exists());
+    }
+    fs::create_dir_all(root.join(".cargo")).unwrap();
+    fs::write(
+        root.join(".cargo/config.toml"),
+        format!(
+            "[build]\ntarget-dir = {0:?}\nbuild-dir = {0:?}\n",
+            foreign.to_string_lossy().replace('\\', "/")
+        ),
+    )
+    .unwrap();
+    let plan = configured_command(
+        &root,
+        binary,
+        &["check", "--base", "HEAD", "--plan", "--json"],
+    )
+    .env_remove("CARGO_TARGET_DIR")
+    .env_remove("CARGO_BUILD_TARGET_DIR")
+    .env_remove("CARGO_BUILD_BUILD_DIR")
+    .output()
+    .unwrap();
+    assert!(
+        plan.status.success(),
+        "{}",
+        String::from_utf8_lossy(&plan.stderr)
+    );
+    let run = fs::read_dir(root.join("target/ara-dev"))
+        .unwrap()
+        .next()
+        .unwrap()
+        .unwrap()
+        .path();
+    let metadata: serde_json::Value =
+        serde_json::from_slice(&fs::read(run.join("metadata.json")).unwrap()).unwrap();
+    for name in ["target_directory", "build_directory"] {
+        assert_eq!(
+            Path::new(metadata[name].as_str().unwrap())
+                .canonicalize()
+                .unwrap(),
+            root.join("target").canonicalize().unwrap()
+        );
+    }
+    let disk = configured_command(&root, binary, &["disk", "--warn-gib", "0"])
+        .env_remove("CARGO_TARGET_DIR")
+        .env_remove("CARGO_BUILD_TARGET_DIR")
+        .env_remove("CARGO_BUILD_BUILD_DIR")
+        .output()
+        .unwrap();
+    assert!(!disk.status.success());
+    assert!(String::from_utf8_lossy(&disk.stderr).contains("another checkout's target"));
+    assert!(!foreign.exists());
+}
+
+#[test]
 fn check_selects_reverse_dependencies_and_keeps_json_stdout_clean() {
     let _serial = SERIAL.lock().unwrap_or_else(|p| p.into_inner());
     let root = fixture();
