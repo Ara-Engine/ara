@@ -5,6 +5,8 @@
 //! Hosts map the scene's authored look onto [`Look`] and call
 //! [`crate::Renderer::set_look`] at a frame boundary. The defaults reproduce the
 //! M1 baseline: manual exposure, the ACES fit, no bloom, no sky and no fog.
+pub(crate) mod cascades;
+pub(crate) mod far;
 pub(crate) mod frame;
 pub mod gi;
 pub(crate) mod gpu;
@@ -90,8 +92,10 @@ pub struct Shadows {
     pub cascades: u32,
     /// Texels per cascade side (power of two, 256 to 4096).
     pub resolution: u32,
-    /// Shadowed view distance in metres; shadows fade out over its last tenth.
+    /// Cascaded view distance in metres; the last tenth blends into `far`.
     pub distance: f32,
+    /// Distant shadows beyond the cascades; without one they fade to unshadowed.
+    pub far: Option<FarShadows>,
 }
 impl Default for Shadows {
     fn default() -> Self {
@@ -99,8 +103,21 @@ impl Default for Shadows {
             cascades: 4,
             resolution: 512,
             distance: 100.,
+            far: None,
         }
     }
+}
+
+/// One cached shadow map for distant terrain and buildings past the cascades: a
+/// square region around the camera, recentred only when the camera travels a
+/// quarter of `distance`, and redrawn only when the sun turns, the region
+/// recentres or casters inside it change.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct FarShadows {
+    /// Texels per side (power of two, 256 to 4096).
+    pub resolution: u32,
+    /// Shadowed view distance in metres (beyond the cascades).
+    pub distance: f32,
 }
 
 impl Quality {
@@ -113,6 +130,12 @@ impl Quality {
                 && (256..=4096).contains(&s.resolution)
                 && s.distance.is_finite()
                 && s.distance > 1.
+                && s.far.is_none_or(|far| {
+                    far.resolution.is_power_of_two()
+                        && (256..=4096).contains(&far.resolution)
+                        && far.distance.is_finite()
+                        && far.distance > s.distance
+                })
                 && self.gi_budget > 0
                 && self.reflections.is_none_or(|r| {
                     (0.0..=1.0).contains(&r.max_roughness)

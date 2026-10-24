@@ -171,6 +171,20 @@
       "vertex_stride": 0
     }
   },
+  "look_gi_scatter": {
+    "entries": {
+      "giScatterMain": "compute"
+    },
+    "source": "look-gi.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
   "look_multiscatter": {
     "entries": {
       "multiScatterMain": "compute"
