@@ -61,8 +61,9 @@ ECS; `Scene` is an immutable render extraction snapshot, not authoritative state
   cached D32 map per cascade, redrawn only when its matrix or the casters in its
   light volume change, outer cascades snapped coarsely so they survive motion),
   a cached far map past them (`look::far`), half-res GTAO, half-res SSR (cone
-  footprint into a colour pyramid of last frame), GI relight budget, bloom. Look
-  images are allocated lazily (the bindless storage heap is shared). Probe GI is
+  footprint into a colour pyramid of last frame), GI relight budget, bloom,
+  emitter light budget. Look images are allocated lazily (the bindless storage
+  heap is shared). Probe GI is
   gathered at half resolution for G-buffer pixels.
 - `set_deferred_post` + `finish(color, sampled, state)`: temporally resolve and grade
   an externally composited HDR frame (landscape, particles) with the same look post.
@@ -92,7 +93,8 @@ history readers decode with the state's previous multiplier; look passes learn
 whether their input is history or linear HDR from root word 7.
 Local light lists are tiled 16x16: `scene::MAX_LOCAL_LIGHTS` (256) per scene, the
 first `TILE_LIGHTS` (128) per tile. Spot lumens are point-equivalent (the cone
-masks), as in the path tracer; `Light::parameters.z` softens the near field.
+masks), as in the path tracer; `Light::parameters.z` softens the near field and
+`parameters.w` = 1 keeps a light out of fog (unshadowed emitter lights).
 
 Capture determinism resets history, fixes host tick/seed, disables jitter/history
 blending, locks exposure and renders the explicit settle count. No wall clock or

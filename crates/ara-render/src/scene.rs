@@ -73,7 +73,8 @@ pub struct Light {
     /// Spot forward direction xyz and cosine of outer cone half-angle.
     pub direction_outer: [f32; 4],
     /// Type (0 point, 1 spot), inner cone cosine, source radius in metres (the
-    /// near field softens inside it; zero for an ideal point); w reserved.
+    /// near field softens inside it; zero for an ideal point), and w: one keeps
+    /// the light out of fog in-scattering (emitter lights), zero includes it.
     pub parameters: [f32; 4],
 }
 

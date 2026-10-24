@@ -206,20 +206,21 @@ impl NativeResidency {
         Ok(id)
     }
 
-    /// Mean linear RGBA of a registered map, decoded on the CPU from its coarsest
-    /// level of at least one whole block (sRGB maps are linearised per texel). For
-    /// one-time consumers such as probe GI bakes on a worker thread; residency
-    /// uploads never decode. `None` for unknown IDs or undecodable levels.
-    pub fn mean_texel(&self, id: u32) -> Option<[f32; 4]> {
+    /// Linear RGBA texels (row-major) of a registered map, decoded on the CPU from
+    /// its finest level of at least one whole block with both sides at most
+    /// `max_side`, else its coarsest such level (sRGB maps are linearised per
+    /// texel). For one-time consumers on worker threads, such as probe GI bakes and
+    /// emitter lights; residency uploads never decode. `None` for unknown IDs or
+    /// undecodable levels.
+    pub fn texels(&self, id: u32, max_side: u32) -> Option<([u32; 2], Vec<[f32; 4]>)> {
         let entry = self.entries.get(id as usize)?;
         let source = &entry.source;
+        let size = |level: u32| source.mip(level).map(|m| m.size);
+        let whole = |level: &u32| size(*level).is_some_and(|[w, h]| w >= 4 && h >= 4);
         let level = (0..source.mip_count())
-            .rev()
-            .find(|&level| {
-                source
-                    .mip(level)
-                    .is_some_and(|m| m.size[0] >= 4 && m.size[1] >= 4)
-            })
+            .filter(whole)
+            .find(|&level| size(level).is_some_and(|[w, h]| w.max(h) <= max_side))
+            .or_else(|| (0..source.mip_count()).rev().find(whole))
             .unwrap_or(0);
         let mip = source.mip(level)?;
         let [w, h] = mip.size.map(|v| v as usize);
@@ -233,23 +234,41 @@ impl NativeResidency {
             _ => return None,
         }
         .ok()?;
-        let linear = |v: f64| {
+        let linear = |v: f32| {
             if v <= 0.04045 {
                 v / 12.92
             } else {
                 ((v + 0.055) / 1.055).powf(2.4)
             }
         };
+        let texels = pixels
+            .iter()
+            .map(|p| {
+                // Decoded texels are 0xAARRGGBB.
+                let rgba = [(p >> 16) & 255, (p >> 8) & 255, p & 255, p >> 24];
+                let mut texel = rgba.map(|v| v as f32 / 255.);
+                if entry.srgb {
+                    for v in &mut texel[..3] {
+                        *v = linear(*v);
+                    }
+                }
+                texel
+            })
+            .collect();
+        Some((mip.size, texels))
+    }
+
+    /// Mean linear RGBA of a registered map over its coarsest level of at least
+    /// one whole block ([`Self::texels`]).
+    pub fn mean_texel(&self, id: u32) -> Option<[f32; 4]> {
+        let (_, texels) = self.texels(id, 4)?;
         let mut sum = [0f64; 4];
-        for p in &pixels {
-            // Decoded texels are 0xAARRGGBB.
-            let rgba = [(p >> 16) & 255, (p >> 8) & 255, p & 255, p >> 24];
-            for (i, v) in rgba.into_iter().enumerate() {
-                let v = f64::from(v) / 255.;
-                sum[i] += if entry.srgb && i < 3 { linear(v) } else { v };
+        for texel in &texels {
+            for (sum, v) in sum.iter_mut().zip(texel) {
+                *sum += f64::from(*v);
             }
         }
-        let n = pixels.len().max(1) as f64;
+        let n = texels.len().max(1) as f64;
         Some(sum.map(|s| (s / n) as f32))
     }
 

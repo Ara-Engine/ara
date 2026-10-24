@@ -94,7 +94,8 @@ void fogMain(uint3 tid:SV_DispatchThreadID){
         else source+=density*albedo*ambient;
         if(density>0)for(uint i=0;i<lights;i++){
             Light light=buffers[NonUniformResourceIndex(f.lighting.w)].Load<Light>(i*64);
-            float3 delta=light.positionRange.xyz-at;float distance=length(delta);if(distance>light.positionRange.w)continue;
+            // parameters.w: unshadowed emitter lights stay out of the fog.
+            float3 delta=light.positionRange.xyz-at;float distance=length(delta);if(distance>light.positionRange.w||light.parameters.w>0.5)continue;
             float3 toLight=delta/max(distance,0.001);
             float spot=light.parameters.x<0.5?1:smoothstep(light.directionOuter.w,max(light.directionOuter.w+1e-4,light.parameters.y),dot(-toLight,light.directionOuter.xyz));
             float fade=pow(saturate(1-pow(distance/light.positionRange.w,4)),2);

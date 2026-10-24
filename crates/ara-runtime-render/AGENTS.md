@@ -52,11 +52,13 @@ device and per-view upload state; no simulation, window or process code.
   worker's persistent CPU tracer re-traces only nearby probes
   (`gi_cpu::affected`), which `Renderer::update_probe_surfaces` blends in.
   `tests/gi_edits.rs` checks a moved block's old spot against a fresh view.
-  Emissive surfaces (`emitters.rs`, above 5 cd/m2) light the scene directly: each
-  becomes a local light carrying its flux (flat ones hemispherical spots, sized by
-  area), small neighbours clustered only as far as the light budget needs; the
-  lights follow their instances and ride after the scene's own. Probe bakes zero
-  those materials' emission, so probes keep only their bounce.
+  Emissive surfaces (`emitters.rs`, above 5 cd/m2) light the scene directly. A
+  worker thread samples each emitter's triangles through its emissive map into
+  0.75 m patches and casts rays against its own mesh: the flux escaping the
+  fixture (shades, sockets) and its lobe become spot or point lights (two-sided
+  only for open sheets, as in the path tracer), clustered until they fit
+  `Quality::emitter_lights`. They follow their instances, ride after the scene's
+  own lights and stay out of fog. Probe bakes zero those materials' emission.
   `stats().gpu: Option<GpuFrameCosts>` splits native scene updates, compressed
   texture uploads, VFX simulation/draw, raster/fidelity passes and publication.
   Residency counters accompany that same frame, including native Low. The legacy

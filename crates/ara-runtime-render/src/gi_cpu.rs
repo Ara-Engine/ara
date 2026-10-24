@@ -255,7 +255,7 @@ fn traverse(
 }
 
 /// One geometry's model-space triangles and their BVH.
-struct Mesh {
+pub(crate) struct Mesh {
     nodes: Vec<Node>,
     triangles: Vec<Triangle>,
 }
@@ -267,7 +267,7 @@ impl Mesh {
     }
 
     /// The geometry's triangles at LOD `level` (or its coarsest).
-    fn of(geometry: &Geometry, level: usize) -> Self {
+    pub(crate) fn of(geometry: &Geometry, level: usize) -> Self {
         let Some(lod) = geometry
             .lods
             .get(level.min(geometry.lods.len().saturating_sub(1)))
@@ -307,13 +307,13 @@ impl Mesh {
     }
 
     /// Model bounds (empty when the mesh has no triangles).
-    fn bounds(&self) -> (Vec3, Vec3) {
+    pub(crate) fn bounds(&self) -> (Vec3, Vec3) {
         self.nodes.first().map_or(EMPTY, |n| (n.min, n.max))
     }
 
     /// Closest hit with 0.001 < t < `limit`: distance and model-space normal.
     /// `direction` need not be unit length; t is in its units.
-    fn trace(&self, origin: Vec3, direction: Vec3, limit: f32) -> Option<(f32, Vec3)> {
+    pub(crate) fn trace(&self, origin: Vec3, direction: Vec3, limit: f32) -> Option<(f32, Vec3)> {
         let mut normal = None;
         let distance = traverse(
             &self.nodes,

@@ -290,6 +290,7 @@ impl QualityPreset {
                 reflections: None,
                 gi_budget: 1024,
                 bloom: false,
+                emitter_lights: 4,
             },
             Self::Medium => Quality {
                 shadows: shadows(3, 1024, 100., (1024, 1000.)),
@@ -297,6 +298,7 @@ impl QualityPreset {
                 reflections: ssr(0.4, 20., 16),
                 gi_budget: 2048,
                 bloom: true,
+                emitter_lights: 6,
             },
             Self::High => Quality {
                 shadows: shadows(4, 2048, 150., (2048, 1500.)),
@@ -304,6 +306,7 @@ impl QualityPreset {
                 reflections: ssr(0.5, 30., 24),
                 gi_budget: 2048,
                 bloom: true,
+                emitter_lights: 8,
             },
             Self::Epic => Quality {
                 shadows: shadows(4, 2048, 250., (2048, 2000.)),
@@ -311,6 +314,7 @@ impl QualityPreset {
                 reflections: ssr(0.6, 50., 32),
                 gi_budget: 4096,
                 bloom: true,
+                emitter_lights: 16,
             },
         }
     }
