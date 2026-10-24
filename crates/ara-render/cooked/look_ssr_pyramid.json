@@ -4,10 +4,10 @@
   "key": "13a474e71348b232f8325ef99c2b1d97a71dcb70130df2b9b26ba7a07a8504e1",
   "stages": [
     {
-      "dxil": "25497b047531f62c4ea6d828dfbc6d85715bbb533d18ba1a5ee8a593c459e256/ssrPyramidMain.dxil",
+      "dxil": "13a474e71348b232f8325ef99c2b1d97a71dcb70130df2b9b26ba7a07a8504e1/ssrPyramidMain.dxil",
       "dxil_hash": "e0af05ad03150309717311d91a8883dd3ddbf057332efe220a40c3406462ff4e",
       "source_entry": "ssrPyramidMain",
-      "spirv": "25497b047531f62c4ea6d828dfbc6d85715bbb533d18ba1a5ee8a593c459e256/ssrPyramidMain.spv",
+      "spirv": "13a474e71348b232f8325ef99c2b1d97a71dcb70130df2b9b26ba7a07a8504e1/ssrPyramidMain.spv",
       "spirv_entry": "main",
       "spirv_hash": "5c32ced5c31b5742059248613ae9dd6f00ec0e9fbac83d718acb6dd1d1c9c622",
       "stage": "compute"

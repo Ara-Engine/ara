@@ -4,19 +4,19 @@
   "key": "13a474e71348b232f8325ef99c2b1d97a71dcb70130df2b9b26ba7a07a8504e1",
   "stages": [
     {
-      "dxil": "25497b047531f62c4ea6d828dfbc6d85715bbb533d18ba1a5ee8a593c459e256/shadowFragment.dxil",
+      "dxil": "13a474e71348b232f8325ef99c2b1d97a71dcb70130df2b9b26ba7a07a8504e1/shadowFragment.dxil",
       "dxil_hash": "092fc63c68a592a6047d07a802ec8bb9d3ceadc01f22bfdd886e5d060cde75a3",
       "source_entry": "shadowFragment",
-      "spirv": "25497b047531f62c4ea6d828dfbc6d85715bbb533d18ba1a5ee8a593c459e256/shadowFragment.spv",
+      "spirv": "13a474e71348b232f8325ef99c2b1d97a71dcb70130df2b9b26ba7a07a8504e1/shadowFragment.spv",
       "spirv_entry": "main",
       "spirv_hash": "10e9dd8534ff71176ae34196a44f3f201732363ae1bafe0938088569ee1cc7e9",
       "stage": "fragment"
     },
     {
-      "dxil": "25497b047531f62c4ea6d828dfbc6d85715bbb533d18ba1a5ee8a593c459e256/shadowVertex.dxil",
+      "dxil": "13a474e71348b232f8325ef99c2b1d97a71dcb70130df2b9b26ba7a07a8504e1/shadowVertex.dxil",
       "dxil_hash": "58ab83f60b1fca754c9919efe2ffb9b67c4307bed7aff48c8d6bff167a593528",
       "source_entry": "shadowVertex",
-      "spirv": "25497b047531f62c4ea6d828dfbc6d85715bbb533d18ba1a5ee8a593c459e256/shadowVertex.spv",
+      "spirv": "13a474e71348b232f8325ef99c2b1d97a71dcb70130df2b9b26ba7a07a8504e1/shadowVertex.spv",
       "spirv_entry": "main",
       "spirv_hash": "c94128dce9b122fe10ad51279d887e29d94de560600971934a5a628d3d84b0a7",
       "stage": "vertex"

@@ -4,10 +4,10 @@
   "key": "13a474e71348b232f8325ef99c2b1d97a71dcb70130df2b9b26ba7a07a8504e1",
   "stages": [
     {
-      "dxil": "25497b047531f62c4ea6d828dfbc6d85715bbb533d18ba1a5ee8a593c459e256/aoTraceMain.dxil",
+      "dxil": "13a474e71348b232f8325ef99c2b1d97a71dcb70130df2b9b26ba7a07a8504e1/aoTraceMain.dxil",
       "dxil_hash": "5cb88e35e4ee8ed00b3c96983f7d6f1bac9cc224983f5764df309722d6144e43",
       "source_entry": "aoTraceMain",
-      "spirv": "25497b047531f62c4ea6d828dfbc6d85715bbb533d18ba1a5ee8a593c459e256/aoTraceMain.spv",
+      "spirv": "13a474e71348b232f8325ef99c2b1d97a71dcb70130df2b9b26ba7a07a8504e1/aoTraceMain.spv",
       "spirv_entry": "main",
       "spirv_hash": "6cb405fbd36690d282efe61a5bfb7f85c2a53551e0d3476619feeb7bf4b242de",
       "stage": "compute"

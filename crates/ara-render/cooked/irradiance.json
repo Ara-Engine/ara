@@ -4,10 +4,10 @@
   "key": "13a474e71348b232f8325ef99c2b1d97a71dcb70130df2b9b26ba7a07a8504e1",
   "stages": [
     {
-      "dxil": "25497b047531f62c4ea6d828dfbc6d85715bbb533d18ba1a5ee8a593c459e256/irradianceMain.dxil",
+      "dxil": "13a474e71348b232f8325ef99c2b1d97a71dcb70130df2b9b26ba7a07a8504e1/irradianceMain.dxil",
       "dxil_hash": "946e33fa461ffab3424943fc94fba9db62b6b7139ab1004a56ae33cd77a850c9",
       "source_entry": "irradianceMain",
-      "spirv": "25497b047531f62c4ea6d828dfbc6d85715bbb533d18ba1a5ee8a593c459e256/irradianceMain.spv",
+      "spirv": "13a474e71348b232f8325ef99c2b1d97a71dcb70130df2b9b26ba7a07a8504e1/irradianceMain.spv",
       "spirv_entry": "main",
       "spirv_hash": "7808452ae474bdaee22e95f5af20915159791e2998dcde384ac59e5f086107de",
       "stage": "compute"
