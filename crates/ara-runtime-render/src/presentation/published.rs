@@ -110,7 +110,11 @@ impl Presenter {
             .as_mut()
             .context("presentation device")?
             .gpu_mut();
-        self.stats.gpu_ms += Published::publish(&mut self.published, gpu, source, self.size)?;
+        let elapsed = Published::publish(&mut self.published, gpu, source, self.size)?;
+        self.stats.gpu_ms += elapsed;
+        if let Some(costs) = &mut self.stats.gpu {
+            costs.publication_ms = elapsed;
+        }
         Ok(())
     }
 }

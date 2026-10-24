@@ -132,6 +132,7 @@ impl Presenter {
         frame: &RenderFrame,
         resolve: impl FnOnce() -> Result<Content>,
     ) -> Result<()> {
+        ara_gpu::cpu_scope!("Presenter.prepare");
         let started = Instant::now();
         self.ensure_device()?;
         let renderer = self
@@ -246,6 +247,10 @@ impl Presenter {
                     .update_native_scene(renderer.gpu_mut(), &live.prepared.scene)?;
                 live.lighting_changed |= update.lighting;
                 self.stats.gpu_ms = update.gpu_ms;
+                self.stats.gpu = Some(GpuFrameCosts {
+                    scene_update_ms: update.gpu_ms,
+                    ..Default::default()
+                });
             }
         }
         self.plan = Some(plan);
@@ -264,18 +269,16 @@ impl Presenter {
         frame: &RenderFrame,
         resolve: impl FnOnce() -> Result<Content>,
     ) -> Result<()> {
+        ara_gpu::cpu_scope!("Presenter.present");
         let result = (|| {
             self.prepare_with(frame, resolve)?;
             let started = Instant::now();
             let source = if let Some(live) = &mut self.live {
                 let renderer = self.renderer.as_mut().context("presentation device")?;
-                self.stats.gpu_ms += live.render(renderer.gpu_mut(), frame)?;
-                self.stats.gpu_ms += live
-                    .view
-                    .timings()
-                    .iter()
-                    .map(|pass| pass.milliseconds)
-                    .sum::<f64>();
+                let mut costs = live.render(renderer.gpu_mut(), frame)?;
+                costs.scene_update_ms = self.stats.gpu_ms;
+                self.stats.gpu_ms = costs.accounted_ms();
+                self.stats.gpu = Some(costs);
                 live.view.output()
             } else {
                 self.present_baseline(frame)?;

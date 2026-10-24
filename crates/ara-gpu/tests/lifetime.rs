@@ -5,6 +5,53 @@ use ara_gpu::{
     vk,
     vulkan::{Command, VulkanDevice},
 };
+
+#[test]
+fn retired_buffer_memory_can_back_fresh_buffers_on_either_queue() -> Result<()> {
+    let cache =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/ara-gpu/buffer-reuse");
+    let mut gpu = VulkanDevice::new(&[], cache)?;
+    for iteration in 0..24u32 {
+        let size = if iteration % 3 == 0 { 8192 } else { 4096 };
+        let source = gpu.create_buffer(
+            size,
+            vk::BufferUsageFlags::TRANSFER_SRC | vk::BufferUsageFlags::SHADER_DEVICE_ADDRESS,
+            true,
+        )?;
+        let destination = gpu.create_buffer(size, vk::BufferUsageFlags::TRANSFER_DST, true)?;
+        let expected = vec![iteration as u8; size as usize];
+        gpu.upload(source, &expected)?;
+        let queue = if iteration % 2 == 0 {
+            Queue::Graphics
+        } else {
+            Queue::Compute
+        };
+        let mut commands = gpu.begin(queue);
+        commands.push(Command::CopyBuffer {
+            source,
+            destination,
+            size,
+        });
+        commands.barriers([Barrier {
+            resource: Resource::Buffer(destination),
+            before: Access::CopyDestination,
+            after: Access::HostRead,
+            handoff: None,
+        }]);
+        let point = gpu.submit(commands.finish(), &[])?;
+        // Collection before completion must never recycle memory still in use.
+        gpu.retire(Resource::Buffer(source))?;
+        gpu.collect()?;
+        gpu.resolve(point)?;
+        assert_eq!(gpu.read(destination)?, expected);
+        assert!(gpu.upload(source, &[0]).is_err());
+        gpu.retire(Resource::Buffer(destination))?;
+        gpu.collect()?;
+    }
+    gpu.assert_clean()?;
+    Ok(())
+}
+
 #[test]
 fn static_acceleration_lifetime_and_copy_contracts() -> Result<()> {
     let cache = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../.sn/test-gpu");

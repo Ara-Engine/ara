@@ -40,9 +40,10 @@ struct Launch {
     encryption_key_env: Option<String>,
 }
 
-pub(super) fn run(args: Args) -> Result<()> {
-    let began = Instant::now();
+pub(super) fn run(args: Args, began: Instant) -> Result<()> {
     let mut phases = std::collections::BTreeMap::new();
+    // Include crash-monitor setup and executable hashing in launch latency.
+    phases.insert("bootstrap_ms", began.elapsed().as_millis());
     let root = args.standalone.root.as_ref().map_or_else(
         || {
             std::env::current_exe()?
@@ -140,6 +141,7 @@ pub(super) fn run(args: Args) -> Result<()> {
         let mut previous = Instant::now();
         let mut frames = 0;
         while args.standalone.frames.is_none_or(|limit| frames < limit) {
+            ara_gpu::cpu_scope!("Player.standalone_frame");
             if perf.control(&mut presenter)? {
                 break;
             }
@@ -152,10 +154,16 @@ pub(super) fn run(args: Args) -> Result<()> {
                 world.runtime.input(0, inputs)?;
             }
             let now = Instant::now();
-            world.runtime.advance(now.duration_since(previous))?;
+            {
+                ara_gpu::cpu_scope!("Player.advance");
+                world.runtime.advance(now.duration_since(previous))?;
+            }
             previous = now;
             world.mark();
-            world.runtime.extract(&mut frame);
+            {
+                ara_gpu::cpu_scope!("Player.extract");
+                world.runtime.extract(&mut frame);
+            }
             let simulation_done = Instant::now();
             if is_2d {
                 let tick = world.runtime.tick();
@@ -170,6 +178,7 @@ pub(super) fn run(args: Args) -> Result<()> {
             }
             let presentation_done = Instant::now();
             if let Some((audio, device)) = &mut audio {
+                ara_gpu::cpu_scope!("Player.audio");
                 let inputs = world.audio_inputs()?;
                 world::update_audio(
                     audio,
@@ -198,6 +207,10 @@ pub(super) fn run(args: Args) -> Result<()> {
                 frame_gpu_ms += presenter.stats().gpu_ms;
             }
             frames += 1;
+            #[cfg(feature = "tracy")]
+            if let Some(client) = ara_gpu::__tracy::Client::running() {
+                client.frame_mark();
+            }
             if perf.enabled() {
                 let camera = frame.camera.map(|camera| json!({"position":camera.position,"forward":camera.forward,"fov":camera.fov}));
                 if perf.frame(
