@@ -70,7 +70,7 @@ Surface surfaceMaterial(NativeMaterial m,Varying v){
     s.normal=normalize(t*n.x+cross(normal,t)*handedness*n.y+normal*n.z);
     float4 mr=sampleMap(m,2,v);s.roughness=clamp(m.pbr.emissiveRoughness.w*mr.g,0.045,1);s.metal=saturate(m.pbr.surface.x*mr.b);
     s.emissive=max(0,m.pbr.emissiveRoughness.rgb*sampleMap(m,3,v).rgb);
-    s.ao=lerp(1,sampleMap(m,4,v).r,m.factors.x);return s;
+    s.ao=lerp(1,sampleMap(m,4,v).r,m.factors.x);s.transmission=0;return s;
 }
 Surface surface(Varying v){
     NativeMaterial m=material(v.material);Surface s=surfaceMaterial(m,v);
