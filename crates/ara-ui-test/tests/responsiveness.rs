@@ -342,3 +342,28 @@ fn removals_release_their_layout_space() -> Result<()> {
     assert_eq!(y(&ui), 100.);
     Ok(())
 }
+
+/// A reconcile is all or nothing: an editor raw color (D18), a bad inline style or an
+/// invalid widget value in new or restyled nodes is rejected and the tree stays as it
+/// was; unchanged nodes are not re-validated.
+#[test]
+fn rejected_reconciles_leave_the_tree_unchanged() -> Result<()> {
+    let mut text = TextSystem::bundled()?;
+    let base = "<ui id='app'><panel id='a' style='height:10px' /><button id='b' text='Go' /></ui>";
+    let mut ui = Ui::editor(base, EDITOR_CSS, [200., 100.])?;
+    ui.frame(&mut text)?;
+    let before = ui.nodes.len();
+    for bad in [
+        "<ui id='app'><panel id='a' style='background:#ff0000' /><button id='b' text='Go' /></ui>",
+        "<ui id='app'><panel id='a' style='height:10px' /><panel id='c' style='color:rgb(1,2,3)' /></ui>",
+        "<ui id='app'><panel id='a' style='height:ten' /><button id='b' text='Go' /></ui>",
+        "<ui id='app'><panel id='a' style='height:10px' /><slider id='s' min='2' max='1' /></ui>",
+    ] {
+        assert!(ui.reconcile(bad).is_err(), "{bad}");
+        assert_eq!(ui.nodes.len(), before);
+        assert!(ui.find("b").is_some());
+    }
+    assert!(ui.reconcile(base)?.unchanged());
+    assert_eq!(ui.frame(&mut text)?, ara_ui::Work::default());
+    Ok(())
+}

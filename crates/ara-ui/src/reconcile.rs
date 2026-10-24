@@ -48,20 +48,17 @@ impl Ui {
     /// (a host echoing each keystroke). Runtime-appended children (virtual rows) are
     /// dropped unless the markup lists them.
     pub fn reconcile(&mut self, markup: &str) -> Result<Reconciled> {
-        if self.editor_checks {
-            crate::theme::check_inline(markup)?;
-        }
         let elements = source::compile(markup)?;
+        let mut by_id: HashMap<String, usize> = HashMap::with_capacity(self.nodes.len());
+        for (i, node) in self.nodes.iter().enumerate() {
+            by_id.entry(node.element.id.clone()).or_insert(i);
+        }
+        self.validate(&elements, &by_id)?;
+        // Nothing below fails on its own: the tree is replaced, or left as it was.
         let mut old: Vec<Option<Node>> = std::mem::take(&mut self.nodes)
             .into_iter()
             .map(Some)
             .collect();
-        let mut by_id: HashMap<String, usize> = HashMap::with_capacity(old.len());
-        for (i, node) in old.iter().enumerate() {
-            if let Some(node) = node {
-                by_id.entry(node.element.id.clone()).or_insert(i);
-            }
-        }
         let mut old_widgets = std::mem::take(&mut self.widgets);
         let mut widgets = BTreeMap::new();
         let mut report = Reconciled::default();
@@ -132,6 +129,34 @@ impl Ui {
         Ok(report)
     }
 
+    /// Everything a reconcile can reject, checked before the tree changes: widget
+    /// values, and for new or restyled nodes their cascade and (editor surfaces, D18)
+    /// raw colors in inline styles.
+    fn validate(&self, elements: &[Element], by_id: &HashMap<String, usize>) -> Result<()> {
+        for element in elements {
+            let old = by_id
+                .get(&element.id)
+                .map(|i| &self.nodes[*i])
+                .filter(|n| n.element.tag == element.tag);
+            let restyled = old.is_none_or(|n| {
+                STYLE_ATTRS
+                    .iter()
+                    .any(|a| n.element.attrs.get(*a) != element.attrs.get(*a))
+            });
+            if restyled {
+                if self.editor_checks {
+                    crate::theme::check_node_style(element)?;
+                }
+                let state = crate::style::State {
+                    disabled: element.attrs.get("disabled").is_some_and(|v| v == "true"),
+                    ..Default::default()
+                };
+                self.sheet.compute(element, state)?;
+            }
+            Widget::parse(element)?;
+        }
+        Ok(())
+    }
     /// Bring a kept node up to date with its new element.
     fn update(
         &mut self,
