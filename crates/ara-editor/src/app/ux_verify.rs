@@ -11,6 +11,8 @@ enum Setup {
     Main,
     Menu(usize, Option<usize>),
     Context(Context),
+    /// A toolbar dropdown opened under its button: (button id, its menu).
+    Dropdown(&'static str, Context),
     Palette(&'static str),
     Settings(&'static str),
     Float(&'static str),
@@ -28,6 +30,10 @@ const STEPS: &[(&str, Setup)] = &[
     ("context-viewport", Setup::Context(Context::Viewport)),
     ("context-field", Setup::Context(Context::Field)),
     ("context-tab", Setup::Context(Context::Tab)),
+    (
+        "menu-lighting",
+        Setup::Dropdown("view-mode", Context::ViewModes),
+    ),
     ("palette", Setup::Palette("fra")),
     ("palette-entities", Setup::Palette("@")),
     ("settings", Setup::Settings("")),
@@ -286,6 +292,15 @@ impl UxVerification {
                 } else if !shell.open_context(editor)? {
                     return Err(format!("no context menu for {kind:?}").into());
                 }
+            }
+            Setup::Dropdown(button, kind) => {
+                let r = shell
+                    .ui
+                    .find(button)
+                    .map(|i| shell.ui.nodes[i].rect)
+                    .ok_or("dropdown button not visible")?;
+                shell.pointer = [r.x, r.y + r.h];
+                shell.open_viewport_menu(editor, kind, Target::None)?;
             }
             Setup::Palette(query) => {
                 editor.action("editor.search", json!({"panel": "palette", "query": query}))?;

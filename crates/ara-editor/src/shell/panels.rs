@@ -371,27 +371,28 @@ impl Shell {
                 "Perspective",
                 "Camera views and speed",
             );
-            let mode = match editor.state.view_mode.as_str() {
-                "baseColor" => "Base color",
-                "normals" => "Normals",
-                "depth" => "Depth",
-                "roughnessMetal" => "Rough / metal",
-                "entityIds" => "Entity IDs",
-                "shadowCascades" => "Cascades",
-                _ => {
-                    if editor.state.quality {
-                        "Lit · Fidelity"
-                    } else {
-                        "Lit · Raster"
-                    }
-                }
+            let state = &editor.state;
+            let mode = match state.view_mode.as_str() {
+                "baseColor" => "Base color".into(),
+                "normals" => "Normals".into(),
+                "depth" => "Depth".into(),
+                "roughnessMetal" => "Rough / metal".into(),
+                "entityIds" => "Entity IDs".into(),
+                "shadowCascades" => "Cascades".into(),
+                // Lit shows the preset the view renders with (`Lit · Auto` until detected).
+                _ => format!(
+                    "Lit · {}",
+                    state
+                        .resolve_quality(state.render_choice())
+                        .map_or("Auto", crate::state::preset_title)
+                ),
             };
             self.tool_menu(
                 out,
                 "view-mode",
                 Context::ViewModes,
                 "sun-medium",
-                mode,
+                &mode,
                 "View mode and rendering quality",
             );
             self.tool_menu(

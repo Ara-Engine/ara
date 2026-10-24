@@ -67,6 +67,9 @@ pub struct InputState {
     focus: Option<u64>,
     hover: Option<u64>,
     capture: Option<u64>,
+    /// Where the captured control was when pressed: a release there still activates
+    /// it after a rebuild or slow frame moved it (press/release match by stable ID).
+    capture_rect: Option<crate::paint::Box2>,
     drag: Option<(u64, serde_json::Value)>,
 }
 impl InputState {
@@ -286,6 +289,7 @@ impl InputState {
                     }
                     self.focus_to(ui, Some(id));
                     self.capture = Some(id);
+                    self.capture_rect = Some(ui.nodes[i].rect);
                     ui.select_text_at(i, p, false, clipboard)?;
                     let mut state = ui.nodes[i].state;
                     state.active = true;
@@ -295,6 +299,7 @@ impl InputState {
             }
             InputEvent::PointerUp(p) => {
                 let captured = self.capture.take();
+                let pressed_at = self.capture_rect.take();
                 if let Some(i) = captured.and_then(|id| ui.by_id(id)) {
                     let mut state = ui.nodes[i].state;
                     state.active = false;
@@ -306,7 +311,10 @@ impl InputState {
                                 serde_json::json!({"source":source,"payload":payload}),
                             );
                         }
-                    } else if hit(self, ui, p) == Some(i)
+                    } else if (hit(self, ui, p) == Some(i)
+                        || pressed_at.is_some_and(|r| r.contains(p[0], p[1]))
+                            && is_focusable(&ui.nodes[i])
+                            && self.in_scope(ui, i))
                         && !matches!(
                             ui.widgets.get(&stable_id(&ui.nodes[i].element.id)),
                             Some(

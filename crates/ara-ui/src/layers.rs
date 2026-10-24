@@ -1,5 +1,5 @@
 //! Popup/menu/tooltip/modal composition over the same retained tree and input scopes.
-use crate::{Result, Ui, input::InputState, source::stable_id};
+use crate::{Result, Ui, input::InputState};
 /// Overlay routing policy.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum LayerKind {
@@ -103,11 +103,15 @@ impl LayerStack {
 }
 impl Ui {
     /// Runtime visibility mutation; authoring changes still go through source commands.
+    /// The current visibility again is a no-op.
     pub fn set_visible(&mut self, index: usize, visible: bool) -> Result<()> {
         let n = self
             .nodes
             .get_mut(index)
             .ok_or("ARA4046: invalid node handle")?;
+        if n.visible == visible {
+            return Ok(());
+        }
         n.visible = visible;
         let mut style = self.tree.style(n.layout_id)?.clone();
         style.display = if visible {
@@ -134,9 +138,6 @@ impl Ui {
     }
     /// Authored ID for host action routing from a stable identity.
     pub fn authored_id(&self, id: u64) -> Option<&str> {
-        self.nodes
-            .iter()
-            .find(|n| stable_id(&n.element.id) == id)
-            .map(|n| n.element.id.as_str())
+        self.by_id(id).map(|i| self.nodes[i].element.id.as_str())
     }
 }

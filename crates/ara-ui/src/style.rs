@@ -40,7 +40,7 @@ impl Color {
     }
 }
 /// Independent pointer, focus, active and disabled selector states.
-#[derive(Clone, Copy, Default, Debug, PartialEq)]
+#[derive(Clone, Copy, Default, Debug, PartialEq, Eq, Hash)]
 pub struct State {
     /// Control is pressed or pointer-captured.
     pub active: bool,
@@ -191,10 +191,28 @@ pub struct Rule {
     declarations: Vec<ara_ui_document::stylesheet::Declaration>,
     body_offset: usize,
 }
-/// Typed stylesheet rules and semantic tokens in cascade order.
+/// Typed stylesheet rules and semantic tokens in cascade order. Computed styles are
+/// memoized by what selectors can see (tag, class, inline style, state and, when an
+/// ID rule names it, the ID); swapping tokens (`set_tokens`) clears the memo.
 pub struct Sheet {
     rules: Vec<Rule>,
     tokens: BTreeMap<String, String>,
+    /// `:root` tokens from the source, under any theme overrides.
+    base_tokens: BTreeMap<String, String>,
+    /// The theme's overrides on top of `base_tokens`.
+    overrides: BTreeMap<String, String>,
+    /// IDs some rule selects by `#id`.
+    id_rules: std::collections::HashSet<String>,
+    memo: std::cell::RefCell<std::collections::HashMap<StyleKey, Computed>>,
+}
+/// What a computed style depends on, apart from the sheet itself.
+#[derive(PartialEq, Eq, Hash)]
+struct StyleKey {
+    tag: String,
+    class: Option<String>,
+    style: Option<String>,
+    id: Option<String>,
+    state: State,
 }
 impl Sheet {
     /// Eagerly validate local declarations with an ARA location in the original markup.
@@ -231,7 +249,11 @@ impl Sheet {
         let syntax = ara_ui_document::stylesheet::Stylesheet::parse(source)?;
         let mut sheet = Self {
             rules: Vec::new(),
-            tokens: syntax.tokens,
+            tokens: syntax.tokens.clone(),
+            base_tokens: syntax.tokens,
+            overrides: tokens.clone(),
+            id_rules: Default::default(),
+            memo: Default::default(),
         };
         sheet.tokens.extend(tokens);
         for rule in syntax.rules {
@@ -265,7 +287,30 @@ impl Sheet {
             }
         }
         sheet.rules.sort_by_key(|r| r.selector.priority());
+        sheet.id_rules = sheet
+            .rules
+            .iter()
+            .filter(|r| r.selector.kind == '#')
+            .map(|r| r.selector.name.clone())
+            .collect();
         Ok(sheet)
+    }
+    /// Replace the theme's token overrides without recompiling rules (a theme switch).
+    /// Returns whether any token changed; unchanged tokens keep every computed style.
+    pub fn set_tokens(&mut self, tokens: BTreeMap<String, String>) -> bool {
+        let mut next = self.base_tokens.clone();
+        next.extend(tokens.clone());
+        self.overrides = tokens;
+        if next == self.tokens {
+            return false;
+        }
+        self.tokens = next;
+        self.memo.get_mut().clear();
+        true
+    }
+    /// The theme overrides in effect (kept when the stylesheet is replaced).
+    pub fn overrides(&self) -> &BTreeMap<String, String> {
+        &self.overrides
     }
     /// Matching source declarations in cascade order, for inspector provenance.
     pub fn provenance(&self, e: &Element, state: State) -> Vec<serde_json::Value> {
@@ -301,8 +346,29 @@ impl Sheet {
         }
         Err("ARA4013: cyclic or excessive token nesting".into())
     }
-    /// Apply matching rules in specificity/source order, followed by local overrides.
+    /// Apply matching rules in specificity/source order, followed by local overrides
+    /// (memoized: equal tag, class, inline style and state share one cascade).
     pub fn compute(&self, e: &Element, state: State) -> Result<Computed> {
+        let key = StyleKey {
+            tag: e.tag.clone(),
+            class: e.attrs.get("class").cloned(),
+            style: e.attrs.get("style").cloned(),
+            id: self.id_rules.contains(&e.id).then(|| e.id.clone()),
+            state,
+        };
+        if let Some(c) = self.memo.borrow().get(&key) {
+            return Ok(c.clone());
+        }
+        let c = self.cascade(e, state)?;
+        let mut memo = self.memo.borrow_mut();
+        // Positional inline styles (tooltips, overlays) are unbounded; start over.
+        if memo.len() >= 4096 {
+            memo.clear();
+        }
+        memo.insert(key, c.clone());
+        Ok(c)
+    }
+    fn cascade(&self, e: &Element, state: State) -> Result<Computed> {
         let mut c = Computed::defaults(&e.tag);
         if let Some(value) = self.tokens.get("--foreground") {
             c.color = Color::parse(value)?;

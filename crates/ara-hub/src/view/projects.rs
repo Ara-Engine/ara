@@ -257,7 +257,7 @@ fn grid(p: &mut Page, hub: &Hub, ctx: &Ctx, visible: &[&Project]) {
             for project in visible {
                 let hot = hub.highlight.as_deref() == Some(project.id.as_str());
                 let class = if hot { "card card-hot" } else { "card" };
-                p.panel(class, |p| {
+                p.panel_key(&project.id, class, |p| {
                     p.panel_styled("thumb", &format!("height:{thumb}px"), |p| {
                         p.thumbnail(
                             ctx,
@@ -330,7 +330,7 @@ fn list(p: &mut Page, hub: &Hub, ctx: &Ctx, visible: &[&Project]) {
             }
             let hot = hub.highlight.as_deref() == Some(project.id.as_str());
             let class = if hot { "list-row list-hot" } else { "list-row" };
-            p.panel(class, |p| {
+            p.panel_key(&project.id, class, |p| {
                 p.panel("list-thumb", |p| {
                     p.thumbnail(
                         ctx,

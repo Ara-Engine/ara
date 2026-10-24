@@ -33,10 +33,15 @@ pub struct TextSystem {
     pub context: LayoutContext<u8>,
     /// Registered renderer resources used by shaped runs.
     pub assets: Vec<FontAsset>,
-    /// Cumulative paragraph shaping counter.
+    /// Cumulative paragraph shaping counter (cache misses only).
     pub shapes: usize,
     families: String,
+    /// Recently shaped paragraphs, unbroken, by text, family and size: a recreated
+    /// node (a remounted virtual row, a re-shown panel) re-breaks instead of reshaping.
+    shaped: std::collections::HashMap<(String, Option<String>, u32), Layout<u8>>,
 }
+/// Shaped paragraphs kept for reuse before the cache starts over.
+const SHAPE_CACHE: usize = 4096;
 /// Cached shaped paragraph; width changes rebreak lines without reshaping runs.
 pub struct Text {
     /// Current UTF-8 display string.
@@ -116,25 +121,35 @@ impl TextSystem {
             assets: Vec::new(),
             shapes: 0,
             families: families.into(),
+            shaped: Default::default(),
         })
     }
     /// Width is the content-box constraint from Taffy's leaf measure callback.
     pub fn measure(&mut self, text: &mut Text, width: Option<f32>, size: f32) -> Measure {
         let width = width.map(|w| w.max(1.0));
         if text.dirty || text.size != size {
-            let mut builder = self
-                .context
-                .ranged_builder(&mut self.fonts, &text.value, 1.0, true);
-            builder.push_default(StyleProperty::FontSize(size));
-            builder.push_default(FontFamily::from(
-                text.family.as_deref().unwrap_or(self.families.as_str()),
-            ));
-            builder.push_default(LineHeight::FontSizeRelative(1.5));
-            builder.build_into(&mut text.layout, &text.value);
+            let key = (text.value.clone(), text.family.clone(), size.to_bits());
+            if let Some(layout) = self.shaped.get(&key) {
+                text.layout.clone_from(layout);
+            } else {
+                let mut builder =
+                    self.context
+                        .ranged_builder(&mut self.fonts, &text.value, 1.0, true);
+                builder.push_default(StyleProperty::FontSize(size));
+                builder.push_default(FontFamily::from(
+                    text.family.as_deref().unwrap_or(self.families.as_str()),
+                ));
+                builder.push_default(LineHeight::FontSizeRelative(1.5));
+                builder.build_into(&mut text.layout, &text.value);
+                self.shapes += 1;
+                if self.shaped.len() >= SHAPE_CACHE {
+                    self.shaped.clear();
+                }
+                self.shaped.insert(key, text.layout.clone());
+            }
             text.size = size;
             text.dirty = false;
             text.width = None;
-            self.shapes += 1;
         }
         if text.width != width || text.layout.is_empty() {
             text.layout.break_all_lines(width);

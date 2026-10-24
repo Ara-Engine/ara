@@ -357,6 +357,11 @@ impl Shell {
         });
         changed
     }
+    /// A pressed tab has moved far enough to show a drop preview; until then its
+    /// release is a click on the tab.
+    pub fn tab_dragging(&self) -> bool {
+        matches!(self.drag, Some(Drag::Tab { .. })) && self.drop_preview.is_some()
+    }
     /// The panel being dragged, if a tab drag is active.
     pub fn dragged_tab(&self) -> Option<&str> {
         match &self.drag {

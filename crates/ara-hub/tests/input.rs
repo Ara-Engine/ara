@@ -96,3 +96,53 @@ fn typing_in_search_keeps_focus_and_caret_across_rebuilds() {
         .expect("backspace");
     assert_eq!(app.actions(), [Intent::Search("co".into())]);
 }
+
+#[test]
+fn model_echo_keeps_mid_string_caret_and_undo_history() {
+    let (mut app, mut hub) = setup();
+    hub.intent(Intent::Search("cour".into()));
+    app.rebuild(&mut hub, capture::NOW).expect("initial text");
+    click(&mut app, "search");
+    let mut clipboard = NoClipboard;
+    for _ in 0..2 {
+        app.input
+            .event(
+                &mut app.ui,
+                InputEvent::Edit(EditEvent::Move {
+                    forward: false,
+                    select: false,
+                }),
+                &mut clipboard,
+            )
+            .expect("move caret");
+    }
+    app.input
+        .event(
+            &mut app.ui,
+            InputEvent::Edit(EditEvent::Insert("x".into())),
+            &mut clipboard,
+        )
+        .expect("insert in middle");
+    for intent in app.actions() {
+        hub.intent(intent);
+    }
+    assert_eq!(hub.search, "coxur");
+    // The model echoes the edited value into markup; that is not a new external value.
+    app.rebuild(&mut hub, capture::NOW).expect("model echo");
+    app.input
+        .event(
+            &mut app.ui,
+            InputEvent::Edit(EditEvent::Undo),
+            &mut clipboard,
+        )
+        .expect("undo after echo");
+    assert_eq!(app.actions(), [Intent::Search("cour".into())]);
+    app.input
+        .event(
+            &mut app.ui,
+            InputEvent::Edit(EditEvent::Insert("i".into())),
+            &mut clipboard,
+        )
+        .expect("caret restored by undo");
+    assert_eq!(app.actions(), [Intent::Search("coiur".into())]);
+}

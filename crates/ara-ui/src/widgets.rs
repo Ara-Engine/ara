@@ -145,15 +145,7 @@ impl Ui {
     }
     /// Look up a stable authored/model-key identity; recycled pool slots are never identities.
     pub fn by_id(&self, id: u64) -> Option<usize> {
-        self.paint_order
-            .iter()
-            .copied()
-            .find(|i| stable_id(&self.nodes[*i].element.id) == id)
-            .or_else(|| {
-                self.nodes
-                    .iter()
-                    .position(|n| stable_id(&n.element.id) == id)
-            })
+        self.lookup(id, |n| stable_id(&n.element.id) == id)
     }
     /// Push a model value into a toggle without emitting a user action.
     pub fn set_checked(&mut self, index: usize, value: bool) -> Result<()> {
