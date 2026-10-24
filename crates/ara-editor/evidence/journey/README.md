@@ -11,9 +11,9 @@ ara-editor <copy of samples/outpost> --verify-journey --size 2560x1369 --dpi 1 -
 with the dev profile (optimized) on the RTX 4070 SUPER, dark theme. Only a compact
 set is committed: `1440/` holds the 1440×900 frames as WebP (quality 90) and
 `journey.json`, about 3 MB. The full PNG sets at both sizes, with each step's
-`.layout.json` dump, stay out of history (they were under
-`target/journey-evidence/88b59c84/{1440,2560}` on the machine that produced them).
-Regenerating replaces the compact set; it should stay well under 10 MB. The project is
+`.layout.json` dump, stay out of history: the two runs above write them to their
+`--output` folders, so regenerate them when they are needed (they are refreshed at
+release). Regenerating replaces the compact set; it should stay well under 10 MB. The project is
 the complete Outpost (sources fetched, `.ara/cache` warm); each step's capture waits
 until the Scene's content is published. The window is hidden and the UI is read back
 offscreen. Each step drives the editor's own paths: registry commands (the same ones
