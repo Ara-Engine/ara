@@ -95,6 +95,9 @@ target/release/ara-samples editor outpost levels/outpost.scene outpost --camera 
     **Cooked data fixed (`9f2813f`):** independent texture transforms/UV selectors,
     emissive strength, transmission and cook-time companion opacity maps. Renderer
     consumption is tracked by the renderer workstream.
+    **Sample workarounds removed (`44119d0`):** the original pinned Poly Haven
+    fence uses its source UV transforms and opacity maps; no generated fence or
+    build-time alpha merge remains.
 12. **Physical sky, fog, exposure and post cannot be authored in a scene.** `Environment`
     is a 3-colour gradient plus a linear exposure; the fidelity atmosphere, height fog,
     EV100/auto-exposure, tone mapper and bloom are view settings only. The samples keep
@@ -139,6 +142,15 @@ target/release/ara-samples editor outpost levels/outpost.scene outpost --camera 
     number `7014`, which `ara-diag`'s coverage test does not see.
 
 ## P2: authoring friction (CLI/MCP dogfood)
+
+The sample migration is committed in `44119d0`. Both `ara-samples build outpost`
+and `build showcase` pass `ara check`; repeating both changes none of 926 content
+hashes. Native prefabs, source-node selectors, emissive controls and surface graphs
+replace derived model variants. Centered colliders replace companion entities,
+automatic physics identities replace counters, and `transform.lookAt` replaces
+custom aiming. The terrain's signed origin replaces `outpost::SHIFT`.
+`doc.delete` (`b434883`) makes cleanup attributed and undoable; rebuilds retain
+their journals. Same-agent `ara accept --all` succeeds with no pending transactions.
 
 19. **No `doc.create`.** New scenes, terrains, foliage, animation and music documents
     must be written by hand as empty canonical skeletons before commands can fill them.
