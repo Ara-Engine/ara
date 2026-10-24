@@ -91,6 +91,8 @@ pub(crate) struct LookGpu {
     pub gi: Option<GiGpu>,
     /// Distant shadows past the cascades (`Shadows::far`).
     pub far: Option<super::far::FarMap>,
+    /// The cached cascade maps (`Shadows`).
+    pub cascades: Option<super::cascades::Cascades>,
     /// Reused host staging for probe records: buffer, capacity, storage index.
     pub probe_staging: Option<(Buffer, usize, u32)>,
 }
@@ -104,6 +106,8 @@ pub(crate) struct LookIds {
     pub gi: Option<[ResourceId; 5]>,
     /// The far shadow map.
     pub far: Option<ResourceId>,
+    /// The cascade maps, in cascade order.
+    pub cascades: Vec<ResourceId>,
 }
 
 impl LookIds {
@@ -180,6 +184,7 @@ impl LookGpu {
             deferred_history: None,
             gi: None,
             far: None,
+            cascades: None,
             probe_staging: None,
         })
     }
@@ -333,6 +338,13 @@ impl LookGpu {
                     queue: Queue::Graphics,
                 },
             ),
+            cascades: self.cascades.as_ref().map_or_else(Vec::new, |c| {
+                c.images
+                    .iter()
+                    .zip(&c.states)
+                    .map(|(&image, &state)| graph.import(Resource::Image(image), state))
+                    .collect()
+            }),
             far: self
                 .far
                 .as_ref()
@@ -372,6 +384,11 @@ impl LookGpu {
         }
         if let (Some(far), Some(id)) = (&mut self.far, ids.far) {
             far.state = final_states[id.0];
+        }
+        if let Some(cascades) = &mut self.cascades {
+            for (state, id) in cascades.states.iter_mut().zip(&ids.cascades) {
+                *state = final_states[id.0];
+            }
         }
     }
 }

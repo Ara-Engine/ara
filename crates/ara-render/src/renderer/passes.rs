@@ -60,13 +60,28 @@ impl Renderer {
         // The far map redraws only when its view, content or casters inside it
         // changed; its draws read the far matrix as cascade 0 of their own frame
         // record, and native casters come from a culled pass of their own.
-        if let Some(mut far) = self.look.far.take() {
-            match self.native_caster_changes() {
-                Some(changes) => far.cache.observe(changes.all, changes.bounds),
-                None => far.cache.observe(false, &[]),
-            }
-            self.look.far = Some(far);
+        // Cached shadow maps forget what changed casters reach; legacy (non-native)
+        // content reports no changes, so its maps redraw every frame.
+        if self.look.cascades.is_none() {
+            self.ensure_cascades()?;
         }
+        let (mut far, mut cascades) = (self.look.far.take(), self.look.cascades.take());
+        let (all, bounds) = match self.native_caster_changes() {
+            Some(changes) => (changes.all, changes.bounds),
+            None => (true, &[][..]),
+        };
+        if let Some(far) = &mut far {
+            far.cache.observe(all, bounds);
+        }
+        if let Some(cascades) = &mut cascades {
+            cascades.observe(all, bounds);
+        }
+        (self.look.far, self.look.cascades) = (far, cascades);
+        let cascade_draw: Vec<usize> = self.look.cascades.as_ref().map_or_else(Vec::new, |c| {
+            (0..c.images.len())
+                .filter(|&i| c.needs_draw(i, frame.shadows[i]))
+                .collect()
+        });
         let far_draw = match &self.look.far {
             Some(far) => {
                 let (matrix, view) = crate::look::far::FarMap::fit(
@@ -105,6 +120,11 @@ impl Renderer {
             },
         );
         let mut look_frame = look_frame;
+        if let Some(cascades) = &self.look.cascades {
+            for (slot, &index) in look_frame.cascade_maps.iter_mut().zip(&cascades.sampled) {
+                *slot = index;
+            }
+        }
         if let Some(far) = &self.look.far {
             let drawn = far_draw
                 .map(|(matrix, _)| matrix)
@@ -201,15 +221,29 @@ impl Renderer {
             debug_assert_eq!(id.0, recipes.len(), "passes are declared in order");
             recipes.push(recipe);
         };
-        let shadow = graph.pass(
-            "ShadowAtlas.Cascades",
-            Queue::Graphics,
-            [(ids[SHADOW], Access::Depth)],
-        );
-        declare(shadow, Recipe::Shadow);
+        // Only cascades whose matrix or casters changed are redrawn; shadow passes
+        // read materials (alpha tests) like every shaded pass.
+        let mut shadow_passes = Vec::new();
+        if !cascade_draw.is_empty() {
+            let shadow = graph.pass(
+                "ShadowAtlas.Cascades",
+                Queue::Graphics,
+                cascade_draw
+                    .iter()
+                    .map(|&i| (look.cascades[i], Access::Depth)),
+            );
+            declare(shadow, Recipe::Shadow);
+            shadow_passes.push(shadow);
+        }
+        let cascade_reads: Vec<_> = look
+            .cascades
+            .iter()
+            .map(|&id| (id, Access::ShaderRead))
+            .collect();
         if let (Some(far), Some(_)) = (look.far, far_draw) {
             let pass = graph.pass("ShadowAtlas.Far", Queue::Graphics, [(far, Access::Depth)]);
             declare(pass, Recipe::FarShadow);
+            shadow_passes.push(pass);
         }
         let far_read = look.far.map(|far| (far, Access::ShaderRead));
         let gbuffer = graph.pass(
@@ -242,7 +276,7 @@ impl Renderer {
             declare(id, Recipe::Look(pass));
         }
         let mut sky_shared = graphics.clone();
-        sky_shared.push((ids[SHADOW], Access::ShaderRead));
+        sky_shared.extend(cascade_reads.iter().copied());
         sky_shared.extend(far_read);
         let sun = {
             let d = self.content.sun_direction;
@@ -272,11 +306,11 @@ impl Renderer {
                 (ids[NORMAL], Access::ShaderRead),
                 (ids[MATERIAL], Access::ShaderRead),
                 (ids[WORLD], Access::ShaderRead),
-                (ids[SHADOW], Access::ShaderRead),
                 (tile, Access::ShaderRead),
                 (ids[HDR], Access::Color),
             ]
             .into_iter()
+            .chain(cascade_reads.iter().copied())
             .chain(far_read)
             .chain(look_reads.iter().copied()),
         );
@@ -292,16 +326,17 @@ impl Renderer {
                 (ids[WORLD], Access::Color),
                 (ids[DEPTH], Access::Depth),
                 (ids[ID], Access::Color),
-                (ids[SHADOW], Access::ShaderRead),
                 (tile, Access::ShaderRead),
             ]
             .into_iter()
+            .chain(cascade_reads.iter().copied())
             .chain(far_read)
             .chain(look_reads.iter().copied())
             .chain(self.native.as_ref().map(|_| (ids[MOTION], Access::Color))),
         );
         declare(forward, Recipe::Forward);
-        let mut shaded = vec![shadow, gbuffer, lighting, forward];
+        let mut shaded = shadow_passes;
+        shaded.extend([gbuffer, lighting, forward]);
         // Deferred post leaves the lit scene in HDR for external composites (`finish`).
         // Captures always produce their own output, never a deferred frame.
         let deferred = self.look.deferred && matches!(mode, ViewMode::Lit) && !capture;
@@ -347,9 +382,9 @@ impl Renderer {
                     (ids[WORLD], Access::ShaderRead),
                     (ids[ID], Access::ShaderRead),
                     (ids[DEPTH], Access::ShaderRead),
-                    (ids[SHADOW], Access::ShaderRead),
                 ]
                 .into_iter()
+                .chain(cascade_reads.iter().copied())
                 .chain(far_read),
             );
             declare(tonemap, Recipe::Tonemap);
@@ -427,20 +462,26 @@ impl Renderer {
             recorder.barriers(pass.before.iter().copied());
             match recipes[pass.id.0] {
                 Recipe::Shadow => {
+                    let maps = self
+                        .look
+                        .cascades
+                        .as_ref()
+                        .expect("a cascade pass is declared only with cascade maps");
                     recorder.push(Command::Pipeline(self.pipelines.shadow));
-                    recorder.push(Command::BeginRendering {
-                        colors: Vec::new(),
-                        depth: Some(Attachment {
-                            image: self.targets.images[SHADOW],
-                            clear: Some([0.; 4]),
-                        }),
-                        size: [self.look.quality.shadows.resolution * 2; 2],
-                    });
-                    for (cascade, (origin, size)) in
-                        self.cascade_viewports().into_iter().enumerate()
-                    {
-                        let cascade = cascade as u32;
-                        recorder.push(Command::Viewport { origin, size });
+                    for &index in &cascade_draw {
+                        let cascade = index as u32;
+                        recorder.push(Command::BeginRendering {
+                            colors: Vec::new(),
+                            depth: Some(Attachment {
+                                image: maps.images[index],
+                                clear: Some([0.; 4]),
+                            }),
+                            size: [maps.resolution; 2],
+                        });
+                        recorder.push(Command::Viewport {
+                            origin: [0, 0],
+                            size: [maps.resolution; 2],
+                        });
                         if let Some(native) = &self.native {
                             let mut constants = root;
                             constants.words[4] = cascade;
@@ -460,8 +501,8 @@ impl Renderer {
                             recorder.push(Command::Constants(constants));
                             recorder.push(Command::Draw(draw(mesh)));
                         }
+                        recorder.push(Command::EndRendering);
                     }
-                    recorder.push(Command::EndRendering);
                 }
                 Recipe::FarShadow => {
                     let far = self
@@ -679,6 +720,11 @@ impl Renderer {
         self.look.finish(&look, &compiled.final_states);
         if let (Some(far), Some((matrix, view))) = (&mut self.look.far, far_draw) {
             far.cache.drawn(matrix, view);
+        }
+        if let Some(cascades) = &mut self.look.cascades {
+            for &index in &cascade_draw {
+                cascades.drawn(index, frame.shadows[index]);
+            }
         }
         if let Some(gi) = &mut self.look.gi {
             gi.advance(self.look.quality.gi_budget);

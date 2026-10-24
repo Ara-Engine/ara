@@ -10,7 +10,7 @@ use glam::{Mat4, Vec3};
 
 /// Frames a far map waits before redrawing for moved casters (distant moving
 /// shadows may lag this much); a new view or new content redraws at once.
-const STALE_FRAMES: u32 = 8;
+const STALE_FRAMES: u32 = 30;
 
 /// What a far map shows; it is redrawn whenever this changes.
 #[derive(Clone, Copy, PartialEq, Debug)]
@@ -163,7 +163,7 @@ impl FarMap {
 }
 
 /// Whether world bounds `lo..hi` reach the light volume of `matrix`.
-fn overlaps(matrix: Mat4, lo: Vec3, hi: Vec3) -> bool {
+pub(crate) fn overlaps(matrix: Mat4, lo: Vec3, hi: Vec3) -> bool {
     let (mut min, mut max) = (Vec3::splat(f32::INFINITY), Vec3::splat(f32::NEG_INFINITY));
     for corner in 0..8u32 {
         let pick = |bit: u32, axis: usize| {

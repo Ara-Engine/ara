@@ -1,24 +1,24 @@
 {
   "binding_layout_hash": "35cd2a62b1ba741ce6823b3c8753d7b5aa97b54c5f0a837b56e542518013fd7e",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "e142a6475548c0b1fba6257bb9ccca530a4286dbcd4bc69e81c032cdae736c70",
+  "key": "7474f9297e1fa2f870868cdf9221158ffd46d1f232340bad598215865deb8ac8",
   "stages": [
     {
-      "dxil": "e142a6475548c0b1fba6257bb9ccca530a4286dbcd4bc69e81c032cdae736c70/fullscreenVertex.dxil",
+      "dxil": "7474f9297e1fa2f870868cdf9221158ffd46d1f232340bad598215865deb8ac8/fullscreenVertex.dxil",
       "dxil_hash": "ff35b220dc2593313e4fa107adf9b40eb716f17d0162d3e1bc9f9ed58af2cac2",
       "source_entry": "fullscreenVertex",
-      "spirv": "e142a6475548c0b1fba6257bb9ccca530a4286dbcd4bc69e81c032cdae736c70/fullscreenVertex.spv",
+      "spirv": "7474f9297e1fa2f870868cdf9221158ffd46d1f232340bad598215865deb8ac8/fullscreenVertex.spv",
       "spirv_entry": "main",
       "spirv_hash": "eb7b0d82a0a495581c8b587bea13d84dadcd40956fe60b35e880bb401481af49",
       "stage": "vertex"
     },
     {
-      "dxil": "e142a6475548c0b1fba6257bb9ccca530a4286dbcd4bc69e81c032cdae736c70/lightingFragment.dxil",
-      "dxil_hash": "fdae3466fea0b91a37c1dd3ad41c63f6e9b85e82bc8dd6a52f2d021843e4445a",
+      "dxil": "7474f9297e1fa2f870868cdf9221158ffd46d1f232340bad598215865deb8ac8/lightingFragment.dxil",
+      "dxil_hash": "a0902549eba6e413f9bc730856a5e46262f385f4043b14995150e0d617abe34e",
       "source_entry": "lightingFragment",
-      "spirv": "e142a6475548c0b1fba6257bb9ccca530a4286dbcd4bc69e81c032cdae736c70/lightingFragment.spv",
+      "spirv": "7474f9297e1fa2f870868cdf9221158ffd46d1f232340bad598215865deb8ac8/lightingFragment.spv",
       "spirv_entry": "main",
-      "spirv_hash": "80a31f7ff2c3347783f019a3a184dcbea85ef4a235e2675a8f74d831ebb834df",
+      "spirv_hash": "9a7b4e2909ba5212def2bcdeb000e2e98694bd11e77a60e21e0e68f173c643fa",
       "stage": "fragment"
     }
   ],

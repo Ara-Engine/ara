@@ -30,6 +30,7 @@ struct Look {
     float4 weather;    // x cloud coverage (0..1), y cloud layer altitude (m)
     float4x4 farShadow; // light view-projection of the far shadow map
     uint4 farInfo;     // x far map (sampled), y texels per side, z drawn (0: none)
+    uint4 cascadeMaps; // sampled cascade maps, in cascade order
 };
 static const uint LOOK_PHYSICAL_SKY=1,LOOK_FOG=2,LOOK_RESET=4,LOOK_AMBIENT_OCCLUSION=8,LOOK_REFLECTIONS=16;
 Look look(Frame f){return buffers[NonUniformResourceIndex(f.look.x)].Load<Look>(0);}

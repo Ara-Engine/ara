@@ -5,6 +5,7 @@
 //! Hosts map the scene's authored look onto [`Look`] and call
 //! [`crate::Renderer::set_look`] at a frame boundary. The defaults reproduce the
 //! M1 baseline: manual exposure, the ACES fit, no bloom, no sky and no fog.
+pub(crate) mod cascades;
 pub(crate) mod far;
 pub(crate) mod frame;
 pub mod gi;

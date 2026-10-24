@@ -57,11 +57,13 @@ ECS; `Scene` is an immutable render extraction snapshot, not authoritative state
   surfaces of the same lattice keeping the irradiance, so edits blend in.
 - `look::Quality` (`Renderer::set_quality`): per-preset budgets from
   `ara_render_fidelity::presets::RasterPlan`: shadow cascades (count, texels,
-  distance; stable light space, practical splits, gather PCF, cascade blend),
-  half-res GTAO, half-res SSR (deterministic mirror rays, roughness through a
-  colour pyramid of last frame), GI relight budget, bloom. `cascade_viewports()`
-  drives shadow submission. Look images are allocated lazily (the bindless storage
-  heap is shared). Probe GI is gathered at half resolution for G-buffer pixels.
+  distance; stable light space, practical splits, gather PCF, cascade blend; one
+  cached D32 map per cascade, redrawn only when its matrix or the casters in its
+  light volume change, outer cascades snapped coarsely so they survive motion),
+  a cached far map past them (`look::far`), half-res GTAO, half-res SSR (cone
+  footprint into a colour pyramid of last frame), GI relight budget, bloom. Look
+  images are allocated lazily (the bindless storage heap is shared). Probe GI is
+  gathered at half resolution for G-buffer pixels.
 - `set_deferred_post` + `finish(color, sampled, state)`: temporally resolve and grade
   an externally composited HDR frame (landscape, particles) with the same look post.
   TAA reprojects with native motion (Frame.look.w) when present.

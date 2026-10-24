@@ -80,7 +80,8 @@ impl Renderer {
             extra: [
                 self.targets.sampled[DEPTH],
                 self.targets.sampled[ID],
-                self.targets.sampled[SHADOW],
+                // Unused: the cascade maps live in the look record.
+                0,
                 self.content.environment,
             ],
             lighting: [
@@ -136,7 +137,10 @@ pub(super) fn cascade_splits(shadows: &crate::look::Shadows) -> [f32; 4] {
 }
 /// Light view-projections of the cascades. The light space has a fixed rotation
 /// and world origin, and each cascade's centre snaps to whole texels, so shadows
-/// stay still while the camera moves (no swimming edges).
+/// stay still while the camera moves (no swimming edges). Cascades past the first
+/// snap coarsely instead (a tenth of their radius, inside a matching margin), so
+/// their cached maps (look::cascades) survive camera moves and turns for many
+/// frames; the first keeps texel snapping for the sharpest near shadows.
 fn shadow_cascades(camera: &Camera, sun: Vec3, splits: [f32; 4], resolution: u32) -> [Mat4; 4] {
     let inverse = (camera.projection * camera.view).inverse();
     let up = if sun.dot(Vec3::Y).abs() > 0.99 {
@@ -169,14 +173,21 @@ fn shadow_cascades(camera: &Camera, sun: Vec3, splits: [f32; 4], resolution: u32
             * 16.)
             .ceil()
             / 16.;
+        let radius = if i == 0 { radius } else { radius * 1.1 };
         let texel = radius * 2. / resolution as f32;
+        let step = if i == 0 {
+            texel
+        } else {
+            ((radius * 0.1 / texel).round() * texel).max(texel)
+        };
         let c = light.transform_point3(centre);
-        let x = (c.x / texel).floor() * texel;
-        let y = (c.y / texel).floor() * texel;
+        let snap = |v: f32| (v / step).round() * step;
+        let (x, y) = (snap(c.x), snap(c.y));
         // Light-space z grows towards the sun: casters up to 200 m sunward of the
-        // cascade still shadow it.
-        let away = c.z - radius - 10.;
-        let sunward = c.z + radius + 200.;
+        // cascade still shadow it. Coarse cascades snap their depth range too.
+        let z = if i == 0 { c.z } else { snap(c.z) };
+        let away = z - radius - 10. - (step - texel);
+        let sunward = z + radius + 200.;
         // Near at the far side and far at the sunward side: reversed-Z depth (1 is
         // closest to the sun).
         Mat4::orthographic_rh(
