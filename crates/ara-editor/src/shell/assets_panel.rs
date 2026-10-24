@@ -301,7 +301,7 @@ impl Shell {
         self.asset_footer(out, items.len(), editor);
     }
     fn asset_footer(&mut self, out: &mut String, count: usize, editor: &Editor) {
-        out.push_str(&format!("<panel id='assets-footer' class='footer'><text id='assets-count' text='{count} items{}' /></panel>",if editor.state.asset_path.is_some(){" · 1 selected"}else{""}));
+        out.push_str(&format!("<panel id='assets-footer' class='footer'><text id='assets-count' text='{count} item{}{}' /></panel>",if count==1{""}else{"s"},if editor.state.asset_path.is_some(){" · 1 selected"}else{""}));
     }
     pub(super) fn asset_thumbnail(
         &mut self,

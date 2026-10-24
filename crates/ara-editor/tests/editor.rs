@@ -367,10 +367,17 @@ fn agent_presence_does_not_take_the_human_camera_and_agent_deletes_apply_with_tu
         "{:?}",
         scene.meshes.iter().map(|m| &m.name).collect::<Vec<_>>()
     );
+    editor.tick();
+    assert!(!editor.review_tints().is_empty(), "the agent's turn glows");
     editor
         .action("review.revert", json!({"txn":result["txn"]}))
         .unwrap();
     assert_eq!(editor.view().unwrap().entities().len(), 2);
+    editor.tick();
+    assert!(
+        editor.review_tints().is_empty(),
+        "an undone turn stops glowing"
+    );
 }
 
 #[test]

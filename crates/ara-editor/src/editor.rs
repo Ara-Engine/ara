@@ -550,7 +550,7 @@ impl Editor {
         fields
     }
     /// Viewport/hierarchy tints of records agents changed in the open scene just now.
-    pub(crate) fn review_tints(&self) -> BTreeMap<u64, &'static str> {
+    pub fn review_tints(&self) -> BTreeMap<u64, &'static str> {
         self.activity.tints(
             self.host.store(),
             &self.state.doc,

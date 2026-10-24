@@ -77,7 +77,14 @@ impl Activity {
             .iter()
             .filter(|t| t.result > self.seen_revision)
         {
-            if !matches!(txn.author, Author::Agent(_)) || txn.reverts.is_some() {
+            // An undone turn stops glowing: nothing it changed is on screen any more.
+            if let Some(reverted) = &txn.reverts {
+                let before = self.recent.len();
+                self.recent.retain(|(id, _)| id != reverted);
+                changed |= self.recent.len() != before;
+                continue;
+            }
+            if !matches!(txn.author, Author::Agent(_)) {
                 continue;
             }
             self.recent.push((txn.id.clone(), now));
