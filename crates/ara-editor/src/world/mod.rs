@@ -58,10 +58,16 @@ impl DocumentView {
                 .collect(),
         })
     }
-    /// Model sources the scene references that are not on disk, with an entity that
-    /// uses each (it draws a placeholder), in path order.
-    pub(crate) fn missing_sources(&self, root: &Path) -> Vec<(String, String)> {
-        let mut missing = BTreeMap::new();
+    /// Model sources the scene references, other than the `known` paths, each checked
+    /// on disk once: `Some(entity)` (one that uses it; it draws a placeholder) when
+    /// the file is missing. In path order.
+    pub(crate) fn missing_sources(
+        &self,
+        root: &Path,
+        known: &BTreeSet<String>,
+    ) -> Vec<(String, Option<String>)> {
+        // One disk check per path, not per entity: scenes reuse a few models widely.
+        let mut checked: BTreeMap<String, Option<String>> = BTreeMap::new();
         for (id, entity) in &self.entities {
             let Some(reference) = entity
                 .record
@@ -77,11 +83,12 @@ impl DocumentView {
             else {
                 continue;
             };
-            if !missing.contains_key(&path) && !root.join(&path).is_file() {
-                missing.insert(path, id.clone());
+            if !known.contains(&path) && !checked.contains_key(&path) {
+                let missing = !root.join(&path).is_file();
+                checked.insert(path, missing.then(|| id.clone()));
             }
         }
-        missing.into_iter().collect()
+        checked.into_iter().collect()
     }
     /// Deleted-entity ghosts. Empty since D24 (agent deletions apply like any other
     /// edit); kept as the render seam for future soft-delete previews.
