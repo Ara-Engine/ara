@@ -18,8 +18,29 @@ float3 historyBox(Frame f,uint2 p,float3 history,uint signal,int spacing=1){
     if(count<2)return history;mean/=count;float3 sigma=sqrt(max(square/count-mean*mean,float3(0)));
     return clamp(history,max(0,mean-3*sigma-0.1),mean+3*sigma+0.1);
 }
+// Rough and layered pixels receive strided reservoir samples: a sparse lattice each
+// frame (one pixel in eight at High) carrying inverse-probability weights (w > 1),
+// with explicit zeros elsewhere. Pixel-area accumulation averages that exactly, but
+// moving or animated views keep short histories, which showed the lattice as a
+// full-frame 2x2-block checkerboard. There each such pixel is rebuilt from this
+// frame's lattice samples in the surrounding 3x3 grid blocks on the same surface,
+// as one ordinary sample (w = 1); w = 0 when no sample is near.
+float4 latticeSpecular(Frame f,uint2 p){
+    uint slot=f.control.x;float4 world=pixel(f,WORLD+slot,p);float3 n=pixel(f,NORMAL+slot,p).xyz;
+    float tolerance=max(length(world.xyz-f.camera.xyz)*0.004,0.005);float3 sum=0;float total=0;
+    for(int y=-1;y<=1;y++)for(int x=-1;x<=1;x++){
+        int2 q=gridPoint(f,int2(p)+int2(x,y)*2);float4 lattice=extraPixel(f,SPEC_RAW,q);float4 w=pixel(f,WORLD+slot,q);
+        if(lattice.w<=1 || w.w!=world.w)continue;
+        float weight=pow(saturate(dot(pixel(f,NORMAL+slot,q).xyz,n)),8)*exp(-abs(dot(w.xyz-world.xyz,n))/tolerance);
+        sum+=lattice.rgb*weight;total+=weight;
+    }
+    return total>0?float4(sum/total,1):float4(0,0,0,0);
+}
 void resolveSpecular(Frame f,uint2 p,uint directResidual){
-    uint slot=f.control.x;float4 current=extraPixel(f,SPEC_RAW,p);float3 colour=current.rgb*current.w;float count=1;
+    uint slot=f.control.x;float4 current=extraPixel(f,SPEC_RAW,p);
+    bool rebuilt=f.transport.w!=1 && current.w!=1 && pixel(f,WORLD+slot,p).w>0;
+    if(rebuilt)current=latticeSpecular(f,p);
+    float3 colour=current.rgb*current.w;float count=1;
     float l=luminance(colour),mixed=0;float2 moments=float2(l,l*l);float2 uv;int2 at;
     bool valid=reproject(f,p,uv,at);
     if(valid && f.transport.w!=1 && mixedCoverage(extraPixel(f,SPEC_MOMENTS+1-slot,at).z))valid=false;
@@ -29,6 +50,8 @@ void resolveSpecular(Frame f,uint2 p,uint directResidual){
         // Inverse-probability samples include explicit zeros on skipped frames.
         // A ratio of sampled counts changes material coverage at mixed-rate edges.
         float alpha=max(1/max(count,1),f.temporal.y>0?0.5:f.transport.w==1?1./256.:0.025);
+        // A rebuilt pixel with no lattice sample nearby keeps its history.
+        if(rebuilt && current.w==0){alpha=0;count=old.w;}
         float4 oldMoments=extraPixel(f,SPEC_MOMENTS+1-slot,at);
         if(f.transport.w==1){float oldRough=pixel(f,NORMAL+1-slot,at).w;mixed=float(mixedCoverage(oldMoments.z) || pixel(f,WORLD+slot,p).w!=pixel(f,WORLD+1-slot,at).w || ((rough<0.5)!=(oldRough<0.5)));}
         float3 previous=historyColour(old.rgb,historyPayload(oldMoments.w),10);
