@@ -145,6 +145,22 @@ impl Ui {
     pub fn find(&self, id: &str) -> Option<usize> {
         self.lookup(stable_id(id), |n| n.element.id == id)
     }
+    /// Whether the node is laid out and painted as of the last frame: neither it nor an
+    /// ancestor is hidden (`set_visible`, `display:none`). A hidden node keeps its
+    /// subtree and state, but its geometry is stale.
+    pub fn shown(&self, index: usize) -> bool {
+        let mut at = Some(index);
+        while let Some(i) = at {
+            let Some(node) = self.nodes.get(i) else {
+                return false;
+            };
+            if !node.visible || node.computed.layout.display == Display::None {
+                return false;
+            }
+            at = node.element.parent;
+        }
+        true
+    }
     /// The node indexed under `key` that passes `is`. The index is rebuilt when nodes
     /// were added or a hit is stale (virtual rows rename their nodes in place).
     pub(crate) fn lookup(&self, key: u64, is: impl Fn(&Node) -> bool) -> Option<usize> {

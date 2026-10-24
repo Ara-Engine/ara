@@ -167,6 +167,57 @@ fn rejected_parts_leave_the_tree_intact() -> Result<()> {
 }
 
 #[test]
+fn a_part_hidden_by_its_skeleton_stays_mounted() -> Result<()> {
+    let mut text = TextSystem::bundled()?;
+    let (mut ui, mut view) = mounted(&mut text)?;
+    let before = row_texts(&ui, &view);
+    // The left part sits in a slot the skeleton shows or hides (an inactive tab).
+    let mut slot = |ui: &mut Ui, display: &str| {
+        let skeleton = format!(
+            "<ui id='app' style='flex-direction:row'><panel id='slot' style='display:{display}'><panel id='left' /></panel><panel id='right' /></ui>"
+        );
+        let report = ui.reconcile_parts(
+            &skeleton,
+            &[("left", &left("Hierarchy")), ("right", &right("A"))],
+        );
+        ui.frame(&mut text)?;
+        report
+    };
+    slot(&mut ui, "flex")?;
+    // Handles follow every reconcile (the slot shifted the part's indices).
+    assert!(view.remap(&ui));
+    let pool = ui.nodes.len();
+
+    let report = slot(&mut ui, "none")?;
+    assert_eq!((report.added, report.removed), (0, 0), "{report:?}");
+    assert_eq!(ui.nodes.len(), pool, "the hidden part keeps its nodes");
+    assert!(view.remap(&ui));
+    let (rows, label) = (
+        ui.find("rows").ok_or("rows")?,
+        ui.find("label").ok_or("label")?,
+    );
+    assert!(!ui.shown(rows) && ui.shown(label));
+    assert!(
+        !ui.paint_order.contains(&rows),
+        "hidden nodes are not painted or hit"
+    );
+    let right_x = ui.find("right").map(|i| ui.nodes[i].rect.x);
+    assert!(
+        right_x.is_some_and(|x| x < 20.),
+        "the hidden slot takes no space: {right_x:?}"
+    );
+
+    // Showing it again is a style change: the rows are as they were.
+    let report = slot(&mut ui, "flex")?;
+    assert_eq!((report.added, report.removed), (0, 0), "{report:?}");
+    assert!(view.remap(&ui));
+    assert_eq!(row_texts(&ui, &view), before);
+    let rows = ui.find("rows").ok_or("rows")?;
+    assert!(ui.shown(rows) && ui.nodes[rows].rect.h > 100.);
+    Ok(())
+}
+
+#[test]
 fn a_new_skeleton_moves_kept_parts() -> Result<()> {
     let mut text = TextSystem::bundled()?;
     let (mut ui, mut view) = mounted(&mut text)?;
@@ -216,6 +267,20 @@ fn live_widget_state_survives_in_kept_parts() -> Result<()> {
     assert_eq!(typed(&ui), value);
     assert_eq!(input.focused(), Some(stable_id("name")));
     ui.frame(&mut text)?;
+
+    // Hidden (an inactive tab), the field keeps its edit but not the focus: typing
+    // no longer reaches it.
+    let hidden = "<ui id='app' style='flex-direction:row'><panel id='left' /><panel id='slot' style='display:none'><panel id='right' /></panel></ui>";
+    ui.reconcile_parts(hidden, &[("left", &left("Scene")), ("right", &right("A"))])?;
+    ui.frame(&mut text)?;
+    input.event(
+        &mut ui,
+        InputEvent::Edit(EditEvent::Insert("Y".into())),
+        &mut clip,
+    )?;
+    assert_eq!(input.focused(), None);
+    assert_eq!(typed(&ui), value);
+    assert!(input.focus(&mut ui, stable_id("name")).is_err());
     Ok(())
 }
 

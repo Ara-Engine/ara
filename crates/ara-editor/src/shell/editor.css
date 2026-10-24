@@ -47,6 +47,7 @@ text { flex-shrink:0; white-space:nowrap; color:inherit; }
 
 .dock-root { flex-grow:1; flex-basis:0px; min-height:0px; padding-left:4px; padding-right:4px; padding-bottom:4px; }
 .dock { flex-grow:1; flex-basis:0px; background:var(--card); border-radius:var(--radius-md); overflow:hidden; }
+.tab-body { flex-grow:1; flex-basis:0px; min-width:0px; min-height:0px; }
 .dock-focused { border-width:1px; border-color:var(--separator-strong); }
 .splitter { background:transparent; }
 .splitter:hover { background:var(--primary); }

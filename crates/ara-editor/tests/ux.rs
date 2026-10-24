@@ -1002,6 +1002,41 @@ fn build_profile_comes_from_a_command_and_csharp_projects_can_build() {
     assert_eq!(current["enabled"], true, "{current}");
 }
 
+#[test]
+fn inactive_list_tabs_stay_mounted_hidden_and_come_back_as_they_were() {
+    let project = Project::new();
+    let mut editor = Editor::open(&project.0).unwrap();
+    let mut shell = Shell::new(&mut editor, [1440., 900.]).unwrap();
+    let focus = |shell: &mut Shell, editor: &mut Editor, panel: &str| {
+        editor
+            .action("editor.focus", json!({ "panel": panel }))
+            .unwrap();
+        editor.sync();
+        shell.rebuild_if_stale(editor).unwrap();
+    };
+    focus(&mut shell, &mut editor, "assets");
+    focus(&mut shell, &mut editor, "console");
+    // The Assets body stays mounted but hidden: not laid out, painted or hit.
+    let ui = &shell.ui;
+    let assets = ui
+        .find("body-assets")
+        .expect("the inactive Assets tab stays mounted");
+    let console = ui.find("body-console").unwrap();
+    assert!(!ui.shown(assets) && ui.shown(console));
+    let content = ui.find("assets-content").unwrap();
+    assert!(!ui.paint_order.contains(&content));
+    // Switching back is a visibility change: nothing is mounted again.
+    let nodes = ui.nodes.len();
+    focus(&mut shell, &mut editor, "assets");
+    let ui = &shell.ui;
+    assert_eq!(ui.nodes.len(), nodes);
+    assert!(ui.shown(ui.find("assets-content").unwrap()));
+    assert!(!ui.shown(ui.find("body-console").unwrap()));
+    // Panels with GPU surfaces render only while active.
+    focus(&mut shell, &mut editor, "scene");
+    assert!(shell.ui.find("body-game").is_none());
+}
+
 /// Rebuild cost by stage for UI-only changes (a toolbar toggle, a dock tab), the
 /// click-frame work `--verify-responsiveness` measures on Outpost. Prints averages;
 /// run with `--ignored --nocapture`.

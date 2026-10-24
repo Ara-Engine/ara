@@ -102,6 +102,11 @@ impl InputState {
             })
         }).collect::<Vec<_>>())
     }
+    /// Whether the node can hold focus now: a focusable control, shown (not inside a
+    /// hidden subtree such as an inactive tab) and in the active scope.
+    fn can_focus(&self, ui: &Ui, index: usize) -> bool {
+        is_focusable(&ui.nodes[index]) && ui.shown(index) && self.in_scope(ui, index)
+    }
     fn in_scope(&self, ui: &Ui, index: usize) -> bool {
         self.scopes.last().is_none_or(|scope| {
             let mut i = Some(index);
@@ -171,10 +176,7 @@ impl InputState {
             .scopes
             .last()
             .and_then(|s| s.focus)
-            .filter(|id| {
-                ui.by_id(*id)
-                    .is_some_and(|i| is_focusable(&ui.nodes[i]) && self.in_scope(ui, i))
-            })
+            .filter(|id| ui.by_id(*id).is_some_and(|i| self.can_focus(ui, i)))
             .or_else(|| {
                 ui.paint_order
                     .iter()
@@ -187,12 +189,10 @@ impl InputState {
     }
     /// Explicitly focus a control in the active scope.
     pub fn focus(&mut self, ui: &mut Ui, id: u64) -> Result<()> {
-        if ui
-            .by_id(id)
-            .is_none_or(|i| !is_focusable(&ui.nodes[i]) || !self.in_scope(ui, i))
-        {
+        if ui.by_id(id).is_none_or(|i| !self.can_focus(ui, i)) {
             return Err(
-                "ARA4045: focus target is disabled, clipped or outside the active scope".into(),
+                "ARA4045: focus target is disabled, clipped, hidden or outside the active scope"
+                    .into(),
             );
         }
         self.focus_to(ui, Some(id));
@@ -229,10 +229,9 @@ impl InputState {
         event: InputEvent,
         clipboard: &mut dyn Clipboard,
     ) -> Result<()> {
+        // Focus never stays on a control that went away, was disabled or was hidden.
         if let Some(id) = self.focus
-            && ui
-                .by_id(id)
-                .is_none_or(|i| !is_focusable(&ui.nodes[i]) || !self.in_scope(ui, i))
+            && ui.by_id(id).is_none_or(|i| !self.can_focus(ui, i))
         {
             self.focus_to(ui, None);
         }

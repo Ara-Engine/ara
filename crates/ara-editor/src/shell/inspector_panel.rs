@@ -467,7 +467,7 @@ impl Shell {
 impl Shell {
     /// Start resizing the label column when the pointer is on its edge.
     pub(crate) fn begin_column_drag(&mut self) -> bool {
-        let Some(i) = self.ui.find("inspector-scroll") else {
+        let Some(i) = self.shown_node("inspector-scroll") else {
             return false;
         };
         let r = self.ui.nodes[i].rect;
@@ -485,7 +485,7 @@ impl Shell {
         let Some(super::Drag::Column { .. }) = &self.drag else {
             return Ok(false);
         };
-        let Some(i) = self.ui.find("inspector-scroll") else {
+        let Some(i) = self.shown_node("inspector-scroll") else {
             return Ok(false);
         };
         let r = self.ui.nodes[i].rect;

@@ -15,6 +15,9 @@ Public API:
   element with that ID. An unchanged part keeps its subtree wholesale (runtime rows and
   widget state too; nodes only change index, `Ui::moved_index`); a no-op touches nothing.
   `VirtualView::remap` follows kept rows, `VirtualView::fit` resizes a kept pool.
+- Hidden subtrees (`set_visible(false)`, `display:none`) stay mounted with their state but
+  leave layout, paint, hit testing and focus; `Ui::shown(index)` says whether a node is
+  (its rect is stale otherwise).
 - `Ui::find` / `by_id` resolve authored/model-key identities through a lazily rebuilt index;
   `Work` exposes actual work counters (`+=` sums frames).
 - `theme::EDITOR_CSS`, `EditorTheme::{Dark,Light}`, `Ui::switch_theme` use the canonical root
