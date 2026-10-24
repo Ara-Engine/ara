@@ -1,0 +1,115 @@
+/*! Handles syncing the time between the client and the server
+*/
+use crate::plugin::TimelineSyncPlugin;
+use crate::prelude::client::RemoteTimeline;
+use crate::timeline::input::InputTimelineConfig;
+use crate::timeline::remote;
+use crate::timeline::sync::LocalTimelineSyncPlugin;
+use bevy_app::prelude::*;
+use bevy_ecs::prelude::IntoScheduleConfigs;
+use lightyear_connection::client::Client;
+use lightyear_core::prelude::TimelineSystems;
+
+// When a Client is created; we want to add a PredictedTimeline? InterpolatedTimeline?
+//  or should we let the user do it?
+// Systems we need:
+//  - We want FixedUpdate to slow down if Predicted timeline slows down, because FixedUpdate is fundamentally
+//      what decides
+//  - we update
+pub struct ClientPlugin;
+
+// TODO: we might need a separate Predicted<Virtual> and Predicted<FixedUpdate>, and Predicted<()> fetches the correct one
+//  depending on the Schedule? exactly like bevy does
+//  and so that the Time is updated based on whether we're in Update
+
+// First
+//  - Time<Virtual>/Time<()> advance by delta
+//  - Advance Predicted<()> and Predicted<Virtual> by delta * 1.0 (the predicted timeline is the main timeline so we purely match)
+//  - Advance Interpolated<()> and Interpolated<Virtual> by delta
+// FixedUpdate:
+//  - Advance Predicted<Fixed> and Interpolated<Fixed> by accumulation
+// PostUpdate:
+//  - Sync timelines in PostUpdate because the server sends messages in PostUpdate (however maybe that's not relevant
+//    because the server time is updated in First? Think about it) But we receive the server's Tick at frame end
+//    (after the server ran FixedUpdateLoop)
+//  - Update the Predicted<Virtual> and Interpolated<Virtual> relative speeds
+//  - Set the relative speed of Time<Virtual> to Predicted<Virtual>'s relative speed
+
+// Let's handle the Context later! it's a bit tricky
+// Maybe this is confusing? What if we tried updating the timeline only in FixedUpdate?
+//    - in FixedUpdate the tick/overstep would be correct
+//    - in PostUpdate too
+//    - in PreUpdate the Time<Virtual> has been updated but not the timelines! Maybe we could just store a PreUpdate now()?
+
+impl Plugin for ClientPlugin {
+    fn build(&self, app: &mut App) {
+        if !app.is_plugin_added::<TimelineSyncPlugin>() {
+            app.add_plugins(TimelineSyncPlugin);
+        }
+
+        app.register_required_components::<Client, RemoteTimeline>();
+
+        // Network synchronization disciplines the application's single LocalTimeline even when
+        // it has several network links.
+        app.add_plugins(LocalTimelineSyncPlugin::<RemoteTimeline>::default());
+
+        // Register these after the local-sync plugin initializes its default
+        // configuration. `ClientPlugin` can be built before `CorePlugins` installs TickDuration,
+        // while every runtime configuration update, connection, and sync event happens after it.
+        app.add_observer(InputTimelineConfig::recompute_input_delay_on_local_timeline_shift);
+        app.add_observer(InputTimelineConfig::recompute_input_delay_on_config_update);
+
+        // remote timeline
+        app.add_observer(RemoteTimeline::handle_connect);
+        app.add_observer(remote::update_remote_timeline);
+        app.add_systems(
+            PreUpdate,
+            remote::advance_remote_timeline.in_set(TimelineSystems::Advance),
+        );
+        app.add_systems(Last, remote::reset_received_packet_remote_timeline);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use bevy_time::{TimePlugin, TimeUpdateStrategy};
+    use core::time::Duration;
+    use lightyear_connection::network_topology::NetworkingMetadata;
+    use lightyear_core::plugin::CorePlugins;
+    use lightyear_core::time::TickInstant;
+    use lightyear_link::prelude::Linked;
+    use test_log::test;
+
+    #[test]
+    fn test_advance_remote() {
+        let mut app = App::new();
+        app.world_mut()
+            .insert_resource(TimeUpdateStrategy::ManualDuration(Duration::from_millis(
+                10,
+            )));
+        app.init_resource::<NetworkingMetadata>();
+        app.add_plugins((
+            TimePlugin,
+            CorePlugins {
+                tick_duration: Duration::from_millis(10),
+            },
+            ClientPlugin,
+        ));
+        app.update();
+
+        let e = app
+            .world_mut()
+            .spawn((RemoteTimeline::default(), Linked))
+            .id();
+        assert_eq!(
+            app.world().get::<RemoteTimeline>(e).unwrap().now,
+            TickInstant::zero()
+        );
+        app.update();
+        assert_eq!(
+            app.world().get::<RemoteTimeline>(e).unwrap().now,
+            TickInstant::lit("1.0")
+        );
+    }
+}

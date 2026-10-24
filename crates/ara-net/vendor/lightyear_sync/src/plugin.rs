@@ -1,0 +1,23 @@
+use crate::ping::plugin::PingPlugin;
+use bevy_app::{App, Plugin, PostUpdate};
+use bevy_ecs::schedule::SystemSet;
+
+#[deprecated(note = "Use SyncSystems instead")]
+pub type SyncSet = SyncSystems;
+
+#[derive(SystemSet, Debug, Hash, PartialEq, Eq, Clone, Copy)]
+pub enum SyncSystems {
+    /// Synchronize local clocks and cursors to remote timelines using RTT and jitter information.
+    Sync,
+}
+
+pub struct TimelineSyncPlugin;
+
+impl Plugin for TimelineSyncPlugin {
+    fn build(&self, app: &mut App) {
+        if !app.is_plugin_added::<PingPlugin>() {
+            app.add_plugins(PingPlugin);
+        }
+        app.configure_sets(PostUpdate, SyncSystems::Sync);
+    }
+}
