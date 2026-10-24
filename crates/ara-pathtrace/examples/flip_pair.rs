@@ -7,11 +7,8 @@ fn main() -> anyhow::Result<()> {
     };
     let reference = image::open(reference)?.to_rgba8();
     let test = image::open(test)?.to_rgba8();
-    let result = ara_pathtrace::flip::flip(
-        &reference,
-        &test,
-        ara_pathtrace::flip::PIXELS_PER_DEGREE,
-    )?;
+    let result =
+        ara_pathtrace::flip::flip(&reference, &test, ara_pathtrace::flip::PIXELS_PER_DEGREE)?;
     println!("{:.6}", result.mean);
     Ok(())
 }

@@ -25,7 +25,7 @@ void primaryMain(uint3 tid:SV_DispatchThreadID){
     store(f,DEPTH,p,float4(current.w,s.ao,0,0));
     if(f.transport.x==0){float3 lighting=primarySun(f,s,-ray,p,rng);
 #ifndef RESERVOIR_SURFACES
-        lighting+=directLocal(f,s,-ray,rng);
+        lighting+=directLocal(f,s,-ray,rng,true);
 #endif
         store(f,DIRECT,p,float4(s.emissive+lighting,1));store(f,RAW,p,0);}
 }

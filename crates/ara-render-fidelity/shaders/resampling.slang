@@ -237,7 +237,7 @@ void reservoirSpatial(uint3 tid:SV_DispatchThreadID){
         updateGI(gr,g,target*g.stats.x*m,m,rng);
     }
     if(dr.M==0){
-        float3 local=risDirect(f,s,v,rng),indirect=0;
+        float3 local=risDirect(f,s,v,rng,true),indirect=0;
         // Keep the specular channel's inclusion probability independent of repair.
         // Pixels without any compatible reservoir (disocclusions, thin parts) take
         // the DDGI irradiance: noise-free, and far cheaper than a full traced path.
