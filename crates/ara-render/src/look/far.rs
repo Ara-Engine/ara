@@ -1,12 +1,16 @@
 //! Distant sun shadows past the cascades ([`FarShadows`]): one cached D32 map
 //! over a square region around the camera. The region recentres only when the
 //! camera travels a quarter of the reach, and the map is redrawn only when what
-//! it shows changes (sun, region, settings, or content inside it).
+//! it shows changes (sun, region, settings, content, or casters inside it).
 use super::FarShadows;
 use crate::graph::State;
 use anyhow::Result;
 use ara_gpu::{Access, Buffer, Device, Image, Queue, Resource, vk, vulkan::VulkanDevice};
 use glam::{Mat4, Vec3};
+
+/// Frames a far map waits before redrawing for moved casters (distant moving
+/// shadows may lag this much); a new view or new content redraws at once.
+const STALE_FRAMES: u32 = 8;
 
 /// What a far map shows; it is redrawn whenever this changes.
 #[derive(Clone, Copy, PartialEq, Debug)]
@@ -17,7 +21,49 @@ pub(crate) struct FarView {
     settings: FarShadows,
 }
 
-/// A far shadow map and what it currently holds.
+/// What a far map holds and whether it must be redrawn.
+#[derive(Default)]
+pub(crate) struct FarCache {
+    /// Light view-projection of the drawn map.
+    pub matrix: Mat4,
+    /// The drawn view; `None` until first drawn.
+    pub view: Option<FarView>,
+    /// Casters inside the region changed since it was drawn.
+    stale: bool,
+    /// The content was replaced: redraw on the next frame.
+    urgent: bool,
+    /// Frames since the map was drawn.
+    since: u32,
+}
+
+impl FarCache {
+    /// Whether `view` needs a redraw this frame.
+    pub(crate) fn needs_draw(&self, view: &FarView) -> bool {
+        self.view != Some(*view) || self.urgent || (self.stale && self.since >= STALE_FRAMES)
+    }
+
+    /// Records this frame's caster changes (`all`: new content; `bounds`: old
+    /// and new world bounds of changed casters) against the drawn region.
+    pub(crate) fn observe(&mut self, all: bool, bounds: &[[Vec3; 2]]) {
+        self.since = self.since.saturating_add(1);
+        if self.view.is_none() {
+            return;
+        }
+        self.urgent |= all;
+        self.stale |= all || bounds.iter().any(|&[lo, hi]| overlaps(self.matrix, lo, hi));
+    }
+
+    /// The map now holds `view`, drawn with `matrix`.
+    pub(crate) fn drawn(&mut self, matrix: Mat4, view: FarView) {
+        *self = Self {
+            matrix,
+            view: Some(view),
+            ..Self::default()
+        };
+    }
+}
+
+/// A far shadow map's GPU resources and what it currently holds.
 pub(crate) struct FarMap {
     pub image: Image,
     pub sampled: u32,
@@ -27,12 +73,7 @@ pub(crate) struct FarMap {
     /// their matrix through it (root word 0) at cascade 0.
     pub frame: Buffer,
     pub frame_index: u32,
-    /// Light view-projection of the drawn map.
-    pub matrix: Mat4,
-    /// What the map holds; `None` until first drawn.
-    pub drawn: Option<FarView>,
-    /// Casters inside the region changed since it was drawn.
-    pub stale: bool,
+    pub cache: FarCache,
 }
 
 impl FarMap {
@@ -71,9 +112,7 @@ impl FarMap {
             settings,
             frame,
             frame_index,
-            matrix: Mat4::IDENTITY,
-            drawn: None,
-            stale: false,
+            cache: FarCache::default(),
         })
     }
 
@@ -115,17 +154,29 @@ impl FarMap {
         )
     }
 
-    /// Whether `view` needs a redraw this frame.
-    pub(crate) fn needs_draw(&self, view: &FarView) -> bool {
-        self.stale || self.drawn != Some(*view)
-    }
-
     pub(crate) fn destroy(self, gpu: &mut VulkanDevice) -> Result<()> {
         gpu.retire(Resource::Image(self.image))?;
         gpu.retire(Resource::Buffer(self.frame))?;
         gpu.collect()?;
         Ok(())
     }
+}
+
+/// Whether world bounds `lo..hi` reach the light volume of `matrix`.
+fn overlaps(matrix: Mat4, lo: Vec3, hi: Vec3) -> bool {
+    let (mut min, mut max) = (Vec3::splat(f32::INFINITY), Vec3::splat(f32::NEG_INFINITY));
+    for corner in 0..8u32 {
+        let pick = |bit: u32, axis: usize| {
+            if corner >> bit & 1 == 0 {
+                lo[axis]
+            } else {
+                hi[axis]
+            }
+        };
+        let p = matrix.project_point3(Vec3::new(pick(0, 0), pick(1, 1), pick(2, 2)));
+        (min, max) = (min.min(p), max.max(p));
+    }
+    min.x <= 1. && max.x >= -1. && min.y <= 1. && max.y >= -1. && min.z <= 1. && max.z >= 0.
 }
 
 #[cfg(test)]
@@ -146,6 +197,33 @@ mod tests {
         assert_ne!(a, far, "a quarter of the reach recentres");
         let (_, turned) = FarMap::fit(settings, Vec3::new(10., 2., 5.), Vec3::Y);
         assert_ne!(a, turned, "a turning sun redraws");
+    }
+
+    #[test]
+    fn casters_inside_the_region_stale_the_map_and_redraw_after_a_delay() {
+        let settings = FarShadows {
+            resolution: 1024,
+            distance: 600.,
+        };
+        let sun = Vec3::new(0.2, 0.9, 0.1).normalize();
+        let (matrix, view) = FarMap::fit(settings, Vec3::ZERO, sun);
+        let mut cache = FarCache::default();
+        assert!(cache.needs_draw(&view), "never drawn");
+        cache.drawn(matrix, view);
+        cache.observe(
+            false,
+            &[[Vec3::new(5000., 0., 0.), Vec3::new(5001., 1., 1.)]],
+        );
+        assert!(!cache.needs_draw(&view), "a caster outside the region");
+        cache.observe(false, &[[Vec3::new(50., 0., 0.), Vec3::new(51., 2., 1.)]]);
+        assert!(!cache.needs_draw(&view), "moved casters wait a few frames");
+        for _ in 0..STALE_FRAMES {
+            cache.observe(false, &[]);
+        }
+        assert!(cache.needs_draw(&view));
+        cache.drawn(matrix, view);
+        cache.observe(true, &[]);
+        assert!(cache.needs_draw(&view), "new content redraws at once");
     }
 
     #[test]

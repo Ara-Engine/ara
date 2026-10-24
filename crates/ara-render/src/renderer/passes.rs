@@ -13,6 +13,9 @@ use ara_gpu::{
 };
 
 /// What each declared graph pass records.
+/// Native draw list of the arbitrary-matrix shadow pass (`cull_native_shadow`).
+const FAR_SHADOW_PASS: usize = 6;
+
 #[derive(Clone, Copy)]
 enum Recipe {
     Shadow,
@@ -54,8 +57,16 @@ impl Renderer {
             native.prepare(&mut self.gpu, &frame, &camera)?;
         }
         self.gpu.upload(self.frame, bytemuck::bytes_of(&frame))?;
-        // The far map redraws only when its view changed; its draws read the far
-        // matrix as cascade 0 of their own frame record.
+        // The far map redraws only when its view, content or casters inside it
+        // changed; its draws read the far matrix as cascade 0 of their own frame
+        // record, and native casters come from a culled pass of their own.
+        if let Some(mut far) = self.look.far.take() {
+            match self.native_caster_changes() {
+                Some(changes) => far.cache.observe(changes.all, changes.bounds),
+                None => far.cache.observe(false, &[]),
+            }
+            self.look.far = Some(far);
+        }
         let far_draw = match &self.look.far {
             Some(far) => {
                 let (matrix, view) = crate::look::far::FarMap::fit(
@@ -63,7 +74,7 @@ impl Renderer {
                     camera.position,
                     self.content.sun_direction,
                 );
-                far.needs_draw(&view).then_some((matrix, view))
+                far.cache.needs_draw(&view).then_some((matrix, view))
             }
             None => None,
         };
@@ -71,6 +82,9 @@ impl Renderer {
             let mut far_frame = frame;
             far_frame.shadows[0] = matrix;
             self.gpu.upload(far.frame, bytemuck::bytes_of(&far_frame))?;
+            if self.native.is_some() {
+                self.cull_native_shadow(matrix)?;
+            }
         }
         let mut compute_frame = frame;
         compute_frame.lighting[3] = self.content.compute_light_index;
@@ -94,7 +108,7 @@ impl Renderer {
         if let Some(far) = &self.look.far {
             let drawn = far_draw
                 .map(|(matrix, _)| matrix)
-                .or(far.drawn.map(|_| far.matrix));
+                .or(far.cache.view.map(|_| far.cache.matrix));
             if let Some(matrix) = drawn {
                 look_frame.far_shadow = matrix.to_cols_array_2d();
                 look_frame.far_info = [far.sampled, far.settings.resolution, 1, 0];
@@ -471,6 +485,9 @@ impl Renderer {
                     let mut constants = root;
                     constants.words[0] = far.frame_index;
                     constants.words[4] = 0;
+                    if let Some(native) = &self.native {
+                        native.record(&mut recorder, constants, FAR_SHADOW_PASS);
+                    }
                     for (index, mesh) in self
                         .content
                         .meshes
@@ -661,9 +678,7 @@ impl Renderer {
         }
         self.look.finish(&look, &compiled.final_states);
         if let (Some(far), Some((matrix, view))) = (&mut self.look.far, far_draw) {
-            far.matrix = matrix;
-            far.drawn = Some(view);
-            far.stale = false;
+            far.cache.drawn(matrix, view);
         }
         if let Some(gi) = &mut self.look.gi {
             gi.advance(self.look.quality.gi_budget);

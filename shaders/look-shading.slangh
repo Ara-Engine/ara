@@ -22,8 +22,9 @@ float cascadeVisibility(Frame f,uint c,float3 world,float3 normal){
     }
     return sum;
 }
-// Distant sun visibility from the far shadow map (look/far.rs): one bilinear
-// compare, with normal offset and bias scaled to its (metre-sized) texels.
+// Distant sun visibility from the far shadow map (look/far.rs): the cascades'
+// 3x3 box of bilinear compares (four gathers), with normal offset and bias
+// scaled to its (metre-sized) texels, so distant edges stay smooth.
 float farVisibility(Look l,float3 world,float3 normal){
     if(l.farInfo.z==0)return 1;
     float res=float(l.farInfo.y);float4x4 m=l.farShadow;float texel=2/(length(m[0].xyz)*res);
@@ -31,8 +32,13 @@ float farVisibility(Look l,float3 world,float3 normal){
     if(any(uv<0)||any(uv>1)||q.z<0||q.z>1)return 1;
     float depth=q.z+texel*length(m[2].xyz);
     float2 position=uv*res-0.5,base=floor(position),t=position-base;
-    float4 lit=step(textures[NonUniformResourceIndex(l.farInfo.x)].GatherRed(samplers[2],(base+1)/res),depth);
-    return lerp(lerp(lit.w,lit.z,t.x),lerp(lit.x,lit.y,t.x),t.y);
+    float4 wx=float4(1-t.x,1,1,t.x)/3,wy=float4(1-t.y,1,1,t.y)/3;float sum=0;
+    for(uint j=0;j<2;j++)for(uint i=0;i<2;i++){
+        float2 g=clamp(base+float2(2*i,2*j),1,res-1)/res;
+        float4 lit=step(textures[NonUniformResourceIndex(l.farInfo.x)].GatherRed(samplers[2],g),depth);
+        sum+=wx[2*i]*wy[2*j]*lit.w+wx[2*i+1]*wy[2*j]*lit.z+wx[2*i]*wy[2*j+1]*lit.x+wx[2*i+1]*wy[2*j+1]*lit.y;
+    }
+    return sum;
 }
 // Sun visibility at `world`: blends into the next cascade over the last tenth of
 // each and fades out over the last tenth of the shadow distance.
