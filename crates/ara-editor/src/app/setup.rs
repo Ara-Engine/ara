@@ -48,6 +48,26 @@ impl Options {
             || self.verify_journey
             || self.headless
     }
+
+    /// Bounded runs never touch the owner's profile and start from fresh preferences
+    /// (captures must not depend on an earlier run): preferences (`ARA_CONFIG_DIR`)
+    /// and crash reports (`ARA_CRASH_DIR`) go to `<output>/.ara-profile`, and the
+    /// players and import workers they start inherit both.
+    ///
+    /// # Safety
+    /// Mutates the process environment: call it before any thread exists.
+    pub unsafe fn isolate_profile(&self) {
+        if !self.offscreen() {
+            return;
+        }
+        let profile = self.output.join(".ara-profile");
+        let profile = std::path::absolute(&profile).unwrap_or(profile);
+        let _ = std::fs::remove_dir_all(profile.join("config"));
+        for (name, dir) in [("ARA_CONFIG_DIR", "config"), ("ARA_CRASH_DIR", "crashes")] {
+            // SAFETY: the caller guarantees the process is still single-threaded.
+            unsafe { std::env::set_var(name, profile.join(dir)) };
+        }
+    }
 }
 impl Default for Options {
     fn default() -> Self {

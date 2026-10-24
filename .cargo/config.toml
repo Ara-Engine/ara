@@ -1,0 +1,7 @@
+# Tests never touch the owner's real profile (%APPDATA%\Ara, %LOCALAPPDATA%\Ara).
+# Every process cargo launches (tests, the editors, players and workers they start,
+# `cargo run`) gets isolated user config and crash directories under target/.
+# ara-editor refuses the OS profile when these are missing under cargo.
+[env]
+ARA_CONFIG_DIR = { value = "target/ara-config", relative = true }
+ARA_CRASH_DIR = { value = "target/ara-crashes", relative = true }

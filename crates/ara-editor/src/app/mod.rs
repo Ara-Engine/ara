@@ -42,14 +42,10 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
     if options.verify_panels || options.verify_ux {
         panels_verify::fixtures(&options.project)?;
     }
-    // Verification and screenshots keep preferences in the output folder, never the user's profile.
-    let user_settings =
-        if options.verify || options.verify_panels || options.verify_ux || options.screenshot {
-            Some(options.output.join("user-settings.json"))
-        } else {
-            crate::settings::user_settings_path()
-        };
-    let mut editor = Editor::open_with(&options.project, user_settings)?;
+    // Bounded runs resolve an isolated ARA_CONFIG_DIR (`Options::isolate_profile`);
+    // tests and cargo runs are refused the owner's profile.
+    let user_settings = crate::settings::user_settings_path()?;
+    let mut editor = Editor::open_with(&options.project, Some(user_settings))?;
     setup::prepare(&mut editor, &options)?;
     let mut server = Server::start(editor.host.root())?;
     eprintln!(
@@ -842,7 +838,7 @@ fn headless(options: Options) -> ara_ui::Result<()> {
     std::fs::create_dir_all(&options.output)?;
     let mut editor = Editor::open_with(
         &options.project,
-        Some(options.output.join("user-settings.json")),
+        Some(crate::settings::user_settings_path()?),
     )?;
     setup::prepare(&mut editor, &options)?;
     let view = editor.view()?;

@@ -452,7 +452,13 @@ fn hierarchy_100k_keeps_a_bounded_row_pool_and_reaches_the_last_entity() {
     eprintln!(
         "100k hierarchy: build {build_ms:.3} ms; scroll {scroll_ms:.3} ms; {node_count} retained nodes"
     );
-    let output = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("evidence/hierarchy-100k.json");
+    // Tests never write tracked files: the checked-in measurement changes only on
+    // request (ARA_EDITOR_UPDATE_EVIDENCE=1).
+    let output = if std::env::var_os("ARA_EDITOR_UPDATE_EVIDENCE").is_some_and(|v| v == "1") {
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("evidence/hierarchy-100k.json")
+    } else {
+        PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join("hierarchy-100k.json")
+    };
     std::fs::create_dir_all(output.parent().unwrap()).unwrap();
     write(
         &output,
@@ -858,4 +864,34 @@ fn material_values_and_animation_layout_share_undo_and_survive_reopen() {
     )
     .unwrap();
     assert_eq!(graph.editor.comments["note"].text, "Locomotion");
+}
+
+/// Tests never touch the owner's profile (%APPDATA%\Ara, %LOCALAPPDATA%\Ara): cargo
+/// gives every test and the editors it starts isolated directories under target/
+/// (`.cargo/config.toml`), and without them the editor refuses to start.
+#[test]
+fn tests_resolve_isolated_profile_directories_under_target() {
+    let config = ara_editor::settings::config_dir().expect("an isolated config directory");
+    let crashes = std::env::var_os("ARA_CRASH_DIR")
+        .map(std::path::PathBuf::from)
+        .expect("ARA_CRASH_DIR");
+    for dir in [&config, &crashes] {
+        assert!(
+            dir.components().any(|c| c.as_os_str() == "target"),
+            "{dir:?} is not under target/"
+        );
+        for profile in [
+            "APPDATA",
+            "LOCALAPPDATA",
+            "XDG_CONFIG_HOME",
+            "XDG_STATE_HOME",
+        ] {
+            if let Some(profile_dir) = std::env::var_os(profile) {
+                assert!(
+                    !dir.starts_with(&profile_dir),
+                    "{dir:?} is inside {profile}"
+                );
+            }
+        }
+    }
 }

@@ -82,9 +82,13 @@ read it; a disabled command returns `Avail::Blocked(reason)` and a deferred one 
 `Run::Later(reason)`. New buttons bind `Binding::Command`; `tests/ux.rs` rejects
 uncommanded buttons. Context-menu sources are `Shell::context_at`.
 `settings.rs` holds the settings table; edits are ops on a private store (undoable,
-`editor.settings.*`), user scope persists to `%APPDATA%\Ara\editor-settings.json`
-and project scope to `ara.project.json`. `Editor::open` keeps user settings in
-memory; the app passes the real path via `open_with`.
+`editor.settings.*`), user scope persists to `editor-settings.json` in
+`settings::config_dir()` (`ARA_CONFIG_DIR`, else `%APPDATA%\Ara`) and project scope
+to `ara.project.json`. `Editor::open` keeps user settings in memory.
+Tests never touch the owner's profile: `.cargo/config.toml` gives every cargo-run
+process `ARA_CONFIG_DIR`/`ARA_CRASH_DIR` under `target/`, `config_dir()` refuses the OS
+profile under tests and cargo, and bounded runs (`Options::isolate_profile`) start
+from a fresh `<output>/.ara-profile`. Never write user state anywhere else.
 Floating windows: `DockLayout` floating roots map to owned OS windows
 (`app/windows.rs`); each is a Shell `Surface` swapped into `self.ui` by
 `enter/leave`, and renders through `NativeUi::select_target`. Rects persist in
