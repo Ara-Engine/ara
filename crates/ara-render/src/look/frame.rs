@@ -42,6 +42,7 @@ pub(crate) struct LookFrame {
     pub gi_gather: [u32; 4],
     pub ssr: [f32; 4],
     pub ssr_images: [u32; 4],
+    pub weather: [f32; 4],
 }
 
 /// Per-frame inputs that are not part of the authored look.
@@ -120,6 +121,7 @@ impl LookFrame {
             gi_gather: [0; 4],
             ssr: [0.; 4],
             ssr_images: [0; 4],
+            weather: [sky.cloud_coverage, sky.cloud_height, 0., 0.],
         }
     }
 }

@@ -224,6 +224,10 @@ pub struct Sky {
     pub aerosols: f32,
     /// Angular radius of the sun disk in radians.
     pub sun_radius: f32,
+    /// Planar cloud cover from zero (clear) to one; clouds also shade the sun.
+    pub cloud_coverage: f32,
+    /// World altitude of the cloud layer in metres.
+    pub cloud_height: f32,
 }
 impl Default for Sky {
     fn default() -> Self {
@@ -231,6 +235,8 @@ impl Default for Sky {
             sea_level: 0.,
             aerosols: 1.,
             sun_radius: 0.00465,
+            cloud_coverage: 0.,
+            cloud_height: 2200.,
         }
     }
 }
@@ -294,7 +300,9 @@ impl Look {
             anyhow::ensure!(
                 s.sea_level.is_finite()
                     && (0.0..=20.0).contains(&s.aerosols)
-                    && (0.0..=0.2).contains(&s.sun_radius),
+                    && (0.0..=0.2).contains(&s.sun_radius)
+                    && (0.0..=1.0).contains(&s.cloud_coverage)
+                    && s.cloud_height.is_finite(),
                 "Invalid sky"
             );
         }

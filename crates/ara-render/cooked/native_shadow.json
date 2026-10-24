@@ -1,22 +1,22 @@
 {
   "binding_layout_hash": "35cd2a62b1ba741ce6823b3c8753d7b5aa97b54c5f0a837b56e542518013fd7e",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "d2d992ce8eb657a5138b277cdd745913af5746ac719731e684620f3fe73c1d6e",
+  "key": "25497b047531f62c4ea6d828dfbc6d85715bbb533d18ba1a5ee8a593c459e256",
   "stages": [
     {
-      "dxil": "d2d992ce8eb657a5138b277cdd745913af5746ac719731e684620f3fe73c1d6e/nativeShadowFragment.dxil",
+      "dxil": "25497b047531f62c4ea6d828dfbc6d85715bbb533d18ba1a5ee8a593c459e256/nativeShadowFragment.dxil",
       "dxil_hash": "cccf2659e529446b17229b8dfe944f74e8018d6148bfeb262f7637cdd484c2aa",
       "source_entry": "nativeShadowFragment",
-      "spirv": "d2d992ce8eb657a5138b277cdd745913af5746ac719731e684620f3fe73c1d6e/nativeShadowFragment.spv",
+      "spirv": "25497b047531f62c4ea6d828dfbc6d85715bbb533d18ba1a5ee8a593c459e256/nativeShadowFragment.spv",
       "spirv_entry": "main",
       "spirv_hash": "af4475b13727828caa6f879ca2b3865c4177735f0615474008608e1a050bb1c8",
       "stage": "fragment"
     },
     {
-      "dxil": "d2d992ce8eb657a5138b277cdd745913af5746ac719731e684620f3fe73c1d6e/nativeShadowVertex.dxil",
+      "dxil": "25497b047531f62c4ea6d828dfbc6d85715bbb533d18ba1a5ee8a593c459e256/nativeShadowVertex.dxil",
       "dxil_hash": "1da176d109922855216992e4a3df24914ea6e1ff1c78e4f299739f534522c58b",
       "source_entry": "nativeShadowVertex",
-      "spirv": "d2d992ce8eb657a5138b277cdd745913af5746ac719731e684620f3fe73c1d6e/nativeShadowVertex.spv",
+      "spirv": "25497b047531f62c4ea6d828dfbc6d85715bbb533d18ba1a5ee8a593c459e256/nativeShadowVertex.spv",
       "spirv_entry": "main",
       "spirv_hash": "9cacbacc8a77d0e6bf4c305b94088bf0978d654939ec7f675df55deacd41211c",
       "stage": "vertex"

@@ -60,6 +60,7 @@ impl LookGpu {
             let key = SkyKey {
                 aerosols: sky.aerosols,
                 sun,
+                clouds: [sky.cloud_coverage, sky.cloud_height],
             };
             if self.sky.is_none_or(|k| k.aerosols != key.aerosols) {
                 add(

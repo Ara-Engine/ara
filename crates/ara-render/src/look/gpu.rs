@@ -63,6 +63,7 @@ pub(crate) struct Pipelines {
 pub(crate) struct SkyKey {
     pub aerosols: f32,
     pub sun: [f32; 6],
+    pub clouds: [f32; 2],
 }
 
 pub(crate) struct LookGpu {

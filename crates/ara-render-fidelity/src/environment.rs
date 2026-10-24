@@ -149,7 +149,7 @@ impl FrameEnvironment {
     }
 
     /// The same look for the raster renderer (`ara_render::Renderer::set_look`):
-    /// the physical sky and height fog run on the GPU there too; clouds do not yet.
+    /// the physical sky (with its cloud layer) and height fog run on the GPU there too.
     pub fn raster(&self) -> ara_render::look::Look {
         use ara_render::look::{
             AutoExposure as Metering, Fog, Grading as RasterGrading, Look, Sky, ToneCurve,
@@ -179,6 +179,8 @@ impl FrameEnvironment {
             sky: self.atmosphere.filter(|a| a.physical_sky).map(|a| Sky {
                 sea_level: a.sea_level,
                 aerosols: a.aerosols,
+                cloud_coverage: a.cloud_coverage,
+                cloud_height: a.cloud_height,
                 ..Sky::default()
             }),
             fog: self

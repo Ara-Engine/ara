@@ -27,6 +27,7 @@ struct Look {
     uint4 giGather;    // diffuse, specular (sampled), diffuse, specular (storage); half resolution
     float4 ssr;        // x max roughness, y max distance (m), z march steps
     uint4 ssrImages;   // pyramid, trace (sampled), pyramid, trace (storage)
+    float4 weather;    // x cloud coverage (0..1), y cloud layer altitude (m)
 };
 static const uint LOOK_PHYSICAL_SKY=1,LOOK_FOG=2,LOOK_RESET=4,LOOK_AMBIENT_OCCLUSION=8,LOOK_REFLECTIONS=16;
 Look look(Frame f){return buffers[NonUniformResourceIndex(f.look.x)].Load<Look>(0);}
@@ -79,10 +80,23 @@ float3 integrateSky(Look l,float3 sun,float3 p,float3 d,float distance,uint step
         sum+=throughput*source*(1-segment)/max(e,float3(1e-9));throughput*=segment;
     }return sum;
 }
-// Sun illuminance reaching `position` through the physical sky (lux).
+// Planar clouds (as the fidelity sky): five octaves of value noise thresholded
+// by the coverage, at the layer altitude.
+uint lookHash(uint x){x^=x>>16;x*=0x7feb352d;x^=x>>15;x*=0x846ca68b;x^=x>>16;return x;}
+float noise2(float2 p){
+    int2 i=int2(floor(p));float2 a=frac(p);a=a*a*(3-2*a);
+    float n00=float(lookHash(asuint(i.x)*73856093u^asuint(i.y)*19349663u)&65535)/65535.,n10=float(lookHash(asuint(i.x+1)*73856093u^asuint(i.y)*19349663u)&65535)/65535.;
+    float n01=float(lookHash(asuint(i.x)*73856093u^asuint(i.y+1)*19349663u)&65535)/65535.,n11=float(lookHash(asuint(i.x+1)*73856093u^asuint(i.y+1)*19349663u)&65535)/65535.;
+    return lerp(lerp(n00,n10,a.x),lerp(n01,n11,a.x),a.y);
+}
+float cloudDensity(Look l,float2 p){float n=0,m=0.5;for(uint i=0;i<5;i++){n+=noise2(p)*m;p=p*2.03+17.7;m*=0.5;}return smoothstep(1-l.weather.x,1-l.weather.x+0.18,n);}
+// Sun illuminance reaching `position` through the physical sky and the cloud
+// layer's shadow (lux).
 float3 sunAt(Frame f,Look l,float3 position){
-    float3 lux=f.sunColorExposure.rgb;
-    return physicalSky(l)?lux*transmittance(l,max(position.y-l.atmosphere.x,0),f.sunDirection.y):lux;
+    float3 lux=f.sunColorExposure.rgb;if(!physicalSky(l))return lux;
+    lux*=transmittance(l,max(position.y-l.atmosphere.x,0),f.sunDirection.y);
+    if(l.weather.x>0 && f.sunDirection.y>0.01){float2 p=position.xz+f.sunDirection.xz*((l.weather.y-position.y)/f.sunDirection.y);lux*=exp(-cloudDensity(l,p*0.00025)*3/max(f.sunDirection.y,0.2));}
+    return lux;
 }
 // Sky radiance along `d` (cd/m²): the sky-view LUT plus an analytic sun disk.
 float3 skyRadiance(Frame f,Look l,float3 d,bool disk){
@@ -91,6 +105,12 @@ float3 skyRadiance(Frame f,Look l,float3 d,bool disk){
     if(disk && angle<radius && d.y>0){
         float mu=sqrt(saturate(1-angle*angle/(radius*radius)));float limb=1-0.6*(1-mu);
         c+=l.sunLux.rgb*transmittance(l,max(f.camera.y-l.atmosphere.x,2),d.y)*limb/(PI*radius*radius*0.8);
+    }
+    if(l.weather.x>0 && d.y>0.01){
+        float2 at=f.camera.xz+d.xz*((l.weather.y-f.camera.y)/d.y);
+        float density=cloudDensity(l,at*0.00025),shade=cloudDensity(l,(at+f.sunDirection.xz*250)*0.00025);
+        float t=exp(-density*3/max(d.y,0.2));float3 light=l.sunLux.rgb*(0.045+0.2*exp(-shade*2.2))*max(f.sunDirection.y,0.05);
+        c=c*t+light*(1-t);
     }return c;
 }
 // Froxel fog: 64x36 columns, 32 logarithmic slices to 4 km; per slice the
