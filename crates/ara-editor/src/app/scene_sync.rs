@@ -301,8 +301,9 @@ impl SceneSync {
         true
     }
 
-    /// The native preview: typed drafts (any field) as a projected view; gizmo drags
-    /// reach the native Scene through `editor.gesture` on their own.
+    /// The native preview: typed drafts (any field) as a projected view. A gizmo drag
+    /// reaches the native Scene through `editor.gesture`; each new pose (and the end
+    /// of the drag) only needs the Scene rendered again.
     fn project(
         &mut self,
         view: &DocumentView,
@@ -310,16 +311,23 @@ impl SceneSync {
         shell: &Shell,
         scene_view: &mut SceneView,
     ) -> bool {
-        self.pose = None;
+        if let Some(gesture) = &editor.gesture {
+            if self.pose.as_ref() == Some(&gesture.current) {
+                return false;
+            }
+            self.pose = Some(gesture.current.clone());
+            return true;
+        }
+        let dragged = self.pose.take().is_some();
         if self.drafts.as_ref() == Some(shell.drafts()) {
-            return false;
+            return dragged;
         }
         self.drafts = Some(shell.drafts().clone());
         let target = shell
             .draft_records(editor, view)
             .map(|records| view.with_records(records));
         if target.is_none() && !self.projected {
-            return false;
+            return dragged;
         }
         self.projected = target.is_some();
         scene_view.set_preview_view(target);
