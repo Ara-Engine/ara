@@ -54,6 +54,21 @@ expression: "ara_json::to_canonical_string(&reg.catalog())"
       }
     ]
   },
+  "doc.delete": {
+    "kind": "command",
+    "summary": "Delete a loaded document and its records with history and undo.",
+    "params": "DocDeleteParams",
+    "hints": {
+      "idempotent": false,
+      "destructive": true
+    },
+    "scope": "edit:scene",
+    "examples": [
+      {
+        "document": "@levels/old.scene#sc_old001"
+      }
+    ]
+  },
   "entity.create": {
     "kind": "command",
     "summary": "Create an entity, optionally with a parent, a position among its siblings and components.",

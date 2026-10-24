@@ -2397,6 +2397,18 @@ expression: out
         }
       }
     },
+    "DocDeleteParams": {
+      "kind": "params",
+      "doc": "Parameters of `doc.delete`.",
+      "module": "core",
+      "fields": {
+        "document": {
+          "type": "asset",
+          "doc": "Loaded document path or asset reference to remove. Run from a different batch document, such as ara.project.json; project settings cannot be deleted.",
+          "required": true
+        }
+      }
+    },
     "Entity": {
       "kind": "record",
       "doc": "An entity in a scene or prefab. Components are stored inline under their type names; a prefab instance stores `prefab` plus overrides instead.",
@@ -8045,6 +8057,21 @@ expression: out
         {
           "path": "levels/arena.scene",
           "id": "sc_arena001"
+        }
+      ]
+    },
+    "doc.delete": {
+      "kind": "command",
+      "summary": "Delete a loaded document and its records with history and undo.",
+      "params": "DocDeleteParams",
+      "hints": {
+        "idempotent": false,
+        "destructive": true
+      },
+      "scope": "edit:scene",
+      "examples": [
+        {
+          "document": "@levels/old.scene#sc_old001"
         }
       ]
     },

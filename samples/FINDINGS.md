@@ -167,6 +167,8 @@ target/release/ara-samples editor outpost levels/outpost.scene outpost --camera 
 23. **Colliders have no offset and models can't be colliders in play.** Model origins sit
     at the base, box colliders at the entity origin; every solid prop needs a second
     entity at its bounds centre. `PhysicsId` defaults to 1 and must be made unique by hand.
+    **Fixed (`12f2942`):** body-local `Collider.center`, typed model hull/mesh
+    generation, and deterministic automatic PhysicsIds now work in Play and restore.
 24. **Aiming lights and cameras needs Euler math.** `Transform.rotation` is intrinsic XYZ
     degrees; there is no look-at helper or `direction` field, and the obvious
     pitch/yaw split yields upside-down cameras for targets behind −Z.
