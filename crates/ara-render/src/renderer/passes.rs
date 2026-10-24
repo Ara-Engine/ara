@@ -74,6 +74,13 @@ impl Renderer {
             gi.write(&mut look_frame, self.look.quality.gi_budget);
             look_frame.gi_gather = self.look.gather_indices();
         }
+        if let Some(r) = self.look.quality.reflections
+            && self.targets.history.is_some()
+        {
+            look_frame.flags[1] |= crate::look::frame::REFLECTIONS;
+            look_frame.ssr = [r.max_roughness, r.distance, r.steps as f32, 0.];
+            look_frame.ssr_images = self.look.ssr_indices();
+        }
         if let Some(ao) = self.look.quality.ambient_occlusion {
             look_frame.flags[1] |= crate::look::frame::AMBIENT_OCCLUSION;
             look_frame.ao = [ao.radius, ao.slices as f32, ao.steps as f32, 0.];
@@ -179,6 +186,12 @@ impl Renderer {
         for (id, pass) in self.look.ao_passes(&mut graph, &look, &ao_reads) {
             declare(id, Recipe::Look(pass));
         }
+        let mut ssr_reads = ao_reads.clone();
+        ssr_reads.push((ids[WORLD], Access::ShaderRead));
+        let history = self.targets.history.map(|h| ids[h]);
+        for (id, pass) in self.look.ssr_passes(&mut graph, &look, history, &ssr_reads) {
+            declare(id, Recipe::Look(pass));
+        }
         let mut sky_shared = graphics.clone();
         sky_shared.push((ids[SHADOW], Access::ShaderRead));
         let sun = {
@@ -199,7 +212,8 @@ impl Renderer {
         }
         let culling = graph.pass("TiledLightCull", Queue::Compute, [(tile, Access::Storage)]);
         declare(culling, Recipe::Tile);
-        let look_reads = self.look.lighting_reads(&look);
+        let reflected = self.look.quality.reflections.is_some() && self.targets.history.is_some();
+        let look_reads = self.look.lighting_reads(&look, reflected);
         let lighting = graph.pass(
             "DeferredLighting",
             Queue::Graphics,
@@ -528,7 +542,14 @@ impl Renderer {
                     &mut recorder,
                     look_pass,
                     self.frame_index,
-                    self.targets.sampled[output_history],
+                    // The reflection pyramid reads last frame's history; post passes
+                    // read this frame's.
+                    match look_pass {
+                        LookPass::SsrPyramid(_) => {
+                            self.targets.history.map_or(0, |h| self.targets.sampled[h])
+                        }
+                        _ => self.targets.sampled[output_history],
+                    },
                     self.size,
                 ),
                 Recipe::Empty => {}

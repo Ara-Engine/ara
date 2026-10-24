@@ -74,6 +74,18 @@ float gatheredLobes(Frame f,Look l,int2 p,float distance,out float3 diffuse,out 
     }
     diffuse/=total;specular/=total;return coverage/total;
 }
+// Screen-space reflection at full-resolution pixel `p`: rgb radiance, a confidence
+// (zero without a hit). Upsampled from half resolution with depth-similar weights.
+float4 screenReflection(Frame f,Look l,int2 p){
+    if((l.flags.y&LOOK_REFLECTIONS)==0)return 0;
+    int2 half=int2((f.extent.xy+1)/2);float2 h=(float2(p)+0.5)*0.5-0.5;int2 b=int2(floor(h));float2 t=h-float2(b);
+    float depth=pixel(f.extra.x,p).x;float4 sum=0;float total=0;
+    for(uint k=0;k<4;k++){
+        int2 o=int2(k&1,k>>1),q=clamp(b+o,int2(0),half-1);float d=pixel(f.extra.x,q*2).x;
+        float w=(o.x==1?t.x:1-t.x)*(o.y==1?t.y:1-t.y)*exp(-abs(d/max(depth,1e-7)-1)*40)+1e-5;
+        sum+=pixel(l.ssrImages.y,q)*w;total+=w;
+    }return sum/total;
+}
 // Ambient light: the physical sky's IBL under a sky atmosphere, otherwise the
 // environment map's (32x16 irradiance, five-level 256x640 GGX prefilter strip for
 // roughness 0, .25, .5, .75, 1). Inside the probe volume, probe irradiance replaces
@@ -97,6 +109,7 @@ float3 ibl(Frame f,Look l,Surface s,float3 world,float3 v,int2 p,bool gathered) 
         ambient=lerp(ambient,diffuseGi,coverage);
         spec=lerp(spec,lerp(spec*occlusion,specularGi/PI,s.roughness),coverage);
     }
+    if(gathered){float4 r=screenReflection(f,l,p);spec=lerp(spec,r.rgb,r.a);}
     float3 diffuse=ambient*s.albedo*(1-s.metal)*(1-F)/PI*multiBounce(s.ao,s.albedo);
     // Analytic split-sum environment BRDF fit (Lazarov, Epic 2014).
     float4 r=s.roughness*float4(-1,-0.0275,-0.572,0.022)+float4(1,0.0425,1.04,-0.04);

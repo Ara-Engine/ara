@@ -607,7 +607,7 @@
     },
     "entryPoints": [
         {
-            "name": "postMain",
+            "name": "ssrPyramidMain",
             "stage": "compute",
             "scope": {
                 "kind": "none",

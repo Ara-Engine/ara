@@ -21,6 +21,9 @@ pub struct Quality {
     /// Screen-space ambient occlusion (GTAO at half resolution); `None` keeps
     /// only material occlusion.
     pub ambient_occlusion: Option<AmbientOcclusion>,
+    /// Screen-space reflections (half resolution) over probe and environment
+    /// reflections; `None` keeps only those.
+    pub reflections: Option<Reflections>,
     /// Probe GI caches relit per frame; the rest carry their irradiance forward.
     pub gi_budget: u32,
     /// Run the bloom pyramid when the look asks for bloom.
@@ -31,6 +34,7 @@ impl Default for Quality {
         Self {
             shadows: Shadows::default(),
             ambient_occlusion: None,
+            reflections: None,
             gi_budget: 2048,
             bloom: true,
         }
@@ -53,6 +57,27 @@ impl Default for AmbientOcclusion {
             radius: 1.,
             slices: 2,
             steps: 6,
+        }
+    }
+}
+
+/// Screen-space reflections: one deterministic mirror ray per half-resolution
+/// pixel; roughness widens them through a colour pyramid instead of noise.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Reflections {
+    /// Surfaces rougher than this keep probe and environment reflections only.
+    pub max_roughness: f32,
+    /// Longest reflection ray in metres.
+    pub distance: f32,
+    /// March steps per ray (each followed by a five-step refinement on a hit).
+    pub steps: u32,
+}
+impl Default for Reflections {
+    fn default() -> Self {
+        Self {
+            max_roughness: 0.5,
+            distance: 30.,
+            steps: 24,
         }
     }
 }
@@ -89,6 +114,12 @@ impl Quality {
                 && s.distance.is_finite()
                 && s.distance > 1.
                 && self.gi_budget > 0
+                && self.reflections.is_none_or(|r| {
+                    (0.0..=1.0).contains(&r.max_roughness)
+                        && r.distance.is_finite()
+                        && r.distance > 0.
+                        && (4..=128).contains(&r.steps)
+                })
                 && self.ambient_occlusion.is_none_or(|a| {
                     a.radius.is_finite()
                         && a.radius > 0.
