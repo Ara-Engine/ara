@@ -2,7 +2,8 @@
 //! exposure, bloom and display grading after temporal resolve.
 use super::gpu::{
     AO_DENOISED, AO_TRACE, BLOOM_DOWN, BLOOM_UP, FROXELS, GI_DIFFUSE, GI_SPECULAR, LookGpu,
-    LookIds, MULTISCATTER, SKY_IRRADIANCE, SKY_PREFILTER, SKY_VIEW, SkyKey, TRANSMITTANCE,
+    LookIds, MULTISCATTER, SKY_IRRADIANCE, SKY_PREFILTER, SKY_VIEW, SSR_PYRAMID, SSR_TRACE, SkyKey,
+    TRANSMITTANCE,
 };
 use crate::graph::{Graph, PassId, ResourceId};
 use ara_gpu::{
@@ -26,6 +27,9 @@ pub(crate) enum LookPass {
     AoTrace,
     AoDenoise,
     GiGather,
+    /// Reflection colour pyramid level (1..4) from the previous history.
+    SsrPyramid(u32),
+    SsrTrace,
 }
 
 impl LookGpu {
@@ -148,6 +152,55 @@ impl LookGpu {
         passes
     }
 
+    /// Screen-space reflections before lighting: a colour pyramid of the previous
+    /// resolved frame (`history`; none on the first frame) and the half-resolution
+    /// trace. `reads` must cover depth, normals, world positions and the frame.
+    pub(crate) fn ssr_passes(
+        &self,
+        graph: &mut Graph,
+        ids: &LookIds,
+        history: Option<ResourceId>,
+        reads: &[(ResourceId, Access)],
+    ) -> Vec<(PassId, LookPass)> {
+        let (Some(_), Some(history)) = (self.quality.reflections, history) else {
+            return Vec::new();
+        };
+        let mut passes = Vec::new();
+        for level in 1..=4u32 {
+            const NAMES: [&str; 4] = [
+                "SSR.Pyramid1",
+                "SSR.Pyramid2",
+                "SSR.Pyramid3",
+                "SSR.Pyramid4",
+            ];
+            let id = graph.pass(
+                NAMES[level as usize - 1],
+                Queue::Graphics,
+                [
+                    (history, Access::ShaderRead),
+                    (ids.image(SSR_PYRAMID), Access::Storage),
+                    (ids.frame, Access::ShaderRead),
+                ]
+                .into_iter()
+                .chain(reads.iter().copied()),
+            );
+            passes.push((id, LookPass::SsrPyramid(level)));
+        }
+        let id = graph.pass(
+            "SSR.Trace",
+            Queue::Graphics,
+            [
+                (ids.image(SSR_PYRAMID), Access::ShaderRead),
+                (ids.image(SSR_TRACE), Access::Storage),
+                (ids.frame, Access::ShaderRead),
+            ]
+            .into_iter()
+            .chain(reads.iter().copied()),
+        );
+        passes.push((id, LookPass::SsrTrace));
+        passes
+    }
+
     /// The half-resolution probe gather (after the relight); `reads` must cover the
     /// G-buffer world positions and normals.
     pub(crate) fn gather_passes(
@@ -210,8 +263,13 @@ impl LookGpu {
         vec![(trace, LookPass::AoTrace), (denoise, LookPass::AoDenoise)]
     }
 
-    /// Images the lighting and transparency passes sample.
-    pub(crate) fn lighting_reads(&self, ids: &LookIds) -> Vec<(ResourceId, Access)> {
+    /// Images the lighting and transparency passes sample; `reflected` when this
+    /// frame traced screen-space reflections (they need last frame's history).
+    pub(crate) fn lighting_reads(
+        &self,
+        ids: &LookIds,
+        reflected: bool,
+    ) -> Vec<(ResourceId, Access)> {
         let mut reads = vec![(ids.frame, Access::ShaderRead)];
         if self.look.sky.is_some() {
             reads.extend(
@@ -228,6 +286,9 @@ impl LookGpu {
         }
         if self.quality.ambient_occlusion.is_some() {
             reads.push((ids.image(AO_DENOISED), Access::ShaderRead));
+        }
+        if reflected {
+            reads.push((ids.image(SSR_TRACE), Access::ShaderRead));
         }
         reads
     }
@@ -323,6 +384,12 @@ impl LookGpu {
             LookPass::AoTrace => (p.ao_trace, 0, groups(size.map(|v| v.div_ceil(2)))),
             LookPass::AoDenoise => (p.ao_denoise, 0, groups(size.map(|v| v.div_ceil(2)))),
             LookPass::GiGather => (p.gi_gather, 0, groups(size.map(|v| v.div_ceil(2)))),
+            LookPass::SsrPyramid(level) => (
+                p.ssr_pyramid,
+                level - 1,
+                groups(size.map(|v| (v >> level).max(1))),
+            ),
+            LookPass::SsrTrace => (p.ssr_trace, 0, groups(size.map(|v| v.div_ceil(2)))),
             LookPass::GiRelight => (
                 p.gi_relight,
                 0,

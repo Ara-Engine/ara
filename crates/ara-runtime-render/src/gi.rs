@@ -31,12 +31,18 @@ fn config() -> NativeConfig {
     }
 }
 
-/// Background, disk-cached probe surface acquisition for one presenter.
+/// Background, disk-cached probe surface acquisition for one presenter. At most
+/// one bake runs at a time; while it runs, only the newest request waits (bursts
+/// of content changes, e.g. streaming publications, never stack GPU bakes), and a
+/// bake superseded by a newer request is discarded when it finishes.
 pub(crate) struct Acquisition {
     cache: PathBuf,
     /// Content key of the newest request.
     key: Option<u64>,
-    pending: Option<Receiver<Result<ProbeSurfaces>>>,
+    /// The running bake and its key.
+    active: Option<(u64, Receiver<Result<ProbeSurfaces>>)>,
+    /// The newest request made while a bake was running.
+    queued: Option<(u64, RenderFrame, Content)>,
 }
 
 impl Acquisition {
@@ -44,11 +50,13 @@ impl Acquisition {
         Self {
             cache: cache.join("probe-gi"),
             key: None,
-            pending: None,
+            active: None,
+            queued: None,
         }
     }
 
-    /// Starts acquiring `frame`'s content unless `key` was already requested.
+    /// Requests `frame`'s content unless `key` is already the newest request:
+    /// starts a bake when none runs, otherwise replaces the queued request.
     /// `content` is only resolved for a new key.
     pub(crate) fn request(
         &mut self,
@@ -61,43 +69,60 @@ impl Acquisition {
             return Ok(());
         }
         self.key = Some(key);
-        let snapshot = snapshot(frame);
-        let content = content()?;
+        let request = (key, snapshot(frame), content()?);
+        if self.active.is_some() {
+            self.queued = Some(request);
+            return Ok(());
+        }
+        self.start(request)
+    }
+
+    fn start(&mut self, (key, frame, content): (u64, RenderFrame, Content)) -> Result<()> {
         let cache = self.cache.clone();
         let (send, receive) = channel();
         std::thread::Builder::new()
             .name("probe-gi".into())
             .spawn(move || {
-                let _ = send.send(acquire(&cache, key, &snapshot, content));
+                let _ = send.send(acquire(&cache, key, &frame, content));
             })
             .context("starting the probe GI worker")?;
-        self.pending = Some(receive);
+        self.active = Some((key, receive));
         Ok(())
     }
 
-    /// The finished acquisition, once; `wait` blocks until it completes.
-    /// Failures are reported and leave the scene with sky-only ambient light.
+    /// The newest request's surfaces, once, when its bake finishes; `wait` blocks
+    /// until every queued request is done. Failures are reported and leave the
+    /// scene with sky-only ambient light.
     pub(crate) fn poll(&mut self, wait: bool) -> Option<ProbeSurfaces> {
-        let receive = self.pending.as_ref()?;
-        let result = if wait {
-            receive.recv().ok()
-        } else {
-            match receive.try_recv() {
-                Ok(result) => Some(result),
-                Err(TryRecvError::Empty) => return None,
-                Err(TryRecvError::Disconnected) => None,
-            }
-        };
-        self.pending = None;
-        match result {
-            Some(Ok(surfaces)) => Some(surfaces),
-            Some(Err(error)) => {
+        loop {
+            let (key, receive) = self.active.as_ref()?;
+            let result = if wait {
+                receive.recv().ok()
+            } else {
+                match receive.try_recv() {
+                    Ok(result) => Some(result),
+                    Err(TryRecvError::Empty) => return None,
+                    Err(TryRecvError::Disconnected) => None,
+                }
+            };
+            let current = Some(*key) == self.key;
+            self.active = None;
+            if let Some(next) = self.queued.take()
+                && let Err(error) = self.start(next)
+            {
                 eprintln!("ara-runtime-render: probe GI acquisition failed: {error:#}");
-                None
             }
-            None => {
-                eprintln!("ara-runtime-render: probe GI worker stopped");
-                None
+            match result {
+                Some(Ok(surfaces)) if current => return Some(surfaces),
+                // Superseded by a newer request: discard and keep polling it.
+                Some(Ok(_)) => {}
+                Some(Err(error)) => {
+                    eprintln!("ara-runtime-render: probe GI acquisition failed: {error:#}")
+                }
+                None => eprintln!("ara-runtime-render: probe GI worker stopped"),
+            }
+            if !wait {
+                return None;
             }
         }
     }
@@ -250,6 +275,45 @@ fn bake(gpu: &mut VulkanDevice, frame: &RenderFrame, content: Content) -> Result
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn lattice(origin: f32) -> ProbeSurfaces {
+        ProbeSurfaces {
+            origin: [origin, 0., 0.],
+            spacing: [1.; 3],
+            counts: [2, 2, 2],
+            texels: vec![[0; 4]; 8 * SURFACE_TEXELS],
+            statics: vec![[1., 1., 0., 1.]; 8 * STATIC_VECTORS],
+        }
+    }
+
+    #[test]
+    fn bursts_run_one_bake_and_deliver_only_the_newest_request() -> Result<()> {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../target/runtime-render/probe-gi-queue");
+        let _ = std::fs::remove_dir_all(&root);
+        let mut acquisition = Acquisition::new(root.clone());
+        // Cached results make every "bake" a file read, so no GPU is needed.
+        std::fs::create_dir_all(root.join("probe-gi"))?;
+        for (key, origin) in [(1u64, 1.), (2, 2.), (3, 3.)] {
+            let key = key ^ u64::from(VERSION);
+            std::fs::write(
+                root.join(format!("probe-gi/{key:016x}.gi")),
+                encode(&lattice(origin)),
+            )?;
+        }
+        let frame = RenderFrame::default();
+        acquisition.request(1, &frame, || Ok(Content::default()))?;
+        acquisition.request(2, &frame, || Ok(Content::default()))?;
+        acquisition.request(3, &frame, || Ok(Content::default()))?;
+        // Repeating the newest key resolves no content.
+        acquisition.request(3, &frame, || anyhow::bail!("resolved twice"))?;
+        assert!(acquisition.queued.is_some(), "requests during a bake queue");
+        let surfaces = acquisition.poll(true).context("the newest request")?;
+        assert_eq!(surfaces.origin[0], 3.);
+        assert!(acquisition.active.is_none() && acquisition.queued.is_none());
+        assert!(acquisition.poll(false).is_none());
+        Ok(())
+    }
 
     #[test]
     fn cache_round_trips_and_rejects_truncation() -> Result<()> {

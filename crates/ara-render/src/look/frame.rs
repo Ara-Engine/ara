@@ -11,6 +11,8 @@ pub(crate) const FOG: u32 = 2;
 pub(crate) const RESET: u32 = 4;
 /// Shader flag: screen-space ambient occlusion is available.
 pub(crate) const AMBIENT_OCCLUSION: u32 = 8;
+/// Shader flag: screen-space reflections are available.
+pub(crate) const REFLECTIONS: u32 = 16;
 /// Exposure adaptation step; the renderer has no wall clock.
 const FRAME_SECONDS: f32 = 1. / 60.;
 
@@ -38,6 +40,8 @@ pub(crate) struct LookFrame {
     pub ao: [f32; 4],
     pub ao_images: [u32; 4],
     pub gi_gather: [u32; 4],
+    pub ssr: [f32; 4],
+    pub ssr_images: [u32; 4],
 }
 
 /// Per-frame inputs that are not part of the authored look.
@@ -114,6 +118,8 @@ impl LookFrame {
             ao: [0.; 4],
             ao_images: [0; 4],
             gi_gather: [0; 4],
+            ssr: [0.; 4],
+            ssr_images: [0; 4],
         }
     }
 }

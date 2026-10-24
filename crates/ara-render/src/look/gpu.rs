@@ -20,7 +20,9 @@ pub(crate) const AO_TRACE: usize = 8;
 pub(crate) const AO_DENOISED: usize = 9;
 pub(crate) const GI_DIFFUSE: usize = 10;
 pub(crate) const GI_SPECULAR: usize = 11;
-const IMAGES: usize = 12;
+pub(crate) const SSR_PYRAMID: usize = 12;
+pub(crate) const SSR_TRACE: usize = 13;
+const IMAGES: usize = 14;
 
 /// Fixed LUT extents; bloom atlases follow the render size.
 fn extent(image: usize, size: [u32; 2]) -> [u32; 2] {
@@ -31,7 +33,9 @@ fn extent(image: usize, size: [u32; 2]) -> [u32; 2] {
         FROXELS => [4096, 36],
         SKY_IRRADIANCE => [32, 16],
         SKY_PREFILTER => [256, 640],
-        AO_TRACE | AO_DENOISED | GI_DIFFUSE | GI_SPECULAR => size.map(|v| v.div_ceil(2)),
+        AO_TRACE | AO_DENOISED | GI_DIFFUSE | GI_SPECULAR | SSR_TRACE => {
+            size.map(|v| v.div_ceil(2))
+        }
         _ => [size[0], (size[1] / 2).max(1)],
     }
 }
@@ -50,6 +54,8 @@ pub(crate) struct Pipelines {
     pub ao_trace: Pipeline,
     pub ao_denoise: Pipeline,
     pub gi_gather: Pipeline,
+    pub ssr_pyramid: Pipeline,
+    pub ssr_trace: Pipeline,
 }
 
 /// What the sky LUTs (`aerosols`) and the sky IBL (sun and sky) were computed for.
@@ -130,6 +136,8 @@ impl LookGpu {
             ao_trace: load("look_ao_trace")?,
             ao_denoise: load("look_ao_denoise")?,
             gi_gather: load("look_gi_gather")?,
+            ssr_pyramid: load("look_ssr_pyramid")?,
+            ssr_trace: load("look_ssr_trace")?,
         };
         let frame = gpu.create_buffer(
             std::mem::size_of::<LookFrame>() as u64,
@@ -187,6 +195,8 @@ impl LookGpu {
             AO_DENOISED,
             GI_DIFFUSE,
             GI_SPECULAR,
+            SSR_PYRAMID,
+            SSR_TRACE,
         ] {
             if let Some(old) = self.images[i].take() {
                 gpu.retire(Resource::Image(old))?;
@@ -215,6 +225,8 @@ impl LookGpu {
             self.quality.ambient_occlusion.is_some(),
             self.gi.is_some(),
             self.gi.is_some(),
+            self.quality.reflections.is_some(),
+            self.quality.reflections.is_some(),
         ];
         for (i, needed) in needed.into_iter().enumerate() {
             if !needed || self.images[i].is_some() {
@@ -250,6 +262,16 @@ impl LookGpu {
             self.sampled[AO_DENOISED],
             self.storage[AO_TRACE],
             self.storage[AO_DENOISED],
+        ]
+    }
+
+    /// Reflection rows: pyramid and trace (sampled), then (storage).
+    pub(crate) fn ssr_indices(&self) -> [u32; 4] {
+        [
+            self.sampled[SSR_PYRAMID],
+            self.sampled[SSR_TRACE],
+            self.storage[SSR_PYRAMID],
+            self.storage[SSR_TRACE],
         ]
     }
 

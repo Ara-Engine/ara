@@ -52,10 +52,13 @@ ECS; `Scene` is an immutable render extraction snapshot, not authoritative state
 - `look::Quality` (`Renderer::set_quality`): per-preset budgets from
   `ara_render_fidelity::presets::RasterPlan`: shadow cascades (count, texels,
   distance; stable light space, practical splits, gather PCF, cascade blend),
-  half-res GTAO, GI relight budget, bloom. `cascade_viewports()` drives shadow
-  submission. Look images are allocated lazily (the bindless storage heap is shared).
-- `set_deferred_post` + `finish(color, sampled, state)`: grade an externally
-  composited HDR frame (landscape, particles) with the same look post.
+  half-res GTAO, half-res SSR (deterministic mirror rays, roughness through a
+  colour pyramid of last frame), GI relight budget, bloom. `cascade_viewports()`
+  drives shadow submission. Look images are allocated lazily (the bindless storage
+  heap is shared). Probe GI is gathered at half resolution for G-buffer pixels.
+- `set_deferred_post` + `finish(color, sampled, state)`: temporally resolve and grade
+  an externally composited HDR frame (landscape, particles) with the same look post.
+  TAA reprojects with native motion (Frame.look.w) when present.
 - `CaptureRequest`, `Capture`: fixed tick/seed, settle frames, modes, PNG, picking,
   numbered marks, visible-pixel boxes, legends, content/compiler/driver provenance.
 - `compare`: local RGB SSIM, explicit tolerance and an amplified diff image.

@@ -7,7 +7,7 @@
 use crate::{FidelityView, Mode, PostSettings, Settings, Tier, Upscaler};
 use anyhow::{Result, bail};
 use ara_gpu::vulkan::VulkanDevice;
-use ara_render::look::{AmbientOcclusion, Quality, Shadows};
+use ara_render::look::{AmbientOcclusion, Quality, Reflections, Shadows};
 
 /// User-facing quality tier. D27: every tier is raster by default
 /// ([`QualityPreset::raster_quality`]); with [`RenderOptions::ray_tracing`] on an RT
@@ -254,6 +254,13 @@ impl QualityPreset {
             resolution,
             distance,
         };
+        let ssr = |max_roughness, distance, steps| {
+            Some(Reflections {
+                max_roughness,
+                distance,
+                steps,
+            })
+        };
         let ao = |slices, steps| {
             Some(AmbientOcclusion {
                 radius: 1.,
@@ -265,24 +272,28 @@ impl QualityPreset {
             Self::Low => Quality {
                 shadows: shadows(2, 1024, 60.),
                 ambient_occlusion: None,
+                reflections: None,
                 gi_budget: 1024,
                 bloom: false,
             },
             Self::Medium => Quality {
                 shadows: shadows(3, 1024, 100.),
                 ambient_occlusion: ao(2, 4),
+                reflections: ssr(0.4, 20., 16),
                 gi_budget: 2048,
                 bloom: true,
             },
             Self::High => Quality {
                 shadows: shadows(4, 2048, 150.),
                 ambient_occlusion: ao(2, 6),
+                reflections: ssr(0.5, 30., 24),
                 gi_budget: 2048,
                 bloom: true,
             },
             Self::Epic => Quality {
                 shadows: shadows(4, 2048, 250.),
                 ambient_occlusion: ao(3, 8),
+                reflections: ssr(0.6, 50., 32),
                 gi_budget: 4096,
                 bloom: true,
             },
