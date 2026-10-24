@@ -1,3 +1,4 @@
+mod buffer_memory;
 mod create;
 mod resources;
 pub use resources::image_barrier;
@@ -196,6 +197,7 @@ pub struct Gpu {
     debug: ash::ext::debug_utils::Instance,
     messenger: vk::DebugUtilsMessengerEXT,
     buffers: Vec<BufferAllocation>,
+    buffer_memory: buffer_memory::BufferMemory,
     images: Vec<ImageAllocation>,
     structures: Vec<vk::AccelerationStructureKHR>,
 }
@@ -285,6 +287,9 @@ impl Drop for Gpu {
             for buffer in &self.buffers {
                 self.device.destroy_buffer(buffer.handle, None);
                 self.device.free_memory(buffer.memory, None);
+            }
+            for memory in self.buffer_memory.drain() {
+                self.device.free_memory(memory, None);
             }
             self.device.destroy_command_pool(self.compute_pool, None);
             self.device.destroy_command_pool(self.graphics_pool, None);

@@ -19,6 +19,8 @@ enum Geometry {
 }
 pub(super) struct NativeAcceleration {
     pub handle: vk::AccelerationStructureKHR,
+    /// BLAS address is stable for this object's lifetime, including before build.
+    address: vk::DeviceAddress,
     pub backing: BufferAllocation,
     pub scratch: Buffer,
     pub dependencies: Vec<AccelerationStructure>,
@@ -33,6 +35,7 @@ impl VulkanDevice {
         &mut self,
         desc: &AccelerationDesc,
     ) -> Result<AccelerationStructure> {
+        crate::cpu_scope!("GPU.allocate_acceleration_structure");
         if !self.context.info.ray_tracing {
             return Err(GpuError::Contract(
                 "RT-tier acceleration structures are unavailable".into(),
@@ -70,15 +73,6 @@ impl VulkanDevice {
                     {
                         return Err(GpuError::Contract("Invalid TLAS instance".into()));
                     }
-                    // SAFETY: Allocated BLAS belongs to this device; address is stable before and after build.
-                    let address = unsafe {
-                        self.context
-                            .acceleration
-                            .get_acceleration_structure_device_address(
-                                &vk::AccelerationStructureDeviceAddressInfoKHR::default()
-                                    .acceleration_structure(blas.raw.handle),
-                            )
-                    };
                     native.push(vk::AccelerationStructureInstanceKHR {
                         transform: vk::TransformMatrixKHR {
                             matrix: instance.transform,
@@ -93,7 +87,7 @@ impl VulkanDevice {
                                 as u8,
                         ),
                         acceleration_structure_reference: vk::AccelerationStructureReferenceKHR {
-                            device_handle: address,
+                            device_handle: blas.raw.address,
                         },
                     });
                     dependencies.push(instance.geometry);
@@ -148,9 +142,24 @@ impl VulkanDevice {
         let (handle, backing) = self
             .context
             .structure(sizes.acceleration_structure_size, kind)?;
+        let address = if matches!(&geometry, Geometry::Triangles { .. }) {
+            // SAFETY: This live BLAS and its backing allocation belong to the device.
+            // Vulkan keeps the address valid until that same object is destroyed.
+            unsafe {
+                self.context
+                    .acceleration
+                    .get_acceleration_structure_device_address(
+                        &vk::AccelerationStructureDeviceAddressInfoKHR::default()
+                            .acceleration_structure(handle),
+                    )
+            }
+        } else {
+            0
+        };
         self.accelerations.insert(Owned {
             raw: NativeAcceleration {
                 handle,
+                address,
                 backing,
                 scratch,
                 geometry,
