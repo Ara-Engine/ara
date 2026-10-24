@@ -121,4 +121,9 @@ instead of "Starting Play…". Play embeds unless `play.inGameView` is off. Buil
 runs ara-export with `presets/*.export.json` on a thread.
 Bounded runs are offscreen (`Options::offscreen`: hidden windows, UI readback);
 never add a capture route that shows a window. `--verify-journey` captures the
-journey (`app/journey.rs`) and writes `journey.json`.
+journey (`app/journey.rs`) and writes `journey.json` after every step.
+Tools: `shell/material_panel.rs` (preview + parameters, Graph|Source, compile
+status; swatches are painted after layout, never raw colours in markup) and
+`shell/vfx_panel.rs` (emitter stacks, preview-only Hide/Isolate, timeline driving
+`asset_tools/vfx_stream.rs`: rate, restart, step, GPU counters updated in place).
+Imports use the shared `import.initialize`/`import.configure` commands.

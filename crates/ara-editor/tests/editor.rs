@@ -742,7 +742,13 @@ fn material_values_and_animation_layout_share_undo_and_survive_reopen() {
     let mut invalid_shell = Shell::new(&mut editor, [1440., 900.]).unwrap();
     editor.apply_to(&material,vec![json!({"cmd":"graph.param.set","args":{"node":node,"name":"value","value":"invalid numeric default"}})],"Verify node diagnostics").unwrap();
     invalid_shell.rebuild(&mut editor).unwrap();
-    assert!(invalid_shell.ui.find("material-error-0").is_some());
+    // The Material tool's status strip names the first error.
+    assert!(
+        invalid_shell
+            .ui
+            .find("material-status-error-text")
+            .is_some()
+    );
     assert!(
         invalid_shell.layout_report()["graph"]["nodes"]
             .as_array()
@@ -752,7 +758,12 @@ fn material_values_and_animation_layout_share_undo_and_survive_reopen() {
     );
     editor.action("history.undo", json!({})).unwrap();
     invalid_shell.rebuild(&mut editor).unwrap();
-    assert!(invalid_shell.ui.find("material-error-0").is_none());
+    assert!(
+        invalid_shell
+            .ui
+            .find("material-status-error-text")
+            .is_none()
+    );
     drop(invalid_shell);
 
     let animation = editor

@@ -120,7 +120,7 @@ scroll { overflow:hidden; flex-basis:0px; min-height:0px; min-width:0px; }
 .search-icon { position:absolute; left:6px; top:3px; width:16px; height:16px; color:var(--muted-foreground); }
 .placeholder { position:absolute; left:24px; top:2px; font-size:12px; color:var(--muted-foreground); }
 .vector-cell { flex-direction:row; flex-grow:1; flex-basis:0px; flex-shrink:1; align-items:center; min-width:0px; height:22px; background:var(--background); border-width:1px; border-color:var(--input); border-radius:4px; overflow:hidden; }
-.vector-input { flex-grow:1; flex-basis:0px; border-width:0px; background:transparent; border-radius:0px; padding:1px; padding-left:2px; padding-right:4px; height:20px; }
+.vector-input { text-align:left; flex-grow:1; flex-basis:0px; border-width:0px; background:transparent; border-radius:0px; padding:1px; padding-left:2px; padding-right:4px; height:20px; }
 .axis { width:16px; height:20px; padding:0px; border-width:0px; border-radius:0px; font-size:10px; background:transparent; }
 .axis:hover { background:var(--raised); }
 .axis-x { color:var(--destructive-foreground); }
@@ -288,3 +288,22 @@ scroll { overflow:hidden; flex-basis:0px; min-height:0px; min-width:0px; }
 .game-frame { padding:0px; border-width:0px; border-radius:0px; background:var(--background); }
 .game-stats { position:absolute; right:10px; top:10px; padding:4px; padding-left:8px; padding-right:8px; border-radius:var(--radius-sm); background:var(--menu-surface); font-size:11px; color:var(--foreground); }
 .game-hint { position:absolute; left:10px; bottom:10px; height:24px; padding-left:8px; padding-right:8px; align-items:center; border-radius:var(--radius-sm); background:var(--menu-surface); font-size:11px; color:var(--muted-foreground); }
+/* Authoring tools (Material, VFX): side column, main area, status strip. */
+.tool-body { flex-direction:row; flex-grow:1; flex-basis:0px; min-height:0px; }
+.tool-side { flex-shrink:0; min-height:0px; background:var(--panel-header); }
+.tool-edge { width:1px; flex-shrink:0; background:var(--separator-strong); }
+.tool-main { flex-grow:1; flex-basis:0px; min-width:0px; min-height:0px; overflow:hidden; background:var(--background); }
+.tool-preview { flex-shrink:0; padding:8px; gap:6px; }
+.tool-status { height:24px; flex-shrink:0; flex-direction:row; align-items:center; gap:6px; padding-left:8px; padding-right:8px; background:var(--chrome); font-size:11px; overflow:hidden; }
+.side-header { height:26px; flex-shrink:0; flex-direction:row; align-items:center; gap:4px; padding-left:8px; padding-right:4px; }
+.param-row { height:26px; flex-shrink:0; flex-direction:row; align-items:center; gap:6px; padding-left:8px; padding-right:6px; }
+.param-row:hover { background:var(--raised); }
+.param-selected { background:var(--selection-surface); }
+.param-name { flex-grow:1; flex-basis:0px; min-width:0px; height:22px; flex-direction:row; align-items:center; justify-content:start; gap:6px; padding:0px; background:transparent; border-width:0px; overflow:hidden; font-size:12px; }
+.param-name:hover { background:transparent; }
+.param-value { width:112px; flex-shrink:0; height:22px; text-align:left; }
+.status-link { height:20px; padding-left:4px; padding-right:4px; min-width:0px; overflow:hidden; }
+.timeline { height:32px; flex-shrink:0; flex-direction:row; align-items:center; gap:4px; padding-left:4px; padding-right:8px; background:var(--panel-header); border-radius:var(--radius-sm); }
+.emitter-header { height:28px; flex-shrink:0; flex-direction:row; align-items:center; gap:4px; padding-left:0px; padding-right:2px; border-radius:4px; background:var(--card); }
+.emitter-muted { color:var(--muted-foreground); }
+.emitter-tool { width:22px; height:22px; padding:3px; }

@@ -1,5 +1,7 @@
-//! Hierarchy: a virtual 22 px tree with type-tinted icons, a strong selection
-//! fill, hover eye/lock toggles, a scene header, a footer count and an empty state.
+//! Hierarchy: a virtual 22 px tree with type-tinted icons (prefab instances in the
+//! prefab tint), a strong selection fill, hover eye/lock toggles, a scene header, a
+//! type filter menu (it writes `t:Kind` into the search), a footer count and an
+//! empty state.
 use super::commands::{Target, menus::Context};
 use super::*;
 impl Shell {
@@ -15,6 +17,16 @@ impl Shell {
         );
         out.push_str(&format!("<button id='entity-create' class='ghost' style='padding-left:4px;padding-right:2px' label='Create' description='Create an entity · Shift+A' action='Dispatch'>{}{}</button>",icons::icon("entity-create","plus"),icons::icon_in("entity-create-more","chevron-down","icon-sm")));
         self.search(out, "hierarchy", editor);
+        let filtered = editor
+            .state
+            .searches
+            .get("hierarchy")
+            .is_some_and(|q| q.starts_with("t:"));
+        self.bindings.insert(
+            ara_ui::source::stable_id("hierarchy-filter"),
+            Binding::ContextMenu(Context::HierarchyFilter, Target::None),
+        );
+        out.push_str(&format!("<button id='hierarchy-filter' class='{} icon-button' label='Filter by type' description='Show only lights, cameras, meshes, prefabs, audio or effects' action='Dispatch'>{}</button>",if filtered{"selected"}else{"ghost"},if filtered{icons::icon_in("hierarchy-filter","funnel","on-selection")}else{icons::icon("hierarchy-filter","funnel")}));
         out.push_str("</panel>");
         let resolved = crate::world::resolve(editor.host.store(), &editor.state.doc)
             .map_err(|d| format!("{d:?}"))?;
@@ -64,7 +76,9 @@ impl Shell {
             );
             if matches {
                 let key = crate::world::render_id(id);
-                let (icon, tint) = if e.record.contains_key("Light") {
+                let (icon, tint) = if e.record.contains_key("prefab") {
+                    ("package", "tint-prefab")
+                } else if e.record.contains_key("Light") {
                     ("lightbulb", "tint-light")
                 } else if e.record.contains_key("Camera") {
                     ("camera", "tint-camera")

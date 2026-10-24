@@ -7,6 +7,24 @@ use std::sync::LazyLock;
 
 pub(super) static COMMANDS: LazyLock<Vec<Spec>> = LazyLock::new(build);
 
+/// A Hierarchy type filter: it writes `query` into the Hierarchy search, so the
+/// filter stays visible and editable there.
+macro_rules! hierarchy_filter {
+    ($id:literal, $title:literal, $icon:literal, $query:literal) => {
+        cmd(
+            $id,
+            $title,
+            $icon,
+            "",
+            "Show only these entities in the Hierarchy; its search box shows the filter.",
+            |_, e, _| act(e, "editor.search", json!({"panel": "hierarchy", "query": $query})),
+        )
+        .when(|c| {
+            Avail::Checked(c.state.searches.get("hierarchy").map_or("", String::as_str) == $query)
+        })
+    };
+}
+
 fn cmd(
     id: &'static str,
     title: &'static str,
@@ -1391,6 +1409,45 @@ fn build() -> Vec<Spec> {
             },
         )
         .when(|c| Avail::Checked(c.game.0)),
+        hierarchy_filter!("hierarchy.filter.all", "All Entities", "list-tree", ""),
+        hierarchy_filter!("hierarchy.filter.lights", "Lights", "lightbulb", "t:light"),
+        hierarchy_filter!("hierarchy.filter.cameras", "Cameras", "camera", "t:camera"),
+        hierarchy_filter!("hierarchy.filter.meshes", "Meshes", "box", "t:meshrenderer"),
+        hierarchy_filter!(
+            "hierarchy.filter.prefabs",
+            "Prefab Instances",
+            "package",
+            "t:prefab"
+        ),
+        hierarchy_filter!("hierarchy.filter.audio", "Audio", "volume-2", "t:audio"),
+        hierarchy_filter!(
+            "hierarchy.filter.effects",
+            "Effects",
+            "sparkles",
+            "t:visualeffect"
+        ),
+        cmd(
+            "material.view_graph",
+            "Material Graph",
+            "layers",
+            "",
+            "Edit the open material as a node graph.",
+            |s, _, _| {
+                s.material_source_view = false;
+                Ok(())
+            },
+        ),
+        cmd(
+            "material.view_source",
+            "Material Source",
+            "file-code",
+            "",
+            "Edit the open material as DSL text: the same document as the graph.",
+            |s, _, _| {
+                s.material_source_view = true;
+                Ok(())
+            },
+        ),
         cmd(
             "game.client",
             "Show Client",
@@ -1831,6 +1888,41 @@ fn build() -> Vec<Spec> {
         cmd("vfx.module.down", "Move Module Down", "chevron-down", "Alt+Down", "Move the module later in its stage.", |s, e, t| vfx_module(s, e, t, "down")).when(vfx_module_target),
         cmd("vfx.module.duplicate", "Duplicate Module", "copy", "", "Insert a copy after the module.", |s, e, t| vfx_module(s, e, t, "duplicate")).when(vfx_module_target),
         cmd("vfx.module.delete", "Delete Module", "trash", "", "Remove the module from its stage.", |s, e, t| vfx_module(s, e, t, "delete")).when(vfx_module_target),
+        cmd("vfx.restart", "Restart Effect", "rotate-ccw", "", "Run the VFX preview again from tick 0.", |s, _, _| {
+            s.vfx_stream.restart();
+            Ok(())
+        }),
+        cmd("vfx.step", "Step Effect", "step-forward", "", "Advance the paused VFX preview by one tick.", |s, e, _| {
+            if e.state.preview_playing {
+                act(e, "editor.workspace", json!({"playing": false}))?;
+            }
+            s.vfx_stream.step();
+            Ok(())
+        }),
+        cmd("vfx.rate", "Preview Rate", "gauge", "", "Run the VFX preview faster or slower (its fixed tick is unchanged).", |s, _, t| {
+            let Target::Text(rate) = t else { return Err("choose a rate".into()) };
+            s.vfx_rate = rate.parse().map_err(|_| "rates are percentages")?;
+            Ok(())
+        }),
+        cmd("vfx.emitter.collapse", "Collapse Emitter", "chevron-down", "", "Collapse or expand an emitter's stack.", |s, _, t| {
+            let Target::Text(name) = t else { return Err("choose an emitter".into()) };
+            if !s.vfx_collapsed.remove(name) {
+                s.vfx_collapsed.insert(name.clone());
+            }
+            Ok(())
+        }),
+        cmd("vfx.emitter.hide", "Hide Emitter in Preview", "eye-off", "", "Leave an emitter out of the preview (the effect is unchanged).", |s, _, t| {
+            let Target::Text(name) = t else { return Err("choose an emitter".into()) };
+            if !s.vfx_hidden.remove(name) {
+                s.vfx_hidden.insert(name.clone());
+            }
+            Ok(())
+        }),
+        cmd("vfx.emitter.isolate", "Isolate Emitter", "scan-eye", "", "Preview only this emitter; again to show every emitter.", |s, _, t| {
+            let Target::Text(name) = t else { return Err("choose an emitter".into()) };
+            s.vfx_solo = (s.vfx_solo.as_ref() != Some(name)).then(|| name.clone());
+            Ok(())
+        }),
         cmd("console.copy", "Copy Message", "copy", "", "Copy the diagnostic text.", |s, _, t| {
             let Target::Text(text) = t else { return Err("choose a message".into()) };
             s.copy_text(text.clone());

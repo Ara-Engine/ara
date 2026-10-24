@@ -488,6 +488,8 @@ pub(crate) enum Context {
     Show,
     /// Game view toolbar: aspect presets.
     GameAspect,
+    /// Hierarchy toolbar: type filters.
+    HierarchyFilter,
 }
 /// Context-menu layout for a target kind.
 pub(crate) fn context(kind: Context) -> &'static [Item] {
@@ -701,6 +703,16 @@ pub(crate) fn context(kind: Context) -> &'static [Item] {
             C("view.mode.gi_debug"),
             S,
             C("view.fidelity"),
+        ],
+        Context::HierarchyFilter => &[
+            C("hierarchy.filter.all"),
+            S,
+            C("hierarchy.filter.lights"),
+            C("hierarchy.filter.cameras"),
+            C("hierarchy.filter.meshes"),
+            C("hierarchy.filter.prefabs"),
+            C("hierarchy.filter.audio"),
+            C("hierarchy.filter.effects"),
         ],
         Context::GameAspect => &[
             C("game.aspect.free"),

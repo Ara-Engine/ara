@@ -36,6 +36,7 @@ mod hierarchy;
 mod import_panel;
 mod inspector_panel;
 mod log_panels;
+mod material_panel;
 pub(crate) use log_panels::LogView;
 mod material_inspector;
 pub mod overlay;
@@ -107,6 +108,11 @@ pub struct Shell {
     pub(crate) game_stats: bool,
     /// The shown Play world's fault (`play.status`), shown instead of the game.
     pub(crate) game_fault: Option<String>,
+    /// The Material tool shows its DSL source instead of the node graph.
+    pub(crate) material_source_view: bool,
+    /// Colour swatches outside the Inspector (material parameters): node id and
+    /// colour, painted after layout like the Inspector's.
+    value_swatches: Vec<(String, ara_ui::style::Color)>,
     /// Create > C# Behaviour opens the IDE (verification routes turn it off).
     pub(crate) open_ide: bool,
     /// The running export (Build > Build Current Profile).
@@ -174,6 +180,15 @@ pub struct Shell {
     vfx_visible: bool,
     vfx_ready: bool,
     vfx_error: Option<String>,
+    /// VFX timeline: preview rate (percent), the effect's tick rate and the latest
+    /// GPU counters.
+    pub(crate) vfx_rate: u32,
+    vfx_hz: u32,
+    vfx_live: Option<vfx_panel::VfxLive>,
+    /// Preview-only emitter state: hidden, isolated (solo) and collapsed in the stack.
+    pub(crate) vfx_hidden: std::collections::BTreeSet<String>,
+    pub(crate) vfx_solo: Option<String>,
+    pub(crate) vfx_collapsed: std::collections::BTreeSet<String>,
     axis_camera: crate::state::Camera,
     /// Open menu bar menu, context menu or value menu.
     pub(crate) menu: Option<menu::MenuState>,
@@ -288,6 +303,8 @@ impl Shell {
             game_aspect: "free",
             game_stats: true,
             game_fault: None,
+            material_source_view: false,
+            value_swatches: Vec::new(),
             console_open: None,
             explained_problems: std::collections::BTreeSet::new(),
             hierarchy_view: None,
@@ -340,6 +357,12 @@ impl Shell {
             vfx_visible: false,
             vfx_ready: false,
             vfx_error: None,
+            vfx_rate: 100,
+            vfx_hz: 60,
+            vfx_live: None,
+            vfx_hidden: std::collections::BTreeSet::new(),
+            vfx_solo: None,
+            vfx_collapsed: std::collections::BTreeSet::new(),
             axis_camera: Default::default(),
             menu: None,
             menu_anchors: Vec::new(),
@@ -916,26 +939,37 @@ impl Shell {
                 }
             }
         }
+        let mut live = false;
         for result in self.vfx_stream.poll() {
             match result {
-                Ok(image) => {
-                    changed |= !self.vfx_ready;
+                Ok(frame) => {
+                    changed |= !self.vfx_ready || self.vfx_error.is_some();
                     self.vfx_ready = true;
                     self.vfx_error = None;
                     self.thumbnail_uploads.push((
                         ara_ui::source::stable_id("vfx-live-preview") as u32 & 0x7fff_ffff,
                         ara_ui_render::gpu::Image {
-                            width: image.width(),
-                            height: image.height(),
-                            rgba: image.into_raw(),
+                            width: frame.image.width(),
+                            height: frame.image.height(),
+                            rgba: frame.image.into_raw(),
                         },
                     ));
+                    self.vfx_live = Some(vfx_panel::VfxLive {
+                        tick: frame.tick,
+                        alive: frame.alive,
+                        emitters: frame.emitters,
+                    });
+                    live = true;
                 }
                 Err(error) => {
                     self.vfx_error = Some(error);
                     changed = true;
                 }
             }
+        }
+        // Counters change every preview frame: update their text, not the panel.
+        if live && !changed {
+            let _ = self.vfx_live_text();
         }
         changed
     }
