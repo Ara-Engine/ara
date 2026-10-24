@@ -22,7 +22,7 @@
             "name": "rate",
             "module": {
               "op": "rate",
-              "per_second": 65
+              "per_second": 80
             }
           }
         ],
@@ -31,8 +31,8 @@
             "name": "lifetime",
             "module": {
               "op": "lifetime",
-              "seconds": 1.25,
-              "size": 0.42,
+              "seconds": 0.85,
+              "size": 0.3,
               "color": [5, 0.6, 0.03, 0.5]
             }
           },
@@ -40,16 +40,16 @@
             "name": "hearth",
             "module": {
               "op": "sphere",
-              "center": [0, 0.2, 0],
-              "radius": 0.22
+              "center": [0, 0.12, 0],
+              "radius": 0.2
             }
           },
           {
             "name": "rise",
             "module": {
               "op": "velocity",
-              "value": [0, 1.15, 0],
-              "spread": [0.15, 0.2, 0.15]
+              "value": [0, 0.95, 0],
+              "spread": [0.12, 0.2, 0.12]
             }
           }
         ],
@@ -59,7 +59,7 @@
             "module": {
               "op": "curl_noise",
               "frequency": 3,
-              "strength": 0.65
+              "strength": 0.55
             }
           },
           {
@@ -76,19 +76,19 @@
               "keys": [
                 {
                   "t": 0,
-                  "value": [5, 2, 0.4, 0]
+                  "value": [4, 1.6, 0.35, 0]
                 },
                 {
-                  "t": 0.15,
-                  "value": [4, 1.5, 0.25, 0.65]
+                  "t": 0.1,
+                  "value": [4, 1.5, 0.25, 0.75]
                 },
                 {
-                  "t": 0.65,
-                  "value": [3, 0.6, 0.04, 0.5]
+                  "t": 0.55,
+                  "value": [2.6, 0.65, 0.06, 0.5]
                 },
                 {
                   "t": 1,
-                  "value": [0.5, 0.03, 0, 0]
+                  "value": [0.4, 0.04, 0, 0]
                 }
               ]
             }
@@ -100,15 +100,15 @@
               "keys": [
                 {
                   "t": 0,
-                  "value": 0.36
+                  "value": 0.24
                 },
                 {
-                  "t": 0.4,
-                  "value": 0.48
+                  "t": 0.35,
+                  "value": 0.34
                 },
                 {
                   "t": 1,
-                  "value": 0.12
+                  "value": 0.08
                 }
               ]
             }
@@ -148,8 +148,8 @@
             "module": {
               "op": "light",
               "color": [1, 0.32, 0.055],
-              "lumens": 650,
-              "radius": 4
+              "lumens": 900,
+              "radius": 6
             }
           }
         ]
@@ -168,7 +168,7 @@
             "name": "rate",
             "module": {
               "op": "rate",
-              "per_second": 16
+              "per_second": 12
             }
           }
         ],
@@ -177,7 +177,7 @@
             "name": "lifetime",
             "module": {
               "op": "lifetime",
-              "seconds": 4,
+              "seconds": 4.5,
               "size": 0.45,
               "color": [0.2, 0.23, 0.28, 0.14]
             }
@@ -186,17 +186,17 @@
             "name": "source",
             "module": {
               "op": "cone",
-              "origin": [0, 0.1, 0],
-              "height": 0.4,
-              "radius": 0.3
+              "origin": [0, 0.55, 0],
+              "height": 0.2,
+              "radius": 0.12
             }
           },
           {
             "name": "rise",
             "module": {
               "op": "velocity",
-              "value": [0, 0.8, 0],
-              "spread": [0.15, 0.2, 0.15]
+              "value": [0, 0.55, 0],
+              "spread": [0.12, 0.15, 0.12]
             }
           }
         ],
@@ -205,8 +205,8 @@
             "name": "curl",
             "module": {
               "op": "curl_noise",
-              "frequency": 1.5,
-              "strength": 0.45
+              "frequency": 1.2,
+              "strength": 0.35
             }
           },
           {
@@ -216,11 +216,11 @@
               "keys": [
                 {
                   "t": 0,
-                  "value": 0.45
+                  "value": 0.25
                 },
                 {
                   "t": 1,
-                  "value": 1.5
+                  "value": 1
                 }
               ]
             }
@@ -232,19 +232,19 @@
               "keys": [
                 {
                   "t": 0,
-                  "value": [0.35, 0.39, 0.44, 0]
+                  "value": [0.1, 0.095, 0.09, 0]
                 },
                 {
                   "t": 0.15,
-                  "value": [0.55, 0.58, 0.63, 0.55]
+                  "value": [0.12, 0.115, 0.11, 0.2]
                 },
                 {
-                  "t": 0.75,
-                  "value": [0.55, 0.58, 0.63, 0.2]
+                  "t": 0.6,
+                  "value": [0.16, 0.16, 0.16, 0.11]
                 },
                 {
                   "t": 1,
-                  "value": [0.55, 0.58, 0.63, 0]
+                  "value": [0.2, 0.2, 0.2, 0]
                 }
               ]
             }
@@ -295,7 +295,7 @@
             "name": "rate",
             "module": {
               "op": "rate",
-              "per_second": 18
+              "per_second": 12
             }
           }
         ],

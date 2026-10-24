@@ -16,14 +16,14 @@
       "vertical_fov": 1.0
     },
     "convergence": {
-      "mae": 0.6543480127448899,
-      "relative_rmse": 0.0031890731038307528,
-      "rmse": 1.7228962671475159
+      "mae": 0.6543479952718986,
+      "relative_rmse": 0.003189073111834991,
+      "rmse": 1.7228962692140253
     },
     "error": {
-      "mae": 9.968013500623988,
-      "relative_rmse": 0.026711402172123002,
-      "rmse": 14.430831026527997
+      "mae": 9.968013603413791,
+      "relative_rmse": 0.02671140214030213,
+      "rmse": 14.430830990425813
     },
     "ev100": 12.0,
     "reference_model": "independent path-traced surface transport; shared sky LUT and froxel display composition; HDR error measured before fog",
@@ -31,21 +31,21 @@
     "scene": "outdoor_day",
     "scene_hash": "e5527cd4e8eac8f0b96e8a45055b02d8ccab2d19725d32d36560a80aa2560e54",
     "settle_frames": 256,
-    "shader_revision": "aaca1410d7d2d9203a854b71bde69d4fb770220db3d2db6010befbd5cfccc3ce",
+    "shader_revision": "803f1988a4aeabfdd1fdb7e640c974225334e4f321ce9b8c05c68d53aa982975",
     "size": [
       480,
       270
     ],
     "surface_roi": "lower half: terrain and foliage",
     "surface_roi_convergence": {
-      "mae": 0.9186865123529984,
-      "relative_rmse": 0.004049541104242962,
-      "rmse": 1.7186761430570703
+      "mae": 0.9186865164958891,
+      "relative_rmse": 0.0040495411277216,
+      "rmse": 1.718676151364882
     },
     "surface_roi_error": {
-      "mae": 15.575405776238245,
-      "relative_rmse": 0.043755874859034656,
-      "rmse": 18.570543254893597
+      "mae": 15.575405928286505,
+      "relative_rmse": 0.04375587487919989,
+      "rmse": 18.570543245549825
     },
     "tone_mapper": "PBR Neutral"
   },
@@ -66,14 +66,14 @@
       "vertical_fov": 0.8999999761581421
     },
     "convergence": {
-      "mae": 0.1994168993827067,
-      "relative_rmse": 0.0034771933664352063,
-      "rmse": 0.5492851628080261
+      "mae": 0.19940659514736148,
+      "relative_rmse": 0.0034762822658451274,
+      "rmse": 0.5491417533189672
     },
     "error": {
-      "mae": 0.5886533328180745,
-      "relative_rmse": 0.016050085009293013,
-      "rmse": 2.5353992799228036
+      "mae": 0.5262559374493211,
+      "relative_rmse": 0.012611385853861517,
+      "rmse": 1.9921968384485815
     },
     "ev100": 5.0,
     "reference_model": "independent surface path transport",
@@ -81,21 +81,21 @@
     "scene": "night_interior",
     "scene_hash": "3c14e52ed70bc41a14e6b01b2589e2aef6d79e647ff3157d8b4807ecb0e15d3e",
     "settle_frames": 256,
-    "shader_revision": "aaca1410d7d2d9203a854b71bde69d4fb770220db3d2db6010befbd5cfccc3ce",
+    "shader_revision": "803f1988a4aeabfdd1fdb7e640c974225334e4f321ce9b8c05c68d53aa982975",
     "size": [
       480,
       270
     ],
     "surface_roi": "lower half: floor and sphere bases",
     "surface_roi_convergence": {
-      "mae": 0.17727017593418254,
-      "relative_rmse": 0.022015002298217158,
-      "rmse": 0.2976411763219715
+      "mae": 0.17726374333802955,
+      "relative_rmse": 0.022014377706011216,
+      "rmse": 0.2976329683308026
     },
     "surface_roi_error": {
-      "mae": 0.515047796735203,
-      "relative_rmse": 0.07728698358025314,
-      "rmse": 1.0449142087560155
+      "mae": 0.4715021392891896,
+      "relative_rmse": 0.07074250859369095,
+      "rmse": 0.9564341586706863
     },
     "tone_mapper": "PBR Neutral"
   }

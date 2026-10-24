@@ -87,7 +87,7 @@ float3 risDirect(Frame f,Surface s,float3 v,inout uint rng){
 float3 directSun(Frame f,Surface s,float3 v,inout uint rng){
     float3 l=coneDirection(normalize(f.sunDirection.xyz),f.sunDirection.w,rng),sunlight=f.sunLux.rgb;float pdf;
 #ifdef SKY_ATMOSPHERE
-    [branch]if(f.display.w!=0)sunlight=solarIrradiance(f,s.position);
+    [branch]if((f.display.w&2)!=0)sunlight=solarIrradiance(f,s.position);
 #endif
     return any(sunlight>0) && (dot(s.normal,l)>0 || s.transmission>0) && !occluded(f,rayOrigin(s,l),l,10000,rng)?evaluate(s,v,l,pdf)*sunlight:float3(0);
 }
@@ -116,7 +116,7 @@ float3 primarySun(Frame f,Surface s,float3 v,uint2 p,inout uint rng){
         if(visibility.w>=0.5){
             float3 l=coneDirection(normalize(f.sunDirection.xyz),f.sunDirection.w,rng),sunlight=f.sunLux.rgb;float pdf;
 #ifdef SKY_ATMOSPHERE
-            if(f.display.w!=0)sunlight=solarIrradiance(f,s.position);
+            if((f.display.w&2)!=0)sunlight=solarIrradiance(f,s.position);
 #endif
             return evaluate(s,v,l,pdf)*sunlight*saturate(visibility.rgb);
         }

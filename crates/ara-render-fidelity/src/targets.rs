@@ -33,6 +33,69 @@ pub(crate) const SURFACE_ALBEDO: usize = 35;
 pub(crate) const SURFACE_GEOMETRY: usize = 36;
 pub(crate) const COUNT: usize = 37;
 
+/// Bloom pass names in a frame, and when rerun over feature-composited radiance.
+pub(crate) const BLOOM_NAMES: [&str; 9] = [
+    "Bloom.Down.1",
+    "Bloom.Down.2",
+    "Bloom.Down.3",
+    "Bloom.Down.4",
+    "Bloom.Down.5",
+    "Bloom.Up.4",
+    "Bloom.Up.3",
+    "Bloom.Up.2",
+    "Bloom.Up.1",
+];
+pub(crate) const FEATURE_BLOOM_NAMES: [&str; 9] = [
+    "Feature.Bloom.Down.1",
+    "Feature.Bloom.Down.2",
+    "Feature.Bloom.Down.3",
+    "Feature.Bloom.Down.4",
+    "Feature.Bloom.Down.5",
+    "Feature.Bloom.Up.4",
+    "Feature.Bloom.Up.3",
+    "Feature.Bloom.Up.2",
+    "Feature.Bloom.Up.1",
+];
+/// A bloom pass recipe: name, pass index, dispatch and graph uses.
+pub(crate) type BloomPass = (
+    &'static str,
+    u32,
+    [u32; 3],
+    Vec<(ara_render::graph::ResourceId, Access)>,
+);
+
+/// The bloom pyramid's nine passes over a render size (see post.slang `bloomMain`),
+/// with their levels packed into BLOOM0 (downsamples) and BLOOM1 (upsamples).
+pub(crate) fn bloom_passes(
+    names: &'static [&'static str; 9],
+    render: [u32; 2],
+    source: ara_render::graph::ResourceId,
+    bloom: [ara_render::graph::ResourceId; 2],
+    exposure: ara_render::graph::ResourceId,
+) -> Vec<BloomPass> {
+    (0..9u32)
+        .map(|pass| {
+            let level = if pass < 5 { pass + 1 } else { 9 - pass };
+            let size = render.map(|v| (v >> level).max(1));
+            let uses = match pass {
+                0 => vec![
+                    (source, Access::ShaderRead),
+                    (exposure, Access::ShaderRead),
+                    (bloom[0], Access::Storage),
+                ],
+                1..=4 => vec![(bloom[0], Access::Storage)],
+                _ => vec![(bloom[0], Access::ShaderRead), (bloom[1], Access::Storage)],
+            };
+            (
+                names[pass as usize],
+                pass,
+                [size[0].div_ceil(8), size[1].div_ceil(8), 1],
+                uses,
+            )
+        })
+        .collect()
+}
+
 pub(crate) struct Targets {
     pub images: Vec<Image>,
     pub sampled: [u32; COUNT],

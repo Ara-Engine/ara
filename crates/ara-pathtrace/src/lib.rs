@@ -3,6 +3,7 @@
 //! Offline/editor ground-truth capture over Ara's shared transport semantics.
 pub mod artifacts;
 pub mod beauty;
+pub mod flip;
 mod gltf_fixture;
 pub mod many_lights;
 pub mod metrics;

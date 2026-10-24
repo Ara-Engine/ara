@@ -46,58 +46,64 @@ fn appearance(
 pub(crate) fn finish(mut effect: Effect) -> Effect {
     match effect.name.as_str() {
         "campfire" => {
+            // A waist-high hearth fire: ~0.7 m additive flame tongues, thin sooty
+            // smoke that starts above the flame tips, and a few embers. HDR colours
+            // are cd/m2 before exposure; overlap stays well below white at dusk.
             let e = &mut effect.emitters[0];
             e.capacity = 512;
             for m in &mut e.stacks.spawn {
                 if let Module::Rate { per_second } = &mut m.module {
-                    *per_second = 65.;
+                    *per_second = 80.;
                 }
             }
             for m in &mut e.stacks.initialize {
                 match &mut m.module {
                     Module::Lifetime { seconds, size, .. } => {
-                        *seconds = 1.25;
-                        *size = 0.42;
+                        *seconds = 0.85;
+                        *size = 0.3;
                     }
-                    Module::Sphere { radius, .. } => *radius = 0.22,
+                    Module::Sphere { center, radius } => {
+                        *center = [0., 0.12, 0.];
+                        *radius = 0.2;
+                    }
                     Module::Velocity { value, spread } => {
-                        *value = [0., 1.15, 0.];
-                        *spread = [0.15, 0.2, 0.15];
+                        *value = [0., 0.95, 0.];
+                        *spread = [0.12, 0.2, 0.12];
                     }
                     _ => {}
                 }
             }
             for m in &mut e.stacks.update {
                 match &mut m.module {
-                    Module::CurlNoise { strength, .. } => *strength = 0.65,
+                    Module::CurlNoise { strength, .. } => *strength = 0.55,
                     Module::ColorOverLife { keys } => {
                         *keys = vec![
                             ColorKey {
                                 t: 0.,
-                                value: [5., 2., 0.4, 0.],
+                                value: [4., 1.6, 0.35, 0.],
                             },
                             ColorKey {
-                                t: 0.15,
-                                value: [4., 1.5, 0.25, 0.65],
+                                t: 0.1,
+                                value: [4., 1.5, 0.25, 0.75],
                             },
                             ColorKey {
-                                t: 0.65,
-                                value: [3., 0.6, 0.04, 0.5],
+                                t: 0.55,
+                                value: [2.6, 0.65, 0.06, 0.5],
                             },
                             ColorKey {
                                 t: 1.,
-                                value: [0.5, 0.03, 0., 0.],
+                                value: [0.4, 0.04, 0., 0.],
                             },
                         ]
                     }
                     Module::SizeOverLife { keys } => {
                         *keys = vec![
-                            Key { t: 0., value: 0.36 },
+                            Key { t: 0., value: 0.24 },
                             Key {
-                                t: 0.4,
-                                value: 0.48,
+                                t: 0.35,
+                                value: 0.34,
                             },
-                            Key { t: 1., value: 0.12 },
+                            Key { t: 1., value: 0.08 },
                         ]
                     }
                     _ => {}
@@ -115,22 +121,76 @@ pub(crate) fn finish(mut effect: Effect) -> Effect {
                 "hearth_light",
                 Module::Light {
                     color: [1., 0.32, 0.055],
-                    lumens: 650.,
-                    radius: 4.,
+                    lumens: 900.,
+                    radius: 6.,
                 },
             ));
             let mut smoke = crate::samples::smoke().emitters.remove(0);
             smoke.name = "smoke".into();
             for m in &mut smoke.stacks.spawn {
                 if let Module::Rate { per_second } = &mut m.module {
-                    *per_second = 16.;
+                    *per_second = 12.;
+                }
+            }
+            for m in &mut smoke.stacks.initialize {
+                match &mut m.module {
+                    Module::Lifetime { seconds, .. } => *seconds = 4.5,
+                    Module::Cone {
+                        origin,
+                        height,
+                        radius,
+                    } => {
+                        *origin = [0., 0.55, 0.];
+                        *height = 0.2;
+                        *radius = 0.12;
+                    }
+                    Module::Velocity { value, spread } => {
+                        *value = [0., 0.55, 0.];
+                        *spread = [0.12, 0.15, 0.12];
+                    }
+                    _ => {}
+                }
+            }
+            for m in &mut smoke.stacks.update {
+                match &mut m.module {
+                    Module::CurlNoise {
+                        frequency,
+                        strength,
+                    } => {
+                        *frequency = 1.2;
+                        *strength = 0.35;
+                    }
+                    Module::SizeOverLife { keys } => {
+                        *keys = vec![Key { t: 0., value: 0.25 }, Key { t: 1., value: 1. }]
+                    }
+                    Module::ColorOverLife { keys } => {
+                        *keys = vec![
+                            ColorKey {
+                                t: 0.,
+                                value: [0.1, 0.095, 0.09, 0.],
+                            },
+                            ColorKey {
+                                t: 0.15,
+                                value: [0.12, 0.115, 0.11, 0.2],
+                            },
+                            ColorKey {
+                                t: 0.6,
+                                value: [0.16, 0.16, 0.16, 0.11],
+                            },
+                            ColorKey {
+                                t: 1.,
+                                value: [0.2, 0.2, 0.2, 0.],
+                            },
+                        ]
+                    }
+                    _ => {}
                 }
             }
             let mut embers = crate::samples::sparks().emitters.remove(0);
             embers.name = "embers".into();
             for m in &mut embers.stacks.spawn {
                 if let Module::Rate { per_second } = &mut m.module {
-                    *per_second = 18.;
+                    *per_second = 12.;
                 }
             }
             for m in &mut embers.stacks.initialize {

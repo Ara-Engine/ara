@@ -50,10 +50,12 @@ impl FidelityView {
             volume: self.volume,
         })
     }
-    /// Run the actual fidelity bloom, exposure, lens, display and upscale pipelines
-    /// over a feature-composited HDR input. This completed-frame seam resets display
-    /// history; transparent motion/history integration can extend it independently.
-    /// The input must match render_size and returns Graphics/ShaderRead.
+    /// Rerun the last completed frame's bloom, lens, display and temporal upscale
+    /// over a feature-composited HDR input, replacing that frame's output. The
+    /// frame's own camera, jitter, exposure and display history are replayed, so
+    /// composited features keep temporal antialiasing; composite every frame for
+    /// them to converge. Exposure is not metered again. `input` must describe the
+    /// same frame. The colour must match render_size and returns Graphics/ShaderRead.
     pub fn post_process(
         &mut self,
         gpu: &mut VulkanDevice,
@@ -64,10 +66,15 @@ impl FidelityView {
             self.history && colour.state.queue == Queue::Graphics,
             "post input requires a completed Graphics frame"
         );
-        let (mut frame, _, _) = self.frame(input)?;
+        ensure!(
+            input.delta_seconds.is_finite(),
+            "post input requires a valid frame"
+        );
+        let mut frame = self
+            .last_frame
+            .ok_or_else(|| anyhow::anyhow!("render before post_process"))?;
         frame.read[FILTER0 / 4][FILTER0 % 4] = colour.sampled_index;
-        frame.temporal[0] = 1.;
-        frame.control[0] = (1 - self.slot) as u32;
+        let reset = frame.temporal[0] > 0.;
         gpu.upload(self.frame_buffer, bytemuck::bytes_of(&frame))?;
         let mut graph = Graph::default();
         let ids = self
@@ -105,31 +112,16 @@ impl FidelityView {
         let display_groups = [display[0].div_ceil(8), display[1].div_ceil(8), 1];
         let mut recipes = Vec::new();
         let fsr = u32::from(self.settings.upscaler == crate::Upscaler::Fsr1 && size != display);
-        for (name, pipeline, arg, dispatch, mut uses) in [
-            (
-                "Feature.Bloom.Horizontal",
-                "bloom",
-                0,
-                groups,
-                vec![(source, Access::ShaderRead), (ids[BLOOM0], Access::Storage)],
-            ),
-            (
-                "Feature.Bloom.Vertical",
-                "bloom",
-                1,
-                groups,
-                vec![
-                    (ids[BLOOM0], Access::ShaderRead),
-                    (ids[BLOOM1], Access::Storage),
-                ],
-            ),
-            (
-                "Feature.Exposure",
-                "exposure",
-                0,
-                [1, 1, 1],
-                vec![(source, Access::ShaderRead), (exposure, Access::Storage)],
-            ),
+        let bloom = bloom_passes(
+            &FEATURE_BLOOM_NAMES,
+            size,
+            source,
+            [ids[BLOOM0], ids[BLOOM1]],
+            exposure,
+        )
+        .into_iter()
+        .map(|(name, pass, dispatch, uses)| (name, "bloom", pass, dispatch, uses));
+        for (name, pipeline, arg, dispatch, mut uses) in bloom.chain([
             (
                 "Feature.Post",
                 "post",
@@ -166,7 +158,7 @@ impl FidelityView {
                     (ids[OUTPUT], Access::Storage),
                 ],
             ),
-        ] {
+        ]) {
             uses.push((fb, Access::ShaderRead));
             if pipeline == "post" && self.atmosphere.is_some() {
                 uses.extend(
@@ -178,6 +170,12 @@ impl FidelityView {
                 uses.extend(
                     [MOTION, DEPTH, WORLD0 + 1 - self.slot].map(|i| (ids[i], Access::ShaderRead)),
                 );
+                if !reset && fsr == 0 {
+                    uses.extend(
+                        [DISPLAY_HISTORY0 + self.slot, WORLD0 + self.slot]
+                            .map(|i| (ids[i], Access::ShaderRead)),
+                    );
+                }
             }
             let id = graph.pass(name, Queue::Graphics, uses);
             recipes.push((id, pipeline, arg, dispatch));

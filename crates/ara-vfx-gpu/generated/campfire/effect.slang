@@ -39,7 +39,9 @@ void storeParticle(uint slot,Particle p,uint events){
     buffers[NonUniformResourceIndex(root.particles)].Store<uint4>((slot+3*n)*16,uint4(asuint(p.size),p.seed,p.birth,events));
 }
 float3 reconstruct(float2 uv,float z){float4 w=mul(frame().inverseVp,float4(uv.x*2-1,1-uv.y*2,z,1));return w.xyz/w.w;}
-float sceneDepth(uint2 pixel){Frame f=frame();float z=textures[NonUniformResourceIndex(f.inputs.y)].Load(int3(pixel,0)).r;return (f.visuals.z&1u)!=0&&z>0?f.clock.z/z:z;}
+// Scene depth in the effect's local units: sunDirection.w is world metres per
+// local unit (Placement.scale), applied to linear and reversed-Z depth alike.
+float sceneDepth(uint2 pixel){Frame f=frame();float z=textures[NonUniformResourceIndex(f.inputs.y)].Load(int3(pixel,0)).r;float s=f.sunDirection.w;return (f.visuals.z&1u)!=0&&z>0?f.clock.z*s/z:z*s;}
 void collideDepth(inout Particle p,float3 previous,float restitution,float thickness,inout uint events){
     Frame f=frame();if(f.inputs.z==0)return;
     float4 clip=mul(f.vp,float4(p.position,1));if(clip.w<=0)return;
@@ -162,28 +164,28 @@ float3 ara_engine_light(AraSurface s, AraMaterialInput input, float3 lightDirect
     return ((diffuse + specular) * (1.0 - coat * 0.04) + clearCoat) * radiance * nl
          + transmitted * radiance + s.baseColor * indirect * (1.0 - metallic) + s.emissive;
 }
-// VFX content 752d0cf31d3021d8b678186674033e9b2f07bf6771088c2cd8a18b3678d4c63b
+// VFX content 0e3bac1e6a77bc3fde1c51e54d96c3470ce9dfcbc81f941047b9330646acad57
 void initializeParticle(uint emitter, inout Particle p) { uint rng=p.seed; switch(emitter) {
 case 0u: {
 {
-p.life=1.25; p.size=0.41999998688697815; p.color=float4(5.0,0.6000000238418579,0.029999999329447746,0.5);
+p.life=0.8500000238418579; p.size=0.30000001192092896; p.color=float4(5.0,0.6000000238418579,0.029999999329447746,0.5);
 }
 {
-float3 r=random3(rng); float z=2*r.x-1; float a=6.28318530718*r.y; float xy=sqrt(max(0.,1-z*z)); p.position=float3(0.0,0.20000000298023224,0.0)+0.2199999988079071*pow(r.z,1./3.)*float3(xy*cos(a),z,xy*sin(a));
+float3 r=random3(rng); float z=2*r.x-1; float a=6.28318530718*r.y; float xy=sqrt(max(0.,1-z*z)); p.position=float3(0.0,0.11999999731779099,0.0)+0.20000000298023224*pow(r.z,1./3.)*float3(xy*cos(a),z,xy*sin(a));
 }
 {
-p.velocity=float3(0.0,1.149999976158142,0.0)+(2*random3(rng)-1)*float3(0.15000000596046448,0.20000000298023224,0.15000000596046448);
+p.velocity=float3(0.0,0.949999988079071,0.0)+(2*random3(rng)-1)*float3(0.11999999731779099,0.20000000298023224,0.11999999731779099);
 }
 break;}
 case 1u: {
 {
-p.life=4.0; p.size=0.44999998807907104; p.color=float4(0.20000000298023224,0.23000000417232513,0.2800000011920929,0.14000000059604645);
+p.life=4.5; p.size=0.44999998807907104; p.color=float4(0.20000000298023224,0.23000000417232513,0.2800000011920929,0.14000000059604645);
 }
 {
-float3 r=random3(rng); float h=pow(r.x,1./3.);float rad=sqrt(r.y)*h*0.30000001192092896;float a=6.28318530718*r.z;p.position=float3(0.0,0.10000000149011612,0.0)+float3(rad*cos(a),h*0.4000000059604645,rad*sin(a));
+float3 r=random3(rng); float h=pow(r.x,1./3.);float rad=sqrt(r.y)*h*0.11999999731779099;float a=6.28318530718*r.z;p.position=float3(0.0,0.550000011920929,0.0)+float3(rad*cos(a),h*0.20000000298023224,rad*sin(a));
 }
 {
-p.velocity=float3(0.0,0.800000011920929,0.0)+(2*random3(rng)-1)*float3(0.15000000596046448,0.20000000298023224,0.15000000596046448);
+p.velocity=float3(0.0,0.550000011920929,0.0)+(2*random3(rng)-1)*float3(0.11999999731779099,0.15000000596046448,0.11999999731779099);
 }
 break;}
 case 2u: {
@@ -201,36 +203,36 @@ break;}
 void updateParticle(uint emitter,inout Particle p,float3 previous,float dt,inout uint events) {float t=saturate(p.age/p.life);switch(emitter){
 case 0u: {
 {
-float3 q=p.position*3.0+float(p.birth)*0.013;float3 c=cos(q);p.velocity+=0.6499999761581421*dt*float3(c.y-c.z,c.z-c.x,c.x-c.y);
+float3 q=p.position*3.0+float(p.birth)*0.013;float3 c=cos(q);p.velocity+=0.550000011920929*dt*float3(c.y-c.z,c.z-c.x,c.x-c.y);
 }
 {
 p.velocity/=1.+0.6000000238418579*dt;
 }
 {
-p.color=float4(5.0,2.0,0.4000000059604645,0.0);
-p.color=lerp(p.color,float4(4.0,1.5,0.25,0.6499999761581421),saturate((t-0.0)/0.15000000596046448));
-p.color=lerp(p.color,float4(3.0,0.6000000238418579,0.03999999910593033,0.5),saturate((t-0.15000000596046448)/0.4999999701976776));
-p.color=lerp(p.color,float4(0.5,0.029999999329447746,0.0,0.0),saturate((t-0.6499999761581421)/0.3500000238418579));
+p.color=float4(4.0,1.600000023841858,0.3499999940395355,0.0);
+p.color=lerp(p.color,float4(4.0,1.5,0.25,0.75),saturate((t-0.0)/0.10000000149011612));
+p.color=lerp(p.color,float4(2.5999999046325684,0.6499999761581421,0.05999999865889549,0.5),saturate((t-0.10000000149011612)/0.45000001788139343));
+p.color=lerp(p.color,float4(0.4000000059604645,0.03999999910593033,0.0,0.0),saturate((t-0.550000011920929)/0.44999998807907104));
 }
 {
-p.size=0.36000001430511475;
-p.size=lerp(p.size,0.47999998927116394,saturate((t-0.0)/0.4000000059604645));
-p.size=lerp(p.size,0.11999999731779099,saturate((t-0.4000000059604645)/0.6000000238418579));
+p.size=0.23999999463558197;
+p.size=lerp(p.size,0.3400000035762787,saturate((t-0.0)/0.3499999940395355));
+p.size=lerp(p.size,0.07999999821186066,saturate((t-0.3499999940395355)/0.6499999761581421));
 }
 break;}
 case 1u: {
 {
-float3 q=p.position*1.5+float(p.birth)*0.013;float3 c=cos(q);p.velocity+=0.44999998807907104*dt*float3(c.y-c.z,c.z-c.x,c.x-c.y);
+float3 q=p.position*1.2000000476837158+float(p.birth)*0.013;float3 c=cos(q);p.velocity+=0.3499999940395355*dt*float3(c.y-c.z,c.z-c.x,c.x-c.y);
 }
 {
-p.size=0.44999998807907104;
-p.size=lerp(p.size,1.5,saturate((t-0.0)/1.0));
+p.size=0.25;
+p.size=lerp(p.size,1.0,saturate((t-0.0)/1.0));
 }
 {
-p.color=float4(0.3499999940395355,0.38999998569488525,0.4399999976158142,0.0);
-p.color=lerp(p.color,float4(0.550000011920929,0.5799999833106995,0.6299999952316284,0.550000011920929),saturate((t-0.0)/0.15000000596046448));
-p.color=lerp(p.color,float4(0.550000011920929,0.5799999833106995,0.6299999952316284,0.20000000298023224),saturate((t-0.15000000596046448)/0.6000000238418579));
-p.color=lerp(p.color,float4(0.550000011920929,0.5799999833106995,0.6299999952316284,0.0),saturate((t-0.75)/0.25));
+p.color=float4(0.10000000149011612,0.0949999988079071,0.09000000357627869,0.0);
+p.color=lerp(p.color,float4(0.11999999731779099,0.11500000208616257,0.10999999940395355,0.20000000298023224),saturate((t-0.0)/0.15000000596046448));
+p.color=lerp(p.color,float4(0.1599999964237213,0.1599999964237213,0.1599999964237213,0.10999999940395355),saturate((t-0.15000000596046448)/0.45000001788139343));
+p.color=lerp(p.color,float4(0.20000000298023224,0.20000000298023224,0.20000000298023224,0.0),saturate((t-0.6000000238418579)/0.3999999761581421));
 }
 break;}
 case 2u: {
@@ -509,6 +511,9 @@ float4 sheet(uint kind,float2 uv,float frameIndex){
     float4 y=textures[NonUniformResourceIndex(frame().visuals.x)].SampleLevel(samplers[2],(cell+b)/float2(4,20),0);
     return lerp(x,y,frac(frameIndex));
 }
+// Henyey-Greenstein phase (g = 0.35) for light propagating along a direction whose
+// cosine with the outgoing (toward-camera) direction is `cosine`.
+float hgPhase(float cosine){float g=.35;return (1-g*g)/(12.56637*pow(max(1+g*g-2*g*cosine,1e-3),1.5));}
 struct ParticleOutput {float4 color:SV_Target0;float id:SV_Target1;};
 [shader("fragment")]
 ParticleOutput particleFragment(ParticleVarying input){
@@ -524,15 +529,26 @@ ParticleOutput particleFragment(ParticleVarying input){
     if(kind==2)m.worldNormal=normalize(input.normal+f.right.xyz*(texel.g*2-1)*1.8+f.up.xyz*(texel.b*2-1)*1.8);
     AraSurface s=evaluateMaterial(input.emitter,m);if(s.opacityMask<.5||s.clip<.5)discard;
     float3 color;
-    if(c.render.z==0){s.baseColor*=input.color.rgb;float3 ambient=particleAmbient(input.world,m.worldNormal);color=ara_engine_light(s,m,f.sunDirection.xyz,f.sunColor.rgb,ambient);
-        for(uint e=0;e<f.extent.w;e++){Config light=config(e);if(light.lightColor.w>0&&state(e,0)>0){float3 d=light.lightPosition.xyz-input.world;float d2=max(dot(d,d),.05);float a=saturate(1-sqrt(d2)/light.lightPosition.w);float flicker=.85+.1*sin(float(root.tick)*.73)+.05*sin(float(root.tick)*1.37);color+=ara_engine_light(s,m,normalize(d),light.lightColor.rgb*(light.lightColor.w*a*a*flicker/(12.56637*d2)),float3(0));}}
+    if(c.render.z==0 && c.render.x==0 && (kind==0 || kind==2)){
+        // Lit soft and smoke sprites are thin participating media, not surfaces
+        // (spark/streak sheets such as rain keep surface lighting): single scattering
+        // with a forward-biased Henyey-Greenstein phase (bright when backlit, dim
+        // when front-lit) plus the probe field's mean radiance. A Lambert surface
+        // facing the sun returned four times the light of an isotropic medium.
+        float3 albedo=s.baseColor*input.color.rgb;float3 toCamera=m.viewDirection;
+        float phase=hgPhase(dot(-f.sunDirection.xyz,toCamera));
         // Local Beer-Lambert density attenuation approximates sprite self shadowing.
-        if(kind==2)color*=exp(-texel.r*1.4)*(.65+.35*saturate(dot(m.worldNormal,f.sunDirection.xyz)));
+        float shadow=kind==2?exp(-texel.r*1.4)*(.65+.35*saturate(dot(m.worldNormal,f.sunDirection.xyz))):1;
+        color=albedo*(f.sunColor.rgb*phase*shadow+particleAmbient(input.world,m.worldNormal));
+        for(uint e=0;e<f.extent.w;e++){Config light=config(e);if(light.lightColor.w>0&&state(e,0)>0){float3 d=light.lightPosition.xyz-input.world;float d2=max(dot(d,d),.05);float a=saturate(1-sqrt(d2)/light.lightPosition.w);float flicker=.85+.1*sin(float(root.tick)*.73)+.05*sin(float(root.tick)*1.37);color+=albedo*light.lightColor.rgb*(light.lightColor.w*a*a*flicker/(12.56637*d2))*hgPhase(dot(-normalize(d),toCamera));}}
+    }
+    else if(c.render.z==0){s.baseColor*=input.color.rgb;float3 ambient=particleAmbient(input.world,m.worldNormal);color=ara_engine_light(s,m,f.sunDirection.xyz,f.sunColor.rgb,ambient);
+        for(uint e=0;e<f.extent.w;e++){Config light=config(e);if(light.lightColor.w>0&&state(e,0)>0){float3 d=light.lightPosition.xyz-input.world;float d2=max(dot(d,d),.05);float a=saturate(1-sqrt(d2)/light.lightPosition.w);float flicker=.85+.1*sin(float(root.tick)*.73)+.05*sin(float(root.tick)*1.37);color+=ara_engine_light(s,m,normalize(d),light.lightColor.rgb*(light.lightColor.w*a*a*flicker/(12.56637*d2)),float3(0));}}
     }
     else color=s.color*input.color.rgb;
     if(kind==1){float heat=pow(texel.r,.6);color*=lerp(float3(.7,.08,.005),float3(1.6,1.1,.35),heat);}
     float alpha=saturate(input.color.a*s.opacity*coverage*fade);if(alpha<.001)discard;
-    ParticleOutput o;o.color=float4(color*alpha,c.appearance.y==1?0:alpha);o.id=1;return o;
+    ParticleOutput o;o.color=float4(color*alpha*f.ambient.w,c.appearance.y==1?0:alpha);o.id=1;return o;
 }
 [shader("fragment")]
 float4 tonemapFragment(Screen input):SV_Target0{

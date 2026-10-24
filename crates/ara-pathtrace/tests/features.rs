@@ -50,7 +50,7 @@ fn feature_hdr_binds_filter_slot_and_reuses_bloom_post() -> Result<()> {
         ensure!(
             view.timings()
                 .iter()
-                .any(|p| p.pass == "Feature.Bloom.Horizontal"),
+                .any(|p| p.pass == "Feature.Bloom.Down.1"),
             "Feature post did not execute the shared bloom pipeline"
         );
         view.destroy(&mut gpu)?;

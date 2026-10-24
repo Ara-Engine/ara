@@ -1,0 +1,187 @@
+{
+  "argsMain": {
+    "source": "effect.slang",
+    "entries": {
+      "argsMain": "compute"
+    },
+    "state": {
+      "color_formats": [],
+      "depth_format": null,
+      "vertex_stride": 0,
+      "depth_test": false,
+      "depth_write": false,
+      "blend": false
+    }
+  },
+  "backdrop": {
+    "source": "effect.slang",
+    "entries": {
+      "backdropFragment": "fragment",
+      "screenVertex": "vertex"
+    },
+    "state": {
+      "color_formats": [109, 100],
+      "depth_format": null,
+      "vertex_stride": 0,
+      "depth_test": false,
+      "depth_write": false,
+      "blend": false
+    }
+  },
+  "particles": {
+    "source": "effect.slang",
+    "entries": {
+      "particleFragment": "fragment",
+      "particleVertex": "vertex"
+    },
+    "state": {
+      "color_formats": [109, 100],
+      "depth_format": null,
+      "vertex_stride": 0,
+      "depth_test": false,
+      "depth_write": false,
+      "blend": true
+    }
+  },
+  "prefixMain": {
+    "source": "effect.slang",
+    "entries": {
+      "prefixMain": "compute"
+    },
+    "state": {
+      "color_formats": [],
+      "depth_format": null,
+      "vertex_stride": 0,
+      "depth_test": false,
+      "depth_write": false,
+      "blend": false
+    }
+  },
+  "prepareMain": {
+    "source": "effect.slang",
+    "entries": {
+      "prepareMain": "compute"
+    },
+    "state": {
+      "color_formats": [],
+      "depth_format": null,
+      "vertex_stride": 0,
+      "depth_test": false,
+      "depth_write": false,
+      "blend": false
+    }
+  },
+  "routeMain": {
+    "source": "effect.slang",
+    "entries": {
+      "routeMain": "compute"
+    },
+    "state": {
+      "color_formats": [],
+      "depth_format": null,
+      "vertex_stride": 0,
+      "depth_test": false,
+      "depth_write": false,
+      "blend": false
+    }
+  },
+  "scanMain": {
+    "source": "effect.slang",
+    "entries": {
+      "scanMain": "compute"
+    },
+    "state": {
+      "color_formats": [],
+      "depth_format": null,
+      "vertex_stride": 0,
+      "depth_test": false,
+      "depth_write": false,
+      "blend": false
+    }
+  },
+  "scatterMain": {
+    "source": "effect.slang",
+    "entries": {
+      "scatterMain": "compute"
+    },
+    "state": {
+      "color_formats": [],
+      "depth_format": null,
+      "vertex_stride": 0,
+      "depth_test": false,
+      "depth_write": false,
+      "blend": false
+    }
+  },
+  "sortMain": {
+    "source": "effect.slang",
+    "entries": {
+      "sortMain": "compute"
+    },
+    "state": {
+      "color_formats": [],
+      "depth_format": null,
+      "vertex_stride": 0,
+      "depth_test": false,
+      "depth_write": false,
+      "blend": false
+    }
+  },
+  "sortPrepareMain": {
+    "source": "effect.slang",
+    "entries": {
+      "sortPrepareMain": "compute"
+    },
+    "state": {
+      "color_formats": [],
+      "depth_format": null,
+      "vertex_stride": 0,
+      "depth_test": false,
+      "depth_write": false,
+      "blend": false
+    }
+  },
+  "spawnMain": {
+    "source": "effect.slang",
+    "entries": {
+      "spawnMain": "compute"
+    },
+    "state": {
+      "color_formats": [],
+      "depth_format": null,
+      "vertex_stride": 0,
+      "depth_test": false,
+      "depth_write": false,
+      "blend": false
+    }
+  },
+  "tonemap": {
+    "source": "effect.slang",
+    "entries": {
+      "screenVertex": "vertex",
+      "tonemapFragment": "fragment"
+    },
+    "state": {
+      "color_formats": [37],
+      "depth_format": null,
+      "vertex_stride": 0,
+      "depth_test": false,
+      "depth_write": false,
+      "blend": false
+    }
+  },
+  "updateMain": {
+    "source": "effect.slang",
+    "entries": {
+      "updateMain": "compute"
+    },
+    "state": {
+      "color_formats": [],
+      "depth_format": null,
+      "vertex_stride": 0,
+      "depth_test": false,
+      "depth_write": false,
+      "blend": false
+    }
+  }
+}

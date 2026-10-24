@@ -39,7 +39,9 @@ void storeParticle(uint slot,Particle p,uint events){
     buffers[NonUniformResourceIndex(root.particles)].Store<uint4>((slot+3*n)*16,uint4(asuint(p.size),p.seed,p.birth,events));
 }
 float3 reconstruct(float2 uv,float z){float4 w=mul(frame().inverseVp,float4(uv.x*2-1,1-uv.y*2,z,1));return w.xyz/w.w;}
-float sceneDepth(uint2 pixel){Frame f=frame();float z=textures[NonUniformResourceIndex(f.inputs.y)].Load(int3(pixel,0)).r;return (f.visuals.z&1u)!=0&&z>0?f.clock.z/z:z;}
+// Scene depth in the effect's local units: sunDirection.w is world metres per
+// local unit (Placement.scale), applied to linear and reversed-Z depth alike.
+float sceneDepth(uint2 pixel){Frame f=frame();float z=textures[NonUniformResourceIndex(f.inputs.y)].Load(int3(pixel,0)).r;float s=f.sunDirection.w;return (f.visuals.z&1u)!=0&&z>0?f.clock.z*s/z:z*s;}
 void collideDepth(inout Particle p,float3 previous,float restitution,float thickness,inout uint events){
     Frame f=frame();if(f.inputs.z==0)return;
     float4 clip=mul(f.vp,float4(p.position,1));if(clip.w<=0)return;
@@ -377,6 +379,9 @@ float4 sheet(uint kind,float2 uv,float frameIndex){
     float4 y=textures[NonUniformResourceIndex(frame().visuals.x)].SampleLevel(samplers[2],(cell+b)/float2(4,20),0);
     return lerp(x,y,frac(frameIndex));
 }
+// Henyey-Greenstein phase (g = 0.35) for light propagating along a direction whose
+// cosine with the outgoing (toward-camera) direction is `cosine`.
+float hgPhase(float cosine){float g=.35;return (1-g*g)/(12.56637*pow(max(1+g*g-2*g*cosine,1e-3),1.5));}
 struct ParticleOutput {float4 color:SV_Target0;float id:SV_Target1;};
 [shader("fragment")]
 ParticleOutput particleFragment(ParticleVarying input){
@@ -392,15 +397,26 @@ ParticleOutput particleFragment(ParticleVarying input){
     if(kind==2)m.worldNormal=normalize(input.normal+f.right.xyz*(texel.g*2-1)*1.8+f.up.xyz*(texel.b*2-1)*1.8);
     AraSurface s=evaluateMaterial(input.emitter,m);if(s.opacityMask<.5||s.clip<.5)discard;
     float3 color;
-    if(c.render.z==0){s.baseColor*=input.color.rgb;float3 ambient=particleAmbient(input.world,m.worldNormal);color=ara_engine_light(s,m,f.sunDirection.xyz,f.sunColor.rgb,ambient);
-        for(uint e=0;e<f.extent.w;e++){Config light=config(e);if(light.lightColor.w>0&&state(e,0)>0){float3 d=light.lightPosition.xyz-input.world;float d2=max(dot(d,d),.05);float a=saturate(1-sqrt(d2)/light.lightPosition.w);float flicker=.85+.1*sin(float(root.tick)*.73)+.05*sin(float(root.tick)*1.37);color+=ara_engine_light(s,m,normalize(d),light.lightColor.rgb*(light.lightColor.w*a*a*flicker/(12.56637*d2)),float3(0));}}
+    if(c.render.z==0 && c.render.x==0 && (kind==0 || kind==2)){
+        // Lit soft and smoke sprites are thin participating media, not surfaces
+        // (spark/streak sheets such as rain keep surface lighting): single scattering
+        // with a forward-biased Henyey-Greenstein phase (bright when backlit, dim
+        // when front-lit) plus the probe field's mean radiance. A Lambert surface
+        // facing the sun returned four times the light of an isotropic medium.
+        float3 albedo=s.baseColor*input.color.rgb;float3 toCamera=m.viewDirection;
+        float phase=hgPhase(dot(-f.sunDirection.xyz,toCamera));
         // Local Beer-Lambert density attenuation approximates sprite self shadowing.
-        if(kind==2)color*=exp(-texel.r*1.4)*(.65+.35*saturate(dot(m.worldNormal,f.sunDirection.xyz)));
+        float shadow=kind==2?exp(-texel.r*1.4)*(.65+.35*saturate(dot(m.worldNormal,f.sunDirection.xyz))):1;
+        color=albedo*(f.sunColor.rgb*phase*shadow+particleAmbient(input.world,m.worldNormal));
+        for(uint e=0;e<f.extent.w;e++){Config light=config(e);if(light.lightColor.w>0&&state(e,0)>0){float3 d=light.lightPosition.xyz-input.world;float d2=max(dot(d,d),.05);float a=saturate(1-sqrt(d2)/light.lightPosition.w);float flicker=.85+.1*sin(float(root.tick)*.73)+.05*sin(float(root.tick)*1.37);color+=albedo*light.lightColor.rgb*(light.lightColor.w*a*a*flicker/(12.56637*d2))*hgPhase(dot(-normalize(d),toCamera));}}
+    }
+    else if(c.render.z==0){s.baseColor*=input.color.rgb;float3 ambient=particleAmbient(input.world,m.worldNormal);color=ara_engine_light(s,m,f.sunDirection.xyz,f.sunColor.rgb,ambient);
+        for(uint e=0;e<f.extent.w;e++){Config light=config(e);if(light.lightColor.w>0&&state(e,0)>0){float3 d=light.lightPosition.xyz-input.world;float d2=max(dot(d,d),.05);float a=saturate(1-sqrt(d2)/light.lightPosition.w);float flicker=.85+.1*sin(float(root.tick)*.73)+.05*sin(float(root.tick)*1.37);color+=ara_engine_light(s,m,normalize(d),light.lightColor.rgb*(light.lightColor.w*a*a*flicker/(12.56637*d2)),float3(0));}}
     }
     else color=s.color*input.color.rgb;
     if(kind==1){float heat=pow(texel.r,.6);color*=lerp(float3(.7,.08,.005),float3(1.6,1.1,.35),heat);}
     float alpha=saturate(input.color.a*s.opacity*coverage*fade);if(alpha<.001)discard;
-    ParticleOutput o;o.color=float4(color*alpha,c.appearance.y==1?0:alpha);o.id=1;return o;
+    ParticleOutput o;o.color=float4(color*alpha*f.ambient.w,c.appearance.y==1?0:alpha);o.id=1;return o;
 }
 [shader("fragment")]
 float4 tonemapFragment(Screen input):SV_Target0{

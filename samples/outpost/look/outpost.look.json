@@ -1,18 +1,6 @@
 {
   "scene": "levels/outpost.scene",
   "ticks": 90,
-  "sky": {
-    "kind": "atmosphere",
-    "fogExtinction": 0.0035,
-    "fogHeight": 18,
-    "fogAlbedo": 0.9,
-    "cloudCoverage": 0.12
-  },
-  "post": {
-    "compensation": -0.4,
-    "bloom": 0.05,
-    "neutral": true
-  },
   "terrain": {
     "texture": "dry_ground_rocks",
     "tint": [0.86, 0.8, 0.74],
@@ -51,5 +39,37 @@
     "frames": 6,
     "step": 10
   },
-  "groundRelative": true
+  "groundRelative": true,
+  "components": {
+    "SkyAtmosphere": {
+      "aerosols": 1.5,
+      "cloudCoverage": 0.12
+    },
+    "HeightFog": {
+      "density": 0.0012,
+      "falloff": 30,
+      "albedo": [
+        0.92,
+        0.86,
+        0.78,
+        1
+      ],
+      "anisotropy": 0.5
+    },
+    "PostProcess": {
+      "toneMapping": "filmic",
+      "bloom": 0.05,
+      "compensation": -0.5
+    }
+  },
+  "sunDirection": [
+    -0.9302,
+    0.0698,
+    0.3601
+  ],
+  "sunLux": [
+    24000,
+    23000,
+    21500
+  ]
 }

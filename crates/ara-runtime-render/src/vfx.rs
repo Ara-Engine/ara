@@ -27,11 +27,7 @@ fn cooked_root() -> PathBuf {
 }
 
 fn library(name: &str) -> Result<Effect> {
-    ara_vfx::samples::all()
-        .into_iter()
-        .map(|(effect, _)| effect)
-        .find(|effect| effect.name == name)
-        .with_context(|| format!("no cooked VFX effect `{name}`"))
+    ara_vfx::samples::find(name).with_context(|| format!("no cooked VFX effect `{name}`"))
 }
 
 /// Effect systems on the renderer's device, by effect name and capture size.

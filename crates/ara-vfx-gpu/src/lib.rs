@@ -12,7 +12,7 @@ mod stats;
 
 pub use atlas::{ATLAS_SIZE, cook_atlas};
 pub use cook::cook_source;
-pub use runtime::{GpuSystem, Lighting, ProbeLighting, SceneColor, SceneDepth, View};
+pub use runtime::{GpuSystem, Lighting, Placement, ProbeLighting, SceneColor, SceneDepth, View};
 pub use stats::{EmitterStats, Stats};
 
 /// All runtime shader entries, cooked together under one immutable content key.

@@ -7,11 +7,6 @@
     "intensity": 900,
     "rotation": 0
   },
-  "post": {
-    "compensation": 0.0,
-    "bloom": 0.04,
-    "neutral": true
-  },
   "details": [],
   "shots": [
     {
@@ -76,5 +71,11 @@
     "to": "character",
     "frames": 6,
     "step": 10
+  },
+  "components": {
+    "PostProcess": {
+      "toneMapping": "neutral",
+      "bloom": 0.04
+    }
   }
 }

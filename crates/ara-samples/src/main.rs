@@ -106,6 +106,12 @@ enum Command {
         /// Frames per timing window.
         #[arg(long, default_value_t = 240)]
         timing_frames: u32,
+        /// Quality presets to capture: comma-separated low, medium, high, epic, or all.
+        #[arg(long, default_value = "high")]
+        quality: String,
+        /// Path-traced reference samples per pixel for RMSE/FLIP scoring (0 skips).
+        #[arg(long, default_value_t = 0)]
+        reference: u32,
     },
     /// Play a scene in a windowed `ara-player` through `ara mcp` and capture it.
     Play {
@@ -255,16 +261,34 @@ fn main() -> Result<()> {
             look,
             quick,
             timing_frames,
-        } => capture::run(
-            &samples,
-            &read_lock()?,
-            &capture::Request {
-                project: &project,
-                look: &look,
-                quick,
-                timing_frames,
-            },
-        )?,
+            quality,
+            reference,
+        } => {
+            use ara_render_fidelity::presets::{QualityChoice, QualityPreset};
+            let presets = if quality == "all" {
+                QualityPreset::ALL.to_vec()
+            } else {
+                quality
+                    .split(',')
+                    .map(|q| match q.trim().parse()? {
+                        QualityChoice::Preset(p) => Ok(p),
+                        QualityChoice::Auto => anyhow::bail!("capture needs explicit presets"),
+                    })
+                    .collect::<anyhow::Result<Vec<_>>>()?
+            };
+            capture::run(
+                &samples,
+                &read_lock()?,
+                &capture::Request {
+                    project: &project,
+                    look: &look,
+                    quick,
+                    timing_frames,
+                    presets: &presets,
+                    reference_samples: reference,
+                },
+            )?
+        }
         Command::Play {
             project,
             scene,

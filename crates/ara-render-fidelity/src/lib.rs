@@ -5,10 +5,12 @@ pub mod atmosphere;
 mod capture;
 pub mod colour;
 mod controls;
+pub mod environment;
 mod features;
 mod frame;
 pub mod material;
 mod pipeline_variants;
+pub mod presets;
 pub mod probes;
 mod render;
 mod resampling;
@@ -18,7 +20,7 @@ pub mod scene;
 pub mod settings;
 mod targets;
 mod view;
-pub use colour::{AutoExposure, ExposureState, ToneMapper};
+pub use colour::{AutoExposure, ExposureState, Grading, ToneMapper};
 pub use features::{FeatureInputs, ImageInput};
 pub use settings::{
     FrameInput, Mode, PostSettings, Quality, Settings, Tier, Upscaler, UpscalerInput,

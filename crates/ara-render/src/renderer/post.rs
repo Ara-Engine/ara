@@ -7,6 +7,20 @@ use ara_gpu::{
 };
 use bytemuck::Zeroable;
 
+/// Display curve applied after exposure by the baseline tone map pass. The values
+/// match `ara_render_fidelity::ToneMapper` so both renderers share one look.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+#[repr(u32)]
+pub enum ToneCurve {
+    /// Narkowicz's per-channel ACES fit (the M1 curve).
+    #[default]
+    AcesFit = 0,
+    /// Khronos PBR Neutral.
+    Neutral = 1,
+    /// Hill's fitted ACES RRT+ODT, pre-scaled to keep 18% grey.
+    Filmic = 2,
+}
+
 /// Shared offline-cooked baseline post pass; it owns no scene or gameplay state.
 pub struct ToneMap {
     pipeline: Pipeline,

@@ -10,7 +10,8 @@ commands, Slang generation and the deterministic CPU reference simulator.
 - `commands::register`: text apply, insert/remove/move module and set parameter.
 - `CpuSystem`: fixed ticks, deterministic SoA storage and authoritative events.
 - `generate`: specialized Slang module functions for offline cooking.
-- `samples`: six authored effects, also used by GPU captures.
+- `samples`: six authored effects, also used by GPU captures; `library()`/`find(name)`
+  are the names `VisualEffect.effect` resolves (+ `depth_sparks`, `dust`).
 
 ## Contracts
 
