@@ -23,7 +23,7 @@ mod tests;
 
 /// Assets resolved from the workspace/library at a control boundary. No project
 /// files, graph ASTs, import workers or scattering are accessed during presentation.
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub struct Content {
     /// Native surface assets keyed by the exact Header.materials reference.
     pub terrain_materials: BTreeMap<String, Arc<MaterialAsset>>,

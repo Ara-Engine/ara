@@ -111,6 +111,13 @@ impl Renderer {
             self.compute_frame,
         )?;
         let old = std::mem::replace(&mut self.content, content);
+        self.retire_content(old)?;
+        self.targets.history = None;
+        self.frame_number = 0;
+        Ok(())
+    }
+
+    pub(super) fn retire_content(&mut self, old: Content) -> Result<()> {
         for resource in old.static_owned.into_iter().chain(old.geometry_owned) {
             self.gpu.retire(resource)?;
         }
@@ -122,8 +129,6 @@ impl Renderer {
             self.gpu.retire_pipeline(pipeline)?;
         }
         self.gpu.collect()?;
-        self.targets.history = None;
-        self.frame_number = 0;
         Ok(())
     }
 
@@ -424,7 +429,7 @@ pub(super) fn prepare_materials(
     Ok(materials)
 }
 
-fn upload_content(
+pub(super) fn upload_content(
     gpu: &mut VulkanDevice,
     scene: Scene,
     artifacts: &Path,

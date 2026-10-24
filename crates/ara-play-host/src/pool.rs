@@ -250,6 +250,7 @@ pub struct Pool {
     idle: Vec<Player>,
     next: u32,
     scripts: Option<ara_play::ScriptScene>,
+    rendering: ara_play::RenderSettings,
 }
 
 impl Pool {
@@ -264,6 +265,17 @@ impl Pool {
         token: String,
         scripts: Option<ara_play::ScriptScene>,
     ) -> std::io::Result<Self> {
+        Self::with_rendering(config, token, scripts, Default::default())
+    }
+
+    /// Select the logical-device policy before windowed/embedded GPU warm-up.
+    /// Changing this setting requires a newly opened pool/device.
+    pub fn with_rendering(
+        config: PoolConfig,
+        token: String,
+        scripts: Option<ara_play::ScriptScene>,
+        rendering: ara_play::RenderSettings,
+    ) -> std::io::Result<Self> {
         let listener = TcpListener::bind("127.0.0.1:0")?;
         listener.set_nonblocking(true)?;
         std::fs::create_dir_all(&config.logs)?;
@@ -275,6 +287,7 @@ impl Pool {
             idle: Vec::new(),
             next: 0,
             scripts,
+            rendering,
         };
         pool.refill();
         Ok(pool)
@@ -336,6 +349,7 @@ impl Pool {
         if window {
             command.arg("--window");
         }
+        command.arg(format!("--ray-tracing={}", self.rendering.ray_tracing));
         if let Some(scripts) = &self.scripts {
             command.env("ARA_PLAY_SCRIPTS", serde_json::to_string(scripts)?);
         }

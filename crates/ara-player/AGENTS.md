@@ -9,7 +9,7 @@ plays: windowed through SDL3 (`--window`) or headless. It exits on `play.stop`.
 ## Command line
 
 `ara-player --owner <port> [--name slot] [--window] [--size 1280x720] [--gpu-cache dir]
-[--quality auto|low|medium|high|epic]`.
+[--quality auto|low|medium|high|epic] [--ray-tracing[=true|false]]`.
 Without `--owner`, loads `ara-launch.json` beside the executable (or `--root DIR`),
 reads the authored PlayScene/cooked generations from game.arapack, and opens a game
 window. `--headless [--capture PNG] [--ticks N]` captures without a window;
@@ -72,9 +72,11 @@ selects windowed Play; default measures the shared-frame notice before editor di
   hello, then handed to Play without rebinding component IDs or running gameplay early.
 - Windowed frames include GPU-composited foliage/VFX and a native 2D path without
   pixel readbacks. `presented: true` captures read the composited 3D output.
-- Windowed, embedded and headless Lit presentation share the native fidelity
-  presenter on RT GPUs. Project `settings.rendering.quality` travels in PlayScene;
-  `--quality` overrides it. Auto detects the GPU, Low/non-RT uses raster. Resolve
+- Windowed, embedded and headless presentation share the native raster view on
+  every GPU. Project `settings.rendering` travels in PlayScene; `--quality` and
+  `--ray-tracing` override it. Experimental RT requires an explicit opt-in and a
+  capable logical device, selected before warm-up (the pool reads project policy).
+  Preset auto-detection otherwise selects raster tiers. Resolve
   terrain/prefab assets at content changes, never on ordinary instance motion.
 - D19 exports `Presenter::output()` at `output_size()`, including retained last-good
   output; `renderer()` owns the shared GPU but is only the bootstrap raster view.

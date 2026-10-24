@@ -4,8 +4,8 @@ use ara_gpu::{
     Access, Barrier, Device, Image, Queue, Resource, commands::Command, vk, vulkan::VulkanDevice,
 };
 use ara_render::capture::{FeatureCapture, ShaderMetadata};
-use ara_render_fidelity::presets::{Capabilities, FidelityPlan, Plan, RenderOptions, RenderPath};
-pub use ara_render_fidelity::presets::{QualityChoice, QualityPreset};
+use ara_render_fidelity::presets::{Capabilities, FidelityPlan, Plan, RenderPath};
+pub use ara_render_fidelity::presets::{QualityChoice, QualityPreset, RenderOptions};
 use ara_render_fidelity::{FidelityView, FrameInput, PostSettings, environment::FrameEnvironment};
 use fidelity::native::{self, Content, FrameChange, NativeConfig, Prepared};
 
@@ -37,6 +37,7 @@ pub(super) type Published = PresentationImage;
 mod capture;
 mod live;
 mod published;
+mod raster;
 
 impl Presenter {
     /// Timestamp results from the active view, excluding readback and display transfers.
@@ -66,7 +67,7 @@ impl Presenter {
     }
 
     /// Selects a user override, or the project's setting when no override exists.
-    /// Auto chooses the hardware preset; unsupported RT presets explicitly resolve to Low.
+    /// Auto chooses a raster tier; experimental RT also requires RenderOptions.
     pub fn set_quality(&mut self, quality: QualityChoice) {
         self.choice = quality;
     }
@@ -82,25 +83,27 @@ impl Presenter {
         self.options = options;
     }
 
-    /// Opt in to probe GI on the raster path: each content change is acquired once
+    /// Enable/disable raster probe GI (enabled by default): content is acquired once
     /// in the background (ray-traced on a separate device, cached on disk by
     /// content) and relit every frame; frames show sky-only ambient until then.
     pub fn set_probe_gi(&mut self, enabled: bool) {
-        self.probe_gi = enabled.then(|| crate::gi::Acquisition::new(self.cache.clone()));
+        self.probe_gi = enabled;
+        if let Some(raster) = &mut self.raster {
+            raster.set_probe_gi(enabled);
+        }
     }
 
     /// Whether probe GI acquisition is still running or queued: a view that stops
     /// redrawing once converged must keep presenting until the result arrives.
     pub fn probe_gi_pending(&self) -> bool {
-        self.probe_gi.as_ref().is_some_and(|gi| gi.is_pending())
+        self.raster.as_ref().is_some_and(RasterView::needs_frame)
     }
 
     /// Blocks until a pending probe GI acquisition is installed (captures and
     /// measurements that must not change lighting midway).
     pub fn wait_probe_gi(&mut self) -> Result<()> {
-        let surfaces = self.probe_gi.as_mut().and_then(|gi| gi.poll(true));
-        if let (Some(surfaces), Some(renderer)) = (surfaces, self.renderer.as_mut()) {
-            renderer.set_probe_surfaces(Some(&surfaces))?;
+        if let (Some(raster), Some(renderer)) = (&mut self.raster, &mut self.renderer) {
+            raster.wait_probe_gi(renderer)?;
         }
         Ok(())
     }
@@ -150,12 +153,12 @@ impl Presenter {
             skin: None,
         });
         let scene = self.scene(&warm, &[])?;
-        self.renderer = Some(Renderer::new(
-            scene,
-            [64, 64],
-            &self.extensions,
-            &self.cache,
-        )?);
+        let create = if self.options.ray_tracing {
+            Renderer::new
+        } else {
+            Renderer::new_raster
+        };
+        self.renderer = Some(create(scene, [64, 64], &self.extensions, &self.cache)?);
         Ok(())
     }
 
@@ -191,36 +194,13 @@ impl Presenter {
                 if let Some(old) = self.live.take() {
                     old.destroy(renderer.gpu_mut())?;
                 }
-                if renderer.size() != self.size {
-                    renderer.resize(self.size)?;
-                }
-                if *renderer.quality() != raster.quality {
-                    renderer.set_quality(raster.quality)?;
-                }
-                let content = self.prepare_baseline(frame, resolve)?;
-                let renderer = self.renderer.as_mut().context("baseline renderer")?;
-                if let Some(gi) = &mut self.probe_gi {
-                    // New content: drop stale probes and acquire in the background.
-                    if let Some(content) = content {
-                        let key = self.layout.iter().fold(FNV, |h, (a, b, c)| {
-                            [a, b, c].iter().fold(h, |h, v| fnv(h, &v.to_le_bytes()))
-                        });
-                        let key = frame
-                            .draws
-                            .iter()
-                            .filter(|d| d.skin.is_none())
-                            .fold(key, |h, d| {
-                                fnv(h, bytemuck::bytes_of(&d.world.to_cols_array()))
-                            });
-                        renderer.set_probe_surfaces(None)?;
-                        gi.request(key, frame, || Ok(content))?;
-                    }
-                    if let Some(surfaces) = gi.poll(false) {
-                        renderer.set_probe_surfaces(Some(&surfaces))?;
-                    }
-                }
+                self.prepare_raster(frame, raster, resolve)?;
             }
             RenderPath::Fidelity(settings) => {
+                if let Some(raster) = self.raster.take() {
+                    raster.destroy(renderer)?;
+                    renderer.clear_native()?;
+                }
                 let change = match &mut self.live {
                     Some(live) => live.prepared.update_frame(frame)?,
                     None => FrameChange::Rebuild,
@@ -343,9 +323,18 @@ impl Presenter {
                 self.stats.gpu_ms = costs.accounted_ms();
                 self.stats.gpu = Some(costs);
                 live.view.output()
+            } else if let Some(raster) = &mut self.raster {
+                let renderer = self
+                    .renderer
+                    .as_mut()
+                    .context("raster presentation device")?;
+                let costs = raster.render(renderer, frame, &camera(frame)?, ViewMode::Lit)?;
+                self.stats.gpu_ms = costs.accounted_ms();
+                self.stats.gpu = Some(costs);
+                renderer.output()
             } else {
                 self.present_baseline(frame)?;
-                self.output.context("baseline completed output")?
+                self.output.context("legacy completed output")?
             };
             self.publish(source)?;
             self.stats.render = started.elapsed();

@@ -82,6 +82,25 @@ fn demo_renders_moves_skins_and_relights_headless() {
         .unwrap();
     first.write(&root.join("demo-start.png")).unwrap();
     assert!(presenter.stats().rebuilt);
+    assert!(presenter.renderer().unwrap().is_native());
+    assert!(
+        !presenter
+            .renderer()
+            .unwrap()
+            .gpu()
+            .context()
+            .info
+            .ray_tracing
+    );
+    assert_eq!(
+        presenter
+            .renderer()
+            .unwrap()
+            .native_geometry_stats()
+            .unwrap()
+            .blas,
+        0
+    );
     if presenter
         .renderer()
         .unwrap()
@@ -137,7 +156,7 @@ fn demo_renders_moves_skins_and_relights_headless() {
         let costs = stats
             .gpu
             .expect("native frame exposes timestamp components");
-        assert!(costs.fidelity_ms > 0. && costs.publication_ms > 0.);
+        assert!(costs.raster_ms > 0. && costs.fidelity_ms == 0. && costs.publication_ms > 0.);
         assert!(
             costs.effects_ms > 0.,
             "demo campfire must be accounted: {costs:?}"

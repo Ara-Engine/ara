@@ -98,7 +98,13 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
     });
     // The publication the first extraction sees; SceneSync re-extracts on newer ones.
     let models_at_open = editor.models.revision();
-    let mut renderer = Renderer::new(
+    let create_renderer =
+        if crate::world::gltf::render_settings(editor.host.store().workspace())?.ray_tracing {
+            Renderer::new
+        } else {
+            Renderer::new_raster
+        };
+    let mut renderer = create_renderer(
         view.scene(editor.host.root(), &editor.state, None, &mut editor.models)?,
         extent_scaled(viewport, dpi),
         &window.extensions()?,
@@ -974,7 +980,13 @@ fn headless(options: Options) -> ara_ui::Result<()> {
     })
     .map_err(anyhow::Error::msg)?;
     let view = editor.view()?;
-    let mut renderer = Renderer::new(
+    let create_renderer =
+        if crate::world::gltf::render_settings(editor.host.store().workspace())?.ray_tracing {
+            Renderer::new
+        } else {
+            Renderer::new_raster
+        };
+    let mut renderer = create_renderer(
         view.scene(editor.host.root(), &editor.state, None, &mut editor.models)?,
         options.size,
         &[],

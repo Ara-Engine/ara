@@ -9,6 +9,7 @@ use bytemuck::{Pod, Zeroable};
 use glam::Vec4;
 
 mod batches;
+mod environment;
 #[cfg(test)]
 mod tests;
 use batches::{Batch, Groups};
@@ -26,6 +27,7 @@ pub(super) struct Native {
     pool: GeometryGpu,
     textures: Box<dyn Textures>,
     texture_digest: [u8; 32],
+    geometry_revisions: Vec<u64>,
     materials: Buffer,
     material_index: u32,
     material_data: Vec<crate::instanced::Material>,
@@ -46,12 +48,22 @@ pub(super) struct Native {
     upload: TextureStats,
     material_dirty: bool,
     pose_changed: bool,
+    update_gpu_ms: f64,
 }
 
 impl Renderer {
     /// Whether this view draws native local geometry and compressed materials.
     pub fn is_native(&self) -> bool {
         self.native.is_some()
+    }
+    /// Release native geometry/residency when an explicitly RT-enabled view
+    /// switches back to the legacy diagnostic renderer on the same device.
+    pub fn clear_native(&mut self) -> Result<()> {
+        if let Some(native) = self.native.take() {
+            native.destroy(&mut self.gpu)?;
+        }
+        self.reset_temporal_history();
+        Ok(())
     }
     /// Upload native local geometry and compressed texture residency on a raster-only
     /// device. Instances share source allocations; no acceleration structures exist.
@@ -63,23 +75,7 @@ impl Renderer {
         cache: impl Into<PathBuf>,
     ) -> Result<Self> {
         scene.validate()?;
-        let environment = Scene {
-            meshes: Vec::new(),
-            materials: vec![crate::scene::Material {
-                textures: [0; 4],
-                ..Default::default()
-            }],
-            textures: vec![crate::scene::Texture {
-                size: [1, 1],
-                rgba: vec![255; 4],
-                srgb: false,
-            }],
-            lights: scene.lights.to_vec(),
-            sun_direction: scene.sun_direction,
-            sun_lux: scene.sun_lux,
-            environment: scene.environment.to_vec(),
-            environment_size: scene.environment_size,
-        };
+        let environment = environment::snapshot(scene);
         let mut renderer = Self::new_device(environment, size, extensions, cache.into(), true)?;
         renderer.replace_native_scene(scene, textures)?;
         Ok(renderer)
@@ -93,6 +89,29 @@ impl Renderer {
         textures: Box<dyn Textures>,
     ) -> Result<()> {
         let next = Native::new(&mut self.gpu, scene, textures, &self.artifacts)?;
+        // The first native generation replaces bootstrap/legacy geometry. HDRI
+        // changes rebuild the actual environment and its IBL, rather than merely
+        // changing the capture metadata. Ordinary motion never enters this path.
+        let environment = environment::snapshot(scene);
+        if !self.content.meshes.is_empty()
+            || super::hash::static_hash(&environment) != self.content.static_hash
+        {
+            let content = match upload::upload_content(
+                &mut self.gpu,
+                environment,
+                &self.artifacts,
+                &self.shader_metadata,
+                self.compute_frame,
+            ) {
+                Ok(content) => content,
+                Err(error) => {
+                    next.destroy(&mut self.gpu)?;
+                    return Err(error);
+                }
+            };
+            let previous = std::mem::replace(&mut self.content, content);
+            self.retire_content(previous)?;
+        }
         let mut hash = sha2::Sha256::new();
         use sha2::Digest;
         hash.update(self.content.static_hash.as_bytes());
@@ -165,9 +184,24 @@ impl Renderer {
         self.native.as_ref().map(|native| native.upload)
     }
 
+    /// Promote compressed native mip tails at a capture/control boundary without
+    /// drawing or allocating acceleration structures.
+    pub fn refine_native_textures(&mut self) -> Result<Option<TextureStats>> {
+        let Some(native) = &mut self.native else {
+            return Ok(None);
+        };
+        native.upload = native.textures.refine(&mut self.gpu)?;
+        Ok(Some(native.upload))
+    }
+
     /// Shared geometry payload and optional-AS counts for the native generation.
     pub fn native_geometry_stats(&self) -> Option<crate::instanced::GeometryUpload> {
         self.native.as_ref().map(|native| native.pool.stats())
+    }
+    /// GPU skin/pose staging from the last native update; rigid motion uses coherent
+    /// instance storage and performs no acceleration-structure work.
+    pub fn native_update_gpu_ms(&self) -> Option<f64> {
+        self.native.as_ref().map(|native| native.update_gpu_ms)
     }
 }
 
@@ -254,6 +288,11 @@ impl Native {
             pool,
             textures,
             texture_digest,
+            geometry_revisions: scene
+                .geometry
+                .iter()
+                .map(|geometry| geometry.revision)
+                .collect(),
             materials,
             instances,
             visible,
@@ -278,18 +317,23 @@ impl Native {
             upload,
             material_dirty: true,
             pose_changed: false,
+            update_gpu_ms: 0.,
         };
         Ok(result)
     }
 
     fn update(&mut self, gpu: &mut VulkanDevice, scene: &NativeScene) -> Result<()> {
         ara_gpu::cpu_scope!("RasterNative.update");
+        self.update_gpu_ms = 0.;
         ensure!(
             scene.instances.len() == self.rows.len()
                 && scene.materials.len() == self.material_data.len(),
             "Native raster layout changed"
         );
         self.groups.validate(scene)?;
+        for (revision, geometry) in self.geometry_revisions.iter_mut().zip(&scene.geometry) {
+            *revision = geometry.revision;
+        }
         ensure!(
             scene
                 .instances
@@ -310,6 +354,7 @@ impl Native {
         );
         // Pose preparation never builds BLASes when GeometryGpu was created for raster.
         if let Some(pose) = self.pool.prepare_pose(gpu, scene)? {
+            self.update_gpu_ms = pose.milliseconds;
             self.pool.commit_pose(gpu, pose)?;
             self.pose_changed = true;
             gpu.collect()?;
@@ -411,7 +456,14 @@ impl Native {
 
     pub(super) fn hash(&self, hash: &mut sha2::Sha256) {
         use sha2::Digest;
-        hash.update(bytemuck::cast_slice(&self.rows));
+        // Previous presentation poses and skin-history flags describe temporal
+        // transport, not content; a settled frame keeps the same scene identity.
+        for row in &self.rows {
+            hash.update(bytemuck::bytes_of(&row.world));
+            hash.update(row.meta[0].to_le_bytes());
+            hash.update(bytemuck::cast_slice(&row.meta[2..]));
+        }
+        hash.update(bytemuck::cast_slice(&self.geometry_revisions));
         hash.update(bytemuck::cast_slice(&self.material_data));
         hash.update(self.texture_digest);
     }

@@ -61,8 +61,9 @@ impl Windowed {
         size: [u32; 2],
         cache: &Path,
         quality: ara_runtime_render::QualityChoice,
+        options: ara_runtime_render::RenderOptions,
     ) -> Result<(Self, Presenter)> {
-        Self::open_with_visibility(name, size, cache, quality, false)
+        Self::open_with_visibility(name, size, cache, quality, options, false)
     }
 
     /// Runs the same render/present loop on an SDL window hidden at creation.
@@ -72,8 +73,9 @@ impl Windowed {
         size: [u32; 2],
         cache: &Path,
         quality: ara_runtime_render::QualityChoice,
+        options: ara_runtime_render::RenderOptions,
     ) -> Result<(Self, Presenter)> {
-        Self::open_with_visibility(name, size, cache, quality, true)
+        Self::open_with_visibility(name, size, cache, quality, options, true)
     }
 
     fn open_with_visibility(
@@ -81,6 +83,7 @@ impl Windowed {
         size: [u32; 2],
         cache: &Path,
         quality: ara_runtime_render::QualityChoice,
+        options: ara_runtime_render::RenderOptions,
         offscreen: bool,
     ) -> Result<(Self, Presenter)> {
         ara_gpu::cpu_scope!("Player.device_and_warm_pipelines");
@@ -92,6 +95,7 @@ impl Windowed {
         };
         let mut presenter = Presenter::new(window.size()?, window.extensions()?, cache);
         presenter.set_quality(quality);
+        presenter.set_render_options(options);
         presenter.prepare(&warm_frame())?;
         Ok((
             Self {

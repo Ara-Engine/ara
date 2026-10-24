@@ -11,7 +11,7 @@ use ara_render::{
 };
 use ara_runtime::extract::RenderFrame;
 use ara_vfx::Effect;
-use ara_vfx_gpu::{GpuSystem, Lighting, SceneColor, SceneDepth, View};
+use ara_vfx_gpu::{GpuSystem, Lighting, Placement, SceneColor, SceneDepth, View};
 use std::{collections::BTreeMap, path::PathBuf};
 
 /// Ticks replayed at most per capture (effects loop well within it).
@@ -36,6 +36,7 @@ pub struct Effects {
     systems: BTreeMap<(String, [u32; 2]), GpuSystem>,
     live: BTreeMap<u64, Live>,
     failed: BTreeMap<u64, String>,
+    gpu_ms: f64,
 }
 
 struct Live {
@@ -47,6 +48,10 @@ struct Live {
 }
 
 impl Effects {
+    /// All particle simulation/draw timestamps in the last live composite.
+    pub fn gpu_ms(&self) -> f64 {
+        self.gpu_ms
+    }
     /// Advances persistent per-entity particle systems to this presentation tick,
     /// then redraws them over the current camera/background. No pixel readbacks.
     pub fn present(
@@ -57,6 +62,7 @@ impl Effects {
         mut color: SceneColor,
         depth: SceneDepth,
     ) -> Result<SceneColor> {
+        self.gpu_ms = 0.;
         let size = renderer.size();
         let stale: Vec<u64> = self
             .live
@@ -140,6 +146,11 @@ impl Effects {
             };
             let view = View {
                 camera,
+                placement: Placement {
+                    origin: glam30::Vec3::ZERO,
+                    scale: effect.scale,
+                },
+                intensity: effect.intensity,
                 exposure: frame.environment.exposure,
                 scene_background: Some(color),
                 scene_depth: Some(depth),
@@ -155,12 +166,47 @@ impl Effects {
             };
             // Catch up only completed simulation ticks; redraws between ticks do
             // not age particles. Bound catch-up after a long paused capture.
-            let count = frame.tick.saturating_sub(live.tick).min(8);
-            if count == 0 && live.rendered {
+            let count = if !live.rendered && renderer.is_native() {
+                // Match the RT view's initial library state. Subsequent frames
+                // simulate only elapsed ticks and draw once, including stills.
+                150
+            } else {
+                frame.tick.saturating_sub(live.tick).min(8)
+            };
+            if renderer.is_native() {
+                for _ in 0..count {
+                    live.system.advance(renderer.gpu_mut(), &view)?;
+                    self.gpu_ms += live
+                        .system
+                        .timings()
+                        .iter()
+                        .map(|pass| pass.milliseconds)
+                        .sum::<f64>();
+                }
                 live.system.render(renderer.gpu_mut(), &view)?;
+                self.gpu_ms += live
+                    .system
+                    .timings()
+                    .iter()
+                    .map(|pass| pass.milliseconds)
+                    .sum::<f64>();
+            } else if count == 0 && live.rendered {
+                live.system.render(renderer.gpu_mut(), &view)?;
+                self.gpu_ms += live
+                    .system
+                    .timings()
+                    .iter()
+                    .map(|pass| pass.milliseconds)
+                    .sum::<f64>();
             } else {
                 for _ in 0..count.max(1) {
                     live.system.step(renderer.gpu_mut(), &view)?;
+                    self.gpu_ms += live
+                        .system
+                        .timings()
+                        .iter()
+                        .map(|pass| pass.milliseconds)
+                        .sum::<f64>();
                 }
             }
             live.tick = frame.tick;
@@ -168,6 +214,17 @@ impl Effects {
             color = live.system.hdr_output();
         }
         Ok(color)
+    }
+
+    /// Release this view's particle resources before reusing its renderer/device.
+    pub fn destroy(self, renderer: &mut Renderer) -> Result<()> {
+        for (_, live) in self.live {
+            live.system.retire(renderer.gpu_mut())?;
+        }
+        for (_, system) in self.systems {
+            system.retire(renderer.gpu_mut())?;
+        }
+        Ok(())
     }
 
     /// Composites `frame`'s effects over the frame `renderer` just captured (call
@@ -248,6 +305,11 @@ impl Effects {
                 gpu,
                 &replay,
                 View {
+                    placement: Placement {
+                        origin: glam30::Vec3::ZERO,
+                        scale: effect.scale,
+                    },
+                    intensity: effect.intensity,
                     scene_background: Some(background),
                     scene_depth: Some(depth),
                     lighting: lighting(),
