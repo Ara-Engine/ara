@@ -140,11 +140,11 @@ impl App {
         }
         // Re-test after geometry changes; unchanged hover/focus keep their state.
         let mut clipboard = OsClipboard;
-        self.input.event(
+        let _ = super::input::recover(self.input.event(
             &mut self.ui,
             InputEvent::PointerMove(self.pointer),
             &mut clipboard,
-        )?;
+        ));
         self.pending_work += self.ui.frame(&mut self.text)?;
         // Rebuild already generated a display list. Keep the presentation request
         // until the native loop consumes it, even when its next frame does no work.
