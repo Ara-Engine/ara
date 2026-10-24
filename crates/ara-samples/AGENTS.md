@@ -53,8 +53,13 @@ captures leave tracked sample evidence unchanged.
 - The fidelity view accepts at most 96 textures and 4096 meshes and has no
   instancing; the engine adapter currently merges by material, picks cooked LODs
   by world-space error and atlases. Dropped maps fold into factors.
-- Looks hold what scenes cannot (sky/atmosphere, fog, exposure, shots). Keep them
-  small; anything a scene can express belongs in the scene.
+- Looks hold what scenes cannot (shots, HDRI sky, ground material) and temporary
+  tuning overrides (`components`, `sunLux`, `sunDirection`, `effects`). Sky, fog and
+  post belong in the scene's `SkyAtmosphere`/`HeightFog`/`PostProcess`.
+- `capture --quality low,medium,high,epic|all` captures each preset (Low through the
+  baseline renderer); `--reference <spp>` scores presets against path-traced truth
+  (linear radiance RMSE, sRGB RMSE, LDR FLIP). `ARA_CAPTURE_SHOTS=a,b` limits shots,
+  `ARA_CAPTURE_SIGNALS=1` dumps direct/incident/radiance signals to scratch.
 - Outpost layout code works in layout coordinates; `outpost::SHIFT` moves the
   layout into the middle of the 384 m terrain (the landscape renderer needs an
   origin-anchored terrain). Look shots are world coordinates.

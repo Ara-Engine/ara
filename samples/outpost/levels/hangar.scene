@@ -335,6 +335,17 @@
         "rotation": [0, 90, 0]
       }
     },
+    "e_dust": {
+      "name": "Dust motes",
+      "order": "b1I",
+      "Transform": {
+        "position": [1, 0, 0]
+      },
+      "VisualEffect": {
+        "effect": "dust",
+        "scale": 1.2
+      }
+    },
     "e_env": {
       "name": "Night sky",
       "order": "a0",
@@ -344,6 +355,18 @@
         "ground": [0.01, 0.01, 0.01, 1],
         "intensity": 30,
         "exposure": 0.02
+      },
+      "HeightFog": {
+        "density": 0.015,
+        "falloff": 6,
+        "albedo": [0.85, 0.82, 0.78, 1],
+        "anisotropy": 0.6
+      },
+      "PostProcess": {
+        "compensation": -0.5,
+        "minEv100": 2,
+        "maxEv100": 8,
+        "bloom": 0.06
       }
     },
     "e_festoon": {

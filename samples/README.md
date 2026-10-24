@@ -21,8 +21,10 @@ target/release/ara-samples editor showcase levels/showcase.scene showcase
 The projects are ordinary Ara projects: `ara check`, `ara mcp` and the editor work in
 them as in any other. GPU commands need the Vulkan SDK (see `crates/ara-samples/AGENTS.md`).
 
-- `<project>/look/*.look.json`: what a scene cannot express yet (physical sky, fog,
-  exposure, camera shots) for the fidelity captures.
+- `<project>/look/*.look.json`: what a scene cannot express yet for the captures:
+  camera shots, an HDRI sky and the terrain ground material, plus temporary tuning
+  overrides. Physical sky, height fog and exposure/post live in the scenes
+  (`SkyAtmosphere`, `HeightFog`, `PostProcess`).
 - `<project>/evidence/`: fidelity captures (1440p native and upscaled, a sequence
   strip), `*-timings.json` (per-pass GPU timings, content stats), Play and editor
   captures.
