@@ -9,12 +9,12 @@ publish.workspace = true
 [dependencies]
 ara-physics = { path = "../ara-physics" }
 ara-schema = { path = "../ara-schema" }
-bevy_ecs = { version = "0.20", default-features = false, features = ["std", "multi_threaded"] }
-rayon = "1.11"
-serde.workspace = true
+bevy_ecs = { workspace = true, features = ["std", "multi_threaded"] }
+rayon = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
 
 [dev-dependencies]
-serde_json.workspace = true
+serde_json = { workspace = true, features = ["preserve_order", "float_roundtrip"] }
 
 [lints]
 workspace = true

@@ -55,7 +55,7 @@ fn play_import_configuration_uses_current_commands_before_sidecar_save() {
                 "settings":{"usage":"shortEffect","codec":"pcm"}}}
         ]}),
     );
-    let worker = support::import_worker(std::path::Path::new(env!("CARGO_BIN_EXE_ara-player")));
+    let worker = support::import_worker();
     let mut assets = ara_play_host::assets::Assets::new(&dir, &worker).unwrap();
     assets
         .synchronize(

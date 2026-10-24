@@ -50,25 +50,58 @@ pub fn runtime_result(output: &str) -> Result<Value> {
     Ok(value)
 }
 
-/// Launches the headless desktop player with a 30-second deadline.
+/// Executes desktop verification: 30 seconds for conformance, 120 for a real
+/// renderer's cold driver setup. Launch/capture time is reported separately.
 pub fn desktop(dist: &Path) -> Result<VerifyReport> {
+    let launch: Value = serde_json::from_slice(&std::fs::read(dist.join("ara-launch.json"))?)?;
+    let runtime = launch.get("contract").and_then(Value::as_str) == Some("ara.player.runtime/1");
     let log = dist.join("verify.log");
     let output = tools::run(
         Command::new(dist.join(tools::executable("ara-player")))
             .arg("--headless")
             .current_dir(dist),
         &log,
-        Duration::from_secs(30),
+        Duration::from_secs(if runtime { 120 } else { 30 }),
     )?;
     let result = runtime_result(&output)?;
-    let launch: Value = serde_json::from_slice(&std::fs::read(dist.join("ara-launch.json"))?)?;
     if let Some(contract) = launch.get("contract") {
         ensure!(
             result.get("template_contract") == Some(contract),
             "ARA-EXP-TPL-005: player result does not match the selected template contract"
         );
     }
-    Ok(VerifyReport { method:"desktop_smoke".into(),passed:true,runtime_executed:true,logs:"verify.log".into(),screenshot:None,perf:result.get("tick").cloned().unwrap_or(Value::Null),evidence:result,unavailable:vec!["ARA-EXP-BRG-010: renderer capture hook not installed in the headless conformance template".into(),"ARA-EXP-BRG-015: GPU timing hook requires ara-render".into()] })
+    let screenshot = result
+        .pointer("/capture/image")
+        .and_then(Value::as_str)
+        .map(|path| {
+            Path::new(path)
+                .strip_prefix(dist)
+                .unwrap_or(Path::new(path))
+                .to_string_lossy()
+                .into_owned()
+        });
+    let (perf, unavailable) = if runtime {
+        ensure!(
+            screenshot.is_some(),
+            "ARA-EXP-VER-002: runtime emitted no rendered capture"
+        );
+        (
+            json!({"gpuMs":result.get("gpu_ms"),"quality":result.get("quality"),"elapsedMs":result.get("elapsed_ms")}),
+            Vec::new(),
+        )
+    } else {
+        (result.get("tick").cloned().unwrap_or(Value::Null), vec!["ARA-EXP-BRG-010: renderer capture hook not installed in the headless conformance template".into(),"ARA-EXP-BRG-015: GPU timing hook requires ara-render".into()])
+    };
+    Ok(VerifyReport {
+        method: "desktop_smoke".into(),
+        passed: true,
+        runtime_executed: true,
+        logs: "verify.log".into(),
+        screenshot,
+        perf,
+        evidence: result,
+        unavailable,
+    })
 }
 
 /// Audits all exported ELF images against glibc 2.31 without starting WSL.

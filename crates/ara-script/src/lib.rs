@@ -9,6 +9,7 @@
 //! - [`run`]: the `ara_run` supervisor: agent scripts in a limited worker process.
 //! - [`codes`]: the host's diagnostic codes (`ARA0900`–`ARA0999`).
 
+extern crate libloading08 as libloading;
 pub mod abi;
 mod boost;
 mod clr;
@@ -35,8 +36,5 @@ pub use module::{MODULE_FILE, ModuleProfile, ModuleSpec, load_order};
 /// Schemas alone do not expose Rust storage: additions need an explicit binding
 /// whose size, alignment and field offsets are checked by the host.
 pub fn engine_bindings() -> EngineBindings {
-    bind_component!(
-        EngineBindings::new(),
-        ara_components::Transform as "Transform" { position, rotation, scale }
-    )
+    EngineBindings::builtin()
 }

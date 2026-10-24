@@ -167,7 +167,14 @@ fn project() -> PathBuf {
 fn spawn(root: &Path) -> (Kill, u16, String) {
     let exe = std::env::current_exe().expect("test binary");
     let mut child = Command::new(exe)
-        .args(["authority_process", "--exact", "--ignored", "--nocapture"])
+        // Keep libtest's serial-mode test-name prefix off the startup protocol.
+        .args([
+            "authority_process",
+            "--exact",
+            "--ignored",
+            "--nocapture",
+            "--quiet",
+        ])
         .env(ROOT_ENV, root)
         .stdout(Stdio::piped())
         .stderr(Stdio::null())

@@ -14,8 +14,13 @@ use anyhow::Result;
 use glam::{Vec2, Vec3};
 use serde_json::{Value, json};
 
-/// Compound centre, in layout coordinates.
+#[cfg(test)]
+mod audit;
+
+/// Compound centre in world X/Z metres.
 const C: Vec2 = Vec2::new(96.0, 96.0);
+/// The complete resident grid along each axis (32 metres per tile).
+const TERRAIN_TILES: i32 = 12;
 /// Level scene.
 pub const SCENE: (&str, &str) = ("levels/outpost.scene", "sc_outpost1");
 const TERRAIN: (&str, &str) = ("terrain/outpost.terrain", "tr_outpost1");
@@ -527,7 +532,7 @@ fn terrain(ctx: &Ctx) -> Result<()> {
             (
                 "terrain.create",
                 json!({"grid": {"origin": [-96, -96], "spacing": 1, "cells": 32,
-                    "min": {"x": 0, "z": 0}, "max": {"x": 12, "z": 12}, "materials": materials}}),
+                    "min": {"x": 0, "z": 0}, "max": {"x": TERRAIN_TILES, "z": TERRAIN_TILES}, "materials": materials}}),
             ),
             (
                 "terrain.layer.add",
@@ -727,12 +732,12 @@ fn exterior(ctx: &Ctx, models: &Models, ground: &Ground) -> Result<()> {
         "Terrain",
         json!({"Transform": {}, "Terrain": {"terrain": reference(TERRAIN), "foliage": reference(FOLIAGE)}}),
     );
-    // Collision and navigation chunks for the walkable middle (tiles 4..8: the
-    // compound plus a 32 m margin); the rim mountains stay scenery.
-    for z in 4..8 {
-        for x in 4..8 {
+    // This level is not streamed: native presentation follows chunk residency,
+    // including the road and mountain rim outside the walkable compound.
+    for z in 0..TERRAIN_TILES {
+        for x in 0..TERRAIN_TILES {
             s.entity(
-                &format!("e_chunk{x}{z}"),
+                &format!("e_chunk{x}z{z}"),
                 "Terrain chunk",
                 json!({"TerrainChunk": {"x": x, "z": z}, "AcousticSurface": {"preset": "gravel"}}),
             );

@@ -15,6 +15,9 @@ use ara_asset::{
 };
 use ara_diag::Diagnostic;
 use ara_schema::SchemaDb;
+mod progress;
+pub use progress::CookProgress;
+use progress::CookWatch;
 use std::{
     collections::{BTreeMap, BTreeSet},
     path::{Path, PathBuf},
@@ -56,6 +59,58 @@ fn sidecars(root: &Path, dir: &Path, out: &mut Vec<PathBuf>) {
 }
 
 impl Assets {
+    /// Waits while requested cooks make progress, without imposing a total export
+    /// deadline. Completed generations reset `stall_timeout`; queue/admission and
+    /// importer progress messages do not. Reports changes and five-second heartbeats.
+    pub fn pins_with_progress(
+        &mut self,
+        wanted: &BTreeSet<String>,
+        stall_timeout: Duration,
+        mut report: impl FnMut(CookProgress) -> Result<(), String>,
+    ) -> Result<BTreeMap<String, String>, String> {
+        let start = Instant::now();
+        let mut watch = CookWatch::new();
+        let mut last_report = None;
+        loop {
+            self.poll(false, true);
+            let requested: Vec<_> = wanted
+                .iter()
+                .filter(|id| self.sources.contains(*id))
+                .collect();
+            let pending: Vec<_> = requested
+                .iter()
+                .copied()
+                .filter(|id| {
+                    !self.failures.contains_key(*id)
+                        && (self.digest(id).is_none() || self.pipeline.is_importing_asset(id))
+                })
+                .collect();
+            let completed = requested
+                .iter()
+                .filter(|id| self.digest(id).is_some() && !self.pipeline.is_importing_asset(id))
+                .count();
+            let state = watch.observe(completed, requested.len(), start.elapsed());
+            if last_report.is_none_or(|(count, elapsed)| {
+                count != completed
+                    || state.elapsed.saturating_sub(elapsed) >= Duration::from_secs(5)
+            }) {
+                report(state)?;
+                last_report = Some((completed, state.elapsed));
+            }
+            if pending.is_empty() {
+                return Ok(self.finished_pins(wanted));
+            }
+            if state.stalled >= stall_timeout {
+                return Err(format!(
+                    "ARA-EXP-COOK-001: no requested cook completed for {stall_timeout:?} ({completed}/{} complete, {:?} total); pending assets: {pending:?}",
+                    requested.len(),
+                    state.elapsed,
+                ));
+            }
+            std::thread::sleep(Duration::from_millis(5));
+        }
+    }
+
     /// Registers every sidecar under `root` and requests imports in the background.
     /// `worker` is the import worker executable (`ara-import-worker`).
     pub fn new(root: &Path, worker: &Path) -> Result<Self, String> {
@@ -304,6 +359,10 @@ impl Assets {
             }
             std::thread::sleep(Duration::from_millis(5));
         }
+        Ok(self.finished_pins(wanted))
+    }
+
+    fn finished_pins(&mut self, wanted: &BTreeSet<String>) -> BTreeMap<String, String> {
         for (asset, error) in self
             .failures
             .iter()
@@ -316,11 +375,10 @@ impl Assets {
                 ),
             ));
         }
-        Ok(self
-            .sources
+        self.sources
             .iter()
             .filter_map(|id| Some((id.clone(), self.digest(id)?)))
-            .collect())
+            .collect()
     }
 
     /// The live generation digest of `asset` as hex.

@@ -4,11 +4,14 @@
 //! `play.start` assigns a role and a shared-memory snapshot; then it runs that world
 //! (windowed through SDL3, embedded in the owner through a shared GPU surface after
 //! `play.embed`, or headless) and exits on `play.stop`.
+extern crate glam34 as glam;
 mod crash;
 mod device;
 mod embed;
 mod input;
 mod net;
+mod packed;
+mod standalone;
 mod world;
 
 use anyhow::{Context, Result, anyhow};
@@ -30,14 +33,11 @@ use world::{PendingPatch, World};
 
 /// Command line. The session token comes from `ARA_PLAY_TOKEN`, never an argument.
 #[derive(Parser)]
-#[command(
-    name = "ara-player",
-    about = "Ara play process (spawned by the edit-world owner)"
-)]
+#[command(name = "ara-player", about = "Ara game player and editor Play process")]
 struct Args {
     /// Owner's live-link port on 127.0.0.1.
     #[arg(long)]
-    owner: u16,
+    owner: Option<u16>,
     /// Pool slot name, for logs and window titles.
     #[arg(long, default_value = "player")]
     name: String,
@@ -48,11 +48,13 @@ struct Args {
     #[arg(long, default_value = "1280x720")]
     size: String,
     /// Persistent pipeline-cache directory.
-    #[arg(long, default_value = ".ara/gpu")]
+    #[arg(long, default_value_os_t = default_gpu_cache())]
     gpu_cache: PathBuf,
     /// Override project quality: auto, low, medium, high or epic.
     #[arg(long)]
     quality: Option<QualityChoice>,
+    #[command(flatten)]
+    standalone: standalone::Options,
 }
 
 fn main() {
@@ -93,6 +95,20 @@ fn main() {
 fn parse_size(text: &str) -> Result<[u32; 2]> {
     let (w, h) = text.split_once('x').context("size must be WIDTHxHEIGHT")?;
     Ok([w.parse()?, h.parse()?])
+}
+
+/// Standalone launches cache driver pipelines outside the current working folder.
+/// Pools still pass their explicit cache; tests inherit their isolated config root.
+fn default_gpu_cache() -> PathBuf {
+    if let Some(root) = std::env::var_os("ARA_CONFIG_DIR") {
+        return PathBuf::from(root).join("gpu");
+    }
+    for variable in ["LOCALAPPDATA", "XDG_CACHE_HOME"] {
+        if let Some(root) = std::env::var_os(variable) {
+            return PathBuf::from(root).join("Ara/gpu");
+        }
+    }
+    std::env::temp_dir().join("ara-player-gpu")
 }
 
 /// Frames the live audio device keeps queued (43 ms at 48 kHz): a hardware period plus
@@ -137,6 +153,9 @@ struct Player {
 }
 
 fn run(args: Args) -> Result<()> {
+    if args.owner.is_none() {
+        return standalone::run(args);
+    }
     let init = Instant::now();
     let size = parse_size(&args.size)?;
     let token = std::env::var(TOKEN_ENV).context("ARA_PLAY_TOKEN is not set")?;
@@ -173,7 +192,7 @@ fn run(args: Args) -> Result<()> {
     } else {
         (None, None)
     };
-    let mut link = Link::connect(args.owner)?;
+    let mut link = Link::connect(args.owner.context("Play requires an owner port")?)?;
     let hello = Hello {
         token,
         protocol: PROTOCOL.into(),

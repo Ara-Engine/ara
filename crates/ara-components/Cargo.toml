@@ -8,11 +8,11 @@ publish.workspace = true
 
 [dependencies]
 ara-schema.workspace = true
-bevy_ecs = { version = "0.20.0", default-features = false, features = ["std"] }
-serde.workspace = true
+bevy_ecs = { workspace = true, features = ["std"] }
+serde = { workspace = true, features = ["derive"] }
 
 [dev-dependencies]
-serde_json.workspace = true
+serde_json = { workspace = true, features = ["preserve_order", "float_roundtrip"] }
 
 [lints]
 workspace = true

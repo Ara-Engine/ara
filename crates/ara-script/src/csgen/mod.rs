@@ -45,8 +45,8 @@ pub fn engine_layouts(db: &SchemaDb, names: &[&str]) -> Result<Vec<StructLayout>
         .collect()
 }
 
-/// Every component with a derivable C layout, sorted by name. This does not check
-/// Rust storage; the standard runtime exposes only [`crate::engine_bindings`].
+/// Every schema component with a blittable canonical layout, sorted by name.
+/// Native engine views must separately validate their Rust layouts with EngineBindings.
 pub fn blittable_components(db: &SchemaDb) -> Vec<&str> {
     db.components()
         .filter(|t| db.struct_layout(&t.name).is_ok())

@@ -19,7 +19,8 @@ standalone entry resolves this path against the player folder. The runtime check
 metadata before loading and the native initializer independently checks compiled
 bindings. `ARA0921` means rebuild scripts and player with the same Ara SDK and
 export again; `ARA0920` reports missing images or an inconsistent module inventory.
-Generation, runtime binding and export hashes use the same `engine_bindings()` set;
+Generation, runtime binding and export hashes use `EngineBindings::builtin()`
+(`engine_bindings()` forwards to it);
 adding an authoring schema alone does not change the C# storage ABI.
 Shipping loads no author paths, CoreCLR installation, Roslyn, watcher or hot reload.
 Gameplay state remains ECS-owned and uses the usual snapshots and restore path.
@@ -48,6 +49,13 @@ BASE --output PROJECT/presets/windows-portable.export.json` derives a named pres
 from a platform preset with real runtime pins. The CLI owner can call the unchanged
 `export(ExportRequest, EventSink)` entry point for an export job and forward its
 progress, artifact and diagnostic events to `ara_jobs`.
+
+Runtime exports report `cooking` events with completed/total counts and elapsed/stalled
+milliseconds. Cold cooking has no total time limit while requested cooks complete.
+If none completes for 600 seconds, export fails with the pending asset list and
+`ARA-EXP-COOK-001`; `ARA_EXPORT_COOK_STALL_SECONDS` accepts a positive integer override.
+Completed cooks remain cached for the next attempt. Import-worker concurrency stays
+bounded by `ARA_IMPORT_WORKERS` (four by default, capped by available CPU parallelism).
 
 - `windows-portable`: deterministic `game.zip`.
 - `windows-installer`: `game.zip` and a self-extracting `game-setup.exe`. Prepare
@@ -379,6 +387,14 @@ $env:ARA_EXPORT_PRESETS = (Resolve-Path target/export-presets/release).Path
 $env:ARA_EXPORT_ARTIFACTS = Join-Path (Get-Location) 'target/export-validation'
 cargo test -p ara-export --test end_to_end -- --ignored --nocapture
 cargo test -p ara-export-player --features dev-bridge --test bridge -- --ignored --nocapture
+
+# Actual packed game with a NativeAOT behaviour, relocation and stale ABI rejection.
+# Keep the matching player/PDB pair if later builds overwrite target/debug outputs.
+cargo rustc -p ara-player --bin ara-player -- -C debuginfo=line-tables-only -C strip=none
+cargo build -p ara-import-worker
+$env:ARA_SHIPPING_E2E_PLAYER = (Resolve-Path target/debug/ara-player.exe).Path
+$env:ARA_SHIPPING_E2E_PDB = (Resolve-Path target/debug/ara_player.pdb).Path
+cargo test -p ara-export --test runtime_csharp -- --ignored --nocapture
 ```
 
 Use a new `ARA_EXPORT_ARTIFACTS` directory for each end-to-end run. This keeps

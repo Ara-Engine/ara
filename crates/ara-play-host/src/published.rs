@@ -201,6 +201,8 @@ impl Publisher {
             && let Ok(mut value) = self.reader.shared.snapshot.try_write()
         {
             *value = Some(Arc::clone(&self.current));
+            // Readers observing this revision must be able to acquire its snapshot.
+            drop(value);
             self.reader
                 .shared
                 .revision

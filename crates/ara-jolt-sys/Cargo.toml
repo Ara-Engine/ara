@@ -14,7 +14,7 @@ bench = []
 profile = ["bench"]
 
 [build-dependencies]
-cc = { version = "1.2", features = ["parallel"] }
+cc = { workspace = true, features = ["parallel"] }
 
 [lints]
 workspace = true

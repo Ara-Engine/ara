@@ -123,7 +123,26 @@ fn driver() -> Result<(), Box<dyn std::error::Error>> {
         start.elapsed() < Duration::from_secs(1),
         "publication reads must not wait for pending imports"
     );
+    let wanted = ["as_ready".to_owned(), "as_pending".to_owned()].into();
+    let mut progress = Vec::new();
+    let stalled = assets
+        .pins_with_progress(&wanted, Duration::from_millis(30), |state| {
+            progress.push(state);
+            Ok(())
+        })
+        .expect_err("blocked worker must produce a bounded stall diagnostic");
+    assert!(
+        stalled.contains("ARA-EXP-COOK-001") && stalled.contains("as_pending"),
+        "{stalled}"
+    );
+    assert_eq!((progress[0].completed, progress[0].total), (1, 2));
     fs::write(&release, [])?;
+    let pins = assets.pins_with_progress(&wanted, Duration::from_secs(5), |_| Ok(()))?;
+    assert_eq!(
+        pins.len(),
+        2,
+        "a stalled export can resume the same queued imports"
+    );
     let second = loop {
         assets.poll(false, true);
         if let Some(snapshot) = reader.snapshot()

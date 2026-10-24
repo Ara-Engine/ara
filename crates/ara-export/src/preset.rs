@@ -10,7 +10,7 @@ pub enum PlayerTemplate {
     /// S7 ABI and pack verification only; does not execute authored demo gameplay.
     #[default]
     Conformance,
-    /// The integrated engine player supplied by the runtime owner.
+    /// The real engine player: a pinned ZIP with ara-player and cooked resources.
     Runtime,
 }
 impl PlayerTemplate {
@@ -396,16 +396,19 @@ impl ExportPreset {
             (1..=ara_pack::MAX_CHUNK as u32).contains(&self.chunk_size),
             "ARA-EXP-PRE-003: chunk size must be 1..=16 MiB"
         );
+        let script_free =
+            self.player_template == PlayerTemplate::Runtime && self.script_project.is_empty();
         ara_pack::validate_path(&self.content)?;
-        if self.player_template == PlayerTemplate::Conformance || !self.script_project.is_empty() {
+        if !script_free {
             ara_pack::validate_path(&self.script_project)?;
         }
         ensure!(
-            !self.assembly.is_empty()
-                && self
-                    .assembly
-                    .chars()
-                    .all(|c| c.is_ascii_alphanumeric() || c == '_'),
+            script_free
+                || (!self.assembly.is_empty()
+                    && self
+                        .assembly
+                        .chars()
+                        .all(|c| c.is_ascii_alphanumeric() || c == '_')),
             "ARA-EXP-PRE-004: invalid assembly stem"
         );
         if self.platform == Platform::Android {

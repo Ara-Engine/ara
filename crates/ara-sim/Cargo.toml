@@ -11,7 +11,7 @@ profiling = ["dep:ara-profile", "dep:tracing"]
 
 [dependencies]
 ara-profile = { path = "../ara-profile", optional = true, features = ["instrumentation"] }
-tracing = { version = "0.1", optional = true }
+tracing = { workspace = true, optional = true }
 ara-components = { path = "../ara-components" }
 ara-diag = { path = "../ara-diag" }
 ara-doc = { path = "../ara-doc" }
@@ -19,16 +19,16 @@ ara-input = { path = "../ara-input" }
 ara-json = { path = "../ara-json" }
 ara-ops = { path = "../ara-ops" }
 ara-schema = { path = "../ara-schema" }
-bevy_ecs = { version = "0.20.0", default-features = false, features = ["std", "multi_threaded", "serialize"] }
-bevy_tasks = { version = "0.20.0", features = ["multi_threaded"] }
-serde.workspace = true
-serde_json.workspace = true
-blake3 = "1.8"
-ciborium = "0.2.2"
+bevy_ecs = { workspace = true, features = ["std", "multi_threaded", "serialize"] }
+bevy_tasks = { workspace = true, features = ["multi_threaded"] }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true, features = ["preserve_order", "float_roundtrip"] }
+blake3 = { workspace = true, default-features = true }
+ciborium = { workspace = true }
 
 [dev-dependencies]
-glam = "0.30.9"
-rayon = "1.11.0"
+glam = { workspace = true }
+rayon = { workspace = true }
 
 [[bench]]
 name = "ecs"

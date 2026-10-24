@@ -20,10 +20,10 @@ required-features = ["symbols"]
 ara-diag.workspace = true
 ara-json.workspace = true
 ara-schema.workspace = true
-anyhow = "1.0.103"
-blake3 = { version = "1.8.7", default-features = false, features = ["std", "pure"] }
-serde.workspace = true
-serde_json.workspace = true
+anyhow = { workspace = true }
+blake3 = { workspace = true, features = ["std", "pure"] }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true, features = ["preserve_order", "float_roundtrip"] }
 ara-why = { path = "../ara-why", optional = true }
 dump_syms = { version = "2.3.9", default-features = false, optional = true }
 minidump = { version = "0.27", optional = true }
@@ -38,10 +38,10 @@ minidumper = "0.11"
 minidump-writer = "0.13"
 
 [target.'cfg(target_os = "linux")'.dependencies]
-libc = "0.2"
+libc.workspace = true
 
 [dev-dependencies]
-tempfile = "3.27.0"
+tempfile = { workspace = true }
 
 [lints]
 workspace = true
