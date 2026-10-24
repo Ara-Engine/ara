@@ -98,7 +98,9 @@ impl Ui {
     /// at the last call keeps its subtree exactly as it is, runtime state and
     /// runtime-appended nodes included; nodes only change index (see
     /// [`moved_index`](Self::moved_index)). Nothing is touched when the skeleton and
-    /// every part are unchanged. A rejected call leaves the tree intact.
+    /// every part are unchanged, and when only parts changed that keep their shape (the
+    /// same element IDs, tags and nesting: attributes or text changed), just their
+    /// nodes are updated, in place. A rejected call leaves the tree intact.
     pub fn reconcile_parts(
         &mut self,
         skeleton: &str,
@@ -154,6 +156,24 @@ impl Ui {
                 kept: self.nodes.len(),
                 ..Default::default()
             });
+        }
+        // The same skeleton and parts, each changed part shaped like its current
+        // subtree (an attribute or text changed): update those nodes where they are.
+        // Nothing moves, and the rest of the tree is not looked at.
+        if same_skeleton
+            && cache.markup.len() == parts.len()
+            && fresh.keys().all(|host| cache.markup.contains_key(*host))
+        {
+            let changed: Vec<&str> = fresh.keys().copied().collect();
+            if let Some(report) = self.update_in_place(&mut fresh)? {
+                for (host, markup) in parts.iter().filter(|(h, _)| changed.contains(h)) {
+                    cache
+                        .markup
+                        .insert((*host).to_owned(), (*markup).to_owned());
+                }
+                cache.remap = None;
+                return Ok(report);
+            }
         }
         if !same_skeleton {
             cache.skeleton_elements = source::compile(skeleton)?;
@@ -251,9 +271,10 @@ impl Ui {
                             .take_if(|n| n.element.tag == element.tag && n.element.id == element.id)
                     });
                     let node = match kept {
-                        Some(node) => {
+                        Some(mut node) => {
                             let widget = old_widgets.remove(&id);
-                            self.update(node, element, widget, &mut widgets, &mut report)?
+                            self.update(&mut node, element, widget, &mut widgets, &mut report)?;
+                            node
                         }
                         None => {
                             report.added += 1;
@@ -372,12 +393,12 @@ impl Ui {
     /// Bring a kept node up to date with its new element.
     fn update(
         &mut self,
-        mut node: Node,
+        node: &mut Node,
         element: Element,
         widget: Option<Widget>,
         widgets: &mut BTreeMap<u64, Widget>,
         report: &mut Reconciled,
-    ) -> Result<Node> {
+    ) -> Result<()> {
         let same = |names: &[&str]| {
             names
                 .iter()
@@ -429,7 +450,82 @@ impl Ui {
             widgets.insert(stable_id(&element.id), widget);
         }
         node.element = element;
-        Ok(node)
+        Ok(())
+    }
+
+    /// [`splice`](Self::splice)'s in-place path: when every changed part in `fresh`
+    /// has the shape of its current subtree, update those nodes where they are and
+    /// return the report; `None` (with `fresh` untouched) when any part changed shape.
+    fn update_in_place(
+        &mut self,
+        fresh: &mut HashMap<&str, Vec<Element>>,
+    ) -> Result<Option<Reconciled>> {
+        let mut targets = Vec::with_capacity(fresh.len());
+        for (host, elements) in fresh.iter() {
+            let Some(indices) = self
+                .find(host)
+                .and_then(|root| self.same_shape(root, elements))
+            else {
+                return Ok(None);
+            };
+            targets.push((*host, indices));
+        }
+        let by_id: HashMap<u64, usize> = targets
+            .iter()
+            .flat_map(|(host, indices)| {
+                fresh[host]
+                    .iter()
+                    .zip(indices)
+                    .map(|(element, i)| (stable_id(&element.id), *i))
+            })
+            .collect();
+        self.validate(fresh.values().flatten(), &by_id)?;
+        // Nothing below fails: `validate` parsed every widget and style.
+        let mut nodes = std::mem::take(&mut self.nodes);
+        let mut widgets = std::mem::take(&mut self.widgets);
+        let mut report = Reconciled::default();
+        let mut result = Ok(());
+        for (host, indices) in targets {
+            for (i, mut element) in indices
+                .into_iter()
+                .zip(fresh.remove(host).unwrap_or_default())
+            {
+                let node = &mut nodes[i];
+                element.parent = node.element.parent;
+                element.children = std::mem::take(&mut node.element.children);
+                let widget = widgets.remove(&stable_id(&element.id));
+                result = result.and(self.update(node, element, widget, &mut widgets, &mut report));
+            }
+        }
+        if report.changed > 0
+            && let Some(root) = nodes.first_mut()
+        {
+            root.dirty.paint = true;
+        }
+        self.nodes = nodes;
+        self.widgets = widgets;
+        result.map(|()| Some(report))
+    }
+
+    /// The preorder indices of the subtree at `root` when it has exactly the shape of
+    /// `elements` (a compiled part, in preorder): the same IDs, tags and child counts.
+    /// Runtime-appended children (virtual rows) make the shapes differ.
+    fn same_shape(&self, root: usize, elements: &[Element]) -> Option<Vec<usize>> {
+        let mut indices = Vec::with_capacity(elements.len());
+        let mut stack = vec![root];
+        while let Some(i) = stack.pop() {
+            let node = self.nodes.get(i)?;
+            let element = elements.get(indices.len())?;
+            if node.element.tag != element.tag
+                || node.element.id != element.id
+                || node.element.children.len() != element.children.len()
+            {
+                return None;
+            }
+            indices.push(i);
+            stack.extend(node.element.children.iter().rev());
+        }
+        (indices.len() == elements.len()).then_some(indices)
     }
 
     /// Replace the stylesheet (the theme's tokens stay); unchanged source is a no-op.

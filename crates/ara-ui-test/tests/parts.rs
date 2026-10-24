@@ -77,10 +77,15 @@ fn unchanged_parts_keep_their_subtree_and_virtual_rows() -> Result<()> {
     assert_eq!(before.first().map(String::as_str), Some("Row 10"));
     let pool = ui.nodes.len();
 
-    // Only the right part changes; the left one (and its rows) moves as it is.
+    // Only the right part changes, keeping its shape: its nodes update in place and
+    // the left part (with its rows) is not touched.
     let report = reconcile(&mut ui, "Hierarchy", "B")?;
-    assert!(report.moved > 0, "{report:?}");
-    assert_eq!((report.added, report.removed), (0, 0), "{report:?}");
+    assert_eq!(
+        (report.added, report.removed, report.moved),
+        (0, 0, 0),
+        "{report:?}"
+    );
+    assert!(report.changed >= 1, "{report:?}");
     assert_eq!(ui.nodes.len(), pool, "the virtual rows survive");
     assert!(view.remap(&ui), "every row handle follows its node");
     assert_eq!(row_texts(&ui, &view), before);
@@ -98,6 +103,26 @@ fn unchanged_parts_keep_their_subtree_and_virtual_rows() -> Result<()> {
     );
     let rows = ui.find("rows").ok_or("rows")?;
     assert!(ui.nodes[rows].rect.h > 100.);
+    Ok(())
+}
+
+#[test]
+fn a_reshaped_part_reconciles_and_the_rest_moves_wholesale() -> Result<()> {
+    let mut text = TextSystem::bundled()?;
+    let (mut ui, mut view) = mounted(&mut text)?;
+    let before = row_texts(&ui, &view);
+    // The right part gains a node: the rows appended after it move.
+    let reshaped = "<panel id='right' style='flex-grow:1'><text id='label' text='A' /><text id='extra' text='New' /><field id='name' text='Outpost' action='Dispatch' /></panel>";
+    let report = ui.reconcile_parts(
+        SKELETON,
+        &[("left", &left("Hierarchy")), ("right", reshaped)],
+    )?;
+    assert_eq!(report.added, 1, "{report:?}");
+    assert!(report.moved > 0, "{report:?}");
+    assert!(view.remap(&ui));
+    assert_eq!(row_texts(&ui, &view), before);
+    ui.frame(&mut text)?;
+    assert!(ui.find("extra").is_some());
     Ok(())
 }
 
@@ -267,11 +292,16 @@ fn live_widget_state_survives_in_kept_parts() -> Result<()> {
     assert_eq!(typed(&ui), value);
     assert_eq!(input.focused(), Some(stable_id("name")));
     ui.frame(&mut text)?;
+    // The right part's label changes in place: the field keeps its edit and focus.
+    reconcile(&mut ui, "Scene", "B")?;
+    assert_eq!(typed(&ui), value);
+    assert_eq!(input.focused(), Some(stable_id("name")));
+    ui.frame(&mut text)?;
 
     // Hidden (an inactive tab), the field keeps its edit but not the focus: typing
     // no longer reaches it.
     let hidden = "<ui id='app' style='flex-direction:row'><panel id='left' /><panel id='slot' style='display:none'><panel id='right' /></panel></ui>";
-    ui.reconcile_parts(hidden, &[("left", &left("Scene")), ("right", &right("A"))])?;
+    ui.reconcile_parts(hidden, &[("left", &left("Scene")), ("right", &right("B"))])?;
     ui.frame(&mut text)?;
     input.event(
         &mut ui,
