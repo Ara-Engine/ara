@@ -153,6 +153,21 @@ impl Shell {
                         self.mnemonics = false;
                         rebuild = true;
                     }
+                    Binding::AssetPicker(path, kind) => {
+                        let at = self
+                            .ui
+                            .by_id(action.node)
+                            .map(|i| {
+                                let r = self.ui.nodes[i].rect;
+                                [r.x, r.y + r.h + 2.]
+                            })
+                            .unwrap_or(self.pointer);
+                        self.open_menu_at(
+                            super::menu::Source::Assets(path.clone(), kind.clone()),
+                            at,
+                        );
+                        rebuild = true;
+                    }
                     Binding::EnumMenu(path, options) => {
                         let at = self
                             .ui
@@ -470,23 +485,28 @@ impl Shell {
                         }
                     }
                     Binding::Asset(asset) => {
-                        editor.action("editor.workspace", json!({"asset":asset.path}))?;
                         rebuild = true;
-                        if let Some(path) = self.pick_field.take()
-                            && let Some(reference) =
-                                asset.current_reference(editor.host.store().workspace())
-                        {
-                            editor.apply(
-                                crate::inspector::edit_commands(
-                                    &editor.state.selection,
-                                    &path,
-                                    &json!(reference),
-                                ),
-                                "Pick asset reference",
-                                None,
-                            )?;
-                            editor.action("editor.workspace", json!({"asset":""}))?;
-                            rebuild = true;
+                        let Some(path) = self.pick_field.clone() else {
+                            editor.action("editor.workspace", json!({"asset":asset.path}))?;
+                            continue;
+                        };
+                        // Picking: a file that does not fit, or has no asset ID yet, is
+                        // explained and picking goes on.
+                        match self.asset_for_field(editor, asset, &path) {
+                            Ok(reference) => {
+                                self.pick_field = None;
+                                self.status_note = None;
+                                editor.apply(
+                                    crate::inspector::edit_commands(
+                                        &editor.state.selection,
+                                        &path,
+                                        &json!(reference),
+                                    ),
+                                    "Pick asset reference",
+                                    None,
+                                )?;
+                            }
+                            Err(why) => self.status_note = Some(why),
                         }
                     }
                     Binding::Fix(diagnostic, index) => {
@@ -495,6 +515,7 @@ impl Shell {
                     }
                     Binding::PickField(path) => {
                         self.pick_field = Some(path.clone());
+                        self.status_note = None;
                         if self.fields.get(path).is_some_and(|f| {
                             matches!(f.widget, crate::inspector::Widget::Asset { .. })
                         }) {
@@ -519,6 +540,37 @@ impl Shell {
             self.rebuild(editor)?;
         }
         Ok(rebuild)
+    }
+    /// The reference `asset` gives the asset field at `path`, or why it cannot fill
+    /// it: the wrong kind of file, or no asset ID yet (still importing).
+    pub(super) fn asset_for_field(
+        &self,
+        editor: &Editor,
+        asset: &assets::Asset,
+        path: &str,
+    ) -> Result<String, String> {
+        let kind = self.fields.get(path).and_then(|f| match &f.widget {
+            crate::inspector::Widget::Asset { kind } => Some(kind.clone()),
+            _ => None,
+        });
+        let kind = kind.flatten();
+        let label = self.fields.get(path).map_or(path, |f| f.label.as_str());
+        if !asset.fits(kind.as_deref(), path) {
+            let wants = assets::field_accepts(kind.as_deref(), path).1;
+            return Err(format!(
+                "{} takes {wants}, not {}",
+                super::inspector_panel::sentence(label),
+                asset.name()
+            ));
+        }
+        asset
+            .current_reference(editor.host.store().workspace())
+            .ok_or_else(|| {
+                format!(
+                    "{} has no asset ID yet: it is still importing. Pick it again when it is ready",
+                    asset.name()
+                )
+            })
     }
     /// Commit pending inspector text and slider values as one transaction.
     pub fn commit_fields(&mut self, editor: &mut Editor) -> ara_ui::Result<bool> {

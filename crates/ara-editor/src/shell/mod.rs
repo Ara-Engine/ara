@@ -308,6 +308,8 @@ pub(crate) enum Binding {
     GraphLabel(String, String),
     Fix(ara_diag::Diagnostic, usize),
     PickField(String),
+    /// An asset field's picker popup: the field's path and declared asset kind.
+    AssetPicker(String, Option<String>),
     RenameValue,
     ColorPicker(String),
     ComponentCollapse(String),

@@ -159,6 +159,8 @@ impl Shell {
             self.drop_preview = None;
             self.show_readout(None);
             self.pick_field = None;
+            // Escape also dismisses a status message (a picking hint, a build note).
+            self.status_note = None;
             self.drafts.clear();
             editor.end_field_gestures()?;
             self.rename = false;
