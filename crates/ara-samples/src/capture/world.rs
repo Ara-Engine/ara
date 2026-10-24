@@ -71,7 +71,18 @@ pub fn load(root: &Path, scene: &str, worker: &Path, ticks: u32) -> Result<World
         assets: CachedAssets::new(FileCache::at(&cache)?, pins),
     };
     world.runtime.step(ticks, &[])?;
+    complete_assets(&world.runtime)?;
     Ok(world)
+}
+
+/// Reference scores are meaningless when extraction substituted missing assets.
+fn complete_assets(runtime: &Runtime) -> Result<()> {
+    anyhow::ensure!(
+        runtime.asset_errors().is_empty(),
+        "capture requires complete scene assets; fix these runtime diagnostics before scoring:\n{}",
+        runtime.asset_errors().join("\n")
+    );
+    Ok(())
 }
 
 impl World {
@@ -97,5 +108,39 @@ impl World {
         let mut frame = RenderFrame::default();
         self.runtime.extract(&mut frame);
         frame
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn missing_model_placeholder_cannot_be_used_as_capture_ground_truth() -> Result<()> {
+        let schema = ara_runtime::schema(&[])?;
+        let path =
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("../ara-player/demo/levels/demo.scene");
+        let read = ara_doc::read(
+            &std::fs::read_to_string(path)?,
+            "levels/demo.scene",
+            &schema,
+            None,
+        );
+        let document = read.doc.context("demo scene")?;
+        let scene = document.id.clone();
+        let mut workspace = ara_doc::Workspace::default();
+        workspace.insert("levels/demo.scene", document);
+        let runtime = Runtime::new(
+            schema,
+            workspace,
+            scene,
+            Box::new(ara_runtime::assets::MemoryAssets::default()),
+            RuntimeConfig::default(),
+            Vec::new(),
+        )?;
+        let error = complete_assets(&runtime).expect_err("missing fox must invalidate reference");
+        assert!(error.to_string().contains("ARA7310"));
+        assert!(error.to_string().contains("as_fox"));
+        Ok(())
     }
 }

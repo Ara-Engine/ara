@@ -25,14 +25,10 @@ impl ModelCache {
         })
     }
 
-    pub(crate) fn load(
-        &mut self,
-        asset: &str,
-        renderer: &ara_runtime::components::MeshRenderer,
-        entity: u64,
-        name: String,
-        material: usize,
-    ) -> anyhow::Result<Mesh> {
+    /// Adopt an available publication and return the revision used by this cache.
+    /// Poll before scene synchronization so newly published models replace placeholders.
+    /// A busy publisher retains the last snapshot and revision without waiting.
+    pub fn revision(&mut self) -> u64 {
         if self
             .snapshot
             .as_ref()
@@ -44,6 +40,20 @@ impl ModelCache {
                 self.snapshot = Some(snapshot);
             }
         }
+        self.snapshot
+            .as_ref()
+            .map_or(0, |snapshot| snapshot.revision())
+    }
+
+    pub(crate) fn load(
+        &mut self,
+        asset: &str,
+        renderer: &ara_runtime::components::MeshRenderer,
+        entity: u64,
+        name: String,
+        material: usize,
+    ) -> anyhow::Result<Mesh> {
+        self.revision();
         let source = self
             .snapshot
             .as_deref()
@@ -323,6 +333,30 @@ pub(crate) fn tangent(normal: Vec3) -> [f32; 4] {
 mod tests {
     use super::*;
     use std::sync::atomic::{AtomicUsize, Ordering};
+
+    #[test]
+    fn cache_observes_a_publisher_attached_after_placeholder_extraction() -> anyhow::Result<()> {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../target/ara-editor/model-publication")
+            .join(std::process::id().to_string());
+        std::fs::create_dir_all(&root)?;
+        let mut cache = ModelCache::new(&root)?;
+        assert_eq!(cache.revision(), 0);
+        let placeholder = cache.load("as_pending", &Default::default(), 1, "Pending".into(), 0)?;
+        assert!(!placeholder.vertices.is_empty());
+        // No source assets or imports: attaching the control-boundary owner alone
+        // publishes the first snapshot, after the viewport already used a placeholder.
+        let _owner = ara_play_host::assets::Assets::new(&root, &root.join("absent-worker.exe"))
+            .map_err(anyhow::Error::msg)?;
+        let revision = cache.revision();
+        assert!(revision > 0);
+        assert_eq!(
+            cache.snapshot.as_ref().context("new snapshot")?.revision(),
+            revision
+        );
+        assert_eq!(cache.revision(), revision);
+        Ok(())
+    }
 
     struct Source {
         current: Option<ara_asset::CachedImport>,

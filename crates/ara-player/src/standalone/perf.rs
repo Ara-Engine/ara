@@ -39,6 +39,7 @@ struct Control {
 
 pub(super) struct Window {
     options: PerfOptions,
+    offscreen: bool,
     frames: BTreeMap<String, Vec<f64>>,
     passes: BTreeMap<String, Vec<f64>>,
     gpu: gpu::Samples,
@@ -64,12 +65,16 @@ fn quantiles(samples: &[f64]) -> Value {
 }
 
 impl Window {
+    pub fn offscreen(&self) -> bool {
+        self.offscreen
+    }
     pub fn enabled(&self) -> bool {
         self.options.perf_output.is_some()
     }
-    pub fn new(options: PerfOptions) -> Self {
+    pub fn new(options: PerfOptions, offscreen: bool) -> Self {
         let collecting = options.perf_output.is_some();
         Self {
+            offscreen: offscreen || collecting,
             options,
             frames: BTreeMap::new(),
             passes: BTreeMap::new(),
@@ -242,7 +247,7 @@ impl Window {
             !passes.is_empty(),
             "perf window did not receive GPU timestamp samples"
         );
-        let report = json!({"format":"ara.player.perf/1","pid":std::process::id(),"quality":presenter.quality().map(|q|q.name()),"validation":cfg!(debug_assertions),"startup":phases,"camera":camera,"frames":self.measured,"warmup":self.options.perf_warmup,"cpu":cpu,"gpu_passes":passes,"gpu_other":self.gpu.report(),"gpu_coverage":self.gpu.coverage(),"shaders":presenter.shader_status()});
+        let report = json!({"format":"ara.player.perf/1","pid":std::process::id(),"quality":presenter.quality().map(|q|q.name()),"presentation":if self.offscreen {"hiddenWindow"} else {"window"},"validation":cfg!(debug_assertions),"startup":phases,"camera":camera,"frames":self.measured,"warmup":self.options.perf_warmup,"cpu":cpu,"gpu_passes":passes,"gpu_other":self.gpu.report(),"gpu_coverage":self.gpu.coverage(),"shaders":presenter.shader_status()});
         let temporary = output.with_extension("json.tmp");
         std::fs::write(&temporary, serde_json::to_vec_pretty(&report)?)?;
         std::fs::rename(temporary, output)?;
@@ -255,6 +260,19 @@ impl Window {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn performance_measurement_never_opens_a_visible_window() -> Result<()> {
+        use clap::Parser;
+        let normal = crate::Args::try_parse_from(["ara-player"])?;
+        assert!(!Window::new(normal.standalone.perf, normal.standalone.offscreen).offscreen());
+        let perf = crate::Args::try_parse_from(["ara-player", "--perf-output", "metrics.json"])?;
+        assert!(Window::new(perf.standalone.perf, perf.standalone.offscreen).offscreen());
+        let hidden = crate::Args::try_parse_from(["ara-player", "--offscreen"])?;
+        assert!(Window::new(hidden.standalone.perf, hidden.standalone.offscreen).offscreen());
+        assert!(crate::Args::try_parse_from(["ara-player", "--offscreen", "--headless"]).is_err());
+        Ok(())
+    }
     #[test]
     fn reports_real_quantiles_and_keeps_no_samples_missing() {
         assert!(quantiles(&[]).is_null());

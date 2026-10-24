@@ -206,6 +206,7 @@ fn host_buffer(
     bytes: &[u8],
     allocated: &mut Vec<Resource>,
 ) -> Result<Buffer> {
+    ara_gpu::cpu_scope!("Native.allocate_host_buffer");
     // SAFETY: Read-only limits query for this live device's physical-device handle.
     let limit = unsafe {
         gpu.context()
