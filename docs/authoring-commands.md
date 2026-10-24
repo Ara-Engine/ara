@@ -119,6 +119,14 @@ factor for the named/indexed `emissiveMaterials` (empty targets all), then
 Procedural shapes retain emitted-radiance semantics. Invalid node/primitive or
 material selectors report `ARA7310`; invalid geometry selections show a placeholder.
 
+`doc.delete` removes a loaded document and its records with attributed history and
+undo. Run from another batch document; `ara.project.json` is the usual anchor.
+Delete and recreate the same ID in one batch for a reproducible regeneration.
+
+```powershell
+ara do doc.delete --doc ara.project.json --args '{"document":"@levels/generated.scene#sc_generated"}' --why 'Regenerate the generated level'
+```
+
 `materialOverrides` replaces individual primitive materials with native surface
 graphs or `.materialinstance` assets. Slot numbers are relative to the selected
 subtree before `primitive` filtering; procedural shapes have slot zero.

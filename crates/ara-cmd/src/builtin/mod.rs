@@ -13,6 +13,7 @@
 
 mod component;
 mod document;
+mod document_delete;
 mod entity;
 mod look_at;
 mod prefab;
@@ -26,6 +27,7 @@ pub use component::{
 pub use document::{
     DocCreate, DocCreateParams, ProjectSetMain, ProjectSetMainParams, ProjectSettings,
 };
+pub use document_delete::{DocDelete, DocDeleteParams};
 pub use entity::{
     Created, Deleted, EntityCreate, EntityCreateParams, EntityDelete, EntityDeleteParams,
     EntityInspect, EntityInspectParams, EntityReparent, EntityReparentParams, Moved,
@@ -41,7 +43,8 @@ use crate::Registry;
 /// Registers the starter set and its params types.
 pub fn register(reg: &mut Registry, db: &mut SchemaDb) {
     document::register(reg, db);
-    reg.command::<EntityCreate>(db)
+    reg.command::<DocDelete>(db)
+        .command::<EntityCreate>(db)
         .command::<EntityDelete>(db)
         .command::<EntityReparent>(db)
         .command::<ComponentAdd>(db)
