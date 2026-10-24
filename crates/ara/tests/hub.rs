@@ -72,13 +72,17 @@ impl Drop for TestHub {
 }
 
 struct Mcp {
+    agent: &'static str,
+    trace: fs::File,
     child: Child,
     input: ChildStdin,
     output: Receiver<String>,
     next: u64,
 }
 impl Mcp {
-    fn start(hub: &TestHub) -> Self {
+    fn start(hub: &TestHub, agent: &'static str) -> Self {
+        let trace = fs::File::create(hub.directory.join(format!("mcp-{agent}.jsonl")))
+            .expect("MCP transcript");
         let mut child = Command::new(env!("CARGO_BIN_EXE_ara"))
             .env("ARA_CONFIG_DIR", hub.config())
             .arg("mcp")
@@ -98,6 +102,8 @@ impl Mcp {
             }
         });
         let mut mcp = Self {
+            agent,
+            trace,
             child,
             input,
             output,
@@ -110,25 +116,48 @@ impl Mcp {
         mcp
     }
     fn request(&mut self, method: &str, params: Value) -> Value {
+        let started = std::time::Instant::now();
         self.next += 1;
-        writeln!(
-            self.input,
-            "{}",
-            json!({"jsonrpc":"2.0","id":self.next,"method":method,"params":params})
-        )
-        .expect("request");
+        let request = json!({"jsonrpc":"2.0","id":self.next,"method":method,"params":params});
+        ara_proto::lines::write_message(&mut self.trace, &json!({"request":request}))
+            .expect("record MCP request");
+        writeln!(self.input, "{request}").expect("request");
         self.input.flush().expect("flush");
         let message = self
             .output
             .recv_timeout(Duration::from_secs(40))
-            .expect("MCP response timeout");
-        let message: Value = serde_json::from_str(&message).expect("response JSON");
-        assert!(message.get("error").is_none(), "{message}");
+            .unwrap_or_else(|error| {
+                panic!(
+                    "agent {} {method} #{} failed waiting for reply: {error}; request: {request}",
+                    self.agent, self.next
+                )
+            });
+        ara_proto::lines::write_message(
+            &mut self.trace,
+            &json!({"response":message,"elapsedMs":started.elapsed().as_millis()}),
+        )
+        .expect("record MCP reply");
+        let message: Value = serde_json::from_str(&message).unwrap_or_else(|error| {
+            panic!(
+                "agent {} {method} #{} returned invalid JSON: {error}; response: {message}",
+                self.agent, self.next
+            )
+        });
+        assert!(
+            message.get("error").is_none(),
+            "agent {} {method} #{}; request: {request}; response: {message}",
+            self.agent,
+            self.next
+        );
         message["result"].clone()
     }
     fn tool(&mut self, name: &str, args: Value) -> Value {
         let result = self.request("tools/call", json!({"name":name,"arguments":args}));
-        assert_ne!(result["isError"], true, "{name}: {result}");
+        assert_ne!(
+            result["isError"], true,
+            "agent {} {name}: {result}",
+            self.agent
+        );
         result["structuredContent"].clone()
     }
 }
@@ -152,7 +181,7 @@ fn global_mcp_edits_two_isolated_daemons_and_closes_one() {
     let hub = TestHub::new("two-projects");
     let a = hub.create("A");
     let b = hub.create("B");
-    let mut mcp = Mcp::start(&hub);
+    let mut mcp = Mcp::start(&hub, "projects");
     let list = mcp.tool("ara_projects", json!({"action":"list"}));
     assert_eq!(list["projects"].as_array().expect("projects").len(), 2);
     let tools = mcp.request("tools/list", json!({}));
@@ -220,8 +249,8 @@ fn concurrent_global_agents_keep_project_sessions_isolated() {
     let hub = TestHub::new("concurrent");
     hub.create("A");
     hub.create("B");
-    let mut a = Mcp::start(&hub);
-    let mut b = Mcp::start(&hub);
+    let mut a = Mcp::start(&hub, "A");
+    let mut b = Mcp::start(&hub, "B");
     let run = |mut mcp: Mcp, project: &'static str| {
         thread::spawn(move || {
             mcp.tool(
