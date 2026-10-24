@@ -146,6 +146,10 @@ void atrousMain(uint3 tid:SV_DispatchThreadID,uint3 group:SV_GroupID,uint lane:S
         }
     }uint packed=asuint(pixel(f,MOMENTS+slot,p).z);float3 modulation=max(float3(packed&1023,(packed>>10)&1023,(packed>>20)&1023)/1023.,float3(0.04));
     float3 spec=specSum/max(specTotal,1e-6);
+    // Imported AO attenuates the filtered indirect signal at remodulation, so its
+    // texel detail stays sharp: diffuse by AO, specular by Lagarde's occlusion.
+    float ao=world.w==0?1:pixel(f,DEPTH,p).y,nv=saturate(dot(guide.xyz,normalize(f.camera.xyz-world.xyz)));
+    float specularAo=saturate(pow(nv+ao,exp2(-16*roughness-1))-1+ao);
     if(splitSignals)extraStore(f,root.pass==1?SPEC_FILTER1:SPEC_FILTER0,p,float4(spec,1));
-    store(f,target,p,float4(root.pass==2?sum/max(total,1e-6)*modulation+pixel(f,DIRECT_HISTORY+slot,p).rgb+spec:sum/max(total,1e-6),1));
+    store(f,target,p,float4(root.pass==2?sum/max(total,1e-6)*modulation*ao+pixel(f,DIRECT_HISTORY+slot,p).rgb+spec*specularAo:sum/max(total,1e-6),1));
 }

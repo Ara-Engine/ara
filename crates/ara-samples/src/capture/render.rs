@@ -449,6 +449,7 @@ fn baseline(
         scene.environment_size = sky_size;
         scene.environment = pixels;
     }
+    scene.sun_lux = environment.sun_lux;
     let created = std::time::Instant::now();
     let mut renderer = ara_render::Renderer::new(scene, size, &[], options.pipeline_cache)?;
     renderer.set_tone_curve(match environment.tone_mapper {

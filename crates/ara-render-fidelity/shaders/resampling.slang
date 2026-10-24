@@ -53,7 +53,7 @@ float3 diffuseValue(Surface s,float3 v,float3 l){
     float3 value=s.albedo*(1-s.metal)*(1-F)*(nl/PI);
     if(s.coat>0)value*=1-s.coat*fresnel(max(dot(s.normal,v),0),float3(0.04)).x;
     if(any(s.sheen>0)){float energy=sheenAlbedo(s,saturate(dot(s.normal,v)));value*=1-max(max(s.sheen.x,s.sheen.y),s.sheen.z)*energy;}
-    return value*saturate(nl+2*s.ao-1);
+    return value;
 }
 bool layeredMaterial(Surface s){return s.coat>0 || any(s.sheen>0) || s.transmission>0;}
 float3 giValue(Surface s,float3 v,GIReservoir r,out float3 direction,out float distance){
@@ -213,7 +213,7 @@ void specularTrace(uint3 tid:SV_DispatchThreadID){
     Frame f=frame();uint2 p=tid.xy;if(any(p>=f.sizes.xy) || pixel(f,WORLD+f.control.x,p).w==0 || pixel(f,NORMAL+f.control.x,p).w>=0.5)return;
     uint rng=hash((p.y*f.sizes.x+p.x)^f.control.w*8737);float3 v;Surface s=primarySurface(f,p,v);if(layeredMaterial(s))return;
     float3 h=visibleGgx(s,v,rng),l=reflect(-v,h),result=0;float nl=dot(s.normal,l);
-    if(nl>0)result=traceSecondaryRay(f,s,l,rng)*fresnel(max(dot(v,h),0),lerp(float3(0.04*s.specular),s.albedo,s.metal))*smith(nl,pow(s.roughness,4))*saturate(nl+2*s.ao-1);
+    if(nl>0)result=traceSecondaryRay(f,s,l,rng)*fresnel(max(dot(v,h),0),lerp(float3(0.04*s.specular),s.albedo,s.metal))*smith(nl,pow(s.roughness,4));
     extraStore(f,SPEC_RAW,p,float4(clampSpecular(f,result),1));
 }
 

@@ -21,7 +21,8 @@ void primaryMain(uint3 tid:SV_DispatchThreadID){
     store(f,WORLD+slot,p,float4(s.position,float(s.id+1)));store(f,NORMAL+slot,p,float4(s.normal,s.roughness));uint3 modulation=uint3(saturate(s.albedo*(1-s.metal)+lerp(float3(0.04*s.specular),s.albedo,s.metal))*255+0.5);
     store(f,BASE,p,float4(hit.bary,float(hit.primitive),float(modulation.x|(modulation.y<<8)|(modulation.z<<16))));
     store(f,MOTION,p,float4(previousUv-currentUv,length(previousWorld-f.previousCamera.xyz),max(max(s.emissive.x,s.emissive.y),s.emissive.z)>1?1:0));
-    store(f,DEPTH,p,float4(current.w,0,0,0));
+    // DEPTH.y carries imported ambient occlusion to the indirect remodulation.
+    store(f,DEPTH,p,float4(current.w,s.ao,0,0));
     if(f.transport.x==0){float3 lighting=primarySun(f,s,-ray,p,rng);
 #ifndef RESERVOIR_SURFACES
         lighting+=directLocal(f,s,-ray,rng);

@@ -455,6 +455,7 @@ impl FidelityView {
             uses.extend(
                 [
                     BASE,
+                    DEPTH,
                     WORLD0 + slot,
                     NORMAL0 + slot,
                     MOMENTS0 + slot,

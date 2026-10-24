@@ -149,19 +149,21 @@ impl FrameEnvironment {
     }
 
     /// The raster approximation for the same sun (`direction` towards the sun,
-    /// illuminance in lux): a physical sky map when the look has a `SkyAtmosphere`,
-    /// a linear exposure and the tone mapper.
+    /// top-of-atmosphere illuminance in lux): a physical sky map when the look has
+    /// a `SkyAtmosphere`, the sun reaching the ground, a linear exposure and the
+    /// tone mapper.
     pub fn baseline(&self, sun_direction: Vec3, sun_lux: Vec3) -> BaselineEnvironment {
         let sky = self
             .atmosphere
             .filter(|a| a.physical_sky)
             .map(|a| sky_map(&a, sun_direction.normalize_or(Vec3::Y), sun_lux));
+        let ground = self.ground_sun(sun_direction, sun_lux);
         let ev100 = self.ev100.unwrap_or_else(|| {
             // Grey-world metering of an 18% surface under the sun and sky, the
             // same target the GPU histogram converges to in an open scene.
             let sky_lux = sky.as_ref().map_or(0., |(_, _, lux)| *lux);
             let sun =
-                crate::colour::luminance(sun_lux) * sun_direction.normalize_or(Vec3::Y).y.max(0.);
+                crate::colour::luminance(ground) * sun_direction.normalize_or(Vec3::Y).y.max(0.);
             let luminance = 0.18 * (sun + sky_lux) / std::f32::consts::PI;
             (luminance.max(1e-6) / (0.18 * 1.2)).log2().clamp(
                 self.auto_exposure.minimum_ev100,
@@ -170,6 +172,7 @@ impl FrameEnvironment {
         });
         BaselineEnvironment {
             sky: sky.map(|(size, pixels, _)| (size, pixels)),
+            sun_lux: ground,
             exposure: crate::settings::exposure_from_ev100(ev100, self.compensation),
             tone_mapper: self.tone_mapper,
         }
@@ -182,6 +185,9 @@ pub struct BaselineEnvironment {
     /// Equirectangular sky radiance in cd/m² (`size`, row-major RGBA), replacing the
     /// `Environment` gradient; `None` keeps the gradient.
     pub sky: Option<([u32; 2], Vec<[f32; 4]>)>,
+    /// Sun illuminance reaching the ground (the physical sky's transmittance
+    /// applied); use it as the raster scene's directional light.
+    pub sun_lux: Vec3,
     /// Linear exposure multiplier for the baseline tone map pass.
     pub exposure: f32,
     /// Display curve.
