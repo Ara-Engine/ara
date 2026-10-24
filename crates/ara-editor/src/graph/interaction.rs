@@ -38,12 +38,12 @@ impl Canvas {
             });
             return;
         }
-        if p[0] > rect.x + rect.w - 150. && p[1] > rect.y + rect.h - 104. {
+        if let Some(map) = self.minimap(rect).filter(|map| map.contains(p[0], p[1])) {
             let bounds = self.bounds();
-            let scale = (120. / bounds.w).min(74. / bounds.h);
+            let scale = ((map.w - 16.) / bounds.w).min((map.h - 16.) / bounds.h);
             let world = [
-                bounds.x + (p[0] - (rect.x + rect.w - 141.)) / scale,
-                bounds.y + (p[1] - (rect.y + rect.h - 95.)) / scale,
+                bounds.x + (p[0] - map.x - 8.) / scale,
+                bounds.y + (p[1] - map.y - 8.) / scale,
             ];
             self.camera.pan = [
                 rect.w * 0.5 - world[0] * self.camera.zoom,
@@ -274,15 +274,15 @@ impl Canvas {
     }
     fn hit_port(&self, p: [f32; 2], rect: Box2) -> Option<(Endpoint, Direction)> {
         for node in self.nodes.iter().rev() {
-            for (port, direction, _) in &node.ports {
+            for pin in &node.ports {
                 let endpoint = Endpoint {
                     node: node.id.clone(),
-                    port: port.clone(),
+                    port: pin.name.clone(),
                 };
                 if let Some(at) = self.port_position(&endpoint, rect)
                     && (at[0] - p[0]).hypot(at[1] - p[1]) < 9.
                 {
-                    return Some((endpoint, *direction));
+                    return Some((endpoint, pin.direction));
                 }
             }
         }

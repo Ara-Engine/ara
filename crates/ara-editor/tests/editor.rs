@@ -640,9 +640,7 @@ fn material_canvas_create_connect_and_keyboard_undo() {
         .unwrap();
     let mut shell = Shell::new(&mut editor, [1440., 900.]).unwrap();
     let mut clipboard = MemoryClipboard::default();
-    shell
-        .click("resource-create-material", &mut clipboard)
-        .unwrap();
+    shell.click("material-empty-new", &mut clipboard).unwrap();
     shell.dispatch(&mut editor).unwrap();
     let doc = editor.state.resource.clone().unwrap();
     let before =

@@ -1507,6 +1507,22 @@ fn build() -> Vec<Spec> {
             },
         ),
         cmd(
+            "animation.view_states",
+            "Animation States",
+            "person-standing",
+            "",
+            "Show the open controller as its state machine.",
+            |s, e, _| s.animation_view(e, false),
+        ),
+        cmd(
+            "animation.view_blends",
+            "Animation Blend Spaces",
+            "layers",
+            "",
+            "Show the open controller's pose and blend graph.",
+            |s, e, _| s.animation_view(e, true),
+        ),
+        cmd(
             "game.client",
             "Show Client",
             "users",

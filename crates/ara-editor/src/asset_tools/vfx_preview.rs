@@ -1,4 +1,5 @@
 //! Offline preview cook/capture worker. Last-good UI images stay live while it runs.
+use super::studio::MASTER;
 use ara_gpu::cooked::{RenderState, Stage};
 use ara_render::{
     capture::{CaptureRequest, ViewMode},
@@ -71,17 +72,66 @@ pub(super) fn cooked(root: &Path, effect: &ara_vfx::Effect) -> anyhow::Result<Pa
     };
     Ok(cooked)
 }
+/// A camera fitted to where the effect's particles actually go. Emitter culling
+/// bounds are deliberately loose, so the CPU reference simulation runs for three
+/// seconds and the 2–98 % extents of live particles (grown by their size) are framed
+/// from a raised front-right 3/4 view, matching model thumbnails.
+pub(crate) fn framing(effect: &ara_vfx::Effect) -> CameraSpec {
+    let fallback = ara_vfx_gpu::View::default().camera;
+    let Ok(mut system) = ara_vfx::CpuSystem::new(effect) else {
+        return fallback;
+    };
+    let hz = effect.hz.max(1);
+    let mut axes = [Vec::new(), Vec::new(), Vec::new()];
+    let mut sizes = Vec::new();
+    for tick in 0..hz * 3 {
+        if system.step(None).is_err() {
+            return fallback;
+        }
+        if tick < hz / 2 || tick % 6 != 0 {
+            continue;
+        }
+        for soa in system.emitters() {
+            for particle in soa.alive.iter().filter_map(|slot| soa.particle(*slot)) {
+                for (axis, value) in axes.iter_mut().zip(particle.position.to_array()) {
+                    axis.push(value);
+                }
+                sizes.push(particle.size);
+            }
+        }
+    }
+    if sizes.is_empty() {
+        return fallback;
+    }
+    let percentile = |values: &mut Vec<f32>, p: f32| {
+        values.sort_by(f32::total_cmp);
+        values[((values.len() - 1) as f32 * p).round() as usize]
+    };
+    let grow = percentile(&mut sizes, 0.9) * 0.5;
+    let mut min = Vec3::ZERO;
+    let mut max = Vec3::ZERO;
+    for (axis, values) in axes.iter_mut().enumerate() {
+        min[axis] = percentile(values, 0.02) - grow;
+        max[axis] = percentile(values, 0.98) + grow;
+    }
+    // Keep the floor contact in view for effects that start at the ground.
+    min.y = min.y.min(0.);
+    CameraSpec::FrameBounds {
+        min,
+        max: max.max(min + Vec3::splat(0.2)),
+        direction: Vec3::new(0.53, 0.41, 0.74),
+        padding: 0.06,
+        vertical_fov: 0.6,
+    }
+}
+
 pub(super) fn capture(root: &Path, effect: &ara_vfx::Effect) -> anyhow::Result<image::RgbaImage> {
     let cooked = cooked(root, effect)?;
     let mut gpu = ara_gpu::vulkan::VulkanDevice::new(&[], root.join(".ara/cache/vfx-preview-gpu"))?;
-    let mut system = ara_vfx_gpu::GpuSystem::new(&mut gpu, effect, &cooked, [384, 384])?;
+    let mut system = ara_vfx_gpu::GpuSystem::new(&mut gpu, effect, &cooked, [MASTER, MASTER])?;
     let request = CaptureRequest {
-        camera: CameraSpec::LookAt {
-            position: Vec3::new(4., 2.8, 5.),
-            target: Vec3::new(0., 1.1, 0.),
-            vertical_fov: 0.75,
-        },
-        size: [384, 384],
+        camera: framing(effect),
+        size: [MASTER, MASTER],
         mode: ViewMode::Lit,
         deterministic: true,
         exposure: 1.,

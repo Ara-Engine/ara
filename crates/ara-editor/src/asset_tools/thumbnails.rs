@@ -1,25 +1,33 @@
 //! Bounded thumbnail queue. Source decoding, Vulkan capture and cache IO stay off-frame.
-use ara_render::{
-    Renderer,
-    capture::{CaptureRequest, ViewMode},
-    scene::{CameraSpec, Material, Scene, Texture},
-};
-use glam::Vec3;
+//! Every preview renders once as a square master (models through `studio`, materials
+//! on a sphere, effects at a fixed tick) and is cached by content; each view gets a
+//! Lanczos resample at its pixel size with rounded corners, so the UI's single-mip
+//! bilinear sampler never minifies more than 2:1.
+use super::studio::{self, MASTER};
+use ara_render::Renderer;
+use image::RgbaImage;
 use std::{
     collections::BTreeSet,
     path::Path,
     sync::mpsc::{self, Receiver, SyncSender},
+    time::Duration,
 };
+
+/// Pixel size of Assets grid tiles: 2× their 64 px logical thumbnail.
+pub(crate) const TILE: u32 = 128;
+/// Longest wait for an in-flight import to publish a model before reporting it.
+const PUBLISH_WAIT: Duration = Duration::from_secs(30);
 
 pub(crate) struct Thumbnail {
     pub key: String,
-    pub image: image::RgbaImage,
+    pub image: RgbaImage,
 }
 struct Request {
     path: String,
     key: String,
     source: Option<Vec<u8>>,
     plane: bool,
+    pixels: u32,
 }
 pub(crate) struct Thumbnails {
     send: SyncSender<Request>,
@@ -34,7 +42,7 @@ impl Thumbnails {
         std::thread::spawn(move || {
             let mut renderer = None;
             for request in rx {
-                let result = match make(
+                let result = match master(
                     &root,
                     &request.path,
                     request.source.as_deref(),
@@ -43,7 +51,7 @@ impl Thumbnails {
                 ) {
                     Ok(image) => Ok(Thumbnail {
                         key: request.key,
-                        image,
+                        image: present(&image, request.pixels),
                     }),
                     Err(error) => Err((request.key, error.to_string())),
                 };
@@ -58,39 +66,50 @@ impl Thumbnails {
             requested: BTreeSet::new(),
         }
     }
+    /// An Assets grid tile, keyed by its project path.
     pub fn request(&mut self, path: &str) {
-        if self.requested.contains(path) {
+        self.enqueue(path, path.into(), None, false, TILE);
+    }
+    /// A larger view of a project asset (import preview), `pixels` square; returns
+    /// its image key. Like live previews it survives browser refreshes as last good.
+    pub fn request_sized(&mut self, path: &str, pixels: u32) -> String {
+        let key = format!("live:{pixels}:{path}");
+        self.enqueue(path, key.clone(), None, false, pixels);
+        key
+    }
+    /// A preview of unsaved source (the material editor's live render); returns its key.
+    pub fn request_live(
+        &mut self,
+        path: &str,
+        source: Vec<u8>,
+        plane: bool,
+        pixels: u32,
+    ) -> String {
+        let key = format!("live:{}:{plane}:{pixels}", ara_asset::Digest::of(&source));
+        self.enqueue(path, key.clone(), Some(source), plane, pixels);
+        key
+    }
+    fn enqueue(
+        &mut self,
+        path: &str,
+        key: String,
+        source: Option<Vec<u8>>,
+        plane: bool,
+        pixels: u32,
+    ) {
+        if self.requested.contains(&key) {
             return;
         }
-        if self
-            .send
-            .try_send(Request {
-                path: path.into(),
-                key: path.into(),
-                source: None,
-                plane: false,
-            })
-            .is_ok()
-        {
-            self.requested.insert(path.to_owned());
+        let request = Request {
+            path: path.into(),
+            key: key.clone(),
+            source,
+            plane,
+            pixels: pixels.clamp(16, MASTER),
+        };
+        if self.send.try_send(request).is_ok() {
+            self.requested.insert(key);
         }
-    }
-    pub fn request_live(&mut self, path: &str, source: Vec<u8>, plane: bool) -> String {
-        let key = format!("live:{}:{}", ara_asset::Digest::of(&source), plane);
-        if !self.requested.contains(&key)
-            && self
-                .send
-                .try_send(Request {
-                    path: path.into(),
-                    key: key.clone(),
-                    source: Some(source),
-                    plane,
-                })
-                .is_ok()
-        {
-            self.requested.insert(key.clone());
-        }
-        key
     }
     pub fn poll(&mut self) -> impl Iterator<Item = Result<Thumbnail, (String, String)>> + '_ {
         self.receive.try_iter().take(8)
@@ -102,13 +121,16 @@ impl Thumbnails {
         self.requested.remove(path);
     }
 }
-fn make(
+
+/// The square master image for a source, from the content-addressed cache when the
+/// source, its import settings and its dependencies are unchanged.
+fn master(
     root: &Path,
     path: &str,
     override_source: Option<&[u8]>,
     plane: bool,
     renderer: &mut Option<Renderer>,
-) -> anyhow::Result<image::RgbaImage> {
+) -> anyhow::Result<RgbaImage> {
     let source = root.join(path).canonicalize()?;
     anyhow::ensure!(
         source.starts_with(root.canonicalize()?),
@@ -128,7 +150,7 @@ fn make(
     if let Ok(value) = ara_json::parse(std::str::from_utf8(&inputs[..source_len]).unwrap_or("")) {
         dependency_bytes(root, source.parent().unwrap_or(root), &value, &mut inputs);
     }
-    inputs.extend(b"ara-thumb-v3-384");
+    inputs.extend(format!("ara-thumb-v4-{MASTER}").as_bytes());
     inputs.push(u8::from(plane));
     let key = ara_asset::Digest::of(&inputs).to_string();
     let cache = root.join(".ara/cache/thumbnails");
@@ -138,120 +160,103 @@ fn make(
         return Ok(image::open(target)?.to_rgba8());
     }
     let extension = source.extension().and_then(|s| s.to_str()).unwrap_or("");
-    let image = if matches!(extension, "png" | "jpg" | "jpeg" | "hdr" | "exr") {
-        let image = image::open(&source)?;
-        image.thumbnail(384, 384).to_rgba8()
-    } else {
-        let mut scene = preview_scene();
-        match extension {
-            "fbx" => scene.meshes = super::cooked_mesh::load(root, path)?,
-            "glb" | "gltf" => {
-                scene
-                    .meshes
-                    .push(crate::world::gltf::load(&source, 1, path.into(), 0)?)
-            }
-            "material" | "graph" => {
-                let text = std::str::from_utf8(&inputs[..source_len])?;
-                // Both views compile the same material AST; cached images are presentation only.
-                let material = if extension == "material" {
-                    ara_material::dsl::parse(text, "gr_preview")
-                        .map_err(|d| anyhow::anyhow!("{d:?}"))?
-                } else {
-                    let mut db = ara_schema::SchemaDb::new();
-                    ara_material::register(&mut db).map_err(|d| anyhow::anyhow!(d.to_string()))?;
-                    let graph =
-                        ara_graph::Graph::read(text, &db).map_err(|d| anyhow::anyhow!("{d:?}"))?;
-                    if graph.header.domain == "vfx" {
-                        let effect = ara_vfx::Effect::from_graph(&graph)
-                            .map_err(|d| anyhow::anyhow!("{d:?}"))?;
-                        let image = super::vfx_preview::capture(root, &effect)?;
-                        image.save(&target)?;
-                        return Ok(image);
-                    }
-                    ara_material::Material::from_graph(&graph)
-                        .map_err(|d| anyhow::anyhow!("{d:?}"))?
-                };
-                let image = super::material_preview::capture(root, &material, plane)?;
-                image.save(&target)?;
-                return Ok(image);
-            }
-            _ => anyhow::bail!("no thumbnail decoder for {extension}"),
+    let image = match extension {
+        "png" | "jpg" | "jpeg" | "hdr" | "exr" => texture(&image::open(&source)?.to_rgba8()),
+        "fbx" => studio::shoot(
+            studio::Subject::clay(super::cooked_mesh::load(root, path)?),
+            renderer,
+            &root.join(".ara/cache/thumbnail-gpu"),
+        )?,
+        "glb" | "gltf" => studio::shoot(
+            studio::Subject::model(&*crate::world::gltf::published(&source, PUBLISH_WAIT)?)?,
+            renderer,
+            &root.join(".ara/cache/thumbnail-gpu"),
+        )?,
+        "material" | "graph" => {
+            let text = std::str::from_utf8(&inputs[..source_len])?;
+            // Both views compile the same material AST; cached images are presentation only.
+            let material = if extension == "material" {
+                ara_material::dsl::parse(text, "gr_preview")
+                    .map_err(|d| anyhow::anyhow!("{d:?}"))?
+            } else {
+                let mut db = ara_schema::SchemaDb::new();
+                ara_material::register(&mut db).map_err(|d| anyhow::anyhow!(d.to_string()))?;
+                let graph =
+                    ara_graph::Graph::read(text, &db).map_err(|d| anyhow::anyhow!("{d:?}"))?;
+                if graph.header.domain == "vfx" {
+                    let effect = ara_vfx::Effect::from_graph(&graph)
+                        .map_err(|d| anyhow::anyhow!("{d:?}"))?;
+                    let image = super::vfx_preview::capture(root, &effect)?;
+                    image.save(&target)?;
+                    return Ok(image);
+                }
+                ara_material::Material::from_graph(&graph).map_err(|d| anyhow::anyhow!("{d:?}"))?
+            };
+            super::material_preview::capture(root, &material, plane)?
         }
-        let mut min = Vec3::splat(f32::INFINITY);
-        let mut max = Vec3::splat(f32::NEG_INFINITY);
-        for vertex in scene.meshes.iter().flat_map(|mesh| &mesh.vertices) {
-            min = min.min(vertex.position.into());
-            max = max.max(vertex.position.into());
-        }
-        anyhow::ensure!(
-            min.is_finite() && max.is_finite(),
-            "thumbnail mesh is empty"
-        );
-        if let Some(renderer) = renderer {
-            renderer.update_geometry(scene)?;
-        } else {
-            *renderer = Some(Renderer::new(
-                scene,
-                [384, 384],
-                &[],
-                root.join(".ara/cache/thumbnail-gpu"),
-            )?);
-        }
-        let renderer = renderer
-            .as_mut()
-            .ok_or_else(|| anyhow::anyhow!("thumbnail renderer missing"))?;
-        renderer
-            .capture(&CaptureRequest {
-                camera: CameraSpec::FrameBounds {
-                    min,
-                    max,
-                    direction: Vec3::new(1., 0.65, 1.6),
-                    padding: 0.12,
-                    vertical_fov: 0.8,
-                },
-                size: [384, 384],
-                mode: ViewMode::Lit,
-                deterministic: true,
-                exposure: 0.0015,
-                settle_frames: 4,
-                tick: 0,
-                seed: 0,
-                marks: None,
-            })?
-            .image
+        _ => anyhow::bail!("no thumbnail decoder for {extension}"),
     };
     image.save(&target)?;
     Ok(image)
 }
-pub(crate) fn preview_scene() -> Scene {
-    Scene {
-        meshes: Vec::new(),
-        materials: vec![Material {
-            base_color: [0.35, 0.48, 0.65, 1.],
-            ..Default::default()
-        }],
-        textures: vec![
-            Texture {
-                size: [1, 1],
-                rgba: vec![255; 4],
-                srgb: false,
-            },
-            Texture {
-                size: [1, 1],
-                rgba: vec![128, 128, 255, 255],
-                srgb: false,
-            },
-        ],
-        lights: Vec::new(),
-        sun_direction: Vec3::new(-0.6, 1., 0.8).normalize(),
-        sun_lux: Vec3::splat(3500.),
-        environment: vec![[0.15, 0.18, 0.24, 1.]],
-        environment_size: [1, 1],
-    }
+
+/// A texture fitted into the square on the studio backdrop; transparent texels show
+/// a quiet checkerboard. Small sources scale up with nearest so pixel art stays sharp.
+fn texture(source: &RgbaImage) -> RgbaImage {
+    let (width, height) = source.dimensions();
+    let largest = width.max(height).max(1);
+    let size = [
+        (width * MASTER / largest).max(1),
+        (height * MASTER / largest).max(1),
+    ];
+    let filter = if largest < MASTER {
+        image::imageops::FilterType::Nearest
+    } else {
+        image::imageops::FilterType::Lanczos3
+    };
+    let fitted = image::imageops::resize(source, size[0], size[1], filter);
+    let offset = [(MASTER - size[0]) / 2, (MASTER - size[1]) / 2];
+    RgbaImage::from_fn(MASTER, MASTER, |x, y| {
+        let backdrop = studio::backdrop(x, y, MASTER);
+        let inside =
+            x >= offset[0] && y >= offset[1] && x < offset[0] + size[0] && y < offset[1] + size[1];
+        if !inside {
+            return backdrop;
+        }
+        let texel = fitted.get_pixel(x - offset[0], y - offset[1]);
+        let check = if (x / 32 + y / 32) % 2 == 0 { 92. } else { 66. };
+        let alpha = f32::from(texel[3]) / 255.;
+        let mix = |c: u8| (f32::from(c) * alpha + check * (1. - alpha)).round() as u8;
+        image::Rgba([mix(texel[0]), mix(texel[1]), mix(texel[2]), 255])
+    })
 }
-/// Stable image resource identity; thumbnail resources use a bounded rotating slot pool.
-pub(crate) fn image_name(slot: usize) -> String {
-    format!("asset-thumbnail-{slot}")
+
+/// Resample a master to `pixels` square with Lanczos and round its corners
+/// (radius 1/16 of the edge, as straight alpha over the backdrop colour).
+pub(super) fn present(master: &RgbaImage, pixels: u32) -> RgbaImage {
+    let mut image = if master.width() == pixels && master.height() == pixels {
+        master.clone()
+    } else {
+        image::imageops::resize(
+            master,
+            pixels,
+            pixels,
+            image::imageops::FilterType::Lanczos3,
+        )
+    };
+    let radius = pixels as f32 / 16.;
+    let edge = pixels as f32;
+    for (x, y, pixel) in image.enumerate_pixels_mut() {
+        let p = [x as f32 + 0.5, y as f32 + 0.5];
+        let corner = [
+            p[0].clamp(radius, edge - radius),
+            p[1].clamp(radius, edge - radius),
+        ];
+        let distance = ((p[0] - corner[0]).powi(2) + (p[1] - corner[1]).powi(2)).sqrt();
+        let coverage = (radius - distance + 0.5).clamp(0., 1.);
+        pixel[3] = (f32::from(pixel[3]) * coverage).round() as u8;
+    }
+    image
 }
 
 fn dependency_bytes(root: &Path, relative: &Path, value: &serde_json::Value, bytes: &mut Vec<u8>) {
@@ -294,5 +299,34 @@ fn dependency_bytes(root: &Path, relative: &Path, value: &serde_json::Value, byt
             }
         }
         _ => {}
+    }
+}
+
+/// Stable image resource identity; thumbnail resources use a bounded rotating slot pool.
+pub(crate) fn image_name(slot: usize) -> String {
+    format!("asset-thumbnail-{slot}")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn present_resamples_and_rounds_only_the_corners() {
+        let master = RgbaImage::from_pixel(MASTER, MASTER, image::Rgba([90, 90, 90, 255]));
+        let tile = present(&master, TILE);
+        assert_eq!(tile.dimensions(), (TILE, TILE));
+        assert_eq!(tile.get_pixel(0, 0)[3], 0, "corner is cut");
+        assert_eq!(tile.get_pixel(TILE / 2, 0)[3], 255, "edges stay opaque");
+        assert_eq!(tile.get_pixel(TILE / 2, TILE / 2)[0], 90);
+    }
+
+    #[test]
+    fn textures_keep_their_aspect_on_the_backdrop() {
+        let wide = RgbaImage::from_pixel(64, 32, image::Rgba([255, 0, 0, 255]));
+        let square = texture(&wide);
+        assert_eq!(square.dimensions(), (MASTER, MASTER));
+        assert_eq!(square.get_pixel(MASTER / 2, MASTER / 2)[0], 255);
+        assert_ne!(square.get_pixel(MASTER / 2, 4)[0], 255, "letterboxed");
     }
 }

@@ -3,6 +3,7 @@
 //! disposable workers.
 pub(crate) mod cooked_mesh;
 mod material_preview;
+mod studio;
 pub(crate) mod thumbnails;
 mod vfx_preview;
 pub(crate) mod vfx_stream;
