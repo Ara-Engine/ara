@@ -263,7 +263,7 @@ impl Verification {
                 )?,
             );
         }
-        crate::shell::icons::install(ui_renderer, editor.state.light, gpu.dpi())?;
+        crate::shell::icons::install(ui_renderer, gpu.dpi())?;
         ui_renderer.render(
             gpu,
             &shell.ui.display,

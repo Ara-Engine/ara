@@ -5,7 +5,9 @@
 //! run as they do for a person. Each click is checked by the state it toggles, with
 //! normal, same-batch and slow-frame timings. Offscreen only; writes
 //! `responsiveness.json` (per-scenario frame costs, UI work counters, GPU UI time,
-//! input-to-present latency and click results).
+//! input-to-present latency and click results). The Play scenario clicks Play and
+//! measures to the first presented frame showing an embedded Game image (cold, then
+//! warm), then clicks Stop.
 use super::*;
 use crate::shell::commands::Target;
 
@@ -48,7 +50,22 @@ enum Act {
     Click(Control, Timing),
     /// The View > Theme rows' command, then frames for it to settle.
     Theme(&'static str),
+    /// Click Play, wait for the first presented Game frame, click Stop.
+    Play,
+    /// Move an entity through a typed command (an Inspector edit), then settle.
+    Edit,
 }
+
+/// A Play attempt in flight.
+struct PlayRun {
+    clicked: Instant,
+    /// When Stop was clicked (`None`: still waiting for the first Game frame).
+    stopping: Option<Instant>,
+    first_frame_ms: Option<f64>,
+    stop_clicked: bool,
+}
+/// How long a Play attempt may take to show its first frame or to stop.
+const PLAY_TIMEOUT: Duration = Duration::from_secs(90);
 
 /// A click in flight.
 struct Pending {
@@ -73,6 +90,11 @@ pub(super) struct Sample {
     pub tick_ms: f64,
     /// Scene re-extraction and geometry upload after document changes.
     pub geometry_ms: f64,
+    /// Of `geometry_ms`: `Editor::view` (resolve), `DocumentView::scene` (extract) and
+    /// `Renderer::update_geometry` (upload).
+    pub view_ms: f64,
+    pub extract_ms: f64,
+    pub upload_ms: f64,
     /// The Scene view's render and overlays (when the frame is dirty).
     pub scene_ms: f64,
     /// Re-rasterizing toolbar icons (theme or DPI changes).
@@ -81,6 +103,8 @@ pub(super) struct Sample {
     pub gpu_ms: f64,
     pub present_ms: f64,
     pub presented: bool,
+    /// A new embedded Game frame was shown (`GameView::update`).
+    pub game_frame: bool,
     pub rebuilds: u32,
     pub rebuild_ms: f64,
     pub mount_ms: f64,
@@ -102,6 +126,8 @@ pub(super) struct Probe {
     hover_targets: Vec<String>,
     samples: Vec<(String, Sample)>,
     clicks: Vec<Value>,
+    play: Option<PlayRun>,
+    plays: Vec<Value>,
 }
 
 impl Probe {
@@ -122,7 +148,14 @@ impl Probe {
             acts.push(Act::Theme("view.theme.light"));
             acts.push(Act::Theme("view.theme.dark"));
         }
+        for _ in 0..6 {
+            acts.push(Act::Edit);
+        }
         acts.push(Act::Idle("idle-after", 120));
+        for _ in 0..3 {
+            acts.push(Act::Play);
+            acts.push(Act::Idle("after-play", 60));
+        }
         Self {
             output: output.into(),
             acts,
@@ -134,6 +167,8 @@ impl Probe {
             hover_targets: Vec::new(),
             samples: Vec::new(),
             clicks: Vec::new(),
+            play: None,
+            plays: Vec::new(),
         }
     }
 
@@ -147,6 +182,8 @@ impl Probe {
             Some(Act::Hover(_)) => "hover".into(),
             Some(Act::Click(control, _)) => format!("click-{control:?}").to_lowercase(),
             Some(Act::Theme(_)) => "theme".into(),
+            Some(Act::Play) => "play".into(),
+            Some(Act::Edit) => "edit".into(),
             None => "done".into(),
         }
     }
@@ -206,9 +243,18 @@ impl Probe {
             }
             Some(Act::Click(control, timing)) => {
                 let (control, timing) = (*control, *timing);
-                let id = target(shell, control)
-                    .ok_or_else(|| format!("responsiveness: no {control:?} control on screen"))?;
-                let point = centre(shell, &id).ok_or("responsiveness: target has no box")?;
+                // A control can be between layouts for a frame (a rebuild in flight):
+                // try again next frame, and fail only if it never shows.
+                let Some(point) = target(shell, control).and_then(|id| centre(shell, &id)) else {
+                    if self.age > 30 {
+                        return Err(format!(
+                            "responsiveness: no {control:?} control on screen ({:?})",
+                            target(shell, control)
+                        )
+                        .into());
+                    }
+                    return Ok(());
+                };
                 push(events, motion(at(point)));
                 push(events, button(true));
                 let same = matches!(timing, Timing::SameBatch | Timing::SlowBefore);
@@ -225,6 +271,53 @@ impl Probe {
                     injected: Instant::now(),
                     released: same,
                 });
+            }
+            Some(Act::Play) => {
+                let target = match &mut self.play {
+                    None => Some("play"),
+                    Some(run) if run.stopping.is_some() && !run.stop_clicked => {
+                        run.stop_clicked = true;
+                        Some("stop")
+                    }
+                    _ => None,
+                };
+                if let Some(id) = target {
+                    let point = centre(shell, id)
+                        .ok_or_else(|| format!("responsiveness: no `{id}` button"))?;
+                    push(events, motion(at(point)));
+                    push(events, button(true));
+                    push(events, button(false));
+                    self.injected = Some(Instant::now());
+                    if self.play.is_none() {
+                        self.play = Some(PlayRun {
+                            clicked: Instant::now(),
+                            stopping: None,
+                            first_frame_ms: None,
+                            stop_clicked: false,
+                        });
+                    }
+                }
+            }
+            Some(Act::Edit) if self.age == 0 => {
+                let entity = crate::world::resolve(editor.host.store(), &editor.state.doc)
+                    .map_err(|d| format!("{d:?}"))?
+                    .into_iter()
+                    .find(|(_, e)| {
+                        e.record.contains_key("Transform") && e.record.contains_key("MeshRenderer")
+                    })
+                    .map(|(id, _)| id)
+                    .ok_or("responsiveness: no mesh entity to edit")?;
+                self.injected = Some(Instant::now());
+                let y = if self.index.is_multiple_of(2) {
+                    0.25
+                } else {
+                    0.0
+                };
+                editor.apply(
+                    vec![json!({"cmd": "property.set", "args": {"entity": entity, "path": "Transform.position", "value": [0.0, y, 0.0]}})],
+                    "Probe edit",
+                    None,
+                )?;
             }
             Some(Act::Theme(command)) if self.age == 0 => {
                 self.injected = Some(Instant::now());
@@ -246,9 +339,31 @@ impl Probe {
         if sample.presented {
             sample.input_to_present_ms = self.injected.map(|t| t.elapsed().as_secs_f64() * 1000.);
         }
+        let game_frame = sample.game_frame;
         self.samples.push((self.label(), sample));
         if std::mem::take(&mut self.sleep_after) {
             std::thread::sleep(SLOW);
+        }
+        if let Some(run) = &mut self.play {
+            if run.stopping.is_none() && (game_frame || run.clicked.elapsed() > PLAY_TIMEOUT) {
+                if game_frame {
+                    run.first_frame_ms = Some(run.clicked.elapsed().as_secs_f64() * 1000.);
+                }
+                run.stopping = Some(Instant::now());
+            } else if let Some(stopping) = run.stopping
+                && run.stop_clicked
+                && (editor.state.playing.is_none() || stopping.elapsed() > PLAY_TIMEOUT)
+            {
+                self.plays.push(json!({
+                    "attempt": self.plays.len() + 1,
+                    "clickToFirstGameFrameMs": run.first_frame_ms,
+                    "stopMs": editor.state.playing.is_none()
+                        .then(|| stopping.elapsed().as_secs_f64() * 1000.),
+                }));
+                self.play = None;
+                self.advance();
+            }
+            return;
         }
         if let Some(pending) = &self.pending {
             let now = signature(editor, shell, pending.control);
@@ -271,8 +386,10 @@ impl Probe {
         self.age += 1;
         let done = match self.acts.get(self.index) {
             Some(Act::Idle(_, frames) | Act::Hover(frames)) => self.age >= *frames,
-            Some(Act::Theme(_)) => self.age >= 8,
-            _ => true,
+            Some(Act::Theme(_) | Act::Edit) => self.age >= 8,
+            // A click's target was not on screen yet (`inject` retries, then fails).
+            Some(Act::Click(..) | Act::Play) => false,
+            None => true,
         };
         if done {
             self.advance();
@@ -332,6 +449,7 @@ impl Probe {
         let landed = self.clicks.iter().filter(|c| c["ok"] == true).count();
         let report = json!({
             "clicks": {"total": self.clicks.len(), "landed": landed, "each": self.clicks},
+            "play": self.plays,
             "scenarios": scenarios,
             "frames": self.samples.iter().map(|(name, s)| json!({"scenario": name, "sample": s})).collect::<Vec<_>>(),
             "device": device,

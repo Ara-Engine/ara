@@ -543,7 +543,7 @@ impl Verification {
         }
         editor.action("editor.theme", json!({"light":false}))?;
         shell.rebuild(editor)?;
-        crate::shell::icons::install(ui, editor.state.light, gpu.dpi())?;
+        crate::shell::icons::install(ui, gpu.dpi())?;
         Ok(())
     }
     fn material_interaction(
