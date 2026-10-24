@@ -15,11 +15,20 @@ entry remains supported.
 `check --no-compiler-cache` (also supported by `merge`) clears `RUSTC_WRAPPER`
 for child Cargo commands, preserving clippy's workspace wrapper. This uses
 [Cargo's documented empty-wrapper override](https://doc.rust-lang.org/cargo/reference/environment-variables.html).
-It leaves the shared cache server and other builds running. On this contended
+The Windows entry script also bypasses its bootstrap wrapper for this flag and
+restores the caller's environment. It leaves the shared cache server and other builds running. On this contended
 machine, a tiny optimized library probe took 20.70 seconds through sccache and
 1.02 seconds with direct Rust. The flag is opt-in; ordinary commands retain the
 caller's wrapper configuration. JSON reports include `compiler_cache_bypassed`
 and total `elapsed_seconds`, including selection and hygiene, excluding bootstrap.
+
+On 2026-10-24, a real entry-script change against `3cdff693` selected only ara-dev.
+The warm gate passed in 70.69 seconds (77.97 seconds including bootstrap), with
+formatting 10.70s, strict clippy 1.22s and tests 50.08s: 14 unit, nine CLI and two
+GPU-queue tests passed. A deliberately invalid caller RUSTC_WRAPPER verified the
+bootstrap bypass, and the script restored it afterwards. CARGO_BUILD_JOBS was 2.
+The initial 33-package cold cache fill reached the 40-minute deadline while
+compiling tests; it was reported as a timeout, with no test execution claimed.
 
 Cargo 1.99 can reuse intermediate artifacts through `CARGO_BUILD_BUILD_DIR` while
 keeping final executables in each worktree's local target directory. Prefer this
