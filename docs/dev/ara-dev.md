@@ -39,6 +39,13 @@ file matched no failures. The working tree stayed unchanged and no pending
 snapshots remained. The all-target workspace check also passed in 281.96 seconds.
 Jobs were 2 and tests ran serially throughout.
 
+After main integrated that implementation as `24a0ea8d`, this branch merged the
+current tip as `5979db15`. The default gate passed again in 14.60 seconds, selecting
+zero crates because only documentation remained different from main. The tracked
+Cargo configuration retains rust-lld together with both relative scratch-profile
+and crash-directory environment settings. This check did not rerun the 182
+harnesses reported above.
+
 A fresh renderer example build then captured every view mode through the real
 machine GPU queue on the RTX 4070 SUPER, with validation clean. The 640x360 lit
 image was visually inspected (material rows, glass, model, floor and shadows).
