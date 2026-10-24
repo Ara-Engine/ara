@@ -25,6 +25,25 @@ use std::{
     time::{Duration, Instant},
 };
 
+/// An import document as [`Assets::synchronize_imports`] reads it: the sidecar path,
+/// the asset ID and the settings record.
+pub type ImportDoc = (String, String, ara_doc::Record);
+
+/// The import documents of `workspace`, collected on the host thread so a pipeline
+/// built elsewhere can apply them ([`Assets::synchronize_imports`]).
+pub fn import_docs(workspace: &ara_doc::Workspace) -> Result<Vec<ImportDoc>, String> {
+    workspace
+        .docs()
+        .filter(|(_, doc)| doc.kind == "import")
+        .map(|(path, doc)| {
+            let record = doc
+                .record("i_settings")
+                .ok_or_else(|| format!("{path}: missing import settings"))?;
+            Ok((path.to_owned(), doc.id.to_string(), record.clone()))
+        })
+        .collect()
+}
+
 /// The owner's import pipeline and the latest published generation per asset.
 pub struct Assets {
     pipeline: AssetPipeline,
@@ -234,19 +253,25 @@ impl Assets {
         if self.revision == Some(revision) {
             return Ok(());
         }
+        self.synchronize_imports(import_docs(workspace)?, revision)
+    }
+
+    /// [`Self::synchronize`] from import documents collected at `revision` (the
+    /// pipeline's build thread applies the first set).
+    pub fn synchronize_imports(
+        &mut self,
+        imports: Vec<ImportDoc>,
+        revision: u64,
+    ) -> Result<(), String> {
         let mut current = BTreeMap::new();
-        for (path, doc) in workspace.docs().filter(|(_, doc)| doc.kind == "import") {
-            let record = doc
-                .record("i_settings")
-                .ok_or_else(|| format!("{path}: missing import settings"))?;
+        for (path, id, record) in imports {
             let source = path
                 .strip_suffix(".import.json")
                 .ok_or_else(|| format!("{path}: import document must name a sidecar"))?;
-            let id = doc.id.to_string();
-            let configuration = (source.to_owned(), record.clone());
+            let configuration = (source.to_owned(), record);
             if self.configurations.get(&id) != Some(&configuration) {
                 let mut settings: ImportSettings =
-                    serde_json::from_value(serde_json::Value::Object(record.clone()))
+                    serde_json::from_value(serde_json::Value::Object(configuration.1.clone()))
                         .map_err(|e| format!("{path}: {e}"))?;
                 self.sources.insert(id.clone());
                 if let Some(installed) = self.installed.get(&settings.importer) {
