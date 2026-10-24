@@ -707,14 +707,19 @@ fn exterior(ctx: &Ctx, models: &Models, ground: &Ground) -> Result<()> {
     s.entity(
         "e_env",
         "Dusk sky",
-        json!({"Environment": {"sky": [0.16, 0.22, 0.42, 1], "horizon": [1.0, 0.56, 0.32, 1], "ground": [0.16, 0.12, 0.09, 1], "intensity": 420, "exposure": 0.0028}}),
+        json!({
+            "Environment": {"sky": [0.16, 0.22, 0.42, 1], "horizon": [1.0, 0.56, 0.32, 1], "ground": [0.16, 0.12, 0.09, 1], "intensity": 420, "exposure": 0.0028},
+            "SkyAtmosphere": {"aerosols": 1.5, "cloudCoverage": 0.12},
+            "HeightFog": {"density": 0.0012, "falloff": 30, "albedo": [0.92, 0.86, 0.78, 1], "anisotropy": 0.5},
+            "PostProcess": {"compensation": -0.5, "bloom": 0.05}
+        }),
     );
-    let sun_toward = Vec3::new(-0.93, 0.05, 0.36).normalize();
+    let sun_toward = Vec3::new(-0.9302, 0.0698, 0.3601).normalize();
     s.commands.extend(light(
         "e_sun",
         "Setting sun",
         Vec3::new(96.0, 40.0, 96.0),
-        json!({"kind": "directional", "color": [1.0, 0.62, 0.4, 1], "intensity": 7000}),
+        json!({"kind": "directional", "color": [1.0, 0.958, 0.896, 1], "intensity": 24000}),
         Some(-sun_toward),
     ));
     s.entity(
