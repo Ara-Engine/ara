@@ -5,7 +5,8 @@ use ara_runtime::{
     extract::{Draw, RenderFrame},
     material::MaterialAsset,
 };
-use ara_texture_stream::{NativeConfig, NativeResidency};
+pub use ara_texture_stream::NativeConfig;
+use ara_texture_stream::NativeResidency;
 use sha2::{Digest, Sha256};
 use std::{collections::BTreeMap, sync::Arc};
 

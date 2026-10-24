@@ -34,6 +34,7 @@ fn editor_document_uses_runtime_surface_effect_and_light_extraction() {
         &mut library,
         &ara_runtime::assets::MemoryAssets::default(),
         None,
+        &Default::default(),
     )
     .unwrap();
     assert_eq!(frame.draws.len(), 1);
@@ -50,4 +51,20 @@ fn editor_document_uses_runtime_surface_effect_and_light_extraction() {
     assert_eq!(frame.lights[0].position, [3.0, 4.0, 5.0]);
     assert_eq!(frame.environment.intensity, 42.0);
     assert_eq!(frame.camera.unwrap().fov, 62.0);
+
+    let hidden = std::collections::BTreeSet::from(["e_actor".to_owned()]);
+    let frame = document_frame(
+        &entities,
+        &transforms,
+        &ara_doc::Workspace::default(),
+        &mut library,
+        &ara_runtime::assets::MemoryAssets::default(),
+        None,
+        &hidden,
+    )
+    .unwrap();
+    assert!(frame.draws.is_empty());
+    assert!(frame.lights.is_empty());
+    assert!(frame.effects.is_empty());
+    assert!(frame.camera.is_none());
 }

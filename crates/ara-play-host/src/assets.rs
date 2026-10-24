@@ -31,6 +31,7 @@ pub struct Assets {
     installed: BTreeMap<String, String>,
     configurations: BTreeMap<String, (String, ara_doc::Record)>,
     revision: Option<u64>,
+    published: crate::published::Publisher,
     /// Cache directory shared with players.
     pub cache: PathBuf,
 }
@@ -63,6 +64,7 @@ impl Assets {
         ara_asset::register_schema(&mut schema);
         let cache = FileCache::new(root).map_err(|e| e.to_string())?;
         let cache_dir = cache.root().to_path_buf();
+        let published = crate::published::Publisher::new(root, cache.clone())?;
         let mut pipeline = AssetPipeline::new(
             root,
             ProcessWorker::new(worker),
@@ -153,6 +155,7 @@ impl Assets {
             installed,
             configurations: BTreeMap::new(),
             revision: None,
+            published,
             cache: cache_dir,
         })
     }
@@ -239,6 +242,7 @@ impl Assets {
             self.failures.remove(id);
         }
         self.configurations = current;
+        self.published.retain(&self.sources);
         self.revision = Some(revision);
         Ok(())
     }
@@ -264,9 +268,12 @@ impl Assets {
             }
         }
         self.pipeline.reload.allow_during_play = allow;
-        self.pipeline
+        let changes = self
+            .pipeline
             .apply_boundary(true, playing, &BTreeSet::new())
-            .unwrap_or_default()
+            .unwrap_or_default();
+        self.published.complete(&changes, &self.pipeline.reload);
+        changes
     }
 
     /// Published source generations (hex digests), waiting up to `timeout` for

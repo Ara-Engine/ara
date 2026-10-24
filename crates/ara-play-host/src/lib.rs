@@ -9,6 +9,8 @@ pub mod assets;
 mod keep;
 pub mod params;
 pub mod pool;
+mod published;
+pub use published::{PublishedAssets, PublishedGeneration, PublishedSnapshot};
 mod scripts;
 mod spec;
 

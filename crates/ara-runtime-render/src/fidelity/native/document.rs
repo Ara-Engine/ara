@@ -11,6 +11,7 @@ use ara_runtime::{
 };
 use bevy_ecs::{component::Component, world::World};
 use serde::de::DeserializeOwned;
+use std::collections::BTreeSet;
 
 /// Extracts resolved editor entities with runtime model selection, materials,
 /// lights and VFX semantics. `transforms` contains complete preview world matrices,
@@ -19,6 +20,7 @@ use serde::de::DeserializeOwned;
 /// The caller retains `library` to reuse decoded models and native materials.
 /// Pass `terrain` only when its manifest, foliage and world translation still match;
 /// this reuses the evaluated generation during unrelated inspector edits/gestures.
+/// `hidden` filters editor visibility without changing the complete parent transforms.
 pub fn document_frame(
     entities: &Resolved,
     transforms: &BTreeMap<String, glam30::Mat4>,
@@ -26,9 +28,13 @@ pub fn document_frame(
     library: &mut Library,
     source: &dyn AssetSource,
     terrain: Option<&TerrainState>,
+    hidden: &BTreeSet<String>,
 ) -> Result<RenderFrame> {
     let mut world = World::new();
     for (address, row) in entities {
+        if hidden.contains(address) {
+            continue;
+        }
         let matrix = transforms
             .get(address)
             .context("editor world transform missing")?;
