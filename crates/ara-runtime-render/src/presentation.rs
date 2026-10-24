@@ -39,6 +39,32 @@ mod live;
 mod published;
 
 impl Presenter {
+    /// Timestamp results from the active view, excluding readback and display transfers.
+    pub fn pass_timings(&self) -> &[ara_gpu::vulkan::PassTiming] {
+        if let Some(live) = &self.live {
+            live.view.timings()
+        } else {
+            self.renderer
+                .as_ref()
+                .map_or(&[], |renderer| renderer.timings())
+        }
+    }
+
+    /// Development shader provenance for a completed frame.
+    pub fn shader_status(&self) -> ara_gpu::vulkan::ShaderStatus {
+        self.renderer
+            .as_ref()
+            .map(|renderer| renderer.gpu().shader_status())
+            .unwrap_or_default()
+    }
+
+    /// Queue a shader replacement without blocking this frame on the driver compiler.
+    pub fn reload_shaders(&mut self) {
+        if let Some(renderer) = &mut self.renderer {
+            renderer.gpu_mut().request_shader_reload();
+        }
+    }
+
     /// Selects a user override, or the project's setting when no override exists.
     /// Auto chooses the hardware preset; unsupported RT presets explicitly resolve to Low.
     pub fn set_quality(&mut self, quality: QualityChoice) {

@@ -60,6 +60,7 @@ reports/         HTML reports published to Snist
 - `cargo clippy -p <crate> --all-targets`: no new warnings.
 - `cargo test -p <crate>`: tests for the crates you touched.
 - `cargo fmt --all`
+- Performance inner loop: `cargo run -p ara-dev -- perf` plus touched-crate checks/tests; run the full `ara-dev check` at commit checkpoints. Shader/live controls: `docs/dev/ara-dev.md`.
 - Before reporting done: `cargo run -p ara-dev -- check` (`--base <ref>`, `--json`, explicit `--known-failures <file>`); set `CARGO_BUILD_JOBS=2` on this shared PC.
 - Fast Windows entry: `.\crates\ara-dev\run.ps1 check --no-compiler-cache` bypasses a contended compiler-cache server; `--plan --json` previews selection; affected gates have a 40-minute deadline.
 - Integrate: `cargo run -p ara-dev -- merge <branch>` (`--push` opts in; `--full` for nightly gates).

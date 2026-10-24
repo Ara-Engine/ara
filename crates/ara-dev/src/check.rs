@@ -382,9 +382,7 @@ pub(crate) fn run(root: &Path, options: Options<'_>) -> Result<bool> {
         let mut tests = selection("test", affected, whole_workspace);
         tests.extend(["--locked".into(), "--no-fail-fast".into()]);
         let tests_ready = if clippy_passed {
-            if let Some(paths) =
-                crate::binaries::prepare(root, &metadata, affected, &tests, &mut logs)?
-            {
+            if let Some(paths) = crate::binaries::prepare(root, &tests, &mut logs)? {
                 logs.test_binaries = paths;
                 true
             } else {

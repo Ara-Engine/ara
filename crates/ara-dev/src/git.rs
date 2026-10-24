@@ -57,6 +57,24 @@ pub(crate) fn paths(bytes: &[u8]) -> Result<Vec<PathBuf>> {
         .collect()
 }
 
+/// Rust opens native/extended Windows paths; Git hashes the inherited file without path translation.
+pub(crate) fn hash_file(root: &Path, path: &Path) -> Result<String> {
+    let result = Command::new("git")
+        .current_dir(root)
+        .args(["hash-object", "--stdin"])
+        .stdin(Stdio::from(
+            std::fs::File::open(path).with_context(|| format!("open {}", path.display()))?,
+        ))
+        .output()
+        .context("hash measured artifact")?;
+    ensure!(
+        result.status.success(),
+        "git hash failed: {}",
+        String::from_utf8_lossy(&result.stderr)
+    );
+    Ok(String::from_utf8(result.stdout)?.trim().to_owned())
+}
+
 pub(crate) fn files(root: &Path) -> Result<Vec<PathBuf>> {
     paths(&bytes(
         root,
@@ -211,6 +229,32 @@ impl TreeState {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn artifact_hashes_support_canonical_windows_paths() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let target = std::env::var_os("CARGO_TARGET_DIR")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| root.join("target"));
+        let directory = target.join("ara-dev/hash-tests");
+        std::fs::create_dir_all(&directory).unwrap();
+        let file = directory.join(format!("artifact-{}.bin", std::process::id()));
+        std::fs::write(&file, b"native-path artifact\0\xff\n").unwrap();
+        let expected = text(
+            file.parent().unwrap(),
+            [
+                OsStr::new("hash-object"),
+                OsStr::new("--no-filters"),
+                file.file_name().unwrap(),
+            ],
+        )
+        .unwrap();
+        assert_eq!(hash_file(&root, &file).unwrap(), expected);
+        assert_eq!(
+            hash_file(&root, &file.canonicalize().unwrap()).unwrap(),
+            expected
+        );
+    }
 
     #[test]
     fn clean_tree_comparison_detects_same_status_but_changed_content() {

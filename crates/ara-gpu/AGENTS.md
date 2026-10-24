@@ -25,6 +25,10 @@ Owns the native GPU boundary. Vulkan uses ash revision
 - `cooked`: versioned descriptions, artifact hashes, ABI fingerprint, JSON writer.
   `resource_dir` finds executable-relative installed shaders before checkout data;
   a distribution with engine.json never silently falls back to checkout shaders.
+- Development `ARA_SHADER_DIR=<workspace>` overrides cooked resources; a flat
+  cohort uses `ARA_SHADER_PACKAGE`. Background cohort reload publishes stable
+  handles at submission boundaries, with deferred retirement and last-good fallback.
+  `VulkanDevice::{request_shader_reload,shader_epoch,shader_status}` exposes control/provenance.
 - `shared` (portable): cross-process shared surfaces (D19 embedded Play). `SLOTS` = 3,
   `SurfaceDesc`/`SlotDesc`/`DeviceIdentity` (JSON, camelCase), `Frame`, `FrameReady`,
   producer `Ring`, owner `Mailbox`, `SharedSurface` (owned NT handles:

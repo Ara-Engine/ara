@@ -1,4 +1,4 @@
-//! Local integration and machine hygiene commands; no daemon or engine startup.
+//! Local integration gates, performance iteration and machine hygiene commands.
 #![cfg_attr(test, allow(clippy::unwrap_used))]
 
 mod binaries;
@@ -10,6 +10,7 @@ mod hygiene;
 mod known;
 mod manifest;
 mod merge;
+mod perf;
 mod platform;
 mod process;
 mod selection;
@@ -32,6 +33,8 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
+    /// Build and measure a frozen packed scene, or control a warm perf session.
+    Perf(perf::Options),
     /// Check changed crates and their reverse dependencies before handing off work.
     Check {
         #[arg(long, default_value = "main")]
@@ -113,6 +116,7 @@ fn run() -> Result<bool> {
         ["rev-parse", "--show-toplevel"],
     )?);
     match cli.command {
+        Command::Perf(options) => perf::run(&root, options),
         Command::Check {
             base,
             json,
