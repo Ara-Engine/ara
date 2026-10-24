@@ -66,9 +66,18 @@ void ssrTraceMain(uint3 tid:SV_DispatchThreadID){
             float3 hitWorld=ssrWorldAt(f,floor(at.xy)+0.5,pixel(f.extra.x,int2(at.xy)).x);
             float4 h=mul(f.previousVp,float4(hitWorld,1));float2 uv=float2(h.x/h.w*0.5+0.5,0.5-h.y/h.w*0.5);
             if(h.w>0 && all(uv>0) && all(uv<1)){
-                float level=saturate(roughness/max(l.ssr.x,1e-3))*3;uint lo=uint(level);
-                float3 colour=lerp(ssrLevel(f,l,lo+1,uv),ssrLevel(f,l,min(lo+2,4),uv),frac(level));
-                float2 edge=min(uv,1-uv)*8;float fade=saturate(min(edge.x,edge.y))*(1-saturate((roughness/l.ssr.x-0.7)/0.3));
+                // Cone footprint: the GGX lobe (half-angle ~ alpha) spreads over twice
+                // the travelled distance times alpha at the hit; its projected size in
+                // pixels picks the pyramid level (level k texels span 2^k pixels).
+                // Lobes wider than the pyramid fade to the prefiltered environment.
+                float alpha=roughness*roughness,footprint=2*length(hitWorld-world.xyz)*alpha;
+                float3 toHit=normalize(hitWorld-f.camera.xyz);
+                float3 side=normalize(cross(toHit,abs(toHit.y)<0.99?float3(0,1,0):float3(1,0,0)));
+                float pixels=length(ssrProject(f,hitWorld+side*footprint).xy-ssrProject(f,hitWorld).xy);
+                float level=clamp(log2(max(pixels,2)),1,4);uint lo=uint(level);
+                float3 colour=lerp(ssrLevel(f,l,lo,uv),ssrLevel(f,l,min(lo+1,4),uv),frac(level));
+                float2 edge=min(uv,1-uv)*8;
+                float fade=saturate(min(edge.x,edge.y))*saturate(5-log2(max(pixels,1)))*(1-saturate((roughness/l.ssr.x-0.7)/0.3));
                 result=float4(colour,fade);
             }
         }

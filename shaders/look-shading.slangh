@@ -107,7 +107,7 @@ float4 screenReflection(Frame f,Look l,int2 p){
 // forward surfaces search the probes directly.
 float3 ibl(Frame f,Look l,Surface s,float3 world,float3 v,int2 p,bool gathered) {
     uint irradiance=physicalSky(l)?l.sampled1.x:f.lighting.x,prefilter=physicalSky(l)?l.sampled1.y:f.lighting.y;
-    float nv=saturate(dot(s.normal,v));float3 F=fresnel(nv,lerp(float3(0.04),s.albedo,s.metal));
+    float nv=saturate(dot(s.normal,v));float3 f0=lerp(float3(0.04),s.albedo,s.metal);
     float3 reflected=reflect(-v,s.normal);float2 uv=environmentUv(reflected);float level=s.roughness*4;float low=floor(level);float high=min(low+1,4);
     float3 spec=lerp(envTex(prefilter,float2(uv.x,(uv.y*127+0.5+low*128)/640)).rgb,envTex(prefilter,float2(uv.x,(uv.y*127+0.5+high*128)/640)).rgb,frac(level));
     float3 ambient=envTex(irradiance,environmentUv(s.normal)).rgb;
@@ -122,11 +122,15 @@ float3 ibl(Frame f,Look l,Surface s,float3 world,float3 v,int2 p,bool gathered) 
         spec=lerp(spec,lerp(spec*occlusion,specularGi/PI,s.roughness),coverage);
     }
     if(gathered){float4 r=screenReflection(f,l,p);spec=lerp(spec,r.rgb,r.a);}
-    float3 diffuse=ambient*s.albedo*(1-s.metal)*(1-s.transmission)*(1-F)/PI*multiBounce(s.ao,s.albedo);
-    // Analytic split-sum environment BRDF fit (Lazarov, Epic 2014).
+    // Analytic split-sum environment BRDF fit (Lazarov, Epic 2014). Its scale and
+    // bias already integrate Fresnel over the lobe, so they take F0: Fresnel at
+    // the view angle would make rough surfaces mirror-bright at grazing angles.
     float4 r=s.roughness*float4(-1,-0.0275,-0.572,0.022)+float4(1,0.0425,1.04,-0.04);
     float a004=min(r.x*r.x,exp2(-9.28*nv))*r.x+r.y;float2 ab=float2(-1.04,1.04)*a004+r.zw;
-    return diffuse+spec*(F*ab.x+ab.y)*specularOcclusion(nv,s.ao,s.roughness);
+    float3 specularAlbedo=f0*ab.x+ab.y;
+    // Diffuse keeps the energy the specular lobe does not reflect.
+    float3 diffuse=ambient*s.albedo*(1-s.metal)*(1-s.transmission)*(1-specularAlbedo)/PI*multiBounce(s.ao,s.albedo);
+    return diffuse+spec*specularAlbedo*specularOcclusion(nv,s.ao,s.roughness);
 }
 // Linear HDR radiance leaving `world` towards the camera (before fog and exposure).
 // `gathered`: deferred G-buffer pixels read the half-resolution probe gather.
