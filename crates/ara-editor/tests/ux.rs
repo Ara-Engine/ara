@@ -943,3 +943,61 @@ fn camera_menu_and_toolbar_field_set_the_scene_field_of_view() {
         .unwrap_err();
     assert!(blocked.to_string().contains("no Camera component"), "{blocked}");
 }
+
+/// Build Current Profile: the default Windows profile is made by a command (the
+/// canonical export preset, runtime player, no machine paths); a project with a C#
+/// module is blocked with the shipping-host reason, for people and agents alike.
+#[test]
+fn build_profile_comes_from_a_command_and_csharp_modules_block_with_the_reason() {
+    use ara_editor::shell::commands::Target;
+    let project = Project::new();
+    let mut editor = Editor::open(&project.0).unwrap();
+    let mut shell = Shell::new(&mut editor, [1440., 900.]).unwrap();
+    let run = shell
+        .run_command(&mut editor, "build.run", &Target::None)
+        .unwrap_err();
+    assert!(run.to_string().contains("Build the project first"), "{run}");
+
+    shell
+        .run_command(&mut editor, "build.profile.create", &Target::None)
+        .unwrap();
+    let text = std::fs::read_to_string(project.0.join("presets/windows.export.json")).unwrap();
+    let preset = ara_export::ExportPreset::from_text(&text).unwrap();
+    assert_eq!(preset.platform, ara_export::Platform::Windows);
+    assert_eq!(
+        preset.player_template,
+        ara_export::preset::PlayerTemplate::Runtime
+    );
+    assert!(preset.templates.is_empty(), "pinned at build time, not here");
+    assert!(preset.script_project.is_empty());
+    assert!(
+        shell
+            .run_command(&mut editor, "build.profile.create", &Target::None)
+            .is_err(),
+        "an existing profile is never overwritten"
+    );
+
+    std::fs::create_dir_all(project.0.join("scripts/Game")).unwrap();
+    std::fs::write(
+        project.0.join("scripts/Game/ara.module.toml"),
+        "name = \"Game\"\n",
+    )
+    .unwrap();
+    let blocked = shell
+        .run_command(&mut editor, "build.current", &Target::None)
+        .unwrap_err()
+        .to_string();
+    assert!(blocked.contains("shipping script host"), "{blocked}");
+    assert!(blocked.contains("scripts/Game"), "{blocked}");
+    let commands = editor.action("editor.commands", json!({})).unwrap();
+    let current = commands["commands"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|c| c["id"] == "build.current")
+        .unwrap();
+    assert_eq!(current["enabled"], false);
+    // The window may say it before running (`Title: reason`) or when run.
+    let reason = current["disabledReason"].as_str().unwrap();
+    assert!(blocked.ends_with(reason), "{blocked} / {reason}");
+}

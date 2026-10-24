@@ -286,7 +286,13 @@ impl EditorService {
                 logs: crate::shell::LogView::default(),
                 assets_show_all: false,
                 game: (true, "free", false),
-                build: (false, false),
+                // The window's build job is not visible here; the project's state is.
+                build: crate::shell::commands::BuildState {
+                    blocker: crate::shell::build::project_blocker(cx.root()),
+                    running: false,
+                    built: false,
+                    profile: !crate::shell::build::presets(cx.root()).is_empty(),
+                },
             };
             return Ok(json!({"commands": export(&cx, &keymap(state))}));
         }

@@ -83,6 +83,7 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
         eprintln!("Verification extent {physical:?}; logical {logical:?}; DPI {dpi}");
     }
     let mut shell = Shell::new(&mut editor, logical)?;
+    shell.offscreen = offscreen;
     let mut view = editor.view()?;
     let viewport = shell.viewport().unwrap_or(ara_ui::paint::Box2 {
         x: 0.,

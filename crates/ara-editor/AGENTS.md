@@ -132,8 +132,13 @@ Game view (D19): `app/game.rs` imports the play host's shared surfaces
 (`PlayService::surfaces`, taken in `Editor::open`) and shows texture `game-view`;
 `game_input` forwards keys/mouse to the selected client while captured (Esc
 releases); a faulted world (`play.status`) shows its fault with Restart/Stop
-instead of "Starting Play…". Play embeds unless `play.inGameView` is off. Build: `shell/build.rs`
-runs ara-export with `presets/*.export.json` on a thread.
+instead of "Starting Play…". Play embeds unless `play.inGameView` is off.
+Build (`shell/build.rs`): `build.current` exports the main scene with the first
+`presets/*.export.json` (else `build.profile.create` writes the portable Windows
+runtime profile) into `builds/<profile>-<time>/build` on a thread; the runtime
+template (ara-player.exe + PDB beside the editor, cooked shaders) is zipped and
+pinned under `.ara/export/` each build. `build.run` launches it (offscreen: headless,
+one tick, `run.png`). C# modules block it until the shipping host lands (ARA4505).
 Bounded runs are offscreen (`Options::offscreen`: hidden windows, UI readback);
 never add a capture route that shows a window. `--verify-journey` captures the
 journey (`app/journey.rs`) and writes `journey.json` after every step.
