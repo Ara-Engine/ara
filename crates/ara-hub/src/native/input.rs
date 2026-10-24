@@ -15,6 +15,58 @@ use std::{
     sync::mpsc::{self, Receiver, Sender},
 };
 
+/// Reject one malformed native event without unwinding the window loop.
+pub(super) fn recover<T>(result: ara_ui::Result<T>) -> Option<T> {
+    result
+        .map_err(|error| {
+            let message = error.to_string();
+            let code = message
+                .split(':')
+                .next()
+                .and_then(ara_diag::Code::parse)
+                .unwrap_or(ara_diag::codes::IO);
+            eprintln!("{code}: Dropped Hub input event: {message}");
+            ara_diag::Diagnostic::warning(code, format!("Dropped Hub input event: {message}"))
+                .emit();
+        })
+        .ok()
+}
+
+/// The SDL edit delivery seam, also used by windowless input regression tests.
+pub(crate) fn deliver_edit(
+    composing: &mut bool,
+    ui: &mut Ui,
+    input: &mut InputState,
+    edit: EditEvent,
+    clipboard: &mut dyn Clipboard,
+) -> bool {
+    let result = (|| -> ara_ui::Result<()> {
+        match &edit {
+            EditEvent::ImePreedit { text, .. } => {
+                if !*composing && !text.is_empty() {
+                    input.event(ui, InputEvent::Edit(EditEvent::ImeStart), clipboard)?;
+                    *composing = true;
+                }
+                if text.is_empty() {
+                    input.event(ui, InputEvent::Edit(EditEvent::ImeCancel), clipboard)?;
+                    *composing = false;
+                    return Ok(());
+                }
+            }
+            EditEvent::ImeCommit(_) => *composing = false,
+            _ => {}
+        }
+        input.event(ui, InputEvent::Edit(edit), clipboard)
+    })();
+    if recover(result).is_some() {
+        true
+    } else {
+        *composing = false;
+        let _ = recover(input.event(ui, InputEvent::Edit(EditEvent::ImeCancel), clipboard));
+        false
+    }
+}
+
 /// What the event watch forwards from SDL's queue.
 enum Watched {
     Edit(EditEvent),
@@ -112,7 +164,10 @@ impl NativeInput {
                 } else {
                     SDL_StopTextInput(self.window)
                 };
-                anyhow::ensure!(ok, "SDL text input state failed");
+                if !ok {
+                    let _ = recover::<()>(Err("SDL text input state failed".into()));
+                    return Ok(());
+                }
                 self.text_active = field.is_some();
             }
             if let Some(i) = field {
@@ -142,23 +197,7 @@ impl NativeInput {
                 }
                 Watched::Edit(edit) => edit,
             };
-            match &edit {
-                EditEvent::ImePreedit { text, .. } => {
-                    if !self.composing && !text.is_empty() {
-                        input.event(ui, InputEvent::Edit(EditEvent::ImeStart), &mut clipboard)?;
-                        self.composing = true;
-                    }
-                    if text.is_empty() {
-                        input.event(ui, InputEvent::Edit(EditEvent::ImeCancel), &mut clipboard)?;
-                        self.composing = false;
-                        continue;
-                    }
-                }
-                EditEvent::ImeCommit(_) => self.composing = false,
-                _ => {}
-            }
-            input.event(ui, InputEvent::Edit(edit), &mut clipboard)?;
-            changed = true;
+            changed |= deliver_edit(&mut self.composing, ui, input, edit, &mut clipboard);
         }
         Ok(changed)
     }
@@ -199,5 +238,91 @@ impl Clipboard for OsClipboard {
         } else {
             Err("SDL clipboard write failed".into())
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    struct UnavailableClipboard;
+    impl Clipboard for UnavailableClipboard {
+        fn read(&mut self) -> ara_ui_text::Result<String> {
+            Err("clipboard unavailable".into())
+        }
+        fn write(&mut self, _: &str) -> ara_ui_text::Result<()> {
+            Err("clipboard unavailable".into())
+        }
+    }
+
+    #[test]
+    fn native_text_delivery_recovers_and_keeps_typing() -> ara_ui::Result<()> {
+        let mut ui = Ui::editor(
+            "<ui id='ui'><field id='name' text='ab' action='Edit'/></ui>",
+            "ui { width:400px; height:80px; } field { width:300px; height:40px; }",
+            [400., 80.],
+        )?;
+        ui.frame(&mut ara_ui_text::TextSystem::bundled()?)?;
+        let mut input = InputState::default();
+        let id = ara_ui::source::stable_id("name");
+        input.focus(&mut ui, id)?;
+        let mut composing = false;
+        let mut clipboard = UnavailableClipboard;
+        for event in [
+            EditEvent::Select {
+                anchor: 1,
+                caret: 1,
+            },
+            EditEvent::ImeCommit("x".into()),
+            EditEvent::Undo,
+            EditEvent::ImePreedit {
+                text: "ni".into(),
+                selection: 0..2,
+            },
+            EditEvent::ImeCommit("\u{65e5}".into()),
+            EditEvent::Undo,
+            EditEvent::ImePreedit {
+                text: String::new(),
+                selection: 0..0,
+            },
+            EditEvent::ImeCommit("y".into()),
+        ] {
+            assert!(deliver_edit(
+                &mut composing,
+                &mut ui,
+                &mut input,
+                event,
+                &mut clipboard
+            ));
+        }
+        // Reject a malformed OS span and a failed paste, then consume the next commit.
+        for event in [
+            EditEvent::ImePreedit {
+                text: "\u{65e5}".into(),
+                selection: 1..2,
+            },
+            EditEvent::Paste,
+        ] {
+            assert!(!deliver_edit(
+                &mut composing,
+                &mut ui,
+                &mut input,
+                event,
+                &mut clipboard
+            ));
+        }
+        assert!(deliver_edit(
+            &mut composing,
+            &mut ui,
+            &mut input,
+            EditEvent::ImeCommit("z".into()),
+            &mut clipboard
+        ));
+        let Some(ara_ui::widgets::Widget::Input(field)) = ui.widgets.get(&id) else {
+            panic!("field");
+        };
+        assert_eq!((field.value(), field.caret()), ("ayzb", 3));
+        assert!(!composing);
+        Ok(())
     }
 }

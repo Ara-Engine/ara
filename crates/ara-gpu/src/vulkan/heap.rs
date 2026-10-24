@@ -151,7 +151,11 @@ impl Heap {
                 set_layout,
                 pool,
                 samplers,
-                free_acceleration: (0..16).rev().collect(),
+                free_acceleration: if gpu.info.ray_tracing {
+                    (0..16).rev().collect()
+                } else {
+                    Vec::new()
+                },
                 free_images: (0..gpu.info.sampled_image_capacity).rev().collect(),
                 free_buffers: (0..64).rev().collect(),
                 free_storage: (0..64).rev().collect(),

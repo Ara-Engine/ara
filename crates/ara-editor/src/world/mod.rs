@@ -2,6 +2,7 @@
 pub mod gesture;
 mod ghosts;
 pub(crate) mod gltf;
+mod patch;
 use crate::state::EditorState;
 use ara_diag::Diagnostic;
 use ara_doc::prefab::Resolved;
@@ -9,6 +10,8 @@ use ara_ops::Store;
 use ara_render::scene::{Light, Material, Mesh, Scene, Texture, Vertex};
 use ara_runtime::components::MeshRenderer;
 use glam::{EulerRot, Mat4, Quat, Vec3};
+pub use gltf::ModelCache;
+pub(crate) use patch::Patch;
 use serde_json::Value;
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -19,12 +22,13 @@ use std::{
 pub trait EditWorldView {
     /// Current scene entities, with prefab inheritance resolved.
     fn entities(&self) -> &Resolved;
-    /// Extract immutable render geometry; no gameplay state is stored in the editor.
+    /// Extract geometry using the project-owned published model cache across edits.
     fn scene(
         &self,
         root: &Path,
         state: &EditorState,
         preview: Option<&gesture::Gesture>,
+        models: &mut ModelCache,
     ) -> anyhow::Result<Scene>;
 }
 /// Document-backed edit-world view used until ara-sim is integrated.
@@ -187,6 +191,23 @@ impl EditWorldView for DocumentView {
         root: &Path,
         state: &EditorState,
         preview: Option<&gesture::Gesture>,
+        models: &mut ModelCache,
+    ) -> anyhow::Result<Scene> {
+        self.extract(root, state, preview, models, None)
+    }
+}
+impl DocumentView {
+    /// Extract render geometry. With `only`, meshes come just from those entities (a
+    /// [`Patch`] re-uploads them alone) while lights still cover the whole scene;
+    /// ghosts and the empty-scene fallback are left out. Every record field read here
+    /// must also be classified by `patch.rs`.
+    pub(crate) fn extract(
+        &self,
+        root: &Path,
+        state: &EditorState,
+        preview: Option<&gesture::Gesture>,
+        models: &mut ModelCache,
+        only: Option<&BTreeSet<String>>,
     ) -> anyhow::Result<Scene> {
         let mut scene = Scene {
             meshes: Vec::new(),
@@ -223,20 +244,15 @@ impl EditWorldView for DocumentView {
                 .get("name")
                 .and_then(Value::as_str)
                 .unwrap_or(id);
-            if let Some(record) = entity.record.get("MeshRenderer") {
+            if let Some(record) = entity.record.get("MeshRenderer")
+                && only.is_none_or(|only| only.contains(id))
+            {
                 // Decoded as the engine component, defaults and all: the viewport
                 // draws what Play draws (same material and procedural shapes).
                 let renderer: MeshRenderer =
                     serde_json::from_value(record.clone()).unwrap_or_default();
                 let material = scene.materials.len();
-                let [r, g, b] = renderer.emissive;
-                scene.materials.push(Material {
-                    base_color: renderer.color.0,
-                    emissive_roughness: [r, g, b, renderer.roughness],
-                    surface: [renderer.metallic, 1.0, 1.0, 0.5],
-                    textures: [0, 1, 0, 0],
-                    flags: [u32::from(renderer.color.0[3] < 1.0) * 2, 0, 0, 0],
-                });
+                scene.materials.push(raster_material(&renderer));
                 let mut mesh = if let Some(reference) = &renderer.model {
                     let reference =
                         ara_schema::grammar::parse_ref(&reference.0).map_err(anyhow::Error::msg)?;
@@ -273,8 +289,20 @@ impl EditWorldView for DocumentView {
                             cube(render_id(id), name.to_owned(), material)
                         }
                     } else {
-                        gltf::load(&path, render_id(id), name.to_owned(), material)
-                            .unwrap_or_else(|_| cube(render_id(id), name.to_owned(), material))
+                        reference
+                            .id
+                            .and_then(|asset| {
+                                models
+                                    .load(
+                                        asset,
+                                        &renderer,
+                                        render_id(id),
+                                        name.to_owned(),
+                                        material,
+                                    )
+                                    .ok()
+                            })
+                            .unwrap_or_else(|| cube(render_id(id), name.to_owned(), material))
                     }
                 } else {
                     shape(&renderer, render_id(id), name.to_owned(), material)
@@ -323,7 +351,10 @@ impl EditWorldView for DocumentView {
                 }
             }
         }
-        self.append_ghosts(root, state, &transforms, &mut scene)?;
+        if only.is_some() {
+            return Ok(scene);
+        }
+        self.append_ghosts(root, state, &transforms, &mut scene, models)?;
         // A tiny non-pickable fallback keeps the baseline renderer valid for an empty scene.
         if scene.meshes.is_empty() {
             let mut mesh = cube(0, "Empty scene".into(), 0);
@@ -333,6 +364,18 @@ impl EditWorldView for DocumentView {
             scene.meshes.push(mesh);
         }
         Ok(scene)
+    }
+}
+/// The raster material a `MeshRenderer` draws with (`MATERIAL_FIELDS` in `patch.rs`
+/// lists what it reads).
+fn raster_material(renderer: &MeshRenderer) -> Material {
+    let [r, g, b] = renderer.emissive;
+    Material {
+        base_color: renderer.color.0,
+        emissive_roughness: [r, g, b, renderer.roughness],
+        surface: [renderer.metallic, 1.0, 1.0, 0.5],
+        textures: [0, 1, 0, 0],
+        flags: [u32::from(renderer.color.0[3] < 1.0) * 2, 0, 0, 0],
     }
 }
 /// The engine's procedural shape for a `MeshRenderer` without a model (model space).

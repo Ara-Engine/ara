@@ -195,7 +195,7 @@ impl Controller {
         event: Event,
         editor: &mut Editor,
         shell: &mut Shell,
-        renderer: &Renderer,
+        renderer: &mut Renderer,
         view: &crate::world::DocumentView,
         clipboard: &mut dyn ara_ui_text::Clipboard,
     ) -> ara_ui::Result<(bool, bool, bool)> {
@@ -333,9 +333,9 @@ impl Controller {
                     } else {
                         None
                     };
+                    // Handle highlights are UI overlays: a redraw, not a Scene frame.
                     if hover != self.hover {
                         self.hover = hover;
-                        scene_dirty = true;
                     }
                     shell.event(InputEvent::PointerMove(position), clipboard)?;
                     shell.hover_tooltip()?;

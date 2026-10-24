@@ -2,10 +2,11 @@ use super::*;
 impl DocumentView {
     pub(super) fn append_ghosts(
         &self,
-        root: &Path,
+        _root: &Path,
         state: &EditorState,
         transforms: &BTreeMap<String, Mat4>,
         scene: &mut Scene,
+        models: &mut gltf::ModelCache,
     ) -> anyhow::Result<()> {
         let tokens = if state.light {
             ara_ui::theme::EditorTheme::Light
@@ -70,13 +71,11 @@ impl DocumentView {
             let mut mesh = if let Some(reference) = &renderer.model {
                 let parts =
                     ara_schema::grammar::parse_ref(&reference.0).map_err(anyhow::Error::msg)?;
-                gltf::load(
-                    &crate::commands::project_path(
-                        root,
-                        parts
-                            .path
-                            .ok_or_else(|| anyhow::anyhow!("mesh path missing"))?,
-                    )?,
+                models.load(
+                    parts
+                        .id
+                        .ok_or_else(|| anyhow::anyhow!("mesh asset ID missing"))?,
+                    &renderer,
                     render_id(id),
                     name,
                     material,

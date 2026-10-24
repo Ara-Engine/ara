@@ -5,6 +5,10 @@ Owns the native GPU boundary. Vulkan uses ash revision
 
 ## Public API
 
+- `VulkanDevice::new_raster` creates a raster-only logical device: no ray-query/AS
+  extensions, features or acceleration descriptor capacity, even on an RT GPU.
+  `new` retains the optional RT tier for explicit fidelity/reference consumers.
+
 - `Device`: portable descriptors, queues, cooked pipelines, recording and retirement.
 - `VulkanDevice`: Vulkan backend; `context()` is read-only native integration access.
 - `VulkanDevice::create_mip_image`: native sampled mip chains, including BC4/5/7.
@@ -55,6 +59,10 @@ immediately; allocation and descriptor reuse wait for both queue timelines.
 Retention is conservative across published resources in v0. A live TLAS prevents
 its BLAS from retiring. Static acceleration structures build once; replacement
 uses a fresh identity. Pipelines also retire through queue completion.
+Retired buffers destroy their VkBuffer but may retain up to 64 MiB/256 idle memory
+blocks. Reuse requires exact size, memory type and device-address allocation flags;
+required dedicated allocations are excluded. Fresh buffers keep queue ownership
+and handle generations independent; images and shared surfaces do not use this pool.
 
 Recording validates generations, queue classes, rendering scopes, attachment
 formats, copy capacities and vertex/index usage before touching native commands.

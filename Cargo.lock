@@ -825,6 +825,7 @@ dependencies = [
  "ara-vfx",
  "ara-vfx-gpu",
  "ara-world",
+ "blake3",
  "bytemuck",
  "embed-resource",
  "glam 0.30.9",
@@ -991,6 +992,7 @@ dependencies = [
  "ara-ui-document",
  "ara-why",
  "insta",
+ "notify",
  "serde",
  "serde_json",
 ]
@@ -1520,6 +1522,7 @@ dependencies = [
  "getrandom 0.3.4",
  "hex",
  "serde_json",
+ "tempfile",
  "zip 2.6.1",
 ]
 
@@ -1887,6 +1890,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "ara-setup"
+version = "0.0.1-alpha"
+dependencies = [
+ "anyhow",
+ "ara-export-installer",
+ "embed-resource",
+ "image",
+ "serde_json",
+ "tempfile",
+ "windows-sys 0.61.2",
+ "zip 2.6.1",
+]
+
+[[package]]
 name = "ara-shader-cook"
 version = "0.0.1-alpha"
 dependencies = [
@@ -1948,8 +1965,10 @@ dependencies = [
  "ara-gpu",
  "ara-render",
  "bytemuck",
+ "glam 0.30.9",
  "serde",
  "serde_json",
+ "sha2 0.10.9",
  "texture2ddecoder",
 ]
 

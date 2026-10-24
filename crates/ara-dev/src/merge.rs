@@ -67,11 +67,15 @@ pub(crate) fn run(
         return Ok(true);
     }
     let mut logs = check::Logs::new(root, no_compiler_cache)?;
-    if !logs.command(
-        root,
-        "workspace-check",
-        &["check", "--workspace", "--all-targets"].map(String::from),
-    )? {
+    let workspace_checked = {
+        let _lease = crate::compile_cache::acquire(None)?;
+        logs.command(
+            root,
+            "workspace-check",
+            &["check", "--workspace", "--all-targets"].map(String::from),
+        )?
+    };
+    if !workspace_checked {
         bail!("workspace check failed; merge remains uncommitted. Fix it or git merge --abort");
     }
     git::bytes(root, ["add", "--", "Cargo.lock"])?;

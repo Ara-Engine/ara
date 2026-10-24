@@ -193,10 +193,11 @@ owner: ara-ui-text
 An input-method composition event arrived out of order or with an out-of-range span.
 
 Causes:
-- A platform layer forwarded a commit without a preceding composition.
+- A preedit arrived without an active composition, or its selection is out of range.
 
 Fixes:
 - Forward IME start/update/commit events in order; reset composition on focus loss.
+- Plain text commits do not require a preceding composition and insert at the selection.
 
 ## ARA4032 ui::GRAPHEME: Selection splits a grapheme
 owner: ara-ui-text

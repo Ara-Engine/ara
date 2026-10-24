@@ -16,6 +16,7 @@ pins them, `fetch` restores them.
 | `fetch [projects]` / `verify [projects]` | resumable, verified download into `<project>/assets/third_party/` (hard links from `samples/.cache/blobs`) / check only |
 | `credits` | regenerate `samples/THIRD_PARTY_ASSETS.md` from the lock |
 | `build outpost\|showcase` | author the project through `ara` (typed command batches via `ara do`), then `ara check` |
+| `kits <project>` | write only the generated, git-ignored `assets/kit/` files (glTF + bin, suit palette); no document is authored. Release packaging runs it on the staged template copy (`--samples <stage>/templates`) |
 | `capture <project> <look> [--quick] [--quality low\|medium\|high\|epic] [--reference spp]` | captures, per-pass timings and optional path-tracer errors → `target/ara-samples/captures/<project>/<look>/` |
 | `play <project> <scene> <name> [--walk ticks]` | windowed `ara-player` through `ara mcp` (`ara_play`), presented + full captures |
 | `editor <project> <scene> <name> [--camera x,y,z,yaw,pitch,distance]` | `ara-editor --screenshot`, framed over the Engine Protocol → `evidence/<name>-editor.png` |

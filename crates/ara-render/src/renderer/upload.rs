@@ -26,6 +26,10 @@ pub(super) struct Content {
     pub texture_indices: Vec<u32>,
     /// Hash of the textures and environment (`update_geometry` must keep them).
     pub static_hash: String,
+    pub material_buffer: Buffer,
+    pub material_count: usize,
+    /// Logical material digest after a parameter-only edit, independent of heap slots.
+    pub material_update: Option<[u8; 32]>,
     pub material_index: u32,
     pub lights: Vec<Light>,
     pub light_buffer: Buffer,
@@ -89,6 +93,7 @@ impl Renderer {
             shader_metadata,
             last_timings: Vec::new(),
             look,
+            native: None,
         })
     }
 
@@ -97,6 +102,7 @@ impl Renderer {
     /// structural changes (spawns, asset reloads); per-frame motion uses `update_mesh`.
     /// On error the previous content stays live (last-good).
     pub fn replace_scene(&mut self, scene: Scene) -> Result<()> {
+        ensure!(!scene.meshes.is_empty(), "Scene has no geometry");
         let content = upload_content(
             &mut self.gpu,
             scene,
@@ -209,11 +215,22 @@ impl Renderer {
         }
         let mut hash = Sha256::new();
         hash.update(self.content.base_hash.as_bytes());
+        if let Some(native) = &self.native {
+            native.hash(&mut hash);
+        }
         for mesh in &self.content.meshes {
             if let Some(latest) = &mesh.latest {
                 hash.update(mesh.entity.to_le_bytes());
                 hash.update(bytemuck::cast_slice(latest));
             }
+        }
+        if let Some(materials) = self.content.material_update {
+            hash.update(materials);
+        }
+        for (entity, name) in &self.content.entity_names {
+            hash.update(entity.to_le_bytes());
+            hash.update((name.len() as u64).to_le_bytes());
+            hash.update(name.as_bytes());
         }
         hash.update(bytemuck::cast_slice(&self.content.lights));
         hash.update(bytemuck::bytes_of(&self.content.sun_direction));
@@ -239,6 +256,8 @@ pub(super) struct Geometry {
     pub meshes: Vec<Mesh>,
     pub inputs: Vec<(Resource, Access)>,
     pub owned: Vec<Resource>,
+    pub material_buffer: Buffer,
+    pub material_count: usize,
     pub material_index: u32,
     pub lights: Vec<Light>,
     pub light_buffer: Buffer,
@@ -257,10 +276,7 @@ pub(super) fn upload_geometry(
     lights: Vec<Light>,
     texture_indices: &[u32],
 ) -> Result<Geometry> {
-    ensure!(
-        !materials.is_empty() && !meshes.is_empty(),
-        "Scene has no geometry/materials"
-    );
+    ensure!(!materials.is_empty(), "Scene has no materials");
     ensure!(
         lights.len() <= MAX_LIGHTS,
         "Tiled baseline supports at most 64 local lights"
@@ -271,15 +287,6 @@ pub(super) fn upload_geometry(
             .iter()
             .all(|v| v.is_finite()),
         "Non-finite light"
-    );
-    ensure!(
-        materials.iter().all(|m| m
-            .base_color
-            .iter()
-            .chain(&m.emissive_roughness)
-            .chain(&m.surface)
-            .all(|v| v.is_finite())),
-        "Non-finite material"
     );
     let mut seen = std::collections::BTreeSet::new();
     for mesh in &meshes {
@@ -304,14 +311,7 @@ pub(super) fn upload_geometry(
             "Non-finite vertex"
         );
     }
-    let mut materials = materials;
-    for material in &mut materials {
-        for index in &mut material.textures {
-            *index = *texture_indices
-                .get(*index as usize)
-                .ok_or_else(|| anyhow::anyhow!("Material texture out of bounds"))?;
-        }
-    }
+    let materials = prepare_materials(materials, texture_indices)?;
     let mut created = Vec::new();
     let result = (|| -> Result<Geometry> {
         let material_buffer = upload_buffer(
@@ -380,6 +380,8 @@ pub(super) fn upload_geometry(
                 Resource::Buffer(light_buffer),
                 Resource::Buffer(compute_lights),
             ],
+            material_buffer,
+            material_count: materials.len(),
             material_index,
             lights,
             light_buffer,
@@ -396,6 +398,30 @@ pub(super) fn upload_geometry(
         gpu.collect()?;
     }
     result
+}
+
+/// Validate logical material parameters and resolve their texture slots before upload.
+pub(super) fn prepare_materials(
+    mut materials: Vec<crate::scene::Material>,
+    texture_indices: &[u32],
+) -> Result<Vec<crate::scene::Material>> {
+    ensure!(
+        materials.iter().all(|m| m
+            .base_color
+            .iter()
+            .chain(&m.emissive_roughness)
+            .chain(&m.surface)
+            .all(|v| v.is_finite())),
+        "Non-finite material"
+    );
+    for material in &mut materials {
+        for index in &mut material.textures {
+            *index = *texture_indices
+                .get(*index as usize)
+                .ok_or_else(|| anyhow::anyhow!("Material texture out of bounds"))?;
+        }
+    }
+    Ok(materials)
 }
 
 fn upload_content(
@@ -602,6 +628,9 @@ fn upload_content(
         ibl_pipelines: [irradiance_pipeline, specular_pipeline],
         texture_indices,
         static_hash,
+        material_buffer: geometry.material_buffer,
+        material_count: geometry.material_count,
+        material_update: None,
         material_index: geometry.material_index,
         lights: geometry.lights,
         light_buffer: geometry.light_buffer,

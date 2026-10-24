@@ -5,6 +5,7 @@ mod game;
 mod journey;
 mod panels_verify;
 mod responsiveness;
+mod scene_sync;
 mod setup;
 mod ux_verify;
 mod verify;
@@ -35,6 +36,8 @@ use std::{
     path::PathBuf,
     time::{Duration, Instant},
 };
+/// How long after the last input progressive Scene frames resume.
+const INTERACTION_PAUSE: Duration = Duration::from_millis(250);
 /// Open the SDL3 editor, host the project authority and serve authenticated EP/MCP.
 pub fn run(options: Options) -> ara_ui::Result<()> {
     if options.headless {
@@ -84,6 +87,7 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
         eprintln!("Verification extent {physical:?}; logical {logical:?}; DPI {dpi}");
     }
     let mut shell = Shell::new(&mut editor, logical)?;
+    shell.offscreen = offscreen;
     let mut view = editor.view()?;
     editor.report_missing_sources(&view);
     let viewport = shell.viewport().unwrap_or(ara_ui::paint::Box2 {
@@ -92,8 +96,10 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
         w: 800.,
         h: 600.,
     });
+    // The publication the first extraction sees; SceneSync re-extracts on newer ones.
+    let models_at_open = editor.models.revision();
     let mut renderer = Renderer::new(
-        view.scene(editor.host.root(), &editor.state, None)?,
+        view.scene(editor.host.root(), &editor.state, None, &mut editor.models)?,
         extent_scaled(viewport, dpi),
         &window.extensions()?,
         editor.host.root().join(".ara/gpu"),
@@ -178,7 +184,8 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
         let mut last_panels = editor.panels_revision;
         let mut last_review = editor.review_revision;
         let mut last_extraction = editor.extraction_revision;
-        let mut preview_present = false;
+        // Value edits, typed drafts and gizmo drags patch the Scene in place.
+        let mut scene_sync = scene_sync::SceneSync::new(models_at_open);
         let mut last_physical = physical;
         let mut last_dpi = dpi;
         let mut dirty = true;
@@ -193,8 +200,9 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
         let mut wall_samples = Vec::new();
         let mut last_ui = 0;
         let frame_budget = Duration::from_secs_f64(1. / 144.);
-        // The last progressive Scene frame (see below), so hovering never starves it.
-        let mut last_progressive = Instant::now();
+        // The last pointer, key or wheel input: progressive Scene frames wait while the
+        // user is working (see below).
+        let mut last_input: Option<Instant> = None;
         let mut previous = Instant::now();
         loop {
             if let Some(probe) = &mut probe {
@@ -226,6 +234,18 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                 inject_ms = at.elapsed().as_secs_f64() * 1000.;
             }
             let interaction_start = (!events.is_empty()).then(Instant::now);
+            if events.iter().any(|(_, event)| {
+                matches!(
+                    event,
+                    Event::MouseMotion { .. }
+                        | Event::MouseButton { .. }
+                        | Event::Wheel(_)
+                        | Event::Key { .. }
+                )
+            }) || probe.as_ref().is_some_and(|p| p.acted())
+            {
+                last_input = Some(Instant::now());
+            }
             let routed_at = Instant::now();
             let mut quit = false;
             for (sdl, event) in events {
@@ -239,7 +259,7 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                     &mut controller,
                     &mut editor,
                     &mut shell,
-                    &renderer,
+                    &mut renderer,
                     &view,
                     &mut clipboard,
                 );
@@ -279,7 +299,13 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                 shell.enter(id);
             }
             match native.input(&mut shell.ui, &mut shell.input) {
-                Ok(changed) => dirty |= changed,
+                Ok(changed) => {
+                    dirty |= changed;
+                    // Typed text (IME commits) is input too.
+                    if changed {
+                        last_input = Some(Instant::now());
+                    }
+                }
                 Err(error) => editor.report_failure(&*error),
             }
             shell.leave();
@@ -428,33 +454,29 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
             }
             dirty |= shell.upload_thumbnails(&mut ui_renderer)?;
             let geometry_at = Instant::now();
-            let (mut view_ms, mut extract_ms, mut upload_ms) = (0., 0., 0.);
+            let mut view_ms = 0.;
+            let mut stages = scene_sync::Stages::default();
+            let idle = last_input.is_none_or(|t| t.elapsed() >= INTERACTION_PAUSE);
+            if scene_sync.refresh(&view, &mut editor, &mut renderer, idle)? {
+                dirty = true;
+                scene_dirty = true;
+            }
             if editor.host.store().revision() != last_revision {
                 last_revision = editor.host.store().revision();
                 let at = Instant::now();
-                view = editor.view()?;
-                editor.report_missing_sources(&view);
+                let next = editor.view()?;
+                editor.report_missing_sources(&next);
                 view_ms = at.elapsed().as_secs_f64() * 1000.;
-                let at = Instant::now();
-                let scene =
-                    view.scene(editor.host.root(), &editor.state, editor.gesture.as_ref())?;
-                extract_ms = at.elapsed().as_secs_f64() * 1000.;
-                let at = Instant::now();
-                renderer.update_geometry(scene)?;
-                upload_ms = at.elapsed().as_secs_f64() * 1000.;
+                stages = scene_sync.commit(&view, &next, &mut editor, &mut renderer)?;
+                view = next;
                 shell.rebuild_if_stale(&mut editor)?;
                 dirty = true;
                 scene_dirty = true;
-                preview_present = editor.gesture.is_some();
             }
             if editor.extraction_revision != last_extraction {
                 last_extraction = editor.extraction_revision;
                 view = editor.view()?;
-                renderer.update_geometry(view.scene(
-                    editor.host.root(),
-                    &editor.state,
-                    editor.gesture.as_ref(),
-                )?)?;
+                scene_sync.rebuild(&view, &mut editor, &mut renderer)?;
                 dirty = true;
                 scene_dirty = true;
             }
@@ -462,13 +484,13 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                 last_review = editor.review_revision;
                 let next = editor.view()?;
                 if next.ghosts() != view.ghosts() {
-                    renderer.update_geometry(next.scene(
-                        editor.host.root(),
-                        &editor.state,
-                        editor.gesture.as_ref(),
-                    )?)?;
+                    scene_sync.rebuild(&next, &mut editor, &mut renderer)?;
                 }
                 view = next;
+                dirty = true;
+                scene_dirty = true;
+            }
+            if scene_sync.preview(&view, &mut editor, &shell, &mut renderer)? {
                 dirty = true;
                 scene_dirty = true;
             }
@@ -492,6 +514,7 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                     &mut gpu,
                     &mut ui_renderer,
                     &mut renderer,
+                    &mut scene_view,
                 )?;
                 if changed {
                     icon_dpi = None;
@@ -506,6 +529,7 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                     &mut gpu,
                     &mut ui_renderer,
                     &mut renderer,
+                    &mut scene_view,
                 )?;
                 dirty |= changed;
                 scene_dirty |= changed;
@@ -519,6 +543,7 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                     &mut ui_renderer,
                     &mut renderer,
                     &floats,
+                    &mut scene_view,
                 )?;
                 if changed {
                     icon_dpi = None;
@@ -541,6 +566,7 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                     &mut gpu,
                     &mut ui_renderer,
                     &mut renderer,
+                    &mut scene_view,
                 )?;
                 dirty |= changed;
                 scene_dirty |= changed;
@@ -601,18 +627,16 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
             drop(ui_scope);
             dirty |= work.paint_nodes > 0 || work.layout_passes > 0 || work.restyled > 0;
             // Progressive Scene frames (fidelity accumulation, newly published assets)
-            // yield to frames carrying input, so a click or hover presents without
-            // waiting for one; they resume on the next quiet frame, and at least every
-            // 100 ms. Scene changes made by input (camera, gizmos, edits) render now.
-            if shell.viewport().is_some() && scene_view.needs_frame(editor.state.quality) {
-                let yield_to_input = interaction_start.is_some()
-                    && !scene_dirty
-                    && last_progressive.elapsed() < Duration::from_millis(100);
-                if !yield_to_input {
-                    dirty = true;
-                    scene_dirty = true;
-                    last_progressive = Instant::now();
-                }
+            // block this thread for their GPU time (27-50 ms on large scenes), so they
+            // wait while the user is working: no pointer, key or wheel input for
+            // INTERACTION_PAUSE. A click or hover then never queues behind one. Scene
+            // changes made by input (camera, gizmo drags, edits) still render at once.
+            if shell.viewport().is_some()
+                && scene_view.needs_frame(editor.state.quality)
+                && (scene_dirty || last_input.is_none_or(|t| t.elapsed() >= INTERACTION_PAUSE))
+            {
+                dirty = true;
+                scene_dirty = true;
             }
             if dirty {
                 let _render_scope = profile_frame.map(|_| ara_profile::scope("editor.render"));
@@ -622,14 +646,6 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                 if let Some(rect) = shell.viewport() {
                     renderer.resize(extent_scaled(rect, dpi))?;
                     if scene_dirty {
-                        if editor.gesture.is_some() || preview_present {
-                            renderer.update_geometry(view.scene(
-                                editor.host.root(),
-                                &editor.state,
-                                editor.gesture.as_ref(),
-                            )?)?;
-                            preview_present = editor.gesture.is_some();
-                        }
                         scene_view.render(&mut renderer, &editor, &view, 1)?;
                     }
                     scene_view.attach(&mut gpu, &renderer, editor.state.quality)?;
@@ -849,8 +865,9 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                     tick_ms,
                     geometry_ms,
                     view_ms,
-                    extract_ms,
-                    upload_ms,
+                    extract_ms: stages.extract_ms,
+                    upload_ms: stages.upload_ms,
+                    patched: stages.patched,
                     scene_ms,
                     icons_ms,
                     render_ms,
@@ -958,7 +975,7 @@ fn headless(options: Options) -> ara_ui::Result<()> {
     .map_err(anyhow::Error::msg)?;
     let view = editor.view()?;
     let mut renderer = Renderer::new(
-        view.scene(editor.host.root(), &editor.state, None)?,
+        view.scene(editor.host.root(), &editor.state, None, &mut editor.models)?,
         options.size,
         &[],
         editor.host.root().join(".ara/gpu"),
@@ -1059,7 +1076,7 @@ fn route_event(
     controller: &mut controller::Controller,
     editor: &mut Editor,
     shell: &mut Shell,
-    renderer: &Renderer,
+    renderer: &mut Renderer,
     view: &crate::world::DocumentView,
     clipboard: &mut OsClipboard,
 ) -> ara_ui::Result<(bool, bool, bool)> {

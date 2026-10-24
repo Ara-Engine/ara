@@ -54,6 +54,29 @@ fn runtime_preset_discovers_modules_without_an_author_csproj() {
         "the S7 fixture still needs its project file"
     );
 }
+/// A runtime profile may leave its templates for the builder to pin (the editor's
+/// Build Current Profile): it round-trips unpinned, other invariants still hold, and
+/// strict reading (the CLI, the export itself) still demands the pins.
+#[test]
+fn unpinned_runtime_profiles_round_trip_but_exports_still_need_pins() {
+    let mut p = preset("windows");
+    p.player_template = ara_export::preset::PlayerTemplate::Runtime;
+    p.script_project.clear();
+    p.templates.clear();
+    let text = p.to_unpinned_text().unwrap();
+    let read = ExportPreset::from_unpinned_text(&text).unwrap();
+    assert_eq!(read.to_unpinned_text().unwrap(), text);
+    let strict = ExportPreset::from_text(&text).unwrap_err().to_string();
+    assert!(strict.contains("ARA-EXP-TPL-003"), "{strict}");
+    assert!(p.to_text().is_err());
+    p.target_api = 35;
+    p.platform = Platform::Android;
+    assert!(
+        p.to_unpinned_text().is_err(),
+        "other invariants still apply"
+    );
+}
+
 #[test]
 fn permission_merge_deduplicates_and_rejects_conflicts_and_xml_injection() {
     let p = preset("android");

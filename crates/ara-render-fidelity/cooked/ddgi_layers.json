@@ -4,10 +4,10 @@
   "key": "f1a4b8ed976206787a15b17776937231d71dec874a7dc441a3a1fa6d9ef21f9b",
   "stages": [
     {
-      "dxil": "dfe9118036e48a3574b65222fa08263508db1238019c916434cb583c52e7ac3e/ddgiLayersMain.dxil",
+      "dxil": "f1a4b8ed976206787a15b17776937231d71dec874a7dc441a3a1fa6d9ef21f9b/ddgiLayersMain.dxil",
       "dxil_hash": "02de052d643afcb8dc9c18229e3b63e20b7e5835904b41b5b390459ad71d6ab4",
       "source_entry": "ddgiLayersMain",
-      "spirv": "dfe9118036e48a3574b65222fa08263508db1238019c916434cb583c52e7ac3e/ddgiLayersMain.spv",
+      "spirv": "f1a4b8ed976206787a15b17776937231d71dec874a7dc441a3a1fa6d9ef21f9b/ddgiLayersMain.spv",
       "spirv_entry": "main",
       "spirv_hash": "fd61b81eaced629a8d35757eda6f9478290d975a168fd019edcdf43735b1d0ae",
       "stage": "compute"

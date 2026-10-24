@@ -1,7 +1,7 @@
 {
   "binding_layout_hash": "35cd2a62b1ba741ce6823b3c8753d7b5aa97b54c5f0a837b56e542518013fd7e",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "c4d880de129894ae78d91b76808e295577492b42ead9fac84122e2389420bcbf",
+  "key": "35d2c025466f7f3da35dfc8e771cd4a505238bdd66be636a4d8e97a3e959ed88",
   "stages": [
     {
       "dxil": "bc8e903de46ebc9ca94caa137a60811c4d74de321175590ff38f9c37513ae6d0/skyIrradianceMain.dxil",

@@ -44,9 +44,13 @@ pub const RESERVED: [(&str, &str); 4] = [
 pub struct HostConfig {
     /// Quiet time after the last edit before a document is written to disk.
     pub debounce: Duration,
-    /// How often loaded files are checked for external edits.
+    /// How often loaded files are checked for external edits when OS change
+    /// notifications are unavailable (with them, a full check runs every 30 s as a
+    /// safety net). Checks run on the host's file thread; zero instead checks every
+    /// file synchronously on each `tick` (tests).
     pub watch_every: Duration,
-    /// How often the project is scanned for new document files.
+    /// How often the project is scanned for new document files when OS change
+    /// notifications are unavailable.
     pub scan_every: Duration,
     /// Seed for host IDs (sessions, checkpoints, jobs) and the store; entropy if `None`.
     pub seed: Option<u64>,
@@ -80,7 +84,6 @@ pub(crate) struct State {
     pub(crate) name: String,
     /// The project's main scene (path), the default document of calls naming none.
     pub(crate) main: Option<String>,
-    pub(crate) type_files: Vec<(PathBuf, Option<std::time::SystemTime>)>,
     pub(crate) store: Store,
     pub(crate) registry: Registry,
     pub(crate) proto: SchemaDb,
@@ -119,7 +122,6 @@ pub(crate) struct State {
     pub(crate) approval: Box<dyn Approval>,
     pub(crate) debounce: Duration,
     pub(crate) watch_every: Duration,
-    pub(crate) scan_every: Duration,
     pub(crate) stop: bool,
     killed: bool,
     ops: Receiver<Transaction>,
@@ -217,13 +219,29 @@ impl Host {
         for d in diags.into_iter().chain(per_file.into_values().flatten()) {
             diag.push(d, Meta::default());
         }
-        let mut files = Files::default();
+        let type_files = type_files
+            .into_iter()
+            .map(|p| {
+                let m = fs::metadata(&p).and_then(|m| m.modified()).ok();
+                (p, m)
+            })
+            .collect();
+        let io = crate::file_io::FileThread::start(
+            root.clone(),
+            db.clone(),
+            type_files,
+            config.watch_every,
+            config.scan_every,
+        )
+        .map_err(|e| io_error("start the file thread for", &root, e))?;
+        let mut files = Files::new(io);
         for (path, doc) in ws.docs() {
             let abs = root.join(path);
             if let Ok(text) = fs::read_to_string(&abs) {
+                files.io.track(path.to_owned(), crate::file_io::stamp(&abs));
                 files.synced.insert(
                     doc.id.clone(),
-                    Synced::new(path.to_owned(), text, doc.clone(), &abs),
+                    Synced::new(path.to_owned(), text, doc.clone()),
                 );
             }
         }
@@ -238,13 +256,6 @@ impl Host {
             diag.push(d, Meta::default());
         }
         let ops = store.subscribe();
-        let type_files = type_files
-            .into_iter()
-            .map(|p| {
-                let m = fs::metadata(&p).and_then(|m| m.modified()).ok();
-                (p, m)
-            })
-            .collect();
         let mut st = State {
             profiler: ara_profile::Profiler::new(ara_profile::Config::default())
                 .map_err(|e| Diagnostic::error(codes::INVALID_PARAMS, e))?,
@@ -252,7 +263,6 @@ impl Host {
             root,
             name,
             main,
-            type_files,
             store,
             registry,
             proto: SchemaDb::new(),
@@ -279,7 +289,6 @@ impl Host {
             approval: config.approval,
             debounce: config.debounce,
             watch_every: config.watch_every,
-            scan_every: config.scan_every,
             stop: false,
             killed: false,
             ops,
@@ -975,7 +984,10 @@ impl State {
     /// Rewrites the journal once it grows past its bound. Only safe when every
     /// document is flushed, so their flush entries cover all dropped transactions.
     pub(crate) fn maybe_compact(&mut self) {
-        if self.journal.len() <= journal::MAX_ENTRIES || !self.files.changed.is_empty() {
+        if self.journal.len() <= journal::MAX_ENTRIES
+            || !self.files.changed.is_empty()
+            || self.files.io.pending() > 0
+        {
             return;
         }
         let result = self.journal.read_all().and_then(|entries| {

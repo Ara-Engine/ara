@@ -30,6 +30,7 @@ pub(super) fn pack_motion(
     previous: Option<&[glam::Mat4]>,
     pose: Option<&ara_render::instanced::PreparedPose>,
 ) -> Result<Vec<u8>> {
+    ara_gpu::cpu_scope!("Native.pack_motion_table");
     let records = 64usize
         .checked_add(
             scene
@@ -122,6 +123,7 @@ pub(super) fn instances(
     pool: &GeometryGpu,
     pose: Option<&ara_render::instanced::PreparedPose>,
 ) -> Result<Vec<AccelerationInstance>> {
+    ara_gpu::cpu_scope!("Native.pack_tlas_instances");
     scene
         .instances
         .iter()
@@ -153,6 +155,7 @@ pub(super) fn instances(
 }
 
 fn emitters(scene: &NativeScene, out: &mut Vec<u8>) -> Result<(u32, u32, f32)> {
+    ara_gpu::cpu_scope!("Native.pack_emitters");
     let offset = u32::try_from(out.len())?;
     let mut count = 0u32;
     let mut total = 0.0;

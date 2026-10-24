@@ -32,6 +32,8 @@ impl From<RpcError> for EditorError {
 /// One editor process owns the project lock, authority, navigation and agent activity.
 pub struct Editor {
     asset_updates: Receiver<()>,
+    /// Published model generations retained across document and transform edits.
+    pub(crate) models: crate::world::gltf::ModelCache,
     /// Shared engine host. UI content mutations go through this protocol endpoint.
     pub host: Host,
     /// Current native view snapshot, updated by editor action notifications.
@@ -73,6 +75,13 @@ pub struct Editor {
     pub(crate) game_size: [u32; 2],
     /// Missing asset sources already reported (`report_missing_sources`).
     missing_reported: BTreeSet<String>,
+    /// Each scene's last Scene view camera, saved as a user preference.
+    cameras: crate::view_camera::SavedCameras,
+}
+impl Drop for Editor {
+    fn drop(&mut self) {
+        self.cameras.observe(&self.state, true);
+    }
 }
 impl Editor {
     /// Open the project with in-memory preferences (nothing is written outside it).
@@ -136,9 +145,13 @@ impl Editor {
             })
             .map(|d| d.id.to_string())
             .ok_or_else(|| anyhow::anyhow!("project has no scene; run ara init first"))?;
+        // Scenes reopen with the camera they were left with (a user preference).
+        let cameras = crate::view_camera::SavedCameras::open(user_settings.as_deref(), root);
         let settings = crate::settings::Settings::open(root, user_settings)?;
         let activity = crate::activity::Activity::new(host.store().revision());
         let mut state = EditorState {
+            camera: cameras.saved.get(&doc).copied().unwrap_or_default(),
+            scene_cameras: cameras.saved.clone(),
             doc,
             ..Default::default()
         };
@@ -190,6 +203,7 @@ impl Editor {
         .map_err(EditorError::from)?;
         let mut editor = Self {
             asset_updates,
+            models: crate::world::gltf::ModelCache::new(root)?,
             host,
             state,
             session,
@@ -213,12 +227,11 @@ impl Editor {
             play_world: None,
             game_size: [1280, 720],
             missing_reported: BTreeSet::new(),
+            cameras,
         };
-        // A scene seen for the first time is framed, like `editor.scene.open` does.
-        if editor.state.camera == crate::state::Camera::default()
-            && !editor.state.scene_cameras.contains_key(&editor.state.doc)
-        {
-            editor.action("editor.frame", json!({}))?;
+        // A scene without a saved camera gets its opening view, like `editor.scene.open`.
+        if !editor.state.scene_cameras.contains_key(&editor.state.doc) {
+            editor.action("editor.frame", json!({"opening": true}))?;
         }
         Ok(editor)
     }
@@ -375,6 +388,7 @@ impl Editor {
     pub fn tick(&mut self) {
         self.host.tick();
         self.sync();
+        self.cameras.observe(&self.state, false);
         let now = std::time::Instant::now();
         let mut activity = self.activity.observe_history(self.host.store(), now);
         if let Some(since) = self.activity.log_poll(now) {

@@ -23,7 +23,6 @@ enum Recipe {
     Taa,
     Tonemap,
     Look(LookPass),
-    Readback,
     /// Ownership/synchronization only.
     Empty,
 }
@@ -48,6 +47,9 @@ impl Renderer {
             HISTORY0
         };
         let frame = self.frame_data(&camera, exposure, deterministic, mode, output_history);
+        if let Some(native) = &mut self.native {
+            native.prepare(&mut self.gpu, &frame, &camera)?;
+        }
         self.gpu.upload(self.frame, bytemuck::bytes_of(&frame))?;
         let mut compute_frame = frame;
         compute_frame.lighting[3] = self.content.compute_light_index;
@@ -95,20 +97,6 @@ impl Renderer {
                 queue: Queue::Compute,
             },
         );
-        let color_readback = graph.import(
-            Resource::Buffer(self.targets.read_color),
-            State {
-                access: Access::Undefined,
-                queue: Queue::Graphics,
-            },
-        );
-        let id_readback = graph.import(
-            Resource::Buffer(self.targets.read_ids),
-            State {
-                access: Access::Undefined,
-                queue: Queue::Graphics,
-            },
-        );
         let look = self.look.import(&mut graph);
         // Conservative bindless reachability of every graphics-queue shader pass.
         let mut graphics = self
@@ -127,6 +115,18 @@ impl Renderer {
                 (id, access)
             })
             .collect::<Vec<_>>();
+        if let Some(native) = &self.native {
+            native.resources(&mut |resource, access| {
+                let id = graph.import(
+                    resource,
+                    State {
+                        access,
+                        queue: Queue::Graphics,
+                    },
+                );
+                graphics.push((id, Access::ShaderRead));
+            });
+        }
         let frame_id = graph.import(
             Resource::Buffer(self.frame),
             State {
@@ -166,7 +166,9 @@ impl Renderer {
                 (ids[WORLD], Access::Color),
                 (ids[ID], Access::Color),
                 (ids[DEPTH], Access::Depth),
-            ],
+            ]
+            .into_iter()
+            .chain(self.native.as_ref().map(|_| (ids[MOTION], Access::Color))),
         );
         declare(gbuffer, Recipe::GBuffer);
         let mut ao_reads = graphics.clone();
@@ -229,7 +231,8 @@ impl Renderer {
                 (tile, Access::ShaderRead),
             ]
             .into_iter()
-            .chain(look_reads.iter().copied()),
+            .chain(look_reads.iter().copied())
+            .chain(self.native.as_ref().map(|_| (ids[MOTION], Access::Color))),
         );
         declare(forward, Recipe::Forward);
         let mut shaded = vec![shadow, gbuffer, lighting, forward];
@@ -245,6 +248,9 @@ impl Renderer {
             ];
             if let Some(history) = self.targets.history {
                 taa.push((ids[history], Access::ShaderRead));
+            }
+            if self.native.is_some() {
+                taa.push((ids[MOTION], Access::ShaderRead));
             }
             let temporal = graph.pass("TemporalResolve", Queue::Graphics, taa);
             declare(temporal, Recipe::Taa);
@@ -281,26 +287,15 @@ impl Renderer {
         }
         // A deferred frame has no output yet; `finish` produces it.
         if !deferred {
-            let readback = graph.pass(
-                "CaptureReadback",
+            let ready = graph.pass(
+                "PresentationReady",
                 Queue::Graphics,
                 [
                     (ids[OUTPUT], Access::CopySource),
                     (ids[ID], Access::CopySource),
-                    (color_readback, Access::CopyDestination),
-                    (id_readback, Access::CopyDestination),
                 ],
             );
-            declare(readback, Recipe::Readback);
-            let host = graph.pass(
-                "HostReadback",
-                Queue::Graphics,
-                [
-                    (color_readback, Access::HostRead),
-                    (id_readback, Access::HostRead),
-                ],
-            );
-            declare(host, Recipe::Empty);
+            declare(ready, Recipe::Empty);
         }
         let ownership = graph.pass(
             "TileOwnershipReturn",
@@ -362,12 +357,17 @@ impl Renderer {
                     {
                         let cascade = cascade as u32;
                         recorder.push(Command::Viewport { origin, size });
+                        if let Some(native) = &self.native {
+                            let mut constants = root;
+                            constants.words[4] = cascade;
+                            native.record(&mut recorder, constants, cascade as usize);
+                        }
                         for (index, mesh) in self
                             .content
                             .meshes
                             .iter()
                             .enumerate()
-                            .filter(|(_, m)| !m.transparent)
+                            .filter(|(_, m)| self.native.is_none() && !m.transparent)
                         {
                             let mut constants = root;
                             constants.words[2] = mesh.material;
@@ -383,8 +383,9 @@ impl Renderer {
                     recorder.push(Command::Pipeline(self.pipelines.gbuffer));
                     recorder.push(Command::BeginRendering {
                         colors: [ALBEDO, NORMAL, MATERIAL, WORLD, ID]
-                            .iter()
-                            .map(|&i| Attachment {
+                            .into_iter()
+                            .chain(self.native.as_ref().map(|_| MOTION))
+                            .map(|i| Attachment {
                                 image: self.targets.images[i],
                                 clear: Some([0.; 4]),
                             })
@@ -395,12 +396,15 @@ impl Renderer {
                         }),
                         size: self.size,
                     });
+                    if let Some(native) = &self.native {
+                        native.record(&mut recorder, root, 4);
+                    }
                     for (index, mesh) in self
                         .content
                         .meshes
                         .iter()
                         .enumerate()
-                        .filter(|(_, m)| !m.transparent)
+                        .filter(|(_, m)| self.native.is_none() && !m.transparent)
                     {
                         let mut constants = root;
                         constants.words[2] = mesh.material;
@@ -463,19 +467,28 @@ impl Renderer {
                                 image: self.targets.images[WORLD],
                                 clear: None,
                             },
-                        ],
+                        ]
+                        .into_iter()
+                        .chain(self.native.as_ref().map(|_| Attachment {
+                            image: self.targets.images[MOTION],
+                            clear: None,
+                        }))
+                        .collect(),
                         depth: Some(Attachment {
                             image: self.targets.images[DEPTH],
                             clear: None,
                         }),
                         size: self.size,
                     });
+                    if let Some(native) = &self.native {
+                        native.record(&mut recorder, root, 5);
+                    }
                     let mut transparent = self
                         .content
                         .meshes
                         .iter()
                         .enumerate()
-                        .filter(|(_, m)| m.transparent)
+                        .filter(|(_, m)| self.native.is_none() && m.transparent)
                         .collect::<Vec<_>>();
                     transparent.sort_by(|(_, a), (_, b)| {
                         b.centre
@@ -518,16 +531,6 @@ impl Renderer {
                     self.targets.sampled[output_history],
                     self.size,
                 ),
-                Recipe::Readback => {
-                    recorder.push(Command::ReadImage {
-                        source: self.targets.images[OUTPUT],
-                        destination: self.targets.read_color,
-                    });
-                    recorder.push(Command::ReadImage {
-                        source: self.targets.images[ID],
-                        destination: self.targets.read_ids,
-                    });
-                }
                 Recipe::Empty => {}
             }
             recorder.barriers(pass.after.iter().copied());
@@ -556,6 +559,9 @@ impl Renderer {
         self.previous_vp = frame.vp;
         self.frame_number = self.frame_number.wrapping_add(1);
         self.gpu.assert_clean()?;
+        if let Some(native) = &mut self.native {
+            native.presented(&camera);
+        }
         Ok(())
     }
 }

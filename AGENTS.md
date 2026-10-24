@@ -60,9 +60,10 @@ reports/         HTML reports published to Snist
 - `cargo clippy -p <crate> --all-targets`: no new warnings.
 - `cargo test -p <crate>`: tests for the crates you touched.
 - `cargo fmt --all`
-- Performance inner loop: `cargo run -p ara-dev -- perf` plus touched-crate checks/tests; run the full `ara-dev check` at commit checkpoints. Shader/live controls: `docs/dev/ara-dev.md`.
-- Before reporting done: `cargo run -p ara-dev -- check` (`--base <ref>`, `--json`, explicit `--known-failures <file>`); set `CARGO_BUILD_JOBS=2` on this shared PC.
-- Fast Windows entry: `.\crates\ara-dev\run.ps1 check --no-compiler-cache` bypasses a contended compiler-cache server; `--plan --json` previews selection; affected gates have a 40-minute deadline.
+- Performance inner loop: `cargo run -p ara-dev -- perf` plus touched-crate checks/tests. Shader/live controls: `docs/dev/ara-dev.md`.
+- **Agent checkpoints are focused:** `cargo fmt`, `cargo clippy -p <changed crates> --all-targets -D warnings`, `cargo test -p <changed crates>`, plus the specific GPU/player/editor suites your change touches. Commit and hand over the SHA when these pass; set `CARGO_BUILD_JOBS=2` on this shared PC.
+- **The integration gate** (`cargo run -p ara-dev -- check`, with `--base <ref>`, `--json`, explicit `--known-failures <file>`) runs once per merge batch on main, by the integrator. Agents don't run it at checkpoints; breaks it finds go back to the owning agent.
+- Fast Windows entry: `.\crates\ara-dev\run.ps1 cargo -- <focused cargo args>`; opt into shared intermediates with `ARA_SHARED_BUILD_DIR` (see `docs/dev/ara-dev.md`). `check --plan --json` previews compile/test sets; `--no-compiler-cache` bypasses the optional wrapper.
 - Integrate: `cargo run -p ara-dev -- merge <branch>` (`--push` opts in; `--full` for nightly gates).
 - Wrap GPU benchmarks and timing runs with `ara-dev gpu --` (via `cargo run -p ara-dev -- gpu -- <command>`); normal GPU unit tests stay unwrapped.
 - Disk: `cargo run -p ara-dev -- disk`; `clean-worktrees` previews merged, stale targets (`--yes` deletes; never the current/dirty worktree). See `docs/dev/ara-dev.md`.

@@ -43,32 +43,7 @@ pub struct NativeConfig {
     pub upload_bytes: u64,
 }
 
-/// GPU table consumed by native material sampling. Declare the owner's resources
-/// in every sampling pass and keep the resident set alive until those passes finish.
-#[derive(Debug, Clone, Copy)]
-pub struct NativeBinding {
-    /// Bindless storage-buffer index containing 32-byte native texture rows.
-    pub buffer_index: u32,
-    /// Number of initialized material texture IDs in the table.
-    pub textures: u32,
-}
-
-/// Payload and refinement measurements; no pixel decoding or atlas memory is hidden.
-#[derive(Debug, Default, Clone, Copy, serde::Serialize)]
-pub struct NativeStats {
-    /// Distinct registered cooked payload/view identities.
-    pub textures: usize,
-    /// Published native compressed image payload.
-    pub resident_bytes: u64,
-    /// Payload of the requested levels before budget-driven coarsening.
-    pub requested_bytes: u64,
-    /// Images whose published first mip still differs from the budgeted plan.
-    pub pending_textures: usize,
-    /// Compressed bytes uploaded by the most recent preparation/refinement.
-    pub uploaded_bytes: u64,
-    /// GPU time for the most recent upload batch, excluding host preparation.
-    pub upload_gpu_ms: f64,
-}
+pub use ara_render::instanced::{TextureBinding as NativeBinding, TextureStats as NativeStats};
 
 // ABI: slot, resident first mip, original width/height, encoding, resident levels,
 // then two reserved words. Encoding 1 is BC4, 2 is BC5 XY, and 0 is BC7 colour/data.
@@ -109,6 +84,35 @@ pub struct NativeResidency {
     table: Option<Table>,
     last: Option<TimelinePoint>,
     stats: NativeStats,
+}
+
+impl ara_render::instanced::Textures for NativeResidency {
+    fn content_digest(&self) -> [u8; 32] {
+        use sha2::{Digest, Sha256};
+        let mut digest = Sha256::new();
+        for (source, srgb) in self.content_keys() {
+            digest.update(source);
+            digest.update([u8::from(srgb)]);
+        }
+        digest.finalize().into()
+    }
+    fn initialize(&mut self, gpu: &mut VulkanDevice) -> Result<NativeStats> {
+        Self::initialize(self, gpu)
+    }
+    fn refine(&mut self, gpu: &mut VulkanDevice) -> Result<NativeStats> {
+        Self::refine(self, gpu)
+    }
+    fn binding(&self) -> Option<NativeBinding> {
+        Self::binding(self)
+    }
+    fn visit_resources(&self, visit: &mut dyn FnMut(Resource, Access)) {
+        for (resource, access) in self.resources() {
+            visit(resource, access);
+        }
+    }
+    fn destroy(self: Box<Self>, gpu: &mut VulkanDevice) -> Result<()> {
+        (*self).destroy(gpu)
+    }
 }
 
 impl NativeResidency {

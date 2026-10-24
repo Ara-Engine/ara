@@ -65,6 +65,8 @@ helpers. This keeps final binaries separate from hashed test executables, handle
 custom build directories, and avoids a second build with a different feature set.
 `test-build` accounts for all compilation, including peer binaries; `tests`
 accounts for execution, including doctests. All phases share the same deadline.
+Binary-only selections omit `--lib` and the doctest phase; library selections keep the
+same package roots throughout binary preparation and test execution.
 
 Cargo 1.99 can reuse intermediate artifacts through `CARGO_BUILD_BUILD_DIR` while
 keeping final executables in each worktree's local target directory. Prefer this
@@ -77,11 +79,100 @@ cleaning a parent target can remove a nested cache while its Cargo build is acti
 Keep source changes and rebuilds out of an in-progress test/doctest run using that
 cache: replacing its dependencies can invalidate already-built Rust metadata.
 
-## One gate
+## Focused agents, one integration gate per batch
 
-For performance work, run `ara-dev perf` plus `cargo check` and focused tests on
-the touched crates during each iteration. Run `ara-dev check` at commit
-checkpoints. Repeating the full gate between measurements destroys iteration speed.
+Agents run fmt plus clippy/tests for touched crates, and the particular GPU/player/editor
+suites their change touches. Commit and hand over the SHA. The integrator runs `ara-dev check`
+once per merge batch on main; `--base` names the previous integrated checkpoint.
+`--full` is the nightly/dependency-update validation path. Performance iterations use
+`ara-dev perf` plus focused checks. Historical gate measurements above predate this policy.
+
+The normal gate tests source owners and **direct** consumers; clippy covers their full
+reverse dependency closure. Test/example/bench edits stay local. Markdown (including
+diagnostic catalog wording), docs and captures never cascade; fixture/golden changes
+test their owner. Catalog edits always run `ara-diag --test coverage`. Rust token comparison
+ignores formatting; Cargo.lock-only changes are reported without selecting source owners.
+Use `--full` for dependency-only version upgrades. JSON/`--plan` distinguish `affected`
+(compile) from `test_packages` (execution).
+
+Tests execute the compiled artifact paths directly, two harnesses at a time by default.
+Admission estimates reserve at most 4096 MiB and half the available physical RAM.
+`ARA_TEST_JOBS` (1–4), `ARA_TEST_RAM_MIB`, and `ARA_TEST_TIMEOUT_SECONDS` override these limits.
+The tracked `crates/ara-dev/test-tiers.toml` labels slow suites and exclusive GPU/.NET/process
+groups. Fast suites have a 120-second deadline; slow suites have explicit 180–240-second
+deadlines. Timeout kills the process tree and fails the gate. Separate suite logs and
+`test-execution.json` record results/times. Doctests and diagnostic coverage remain checked
+through Cargo, each with a 180-second phase deadline as well as the overall gate deadline.
+No nextest installation is required; the built-in scheduler is used when that optional
+developer tool is absent. This is an admission estimate, not an OS memory sandbox.
+
+### Shared compilation on this PC
+
+Cargo 1.99 shared intermediates reuse registry builds across worktrees. Keep final targets
+separate and use the wrapper so builds **and tests** hold the common admission lock:
+
+```powershell
+$env:ARA_SHARED_BUILD_DIR='D:\AraBuild\ara-shared-dev'
+$env:CARGO_BUILD_BUILD_DIR=$env:ARA_SHARED_BUILD_DIR
+# Set CARGO_TARGET_DIR to YOUR worktree target, or leave it unset.
+.\crates\ara-dev\run.ps1 cargo -- clippy -p ara-schema --all-targets -- -D warnings
+.\crates\ara-dev\run.ps1 cargo -- test -p ara-schema
+.\crates\ara-dev\run.ps1 check --base <last-batch> --json
+```
+
+This lane uses two Cargo jobs, disables incremental output, and bypasses the optional Rust
+compiler wrapper. Cargo's shared fingerprints provide reuse without going through a second
+compiler jobserver. It does not stop or reset another agent's sccache server. The existing
+single disk cache is `D:\AraCache\sccache`; ordinary Cargo invocations keep their configured
+wrapper. Unset the two shared-directory variables to return to independent local builds.
+Never run an unwrapped Cargo build against this shared directory while tests use it.
+Perf builds and merge pre-checks also take this lease. Perf releases it before entering
+the continuous player/GPU loop, and keeps the requested profile's incremental setting.
+Oversized suites run alone; RAM weights limit parallel admission rather than enforcing RSS.
+
+Why not just set `SCCACHE_BASEDIRS`? The installed
+[sccache 0.18 Rust implementation](https://github.com/mozilla/sccache/blob/v0.18.0/src/compiler/rust.rs)
+hashes the working directory and Cargo environment; its base-directory rewriting covers C/C++.
+Its [independent compiler jobserver](https://github.com/mozilla/sccache/blob/v0.18.0/src/jobserver.rs)
+also cannot inherit each caller's Cargo budget. Cross-worktree workspace crates can still
+recompile because their source/package identities differ; registry dependency reuse is
+measured separately. We do not normalize embedded manifest paths or reuse branch binaries.
+
+### Gate measurements, 2026-10-24
+
+Measured on the shared 16-thread Windows PC with two build jobs:
+
+- The real infra-only batch against `38fbcd49` passed with main's existing runner in
+  **255.80s**, and the revised runner in **178.84s** (30.1% less wall time). Both select
+  ara-dev; the revised run includes two additional regressions. Formatting fell from
+  20.11s (101 crates) to 0.47s (one crate), test preparation 23.42s to 11.99s, and
+  execution 192.33s to 155.87s. Revised execution passed 23 unit, 17 CLI and two queue
+  tests, with a 2572 MiB admission budget. Strict clippy and unchanged-tree checks passed.
+- A valid catalog sentence edit on isolated main `7bc3ad5e` selected **83 compile
+  packages** with main's runner. The revised gate selected no compile/package-test
+  roots, retained diagnostic coverage, and passed in **13.09s / 6.43s** (first/warm).
+- A controlled four-crate dependency chain checked all four crates but tested two.
+  Matched warm runs improved **24.15s / 21.42s → 14.59s / 13.56s**; harness execution
+  improved **18.08s / 14.76s → 4.02s / 3.09s**. This separates selection/scheduling
+  from the infra batch's intrinsically serial Cargo transaction fixtures.
+- Three linked worktrees building the same three registry dependencies took
+  **58.84s / 12.35s / 9.24s** with separate intermediates and the existing sccache,
+  versus **3.04s / 0.568s / 0.572s** with shared intermediates. Both followers reused
+  **3/3 registry artifacts**; workspace roots compiled on their first visit. The
+  focused wrapper then reused all four artifacts with a deliberately missing optional
+  compiler-cache executable configured (Cargo reported 0.41s).
+
+The recorded main run `run-17344-1792844038180` reached **2402.21s** of observed wall
+time with incomplete test output: clippy 4m26s, test build 12m05s, then slow player
+failures/timeouts. It is an incomplete historical baseline, not a passing catalog-only
+timing. The measurements above identify the selected workload and preserve that distinction.
+Existing sccache counters showed 46.2% Rust hits and 19,401 incremental exclusions;
+the new reuse percentages are Cargo artifact hits, a separate metric.
+
+Evidence is retained under `target/ara-dev/infra-round/` (`infra-batch-before.json`,
+`infra-batch-after-fixed.json`, `catalog-*.json`, `cache-results.json`, and focused logs).
+The inherited fidelity shader cohort was re-cooked after the main merge: all 48 pipelines,
+296.63s, with no tracked output changes. No GPU timing run was needed for this round.
 
 ## Performance iteration
 

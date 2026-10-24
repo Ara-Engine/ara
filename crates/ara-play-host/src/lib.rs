@@ -8,6 +8,7 @@
 pub mod assets;
 pub mod embed;
 mod keep;
+mod lifecycle;
 mod package;
 pub use package::{package_scene, package_scene_for_export, package_scene_with_progress};
 pub mod params;
@@ -147,6 +148,7 @@ pub struct PlayService {
     pool: Option<Pool>,
     assets: Option<assets::Assets>,
     worlds: BTreeMap<String, World>,
+    retiring: Vec<lifecycle::Retiring>,
     next: u32,
     /// The in-process editor's [`embed::Surfaces`] handle, once taken.
     channel: Option<embed::Channel>,
@@ -171,6 +173,7 @@ impl PlayService {
             pool: None,
             assets: None,
             worlds: BTreeMap::new(),
+            retiring: Vec::new(),
             next: 0,
             channel: None,
         }
@@ -721,26 +724,25 @@ impl PlayService {
     }
 
     fn stop(&mut self, id: &str) -> Result<Value, Vec<Diagnostic>> {
-        let mut world = self
+        ara_gpu::cpu_scope!("Play.stop_service");
+        if !self.worlds.contains_key(id) {
+            return Err(fail(codes::UNKNOWN_WORLD, format!("no play world `{id}`")));
+        }
+        let (task, sender) = lifecycle::Retiring::new(id)?;
+        let world = self
             .worlds
             .remove(id)
-            .ok_or_else(|| fail(codes::UNKNOWN_WORLD, format!("no play world `{id}`")))?;
-        let mut tick = Value::Null;
-        for (_, player) in &mut world.players {
-            if let Ok(Ok(result)) = player.call(method::STOP, &json!({}), Duration::from_secs(2)) {
-                tick = result["tick"].clone();
-            }
-            let start = Instant::now();
-            while start.elapsed() < Duration::from_millis(500)
-                && !matches!(player.child.try_wait(), Ok(Some(_)))
-            {
-                std::thread::sleep(Duration::from_millis(2));
-            }
+            .expect("validated world remains owned by this service call");
+        if let Err(error) = sender.send(world) {
+            self.worlds.insert(id.to_owned(), error.0);
+            return Err(fail(
+                codes::PLAY,
+                "shutdown worker stopped before accepting the world",
+            ));
         }
-        // Dropping the world closes this process's surface handles.
-        drop(world);
+        self.retiring.push(task);
         self.close(id);
-        Ok(json!({"world": id, "tick": tick}))
+        Ok(json!({"world": id, "status":"stopping"}))
     }
 
     fn status(&mut self) -> Value {
@@ -771,7 +773,9 @@ impl PlayService {
                 })).collect::<Vec<_>>(),
             }))
             .collect();
-        json!({"pool": pool, "worlds": worlds})
+        json!({"pool": pool, "worlds": worlds, "stopping": self.retiring.iter().map(|task|
+            json!({"world":task.id,"elapsedMs":task.began.elapsed().as_secs_f64()*1000.})
+        ).collect::<Vec<_>>()})
     }
 
     fn test(&mut self, cx: &Cx<'_>, p: TestRunParams) -> Result<Value, Vec<Diagnostic>> {
@@ -1026,6 +1030,9 @@ impl Service for PlayService {
     }
 
     fn tick(&mut self, cx: &mut Cx<'_>) {
+        for problem in self.collect_stopped() {
+            cx.log(problem);
+        }
         if let Ok(pool) = self.pool() {
             for problem in pool.poll() {
                 cx.log(Diagnostic::warning(codes::PLAY, problem));

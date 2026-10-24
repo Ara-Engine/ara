@@ -3,8 +3,10 @@ mod edit;
 mod frame;
 mod gi;
 mod hash;
+mod native;
 mod passes;
 pub mod post;
+mod readback;
 mod transfer;
 mod upload;
 use crate::{
@@ -31,7 +33,8 @@ const HDR: usize = 7;
 const HISTORY0: usize = 8;
 const HISTORY1: usize = 9;
 const OUTPUT: usize = 10;
-const TARGET_COUNT: usize = 11;
+const MOTION: usize = 11;
+const TARGET_COUNT: usize = 12;
 
 struct Mesh {
     /// Stable external identity, the key for `Renderer::update_mesh`.
@@ -89,6 +92,7 @@ pub struct Renderer {
     last_timings: Vec<PassTiming>,
     /// Sky, fog, exposure, bloom and display grading after the G-buffer.
     look: crate::look::gpu::LookGpu,
+    native: Option<native::Native>,
 }
 
 impl Renderer {
@@ -127,8 +131,22 @@ impl Renderer {
         extensions: &[std::ffi::CString],
         cache: impl Into<PathBuf>,
     ) -> Result<Self> {
+        Self::new_device(scene, size, extensions, cache.into(), false)
+    }
+    fn new_device(
+        scene: Scene,
+        size: [u32; 2],
+        extensions: &[std::ffi::CString],
+        cache: PathBuf,
+        raster: bool,
+    ) -> Result<Self> {
         ensure!(!size.contains(&0), "Render extent is zero");
-        let mut gpu = VulkanDevice::new(extensions, cache)?;
+        ensure!(raster || !scene.meshes.is_empty(), "Scene has no geometry");
+        let mut gpu = if raster {
+            VulkanDevice::new_raster(extensions, cache)?
+        } else {
+            VulkanDevice::new(extensions, cache)?
+        };
         let artifacts = ara_gpu::cooked::resource_dir(
             env!("CARGO_PKG_NAME"),
             concat!(env!("CARGO_MANIFEST_DIR"), "/cooked"),
@@ -303,6 +321,7 @@ impl Renderer {
                 true,
             )?;
         }
+        self.readback(true)?;
         let rgba = self.gpu.read(self.targets.read_color)?;
         let ids = self
             .gpu
@@ -336,6 +355,7 @@ impl Renderer {
                 ID => vk::Format::R32_SFLOAT,
                 DEPTH | SHADOW => vk::Format::D32_SFLOAT,
                 OUTPUT => vk::Format::R8G8B8A8_UNORM,
+                MOTION => vk::Format::R16G16_SFLOAT,
                 _ => vk::Format::R32G32B32A32_SFLOAT,
             };
             let depth = target == DEPTH || target == SHADOW;
@@ -343,7 +363,7 @@ impl Renderer {
                 | vk::ImageUsageFlags::TRANSFER_SRC
                 | if depth {
                     vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT
-                } else if target >= HISTORY0 {
+                } else if (HISTORY0..=OUTPUT).contains(&target) {
                     vk::ImageUsageFlags::STORAGE
                 } else {
                     vk::ImageUsageFlags::COLOR_ATTACHMENT

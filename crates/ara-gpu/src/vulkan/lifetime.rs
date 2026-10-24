@@ -102,6 +102,7 @@ impl Device for VulkanDevice {
         Ok(())
     }
     fn collect(&mut self) -> Result<()> {
+        crate::cpu_scope!("GPU.collect_retired");
         let done = self.completed()?;
         let mut index = 0;
         while index < self.retired.len() {

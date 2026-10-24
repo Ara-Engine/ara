@@ -106,7 +106,11 @@ impl Renderer {
                 self.look.frame_index,
                 shadows.resolution,
                 shadows.cascades,
-                u32::MAX,
+                if self.native.is_some() {
+                    self.targets.sampled[MOTION]
+                } else {
+                    u32::MAX
+                },
             ],
         }
     }

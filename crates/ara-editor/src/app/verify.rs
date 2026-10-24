@@ -32,6 +32,7 @@ impl Verification {
         gpu: &mut NativeUi,
         ui_renderer: &mut UiRenderer,
         renderer: &mut Renderer,
+        scene_view: &mut super::viewport::SceneView,
     ) -> ara_ui::Result<bool> {
         if self.finished() {
             return Ok(false);
@@ -122,7 +123,15 @@ impl Verification {
                 if shell.ui.find(&format!("turn-{txn}")).is_none() {
                     return Err("Agents panel did not show the MCP turn".into());
                 }
-                self.screenshot("agents-review", editor, shell, gpu, ui_renderer, renderer)?;
+                self.screenshot(
+                    "agents-review",
+                    editor,
+                    shell,
+                    gpu,
+                    ui_renderer,
+                    renderer,
+                    scene_view,
+                )?;
                 shell.click(&format!("turn-{txn}-undo"), &mut clipboard)?;
                 shell.dispatch(editor)?;
                 check_x(editor, self.entity.as_deref(), 1.5)?;
@@ -141,12 +150,28 @@ impl Verification {
                 shell.rebuild(editor)?;
             }
             8 => {
-                self.screenshot("ara-dark", editor, shell, gpu, ui_renderer, renderer)?;
+                self.screenshot(
+                    "ara-dark",
+                    editor,
+                    shell,
+                    gpu,
+                    ui_renderer,
+                    renderer,
+                    scene_view,
+                )?;
                 editor.action("editor.theme", json!({"light":true}))?;
                 shell.rebuild(editor)?;
             }
             9 => {
-                self.screenshot("ara-light", editor, shell, gpu, ui_renderer, renderer)?;
+                self.screenshot(
+                    "ara-light",
+                    editor,
+                    shell,
+                    gpu,
+                    ui_renderer,
+                    renderer,
+                    scene_view,
+                )?;
                 editor.action("editor.theme", json!({"light":false}))?;
                 shell.rebuild(editor)?;
             }
@@ -156,10 +181,26 @@ impl Verification {
                 editor.action("editor.palette", json!({"open":true}))?;
                 editor.action("editor.search", json!({"panel":"palette","query":"fr"}))?;
                 shell.rebuild(editor)?;
-                self.screenshot("palette-dark", editor, shell, gpu, ui_renderer, renderer)?;
+                self.screenshot(
+                    "palette-dark",
+                    editor,
+                    shell,
+                    gpu,
+                    ui_renderer,
+                    renderer,
+                    scene_view,
+                )?;
                 editor.action("editor.theme", json!({"light":true}))?;
                 shell.rebuild(editor)?;
-                self.screenshot("palette-light", editor, shell, gpu, ui_renderer, renderer)?;
+                self.screenshot(
+                    "palette-light",
+                    editor,
+                    shell,
+                    gpu,
+                    ui_renderer,
+                    renderer,
+                    scene_view,
+                )?;
                 editor.action("editor.theme", json!({"light":false}))?;
                 editor.action("editor.palette", json!({"open":false}))?;
                 shell.rebuild(editor)?;
@@ -216,6 +257,7 @@ impl Verification {
         self.step += 1;
         Ok(true)
     }
+    #[allow(clippy::too_many_arguments)]
     pub(super) fn screenshot(
         &self,
         name: &str,
@@ -224,30 +266,38 @@ impl Verification {
         gpu: &mut NativeUi,
         ui_renderer: &mut UiRenderer,
         renderer: &mut Renderer,
+        scene_view: &mut super::viewport::SceneView,
     ) -> ara_ui::Result<()> {
         shell.settle_transitions();
         shell.frame()?;
-        let mut scene_view = super::viewport::SceneView::default();
         let view = editor.view()?;
-        renderer.update_geometry(view.scene(editor.host.root(), &editor.state, None)?)?;
+        renderer.update_geometry(view.scene(
+            editor.host.root(),
+            &editor.state,
+            None,
+            &mut editor.models,
+        )?)?;
         if let Some(rect) = shell.viewport() {
             renderer.resize(extent_scaled(rect, gpu.dpi()))?;
-            let capture = renderer.capture(&CaptureRequest {
-                camera: editor.state.camera.spec(),
-                size: renderer.size(),
-                mode: ViewMode::Lit,
-                deterministic: true,
-                exposure: 0.0015,
-                settle_frames: 1,
-                tick: 0,
-                seed: 7,
-                marks: Some(100),
-            })?;
+            scene_view.render_capture(renderer, editor, &view, 64)?;
+            let capture = scene_view.capture(
+                renderer,
+                &CaptureRequest {
+                    camera: editor.state.camera.spec(),
+                    size: renderer.size(),
+                    mode: ViewMode::Lit,
+                    deterministic: true,
+                    exposure: 0.0015,
+                    settle_frames: 1,
+                    tick: 0,
+                    seed: 7,
+                    marks: Some(100),
+                },
+            )?;
             if name == "ara-dark" {
                 std::fs::create_dir_all(&self.output)?;
                 capture.write(&self.output.join("viewport.png"))?;
             }
-            scene_view.render(renderer, editor, &view, 64)?;
             scene_view.attach(gpu, renderer, editor.state.quality)?;
             let changed = editor.agent_tints();
             gpu.overlays(
@@ -278,10 +328,9 @@ impl Verification {
             self.output.join(format!("{name}.layout.json")),
             ara_json::to_canonical_string(&shell.layout_report()),
         )?;
-        // Restore live images before releasing the temporary fidelity capture target.
-        super::attach(gpu, renderer)?;
+        // The capture settled the live view; retain that same completed attachment.
+        scene_view.attach(gpu, renderer, editor.state.quality)?;
         gpu.overlays(Default::default(), overlay::ENTITY_IMAGE, Vec::new());
-        scene_view.destroy(renderer)?;
         Ok(())
     }
 }

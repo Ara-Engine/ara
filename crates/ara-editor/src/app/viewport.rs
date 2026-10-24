@@ -23,13 +23,51 @@ pub(super) struct SceneView {
     camera: Option<crate::state::Camera>,
     /// The fidelity view applies to the Lit mode only; debug views show the raster output.
     lit: bool,
+    /// Transient typed drafts, projected through the same native extraction as commits.
+    preview_view: Option<crate::world::DocumentView>,
 }
 impl SceneView {
+    /// Re-extract native input at the next render boundary, retaining GPU content
+    /// until the replacement or in-place update succeeds.
+    pub(super) fn invalidate(&mut self) {
+        self.revision = None;
+        self.failed = None;
+        self.remaining = self.remaining.max(8);
+    }
+    /// Project typed Inspector drafts without authoring documents or baking meshes.
+    pub(super) fn set_preview_view(&mut self, view: Option<crate::world::DocumentView>) {
+        self.preview_view = view;
+        self.invalidate();
+    }
     pub fn timings(&self) -> &[ara_gpu::commands::PassTiming] {
         self.fidelity
             .as_ref()
             .map(|view| view.timings())
             .unwrap_or(&[])
+    }
+    /// Settle a reproducible capture on the live allocation. Reset lighting history
+    /// and the jitter/RNG sequence without holding a second view's GPU descriptors.
+    pub(super) fn render_capture(
+        &mut self,
+        renderer: &mut Renderer,
+        editor: &Editor,
+        view: &crate::world::DocumentView,
+        settle: u32,
+    ) -> ara_ui::Result<()> {
+        self.render(renderer, editor, view, 1)?;
+        if !self.active {
+            return Ok(());
+        }
+        if self.failed.is_some() {
+            return Err("Scene capture could not prepare the requested content generation".into());
+        }
+        self.fidelity
+            .as_mut()
+            .ok_or("Scene capture has no fidelity view")?
+            .reset_accumulation(renderer.gpu_mut())?;
+        self.tick = 0;
+        self.render_fidelity(renderer, editor, view, settle)?;
+        Ok(())
     }
     pub fn render(
         &mut self,
@@ -38,6 +76,9 @@ impl SceneView {
         view: &crate::world::DocumentView,
         settle: u32,
     ) -> ara_ui::Result<()> {
+        if !renderer.is_native() && self.preview_view.is_some() {
+            self.set_preview_view(None);
+        }
         let mode = view_mode(&editor.state.view_mode);
         self.lit = matches!(mode, ViewMode::Lit);
         renderer.render_view(&editor.state.camera.spec(), 0.0015, mode)?;
@@ -325,10 +366,10 @@ mod tests {
         // No source assets: initialize an empty publication without launching a worker.
         let _assets = ara_play_host::assets::Assets::new(&root, &root.join("unused-worker"))
             .map_err(anyhow::Error::msg)?;
-        let editor = Editor::open(&root)?;
+        let mut editor = Editor::open(&root)?;
         let view = editor.view()?;
         let mut renderer = Renderer::new(
-            view.scene(editor.host.root(), &editor.state, None)?,
+            view.scene(editor.host.root(), &editor.state, None, &mut editor.models)?,
             [192, 108],
             &[],
             root.join("gpu"),
@@ -340,7 +381,7 @@ mod tests {
                 .map_err(|error| anyhow::anyhow!("{error}"))?;
             assert!(scene.active);
             let fidelity = scene.fidelity.as_ref().expect("native Scene view");
-            assert_eq!(fidelity.settings().render_size, [128, 72]);
+            assert_eq!(fidelity.settings().render_size, [96, 54]);
             assert_eq!(fidelity.settings().post.ev100, Some(12.));
             assert!(!scene.effects.as_ref().expect("Scene effects").is_empty());
             let request = CaptureRequest {
@@ -357,6 +398,21 @@ mod tests {
             let capture = scene.capture(&mut renderer, &request)?;
             capture.write(&root.join("scene-high.png"))?;
             assert!(capture.image.pixels().any(|pixel| pixel[0] != pixel[1]));
+            scene
+                .render_capture(&mut renderer, &editor, &view, 8)
+                .map_err(|error| anyhow::anyhow!("{error}"))?;
+            let first = scene.capture(&mut renderer, &request)?;
+            scene
+                .render(&mut renderer, &editor, &view, 5)
+                .map_err(|error| anyhow::anyhow!("{error}"))?;
+            scene
+                .render_capture(&mut renderer, &editor, &view, 8)
+                .map_err(|error| anyhow::anyhow!("{error}"))?;
+            let repeated = scene.capture(&mut renderer, &request)?;
+            assert_eq!(
+                first.image, repeated.image,
+                "capture must reset history on the live view without another descriptor set"
+            );
             renderer.resize([240, 136])?;
             scene
                 .render(&mut renderer, &editor, &view, 2)
@@ -365,6 +421,60 @@ mod tests {
                 scene.published.as_ref().expect("completed image").size(),
                 [240, 136]
             );
+            // Interactive resizes retain the published frame while releasing the
+            // old fidelity targets before allocating their replacements.
+            for size in [[192, 108], [256, 144], [240, 136]] {
+                renderer.resize(size)?;
+                scene
+                    .render(&mut renderer, &editor, &view, 1)
+                    .map_err(|error| anyhow::anyhow!("{error}"))?;
+                assert_eq!(
+                    scene.published.as_ref().expect("resized frame").size(),
+                    size
+                );
+                assert_eq!(
+                    scene
+                        .fidelity
+                        .as_ref()
+                        .expect("live view")
+                        .settings()
+                        .display_size,
+                    size
+                );
+            }
+            // Opening another document reuses this same view; it must not acquire
+            // a second set of storage-image descriptors beside the old one.
+            let created = editor.apply(
+                vec![json!({"cmd":"doc.create","args":{
+                    "path":"levels/reopened.scene","kind":"scene"
+                }})],
+                "Create reopened scene fixture",
+                None,
+            )?;
+            let doc = created["outputs"][0]["id"]
+                .as_str()
+                .ok_or_else(|| anyhow::anyhow!("created scene"))?;
+            editor.apply_to(doc, vec![json!({"cmd":"entity.create","args":{
+                "name":"Reopened box","components":{"Transform":{},"MeshRenderer":{"color":[0.3,0.6,0.2,1]}}
+            }})], "Populate reopened scene fixture")?;
+            for path in ["levels/reopened.scene", "levels/main.scene"] {
+                editor.action("editor.scene.open", json!({"scene":path}))?;
+                let reopened = editor.view()?;
+                renderer.replace_scene(reopened.scene(
+                    editor.host.root(),
+                    &editor.state,
+                    None,
+                    &mut editor.models,
+                )?)?;
+                scene
+                    .render(&mut renderer, &editor, &reopened, 1)
+                    .map_err(|error| anyhow::anyhow!("{error}"))?;
+                assert!(scene.active);
+                assert!(
+                    scene.failed.is_none(),
+                    "scene reopen must publish without heap exhaustion"
+                );
+            }
             renderer.gpu().assert_clean()?;
             Ok(())
         })();

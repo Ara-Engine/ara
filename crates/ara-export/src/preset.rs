@@ -304,6 +304,32 @@ impl ExportPreset {
     }
     /// Parses strict JSON, validates schema identity and platform invariants.
     pub fn from_text(text: &str) -> Result<Self> {
+        let preset = Self::parse(text)?;
+        preset.validate()?;
+        Ok(preset)
+    }
+    /// Writes schema-ordered canonical strict JSON with defaults omitted.
+    pub fn to_text(&self) -> Result<String> {
+        self.validate()?;
+        self.canonical()
+    }
+    /// As [`from_text`](Self::from_text) for a preset whose runtime templates are
+    /// pinned by whoever builds it: the editor's Build Current Profile pins this
+    /// engine's player at build time, so the file holds no machine paths. Every other
+    /// invariant holds; [`validate`](Self::validate) still requires the pins before
+    /// an export.
+    pub fn from_unpinned_text(text: &str) -> Result<Self> {
+        let preset = Self::parse(text)?;
+        preset.check(false)?;
+        Ok(preset)
+    }
+    /// Writes a preset that may leave its templates unpinned (see
+    /// [`from_unpinned_text`](Self::from_unpinned_text)).
+    pub fn to_unpinned_text(&self) -> Result<String> {
+        self.check(false)?;
+        self.canonical()
+    }
+    fn parse(text: &str) -> Result<Self> {
         let mut value = ara_json::parse(text)?;
         ensure!(
             value.get("$schema").and_then(|v| v.as_str()) == Some("ara://schema/export/1"),
@@ -313,13 +339,9 @@ impl ExportPreset {
             .as_object_mut()
             .ok_or_else(|| anyhow::anyhow!("preset must be an object"))?
             .shift_remove("$schema");
-        let preset: Self = serde_json::from_value(value)?;
-        preset.validate()?;
-        Ok(preset)
+        Ok(serde_json::from_value(value)?)
     }
-    /// Writes schema-ordered canonical strict JSON with defaults omitted.
-    pub fn to_text(&self) -> Result<String> {
-        self.validate()?;
+    fn canonical(&self) -> Result<String> {
         let mut db = SchemaDb::new();
         Self::register(&mut db);
         let value = db.canonical_value(
@@ -338,6 +360,10 @@ impl ExportPreset {
     }
     /// Checks unsupported combinations and portable path/pin constraints.
     pub fn validate(&self) -> Result<()> {
+        self.check(true)
+    }
+    /// `validate`, requiring one pinned template per architecture when `pinned`.
+    fn check(&self, pinned: bool) -> Result<()> {
         self.crash.validate()?;
         let compatible = match self.packaging {
             PackageFormat::Folder => true,
@@ -447,7 +473,8 @@ impl ExportPreset {
                 "ARA-EXP-TPL-002: invalid template hash"
             );
         }
-        if !matches!(self.platform, Platform::Macos | Platform::Ios)
+        if pinned
+            && !matches!(self.platform, Platform::Macos | Platform::Ios)
             && arches.len() != self.platform.arches().len()
         {
             bail!("ARA-EXP-TPL-003: one pinned template per architecture is required");
