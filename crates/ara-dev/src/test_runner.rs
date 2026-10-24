@@ -364,6 +364,24 @@ mod tests {
         assert!(suite_deadline(now, None, 0).is_err());
     }
     #[test]
+    fn self_building_commands_have_a_slow_budget_bounded_by_the_gate() {
+        let tiers: Tiers = toml_edit::de::from_str(include_str!("../test-tiers.toml")).unwrap();
+        let commands = rule(&tiers, "ara-dev", "commands").expect("self-building slow tier");
+        assert_eq!(commands.timeout_seconds, 600);
+        assert_eq!(commands.group, "cargo");
+        assert!(rule(&tiers, "ara-dev", "ara_dev").is_none());
+        let now = Instant::now();
+        let gate = now + Duration::from_secs(300);
+        assert_eq!(
+            suite_deadline(now, None, commands.timeout_seconds).unwrap(),
+            now + Duration::from_secs(600)
+        );
+        assert_eq!(
+            suite_deadline(now, Some(gate), commands.timeout_seconds).unwrap(),
+            gate
+        );
+    }
+    #[test]
     fn slow_resources_serialize_and_ram_limits_parallel_admission() {
         let tiers: Tiers = toml_edit::de::from_str(include_str!("../test-tiers.toml")).unwrap();
         let gpu = Suite {
