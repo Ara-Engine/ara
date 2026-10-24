@@ -52,13 +52,37 @@ pub struct Connection {
     worker: Option<thread::JoinHandle<()>>,
 }
 
+struct Outbox {
+    events: Sender<Event>,
+    wake: Box<dyn Fn() + Send>,
+}
+impl Outbox {
+    fn send(&self, event: Event) -> Option<()> {
+        self.events.send(event).ok()?;
+        (self.wake)();
+        Some(())
+    }
+}
+
 const HEARTBEAT: Duration = Duration::from_secs(2);
 
 impl Connection {
     /// Connect to the user Hub in `directory`, starting `executable hub serve` if needed.
     pub fn start(directory: PathBuf, executable: PathBuf) -> Self {
+        Self::start_with_wake(directory, executable, || {})
+    }
+    /// Connect off-thread and wake a native event loop when results arrive.
+    pub fn start_with_wake(
+        directory: PathBuf,
+        executable: PathBuf,
+        wake: impl Fn() + Send + 'static,
+    ) -> Self {
         let (calls, inbox) = mpsc::channel();
         let (outbox, events) = mpsc::channel();
+        let outbox = Outbox {
+            events: outbox,
+            wake: Box::new(wake),
+        };
         let stop = Arc::new(AtomicBool::new(false));
         let flag = stop.clone();
         let worker = thread::Builder::new()
@@ -102,7 +126,9 @@ impl Connection {
 }
 impl Drop for Connection {
     fn drop(&mut self) {
-        self.stop();
+        // The GUI must not join an in-flight blocking RPC when its window closes.
+        // Tests call stop() explicitly before stopping their owned service.
+        self.stop.store(true, Ordering::Relaxed);
     }
 }
 
@@ -119,7 +145,7 @@ fn worker(
     directory: &Path,
     executable: &Path,
     inbox: &Receiver<Call>,
-    outbox: &Sender<Event>,
+    outbox: &Outbox,
     stop: &AtomicBool,
 ) {
     let log = directory.join("hub-start.log");
@@ -152,7 +178,7 @@ fn worker(
                         message,
                         log: log.clone(),
                     })
-                    .is_err()
+                    .is_none()
                 {
                     return;
                 }
@@ -165,7 +191,7 @@ fn worker(
             }
         };
         backoff = Duration::from_millis(250);
-        if outbox.send(Event::Connected).is_err() {
+        if outbox.send(Event::Connected).is_none() {
             return;
         }
         let mut beat = Instant::now();
@@ -181,7 +207,7 @@ fn worker(
                     // only a failed heartbeat means the Hub socket itself is gone.
                     lost = unreachable(&result)
                         && unreachable(&client.call("hub.subscribe", json!({})));
-                    if outbox.send(Event::Reply { call, result }).is_err() {
+                    if outbox.send(Event::Reply { call, result }).is_none() {
                         return;
                     }
                     beat = Instant::now();
@@ -198,7 +224,7 @@ fn worker(
                         kind: params["kind"].as_str().unwrap_or_default().to_owned(),
                         project: params["project"].as_str().map(str::to_owned),
                     };
-                    if outbox.send(event).is_err() {
+                    if outbox.send(event).is_none() {
                         return;
                     }
                 }
@@ -214,7 +240,7 @@ fn worker(
                         message,
                         log: log.clone(),
                     })
-                    .is_err()
+                    .is_none()
                 {
                     return;
                 }

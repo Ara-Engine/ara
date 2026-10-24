@@ -197,6 +197,7 @@ impl Thumbnails {
                 std::thread::spawn(move || {
                     let image = decode(&path);
                     let _ = send.send((path, image));
+                    super::wake::wake();
                 });
             }
         }

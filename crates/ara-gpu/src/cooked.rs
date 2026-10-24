@@ -5,6 +5,13 @@ use sha2::{Digest, Sha256};
 /// Finds installed cooked resources beside the executable, falling back to a checkout.
 /// Called during renderer setup, never during per-frame rendering.
 pub fn resource_dir(package: &str, checkout: impl AsRef<std::path::Path>) -> std::path::PathBuf {
+    if let Some(root) = std::env::var_os("ARA_SHADER_DIR") {
+        let root = std::path::PathBuf::from(root);
+        let single = std::env::var("ARA_SHADER_PACKAGE").ok();
+        if let Some(path) = override_dir(&root, package, single.as_deref()) {
+            return path;
+        }
+    }
     std::env::current_exe()
         .ok()
         .and_then(|exe| exe.parent().map(|dir| dir.join("resources").join(package)))
@@ -16,6 +23,50 @@ pub fn resource_dir(package: &str, checkout: impl AsRef<std::path::Path>) -> std
                     .is_some_and(|p| p.join("engine.json").is_file())
         })
         .unwrap_or_else(|| checkout.as_ref().to_path_buf())
+}
+
+fn override_dir(
+    root: &std::path::Path,
+    package: &str,
+    single: Option<&str>,
+) -> Option<std::path::PathBuf> {
+    if let Some(single) = single {
+        return (single == package).then(|| root.to_owned());
+    }
+    if root.file_name().is_some_and(|name| name == "cooked") {
+        return root
+            .parent()
+            .and_then(std::path::Path::file_name)
+            .is_some_and(|name| name == package)
+            .then(|| root.to_owned());
+    }
+    [
+        root.join("crates").join(package).join("cooked"),
+        root.join("resources").join(package),
+        root.join(package),
+    ]
+    .into_iter()
+    .find(|path| path.is_dir())
+}
+
+#[cfg(test)]
+mod override_tests {
+    use super::*;
+    #[test]
+    fn a_flat_cohort_override_never_replaces_an_unrelated_package() {
+        let root = std::path::Path::new("scratch/fidelity");
+        assert_eq!(
+            override_dir(root, "ara-render-fidelity", Some("ara-render-fidelity")),
+            Some(root.to_owned())
+        );
+        assert!(override_dir(root, "ara-render", Some("ara-render-fidelity")).is_none());
+        let cooked = std::path::Path::new("workspace/crates/ara-render-fidelity/cooked");
+        assert_eq!(
+            override_dir(cooked, "ara-render-fidelity", None),
+            Some(cooked.to_owned())
+        );
+        assert!(override_dir(cooked, "ara-render", None).is_none());
+    }
 }
 
 /// Runtime sampled-image array at binding 5. Bindings 0..4 retain the v1 subset

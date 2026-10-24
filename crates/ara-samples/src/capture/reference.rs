@@ -8,11 +8,10 @@
 use super::{look::Shot, render::Options};
 use anyhow::Result;
 use ara_gpu::vulkan::VulkanDevice;
-use ara_render::scene::Scene;
 use ara_render_fidelity::{
-    FidelityView, FrameInput, Mode, PostSettings, Settings, Tier, Upscaler,
-    environment::ev100_from_exposure,
+    FrameInput, Mode, PostSettings, Settings, Tier, Upscaler, environment::ev100_from_exposure,
 };
+use ara_runtime_render::fidelity::native::Prepared as Scene;
 use image::{RgbaImage, imageops};
 use serde_json::{Value, json};
 use std::path::Path;
@@ -46,7 +45,7 @@ pub fn render(
     let mut truths = Vec::new();
     for shot in shots {
         let started = std::time::Instant::now();
-        let mut view = FidelityView::new(
+        let mut view = super::convert::view(
             gpu,
             scene,
             Settings {
@@ -62,7 +61,6 @@ pub fn render(
                 reflection_cutoff: 1.,
                 post: environment.post(PostSettings::default()),
             },
-            None,
         )?;
         view.set_environment(environment)?;
         let cam = super::render::camera(shot);

@@ -175,22 +175,38 @@ pub(super) fn body(p: &mut Page, hub: &Hub) {
             };
             p.text("small muted", &usage);
             if let Some(reason) = hub.engine_errors.get(&engine.version) {
-                p.panel("banner banner-error", |p| {
-                    p.icon("circle-alert", "inherit");
-                    p.text("banner-copy fill", &format!("Can't remove: {reason}."));
-                });
+                let key = format!("engine-error-{}", engine.version);
+                if hub.banner_visible(&key) {
+                    p.panel("banner banner-error", |p| {
+                        p.icon("circle-alert", "inherit");
+                        p.text("banner-copy fill", &format!("Can't remove: {reason}."));
+                        super::shell::dismiss_banner(
+                            p,
+                            &format!("dismiss-engine-error-{}", engine.version),
+                            key,
+                        );
+                    });
+                }
             } else if !open.is_empty() {
+                let key = format!("engine-use-{}", engine.version);
                 let names: Vec<_> = open.iter().map(|p| p.name.as_str()).collect();
-                p.panel("banner banner-warn", |p| {
-                    p.icon("info", "inherit");
-                    p.text(
-                        "banner-copy fill",
-                        &format!(
-                            "In use by {} (open). Close them before removing this build.",
-                            names.join(", ")
-                        ),
-                    );
-                });
+                if hub.banner_visible(&key) {
+                    p.panel("banner banner-warn", |p| {
+                        p.icon("info", "inherit");
+                        p.text(
+                            "banner-copy fill",
+                            &format!(
+                                "In use by {} (open). Close them before removing this build.",
+                                names.join(", ")
+                            ),
+                        );
+                        super::shell::dismiss_banner(
+                            p,
+                            &format!("dismiss-engine-use-{}", engine.version),
+                            key,
+                        );
+                    });
+                }
             }
         });
     }

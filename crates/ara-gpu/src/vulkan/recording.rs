@@ -67,6 +67,7 @@ impl VulkanDevice {
     /// Submit one list with timeline dependencies. Returns a monotonic signal point.
     /// Bindless reachability is conservative: all published resources are retained.
     pub fn submit(&mut self, list: CommandList, waits: &[TimelinePoint]) -> Result<TimelinePoint> {
+        self.poll_shader_reload();
         for wait in waits {
             if wait.value > self.submitted[wait.queue.index()] {
                 return Err(GpuError::Contract("Wait targets unsubmitted work".into()));
