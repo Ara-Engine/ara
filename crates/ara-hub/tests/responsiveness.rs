@@ -136,12 +136,12 @@ fn confirmations_expire_and_errors_and_undo_have_useful_lifetimes() {
             data: None,
         }),
     });
-    let now = Instant::now();
     hub.event(Event::Reply {
         call:Call::Create {template:"blank".into(),name:"Created".into(),path:Some("target/created".into()),engine:None,dry_run:false,revision:0},
         result:Ok(json!({"id":"created","name":"Created","path":"target/created","engineVersion":"0.0.1-alpha"})),
     });
     let informational = hub.notices.last().expect("created confirmation").id;
+    let now = Instant::now();
     assert!(
         hub.tick(now + std::time::Duration::from_secs(9)),
         "ordinary informational toasts expire after eight seconds"
@@ -215,19 +215,18 @@ fn measure_hub_frames() {
         .join("../../target")
         .canonicalize()
         .expect("target");
-    std::fs::create_dir_all(path.parent().expect("parent")).expect("create output folder");
     assert!(
         path.parent()
             .expect("parent")
             .canonicalize()
-            .expect("output")
+            .expect("create an output directory under target/ first")
             .starts_with(target)
     );
     let (mut app, mut hub) = setup();
     let mut samples = Vec::new();
-    for scenario in ["unchanged", "status-refresh", "theme"] {
+    for scenario in ["unchanged", "status-refresh", "status-change", "theme"] {
         let mut elapsed = Vec::new();
-        for _ in 0..40 {
+        for sample in 0..40 {
             let start = Instant::now();
             if scenario == "theme" {
                 hub.intent(Intent::ToggleTheme);
@@ -236,6 +235,31 @@ fn measure_hub_frames() {
                 hub.event(Event::Reply {
                     call: Call::Status,
                     result: Ok(status_snapshot(&hub)),
+                });
+            }
+            if scenario == "status-change" {
+                let mut snapshot = status_snapshot(&hub);
+                let status = &mut snapshot["projects"][0];
+                let open = sample % 2 == 1;
+                status["state"] = json!(if open { "open" } else { "closed" });
+                status["pid"] = if open {
+                    json!(1001)
+                } else {
+                    serde_json::Value::Null
+                };
+                status["port"] = if open {
+                    json!(40101)
+                } else {
+                    serde_json::Value::Null
+                };
+                status["headless"] = if open {
+                    json!(false)
+                } else {
+                    serde_json::Value::Null
+                };
+                hub.event(Event::Reply {
+                    call: Call::Status,
+                    result: Ok(snapshot),
                 });
             }
             app.rebuild(&mut hub, capture::NOW).expect("frame");
