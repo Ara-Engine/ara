@@ -68,6 +68,8 @@ pub struct Ui {
     indexed: std::cell::Cell<usize>,
     /// Editor surfaces reject raw colors in inline styles (D18), on reconcile too.
     pub(crate) editor_checks: bool,
+    /// What `reconcile_parts` remembers between calls (part markup, index moves).
+    pub(crate) parts: crate::reconcile::Parts,
 }
 /// Actual incremental work counters for profiling and focused tests; `+=` sums
 /// several frames (a host's per-frame budget).
@@ -136,6 +138,7 @@ impl Ui {
             index: Default::default(),
             indexed: std::cell::Cell::new(usize::MAX),
             editor_checks: false,
+            parts: Default::default(),
         })
     }
     /// Resolve an authored ID without panicking when the node is absent.

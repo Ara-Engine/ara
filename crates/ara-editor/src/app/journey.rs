@@ -8,7 +8,7 @@
 //! Offscreen only (hidden window). Writes `NN-step.png` per step and, after every
 //! step, `journey.json` (what each step did, whether it worked and how long it took).
 use std::path::{Path, PathBuf};
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use ara_editor_gpu::NativeUi;
 use ara_render::Renderer;
@@ -32,6 +32,9 @@ const KEY_W: i32 = 26;
 const KEY_ESCAPE: i32 = 41;
 /// Editor frames the Play step holds W (the Salvager walks out of the start pose).
 const WALK: u32 = 360;
+/// How long a step's capture may wait for the Scene's content: captures take only
+/// complete scenes, and on a fresh project the importer is still cooking models.
+const CAPTURE_PATIENCE: Duration = Duration::from_secs(900);
 
 pub(super) struct Journey {
     step: usize,
@@ -51,6 +54,9 @@ pub(super) struct Journey {
     /// A label the capture hovers so its tooltip (a disabled reason) shows.
     hover: Option<&'static str>,
     note: String,
+    /// The step is done and waits for a complete Scene to capture: whether it
+    /// worked, and since when it waits.
+    capturing: Option<(bool, Instant)>,
 }
 
 impl Journey {
@@ -74,6 +80,7 @@ impl Journey {
             walking: None,
             hover: None,
             note: String::new(),
+            capturing: None,
         })
     }
 
@@ -93,6 +100,9 @@ impl Journey {
     ) -> ara_ui::Result<bool> {
         if self.finished() {
             return Ok(false);
+        }
+        if let Some((ok, _)) = self.capturing {
+            return self.capture(ok, editor, shell, gpu, ui, renderer, scene_view);
         }
         self.age += 1;
         let (name, _) = STEPS[self.step];
@@ -115,8 +125,29 @@ impl Journey {
         if timed_out && self.note.is_empty() {
             self.note = "timed out waiting for the step's effect".into();
         }
+        let ok = !timed_out && !self.note.starts_with("failed");
+        self.capturing = Some((ok, Instant::now()));
+        self.capture(ok, editor, shell, gpu, ui, renderer, scene_view)
+    }
+
+    /// Capture the finished step and record it; until the Scene's content is
+    /// complete (models still cooking), try again on later frames.
+    #[allow(
+        clippy::too_many_arguments,
+        reason = "the loop's GPU owners are borrowed separately"
+    )]
+    fn capture(
+        &mut self,
+        ok: bool,
+        editor: &mut Editor,
+        shell: &mut Shell,
+        gpu: &mut NativeUi,
+        ui: &mut UiRenderer,
+        renderer: &mut Renderer,
+        scene_view: &mut super::viewport::SceneView,
+    ) -> ara_ui::Result<bool> {
         shell.rebuild(editor)?;
-        if let Some(label) = self.hover.take()
+        if let Some(label) = self.hover
             && let Some(rect) = shell.ui.nodes.iter().find_map(|n| {
                 n.text
                     .as_ref()
@@ -129,10 +160,20 @@ impl Journey {
         }
         shell.upload_thumbnails(ui)?;
         let capture = super::verify::Verification::new(&self.output);
+        let (name, what) = STEPS[self.step];
         let file = format!("{:02}-{name}", self.step + 1);
-        capture.screenshot(&file, editor, shell, gpu, ui, renderer, scene_view)?;
-        let (_, what) = STEPS[self.step];
-        let ok = !timed_out && !self.note.starts_with("failed");
+        if let Err(error) = capture.screenshot(&file, editor, shell, gpu, ui, renderer, scene_view)
+        {
+            let waited = self
+                .capturing
+                .map_or(Duration::ZERO, |(_, at)| at.elapsed());
+            if waited < CAPTURE_PATIENCE {
+                return Ok(true);
+            }
+            return Err(error);
+        }
+        self.capturing = None;
+        self.hover = None;
         self.report.push(json!({
             "step": file,
             "what": what,
