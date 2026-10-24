@@ -33,23 +33,27 @@ impl QualityPreset {
     /// Every preset, cheapest first.
     pub const ALL: [QualityPreset; 4] = [Self::Low, Self::Medium, Self::High, Self::Epic];
 
-    /// The default raster preset: High, or Medium with under 8 GiB of device-local
-    /// memory. Epic is opt-in. Raster tiers never depend on ray tracing support.
+    /// Provisional raster auto tier: discrete adapters with at least 8 GiB start
+    /// at High, 6 GiB at Medium, and shared-memory/entry adapters at Low. Validate
+    /// these tiers against measured budgets; Epic requires measured headroom.
+    /// Ray-tracing enablement never lowers the raster tier.
     pub fn detect_raster(capabilities: &Capabilities) -> Self {
-        if capabilities
-            .device_local_mib
-            .is_some_and(|mib| mib < 8 * 1024)
-        {
-            Self::Medium
-        } else {
-            Self::High
+        match capabilities.device_local_mib {
+            Some(mib) if mib >= 8 * 1024 => Self::High,
+            Some(mib) if mib >= 6 * 1024 => Self::Medium,
+            _ => Self::Low,
         }
+    }
+
+    /// Hardware-selected default for the D27 raster path, including editor labels.
+    pub fn detect(capabilities: &Capabilities) -> Self {
+        Self::detect_raster(capabilities)
     }
 
     /// The default preset for the opt-in ray-traced renderer: Epic is opt-in, RT
     /// devices start at High (Medium with under 8 GiB of device-local memory), and
     /// others use Low.
-    pub fn detect(capabilities: &Capabilities) -> Self {
+    fn detect_ray_traced(capabilities: &Capabilities) -> Self {
         if !capabilities.ray_tracing {
             Self::Low
         } else if capabilities
@@ -134,7 +138,8 @@ impl From<ara_components::render::QualitySetting> for QualityChoice {
 pub struct Capabilities {
     /// Hardware ray queries (the RT tier).
     pub ray_tracing: bool,
-    /// Device-local memory in MiB, when the device reports it.
+    /// Dedicated device-local memory in MiB; absent for shared-memory or unknown
+    /// adapters, which use the conservative raster tier.
     pub device_local_mib: Option<u64>,
 }
 
@@ -143,7 +148,11 @@ impl Capabilities {
     pub fn of(gpu: &VulkanDevice) -> Self {
         Self {
             ray_tracing: gpu.context().info.ray_tracing,
-            device_local_mib: None,
+            device_local_mib: gpu
+                .context()
+                .info
+                .discrete
+                .then_some(gpu.context().info.device_local_mib),
         }
     }
 }
@@ -328,7 +337,7 @@ impl Plan {
         }
         let traced = options.ray_tracing && capabilities.ray_tracing;
         let requested = match choice {
-            QualityChoice::Auto if traced => QualityPreset::detect(capabilities),
+            QualityChoice::Auto if traced => QualityPreset::detect_ray_traced(capabilities),
             QualityChoice::Auto => QualityPreset::detect_raster(capabilities),
             QualityChoice::Preset(p) => p,
         };
@@ -406,6 +415,31 @@ mod tests {
             device_local_mib: None,
         };
         assert_eq!(QualityPreset::detect(&raster), QualityPreset::Low);
+        for (mib, expected) in [
+            (4 * 1024, QualityPreset::Low),
+            (6 * 1024 - 1, QualityPreset::Low),
+            (6 * 1024, QualityPreset::Medium),
+            (8 * 1024 - 1, QualityPreset::Medium),
+            (8 * 1024, QualityPreset::High),
+            (24 * 1024, QualityPreset::High),
+        ] {
+            for ray_tracing in [false, true] {
+                let caps = Capabilities {
+                    ray_tracing,
+                    device_local_mib: Some(mib),
+                };
+                assert_eq!(QualityPreset::detect(&caps), expected);
+                let plan = Plan::resolve(
+                    QualityChoice::Auto,
+                    &caps,
+                    [2560, 1440],
+                    RenderOptions::default(),
+                )
+                .unwrap();
+                assert_eq!(plan.preset, expected);
+                assert!(matches!(plan.path, RenderPath::Raster(_)));
+            }
+        }
     }
 
     #[test]
@@ -448,7 +482,29 @@ mod tests {
             display,
             RenderOptions::default(),
         );
-        assert_eq!(auto.unwrap().preset, QualityPreset::High);
+        assert_eq!(auto.unwrap().preset, QualityPreset::Low);
+    }
+
+    #[test]
+    fn rtx_4070_super_class_auto_is_high_on_a_raster_only_device() {
+        let caps = Capabilities {
+            ray_tracing: false,
+            device_local_mib: Some(12 * 1024),
+        };
+        assert_eq!(
+            QualityPreset::detect(&caps),
+            QualityPreset::High,
+            "editor and runtime must agree"
+        );
+        let plan = Plan::resolve(
+            QualityChoice::Auto,
+            &caps,
+            [2560, 1440],
+            RenderOptions::default(),
+        )
+        .unwrap();
+        assert_eq!(plan.preset, QualityPreset::High);
+        assert!(matches!(plan.path, RenderPath::Raster(_)));
     }
 
     #[test]
