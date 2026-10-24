@@ -199,6 +199,12 @@ line tables. Dependencies remain at opt-level 3. Shipping and D26 confirmation
 use `--profile release`; perf timings are iteration evidence, not a release pass.
 The first cold build and initial content export are setup costs, not the warm loop.
 
+Perf probes create an SDL window hidden from creation: `ara-dev perf` already passes
+`--perf-output`, which implies this policy. Manual player probes can use `--offscreen`.
+Rendering, submission and presentation continue; `player.json` reports
+`presentation: "hiddenWindow"`. These timings cover the hidden render/present path;
+desktop compositor latency and D27 acceptance require their own evidence.
+
 The default scene is a once-exported frozen copy of authored Outpost from
 `samples/outpost`, with the 144-tile scene from main. The production exporter
 cooks it once into `target/ara-dev/perf/outpost`; subsequent runs never reimport
