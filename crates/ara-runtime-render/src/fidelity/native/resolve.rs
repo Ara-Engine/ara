@@ -144,7 +144,7 @@ fn parts(
     Ok(frame.draws)
 }
 
-fn prepare_renderer(
+pub(super) fn prepare_renderer(
     library: &mut Library,
     renderer: &MeshRenderer,
     workspace: &Workspace,

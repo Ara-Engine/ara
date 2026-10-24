@@ -5,13 +5,18 @@ use ara_runtime::{
     extract::{Draw, RenderFrame},
     material::MaterialAsset,
 };
-use ara_texture_stream::{NativeConfig, NativeResidency};
+pub use ara_texture_stream::NativeConfig;
+use ara_texture_stream::NativeResidency;
 use sha2::{Digest, Sha256};
 use std::{collections::BTreeMap, sync::Arc};
 
+mod document;
 mod geometry;
+pub use document::document_frame;
 mod material;
 mod resolve;
+mod sync;
+pub use sync::FrameChange;
 mod terrain;
 #[cfg(test)]
 mod tests;
@@ -36,6 +41,7 @@ pub struct Prepared {
     pub scene: Scene,
     /// Native BC mip tails, with no RGBA expansion or atlas generation.
     pub textures: NativeResidency,
+    bindings: sync::Bindings,
 }
 
 struct Builder {
@@ -79,9 +85,11 @@ pub fn prepare(frame: &RenderFrame, content: Content, config: NativeConfig) -> R
         builder.scene.environment_size = environment.size;
     }
     builder.scene.validate()?;
+    let bindings = sync::Bindings::new(frame, builder.texture_keys)?;
     Ok(Prepared {
         scene: builder.scene,
         textures: builder.textures,
+        bindings,
     })
 }
 

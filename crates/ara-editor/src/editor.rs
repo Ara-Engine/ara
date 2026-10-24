@@ -54,6 +54,8 @@ pub struct Editor {
     pub(crate) command_schemas: BTreeMap<String, Value>,
     pub(crate) view_revision: u64,
     pub(crate) panels_revision: u64,
+    /// Bumps when agent activity changes what is tinted (D24 attribution; the
+    /// viewport rebuilds its tints on change). Named before D24's just-apply model.
     pub(crate) review_revision: u64,
     pub(crate) extraction_revision: u64,
     /// Registry commands requested over MCP, run by the shell at the next frame boundary.
@@ -550,7 +552,7 @@ impl Editor {
         fields
     }
     /// Viewport/hierarchy tints of records agents changed in the open scene just now.
-    pub fn review_tints(&self) -> BTreeMap<u64, &'static str> {
+    pub fn agent_tints(&self) -> BTreeMap<u64, &'static str> {
         self.activity.tints(
             self.host.store(),
             &self.state.doc,

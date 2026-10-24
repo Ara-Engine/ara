@@ -1,10 +1,14 @@
 //! Same-device Scene quality seam. The raster view retains IDs and capture metadata.
 use super::*;
 use ara_render_fidelity::{FidelityView, FrameInput, Mode, PostSettings, Settings, Tier, Upscaler};
+use ara_runtime_render::fidelity::native::{self, FrameChange, NativeConfig, Prepared};
 #[derive(Default)]
 pub(super) struct SceneView {
     fidelity: Option<FidelityView>,
-    revision: Option<(u64, u64, u64)>,
+    content: Option<crate::world::gltf::FidelityContent>,
+    prepared: Option<Prepared>,
+    revision: Option<(u64, u64, u64, u64)>,
+    failed: Option<(u64, u64, u64, u64)>,
     tick: u32,
     remaining: u32,
     camera: Option<crate::state::Camera>,
@@ -31,12 +35,40 @@ impl SceneView {
         if !lit_fidelity(editor) || !renderer.gpu().context().info.ray_tracing {
             return Ok(());
         }
+        if let Err(error) = self.render_fidelity(renderer, editor, view, settle) {
+            eprintln!("Scene fidelity keeps its last good presentation: {error}");
+            self.remaining = 0;
+            self.revision = Some((
+                editor.host.store().revision(),
+                editor.extraction_revision,
+                editor.review_revision,
+                self.content
+                    .as_ref()
+                    .map_or(0, |content| content.revision()),
+            ));
+        }
+        Ok(())
+    }
+    fn render_fidelity(
+        &mut self,
+        renderer: &mut Renderer,
+        editor: &Editor,
+        view: &crate::world::DocumentView,
+        settle: u32,
+    ) -> ara_ui::Result<()> {
         let size = renderer.size();
         let transport = size;
+        if self.content.is_none() {
+            self.content = Some(crate::world::gltf::FidelityContent::new(
+                editor.host.root(),
+            )?);
+        }
+        let content = self.content.as_mut().ok_or("fidelity sources")?;
         let revision = (
             editor.host.store().revision(),
             editor.extraction_revision,
             editor.review_revision,
+            content.revision(),
         );
         if self.camera != Some(editor.state.camera) {
             self.remaining = self.remaining.max(8);
@@ -51,33 +83,84 @@ impl SceneView {
         {
             self.remaining = 64;
         }
-        if self.fidelity.is_none() {
-            let scene = view.scene(editor.host.root(), &editor.state, editor.gesture.as_ref())?;
-            self.fidelity = Some(FidelityView::new(
-                renderer.gpu_mut(),
-                &scene,
-                Settings {
-                    render_size: transport,
-                    display_size: size,
-                    tier: Tier::Rt,
-                    mode: Mode::Hybrid,
-                    upscaler: Upscaler::Taau,
-                    probe_ray_budget: 1024,
-                    reflection_cutoff: 0.5,
-                    post: PostSettings {
-                        ev100: Some(9.1),
-                        bloom: 0.025,
-                        fog_density: 0.,
-                        ..Default::default()
+        let mut replaced = false;
+        if (self.fidelity.is_none() || reset)
+            && (self.failed != Some(revision) || editor.gesture.is_some())
+        {
+            // A rejected generation retries when its inputs change, rather than
+            // repeatedly decoding it while the last good image is still displayed.
+            self.failed = Some(revision);
+            let store = editor.host.store();
+            let frame = content.frame(
+                view,
+                store.workspace(),
+                store.schema(),
+                editor.gesture.as_ref(),
+                &editor.state.hidden,
+            )?;
+            let post = PostSettings {
+                ev100: Some((1.0 / (1.2 * frame.environment.exposure)).log2()),
+                bloom: 0.025,
+                fog_density: 0.0,
+                ..Default::default()
+            };
+            let rebuild = self
+                .prepared
+                .as_mut()
+                .map(|prepared| prepared.update_frame(&frame))
+                .transpose()?
+                .is_none_or(|change| change == FrameChange::Rebuild);
+            if rebuild {
+                let assets = content.content(&frame, store.workspace(), store.schema())?;
+                let mut prepared = native::prepare(&frame, assets, texture_config())?;
+                prepared.enable_motion();
+                let bank = prepared.textures.fork_sources(texture_config())?;
+                let mut next = FidelityView::new_native(
+                    renderer.gpu_mut(),
+                    &prepared.scene,
+                    bank,
+                    Settings {
+                        render_size: transport,
+                        display_size: size,
+                        tier: Tier::Rt,
+                        mode: Mode::Hybrid,
+                        upscaler: Upscaler::Taau,
+                        probe_ray_budget: 1024,
+                        reflection_cutoff: 0.5,
+                        post,
                     },
-                },
-                None,
-            )?);
-        } else if reset {
-            let scene = view.scene(editor.host.root(), &editor.state, editor.gesture.as_ref())?;
-            if let Some(f) = &mut self.fidelity {
-                f.update_scene(renderer.gpu_mut(), &scene)?;
+                    None,
+                )?;
+                if let Err(error) = next.render(
+                    renderer.gpu_mut(),
+                    &FrameInput {
+                        camera: &editor.state.camera.spec(),
+                        tick: self.tick,
+                        delta_seconds: 1.0 / 144.0,
+                        reset: true,
+                        lighting_changed: false,
+                        deterministic: false,
+                    },
+                ) {
+                    next.destroy(renderer.gpu_mut())?;
+                    return Err(error.into());
+                }
+                self.tick = self.tick.wrapping_add(1);
+                // Publish only after upload and a complete first render succeed.
+                if let Some(old) = self.fidelity.replace(next) {
+                    old.destroy(renderer.gpu_mut())?;
+                }
+                self.prepared = Some(prepared);
+                replaced = true;
+            } else if let (Some(fidelity), Some(prepared)) = (&mut self.fidelity, &self.prepared) {
+                fidelity.update_native_scene(renderer.gpu_mut(), &prepared.scene)?;
+                fidelity.set_post(post)?;
             }
+            self.failed = None;
+        }
+        if self.fidelity.is_none() {
+            self.revision = Some(revision);
+            return Ok(());
         }
         let f = self.fidelity.as_mut().ok_or("fidelity allocation")?;
         f.resize(renderer.gpu_mut(), transport, size)?;
@@ -88,8 +171,8 @@ impl SceneView {
                     camera: &editor.state.camera.spec(),
                     tick: self.tick,
                     delta_seconds: 1. / 144.,
-                    reset: reset && n == 0,
-                    lighting_changed: reset && n == 0,
+                    reset: replaced && n == 0,
+                    lighting_changed: false,
                     deterministic: false,
                 },
             )?;
@@ -100,7 +183,12 @@ impl SceneView {
         Ok(())
     }
     pub fn needs_frame(&self, quality: bool) -> bool {
-        quality && self.lit && self.fidelity.is_some() && self.remaining > 0
+        quality
+            && self.lit
+            && (self.fidelity.is_some() && self.remaining > 0
+                || self.content.as_ref().is_some_and(|content| {
+                    content.revision() != self.revision.map_or(0, |revision| revision.3)
+                }))
     }
     pub fn attach(
         &self,
@@ -146,4 +234,11 @@ fn view_mode(name: &str) -> ViewMode {
 }
 fn lit_fidelity(editor: &Editor) -> bool {
     editor.state.quality && matches!(view_mode(&editor.state.view_mode), ViewMode::Lit)
+}
+
+fn texture_config() -> NativeConfig {
+    NativeConfig {
+        resident_bytes: 1 << 30,
+        upload_bytes: 16 << 20,
+    }
 }

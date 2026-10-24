@@ -118,6 +118,26 @@ impl NativeResidency {
         self.keys.keys().copied()
     }
 
+    /// Creates another view's resident set with the same stable IDs and shared
+    /// compressed source bytes. No GPU resources or in-flight state are copied.
+    /// Use only at content/view creation boundaries, never per frame.
+    pub fn fork_sources(&self, config: NativeConfig) -> Result<Self> {
+        let mut result = Self::new(config)?;
+        result.keys = self.keys.clone();
+        result.entries = self
+            .entries
+            .iter()
+            .map(|entry| Entry {
+                source: Arc::clone(&entry.source),
+                srgb: entry.srgb,
+                desired: entry.desired,
+                priority: entry.priority,
+                resident: None,
+            })
+            .collect();
+        Ok(result)
+    }
+
     /// Creates a resident set without allocating GPU resources.
     pub fn new(config: NativeConfig) -> Result<Self> {
         ensure!(

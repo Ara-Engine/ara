@@ -14,6 +14,7 @@ mod acceleration;
 mod emitters;
 mod mips;
 mod native;
+pub use native::NativeUpdate;
 mod packing;
 mod upload;
 use packing::{content_hash, pack, texture_hash, validate};
@@ -201,6 +202,25 @@ impl GpuScene {
     /// Content fingerprint used by baked probes and capture provenance.
     pub fn content_hash(&self) -> &str {
         &self.hash
+    }
+    pub(crate) fn previous_binding(&self) -> u32 {
+        if self.native.is_some() {
+            return u32::from(self.motion_pending);
+        }
+        if self.motion_pending {
+            self.previous_table
+                .map_or(self.table_index, |(_, index)| index)
+        } else {
+            self.table_index
+        }
+    }
+    pub(crate) fn presented(&mut self) {
+        if self.motion_pending
+            && let Some(native) = &mut self.native
+        {
+            native.presented();
+        }
+        self.motion_pending = false;
     }
     pub(crate) fn resources(&self) -> Vec<(Resource, Access)> {
         let mut r = vec![(Resource::Buffer(self.table), Access::ShaderRead)];

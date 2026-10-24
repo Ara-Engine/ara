@@ -9,6 +9,9 @@ use ara_runtime::{
     model::{ModelMaterial, ModelTexture, TextureTransform, TextureUsage},
 };
 
+mod document;
+mod geometry;
+mod sync;
 mod terrain;
 
 fn draw(entity: u64) -> Draw {

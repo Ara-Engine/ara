@@ -76,12 +76,12 @@ fn uploaded_pool_builds_shared_lods_and_traces_transformed_instances() -> anyhow
     let scene = fixture();
     let raster = GeometryGpu::new(&mut gpu, &scene, false)?;
     assert!(raster.table_index().is_some() && raster.blas(0).is_none());
-    assert_eq!(raster.resources().count(), 4);
+    assert_eq!(raster.resources().count(), 5);
     raster.destroy(&mut gpu)?;
     if !gpu.context().info.ray_tracing {
         return Ok(());
     }
-    let pool = GeometryGpu::new(&mut gpu, &scene, true)?;
+    let mut pool = GeometryGpu::new(&mut gpu, &scene, true)?;
     assert_eq!(pool.stats().geometries, 2);
     assert_eq!(pool.stats().blas, 4);
     assert_eq!(
@@ -153,6 +153,41 @@ fn uploaded_pool_builds_shared_lods_and_traces_transformed_instances() -> anyhow
     gpu.retire_pipeline(pipeline)?;
     gpu.retire(Resource::AccelerationStructure(tlas))?;
     gpu.retire(Resource::Buffer(output))?;
+    let mut scene = scene;
+    for vertex in &mut scene.geometry[1].vertices {
+        vertex.position[0] += 0.2;
+    }
+    for bound in &mut scene.geometry[1].bounds {
+        bound.x += 0.2;
+    }
+    scene.geometry[1].revision += 1;
+    let table = pool.table_index();
+    let pose = pool
+        .prepare_pose(&mut gpu, &scene)?
+        .expect("changed skin stages a candidate");
+    assert!(
+        pool.prepare_pose(&mut gpu, &scene).is_err(),
+        "a second outstanding pose must not overwrite its candidate"
+    );
+    assert_eq!(pool.table_index(), table, "preparation must not publish");
+    pool.cancel_pose(&mut gpu, pose)?;
+    assert_eq!(
+        pool.blas(2),
+        Some(b),
+        "cancel must retain the published BLAS"
+    );
+    assert_eq!(pool.table_index(), table);
+    let pose = pool
+        .prepare_pose(&mut gpu, &scene)?
+        .expect("canceled pose may be retried");
+    assert_eq!(pose.geometries, 1);
+    assert_eq!(pose.blas, 2, "both LODs of the changed skin need rebuilds");
+    pool.commit_pose(&mut gpu, pose)?;
+    assert_eq!(pool.blas(0), Some(a), "skin update must retain static BLAS");
+    assert_ne!(pool.blas(2), Some(b));
+    assert_ne!(pool.table_index(), table);
+    pool.presented();
+    assert!(pool.prepare_pose(&mut gpu, &scene)?.is_none());
     pool.destroy(&mut gpu)?;
     gpu.assert_clean()?;
     Ok(())
