@@ -70,13 +70,17 @@ impl Ui {
     /// Parse editor markup with Ara Dark defaults and raw-color diagnostics.
     pub fn editor(markup: &str, css: &str, size: [f32; 2]) -> Result<Self> {
         check_editor(markup, css)?;
-        Self::with_tokens(markup, css, size, EditorTheme::Dark.tokens()?)
+        let mut ui = Self::with_tokens(markup, css, size, EditorTheme::Dark.tokens()?)?;
+        ui.editor_checks = true;
+        Ok(ui)
     }
-    /// Recompute only style differences; color-only changes do not reshape or relayout.
+    /// Swap the palette tokens and restyle once on the next frame; color-only changes
+    /// do not reshape or relayout. The current theme again is a no-op.
     pub fn switch_theme(&mut self, theme: EditorTheme) -> Result<()> {
-        self.sheet = crate::style::Sheet::with_tokens(&self.stylesheet_source, theme.tokens()?)?;
-        for n in &mut self.nodes {
-            n.dirty.style = true;
+        if self.sheet.set_tokens(theme.tokens()?) {
+            for n in &mut self.nodes {
+                n.dirty.style = true;
+            }
         }
         Ok(())
     }
@@ -85,6 +89,10 @@ impl Ui {
 pub fn check_editor(markup: &str, css: &str) -> Result<()> {
     let sheet = ara_ui_document::stylesheet::Stylesheet::parse(css)?;
     sheet.check_editor(css)?;
+    check_inline(markup)
+}
+/// Reject raw colors in editor inline styles (D18: semantic tokens only).
+pub(crate) fn check_inline(markup: &str) -> Result<()> {
     for block in ara_ui_document::inline_styles(markup)? {
         for d in ara_ui_document::stylesheet::declarations(&block.value, 0)? {
             if d.value.contains('#') || d.value.contains("rgb(") || d.value.contains("rgba(") {

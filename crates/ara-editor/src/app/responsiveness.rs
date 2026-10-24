@@ -1,0 +1,408 @@
+//! `--verify-responsiveness`: what UI interaction costs and whether every click lands,
+//! through the real window loop. Synthetic platform events (pointer moves, button
+//! presses at element centres) join the frame's SDL batch, so `route_event`, the
+//! controller, dispatch, rebuilds, layout, paint, the UI GPU submit and present all
+//! run as they do for a person. Each click is checked by the state it toggles, with
+//! normal, same-batch and slow-frame timings. Offscreen only; writes
+//! `responsiveness.json` (per-scenario frame costs, UI work counters, GPU UI time,
+//! input-to-present latency and click results).
+use super::*;
+use crate::shell::commands::Target;
+
+/// How a click's press and release reach the loop.
+#[derive(Clone, Copy, Debug, PartialEq, serde::Serialize)]
+enum Timing {
+    /// Press in one frame, release in the next.
+    Normal,
+    /// Press and release in the same event batch.
+    SameBatch,
+    /// A 120 ms frame, then press and release in one batch (input queued meanwhile).
+    SlowBefore,
+    /// Press, a 120 ms frame, then release.
+    SlowBetween,
+}
+const TIMINGS: [Timing; 4] = [
+    Timing::Normal,
+    Timing::SameBatch,
+    Timing::SlowBefore,
+    Timing::SlowBetween,
+];
+const SLOW: Duration = Duration::from_millis(120);
+/// Clicks per target and timing.
+const CLICKS: usize = 8;
+
+/// What a click targets; each toggles a state the probe can read.
+#[derive(Clone, Copy, Debug, serde::Serialize)]
+enum Control {
+    /// The Scene toolbar's World/Local button (`editor.state.local`).
+    Toolbar,
+    /// Alternate between the first two tabs of a tabbed dock area.
+    Tab,
+    /// The File menu title (opens, then closes its menu).
+    Menu,
+}
+
+enum Act {
+    Idle(&'static str, u32),
+    Hover(u32),
+    Click(Control, Timing),
+    /// The View > Theme rows' command, then frames for it to settle.
+    Theme(&'static str),
+}
+
+/// A click in flight.
+struct Pending {
+    control: Control,
+    timing: Timing,
+    before: String,
+    /// Frames since the press.
+    age: u32,
+    injected: Instant,
+    released: bool,
+}
+
+/// One frame's measurements, filled in by the loop.
+#[derive(Default, serde::Serialize)]
+pub(super) struct Sample {
+    pub cpu_ms: f64,
+    /// Running the injected command (theme rows), before routing.
+    pub inject_ms: f64,
+    pub input_ms: f64,
+    pub ui_ms: f64,
+    /// The authority's tick (server pump, `Editor::tick`).
+    pub tick_ms: f64,
+    /// Scene re-extraction and geometry upload after document changes.
+    pub geometry_ms: f64,
+    /// The Scene view's render and overlays (when the frame is dirty).
+    pub scene_ms: f64,
+    /// Re-rasterizing toolbar icons (theme or DPI changes).
+    pub icons_ms: f64,
+    pub render_ms: f64,
+    pub gpu_ms: f64,
+    pub present_ms: f64,
+    pub presented: bool,
+    pub rebuilds: u32,
+    pub rebuild_ms: f64,
+    pub mount_ms: f64,
+    pub reconcile_ms: f64,
+    pub work: ara_ui::Work,
+    /// Injected input to the end of present, when this frame carried input.
+    pub input_to_present_ms: Option<f64>,
+}
+
+pub(super) struct Probe {
+    output: PathBuf,
+    acts: Vec<Act>,
+    index: usize,
+    age: u32,
+    pending: Option<Pending>,
+    /// Input injected this frame, for input-to-present.
+    injected: Option<Instant>,
+    sleep_after: bool,
+    hover_targets: Vec<String>,
+    samples: Vec<(String, Sample)>,
+    clicks: Vec<Value>,
+}
+
+impl Probe {
+    pub fn new(output: &std::path::Path) -> Self {
+        let mut acts = vec![
+            Act::Idle("warmup", 60),
+            Act::Idle("idle", 240),
+            Act::Hover(160),
+        ];
+        for control in [Control::Toolbar, Control::Tab, Control::Menu] {
+            for timing in TIMINGS {
+                for _ in 0..CLICKS {
+                    acts.push(Act::Click(control, timing));
+                }
+            }
+        }
+        for _ in 0..6 {
+            acts.push(Act::Theme("view.theme.light"));
+            acts.push(Act::Theme("view.theme.dark"));
+        }
+        acts.push(Act::Idle("idle-after", 120));
+        Self {
+            output: output.into(),
+            acts,
+            index: 0,
+            age: 0,
+            pending: None,
+            injected: None,
+            sleep_after: false,
+            hover_targets: Vec::new(),
+            samples: Vec::new(),
+            clicks: Vec::new(),
+        }
+    }
+
+    pub fn finished(&self) -> bool {
+        self.index >= self.acts.len()
+    }
+
+    fn label(&self) -> String {
+        match self.acts.get(self.index) {
+            Some(Act::Idle(name, _)) => (*name).into(),
+            Some(Act::Hover(_)) => "hover".into(),
+            Some(Act::Click(control, _)) => format!("click-{control:?}").to_lowercase(),
+            Some(Act::Theme(_)) => "theme".into(),
+            None => "done".into(),
+        }
+    }
+
+    /// Before polling: apply a slow frame and reset the shell's counters.
+    pub fn begin(&mut self, shell: &mut Shell) {
+        let _ = shell.take_stats();
+        if let Some(Act::Click(_, Timing::SlowBefore)) = self.acts.get(self.index)
+            && self.pending.is_none()
+        {
+            std::thread::sleep(SLOW);
+        }
+    }
+
+    /// Add this frame's synthetic input to the polled batch. `scale` maps window
+    /// points to logical pixels (`native::points_to_logical`).
+    pub fn inject(
+        &mut self,
+        editor: &mut Editor,
+        shell: &mut Shell,
+        scale: f32,
+        events: &mut Vec<(u32, Event)>,
+    ) -> ara_ui::Result<()> {
+        let at = |point: [f32; 2]| [point[0] / scale, point[1] / scale];
+        let push = |events: &mut Vec<(u32, Event)>, event| events.push((0, event));
+        self.injected = None;
+        if let Some(pending) = &mut self.pending {
+            if !pending.released && pending.age >= 1 {
+                push(events, button(false));
+                pending.released = true;
+                self.injected = Some(Instant::now());
+            }
+            pending.age += 1;
+            return Ok(());
+        }
+        match self.acts.get(self.index) {
+            Some(Act::Hover(_)) => {
+                if self.hover_targets.is_empty() {
+                    self.hover_targets = shell
+                        .ui
+                        .nodes
+                        .iter()
+                        .filter(|n| {
+                            n.element.tag == "button"
+                                && (n.element.id.starts_with("menu-title-")
+                                    || n.element.id.starts_with("tool-")
+                                    || n.element.id.starts_with("tab-"))
+                        })
+                        .map(|n| n.element.id.clone())
+                        .collect();
+                }
+                let id = &self.hover_targets[self.age as usize % self.hover_targets.len().max(1)];
+                if let Some(point) = centre(shell, id) {
+                    push(events, motion(at(point)));
+                    self.injected = Some(Instant::now());
+                }
+            }
+            Some(Act::Click(control, timing)) => {
+                let (control, timing) = (*control, *timing);
+                let id = target(shell, control)
+                    .ok_or_else(|| format!("responsiveness: no {control:?} control on screen"))?;
+                let point = centre(shell, &id).ok_or("responsiveness: target has no box")?;
+                push(events, motion(at(point)));
+                push(events, button(true));
+                let same = matches!(timing, Timing::SameBatch | Timing::SlowBefore);
+                if same {
+                    push(events, button(false));
+                }
+                self.sleep_after = timing == Timing::SlowBetween;
+                self.injected = Some(Instant::now());
+                self.pending = Some(Pending {
+                    control,
+                    timing,
+                    before: signature(editor, shell, control),
+                    age: 0,
+                    injected: Instant::now(),
+                    released: same,
+                });
+            }
+            Some(Act::Theme(command)) if self.age == 0 => {
+                self.injected = Some(Instant::now());
+                shell.run_command(editor, command, &Target::None)?;
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+
+    /// After the frame (present included): record it and advance the script.
+    pub fn end(&mut self, editor: &Editor, shell: &mut Shell, mut sample: Sample) {
+        let stats = shell.take_stats();
+        sample.rebuilds = stats.rebuilds;
+        sample.rebuild_ms = stats.rebuild_ms;
+        sample.mount_ms = stats.mount_ms;
+        sample.reconcile_ms = stats.reconcile_ms;
+        sample.work = stats.work;
+        if sample.presented {
+            sample.input_to_present_ms = self.injected.map(|t| t.elapsed().as_secs_f64() * 1000.);
+        }
+        self.samples.push((self.label(), sample));
+        if std::mem::take(&mut self.sleep_after) {
+            std::thread::sleep(SLOW);
+        }
+        if let Some(pending) = &self.pending {
+            let now = signature(editor, shell, pending.control);
+            let landed = pending.released && now != pending.before;
+            if landed || pending.age > 10 {
+                self.clicks.push(json!({
+                    "control": pending.control,
+                    "timing": pending.timing,
+                    "ok": landed,
+                    "frames": pending.age + 1,
+                    "toEffectMs": pending.injected.elapsed().as_secs_f64() * 1000.,
+                    "before": pending.before,
+                    "after": now,
+                }));
+                self.pending = None;
+                self.advance();
+            }
+            return;
+        }
+        self.age += 1;
+        let done = match self.acts.get(self.index) {
+            Some(Act::Idle(_, frames) | Act::Hover(frames)) => self.age >= *frames,
+            Some(Act::Theme(_)) => self.age >= 8,
+            _ => true,
+        };
+        if done {
+            self.advance();
+        }
+    }
+
+    fn advance(&mut self) {
+        self.index += 1;
+        self.age = 0;
+    }
+
+    /// Write `responsiveness.json`: per-scenario statistics, every click and frame.
+    pub fn write(&self, device: &Value) -> ara_ui::Result<()> {
+        let mut scenarios = serde_json::Map::new();
+        let mut names: Vec<&str> = self.samples.iter().map(|(n, _)| n.as_str()).collect();
+        names.dedup();
+        for name in names {
+            let frames: Vec<&Sample> = self
+                .samples
+                .iter()
+                .filter(|(n, _)| n == name)
+                .map(|(_, s)| s)
+                .collect();
+            let stat = |f: &dyn Fn(&Sample) -> f64| {
+                statistics(&frames.iter().map(|s| f(s)).collect::<Vec<_>>())
+            };
+            let latencies: Vec<f64> = frames
+                .iter()
+                .filter_map(|s| s.input_to_present_ms)
+                .collect();
+            scenarios.insert(
+                name.into(),
+                json!({
+                    "frames": frames.len(),
+                    "presented": frames.iter().filter(|s| s.presented).count(),
+                    "cpuMs": stat(&|s| s.cpu_ms),
+                    "inputMs": stat(&|s| s.input_ms),
+                    "uiFrameMs": stat(&|s| s.ui_ms),
+                    "rebuildMs": stat(&|s| s.rebuild_ms),
+                    "mountMs": stat(&|s| s.mount_ms),
+                    "reconcileMs": stat(&|s| s.reconcile_ms),
+                    "sceneMs": stat(&|s| s.scene_ms),
+                    "tickMs": stat(&|s| s.tick_ms),
+                    "geometryMs": stat(&|s| s.geometry_ms),
+                    "rebuilds": frames.iter().map(|s| u64::from(s.rebuilds)).sum::<u64>(),
+                    "renderMs": stat(&|s| s.render_ms),
+                    "gpuWaitMs": stat(&|s| s.gpu_ms),
+                    "presentMs": stat(&|s| s.present_ms),
+                    "restyled": stat(&|s| s.work.restyled as f64),
+                    "layoutPasses": stat(&|s| s.work.layout_passes as f64),
+                    "shaped": stat(&|s| s.work.shaped as f64),
+                    "paintNodes": stat(&|s| s.work.paint_nodes as f64),
+                    "inputToPresentMs": (!latencies.is_empty()).then(|| statistics(&latencies)),
+                }),
+            );
+        }
+        let landed = self.clicks.iter().filter(|c| c["ok"] == true).count();
+        let report = json!({
+            "clicks": {"total": self.clicks.len(), "landed": landed, "each": self.clicks},
+            "scenarios": scenarios,
+            "frames": self.samples.iter().map(|(name, s)| json!({"scenario": name, "sample": s})).collect::<Vec<_>>(),
+            "device": device,
+            "note": "Times are wall-clock on the main thread; gpuWaitMs is the time spent waiting for UI submissions (each waits for its fence). Slow-frame clicks add a 120 ms sleep.",
+        });
+        std::fs::create_dir_all(&self.output)?;
+        std::fs::write(
+            self.output.join("responsiveness.json"),
+            ara_json::to_canonical_string(&report),
+        )?;
+        Ok(())
+    }
+}
+
+fn motion(position: [f32; 2]) -> Event {
+    Event::MouseMotion {
+        position,
+        delta: [0., 0.],
+    }
+}
+fn button(pressed: bool) -> Event {
+    Event::MouseButton { button: 1, pressed }
+}
+fn centre(shell: &Shell, id: &str) -> Option<[f32; 2]> {
+    let r = shell.ui.nodes[shell.ui.find(id)?].rect;
+    (r.w > 0. && r.h > 0.).then_some([r.x + r.w * 0.5, r.y + r.h * 0.5])
+}
+/// The element a click on `control` presses now (for tabs: the inactive one of the
+/// first tabbed area's first two tabs).
+fn target(shell: &Shell, control: Control) -> Option<String> {
+    match control {
+        Control::Toolbar => Some("tool-space".into()),
+        Control::Menu => Some("menu-title-0".into()),
+        Control::Tab => {
+            let [a, b] = tab_pair(shell)?;
+            Some(if selected(shell, &a) { b } else { a })
+        }
+    }
+}
+/// The first two tabs of the first dock area showing a tab bar.
+fn tab_pair(shell: &Shell) -> Option<[String; 2]> {
+    let bar = shell
+        .ui
+        .nodes
+        .iter()
+        .find(|n| n.element.id.starts_with("tabs-") && n.visible)?;
+    let mut tabs = bar
+        .element
+        .children
+        .iter()
+        .map(|i| &shell.ui.nodes[*i])
+        .filter(|n| n.element.tag == "button" && n.element.id.starts_with("tab-"))
+        .map(|n| n.element.id.clone());
+    Some([tabs.next()?, tabs.next()?])
+}
+fn selected(shell: &Shell, id: &str) -> bool {
+    shell.ui.find(id).is_some_and(|i| {
+        shell.ui.nodes[i]
+            .element
+            .attrs
+            .get("class")
+            .is_some_and(|c| c.split(' ').any(|c| c == "tab-selected"))
+    })
+}
+/// The state a click on `control` changes.
+fn signature(editor: &Editor, shell: &Shell, control: Control) -> String {
+    match control {
+        Control::Toolbar => editor.state.local.to_string(),
+        Control::Menu => format!("{:?}", shell.menu.as_ref().and_then(|m| m.bar())),
+        Control::Tab => tab_pair(shell)
+            .map(|pair| pair.into_iter().filter(|t| selected(shell, t)).collect())
+            .unwrap_or_default(),
+    }
+}

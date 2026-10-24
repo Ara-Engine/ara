@@ -11,7 +11,10 @@ Public API:
 - `report_schema` returns the generated JSON Schema; `register` registers report types.
 - `compare` uses local SSIM, perceptual channel error and a changed-pixel budget, including alpha.
 
-Tests: `CARGO_BUILD_JOBS=2 cargo test -p ara-ui-test`.
+Tests: `CARGO_BUILD_JOBS=2 cargo test -p ara-ui-test`. `tests/responsiveness.rs` drives a
+reconciling host through `InputState`: first-click tabs/menus/notification dismissal across
+rebuilds, batched (slow-frame) and moved-under-the-pointer clicks, echoed field edits, zero-work
+idle frames and a theme switch bounded to one restyle with no layout or shaping.
 Run `cargo clippy -p ara-ui-test --all-targets -- -D warnings` and package rustfmt check.
 `ARA_UI_UPDATE_STORY_GOLDENS=1` explicitly rebaselines committed catalogue goldens.
 Inspect all changed captures before accepting a rebaseline. Never auto-accept a missing golden.

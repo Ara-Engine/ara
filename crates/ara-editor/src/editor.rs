@@ -282,10 +282,9 @@ impl Editor {
             changed = true;
         }
         while let Ok(state) = self.updates.try_recv() {
-            if self.state.doc != state.doc
-                || self.state.hidden != state.hidden
-                || self.state.light != state.light
-            {
+            // The theme is not here: it only tints deletion ghosts (none since D24),
+            // and re-extracting a large scene for it took seconds.
+            if self.state.doc != state.doc || self.state.hidden != state.hidden {
                 self.extraction_revision += 1;
             }
             if self.state.panels_changed(&state) {

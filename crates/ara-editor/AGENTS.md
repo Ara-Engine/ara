@@ -132,6 +132,9 @@ runs ara-export with `presets/*.export.json` on a thread.
 Bounded runs are offscreen (`Options::offscreen`: hidden windows, UI readback);
 never add a capture route that shows a window. `--verify-journey` captures the
 journey (`app/journey.rs`) and writes `journey.json` after every step.
+`--verify-responsiveness` (`app/responsiveness.rs`) injects SDL-level clicks/moves into the
+real loop and writes per-frame costs, UI work and click results. Shell rebuilds reconcile
+into the retained `Ui` (`Shell::mount`); `Shell::resolved` caches the open scene per revision.
 Tools: `shell/material_panel.rs` (preview + parameters, Graph|Source, compile
 status; swatches are painted after layout, never raw colours in markup) and
 `shell/vfx_panel.rs` (emitter stacks, preview-only Hide/Isolate, timeline driving

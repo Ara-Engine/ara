@@ -4,6 +4,7 @@ mod controller;
 mod game;
 mod journey;
 mod panels_verify;
+mod responsiveness;
 mod setup;
 mod ux_verify;
 mod verify;
@@ -142,6 +143,9 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
     } else {
         None
     };
+    let mut probe = options
+        .verify_responsiveness
+        .then(|| responsiveness::Probe::new(&options.output));
     let mut journey = if options.verify_journey {
         Some(journey::Journey::new(&mut editor, &options.output)?)
     } else {
@@ -176,8 +180,13 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
         let mut wall_samples = Vec::new();
         let mut last_ui = 0;
         let frame_budget = Duration::from_secs_f64(1. / 144.);
+        // The last progressive Scene frame (see below), so hovering never starves it.
+        let mut last_progressive = Instant::now();
         let mut previous = Instant::now();
         loop {
+            if let Some(probe) = &mut probe {
+                probe.begin(&mut shell);
+            }
             let profile_frame = if editor.host.profiler().is_recording() {
                 editor.host.profiler().begin_frame().ok()
             } else {
@@ -194,10 +203,18 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
             let mut graph_start = None;
             let dt = frame_start.duration_since(previous).as_secs_f32().min(0.05);
             previous = frame_start;
-            let events = Window::poll_tagged()?;
-            let interaction_start = (!events.is_empty()).then(Instant::now);
-            let mut quit = false;
+            let mut events = Window::poll_tagged()?;
             let main_dpi = options.dpi.unwrap_or_else(|| native.dpi()) * windows::ui_scale(&editor);
+            let mut inject_ms = 0.;
+            if let Some(probe) = &mut probe {
+                let scale = crate::native::points_to_logical(window.raw(), main_dpi);
+                let at = Instant::now();
+                probe.inject(&mut editor, &mut shell, scale, &mut events)?;
+                inject_ms = at.elapsed().as_secs_f64() * 1000.;
+            }
+            let interaction_start = (!events.is_empty()).then(Instant::now);
+            let routed_at = Instant::now();
+            let mut quit = false;
             for (sdl, event) in events {
                 let routed = route_event(
                     sdl,
@@ -272,6 +289,7 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                     }
                 }
             }
+            let input_ms = routed_at.elapsed().as_secs_f64() * 1000.;
             if let Some(request) = shell.window_request.take() {
                 match request {
                     crate::shell::WindowRequest::Fullscreen => window.toggle_fullscreen()?,
@@ -317,8 +335,10 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                 scene_dirty = true;
             }
             let authority_scope = profile_frame.map(|_| ara_profile::scope("editor.authority"));
+            let tick_at = Instant::now();
             server.pump(&mut editor);
             editor.tick();
+            let tick_ms = tick_at.elapsed().as_secs_f64() * 1000.;
             // The Game view: its size (physical pixels) is where embedded Play starts and
             // what it resizes to; new frames redraw the UI.
             if let Some(i) = shell.ui.find("game-surface") {
@@ -394,6 +414,7 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                 dirty = true;
             }
             dirty |= shell.upload_thumbnails(&mut ui_renderer)?;
+            let geometry_at = Instant::now();
             if editor.host.store().revision() != last_revision {
                 last_revision = editor.host.store().revision();
                 view = editor.view()?;
@@ -432,6 +453,7 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                 dirty = true;
                 scene_dirty = true;
             }
+            let geometry_ms = geometry_at.elapsed().as_secs_f64() * 1000.;
             if editor.view_revision != last_view {
                 last_view = editor.view_revision;
                 dirty = true;
@@ -549,18 +571,33 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
             shell.sync_canvas(&editor);
             shell.orient_axis(editor.state.camera);
             let ui_scope = profile_frame.map(|_| ara_profile::scope("editor.ui"));
+            let ui_at = Instant::now();
             let work = shell.frame()?;
+            let ui_ms = ui_at.elapsed().as_secs_f64() * 1000.;
+            let (mut render_ms, mut present_ms, mut presented) = (0., 0., false);
+            let (mut scene_ms, mut icons_ms) = (0., 0.);
             let graph_paint = graph_start.map(|start| start.elapsed().as_secs_f64() * 1000.);
             drop(ui_scope);
             dirty |= work.paint_nodes > 0 || work.layout_passes > 0 || work.restyled > 0;
+            // Progressive Scene frames (fidelity accumulation, newly published assets)
+            // yield to frames carrying input, so a click or hover presents without
+            // waiting for one; they resume on the next quiet frame, and at least every
+            // 100 ms. Scene changes made by input (camera, gizmos, edits) render now.
             if shell.viewport().is_some() && scene_view.needs_frame(editor.state.quality) {
-                dirty = true;
-                scene_dirty = true;
+                let yield_to_input = interaction_start.is_some()
+                    && !scene_dirty
+                    && last_progressive.elapsed() < Duration::from_millis(100);
+                if !yield_to_input {
+                    dirty = true;
+                    scene_dirty = true;
+                    last_progressive = Instant::now();
+                }
             }
             if dirty {
                 let _render_scope = profile_frame.map(|_| ara_profile::scope("editor.render"));
                 profile_gpu = shell.viewport().is_some() && scene_dirty;
                 let render_start = Instant::now();
+                let scene_at = Instant::now();
                 if let Some(rect) = shell.viewport() {
                     renderer.resize(extent_scaled(rect, dpi))?;
                     if scene_dirty {
@@ -617,12 +654,16 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                 } else {
                     gpu.overlays(Default::default(), overlay::ENTITY_IMAGE, Vec::new());
                 }
+                scene_ms = scene_at.elapsed().as_secs_f64() * 1000.;
                 if icon_state != (editor.state.light, dpi) {
+                    let icons_at = Instant::now();
                     crate::shell::icons::install(&mut ui_renderer, editor.state.light, dpi)?;
                     icon_state = (editor.state.light, dpi);
+                    icons_ms = icons_at.elapsed().as_secs_f64() * 1000.;
                 }
                 gpu.select_target(0);
                 gpu.set_dpi(dpi)?;
+                let render_at = Instant::now();
                 ui_renderer.render(
                     &mut gpu,
                     &shell.ui.display,
@@ -630,12 +671,16 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                     shell.ui.size.map(|v| v.round() as u32),
                     TextMode::Raster,
                 )?;
+                render_ms = render_at.elapsed().as_secs_f64() * 1000.;
                 let graph_gpu = graph_start.map(|start| start.elapsed().as_secs_f64() * 1000.);
                 let (image, size) = gpu.output()?;
+                let present_at = Instant::now();
                 // SAFETY: UI submission is complete, image is CopySource and all native owners are live.
                 unsafe {
                     present.display(renderer.gpu().context(), image, size)?;
                 }
+                present_ms = present_at.elapsed().as_secs_f64() * 1000.;
+                presented = true;
                 let graph_present = graph_start.map(|start| start.elapsed().as_secs_f64() * 1000.);
                 if work.paint_nodes > 0 || work.layout_passes > 0 || shell.version != last_ui {
                     if focused_float.is_none() {
@@ -774,7 +819,33 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                     )
                     .map_err(String::from)?;
             }
+            if let Some(probe) = &mut probe {
+                let sample = responsiveness::Sample {
+                    cpu_ms: frame_start.elapsed().as_secs_f64() * 1000.,
+                    inject_ms,
+                    input_ms,
+                    ui_ms,
+                    tick_ms,
+                    geometry_ms,
+                    scene_ms,
+                    icons_ms,
+                    render_ms,
+                    gpu_ms: gpu.take_gpu_wait().as_secs_f64() * 1000.,
+                    present_ms,
+                    presented,
+                    ..Default::default()
+                };
+                probe.end(&editor, &mut shell, sample);
+            }
             frames += 1;
+            if probe.as_ref().is_some_and(responsiveness::Probe::finished) {
+                let device = serde_json::to_value(&renderer.gpu().context().info)?;
+                if let Some(probe) = &probe {
+                    probe.write(&device)?;
+                }
+                game.close(&mut editor, &mut gpu)?;
+                break;
+            }
             if options.frames.is_some_and(|limit| frames >= limit)
                 || verification
                     .as_ref()
@@ -981,6 +1052,12 @@ fn route_event(
                 }
                 return Ok((true, false, false));
             }
+            // A tab pressed but not yet dragged (no drop preview: under 6 px of
+            // movement) is an ordinary click: its release goes to the controller.
+            Event::MouseButton {
+                button: 1,
+                pressed: false,
+            } if !shell.tab_dragging() => shell.drag = None,
             Event::MouseButton {
                 button: 1,
                 pressed: false,

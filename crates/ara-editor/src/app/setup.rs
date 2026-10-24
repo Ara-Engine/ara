@@ -35,6 +35,9 @@ pub struct Options {
     /// Run the alpha journey route (open, import, place, prefab, C#, Play, failure,
     /// undo/save/reopen, export) and capture every step.
     pub verify_journey: bool,
+    /// Measure UI cost and click reliability with input injected into the window
+    /// loop (`app/responsiveness.rs`); writes `responsiveness.json`.
+    pub verify_responsiveness: bool,
 }
 impl Options {
     /// Bounded and automated runs (a frame limit, captures, verification routes) keep
@@ -46,6 +49,7 @@ impl Options {
             || self.verify_panels
             || self.verify_ux
             || self.verify_journey
+            || self.verify_responsiveness
             || self.headless
     }
 
@@ -87,6 +91,7 @@ impl Default for Options {
             scene: None,
             play: false,
             verify_journey: false,
+            verify_responsiveness: false,
         }
     }
 }
