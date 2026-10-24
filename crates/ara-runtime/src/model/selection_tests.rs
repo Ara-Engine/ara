@@ -2,7 +2,7 @@ use super::*;
 use ara_asset::{Cancellation, CookPreset, ImportContext, ImportInput, TargetPlatform};
 use serde_json::json;
 
-pub(super) fn scene() -> Value {
+pub(crate) fn scene() -> Value {
     let mut source: Value = serde_json::from_slice(include_bytes!(
         "../../../ara-importers/tests/fixtures/material-extensions.gltf"
     ))
@@ -19,7 +19,7 @@ pub(super) fn scene() -> Value {
     source
 }
 
-pub(super) fn imported(source: Value) -> CachedImport {
+pub(crate) fn imported(source: Value) -> CachedImport {
     let registry = ara_importers::registry().expect("registry");
     let importer = registry.get("ara.gltf").expect("glTF");
     let input = ImportInput {

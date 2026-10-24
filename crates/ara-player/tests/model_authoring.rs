@@ -68,7 +68,9 @@ fn agent_selects_a_kit_piece_and_toggles_its_source_emission_without_derived_glt
         {"cmd":"transform.lookAt","args":{"entity":"e_camera","point":[0.5,0,0.5]}},
         {"cmd":"entity.create","args":{"id":"e_lamp","name":"Selected lamp","components":{"Transform":{},
             "MeshRenderer":{"model":"@models/kit.gltf#as_kit","node":"LampA","emissiveFactor":[5000,0,0],
-                "emissiveMaterials":["Layered"]}}}}
+                "emissiveMaterials":["Layered"]}}}},
+        {"cmd":"physics.collider.fromModel","args":{"entity":"e_lamp","mode":"mesh"}},
+        {"cmd":"entity.create","args":{"id":"e_proxy","components":{"Transform":{"position":[4,0,0]},"RigidBody":{},"Collider":{}}}}
     ]}));
     agent.pool_ready();
     let world = agent.play(
@@ -78,6 +80,14 @@ fn agent_selects_a_kit_piece_and_toggles_its_source_emission_without_derived_glt
         .clone();
     let output = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../../target/authoring-tests/model-authoring");
+    let ids = agent.play(
+        "read",
+        json!({"world":world,"paths":["e_lamp.PhysicsId.value","e_proxy.PhysicsId.value"]}),
+    )["values"]
+        .clone();
+    let lamp = ids["e_lamp.PhysicsId.value"].as_u64().unwrap();
+    let proxy = ids["e_proxy.PhysicsId.value"].as_u64().unwrap();
+    assert!(lamp > 0 && proxy > 0 && lamp != proxy, "{ids}");
     std::fs::create_dir_all(&output).unwrap();
     let red = capture(&mut agent, &world, &output, "red");
     patch(
@@ -122,4 +132,59 @@ fn agent_selects_a_kit_piece_and_toggles_its_source_emission_without_derived_glt
         "MODEL_AUTHORING {:?}: red={red:?}, green={green:?}, off={off:?}",
         output
     );
+}
+
+#[test]
+fn agent_swaps_native_material_assets_on_a_procedural_primitive_in_play() {
+    let dir = demo_copy("native-material-authoring");
+    let mut agent = Agent::open(&dir, 82, |_| {});
+    agent.tool(
+        "ara_apply",
+        json!({"why":"Author native material assets", "commands":[
+            {"cmd":"doc.create","args":{"path":"levels/material.scene","id":"sc_material"}},
+            {"cmd":"doc.create","args":{"kind":"material","path":"red.graph","id":"gr_red"}},
+            {"cmd":"doc.create","args":{"kind":"material","path":"green.graph","id":"gr_green"}}
+        ]}),
+    );
+    for (path, rgb) in [("red.graph", "5000, 0, 0"), ("green.graph", "0, 5000, 0")] {
+        agent.tool("ara_apply",json!({"why":"Author the lamp emission", "doc":path,"commands":[{"cmd":"material.text.apply","args":{"text":format!("material Lamp : surface budget 1 {{ let light : ColorLinear = linear({rgb}); output emissive = light; }}")}}]}));
+    }
+    agent.tool("ara_apply",json!({"why":"Place a lamp using its native material", "doc":"levels/material.scene","commands":[
+        {"cmd":"entity.create","args":{"id":"e_camera","components":{"Transform":{"position":[0,2,2]},"Camera":{"fov":50}}}},
+        {"cmd":"transform.lookAt","args":{"entity":"e_camera","point":[0,0,0]}},
+        {"cmd":"entity.create","args":{"id":"e_lamp","name":"Selected lamp","components":{"Transform":{},"MeshRenderer":{"shape":"plane","size":[2,1,2],"materialOverrides":[{"primitive":0,"material":"@red.graph#gr_red"}]}}}}
+    ]}));
+    agent.pool_ready();
+    let world = agent.play(
+        "start",
+        json!({"scene":"levels/material.scene","startPaused":true,"seed":82}),
+    )["world"]
+        .clone();
+    let output = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../target/authoring-tests/native-material");
+    std::fs::create_dir_all(&output).unwrap();
+    let red = capture(&mut agent, &world, &output, "red");
+    patch(
+        &mut agent,
+        &world,
+        "MeshRenderer.materialOverrides",
+        json!([{"primitive":0,"material":"@green.graph#gr_green"}]),
+    );
+    let green = capture(&mut agent, &world, &output, "green");
+    assert!(
+        red[0] > green[0] + 2. && green[1] > red[1] + 2.,
+        "red={red:?}, green={green:?}"
+    );
+    patch(
+        &mut agent,
+        &world,
+        "MeshRenderer.emissiveEnabled",
+        json!(false),
+    );
+    let off = capture(&mut agent, &world, &output, "off");
+    assert!(
+        green.iter().sum::<f64>() > off.iter().sum::<f64>() + 4.,
+        "green={green:?}, off={off:?}"
+    );
+    agent.play("stop", json!({"world":world}));
 }

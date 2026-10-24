@@ -1,0 +1,45 @@
+{
+  "$schema": "ara://schema/prefab/1",
+  "id": "pf_trashcan",
+  "records": {
+    "e_part0": {
+      "name": "metal_trash_can_rust",
+      "parent": "e_root",
+      "order": "a0",
+      "MeshRenderer": {
+        "model": "@assets/third_party/metal_trash_can/metal_trash_can_1k.gltf#as_metaltrashcan",
+        "node": "metal_trash_can_rust"
+      },
+      "Transform": {}
+    },
+    "e_part1": {
+      "name": "metal_trash_can_rust_handle_left",
+      "parent": "e_root",
+      "order": "a1",
+      "MeshRenderer": {
+        "model": "@assets/third_party/metal_trash_can/metal_trash_can_1k.gltf#as_metaltrashcan",
+        "node": "metal_trash_can_rust_handle_left"
+      },
+      "Transform": {
+        "position": [-0.27, 0.65, 0]
+      }
+    },
+    "e_part2": {
+      "name": "metal_trash_can_rust_handle_right",
+      "parent": "e_root",
+      "order": "a2",
+      "MeshRenderer": {
+        "model": "@assets/third_party/metal_trash_can/metal_trash_can_1k.gltf#as_metaltrashcan",
+        "node": "metal_trash_can_rust_handle_right"
+      },
+      "Transform": {
+        "position": [0.27, 0.65, 0]
+      }
+    },
+    "e_root": {
+      "name": "trash_can",
+      "order": "a0",
+      "Transform": {}
+    }
+  }
+}

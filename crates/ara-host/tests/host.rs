@@ -229,6 +229,45 @@ fn document_creation_and_main_scene_survive_crash_and_undo() {
     assert_eq!(d.code, codes::INVALID_PARAMS);
 }
 
+#[test]
+fn explicit_document_deletion_flushes_recovers_and_undoes_with_history() {
+    let dir = project("document-delete");
+    let mut host = open(&dir, 901);
+    let session = begin(&mut host, "agent:builder");
+    call(
+        &mut host,
+        "cmd.apply",
+        json!({"session":session,"doc":"ara.project.json","why":"Create a generated level","commands":[{"cmd":"doc.create","args":{"path":"levels/generated.scene","id":"sc_generated"}}]}),
+    );
+    call(
+        &mut host,
+        "cmd.apply",
+        json!({"session":session,"doc":"levels/generated.scene","why":"Populate the generated level","commands":[
+            {"cmd":"entity.create","args":{"id":"e_root","components":{"Transform":{}}}},
+            {"cmd":"entity.create","args":{"id":"e_child","parent":"e_root","components":{"Transform":{"position":[1,2,3]}}}}
+        ]}),
+    );
+    host.flush();
+    let before = fs::read_to_string(dir.join("levels/generated.scene")).expect("saved scene");
+    call(
+        &mut host,
+        "cmd.apply",
+        json!({"session":session,"doc":"ara.project.json","why":"Regenerate the level through document ops","commands":[{"cmd":"doc.delete","args":{"document":"@#sc_generated"}}]}),
+    );
+    host.flush();
+    assert!(!dir.join("levels/generated.scene").exists());
+    drop(host);
+    let mut host = open(&dir, 902);
+    let session = begin(&mut host, "agent:builder");
+    assert!(!dir.join("levels/generated.scene").exists());
+    call(&mut host, "history.undo", json!({"session":session}));
+    host.flush();
+    assert_eq!(
+        before,
+        fs::read_to_string(dir.join("levels/generated.scene")).expect("restored scene")
+    );
+}
+
 fn scene(dir: &Path) -> String {
     fs::read_to_string(dir.join("levels/arena.scene")).expect("scene file")
 }

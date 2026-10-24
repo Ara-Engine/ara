@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used)]
 use super::selection_tests::{imported, scene};
 use crate::{
     animation::Library,
@@ -110,4 +111,54 @@ fn procedural_emission_retains_radiance_semantics() {
         .emissive_enabled = false;
     frame.extract(&world, 0, 0.);
     assert_eq!(frame.draws[0].emissive, [0.; 3]);
+}
+
+#[test]
+fn material_slots_are_local_to_the_subtree_before_primitive_filtering() {
+    let assets = MemoryAssets(BTreeMap::from([("as_kit".into(), imported(scene()))]));
+    let mut library = Library::default();
+    library.models.load(&assets, "as_kit").unwrap();
+    let definition=ara_material::dsl::parse("material Green : surface budget 1 { let color : ColorLinear = linear(0,1,0); output baseColor = color; }","gr_green").unwrap();
+    let mut workspace = ara_doc::Workspace::default();
+    workspace.insert(
+        "green.graph",
+        definition
+            .to_graph(Default::default())
+            .unwrap()
+            .to_document()
+            .unwrap(),
+    );
+    library
+        .materials
+        .load(&workspace, &assets, "gr_green")
+        .unwrap();
+    let renderer = MeshRenderer {
+        model: Some(AssetRef("@kit.gltf#as_kit".into())),
+        node: Some("PieceB".into()),
+        primitive: Some(0),
+        material_overrides: vec![crate::components::PrimitiveMaterialOverride {
+            primitive: 0,
+            material: AssetRef("@green.graph#gr_green".into()),
+        }],
+        ..Default::default()
+    };
+    let mut world = World::new();
+    world.insert_resource(library);
+    world.spawn((Identity("e_piece".into()), renderer));
+    let mut frame = RenderFrame::default();
+    frame.extract(&world, 0, 0.);
+    assert_eq!(frame.draws.len(), 1);
+    assert!(matches!(
+        &frame.draws[0].geometry,
+        Geometry::Model { primitive: 2, .. }
+    ));
+    assert_eq!(
+        frame.draws[0]
+            .material
+            .as_ref()
+            .unwrap()
+            .material
+            .base_color,
+        [0., 1., 0., 1.]
+    );
 }

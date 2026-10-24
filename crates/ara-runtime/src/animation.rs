@@ -58,6 +58,8 @@ impl Program {
 pub struct Library {
     /// Live model generations by asset ID.
     pub models: Models,
+    /// Native graph/instance overrides resolved outside frame extraction.
+    pub materials: crate::material::Materials,
     /// The project's `.animation` records (controllers, clips, motion databases).
     pub documents: Documents,
     programs: BTreeMap<String, Arc<Program>>,

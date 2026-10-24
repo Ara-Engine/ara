@@ -119,6 +119,48 @@ factor for the named/indexed `emissiveMaterials` (empty targets all), then
 Procedural shapes retain emitted-radiance semantics. Invalid node/primitive or
 material selectors report `ARA7310`; invalid geometry selections show a placeholder.
 
+`doc.delete` removes a loaded document and its records with attributed history and
+undo. Run from another batch document; `ara.project.json` is the usual anchor.
+Delete and recreate the same ID in one batch for a reproducible regeneration.
+
+```powershell
+ara do doc.delete --doc ara.project.json --args '{"document":"@levels/generated.scene#sc_generated"}' --why 'Regenerate the generated level'
+```
+
+`materialOverrides` replaces individual primitive materials with native surface
+graphs or `.materialinstance` assets. Slot numbers are relative to the selected
+subtree before `primitive` filtering; procedural shapes have slot zero.
+
+```powershell
+ara do property.set --doc levels/yard.scene --args '{"entity":"e_lamp","path":"MeshRenderer.materialOverrides","value":[{"primitive":0,"material":"@materials/paint.graph#gr_paint"}]}' --why 'Use the native paint material'
+```
+
+The same MCP call is `ara_apply` with `doc: "levels/yard.scene"` and a
+`property.set` command containing those arguments. Graph defaults and typed
+instance values compile at content boundaries; failed reloads retain the last
+good material. Unsupported reachable expressions report their graph/node identity.
+PBR constants, affine UVs, normal strength, RGB samples, shared ORM channels,
+base-color alpha masks and transmission lower without baking a new glTF.
+Graph color samples filter raw UNORM before sRGB decoding; data/alpha stay raw.
+The Basic renderer shares one UV stream; fidelity consumes per-slot coordinates.
+
+Create collision from the same source model selection:
+
+```powershell
+ara do physics.collider.fromModel --doc levels/yard.scene --args '{"entity":"e_crate","mode":"convex"}' --why 'Make the selected kit piece solid'
+```
+
+MCP uses `ara_apply` with the same command and arguments. Omit `model`, `node`
+and `primitive` to inherit the entity's MeshRenderer selection, or supply a model
+explicitly. `convex` supports moving bodies; `mesh` requires a static body. A
+missing RigidBody is added as static. Cooking uses published model geometry with
+the selected pivot and entity scale; no source glTF is rewritten.
+
+`Collider.center` offsets any rigid-body shape in body-local metres, after scale
+is baked. Body rotation rotates that offset. `PhysicsId` may be omitted or zero;
+Play assigns a unique nonzero value from the stable entity identity, reserving
+explicit positive IDs. Automatic values survive snapshots and streamed adoption.
+
 `terrain.raise`, `terrain.paint` and `foliage.exclude` accept an optional `id`.
 Use stable IDs such as `s_hill`, `s_grass` and `x_road` for reproducible builds.
 MCP's `as` binds a batch symbol in the same way as `entity.create`. Newly touched

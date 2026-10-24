@@ -30,13 +30,13 @@ an empty dir, `VK_LAYER_PATH` = the SDK `Bin`).
 
 - `lock`, `fetch`, `sources`, `credits`: the manifest, downloads (curl, `-C -`
   resume, BLAKE3 before publishing a blob), source resolution, attribution.
-- `kit`: generated glTF geometry (boxes/cylinders/spheres/ribbons with metre-based
-  UVs over fetched texture sets) and derived glTFs of fetched models (`variant`:
-  node selection, GLB → glTF, cut-out alpha merge, lamps switched on, image swaps).
-- `build/`: `Ctx` (CLI batches, doc.create, project.setMain, import.initialize),
-  `place` (props + separate collider entities, ground sampling, layout shift),
-  `kits` (containers, hut, hangar shell, mast, fence, embers, panels…), `anim`
-  (locomotion controllers via animation.create), `outpost`, `hangar`, `showcase`.
+- `kit`: generated glTF geometry over fetched texture sets, and the graphite suit
+  palette image. Original models stay immutable; the importer merges opacity maps.
+- `build/`: `Ctx` (CLI batches, document lifecycle, project main, shared imports),
+  `place` (props with centered colliders and ground sampling), `native` (source-node
+  prefabs and lamp emission), `bounds` (source-pivot bounds), `materials` (native
+  surface graphs), `kits` (containers, hut, hangar shell, mast, embers, panels),
+  `anim` (locomotion controllers), `outpost`, `hangar`, `showcase`.
 - `capture/`: `world` (play-host asset pipeline → `Runtime`), `convert` (frame →
   fidelity snapshot), `atlas` (UV-square materials packed into 4096² pages),
   `vfx` (cooked effects composited through `feature_inputs`/`post_process`),
@@ -53,9 +53,10 @@ an empty dir, `VK_LAYER_PATH` = the SDK `Bin`).
   and atlases. Dropped maps (only past the atlas) fold into factors.
 - Looks hold what scenes cannot (sky/atmosphere, fog, exposure, shots). Keep them
   small; anything a scene can express belongs in the scene.
-- Outpost layout code works in layout coordinates; `outpost::SHIFT` moves the
-  layout into the middle of the 384 m terrain (the landscape renderer needs an
-  origin-anchored terrain). Look shots are world coordinates.
+- Outpost uses world coordinates throughout, with terrain origin `[-96, -96]`.
+  Terrain graph UVs are world XZ metres, scaled by `1 / texture.meters`.
+- Rebuild cleanup uses attributed `doc.delete` transactions and retains `.ara/journal`.
+  Only generated non-document assets and scratch directories are removed directly.
 - Keep generated files deterministic so a rebuild leaves `git status` clean apart
   from intended changes.
 - Agent edits apply immediately under amended D24, with attribution, why and undo.
@@ -63,5 +64,5 @@ an empty dir, `VK_LAYER_PATH` = the SDK `Bin`).
 
 ## Testing
 
-`cargo test -p ara-samples` (lock validation, kit geometry, aim, fold-in maths).
+`cargo test -p ara-samples` (lock validation, kit geometry, source-pivot bounds, fold-in maths).
 `cargo clippy -p ara-samples --all-targets -- -D warnings`.

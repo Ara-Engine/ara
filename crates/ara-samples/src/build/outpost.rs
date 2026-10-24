@@ -1,5 +1,5 @@
 //! "Outpost at dusk": a derelict compound in arid Namaqualand-style scrubland. A
-//! 192 m terrain (6 × 6 tiles of 32 m) with hills at the rim; in the middle a concrete
+//! 384 m terrain (12 by 12 tiles of 32 m) with hills at the rim; in the middle a concrete
 //! pad inside a chain-link perimeter with a hangar, a guard hut at the gate, stacked
 //! shipping containers, a radio mast, a covered car, crates and barrels, a campfire
 //! and floodlights. A dirt road leaves through the gate past electricity poles.
@@ -7,7 +7,7 @@
 use super::{
     Ctx, anim, clean,
     kits::{self, Hangar},
-    place::{Ground, Models, Prop, Scene, create, transform, transform_euler},
+    place::{Ground, Models, Prop, Scene, create, transform},
 };
 use crate::kit::{self, Kit, Material, meters, part};
 use anyhow::Result;
@@ -16,10 +16,6 @@ use serde_json::{Value, json};
 
 /// Compound centre, in layout coordinates.
 const C: Vec2 = Vec2::new(96.0, 96.0);
-/// Layout coordinates → world: the 384 m terrain (12 × 12 tiles, origin-anchored as
-/// the landscape renderer requires) puts the layout in its middle, with a ring of
-/// rocky mountains at the rim.
-pub const SHIFT: Vec3 = Vec3::new(96.0, 0.0, 96.0);
 /// Level scene.
 pub const SCENE: (&str, &str) = ("levels/outpost.scene", "sc_outpost1");
 const TERRAIN: (&str, &str) = ("terrain/outpost.terrain", "tr_outpost1");
@@ -38,9 +34,11 @@ fn reference((path, id): (&str, &str)) -> String {
 /// Builds the whole project: shared assets, the dusk exterior and the night hangar.
 pub fn build(ctx: &Ctx) -> Result<()> {
     clean(
-        &ctx.root,
+        ctx,
         &[
             "levels",
+            "prefabs",
+            "materials",
             "terrain",
             "anim",
             "audio",
@@ -48,10 +46,9 @@ pub fn build(ctx: &Ctx) -> Result<()> {
             ".scratch",
         ],
     )?;
-    remove_sidecars(&ctx.root.join("assets/third_party"))?;
     let models = models(ctx)?;
     terrain(ctx)?;
-    let ground = Ground::load(ctx, TERRAIN.0)?.shifted(SHIFT);
+    let ground = Ground::load(ctx, TERRAIN.0)?;
     let mut models = models;
     road(ctx, &mut models, &ground)?;
     foliage(ctx, &models)?;
@@ -86,24 +83,7 @@ pub fn build(ctx: &Ctx) -> Result<()> {
     Ok(())
 }
 
-/// Removes previously written sidecars of fetched assets (rewritten below).
-fn remove_sidecars(dir: &std::path::Path) -> Result<()> {
-    let Ok(entries) = std::fs::read_dir(dir) else {
-        return Ok(());
-    };
-    for entry in entries.flatten() {
-        let path = entry.path();
-        if path.is_dir() {
-            remove_sidecars(&path)?;
-        } else if path.to_string_lossy().ends_with(".import.json") {
-            std::fs::remove_file(path)?;
-        }
-    }
-    Ok(())
-}
-
-/// Every model of the project: fetched models, variants cut from variant sheets and
-/// modular kits, and the generated kit pieces.
+/// Original source models, native prefabs of selected kit nodes, and generated geometry.
 fn models(ctx: &Ctx) -> Result<Models> {
     let mut m = Models::default();
     for (name, asset) in [
@@ -271,50 +251,12 @@ fn models(ctx: &Ctx) -> Result<Models> {
         ),
     ];
     for (name, asset, parts) in &variants {
-        let cutout = match *asset {
-            "shrub_03" => Some(kit::cutout(
-                &ctx.root,
-                &ctx.lock,
-                asset,
-                "_diff_",
-                "_alpha_",
-                "shrub_03_cutout",
-            )?),
-            "crystalline_iceplant" => Some(kit::cutout(
-                &ctx.root,
-                &ctx.lock,
-                asset,
-                "_diff_",
-                "_alpha_",
-                "iceplant_cutout",
-            )?),
-            "wild_rooibos_bush" => Some(kit::cutout(
-                &ctx.root,
-                &ctx.lock,
-                asset,
-                "_diff_",
-                "_alpha_",
-                "rooibos_cutout",
-            )?),
-            _ => None,
-        };
         let lit: &[&str] = match *name {
             "fluorescent" => &["mounted_fluorescent_lights_glass"],
             "sconce" => &["industrial_caged_sconce"],
             _ => &[],
         };
-        let overrides = kit::Overrides {
-            cutout: cutout.as_deref(),
-            emissive: lit,
-            images: &[],
-        };
-        let path = kit::variant(&ctx.root, &ctx.lock, asset, name, Some(parts), &overrides)?;
-        ctx.model(
-            &mut m,
-            name,
-            &path,
-            &format!("as_kit{}", super::place::short(name)),
-        )?;
+        super::native::parts(ctx, &mut m, name, asset, parts, lit)?;
     }
     human(ctx, &mut m)?;
     // Lamps, with their bulbs and lenses switched on (the sources ship them off).
@@ -340,22 +282,34 @@ fn models(ctx: &Ctx) -> Result<Models> {
             &["caged_hanging_light"][..],
         ),
     ] {
-        let overrides = kit::Overrides {
-            cutout: None,
-            emissive: lit,
-            images: &[],
-        };
-        let path = kit::variant(&ctx.root, &ctx.lock, asset, name, None, &overrides)?;
-        ctx.model(
-            &mut m,
-            name,
-            &path,
-            &format!("as_kit{}", super::place::short(name)),
-        )?;
+        super::native::whole(ctx, &mut m, name, asset, lit)?;
     }
     // Generated kit pieces.
     let lock = &ctx.lock;
     let root = &ctx.root;
+    super::native::parts(
+        ctx,
+        &mut m,
+        "fence_section",
+        "modular_chainlink_fence",
+        &[
+            part("modular_chainlink_fence_double", [2., 0., 0.], 0.),
+            part("modular_chainlink_fence_post", [0., 0., 0.], 0.),
+        ],
+        &[],
+    )?;
+    super::native::parts(
+        ctx,
+        &mut m,
+        "fence_gate",
+        "modular_chainlink_fence",
+        &[
+            part("modular_chainlink_fence_double", [2., 0., 0.], 0.),
+            part("modular_chainlink_fence_post", [0., 0., 0.], 0.),
+            part("modular_chainlink_fence_post", [2., 0., 0.], 0.),
+        ],
+        &[],
+    )?;
     let kits: Vec<(&str, String)> = vec![
         (
             "container_green",
@@ -430,11 +384,6 @@ fn models(ctx: &Ctx) -> Result<Models> {
         ("festoon", super::hangar::festoon(root, lock)?),
         ("embers", kits::embers(root, lock, "embers")?),
         ("cables", super::hangar::cables(root, lock)?),
-        (
-            "fence_section",
-            kits::fence_section(root, lock, "fence_section")?,
-        ),
-        ("fence_gate", kits::fence_gate(root, lock, "fence_gate")?),
     ];
     for (name, path) in kits {
         ctx.model(
@@ -457,19 +406,19 @@ pub fn human(ctx: &Ctx, models: &mut Models) -> Result<()> {
         [0.52, 0.54, 0.56],
         "human_suit",
     )?;
-    let overrides = kit::Overrides {
-        images: &[("color-palette", &palette)],
-        ..Default::default()
-    };
-    let path = kit::variant(&ctx.root, &ctx.lock, "m2m_human", "human", None, &overrides)?;
-    ctx.model(models, "human", &path, "as_kithuman")
+    super::materials::palette(ctx, models, "human", "m2m_human", &palette)
 }
 
 /// Sculpts the terrain: flat ground under the compound, rolling scrubland, hills at the
 /// rim. Paints soil everywhere, rock on the hills, sparse dry grass patches.
 fn terrain(ctx: &Ctx) -> Result<()> {
+    let materials = vec![
+        super::materials::terrain(ctx, "groundgrass", "dry_ground_01", [0.72, 0.78, 0.6])?,
+        super::materials::terrain(ctx, "groundrock", "rocky_terrain_02", [0.9, 0.86, 0.82])?,
+        super::materials::terrain(ctx, "groundsoil", "dry_ground_rocks", [0.86, 0.8, 0.74])?,
+    ];
     ctx.new_document(TERRAIN.0, "terrain", TERRAIN.1)?;
-    let dab = |x: f32, z: f32, radius: f32, amount: f32| json!({"center": [x + SHIFT.x, z + SHIFT.z], "radius": radius, "amount": amount});
+    let dab = |x: f32, z: f32, radius: f32, amount: f32| json!({"center": [x, z], "radius": radius, "amount": amount});
     // Deterministic jitter for the mountain ring and ground bumps.
     let mut seed = 0x9e37_79b9u32;
     let mut rand = move || {
@@ -577,8 +526,8 @@ fn terrain(ctx: &Ctx) -> Result<()> {
         vec![
             (
                 "terrain.create",
-                json!({"grid": {"origin": [0, 0], "spacing": 1, "cells": 32,
-                    "min": {"x": 0, "z": 0}, "max": {"x": 12, "z": 12}, "materials": []}}),
+                json!({"grid": {"origin": [-96, -96], "spacing": 1, "cells": 32,
+                    "min": {"x": 0, "z": 0}, "max": {"x": 12, "z": 12}, "materials": materials}}),
             ),
             (
                 "terrain.layer.add",
@@ -681,7 +630,7 @@ fn foliage(ctx: &Ctx, models: &Models) -> Result<()> {
     for (i, (x, z, r)) in zones.into_iter().enumerate() {
         calls.push((
             "foliage.exclude",
-            json!({"id":format!("x_clear{i}"), "zone": {"center": [x + SHIFT.x, z + SHIFT.z], "radius": r}}),
+            json!({"id":format!("x_clear{i}"), "zone": {"center": [x, z], "radius": r}}),
         ));
     }
     ctx.apply(
@@ -724,17 +673,6 @@ fn music(ctx: &Ctx) -> Result<()> {
     ])
 }
 
-/// Euler rotation (degrees) aiming local −Z along `direction` (lights, cameras).
-/// Upright: yaw about +Y, then pitch, expressed in the Transform's XYZ Euler order.
-pub fn aim(direction: Vec3) -> Vec3 {
-    let d = direction.normalize();
-    let yaw = (-d.x).atan2(-d.z);
-    let pitch = d.y.clamp(-1.0, 1.0).asin();
-    let q = glam::Quat::from_euler(glam::EulerRot::YXZ, yaw, pitch, 0.0);
-    let (x, y, z) = q.to_euler(glam::EulerRot::XYZ);
-    Vec3::new(x.to_degrees(), y.to_degrees(), z.to_degrees())
-}
-
 /// A light entity.
 pub fn light(
     id: &str,
@@ -742,12 +680,19 @@ pub fn light(
     position: Vec3,
     light: Value,
     direction: Option<Vec3>,
-) -> (&'static str, Value) {
-    let t = match direction {
-        Some(d) => transform_euler(position, aim(d)),
-        None => transform(position, 0.0, 1.0),
-    };
-    create(id, name, json!({"Transform": t, "Light": light}))
+) -> Vec<(&'static str, Value)> {
+    let mut calls = vec![create(
+        id,
+        name,
+        json!({"Transform":transform(position,0.,1.),"Light":light}),
+    )];
+    if let Some(direction) = direction {
+        calls.push((
+            "transform.lookAt",
+            json!({"entity":id,"point":(position+direction).to_array()}),
+        ));
+    }
+    calls
 }
 
 /// The dusk exterior.
@@ -765,7 +710,7 @@ fn exterior(ctx: &Ctx, models: &Models, ground: &Ground) -> Result<()> {
         json!({"Environment": {"sky": [0.16, 0.22, 0.42, 1], "horizon": [1.0, 0.56, 0.32, 1], "ground": [0.16, 0.12, 0.09, 1], "intensity": 420, "exposure": 0.0028}}),
     );
     let sun_toward = Vec3::new(-0.93, 0.05, 0.36).normalize();
-    s.commands.push(light(
+    s.commands.extend(light(
         "e_sun",
         "Setting sun",
         Vec3::new(96.0, 40.0, 96.0),
@@ -793,16 +738,14 @@ fn exterior(ctx: &Ctx, models: &Models, ground: &Ground) -> Result<()> {
         "Human agents",
         json!({"NavAgentType": {"name": "Human", "height": 1.8, "radius": 0.3, "slope": 40}}),
     );
-    let physics = s.physics_id();
     s.entity(
         "e_player",
         "Salvager",
         json!({
             "Transform": transform(START, 140.0, 1.0),
-            "MeshRenderer": {"model": models.get("human").reference},
+            "MeshRenderer": models.get("human").renderer,
             "Animator": {"controller": reference((ANIMATION.0, "an_locomotion"))},
             "CharacterController": {},
-            "PhysicsId": {"value": physics},
             "PlayerControl": {"yaw": 140, "camera": "e_camera", "walkSpeed": 1.5, "runSpeed": 5.0},
             "AudioListener": {},
         }),
@@ -828,9 +771,8 @@ fn exterior(ctx: &Ctx, models: &Models, ground: &Ground) -> Result<()> {
     s.entity(
         "e_padc",
         "Pad collider",
-        json!({"Transform": {"position": [96.0, -0.1, 92.0]}, "RigidBody": {}, "PhysicsId": {"value": s.physics + 1}, "Collider": {"halfExtents": [24.0, 0.15, 15.0]}}),
+        json!({"Transform": {"position": [96.0, -0.1, 92.0]}, "RigidBody": {}, "Collider": {"halfExtents": [24.0, 0.15, 15.0]}}),
     );
-    s.physics += 1;
     s.prop(
         Prop::new("e_hangar", "Hangar", "hangar", HANGAR, 0.0)
             .at_origin()
@@ -889,7 +831,7 @@ fn exterior(ctx: &Ctx, models: &Models, ground: &Ground) -> Result<()> {
         75.0,
     ));
     s.prop(Prop::new("e_hut", "Guard hut", "guard_hut", on_pad(86.0, 80.5), 180.0).at_origin());
-    s.commands.push(light(
+    s.commands.extend(light(
         "e_hutlight",
         "Guard hut lamp",
         Vec3::new(86.0, 2.3, 80.5),
@@ -1061,7 +1003,7 @@ fn exterior(ctx: &Ctx, models: &Models, ground: &Ground) -> Result<()> {
             "AudioSource": {"clip": format!("@{}#as_fire", ctx.lock.get("oga_fireplace").expect("fire").relative("fire.wav")), "looping": true, "referenceDistance": 2, "maxDistance": 30, "gain": 0.5},
             "AcousticSource": {}}),
     );
-    s.commands.push(light(
+    s.commands.extend(light(
         "e_firelight",
         "Campfire light",
         fire + Vec3::new(0.0, 0.7, 0.0),
@@ -1137,7 +1079,7 @@ fn exterior(ctx: &Ctx, models: &Models, ground: &Ground) -> Result<()> {
             .at_origin()
             .renderer(json!({"emissive": [800, 800, 800]})),
     );
-    s.commands.push(light(
+    s.commands.extend(light(
         "e_beacon",
         "Mast beacon",
         g(121.0, 124.0) + Vec3::new(0.0, 24.3, 0.0),
@@ -1167,7 +1109,7 @@ fn exterior(ctx: &Ctx, models: &Models, ground: &Ground) -> Result<()> {
         );
         let head = base + Vec3::new(0.0, 3.7, 0.0);
         let target = Vec3::new(C.x, 0.0, C.y);
-        s.commands.push(light(
+        s.commands.extend(light(
             &format!("e_floodl{i}"),
             "Floodlight beam",
             head,
@@ -1189,7 +1131,7 @@ fn exterior(ctx: &Ctx, models: &Models, ground: &Ground) -> Result<()> {
         .decor()
         .renderer(json!({"emissive": [3000, 2900, 2700]})),
     );
-    s.commands.push(light(
+    s.commands.extend(light(
         "e_seclightl",
         "Security light beam",
         door_light + Vec3::new(0.0, -0.2, -0.2),
@@ -1197,7 +1139,7 @@ fn exterior(ctx: &Ctx, models: &Models, ground: &Ground) -> Result<()> {
         Some(Vec3::new(0.0, -1.0, -0.9)),
     ));
     // Warm work light spilling out of the half-open hangar door.
-    s.commands.push(light(
+    s.commands.extend(light(
         "e_hangarglow",
         "Hangar interior glow",
         Vec3::new(HANGAR.x + 3.0, 4.5, HANGAR.z - 8.0),
@@ -1282,7 +1224,6 @@ fn exterior(ctx: &Ctx, models: &Models, ground: &Ground) -> Result<()> {
         json!({"MusicSource": {"music": reference(MUSIC)}}),
     );
 
-    s.shift(SHIFT);
     let calls = std::mem::take(&mut s.commands);
     ctx.apply(
         SCENE.0,
@@ -1308,12 +1249,10 @@ pub fn hangar_colliders_at(s: &mut Scene<'_>, origin: Vec3) {
     .into_iter()
     .enumerate()
     {
-        let id = s.physics_id();
         s.entity(
             &format!("e_hangarwall{i}"),
             "Hangar wall collider",
-            json!({"Transform": {"position": [origin.x + x, origin.y + h.height / 2.0, origin.z + z]}, "RigidBody": {}, "PhysicsId": {"value": id},
-                "Collider": {"halfExtents": [hx, h.height / 2.0, hz]}}),
+            json!({"Transform": {"position": [origin.x + x, origin.y + h.height / 2.0, origin.z + z]}, "RigidBody": {}, "Collider": {"halfExtents": [hx, h.height / 2.0, hz]}}),
         );
     }
 }
@@ -1366,28 +1305,5 @@ fn fence(s: &mut Scene<'_>, ground: &Ground) {
             .at_origin()
             .decor(),
         );
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn aim_points_local_minus_z_and_stays_upright() {
-        for d in [
-            Vec3::new(0.0, -0.16, 1.0),
-            Vec3::new(1.0, -0.3, 0.2),
-            Vec3::new(-0.93, -0.05, -0.36),
-            Vec3::new(0.0, -1.0, 0.0),
-        ] {
-            let r = aim(d) * std::f32::consts::PI / 180.0;
-            let q = glam::Quat::from_euler(glam::EulerRot::XYZ, r.x, r.y, r.z);
-            let forward = q * Vec3::NEG_Z;
-            assert!(forward.distance(d.normalize()) < 1e-3, "{d} -> {forward}");
-            if d.normalize().y.abs() < 0.99 {
-                assert!((q * Vec3::Y).y > 0.0, "upright for {d}");
-            }
-        }
     }
 }

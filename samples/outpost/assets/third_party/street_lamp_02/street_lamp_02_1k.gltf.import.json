@@ -1,0 +1,11 @@
+{
+  "$schema": "ara://schema/import/1",
+  "id": "as_streetlamp02",
+  "records": {
+    "i_settings": {
+      "importer": "ara.gltf",
+      "version": "5-gltf14-meshopt070-ispc050-tiled-f32text-arag1-khr-opacity",
+      "settings": {}
+    }
+  }
+}

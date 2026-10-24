@@ -429,54 +429,6 @@ pub fn puddle(project: &Path, lock: &Lock, name: &str, radius: f32, seed: u32) -
     kit.write(project, lock, name)
 }
 
-/// A 2 m chain-link fence section along +X from the origin: a galvanised post at
-/// x = 0, top and bottom rails and a cut-out wire panel 2 m high.
-pub fn fence_section(project: &Path, lock: &Lock, name: &str) -> Result<String> {
-    let wire = crate::kit::chainlink_texture(project, "chainlink")?;
-    let mut kit = Kit::new(vec![
-        Material::flat("galvanised steel", [0.56, 0.57, 0.56], 0.42, 1.0),
-        Material::cutout("chain-link", &wire, 0.45, 1.0).blended(),
-    ]);
-    kit.cylinder(0, 0.03, 2.25, 10, Mat4::IDENTITY, Vec2::ONE);
-    kit.sphere(0, Vec3::new(0.0, 2.25, 0.0), 0.034, 6, Vec2::ONE);
-    for y in [2.1, 0.12] {
-        kit.cuboid(0, Vec3::new(2.0, 0.035, 0.035), at(1.0, y, 0.0), Vec2::ONE);
-    }
-    kit.cuboid(
-        1,
-        Vec3::new(1.96, 1.98, 0.004),
-        at(1.0, 1.1, 0.0),
-        Vec2::splat(0.06),
-    );
-    kit.write(project, lock, name)
-}
-
-/// A swinging chain-link gate leaf (1.9 × 1.9 m) hinged at the origin, opening
-/// along +X, in a tubular frame.
-pub fn fence_gate(project: &Path, lock: &Lock, name: &str) -> Result<String> {
-    let wire = crate::kit::chainlink_texture(project, "chainlink")?;
-    let mut kit = Kit::new(vec![
-        Material::flat("galvanised steel", [0.56, 0.57, 0.56], 0.42, 1.0),
-        Material::cutout("chain-link", &wire, 0.45, 1.0).blended(),
-    ]);
-    kit.cylinder(0, 0.04, 2.3, 10, Mat4::IDENTITY, Vec2::ONE);
-    for (sx, sy, x, y) in [
-        (1.9, 0.04, 0.95, 0.15),
-        (1.9, 0.04, 0.95, 2.0),
-        (0.04, 1.85, 0.05, 1.07),
-        (0.04, 1.85, 1.88, 1.07),
-    ] {
-        kit.cuboid(0, Vec3::new(sx, sy, 0.04), at(x, y, 0.0), Vec2::ONE);
-    }
-    kit.cuboid(
-        1,
-        Vec3::new(1.84, 1.82, 0.004),
-        at(0.96, 1.07, 0.0),
-        Vec2::splat(0.06),
-    );
-    kit.write(project, lock, name)
-}
-
 /// Glowing coals and charred logs for a fire pit (about 0.9 m across, on y = 0).
 pub fn embers(project: &Path, lock: &Lock, name: &str) -> Result<String> {
     let mut kit = Kit::new(vec![

@@ -1,0 +1,34 @@
+{
+  "$schema": "ara://schema/prefab/1",
+  "id": "pf_iceplant",
+  "records": {
+    "e_part0": {
+      "name": "crystalline_iceplant_a_LOD0",
+      "parent": "e_root",
+      "order": "a0",
+      "MeshRenderer": {
+        "model": "@assets/third_party/crystalline_iceplant/crystalline_iceplant_1k.gltf#as_crystallineiceplant",
+        "node": "crystalline_iceplant_a_LOD0"
+      },
+      "Transform": {}
+    },
+    "e_part1": {
+      "name": "crystalline_iceplant_c_LOD0",
+      "parent": "e_root",
+      "order": "a1",
+      "MeshRenderer": {
+        "model": "@assets/third_party/crystalline_iceplant/crystalline_iceplant_1k.gltf#as_crystallineiceplant",
+        "node": "crystalline_iceplant_c_LOD0"
+      },
+      "Transform": {
+        "position": [0.35, 0, 0.2],
+        "rotation": [0, 40, 0]
+      }
+    },
+    "e_root": {
+      "name": "iceplant",
+      "order": "a0",
+      "Transform": {}
+    }
+  }
+}

@@ -16,7 +16,7 @@ pub use uv::TextureTransform;
 #[cfg(test)]
 mod extraction_tests;
 #[cfg(test)]
-mod selection_tests;
+pub(crate) mod selection_tests;
 
 /// A decoded model-space vertex with up to eight skin influences.
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
