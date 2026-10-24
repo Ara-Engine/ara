@@ -1,1 +1,2 @@
 # One hexadecimal ed25519 public key per line. Add the release key before packaging.
+d1877f62f6c85412bc4f6b115cc055bd8b56456f43ca243ba1ac35aafd1225ef
