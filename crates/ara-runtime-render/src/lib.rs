@@ -10,6 +10,7 @@
 #![warn(missing_docs)]
 
 mod composite;
+pub mod fidelity;
 pub mod geometry;
 pub mod landscape;
 #[cfg(test)]

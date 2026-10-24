@@ -7,7 +7,7 @@ struct Root{uint frame;uint a;uint b;uint c;uint d;uint e;uint f;uint g;};
 #define BIND(n)
 ConstantBuffer<Root> root:register(b0,space0);
 #endif
-BIND(0) Texture2D<float4> textures[128]:register(t0,space1);
+BIND(5) Texture2D<float4> textures[]:register(t0,space1);
 BIND(1) RWByteAddressBuffer buffers[64]:register(u0,space2);
 BIND(3) RWTexture2D<float4> images[64]:register(u0,space3);
 struct Projection{float4x4 vp;float4 cameraFocal;uint4 control;};

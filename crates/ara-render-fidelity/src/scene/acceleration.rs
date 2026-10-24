@@ -8,6 +8,10 @@ impl GpuScene {
         gpu: &mut VulkanDevice,
         masks: &[(u64, u8)],
     ) -> Result<()> {
+        ensure!(
+            self.native.is_none(),
+            "native masks require a native instance update"
+        );
         ensure!(self.tlas.is_some(), "Instance masks require the RT tier");
         for (id, _) in masks {
             ensure!(self.ids.contains_key(id), "Unknown instance mask entity");

@@ -13,6 +13,8 @@ fn gpu_replay_goldens_and_cpu_count_parity() {
         return;
     }
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let captures = root.join("../../target/ara-vfx-gpu/goldens");
+    std::fs::create_dir_all(&captures).unwrap();
     let mut gpu = VulkanDevice::new(&[], root.join(".cache/tests")).unwrap();
     for (effect, tick) in ara_vfx::samples::all() {
         let mut system = GpuSystem::new(
@@ -114,26 +116,30 @@ fn gpu_replay_goldens_and_cpu_count_parity() {
             a.image.save(&golden).unwrap();
             strip.save(&strip_golden).unwrap();
         }
+        a.write(&captures.join(format!("{}.png", effect.name)))
+            .unwrap();
+        strip
+            .save(captures.join(format!("{}.sequence.png", effect.name)))
+            .unwrap();
         let reference = image::open(&golden).unwrap().to_rgba8();
         let difference = compare(&reference, &a.image, 0.005).unwrap();
-        assert!(difference.passed, "{} golden comparison", effect.name);
+        difference
+            .diff
+            .save(captures.join(format!("{}.diff.png", effect.name)))
+            .unwrap();
+        assert!(
+            difference.passed,
+            "{} golden comparison, 1-SSIM: {}",
+            effect.name, difference.score
+        );
         let reference = image::open(&strip_golden).unwrap().to_rgba8();
         assert!(
             compare(&reference, &strip, 0.005).unwrap().passed,
             "{} sequence golden",
             effect.name
         );
-        strip
-            .save(
-                root.join("captures")
-                    .join(format!("{}.sequence.png", effect.name)),
-            )
-            .unwrap();
-        a.write(&root.join("captures").join(format!("{}.png", effect.name)))
-            .unwrap();
         std::fs::write(
-            root.join("captures")
-                .join(format!("{}.stats.json", effect.name)),
+            captures.join(format!("{}.stats.json", effect.name)),
             ara_json::to_canonical_string(&ara_json::to_value(&stats).unwrap()),
         )
         .unwrap();

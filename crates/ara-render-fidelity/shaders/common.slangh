@@ -7,7 +7,7 @@ struct Root {uint frame;uint pass;uint arg;uint pad0;uint pad1;uint pad2;uint pa
 #define BIND(n)
 ConstantBuffer<Root> root:register(b0,space0);
 #endif
-BIND(0) Texture2D<float4> textures[128]:register(t0,space1);
+BIND(5) Texture2D<float4> textures[]:register(t0,space1);
 BIND(1) RWByteAddressBuffer buffers[64]:register(u0,space2);
 BIND(2) SamplerState samplers[3]:register(s0,space0);
 BIND(3) RWTexture2D<float4> images[64]:register(u0,space3);
@@ -61,11 +61,18 @@ float3 environment(Frame f,float3 d){
     return textures[NonUniformResourceIndex(f.scene.z)].SampleLevel(samplers[1],envUv(d),0).rgb;
 }
 struct Material {float4 colour;float4 emissiveRoughness;float4 surface;uint4 textures;uint4 flags;};
-struct Vertex {float3 position;float3 normal;float2 uv;float4 tangent;};
+struct LegacyVertex {float3 position;float3 normal;float2 uv;float4 tangent;};
+struct Vertex {float3 position;float3 normal;float2 uv;float4 tangent;float2 uv1;uint weights;uint reserved;};
 struct Surface {float3 position;float3 previousPosition;float3 normal;float3 geometricNormal;float3 albedo;float3 emissive;float roughness;float metal;float alpha;float specular;float ao;float coat;float coatRoughness;float3 sheen;float sheenRoughness;float transmission;uint sheenLut;uint id;uint material;};
-uint4 mesh(Frame f,uint id){return buffers[f.scene.x].Load<uint4>(32+id*16);}
-Material material(Frame f,uint id){return buffers[f.scene.x].Load<Material>(buffers[f.scene.x].Load(4)+id*80);}
-Vertex vertex(Frame f,uint offset,uint index){return buffers[f.scene.x].Load<Vertex>(offset+index*48);}
+#include "native_geometry.slangh"
+uint4 mesh(Frame f,uint id){return buffers[f.scene.x].Load<uint4>((nativeScene(f)?64:32)+id*16);}
+Material material(Frame f,uint id){uint address=buffers[f.scene.x].Load(4);[branch]if(nativeScene(f))return buffers[NonUniformResourceIndex(address)].Load<Material>(id*320);return buffers[f.scene.x].Load<Material>(address+id*80);}
+Vertex vertex(Frame f,uint offset,uint index){
+    [branch]if(nativeScene(f))return nativeVertex(f,offset,index,false);
+    LegacyVertex source=buffers[f.scene.x].Load<LegacyVertex>(offset+index*48);
+    Vertex v=(Vertex)0;v.position=source.position;v.normal=source.normal;v.uv=source.uv;v.uv1=source.uv;v.tangent=source.tangent;return v;
+}
+uint3 indices(Frame f,uint4 m,uint primitive){[branch]if(nativeScene(f))return nativeIndices(f,m.y,primitive);return buffers[f.scene.x].Load<uint3>(m.y+primitive*12);}
 float4 mipTex(uint i,float2 uv,uint level){
     uint w,h;textures[NonUniformResourceIndex(i)].GetDimensions(w,h);h/=2;
     if(w==1 && h==1)return textures[NonUniformResourceIndex(i)].Load(int3(0,0,0));
@@ -86,15 +93,17 @@ float4 texLod(uint i,float2 uv,float footprint,float bias){
     float lod=clamp(log2(max(1e-8,footprint*max(w,h)))+bias,0.,floor(log2(float(min(w,h)))));
     uint lo=uint(lod);float4 a=mipTex(i,uv,lo);return frac(lod)>0?lerp(a,mipTex(i,uv,lo+1),frac(lod)):a;
 }
-float2 hitUv(Frame f,uint id,uint primitive,float2 bary){uint4 m=mesh(f,id);uint3 ix=buffers[f.scene.x].Load<uint3>(m.y+primitive*12);return vertex(f,m.x,ix.x).uv*(1-bary.x-bary.y)+vertex(f,m.x,ix.y).uv*bary.x+vertex(f,m.x,ix.z).uv*bary.y;}
-bool accept(Frame f,uint id,uint primitive,float2 bary,inout uint rng){Material m=material(f,mesh(f,id).w);if(m.flags.x==0)return true;float a=m.colour.a*tex(m.textures.x,hitUv(f,id,primitive,bary)).a;return m.flags.x==1?a>=m.surface.w:random(rng)<a;}
+#include "native_material.slangh"
+float2 hitUv(Frame f,uint id,uint primitive,float2 bary){uint4 m=mesh(f,id);uint3 ix=indices(f,m,primitive);return vertex(f,m.x,ix.x).uv*(1-bary.x-bary.y)+vertex(f,m.x,ix.y).uv*bary.x+vertex(f,m.x,ix.z).uv*bary.y;}
+bool accept(Frame f,uint id,uint primitive,float2 bary,inout uint rng){[branch]if(nativeScene(f))return nativeAccept(f,id,primitive,bary,rng);Material m=material(f,mesh(f,id).w);if(m.flags.x==0)return true;float a=m.colour.a*tex(m.textures.x,hitUv(f,id,primitive,bary)).a;return m.flags.x==1?a>=m.surface.w:random(rng)<a;}
 // Only primary motion-vector extraction needs the preceding vertex table.
 float3 previousPosition(Frame f,uint id,uint primitive,float2 bary,float3 current){
+    [branch]if(nativeScene(f)){uint4 m=mesh(f,id);uint3 ix=indices(f,m,primitive);float3 w=float3(1-bary.x-bary.y,bary);return nativeVertex(f,m.x,ix.x,true).position*w.x+nativeVertex(f,m.x,ix.y,true).position*w.y+nativeVertex(f,m.x,ix.z,true).position*w.z;}
     if(f.scene.x==f.scene.w)return current;float3 w=float3(1-bary.x-bary.y,bary);
     uint previousCount=buffers[f.scene.w].Load(0);
     if(id<previousCount){uint4 previousMesh=buffers[f.scene.w].Load<uint4>(32+id*16);
         if(previousMesh.z>primitive*3+2){uint3 previousIndices=buffers[f.scene.w].Load<uint3>(previousMesh.y+primitive*12);
-            Vertex pa=buffers[f.scene.w].Load<Vertex>(previousMesh.x+previousIndices.x*48),pb=buffers[f.scene.w].Load<Vertex>(previousMesh.x+previousIndices.y*48),pc=buffers[f.scene.w].Load<Vertex>(previousMesh.x+previousIndices.z*48);
+            LegacyVertex pa=buffers[f.scene.w].Load<LegacyVertex>(previousMesh.x+previousIndices.x*48),pb=buffers[f.scene.w].Load<LegacyVertex>(previousMesh.x+previousIndices.y*48),pc=buffers[f.scene.w].Load<LegacyVertex>(previousMesh.x+previousIndices.z*48);
             return pa.position*w.x+pb.position*w.y+pc.position*w.z;
         }
     }
@@ -102,7 +111,8 @@ float3 previousPosition(Frame f,uint id,uint primitive,float2 bary,float3 curren
     return current;
 }
 Surface surface(Frame f,uint id,uint primitive,float2 bary){
-    uint4 m=mesh(f,id);uint3 ix=buffers[f.scene.x].Load<uint3>(m.y+primitive*12);
+    [branch]if(nativeScene(f))return nativeSurface(f,id,primitive,bary);
+    uint4 m=mesh(f,id);uint3 ix=indices(f,m,primitive);
     Vertex a=vertex(f,m.x,ix.x),b=vertex(f,m.x,ix.y),c=vertex(f,m.x,ix.z);float3 w=float3(1-bary.x-bary.y,bary);
     Surface s;s.position=a.position*w.x+b.position*w.y+c.position*w.z;s.previousPosition=s.position;
     s.geometricNormal=normalize(cross(b.position-a.position,c.position-a.position));
@@ -126,6 +136,7 @@ Surface surface(Frame f,uint id,uint primitive,float2 bary){
 struct Hit {float distance;uint id;uint primitive;float2 bary;bool front;};
 bool traceImpl(Frame f,float3 origin,float3 direction,float maximum,inout uint rng,bool shadow,out Hit hit){
     hit=(Hit)0;hit.distance=maximum;
+    if((buffers[f.scene.x].Load(0)&0x7fffffff)==0)return false;
 #ifndef RASTER
     RayDesc ray;ray.Origin=origin;ray.Direction=direction;ray.TMin=0.001;ray.TMax=maximum;
     // Internal instance masks partition opaque and alpha-tested geometry. The
@@ -141,9 +152,9 @@ bool traceImpl(Frame f,float3 origin,float3 direction,float maximum,inout uint r
         if(masked.CommittedStatus()==COMMITTED_TRIANGLE_HIT){hit.distance=masked.CommittedRayT();hit.id=masked.CommittedInstanceID();hit.primitive=masked.CommittedPrimitiveIndex();hit.bary=masked.CommittedTriangleBarycentrics();hit.front=masked.CommittedTriangleFrontFace();found=true;}
     }return found;
 #else
-    bool found=false;uint count=buffers[f.scene.x].Load(0);
+    bool found=false;uint count=buffers[f.scene.x].Load(0)&0x7fffffff;
     for(uint id=0;id<count;id++){uint4 m=mesh(f,id);for(uint p=0;p<m.z/3;p++){
-        uint3 ix=buffers[f.scene.x].Load<uint3>(m.y+p*12);float3 a=vertex(f,m.x,ix.x).position,b=vertex(f,m.x,ix.y).position,c=vertex(f,m.x,ix.z).position;
+        uint3 ix=indices(f,m,p);float3 a=vertex(f,m.x,ix.x).position,b=vertex(f,m.x,ix.y).position,c=vertex(f,m.x,ix.z).position;
         float3 e1=b-a,e2=c-a,h=cross(direction,e2);float det=dot(e1,h);if(abs(det)<1e-8)continue;float inv=1/det;float3 v=origin-a;float u=dot(v,h)*inv;float3 q=cross(v,e1);float vv=dot(direction,q)*inv;float t=dot(e2,q)*inv;
         if(u>=0 && vv>=0 && u+vv<=1 && t>0.001 && t<hit.distance && accept(f,id,p,float2(u,vv),rng)){hit.distance=t;hit.id=id;hit.primitive=p;hit.bary=float2(u,vv);hit.front=det>0;found=true;}
     }}return found;

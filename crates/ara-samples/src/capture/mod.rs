@@ -1,13 +1,10 @@
 //! `capture`: a project scene through the fidelity renderer (ara-render-fidelity:
 //! RT hybrid transport, DDGI, ReSTIR, atmosphere, auto exposure, TAA/FSR1). The
-//! engine has no project-scene → fidelity path outside the editor viewport (which
-//! draws imported models untextured), so this module bridges Play's extraction to a
-//! fidelity snapshot: the scene is cooked and simulated exactly as Play does it.
-mod atlas;
+//! engine adapter consumes Play's extraction; samples resolve pinned overrides,
+//! frame shots and measure the resulting views. Scenes cook and simulate like Play.
 pub mod convert;
 pub mod look;
 pub mod render;
-mod vfx;
 pub mod world;
 
 use crate::{build::tool, lock::Lock};
@@ -72,8 +69,15 @@ pub fn run(samples: &Path, lock: &Lock, request: &Request<'_>) -> Result<()> {
         Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/ara-samples/pipeline-cache");
     std::fs::create_dir_all(&cache)?;
     let mut gpu = ara_gpu::vulkan::VulkanDevice::new(&[], cache)?;
-    let evidence = root.join("evidence");
-    let scratch = root.join(".scratch/captures");
+    let output = std::env::var_os("ARA_CAPTURE_OUTPUT_DIR")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| {
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/ara-samples/captures")
+        })
+        .join(request.project)
+        .join(request.look);
+    let evidence = output.join("evidence");
+    let scratch = output.join("full");
     render::run(
         &mut gpu,
         &scene,

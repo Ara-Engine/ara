@@ -10,16 +10,25 @@ publish.workspace = true
 anyhow = "1"
 ara-2d = { path = "../ara-2d" }
 ara-asset-format = { path = "../ara-asset-format" }
+ara-components = { path = "../ara-components" }
+ara-doc.workspace = true
+ara-foliage = { path = "../ara-foliage" }
+ara-render-fidelity = { path = "../ara-render-fidelity" }
 ara-gpu = { path = "../ara-gpu" }
 ara-landscape = { path = "../ara-landscape" }
 ara-render = { path = "../ara-render" }
 ara-render2d = { path = "../ara-render2d" }
 ara-runtime = { path = "../ara-runtime" }
 ara-schema.workspace = true
+ara-sim = { path = "../ara-sim" }
 ara-terrain = { path = "../ara-terrain" }
+ara-texture-stream = { path = "../ara-texture-stream" }
 ara-vfx = { path = "../ara-vfx" }
 ara-vfx-gpu = { path = "../ara-vfx-gpu" }
 bevy_ecs = { version = "0.20", default-features = false, features = ["std", "multi_threaded"] }
+bytemuck = "1.24"
+sha2 = "0.10"
+serde.workspace = true
 serde_json.workspace = true
 glam = "0.34"
 image = { version = "0.25", default-features = false, features = ["png"] }
@@ -29,10 +38,8 @@ texture2ddecoder = "0.1.2"
 
 [dev-dependencies]
 ara-asset = { path = "../ara-asset" }
-ara-doc.workspace = true
 ara-importers = { path = "../ara-importers" }
 ara-input = { path = "../ara-input" }
-ara-sim = { path = "../ara-sim" }
 serde_json.workspace = true
 
 [lints]
