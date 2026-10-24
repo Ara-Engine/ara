@@ -1,14 +1,9 @@
 //! Six small art-directed effects used by deterministic GPU capture tests.
 use crate::*;
 use ara_material::Domain;
-use std::collections::BTreeMap;
 
 fn item(name: &str, module: Module) -> StackModule {
-    StackModule {
-        name: name.into(),
-        module,
-        bindings: BTreeMap::new(),
-    }
+    StackModule::new(name, module)
 }
 fn emitter(name: &str, capacity: u32, color: [f32; 4], life: f32, size: f32) -> Emitter {
     Emitter {

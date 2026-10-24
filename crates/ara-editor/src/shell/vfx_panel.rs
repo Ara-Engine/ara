@@ -241,7 +241,13 @@ impl Shell {
                 } else {
                     "caption"
                 };
-                out.push_str(&format!("<panel id='{id}-card' class='module-row{}'><panel id='{id}-rail' class='stage-rail' style='background:var(--{rail})' /><button id='{id}' class='module-title' label='{}' description='{}' action='Dispatch'><text id='{id}-name' class='{}' text='{}' /><text id='{id}-kind' class='{muted}' text='{}' /><panel id='{id}-gap' class='fill' /><text id='{id}-summary' class='{muted}' style='font-size:11px;flex-shrink:1;min-width:0px;overflow:hidden' text='{}' /></button>",if selected{" module-selected"}else{""},escape(&module.name),escape(ara_vfx::library::MODULES.iter().find(|k|k.name==kind).map(|k|k.doc).unwrap_or("Typed VFX module")),if selected{"on-selection"}else{"fg"},escape(&title),escape(&kind_text),escape(&summary)));
+                // A disabled module stays in place, dimmed, with its checkbox clear.
+                let name_class = match (selected, module.enabled) {
+                    (true, _) => "on-selection",
+                    (false, true) => "fg",
+                    (false, false) => "muted",
+                };
+                out.push_str(&format!("<panel id='{id}-card' class='module-row{}'><panel id='{id}-rail' class='stage-rail' style='background:var(--{rail})' /><button id='{id}' class='module-title' label='{}' description='{}' action='Dispatch'><text id='{id}-name' class='{name_class}' text='{}' /><text id='{id}-kind' class='{muted}' text='{}' /><panel id='{id}-gap' class='fill' /><text id='{id}-summary' class='{muted}' style='font-size:11px;flex-shrink:1;min-width:0px;overflow:hidden' text='{}' /></button>",if selected{" module-selected"}else{""},escape(&module.name),escape(ara_vfx::library::MODULES.iter().find(|k|k.name==kind).map(|k|k.doc).unwrap_or("Typed VFX module")),escape(&title),escape(&kind_text),escape(&if module.enabled{summary}else{"disabled".into()})));
                 if selected {
                     for (command, icon, label) in [
                         ("vfx.module.up", "chevron-up", "Move up · Alt+Up"),
@@ -254,6 +260,16 @@ impl Shell {
                         out.push_str(&format!("<button id='{button}' class='ghost icon-button' style='width:20px;height:20px;padding:2px' label='{label}' description='{label}' action='Dispatch'>{}</button>",icons::icon_in(&button,icon,"on-selection")));
                     }
                 }
+                let enable = format!("{id}-enabled");
+                self.bindings.insert(
+                    ara_ui::source::stable_id(&enable),
+                    Binding::ResourceContent(
+                        doc.into(),
+                        vec![json!({"cmd":"vfx.module.enable","args":{"emitter":emitter.name,"stage":stage_name,"name":module.name,"enabled":!module.enabled}})],
+                        if module.enabled { "Disable VFX module" } else { "Enable VFX module" }.into(),
+                    ),
+                );
+                out.push_str(&format!("<toggle id='{enable}' class='module-enable' checked='{}' label='Run {}' description='Run this module (unchecked: kept but skipped)' action='Dispatch' />",module.enabled,escape(&module.name)));
                 out.push_str("</panel>");
             }
         }
@@ -573,6 +589,15 @@ impl Shell {
                 copy.name = format!("{}_copy{}", copy.name, editor.host.store().revision());
                 json!({"emitter":emitter_name,"stage":stage,"name":copy.name,"operation":"insert","index":index + 1,"module":copy})
             }
+            "toggle" => {
+                let enabled = !modules[index].enabled;
+                editor.apply_to(
+                    &doc,
+                    vec![json!({"cmd":"vfx.module.enable","args":{"emitter":emitter_name,"stage":stage,"name":name,"enabled":enabled}})],
+                    if enabled { "Enable VFX module" } else { "Disable VFX module" },
+                )?;
+                return Ok(());
+            }
             _ => json!({"emitter":emitter_name,"stage":stage,"name":name,"operation":"remove"}),
         };
         editor.apply_to(
@@ -599,9 +624,5 @@ fn default_module(stage: ara_vfx::Stage, revision: u64) -> ara_vfx::StackModule 
             shutter: 0.,
         },
     };
-    ara_vfx::StackModule {
-        name: format!("module{revision}"),
-        module,
-        bindings: Default::default(),
-    }
+    ara_vfx::StackModule::new(format!("module{revision}"), module)
 }

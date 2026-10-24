@@ -1,6 +1,6 @@
 //! All live effect edits produce attributed, invertible kernel ops.
 use crate::{Effect, Stage, decode, error};
-use ara_cmd::{Command, EditCtx, Registry};
+use ara_cmd::{Command, EditCtx, Hints, Registry};
 use ara_diag::Diagnostic;
 use ara_graph::Graph;
 use ara_schema::{Schema, SchemaDb};
@@ -32,6 +32,20 @@ pub struct StackParams {
     pub index: Option<u32>,
     /// Typed StackModule JSON for insertion.
     pub module: Option<Value>,
+}
+/// Turn one module on or off without removing it.
+#[derive(Schema, Deserialize)]
+#[ara(params, name = "VfxEnableParams", module = "vfx")]
+#[serde(deny_unknown_fields)]
+pub struct EnableParams {
+    /// Stable emitter name.
+    pub emitter: String,
+    /// One of spawn, initialize, update, render.
+    pub stage: String,
+    /// Stable module name.
+    pub name: String,
+    /// Whether the module runs; a disabled module keeps its place and settings.
+    pub enabled: bool,
 }
 /// Typed default parameter mutation.
 #[derive(Schema, Deserialize)]
@@ -120,6 +134,37 @@ impl Command for EditStack {
         apply(ctx, graph, effect)
     }
 }
+/// Enable or disable a named module (Niagara's module checkbox).
+pub struct EnableModule;
+impl Command for EnableModule {
+    type Params = EnableParams;
+    type Output = Value;
+    const NAME: &'static str = "vfx.module.enable";
+    const SUMMARY: &'static str = "Enable or disable a named VFX module without removing it.";
+    const HINTS: Hints = Hints {
+        idempotent: true,
+        destructive: false,
+    };
+    fn examples() -> Vec<Value> {
+        vec![json!({"emitter":"flame","stage":"update","name":"curl","enabled":false})]
+    }
+    fn run(ctx: &mut EditCtx<'_, '_>, p: EnableParams) -> Result<Value, Diagnostic> {
+        let (graph, mut effect) = current(ctx)?;
+        let stage: Stage = decode(Value::String(p.stage))?;
+        effect
+            .emitters
+            .iter_mut()
+            .find(|e| e.name == p.emitter)
+            .ok_or_else(|| error("unknown emitter"))?
+            .stacks
+            .get_mut(stage)
+            .iter_mut()
+            .find(|m| m.name == p.name)
+            .ok_or_else(|| error("unknown module"))?
+            .enabled = p.enabled;
+        apply(ctx, graph, effect)
+    }
+}
 /// Change a declared parameter default without altering its type.
 pub struct SetParameter;
 impl Command for SetParameter {
@@ -150,5 +195,6 @@ pub fn register(registry: &mut Registry, db: &mut SchemaDb) {
     registry
         .command::<ApplyText>(db)
         .command::<EditStack>(db)
+        .command::<EnableModule>(db)
         .command::<SetParameter>(db);
 }

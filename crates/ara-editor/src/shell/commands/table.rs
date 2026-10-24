@@ -1961,6 +1961,7 @@ fn build() -> Vec<Spec> {
         cmd("vfx.module.up", "Move Module Up", "chevron-up", "Alt+Up", "Move the module earlier in its stage.", |s, e, t| vfx_module(s, e, t, "up")).when(vfx_module_target),
         cmd("vfx.module.down", "Move Module Down", "chevron-down", "Alt+Down", "Move the module later in its stage.", |s, e, t| vfx_module(s, e, t, "down")).when(vfx_module_target),
         cmd("vfx.module.duplicate", "Duplicate Module", "copy", "", "Insert a copy after the module.", |s, e, t| vfx_module(s, e, t, "duplicate")).when(vfx_module_target),
+        cmd("vfx.module.toggle", "Enable or Disable Module", "check", "", "Turn the module off without removing it, or back on.", |s, e, t| vfx_module(s, e, t, "toggle")).when(vfx_module_target),
         cmd("vfx.module.delete", "Delete Module", "trash", "", "Remove the module from its stage.", |s, e, t| vfx_module(s, e, t, "delete")).when(vfx_module_target),
         cmd("vfx.restart", "Restart Effect", "rotate-ccw", "", "Run the VFX preview again from tick 0.", |s, _, _| {
             s.vfx_stream.restart();
