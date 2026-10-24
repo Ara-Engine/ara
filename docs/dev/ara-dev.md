@@ -30,6 +30,22 @@ bootstrap bypass, and the script restored it afterwards. CARGO_BUILD_JOBS was 2.
 The initial 33-package cold cache fill reached the 40-minute deadline while
 compiling tests; it was reported as a timeout, with no test execution claimed.
 
+Final validation on 2026-10-24 used source commit `3054c208`, after merging main
+`2858d319`. The normal 40-minute affected gate selected 34 crates and passed in
+848.96 seconds (851.27 including bootstrap): formatting 12.88s, diagnostic coverage
+2.98s, strict clippy 16.35s, test compilation 265.15s, regular CLI binaries 39.33s,
+and tests/doctests 498.14s. All 182 harnesses passed; the explicit Valley exception
+file matched no failures. The working tree stayed unchanged and no pending
+snapshots remained. The all-target workspace check also passed in 281.96 seconds.
+Jobs were 2 and tests ran serially throughout.
+
+A fresh renderer example build then captured every view mode through the real
+machine GPU queue on the RTX 4070 SUPER, with validation clean. The 640x360 lit
+image was visually inspected (material rows, glass, model, floor and shadows).
+Local evidence is under `target/ara-dev/final-green3.json`, `final-workspace3.log`,
+`final-capture3.log` and `verified-baseline/lit.png`. Disk reporting passed on all
+drives, and the live worktree cleanup dry-run completed without deletions.
+
 The gate compiles selected tests with Cargo's JSON artifact messages before
 execution, then builds any missing selected binary targets once. It exposes the
 exact regular executables as runtime CARGO_BIN_EXE_* variables for process-test
