@@ -132,6 +132,21 @@ pub(super) struct EditorFocus {
     /// Field path to reveal, when focusing the inspector.
     pub field: Option<String>,
 }
+/// Parameters of `editor.frame`.
+#[derive(Schema, Deserialize)]
+#[ara(params)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(super) struct EditorFrame {
+    /// Live protocol session.
+    #[expect(
+        dead_code,
+        reason = "Host validates the session before service dispatch"
+    )]
+    pub session: String,
+    /// Show the scene as it opens instead: its gameplay camera's view, else its
+    /// content (terrain and ground excluded) from a three-quarter angle.
+    pub opening: Option<bool>,
+}
 /// Parameters to read or change the Scene view camera. Omitted fields keep their
 /// values; with none given the call only reads the camera.
 #[derive(Schema, Deserialize)]

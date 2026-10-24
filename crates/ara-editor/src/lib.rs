@@ -20,6 +20,7 @@ pub mod settings;
 pub mod shell;
 pub mod state;
 mod transport;
+mod view_camera;
 pub mod world;
 
 pub use app::{Options, run};
