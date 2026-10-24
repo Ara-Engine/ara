@@ -232,9 +232,18 @@ impl Probe {
             }
             Some(Act::Click(control, timing)) => {
                 let (control, timing) = (*control, *timing);
-                let id = target(shell, control)
-                    .ok_or_else(|| format!("responsiveness: no {control:?} control on screen"))?;
-                let point = centre(shell, &id).ok_or("responsiveness: target has no box")?;
+                // A control can be between layouts for a frame (a rebuild in flight):
+                // try again next frame, and fail only if it never shows.
+                let Some(point) = target(shell, control).and_then(|id| centre(shell, &id)) else {
+                    if self.age > 30 {
+                        return Err(format!(
+                            "responsiveness: no {control:?} control on screen ({:?})",
+                            target(shell, control)
+                        )
+                        .into());
+                    }
+                    return Ok(());
+                };
                 push(events, motion(at(point)));
                 push(events, button(true));
                 let same = matches!(timing, Timing::SameBatch | Timing::SlowBefore);
@@ -346,7 +355,9 @@ impl Probe {
         let done = match self.acts.get(self.index) {
             Some(Act::Idle(_, frames) | Act::Hover(frames)) => self.age >= *frames,
             Some(Act::Theme(_)) => self.age >= 8,
-            _ => true,
+            // A click's target was not on screen yet (`inject` retries, then fails).
+            Some(Act::Click(..) | Act::Play) => false,
+            None => true,
         };
         if done {
             self.advance();

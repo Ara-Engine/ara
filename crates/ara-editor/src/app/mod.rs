@@ -148,12 +148,21 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
     let mut probe = options
         .verify_responsiveness
         .then(|| responsiveness::Probe::new(&options.output));
+    if probe.is_some() {
+        // Measure from the default layout and theme, whatever an earlier run left.
+        editor.action("editor.layout.reset", json!({}))?;
+        editor.action("editor.theme", json!({"light": false}))?;
+    }
     let mut journey = if options.verify_journey {
         Some(journey::Journey::new(&mut editor, &options.output)?)
     } else {
         None
     };
-    if panel_verification.is_some() || ux_verification.is_some() || journey.is_some() {
+    if panel_verification.is_some()
+        || ux_verification.is_some()
+        || journey.is_some()
+        || probe.is_some()
+    {
         shell.rebuild(&mut editor)?;
     }
 
