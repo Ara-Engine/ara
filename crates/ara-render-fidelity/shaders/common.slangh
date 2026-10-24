@@ -201,8 +201,9 @@ float3 evaluate(Surface s,float3 v,float3 l,out float pdf){
         result=result*scaling+s.sheen*ds*vis*nl;}
     if(s.coat>0){float ca=pow(s.coatRoughness,4),cd=ca/(PI*pow(nh*nh*(ca-1)+1,2)),cg=smith(nv,ca)*smith(nl,ca);float cf=s.coat*fresnel(nv,float3(0.04)).x;
         result=lerp(result,float3(cd*cg/max(4*nv,1e-6)),cf);pdf=lerp(pdf,cd*smith(nv,ca)/(4*nv)*float(nl>0),s.coat*0.25);}
-    // Authored micro-occlusion modulates unresolvable normal-map horizons only.
-    return result*saturate(abs(dot(s.normal,l))+2*s.ao-1);
+    // Surface.ao is imported ambient occlusion: it attenuates indirect light only
+    // (probe terminals here, the primary surface's at remodulation), never direct.
+    return result;
 }
 float3 sampleBrdfPdf(Surface s,float3 v,inout uint rng,out float3 weight,out float pdf){
     float3 l;float choice=random(rng);bool specular=choice<lerp(0.5,1.,s.metal);if(specular){
@@ -250,7 +251,7 @@ float3 indirect(Frame f,Surface s,float3 v,uint probes){
     float3 F=fresnel(sqrt(0.5+0.5*saturate(dot(s.normal,v))),lerp(float3(0.04*s.specular),s.albedo,s.metal));
     float3 reflection=reflect(-v,s.normal);float horizon=pow(saturate(1+dot(reflection,gn)),2);
     float specularOcclusion=saturate(pow(saturate(dot(s.normal,v))+s.ao,exp2(-16*s.roughness-1))-1+s.ao);
-    float3 diffuseWeight=s.albedo*(1-s.metal)*(1-F),specularWeight=F*horizon*specularOcclusion;
+    float3 diffuseWeight=s.albedo*(1-s.metal)*(1-F)*s.ao,specularWeight=F*horizon*specularOcclusion;
     if(any(s.sheen>0)){float energy=sheenAlbedo(s,saturate(dot(s.normal,v)));float scaling=1-max(max(s.sheen.x,s.sheen.y),s.sheen.z)*energy;diffuseWeight=diffuseWeight*scaling+s.sheen*energy;specularWeight*=scaling;}
     if(s.coat>0){float coat=s.coat*fresnel(saturate(dot(s.normal,v)),float3(0.04)).x;diffuseWeight*=1-coat;specularWeight=specularWeight*(1-coat)+coat*horizon*specularOcclusion;}
     float3 biased=s.position+bias,grid=(biased-f.origin.xyz)/f.spacing.xyz;

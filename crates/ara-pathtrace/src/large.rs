@@ -116,7 +116,7 @@ pub fn quality(gpu: &mut VulkanDevice, root: &Path) -> Result<()> {
         .save(output_path(root, "captures/sponza-reference.png")?)?;
     anyhow::ensure!(
         manifest["size"] == serde_json::json!(SIZE)
-            && manifest["camera"] == serde_json::to_value(&camera)?
+            && manifest["camera"] == serde_json::to_value(camera)?
             && manifest["reference_samples"]
                 .as_u64()
                 .is_some_and(|n| n >= 4096)

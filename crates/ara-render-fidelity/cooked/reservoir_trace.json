@@ -1,15 +1,15 @@
 {
   "binding_layout_hash": "35cd2a62b1ba741ce6823b3c8753d7b5aa97b54c5f0a837b56e542518013fd7e",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "bacc34b4803ffa8fe27833aaa75a478f3f3d78abf22b7ba2f8a527531f535088",
+  "key": "be39f90f8ccaba90d56229080b52a2bf141cd30739b351d3699faaade7911af9",
   "stages": [
     {
-      "dxil": "bacc34b4803ffa8fe27833aaa75a478f3f3d78abf22b7ba2f8a527531f535088/reservoirTrace.dxil",
-      "dxil_hash": "db73fdf2b78c5e30e343f66a475e223e50c22cbbd20695f0a6ed6353327f8355",
+      "dxil": "be39f90f8ccaba90d56229080b52a2bf141cd30739b351d3699faaade7911af9/reservoirTrace.dxil",
+      "dxil_hash": "1768a6af2d40e9c04dce45cf8fae93a3a86d8dbb5b97fa6a2250261a21bda62f",
       "source_entry": "reservoirTrace",
-      "spirv": "bacc34b4803ffa8fe27833aaa75a478f3f3d78abf22b7ba2f8a527531f535088/reservoirTrace.spv",
+      "spirv": "be39f90f8ccaba90d56229080b52a2bf141cd30739b351d3699faaade7911af9/reservoirTrace.spv",
       "spirv_entry": "main",
-      "spirv_hash": "ff0d89f2bbdcad9725c68b16de52f277151e80e463a0cf32cf076960262d007c",
+      "spirv_hash": "c9c4dce2e3f82428429aac51ece3fe8f1461b40947dea5b5c4d7a1489edb791d",
       "stage": "compute"
     }
   ],

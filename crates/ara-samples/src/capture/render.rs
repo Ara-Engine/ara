@@ -428,6 +428,19 @@ fn signals(
                 .scratch
                 .join(format!("{}-{label}-{shot}-{name}.png", options.name)),
         )?;
+        if name != "radiance" {
+            // Temporal sample count (alpha) as grey: white is 24 or more frames.
+            let count = RgbaImage::from_fn(w, h, |x, y| {
+                let v = (data[(y * w + x) as usize][3] / 24.).clamp(0., 1.);
+                let c = (v * 255.) as u8;
+                image::Rgba([c, c, c, 255])
+            });
+            count.save(
+                options
+                    .scratch
+                    .join(format!("{}-{label}-{shot}-{name}-count.png", options.name)),
+            )?;
+        }
     }
     Ok(())
 }
@@ -449,6 +462,7 @@ fn baseline(
         scene.environment_size = sky_size;
         scene.environment = pixels;
     }
+    scene.sun_lux = environment.sun_lux;
     let created = std::time::Instant::now();
     let mut renderer = ara_render::Renderer::new(scene, size, &[], options.pipeline_cache)?;
     renderer.set_tone_curve(match environment.tone_mapper {
@@ -539,7 +553,13 @@ fn strip(
     let lerp = |x: [f32; 3], y: [f32; 3], t: f32| [0, 1, 2].map(|i| x[i] + (y[i] - x[i]) * t);
     let (w, h) = (480u32, 270u32);
     let mut out = RgbaImage::new(w * sequence.frames, h);
-    let steps = sequence.frames.saturating_sub(1).max(1) * sequence.step;
+    // `ARA_CAPTURE_SEQUENCE_STEP` overrides the frames between strip images (pace).
+    let step = std::env::var("ARA_CAPTURE_SEQUENCE_STEP")
+        .ok()
+        .and_then(|v| v.parse::<u32>().ok())
+        .filter(|v| *v > 0)
+        .unwrap_or(sequence.step);
+    let steps = sequence.frames.saturating_sub(1).max(1) * step;
     let mut frame_index = 0;
     let start = camera(a);
     for n in 0..options.settle {
@@ -562,7 +582,7 @@ fn strip(
             effects.composite(gpu, view, &cam, *tick)?;
         }
         *tick += 1;
-        if s % sequence.step == 0 && frame_index < sequence.frames {
+        if s % step == 0 && frame_index < sequence.frames {
             let image = view.capture(gpu)?;
             if frame_index == sequence.frames / 2 {
                 // A full-resolution mid-move frame shows motion grain at its real size.
@@ -571,6 +591,9 @@ fn strip(
                         .scratch
                         .join(format!("{}-{label}-motion.png", options.name)),
                 )?;
+                if std::env::var_os("ARA_CAPTURE_SIGNALS").is_some() {
+                    signals(gpu, view, options, label, "motion")?;
+                }
             }
             let small = imageops::resize(&image, w, h, imageops::FilterType::Triangle);
             imageops::overlay(&mut out, &small, i64::from(frame_index * w), 0);

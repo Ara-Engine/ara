@@ -77,6 +77,13 @@ target/release/ara-samples editor outpost levels/outpost.scene outpost --camera 
    reservoirs). The GPU is shared with other agents, so absolute numbers drift between
    runs (Outpost upscaled measured 5.0, 8.7 and 5.4 ms); the ratio held at 2.1× in all
    three hangar runs (23.6/11.2, 24.1/11.5, 24.6/11.9 ms).
+    **Fixed (`000dfb7d`):** reuse compatibility tests the geometric plane instead of
+    normal-mapped shading normals (corrugated walls rejected almost all reuse and fell
+    back to full traced paths); empty reservoirs repair from DDGI; emitter scenes draw
+    8 DI candidates instead of 1 with two spatial neighbours. `ReSTIR.Spatial` 10.5 →
+    ~3.2 ms native; Hangar High (TAAU 1707×960) 8.6 ms vs 11.9 ms FSR1 before. Motion
+    keeps 24 frames of clipped history instead of 4. See
+    `docs/reports/visual-review-alpha.md`.
 8. **Terrain materials stop at the renderer.** `Header.materials` is ignored; the
    landscape renderer and the windowed terrain meshes use fixed grass/rock/soil/snow
    colours, so an arid biome renders green unless soil is painted everywhere. The
@@ -103,6 +110,11 @@ target/release/ara-samples editor outpost levels/outpost.scene outpost --camera 
     EV100/auto-exposure, tone mapper and bloom are view settings only. The samples keep
     them in `look/*.look.json` next to the camera shots. Play and the editor show the
     gradient sky; the fidelity captures show the physical sky.
+    **Fixed (`000dfb7d`, `56ae1973`):** `SkyAtmosphere`, `HeightFog`, `PostProcess` (and
+    the `RenderSettings.quality` project setting) in `ara-components`, extracted into
+    `RenderFrame.look`; `FrameEnvironment` drives the fidelity view and gives the
+    baseline a CPU-integrated sky, ground-level sun, exposure and tone curve. Hangar and
+    Showcase scenes carry their looks; Outpost follows with the authoring migration.
 13. **VFX is limited to the committed library.** Only `campfire`, `sparks`, `smoke`,
     `magic_swirl`, `muzzle_flash`, `rain` resolve (`depth_sparks` is cooked but not in
     `ara_vfx::samples::all()` → `no cooked VFX effect`). Project effects cannot be cooked
@@ -111,6 +123,10 @@ target/release/ara-samples editor outpost levels/outpost.scene outpost --camera 
     the dusk exposure it saturates into a ~4 m white plume, the worst element of the
     Outpost captures. There is no dust effect for the hangar either. Compositing into
     the fidelity view works through `feature_inputs`/`post_process` (done by the bridge).
+    **Fixed (`000dfb7d`):** `VisualEffect.scale`/`intensity`; `samples::library()` adds
+    `depth_sparks` and `dust`; the campfire is a ~0.7 m fire with thin sooty smoke;
+    effects sample DDGI at their world position (they used local coordinates) and lit
+    smoke shades as a thin medium. Project-cooked effects remain build order.
 14. **Music longer than ~2.8 minutes cannot be imported.** The audio importer decodes the
     whole file against a fixed 64 MiB budget (`audio capacity exhausted: resident decode
     budget`), even for streamed music; not a sidecar setting. The 4-minute CC0 track was

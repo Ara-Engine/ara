@@ -70,9 +70,13 @@ LightCandidate lightAt(Frame f,Surface s,float3 v,uint light,uint seed){
     return c;
 }
 float lightTarget(float3 value){return max(dot(value,float3(0.2126,0.7152,0.0722)),0);}
-float3 risDirect(Frame f,Surface s,float3 v,inout uint rng){
+// `primary` marks camera-visible shading, which affords more candidates than the
+// direct light gathered at every secondary bounce.
+float3 risDirect(Frame f,Surface s,float3 v,inout uint rng,bool primary=false){
     LightCandidate selected;float sum=0;float target=0;
-    uint candidates=f.transport.x==1?(buffers[f.scene.x].Load(12)>64?32:8):2;
+    // Emissive triangles make many-light scenes without many Light entities: two
+    // candidates left emitter-lit rooms speckled when reservoirs are off (Medium).
+    uint candidates=f.transport.x==1?(buffers[f.scene.x].Load(12)>64?32:8):(primary && emitterCount(f)>0?6:2);
     for(uint i=0;i<candidates;i++){
         // Fork a substream: reservoir roulette must not reuse the barycentric
         // variates generated inside lightAt (visibility may depend on them).
@@ -91,11 +95,11 @@ float3 directSun(Frame f,Surface s,float3 v,inout uint rng){
 #endif
     return any(sunlight>0) && (dot(s.normal,l)>0 || s.transmission>0) && !occluded(f,rayOrigin(s,l),l,10000,rng)?evaluate(s,v,l,pdf)*sunlight:float3(0);
 }
-float3 directLocal(Frame f,Surface s,float3 v,inout uint rng){
+float3 directLocal(Frame f,Surface s,float3 v,inout uint rng,bool primary=false){
     float3 sum=0;
     uint count=buffers[f.scene.x].Load(12);
 #ifdef EMISSIVE_LIGHTS
-    if(emitterCount(f)>0 || count>8)return sum+risDirect(f,s,v,rng);
+    if(emitterCount(f)>0 || count>8)return sum+risDirect(f,s,v,rng,primary);
 #endif
     // Small non-emissive scenes retain their exact all-light estimator.
     for(uint i=0;i<count;i++){

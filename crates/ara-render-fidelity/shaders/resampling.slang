@@ -53,7 +53,7 @@ float3 diffuseValue(Surface s,float3 v,float3 l){
     float3 value=s.albedo*(1-s.metal)*(1-F)*(nl/PI);
     if(s.coat>0)value*=1-s.coat*fresnel(max(dot(s.normal,v),0),float3(0.04)).x;
     if(any(s.sheen>0)){float energy=sheenAlbedo(s,saturate(dot(s.normal,v)));value*=1-max(max(s.sheen.x,s.sheen.y),s.sheen.z)*energy;}
-    return value*saturate(nl+2*s.ao-1);
+    return value;
 }
 bool layeredMaterial(Surface s){return s.coat>0 || any(s.sheen>0) || s.transmission>0;}
 float3 giValue(Surface s,float3 v,GIReservoir r,out float3 direction,out float distance){
@@ -83,14 +83,17 @@ bool compatible(Frame f,uint2 p,int2 q,bool previous){
     if(!previous)plane=plane && dot(g,extraPixel(f,36,q).xyz)>0.9;
     return a.w>0 && a.w==b.w && dot(na.xyz,nb.xyz)>0.5 && abs(na.w-nb.w)<0.4 && plane;
 }
+// Plain pixels rebuild their surface from the primary pass's compact targets; only
+// layered ones (tagged AO >= 2) re-evaluate the material. Layer-capable variants
+// (atmosphere/layers) used to re-evaluate every pixel in each of four passes.
 Surface primarySurface(Frame f,uint2 p,out float3 v){
-    float4 w=pixel(f,WORLD+f.control.x,p),h=pixel(f,BASE,p);v=-cameraRay(f,float2(p)+0.5);
-#ifndef MATERIAL_LAYERS
-    Surface s=(Surface)0;float4 a=extraPixel(f,35,p),g=extraPixel(f,36,p),n=pixel(f,NORMAL+f.control.x,p);
-    s.position=w.xyz;s.id=uint(w.w)-1;s.albedo=a.rgb;s.metal=a.w;s.normal=n.xyz;s.roughness=n.w;s.geometricNormal=g.xyz;s.ao=g.w;s.specular=1;return s;
-#else
-    Surface s=surface(f,uint(w.w)-1,uint(h.z),h.xy);if(dot(s.normal,v)<0)s.normal=-s.normal;return s;
+    float4 w=pixel(f,WORLD+f.control.x,p),h=pixel(f,BASE,p),g=extraPixel(f,36,p);v=-cameraRay(f,float2(p)+0.5);
+#ifdef MATERIAL_LAYERS
+    [branch]if(g.w>=2){Surface s=surface(f,uint(w.w)-1,uint(h.z),h.xy);if(dot(s.normal,v)<0)s.normal=-s.normal;return s;}
 #endif
+    Surface s=(Surface)0;float4 a=extraPixel(f,35,p),n=pixel(f,NORMAL+f.control.x,p);
+    s.position=w.xyz;s.id=uint(w.w)-1;s.albedo=a.rgb;s.metal=a.w;s.normal=n.xyz;s.roughness=n.w;s.geometricNormal=g.xyz;s.ao=g.w>=2?g.w-2:g.w;s.specular=1;
+    s.sheenLut=f.display.z;s.coatRoughness=0.15;s.sheenRoughness=0.5;return s;
 }
 // Firefly suppression for one-sample specular estimates: cap a sample at sixteen
 // display-white units under the current exposure. Converged highlights of real
@@ -213,7 +216,7 @@ void specularTrace(uint3 tid:SV_DispatchThreadID){
     Frame f=frame();uint2 p=tid.xy;if(any(p>=f.sizes.xy) || pixel(f,WORLD+f.control.x,p).w==0 || pixel(f,NORMAL+f.control.x,p).w>=0.5)return;
     uint rng=hash((p.y*f.sizes.x+p.x)^f.control.w*8737);float3 v;Surface s=primarySurface(f,p,v);if(layeredMaterial(s))return;
     float3 h=visibleGgx(s,v,rng),l=reflect(-v,h),result=0;float nl=dot(s.normal,l);
-    if(nl>0)result=traceSecondaryRay(f,s,l,rng)*fresnel(max(dot(v,h),0),lerp(float3(0.04*s.specular),s.albedo,s.metal))*smith(nl,pow(s.roughness,4))*saturate(nl+2*s.ao-1);
+    if(nl>0)result=traceSecondaryRay(f,s,l,rng)*fresnel(max(dot(v,h),0),lerp(float3(0.04*s.specular),s.albedo,s.metal))*smith(nl,pow(s.roughness,4));
     extraStore(f,SPEC_RAW,p,float4(clampSpecular(f,result),1));
 }
 
@@ -237,7 +240,7 @@ void reservoirSpatial(uint3 tid:SV_DispatchThreadID){
         updateGI(gr,g,target*g.stats.x*m,m,rng);
     }
     if(dr.M==0){
-        float3 local=risDirect(f,s,v,rng),indirect=0;
+        float3 local=risDirect(f,s,v,rng,true),indirect=0;
         // Keep the specular channel's inclusion probability independent of repair.
         // Pixels without any compatible reservoir (disocclusions, thin parts) take
         // the DDGI irradiance: noise-free, and far cheaper than a full traced path.

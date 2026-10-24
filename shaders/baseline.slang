@@ -62,6 +62,10 @@ Surface surface(Varying v) {
     float3 n=normalize(v.normal);float3 t=normalize(v.tangent.xyz-n*dot(v.tangent.xyz,n));float3 b=cross(n,t)*v.tangent.w;
     float3 normal=tex(m.textures.y,v.uv).xyz*2-1;normal.xy*=m.surface.y;s.normal=normalize(t*normal.x+b*normal.y+n*normal.z);
     float4 mr=tex(m.textures.z,v.uv);s.roughness=clamp(m.emissiveRoughness.w*mr.g,0.045,1);s.metal=saturate(m.surface.x*mr.b);
+    // Geometric specular AA (Tokuyoshi & Kaplanyan 2019): widen GGX alpha^2 by the
+    // pixel's shading-normal variance so sub-pixel normal detail cannot sparkle.
+    float3 du=ddx(s.normal),dv=ddy(s.normal);float kernel=min(2*0.15915494*(dot(du,du)+dot(dv,dv)),0.18);
+    s.roughness=sqrt(sqrt(saturate(pow(s.roughness,4)+kernel)));
     float3 emission=tex(m.textures.w,v.uv).rgb;
     if((m.flags.y&(1u<<26))!=0)emission=materialLinear(emission);
     s.emissive=emission*m.emissiveRoughness.rgb;return s;
