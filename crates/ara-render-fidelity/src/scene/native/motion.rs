@@ -87,6 +87,7 @@ impl Motion {
     }
 
     fn check(&self, scene: &NativeScene) -> Result<Change> {
+        ara_gpu::cpu_scope!("Native.check_parameters_and_poses");
         ensure!(
             self.geometry.len() == scene.geometry.len()
                 && self
@@ -100,7 +101,10 @@ impl Motion {
             self.ids.len() == scene.instances.len(),
             "native instance layout changed; prepare replacement content"
         );
-        scene.validate_parameters()?;
+        {
+            ara_gpu::cpu_scope!("Native.validate_parameters");
+            scene.validate_parameters()?;
+        }
         let deformed = self
             .geometry
             .iter()
@@ -226,7 +230,10 @@ impl GpuScene {
             .pool
             .as_mut()
             .expect("native scene owns its geometry pool");
-        let mut pose = pool.prepare_pose(gpu, scene)?;
+        let mut pose = {
+            ara_gpu::cpu_scope!("Native.prepare_skin_pose");
+            pool.prepare_pose(gpu, scene)?
+        };
         let rebuilt_blas = pose.as_ref().map_or(0, |p| p.blas);
         let pose_ms = pose.as_ref().map_or(0.0, |p| p.milliseconds);
         let mut allocated = Vec::new();
@@ -346,7 +353,10 @@ impl GpuScene {
             .iter()
             .any(|m| crate::material::has_layers(std::slice::from_ref(&m.pbr)));
         self.many_local_lights = scene.lights.len() > 8;
-        self.hash = native.motion.fingerprint(scene);
+        self.hash = {
+            ara_gpu::cpu_scope!("Native.fingerprint");
+            native.motion.fingerprint(scene)
+        };
         native.motion.accept(scene);
         self.acceleration_update = AccelerationUpdate {
             reused_blas: pool.stats().blas - rebuilt_blas,
