@@ -5,6 +5,7 @@
 //!   `assets/third_party/`; `verify` checks without downloading;
 //! - `credits` regenerates `samples/THIRD_PARTY_ASSETS.md` from the lock;
 //! - `build` authors a project's levels through the `ara` CLI (see `build`).
+//! - `kits` writes only the generated, git-ignored kit files (release packaging).
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;
@@ -91,6 +92,12 @@ enum Command {
     /// Author a project's levels through the `ara` CLI (`outpost` or `showcase`).
     /// Needs fetched assets and release builds of `ara` and `ara-import-worker`.
     Build {
+        /// Project folder name.
+        project: String,
+    },
+    /// Write a project's generated, git-ignored kit files (`assets/kit/`) without
+    /// authoring any document. Needs fetched assets; projects without kits are a no-op.
+    Kits {
         /// Project folder name.
         project: String,
     },
@@ -255,6 +262,19 @@ fn main() -> Result<()> {
                 other => anyhow::bail!("unknown project {other} (outpost, showcase)"),
             }
             println!("built {project}");
+        }
+        Command::Kits { project } => {
+            let lock = read_lock()?;
+            let root = samples.join(&project);
+            match project.as_str() {
+                "outpost" => build::outpost::generate(&root, &lock)?,
+                "showcase" => build::showcase::generate(&root, &lock)?,
+                _ => {
+                    println!("{project} has no generated kits");
+                    return Ok(());
+                }
+            }
+            println!("generated {project} kits");
         }
         Command::Capture {
             project,

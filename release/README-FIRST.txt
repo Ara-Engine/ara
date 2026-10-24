@@ -9,10 +9,12 @@ https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist
 
 Run the setup EXE, or extract the portable ZIP and run:
   powershell -NoProfile -ExecutionPolicy Bypass -File .\install.ps1
-Silent install / custom destination:
+Silent install / custom destination (in PowerShell, add | Out-Host to wait for it):
   ara-0.0.1-alpha-windows-x64-setup.exe --silent --destination C:\path\Ara
 Each version installs to %LOCALAPPDATA%\Programs\Ara\<version> by default.
-An existing destination is never overwritten. Start menu shortcuts are versioned.
+Running setup again for an installed version asks before replacing it (silent
+installs need --replace); folders that are not Ara installations are never touched.
+Start menu shortcuts are versioned.
 Restart your terminal after installation to pick up the per-user PATH entry.
 
   ara --version

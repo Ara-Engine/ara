@@ -7,10 +7,14 @@ use super::{
     outpost::light,
     place::{Models, Prop, Scene, transform},
 };
-use crate::kit::{Kit, Material};
+use crate::{
+    kit::{Kit, Material},
+    lock::Lock,
+};
 use anyhow::Result;
 use glam::{Mat4, Vec2, Vec3};
 use serde_json::json;
+use std::path::Path;
 
 /// Level scene.
 pub const SCENE: (&str, &str) = ("levels/showcase.scene", "sc_showcase1");
@@ -81,6 +85,53 @@ fn balls() -> Vec<(&'static str, Material, f32)> {
     ]
 }
 
+/// Writes the stage, plinth and material balls and returns `(model name, glTF path)`.
+/// Only ignored `assets/kit/` files change.
+fn kits(root: &Path, lock: &Lock) -> Result<Vec<(String, String)>> {
+    let mut stage = Kit::new(vec![
+        Material::textured("floor", "concrete_floor_02").tinted([0.32, 0.31, 0.3]),
+        Material::flat("turntable", [0.06, 0.06, 0.065], 0.35, 0.0),
+        Material::flat("plinth", [0.72, 0.71, 0.69], 0.55, 0.0),
+    ]);
+    stage.cuboid(
+        0,
+        Vec3::new(30.0, 0.2, 30.0),
+        Mat4::from_translation(Vec3::new(0.0, -0.1, 0.0)),
+        crate::kit::meters(lock, "concrete_floor_02"),
+    );
+    stage.cylinder(1, 1.6, 0.12, 64, Mat4::IDENTITY, Vec2::ONE);
+    let mut written = vec![("stage".to_owned(), stage.write(root, lock, "stage")?)];
+    let mut plinth = Kit::new(vec![Material::flat(
+        "plinth",
+        [0.72, 0.71, 0.69],
+        0.55,
+        0.0,
+    )]);
+    plinth.cuboid(
+        0,
+        Vec3::new(0.6, 1.0, 0.6),
+        Mat4::from_translation(Vec3::new(0.0, 0.5, 0.0)),
+        Vec2::ONE,
+    );
+    written.push(("plinth".to_owned(), plinth.write(root, lock, "plinth")?));
+    for (name, material, _) in balls() {
+        let mut kit = Kit::new(vec![material]);
+        kit.sphere(0, Vec3::new(0.0, 0.3, 0.0), 0.3, 32, Vec2::new(2.0, 1.0));
+        let kit_name = format!("ball_{name}");
+        let path = kit.write(root, lock, &kit_name)?;
+        written.push((kit_name, path));
+    }
+    Ok(written)
+}
+
+/// Writes every generated, git-ignored showcase file (`assets/kit/`) without
+/// authoring a document; see `outpost::generate`.
+pub fn generate(root: &Path, lock: &Lock) -> Result<()> {
+    super::outpost::suit(root, lock)?;
+    kits(root, lock)?;
+    Ok(())
+}
+
 /// Builds the showcase project.
 pub fn build(ctx: &Ctx) -> Result<()> {
     clean(
@@ -113,49 +164,18 @@ pub fn build(ctx: &Ctx) -> Result<()> {
     super::outpost::human(ctx, &mut models)?;
     let lock = &ctx.lock;
     let root = &ctx.root;
-    // Stage pieces.
-    let mut stage = Kit::new(vec![
-        Material::textured("floor", "concrete_floor_02").tinted([0.32, 0.31, 0.3]),
-        Material::flat("turntable", [0.06, 0.06, 0.065], 0.35, 0.0),
-        Material::flat("plinth", [0.72, 0.71, 0.69], 0.55, 0.0),
-    ]);
-    stage.cuboid(
-        0,
-        Vec3::new(30.0, 0.2, 30.0),
-        Mat4::from_translation(Vec3::new(0.0, -0.1, 0.0)),
-        crate::kit::meters(lock, "concrete_floor_02"),
-    );
-    stage.cylinder(1, 1.6, 0.12, 64, Mat4::IDENTITY, Vec2::ONE);
-    let path = stage.write(root, lock, "stage")?;
-    ctx.model(&mut models, "stage", &path, "as_kitstage")?;
-    let mut plinth = Kit::new(vec![Material::flat(
-        "plinth",
-        [0.72, 0.71, 0.69],
-        0.55,
-        0.0,
-    )]);
-    plinth.cuboid(
-        0,
-        Vec3::new(0.6, 1.0, 0.6),
-        Mat4::from_translation(Vec3::new(0.0, 0.5, 0.0)),
-        Vec2::ONE,
-    );
-    let path = plinth.write(root, lock, "plinth")?;
-    ctx.model(&mut models, "plinth", &path, "as_kitplinth")?;
-    let mut emitters = Vec::new();
-    for (name, material, radiance) in balls() {
-        let mut kit = Kit::new(vec![material]);
-        kit.sphere(0, Vec3::new(0.0, 0.3, 0.0), 0.3, 32, Vec2::new(2.0, 1.0));
-        let kit_name = format!("ball_{name}");
-        let path = kit.write(root, lock, &kit_name)?;
+    for (name, path) in kits(root, lock)? {
         ctx.model(
             &mut models,
-            &kit_name,
+            &name,
             &path,
-            &format!("as_kit{}", super::place::short(&kit_name)),
+            &format!("as_kit{}", super::place::short(&name)),
         )?;
-        emitters.push((kit_name, radiance));
     }
+    let emitters: Vec<(String, f32)> = balls()
+        .into_iter()
+        .map(|(name, _, radiance)| (format!("ball_{name}"), radiance))
+        .collect();
     let human = lock.get("m2m_human").expect("m2m_human pinned");
     anim::locomotion(
         ctx,

@@ -5,6 +5,11 @@ Exporter appends a ZIP and a length/hash trailer to this pinned executable.
 `--destination DIR` installs into a new directory; `--list` only lists paths.
 Installation stages into a unique sibling and renames only after validation.
 It never overwrites or deletes an existing installation or creates services.
+The payload streams from disk: `Payload::open` reads only the PE header and
+trailer, `verify(progress)` hashes it (typestate: only `Verified` lists or
+extracts, with byte progress), and `Stage` removes itself on drop unless
+`publish`ed or `rename_to` succeeds. `ara-setup` (engine/Hub setup) builds its
+replace-with-rollback on these; the `&[u8]` `list`/`install` remain for callers.
 All archive names are validated before writing: no traversal, alternate streams,
 Windows device names, symlinks or duplicate/case-colliding files. Failure removes
 only the stage directory created by this invocation. Authenticode's PE certificate
