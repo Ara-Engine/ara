@@ -39,8 +39,11 @@ pub enum Widget {
     Vector {
         /// Number of channels.
         count: usize,
-        /// Colour swatch/picker.
+        /// Colour swatch/picker (a `color`, or a vector with the `color` editor hint).
         color: bool,
+        /// Channels are addressed `r g b a` (a `color` value), not `x y z w`.
+        #[serde(skip_serializing)]
+        rgba: bool,
     },
     /// Boolean checkbox.
     Bool,
@@ -56,7 +59,17 @@ pub enum Widget {
     },
     /// Entity address with a scene-picking action.
     Entity,
-    /// Text or JSON fallback for compound data.
+    /// Lists, keyed lists, maps and (optional) structs: a typed editor per element
+    /// (`shell/compound.rs`).
+    Compound {
+        /// The schema type, as written in schemas (`list<vec2>`).
+        #[serde(rename = "type")]
+        name: String,
+        /// The schema type the element editors follow.
+        #[serde(skip_serializing)]
+        ty: ValueType,
+    },
+    /// Plain text, or JSON for a `json` value.
     Text,
 }
 /// One inspector field across all selected entities.
@@ -219,24 +232,36 @@ pub fn fields(
     result
 }
 /// Map reflected field metadata to the shared native control model.
-pub(crate) fn widget(db: &SchemaDb, desc: &FieldDesc) -> Widget {
+pub fn widget(db: &SchemaDb, desc: &FieldDesc) -> Widget {
     let ty = if let ValueType::Option(inner) = &desc.ty {
         inner.as_ref()
     } else {
         &desc.ty
     };
     if ty.is_number() {
+        let (min, max) = (
+            desc.range.and_then(|r| r.min),
+            desc.range.and_then(|r| r.max),
+        );
         return Widget::Number {
-            min: desc.range.and_then(|r| r.min),
-            max: desc.range.and_then(|r| r.max),
-            slider: desc.editor.slider,
+            min,
+            max,
+            // A closed range reads best as a slider (roughness, metallic).
+            slider: desc.editor.slider || (min.is_some() && max.is_some()),
             step: desc.editor.step.unwrap_or(0.1),
         };
     }
     if let Some(count) = ty.vector_len() {
         return Widget::Vector {
             count,
-            color: *ty == ValueType::Color,
+            color: *ty == ValueType::Color || desc.editor.color,
+            rgba: *ty == ValueType::Color,
+        };
+    }
+    if compound(db, ty) {
+        return Widget::Compound {
+            name: desc.ty.to_string(),
+            ty: desc.ty.clone(),
         };
     }
     match ty {
@@ -250,6 +275,16 @@ pub(crate) fn widget(db: &SchemaDb, desc: &FieldDesc) -> Widget {
             _ => Widget::Text,
         },
         _ => Widget::Text,
+    }
+}
+/// Whether `ty` is edited element by element: a list, keyed list, map or struct.
+pub(crate) fn compound(db: &SchemaDb, ty: &ValueType) -> bool {
+    match ty {
+        ValueType::List(_) | ValueType::Keyed(_) | ValueType::Map(_) => true,
+        ValueType::Named(name) => {
+            matches!(db.get(name).map(|t| &t.shape), Some(Shape::Struct { .. }))
+        }
+        _ => false,
     }
 }
 /// Parse a scalar with a physical suffix, converting to the schema's authoring unit.

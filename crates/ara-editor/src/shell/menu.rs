@@ -252,11 +252,7 @@ impl Shell {
             }
         }
         if let Source::Enum(path, options) = &menu.source {
-            let current = self
-                .fields
-                .get(path)
-                .map(|f| f.value.clone())
-                .unwrap_or(Value::Null);
+            let current = self.field_value(path);
             for option in options {
                 root.push(Row::Command {
                     id: "field.set",
@@ -268,18 +264,17 @@ impl Shell {
             }
         }
         if let Source::Assets(path, kind) = &menu.source {
-            let current = self
-                .fields
-                .get(path)
-                .map(|f| f.value.clone())
-                .unwrap_or(Value::Null);
-            root.push(Row::Command {
-                id: "field.set",
-                target: Target::Text(format!("{path}=null")),
-                label: Some("None".into()),
-                path: String::new(),
-                checked: Some(current.is_null()),
-            });
+            let current = self.field_value(path);
+            // Adding an item by picking its asset offers no "None".
+            if !self.appends(path) {
+                root.push(Row::Command {
+                    id: "field.set",
+                    target: Target::Text(format!("{path}=null")),
+                    label: Some("None".into()),
+                    path: String::new(),
+                    checked: Some(current.is_null()),
+                });
+            }
             let workspace = editor.host.store().workspace();
             for asset in self
                 .browser

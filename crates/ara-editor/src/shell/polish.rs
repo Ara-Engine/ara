@@ -229,6 +229,7 @@ fn image(draws: &mut Vec<Draw>, node: u64, rect: Box2, name: &str, tint: Color) 
 
 impl Shell {
     pub(super) fn paint_swatches(&mut self) {
+        self.paint_nested_swatches();
         for (id, color) in &self.value_swatches {
             if let Some(i) = self.ui.find(id) {
                 let r = self.ui.nodes[i].rect;

@@ -391,6 +391,9 @@ pub struct EditorHints {
     /// Show but do not allow edits.
     #[serde(default, skip_serializing_if = "is_default")]
     pub read_only: bool,
+    /// Edit a `vec3`/`vec4` of linear RGB(A) with a colour swatch and picker.
+    #[serde(default, skip_serializing_if = "is_default")]
+    pub color: bool,
 }
 
 fn is_default<T: Default + PartialEq>(v: &T) -> bool {
