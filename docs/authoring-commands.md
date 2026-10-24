@@ -136,6 +136,23 @@ base-color alpha masks and transmission lower without baking a new glTF.
 Graph color samples filter raw UNORM before sRGB decoding; data/alpha stay raw.
 The Basic renderer shares one UV stream; fidelity consumes per-slot coordinates.
 
+Create collision from the same source model selection:
+
+```powershell
+ara do physics.collider.fromModel --doc levels/yard.scene --args '{"entity":"e_crate","mode":"convex"}' --why 'Make the selected kit piece solid'
+```
+
+MCP uses `ara_apply` with the same command and arguments. Omit `model`, `node`
+and `primitive` to inherit the entity's MeshRenderer selection, or supply a model
+explicitly. `convex` supports moving bodies; `mesh` requires a static body. A
+missing RigidBody is added as static. Cooking uses published model geometry with
+the selected pivot and entity scale; no source glTF is rewritten.
+
+`Collider.center` offsets any rigid-body shape in body-local metres, after scale
+is baked. Body rotation rotates that offset. `PhysicsId` may be omitted or zero;
+Play assigns a unique nonzero value from the stable entity identity, reserving
+explicit positive IDs. Automatic values survive snapshots and streamed adoption.
+
 `terrain.raise`, `terrain.paint` and `foliage.exclude` accept an optional `id`.
 Use stable IDs such as `s_hill`, `s_grass` and `x_road` for reproducible builds.
 MCP's `as` binds a batch symbol in the same way as `entity.create`. Newly touched

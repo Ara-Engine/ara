@@ -161,6 +161,9 @@ target/release/ara-samples editor outpost levels/outpost.scene outpost --camera 
     with their bulbs off; each needs a derived glTF (`kit::variant`). There is no material
     asset slot on `MeshRenderer`, so a palette-textured character can't be recoloured
     without a derived texture.
+    **Fixed (`4ea00d6`, `81cd239`):** source-node/subtree primitive selection,
+    native graph/instance overrides per primitive, and targeted lamp emission
+    controls now reach Play. No derived model is needed for these controls.
 23. **Colliders have no offset and models can't be colliders in play.** Model origins sit
     at the base, box colliders at the entity origin; every solid prop needs a second
     entity at its bounds centre. `PhysicsId` defaults to 1 and must be made unique by hand.

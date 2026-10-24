@@ -2043,8 +2043,16 @@ expression: out
             "sphere",
             "capsule",
             "cylinder",
-            "cooked"
+            "cooked",
+            "modelConvex",
+            "modelMesh"
           ]
+        },
+        "center": {
+          "type": "vec3",
+          "doc": "Shape center in body-local metres, after visual scale is baked. The body origin remains at Transform/PhysicsPose; rotation also rotates this offset.",
+          "default": [0, 0, 0],
+          "unit": "m"
         },
         "halfExtents": {
           "type": "vec3",
@@ -2070,6 +2078,16 @@ expression: out
         "asset": {
           "type": "option<asset>",
           "doc": "Cooked collision asset (`@path#id`); resolve into `CookedCollider` before ticking.",
+          "default": null
+        },
+        "node": {
+          "type": "option<string>",
+          "doc": "Source model node name/index for model-derived geometry; absent uses its default scene.",
+          "default": null
+        },
+        "primitive": {
+          "type": "option<u32>",
+          "doc": "Subtree-local primitive for model-derived geometry; absent uses the complete subtree.",
           "default": null
         },
         "layer": {
@@ -2164,6 +2182,47 @@ expression: out
         }
       }
     },
+    "ColliderFromModelParams": {
+      "kind": "params",
+      "doc": "Derive a collider from an imported model or the entity's MeshRenderer selection.",
+      "module": "physics",
+      "fields": {
+        "entity": {
+          "type": "entity",
+          "doc": "Target entity, including prefab addresses.",
+          "required": true
+        },
+        "model": {
+          "type": "option<asset>",
+          "doc": "Source import; omitted uses MeshRenderer.model.",
+          "default": null
+        },
+        "node": {
+          "type": "option<string>",
+          "doc": "Source node name/index; omitted inherits MeshRenderer.node when model is omitted.",
+          "default": null
+        },
+        "primitive": {
+          "type": "option<u32>",
+          "doc": "Subtree-local primitive; omitted inherits MeshRenderer.primitive when model is omitted.",
+          "default": null
+        },
+        "mode": {
+          "type": "ModelColliderMode",
+          "doc": "Convex hull by default, or a static triangle surface.",
+          "default": "convex",
+          "options": [
+            "convex",
+            "mesh"
+          ]
+        },
+        "center": {
+          "type": "option<vec3>",
+          "doc": "Optional center in body-local metres, after visual scale is baked.",
+          "default": null
+        }
+      }
+    },
     "ColliderKind": {
       "kind": "enum",
       "doc": "Primitive or cooked geometry selection. Cooked geometry is resolved by the asset worker.",
@@ -2183,6 +2242,12 @@ expression: out
         },
         "cooked": {
           "doc": "Immutable cooked hull, mesh, terrain or compound, attached as `CookedCollider`."
+        },
+        "modelConvex": {
+          "doc": "Convex hull from the selected cooked model geometry; supports moving bodies."
+        },
+        "modelMesh": {
+          "doc": "Triangle surface from the selected cooked model geometry; static bodies only."
         }
       }
     },
@@ -4264,6 +4329,19 @@ expression: out
         }
       }
     },
+    "ModelColliderMode": {
+      "kind": "enum",
+      "doc": "Geometry used by a model-derived collider.",
+      "module": "physics",
+      "variants": {
+        "convex": {
+          "doc": "Convex hull, usable by static, kinematic and dynamic bodies."
+        },
+        "mesh": {
+          "doc": "Exact triangle surface, usable only by static bodies."
+        }
+      }
+    },
     "MotionType": {
       "kind": "enum",
       "doc": "How a rigid body moves; kinematic targets are runtime intents.",
@@ -5200,9 +5278,9 @@ expression: out
       "fields": {
         "value": {
           "type": "u64",
-          "doc": "Stable scene/network identity, used to sort creation and inputs across peers.",
-          "default": 1,
-          "range": [1, null]
+          "doc": "Stable scene/network identity. Zero asks Play to assign a unique value from the entity identity; positive values explicitly reserve an identity.",
+          "default": 0,
+          "range": [0, null]
         }
       }
     },
@@ -8544,6 +8622,27 @@ expression: out
             "to": "Combat",
             "sync": "bar"
           }
+        }
+      ]
+    },
+    "physics.collider.fromModel": {
+      "kind": "command",
+      "summary": "Derive convex or static mesh collision from cooked model geometry.",
+      "params": "ColliderFromModelParams",
+      "hints": {
+        "idempotent": false,
+        "destructive": false
+      },
+      "scope": "edit:scene",
+      "examples": [
+        {
+          "entity": "e_crate",
+          "mode": "convex"
+        },
+        {
+          "entity": "e_wall",
+          "mode": "mesh",
+          "center": [0, 0.5, 0]
         }
       ]
     },

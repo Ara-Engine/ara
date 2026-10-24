@@ -106,6 +106,9 @@ plugin Late → poses.resolve.
 - Physics: a body is teleported only when its `Transform` differs from what physics
   last wrote (`SyncedTransform`). Static bodies keep authored transforms. Kinematic
   nav agents lift their collider so it rests on the ground.
+  Model colliders share MeshRenderer's selectors and pivot, bake world scale, and
+  rebuild native handles on portable restore. Omitted/zero PhysicsIds receive stable
+  unique values before binding; automatic IDs are marked driven in keep-changes.
 - Navmeshes bake at load from static box colliders and terrain inside each
   `NavMeshSurface` (cached by tile content in `nav_cache`). `NavMeshSurface.geometry`
   assets are not baked yet (structured error). Streamed navigation needs terrain
