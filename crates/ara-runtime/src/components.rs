@@ -27,6 +27,8 @@ pub enum MeshShape {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct PrimitiveMaterialOverride {
     /// Zero-based primitive within the selected subtree, before `primitive` filtering.
+    // The canonical writer omits the default slot 0, so reading must default it.
+    #[serde(default)]
     pub primitive: u32,
     /// Authoritative material graph or material-instance asset (`@path#id`).
     pub material: AssetRef,
