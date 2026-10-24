@@ -17,6 +17,15 @@ struct Cli {
 }
 #[derive(Subcommand)]
 enum Cmd {
+    /// Bundles a prebuilt real player and current cooked cohorts for hash pinning.
+    RuntimeTemplate {
+        #[arg(long)]
+        player: PathBuf,
+        #[arg(long)]
+        engine: PathBuf,
+        #[arg(long)]
+        output: PathBuf,
+    },
     /// Checks prerequisites without starting WSL or an emulator.
     Doctor {
         #[arg(long)]
@@ -113,6 +122,14 @@ fn main() -> ExitCode {
 }
 fn run() -> Result<bool> {
     match Cli::parse().command {
+        Cmd::RuntimeTemplate {
+            player,
+            engine,
+            output,
+        } => {
+            ara_export::build_runtime_template(&player, &engine, &output)?;
+            Ok(true)
+        }
         Cmd::Doctor {
             preset,
             project,

@@ -18,6 +18,7 @@ ara-gpu = { path = "../ara-gpu" }
 ara-input = { path = "../ara-input" }
 ara-platform = { path = "../ara-platform" }
 ara-play = { path = "../ara-play" }
+ara-pack = { path = "../ara-pack", default-features = false }
 ara-render = { path = "../ara-render" }
 ara-runtime = { path = "../ara-runtime" }
 ara-runtime-audio = { path = "../ara-runtime-audio" }
@@ -29,6 +30,7 @@ ara-runtime-script = { path = "../ara-runtime-script" }
 ara-sim = { path = "../ara-sim" }
 ara-doc.workspace = true
 clap = { workspace = true, features = ["derive"] }
+ciborium.workspace = true
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true, features = ["preserve_order", "float_roundtrip"] }
 glam34 = { workspace = true }
