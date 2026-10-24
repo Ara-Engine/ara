@@ -5670,13 +5670,13 @@ expression: out
           "doc": "Raster renderer with temporal antialiasing; no ray tracing."
         },
         "medium": {
-          "doc": "Ray-traced lighting at half resolution, upscaled temporally; no ReSTIR."
+          "doc": "Raster lighting with ambient occlusion and screen-space reflections."
         },
         "high": {
-          "doc": "Ray-traced lighting at two-thirds resolution, upscaled temporally; ReSTIR in scenes lit by emissive surfaces or many lights."
+          "doc": "Raster lighting with stronger shadow, GI and screen-space effect budgets."
         },
         "epic": {
-          "doc": "Native-resolution ray tracing with ReSTIR everywhere. The most expensive."
+          "doc": "The highest raster shadow, GI and reflection budgets. The most expensive."
         }
       }
     },
@@ -5755,6 +5755,11 @@ expression: out
             "high",
             "epic"
           ]
+        },
+        "rayTracing": {
+          "type": "bool",
+          "doc": "Opt in to experimental hardware ray tracing for supported presets. False keeps every preset on raster and creates no ray-tracing presentation device. Takes effect when the player or editor GPU device is opened.",
+          "default": false
         }
       }
     },
