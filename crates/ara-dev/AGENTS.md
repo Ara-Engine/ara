@@ -6,7 +6,8 @@ Local developer binary. No engine dependencies; uses git and cargo as subprocess
   clippy, tests, diagnostic coverage and unchanged-tree verification.
   `--plan` previews selection; default deadline 40 minutes includes cache waits.
   `--no-compiler-cache` bypasses RUSTC_WRAPPER; JSON records total elapsed time.
-  Test compilation records Cargo artifact paths; tests receive peer CARGO_BIN_EXE_* values.
+  Compile tests and regular bins together for the full selection and test profile;
+  record Cargo artifact paths for peer CARGO_BIN_EXE_* values without feature re-resolution.
 - `merge`: clean-tree no-ff merge, Cargo.lock-only recovery, workspace check,
   affected gate (or `--full`), commit and optional push.
 - `gpu`: machine-wide FIFO file-lock queue with OS crash recovery and timeout.

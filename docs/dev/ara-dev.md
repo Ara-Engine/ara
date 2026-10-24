@@ -55,12 +55,15 @@ Local evidence is under `target/ara-dev/final-green3.json`, `final-workspace3.lo
 `final-capture3.log` and `verified-baseline/lit.png`. Disk reporting passed on all
 drives, and the live worktree cleanup dry-run completed without deletions.
 
-The gate compiles selected tests with Cargo's JSON artifact messages before
-execution, then builds any missing selected binary targets once. It exposes the
+The gate compiles selected tests and regular binaries together with
+`cargo build --tests --bins --examples --profile test`, collecting Cargo's JSON
+artifact messages in one invocation over the entire selected package set. This
+keeps dev-dependency features unified, includes library-only feature owners, and
+retains the test profile even when it differs from dev. It exposes the
 exact regular executables as runtime CARGO_BIN_EXE_* variables for process-test
 helpers. This keeps final binaries separate from hashed test executables, handles
-custom build directories, and avoids nested builds with a different feature set.
-`test-build` and optional `test-binaries` rows account for compilation; `tests`
+custom build directories, and avoids a second build with a different feature set.
+`test-build` accounts for all compilation, including peer binaries; `tests`
 accounts for execution, including doctests. All phases share the same deadline.
 
 Cargo 1.99 can reuse intermediate artifacts through `CARGO_BUILD_BUILD_DIR` while

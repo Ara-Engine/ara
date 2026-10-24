@@ -13,17 +13,18 @@ static SERIAL: Mutex<()> = Mutex::new(());
 static NEXT: AtomicUsize = AtomicUsize::new(0);
 
 fn scratch(label: &str) -> PathBuf {
-    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../target/ara-dev/tests")
-        .join(format!(
-            "{label}-{}-{}-{}",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_nanos(),
-            NEXT.fetch_add(1, Ordering::Relaxed)
-        ));
+    let target = std::env::var_os("CARGO_TARGET_DIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target"));
+    let path = target.join("ara-dev/tests").join(format!(
+        "{label}-{}-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos(),
+        NEXT.fetch_add(1, Ordering::Relaxed)
+    ));
     fs::create_dir_all(&path).unwrap();
     let path = path.canonicalize().unwrap();
     #[cfg(windows)]
@@ -277,6 +278,105 @@ fn invokes_fresh_peer() {
             .unwrap()
             .iter()
             .any(|row| row["check"] == "test-build" && row["passed"] == true)
+    );
+}
+
+#[test]
+fn peer_binaries_share_the_test_feature_union_without_a_second_build() {
+    let _serial = SERIAL.lock().unwrap_or_else(|p| p.into_inner());
+    let root = fixture();
+    let manifest = fs::read_to_string(root.join("Cargo.toml")).unwrap();
+    fs::write(
+        root.join("Cargo.toml"),
+        format!(
+            "{}\n[profile.test]\ndebug-assertions = false\n",
+            manifest.replace("\"diag\"]", "\"diag\", \"owner\"]")
+        ),
+    )
+    .unwrap();
+    let core = fs::read_to_string(root.join("core/Cargo.toml")).unwrap();
+    fs::write(
+        root.join("core/Cargo.toml"),
+        format!("{core}\n[features]\nextra = []\n"),
+    )
+    .unwrap();
+    let tool = fs::read_to_string(root.join("tool/Cargo.toml")).unwrap();
+    fs::write(
+        root.join("tool/Cargo.toml"),
+        tool.replace(", optional = true", ""),
+    )
+    .unwrap();
+    fs::write(
+        root.join("tool/src/main.rs"),
+        "fn main() {\n    println!(\"{} {}\", renamed::extra(), cfg!(debug_assertions));\n}\n",
+    )
+    .unwrap();
+    // A selected library-only package enables a feature exclusively through dev-dependencies.
+    fs::create_dir_all(root.join("owner/src")).unwrap();
+    fs::write(root.join("owner/Cargo.toml"), "[package]\nname = \"feature-owner\"\nversion = \"0.1.0\"\nedition = \"2024\"\n\n[dev-dependencies]\nmini-core = { path = \"../core\", features = [\"extra\"] }\n").unwrap();
+    fs::write(
+        root.join("owner/src/lib.rs"),
+        r#"#[test]
+fn peer_keeps_dev_features() {
+    assert!(mini_core::extra());
+    assert!(!cfg!(debug_assertions));
+    let peer = std::env::var_os("CARGO_BIN_EXE_mini-tool").expect("peer binary");
+    let output = std::process::Command::new(peer).output().unwrap();
+    assert!(output.status.success());
+    assert_eq!(output.stdout, b"true false\n");
+}
+"#,
+    )
+    .unwrap();
+    fs::write(root.join("core/src/lib.rs"), "pub fn value() -> u32 {\n    1\n}\npub fn extra() -> bool {\n    cfg!(feature = \"extra\")\n}\n").unwrap();
+    ok(&root, "cargo", &["generate-lockfile", "--offline"]);
+    git(&root, &["add", "."]);
+    git(&root, &["commit", "-m", "dev feature fixture"]);
+    let core = fs::read_to_string(root.join("core/src/lib.rs")).unwrap();
+    fs::write(root.join("core/src/lib.rs"), core.replace('1', "2")).unwrap();
+    let output = ok(
+        &root,
+        env!("CARGO_BIN_EXE_ara-dev"),
+        &["check", "--json", "--no-compiler-cache"],
+    );
+    let report: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(report["passed"], true);
+    assert_eq!(
+        report["affected"],
+        serde_json::json!(["feature-owner", "mini-core", "mini-tool"])
+    );
+    let rows = report["checks"].as_array().unwrap();
+    assert!(!rows.iter().any(|row| row["check"] == "test-binaries"));
+    let run = fs::read_dir(root.join("target/ara-dev"))
+        .unwrap()
+        .map(|entry| entry.unwrap().path())
+        .find(|path| path.join("test-build.json").is_file())
+        .unwrap();
+    let messages: Vec<serde_json::Value> = fs::read_to_string(run.join("test-build.json"))
+        .unwrap()
+        .lines()
+        .filter_map(|line| serde_json::from_str(line).ok())
+        .collect();
+    assert!(messages.iter().any(|message| {
+        message["target"]["name"] == "mini-tool"
+            && message["profile"]["test"] == false
+            && message["executable"].is_string()
+    }));
+    let regular_core: Vec<_> = messages
+        .iter()
+        .filter(|message| {
+            message["reason"] == "compiler-artifact"
+                && message["target"]["name"] == "mini_core"
+                && message["profile"]["test"] == false
+        })
+        .collect();
+    assert_eq!(regular_core.len(), 1);
+    assert_eq!(regular_core[0]["features"], serde_json::json!(["extra"]));
+    assert!(
+        !fs::read_to_string(run.join("tests.log"))
+            .unwrap()
+            .contains("Compiling "),
+        "executing prepared tests must reuse the compiled feature union"
     );
 }
 
