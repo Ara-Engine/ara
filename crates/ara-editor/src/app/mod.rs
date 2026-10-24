@@ -191,7 +191,8 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
         let mut last_review = editor.review_revision;
         let mut last_extraction = editor.extraction_revision;
         // Value edits, typed drafts and gizmo drags patch the Scene in place.
-        let mut scene_sync = scene_sync::SceneSync::new(models_at_open);
+        let mut scene_sync =
+            scene_sync::SceneSync::new(models_at_open, editor.host.store().revision());
         let mut last_physical = physical;
         let mut last_dpi = dpi;
         let mut dirty = true;

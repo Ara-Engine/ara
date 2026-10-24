@@ -24,6 +24,40 @@ pub(crate) struct Patch {
 /// `MeshRenderer` fields that only feed the raster material (`raster_material`).
 const MATERIAL_FIELDS: [&str; 4] = ["color", "emissive", "roughness", "metallic"];
 
+/// Components the Scene extracts beyond meshes, lights and transforms (environment,
+/// post-processing, terrain, effects): a change to any of them, even on a hidden
+/// entity, needs a full extraction.
+const SCENE_WIDE: [&str; 8] = [
+    "Environment",
+    "SkyAtmosphere",
+    "HeightFog",
+    "PostProcess",
+    "Terrain",
+    "TerrainChunk",
+    "TerrainView",
+    "VisualEffect",
+];
+
+/// Whether every document changed after revision `since` reaches the Scene through
+/// the open `scene`'s entities: the scene itself, the prefabs it instances (resolved
+/// into its records) and import settings (compared as a view's `imports`). Anything
+/// else (a material graph, the project's render settings, an environment asset) needs
+/// a full extraction, since a [`DocumentView`] does not see it.
+pub fn scene_only(store: &Store, since: u64, scene: &str) -> bool {
+    let workspace = store.workspace();
+    store
+        .since(since)
+        .iter()
+        .flat_map(|transaction| &transaction.ops)
+        .all(|op| {
+            let doc = op.doc().as_str();
+            doc == scene
+                || workspace
+                    .doc(doc)
+                    .is_some_and(|d| matches!(d.kind.as_str(), "prefab" | "import"))
+        })
+}
+
 impl Patch {
     /// Whether the renderer already shows the target.
     pub fn is_empty(&self) -> bool {
@@ -43,8 +77,10 @@ impl Patch {
 impl DocumentView {
     /// The patch that takes the Scene from this view to `next`, or None when only a
     /// full extraction will do: entities added, removed or re-parented, import
-    /// settings or ghosts changed, or a drawn `MeshRenderer` changed more than its
-    /// material fields. Fields the Scene does not draw never need one.
+    /// settings or ghosts changed, a drawn `MeshRenderer` changed more than its
+    /// material fields, or a scene-wide component changed (environment, post, terrain,
+    /// effects). Fields the Scene does not draw never need one. Documents other than
+    /// the scene are not compared here: see [`scene_only`].
     pub(crate) fn patch_to(&self, next: &DocumentView, hidden: &BTreeSet<String>) -> Option<Patch> {
         if self.entities.len() != next.entities.len()
             || !self.ghosts.is_empty()
@@ -61,6 +97,12 @@ impl DocumentView {
             }
             if a.record == b.record {
                 continue;
+            }
+            if SCENE_WIDE
+                .iter()
+                .any(|key| a.record.get(*key) != b.record.get(*key))
+            {
+                return None;
             }
             // A hidden entity's transform still moves its children.
             transforms |= a.record.get("Transform") != b.record.get("Transform");
@@ -301,6 +343,22 @@ mod tests {
             patch.moved,
             moved(&["e_crate"]),
             "hidden meshes are not drawn"
+        );
+    }
+
+    #[test]
+    fn scene_wide_components_need_a_full_extraction() {
+        let before = view();
+        let fog = edit(&before, "e_pivot", &["HeightFog", "density"], json!(0.2));
+        assert_eq!(before.patch_to(&fog, &BTreeSet::new()), None);
+        // Hidden or not: the environment applies to the whole Scene.
+        let hidden = moved(&["e_pivot"]);
+        assert_eq!(before.patch_to(&fog, &hidden), None);
+        let script = edit(&before, "e_pivot", &["Spinner", "speed"], json!(2.));
+        assert_eq!(
+            before.patch_to(&script, &BTreeSet::new()),
+            Some(Patch::default()),
+            "a component the Scene does not draw needs nothing"
         );
     }
 
