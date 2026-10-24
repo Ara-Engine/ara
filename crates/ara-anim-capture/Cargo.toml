@@ -13,7 +13,7 @@ ara-schema = { path = "../ara-schema" }
 ara-anim-physics = { path = "../ara-anim-physics" }
 ara-physics = { path = "../ara-physics" }
 ara-physics-jolt = { path = "../ara-physics-jolt" }
-glam = "0.30"
+glam = { workspace = true }
 
 [lints]
 workspace = true

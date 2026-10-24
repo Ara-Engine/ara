@@ -7,7 +7,7 @@ mod support;
 use std::time::{Duration, Instant};
 
 use ara_script::abi::{ORIGIN_AGENT, ORIGIN_HUMAN, RELOAD_ERROR, RELOAD_L1, RELOAD_L3};
-use ara_script::{EditOrigin, codes};
+use ara_script::{EditOrigin, ModuleSpec, codes};
 use serde_json::json;
 use support::Live;
 
@@ -194,28 +194,47 @@ public static partial class Summing
 #[test]
 fn agent_compiles_are_coalesced_and_run_behind_the_humans() {
     let _clr = support::clr_lock();
-    let mut s = Live::start("nb-agent", &[("Work", WORK, &[]), ("Dials", DIAL, &[])]);
+    let root = Live::write("nb-agent", &[("Work", WORK, &[]), ("Dials", DIAL, &[])]);
+    let mut s = Live::host(root);
+    let modules: Vec<_> = ["Work", "Dials"]
+        .into_iter()
+        .map(|name| {
+            let mut module = ModuleSpec::from_dir(&s.root.join(name)).expect("module file");
+            module.watch = false;
+            module
+        })
+        .collect();
+    s.host
+        .load_modules(&mut s.world, &modules)
+        .expect("modules");
     let total = s.spawn(&[("Total", json!({}))]);
     let dial = s.spawn(&[("Dial", json!({}))]);
     s.until("the initial code", |s| {
         s.int(total, "Total", "value") == 6 && s.int(dial, "Dial", "value") == 1
     });
 
-    // An agent edits three helpers in quick succession (claiming the file first), then the
-    // human saves another module.
+    // Exercise the explicit queue API: watcher delivery can arrive after an agent's
+    // quiet window on a busy machine. The scheduler's own tests cover preemption.
     let work = s.file("Work");
-    for (from, to) in [
-        ("return 1;", "return 10;"),
-        ("return 2;", "return 20;"),
-        ("return 3;", "return 30;"),
-    ] {
+    s.edit_many(
+        "Work",
+        &[
+            ("return 1;", "return 10;"),
+            ("return 2;", "return 20;"),
+            ("return 3;", "return 30;"),
+        ],
+    );
+    s.edit("Dials", "d.Value = 1;", "d.Value = 2;");
+    assert!(
+        s.host
+            .request_compile("Dials", &[s.file("Dials")], EditOrigin::Human)
+    );
+    for _ in 0..3 {
         assert!(
             s.host
                 .request_compile("Work", std::slice::from_ref(&work), EditOrigin::Agent)
         );
-        s.edit("Work", from, to);
     }
-    s.edit("Dials", "d.Value = 1;", "d.Value = 2;");
     s.until("both edits", |s| {
         s.int(total, "Total", "value") == 60 && s.int(dial, "Dial", "value") == 2
     });

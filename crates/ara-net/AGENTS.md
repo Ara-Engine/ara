@@ -13,6 +13,8 @@ link Lightyear, Replicon, App, sockets, histories or network services.
 - `Client<F>` uses native Lightyear input histories, selective owner rollback and
   remote interpolation. Inject device/bot actions or attach an immutable input
   source. Sources run only when sampling new inputs, never during native replay.
+  Rollback history covers the configured prediction horizon; keep those budgets
+  aligned so delayed authoritative samples remain reconcilable.
 - `Server::advance` / `Client::advance` use caller-supplied elapsed time instead of
   wall-clock polling. Advance all peers and `Link::pump` from the same clock;
   do not mix these calls with `poll`. The first advance consumes its full duration.
@@ -92,6 +94,8 @@ The adverse gate uses one virtual 60 Hz frame clock, a bounded virtual deadline,
 and a neutral input tail through tick 600; it checks the applied tail and waits
 until every owner has sampled beyond the final input history before asserting.
 The frame-size regression compares complete tick records and replay hashes.
+The delayed-confirmation gate uses a fixed clock and 250 ms each way, beyond
+Lightyear's default 20-tick history, and checks native reconciliation and replay.
 
 The composition root must call `ara_net::register(host, control)`; this optional
 crate never makes ara-host depend on networking. Workspace members are globbed,

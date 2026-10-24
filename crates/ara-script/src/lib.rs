@@ -9,6 +9,7 @@
 //! - [`run`]: the `ara_run` supervisor: agent scripts in a limited worker process.
 //! - [`codes`]: the host's diagnostic codes (`ARA0900`–`ARA0999`).
 
+extern crate libloading08 as libloading;
 pub mod abi;
 mod boost;
 mod clr;

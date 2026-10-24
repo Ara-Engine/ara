@@ -7,11 +7,13 @@
 
 #![warn(missing_docs)]
 mod model;
+mod owned;
 mod read;
 #[cfg(feature = "write")]
 mod write;
 
 pub use model::*;
+pub use owned::OwnedPack;
 pub use read::{MappedPack, Pack};
 #[cfg(feature = "write")]
 pub use write::{BuiltPack, Input, build, build_directory};

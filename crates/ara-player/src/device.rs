@@ -62,7 +62,7 @@ impl Windowed {
         cache: &Path,
         quality: ara_runtime_render::QualityChoice,
     ) -> Result<(Self, Presenter)> {
-        let window = Window::new(&format!("Ara | {name} | waiting for Play"), size)?;
+        let window = Window::new(&format!("Ara | {name}"), size)?;
         let mut presenter = Presenter::new(window.size()?, window.extensions()?, cache);
         presenter.set_quality(quality);
         presenter.prepare(&warm_frame())?;

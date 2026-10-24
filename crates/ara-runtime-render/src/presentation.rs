@@ -28,10 +28,11 @@ pub(super) struct Live {
 }
 
 /// A completed display image independent of view targets and scene generations.
-pub(super) struct Published {
+pub struct PresentationImage {
     pub(super) image: Image,
     size: [u32; 2],
 }
+pub(super) type Published = PresentationImage;
 
 mod capture;
 mod live;
@@ -242,7 +243,7 @@ impl Presenter {
             let started = Instant::now();
             let source = if let Some(live) = &mut self.live {
                 let renderer = self.renderer.as_mut().context("presentation device")?;
-                live.render(renderer.gpu_mut(), frame)?;
+                self.stats.gpu_ms += live.render(renderer.gpu_mut(), frame)?;
                 self.stats.gpu_ms += live
                     .view
                     .timings()

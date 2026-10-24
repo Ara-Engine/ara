@@ -401,6 +401,7 @@ dependencies = [
  "ara-diag",
  "ara-doc",
  "ara-host",
+ "ara-hub",
  "ara-hub-service",
  "ara-json",
  "ara-mcp",
@@ -743,6 +744,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "ara-dev"
+version = "0.0.1-alpha"
+dependencies = [
+ "anyhow",
+ "clap",
+ "libc",
+ "quote",
+ "semver",
+ "serde",
+ "serde_json",
+ "syn 2.0.119",
+ "toml_edit",
+ "windows-sys 0.61.2",
+]
+
+[[package]]
 name = "ara-diag"
 version = "0.0.1-alpha"
 dependencies = [
@@ -839,15 +856,19 @@ name = "ara-export"
 version = "0.0.1-alpha"
 dependencies = [
  "anyhow",
+ "ara-asset",
  "ara-bridge",
  "ara-crash",
  "ara-diag",
  "ara-export-installer",
  "ara-json",
  "ara-pack",
+ "ara-play",
+ "ara-play-host",
  "ara-schema",
  "backhand",
  "blake3",
+ "ciborium",
  "clap",
  "dunce",
  "flate2",
@@ -1434,6 +1455,7 @@ dependencies = [
  "ara-json",
  "ara-mcp",
  "ara-ops",
+ "ara-pack",
  "ara-platform",
  "ara-play",
  "ara-play-host",
@@ -1446,6 +1468,7 @@ dependencies = [
  "ara-runtime-world",
  "ara-schema",
  "ara-sim",
+ "ciborium",
  "clap",
  "embed-resource",
  "glam 0.34.1",
@@ -11993,8 +12016,11 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e3641d5bbb5349a79e1020a242d251efbc546ad8048d133958323ce9c40a9c9c"
 dependencies = [
  "indexmap",
+ "serde_core",
+ "serde_spanned",
  "toml_datetime",
  "toml_parser",
+ "toml_writer",
  "winnow",
 ]
 

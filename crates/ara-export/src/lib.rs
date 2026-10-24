@@ -16,6 +16,9 @@ mod native;
 mod pipeline;
 /// Schema-registered project export documents.
 pub mod preset;
+mod runtime;
+mod runtime_template;
+pub use runtime_template::build_runtime_template;
 mod shipping_doctor;
 /// Debug-symbol archive production and stripping tool discovery.
 pub mod symbols;

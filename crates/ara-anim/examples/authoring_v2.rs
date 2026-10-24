@@ -1,4 +1,5 @@
 //! Generates worked canonical documents through typed commands and attributed kernel ops.
+extern crate glam34 as glam;
 mod v2_support;
 use ara_anim::{
     document::{self, AnimAsset, AnimationCommand, IkSetup},

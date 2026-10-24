@@ -17,6 +17,8 @@
 //! [`builtin`] holds the starter set (entities, components, properties, transforms,
 //! prefabs).
 
+extern crate glam34 as glam;
+
 pub mod builtin;
 mod ctx;
 mod registry;

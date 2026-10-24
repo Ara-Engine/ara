@@ -18,12 +18,12 @@ ara-audio = { path = "../ara-audio" }
 ara-diag = { path = "../ara-diag" }
 ara-schema = { path = "../ara-schema" }
 ara-physics = { path = "../ara-physics", optional = true }
-blake3 = "1"
-libloading = "0.9"
-rtrb = "0.4"
-bevy_ecs = { version = "0.20", default-features = false, features = ["std"], optional = true }
-serde = { workspace = true }
-serde_json = { workspace = true }
+blake3 = { workspace = true, default-features = true }
+libloading = { workspace = true }
+rtrb = { workspace = true }
+bevy_ecs = { workspace = true, features = ["std"], optional = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true, features = ["preserve_order", "float_roundtrip"] }
 
 [dev-dependencies]
 ara-json = { path = "../ara-json" }

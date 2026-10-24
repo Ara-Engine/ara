@@ -162,6 +162,9 @@ impl FidelityView {
         )?;
         self.settings = settings;
         self.shadow_source = crate::SunShadowSource::RayQueries;
+        // Resizing allocated fresh atmosphere LUT images, even when the authored
+        // atmosphere and sun did not change. They need producers before sampling.
+        self.atmosphere_dirty = true;
         self.history = false;
         self.samples = 0;
         self.last_frame = None;

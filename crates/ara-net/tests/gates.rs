@@ -497,6 +497,81 @@ fn datagram_conditions_duplicate_reorder_drop_and_shape() -> Result<()> {
 }
 
 #[test]
+fn prediction_reconciles_confirmations_beyond_twenty_ticks() -> Result<()> {
+    let mut link = Link::new(
+        21668,
+        Conditions {
+            latency_ms: 250,
+            ..Default::default()
+        },
+    )?;
+    let endpoint = link.address()?;
+    let mut server = Server::<Movement>::new(
+        session()?,
+        policies()?,
+        ServerConfig {
+            max_clients: 1,
+            start_clients: 1,
+            expected_addresses: vec![endpoint],
+            tick_limit: Some(600),
+            ..Default::default()
+        },
+    )?;
+    configure(&mut server)?;
+    server.record(build(), vec![21668])?;
+    link.set_server(server.address()?);
+    let mut client = Client::<Movement>::new(
+        policies()?,
+        ClientConfig {
+            player: PlayerId(0),
+            endpoint,
+            hz: 60,
+            tick_limit: Some(600),
+        },
+        server.token(PlayerId(0), endpoint)?,
+    )?;
+    client.input_source(script);
+    client.perturb_prediction(330, |state| state.x += 250);
+    let frame = Duration::from_secs_f64(1.0 / 60.0);
+    let start = Instant::now();
+    for step in 1..=1800 {
+        let now = start + frame * step;
+        link.pump(now, false)?;
+        server.advance(frame)?;
+        client.advance(frame)?;
+        link.pump(now, false)?;
+        if server.session().tick() != 600 || client.status().tick != 600 {
+            continue;
+        }
+        let Some(owner) = client
+            .spawns()
+            .into_iter()
+            .find(|spawn| spawn.owner == Some(PlayerId(0)))
+        else {
+            continue;
+        };
+        let authority = *server
+            .session()
+            .world()
+            .get::<Motor>(server.session().entity(&owner.identity).unwrap())
+            .unwrap();
+        if client.status().predicted_tick >= 608
+            && client.state(owner.id) == Some(authority)
+            && client.view(owner.id) == Some(authority)
+        {
+            assert!(client.status().rollbacks > 0);
+            assert_eq!(client.status().privacy_leaks, 0);
+            assert_eq!(server.trace().unwrap().replay(&mut session()?)?, None);
+            return Ok(());
+        }
+    }
+    panic!(
+        "delayed confirmations did not reconcile: {:?}",
+        client.status()
+    );
+}
+
+#[test]
 fn local_listen_dedicated_late_join_adverse_and_bandwidth() -> Result<()> {
     for mode in [SessionMode::Dedicated, SessionMode::Listen] {
         run(mode)?;

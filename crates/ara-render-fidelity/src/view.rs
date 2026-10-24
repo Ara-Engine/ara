@@ -364,6 +364,7 @@ impl FidelityView {
         }
         self.settings = settings;
         self.shadow_source = crate::SunShadowSource::RayQueries;
+        self.atmosphere_dirty = true;
         self.history = false;
         self.samples = 0;
         gpu.collect()?;

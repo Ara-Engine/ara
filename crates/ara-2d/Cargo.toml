@@ -12,11 +12,11 @@ ara-json = { path = "../ara-json" }
 ara-cmd = { path = "../ara-cmd" }
 ara-diag = { path = "../ara-diag" }
 ara-sim = { path = "../ara-sim" }
-serde.workspace = true
-serde_json.workspace = true
-anyhow = "1"
-blake3 = "1.8"
-bevy_ecs = { version = "0.20", default-features = false, features = ["std"] }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true, features = ["preserve_order", "float_roundtrip"] }
+anyhow = { workspace = true }
+blake3 = { workspace = true, default-features = true }
+bevy_ecs = { workspace = true, features = ["std"] }
 
 [dev-dependencies]
 ara-doc = { path = "../ara-doc" }

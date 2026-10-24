@@ -45,7 +45,8 @@ pub fn engine_layouts(db: &SchemaDb, names: &[&str]) -> Result<Vec<StructLayout>
         .collect()
 }
 
-/// Every blittable component of `db`, sorted by name: the default engine binding set.
+/// Every schema component with a blittable canonical layout, sorted by name.
+/// Native engine views must separately validate their Rust layouts with EngineBindings.
 pub fn blittable_components(db: &SchemaDb) -> Vec<&str> {
     db.components()
         .filter(|t| db.struct_layout(&t.name).is_ok())

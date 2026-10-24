@@ -9,11 +9,11 @@ publish.workspace = true
 ara-json = { path = "../ara-json" }
 ara-ui-document = { path = "../ara-ui-document" }
 ara-ui-text = { path = "../ara-ui-text" }
-accesskit = { version = "0.25.1", features = ["serde"] }
-parley = { version = "0.12.0", default-features = false, features = ["std", "complex-scripts"] }
+accesskit = { workspace = true, features = ["serde"] }
+parley = { workspace = true, features = ["std", "complex-scripts"] }
 taffy = "0.15.0"
-serde = { workspace = true }
-serde_json = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true, features = ["preserve_order", "float_roundtrip"] }
 
 [lints]
 workspace = true

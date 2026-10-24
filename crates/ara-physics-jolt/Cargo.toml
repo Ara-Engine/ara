@@ -15,14 +15,14 @@ profile = ["bench", "ara-jolt-sys/profile"]
 [dependencies]
 ara-physics = { path = "../ara-physics" }
 ara-jolt-sys = { path = "../ara-jolt-sys", default-features = false }
-bevy_tasks = { version = "0.20", features = ["multi_threaded"] }
+bevy_tasks = { workspace = true, features = ["multi_threaded"] }
 
 [dev-dependencies]
-bevy_ecs = "0.20"
+bevy_ecs = { workspace = true, default-features = true }
 ara-schema = { path = "../ara-schema" }
-serde_json.workspace = true
-glam = "0.33"
+serde_json = { workspace = true, features = ["preserve_order", "float_roundtrip"] }
 ara-json = { path = "../ara-json" }
+glam33.workspace = true
 
 [[bench]]
 name = "scale"

@@ -2,7 +2,7 @@ use crate::files::{collect_sizes, copy_all, copy_scripts};
 use crate::{
     ExportPreset, Platform, android, apple,
     event::{Diagnostic, Event, EventKind, EventSink},
-    preset::ScriptLane,
+    preset::{PlayerTemplate, ScriptLane},
     template,
     tools::{self, Toolchain},
     verify::{self, VerifyReport},
@@ -81,7 +81,7 @@ impl Driver<'_> {
         })?;
         Ok(())
     }
-    fn stage<T>(&mut self, name: &str, f: impl FnOnce(&Self) -> Result<T>) -> Result<T> {
+    fn stage<T>(&mut self, name: &str, f: impl FnOnce(&mut Self) -> Result<T>) -> Result<T> {
         self.stage = name.into();
         self.emit(EventKind::Progress {
             status: "started".into(),
@@ -186,18 +186,37 @@ fn run(r: &ExportRequest, d: &mut Driver<'_>, started: Instant) -> Result<Export
     let output = d.work.join("dist");
     let dist = output.join("build");
     std::fs::create_dir_all(&dist)?;
-    let templates = d.stage("template", |_| {
+    let templates = d.stage("template", |d| {
         p.templates
             .iter()
             .map(|pin| {
-                Ok((
-                    pin.arch.clone(),
-                    template::resolve(pin, &project, &std::path::absolute(&r.cache)?)?,
-                ))
+                let resolved = template::resolve(pin, &project, &std::path::absolute(&r.cache)?)?;
+                let executable = if p.player_template == PlayerTemplate::Runtime {
+                    ensure!(
+                        matches!(p.platform, Platform::Windows | Platform::Linux),
+                        "the real game runtime template currently requires a desktop platform"
+                    );
+                    crate::runtime::unpack_template(
+                        &resolved,
+                        &d.work.join("runtime").join(&pin.arch),
+                        if p.platform == Platform::Windows {
+                            "ara-player.exe"
+                        } else {
+                            "ara-player"
+                        },
+                    )?
+                } else {
+                    resolved
+                };
+                Ok((pin.arch.clone(), executable))
             })
             .collect::<Result<BTreeMap<_, _>>>()
     })?;
-    let script_project = tools::project_path(&project, &p.script_project)?;
+    let script_project = if p.script_project.is_empty() {
+        None
+    } else {
+        Some(tools::project_path(&project, &p.script_project)?)
+    };
     let crash_source = d.work.join("AraCrash.cs");
     std::fs::write(&crash_source, include_str!("managed-crash.cs"))?;
     let crash_targets = d.work.join("AraCrash.targets");
@@ -214,6 +233,9 @@ fn run(r: &ExportRequest, d: &mut Driver<'_>, started: Instant) -> Result<Export
     )?;
     let mut scripts = BTreeMap::new();
     d.stage("script", |d| {
+        let Some(script_project) = &script_project else {
+            return Ok(());
+        };
         let targets: Vec<_> = if p.platform == Platform::Android {
             android::ABIS.iter().map(|(a, _, rid)| (*a, *rid)).collect()
         } else {
@@ -235,7 +257,7 @@ fn run(r: &ExportRequest, d: &mut Driver<'_>, started: Instant) -> Result<Export
             };
             let mut cmd = Command::new("dotnet");
             cmd.arg("publish")
-                .arg(&script_project)
+                .arg(script_project)
                 .args([
                     "-c",
                     "Release",
@@ -321,7 +343,7 @@ fn run(r: &ExportRequest, d: &mut Driver<'_>, started: Instant) -> Result<Export
             Ok(ara_pack::EncryptionKey::from_hex(&text)?)
         })
         .transpose()?;
-    let pack = d.stage("pack", |_| {
+    let pack = d.stage("pack", |d| {
         let cook = ara_pack::CookKey {
             platform: p.platform.name().into(),
             arch: if p.platform == Platform::Android {
@@ -334,17 +356,38 @@ fn run(r: &ExportRequest, d: &mut Driver<'_>, started: Instant) -> Result<Export
             cooker: "ara-export/1".into(),
             settings: BTreeMap::new(),
         };
-        let built = ara_pack::build_directory(
-            &tools::project_path(&project, &p.content)?,
-            cook,
-            p.chunk_size as usize,
-            encryption.as_ref(),
-        )?;
+        let built = if p.player_template == PlayerTemplate::Runtime {
+            let worker = ara_play_host::PlayConfig::for_project(&project).import_worker;
+            ara_pack::build(
+                crate::runtime::inputs(&project, &worker, |progress| {
+                    d.emit(EventKind::Cooking {
+                        completed: progress.completed,
+                        total: progress.total,
+                        elapsed_ms: millis(progress.elapsed),
+                        stalled_ms: millis(progress.stalled),
+                    })
+                    .map_err(|error| error.to_string())
+                })?,
+                cook,
+                p.chunk_size as usize,
+                encryption.as_ref(),
+            )?
+        } else {
+            ara_pack::build_directory(
+                &tools::project_path(&project, &p.content)?,
+                cook,
+                p.chunk_size as usize,
+                encryption.as_ref(),
+            )?
+        };
         ara_pack::Pack::open(&built.bytes)?.validate_all(encryption.as_ref())?;
         std::fs::write(dist.join("game.arapack"), &built.bytes)?;
         Ok(built)
     })?;
     d.stage("assemble",|_| {
+        if p.player_template == PlayerTemplate::Runtime {
+            copy_all(templates["x64"].parent().context("runtime template directory")?, &dist)?;
+        }
         let launch=json!({"contract":p.player_template.contract(),"pack":"game.arapack","lane":if p.lane==ScriptLane::NativeAot {"nativeaot"} else {"r2r-coreclr"},"script":if p.platform==Platform::Windows {if p.lane==ScriptLane::NativeAot {format!("game/{}.dll",p.assembly)} else {"dotnet".into()}} else if p.lane==ScriptLane::NativeAot {format!("game/{}.so",p.assembly)} else {"dotnet".into()},"assembly":p.assembly,"config":p.config.name(),"encryption_key_env":p.encryption_key_env});
         tools::write_json(&dist.join("ara-launch.json"),&launch)?;
         if p.platform==Platform::Android {
@@ -354,10 +397,10 @@ fn run(r: &ExportRequest, d: &mut Driver<'_>, started: Instant) -> Result<Export
             }
         } else {
             tools::copy(&templates["x64"],&dist.join(if p.platform==Platform::Windows {"ara-player.exe"} else {"ara-player"}))?;
-            if p.lane==ScriptLane::NativeAot {
+            if let Some(script_dir) = scripts.get("x64") { if p.lane==ScriptLane::NativeAot {
                 let name=format!("{}.{}",p.assembly,if p.platform==Platform::Windows {"dll"} else {"so"});
-                tools::copy(&scripts["x64"].join(&name),&dist.join("game").join(name))?;
-            } else { copy_scripts(&scripts["x64"],&dist.join("dotnet"),&p.assembly)?; }
+                tools::copy(&script_dir.join(&name),&dist.join("game").join(name))?;
+            } else { copy_scripts(script_dir,&dist.join("dotnet"),&p.assembly)?; } }
         }
         for (arch,path) in &plugins {let name=path.file_name().context("plugin has no filename")?; tools::copy(path,&if p.platform==Platform::Android {dist.join("lib").join(arch).join(name)} else {dist.join("plugins").join(name)})?;}
         Ok(())

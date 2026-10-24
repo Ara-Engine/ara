@@ -21,6 +21,13 @@ from a platform preset with real runtime pins. The CLI owner can call the unchan
 `export(ExportRequest, EventSink)` entry point for an export job and forward its
 progress, artifact and diagnostic events to `ara_jobs`.
 
+Runtime exports report `cooking` events with completed/total counts and elapsed/stalled
+milliseconds. Cold cooking has no total time limit while requested cooks complete.
+If none completes for 600 seconds, export fails with the pending asset list and
+`ARA-EXP-COOK-001`; `ARA_EXPORT_COOK_STALL_SECONDS` accepts a positive integer override.
+Completed cooks remain cached for the next attempt. Import-worker concurrency stays
+bounded by `ARA_IMPORT_WORKERS` (four by default, capped by available CPU parallelism).
+
 - `windows-portable`: deterministic `game.zip`.
 - `windows-installer`: `game.zip` and a self-extracting `game-setup.exe`. Prepare
   `ara-export-installer` once, pin it with `artifact-pin --file FILE`, and put that

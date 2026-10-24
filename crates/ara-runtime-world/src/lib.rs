@@ -14,6 +14,8 @@
 //!
 //! Install it after every plugin that registers components: the world workers prepare
 //! rows against the registry as it is at registration.
+#[cfg(test)]
+extern crate glam34 as glam;
 use ara_doc::Workspace;
 use ara_runtime::{RuntimeError, components::PlayerControl, plugin::RuntimePlugin};
 use ara_sim::{Session, SimRegistry, StreamingBoundary};

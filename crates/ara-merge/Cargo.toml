@@ -11,12 +11,12 @@ ara-diag.workspace = true
 ara-doc.workspace = true
 ara-json.workspace = true
 ara-schema.workspace = true
-serde_json.workspace = true
+serde_json = { workspace = true, features = ["preserve_order", "float_roundtrip"] }
 
 [dev-dependencies]
 ara-components.workspace = true
 ara-ops.workspace = true
-insta.workspace = true
+insta = { workspace = true }
 
 [lints]
 workspace = true

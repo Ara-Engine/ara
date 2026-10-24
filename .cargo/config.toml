@@ -1,5 +1,7 @@
-# Workspace-local Cargo settings (tracked).
-
+# rust-lld ships with the pinned Rust toolchain; rustc locates it in its sysroot.
+# Three heavy-target measurements and correctness gates: docs/dev/linking.md.
+[target.x86_64-pc-windows-msvc]
+linker = "rust-lld.exe"
 # Builds and tests run from a checkout never touch the real user profile
 # (%APPDATA%\Ara, %LOCALAPPDATA%\Ara on Windows): `cargo run`/`cargo test`, and the
 # editors, players and workers they start, point Ara at scratch config and crash

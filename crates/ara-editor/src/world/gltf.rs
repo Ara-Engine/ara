@@ -5,6 +5,21 @@ use ara_runtime::assets::AssetSource;
 use glam::Vec3;
 use std::path::Path;
 
+/// Reads the transactional project default, including unsaved typed settings edits.
+pub(crate) fn render_quality(
+    workspace: &ara_doc::Workspace,
+) -> anyhow::Result<ara_runtime_render::QualityChoice> {
+    let settings: ara_components::render::RenderSettings = workspace
+        .doc("pj_project")
+        .and_then(|doc| doc.record("p_settings"))
+        .and_then(|record| record.get("settings"))
+        .and_then(|settings| settings.get("rendering"))
+        .map(serde::Deserialize::deserialize)
+        .transpose()?
+        .unwrap_or_default();
+    Ok(settings.quality.into())
+}
+
 pub(crate) fn load(
     path: &Path,
     entity: u64,

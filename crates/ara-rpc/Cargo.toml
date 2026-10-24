@@ -9,9 +9,9 @@ publish.workspace = true
 [dependencies]
 ara-diag.workspace = true
 ara-proto.workspace = true
-serde.workspace = true
-serde_json.workspace = true
-tungstenite.workspace = true
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true, features = ["preserve_order", "float_roundtrip"] }
+tungstenite = { workspace = true, features = ["handshake"] }
 
 [lints]
 workspace = true

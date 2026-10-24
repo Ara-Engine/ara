@@ -10,33 +10,33 @@ ara-audio = { path = "../ara-audio" }
 ara-cmd.workspace = true
 ara-doc.workspace = true
 ara-diag.workspace = true
-rayon = "1.11"
+rayon = { workspace = true }
 ara-asset = { path = "../ara-asset" }
 ara-geo = { path = "../ara-geo" }
 ara-asset-format = { path = "../ara-asset-format" }
 ara-json = { path = "../ara-json" }
 ara-schema = { path = "../ara-schema" }
 base64 = "0.22"
-bytemuck = { version = "1.24", features = ["derive", "extern_crate_alloc"] }
-gltf = { version = "1.4.1", default-features = false, features = ["utils", "names", "extensions", "extras", "KHR_texture_transform", "KHR_lights_punctual", "KHR_materials_unlit", "KHR_materials_emissive_strength", "KHR_materials_ior", "KHR_materials_transmission"] }
-image = { version = "0.25.10", default-features = false, features = ["png", "jpeg", "hdr", "exr"] }
+bytemuck = { workspace = true, features = ["derive", "extern_crate_alloc"] }
+gltf = { workspace = true, features = ["utils", "names", "extensions", "extras", "KHR_texture_transform", "KHR_lights_punctual", "KHR_materials_unlit", "KHR_materials_emissive_strength", "KHR_materials_ior", "KHR_materials_transmission"] }
+image = { workspace = true, features = ["png", "jpeg", "hdr", "exr"] }
 intel_tex_2 = "0.5.0"
-half = { version = "2.7.1", features = ["bytemuck"] }
+half = { workspace = true, features = ["bytemuck"] }
 meshopt = "0.7.0"
 mikktspace = { version = "0.3.0", default-features = false, features = ["glam"] }
 ufbx = "0.11.5"
-serde.workspace = true
-serde_json.workspace = true
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true, features = ["preserve_order", "float_roundtrip"] }
 urlencoding = "2.1"
 
 [dev-dependencies]
 ara-ops.workspace = true
-texture2ddecoder = "0.1.2"
+texture2ddecoder = { workspace = true }
 bcdec_rs = "0.2.1"
-tempfile = "3.23"
+tempfile = { workspace = true }
 
 [target.'cfg(windows)'.dev-dependencies]
-windows-sys = { version = "0.61", features = ["Win32_System_ProcessStatus", "Win32_System_Threading"] }
+windows-sys = { workspace = true, features = ["Win32_System_ProcessStatus", "Win32_System_Threading"] }
 
 [lints]
 workspace = true

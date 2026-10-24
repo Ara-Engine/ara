@@ -4,6 +4,14 @@ Production export orchestration; `ara-export` is temporary CLI wiring.
 `export(ExportRequest, EventSink)` is the integration entry; `doctor` shares
 tool discovery. `ExportPreset` is schema registered and uses ara-json canonical
 writing. Template files must match the hash and (platform, arch, config) pin.
+Conformance pins remain executable smoke workloads. Runtime pins are ZIPs of the
+real ara-player plus cooked resources: `ara-export runtime-template --player EXE
+--engine ENGINE --output ZIP`, then the existing `pin` command with matching symbols.
+The builder includes current shader manifests/cohorts, excluding obsolete cooks.
+Runtime packs contain `.ara/scene.cbor` and `.ara/cooked/<digest>.cbor`; their asset
+source reads compressed cooked outputs directly, without author cache paths.
+`examples/runtime_game.rs` probes a real authored project and requires an executed
+game plus renderer screenshot. Captures and evidence go under target/.
 
 Run `cargo test -p ara-export`, `cargo clippy -p ara-export --all-targets`.
 `cargo run -p ara-export -- doctor --platform windows` checks the host.
