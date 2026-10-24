@@ -124,12 +124,17 @@ impl Renderer {
         Ok(())
     }
 
-    /// Pick from the last completed frame's entity-ID channel, without rendering or PNG encoding.
-    pub fn entity_at(&self, pixel: [u32; 2]) -> Result<Option<u64>> {
+    /// Read the last completed frame's entity-ID channel on demand, without rendering
+    /// or PNG encoding. Ordinary live frames never copy pixels to host memory.
+    pub fn entity_at(&mut self, pixel: [u32; 2]) -> Result<Option<u64>> {
         ensure!(
             pixel[0] < self.size[0] && pixel[1] < self.size[1],
             "Pick is outside the viewport"
         );
+        if self.targets.states[ID].access == Access::Undefined {
+            return Ok(None);
+        }
+        self.readback(false)?;
         let bytes = self.gpu.read(self.targets.read_ids)?;
         let index = (pixel[1] as usize * self.size[0] as usize + pixel[0] as usize) * 4;
         let id = f32::from_le_bytes(bytes[index..index + 4].try_into()?) as usize;
