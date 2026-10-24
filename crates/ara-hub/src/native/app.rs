@@ -33,6 +33,9 @@ pub struct App {
     pub pointer: [f32; 2],
     bindings: BTreeMap<u64, Binding>,
     modifiers: [bool; 3],
+    markup: String,
+    light: bool,
+    present_needed: bool,
 }
 
 impl App {
@@ -48,6 +51,9 @@ impl App {
             pointer: [-1.; 2],
             bindings: BTreeMap::new(),
             modifiers: [false; 3],
+            markup: String::new(),
+            light: false,
+            present_needed: false,
         })
     }
 
@@ -71,6 +77,17 @@ impl App {
             docs: &self.docs,
         };
         let page = view::page(hub, &ctx);
+        self.bindings = page.bindings;
+        self.thumbnails.request(&page.wanted);
+        if self.markup == page.markup
+            && self.ui.size == self.size
+            && self.light == hub.prefs.light
+            && hub.focus.is_none()
+        {
+            return Ok(());
+        }
+        self.markup.clone_from(&page.markup);
+        self.light = hub.prefs.light;
         let mut ui = Ui::editor(&page.markup, view::CSS, self.size)?;
         // Always switch: it also marks every node for restyle, which is what resolves
         // `color: inherit` (icons and labels in colored buttons) on the first frame.
@@ -121,9 +138,41 @@ impl App {
             &mut clipboard,
         )?;
         self.ui.frame(&mut self.text)?;
-        self.ui.drain_actions().for_each(drop);
-        self.bindings = page.bindings;
-        self.thumbnails.request(&page.wanted);
+        // Rebuild already generated a display list. Keep the presentation request
+        // until the native loop consumes it, even when its next frame does no work.
+        self.present_needed = true;
+        Ok(())
+    }
+
+    /// Process incremental UI work and consume one presentation request. Rebuilds
+    /// and input share this path, so idle frames do not submit to the GPU.
+    pub fn frame(&mut self) -> ara_ui::Result<bool> {
+        let work = self.ui.frame(&mut self.text)?;
+        let changed = self.present_needed
+            || work.paint_nodes > 0
+            || work.layout_passes > 0
+            || work.restyled > 0
+            || work.shaped > 0;
+        self.present_needed = false;
+        Ok(changed)
+    }
+
+    /// Apply activation before the next queued pointer event. A slow native frame
+    /// can contain both the menu-opening click and a click on one of its items.
+    pub fn dispatch_pointer(
+        &mut self,
+        hub: &mut Hub,
+        event: InputEvent,
+        now_ms: u64,
+    ) -> ara_ui::Result<()> {
+        self.pointer(event)?;
+        let intents = self.actions();
+        if !intents.is_empty() {
+            for intent in intents {
+                hub.intent(intent);
+            }
+            self.rebuild(hub, now_ms)?;
+        }
         Ok(())
     }
 

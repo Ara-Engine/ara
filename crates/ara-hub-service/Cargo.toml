@@ -19,6 +19,9 @@ serde_json = { workspace = true, features = ["preserve_order", "float_roundtrip"
 [target.'cfg(windows)'.dependencies]
 windows-sys = { workspace = true, features = ["Win32_Foundation", "Win32_System_Threading", "Win32_Security"] }
 
+[target.'cfg(unix)'.dependencies]
+libc.workspace = true
+
 [lints]
 workspace = true
 

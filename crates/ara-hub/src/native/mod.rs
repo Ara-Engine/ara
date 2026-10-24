@@ -6,7 +6,9 @@ mod frame;
 mod images;
 mod input;
 pub(crate) mod os;
+mod prefs;
 mod updates;
+mod wake;
 
 use crate::{
     capture,
@@ -181,16 +183,6 @@ fn load_prefs(config: &Path) -> Prefs {
         .and_then(|bytes| serde_json::from_slice(&bytes).ok())
         .unwrap_or_default()
 }
-fn save_prefs(config: &Path, prefs: &Prefs) {
-    if let Ok(value) = serde_json::to_value(prefs) {
-        let _ = std::fs::create_dir_all(config);
-        let _ = std::fs::write(
-            config.join("hub-ui.json"),
-            ara_json::to_canonical_string(&value),
-        );
-    }
-}
-
 /// Open the Hub window and run until it closes (or until captures are written).
 pub fn run(options: Options) -> anyhow::Result<()> {
     let exe_dir = exe_dir();
@@ -282,31 +274,28 @@ fn interactive(
     ara: &Path,
     mut health: Option<&Path>,
 ) -> anyhow::Result<()> {
-    let connection = Connection::start(config.to_owned(), ara.to_owned());
+    let prefs = prefs::Writer::new(config.to_owned())?;
+    let connection = Connection::start_with_wake(config.to_owned(), ara.to_owned(), wake::wake);
     let picks = os::picks();
     let (send, snippets) = std::sync::mpsc::channel();
     let snippet_ara = ara.to_owned();
     std::thread::spawn(move || {
         for snippet in os::install_snippets(&snippet_ara) {
             let _ = send.send(snippet);
+            wake::wake();
         }
     });
     let mut saved = hub.prefs.clone();
-    let mut dirty = true;
+    let mut dirty = false;
     let mut last_minute = 0;
     let mut last_check = std::time::Instant::now();
-    let mut last_download = std::time::Instant::now();
     hub.intent(crate::model::Intent::CheckUpdates);
+    app.rebuild(hub, now_ms()).map_err(err)?;
     loop {
+        dirty |= hub.tick(std::time::Instant::now());
         if last_check.elapsed() >= Duration::from_secs(4 * 3600) {
             hub.intent(crate::model::Intent::CheckUpdates);
             last_check = std::time::Instant::now();
-        }
-        if last_download.elapsed() >= Duration::from_secs(1)
-            && hub.releases.jobs.iter().any(|j| j.state == "running")
-        {
-            hub.intent(crate::model::Intent::RefreshDownloads);
-            last_download = std::time::Instant::now();
         }
         let mut intents = Vec::new();
         let scale = host.input.points_per_logical(host.dpi);
@@ -320,8 +309,12 @@ fn interactive(
                     intents.extend(app.key(hub, scancode, pressed).map_err(err)?);
                 }
                 Event::MouseMotion { position, .. } => {
-                    app.pointer(InputEvent::PointerMove(position.map(|v| v * scale)))
-                        .map_err(err)?;
+                    app.dispatch_pointer(
+                        hub,
+                        InputEvent::PointerMove(position.map(|v| v * scale)),
+                        now_ms(),
+                    )
+                    .map_err(err)?;
                 }
                 Event::MouseButton { button: 1, pressed } => {
                     let at = app.pointer;
@@ -330,7 +323,7 @@ fn interactive(
                     } else {
                         InputEvent::PointerUp(at)
                     };
-                    app.pointer(event).map_err(err)?;
+                    app.dispatch_pointer(hub, event, now_ms()).map_err(err)?;
                     // Clicking away from an inline rename saves it, as in Explorer.
                     if pressed
                         && hub.rename.is_some()
@@ -349,8 +342,15 @@ fn interactive(
                         position: app.pointer,
                         delta: [-delta[0] * 48., -delta[1] * 48.],
                     };
-                    app.pointer(event).map_err(err)?;
+                    app.dispatch_pointer(hub, event, now_ms()).map_err(err)?;
                 }
+            }
+            intents.extend(app.actions());
+            if !intents.is_empty() {
+                for intent in intents.drain(..) {
+                    hub.intent(intent);
+                }
+                app.rebuild(hub, now_ms()).map_err(err)?;
             }
         }
         host.input.pump(&mut app.ui, &mut app.input).map_err(err)?;
@@ -410,12 +410,15 @@ fn interactive(
             if hub.prefs.light != saved.light {
                 frame::style(host.window.raw(), hub.prefs.light);
             }
-            save_prefs(config, &hub.prefs);
+            prefs.save(hub.prefs.clone());
             saved = hub.prefs.clone();
         }
         dirty |= app.thumbnails.upload(&mut host.renderer);
         if host.physical.contains(&0) || host.window.size()?.contains(&0) {
-            std::thread::sleep(Duration::from_millis(20));
+            // SAFETY: Main-thread SDL pump; input and worker events wake a minimized Hub.
+            unsafe {
+                sdl3_sys::events::SDL_WaitEventTimeout(std::ptr::null_mut(), 1000);
+            }
             host.physical = host.window.size()?;
             continue;
         }
@@ -432,18 +435,29 @@ fn interactive(
             app.rebuild(hub, now).map_err(err)?;
             dirty = false;
         }
-        let work = app.ui.frame(&mut app.text).map_err(err)?;
-        if work.paint_nodes > 0 || work.layout_passes > 0 || work.restyled > 0 || work.shaped > 0 {
+        if app.frame().map_err(err)? {
             host.input.sync_text_input(&app.ui, &app.input, host.dpi)?;
             host.render(app)?;
             if let Some(marker) = health.take() {
                 std::fs::write(marker, b"ready")?;
             }
         }
-        // Sleep until input arrives or the next connection poll is due.
+        // Worker results push an SDL wake event. The only idle deadline is the
+        // next relative-time label or informational toast expiration.
+        let mut wait_ms = 60_000 - now_ms() % 60_000;
+        if let Some(deadline) = hub.notice_deadline() {
+            wait_ms = wait_ms.min(
+                deadline
+                    .saturating_duration_since(std::time::Instant::now())
+                    .as_millis() as u64,
+            );
+        }
+        wait_ms = wait_ms.min(
+            (Duration::from_secs(4 * 3600).saturating_sub(last_check.elapsed())).as_millis() as u64,
+        );
         // SAFETY: Main-thread SDL pump; a null event leaves input queued for poll().
         unsafe {
-            sdl3_sys::events::SDL_WaitEventTimeout(std::ptr::null_mut(), 16);
+            sdl3_sys::events::SDL_WaitEventTimeout(std::ptr::null_mut(), wait_ms.max(1) as i32);
         }
     }
 }

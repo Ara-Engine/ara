@@ -68,6 +68,14 @@ monotonic counter within this Hub run, not an on-disk revision. Subscribe before
 initial reads to avoid missing a change. No replay history is promised; refresh
 all views after reconnect. Do not render lifecycle calls as approval or review.
 
+`hub.changed {kind:"closed",project:id,revision}` is emitted when the authority
+process exits (Hub Close, window X, crash or kill). Windows observers block on
+process/cancellation kernel objects; discovery-file polling is not an exit signal.
+Status reads use authenticated cached metadata plus process liveness. Service
+restart rediscovers live authorities once; late exits cannot close a replacement.
+Activity uses persistent connections at 2 s intervals while subscribed/open;
+unchanged snapshots emit nothing. GUI clients run all calls off their input thread.
+
 `hub.changed` kinds `releases` and `progress` invalidate release/job snapshots.
 `hub.engines` adds `managed:bool` (external registrations are unregister-only).
 Offline/rate-limited feeds carry a clear status; signatures are reverified on cache
@@ -130,5 +138,8 @@ Do not stop or alter another user's/service's profile.
 `cargo test -p ara --test hub` runs real user Hub + global stdio MCP + two project
 daemons, concurrent clients, registry metadata, subscriptions, and install output.
 `cargo test -p ara --test engine` retains per-project MCP/HTTP coverage.
+`tests/process_exit.rs` uses windowless editor-authority processes to cover all
+four exit paths, including stale discovery after crash/kill. Watcher cancellation
+joins its thread and never terminates the observed editor when the Hub stops.
 `cargo clippy -p ara-hub-service --all-targets -- -D warnings`; scoped rustfmt.
 No new root workspace dependency: member discovery is already `crates/*`.

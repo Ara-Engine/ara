@@ -35,12 +35,17 @@ contract is `crates/ara-hub-service/AGENTS.md`.
 
 ## Behavior worth knowing
 
-- Every model change rebuilds the `Ui` from markup. `App::rebuild` carries field
+- Equal markup replies keep the current `Ui` and its text caches. Changed markup carries field
   `TextInput`s (caret, selection, undo) and scroll offsets across by stable ID,
   then restores focus and re-derives hover.
 - `App::rebuild` always calls `switch_theme`, even for Dark: a fresh `Ui` does not
   resolve `color: inherit` until something restyles it (ara-ui quirk; without it
   icons in primary buttons stay muted).
+- `App::frame` consumes a retained presentation request: rebuilding must present
+  even if its layout work was already consumed. Pointer activations apply before
+  the next queued event. Worker results wake SDL; idle waits follow clock/toast deadlines.
+- Every toast/banner has Dismiss. Informational toasts expire after 8 s (Undo: 20 s);
+  errors remain until dismissed. Preference writes are coalesced off the UI thread.
 - Create validation is the service's: every edit sends `hub.create {dryRun:true}`;
   diagnostics carry `location.path` = `name|path|template|engineVersion` and render
   under that field. One dry run in flight; a stale reply re-checks.
@@ -72,7 +77,7 @@ editor's panel rebuild lands.
 
 ## Tests
 
-Set `CARGO_BUILD_JOBS=2`, `VULKAN_SDK` and an explicit scratch profile for every
+Set `CARGO_BUILD_JOBS=4`, `VULKAN_SDK` and an explicit scratch profile for every
 test, capture and manual check (PowerShell, from the workspace root):
 `$env:ARA_CONFIG_DIR = (New-Item -ItemType Directory -Force "target/hub-checks/$([guid]::NewGuid())/config").FullName`.
 The config-isolation test fails without this. Checkout binaries reject the real
@@ -91,6 +96,11 @@ user profile, even via --config-dir. Never register worktree builds there.
   before shutting down a test service; await removal of its discovery file.
   Never leave a service/updater you started running after a check.
 - `cargo clippy -p ara-hub --all-targets -- -D warnings`.
+- `tests/responsiveness.rs` covers presentation, idle, dismissal and queued clicks;
+  `tests/async_rpc.rs` holds a service reply while input still completes.
+  Opt-in CPU timings: set ARA_HUB_TIMINGS to an absolute target/.../timings.json,
+  then `cargo test -p ara-hub --test responsiveness measure_hub_frames -- --ignored`.
+  Captures also inject menu, rename and dismiss clicks and save before/after images.
 
 ## Gotchas
 

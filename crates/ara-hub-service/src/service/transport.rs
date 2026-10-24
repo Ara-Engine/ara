@@ -26,16 +26,17 @@ impl Handler for Hub {
     }
     fn tick(&mut self) {
         self.poll_updates();
-        for child in self.children.values_mut() {
-            let _ = child.try_wait();
-        }
-        if self.subscribers.is_empty() {
+        self.poll_processes();
+        if self.subscribers.is_empty()
+            || self.processes.running.is_empty()
+            || self.last_activity_check.elapsed() < Duration::from_secs(2)
+        {
             return;
         }
-        let status = self.call("hub.status", json!({}));
+        self.last_activity_check = Instant::now();
         let activity = self.call("hub.activity", json!({}));
-        if let (Ok(status), Ok(activity)) = (status, activity) {
-            let state = json!({"projects":status["projects"],"activity":activity["activity"]});
+        if let Ok(activity) = activity {
+            let state = activity["activity"].clone();
             if self.last_status != state {
                 self.last_status = state;
                 self.changed("activity", None);
