@@ -117,6 +117,11 @@ pub struct DeviceInfo {
     pub vendor_id: u32,
     /// Device identity used by the pipeline cache.
     pub device_id: u32,
+    /// Discrete adapter classification; shared-memory integrated/CPU devices use
+    /// conservative raster auto-selection regardless of their reported heap size.
+    pub discrete: bool,
+    /// Sum of physical device-local heaps in MiB, recorded once at device creation.
+    pub device_local_mib: u64,
     /// Optional RT-tier support; the raster baseline never requires it.
     pub ray_tracing: bool,
     /// Enabled BC4/BC5/BC6H/BC7 sampled textures, without CPU decompression.
