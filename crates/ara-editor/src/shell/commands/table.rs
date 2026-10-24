@@ -2,10 +2,22 @@
 //! reason, so menus explain what is missing instead of hiding it.
 use super::{Avail, Ctx, Run, RunFn, Spec, Target};
 use crate::{Editor, shell::Shell};
+use ara_render_fidelity::presets::QualityPreset;
 use serde_json::{Value, json};
 use std::sync::LazyLock;
 
 pub(super) static COMMANDS: LazyLock<Vec<Spec>> = LazyLock::new(build);
+
+/// A Scene viewport quality choice: it sets the user preference `viewport.quality`
+/// (`EditorState::render_quality`), checked while active.
+macro_rules! viewport_quality {
+    ($id:literal, $title:literal, $value:literal, $summary:literal) => {
+        cmd($id, $title, "", "", $summary, |_, e, _| {
+            set(e, "viewport.quality", json!($value))
+        })
+        .when(|c| is(c, "viewport.quality", $value))
+    };
+}
 
 /// A Hierarchy type filter: it writes `query` into the Hierarchy search, so the
 /// filter stays visible and editable there.
@@ -757,10 +769,22 @@ fn build() -> Vec<Spec> {
         later("view.show.stats", "Stats Overlay", "gauge", "", "The viewport Stats overlay arrives with Profiler v2."),
         cmd("view.game", "Game View", "play", "G", "Hide every editor visual in the viewport.", |_, e, _| view(e, json!({"gameView": !e.state.game_view}))).when(|c| Avail::Checked(c.state.game_view)),
         cmd("view.hide_overlays", "Hide Overlays", "eye-off", "Shift+G", "Hide the viewport toolbar and widgets.", |_, e, _| view(e, json!({"hideOverlays": !e.state.hide_overlays}))).when(|c| Avail::Checked(c.state.hide_overlays)),
-        cmd("view.fidelity", "Fidelity Rendering", "sun", "", "Switch between ray-traced Fidelity and the Raster preview.", |_, e, _| {
-            let next = if e.state.quality { "raster" } else { "fidelity" };
+        cmd("view.fidelity", "Fidelity Rendering", "sun", "", "Switch between the project's quality (ray-traced Fidelity) and the Low raster preview.", |_, e, _| {
+            let low = |c| e.state.resolve_quality(c) == Some(QualityPreset::Low);
+            let next = if e.state.quality { "low" } else if low(e.state.project_quality()) { "auto" } else { "project" };
             set(e, "viewport.quality", json!(next))
         }).when(|c| Avail::Checked(c.state.quality)),
+        viewport_quality!("view.quality.project", "Project Default", "project", "Render the Scene view at the project's quality (Project Settings > Rendering).")
+            .labelled(|c| format!("Project Default ({})", c.state.quality_label(c.state.project_quality()))),
+        viewport_quality!("view.quality.auto", "Auto", "auto", "Pick the quality from this GPU: High with ray tracing (Medium under 8 GiB), Low without.")
+            .labelled(|c| match c.state.detected_quality {
+                Some(preset) => format!("Auto ({} on this GPU)", crate::state::preset_title(preset)),
+                None => "Auto".into(),
+            }),
+        viewport_quality!("view.quality.low", "Low", "low", "Raster lighting with temporal antialiasing; no ray tracing."),
+        viewport_quality!("view.quality.medium", "Medium", "medium", "Ray-traced lighting at half resolution, upscaled temporally; no ReSTIR."),
+        viewport_quality!("view.quality.high", "High", "high", "Ray-traced lighting at two-thirds resolution; ReSTIR in scenes lit by emissives or many lights."),
+        viewport_quality!("view.quality.epic", "Epic", "epic", "Native-resolution ray tracing with ReSTIR everywhere. The most expensive."),
         later("view.environment", "Environment Preview", "sun", "", "Time-of-day and weather previews need the sky system in the editor."),
         later("view.layout_quad", "Viewport Layout", "grid-2x2", "", "Several viewports need one render target per view; quad view is not built yet."),
         cmd("window.maximize", "Maximize Panel", "maximize", "Shift+Space", "Fill the window with the active panel; again to restore.", |s, e, t| {
