@@ -163,7 +163,63 @@ fn subtitle(hub: &Hub) -> String {
         }
         View::Agents => "Connect agents once; they work in any project registered here.".into(),
         View::Learn => "Samples to explore and the docs that ship with Ara.".into(),
+        View::Settings => "Hub updates, release channel and download source.".into(),
     }
+}
+
+pub(super) fn update(p: &mut Page, hub: &Hub) {
+    let Some(release) = &hub.releases.hub else {
+        return;
+    };
+    p.panel("banner banner-info", |p| {
+        p.icon("download", "accent");
+        p.panel("col fill", |p| {
+            p.text(
+                "toast-title",
+                &format!("Ara Hub {} is available", release.version),
+            );
+            if let Some(job) = hub.releases.running("hub", &release.version) {
+                let progress = job
+                    .progress
+                    .as_ref()
+                    .map_or(0, |p| p.received.saturating_mul(100) / p.total.max(1));
+                p.text(
+                    "small muted",
+                    &format!("Downloading verified update · {progress}%"),
+                );
+            } else {
+                p.text(
+                    "small muted",
+                    "Your open projects and Hub service keep running during restart.",
+                );
+            }
+        });
+        if hub.releases.prepared().is_some() {
+            p.action(
+                "restart-update",
+                "primary compact",
+                "refresh-cw",
+                "Restart to update",
+                Some(Intent::RestartUpdate),
+            );
+        } else if let Some(job) = hub.releases.running("hub", &release.version) {
+            p.action(
+                "cancel-hub-update",
+                "compact",
+                "x",
+                "Cancel",
+                Some(Intent::CancelDownload(job.id.clone())),
+            );
+        } else {
+            p.action(
+                "download-update",
+                "compact",
+                "download",
+                "Download update",
+                Some(Intent::PrepareUpdate),
+            );
+        }
+    });
 }
 
 pub(super) fn offline(p: &mut Page, hub: &Hub) {

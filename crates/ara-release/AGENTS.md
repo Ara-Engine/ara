@@ -9,9 +9,18 @@ hash-checked SFX extraction and calls the per-user installer script.
 `cargo run -p ara-release -- notes --version 0.0.1-alpha`
 `cargo run -p ara-release -- smoke`
 
-Always CARGO_BUILD_JOBS=2. Package is an explicit opt-in release build; no dev
+Always CARGO_BUILD_JOBS=4. Package is an explicit opt-in release build; no dev
 server or full workspace build. Outputs, logs, smoke projects and symbols belong
-under target/release-dist. Never tag, push, publish, or upload crashes.
+under target/release-dist. Never tag, push, publish, or upload crashes unless explicitly requested.
+
+`package --kind hub|engine` builds independent distributions. Hub installs into
+LOCALAPPDATA/Programs/Ara Hub; its bootstrap service runs from Ara/Services/version.
+`keygen --output <outside-repo-path>` prints only the public key; embed it in
+ara-update/public-keys.txt before packaging. `sign` and `publish` read --key or
+ARA_RELEASE_SIGNING_KEY (a path). Never store private keys/tokens in source.
+`publish --repo Snowy7/ara --tag hub-v<version>|engine-v<version> --prerelease --dry-run`
+creates a signed local folder. Without --dry-run, gh creates/uploads a draft then
+publishes it; gh is a publishing prerequisite only. See docs/releases.md.
 
 Version must match workspace.package.version; paths are never derived from an
 unchecked version string. Repackaging uses a fresh stage and refuses to replace
@@ -25,8 +34,9 @@ prerequisite; only open-source Roslyn/NuGet dependencies are redistributed.
 PDBs stay in a separate symbols ZIP with binary hashes; never inside the portable
 archive. The symbols command converts these PDBs through ara-crash when needed.
 
-`ara-hub.exe` ships when `crates/ara-hub` exists; the installer's Hub shortcut
-starts it directly, it registers the installed build on first run, and smoke
+`ara-hub.exe` and its updater ship when `crates/ara-hub` exists; the engine installer
+registers its build, installs/reuses the standalone Hub and points its Hub shortcut
+there. No-system-integration smoke leaves shared installations alone; smoke
 captures every Hub page from the installed binary. Packaged samples get their
 `thumbnail.png` from `evidence/<main-scene>-player.png` (evidence is excluded).
 

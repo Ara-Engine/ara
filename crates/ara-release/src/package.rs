@@ -31,6 +31,10 @@ const RESOURCES: &[&str] = &[
 
 pub fn package(root: &Path, version: &str) -> Result<()> {
     ensure!(
+        !ara_update::trusted_keys().is_empty(),
+        "embed a release public key before packaging an installable engine/Hub"
+    );
+    ensure!(
         cfg!(all(windows, target_arch = "x86_64")),
         "engine packaging currently requires Windows x64"
     );
@@ -47,7 +51,7 @@ pub fn package(root: &Path, version: &str) -> Result<()> {
     let mut build = Command::new("cargo");
     build
         .current_dir(root)
-        .env("CARGO_BUILD_JOBS", "2")
+        .env("CARGO_BUILD_JOBS", "4")
         .env("CARGO_PROFILE_RELEASE_DEBUG", "line-tables-only")
         .env("VULKAN_SDK", &sdk)
         .args(["build", "--release"]);
@@ -58,6 +62,7 @@ pub fn package(root: &Path, version: &str) -> Result<()> {
     let hub = root.join("crates/ara-hub/Cargo.toml").is_file();
     if hub {
         build.args(["-p", "ara-hub", "--bin", "ara-hub"]);
+        build.args(["--bin", "ara-hub-updater"]);
     }
     run(&mut build, &dist.join("logs/release-build.log"))?;
     let stage = dist.join(format!(".stage-{name}-{}", std::process::id()));
@@ -68,7 +73,8 @@ pub fn package(root: &Path, version: &str) -> Result<()> {
     let binaries = BINARIES
         .iter()
         .map(|(_, binary)| *binary)
-        .chain(hub.then_some("ara-hub"));
+        .chain(hub.then_some("ara-hub"))
+        .chain(hub.then_some("ara-hub-updater"));
     for binary in binaries {
         let source = root.join("target/release").join(format!("{binary}.exe"));
         if binary != "ara-setup" {
@@ -121,6 +127,21 @@ pub fn package(root: &Path, version: &str) -> Result<()> {
         copy(&root.join("release").join(file), &stage.join(file))?;
     }
     bundle_tools(root, &stage, &sdk)?;
+    if hub {
+        let script = stage.join("install.ps1");
+        let mut install = fs::read_to_string(&script)?;
+        install.push_str(include_str!("../engine-hub.ps1"));
+        fs::write(script, install)?;
+        support::json(
+            &stage.join("hub-launcher.json"),
+            &json!({"format":"ara.hub/1","version":version}),
+        )?;
+        support::json(&stage.join("hub-service.json"), &json!({"version":version}))?;
+        fs::write(
+            stage.join("standalone-hub-install.ps1"),
+            include_str!("../hub-install.ps1"),
+        )?;
+    }
     bundle_dotnet(root, &stage, &symbols, &dist)?;
     templates(root, &stage, &dist)?;
     notices::generate(root, &stage, &dist)?;
@@ -368,7 +389,7 @@ pub fn notes(root: &Path, version: &str) -> Result<()> {
     )?;
     let issues = fs::read_to_string(root.join("docs/KNOWN_ISSUES.md"))?;
     let notes = format!(
-        "# Ara {version}\n\nEarly Windows alpha for testers. Unsigned; no automatic crash uploads.\n\n## System requirements\n\n- Windows 10/11 x64; 16 GB RAM.\n- Vulkan 1.3 GPU and current driver; ray tracing recommended (RTX 20-series or newer / RX 6000+).\n- x64 .NET 10 SDK and runtime: https://dotnet.microsoft.com/en-us/download/dotnet/10.0\n- Microsoft VC++ v14 Redistributable (x64), required by bundled SDK shader tools: https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist\n- Slang, DXC and SPIR-V validation tools are bundled; no Vulkan SDK or Rust is needed to run the installed engine.\n\n## Installation\n\nRun the setup EXE, or extract the ZIP and run install.ps1. Versions install side by side under %LOCALAPPDATA%\\Programs\\Ara\\{version}. Connect agents with `ara hub install-mcp --client claude|codex`.\n\n## Decision highlights\n\n| ID | Decision | Date |\n|---|---|---|\n{highlights}\n\n## Merged features (first-parent history)\n\n{features}\n\n## Known issues (source document snapshot)\n\nThe following is copied from docs/KNOWN_ISSUES.md. Its installer/Hub build-order entries may precede this packaging; see the smoke report for actual installed-build results.\n\n{issues}\n"
+        "# Ara {version}\n\nEarly Windows alpha for testers. No Authenticode code signing yet; Windows SmartScreen warns. No automatic crash uploads.\n\n## System requirements\n\n- Windows 10/11 x64; 16 GB RAM.\n- Vulkan 1.3 GPU and current driver; ray tracing recommended (RTX 20-series or newer / RX 6000+).\n- x64 .NET 10 SDK and runtime: https://dotnet.microsoft.com/en-us/download/dotnet/10.0\n- Microsoft VC++ v14 Redistributable (x64), required by bundled SDK shader tools: https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist\n- Slang, DXC and SPIR-V validation tools are bundled; no Vulkan SDK or Rust is needed to run the installed engine.\n\n## Installation\n\nRun the setup EXE, or extract the ZIP and run install.ps1. Versions install side by side under %LOCALAPPDATA%\\Programs\\Ara\\{version}. Connect agents with `ara hub install-mcp --client claude|codex`.\n\n## Decision highlights\n\n| ID | Decision | Date |\n|---|---|---|\n{highlights}\n\n## Merged features (first-parent history)\n\n{features}\n\n## Known issues (source document snapshot)\n\nThe following is copied from docs/KNOWN_ISSUES.md. Its installer/Hub build-order entries may precede this packaging; see the smoke report for actual installed-build results.\n\n{issues}\n"
     );
     let dist = support::dist(root);
     fs::create_dir_all(&dist)?;
@@ -408,7 +429,7 @@ pub fn symbols(root: &Path, directory: &Path) -> Result<()> {
     run(
         Command::new("cargo")
             .current_dir(root)
-            .env("CARGO_BUILD_JOBS", "2")
+            .env("CARGO_BUILD_JOBS", "4")
             .args([
                 "build",
                 "-p",

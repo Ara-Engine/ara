@@ -47,7 +47,20 @@ pub enum HubCommand {
     /// Running project PIDs and ports.
     Status { project: Option<String> },
     /// Installed engine versions.
-    Engines,
+    Engines {
+        /// List authenticated GitHub releases instead of installed builds.
+        #[arg(long)]
+        available: bool,
+        /// stable or preview (preview includes stable).
+        #[arg(long, default_value = "stable")]
+        channel: String,
+    },
+    /// Download, verify and register an engine version side by side.
+    Install { version: String },
+    /// Remove a Hub-managed engine, rejecting open project pins.
+    Uninstall { version: String },
+    /// Cancel a download returned by hub.engine.install or hub.update.prepare.
+    Cancel { job: String },
     /// Register this installed engine with the running user Hub.
     RegisterEngine,
     /// Unregister this exact installed build, preserving projects and other versions.
@@ -108,6 +121,51 @@ pub fn hub(command: HubCommand) -> Result<bool, String> {
     let directory = ara_hub_service::config_dir().map_err(|e| e.to_string())?;
     let mut client =
         ara_hub_service::connect_or_start(&directory, &executable).map_err(|e| e.to_string())?;
+    if let HubCommand::Install { version } = command {
+        available_releases(&mut client, "preview")?;
+        let job = client
+            .call("hub.engine.install", json!({"version":version}))
+            .map_err(|e| e.to_string())?;
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(14_400);
+        let mut last_progress: Option<u64> = None;
+        loop {
+            let jobs = client
+                .call("hub.downloads", json!({}))
+                .map_err(|e| e.to_string())?;
+            if let Some(current) = jobs["jobs"]
+                .as_array()
+                .and_then(|jobs| jobs.iter().find(|j| j["id"] == job["id"]))
+            {
+                match current["state"].as_str() {
+                    Some("complete") => {
+                        println!("{}", ara_json::to_canonical_string(&current["result"]));
+                        return Ok(true);
+                    }
+                    Some("failed" | "cancelled") => return Err(current["error"].to_string()),
+                    _ => {}
+                }
+                if let (Some(received), Some(total)) = (
+                    current["progress"]["received"].as_u64(),
+                    current["progress"]["total"].as_u64(),
+                ) {
+                    let percent = received.saturating_mul(100) / total.max(1);
+                    if last_progress.is_none_or(|previous| percent >= previous + 5) {
+                        eprintln!(
+                            "Installing Ara {version}: {percent}% ({received}/{total} bytes)"
+                        );
+                        last_progress = Some(percent);
+                    }
+                }
+            }
+            if std::time::Instant::now() >= deadline {
+                return Err(format!(
+                    "installation still running; inspect hub.downloads or cancel {}",
+                    job["id"]
+                ));
+            }
+            std::thread::sleep(std::time::Duration::from_millis(250));
+        }
+    }
     let (method, params) = match command {
         HubCommand::Add { path, name } => (
             "hub.register",
@@ -132,7 +190,17 @@ pub fn hub(command: HubCommand) -> Result<bool, String> {
         }
         HubCommand::Close { project } => ("hub.close", json!({"project":project})),
         HubCommand::Status { project } => ("hub.status", json!({"project":project})),
-        HubCommand::Engines => ("hub.engines", json!({})),
+        HubCommand::Engines {
+            available: true,
+            channel,
+        } => {
+            let result = available_releases(&mut client, &channel)?;
+            println!("{}", ara_json::to_canonical_string(&result));
+            return Ok(true);
+        }
+        HubCommand::Engines { .. } => ("hub.engines", json!({})),
+        HubCommand::Uninstall { version } => ("hub.engine.uninstall", json!({"version":version})),
+        HubCommand::Cancel { job } => ("hub.download.cancel", json!({"job":job})),
         HubCommand::RegisterEngine | HubCommand::UnregisterEngine => {
             let config = ara_hub_service::HubConfig::user(executable).map_err(|e| e.to_string())?;
             (
@@ -146,11 +214,35 @@ pub fn hub(command: HubCommand) -> Result<bool, String> {
         }
         HubCommand::Shutdown => ("hub.shutdown", json!({})),
         HubCommand::Activity => ("hub.activity", json!({})),
-        HubCommand::InstallMcp { .. } | HubCommand::Serve { .. } => unreachable!("handled above"),
+        HubCommand::Install { .. } | HubCommand::InstallMcp { .. } | HubCommand::Serve { .. } => {
+            unreachable!("handled above")
+        }
     };
     let result = client.call(method, params).map_err(|e| e.to_string())?;
     println!("{}", ara_json::to_canonical_string(&result));
     Ok(true)
+}
+
+fn available_releases(
+    client: &mut ara_rpc::Client,
+    channel: &str,
+) -> Result<serde_json::Value, String> {
+    client
+        .call("hub.releases.check", json!({}))
+        .map_err(|e| e.to_string())?;
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(240);
+    loop {
+        let result = client
+            .call("hub.engines.available", json!({"channel":channel}))
+            .map_err(|e| e.to_string())?;
+        if result["checking"] != true {
+            return Ok(result);
+        }
+        if std::time::Instant::now() >= deadline {
+            return Err("release check still running; retry shortly".into());
+        }
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    }
 }
 
 pub fn global_mcp() -> Result<bool, String> {

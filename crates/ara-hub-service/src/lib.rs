@@ -4,7 +4,7 @@ mod service;
 mod templates;
 
 pub use registry::{EngineBuild, ProjectEntry, Registry};
-pub use service::{Hub, HubConfig, connect_or_start, serve};
+pub use service::{Hub, HubConfig, UpdateConfig, connect_or_start, serve};
 pub use templates::{DirectoryTemplates, Template, TemplateSource};
 
 use ara_diag::{Diagnostic, codes};

@@ -808,3 +808,112 @@ Causes:
 Fixes:
 - Apply the attached `save.restore_backup` action for the slot to restore the verified backup atomically, using local or server authority.
 - Investigate the primary file failure before the next save; the recovered state may be one generation older than the failed primary.
+## ARA1950 update::SIGNATURE: Release signature rejected
+owner: ara-update
+
+A manifest is unsigned, malformed or signed by an untrusted key.
+
+Causes:
+- The release is incomplete, modified, or uses a key not yet embedded in this Hub.
+
+Fixes:
+- Check the publisher and update the Hub from a trusted installer. Publish both rotation keys before switching signers.
+
+## ARA1951 update::HASH: Release checksum mismatch
+owner: ara-update
+
+Downloaded bytes differ from the signed SHA-256.
+
+Causes:
+- An asset was changed after signing, or the download is corrupt.
+
+Fixes:
+- Retry the download. Publishers must regenerate and sign the manifest when replacing an asset.
+
+## ARA1952 update::SIZE: Release exceeds size limit
+owner: ara-update
+
+An asset or expanded archive exceeds its signed length or the hard safety limit.
+
+Causes:
+- An oversized response, expansion bomb or incorrect signed length was encountered.
+
+Fixes:
+- Publish a correctly sized archive. Do not bypass the size check.
+
+## ARA1953 update::MANIFEST: Invalid release manifest or archive
+owner: ara-update
+
+Signed release metadata or archive contents are incompatible or unsafe.
+
+Causes:
+- A tag, version, channel or platform differs; required files are missing; a ZIP entry escapes its staging directory.
+
+Fixes:
+- Package again with ara-release, then sign and publish matching artifacts.
+
+## ARA1954 update::URL: Unsafe release URL
+owner: ara-update
+
+The feed, asset URL or redirect violates the HTTPS GitHub host policy.
+
+Causes:
+- A URL targets a different host, includes credentials, or attempts to leave the configured API endpoint.
+
+Fixes:
+- Use GitHub Releases and an owner/name repository override.
+
+## ARA1955 update::NETWORK: Release feed unavailable
+owner: ara-update
+
+GitHub or an asset cannot be reached and no usable cached result exists.
+
+Causes:
+- The network is offline or a transfer was interrupted.
+
+Fixes:
+- Reconnect and retry. Interrupted transfers resume from authenticated staging; cached feeds remain available offline.
+
+## ARA1956 update::RATE_LIMIT: GitHub release rate limit
+owner: ara-update
+
+GitHub throttled a request and no usable cache exists.
+
+Causes:
+- The anonymous quota or secondary limit was reached.
+
+Fixes:
+- Wait for the reported reset time or set GITHUB_TOKEN privately in the service environment.
+
+## ARA1957 update::IO: Release storage operation failed
+owner: ara-update
+
+An installation file, directory, process or lock could not be accessed.
+
+Causes:
+- Disk space, permissions, an existing installation or a competing update prevented progress.
+
+Fixes:
+- Correct the reported local problem and retry. Inspect an unfinished staging directory before removing it.
+
+## ARA1958 update::CANCELLED: Release transfer cancelled
+owner: ara-update
+
+A requested install or Hub update was cancelled before commit.
+
+Causes:
+- The user cancelled an active download.
+
+Fixes:
+- Start Install again when ready. Cancelled partial downloads are removed.
+
+## ARA1959 update::ROLLBACK: Hub update rolled back
+owner: ara-update
+
+A Hub swap, startup health check or recovery could not complete.
+
+Causes:
+- The new Hub failed startup, the previous Hub stayed open, or an unfinished update already exists.
+
+Fixes:
+- The previous Hub is restored after a failed health check. Inspect the update log and retained staging before retrying.

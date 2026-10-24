@@ -3,6 +3,7 @@ mod background;
 mod create;
 mod lifecycle;
 mod transport;
+mod updates;
 use crate::{
     DirectoryTemplates, EngineBuild, ProjectEntry, Registry, TemplateSource, invalid, io_error,
     now, registry::write_json, templates::Layered,
@@ -22,6 +23,7 @@ use std::{
     time::{Duration, Instant},
 };
 pub use transport::{connect_or_start, serve};
+pub use updates::UpdateConfig;
 
 /// Hub construction dependencies. Templates are replaceable without changing the wire API.
 pub struct HubConfig {
@@ -61,6 +63,7 @@ impl HubConfig {
 
 /// User-level project authority. Every engine daemon remains in its own process.
 pub struct Hub {
+    updates: updates::Updates,
     config: HubConfig,
     registry: Registry,
     children: BTreeMap<String, Child>,
@@ -103,8 +106,19 @@ fn required<T>(value: Option<T>, name: &str) -> Result<T, RpcError> {
 
 impl Hub {
     /// Lock the user registry. A second service for the same user fails without changing it.
-    pub fn open(mut config: HubConfig) -> Result<Self, RpcError> {
+    pub fn open(config: HubConfig) -> Result<Self, RpcError> {
+        let updates = UpdateConfig::user(&config.directory)?;
+        Self::open_with_updates(config, updates)
+    }
+
+    /// Construct a Hub with explicit release dependencies (local fake servers in tests).
+    pub fn open_with_updates(
+        mut config: HubConfig,
+        mut updates: UpdateConfig,
+    ) -> Result<Self, RpcError> {
         fs::create_dir_all(&config.directory).map_err(io_error)?;
+        config.directory = fs::canonicalize(&config.directory).map_err(io_error)?;
+        updates.engines = std::path::absolute(&updates.engines).map_err(io_error)?;
         let lock = File::create(config.directory.join("hub.lock")).map_err(io_error)?;
         lock.try_lock().map_err(|e| {
             io_error(format!(
@@ -112,23 +126,28 @@ impl Hub {
             ))
         })?;
         let mut registry = Registry::load(&config.directory)?;
-        if !registry
-            .engines
-            .iter()
-            .any(|e| e.version == config.engine.version)
-        {
-            registry.engines.push(config.engine.clone());
-        } else if let Some(engine) = registry
-            .engines
-            .iter_mut()
-            .find(|e| e.version == config.engine.version)
-        {
-            *engine = config.engine.clone();
+        let bootstrap = config
+            .engine
+            .executable
+            .parent()
+            .is_some_and(|p| p.join("service.json").is_file());
+        // A standalone Hub's bootstrap CLI is a service, not an installed engine.
+        if !bootstrap {
+            if let Some(engine) = registry
+                .engines
+                .iter_mut()
+                .find(|e| e.version == config.engine.version)
+            {
+                *engine = config.engine.clone();
+            } else {
+                registry.engines.push(config.engine.clone());
+            }
         }
         registry.save(&config.directory)?;
         config.templates =
             Layered::with_checkout_samples(config.templates, &config.engine.executable);
         Ok(Self {
+            updates: updates::Updates::new(updates, &config.directory),
             config,
             registry,
             children: BTreeMap::new(),
@@ -168,6 +187,21 @@ impl Hub {
         method: &str,
         value: Value,
     ) -> Result<Value, RpcError> {
+        self.poll_updates();
+        if matches!(
+            method,
+            "hub.engines.available"
+                | "hub.updates"
+                | "hub.releases.check"
+                | "hub.releases.configure"
+                | "hub.downloads"
+                | "hub.download.cancel"
+                | "hub.engine.install"
+                | "hub.engine.uninstall"
+                | "hub.update.prepare"
+        ) {
+            return self.update_call(method, value);
+        }
         if method == "hub.call" {
             return self.proxy(conn, value);
         }
@@ -190,7 +224,24 @@ impl Hub {
             }
             "hub.resolve" => Ok(json!(self.project(p.project)?)),
             "hub.templates" => Ok(json!({"templates":self.config.templates.list()?})),
-            "hub.engines" => Ok(json!({"engines":self.registry.engines})),
+            "hub.engines" => {
+                let engines = self
+                    .registry
+                    .engines
+                    .iter()
+                    .map(|engine| {
+                        let mut value = json!(engine);
+                        value["managed"] = json!(
+                            engine
+                                .executable
+                                .parent()
+                                .is_some_and(|root| root.join(".ara-managed.json").is_file())
+                        );
+                        value
+                    })
+                    .collect::<Vec<_>>();
+                Ok(json!({"engines":engines}))
+            }
             "hub.engine.register" => {
                 let engine = required(p.engine, "engine")?;
                 if engine.version.is_empty()

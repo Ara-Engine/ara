@@ -105,7 +105,10 @@ impl Registry {
             .or_else(|| marker["engineVersion"].as_str().map(str::to_owned))
             .or_else(|| self.engines.first().map(|e| e.version.clone()))
             .ok_or_else(|| invalid("no installed engine"))?;
-        self.engine(&engine_version)?;
+        // Imported projects may pin a published engine which is not installed yet.
+        if !self.engines.iter().any(|e| e.version == engine_version) {
+            ara_update::version(&engine_version).map_err(|e| invalid(e.to_string()))?;
+        }
         marker["name"] = name.clone().into();
         marker["engineVersion"] = engine_version.clone().into();
         write_json(&marker_path, &marker)?;

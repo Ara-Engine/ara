@@ -52,6 +52,15 @@ contract is `crates/ara-hub-service/AGENTS.md`.
   build with `hub.engine.register` if the service lacks it. Dev builds don't.
 - Folder drops on the window register the folder (`Intent::Register`).
 - Prefs (theme, sort, layout, agent client) persist to `<config>/hub-ui.json`.
+- `model/updates.rs`: authenticated release metadata and jobs from the service.
+  Installs shows published versions, progress/cancel and managed Uninstall;
+  Settings configures channel/repository and checks for updates. Native checks
+  at startup and every four hours; standalone Hubs prepare updates automatically.
+- Standalone `hub.json` builds bootstrap the immutable service into
+  LOCALAPPDATA/Ara/Services/version. `ara-hub-updater` runs from config/updater,
+  waits for this GUI only, verifies again and swaps with rollback. Health is
+  acknowledged after the first rendered GUI frame. Captures never bootstrap,
+  connect or check releases. Engine-bundled Hubs cannot replace their engine dir.
 - Release builds use the Windows GUI subsystem; fatal startup errors show a message box.
 
 ## Copied from ara-editor (extract later)

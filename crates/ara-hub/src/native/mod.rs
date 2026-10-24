@@ -6,6 +6,7 @@ mod frame;
 mod images;
 mod input;
 pub(crate) mod os;
+mod updates;
 
 use crate::{
     capture,
@@ -29,6 +30,8 @@ use std::{
 /// Command-line options of `ara-hub`.
 #[derive(Clone, Debug)]
 pub struct Options {
+    /// Internal updater acknowledgment, written after the first rendered GUI frame.
+    pub update_health: Option<PathBuf>,
     /// Initial window size in physical pixels.
     pub size: [u32; 2],
     /// Fixed UI scale (captures); the display's scale otherwise.
@@ -43,6 +46,7 @@ pub struct Options {
 impl Default for Options {
     fn default() -> Self {
         Self {
+            update_health: None,
             size: [1440, 900],
             dpi: None,
             capture: None,
@@ -194,10 +198,7 @@ pub fn run(options: Options) -> anyhow::Result<()> {
         Some(dir) => dir.clone(),
         None => ara_hub_service::config_dir().context("find the Ara config directory")?,
     };
-    let ara = options
-        .ara
-        .clone()
-        .unwrap_or_else(|| exe_dir.join(format!("ara{}", std::env::consts::EXE_SUFFIX)));
+    let config = std::path::absolute(config)?;
     let prefs = if options.capture.is_some() {
         Prefs::default()
     } else {
@@ -211,8 +212,20 @@ pub fn run(options: Options) -> anyhow::Result<()> {
         return capture::run(&mut offscreen, &mut app, &mut hub, &directory);
     }
     let mut host = Host::new(&options, hub.prefs.light)?;
+    let ara = match &options.ara {
+        Some(ara) => std::path::absolute(ara)?,
+        None => updates::service(&exe_dir)?,
+    };
+    hub.releases.can_self_update = exe_dir.join("hub.json").is_file();
     let mut app = App::new(host.logical(), docs).map_err(err)?;
-    interactive(&mut host, &mut app, &mut hub, &config, &ara)
+    interactive(
+        &mut host,
+        &mut app,
+        &mut hub,
+        &config,
+        &ara,
+        options.update_health.as_deref(),
+    )
 }
 
 /// Captures without a window: a headless device, the same `NativeUi` adapter and
@@ -266,6 +279,7 @@ fn interactive(
     hub: &mut Hub,
     config: &Path,
     ara: &Path,
+    mut health: Option<&Path>,
 ) -> anyhow::Result<()> {
     let connection = Connection::start(config.to_owned(), ara.to_owned());
     let picks = os::picks();
@@ -279,7 +293,20 @@ fn interactive(
     let mut saved = hub.prefs.clone();
     let mut dirty = true;
     let mut last_minute = 0;
+    let mut last_check = std::time::Instant::now();
+    let mut last_download = std::time::Instant::now();
+    hub.intent(crate::model::Intent::CheckUpdates);
     loop {
+        if last_check.elapsed() >= Duration::from_secs(4 * 3600) {
+            hub.intent(crate::model::Intent::CheckUpdates);
+            last_check = std::time::Instant::now();
+        }
+        if last_download.elapsed() >= Duration::from_secs(1)
+            && hub.releases.jobs.iter().any(|j| j.state == "running")
+        {
+            hub.intent(crate::model::Intent::RefreshDownloads);
+            last_download = std::time::Instant::now();
+        }
         let mut intents = Vec::new();
         let scale = host.input.points_per_logical(host.dpi);
         for event in host.window.poll()? {
@@ -351,6 +378,17 @@ fn interactive(
         connection.send(hub.take_calls());
         for effect in hub.take_effects() {
             match effect {
+                Effect::ApplyUpdate {
+                    archive,
+                    manifest,
+                    signature,
+                } => match updates::launch(config, ara, archive, manifest, signature) {
+                    Ok(()) => return Ok(()),
+                    Err(error) => {
+                        hub.update_error(error.to_string());
+                        dirty = true;
+                    }
+                },
                 Effect::Pick(pick) => {
                     let start = match pick {
                         crate::model::Pick::Destination => {
@@ -397,6 +435,9 @@ fn interactive(
         if work.paint_nodes > 0 || work.layout_passes > 0 || work.restyled > 0 || work.shaped > 0 {
             host.input.sync_text_input(&app.ui, &app.input, host.dpi)?;
             host.render(app)?;
+            if let Some(marker) = health.take() {
+                std::fs::write(marker, b"ready")?;
+            }
         }
         // Sleep until input arrives or the next connection poll is due.
         // SAFETY: Main-thread SDL pump; a null event leaves input queued for poll().

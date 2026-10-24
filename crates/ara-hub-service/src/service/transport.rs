@@ -25,6 +25,7 @@ impl Handler for Hub {
         self.subscribers.remove(&conn);
     }
     fn tick(&mut self) {
+        self.poll_updates();
         for child in self.children.values_mut() {
             let _ = child.try_wait();
         }
