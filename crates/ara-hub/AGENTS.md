@@ -35,12 +35,11 @@ contract is `crates/ara-hub-service/AGENTS.md`.
 
 ## Behavior worth knowing
 
-- Equal markup replies keep the current `Ui` and its text caches. Changed markup carries field
-  `TextInput`s (caret, selection, undo) and scroll offsets across by stable ID,
-  then restores focus and re-derives hover.
-- `App::rebuild` always calls `switch_theme`, even for Dark: a fresh `Ui` does not
-  resolve `color: inherit` until something restyles it (ara-ui quirk; without it
-  icons in primary buttons stay muted).
+- Equal markup replies do no UI work. Changed markup uses `Ui::reconcile` on the
+  same tree, retaining shaped text, layouts, widget state and input identity.
+  Scroll offsets clamp after layout; explicit focus requests and hover update then.
+- Theme changes call `switch_theme` once to swap palette tokens. Initial inherited
+  colors resolve in the runtime; `Ui::editor` is used only for window creation.
 - `App::frame` consumes a retained presentation request: rebuilding must present
   even if its layout work was already consumed. Pointer activations apply before
   the next queued event. Worker results wake SDL; idle waits follow clock/toast deadlines.

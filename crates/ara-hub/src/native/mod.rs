@@ -1,6 +1,6 @@
 //! The native Hub window: SDL3 through ara-platform, the editor's Vulkan UI
 //! adapter (`ara-editor-gpu`) on a plain device (no scene renderer), and one
-//! retained `Ui` rebuilt from the view-model whenever it changes.
+//! retained `Ui` reconciled from the view-model whenever it changes.
 mod app;
 mod frame;
 mod images;

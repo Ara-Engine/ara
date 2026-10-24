@@ -73,6 +73,37 @@ fn notification_dismiss_lands_on_first_try() {
 }
 
 #[test]
+fn dismissed_banners_release_their_layout_space() {
+    let (mut app, mut hub) = setup();
+    hub.event(Event::Offline {
+        message: "fixture offline".into(),
+        log: "target/hub-tests/missing.log".into(),
+    });
+    app.rebuild(&mut hub, capture::NOW).expect("banners");
+    app.frame().expect("banner frame");
+    let before = center(&app, "open-project-3")[1];
+    hub.intent(Intent::DismissBanner("offline".into()));
+    app.rebuild(&mut hub, capture::NOW)
+        .expect("dismiss offline");
+    assert!(app.frame().expect("present dismissal"));
+    let after = center(&app, "open-project-3")[1];
+    assert!(
+        after < before - 50.,
+        "banner space must collapse: {before} -> {after}"
+    );
+
+    let mut fresh = App::new(app.size, Vec::new()).expect("fresh app");
+    fresh
+        .rebuild(&mut hub, capture::NOW)
+        .expect("same final model");
+    assert_eq!(
+        center(&app, "open-project-3"),
+        center(&fresh, "open-project-3"),
+        "reconciled layout must match a fresh layout"
+    );
+}
+
+#[test]
 fn queued_menu_and_item_clicks_work_even_after_a_slow_frame() {
     for delay in [
         std::time::Duration::ZERO,
@@ -113,7 +144,56 @@ fn idle_frames_do_not_request_gpu_submission() {
         assert!(!hub.tick(Instant::now()), "idle model tick");
         app.rebuild(&mut hub, capture::NOW).expect("equal refresh");
         assert!(!app.frame().expect("idle frame"));
+        assert_eq!(
+            app.work.restyled + app.work.layout_passes + app.work.shaped + app.work.paint_nodes,
+            0
+        );
     }
+}
+
+#[test]
+fn theme_swap_keeps_text_and_layout_and_restyles_only_once() {
+    let (mut app, mut hub) = setup();
+    app.frame().expect("initial frame");
+    let shapes = app.text.shapes;
+    for _ in 0..4 {
+        hub.intent(Intent::ToggleTheme);
+        app.rebuild(&mut hub, capture::NOW).expect("token swap");
+        assert!(app.frame().expect("theme present"));
+        assert_eq!(app.text.shapes, shapes, "theme keeps shaped paragraphs");
+        assert_eq!(app.work.shaped, 0);
+        assert_eq!(app.work.layout_passes, 0);
+        assert_eq!(
+            app.work.restyled,
+            app.ui.nodes.len(),
+            "one restyle per node"
+        );
+        assert!(!app.frame().expect("idle after swap"));
+        assert_eq!(app.work.restyled, 0);
+    }
+}
+
+#[test]
+fn shorter_filtered_list_clamps_retained_scroll() {
+    let (mut app, mut hub) = setup();
+    app.size = [900., 600.];
+    app.rebuild(&mut hub, capture::NOW).expect("small viewport");
+    let scroll = app.ui.find("scroll-projects").expect("scroll");
+    app.ui
+        .scroll_to(scroll, [0., 10_000.])
+        .expect("scroll down");
+    app.frame().expect("scrolled frame");
+    let id = ara_ui::source::stable_id("scroll-projects");
+    assert!(matches!(app.ui.widgets.get(&id),Some(ara_ui::widgets::Widget::Scroll(p)) if p[1]>0.));
+    hub.intent(Intent::Search("cour".into()));
+    app.rebuild(&mut hub, capture::NOW).expect("filtered list");
+    app.frame().expect("filtered frame");
+    assert!(matches!(app.ui.widgets.get(&id),Some(ara_ui::widgets::Widget::Scroll(p)) if p[1]==0.));
+    let button = &app.ui.nodes[app.ui.find("open-project-3").expect("filtered project")];
+    assert!(
+        button.rect.intersects(button.clip),
+        "remaining project stays visible"
+    );
 }
 
 #[test]
@@ -162,6 +242,7 @@ fn confirmations_expire_and_errors_and_undo_have_useful_lifetimes() {
 #[test]
 fn inline_notifications_have_dismiss_controls() {
     let (mut app, mut hub) = setup();
+    app.frame().expect("initial frame");
     hub.event(Event::Offline {
         message: "fixture offline".into(),
         log: "target/hub-tests/missing.log".into(),
@@ -224,8 +305,10 @@ fn measure_hub_frames() {
     );
     let (mut app, mut hub) = setup();
     let mut samples = Vec::new();
+    app.frame().expect("initial frame");
     for scenario in ["unchanged", "status-refresh", "status-change", "theme"] {
         let mut elapsed = Vec::new();
+        let mut work = ara_ui::Work::default();
         for sample in 0..40 {
             let start = Instant::now();
             if scenario == "theme" {
@@ -264,10 +347,11 @@ fn measure_hub_frames() {
             }
             app.rebuild(&mut hub, capture::NOW).expect("frame");
             app.frame().expect("paint frame");
+            work += std::mem::take(&mut app.work);
             elapsed.push(start.elapsed().as_secs_f64() * 1000.);
         }
         elapsed.sort_by(f64::total_cmp);
-        samples.push(json!({"scenario":scenario,"medianMs":elapsed[20],"p95Ms":elapsed[37],"samplesMs":elapsed}));
+        samples.push(json!({"scenario":scenario,"medianMs":elapsed[20],"p95Ms":elapsed[37],"samplesMs":elapsed,"work":work}));
     }
     let result = json!({"profile": if cfg!(debug_assertions) {"debug"} else {"release"}, "size":[1440,900],"samples":samples});
     std::fs::write(path, ara_json::to_canonical_string(&result)).expect("timing artifact");
