@@ -20,6 +20,8 @@ creation. Perf mode (`--perf-output`) always implies it; `ara-dev perf` never op
 a desktop window. GPU pass timestamps remain valid; reports label `hiddenWindow`
 and do not measure desktop compositor latency. `--headless` is a separate still
 capture path and cannot produce perf frame windows.
+Owner-mode window probes also honour `--offscreen`; `ARA_PLAY_OFFSCREEN=1` adds
+it to pooled windowed players, so entry-latency measurements stay hidden too.
 `--read entity.Component.field` adds a value to `ARA_RESULT.reads` after simulation;
 repeat it to inspect shipped C# or Rust component fields. Shipping hosts resolve their
 NativeAOT metadata against the export folder; development host paths are rejected.
@@ -34,6 +36,10 @@ and audio. The optional client starts in the executable; normal builds erase zon
 `CARGO_BIN_EXE_ara-import-worker` to its worker. It copies input under target,
 settles publication and reports three warm sessions. `ARA_PLAY_ENTRY_WINDOW=1`
 selects windowed Play; default measures the shared-frame notice before editor display.
+`ARA_PLAY_ENTRY_BACKGROUND=1` measures the nonblocking start API;
+`ARA_PLAY_ENTRY_COLD=1` also skips copied caches and asset warm-up. Surface-attached
+pools prewarm a 64x64 Low presenter without probe GI before hello and reuse its
+logical device at embed creation; headless services without surfaces allocate no GPU.
 
 ## Modules
 
@@ -93,7 +99,8 @@ selects windowed Play; default measures the shared-frame notice before editor di
 - Device input and agent `play.input` both go through `Session::inject`, so they are
   recorded and replayable. Local and listen-host players are input owner 1; clients
   are players 2.. (movement, orbit, sprint and jump are predicted through `ara-runtime-net`).
-- Headless players create a GPU device only on their first `play.capture` with a path.
+- Headless players without a Surfaces attachment create a GPU device only on their
+  first `play.capture` with a path; attached pools prewarm the bounded graphics view.
 - Replay files carry portable snapshots (native physics checkpoints stay in-process):
   `play.replay` verifies exactly from recordings started at tick 0 (the fresh build);
   a mid-play recording diverges at its first tick once bodies are in contact.

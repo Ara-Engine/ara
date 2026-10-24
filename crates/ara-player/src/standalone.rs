@@ -21,7 +21,7 @@ pub(super) struct Options {
     headless: bool,
     /// Run continuous presentation on a hidden Vulkan window; perf mode implies this.
     #[arg(long, conflicts_with = "headless")]
-    offscreen: bool,
+    pub(super) offscreen: bool,
     /// Write a capture after --ticks (headless defaults to verify.png).
     #[arg(long)]
     capture: Option<PathBuf>,

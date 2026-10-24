@@ -103,13 +103,22 @@ impl Embedded {
         cache: &Path,
         quality: ara_runtime_render::QualityChoice,
         options: ara_runtime_render::RenderOptions,
+        prepared: Option<Presenter>,
     ) -> Result<(Self, Presenter)> {
         let size = [params.width, params.height];
         check(size)?;
-        let mut presenter = Presenter::new(size, Vec::new(), cache);
+        let mut presenter = match prepared {
+            Some(mut presenter) => {
+                presenter.resize(size)?;
+                presenter
+            }
+            None => Presenter::new(size, Vec::new(), cache),
+        };
         presenter.set_quality(quality);
         presenter.set_render_options(options);
+        presenter.set_probe_gi(false);
         presenter.prepare(&device::warm_frame())?;
+        presenter.set_probe_gi(true);
         let renderer = presenter
             .renderer()
             .context("renderer missing after warm-up")?;
@@ -231,6 +240,23 @@ impl Embedded {
     }
 }
 
+/// Warm device and pipelines without a window or shared ring. The idle view is
+/// bounded to 64x64 Low with one procedural box and no probe acquisition.
+pub(crate) fn prewarm(
+    cache: &Path,
+    options: ara_runtime_render::RenderOptions,
+) -> Result<Presenter> {
+    ara_gpu::cpu_scope!("Player.prewarm_graphics");
+    let mut presenter = Presenter::new([64, 64], Vec::new(), cache);
+    presenter.set_quality(ara_runtime_render::QualityChoice::Preset(
+        ara_runtime_render::QualityPreset::Low,
+    ));
+    presenter.set_render_options(options);
+    presenter.set_probe_gi(false);
+    presenter.prepare(&device::warm_frame())?;
+    Ok(presenter)
+}
+
 #[cfg(all(test, windows))]
 mod tests {
     use super::*;
@@ -256,12 +282,34 @@ mod tests {
             ("raster", RenderOptions::default()),
             ("rt-opt-in", RenderOptions { ray_tracing: true }),
         ] {
+            let prepared = prewarm(&root.join(name), options)?;
+            assert_eq!(prepared.size(), [64, 64]);
+            assert!(!prepared.probe_gi_pending());
+            let device = prepared
+                .renderer()
+                .context("prewarmed renderer")?
+                .gpu()
+                .context()
+                .device
+                .handle();
             let (embedded, presenter) = Embedded::open(
                 &params,
                 &root.join(name),
                 QualityChoice::Preset(QualityPreset::High),
                 options,
+                Some(prepared),
             )?;
+            assert_eq!(
+                presenter
+                    .renderer()
+                    .context("embedded renderer")?
+                    .gpu()
+                    .context()
+                    .device
+                    .handle(),
+                device,
+                "embedding reuses the presenter's logical device"
+            );
             let mut session = Session {
                 _ring: embedded,
                 presenter,

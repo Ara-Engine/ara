@@ -246,7 +246,12 @@ impl PlayService {
     /// answering is logged (the world is marked faulted), never dropped silently.
     pub(crate) fn publish_commands(&mut self, cx: &mut Cx<'_>, world: &str) {
         match self.call(world, method::COMMANDS, json!({}), false) {
-            Ok(catalog) => cx.publish_commands("play", &catalog),
+            Ok(catalog) => {
+                if let Some(world) = self.worlds.get_mut(world) {
+                    world.commands = catalog.clone();
+                }
+                cx.publish_commands("play", &catalog);
+            }
             Err(problems) => problems.into_iter().for_each(|d| cx.log(d)),
         }
     }

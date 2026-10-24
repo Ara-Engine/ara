@@ -12,6 +12,10 @@ pub struct PlayStartParams {
     pub session: String,
     /// Scene path or asset ID; default: the project's main scene.
     pub scene: Option<String>,
+    /// Return a starting world immediately and prepare it off the caller thread.
+    /// Poll `play.status` for progress/readiness; `play.stop` cancels a pending
+    /// start. Omitted/false retains the synchronous world-ready response.
+    pub background: Option<bool>,
     /// `local` (default), `host` (Listen) or `dedicated`.
     pub mode: Option<String>,
     /// Additional client processes for `host`/`dedicated` (max 16).

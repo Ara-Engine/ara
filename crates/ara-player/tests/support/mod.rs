@@ -214,6 +214,7 @@ pub fn close_window(pid: u32) -> bool {
     struct Target {
         pid: u32,
         posted: bool,
+        hidden: bool,
     }
     #[link(name = "user32")]
     unsafe extern "system" {
@@ -223,23 +224,32 @@ pub fn close_window(pid: u32) -> bool {
         ) -> i32;
         fn GetWindowThreadProcessId(window: isize, pid: *mut u32) -> u32;
         fn IsWindowVisible(window: isize) -> i32;
+        fn GetWindowTextW(window: isize, text: *mut u16, capacity: i32) -> i32;
         fn PostMessageW(window: isize, message: u32, wparam: usize, lparam: isize) -> i32;
     }
     unsafe extern "system" fn visit(window: isize, parameter: isize) -> i32 {
         // SAFETY: EnumWindows invokes synchronously with our live Target pointer.
         let target = unsafe { &mut *(parameter as *mut Target) };
         let mut pid = 0;
-        // SAFETY: the OS supplies a window handle; the output PID pointer is valid.
+        // SAFETY: The OS supplies the window handle; both output buffers are valid.
         unsafe {
             GetWindowThreadProcessId(window, &mut pid);
-            if pid == target.pid && IsWindowVisible(window) != 0 {
+            let mut title = [0u16; 64];
+            let length = GetWindowTextW(window, title.as_mut_ptr(), title.len() as i32);
+            let hidden_player =
+                target.hidden && length >= 5 && title[..5] == [65, 114, 97, 32, 124]; // "Ara |"
+            if pid == target.pid && (IsWindowVisible(window) != 0 || hidden_player) {
                 target.posted = PostMessageW(window, 0x0010, 0, 0) != 0;
                 return 0;
             }
         }
         1
     }
-    let mut target = Target { pid, posted: false };
+    let mut target = Target {
+        pid,
+        posted: false,
+        hidden: std::env::var_os("ARA_PLAY_OFFSCREEN").is_some(),
+    };
     // SAFETY: visit has the Win32 callback ABI and Target outlives this enumeration.
     unsafe {
         EnumWindows(visit, std::ptr::from_mut(&mut target) as isize);
