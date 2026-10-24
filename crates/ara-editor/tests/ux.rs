@@ -1025,11 +1025,15 @@ fn inactive_list_tabs_stay_mounted_hidden_and_come_back_as_they_were() {
     assert!(!ui.shown(assets) && ui.shown(console));
     let content = ui.find("assets-content").unwrap();
     assert!(!ui.paint_order.contains(&content));
-    // Switching back is a visibility change: nothing is mounted again.
-    let nodes = ui.nodes.len();
+    // Switching back is a visibility change: the Assets body is not mounted again
+    // (its nodes keep their layout identities; other parts may change meanwhile).
+    let identities = |ui: &ara_ui::Ui| {
+        ["body-assets", "assets-content"].map(|id| ui.nodes[ui.find(id).unwrap()].layout_id)
+    };
+    let before = identities(ui);
     focus(&mut shell, &mut editor, "assets");
     let ui = &shell.ui;
-    assert_eq!(ui.nodes.len(), nodes);
+    assert_eq!(identities(ui), before);
     assert!(ui.shown(ui.find("assets-content").unwrap()));
     assert!(!ui.shown(ui.find("body-console").unwrap()));
     // Panels with GPU surfaces render only while active.

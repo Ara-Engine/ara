@@ -191,7 +191,8 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
         let mut last_review = editor.review_revision;
         let mut last_extraction = editor.extraction_revision;
         // Value edits, typed drafts and gizmo drags patch the Scene in place.
-        let mut scene_sync = scene_sync::SceneSync::new(models_at_open);
+        let mut scene_sync =
+            scene_sync::SceneSync::new(models_at_open, editor.host.store().revision());
         let mut last_physical = physical;
         let mut last_dpi = dpi;
         let mut dirty = true;
@@ -652,8 +653,13 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                 let scene_at = Instant::now();
                 if let Some(rect) = shell.viewport() {
                     renderer.resize(extent_scaled(rect, dpi))?;
-                    if scene_dirty {
-                        scene_view.render(&mut renderer, &editor, &view, 1)?;
+                    // A Scene that cannot render yet (models still publishing, a missing
+                    // source) keeps its last frame and is reported; the next change or
+                    // publication retries. It never closes the editor.
+                    if scene_dirty
+                        && let Err(error) = scene_view.render(&mut renderer, &editor, &view, 1)
+                    {
+                        editor.report_failure(&*error);
                     }
                     scene_view.attach(&mut gpu, &renderer, editor.state.quality)?;
                     let mut changed = editor.agent_tints();

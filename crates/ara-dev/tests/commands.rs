@@ -13,6 +13,163 @@ static SERIAL: Mutex<()> = Mutex::new(());
 static NEXT: AtomicUsize = AtomicUsize::new(0);
 
 #[test]
+fn editor_builds_matching_companion_and_refuses_stale_or_failed_pairs() {
+    let _serial = SERIAL.lock().unwrap_or_else(|p| p.into_inner());
+    let root = fixture();
+    let manifest = fs::read_to_string(root.join("Cargo.toml")).unwrap();
+    fs::write(
+        root.join("Cargo.toml"),
+        format!(
+            "{}\n[profile.paired]\ninherits = \"dev\"\ndebug-assertions = false\n",
+            manifest.replace("\"diag\"]", "\"diag\", \"editor\", \"player\"]")
+        ),
+    )
+    .unwrap();
+    fs::write(root.join("core/Cargo.toml"), "[package]\nname=\"mini-core\"\nversion=\"0.1.0\"\nedition=\"2024\"\n[features]\npaired=[]\n").unwrap();
+    fs::write(
+        root.join("core/src/lib.rs"),
+        "pub fn paired()->bool { cfg!(feature=\"paired\") }\n",
+    )
+    .unwrap();
+    fs::write(root.join("tool/Cargo.toml"), "[package]\nname=\"mini-tool\"\nversion=\"0.1.0\"\nedition=\"2024\"\n[dependencies]\nmini-core={path=\"../core\",features=[\"paired\"]}\n").unwrap();
+    for (dir, name) in [("editor", "ara-editor"), ("player", "ara-player")] {
+        fs::create_dir_all(root.join(dir).join("src")).unwrap();
+        fs::write(root.join(dir).join("Cargo.toml"), format!("[package]\nname={name:?}\nversion=\"0.1.0\"\nedition=\"2024\"\n[dependencies]\nmini-core={{path=\"../core\"}}\n")).unwrap();
+    }
+    fs::write(root.join("editor/src/main.rs"), r#"fn main() {
+    assert!(mini_core::paired());
+    assert!(!cfg!(debug_assertions));
+    let mut args=std::env::args().skip(1);
+    let marker=args.next().unwrap();
+    assert_eq!(args.collect::<Vec<_>>(), ["project with spaces", "--headless"]);
+    std::fs::write(marker, std::env::var_os("ARA_PLAYER").unwrap().to_string_lossy().as_bytes()).unwrap();
+}"#).unwrap();
+    fs::write(
+        root.join("player/src/main.rs"),
+        r#"fn main() {
+    assert!(mini_core::paired());
+    assert!(!cfg!(debug_assertions));
+    let args=std::env::args().skip(1).collect::<Vec<_>>();
+    assert!(args==["--ray-tracing=false", "--help"] || args==["--ray-tracing=true", "--help"]);
+    println!("ara-player --ray-tracing [true|false]");
+}"#,
+    )
+    .unwrap();
+    let binary = env!("CARGO_BIN_EXE_ara-dev");
+    let target = root.join("target/custom-final");
+    let build = root.join("target/custom-build");
+    let marker = root.join("target/editor-launched");
+    let invoke = |override_player: Option<&Path>| {
+        let mut args = vec![
+            "cargo",
+            "--",
+            "run",
+            "-p",
+            "ara-editor",
+            "-p",
+            "mini-tool",
+            "--profile",
+            "paired",
+            "--target-dir",
+            target.to_str().unwrap(),
+            "--bin",
+            "ara-editor",
+            "--offline",
+        ];
+        args.extend([
+            "--",
+            marker.to_str().unwrap(),
+            "project with spaces",
+            "--headless",
+        ]);
+        let mut command = configured_command(&root, binary, &args);
+        command
+            .env("CARGO_BUILD_BUILD_DIR", &build)
+            .env("RUSTC_WRAPPER", "")
+            .env_remove("ARA_PLAYER");
+        if let Some(path) = override_player {
+            command.env("ARA_PLAYER", path);
+        }
+        command.output().unwrap()
+    };
+    let output = invoke(None);
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let player = target
+        .join("paired")
+        .join(format!("ara-player{}", std::env::consts::EXE_SUFFIX));
+    assert_eq!(
+        fs::read_to_string(&marker).unwrap(),
+        player.to_string_lossy()
+    );
+    assert!(
+        !build.join("paired/ara-player.exe").is_file(),
+        "final player must come from Cargo's artifact path, not the intermediate directory"
+    );
+    fs::remove_file(&marker).unwrap();
+    let stale_override = root.join("target/unmatched-player.exe");
+    fs::copy(&player, &stale_override).unwrap();
+    let output = invoke(Some(&stale_override));
+    assert!(!output.status.success());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("unset ARA_PLAYER"));
+    assert!(
+        !marker.exists(),
+        "an unmatched override must never reach editor warm-up"
+    );
+    let output = invoke(Some(&player));
+    assert!(
+        output.status.success(),
+        "a matching override should remain usable: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    // A player-only edit must be rebuilt by the next editor run, not reused.
+    fs::write(
+        root.join("player/src/main.rs"),
+        "fn main(){ eprintln!(\"unexpected argument --ray-tracing\"); std::process::exit(2); }\n",
+    )
+    .unwrap();
+    fs::remove_file(&marker).unwrap();
+    let output = invoke(None);
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("stale or incompatible companion"),
+        "{stderr}"
+    );
+    assert!(stderr.contains("--ray-tracing=false"));
+    assert!(
+        !marker.exists(),
+        "incompatible player must stop editor warm-up"
+    );
+    fs::write(
+        root.join("player/src/main.rs"),
+        "fn main(){ println!(\"old player help without device-policy option\"); }\n",
+    )
+    .unwrap();
+    let output = invoke(None);
+    assert!(
+        !output.status.success(),
+        "help success without the actual option is not compatibility"
+    );
+    assert!(!marker.exists());
+    fs::write(
+        root.join("player/src/main.rs"),
+        "compile_error!(\"broken player source\");\nfn main(){}\n",
+    )
+    .unwrap();
+    let output = invoke(None);
+    assert!(!output.status.success());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("existing player was not reused"));
+    assert!(
+        !marker.exists(),
+        "failed build must never launch old editor/player artifacts"
+    );
+}
+
+#[test]
 fn perf_controls_and_stdio_mcp_use_the_existing_session_without_builds() {
     use std::io::Write;
     use std::process::Stdio;

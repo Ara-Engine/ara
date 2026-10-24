@@ -81,6 +81,30 @@ cache: replacing its dependencies can invalidate already-built Rust metadata.
 
 ## Focused agents, one integration gate per batch
 
+Build and run checkout editors through the paired development flow:
+
+```powershell
+.\crates\ara-dev\run.ps1 cargo -- build -p ara-editor --profile perf
+.\crates\ara-dev\run.ps1 cargo -- run -p ara-editor --profile perf -- <project> --scene levels/outpost.scene
+```
+
+The wrapper includes `ara-player` in the same Cargo invocation, retaining every
+selected package, feature, profile and target option. It takes both executable paths
+from Cargo JSON, so custom target/build directories work. A run launches that editor
+directly with the matching `ARA_PLAYER`, avoiding another feature resolution.
+Explicit bin selection includes the player bin too. Workspace builds verify the pair
+when they produce an editor; library-only builds and focused check/clippy/test commands
+retain their normal scope. Native editor runs require explicit `-p ara-editor`.
+
+Before editor warm-up, the companion must accept and advertise `--ray-tracing` with
+both `false` and `true`; the probes only request help and use isolated scratch profiles.
+Missing/incompatible companions, build failures, and an `ARA_PLAYER` override pointing
+elsewhere stop launch with paths and a rebuild action. No flag is removed to accommodate
+an old RT-default player. Logs are under `target/ara-dev/editor-*`. If an incompatible
+executable was manually copied over Cargo's cached output, remove that stale final
+executable and repeat the same paired command. Plain `cargo build -p ara-editor` and
+manual executable launches cannot provide this companion check; use the wrapper.
+
 Agents run fmt plus clippy/tests for touched crates, and the particular GPU/player/editor
 suites their change touches. Commit and hand over the SHA. The integrator runs `ara-dev check`
 once per merge batch on main; `--base` names the previous integrated checkpoint.
@@ -228,16 +252,19 @@ completed window (NDJSON). `--no-build` reuses prior Cargo artifact paths;
 `--player <exe>` can supply an explicit prebuilt player. The same selected package
 set is kept after initial setup, preserving the build feature union.
 
-`player.gpu_other` reports scene-update, texture-upload, VFX, fidelity and
+`player.gpu_other` reports scene-update, texture-upload, VFX, raster, fidelity and
 publication timestamp quantiles, plus uploaded/resident texture bytes and pending
 promotions. `accounted_ms`, `unaccounted_ms` and `outside_view_ms` are calculated
 for each frame before quantiles; do not subtract or sum independently computed
-medians to attribute a budget. Signed residuals remain visible. Native terrain/
-foliage and VFX shared-post replay are included in `fidelity_ms`, as recorded in
-`gpu_coverage`. Low's incomplete component coverage is null, with unavailable
-frame counts; outside-view/residual values are unavailable because its legacy
-presenter total does not cover the view or all landscape/VFX work. These fields
-also appear in the terminal table and previous-run deltas.
+medians to attribute a budget. Signed residuals remain visible. `raster_ms` covers
+native geometry, look and shared post at every preset, including Low;
+`fidelity_ms` is experimental RT only and stays zero for native raster. Native
+terrain/foliage and VFX shared-post replay belong to the selected view's component.
+`gpu_coverage.components` is complete when every frame supplies native components,
+partial for mixed native/legacy windows, and unavailable for legacy-only windows.
+Only the legacy diagnostic fallback has null components and outside-view/residual
+values because its total omits view/landscape/VFX work. These fields also appear
+in the terminal table and previous-run deltas.
 
 `--keep-alive` holds the GPU lock while the player remains open. The control queue
 supports fresh measurement windows, preset swaps, shader reload, and stop. A plain

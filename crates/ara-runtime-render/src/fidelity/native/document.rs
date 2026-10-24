@@ -32,9 +32,28 @@ pub fn document_frame(
     terrain: Option<&TerrainState>,
     hidden: &BTreeSet<String>,
 ) -> Result<RenderFrame> {
+    document_frame_selected(
+        entities, transforms, workspace, library, source, terrain, hidden, None,
+    )
+}
+
+/// Extracts only the requested already-resolved entities for an editor value patch.
+/// Parent matrices are supplied by the caller; terrain and unrelated assets are
+/// never traversed when their entity IDs are absent from `only`.
+#[allow(clippy::too_many_arguments)]
+pub fn document_frame_selected(
+    entities: &Resolved,
+    transforms: &BTreeMap<String, glam30::Mat4>,
+    workspace: &Workspace,
+    library: &mut Library,
+    source: &dyn AssetSource,
+    terrain: Option<&TerrainState>,
+    hidden: &BTreeSet<String>,
+    only: Option<&BTreeSet<String>>,
+) -> Result<RenderFrame> {
     let mut world = World::new();
     for (address, row) in entities {
-        if hidden.contains(address) {
+        if hidden.contains(address) || only.is_some_and(|only| !only.contains(address)) {
             continue;
         }
         let matrix = transforms

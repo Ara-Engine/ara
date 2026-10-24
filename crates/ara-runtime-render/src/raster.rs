@@ -69,6 +69,23 @@ impl RasterView {
             .is_some_and(|gi| gi.is_pending() || self.mobility.settling())
     }
 
+    /// Change derived capture/probe labels at an editor control boundary without
+    /// replacing geometry, residency or temporal state.
+    pub fn rename(&mut self, entity: u64, name: &str) -> Result<()> {
+        let instance = self
+            .prepared
+            .as_mut()
+            .context("native raster content")?
+            .scene
+            .instances
+            .iter_mut()
+            .find(|instance| instance.entity == entity)
+            .context("native raster label entity missing")?;
+        instance.name.clear();
+        instance.name.push_str(name);
+        Ok(())
+    }
+
     /// Resolve a new content generation once, or update transforms/material factors
     /// and skin poses. Rejected generations leave the existing renderer content live.
     pub fn prepare(

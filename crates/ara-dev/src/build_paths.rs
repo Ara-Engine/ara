@@ -129,6 +129,15 @@ fn foreign_checkout(root: &Path, path: &Path) -> Result<Option<PathBuf>> {
     Ok(None)
 }
 
+pub(crate) fn validate_output(root: &Path, path: &Path) -> Result<()> {
+    ensure!(
+        foreign_checkout(root, path)?.is_none(),
+        "refusing output {} inside another checkout's target; use a worktree-local or independent directory",
+        path.display()
+    );
+    Ok(())
+}
+
 #[derive(Deserialize)]
 struct Configured {
     target_directory: PathBuf,

@@ -12,6 +12,8 @@ Local developer binary. No engine dependencies; uses git and cargo as subprocess
   `test-tiers.toml` labels slow GPU/.NET/process/capture suites; `--full` runs all.
 - `cargo -- <args>`: focused checks with optional `ARA_SHARED_BUILD_DIR` reuse.
   Keep targets separate; the shared admission lease covers builds and test execution.
+  Editor build/run pairs ara-player in one Cargo build, probes both RT values,
+  and pins the exact companion artifact. Stale overrides/failed builds stop launch.
 - `merge`: clean-tree no-ff merge, Cargo.lock-only recovery, workspace check,
   affected gate (or `--full`), commit and optional push.
 - `gpu`: machine-wide FIFO file-lock queue with OS crash recovery and timeout.

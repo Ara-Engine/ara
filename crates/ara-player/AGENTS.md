@@ -99,8 +99,7 @@ selects windowed Play; default measures the shared-frame notice before editor di
   a mid-play recording diverges at its first tick once bodies are in contact.
 - Windowed frames extract once, then present on the frame thread while a scoped worker
   runs acoustics and voice updates (they only read the simulation between ticks).
-- Streamed worlds settle in headless players (reproducible arrivals, agent tests) and
-  stream live in windowed ones.
+- Streamed worlds settle in headless players (reproducible arrivals) and stream live in windowed ones.
 
 ## Demo
 
@@ -123,8 +122,7 @@ prints the measured numbers. It builds `ara-import-worker` if missing. `evidence
 reviewed captures: walked with marks, relit after the patch, windowed, walked with
 the campfire VFX, the 2D platformer with marks, and the mixed scene (image, WAV and
 loudness analysis).
-`tests/two_d.rs` plays the ara-render2d platformer sample (atlases imported through
-the worker, the scout as a 2D player, an ara-render2d capture with marks).
+`tests/two_d.rs` plays the ara-render2d platformer (worker-imported atlases, 2D player, marked capture).
 `tests/mixed.rs` plays the demo with its campfire effect and an agent-attached sound:
 `play.captureAudio` (ara-runtime-audio: mixer, room reverb, acoustics against Jolt,
 audibility report) and a VFX-composited capture. Windowed players play live audio
