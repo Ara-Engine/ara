@@ -196,6 +196,12 @@ impl Shell {
                         self.open_menu_at(super::menu::Source::Context(*kind, target.clone()), at);
                         rebuild = true;
                     }
+                    Binding::CameraFov => {
+                        self.drafts.insert(
+                            "@camera|fov".into(),
+                            action.value.as_str().unwrap_or("").into(),
+                        );
+                    }
                     Binding::Setting(key) => {
                         if let Some(v) = action.value.as_bool() {
                             editor.action("editor.settings.set", json!({"key":key,"value":v}))?;
@@ -565,6 +571,17 @@ impl Shell {
         if !animation_keys.is_empty() && self.drafts.is_empty() {
             self.rebuild(editor)?;
             return Ok(true);
+        }
+        if let Some(text) = self.drafts.remove("@camera|fov") {
+            self.execute(
+                editor,
+                "view.camera.fov.set",
+                &commands::Target::Text(text),
+            )?;
+            if self.drafts.is_empty() {
+                self.rebuild(editor)?;
+                return Ok(true);
+            }
         }
         let setting_keys = self
             .drafts

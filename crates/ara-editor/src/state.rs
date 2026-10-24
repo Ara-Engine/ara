@@ -25,8 +25,9 @@ pub enum Tool {
     Scale,
 }
 /// Perspective scene camera; this is editor state, never gameplay state.
+/// Fields missing from older saved state take their defaults.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", default)]
 pub struct Camera {
     /// Orbit centre in metres.
     pub target: Vec3,
@@ -36,6 +37,9 @@ pub struct Camera {
     pub pitch: f32,
     /// Orbit radius in metres.
     pub distance: f32,
+    /// Vertical field of view in degrees, within [`Camera::FOV_RANGE`]; set it with
+    /// [`Camera::set_fov`]. Matches a scene `Camera.fov` for parity shots.
+    pub fov_y_degrees: f32,
 }
 impl Default for Camera {
     fn default() -> Self {
@@ -44,10 +48,37 @@ impl Default for Camera {
             yaw: 0.6,
             pitch: 0.4,
             distance: 10.,
+            fov_y_degrees: Self::DEFAULT_FOV,
         }
     }
 }
 impl Camera {
+    /// The Scene view's vertical field of view until one is chosen, in degrees.
+    pub const DEFAULT_FOV: f32 = 50.;
+    /// Vertical fields of view the Scene view accepts, in degrees.
+    pub const FOV_RANGE: std::ops::RangeInclusive<f32> = 10.0..=120.0;
+    /// Set the vertical field of view, clamped to [`Camera::FOV_RANGE`].
+    pub fn set_fov(&mut self, degrees: f32) {
+        self.fov_y_degrees = degrees.clamp(*Self::FOV_RANGE.start(), *Self::FOV_RANGE.end());
+    }
+    /// The field of view for labels: whole degrees or one decimal (`46°`, `47.5°`).
+    pub fn fov_label(&self) -> String {
+        let tenths = (self.fov_y_degrees * 10.).round() / 10.;
+        if tenths.fract() == 0. {
+            format!("{tenths:.0}°")
+        } else {
+            format!("{tenths:.1}°")
+        }
+    }
+    /// Look from `position` along `forward` (a scene camera's pose), keeping the
+    /// orbit distance so the pivot lies straight ahead. The orbit camera has no
+    /// roll, and views within ~2° of vertical keep the pitch limit.
+    pub fn look_from(&mut self, position: Vec3, forward: Vec3) {
+        let back = -forward.try_normalize().unwrap_or(Vec3::NEG_Z);
+        self.pitch = back.y.clamp(-1., 1.).asin().clamp(-1.54, 1.54);
+        self.yaw = back.x.atan2(back.z);
+        self.target = position - (self.position() - self.target);
+    }
     /// Camera position, derived from its orbit representation.
     pub fn position(&self) -> Vec3 {
         self.target
@@ -62,7 +93,7 @@ impl Camera {
         ara_render::scene::CameraSpec::LookAt {
             position: self.position(),
             target: self.target,
-            vertical_fov: 50f32.to_radians(),
+            vertical_fov: self.fov_y_degrees.to_radians(),
         }
     }
     /// Pan in the camera's image plane, in logical pixels.

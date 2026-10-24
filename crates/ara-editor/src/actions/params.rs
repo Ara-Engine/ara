@@ -132,7 +132,8 @@ pub(super) struct EditorFocus {
     /// Field path to reveal, when focusing the inspector.
     pub field: Option<String>,
 }
-/// Parameters for an explicit orbit camera pose.
+/// Parameters to read or change the Scene view camera. Omitted fields keep their
+/// values; with none given the call only reads the camera.
 #[derive(Schema, Deserialize)]
 #[ara(params)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -143,16 +144,22 @@ pub(super) struct EditorCamera {
         reason = "Host validates the session before service dispatch"
     )]
     pub session: String,
+    /// A scene entity with a `Camera` component: look from its world pose with its
+    /// field of view (applied before the other fields).
+    pub entity: Option<String>,
     /// Orbit centre, in metres.
     #[ara(unit=Meters)]
-    pub target: [f32; 3],
+    pub target: Option<[f32; 3]>,
     /// Azimuth, in radians.
-    pub yaw: f32,
+    pub yaw: Option<f32>,
     /// Elevation, in radians.
-    pub pitch: f32,
+    pub pitch: Option<f32>,
     /// Positive orbit distance, in metres.
     #[ara(unit=Meters)]
-    pub distance: f32,
+    pub distance: Option<f32>,
+    /// Vertical field of view, in degrees; clamped to 10–120.
+    #[ara(unit=Degrees)]
+    pub fov_y_degrees: Option<f32>,
 }
 /// Parameters for a theme switch.
 #[derive(Schema, Deserialize)]

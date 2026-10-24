@@ -973,3 +973,65 @@ fn scene_quality_persists_as_a_preference_and_the_project_default_in_its_manifes
     drop(editor);
     std::fs::remove_dir_all(&profile).unwrap();
 }
+
+/// The Scene view camera carries its vertical field of view: `editor.camera` reads
+/// it, sets it within 10–120°, and looks through a scene Camera entity (pose and
+/// FOV); `spec()` hands it to the renderer.
+#[test]
+fn scene_view_fov_is_read_set_clamped_and_aligned_to_a_scene_camera() {
+    let project = Project::new();
+    write(
+        &project.0.join("levels/main.scene"),
+        json!({"$schema":"ara://schema/scene/1","id":"sc_test0001","records":{
+            "e_crate001":{"name":"Salvage crate","Transform":{"position":[0,0.6,0]},"MeshRenderer":{}},
+            "e_rig00001":{"name":"Rig","Transform":{"position":[0,1,4]}},
+            "e_shot0001":{"name":"Shot","parent":"e_rig00001","Transform":{"position":[2,0.5,2],"rotation":[-12,25,0]},"Camera":{"fov":46}}}}),
+    );
+    let mut editor = project.open();
+    let read = editor.action("editor.camera", json!({})).unwrap();
+    assert_eq!(read["camera"]["fovYDegrees"], 50.);
+    editor
+        .action("editor.camera", json!({"fovYDegrees": 200}))
+        .unwrap();
+    assert_eq!(editor.state.camera.fov_y_degrees, 120.);
+    let set = editor
+        .action("editor.camera", json!({"fovYDegrees": 54}))
+        .unwrap();
+    assert_eq!(set["camera"]["fovYDegrees"], 54.);
+    let ara_render::scene::CameraSpec::LookAt { vertical_fov, .. } = editor.state.camera.spec()
+    else {
+        panic!("the Scene view is a perspective camera")
+    };
+    assert!((vertical_fov - 54f32.to_radians()).abs() < 1e-6);
+
+    // Looking through the shot copies its world pose (under its parent) and FOV.
+    editor
+        .action("editor.camera", json!({"entity":"e_shot0001"}))
+        .unwrap();
+    let camera = editor.state.camera;
+    assert_eq!(camera.fov_y_degrees, 46.);
+    assert!(
+        camera.position().distance(Vec3::new(2., 1.5, 6.)) < 1e-4,
+        "{:?}",
+        camera.position()
+    );
+    let rotation = glam::Quat::from_euler(
+        glam::EulerRot::XYZ,
+        (-12f32).to_radians(),
+        25f32.to_radians(),
+        0.,
+    );
+    let forward = (camera.target - camera.position()).normalize();
+    assert!(forward.dot(rotation * Vec3::NEG_Z) > 0.99999, "{forward:?}");
+    let error = editor
+        .action("editor.camera", json!({"entity":"e_crate001"}))
+        .unwrap_err();
+    assert!(error.to_string().contains("no Camera component"), "{error}");
+
+    // Cameras saved before the field existed get the default.
+    let saved: ara_editor::state::Camera = serde_json::from_value(
+        json!({"target":[0,0,0],"yaw":0,"pitch":0.2,"distance":5}),
+    )
+    .unwrap();
+    assert_eq!(saved.fov_y_degrees, 50.);
+}

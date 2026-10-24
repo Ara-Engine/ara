@@ -212,6 +212,18 @@ fn mode(c: &Ctx, mode: &str) -> Avail {
 fn flag(c: &Ctx, key: &str) -> Avail {
     Avail::Checked(setting(c, key).as_bool().unwrap_or(false))
 }
+/// The selection is a `Camera` entity (prefab-resolved entities are checked when run).
+fn selected_camera(c: &Ctx) -> Avail {
+    let Some(id) = c.target.entity(c.state) else {
+        return Avail::Blocked("Select a Camera entity first".into());
+    };
+    match c.store.workspace().doc(&c.state.doc).and_then(|d| d.record(id)) {
+        Some(record) if !record.contains_key("Camera") => {
+            Avail::Blocked("The selection has no Camera component".into())
+        }
+        _ => Avail::Ready,
+    }
+}
 fn with_components(c: &Ctx, names: &[&str]) -> Avail {
     match names.iter().find(|n| c.store.schema().get(n).is_none()) {
         Some(missing) => Avail::Blocked(format!(
@@ -665,6 +677,17 @@ fn build() -> Vec<Spec> {
     c.extend([
         later("view.camera.perspective", "Perspective / Orthographic", "camera", "Num5", "The renderer's camera is perspective-only; orthographic projection needs ara-render support."),
         cmd("view.camera.default", "Default View", "video", "", "Return to the default three-quarter perspective.", |_, e, _| camera(e, 0.6, 0.4)),
+        cmd("view.camera.fov", "Field of View…", "scan-eye", "", "Choose the Scene view's vertical field of view.", |s, _, _| { s.open_value_menu("fov"); Ok(()) })
+            .labelled(|c| format!("Field of View ({})…", c.state.camera.fov_label())),
+        cmd("view.camera.fov.set", "Set Field of View", "scan-eye", "", "Set the Scene view's vertical field of view: target `46` (degrees, 10–120).", |_, e, t| {
+            let Target::Text(text) = t else { return Err("choose a field of view".into()) };
+            let degrees: f32 = text.trim().trim_end_matches('°').trim().parse().map_err(|_| "the field of view needs a number of degrees")?;
+            act(e, "editor.camera", json!({"fovYDegrees": degrees}))
+        }),
+        cmd("view.camera.align", "Align View to Selected Camera", "camera", "", "Look through the selected Camera entity: its position, direction and field of view.", |_, e, t| {
+            let entity = t.entity(&e.state).ok_or("select a Camera entity")?.to_owned();
+            act(e, "editor.camera", json!({"entity": entity}))
+        }).when(selected_camera),
         cmd("view.camera.top", "Top", "", "Num7", "Look straight down.", |_, e, _| camera(e, 0., 1.54)),
         cmd("view.camera.bottom", "Bottom", "", "Ctrl+Num7", "Look straight up.", |_, e, _| camera(e, 0., -1.54)),
         cmd("view.camera.front", "Front", "", "Num1", "Look along −Z.", |_, e, _| camera(e, 0., 0.)),
@@ -689,7 +712,7 @@ fn build() -> Vec<Spec> {
             set(e, "viewport.cameraSpeed", json!((v * 0.5).max(0.5)))
         }),
         later("view.camera.bookmarks", "Bookmarks", "", "", "Camera bookmarks need a per-scene editor sidecar; they are not built yet."),
-        later("view.camera.pilot", "Pilot Selected Camera", "camera", "", "Piloting a scene camera needs the Game view through the shared texture (D19)."),
+        later("view.camera.pilot", "Pilot Selected Camera", "camera", "", "Piloting (moving the scene camera with the view) is not built yet; Align View to Selected Camera copies its pose and field of view."),
     ]);
     c.extend([
         cmd(

@@ -674,7 +674,9 @@ pub(crate) fn context(kind: Context) -> &'static [Item] {
         ],
         Context::Camera => &[
             C("view.camera.perspective"),
+            C("view.camera.fov"),
             C("view.camera.default"),
+            C("view.camera.align"),
             S,
             C("view.camera.top"),
             C("view.camera.bottom"),

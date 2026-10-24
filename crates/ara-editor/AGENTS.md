@@ -95,6 +95,11 @@ Project Settings > Rendering page); `state.quality` is derived in `apply_setting
 (false only for Low) and the window keeps `detected_quality` (GPU's Auto preset).
 Commands `view.quality.{project,auto,low,medium,high,epic}` feed the Lit menu,
 palette and `editor.commands`; agents may also use `editor.preferences.renderQuality`.
+Scene camera: `state::Camera` (orbit pose plus `fov_y_degrees`, 10–120, default 50)
+feeds the renderer through `spec()`. `editor.camera` reads it (no fields) or sets any
+subset (`fovYDegrees`; `entity` looks through a scene `Camera`'s world pose and FOV)
+and returns `camera`. UI: the toolbar FOV field, the Camera menu's `view.camera.fov`
+presets and `view.camera.align` (Align View to Selected Camera).
 Floating windows: `DockLayout` floating roots map to owned OS windows
 (`app/windows.rs`); each is a Shell `Surface` swapped into `self.ui` by
 `enter/leave`, and renders through `NativeUi::select_target`. Rects persist in
