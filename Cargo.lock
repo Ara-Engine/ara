@@ -401,6 +401,7 @@ dependencies = [
  "ara-diag",
  "ara-doc",
  "ara-host",
+ "ara-hub",
  "ara-hub-service",
  "ara-json",
  "ara-mcp",

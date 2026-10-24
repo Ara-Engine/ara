@@ -217,3 +217,10 @@ quiet window. It retains exact reload order, origin and changed-member assertion
 the compile server's queue unit test covers human preemption of pending agent work.
 The reload fixture waits for its expected analyzer diagnostic as well as the error
 report, so an earlier error notification cannot satisfy the next edit's assertion.
+
+The Hub view-model lifecycle fixture now lives in ara's integration suite and uses
+Cargo's CARGO_BIN_EXE_ara. Its former nested `cargo build -p ara` forced four jobs,
+rebuilt another feature set, and guessed the CLI path from the intermediate test
+directory. The CLI dev-dependency on ara-hub expresses the integration edge for
+affected selection. All lifecycle assertions remain; the focused test passed in
+5.41 seconds after building. Cargo.lock gains one existing workspace edge for it.
