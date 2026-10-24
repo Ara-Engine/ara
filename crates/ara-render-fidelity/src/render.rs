@@ -10,6 +10,19 @@ impl FidelityView {
     /// Execute graph-declared passes and publish a completed offscreen output.
     /// No compiler, image readback or wall-clock sampling runs in this method.
     pub fn render(&mut self, gpu: &mut VulkanDevice, input: &FrameInput<'_>) -> Result<()> {
+        if self.shader_epoch != gpu.shader_epoch() {
+            self.shader_epoch = gpu.shader_epoch();
+            let directory = ara_gpu::cooked::resource_dir(
+                env!("CARGO_PKG_NAME"),
+                concat!(env!("CARGO_MANIFEST_DIR"), "/cooked"),
+            );
+            if let Some(key) = gpu.shader_status().cohorts.get(&directory) {
+                self.shader_revision = key.clone();
+            }
+            self.history = false;
+            self.samples = 0;
+            self.atmosphere_dirty = true;
+        }
         anyhow::ensure!(
             self.targets.images.len() >= 28,
             "view requires a successful target resize"

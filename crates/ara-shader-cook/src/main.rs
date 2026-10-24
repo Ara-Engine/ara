@@ -1,9 +1,12 @@
 use anyhow::{Context, Result};
-use ara_shader_cook::{Toolchain, cook};
+use ara_shader_cook::{Toolchain, cook, source_fingerprint};
 use std::path::PathBuf;
 
 fn main() -> Result<()> {
-    let mut args = std::env::args_os().skip(1);
+    let mut raw: Vec<_> = std::env::args_os().skip(1).collect();
+    let watch = raw.iter().any(|arg| arg == "--watch");
+    raw.retain(|arg| arg != "--watch");
+    let mut args = raw.into_iter();
     let manifest = PathBuf::from(
         args.next()
             .context("Usage: ara-shader-cook <manifest.json> <output-dir> [sdk]")?,
@@ -19,7 +22,26 @@ fn main() -> Result<()> {
     } else {
         Toolchain::discover()
     };
-    let rebuilt = cook(&manifest, &output, &tools)?;
-    println!("Cooked {rebuilt} pipelines (unchanged artifacts reused)");
-    Ok(())
+    let mut previous = String::new();
+    loop {
+        let current = source_fingerprint(&manifest)?;
+        if current != previous {
+            previous = current;
+            let started = std::time::Instant::now();
+            match cook(&manifest, &output, &tools) {
+                Ok(rebuilt) => println!(
+                    "Cooked {rebuilt} pipelines in {:.3}s (unchanged artifacts reused)",
+                    started.elapsed().as_secs_f64()
+                ),
+                Err(error) if watch => {
+                    eprintln!("Cook failed; last good cohort retained: {error:#}")
+                }
+                Err(error) => return Err(error),
+            }
+        }
+        if !watch {
+            return Ok(());
+        }
+        std::thread::sleep(std::time::Duration::from_millis(200));
+    }
 }

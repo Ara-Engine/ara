@@ -26,7 +26,7 @@ struct Profile {
     test: bool,
 }
 
-fn artifacts(output: &str) -> Result<Binaries> {
+pub(crate) fn artifacts(output: &str) -> Result<Binaries> {
     let mut binaries = Binaries::new();
     let mut owners = BTreeMap::new();
     for line in output.lines() {
@@ -71,6 +71,7 @@ pub(crate) fn prepare(
     // --examples preserves cargo test's default example-compilation coverage.
     compile.extend(
         [
+            "--lib",
             "--tests",
             "--bins",
             "--examples",

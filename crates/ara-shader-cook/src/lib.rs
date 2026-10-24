@@ -6,13 +6,13 @@ use ara_gpu::cooked::{CookedPipeline, CookedStage, RenderState, Stage, binding_l
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, BTreeSet},
     path::{Path, PathBuf},
     process::Command,
 };
 
 /// One input pipeline in a shader manifest.
-#[derive(Deserialize)]
+#[derive(Deserialize, serde::Serialize)]
 pub struct PipelineSource {
     /// Slang source path relative to the manifest.
     pub source: String,
@@ -89,8 +89,13 @@ pub fn cook(manifest: &Path, output: &Path, tools: &Toolchain) -> Result<usize> 
         source_hash.update(file.strip_prefix(source_root)?.to_string_lossy().as_bytes());
         source_hash.update(std::fs::read(file)?);
     }
-    source_hash.update(b"ara-cook-3|sm_6_6+spirv_1_6|sm_6_6|-O2|column-major|VULKAN|invert-y-vertex-mesh|vulkan1.3-validation");
-    source_hash.update(std::fs::read(&tools.slangc)?);
+    let mut compiler_hash = Sha256::new();
+    let recipe = b"ara-cook-3|sm_6_6+spirv_1_6|sm_6_6|-O2|column-major|VULKAN|invert-y-vertex-mesh|vulkan1.3-validation";
+    source_hash.update(recipe);
+    compiler_hash.update(recipe);
+    let executable = std::fs::read(&tools.slangc)?;
+    source_hash.update(&executable);
+    compiler_hash.update(&executable);
     if let Some(bin) = tools.slangc.parent() {
         for name in [
             "slang.dll",
@@ -102,27 +107,41 @@ pub fn cook(manifest: &Path, output: &Path, tools: &Toolchain) -> Result<usize> 
         ] {
             if let Ok(bytes) = std::fs::read(bin.join(name)) {
                 source_hash.update(name.as_bytes());
-                source_hash.update(bytes);
+                source_hash.update(&bytes);
+                compiler_hash.update(name.as_bytes());
+                compiler_hash.update(&bytes);
             }
         }
     }
     source_hash.update(compiler.as_bytes());
     source_hash.update(binding_layout_hash());
     source_hash.update(manifest_bytes);
+    compiler_hash.update(compiler.as_bytes());
+    compiler_hash.update(binding_layout_hash());
+    let compiler_key = hash(compiler_hash.finalize());
     let key = hash(source_hash.finalize());
     std::fs::create_dir_all(output)?;
     let artifacts = output.join(&key);
     std::fs::create_dir_all(&artifacts)?;
     let mut rebuilt = 0;
+    let cache_path = output.join(".ara-pipeline-inputs.json");
+    let previous: BTreeMap<String, String> = std::fs::read(&cache_path)
+        .ok()
+        .and_then(|bytes| serde_json::from_slice(&bytes).ok())
+        .unwrap_or_default();
+    let mut inputs = BTreeMap::new();
+    let mut publication = Vec::new();
     for (name, pipeline) in pipelines {
         ensure!(
             name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_'),
             "Invalid pipeline name"
         );
         let path = output.join(format!("{name}.json"));
+        let input_key = pipeline_input_key(source_root, &pipeline, &compiler_key)?;
+        inputs.insert(name.clone(), input_key.clone());
         if let Ok(bytes) = std::fs::read(&path)
-            && let Ok(old) = serde_json::from_slice::<CookedPipeline>(&bytes)
-            && old.key == key
+            && let Ok(mut old) = serde_json::from_slice::<CookedPipeline>(&bytes)
+            && (old.key == key || previous.get(&name) == Some(&input_key))
             && old.stages.iter().all(|s| {
                 std::fs::read(output.join(&s.spirv)).is_ok_and(|b| hash(b) == s.spirv_hash)
                     && std::fs::read(output.join(&s.dxil)).is_ok_and(|b| hash(b) == s.dxil_hash)
@@ -130,6 +149,10 @@ pub fn cook(manifest: &Path, output: &Path, tools: &Toolchain) -> Result<usize> 
                     && output.join(&s.dxil).with_extension("dxil.json").exists()
             })
         {
+            if old.key != key {
+                old.key = key.clone();
+                publication.push((path, old));
+            }
             continue;
         }
         let mut stages = Vec::new();
@@ -191,13 +214,71 @@ pub fn cook(manifest: &Path, output: &Path, tools: &Toolchain) -> Result<usize> 
             stages,
             state: pipeline.state,
         };
-        // Struct field order and BTreeMap ordering define this derived manifest writer.
+        publication.push((path, cooked));
+        rebuilt += 1;
+    }
+    // A failed compiler invocation never publishes any part of the new cohort.
+    let changed = !publication.is_empty();
+    for (path, cooked) in publication {
         let temporary = path.with_extension("json.tmp");
         ara_gpu::cooked::write_json(&temporary, &cooked)?;
         std::fs::rename(temporary, path)?;
-        rebuilt += 1;
+    }
+    ara_gpu::cooked::write_json(&cache_path, &inputs)?;
+    if changed {
+        let signal = output.join(".ara-shader-reload");
+        let temporary = signal.with_extension("tmp");
+        std::fs::write(&temporary, &key)?;
+        std::fs::rename(temporary, signal)?;
     }
     Ok(rebuilt)
+}
+
+fn pipeline_input_key(root: &Path, pipeline: &PipelineSource, compiler: &str) -> Result<String> {
+    fn includes(file: &Path, seen: &mut BTreeSet<PathBuf>, digest: &mut Sha256) -> Result<()> {
+        let file = file.canonicalize()?;
+        if !seen.insert(file.clone()) {
+            return Ok(());
+        }
+        let source = std::fs::read_to_string(&file)?;
+        digest.update(source.as_bytes());
+        for line in source.lines().map(str::trim) {
+            if let Some(include) = line.strip_prefix("#include") {
+                let include = include.trim();
+                if let Some(name) = include.strip_prefix('"').and_then(|s| s.split('"').next()) {
+                    includes(
+                        &file.parent().context("include parent")?.join(name),
+                        seen,
+                        digest,
+                    )?;
+                } else {
+                    anyhow::bail!("non-literal shader include: {line}");
+                }
+            } else if line.starts_with("import ") || line.starts_with("# include") {
+                anyhow::bail!("shader dependency requires conservative invalidation");
+            }
+        }
+        Ok(())
+    }
+    let mut digest = Sha256::new();
+    digest.update(compiler.as_bytes());
+    digest.update(serde_json::to_vec(pipeline)?);
+    if includes(
+        &root.join(&pipeline.source),
+        &mut BTreeSet::new(),
+        &mut digest,
+    )
+    .is_err()
+    {
+        // Macro/system/module imports may hide dependencies. Hash the entire source tree.
+        let mut files = Vec::new();
+        collect_sources(root, &mut files)?;
+        files.sort();
+        for file in files {
+            digest.update(std::fs::read(file)?);
+        }
+    }
+    Ok(hash(digest.finalize()))
 }
 fn collect_sources(root: &Path, files: &mut Vec<PathBuf>) -> Result<()> {
     for entry in std::fs::read_dir(root)? {
@@ -212,4 +293,18 @@ fn collect_sources(root: &Path, files: &mut Vec<PathBuf>) -> Result<()> {
         }
     }
     Ok(())
+}
+
+/// Content fingerprint for a watch loop, including recursive Slang headers and the manifest.
+pub fn source_fingerprint(manifest: &Path) -> Result<String> {
+    let mut files = Vec::new();
+    collect_sources(manifest.parent().context("manifest parent")?, &mut files)?;
+    files.push(manifest.to_owned());
+    files.sort();
+    let mut digest = Sha256::new();
+    for file in files {
+        digest.update(file.to_string_lossy().as_bytes());
+        digest.update(std::fs::read(file)?);
+    }
+    Ok(hash(digest.finalize()))
 }

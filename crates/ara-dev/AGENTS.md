@@ -15,6 +15,8 @@ Local developer binary. No engine dependencies; uses git and cargo as subprocess
   stale files, clean checkout, no symlinks/reparse points and no active Cargo lock.
 - `disk`: all mounted drive free-space report.
   Also flags configured Cargo outputs inside another checkout's target.
+- `perf`: optimized incremental build, once-frozen Outpost pack, GPU-locked frame
+  windows, JSON/deltas, warm-player file controls and local stdio MCP bridge.
 
 Run `cargo test -p ara-dev`, `cargo clippy -p ara-dev --all-targets -- -D warnings`
 and `cargo fmt --all -- --check`. Set CARGO_BUILD_JOBS=2 on the shared PC.

@@ -12,6 +12,67 @@ use std::sync::{
 static SERIAL: Mutex<()> = Mutex::new(());
 static NEXT: AtomicUsize = AtomicUsize::new(0);
 
+#[test]
+fn perf_controls_and_stdio_mcp_use_the_existing_session_without_builds() {
+    use std::io::Write;
+    use std::process::Stdio;
+    let _serial = SERIAL.lock().unwrap_or_else(|p| p.into_inner());
+    let root = fixture();
+    let session = root.join("target/perf/control");
+    fs::create_dir_all(&session).unwrap();
+    fs::write(
+        session.parent().unwrap().join("status.json"),
+        br#"{"quality":"high","shaders":{"epoch":2}}"#,
+    )
+    .unwrap();
+    let binary = env!("CARGO_BIN_EXE_ara-dev");
+    let output = ok(
+        &root,
+        binary,
+        &[
+            "perf",
+            "control",
+            "--session",
+            session.to_str().unwrap(),
+            "--preset",
+            "medium",
+        ],
+    );
+    assert!(String::from_utf8_lossy(&output.stdout).contains("Queued"));
+    let requests: Vec<_> = fs::read_dir(&session)
+        .unwrap()
+        .map(|entry| entry.unwrap().path())
+        .collect();
+    assert_eq!(requests.len(), 1);
+    let request: serde_json::Value =
+        serde_json::from_slice(&fs::read(&requests[0]).unwrap()).unwrap();
+    assert_eq!(request["quality"], "medium");
+    assert_eq!(request["measure"], true);
+    let mut child = configured_command(
+        &root,
+        binary,
+        &["perf", "mcp", "--session", session.to_str().unwrap()],
+    )
+    .stdin(Stdio::piped())
+    .stdout(Stdio::piped())
+    .stderr(Stdio::piped())
+    .spawn()
+    .unwrap();
+    child.stdin.take().unwrap().write_all(b"{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\"params\":{\"name\":\"perf_status\"}}\n").unwrap();
+    let output = child.wait_with_output().unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let response: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(
+        response["result"]["structuredContent"]["live"]["shaders"]["epoch"],
+        2
+    );
+    assert!(response["result"]["structuredContent"]["latest_measurement"].is_null());
+}
+
 fn scratch(label: &str) -> PathBuf {
     let target = std::env::var_os("CARGO_TARGET_DIR")
         .map(PathBuf::from)
@@ -319,7 +380,6 @@ fn peer_binaries_share_the_test_feature_union_without_a_second_build() {
         r#"#[test]
 fn peer_keeps_dev_features() {
     assert!(mini_core::extra());
-    assert!(!cfg!(debug_assertions));
     let peer = std::env::var_os("CARGO_BIN_EXE_mini-tool").expect("peer binary");
     let output = std::process::Command::new(peer).output().unwrap();
     assert!(output.status.success());

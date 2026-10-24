@@ -7,9 +7,12 @@ use ara_runtime_render::{Presenter, two_d::Presenter2d};
 use serde::Deserialize;
 use serde_json::json;
 use std::{path::PathBuf, sync::Arc, time::Instant};
+mod perf;
 
 #[derive(clap::Args)]
 pub(super) struct Options {
+    #[command(flatten)]
+    perf: perf::Options,
     /// Export folder containing ara-launch.json (defaults to the executable folder).
     #[arg(long)]
     root: Option<PathBuf>,
@@ -99,6 +102,7 @@ pub(super) fn run(args: Args) -> Result<()> {
     let mut frame_max_ms = 0_f64;
     let mut frame_phase_ms = [0_f64; 4];
     let mut frame_gpu_ms = 0_f64;
+    let mut perf = perf::Window::new(args.standalone.perf);
     if args.standalone.headless {
         world.runtime.step(args.standalone.ticks, &[])?;
         phases.insert("simulation_ready_ms", began.elapsed().as_millis());
@@ -106,6 +110,10 @@ pub(super) fn run(args: Args) -> Result<()> {
         let source = world.asset_source()?;
         let simulation = world.runtime.play_mut().session_mut().world_mut();
         let is_2d = ara_runtime_render::two_d::camera(simulation).is_some();
+        ensure!(
+            !perf.enabled() || !is_2d,
+            "perf frame windows require the 3D presenter; a 2D pack cannot supply these GPU pass timings"
+        );
         if is_2d {
             presenter2d.set_atlases(ara_runtime_render::two_d::atlases(
                 simulation,
@@ -122,6 +130,9 @@ pub(super) fn run(args: Args) -> Result<()> {
         let mut previous = Instant::now();
         let mut frames = 0;
         while args.standalone.frames.is_none_or(|limit| frames < limit) {
+            if perf.control(&mut presenter)? {
+                break;
+            }
             let frame_start = Instant::now();
             let (quit, inputs) = window.events(world.runtime.player())?;
             if quit {
@@ -177,6 +188,26 @@ pub(super) fn run(args: Args) -> Result<()> {
                 frame_gpu_ms += presenter.stats().gpu_ms;
             }
             frames += 1;
+            if perf.enabled() {
+                let camera = frame.camera.map(|camera| json!({"position":camera.position,"forward":camera.forward,"fov":camera.fov}));
+                if perf.frame(
+                    &presenter,
+                    &phases,
+                    json!(camera),
+                    [
+                        simulation_done.duration_since(frame_start).as_secs_f64() * 1000.,
+                        presenter.stats().prepare.as_secs_f64() * 1000.,
+                        presentation_done
+                            .duration_since(simulation_done)
+                            .as_secs_f64()
+                            * 1000.,
+                        presentation_done.elapsed().as_secs_f64() * 1000.,
+                    ],
+                    frame_start.elapsed().as_secs_f64() * 1000.,
+                )? {
+                    break;
+                }
+            }
         }
         window.shutdown(&presenter)?;
     }
