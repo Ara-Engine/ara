@@ -62,9 +62,10 @@ upper bounds. Most of a step is the 13-frame settle plus the capture.
   camera, with the boom stopped in front of the back wall. The fidelity Scene
   capture of that first open shows a brown occluder; a raster capture from the same
   camera shows the Salvager in the hangar, as intended. This is with the renderer.
-- **The hangar's start pose in the game.** The follow camera starts behind the back
-  wall (`place_cameras` has no collision), so the exported game's first frames
-  (`09-…-game`, `18-…-game`) show that wall. The Play step walks forward first.
+- **The hangar's start pose in the game.** In these frames the follow camera starts
+  behind the back wall, so the exported game's first frames (`09-…-game`,
+  `18-…-game`) show that wall. Since then, `place_cameras` stops the boom in front of
+  static box colliders, as the editor's opening view does (`ara_runtime::follow`).
 - **Seeing the reload.** The behaviour is not attached to an entity: the module's
   types exist only after the first Play compiles it. So the reload shows as the
   Console line, not as motion.

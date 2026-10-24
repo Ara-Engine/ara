@@ -10,6 +10,8 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 use ara_doc::prefab::{Resolved, ResolvedEntity};
+use ara_physics::{Collider, RigidBody};
+use ara_runtime::follow::{FollowView, Wall};
 use glam::{Mat4, Vec3};
 use serde_json::{Value, json};
 
@@ -17,11 +19,6 @@ use crate::state::{Camera, EditorState};
 
 /// A world-space axis-aligned box: (min, max).
 type Bounds = (Vec3, Vec3);
-
-/// How far in front of a collider a follow rig's shortened boom stops, in metres.
-const BOOM_MARGIN: f32 = 0.25;
-/// The shortest boom a collider leaves a follow rig, in metres.
-const MIN_BOOM: f32 = 0.3;
 
 /// Components that make an entity terrain (framed only when selected).
 const TERRAIN: &[&str] = &["Terrain", "TerrainChunk", "Landscape"];
@@ -43,8 +40,9 @@ pub(crate) fn opening(resolved: &Resolved, transforms: &BTreeMap<String, Mat4>) 
 }
 
 /// The view of the scene's gameplay camera (the lowest `Camera.priority`, first by
-/// address on ties) with its field of view. A follow rig looks from behind its target
-/// and pivots on the aim point, where Play places it (`ara_runtime` `place_cameras`).
+/// address on ties) with its field of view. A follow rig looks from behind its target,
+/// its boom stopped by walls, and pivots on the aim point: where Play places it
+/// (`ara_runtime::follow::FollowView`).
 pub(crate) fn gameplay(resolved: &Resolved, transforms: &BTreeMap<String, Mat4>) -> Option<Camera> {
     use ara_runtime::components::{Camera as Lens, FollowCamera};
     let (address, lens, entity) = resolved
@@ -66,22 +64,14 @@ pub(crate) fn gameplay(resolved: &Resolved, transforms: &BTreeMap<String, Mat4>)
             .as_ref()
             .and_then(|t| transforms.get(t.0.as_str()))
     {
-        let (yaw, pitch) = (rig.yaw.to_radians(), rig.pitch.to_radians());
-        let forward = Vec3::new(
-            yaw.sin() * pitch.cos(),
-            -pitch.sin(),
-            yaw.cos() * pitch.cos(),
+        // The runtime is on a newer glam: values cross as arrays.
+        let target = target.w_axis.truncate().to_array().into();
+        let view = FollowView::new(&rig, target, walls(resolved, transforms));
+        let (aim, forward) = (
+            Vec3::from(view.aim.to_array()),
+            Vec3::from(view.forward.to_array()),
         );
-        let aim = target.w_axis.truncate() + Vec3::Y * rig.height;
-        let distance = rig.distance.max(0.05);
-        // The boom stops short of solid colliders, like a camera arm: a target by a
-        // wall is seen from inside the room, not through the wall.
-        let reach = boom(resolved, transforms, aim, -forward, distance);
-        camera.distance = if reach < distance {
-            (reach - BOOM_MARGIN).max(MIN_BOOM)
-        } else {
-            distance
-        };
+        camera.distance = view.distance.max(0.05);
         camera.look_from(aim - forward * camera.distance, forward);
     } else {
         let (_, rotation, position) = transforms.get(address)?.to_scale_rotation_translation();
@@ -90,53 +80,27 @@ pub(crate) fn gameplay(resolved: &Resolved, transforms: &BTreeMap<String, Mat4>)
     Some(camera)
 }
 
-/// How far from `origin` along unit `direction` the first solid box `Collider`
-/// starts, within `max` (`max` when none does). Boxes containing `origin` and
-/// sensors are ignored.
-fn boom(
-    resolved: &Resolved,
-    transforms: &BTreeMap<String, Mat4>,
-    origin: Vec3,
-    direction: Vec3,
-    max: f32,
-) -> f32 {
-    let mut reach = max;
-    for (id, entity) in resolved {
-        let Some(collider) = entity.record.get("Collider") else {
-            continue;
-        };
-        let solid_box = collider
-            .get("kind")
-            .and_then(Value::as_str)
-            .is_none_or(|k| k == "box")
-            && collider.get("sensor").and_then(Value::as_bool) != Some(true);
-        let Some(world) = transforms.get(id).filter(|_| solid_box) else {
-            continue;
-        };
-        let half = crate::world::vector(collider.get("halfExtents"), Vec3::splat(0.5));
-        let centre = crate::world::vector(collider.get("center"), Vec3::ZERO);
-        // In the box's own space the ray parameter is unchanged (an affine map).
-        let local = world.inverse();
-        let from = local.transform_point3(origin) - centre;
-        let along = local.transform_vector3(direction);
-        let (mut near, mut far) = (f32::NEG_INFINITY, f32::INFINITY);
-        for axis in 0..3 {
-            if along[axis].abs() < 1e-8 {
-                if from[axis].abs() > half[axis] {
-                    far = f32::NEG_INFINITY;
-                }
-                continue;
-            }
-            let a = (-half[axis] - from[axis]) / along[axis];
-            let b = (half[axis] - from[axis]) / along[axis];
-            near = near.max(a.min(b));
-            far = far.min(a.max(b));
+/// The walls a follow rig's boom stops in front of, as Play finds them: static, solid
+/// box colliders at their world pose ([`Wall::solid`]).
+fn walls<'a>(
+    resolved: &'a Resolved,
+    transforms: &'a BTreeMap<String, Mat4>,
+) -> impl Iterator<Item = Wall> + 'a {
+    resolved.iter().filter_map(|(id, entity)| {
+        let collider: Collider =
+            serde_json::from_value(entity.record.get("Collider")?.clone()).ok()?;
+        let body: RigidBody =
+            serde_json::from_value(entity.record.get("RigidBody")?.clone()).ok()?;
+        if !Wall::solid(&collider, &body) {
+            return None;
         }
-        if near > 0. && near <= far && near < reach {
-            reach = near;
-        }
-    }
-    reach
+        let (_, rotation, translation) = transforms.get(id)?.to_scale_rotation_translation();
+        Some(Wall::new(
+            &collider,
+            translation.to_array().into(),
+            glam34::Quat::from_array(rotation.to_array()),
+        ))
+    })
 }
 
 /// World bounds framing shows: the `selection` when there is one (anything selected
