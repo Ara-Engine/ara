@@ -9,6 +9,7 @@ use ara_ops::Store;
 use ara_render::scene::{Light, Material, Mesh, Scene, Texture, Vertex};
 use ara_runtime::components::MeshRenderer;
 use glam::{EulerRot, Mat4, Quat, Vec3};
+pub use gltf::ModelCache;
 use serde_json::Value;
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -19,12 +20,13 @@ use std::{
 pub trait EditWorldView {
     /// Current scene entities, with prefab inheritance resolved.
     fn entities(&self) -> &Resolved;
-    /// Extract immutable render geometry; no gameplay state is stored in the editor.
+    /// Extract geometry using the project-owned published model cache across edits.
     fn scene(
         &self,
         root: &Path,
         state: &EditorState,
         preview: Option<&gesture::Gesture>,
+        models: &mut ModelCache,
     ) -> anyhow::Result<Scene>;
 }
 /// Document-backed edit-world view used until ara-sim is integrated.
@@ -187,6 +189,7 @@ impl EditWorldView for DocumentView {
         root: &Path,
         state: &EditorState,
         preview: Option<&gesture::Gesture>,
+        models: &mut ModelCache,
     ) -> anyhow::Result<Scene> {
         let mut scene = Scene {
             meshes: Vec::new(),
@@ -273,8 +276,20 @@ impl EditWorldView for DocumentView {
                             cube(render_id(id), name.to_owned(), material)
                         }
                     } else {
-                        gltf::load(&path, render_id(id), name.to_owned(), material)
-                            .unwrap_or_else(|_| cube(render_id(id), name.to_owned(), material))
+                        reference
+                            .id
+                            .and_then(|asset| {
+                                models
+                                    .load(
+                                        asset,
+                                        &renderer,
+                                        render_id(id),
+                                        name.to_owned(),
+                                        material,
+                                    )
+                                    .ok()
+                            })
+                            .unwrap_or_else(|| cube(render_id(id), name.to_owned(), material))
                     }
                 } else {
                     shape(&renderer, render_id(id), name.to_owned(), material)
@@ -323,7 +338,7 @@ impl EditWorldView for DocumentView {
                 }
             }
         }
-        self.append_ghosts(root, state, &transforms, &mut scene)?;
+        self.append_ghosts(root, state, &transforms, &mut scene, models)?;
         // A tiny non-pickable fallback keeps the baseline renderer valid for an empty scene.
         if scene.meshes.is_empty() {
             let mut mesh = cube(0, "Empty scene".into(), 0);

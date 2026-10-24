@@ -3,7 +3,111 @@ use anyhow::Context;
 use ara_render::scene::{Mesh, Vertex};
 use ara_runtime::assets::AssetSource;
 use glam::Vec3;
+use std::collections::BTreeMap;
 use std::path::Path;
+
+/// Project-owned decoded generations. Publication changes invalidate by digest;
+/// document transforms and repeated prefab instances do not read model payloads.
+pub struct ModelCache {
+    reader: ara_play_host::PublishedAssets,
+    snapshot: Option<std::sync::Arc<ara_play_host::PublishedSnapshot>>,
+    decoded: DecodedModels,
+}
+
+impl ModelCache {
+    /// Attach once to the project's read-only publication feed; never starts imports.
+    pub fn new(root: &Path) -> anyhow::Result<Self> {
+        Ok(Self {
+            reader: ara_play_host::PublishedAssets::for_project(root)
+                .map_err(anyhow::Error::msg)?,
+            snapshot: None,
+            decoded: Default::default(),
+        })
+    }
+
+    pub(crate) fn load(
+        &mut self,
+        asset: &str,
+        renderer: &ara_runtime::components::MeshRenderer,
+        entity: u64,
+        name: String,
+        material: usize,
+    ) -> anyhow::Result<Mesh> {
+        if self
+            .snapshot
+            .as_ref()
+            .is_none_or(|old| old.revision() != self.reader.revision())
+        {
+            // Pending work and a busy publisher never block the UI. Keep the last
+            // immutable snapshot if its replacement is not available this boundary.
+            if let Some(snapshot) = self.reader.snapshot() {
+                self.snapshot = Some(snapshot);
+            }
+        }
+        let source = self
+            .snapshot
+            .as_deref()
+            .map(|snapshot| snapshot as &dyn AssetSource);
+        mesh(
+            self.decoded.get(source, asset)?,
+            renderer,
+            entity,
+            name,
+            material,
+        )
+    }
+}
+
+/// One-shot thumbnail worker entry. Scene extraction uses its persistent cache;
+/// an isolated preview instead resolves its sidecar once at this control boundary.
+pub(crate) fn load(
+    path: &Path,
+    entity: u64,
+    name: String,
+    material: usize,
+) -> anyhow::Result<Mesh> {
+    let root = path
+        .ancestors()
+        .find(|root| root.join("ara.project.json").is_file())
+        .context("model has no project root")?;
+    let mut sidecar = path.as_os_str().to_os_string();
+    sidecar.push(".import.json");
+    let value = ara_json::parse(&std::fs::read_to_string(sidecar)?)?;
+    let asset = value["id"]
+        .as_str()
+        .context("model sidecar has no asset ID")?;
+    ModelCache::new(root)?.load(asset, &Default::default(), entity, name, material)
+}
+
+#[derive(Default)]
+struct DecodedModels {
+    models: ara_runtime::assets::Models,
+    failed: BTreeMap<String, ara_asset::Digest>,
+}
+
+impl DecodedModels {
+    fn get(
+        &mut self,
+        source: Option<&dyn AssetSource>,
+        asset: &str,
+    ) -> anyhow::Result<Option<&ara_runtime::model::Model>> {
+        if let Some(source) = source
+            && let Some(digest) = source.digest(asset)
+            && self.failed.get(asset) != Some(&digest)
+        {
+            if let Err(error) = self.models.load(source, asset) {
+                self.failed.insert(asset.to_owned(), digest);
+                if self.models.get(asset).is_none() {
+                    return Err(error.into());
+                }
+                eprintln!("Scene model {asset} keeps its last good generation: {error}");
+            } else {
+                self.failed.remove(asset);
+            }
+        }
+        Ok(self.models.get(asset).map(std::sync::Arc::as_ref))
+    }
+}
 
 /// Reads the transactional project default, including unsaved typed settings edits.
 pub(crate) fn render_quality(
@@ -20,35 +124,13 @@ pub(crate) fn render_quality(
     Ok(settings.quality.into())
 }
 
-pub(crate) fn load(
-    path: &Path,
+fn mesh(
+    model: Option<&ara_runtime::model::Model>,
+    renderer: &ara_runtime::components::MeshRenderer,
     entity: u64,
     name: String,
     material: usize,
 ) -> anyhow::Result<Mesh> {
-    let root = path
-        .ancestors()
-        .find(|root| root.join("ara.project.json").is_file())
-        .context("model has no project root")?;
-    let reader = ara_play_host::PublishedAssets::for_project(root).map_err(anyhow::Error::msg)?;
-    let mut sidecar = path.as_os_str().to_os_string();
-    sidecar.push(".import.json");
-    let value = ara_json::parse(&std::fs::read_to_string(sidecar)?)?;
-    let asset = value["id"]
-        .as_str()
-        .context("model sidecar has no asset ID")?;
-    let model = reader
-        .snapshot()
-        .map(|snapshot| -> anyhow::Result<_> {
-            let Some((digest, cached)) = snapshot.load(asset)? else {
-                return Ok(None);
-            };
-            Ok(Some(ara_runtime::model::Model::decode(
-                asset, digest, &cached,
-            )?))
-        })
-        .transpose()?
-        .flatten();
     let mut mesh = Mesh {
         entity,
         name,
@@ -57,11 +139,13 @@ pub(crate) fn load(
         material,
     };
     if let Some(model) = model {
-        for primitive in &model.primitives {
+        let selection = model.select(renderer.node.as_deref(), renderer.primitive)?;
+        let offset = Vec3::from_array(selection.offset);
+        for primitive in &model.primitives[selection.primitives] {
             let base = u32::try_from(mesh.vertices.len())?;
             mesh.vertices
                 .extend(primitive.vertices.iter().map(|v| Vertex {
-                    position: v.position,
+                    position: (Vec3::from_array(v.position) + offset).into(),
                     normal: v.normal,
                     uv: v.uv,
                     tangent: v.tangent,
@@ -238,6 +322,137 @@ pub(crate) fn tangent(normal: Vec3) -> [f32; 4] {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    struct Source {
+        current: Option<ara_asset::CachedImport>,
+        reads: AtomicUsize,
+    }
+    impl AssetSource for Source {
+        fn digest(&self, _: &str) -> Option<ara_asset::Digest> {
+            self.current.as_ref().map(|generation| generation.key)
+        }
+        fn load(
+            &self,
+            _: &str,
+        ) -> ara_runtime::Result<Option<(ara_asset::Digest, ara_asset::CachedImport)>> {
+            self.reads.fetch_add(1, Ordering::Relaxed);
+            Ok(self
+                .current
+                .as_ref()
+                .map(|generation| (generation.key, generation.clone())))
+        }
+    }
+
+    fn generation(x: f32) -> ara_asset::CachedImport {
+        use ara_asset::{Cancellation, CookPreset, ImportContext, ImportInput, TargetPlatform};
+        use serde_json::json;
+        let mut scene: serde_json::Value = serde_json::from_slice(include_bytes!(
+            "../../../ara-importers/tests/fixtures/material-extensions.gltf"
+        ))
+        .expect("fixture");
+        scene["nodes"] = json!([
+            {"name":"Selected", "mesh":0, "translation":[x,0,0]},
+            {"name":"Sibling", "mesh":0, "translation":[20,0,0]}
+        ]);
+        scene["scenes"] = json!([{"nodes":[0,1]}]);
+        let registry = ara_importers::registry().expect("registry");
+        let importer = registry.get("ara.gltf").expect("glTF importer");
+        let input = ImportInput {
+            preset: CookPreset::Fast,
+            thread_budget: 1,
+            source_path: "cached.gltf".into(),
+            source: ara_json::to_canonical_string(&scene).into_bytes(),
+            importer: importer.id().into(),
+            version: importer.version().into(),
+            settings: json!({"virtualGeometry":false}),
+            target: TargetPlatform::Windows,
+            dependencies: BTreeMap::new(),
+            asset_dependencies: BTreeMap::new(),
+        };
+        let output = registry
+            .import(
+                &input,
+                &mut ImportContext {
+                    metrics: None,
+                    cancellation: &Cancellation::default(),
+                    progress: &mut |_| {},
+                },
+            )
+            .expect("cook");
+        ara_asset::CachedImport {
+            key: input.key().expect("key"),
+            output,
+        }
+    }
+
+    #[test]
+    fn cache_tracks_publication_digests_and_reuses_selected_node_geometry() -> anyhow::Result<()> {
+        let mut source = Source {
+            current: None,
+            reads: AtomicUsize::new(0),
+        };
+        let mut cache = DecodedModels::default();
+        assert!(cache.get(Some(&source), "as_model")?.is_none());
+        assert_eq!(source.reads.load(Ordering::Relaxed), 0);
+        source.current = Some(generation(7.));
+        let first_digest = source
+            .digest("as_model")
+            .context("published fixture digest")?;
+        for _ in 0..100 {
+            let model = cache
+                .get(Some(&source), "as_model")?
+                .context("published model")?;
+            assert_eq!(model.digest, first_digest);
+        }
+        assert_eq!(
+            source.reads.load(Ordering::Relaxed),
+            1,
+            "one payload read/decode for repeated entities and edits"
+        );
+        let renderer = ara_runtime::components::MeshRenderer {
+            node: Some("Selected".into()),
+            primitive: Some(0),
+            ..Default::default()
+        };
+        let model = cache
+            .get(Some(&source), "as_model")?
+            .context("published model")?;
+        let selected = mesh(Some(model), &renderer, 42, "Fence".into(), 3)?;
+        assert_eq!(selected.indices.len(), model.primitives[0].indices.len());
+        assert!(
+            selected
+                .vertices
+                .iter()
+                .all(|vertex| vertex.position[0].abs() < 2.),
+            "source pivot restored, sibling excluded"
+        );
+        source.current = Some(generation(9.));
+        let changed = cache
+            .get(Some(&source), "as_model")?
+            .context("changed published model")?
+            .digest;
+        assert_ne!(changed, first_digest);
+        assert_eq!(source.reads.load(Ordering::Relaxed), 2);
+        let mut broken = generation(11.);
+        broken.output.artifacts.clear();
+        source.current = Some(broken);
+        for _ in 0..3 {
+            assert_eq!(
+                cache
+                    .get(Some(&source), "as_model")?
+                    .context("last good published model")?
+                    .digest,
+                changed
+            );
+        }
+        assert_eq!(
+            source.reads.load(Ordering::Relaxed),
+            3,
+            "failed generation attempted once, retains last good"
+        );
+        Ok(())
+    }
 
     #[test]
     fn tangent_is_perpendicular_to_axis_normals() {

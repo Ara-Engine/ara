@@ -133,8 +133,8 @@ M0 exits on the Windows/Linux/Android results.
 - **Rendering:**
   - full render graph (async compute, aliasing);
   - material AST + text DSL + graph editor;
-  - baked GI and probes;
-  - hardware-RT DDGI, with RT reflections and shadows;
+  - raster-first quality: baked GI and probes, GTAO, soft shadows, SSR and reflection probes (D27);
+  - hardware-RT DDGI, with RT reflections and shadows (opt-in; a later milestone per D27);
   - denoising;
   - DLSS, FSR, XeSS and MetalFX;
   - post stack;

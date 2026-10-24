@@ -32,6 +32,8 @@ impl From<RpcError> for EditorError {
 /// One editor process owns the project lock, authority, navigation and agent activity.
 pub struct Editor {
     asset_updates: Receiver<()>,
+    /// Published model generations retained across document and transform edits.
+    pub(crate) models: crate::world::gltf::ModelCache,
     /// Shared engine host. UI content mutations go through this protocol endpoint.
     pub host: Host,
     /// Current native view snapshot, updated by editor action notifications.
@@ -190,6 +192,7 @@ impl Editor {
         .map_err(EditorError::from)?;
         let mut editor = Self {
             asset_updates,
+            models: crate::world::gltf::ModelCache::new(root)?,
             host,
             state,
             session,

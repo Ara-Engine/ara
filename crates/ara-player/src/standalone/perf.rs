@@ -8,8 +8,10 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
+mod gpu;
+
 #[derive(clap::Args)]
-pub(super) struct Options {
+pub(super) struct PerfOptions {
     /// Publish detailed frame-window metrics to this JSON file (development only).
     #[arg(long)]
     perf_output: Option<PathBuf>,
@@ -36,9 +38,10 @@ struct Control {
 }
 
 pub(super) struct Window {
-    options: Options,
+    options: PerfOptions,
     frames: BTreeMap<String, Vec<f64>>,
     passes: BTreeMap<String, Vec<f64>>,
+    gpu: gpu::Samples,
     seen: u32,
     measured: u32,
     collecting: bool,
@@ -64,12 +67,13 @@ impl Window {
     pub fn enabled(&self) -> bool {
         self.options.perf_output.is_some()
     }
-    pub fn new(options: Options) -> Self {
+    pub fn new(options: PerfOptions) -> Self {
         let collecting = options.perf_output.is_some();
         Self {
             options,
             frames: BTreeMap::new(),
             passes: BTreeMap::new(),
+            gpu: gpu::Samples::default(),
             seen: 0,
             measured: 0,
             collecting,
@@ -83,6 +87,7 @@ impl Window {
     fn reset(&mut self) {
         self.frames.clear();
         self.passes.clear();
+        self.gpu = gpu::Samples::default();
         self.seen = 0;
         self.measured = 0;
         self.collecting = true;
@@ -204,6 +209,7 @@ impl Window {
         {
             *per_frame.entry(pass).or_default() += milliseconds;
         }
+        self.gpu.record(presenter.stats(), per_frame.values().sum());
         for (pass, milliseconds) in per_frame {
             self.passes
                 .entry(pass.to_owned())
@@ -236,7 +242,7 @@ impl Window {
             !passes.is_empty(),
             "perf window did not receive GPU timestamp samples"
         );
-        let report = json!({"format":"ara.player.perf/1","pid":std::process::id(),"quality":presenter.quality().map(|q|q.name()),"validation":cfg!(debug_assertions),"startup":phases,"camera":camera,"frames":self.measured,"warmup":self.options.perf_warmup,"cpu":cpu,"gpu_passes":passes,"shaders":presenter.shader_status()});
+        let report = json!({"format":"ara.player.perf/1","pid":std::process::id(),"quality":presenter.quality().map(|q|q.name()),"validation":cfg!(debug_assertions),"startup":phases,"camera":camera,"frames":self.measured,"warmup":self.options.perf_warmup,"cpu":cpu,"gpu_passes":passes,"gpu_other":self.gpu.report(),"gpu_coverage":self.gpu.coverage(),"shaders":presenter.shader_status()});
         let temporary = output.with_extension("json.tmp");
         std::fs::write(&temporary, serde_json::to_vec_pretty(&report)?)?;
         std::fs::rename(temporary, output)?;

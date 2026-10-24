@@ -95,7 +95,7 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
         h: 600.,
     });
     let mut renderer = Renderer::new(
-        view.scene(editor.host.root(), &editor.state, None)?,
+        view.scene(editor.host.root(), &editor.state, None, &mut editor.models)?,
         extent_scaled(viewport, dpi),
         &window.extensions()?,
         editor.host.root().join(".ara/gpu"),
@@ -457,8 +457,12 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                 editor.report_missing_sources(&view);
                 view_ms = at.elapsed().as_secs_f64() * 1000.;
                 let at = Instant::now();
-                let scene =
-                    view.scene(editor.host.root(), &editor.state, editor.gesture.as_ref())?;
+                let scene = view.scene(
+                    editor.host.root(),
+                    &editor.state,
+                    editor.gesture.as_ref(),
+                    &mut editor.models,
+                )?;
                 extract_ms = at.elapsed().as_secs_f64() * 1000.;
                 let at = Instant::now();
                 renderer.update_geometry(scene)?;
@@ -475,6 +479,7 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                     editor.host.root(),
                     &editor.state,
                     editor.gesture.as_ref(),
+                    &mut editor.models,
                 )?)?;
                 dirty = true;
                 scene_dirty = true;
@@ -487,6 +492,7 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                         editor.host.root(),
                         &editor.state,
                         editor.gesture.as_ref(),
+                        &mut editor.models,
                     )?)?;
                 }
                 view = next;
@@ -646,6 +652,7 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                                 editor.host.root(),
                                 &editor.state,
                                 editor.gesture.as_ref(),
+                                &mut editor.models,
                             )?)?;
                             preview_present = editor.gesture.is_some();
                         }
@@ -977,7 +984,7 @@ fn headless(options: Options) -> ara_ui::Result<()> {
     .map_err(anyhow::Error::msg)?;
     let view = editor.view()?;
     let mut renderer = Renderer::new(
-        view.scene(editor.host.root(), &editor.state, None)?,
+        view.scene(editor.host.root(), &editor.state, None, &mut editor.models)?,
         options.size,
         &[],
         editor.host.root().join(".ara/gpu"),

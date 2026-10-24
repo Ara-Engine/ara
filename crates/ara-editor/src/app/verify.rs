@@ -229,7 +229,12 @@ impl Verification {
         shell.frame()?;
         let mut scene_view = super::viewport::SceneView::default();
         let view = editor.view()?;
-        renderer.update_geometry(view.scene(editor.host.root(), &editor.state, None)?)?;
+        renderer.update_geometry(view.scene(
+            editor.host.root(),
+            &editor.state,
+            None,
+            &mut editor.models,
+        )?)?;
         if let Some(rect) = shell.viewport() {
             renderer.resize(extent_scaled(rect, gpu.dpi()))?;
             let capture = renderer.capture(&CaptureRequest {

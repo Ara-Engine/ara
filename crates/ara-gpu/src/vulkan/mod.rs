@@ -327,6 +327,7 @@ impl VulkanDevice {
         cooked: &cooked::CookedPipeline,
         artifacts: &std::path::Path,
     ) -> Result<Pipeline> {
+        crate::cpu_scope!("GPU.pipeline_create");
         let native = pipeline::create(
             &self.context,
             self.heap.layout,

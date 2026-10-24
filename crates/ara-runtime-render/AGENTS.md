@@ -28,6 +28,11 @@ no simulation, window or process code.
   native captures read the same view as windows and embedded Game. Low merges
   ara-landscape depth and particles through the existing raster compositor.
 - `stats()`: rebuilt flag, updated poses/skins, CPU prepare/render time and GPU ms.
+  `stats().gpu: Option<GpuFrameCosts>` splits native scene updates, compressed
+  texture uploads, VFX simulation/draw, fidelity/post replays and publication.
+  Residency counters accompany that same frame. Low returns `None` because its
+  landscape/VFX coverage is incomplete. Native terrain/foliage are in fidelity.
+  Sum components per frame before quantiles; marginal pass medians do not add.
 - `fidelity::scene(frame, Content)`: engine-owned scene conversion for fidelity.
   `Content` holds already-resolved terrain layers, foliage rule models, material
   detail and HDR environment overrides; it never reads sample locks or project paths.

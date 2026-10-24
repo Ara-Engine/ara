@@ -55,6 +55,7 @@ struct Builder {
 /// Prepares one content generation. Repeated static draws share the original
 /// model-space allocation; this operation is not the per-frame motion update.
 pub fn prepare(frame: &RenderFrame, content: Content, config: NativeConfig) -> Result<Prepared> {
+    ara_gpu::cpu_scope!("Native.prepare_scene");
     let (size, pixels) = crate::sky(&frame.environment);
     let (direction, lux) = frame.sun.unwrap_or(([0.3, 1.0, 0.2], [0.0; 3]));
     let mut builder = Builder {

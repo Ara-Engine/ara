@@ -5,6 +5,7 @@ pub mod acceleration;
 pub mod arena;
 pub mod commands;
 pub mod cooked;
+mod cpu;
 pub mod descriptors;
 #[cfg(target_os = "macos")]
 pub mod metal;
@@ -13,6 +14,9 @@ pub mod vulkan;
 
 pub use ash::vk;
 use serde::{Deserialize, Serialize};
+#[cfg(feature = "tracy")]
+#[doc(hidden)]
+pub use tracy_client as __tracy;
 
 /// A logical execution queue; backend family indices never enter the graph.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
