@@ -93,6 +93,8 @@ pub struct Shell {
     hierarchy: VirtualList,
     hierarchy_entities: BTreeMap<u64, String>,
     hierarchy_tints: BTreeMap<u64, &'static str>,
+    /// What the Hierarchy rows were last built from.
+    hierarchy_key: Option<hierarchy::HierarchyKey>,
     hierarchy_ghosts: std::collections::BTreeSet<u64>,
     /// Game view: players of the shown world, the selected one, whether a frame is
     /// showing, frames per second, the surface size, the wanted size (physical px),
@@ -167,6 +169,17 @@ pub struct Shell {
     hierarchy_style: BTreeMap<u64, polish::RowStyle>,
     selected_rows: std::collections::BTreeSet<u64>,
     pub(crate) version: u64,
+    /// UI work since the host last took it (`take_stats`).
+    pub(crate) stats: UiStats,
+    /// The editor's panels and store revisions the last rebuild reflected, so a
+    /// revision the shell already rebuilt for does not rebuild it again.
+    built: (u64, u64),
+    /// The open scene resolved, with the (document, store revision, document count)
+    /// it was resolved at (`resolved`).
+    resolved_cache: Option<(
+        (String, u64, usize),
+        std::sync::Arc<ara_doc::prefab::Resolved>,
+    )>,
     tooltip_text: Option<String>,
     field_request: Option<String>,
     canvas: Option<crate::graph::Canvas>,
@@ -216,6 +229,20 @@ pub struct Shell {
 
     /// Main window's desktop rectangle (x, y, width, height), kept by the window owner.
     pub main_rect: [i32; 4],
+}
+/// UI cost counters a host reads per frame (`Shell::take_stats`).
+#[derive(Clone, Copy, Debug, Default, serde::Serialize)]
+pub struct UiStats {
+    /// Full shell rebuilds (markup regenerated and mounted).
+    pub rebuilds: u32,
+    /// Milliseconds spent in rebuilds.
+    pub rebuild_ms: f64,
+    /// Of `rebuild_ms`: mounting (reconcile, virtual rows, frames); the rest is markup.
+    pub mount_ms: f64,
+    /// Of `mount_ms`: `Ui::reconcile` alone.
+    pub reconcile_ms: f64,
+    /// Runtime work summed over every `Ui::frame` (rebuild mounts and the frame's own).
+    pub work: ara_ui::Work,
 }
 pub(crate) enum Binding {
     Protocol(&'static str, Value),
@@ -286,6 +313,7 @@ impl Shell {
             hierarchy: VirtualList { items: Vec::new() },
             hierarchy_entities: BTreeMap::new(),
             hierarchy_tints: BTreeMap::new(),
+            hierarchy_key: None,
             hierarchy_ghosts: std::collections::BTreeSet::new(),
             expanded_turns: std::collections::BTreeSet::new(),
             pending_reports: Vec::new(),
@@ -344,6 +372,9 @@ impl Shell {
             hierarchy_style: BTreeMap::new(),
             selected_rows: Default::default(),
             version: 0,
+            stats: UiStats::default(),
+            built: (u64::MAX, u64::MAX),
+            resolved_cache: None,
             tooltip_text: None,
             field_request: None,
             canvas_display: Default::default(),
@@ -419,15 +450,60 @@ impl Shell {
     }
     /// Reconcile a document/navigation notification. Unchanged idle frames never rebuild panels.
     pub fn rebuild(&mut self, editor: &mut Editor) -> ara_ui::Result<()> {
+        let started = std::time::Instant::now();
         let returning = self.current.clone();
         self.leave();
         let result = self.rebuild_all(editor);
         if let Some(id) = returning {
             self.enter(&id);
         }
+        self.stats.rebuilds += 1;
+        self.stats.rebuild_ms += started.elapsed().as_secs_f64() * 1000.;
         result
     }
+    /// The open scene with prefabs resolved, reused by every panel until the store
+    /// changes: a transaction (the revision), or a document loaded or unloaded (the
+    /// count).
+    pub(crate) fn resolved(
+        &mut self,
+        editor: &Editor,
+    ) -> ara_ui::Result<std::sync::Arc<ara_doc::prefab::Resolved>> {
+        let store = editor.host.store();
+        let key = (
+            editor.state.doc.clone(),
+            store.revision(),
+            store.workspace().docs().count(),
+        );
+        if let Some((cached, resolved)) = &self.resolved_cache
+            && *cached == key
+        {
+            return Ok(resolved.clone());
+        }
+        let resolved = std::sync::Arc::new(
+            crate::world::resolve(store, &editor.state.doc).map_err(|d| format!("{d:?}"))?,
+        );
+        self.resolved_cache = Some((key, resolved.clone()));
+        Ok(resolved)
+    }
+    /// The (document, store revision, document count) `resolved` last resolved at.
+    pub(crate) fn resolved_key(&self) -> Option<(String, u64, usize)> {
+        self.resolved_cache.as_ref().map(|(key, _)| key.clone())
+    }
+    /// The UI work done since the last call: rebuilds and every runtime frame's counters.
+    pub fn take_stats(&mut self) -> UiStats {
+        std::mem::take(&mut self.stats)
+    }
+    /// Rebuild unless the last rebuild already reflects the editor's panels and store
+    /// revisions (an action that rebuilt in dispatch changed them); true if it rebuilt.
+    pub fn rebuild_if_stale(&mut self, editor: &mut Editor) -> ara_ui::Result<bool> {
+        if self.built == (editor.panels_revision, editor.host.store().revision()) {
+            return Ok(false);
+        }
+        self.rebuild(editor)?;
+        Ok(true)
+    }
     fn rebuild_all(&mut self, editor: &mut Editor) -> ara_ui::Result<()> {
+        self.built = (editor.panels_revision, editor.host.store().revision());
         self.keymap = commands::keymap(&editor.state);
         self.reduce_motion = editor.state.reduce_motion;
         self.version += 1;
@@ -472,25 +548,40 @@ impl Shell {
         }
         css
     }
-    /// Parse markup into the current surface and run the shared mount/paint steps.
+    /// Reconcile markup into the current surface (nodes whose ID survives keep their
+    /// shaped text, layout, widget and hover/focus state), lay it out once and mount
+    /// the virtual rows. Stylesheet and theme apply only when they change. The caller
+    /// frames afterwards: new rows have geometry only after that frame.
     fn mount(&mut self, editor: &mut Editor, markup: &str) -> ara_ui::Result<()> {
-        let mut ui = Ui::editor(markup, &Self::stylesheet(editor), self.ui.size)?;
+        let started = std::time::Instant::now();
+        let result = self.mount_markup(editor, markup);
+        self.stats.mount_ms += started.elapsed().as_secs_f64() * 1000.;
+        result
+    }
+    fn mount_markup(&mut self, editor: &mut Editor, markup: &str) -> ara_ui::Result<()> {
+        self.ui.set_stylesheet(&Self::stylesheet(editor))?;
+        self.ui.switch_theme(if editor.state.light {
+            ara_ui::theme::EditorTheme::Light
+        } else {
+            ara_ui::theme::EditorTheme::Dark
+        })?;
+        let reconciling = std::time::Instant::now();
+        self.ui.reconcile(markup)?;
+        self.stats.reconcile_ms += reconciling.elapsed().as_secs_f64() * 1000.;
+        let ui = &mut self.ui;
         for hidden in ["tooltip", "drop-label", "gizmo-readout"] {
             if let Some(i) = ui.find(hidden) {
                 ui.set_visible(i, false)?;
             }
         }
         self.tooltip_text = None;
-        if editor.state.light {
-            ui.switch_theme(ara_ui::theme::EditorTheme::Light)?;
-        }
-        ui.frame(&mut self.text)?;
+        self.stats.work += ui.frame(&mut self.text)?;
         let row = if editor.state.comfortable() { 26. } else { 22. };
         if let Some(index) = ui.find("hierarchy-rows") {
             let height = ui.nodes[index].rect.h.max(row);
             let width = ui.nodes[index].rect.w.max(80.);
-            let mut view = VirtualView::mount(&mut ui, index, row, height, vec![width])?;
-            view.scroll(&mut ui, &self.hierarchy, self.hierarchy_offset, height)?;
+            let mut view = VirtualView::mount(ui, index, row, height, vec![width])?;
+            view.scroll(ui, &self.hierarchy, self.hierarchy_offset, height)?;
             for (id, entity) in &self.hierarchy_entities {
                 self.bindings.insert(
                     view.identity(*id),
@@ -507,8 +598,8 @@ impl Shell {
         if let Some(index) = ui.find("asset-rows") {
             let height = ui.nodes[index].rect.h.max(row);
             let width = ui.nodes[index].rect.w.max(80.);
-            let mut view = VirtualView::mount(&mut ui, index, row, height, vec![width])?;
-            view.scroll(&mut ui, &self.asset_rows, self.asset_offset, height)?;
+            let mut view = VirtualView::mount(ui, index, row, height, vec![width])?;
+            view.scroll(ui, &self.asset_rows, self.asset_offset, height)?;
             for (key, asset) in &self.asset_entries {
                 self.bindings.insert(
                     view.identity(*key),
@@ -522,8 +613,8 @@ impl Shell {
             self.asset_view = Some(view);
             self.asset_surface = self.current.clone();
         }
-        ui.frame(&mut self.text)?;
-        self.ui = ui;
+        // Row decorations set attributes only; the caller's frame lays out and paints
+        // once (no geometry is read until then, apart from pre-existing nodes).
         self.decorate_hierarchy();
         if self.asset_surface == self.current
             && let Some(view) = &self.asset_view
@@ -537,7 +628,6 @@ impl Shell {
                 }
             }
         }
-        self.ui.frame(&mut self.text)?;
         Ok(())
     }
     fn rebuild_float(
@@ -559,6 +649,7 @@ impl Shell {
         markup.push_str(POPUP_TAIL);
         markup.push_str("</ui>");
         self.mount(editor, &markup)?;
+        self.stats.work += self.ui.frame(&mut self.text)?;
         self.after_mount(editor)
     }
     fn rebuild_main(
@@ -653,12 +744,12 @@ impl Shell {
             self.ui.nodes[cube].paint_offset = [rect.x + rect.w - 68. - r.x, rect.y + 12. - r.y];
             self.ui.nodes[cube].dirty.paint = true;
         }
-        self.ui.frame(&mut self.text)?;
+        self.stats.work += self.ui.frame(&mut self.text)?;
         if previous_canvas != self.canvas_doc.as_deref().map(ara_ui::source::stable_id)
             && editor.state.canvas == crate::graph::Camera::default()
         {
             self.edit_graph_layout(editor, "frame")?;
-            self.ui.frame(&mut self.text)?;
+            self.stats.work += self.ui.frame(&mut self.text)?;
         }
         if allow_asset_reflow
             && self.asset_surface.is_none()
@@ -738,7 +829,7 @@ impl Shell {
                 let r = self.ui.nodes[row].rect;
                 self.ui.nodes[i].paint_offset = [r.x + 40., r.y];
                 self.ui.nodes[i].dirty.paint = true;
-                self.ui.frame(&mut self.text)?;
+                self.stats.work += self.ui.frame(&mut self.text)?;
             }
             self.input.focus(
                 &mut self.ui,
@@ -811,7 +902,7 @@ impl Shell {
         if let Some(scroll) = self.ui.find("inspector-scroll") {
             let delta = self.ui.nodes[row].rect.y - self.ui.nodes[scroll].rect.y;
             self.ui.scroll_to(scroll, [0., delta])?;
-            self.ui.frame(&mut self.text)?;
+            self.stats.work += self.ui.frame(&mut self.text)?;
         }
         if let Some(field) = self
             .ui
@@ -863,6 +954,7 @@ impl Shell {
             }
         }
         let mut work = self.ui.frame(&mut self.text)?;
+        self.stats.work += work;
         if work.paint_nodes > 0 {
             self.paint_decorations();
         }

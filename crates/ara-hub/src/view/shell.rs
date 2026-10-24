@@ -171,6 +171,10 @@ pub(super) fn update(p: &mut Page, hub: &Hub) {
     let Some(release) = &hub.releases.hub else {
         return;
     };
+    let key = format!("update-{}", release.version);
+    if !hub.banner_visible(&key) {
+        return;
+    }
     p.panel("banner banner-info", |p| {
         p.icon("download", "accent");
         p.panel("col fill", |p| {
@@ -219,6 +223,7 @@ pub(super) fn update(p: &mut Page, hub: &Hub) {
                 Some(Intent::PrepareUpdate),
             );
         }
+        dismiss_banner(p, "dismiss-update", key);
     });
 }
 
@@ -226,6 +231,9 @@ pub(super) fn offline(p: &mut Page, hub: &Hub) {
     let Link::Offline { message, log } = &hub.link else {
         return;
     };
+    if !hub.banner_visible("offline") {
+        return;
+    }
     p.panel("banner banner-error", |p| {
         p.icon("circle-alert", "destructive icon-lg");
         p.panel("col fill", |p| {
@@ -240,7 +248,18 @@ pub(super) fn offline(p: &mut Page, hub: &Hub) {
             "Open hub-start.log",
             log_exists.then(|| Intent::OpenPath(log.clone())),
         );
+        dismiss_banner(p, "dismiss-offline", "offline".into());
     });
+}
+
+pub(super) fn dismiss_banner(p: &mut Page, id: &str, key: String) {
+    p.button(
+        id,
+        "ghost icon-compact",
+        "Dismiss",
+        Some(Intent::DismissBanner(key)),
+        |p| p.icon("x", "inherit"),
+    );
 }
 
 pub(super) fn toasts(p: &mut Page, hub: &Hub) {
@@ -254,7 +273,7 @@ pub(super) fn toasts(p: &mut Page, hub: &Hub) {
             } else {
                 "toast"
             };
-            p.panel(class, |p| {
+            p.panel_key(&format!("notice-{}", notice.id), class, |p| {
                 p.panel("row", |p| {
                     if notice.is_error() {
                         p.icon("circle-alert", "destructive");

@@ -102,8 +102,6 @@ float3 clampSpecular(Frame f,float3 c){
     float exposure=buffers[NonUniformResourceIndex(f.control.y)].Load<float>(0);float l=dot(c,float3(0.2126,0.7152,0.0722))*exposure;
     return l>16?c*(16/l):c;
 }
-uint2 gridPhase(Frame f){uint t=f.control.w;uint phase=t^(t>>2)^(t>>4)^(t>>6);return uint2(phase&1,(phase>>1)&1);}
-int2 gridPoint(Frame f,int2 p){int2 phase=int2(gridPhase(f));int2 q=max((p-phase)/2,int2(0))*2+phase;return min(q,int2(f.sizes.xy)-1-((int2(f.sizes.xy)-1-phase)&1));}
 // Trace independent bounded secondary paths; the reference uses the same twelve
 // total surface events, without reservoir reconnection or spatial filtering.
 float3 traceSecondaryPath(Frame f,Surface s,float3 v,inout uint rng){
@@ -174,7 +172,12 @@ void reservoirTrace(uint3 tid:SV_DispatchThreadID){
     Frame f=frame();ReservoirFrame reservoir=reservoirFrame();uint2 p=tid.xy;
     uint stride=max((reservoir.gi.w>>1)/2,1);
     float sampleWeight=f.temporal.x>0 || f.temporal.y>0?4.:4.*stride;
-    uint phase=f.control.w^(f.control.w>>2)^(f.control.w>>4);
+    // Stride-2 frames trace alternate grid blocks. The grid phase visits all four
+    // block positions every four frames, so the block parity flips per four-frame
+    // window: every pixel is traced exactly once per eight frames. (Deriving it from
+    // the same XOR fold as the grid phase left half the pixels, a 2x2-block
+    // checkerboard, without rough-specular samples for 64 frames at a time.)
+    uint phase=f.control.w>>2;
     if(f.temporal.x==0 && f.temporal.y==0)p.x=p.x*stride+((p.y+phase)&(stride-1));
     p=p*2+gridPhase(f);
     if(any(p>=f.sizes.xy) || pixel(f,WORLD+f.control.x,p).w==0)return;

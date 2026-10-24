@@ -77,7 +77,8 @@ pub(super) struct EditorReport {
     pub session: String,
     /// Actionable editor error message.
     pub message: String,
-    /// What failed: `action` (default), `thumbnail`, `settings`, `transport` or `render`.
+    /// What failed: `action` (default), `thumbnail`, `settings`, `transport`, `render`
+    /// or `missing` (a scene's asset file).
     pub kind: Option<String>,
     /// What it is about (`asset:@textures/a.png`, `entity:e_8b21`); default `system:editor`.
     pub subject: Option<String>,
@@ -301,8 +302,12 @@ pub(super) struct EditorPreferences {
     pub session: String,
     /// Disable 140 ms decorative transitions.
     pub reduce_motion: Option<bool>,
-    /// Use hardware fidelity lighting, or the fast raster view.
+    /// Legacy switch: true uses the project's default quality (Auto if that is Low),
+    /// false the Low raster view. Prefer `renderQuality`.
     pub quality: Option<bool>,
+    /// Scene viewport quality: `project` (the project's default), `auto`, `low`,
+    /// `medium`, `high` or `epic`. A user preference, never saved in the project.
+    pub render_quality: Option<String>,
 }
 /// Set or reset one setting; the edit is an undoable op attributed to the session.
 #[derive(Schema, Deserialize)]

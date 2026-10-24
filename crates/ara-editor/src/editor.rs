@@ -53,6 +53,9 @@ pub struct Editor {
     controls: Receiver<Control>,
     pub(crate) command_schemas: BTreeMap<String, Value>,
     pub(crate) view_revision: u64,
+    /// Bumped when navigation changes what the Scene view renders (`scene_changed`);
+    /// other navigation changes only redraw the UI over the last Scene image.
+    pub(crate) scene_revision: u64,
     pub(crate) panels_revision: u64,
     /// Bumps when agent activity changes what is tinted (D24 attribution; the
     /// viewport rebuilds its tints on change). Named before D24's just-apply model.
@@ -68,6 +71,8 @@ pub struct Editor {
     pub(crate) play_world: Option<String>,
     /// The Game view's size in physical pixels: the size embedded Play starts at.
     pub(crate) game_size: [u32; 2],
+    /// Missing asset sources already reported (`report_missing_sources`).
+    missing_reported: BTreeSet<String>,
 }
 impl Editor {
     /// Open the project with in-memory preferences (nothing is written outside it).
@@ -198,6 +203,7 @@ impl Editor {
             controls,
             command_schemas,
             view_revision: 0,
+            scene_revision: 0,
             panels_revision: 0,
             review_revision: 0,
             extraction_revision: 0,
@@ -206,6 +212,7 @@ impl Editor {
             play_surfaces,
             play_world: None,
             game_size: [1280, 720],
+            missing_reported: BTreeSet::new(),
         };
         // A scene seen for the first time is framed, like `editor.scene.open` does.
         if editor.state.camera == crate::state::Camera::default()
@@ -282,16 +289,23 @@ impl Editor {
             changed = true;
         }
         while let Ok(state) = self.updates.try_recv() {
-            if self.state.doc != state.doc
-                || self.state.hidden != state.hidden
-                || self.state.light != state.light
-            {
+            // The theme is not here: it only tints deletion ghosts (none since D24),
+            // and re-extracting a large scene for it took seconds.
+            if self.state.doc != state.doc || self.state.hidden != state.hidden {
                 self.extraction_revision += 1;
             }
             if self.state.panels_changed(&state) {
                 self.panels_revision += 1;
             }
+            if self.state.scene_changed(&state) {
+                self.scene_revision += 1;
+            }
+            // GPU detection belongs to this window, not to navigation history: keep
+            // it and re-derive `quality` from the incoming settings.
+            let detected = self.state.detected_quality;
             self.state = state;
+            self.state.detected_quality = detected;
+            self.state.apply_settings();
             self.view_revision += 1;
             changed = true;
         }
@@ -384,6 +398,22 @@ impl Editor {
         if activity {
             self.review_revision += 1;
             self.panels_revision += 1;
+        }
+    }
+    /// Report each model source the open scene references but the disk lacks, once
+    /// per path (Problems names it; the entity draws a placeholder).
+    pub fn report_missing_sources(&mut self, view: &DocumentView) {
+        let root = self.host.root().to_owned();
+        for (path, entity) in view.missing_sources(&root) {
+            if self.missing_reported.insert(path.clone()) {
+                self.report(
+                    "missing",
+                    &format!(
+                        "`{path}` is missing; {entity} draws a placeholder. Restore the file or fix the reference"
+                    ),
+                    Some(&format!("asset:@{path}")),
+                );
+            }
         }
     }
     /// Read-only current edit-world adapter.

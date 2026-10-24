@@ -76,12 +76,26 @@ pub struct Page {
     /// Preview images referenced but not loaded yet.
     pub wanted: Vec<PathBuf>,
     next: u32,
+    scope: String,
 }
 
 impl Page {
     fn auto(&mut self) -> String {
         self.next += 1;
-        format!("n{}", self.next)
+        format!("node-{:x}-{}", stable_id(&self.scope), self.next)
+    }
+    /// Keep generated children stable when an unrelated section is inserted.
+    fn scoped(&mut self, key: &str, body: impl FnOnce(&mut Self)) {
+        let scope = format!("{}/{key}", self.scope);
+        let previous = std::mem::replace(&mut self.scope, scope);
+        let next = std::mem::take(&mut self.next);
+        body(self);
+        self.scope = previous;
+        self.next = next;
+    }
+    /// A keyed collection item; identity follows the item when sorted or filtered.
+    pub fn panel_key(&mut self, key: &str, class: &str, body: impl FnOnce(&mut Self)) {
+        self.scoped(key, |p| p.panel(class, body));
     }
     fn open(&mut self, tag: &str, class: &str, style: &str) {
         let id = self.auto();
@@ -158,7 +172,7 @@ impl Page {
         if let Some(intent) = intent {
             self.bindings.insert(stable_id(id), Binding::Intent(intent));
         }
-        body(self);
+        self.scoped(id, body);
         self.close("button");
     }
     /// Icon + label button, the common case.
@@ -227,29 +241,29 @@ impl Page {
 pub fn page(hub: &Hub, ctx: &Ctx) -> Page {
     let mut page = Page::default();
     page.markup.push_str("<ui id='hub'>");
-    shell::sidebar(&mut page, hub);
+    page.scoped("sidebar", |p| shell::sidebar(p, hub));
     page.leaf("sidebar-edge");
     page.panel("main", |p| {
-        shell::header(p, hub, ctx);
+        p.scoped("header", |p| shell::header(p, hub, ctx));
         let scroll = format!("scroll-{:?}", hub.view).to_lowercase();
         let _ = write!(
             p.markup,
             "<scroll id='{scroll}' class='content-scroll'><panel id='content' class='content'>"
         );
-        shell::offline(p, hub);
-        shell::update(p, hub);
-        match hub.view {
+        p.scoped("offline", |p| shell::offline(p, hub));
+        p.scoped("update", |p| shell::update(p, hub));
+        p.scoped(&format!("{:?}", hub.view), |p| match hub.view {
             crate::model::View::Projects => projects::body(p, hub, ctx),
             crate::model::View::Create => create::body(p, hub, ctx),
             crate::model::View::Installs => installs::body(p, hub),
             crate::model::View::Agents => agents::body(p, hub),
             crate::model::View::Learn => learn::body(p, hub, ctx),
             crate::model::View::Settings => settings::body(p, hub),
-        }
+        });
         p.markup.push_str("</panel></scroll>");
     });
-    projects::menu(&mut page, hub, ctx);
-    shell::toasts(&mut page, hub);
+    page.scoped("menu", |p| projects::menu(p, hub, ctx));
+    page.scoped("toasts", |p| shell::toasts(p, hub));
     page.markup.push_str("</ui>");
     page
 }

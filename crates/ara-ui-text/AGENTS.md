@@ -7,7 +7,9 @@ Public API:
 - `TextSystem::new(font_bytes, family_list)` registers explicit fallback resources.
 - `TextSystem::bundled` ships pinned OFL Noto Sans and Noto Naskh Arabic.
 - `Text` caches shaping separately from line breaking; surviving keyed rows keep this object.
-- `TextSystem::measure` reshapes changed text/style and rebreaks changed widths.
+- `TextSystem::measure` reshapes changed text/style and rebreaks changed widths. Shaped
+  paragraphs are cached by text, family and size (bounded): a recreated `Text` re-breaks a
+  cached layout instead of reshaping; `shapes` counts real shaping only.
 - `inspect` reports bidi runs, original byte clusters and missing glyphs.
 - `TextInput`, `EditEvent`, `Clipboard` provide selection, undo/redo and simulated/native IME seams.
 

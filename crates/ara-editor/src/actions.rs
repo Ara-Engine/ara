@@ -2,6 +2,7 @@
 use crate::state::{EditorState, Navigation, Tool, default_layout};
 use ara_diag::Diagnostic;
 use ara_host::{Cx, Method, Service, parse};
+use ara_render_fidelity::presets::QualityPreset;
 use ara_schema::{Schema, SchemaDb};
 use ara_ui::docking::{Axis, DockDrop, DockLayout, DockNode};
 use glam::Vec3;
@@ -324,6 +325,7 @@ impl EditorService {
             let p: EditorReport = parse(params)?;
             let (code, warning) = match p.kind.as_deref().unwrap_or("action") {
                 "thumbnail" => (crate::codes::THUMBNAIL, true),
+                "missing" => (crate::codes::MISSING_SOURCE, true),
                 "settings" => (crate::codes::SETTINGS, true),
                 "transport" => (crate::codes::TRANSPORT, false),
                 "render" => (crate::codes::RENDER, false),
@@ -461,7 +463,16 @@ impl EditorService {
                         .set("appearance.reduceMotion", Some(json!(v)), author.clone())?;
                 }
                 if let Some(v) = p.quality {
-                    let quality = if v { "fidelity" } else { "raster" };
+                    let low = |c| state.resolve_quality(c) == Some(QualityPreset::Low);
+                    let quality = match (v, low(state.project_quality())) {
+                        (false, _) => "low",
+                        (true, false) => "project",
+                        (true, true) => "auto",
+                    };
+                    self.settings
+                        .set("viewport.quality", Some(json!(quality)), author.clone())?;
+                }
+                if let Some(quality) = p.render_quality {
                     self.settings
                         .set("viewport.quality", Some(json!(quality)), author)?;
                 }

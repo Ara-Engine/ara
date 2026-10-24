@@ -279,6 +279,7 @@ impl VirtualView {
             let s = &mut self.slots[slot];
             let entering = s.key != Some(row.key);
             if entering {
+                ui.invalidate_index();
                 s.key = Some(row.key);
                 ui.nodes[s.node].element.id = format!("{}/key-{}", self.namespace, row.key);
                 ui.nodes[s.node].state = State::default();
