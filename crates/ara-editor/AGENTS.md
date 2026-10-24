@@ -16,8 +16,11 @@ Public boundaries:
   `rc.exe` ships with the Windows SDK MSVC already needs). The window icon comes from ara-platform.
 
 Every content change uses cmd.apply, including gizmo commits and diagnostic fixes.
-Gizmo preview is transient extraction data, never a side-channel document write.
+Gizmo and typed-draft previews are transient renderer patches, never document writes.
 Escape drops the preview; release commits one transform.set batch with its base.
+`app/scene_sync.rs` patches the Scene in place (`world/patch.rs`: moved meshes alone via
+`update_mesh`, the light list) for value edits, drafts and drags; anything `patch_to`
+cannot classify (structure, `MeshRenderer`, mesh names) uploads the whole scene.
 View commands produce ara-ops transactions in a separate navigation document.
 Persist layout with the canonical writer to `.ara/editor-layout.json`.
 

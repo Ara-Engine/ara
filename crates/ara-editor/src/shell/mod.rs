@@ -489,6 +489,10 @@ impl Shell {
     pub(crate) fn resolved_key(&self) -> Option<(String, u64, usize)> {
         self.resolved_cache.as_ref().map(|(key, _)| key.clone())
     }
+    /// Uncommitted field text, keyed by field (`path#axis`, or `@…` for other panels).
+    pub(crate) fn drafts(&self) -> &BTreeMap<String, String> {
+        &self.drafts
+    }
     /// The UI work done since the last call: rebuilds and every runtime frame's counters.
     pub fn take_stats(&mut self) -> UiStats {
         std::mem::take(&mut self.stats)

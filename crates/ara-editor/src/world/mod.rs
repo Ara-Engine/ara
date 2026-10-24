@@ -2,6 +2,7 @@
 pub mod gesture;
 mod ghosts;
 pub(crate) mod gltf;
+mod patch;
 use crate::state::EditorState;
 use ara_diag::Diagnostic;
 use ara_doc::prefab::Resolved;
@@ -10,6 +11,7 @@ use ara_render::scene::{Light, Material, Mesh, Scene, Texture, Vertex};
 use ara_runtime::components::MeshRenderer;
 use glam::{EulerRot, Mat4, Quat, Vec3};
 pub use gltf::ModelCache;
+pub(crate) use patch::Patch;
 use serde_json::Value;
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -191,6 +193,22 @@ impl EditWorldView for DocumentView {
         preview: Option<&gesture::Gesture>,
         models: &mut ModelCache,
     ) -> anyhow::Result<Scene> {
+        self.extract(root, state, preview, models, None)
+    }
+}
+impl DocumentView {
+    /// Extract render geometry. With `only`, meshes come just from those entities (a
+    /// [`Patch`] re-uploads them alone) while lights still cover the whole scene;
+    /// ghosts and the empty-scene fallback are left out. Every record field read here
+    /// must also be classified by `patch.rs`.
+    pub(crate) fn extract(
+        &self,
+        root: &Path,
+        state: &EditorState,
+        preview: Option<&gesture::Gesture>,
+        models: &mut ModelCache,
+        only: Option<&BTreeSet<String>>,
+    ) -> anyhow::Result<Scene> {
         let mut scene = Scene {
             meshes: Vec::new(),
             materials: vec![Material::default()],
@@ -226,7 +244,9 @@ impl EditWorldView for DocumentView {
                 .get("name")
                 .and_then(Value::as_str)
                 .unwrap_or(id);
-            if let Some(record) = entity.record.get("MeshRenderer") {
+            if let Some(record) = entity.record.get("MeshRenderer")
+                && only.is_none_or(|only| only.contains(id))
+            {
                 // Decoded as the engine component, defaults and all: the viewport
                 // draws what Play draws (same material and procedural shapes).
                 let renderer: MeshRenderer =
@@ -337,6 +357,9 @@ impl EditWorldView for DocumentView {
                     });
                 }
             }
+        }
+        if only.is_some() {
+            return Ok(scene);
         }
         self.append_ghosts(root, state, &transforms, &mut scene, models)?;
         // A tiny non-pickable fallback keeps the baseline renderer valid for an empty scene.
