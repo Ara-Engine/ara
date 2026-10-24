@@ -1434,3 +1434,17 @@ Causes:
 Fixes:
 - Use `playerTemplate: conformance` with S7 conformance template pins when validating packaging and crash reporting.
 - For a runtime export, pin an integrated player implementing `ara.player.runtime/1` and require its headless result to match that contract and report verification.
+
+## ARA8114 export::COOK_001: Runtime content cooking stalled
+owner: ara-export, ara-play-host
+shown as: ARA-EXP-COOK-001
+
+No requested import completed within the export's stall timeout. The diagnostic lists pending assets and completed/total counts; prior completed generations remain cached. Total cooking time has no fixed limit while completions continue.
+
+Causes:
+- An importer is stalled, or every admitted import exceeds the no-completion interval.
+- The shared machine is under sustained resource pressure.
+
+Fixes:
+- Inspect the listed source assets and import diagnostics, then retry; completed cache entries are reused.
+- For exceptionally expensive cooks, set `ARA_EXPORT_COOK_STALL_SECONDS` to a larger positive integer (default 600).
