@@ -18,6 +18,8 @@ mod pipeline;
 pub mod preset;
 mod runtime;
 mod runtime_template;
+/// Project gameplay modules linked into the shipping NativeAOT host ABI.
+pub mod scripts;
 pub use runtime_template::build_runtime_template;
 mod shipping_doctor;
 /// Debug-symbol archive production and stripping tool discovery.

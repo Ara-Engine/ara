@@ -8,6 +8,10 @@ ara-runtime, ara-sim. The .NET side lives in `dotnet/`.
 
 - `ScriptPlugin::new(ScriptSettings { host_dir, compile_server, modules }) -> (plugin,
   Receiver<ScriptEvent>)`; pass the plugin to `Runtime::new`.
+- `ScriptHostConfig::{Development, NativeAot}` selects the host; `ScriptPlugin::shipping`
+  takes an export-local `scripts.json`. It validates ABI/layout before loading, then
+  registers statically linked modules through the same gameplay ABI and snapshots.
+  No CoreCLR, Roslyn, module folders, watcher or hot reload is used in shipping.
 - `ScriptPlugin::prewarm(settings)` loads CoreCLR, Ara.Runtime, the compile server
   and modules on an empty world. `prepare` moves that world and its host together
   into the runtime; component IDs remain valid. No gameplay tick runs during warmup.

@@ -40,9 +40,15 @@ impl NativeUi {
                 ])],
                 self.fence,
             )?;
+            let waited = std::time::Instant::now();
             device.wait_for_fences(&[self.fence], true, u64::MAX)?;
+            self.gpu_wait.set(self.gpu_wait.get() + waited.elapsed());
         }
         Ok(())
+    }
+    /// Time spent waiting for UI submissions (uploads and draws) since the last call.
+    pub fn take_gpu_wait(&self) -> std::time::Duration {
+        self.gpu_wait.take()
     }
     pub(super) fn upload_texture(&self, image: &Image, staging: &Buffer) -> Result<()> {
         self.start()?;

@@ -46,8 +46,7 @@ impl Shell {
         if editor.state.asset_path.is_some() {
             return self.import_panel(editor, out);
         }
-        let resolved = crate::world::resolve(editor.host.store(), &editor.state.doc)
-            .map_err(|d| format!("{d:?}"))?;
+        let resolved = self.resolved(editor)?;
         if editor.state.selection.is_empty() {
             self.empty(
                 out,

@@ -11,6 +11,12 @@ use std::{
 /// Read access to published cooked generations. The edit-world owner pins which
 /// generation is live; players never run importers.
 pub trait AssetSource: Send + Sync {
+    /// Published action digest from immutable generation metadata, without reading
+    /// or decoding a payload. `None` means unavailable; callers then use `load`.
+    fn digest(&self, _asset: &str) -> Option<Digest> {
+        None
+    }
+
     /// The live generation of an imported asset (`as_…` sidecar ID), if published.
     fn load(&self, asset: &str) -> Result<Option<(Digest, CachedImport)>>;
 }
@@ -33,6 +39,10 @@ impl CachedAssets {
 }
 
 impl AssetSource for CachedAssets {
+    fn digest(&self, asset: &str) -> Option<Digest> {
+        self.pins.get(asset).copied()
+    }
+
     fn load(&self, asset: &str) -> Result<Option<(Digest, CachedImport)>> {
         let Some(&digest) = self.pins.get(asset) else {
             return Ok(None);
@@ -46,6 +56,10 @@ impl AssetSource for CachedAssets {
 pub struct MemoryAssets(pub BTreeMap<String, CachedImport>);
 
 impl AssetSource for MemoryAssets {
+    fn digest(&self, asset: &str) -> Option<Digest> {
+        self.0.get(asset).map(|cached| cached.key)
+    }
+
     fn load(&self, asset: &str) -> Result<Option<(Digest, CachedImport)>> {
         Ok(self.0.get(asset).map(|c| (c.key, c.clone())))
     }
@@ -105,6 +119,13 @@ impl Models {
     /// Decodes `asset` from `source` unless that exact generation is already loaded.
     /// Returns whether a new generation was installed.
     pub fn load(&mut self, source: &dyn AssetSource, asset: &str) -> Result<bool> {
+        if self
+            .models
+            .get(asset)
+            .is_some_and(|model| source.digest(asset) == Some(model.digest))
+        {
+            return Ok(false);
+        }
         self.wanted.insert(asset.to_owned());
         let (digest, cached) = source
             .load(asset)?

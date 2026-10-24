@@ -28,15 +28,14 @@ impl Shell {
         );
         out.push_str(&format!("<button id='hierarchy-filter' class='{} icon-button' label='Filter by type' description='Show only lights, cameras, meshes, prefabs, audio or effects' action='Dispatch'>{}</button>",if filtered{"selected"}else{"ghost"},if filtered{icons::icon_in("hierarchy-filter","funnel","on-selection")}else{icons::icon("hierarchy-filter","funnel")}));
         out.push_str("</panel>");
-        let resolved = crate::world::resolve(editor.host.store(), &editor.state.doc)
-            .map_err(|d| format!("{d:?}"))?;
+        let resolved = self.resolved(editor)?;
         let changed = editor.agent_fields();
         let changed_entities: std::collections::BTreeSet<_> =
             changed.keys().map(|(id, _)| id.as_str()).collect();
         self.hierarchy_tints = editor.agent_tints();
         self.hierarchy_ghosts.clear();
         let mut children: BTreeMap<Option<&str>, Vec<&String>> = BTreeMap::new();
-        for (id, e) in &resolved {
+        for (id, e) in resolved.iter() {
             children.entry(e.parent.as_deref()).or_default().push(id);
         }
         for kids in children.values_mut() {
@@ -118,19 +117,6 @@ impl Shell {
             {
                 stack.extend(kids.iter().rev().map(|kid| (*kid, depth + 1)));
             }
-        }
-        for (id, record) in editor.view()?.ghosts() {
-            let key = crate::world::render_id(id);
-            self.hierarchy.items.push((
-                key,
-                format!(
-                    "{} (deleted)",
-                    record.get("name").and_then(Value::as_str).unwrap_or(id)
-                ),
-            ));
-            self.hierarchy_entities.insert(key, id.clone());
-            self.hierarchy_ghosts.insert(key);
-            self.hierarchy_tints.insert(key, "destructive-foreground");
         }
         let scene = editor
             .host

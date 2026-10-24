@@ -55,6 +55,10 @@ impl PublishedSnapshot {
     }
 }
 impl AssetSource for PublishedSnapshot {
+    fn digest(&self, asset: &str) -> Option<Digest> {
+        self.entries.get(asset).map(|generation| generation.digest)
+    }
+
     fn load(&self, asset: &str) -> ara_runtime::Result<Option<(Digest, ara_asset::CachedImport)>> {
         let Some(generation) = self.entries.get(asset) else {
             return Ok(None);

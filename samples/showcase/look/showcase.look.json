@@ -71,11 +71,5 @@
     "to": "character",
     "frames": 6,
     "step": 10
-  },
-  "components": {
-    "PostProcess": {
-      "toneMapping": "neutral",
-      "bloom": 0.04
-    }
   }
 }

@@ -103,6 +103,15 @@ const fn def(
     }
 }
 use Scope::{Project, User};
+/// `viewport.quality` choices: the project's default, Auto, or a preset.
+pub const QUALITY_OVERRIDES: &[(&str, &str)] = &[
+    ("project", "Project default"),
+    ("auto", "Auto"),
+    ("low", "Low"),
+    ("medium", "Medium"),
+    ("high", "High"),
+    ("epic", "Epic"),
+];
 /// Every setting, grouped by category in display order.
 pub const DEFS: &[Def] = &[
     def(
@@ -150,10 +159,10 @@ pub const DEFS: &[Def] = &[
         "viewport.quality",
         User,
         "Viewport",
-        "Scene rendering",
-        "Fidelity uses the ray-traced view when the GPU supports it; Raster is the fast preview.",
-        Kind::Choice(&[("fidelity", "Fidelity"), ("raster", "Raster")]),
-        Lit::S("fidelity"),
+        "Scene quality",
+        "Lit quality of your Scene view: the project's default, detected from the GPU, or a preset. Low is the raster preview; never saved in the project.",
+        Kind::Choice(QUALITY_OVERRIDES),
+        Lit::S("project"),
     ),
     def(
         "viewport.grid",
@@ -250,6 +259,21 @@ pub const DEFS: &[Def] = &[
         "Scene opened at startup and played by default (project path).",
         Kind::Text,
         Lit::S(""),
+    ),
+    def(
+        "rendering.quality",
+        Project,
+        "Rendering",
+        "Quality",
+        "Default quality for Play, exported players and the Scene view. Auto picks High on ray-tracing GPUs (Medium under 8 GiB), Low otherwise; Epic is never automatic.",
+        Kind::Choice(&[
+            ("auto", "Auto"),
+            ("low", "Low"),
+            ("medium", "Medium"),
+            ("high", "High"),
+            ("epic", "Epic"),
+        ]),
+        Lit::S("auto"),
     ),
     def(
         "play.mode",
@@ -387,6 +411,20 @@ impl Settings {
             if let Some(v) = manifest[field].as_str() {
                 project.insert(key.into(), v.into());
             }
+        }
+        // Players read `rendering.quality` from the manifest's own `rendering` object.
+        if let Some(v) = manifest["rendering"]["quality"].as_str() {
+            project.insert("rendering.quality".into(), v.into());
+        }
+        // Before presets: Fidelity meant the project's default, Raster meant Low.
+        match user.get("viewport.quality").and_then(Value::as_str) {
+            Some("fidelity") => {
+                user.remove("viewport.quality");
+            }
+            Some("raster") => {
+                user.insert("viewport.quality".into(), "low".into());
+            }
+            _ => {}
         }
         // Unknown or invalid stored values fall back to their defaults.
         user.retain(|k, v| def_of(k).is_some_and(|d| d.scope == User && valid(d, v).is_ok()));
@@ -569,6 +607,26 @@ impl Settings {
                         m.remove(field);
                     }
                 }
+            }
+        }
+        // `rendering.quality` lives in the manifest's `rendering` object (other
+        // rendering fields stay); the default (auto) is written by omission.
+        let quality = settings.remove("rendering.quality");
+        if let Some(m) = manifest.as_object_mut() {
+            let mut rendering = m
+                .remove("rendering")
+                .and_then(|r| r.as_object().cloned())
+                .unwrap_or_default();
+            match quality {
+                Some(v) => {
+                    rendering.insert("quality".into(), v);
+                }
+                None => {
+                    rendering.remove("quality");
+                }
+            }
+            if !rendering.is_empty() {
+                m.insert("rendering".into(), Value::Object(rendering));
             }
         }
         if let Some(m) = manifest.as_object_mut() {

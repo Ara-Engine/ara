@@ -25,7 +25,7 @@ use ara_runtime::{
 use ara_schema::Schema;
 use ara_schema::SchemaDb;
 use ara_script::{
-    EditOrigin, EngineBindings, ModuleSpec, ScriptConfig, ScriptHost,
+    EditOrigin, ModuleSpec, ScriptConfig, ScriptHost,
     abi::{ReloadReport, Tick},
 };
 use ara_sim::{
@@ -54,6 +54,32 @@ pub struct ScriptSettings {
     pub modules: Vec<PathBuf>,
 }
 
+/// Selects development compilation or a precompiled shipping image.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ScriptHostConfig {
+    /// Reloadable editor/Play host (the default configuration).
+    Development(ScriptSettings),
+    /// Portable NativeAOT metadata adjacent to the linked gameplay image.
+    NativeAot {
+        /// Export-local `scripts.json` path.
+        manifest: PathBuf,
+    },
+}
+
+impl From<ScriptSettings> for ScriptHostConfig {
+    fn from(settings: ScriptSettings) -> Self {
+        Self::Development(settings)
+    }
+}
+
+/// ABI/layout identity for the engine components exposed by this runtime plugin.
+pub fn shipping_layout(schema: &SchemaDb) -> Result<u64> {
+    let bindings = ara_script::engine_bindings();
+    let layouts = ara_script::csgen::engine_layouts(schema, &bindings.names())
+        .map_err(|d| failed(vec![d]))?;
+    Ok(ara_script::abi::layout_hash(&layouts))
+}
+
 /// What the C# host reported, drained by the play process between ticks.
 #[derive(Debug, Clone)]
 pub enum ScriptEvent {
@@ -72,7 +98,7 @@ pub enum ScriptEvent {
 /// The C# runtime plugin. Create with [`ScriptPlugin::new`] and pass it to
 /// `Runtime::new`; keep the receiver to forward [`ScriptEvent`]s.
 pub struct ScriptPlugin {
-    settings: ScriptSettings,
+    config: ScriptHostConfig,
     events: Sender<ScriptEvent>,
     /// The host between `prepare` and `install`, only reached through `&mut self`
     /// (`Mutex::get_mut`, never locked): `ScriptHost` is `Send` but not `Sync`.
@@ -82,12 +108,12 @@ pub struct ScriptPlugin {
 }
 
 impl ScriptPlugin {
-    /// A plugin for `settings` and the receiving end of its event channel.
-    pub fn new(settings: ScriptSettings) -> (Self, Receiver<ScriptEvent>) {
+    /// A plugin for the selected host and the receiving end of its event channel.
+    pub fn new(config: impl Into<ScriptHostConfig>) -> (Self, Receiver<ScriptEvent>) {
         let (events, receiver) = channel();
         (
             Self {
-                settings,
+                config: config.into(),
                 events,
                 host: std::sync::Mutex::new(None),
                 components: Vec::new(),
@@ -97,11 +123,19 @@ impl ScriptPlugin {
         )
     }
 
-    /// Starts CoreCLR, Roslyn and the module generations before a pooled player is
-    /// offered for Play. The entire empty world moves with its host: component IDs
-    /// and the host's ECS bindings never cross worlds.
-    pub fn prewarm(settings: ScriptSettings) -> Result<(Self, Receiver<ScriptEvent>)> {
-        let (mut plugin, events) = Self::new(settings);
+    /// A shipping image described by an export-local `scripts.json`. Linked modules
+    /// use the real gameplay ABI; no CoreCLR, compiler, watcher or reload is started.
+    pub fn shipping(manifest: impl Into<PathBuf>) -> (Self, Receiver<ScriptEvent>) {
+        Self::new(ScriptHostConfig::NativeAot {
+            manifest: manifest.into(),
+        })
+    }
+
+    /// Prepares the selected host before a pooled player is offered for Play.
+    /// Development warms CoreCLR/Roslyn; shipping loads only its linked image.
+    /// The empty world moves with its host so component IDs never cross worlds.
+    pub fn prewarm(config: impl Into<ScriptHostConfig>) -> Result<(Self, Receiver<ScriptEvent>)> {
+        let (mut plugin, events) = Self::new(config);
         let mut world = World::new();
         let mut schema = ara_runtime::schema(&[])?;
         plugin.prepare(&mut world, &mut schema)?;
@@ -111,7 +145,7 @@ impl ScriptPlugin {
 
     /// Whether this prepared host belongs to the requested module configuration.
     pub fn matches(&self, settings: &ScriptSettings) -> bool {
-        &self.settings == settings
+        matches!(&self.config, ScriptHostConfig::Development(prepared) if prepared == settings)
     }
 }
 
@@ -160,18 +194,56 @@ impl RuntimePlugin for ScriptPlugin {
             }
             return Ok(());
         }
-        let engine = EngineBindings::builtin();
-        let mut config = ScriptConfig::jit(&self.settings.host_dir);
-        config.compile_server = self.settings.compile_server.clone();
-        let mut host = ScriptHost::start(config, schema.clone(), &engine, world).map_err(failed)?;
-        let specs = self
-            .settings
-            .modules
-            .iter()
-            .map(|dir| ModuleSpec::from_dir(dir))
-            .collect::<std::result::Result<Vec<_>, _>>()
-            .map_err(|d| failed(vec![d]))?;
+        let engine = ara_script::engine_bindings();
+        let (config, specs, manifest) = match &self.config {
+            ScriptHostConfig::Development(settings) => {
+                let mut config = ScriptConfig::jit(&settings.host_dir);
+                config.compile_server = settings.compile_server.clone();
+                let specs = settings
+                    .modules
+                    .iter()
+                    .map(|dir| ModuleSpec::from_dir(dir))
+                    .collect::<std::result::Result<Vec<_>, _>>()
+                    .map_err(|d| failed(vec![d]))?;
+                (config, specs, None)
+            }
+            ScriptHostConfig::NativeAot { manifest: path } => {
+                let manifest = ara_script::shipping::ScriptManifest::read(path)
+                    .map_err(|d| failed(vec![d]))?;
+                manifest
+                    .validate(shipping_layout(schema)?)
+                    .map_err(|d| failed(vec![d]))?;
+                let config = ScriptConfig::native_aot(
+                    manifest.library_path(path).map_err(|d| failed(vec![d]))?,
+                );
+                (config, Vec::new(), Some(manifest))
+            }
+        };
+        let mut host = ScriptHost::start(config, schema.clone(), &engine, world).map_err(|mut problems| {
+            if manifest.is_some() {
+                for diagnostic in &mut problems {
+                    if diagnostic.code == ara_script::codes::STALE_BINDINGS {
+                        diagnostic.message.push_str("; rebuild shipping scripts and the player with the same Ara SDK and export again");
+                    }
+                }
+            }
+            failed(problems)
+        })?;
         host.load_modules(world, &specs).map_err(failed)?;
+        if let Some(manifest) = manifest {
+            let mut actual: Vec<_> = host.modules().into_iter().map(|m| m.name).collect();
+            let mut expected = manifest.modules;
+            actual.sort();
+            expected.sort();
+            if actual != expected {
+                return Err(failed(vec![ara_diag::Diagnostic::error(
+                    ara_script::codes::LOAD_FAILED,
+                    format!(
+                        "shipping module inventory mismatch: expected {expected:?}, loaded {actual:?}; export again"
+                    ),
+                )]));
+            }
+        }
         let _ = self
             .events
             .send(ScriptEvent::Types(types_files(&specs, &host)));
@@ -224,12 +296,14 @@ impl RuntimePlugin for ScriptPlugin {
         if !world.contains_resource::<Scripts>() {
             return Ok(());
         }
-        let specs: Vec<ModuleSpec> = self
-            .settings
-            .modules
-            .iter()
-            .filter_map(|dir| ModuleSpec::from_dir(dir).ok())
-            .collect();
+        let specs: Vec<ModuleSpec> = match &self.config {
+            ScriptHostConfig::Development(settings) => settings
+                .modules
+                .iter()
+                .filter_map(|dir| ModuleSpec::from_dir(dir).ok())
+                .collect(),
+            ScriptHostConfig::NativeAot { .. } => Vec::new(),
+        };
         world.resource_scope::<Scripts, _>(|world, mut scripts| {
             let boundary = scripts.host.tick_boundary(world);
             if boundary.reloaded {

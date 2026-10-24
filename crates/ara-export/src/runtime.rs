@@ -11,14 +11,11 @@ use std::{
 pub(crate) fn inputs(
     project: &Path,
     worker: &Path,
+    scripts: Option<ara_play::ScriptScene>,
     report: impl FnMut(ara_play_host::assets::CookProgress) -> Result<(), String>,
 ) -> Result<Vec<Input>> {
-    let mut scene = ara_play_host::package_scene_with_progress(project, worker, report)
+    let mut scene = ara_play_host::package_scene_for_export(project, worker, scripts, report)
         .map_err(anyhow::Error::msg)?;
-    ensure!(
-        scene.scripts.is_none(),
-        "exported C# modules require a shipping script host"
-    );
     let cache = FileCache::at(&scene.cache)?;
     let mut generations = BTreeSet::new();
     let mut inputs = Vec::new();
