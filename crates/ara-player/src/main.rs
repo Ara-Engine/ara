@@ -47,7 +47,7 @@ struct Args {
     #[arg(long, default_value = "1280x720")]
     size: String,
     /// Persistent pipeline-cache directory.
-    #[arg(long, default_value = ".ara/gpu")]
+    #[arg(long, default_value_os_t = default_gpu_cache())]
     gpu_cache: PathBuf,
     /// Override project quality: auto, low, medium, high or epic.
     #[arg(long)]
@@ -94,6 +94,20 @@ fn main() {
 fn parse_size(text: &str) -> Result<[u32; 2]> {
     let (w, h) = text.split_once('x').context("size must be WIDTHxHEIGHT")?;
     Ok([w.parse()?, h.parse()?])
+}
+
+/// Standalone launches cache driver pipelines outside the current working folder.
+/// Pools still pass their explicit cache; tests inherit their isolated config root.
+fn default_gpu_cache() -> PathBuf {
+    if let Some(root) = std::env::var_os("ARA_CONFIG_DIR") {
+        return PathBuf::from(root).join("gpu");
+    }
+    for variable in ["LOCALAPPDATA", "XDG_CACHE_HOME"] {
+        if let Some(root) = std::env::var_os(variable) {
+            return PathBuf::from(root).join("Ara/gpu");
+        }
+    }
+    std::env::temp_dir().join("ara-player-gpu")
 }
 
 /// Frames the live audio device keeps queued (43 ms at 48 kHz): a hardware period plus
