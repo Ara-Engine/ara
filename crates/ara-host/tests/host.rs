@@ -3,7 +3,7 @@
 
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use ara_diag::{Diagnostic, FixAction, codes};
 use ara_host::{Cx, Host, HostConfig, Method, Project, Service};
@@ -676,6 +676,72 @@ fn external_edits_merge_in_or_are_reported_without_overwriting() {
     );
     assert_eq!(logs["total"], 1);
     assert_eq!(name_of(&mut h, &s, "e_flr1"), "Agent");
+}
+
+/// Tick until `done`, failing after ten seconds.
+fn tick_until(h: &mut Host, what: &str, mut done: impl FnMut(&mut Host) -> bool) {
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while !done(h) {
+        assert!(Instant::now() < deadline, "timed out waiting for {what}");
+        h.tick();
+        std::thread::sleep(Duration::from_millis(10));
+    }
+}
+
+/// With its own cadence (OS notifications, or polling without them) the file
+/// thread saves and watches off the tick: the host's saves never come back as
+/// external edits, and real edits and new documents still arrive.
+#[test]
+fn the_file_thread_saves_and_watches_off_the_tick() {
+    let dir = project("file-thread");
+    let config = HostConfig {
+        debounce: Duration::from_millis(20),
+        seed: Some(70),
+        ..HostConfig::default()
+    };
+    let mut h = Host::open(Project::open(&dir).expect("project"), config).expect("host");
+    let s = begin(&mut h, "agent:claude");
+    call(
+        &mut h,
+        "cmd.apply",
+        json!({ "session": s, "doc": "levels/arena.scene", "why": "rename the floor",
+                "commands": [{ "cmd": "property.set", "args": { "entity": "e_flr1", "path": "name", "value": "Saved" } }] }),
+    );
+    tick_until(&mut h, "the debounced save", |_| {
+        scene(&dir).contains("\"Saved\"")
+    });
+    // Long enough for the thread to see its own write.
+    for _ in 0..30 {
+        h.tick();
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    let merged = |h: &mut Host| {
+        call(h, "logs", json!({ "session": s, "codes": ["ARA1907"] }))["total"].clone()
+    };
+    assert_eq!(
+        merged(&mut h),
+        0,
+        "the host's own save came back as an edit"
+    );
+
+    fs::write(
+        dir.join("levels/arena.scene"),
+        scene(&dir).replace("\"Saved\"", "\"Edited\""),
+    )
+    .expect("edit");
+    tick_until(&mut h, "the external edit", |h| {
+        name_of(h, &s, "e_flr1") == "Edited"
+    });
+    assert_eq!(merged(&mut h), 1);
+
+    fs::write(
+        dir.join("levels/extra.scene"),
+        r#"{"$schema":"ara://schema/scene/1","id":"sc_extra001","records":{}}"#,
+    )
+    .expect("new document");
+    tick_until(&mut h, "the new document", |h| {
+        h.store().workspace().find("levels/extra.scene").is_some()
+    });
 }
 
 #[test]
