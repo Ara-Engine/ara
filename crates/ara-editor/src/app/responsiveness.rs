@@ -155,6 +155,9 @@ pub(super) struct Sample {
     pub rebuild_ms: f64,
     pub mount_ms: f64,
     pub reconcile_ms: f64,
+    /// Of `mount_ms`: the mount's layout frame, and the virtual row pools.
+    pub frame_ms: f64,
+    pub rows_ms: f64,
     pub work: ara_ui::Work,
     /// Injected input to the end of present, when this frame carried input.
     pub input_to_present_ms: Option<f64>,
@@ -461,6 +464,8 @@ impl Probe {
         sample.rebuild_ms = stats.rebuild_ms;
         sample.mount_ms = stats.mount_ms;
         sample.reconcile_ms = stats.reconcile_ms;
+        sample.frame_ms = stats.frame_ms;
+        sample.rows_ms = stats.rows_ms;
         sample.work = stats.work;
         if sample.presented {
             sample.input_to_present_ms = self.injected.map(|t| t.elapsed().as_secs_f64() * 1000.);

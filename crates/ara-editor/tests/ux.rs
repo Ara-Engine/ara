@@ -1001,3 +1001,55 @@ fn build_profile_comes_from_a_command_and_csharp_projects_can_build() {
         .unwrap();
     assert_eq!(current["enabled"], true, "{current}");
 }
+
+/// Rebuild cost by stage for UI-only changes (a toolbar toggle, a dock tab), the
+/// click-frame work `--verify-responsiveness` measures on Outpost. Prints averages;
+/// run with `--ignored --nocapture`.
+#[test]
+#[ignore = "timing measurement; run explicitly"]
+fn rebuild_cost_by_stage() {
+    use ara_editor::shell::commands::Target;
+    let project = Project::new();
+    let mut editor = Editor::open(&project.0).unwrap();
+    let mut shell = Shell::new(&mut editor, [1440., 900.]).unwrap();
+    let mut measure = |label: &str, act: &mut dyn FnMut(&mut Shell, &mut Editor, usize)| {
+        for i in 0..10 {
+            act(&mut shell, &mut editor, i);
+        }
+        shell.take_stats();
+        let runs = 60;
+        let started = std::time::Instant::now();
+        for i in 0..runs {
+            act(&mut shell, &mut editor, i);
+        }
+        let total = started.elapsed().as_secs_f64() * 1000. / runs as f64;
+        let s = shell.take_stats();
+        let per = |v: f64| v / f64::from(s.rebuilds.max(1));
+        println!(
+            "{label}: {total:.2} ms/act, {} rebuilds; rebuild {:.2} = markup {:.2} + mount {:.2} (reconcile {:.2}, frame {:.2}, rows {:.2}); restyled {} paint {}",
+            s.rebuilds,
+            per(s.rebuild_ms),
+            per(s.rebuild_ms - s.mount_ms),
+            per(s.mount_ms),
+            per(s.reconcile_ms),
+            per(s.frame_ms),
+            per(s.rows_ms),
+            s.work.restyled / s.rebuilds.max(1) as usize,
+            s.work.paint_nodes / s.rebuilds.max(1) as usize,
+        );
+    };
+    measure("toolbar toggle", &mut |shell, editor, _| {
+        shell
+            .run_command(editor, "view.space", &Target::None)
+            .unwrap();
+        shell.rebuild_if_stale(editor).unwrap();
+    });
+    measure("dock tab", &mut |shell, editor, i| {
+        let panel = if i % 2 == 0 { "console" } else { "assets" };
+        editor
+            .action("editor.focus", json!({ "panel": panel }))
+            .unwrap();
+        editor.sync();
+        shell.rebuild_if_stale(editor).unwrap();
+    });
+}
