@@ -12,18 +12,19 @@ use crate::check::Logs;
 pub(crate) type Binaries = BTreeMap<String, PathBuf>;
 
 #[derive(Deserialize)]
-struct Message {
-    reason: String,
+pub(crate) struct Message {
+    pub(crate) reason: String,
     #[serde(default)]
     package_id: String,
-    executable: Option<PathBuf>,
-    target: Option<crate::workspace::Target>,
-    profile: Option<Profile>,
+    pub(crate) executable: Option<PathBuf>,
+    pub(crate) target: Option<crate::workspace::Target>,
+    pub(crate) profile: Option<Profile>,
+    pub(crate) manifest_path: Option<PathBuf>,
 }
 
 #[derive(Deserialize)]
-struct Profile {
-    test: bool,
+pub(crate) struct Profile {
+    pub(crate) test: bool,
 }
 
 pub(crate) fn artifacts(output: &str) -> Result<Binaries> {
@@ -62,16 +63,25 @@ pub(crate) fn artifacts(output: &str) -> Result<Binaries> {
 pub(crate) fn prepare(
     root: &Path,
     test_args: &[String],
+    metadata: &crate::workspace::Metadata,
+    selected: &std::collections::BTreeSet<String>,
     logs: &mut Logs,
 ) -> Result<Option<Binaries>> {
     let mut compile = test_args.to_vec();
     compile[0] = "build".into();
     compile.retain(|arg| arg != "--no-fail-fast");
+    if metadata
+        .packages
+        .iter()
+        .filter(|p| selected.contains(&p.name))
+        .any(|p| p.has_library())
+    {
+        compile.push("--lib".into());
+    }
     // --tests keeps dev-dependency features active, even on library-only roots.
     // --examples preserves cargo test's default example-compilation coverage.
     compile.extend(
         [
-            "--lib",
             "--tests",
             "--bins",
             "--examples",

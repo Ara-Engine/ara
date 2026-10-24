@@ -21,7 +21,14 @@ impl Directories {
             .map_or_else(|| root.join("target"), PathBuf::from);
         let build = std::env::var_os("CARGO_BUILD_BUILD_DIR")
             .filter(|value| !value.is_empty())
+            .or_else(|| std::env::var_os("ARA_SHARED_BUILD_DIR").filter(|v| !v.is_empty()))
             .map_or_else(|| root.join("target"), PathBuf::from);
+        if let Some(shared) = std::env::var_os("ARA_SHARED_BUILD_DIR").filter(|v| !v.is_empty()) {
+            ensure!(
+                same_path(&resolve(root, Path::new(&shared))?, &resolve(root, &build)?),
+                "ARA_SHARED_BUILD_DIR and CARGO_BUILD_BUILD_DIR disagree; use the shared directory for both so admission protects live artifacts"
+            );
+        }
         for (name, path) in [
             ("Cargo target directory", &target),
             ("Cargo build directory", &build),
@@ -133,6 +140,7 @@ struct Configured {
 pub(crate) fn disk_check(root: &Path) -> Result<bool> {
     let mut healthy = true;
     for name in [
+        "ARA_SHARED_BUILD_DIR",
         "CARGO_TARGET_DIR",
         "CARGO_BUILD_TARGET_DIR",
         "CARGO_BUILD_BUILD_DIR",

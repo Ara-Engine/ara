@@ -514,6 +514,7 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                     &mut gpu,
                     &mut ui_renderer,
                     &mut renderer,
+                    &mut scene_view,
                 )?;
                 if changed {
                     icon_dpi = None;
@@ -528,6 +529,7 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                     &mut gpu,
                     &mut ui_renderer,
                     &mut renderer,
+                    &mut scene_view,
                 )?;
                 dirty |= changed;
                 scene_dirty |= changed;
@@ -541,6 +543,7 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                     &mut ui_renderer,
                     &mut renderer,
                     &floats,
+                    &mut scene_view,
                 )?;
                 if changed {
                     icon_dpi = None;
@@ -563,6 +566,7 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                     &mut gpu,
                     &mut ui_renderer,
                     &mut renderer,
+                    &mut scene_view,
                 )?;
                 dirty |= changed;
                 scene_dirty |= changed;

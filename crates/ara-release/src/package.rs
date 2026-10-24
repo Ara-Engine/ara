@@ -1,5 +1,5 @@
 use crate::{
-    archive, notices,
+    archive, notices, references,
     support::{self, copy, copy_tree, files, run},
 };
 use anyhow::{Context, Result, ensure};
@@ -18,7 +18,7 @@ const BINARIES: &[(&str, &str)] = &[
     ("ara-nav", "ara-nav-worker"),
     ("ara-terrain", "ara-terrain-worker"),
     ("ara-shader-cook", "ara-shader-cook"),
-    ("ara-release", "ara-setup"),
+    ("ara-setup", "ara-setup"),
 ];
 const RESOURCES: &[&str] = &[
     "ara-render",
@@ -58,6 +58,8 @@ pub fn package(root: &Path, version: &str) -> Result<()> {
     for (package, binary) in BINARIES {
         build.args(["-p", package, "--bin", binary]);
     }
+    // Packaging tool only (never shipped): writes the samples' generated kits.
+    build.args(["-p", "ara-samples", "--bin", "ara-samples"]);
     // A Hub UI package can land independently; no fake Hub executable is shipped.
     let hub = root.join("crates/ara-hub/Cargo.toml").is_file();
     if hub {
@@ -306,10 +308,18 @@ fn templates(root: &Path, stage: &Path, dist: &Path) -> Result<()> {
         &dist.join("logs/starter.log"),
     )?;
     let samples = root.join("samples");
+    let templates = stage.join("templates");
     if samples.is_dir() {
+        if samples.join("assets.lock.json").is_file() {
+            copy(
+                &samples.join("assets.lock.json"),
+                &templates.join("assets.lock.json"),
+            )?;
+        }
         for entry in fs::read_dir(&samples)? {
             let path = entry?.path();
             if path.join("ara.project.json").is_file() {
+                let name = path.file_name().context("sample directory")?;
                 for file in files(&path)? {
                     let rel = file.strip_prefix(&path)?;
                     if !rel.components().any(|c| {
@@ -317,23 +327,27 @@ fn templates(root: &Path, stage: &Path, dist: &Path) -> Result<()> {
                             .iter()
                             .any(|name| c.as_os_str() == *name)
                     }) {
-                        copy(
-                            &file,
-                            &stage
-                                .join("templates")
-                                .join(path.file_name().context("sample directory")?)
-                                .join(rel),
-                        )?;
+                        copy(&file, &templates.join(name).join(rel))?;
                     }
                 }
-                sample_thumbnail(&path, &stage.join("templates"))?;
+                sample_thumbnail(&path, &templates)?;
+                // Kits are generated and git-ignored: write them into the staged copy
+                // (no document is authored, so the checkout's scenes never drift).
+                run(
+                    Command::new(root.join("target/release/ara-samples.exe"))
+                        .arg("--samples")
+                        .arg(&templates)
+                        .arg("kits")
+                        .arg(name),
+                    &dist.join(format!("logs/kits-{}.log", name.to_string_lossy())),
+                )?;
             }
         }
-        if samples.join("assets.lock.json").is_file() {
-            copy(
-                &samples.join("assets.lock.json"),
-                &stage.join("templates/assets.lock.json"),
-            )?;
+    }
+    for entry in fs::read_dir(&templates)? {
+        let template = entry?.path();
+        if template.join("ara.project.json").is_file() {
+            references::check(&template)?;
         }
     }
     Ok(())

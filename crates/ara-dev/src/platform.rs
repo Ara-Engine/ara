@@ -2,6 +2,37 @@
 
 use anyhow::Result;
 
+/// Admission control leaves half the currently available physical RAM for other agents.
+pub(crate) fn available_memory_mib() -> Option<u64> {
+    #[cfg(windows)]
+    {
+        use windows_sys::Win32::System::SystemInformation::{GlobalMemoryStatusEx, MEMORYSTATUSEX};
+        // SAFETY: this Windows POD is zeroed and its size initialized before the call.
+        let mut status: MEMORYSTATUSEX = unsafe { std::mem::zeroed() };
+        status.dwLength = std::mem::size_of_val(&status) as u32;
+        // SAFETY: status is a writable structure with the expected API size.
+        if unsafe { GlobalMemoryStatusEx(&mut status) } != 0 {
+            return Some(status.ullAvailPhys / 1_048_576);
+        }
+    }
+    #[cfg(target_os = "linux")]
+    {
+        if let Ok(text) = std::fs::read_to_string("/proc/meminfo") {
+            return text
+                .lines()
+                .find_map(|line| {
+                    line.strip_prefix("MemAvailable:")?
+                        .split_whitespace()
+                        .next()?
+                        .parse::<u64>()
+                        .ok()
+                })
+                .map(|kib| kib / 1024);
+        }
+    }
+    None
+}
+
 /// Windows allows renaming a loaded image, but Cargo cannot replace its old path.
 #[cfg(windows)]
 pub(crate) fn release_executable_path(target: &std::path::Path) -> Result<()> {

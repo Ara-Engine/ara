@@ -4,6 +4,7 @@ mod hub;
 mod notices;
 mod package;
 mod publish;
+mod references;
 mod smoke;
 mod support;
 
@@ -30,6 +31,12 @@ enum Command {
     Notes {
         #[arg(long)]
         version: String,
+    },
+    /// Check that every file a template's documents reference exists inside it
+    /// (the packaging gate), e.g. on a sample after `ara-samples kits`.
+    References {
+        #[arg(required = true)]
+        templates: Vec<PathBuf>,
     },
     /// Install the SFX into scratch space and exercise the installed build.
     Smoke {
@@ -83,6 +90,13 @@ fn main() -> Result<()> {
         Command::Notes { version } => {
             valid_version(&version)?;
             package::notes(&root, &version)
+        }
+        Command::References { templates } => {
+            for template in &templates {
+                references::check(template)?;
+                println!("{}: every reference resolves", template.display());
+            }
+            Ok(())
         }
         Command::Smoke { version } => {
             valid_version(&version)?;

@@ -18,6 +18,8 @@ use crate::{
 #[derive(Default, Serialize)]
 pub(crate) struct Selection {
     pub(crate) affected: BTreeSet<String>,
+    /// Executed tests stop at immediate consumers; compilation still reaches all consumers.
+    pub(crate) test_packages: BTreeSet<String>,
     pub(crate) changed_libraries: BTreeSet<String>,
     pub(crate) test_only: BTreeSet<String>,
     pub(crate) reasons: Vec<String>,
@@ -58,9 +60,19 @@ pub(crate) fn compute(
             .unwrap_or(""),
     )?;
     let new_lock = Lock::parse(&fs::read_to_string(root.join("Cargo.lock"))?)?;
-    let lock_changes = old_lock.changed_external(&new_lock)?;
     let mut snapshots = BTreeMap::new();
     let mut result = Selection::default();
+    let lock_changes = old_lock.changed_external(&new_lock)?;
+    if !lock_changes.is_empty() {
+        let mut consumers = 0;
+        for package in &metadata.packages {
+            consumers += usize::from(
+                old_lock.reaches(&package.name, &lock_changes)?
+                    || new_lock.reaches(&package.name, &lock_changes)?,
+            );
+        }
+        result.reasons.push(format!("lockfile resolution changed for {consumers} consumers; source selection unchanged (use --full for dependency-update validation)"));
+    }
     for package in &metadata.packages {
         let path = package.manifest_path.strip_prefix(root)?;
         let directory = path.parent().context("manifest directory")?;
@@ -75,32 +87,27 @@ pub(crate) fn compute(
             &new_lock,
             directory,
         )?;
-        if previous
-            .as_ref()
-            .is_none_or(|old| !old.equivalent(&current))
+        let manifest_changed = changed
+            .iter()
+            .any(|p| p == path || p == Path::new("Cargo.toml"));
+        if manifest_changed
+            && previous
+                .as_ref()
+                .is_none_or(|old| !old.equivalent(&current))
         {
             result.changed_libraries.insert(package.name.clone());
             result.reasons.push(format!(
                 "{}: package or resolved dependency settings changed",
                 package.name
             ));
-        } else if previous
-            .as_ref()
-            .is_some_and(|old| old.bindings != current.bindings)
+        } else if manifest_changed
+            && previous
+                .as_ref()
+                .is_some_and(|old| old.bindings != current.bindings)
         {
             // Compile every target to validate renamed imports, without retesting
             // consumers of the same resolved packages and feature sets.
             result.test_only.insert(package.name.clone());
-        }
-        if !lock_changes.is_empty()
-            && (old_lock.reaches(&package.name, &lock_changes)?
-                || new_lock.reaches(&package.name, &lock_changes)?)
-        {
-            result.changed_libraries.insert(package.name.clone());
-            result.reasons.push(format!(
-                "{}: transitive dependency resolution changed",
-                package.name
-            ));
         }
         snapshots.insert(package.name.as_str(), (previous, current));
     }
@@ -158,6 +165,9 @@ pub(crate) fn compute(
             continue;
         }
         let Some(package) = metadata.owner(root, path) else {
+            if !code_input(path) && !path.extension().is_some_and(|e| e == "toml" || e == "lock") {
+                continue;
+            }
             global = true;
             result
                 .reasons
@@ -191,8 +201,11 @@ pub(crate) fn compute(
         }
         if test_only {
             result.test_only.insert(package.name.clone());
-        } else {
+        } else if code_input(path) {
             result.changed_libraries.insert(package.name.clone());
+        } else {
+            // Fixtures/goldens validate their owner without rebuilding every consumer.
+            result.test_only.insert(package.name.clone());
         }
     }
     result.affected = if global {
@@ -201,6 +214,13 @@ pub(crate) fn compute(
         let mut affected = metadata.reverse_closure(&result.changed_libraries);
         affected.extend(result.test_only.iter().cloned());
         affected
+    };
+    result.test_packages = if global {
+        result.affected.clone()
+    } else {
+        let mut tests = metadata.direct_dependents(&result.changed_libraries);
+        tests.extend(result.test_only.iter().cloned());
+        tests
     };
     result.reasons.sort();
     result.reasons.dedup();
@@ -212,8 +232,28 @@ fn documentation(path: &Path) -> bool {
         || path.starts_with("reports")
         || path.starts_with("spikes")
         || path.file_name().is_some_and(|n| n == "AGENTS.md")
-        // Crate Markdown can be compiled input (notably ara-diag's catalog).
-        || !path.starts_with("crates") && path.extension().is_some_and(|e| e == "md")
+        || path.extension().is_some_and(|e| e == "md")
+}
+
+fn code_input(path: &Path) -> bool {
+    path.extension().is_some_and(|e| {
+        matches!(
+            e.to_str(),
+            Some(
+                "rs" | "slang"
+                    | "slangh"
+                    | "spv"
+                    | "dxil"
+                    | "c"
+                    | "cc"
+                    | "cpp"
+                    | "h"
+                    | "hpp"
+                    | "cs"
+            )
+        )
+    }) || path.components().any(|c| c.as_os_str() == "cooked")
+        || path.file_name().is_some_and(|n| n == "pipelines.json")
 }
 
 fn build_settings(root: &Value) -> Value {
@@ -335,11 +375,11 @@ mod tests {
     use super::*;
 
     #[test]
-    fn crate_markdown_remains_a_build_input_except_agent_instructions() {
+    fn documentation_never_cascades_including_catalog_text() {
         assert!(documentation(Path::new("docs/dev/ara-dev.md")));
         assert!(documentation(Path::new("crates/ara-dev/AGENTS.md")));
-        assert!(!documentation(Path::new("crates/ara-diag/codes/kernel.md")));
-        assert!(!documentation(Path::new("crates/core/README.md")));
+        assert!(documentation(Path::new("crates/ara-diag/codes/kernel.md")));
+        assert!(documentation(Path::new("crates/core/README.md")));
     }
 
     #[test]

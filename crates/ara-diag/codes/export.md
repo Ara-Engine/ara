@@ -1448,3 +1448,71 @@ Causes:
 Fixes:
 - Inspect the listed source assets and import diagnostics, then retry; completed cache entries are reused.
 - For exceptionally expensive cooks, set `ARA_EXPORT_COOK_STALL_SECONDS` to a larger positive integer (default 600).
+
+## ARA8115 installer::INSTALL_006: Destination is not an Ara installation
+owner: ara-setup
+shown as: ARA-EXP-INSTALL-006
+
+Setup was asked to replace a destination that is not a recognizable Ara installation of the payload's kind: an engine folder has `engine.json` with format `ara.engine/1`, a Hub folder has `hub.json` with format `ara.hub/1`. Setup never modifies such a folder.
+
+Causes:
+- `--destination` (or the default location) points at an unrelated folder, a link or junction, or the other kind of Ara installation.
+- The installation's manifest is missing or damaged.
+
+Fixes:
+- Choose another `--destination`, or move the existing folder yourself after checking its contents.
+- For a damaged Ara installation, delete or rename it, then run setup again.
+
+## ARA8116 installer::INSTALL_007: Ara programs are running from the installation
+owner: ara-setup
+shown as: ARA-EXP-INSTALL-007
+
+Replacing an installation needs every program started from that folder to exit (Ara Hub, its service, the editor, players, `ara` command lines and MCP servers). Silent setup reports them and changes nothing; the window lists them, offers Retry and stops the Hub service through `ara hub shutdown`. Setup never terminates processes.
+
+Causes:
+- Ara Hub, an editor, a player or an agent's `ara mcp` started from the installation is still open.
+- `ara hub shutdown` failed, or the service did not exit within 15 seconds.
+
+Fixes:
+- Close the listed programs (agent sessions using Ara's MCP server included), then run setup again or select Retry.
+- Stop the Hub service with `ara hub shutdown`; it starts again when it is needed.
+
+## ARA8117 installer::INSTALL_008: Replacing the installation failed and was rolled back
+owner: ara-setup
+shown as: ARA-EXP-INSTALL-008
+
+Setup extracts the new files beside the installation, moves the previous installation aside, then moves the new files into place. One of those moves failed; the previous installation is unchanged or was restored, and the extracted copy was removed.
+
+Causes:
+- A program, scanner or Explorer preview keeps a file inside the installation open.
+- The new files could not be moved into place.
+
+Fixes:
+- Close programs that use files in the installation folder (C# compile servers included), then run setup again.
+- If the problem persists, restart Windows and run setup before opening Ara.
+
+## ARA8118 installer::INSTALL_009: Rollback failed during replacement
+owner: ara-setup
+shown as: ARA-EXP-INSTALL-009
+
+The new files could not be moved into place and moving the previous installation back failed too. The previous installation is intact in a `.ara-replaced-*` folder beside the destination; the message names both paths.
+
+Causes:
+- Another process created or locked the destination while setup was replacing it.
+
+Fixes:
+- Rename the named `.ara-replaced-*` folder back to the destination, then run setup again.
+
+## ARA8119 installer::INSTALL_010: Installation registration failed
+owner: ara-setup
+shown as: ARA-EXP-INSTALL-010
+
+The installed package's `install.ps1 -RegisterOnly` (Hub engine registration, shortcuts, PATH and prerequisite checks) exited with an error. The installed files remain; the script's output follows the message and is copied by the window's Copy details.
+
+Causes:
+- A prerequisite such as the Microsoft Visual C++ v14 Redistributable (x64) is missing.
+- The Hub service could not start or register the engine.
+
+Fixes:
+- Fix the cause shown in the output, then run `install.ps1 -RegisterOnly` in the installation folder (or run setup again and choose Replace).
+- Check `hub-start.log` in the Ara config folder when the Hub service failed to start.

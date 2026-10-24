@@ -35,7 +35,7 @@ pub fn package(root: &Path, version: &str) -> Result<()> {
                 "--bin",
                 "ara",
                 "-p",
-                "ara-release",
+                "ara-setup",
                 "--bin",
                 "ara-setup",
             ]),

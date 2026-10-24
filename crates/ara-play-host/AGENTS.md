@@ -72,6 +72,9 @@ every player of a world; reads go to the authority.
 - Faults: exit code + `ARA_PLAYER_CRASH` stderr line + 1 s silence →
   `player_panicked | player_crashed | player_unresponsive | player_exited`, logged with a
   `play.restart` fix; `play.status` holds the structured fault.
+- `play.stop` removes the active world and returns `status: "stopping"` immediately.
+  An owned worker sends STOP and reaps its children; `play.status.stopping` lists
+  outstanding shutdowns. Host ticks only join workers that have already finished.
 - `test.run {steps, seed, determinism}` runs a spec (`spec.rs`: input, step, until,
   expect, patch, watch, capture, hash) in fresh headless players; `determinism` runs
   it twice in separate processes and requires equal final hashes.
