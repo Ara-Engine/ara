@@ -105,8 +105,10 @@ fn run_command(root: &Path, command: &mut Command, label: &str, timeout: u64) ->
 
 fn build(root: &Path, directory: &Path, profile: &str) -> Result<(Binaries, f64)> {
     let started = Instant::now();
+    let directories = Directories::from_env(root)?;
+    let _lease = crate::compile_cache::acquire(started.checked_add(Duration::from_secs(3600)))?;
     let mut command = Command::new("cargo");
-    Directories::from_env(root)?.apply(&mut command);
+    directories.apply(&mut command);
     command.args([
         "build",
         "--locked",

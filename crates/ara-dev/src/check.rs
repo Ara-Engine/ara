@@ -123,6 +123,7 @@ impl Logs {
         let start = Instant::now();
         let mut command = Command::new("cargo");
         self.cargo_directories.apply(&mut command);
+        crate::compile_cache::configure(&mut command);
         command
             .current_dir(root)
             .args(args)
@@ -139,13 +140,20 @@ impl Logs {
                 command.env(format!("CARGO_BIN_EXE_{binary}"), path);
             }
         }
-        let status = process::run(&mut command, self.deadline);
+        let deadline = if matches!(name, "doctests" | "diagnostic-coverage") {
+            command.env("RUST_TEST_THREADS", "2");
+            let limit = start + Duration::from_secs(180);
+            Some(self.deadline.map_or(limit, |gate| gate.min(limit)))
+        } else {
+            self.deadline
+        };
+        let status = process::run(&mut command, deadline);
         let passed = status.as_ref().is_ok_and(process::Outcome::success);
         let timed_out = matches!(status, Ok(process::Outcome::TimedOut));
         let detail = match status {
             Ok(process::Outcome::Exited(s)) => format!("{s}; {}", log.display()),
             Ok(process::Outcome::TimedOut) => format!(
-                "timed out at the check deadline (including Cargo cache waits); {}",
+                "timed out at the command/check deadline (including Cargo cache waits); {}",
                 log.display()
             ),
             Err(e) => format!("{e}; {}", log.display()),
@@ -177,10 +185,20 @@ impl Logs {
     }
 
     /// Cargo fmt forwards target paths to rustfmt; batch to stay below Windows' limit.
-    fn formatting(&mut self, root: &Path, metadata: &Metadata) -> Result<bool> {
+    fn formatting(
+        &mut self,
+        root: &Path,
+        metadata: &Metadata,
+        selected: &std::collections::BTreeSet<String>,
+    ) -> Result<bool> {
         let start = Instant::now();
         let first = self.rows.len();
-        for (index, packages) in metadata.packages.chunks(4).enumerate() {
+        let packages: Vec<_> = metadata
+            .packages
+            .iter()
+            .filter(|p| selected.contains(&p.name))
+            .collect();
+        for (index, packages) in packages.chunks(4).enumerate() {
             let mut args = vec!["fmt".into()];
             for package in packages {
                 args.extend(["-p".into(), package.name.clone()]);
@@ -200,7 +218,7 @@ impl Logs {
             .unwrap_or_else(|| {
                 format!(
                     "{} packages in {} batches; {}",
-                    metadata.packages.len(),
+                    packages.len(),
                     batches.len(),
                     self.directory.display()
                 )
@@ -294,6 +312,7 @@ pub(crate) fn run(root: &Path, options: Options<'_>) -> Result<bool> {
     let mut scope = selection::compute(root, &base, &changed, &metadata)?;
     if full {
         scope.affected = metadata.packages.iter().map(|p| p.name.clone()).collect();
+        scope.test_packages = scope.affected.clone();
         scope
             .reasons
             .push("--full requested the whole workspace".into());
@@ -327,6 +346,10 @@ pub(crate) fn run(root: &Path, options: Options<'_>) -> Result<bool> {
                     .collect::<Vec<_>>()
                     .join(", ")
             );
+            println!(
+                "Tests: {} source/direct-consumer packages (transitive consumers compile only)",
+                scope.test_packages.len()
+            );
             for reason in &scope.reasons {
                 println!("  {reason}");
             }
@@ -334,6 +357,7 @@ pub(crate) fn run(root: &Path, options: Options<'_>) -> Result<bool> {
         return Ok(true);
     }
     let affected = &scope.affected;
+    let _build_lease = crate::compile_cache::acquire(logs.deadline)?;
     if affected.contains("ara-dev") || full {
         crate::platform::release_executable_path(&metadata.target_directory)?;
     }
@@ -344,11 +368,21 @@ pub(crate) fn run(root: &Path, options: Options<'_>) -> Result<bool> {
         "importer versions",
         hygiene::importer_versions(root, &files)?,
     );
-    let fmt = logs.formatting(root, &metadata)?;
+    // Formatting-only edits still receive fmt verification without cascading builds.
+    let mut format_packages = scope.affected.clone();
+    format_packages.extend(
+        changed
+            .iter()
+            .filter_map(|p| metadata.owner(root, p).map(|p| p.name.clone())),
+    );
+    let fmt = logs.formatting(root, &metadata, &format_packages)?;
     let ready = fmt && logs.rows.iter().all(|row| row.passed);
     let codes = changed.iter().any(|p| {
         p.starts_with("dotnet") && p.extension().is_some_and(|e| e == "cs")
-            || p.starts_with("crates/ara-diag/codes")
+            || metadata
+                .owner(root, p)
+                .is_some_and(|owner| owner.name == "ara-diag")
+                && p.components().any(|part| part.as_os_str() == "codes")
     }) || metadata
         .packages
         .iter()
@@ -361,7 +395,7 @@ pub(crate) fn run(root: &Path, options: Options<'_>) -> Result<bool> {
                 fs::read_to_string(root.join(p))
                     .is_ok_and(|text| text.contains("Code(") || text.contains("\"ARA"))
             });
-    let early_coverage = ready && codes && !affected.contains("ara-diag");
+    let early_coverage = ready && codes && !scope.test_packages.contains("ara-diag");
     let coverage_ready = !early_coverage
         || logs.command(
             root,
@@ -379,10 +413,18 @@ pub(crate) fn run(root: &Path, options: Options<'_>) -> Result<bool> {
             "warnings".into(),
         ]);
         let clippy_passed = logs.command(root, "clippy", &clippy)?;
-        let mut tests = selection("test", affected, whole_workspace);
-        tests.extend(["--locked".into(), "--no-fail-fast".into()]);
-        let tests_ready = if clippy_passed {
-            if let Some(paths) = crate::binaries::prepare(root, &tests, &mut logs)? {
+        let mut tests = selection("test", &scope.test_packages, full);
+        // Clippy fetched every selected test dependency; avoid another online
+        // registry transaction competing with other worktrees.
+        tests.extend([
+            "--locked".into(),
+            "--offline".into(),
+            "--no-fail-fast".into(),
+        ]);
+        let tests_ready = if clippy_passed && !scope.test_packages.is_empty() {
+            if let Some(paths) =
+                crate::binaries::prepare(root, &tests, &metadata, &scope.test_packages, &mut logs)?
+            {
                 logs.test_binaries = paths;
                 true
             } else {
@@ -391,8 +433,35 @@ pub(crate) fn run(root: &Path, options: Options<'_>) -> Result<bool> {
         } else {
             false
         };
+        let tests_passed = if tests_ready {
+            let execution = crate::test_runner::run(
+                root,
+                &logs.directory,
+                &metadata,
+                &scope.test_packages,
+                &logs.test_binaries,
+                logs.deadline,
+            )?;
+            logs.rows.push(Row {
+                check: "tests".into(),
+                passed: execution.passed,
+                known_failure: false,
+                timed_out: execution.timed_out,
+                seconds: execution.seconds,
+                detail: format!(
+                    "{} harnesses, {} workers, {} MiB budget; {}",
+                    execution.suites,
+                    execution.jobs,
+                    execution.memory_mib,
+                    logs.directory.join("tests.log").display()
+                ),
+            });
+            execution.passed
+        } else {
+            false
+        };
         if tests_ready
-            && !logs.command(root, "tests", &tests)?
+            && !tests_passed
             && !allowed.is_empty()
             && !logs.rows.last().is_some_and(|row| row.timed_out)
         {
@@ -417,8 +486,23 @@ pub(crate) fn run(root: &Path, options: Options<'_>) -> Result<bool> {
                 );
             }
         }
+        if tests_ready
+            && metadata
+                .packages
+                .iter()
+                .any(|p| scope.test_packages.contains(&p.name) && p.has_library())
+        {
+            let mut docs = selection("test", &scope.test_packages, full);
+            docs.extend([
+                "--doc".into(),
+                "--locked".into(),
+                "--offline".into(),
+                "--no-fail-fast".into(),
+            ]);
+            logs.command(root, "doctests", &docs)?;
+        }
     }
-    let covered = affected.contains("ara-diag")
+    let covered = scope.test_packages.contains("ara-diag")
         && logs
             .rows
             .iter()
@@ -491,6 +575,11 @@ pub(crate) fn run(root: &Path, options: Options<'_>) -> Result<bool> {
                 .cloned()
                 .collect::<Vec<_>>()
                 .join(", ")
+        );
+        println!(
+            "Tests: {} source/direct-consumer packages{}",
+            report.selection.test_packages.len(),
+            if full { " (--full)" } else { "" }
         );
         if report.selection.affected.len() > 8 {
             println!(

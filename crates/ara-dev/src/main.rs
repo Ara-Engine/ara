@@ -4,6 +4,7 @@
 mod binaries;
 mod build_paths;
 mod check;
+mod compile_cache;
 mod git;
 mod gpu;
 mod hygiene;
@@ -14,6 +15,7 @@ mod perf;
 mod platform;
 mod process;
 mod selection;
+mod test_runner;
 mod workspace;
 mod worktrees;
 
@@ -33,6 +35,11 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
+    /// Focused Cargo command using optional shared intermediates and bounded concurrency.
+    Cargo {
+        #[arg(last = true, required = true, num_args = 1..)]
+        args: Vec<OsString>,
+    },
     /// Build and measure a frozen packed scene, or control a warm perf session.
     Perf(perf::Options),
     /// Check changed crates and their reverse dependencies before handing off work.
@@ -116,6 +123,7 @@ fn run() -> Result<bool> {
         ["rev-parse", "--show-toplevel"],
     )?);
     match cli.command {
+        Command::Cargo { args } => compile_cache::cargo(&root, &args),
         Command::Perf(options) => perf::run(&root, options),
         Command::Check {
             base,

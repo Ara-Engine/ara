@@ -1,0 +1,80 @@
+# Package/target globs. Slow suites are eligible only for source owners and direct
+# consumers (all packages with --full). Resource groups serialize scarce devices.
+[[slow]]
+package = "ara-player"
+target = "*"
+group = "gpu"
+memory_mib = 2048
+timeout_seconds = 240
+
+[[slow]]
+package = "ara-script"
+target = "*"
+group = "dotnet"
+memory_mib = 1536
+timeout_seconds = 240
+
+[[slow]]
+package = "ara-play*"
+target = "*"
+group = "process"
+memory_mib = 1024
+timeout_seconds = 180
+
+[[slow]]
+package = "ara-runtime-script"
+target = "*"
+group = "dotnet"
+memory_mib = 1536
+timeout_seconds = 240
+
+[[slow]]
+package = "ara-*"
+target = "*"
+group = "gpu"
+memory_mib = 1536
+timeout_seconds = 180
+# This last rule applies only to packages whose names identify GPU/render suites.
+gpu_packages_only = true
+
+[[slow]]
+package = "ara-anim-capture"
+target = "*"
+group = "gpu"
+memory_mib = 1536
+timeout_seconds = 240
+
+[[slow]]
+package = "ara-editor"
+target = "*"
+group = "gpu"
+memory_mib = 1536
+timeout_seconds = 180
+
+[[slow]]
+package = "ara-ui-test"
+target = "*"
+group = "gpu"
+memory_mib = 1536
+timeout_seconds = 180
+
+[[slow]]
+package = "ara-hub"
+target = "*"
+group = "gpu"
+memory_mib = 1536
+timeout_seconds = 180
+
+[[slow]]
+package = "ara-importers"
+target = "*"
+group = "process"
+memory_mib = 1024
+timeout_seconds = 180
+
+[[slow]]
+package = "ara-dev"
+target = "commands"
+group = "cargo"
+memory_mib = 1024
+timeout_seconds = 240

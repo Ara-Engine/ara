@@ -279,6 +279,160 @@ fn check_selects_reverse_dependencies_and_keeps_json_stdout_clean() {
 }
 
 #[test]
+fn binary_only_selection_builds_and_runs_without_a_library_target() {
+    let _serial = SERIAL.lock().unwrap_or_else(|p| p.into_inner());
+    let root = fixture();
+    let manifest = fs::read_to_string(root.join("Cargo.toml")).unwrap();
+    fs::write(
+        root.join("Cargo.toml"),
+        manifest.replace("\"diag\"]", "\"diag\", \"binary\"]"),
+    )
+    .unwrap();
+    fs::create_dir_all(root.join("binary/src")).unwrap();
+    fs::write(
+        root.join("binary/Cargo.toml"),
+        "[package]\nname=\"binary-only\"\nversion=\"0.1.0\"\nedition=\"2024\"\n",
+    )
+    .unwrap();
+    fs::write(
+        root.join("binary/src/main.rs"),
+        "fn main() {}\n#[test]\nfn bin_test() {\n    main();\n}\n",
+    )
+    .unwrap();
+    ok(&root, "cargo", &["generate-lockfile", "--offline"]);
+    let output = ok(
+        &root,
+        env!("CARGO_BIN_EXE_ara-dev"),
+        &["check", "--json", "--no-compiler-cache"],
+    );
+    let report: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(report["test_packages"], serde_json::json!(["binary-only"]));
+    assert!(
+        report["checks"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|r| r["check"] == "tests" && r["passed"] == true)
+    );
+}
+
+#[test]
+fn source_tests_stop_at_direct_consumers_but_full_runs_transitive_suites() {
+    let _serial = SERIAL.lock().unwrap_or_else(|p| p.into_inner());
+    let root = fixture();
+    let manifest = fs::read_to_string(root.join("Cargo.toml")).unwrap();
+    fs::write(
+        root.join("Cargo.toml"),
+        manifest.replace("\"diag\"]", "\"diag\", \"leaf\"]"),
+    )
+    .unwrap();
+    fs::create_dir_all(root.join("leaf/src")).unwrap();
+    fs::write(root.join("leaf/Cargo.toml"), "[package]\nname=\"leaf\"\nversion=\"0.1.0\"\nedition=\"2024\"\n[dependencies]\nmini-tool={path=\"../tool\"}\n").unwrap();
+    fs::write(root.join("leaf/src/lib.rs"), "#[test]\nfn transitive_slow_suite() {\n    panic!(\"only full gates run this suite\");\n}\n").unwrap();
+    let diag = fs::read_to_string(root.join("diag/Cargo.toml")).unwrap();
+    fs::write(
+        root.join("diag/Cargo.toml"),
+        format!("{diag}\n[dependencies]\nmini-tool={{path=\"../tool\"}}\n"),
+    )
+    .unwrap();
+    ok(&root, "cargo", &["generate-lockfile", "--offline"]);
+    git(&root, &["add", "."]);
+    git(&root, &["commit", "-m", "transitive consumer"]);
+    let base = String::from_utf8(git(&root, &["rev-parse", "HEAD"]).stdout).unwrap();
+    fs::write(
+        root.join("core/src/lib.rs"),
+        "pub fn value() -> u32 {\n    2\n}\n",
+    )
+    .unwrap();
+    let binary = env!("CARGO_BIN_EXE_ara-dev");
+    let output = ok(
+        &root,
+        binary,
+        &[
+            "check",
+            "--base",
+            base.trim(),
+            "--json",
+            "--no-compiler-cache",
+        ],
+    );
+    let report: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(
+        report["affected"],
+        serde_json::json!(["ara-diag", "leaf", "mini-core", "mini-tool"])
+    );
+    assert_eq!(
+        report["test_packages"],
+        serde_json::json!(["mini-core", "mini-tool"])
+    );
+    assert!(
+        report["checks"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|r| r["check"] == "diagnostic-coverage" && r["passed"] == true)
+    );
+    let output = command(
+        &root,
+        binary,
+        &[
+            "check",
+            "--base",
+            base.trim(),
+            "--full",
+            "--json",
+            "--no-compiler-cache",
+        ],
+    );
+    assert!(!output.status.success());
+    let report: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert!(
+        report["test_packages"]
+            .as_array()
+            .unwrap()
+            .contains(&serde_json::json!("leaf"))
+    );
+}
+
+#[test]
+fn catalog_text_runs_coverage_without_cascading_and_format_lock_only_edits_stay_local() {
+    let _serial = SERIAL.lock().unwrap_or_else(|p| p.into_inner());
+    let root = fixture();
+    fs::create_dir_all(root.join("diag/codes")).unwrap();
+    fs::write(root.join("diag/codes/catalog.md"), "# Catalog wording\n").unwrap();
+    let binary = env!("CARGO_BIN_EXE_ara-dev");
+    let output = ok(&root, binary, &["check", "--json", "--no-compiler-cache"]);
+    let report: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(report["affected"], serde_json::json!([]));
+    assert_eq!(report["test_packages"], serde_json::json!([]));
+    assert!(
+        report["checks"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|r| r["check"] == "diagnostic-coverage" && r["passed"] == true)
+    );
+    assert!(
+        !report["checks"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|r| r["check"] == "clippy")
+    );
+    let lock = fs::read_to_string(root.join("Cargo.lock")).unwrap();
+    fs::write(
+        root.join("Cargo.lock"),
+        format!("{lock}\n# lock-only change\n"),
+    )
+    .unwrap();
+    fs::write(root.join("core/src/lib.rs"), "pub fn value()->u32{1}\n").unwrap();
+    fs::write(root.join("capture.png"), [1, 2, 3]).unwrap();
+    let output = ok(&root, binary, &["check", "--plan", "--json"]);
+    let report: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(report["affected"], serde_json::json!([]));
+}
+
+#[test]
 fn test_helpers_receive_fresh_peer_binaries_with_separate_build_directories() {
     let _serial = SERIAL.lock().unwrap_or_else(|p| p.into_inner());
     let root = fixture();
@@ -480,13 +634,12 @@ fn external_inputs_select_their_consumers_with_a_conservative_fallback() {
         ok(&root, "cargo", &["generate-lockfile", "--offline"]);
         git(&root, &["add", "."]);
         git(&root, &["commit", "-m", "script host"]);
-        for (root, expected) in [
-            (root, expected),
-            (
-                fixture(),
-                serde_json::json!(["ara-diag", "mini-core", "mini-tool"]),
-            ),
-        ] {
+        let fallback = if name == "ara-release" {
+            serde_json::json!([])
+        } else {
+            serde_json::json!(["ara-diag", "mini-core", "mini-tool"])
+        };
+        for (root, expected) in [(root, expected), (fixture(), fallback)] {
             let path = root.join(input);
             fs::create_dir_all(path.parent().unwrap()).unwrap();
             fs::write(path, "external input changed\n").unwrap();
