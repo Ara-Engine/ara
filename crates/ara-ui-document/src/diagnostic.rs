@@ -4,7 +4,7 @@ use std::{fmt, ops::Range};
 /// Located, stable UI diagnostic; `fix` explains the supported replacement.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Diagnostic {
-    /// Stable code in the UI-owned ARA7000–ARA7099 range.
+    /// Stable code in the UI-owned ARA4000–ARA4199 range (`codes.rs`).
     pub code: String,
     /// Human-readable reason the source or operation was rejected.
     pub message: String,

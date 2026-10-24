@@ -129,7 +129,7 @@ fn native_hierarchy_inspector_gesture_and_author_undo_share_the_authority() {
 }
 
 #[test]
-fn mcp_actions_agent_review_provenance_and_revert_are_live() {
+fn mcp_agent_edits_apply_at_once_with_attribution_and_turn_undo() {
     let project = Project::new();
     let mut editor = project.open();
     let mut mcp = ara_mcp::Adapter::new();
@@ -160,6 +160,8 @@ fn mcp_actions_agent_review_provenance_and_revert_are_live() {
     editor
         .action("editor.focus", json!({"panel":"agents"}))
         .unwrap();
+    // The window observes agent history at its frame boundary.
+    editor.tick();
     let mut shell = Shell::new(&mut editor, [1440., 900.]).unwrap();
     assert!(shell.ui.find(&format!("turn-{txn}")).is_some());
     assert_eq!(
@@ -168,7 +170,7 @@ fn mcp_actions_agent_review_provenance_and_revert_are_live() {
     );
     let mut clipboard = MemoryClipboard::default();
     shell
-        .click(&format!("revert-{txn}"), &mut clipboard)
+        .click(&format!("turn-{txn}-undo"), &mut clipboard)
         .unwrap();
     shell.dispatch(&mut editor).unwrap();
     assert_eq!(x(&editor), 0.);
@@ -311,7 +313,7 @@ fn layout_persistence_units_and_multi_edit_are_validated() {
 }
 
 #[test]
-fn agent_presence_does_not_take_the_human_camera_and_deleted_records_remain_reviewable() {
+fn agent_presence_does_not_take_the_human_camera_and_agent_deletes_apply_with_turn_undo() {
     let project = Project::new();
     let mut editor = project.open();
     editor
@@ -342,22 +344,40 @@ fn agent_presence_does_not_take_the_human_camera_and_deleted_records_remain_revi
     assert_eq!(editor.state.camera, human);
     assert_eq!(editor.state.selection, ["e_child001"]);
     assert_eq!(editor.state.presence[&agent].selection, ["e_crate001"]);
+    // The human is told what the agent looks at, with View/Follow; nothing moves.
+    assert!(editor.activity.notices().iter().any(|n| {
+        n.text == "Presence is viewing main.scene · Salvage crate"
+            && n.kind
+                == ara_editor::activity::NoticeKind::AgentView {
+                    agent: agent.clone(),
+                }
+    }));
     editor
         .action("editor.follow", json!({"agent":agent}))
         .unwrap();
     assert_eq!(editor.state.camera.distance, 6.);
     editor.action("editor.follow", json!({})).unwrap();
     let result=Endpoint::call(&mut editor,"cmd.apply",json!({"session":agent,"doc":"sc_test0001","why":"Remove obsolete crate","commands":[{"cmd":"entity.delete","args":{"entities":["e_crate001"]}}]})).unwrap();
+    // D24: the delete just applies (no reviewable ghost); the turn can be undone.
     let view = editor.view().unwrap();
     assert!(view.entities().is_empty());
     let scene = view.scene(&project.0, &editor.state, None).unwrap();
-    assert_eq!(scene.meshes.len(), 1);
-    assert!(scene.meshes[0].name.contains("deleted"));
-    assert_eq!(scene.materials[scene.meshes[0].material].flags[0], 2);
+    assert!(
+        !scene.meshes.iter().any(|m| m.name.contains("deleted")),
+        "{:?}",
+        scene.meshes.iter().map(|m| &m.name).collect::<Vec<_>>()
+    );
+    editor.tick();
+    assert!(!editor.agent_tints().is_empty(), "the agent's turn glows");
     editor
         .action("review.revert", json!({"txn":result["txn"]}))
         .unwrap();
     assert_eq!(editor.view().unwrap().entities().len(), 2);
+    editor.tick();
+    assert!(
+        editor.agent_tints().is_empty(),
+        "an undone turn stops glowing"
+    );
 }
 
 #[test]
@@ -432,7 +452,13 @@ fn hierarchy_100k_keeps_a_bounded_row_pool_and_reaches_the_last_entity() {
     eprintln!(
         "100k hierarchy: build {build_ms:.3} ms; scroll {scroll_ms:.3} ms; {node_count} retained nodes"
     );
-    let output = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("evidence/hierarchy-100k.json");
+    // Tests never write tracked files: the checked-in measurement changes only on
+    // request (ARA_EDITOR_UPDATE_EVIDENCE=1).
+    let output = if std::env::var_os("ARA_EDITOR_UPDATE_EVIDENCE").is_some_and(|v| v == "1") {
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("evidence/hierarchy-100k.json")
+    } else {
+        PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join("hierarchy-100k.json")
+    };
     std::fs::create_dir_all(output.parent().unwrap()).unwrap();
     write(
         &output,
@@ -520,7 +546,7 @@ fn import_settings_are_typed_attributed_and_undoable() {
         editor.host.store().workspace().path_of(&doc),
         Some("paint.png.import.json")
     );
-    editor.apply_to(&doc,vec![json!({"cmd":"editor.import.settings","args":{"settings":{"usage":"normal","mipmaps":false},"preset":"balanced"}})],"Use a normal map").unwrap();
+    editor.apply_to(&doc,vec![json!({"cmd":"import.configure","args":{"source":"paint.png","settings":{"usage":"normal","mipmaps":false},"preset":"balanced"}})],"Use a normal map").unwrap();
     assert_eq!(
         editor
             .host
@@ -544,7 +570,7 @@ fn import_settings_are_typed_attributed_and_undoable() {
             .unwrap()["settings"],
         json!({})
     );
-    assert!(editor.apply_to(&doc,vec![json!({"cmd":"editor.import.settings","args":{"settings":{"unknown":true},"preset":"fast"}})],"Invalid setting").is_err());
+    assert!(editor.apply_to(&doc,vec![json!({"cmd":"import.configure","args":{"source":"paint.png","settings":{"unknown":true},"preset":"fast"}})],"Invalid setting").is_err());
     assert!(
         editor
             .action("editor.asset.import", json!({"path":"../escape.png"}))
@@ -729,7 +755,13 @@ fn material_values_and_animation_layout_share_undo_and_survive_reopen() {
     let mut invalid_shell = Shell::new(&mut editor, [1440., 900.]).unwrap();
     editor.apply_to(&material,vec![json!({"cmd":"graph.param.set","args":{"node":node,"name":"value","value":"invalid numeric default"}})],"Verify node diagnostics").unwrap();
     invalid_shell.rebuild(&mut editor).unwrap();
-    assert!(invalid_shell.ui.find("material-error-0").is_some());
+    // The Material tool's status strip names the first error.
+    assert!(
+        invalid_shell
+            .ui
+            .find("material-status-error-text")
+            .is_some()
+    );
     assert!(
         invalid_shell.layout_report()["graph"]["nodes"]
             .as_array()
@@ -739,7 +771,12 @@ fn material_values_and_animation_layout_share_undo_and_survive_reopen() {
     );
     editor.action("history.undo", json!({})).unwrap();
     invalid_shell.rebuild(&mut editor).unwrap();
-    assert!(invalid_shell.ui.find("material-error-0").is_none());
+    assert!(
+        invalid_shell
+            .ui
+            .find("material-status-error-text")
+            .is_none()
+    );
     drop(invalid_shell);
 
     let animation = editor
@@ -827,4 +864,34 @@ fn material_values_and_animation_layout_share_undo_and_survive_reopen() {
     )
     .unwrap();
     assert_eq!(graph.editor.comments["note"].text, "Locomotion");
+}
+
+/// Tests never touch the owner's profile (%APPDATA%\Ara, %LOCALAPPDATA%\Ara): cargo
+/// gives every test and the editors it starts isolated directories under target/
+/// (`.cargo/config.toml`), and without them the editor refuses to start.
+#[test]
+fn tests_resolve_isolated_profile_directories_under_target() {
+    let config = ara_editor::settings::config_dir().expect("an isolated config directory");
+    let crashes = std::env::var_os("ARA_CRASH_DIR")
+        .map(std::path::PathBuf::from)
+        .expect("ARA_CRASH_DIR");
+    for dir in [&config, &crashes] {
+        assert!(
+            dir.components().any(|c| c.as_os_str() == "target"),
+            "{dir:?} is not under target/"
+        );
+        for profile in [
+            "APPDATA",
+            "LOCALAPPDATA",
+            "XDG_CONFIG_HOME",
+            "XDG_STATE_HOME",
+        ] {
+            if let Some(profile_dir) = std::env::var_os(profile) {
+                assert!(
+                    !dir.starts_with(&profile_dir),
+                    "{dir:?} is inside {profile}"
+                );
+            }
+        }
+    }
 }

@@ -167,7 +167,7 @@ fn unsupported_syntax_has_stable_diagnostics_and_fixes() {
         ":root{--a:var(--b);--b:var(--a)}",
     ] {
         let e = Stylesheet::parse(css).expect_err("unsupported source must be rejected");
-        assert!(e.code.starts_with("ARA70"));
+        assert!(e.code.starts_with("ARA40"));
         assert!(!e.fix.is_empty());
         assert!(e.line >= 1 && e.column >= 1);
     }

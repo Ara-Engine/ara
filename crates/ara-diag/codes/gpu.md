@@ -77,3 +77,19 @@ Causes:
 Fixes:
 - Usually nothing; disable the third-party overlay if the message repeats or a crash follows.
 - Update the Vulkan SDK and GPU driver.
+
+## ARA6006 GPU_EXTERNAL: Shared GPU surface unavailable
+owner: ara-gpu
+shown as: ARA_GPU_EXTERNAL
+
+A shared surface (GPU memory one process renders and another samples, such as an embedded Play client shown in the editor's Game view) could not be exported or imported. Opaque memory only moves between devices of the same physical GPU and driver, through Windows NT handles.
+
+Causes:
+- The platform or backend has no shared surfaces yet (macOS/Metal, Linux).
+- The driver does not offer `VK_KHR_external_memory_win32`, or cannot export or import RGBA8 images.
+- The player and the editor picked different GPUs or driver versions (device or driver UUID differ), for example after a driver update while the editor kept running.
+
+Fixes:
+- Update the GPU driver, then restart the editor so both processes use the same driver.
+- On machines with several GPUs, make the editor and players use the same adapter.
+- Play in a window (`play.start` with `window: true`) until shared surfaces are available on this platform.

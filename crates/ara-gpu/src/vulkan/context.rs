@@ -157,6 +157,11 @@ pub struct DeviceInfo {
     pub timestamp_valid_bits: [u32; 2],
     /// Native driver pipeline-cache compatibility UUID.
     pub pipeline_cache_uuid: Vec<u8>,
+    /// Enabled `VK_KHR_external_memory_win32` (enabled whenever available):
+    /// shared surfaces can be exported and imported ([`super::external`]).
+    pub external_memory: bool,
+    /// Physical GPU and driver identity (`VkPhysicalDeviceIDProperties`).
+    pub identity: crate::shared::DeviceIdentity,
 }
 
 /// Owns the instance, queues, allocations and validation callback lifetime.

@@ -208,6 +208,29 @@ fn image(draws: &mut Vec<Draw>, node: u64, rect: Box2, name: &str, tint: Color) 
 
 impl Shell {
     pub(super) fn paint_swatches(&mut self) {
+        for (id, color) in &self.value_swatches {
+            if let Some(i) = self.ui.find(id) {
+                let r = self.ui.nodes[i].rect;
+                let clip = self.ui.nodes[i].clip.intersection(r);
+                if !r.intersects(clip) || clip.w <= 0. || clip.h <= 0. {
+                    continue;
+                }
+                let display = &mut self.ui.display.commands;
+                display.push(ara_ui::paint::Draw::PushClip { rect: clip });
+                display.push(ara_ui::paint::Draw::RoundedRect {
+                    node: ara_ui::source::stable_id(id),
+                    rect: Box2 {
+                        x: r.x + 2.,
+                        y: r.y + 2.,
+                        w: (r.w - 4.).max(0.),
+                        h: (r.h - 4.).max(0.),
+                    },
+                    radius: 3.,
+                    color: *color,
+                });
+                display.push(ara_ui::paint::Draw::PopClip);
+            }
+        }
         for field in self.fields.values() {
             if !matches!(
                 field.widget,

@@ -151,6 +151,31 @@ impl Shell {
         }
         Ok(())
     }
+    /// Poll the background asset scan once; rebuilds and returns true when it arrived.
+    pub fn poll_assets_for_test(&mut self, editor: &mut Editor) -> bool {
+        if self.poll_assets() || !self.browser.items.is_empty() {
+            let _ = self.rebuild(editor);
+            return !self.browser.items.is_empty();
+        }
+        false
+    }
+    /// Palette rows for `query` as (group, title, command id) without opening it.
+    pub fn palette_rows(
+        &mut self,
+        editor: &mut Editor,
+        query: &str,
+    ) -> Vec<(&'static str, String, Option<&'static str>)> {
+        self.palette_items(editor, query)
+            .into_iter()
+            .map(|item| {
+                let command = match item.binding {
+                    Binding::Command(id, _) => Some(id),
+                    _ => None,
+                };
+                (item.group, item.title, command)
+            })
+            .collect()
+    }
     /// Open the context menu at a control (or the first hierarchy row) and list its commands.
     pub fn context_rows_at(
         &mut self,

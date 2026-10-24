@@ -241,7 +241,7 @@ impl Verification {
                     .find("models/Avocado.glb")
                     .ok_or("import settings doc")?
                     .to_string();
-                editor.apply_to(&doc,vec![json!({"cmd":"editor.import.settings","args":{"settings":{"lodCount":2},"preset":"fast"}})],"Verify reimport settings")?;
+                editor.apply_to(&doc,vec![json!({"cmd":"import.configure","args":{"source":"models/Avocado.glb","settings":{"lodCount":2},"preset":"fast"}})],"Verify reimport settings")?;
                 self.job = editor.action(
                     "editor.asset.reimport",
                     json!({"path":"models/Avocado.glb"}),

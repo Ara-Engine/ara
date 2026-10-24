@@ -281,6 +281,7 @@ pub(crate) const MENUS: &[Menu] = &[
             ),
             S,
             C("create.prefab"),
+            C("assets.create.script"),
         ],
     },
     Menu {
@@ -396,7 +397,9 @@ pub(crate) const MENUS: &[Menu] = &[
             C("window.hierarchy"),
             C("window.inspector"),
             C("window.assets"),
+            C("window.game"),
             C("window.console"),
+            C("window.problems"),
             C("window.agents"),
             C("window.profiler"),
             C("window.history"),
@@ -483,6 +486,10 @@ pub(crate) enum Context {
     ViewModes,
     /// Viewport toolbar: show flags.
     Show,
+    /// Game view toolbar: aspect presets.
+    GameAspect,
+    /// Hierarchy toolbar: type filters.
+    HierarchyFilter,
 }
 /// Context-menu layout for a target kind.
 pub(crate) fn context(kind: Context) -> &'static [Item] {
@@ -508,7 +515,17 @@ pub(crate) fn context(kind: Context) -> &'static [Item] {
             C("edit.hide"),
             C("edit.lock"),
             S,
-            C("prefab.unpack"),
+            C("create.prefab"),
+            Sub(
+                "Prefab",
+                &[
+                    C("prefab.open"),
+                    C("prefab.apply_all"),
+                    C("prefab.revert_all"),
+                    S,
+                    C("prefab.unpack"),
+                ],
+            ),
             C("assets.show"),
         ],
         Context::Hierarchy => &[
@@ -584,12 +601,17 @@ pub(crate) fn context(kind: Context) -> &'static [Item] {
             C("assets.import"),
             C("assets.reveal"),
             C("assets.rebuild_thumbnails"),
+            S,
+            C("assets.show_all"),
         ],
         Context::Field => &[
             C("field.copy"),
             C("field.paste"),
             C("field.reset"),
             C("field.copy_path"),
+            S,
+            C("prefab.apply_override"),
+            C("prefab.revert_override"),
             S,
             C("field.why"),
         ],
@@ -681,6 +703,25 @@ pub(crate) fn context(kind: Context) -> &'static [Item] {
             C("view.mode.gi_debug"),
             S,
             C("view.fidelity"),
+        ],
+        Context::HierarchyFilter => &[
+            C("hierarchy.filter.all"),
+            S,
+            C("hierarchy.filter.lights"),
+            C("hierarchy.filter.cameras"),
+            C("hierarchy.filter.meshes"),
+            C("hierarchy.filter.prefabs"),
+            C("hierarchy.filter.audio"),
+            C("hierarchy.filter.effects"),
+        ],
+        Context::GameAspect => &[
+            C("game.aspect.free"),
+            S,
+            C("game.aspect.16x9"),
+            C("game.aspect.16x10"),
+            C("game.aspect.4x3"),
+            C("game.aspect.21x9"),
+            C("game.aspect.9x16"),
         ],
         Context::Show => &[
             C("view.show.grid"),

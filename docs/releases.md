@@ -123,7 +123,9 @@ running Hub service are never terminated by GUI updates.
 
 ## CLI and RPC
 
-Development tests, captures and manual checks always use an isolated profile:
+Development tests, captures and manual checks always use an isolated profile.
+`cargo test` and `cargo run` get `ARA_CONFIG_DIR=target/ara-config` from the
+tracked `.cargo/config.toml`; set it explicitly for a per-check scratch profile:
 
 ```powershell
 $env:ARA_CONFIG_DIR = (New-Item -ItemType Directory -Force "target/hub-checks/$([guid]::NewGuid())/config").FullName
@@ -131,8 +133,8 @@ $env:ARA_CONFIG_DIR = (New-Item -ItemType Directory -Force "target/hub-checks/$(
 
 Checkout binaries refuse the real user profile before accessing discovery or
 registry files. Worktree engine/editor paths cannot be registered in that real
-profile by an installed service either. Test harnesses fail if ARA_CONFIG_DIR is
-missing or resolves outside target/. Stop every service/updater started by a check;
+profile by an installed service either. Test harnesses fail if ARA_CONFIG_DIR
+resolves outside target/. Stop every service/updater started by a check;
 GUI checks use offscreen captures only. Smoke uses its own isolated config and
 cleans up the service on failure as well as success.
 

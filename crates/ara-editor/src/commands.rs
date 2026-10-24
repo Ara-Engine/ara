@@ -233,7 +233,7 @@ impl Command for Unpack {
 struct InstantiateMeshParams {
     /// Stable mesh reference.
     mesh: AssetRef,
-    /// Optional display name.
+    /// Optional display name; defaults to the source file's name.
     name: Option<String>,
     /// Optional parent.
     parent: Option<EntityRef>,
@@ -251,11 +251,17 @@ impl Command for InstantiateMesh {
         vec![json!({"mesh":"@meshes/crate.glb#me_crate001"})]
     }
     fn run(cx: &mut EditCtx<'_, '_>, p: InstantiateMeshParams) -> Result<Value, Diagnostic> {
+        // Unnamed placements take the source file's name (`@props/rock.glb#…` → rock).
+        let name = p.name.unwrap_or_else(|| {
+            let path = p.mesh.0.trim_start_matches('@');
+            Path::new(path.split('#').next().unwrap_or(path))
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .unwrap_or("Mesh")
+                .to_owned()
+        });
         let mut record = ara_doc::Record::new();
-        record.insert(
-            "name".into(),
-            p.name.unwrap_or_else(|| "Mesh".into()).into(),
-        );
+        record.insert("name".into(), name.into());
         if let Some(parent) = p.parent {
             cx.read().target(&parent.0)?;
             record.insert("parent".into(), parent.0.into());

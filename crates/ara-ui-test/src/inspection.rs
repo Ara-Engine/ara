@@ -72,7 +72,7 @@ pub(crate) fn inspect(ui: &Ui, view: &StoryView, renderer: &Renderer) -> Result<
         if outside(n.rect, boundary) {
             warn(
                 &mut out,
-                "ARA7100",
+                "ARA4100",
                 &n.element.id,
                 format!(
                     "{}: box overflows {} in {}",
@@ -100,7 +100,7 @@ pub(crate) fn inspect(ui: &Ui, view: &StoryView, renderer: &Renderer) -> Result<
             if outside(bounds, content) || outside(bounds, n.clip) {
                 warn(
                     &mut out,
-                    "ARA7101",
+                    "ARA4101",
                     &n.element.id,
                     format!(
                         "Text exceeds content or clip bounds in {} ({} x {})",
@@ -113,7 +113,7 @@ pub(crate) fn inspect(ui: &Ui, view: &StoryView, renderer: &Renderer) -> Result<
             if evidence.missing_glyphs > 0 {
                 warn(
                     &mut out,
-                    "ARA7102",
+                    "ARA4102",
                     &n.element.id,
                     format!(
                         "{} missing glyphs in {}",
@@ -124,7 +124,7 @@ pub(crate) fn inspect(ui: &Ui, view: &StoryView, renderer: &Renderer) -> Result<
             }
             let id = ara_ui::source::stable_id(&n.element.id);
             if ui.display.commands.iter().any(|draw| matches!(draw, Draw::GlyphRun { node, font, .. } if *node == id && *font != 0)) {
-                warn(&mut out, "ARA7103", &n.element.id, format!("Text uses an explicit fallback font in {}", view.locale), "Inspect shaping clusters; retain the required fallback pack or select a covering primary font");
+                warn(&mut out, "ARA4103", &n.element.id, format!("Text uses an explicit fallback font in {}", view.locale), "Inspect shaping clusters; retain the required fallback pack or select a covering primary font");
             }
             if !text.value.is_empty() {
                 contrast(ui, i, &mut out);
@@ -136,7 +136,7 @@ pub(crate) fn inspect(ui: &Ui, view: &StoryView, renderer: &Renderer) -> Result<
             if minimum < 44.0 {
                 warn(
                     &mut out,
-                    "ARA7106",
+                    "ARA4106",
                     &n.element.id,
                     format!(
                         "Effective touch target is {:.1} x {:.1} logical pixels",
@@ -225,7 +225,7 @@ fn contrast(ui: &Ui, i: usize, out: &mut CaptureReport) {
     if image || background[3] < 0.999 {
         warn(
             out,
-            "ARA7105",
+            "ARA4105",
             &n.element.id,
             "Contrast is uncertain over imagery or an unbacked transparent surface",
             "Provide a solid scrim/background or inspect representative game imagery",
@@ -246,7 +246,7 @@ fn contrast(ui: &Ui, i: usize, out: &mut CaptureReport) {
     };
     // Report passes as well: agents need the actual ratio, not only failing checks.
     out.diagnostics.push(UiDiagnostic {
-        code: "ARA7104".into(),
+        code: "ARA4104".into(),
         node: n.element.id.clone(),
         message: format!(
             "Solid-background contrast {:.2}:1 ({})",

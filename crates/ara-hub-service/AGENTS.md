@@ -120,8 +120,9 @@ Per-project compatibility: `ara mcp --root <project>` and optional `.mcp.json`
 
 ## Tests and gates
 
-Every test/capture/manual check must set ARA_CONFIG_DIR to an existing scratch
-directory under target/. Config-isolation tests fail otherwise. Test cleanup
+Every test/capture/manual check uses a scratch ARA_CONFIG_DIR under target/: the
+tracked `.cargo/config.toml` sets `target/ara-config` for `cargo test`/`cargo run`
+(an explicit value wins). Config-isolation tests fail if it resolves elsewhere. Test cleanup
 closes projects, shuts down the owned service and waits for discovery removal.
 Do not stop or alter another user's/service's profile.
 

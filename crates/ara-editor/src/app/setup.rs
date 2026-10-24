@@ -28,6 +28,46 @@ pub struct Options {
     pub verify_panels: bool,
     /// Run the Editor UX v2 capture route (menus, Settings, floating windows, tabs).
     pub verify_ux: bool,
+    /// Scene to open instead of the project's main scene (`levels/hangar.scene`).
+    pub scene: Option<String>,
+    /// Start Play (in the Game view) once the window is up.
+    pub play: bool,
+    /// Run the alpha journey route (open, import, place, prefab, C#, Play, failure,
+    /// undo/save/reopen, export) and capture every step.
+    pub verify_journey: bool,
+}
+impl Options {
+    /// Bounded and automated runs (a frame limit, captures, verification routes) keep
+    /// every window hidden and capture offscreen.
+    pub fn offscreen(&self) -> bool {
+        self.frames.is_some()
+            || self.screenshot
+            || self.verify
+            || self.verify_panels
+            || self.verify_ux
+            || self.verify_journey
+            || self.headless
+    }
+
+    /// Bounded runs never touch the owner's profile and start from fresh preferences
+    /// (captures must not depend on an earlier run): preferences (`ARA_CONFIG_DIR`)
+    /// and crash reports (`ARA_CRASH_DIR`) go to `<output>/.ara-profile`, and the
+    /// players and import workers they start inherit both.
+    ///
+    /// # Safety
+    /// Mutates the process environment: call it before any thread exists.
+    pub unsafe fn isolate_profile(&self) {
+        if !self.offscreen() {
+            return;
+        }
+        let profile = self.output.join(".ara-profile");
+        let profile = std::path::absolute(&profile).unwrap_or(profile);
+        let _ = std::fs::remove_dir_all(profile.join("config"));
+        for (name, dir) in [("ARA_CONFIG_DIR", "config"), ("ARA_CRASH_DIR", "crashes")] {
+            // SAFETY: the caller guarantees the process is still single-threaded.
+            unsafe { std::env::set_var(name, profile.join(dir)) };
+        }
+    }
 }
 impl Default for Options {
     fn default() -> Self {
@@ -44,10 +84,21 @@ impl Default for Options {
             screenshot: false,
             verify_panels: false,
             verify_ux: false,
+            scene: None,
+            play: false,
+            verify_journey: false,
         }
     }
 }
 pub(super) fn prepare(editor: &mut Editor, options: &Options) -> ara_ui::Result<()> {
+    if let Some(scene) = &options.scene {
+        editor.action("editor.scene.open", json!({"scene": scene}))?;
+    }
+    if options.play {
+        editor
+            .queued_commands
+            .push(("play.start".into(), crate::shell::commands::Target::None));
+    }
     if options.sample {
         sample(editor)?;
     }

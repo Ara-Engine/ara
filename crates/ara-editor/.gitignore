@@ -4,3 +4,4 @@
 /evidence/**/*.log
 /evidence/*.log
 /evidence/golden-failure/
+/evidence/**/.ara-profile/

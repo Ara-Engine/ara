@@ -62,7 +62,7 @@ fn dpi_and_report_contract_match_the_rendered_pixels() -> Result<()> {
             .report
             .diagnostics
             .iter()
-            .any(|d| d.code == "ARA7106" && d.threshold == Some(44.0))
+            .any(|d| d.code == "ARA4106" && d.threshold == Some(44.0))
     );
     let encoded = serde_json::to_value(&capture.report)?;
     let decoded: CaptureReport = serde_json::from_value(encoded)?;
@@ -101,17 +101,17 @@ fn diagnostics_cover_overflow_text_fallback_and_exact_or_uncertain_contrast() ->
             .report
             .diagnostics
             .iter()
-            .any(|d| d.code == "ARA7100" && d.node == "root")
+            .any(|d| d.code == "ARA4100" && d.node == "root")
     );
     let capture = engine.document("<ui id='root'><text id='text' text='A very long string of visible text' style='width:20px;height:12px;overflow:hidden;'/><button id='overflow' text='Go' style='width:240px;'/><text id='arabic' text='سلام'/><text id='missing' text='\u{10ffff}'/></ui>",
         "ui{padding:0px;gap:0px;background:#000000;} text {color:#ffffff;}", &view, &locale())?;
     let ds = &capture.report.diagnostics;
-    for code in ["ARA7100", "ARA7101", "ARA7102", "ARA7103", "ARA7106"] {
+    for code in ["ARA4100", "ARA4101", "ARA4102", "ARA4103", "ARA4106"] {
         assert!(ds.iter().any(|d| d.code == code), "missing {code}");
     }
     assert!(
         ds.iter()
-            .any(|d| d.code == "ARA7104" && d.measured.is_some_and(|v| (v - 21.0).abs() < 0.01))
+            .any(|d| d.code == "ARA4104" && d.measured.is_some_and(|v| (v - 21.0).abs() < 0.01))
     );
     engine.image(
         "@image.png#im_a",
