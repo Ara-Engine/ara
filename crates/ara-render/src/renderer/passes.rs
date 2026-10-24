@@ -343,7 +343,9 @@ impl Renderer {
                         }),
                         size: [self.look.quality.shadows.resolution * 2; 2],
                     });
-                    for (cascade, (origin, size)) in self.cascade_viewports().into_iter().enumerate() {
+                    for (cascade, (origin, size)) in
+                        self.cascade_viewports().into_iter().enumerate()
+                    {
                         let cascade = cascade as u32;
                         recorder.push(Command::Viewport { origin, size });
                         if let Some(native) = &self.native {

@@ -49,6 +49,10 @@ pub(super) struct Native {
 }
 
 impl Renderer {
+    /// Whether this view draws native local geometry and compressed materials.
+    pub fn is_native(&self) -> bool {
+        self.native.is_some()
+    }
     /// Upload native local geometry and compressed texture residency on a raster-only
     /// device. Instances share source allocations; no acceleration structures exist.
     pub fn new_native(

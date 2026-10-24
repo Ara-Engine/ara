@@ -23,8 +23,22 @@ pub(super) struct SceneView {
     camera: Option<crate::state::Camera>,
     /// The fidelity view applies to the Lit mode only; debug views show the raster output.
     lit: bool,
+    /// Transient typed drafts, projected through the same native extraction as commits.
+    preview_view: Option<crate::world::DocumentView>,
 }
 impl SceneView {
+    /// Re-extract native input at the next render boundary, retaining GPU content
+    /// until the replacement or in-place update succeeds.
+    pub(super) fn invalidate(&mut self) {
+        self.revision = None;
+        self.failed = None;
+        self.remaining = self.remaining.max(8);
+    }
+    /// Project typed Inspector drafts without authoring documents or baking meshes.
+    pub(super) fn set_preview_view(&mut self, view: Option<crate::world::DocumentView>) {
+        self.preview_view = view;
+        self.invalidate();
+    }
     pub fn timings(&self) -> &[ara_gpu::commands::PassTiming] {
         self.fidelity
             .as_ref()
@@ -62,6 +76,9 @@ impl SceneView {
         view: &crate::world::DocumentView,
         settle: u32,
     ) -> ara_ui::Result<()> {
+        if !renderer.is_native() && self.preview_view.is_some() {
+            self.set_preview_view(None);
+        }
         let mode = view_mode(&editor.state.view_mode);
         self.lit = matches!(mode, ViewMode::Lit);
         renderer.render_view(&editor.state.camera.spec(), 0.0015, mode)?;
