@@ -17,13 +17,14 @@ fn main() -> Result<()> {
         slangc: sdk.join("Bin/slangc.exe"),
         spirv_val: sdk.join("Bin/spirv-val.exe"),
     };
-    let mut effects = ara_vfx::samples::all()
-        .into_iter()
-        .map(|(e, _)| e)
-        .collect::<Vec<_>>();
+    let mut effects = ara_vfx::samples::library();
     effects.push(ara_vfx::samples::million());
     effects.push(ara_vfx::samples::million_fill());
-    effects.extend(ara_vfx::samples::additional().into_iter().map(|(e, _)| e));
+    for (effect, _) in ara_vfx::samples::additional() {
+        if !effects.iter().any(|e| e.name == effect.name) {
+            effects.push(effect);
+        }
+    }
     let selected = std::env::args().nth(1);
     let text_only = selected.as_deref() == Some("--text-only");
     if !text_only {

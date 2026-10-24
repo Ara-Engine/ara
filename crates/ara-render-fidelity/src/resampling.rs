@@ -53,6 +53,10 @@ impl Reservoirs {
     }
 }
 impl crate::FidelityView {
+    /// Whether ReSTIR reservoirs are allocated and used by hybrid frames.
+    pub fn reservoir_sampling(&self) -> bool {
+        self.reservoirs.is_some()
+    }
     /// Enable direct-light reservoir reuse and diffuse path reconnection at a frame
     /// boundary. Reference mode remains independently sampled. This resets history.
     pub fn set_reservoir_sampling(&mut self, gpu: &mut VulkanDevice, enabled: bool) -> Result<()> {

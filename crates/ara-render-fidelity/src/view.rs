@@ -51,6 +51,8 @@ pub struct FidelityView {
     pub(crate) timings: Vec<PassTiming>,
     pub(crate) reservoirs: Option<crate::resampling::Reservoirs>,
     pub(crate) shadow_source: crate::SunShadowSource,
+    /// The uploaded frame of the last completed render, replayed by `post_process`.
+    pub(crate) last_frame: Option<crate::frame::GpuFrame>,
 }
 impl FidelityView {
     /// Upload immutable extraction, prewarm cooked pipelines and allocate view storage.
@@ -229,6 +231,7 @@ impl FidelityView {
             timings: Vec::new(),
             reservoirs: None,
             shadow_source: crate::SunShadowSource::RayQueries,
+            last_frame: None,
         })
     }
     /// Bound traced secondary surfaces before the DDGI terminal. One event is

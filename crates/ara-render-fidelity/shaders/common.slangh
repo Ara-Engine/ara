@@ -22,6 +22,9 @@ struct Frame {
     float4 origin;float4 spacing;uint4 counts;uint4 probes;
     float4 sunDirection;float4 sunLux;float4 temporal;float4 post;float4 metering;uint4 display;float4 lens;
     uint4 control;uint4 transport;float4 jitter;float4 texture;float4 atmosphere;float4 weather;
+    // fog: tint rgb, anisotropy. grading: white-balance gain rgb, saturation.
+    // look: contrast, vignette, fog base altitude, aerosol scale.
+    float4 fog;float4 grading;float4 look;
 };
 Frame frame(){return buffers[root.frame].Load<Frame>(0);}
 // Rust retains seven read rows, seven write rows, then nine private rows.
@@ -56,7 +59,7 @@ float3 atmosphereEnvironment(Frame f,float3 d,bool disk);
 float3 solarIrradiance(Frame f,float3 position);
 float3 environment(Frame f,float3 d){
 #ifdef SKY_ATMOSPHERE
-    [branch]if(f.display.w!=0)return atmosphereEnvironment(f,d,false);
+    [branch]if((f.display.w&2)!=0)return atmosphereEnvironment(f,d,false);
 #endif
     return textures[NonUniformResourceIndex(f.scene.z)].SampleLevel(samplers[1],envUv(d),0).rgb;
 }

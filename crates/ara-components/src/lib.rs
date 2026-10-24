@@ -9,6 +9,8 @@ use ara_schema::{Schema, SchemaDb};
 use bevy_ecs::prelude::Component;
 use serde::{Deserialize, Serialize};
 
+pub mod render;
+
 /// Position, rotation and scale of an entity relative to its parent.
 #[derive(Debug, Clone, Copy, PartialEq, Schema, Component, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
@@ -46,7 +48,11 @@ impl Default for Transform {
 
 /// Registers every built-in component.
 pub fn register(db: &mut SchemaDb) {
-    db.register::<Transform>();
+    db.register::<Transform>()
+        .register::<render::RenderSettings>()
+        .register::<render::SkyAtmosphere>()
+        .register::<render::HeightFog>()
+        .register::<render::PostProcess>();
 }
 
 #[cfg(test)]
@@ -62,5 +68,33 @@ mod tests {
         let scale = t.field("scale").expect("field");
         assert_eq!(db.field_default(scale), serde_json::json!([1, 1, 1]));
         assert_eq!(Transform::default().scale, [1.0; 3]);
+    }
+
+    /// Omitted JSON fields and schema defaults must both produce the Rust defaults.
+    #[test]
+    fn render_look_defaults_match_schema() {
+        fn check<T>(db: &SchemaDb, name: &str)
+        where
+            T: Default + PartialEq + std::fmt::Debug + serde::de::DeserializeOwned,
+        {
+            let ty = db.get(name).expect("registered");
+            let defaults: serde_json::Map<String, serde_json::Value> = ty
+                .fields()
+                .iter()
+                .map(|f| (f.name.clone(), db.field_default(f)))
+                .collect();
+            let from_schema: T =
+                serde_json::from_value(serde_json::Value::Object(defaults)).expect(name);
+            assert_eq!(from_schema, T::default(), "{name}");
+            let omitted: T = serde_json::from_str("{}").expect(name);
+            assert_eq!(omitted, T::default(), "{name}");
+        }
+        let mut db = SchemaDb::new();
+        register(&mut db);
+        assert!(db.verify().is_empty(), "{:?}", db.verify());
+        check::<render::RenderSettings>(&db, "RenderSettings");
+        check::<render::SkyAtmosphere>(&db, "SkyAtmosphere");
+        check::<render::HeightFog>(&db, "HeightFog");
+        check::<render::PostProcess>(&db, "PostProcess");
     }
 }

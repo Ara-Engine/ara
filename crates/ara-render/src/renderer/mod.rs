@@ -86,6 +86,7 @@ pub struct Renderer {
     artifacts: PathBuf,
     shader_metadata: crate::capture::ShaderMetadata,
     last_timings: Vec<PassTiming>,
+    tone_curve: post::ToneCurve,
 }
 
 impl Renderer {
@@ -205,6 +206,10 @@ impl Renderer {
         self.size = size;
         self.frame_number = 0;
         Ok(())
+    }
+    /// Select the display curve applied after exposure (Lit view only).
+    pub fn set_tone_curve(&mut self, curve: post::ToneCurve) {
+        self.tone_curve = curve;
     }
     /// Render live with TAA jitter and camera reprojection at a locked physical exposure.
     pub fn render(&mut self, camera: &CameraSpec, exposure: f32) -> Result<()> {

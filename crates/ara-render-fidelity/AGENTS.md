@@ -14,6 +14,12 @@ No authoritative gameplay or authoring state lives here.
 - `feature_inputs`, `post_process`: compose feature HDR before the shared post stack.
 - `set_reservoir_sampling`: explicit RT DI/path reuse and split low-light histories.
 - `SunShadowSource`, `render_jitter`: completed VSM sun mask with RT residency fallback.
+- `presets`: `QualityPreset` (Low/Medium/High/Epic), `QualityChoice` (`--quality`),
+  `Capabilities::of`, `Plan::resolve` → `RenderPath::Baseline` or `Fidelity(FidelityPlan)`;
+  `FidelityPlan::settings` at creation, `configure` after new/resize/content swap.
+- `environment::FrameEnvironment::resolve(&frame.look, env.exposure)`: the scene's
+  `SkyAtmosphere`/`HeightFog`/`PostProcess` → `view.set_environment`; `baseline()`
+  gives the raster sky map/exposure/curve, `ground_sun()` the attenuated sun.
 
 ## Gates
 Use CARGO_BUILD_JOBS=2. `cargo test -p ara-render-fidelity`,
@@ -32,7 +38,9 @@ and update more probes with 16 rays each inside the same per-frame ray budget.
 Direct radiance has separate temporal history; incident radiance uses a wavelet
 filter without luminance rejection on rough surfaces. Checkerboard transport must
 repair invalid history before temporal resolve. Reference targets stay RGBA32F.
-Exposure is applied once after reconstruction. Capture is explicit; ordinary
+Exposure is applied once after reconstruction; grading (white balance, contrast,
+saturation, vignette) follows it in scene-linear, then the tone mapper (AcesFit,
+PbrNeutral, Filmic) and the LUT. `post_process` replays the last frame (TAA kept). Capture is explicit; ordinary
 frames never read back image data. GPU pipelines only consume cooked artifacts.
 Every bindless input is declared to the graph, including masked textures.
 Feature inputs remain owned by the view; consume them at a completed boundary.

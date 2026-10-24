@@ -58,14 +58,21 @@ void temporalMain(uint3 tid:SV_DispatchThreadID){
             if(footprint)for(int y=0;y<2;y++)for(int x=0;x<2;x++)footprint=footprint && pixel(f,WORLD+previous,low+int2(x,y)).w==world.w;
             float4 history=footprint?sampleImage(f,HISTORY+previous,uv):pixel(f,HISTORY+previous,at);
             if(splitSignals)history.rgb=historyColour(history.rgb,historyPayload(pixel(f,MOMENTS+previous,at).w),10);
-            bool sampled=pixel(f,RAW,p).w>0;float cap=splitSignals && f.transport.w==1?256.:64.;count=min(history.w+float(sampled),length(motion.xy*f.sizes.xy)>1?4.:cap);float weight=sampled?max(1/count,motion.w>0?0.35:splitSignals && f.transport.w==1?1./256.:0.02):0;
+            // Camera motion keeps a longer history than a hard four-frame reset: the
+            // reprojection test rejects disocclusions, and split signals clip history
+            // to the current neighbourhood, so lag stays bounded while 1-spp grain
+            // averages over 16+ frames instead of four.
+            float speed=length(motion.xy*f.sizes.xy),moving=splitSignals?24.:8.;
+            bool sampled=pixel(f,RAW,p).w>0;float cap=splitSignals && f.transport.w==1?256.:64.;count=min(history.w+float(sampled),speed>1?moving:cap);float weight=sampled?max(1/count,motion.w>0?0.35:splitSignals && f.transport.w==1?1./256.:0.02):0;
             if(f.temporal.y>0 && sampled){weight=max(weight,0.5);count=min(count,2.);}
             float3 clipped=history.rgb;
             if(splitSignals && (length(motion.xy*f.sizes.xy)>0.5 || f.temporal.y>0))clipped=historyBox(f,p,clipped,RAW);
             // Illumination changes are host-signalled; stochastic highlights are not resets.
             float4 oldDirect=footprint?sampleImage(f,DIRECT_HISTORY+previous,uv):pixel(f,DIRECT_HISTORY+previous,at);
             if(splitSignals)oldDirect.rgb=historyColour(oldDirect.rgb,historyPayload(extraPixel(f,SPEC_MOMENTS+previous,at).z)&((1u<<27)-1),9);
-            directCount=min(oldDirect.w+1,length(motion.xy*f.sizes.xy)>1?4.:splitSignals && f.transport.w==1?256.:96.);
+            directCount=min(oldDirect.w+1,speed>1?moving:splitSignals && f.transport.w==1?256.:96.);
+            // View-dependent direct highlights must not smear behind a moving camera.
+            if(speed>0.5)oldDirect.rgb=historyBox(f,p,oldDirect.rgb,DIRECT);
             // Pixel-area integration must include the material factor as well as
             // incident radiance. A current-jitter albedo creates stippled floors.
             if(f.transport.w==1){uint packed=asuint(pixel(f,MOMENTS+previous,p).z);float3 oldMod=float3(packed&1023,(packed>>10)&1023,(packed>>20)&1023)/1023.;modulation=lerp(oldMod,modulation,1/min(directCount,32.));}
@@ -116,6 +123,7 @@ void atrousMain(uint3 tid:SV_DispatchThreadID,uint3 group:SV_GroupID,uint lane:S
     // samples through increasingly thick walls when its pixel radius grows.
     float scale=max(guide.w*0.001,0.003)*baseStep;float roughness=pixel(f,NORMAL+slot,p).w;
     float3 specSum=0;float specTotal=0;float specL=splitSignals?luminance(specCenter):0;
+    float3 centreGeometric=splitSignals?extraPixel(f,36,p).xyz:guide.xyz;
     float4 specMoments=splitSignals?extraPixel(f,SPEC_MOMENTS+slot,p):float4(0);float2 specMom=specMoments.xy;float specSigma=sqrt(max(specMom.y-specMom.x*specMom.x,0.00001));
     for(int y=-1;y<=1;y++)for(int x=-1;x<=1;x++){
         float3 n,c,spec=0;float4 neighborWorld;
@@ -125,7 +133,11 @@ void atrousMain(uint3 tid:SV_DispatchThreadID,uint3 group:SV_GroupID,uint lane:S
         // Rough incident irradiance is smooth: a centre-dependent luminance
         // rejection biases rare bright bounce samples back toward darkness.
         float radianceWeight=historyCount<4?1:lerp(exp(-abs(luminance(c)-l)/(4*sigma+0.1)),1,smoothstep(0.1,0.3,roughness));
-        weight*=exp(-abs(dot(neighborWorld.xyz-world.xyz,guide.xyz))/scale)*pow(max(dot(n,guide.xyz),0),splitSignals?lerp(64.,8.,roughness):lerp(128.,32.,roughness))*radianceWeight*float(neighborWorld.w==world.w);
+        // Split (reservoir) views guide demodulated incident light by the geometric
+        // normal: normal-mapped detail (corrugation, rough plaster) otherwise rejected
+        // nearly every neighbour and left ReSTIR GI's reuse pattern as blotches.
+        float3 geometric=splitSignals?extraPixel(f,36,int2(p)+int2(x,y)*step).xyz:n;
+        weight*=exp(-abs(dot(neighborWorld.xyz-world.xyz,centreGeometric))/scale)*pow(max(dot(geometric,centreGeometric),0),splitSignals?16.:lerp(128.,32.,roughness))*radianceWeight*float(neighborWorld.w==world.w);
         if(splitSignals && mixedCoverage(specMoments.z) && (x!=0 || y!=0))weight=0;
         if(x==0 && y==0)weight=max(weight,1);sum+=c*weight;total+=weight;
         if(splitSignals){

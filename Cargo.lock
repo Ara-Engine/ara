@@ -1507,6 +1507,7 @@ name = "ara-render-fidelity"
 version = "0.0.1-alpha"
 dependencies = [
  "anyhow",
+ "ara-components",
  "ara-gpu",
  "ara-render",
  "bytemuck",
@@ -1743,12 +1744,14 @@ dependencies = [
  "anyhow",
  "ara-anim",
  "ara-asset",
+ "ara-components",
  "ara-diag",
  "ara-doc",
  "ara-foliage",
  "ara-gpu",
  "ara-json",
  "ara-ops",
+ "ara-pathtrace",
  "ara-play",
  "ara-play-host",
  "ara-proto",

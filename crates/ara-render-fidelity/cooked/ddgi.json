@@ -1,13 +1,13 @@
 {
   "binding_layout_hash": "35cd2a62b1ba741ce6823b3c8753d7b5aa97b54c5f0a837b56e542518013fd7e",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "d9e6ec189cc0cfa70ce3f94800577b67b6a81bfab20c16f42554f62cc8140978",
+  "key": "803f1988a4aeabfdd1fdb7e640c974225334e4f321ce9b8c05c68d53aa982975",
   "stages": [
     {
-      "dxil": "d9e6ec189cc0cfa70ce3f94800577b67b6a81bfab20c16f42554f62cc8140978/ddgiMain.dxil",
-      "dxil_hash": "849c66d0eb93ec32ad264b2a5fb9feb1541de0282c5e4bd819349442a446b3a3",
+      "dxil": "803f1988a4aeabfdd1fdb7e640c974225334e4f321ce9b8c05c68d53aa982975/ddgiMain.dxil",
+      "dxil_hash": "44d832ff0bb74a5e546d224cac4ae7b28cccf3d3b6d3c6aa7df45d054d82dd59",
       "source_entry": "ddgiMain",
-      "spirv": "d9e6ec189cc0cfa70ce3f94800577b67b6a81bfab20c16f42554f62cc8140978/ddgiMain.spv",
+      "spirv": "803f1988a4aeabfdd1fdb7e640c974225334e4f321ce9b8c05c68d53aa982975/ddgiMain.spv",
       "spirv_entry": "main",
       "spirv_hash": "d1fe052d0c240c98bc5d3da97512defcdea27a92c93d2600f6866f907366ba46",
       "stage": "compute"

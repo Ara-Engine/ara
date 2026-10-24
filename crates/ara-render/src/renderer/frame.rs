@@ -54,7 +54,11 @@ impl Renderer {
             inverse_vp: vp.inverse(),
             shadows: shadow_cascades(camera, self.content.sun_direction, splits),
             camera: camera.position.extend(0.1).to_array(),
-            forward: camera.forward.extend(0.).to_array(),
+            // w selects the display curve (post::ToneCurve).
+            forward: camera
+                .forward
+                .extend(self.tone_curve as u32 as f32)
+                .to_array(),
             sun_direction: self.content.sun_direction.extend(0.).to_array(),
             sun_color_exposure: self.content.sun_lux.extend(exposure).to_array(),
             splits,

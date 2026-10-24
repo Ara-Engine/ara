@@ -163,7 +163,21 @@ void taaMain(uint3 t:SV_DispatchThreadID){Frame f=frame();if(any(t.xy>=f.extent.
     images[NonUniformResourceIndex(f.post.z)][p]=float4(result,depth);
 }
 float3 srgb(float3 x){return lerp(12.92*x,1.055*pow(max(x,0),1/2.4)-0.055,step(0.0031308,x));}
+// Display curves shared with the fidelity post pass (forward.w: 0 ACES fit, 1 PBR
+// Neutral, 2 fitted ACES filmic pre-scaled to keep 18% grey).
 float3 tonemap(float3 x){return saturate((x*(2.51*x+0.03))/(x*(2.43*x+0.59)+0.14));}
+float3 neutralCurve(float3 c){
+    float minimum=min(c.x,min(c.y,c.z));float offset=minimum<=0.08?minimum-6.25*minimum*minimum:0.04;c-=offset;
+    float peak=max(c.x,max(c.y,c.z));if(peak<=0.76)return c;
+    float compressed=1-0.0576/(peak-0.52);float blend=1-1/(1+0.15*(peak-compressed));return lerp(c*(compressed/peak),float3(compressed),blend);
+}
+float3 filmicCurve(float3 c){
+    c*=1.464;
+    float3 v=float3(dot(float3(0.59719,0.35458,0.04823),c),dot(float3(0.07600,0.90834,0.01566),c),dot(float3(0.02840,0.13383,0.83777),c));
+    v=(v*(v+0.0245786)-0.000090537)/(v*(0.983729*v+0.4329510)+0.238081);
+    return saturate(float3(dot(float3(1.60475,-0.53108,-0.07367),v),dot(float3(-0.10208,1.10813,-0.00605),v),dot(float3(-0.00327,-0.07276,1.07602),v)));
+}
+float3 displayCurve(Frame f,float3 x){uint curve=uint(f.forward.w);return curve==1?neutralCurve(x):curve==2?filmicCurve(x):tonemap(x);}
 [shader("compute")]
 [numthreads(8,8,1)]
 void tonemapMain(uint3 t:SV_DispatchThreadID){Frame f=frame();if(any(t.xy>=f.extent.xy))return;int2 p=int2(t.xy);float3 color=pixel(root.materials,p).rgb;
@@ -173,6 +187,6 @@ void tonemapMain(uint3 t:SV_DispatchThreadID){Frame f=frame();if(any(t.xy>=f.ext
     else if(f.temporal.z==4){float4 n=pixel(f.gbuffer.y,p);float4 m=pixel(f.gbuffer.z,p);color=float3(n.w,m.w,0);}
     else if(f.temporal.z==5){uint id=uint(pixel(f.extra.y,p).x);color=id==0?float3(0):frac(float3(id)*float3(0.6180339,0.381966,0.7548776));}
     else if(f.temporal.z==6){float4 w=pixel(f.gbuffer.w,p);uint c=cascadeIndex(f,w.xyz);color=w.w==0?float3(0):(c==0?float3(0.85,0.2,0.1):c==1?float3(0.2,0.8,0.25):c==2?float3(0.2,0.35,0.9):float3(0.8,0.3,0.8))*visibility(f,w.xyz,pixel(f.gbuffer.y,p).xyz);}
-    if(f.temporal.z==0)color=tonemap(max(color,0)*f.sunColorExposure.w);
+    if(f.temporal.z==0)color=displayCurve(f,max(color,0)*f.sunColorExposure.w);
     images[NonUniformResourceIndex(f.post.w)][p]=float4(srgb(saturate(color)),1);
 }

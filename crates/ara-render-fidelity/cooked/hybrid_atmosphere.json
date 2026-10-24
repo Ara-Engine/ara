@@ -1,15 +1,15 @@
 {
   "binding_layout_hash": "35cd2a62b1ba741ce6823b3c8753d7b5aa97b54c5f0a837b56e542518013fd7e",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "d9e6ec189cc0cfa70ce3f94800577b67b6a81bfab20c16f42554f62cc8140978",
+  "key": "803f1988a4aeabfdd1fdb7e640c974225334e4f321ce9b8c05c68d53aa982975",
   "stages": [
     {
-      "dxil": "d9e6ec189cc0cfa70ce3f94800577b67b6a81bfab20c16f42554f62cc8140978/hybridAtmosphereMain.dxil",
-      "dxil_hash": "67578e38498d873b04d76539c2d3328004e207b099462bbac645d17859283134",
+      "dxil": "803f1988a4aeabfdd1fdb7e640c974225334e4f321ce9b8c05c68d53aa982975/hybridAtmosphereMain.dxil",
+      "dxil_hash": "7a419562cbaacfa0c24282e018205cf1bd8f6b469cf7a0d56c060a2c5a8cd8da",
       "source_entry": "hybridAtmosphereMain",
-      "spirv": "d9e6ec189cc0cfa70ce3f94800577b67b6a81bfab20c16f42554f62cc8140978/hybridAtmosphereMain.spv",
+      "spirv": "803f1988a4aeabfdd1fdb7e640c974225334e4f321ce9b8c05c68d53aa982975/hybridAtmosphereMain.spv",
       "spirv_entry": "main",
-      "spirv_hash": "5e7e0a9e9b89ad9b4a176ce2317ff83329efdde5df7e1646abf7c39f11da1038",
+      "spirv_hash": "d50975230308e16256899de524b7ffb2e82f9cd5c7560d7537f08638ff78fcb7",
       "stage": "compute"
     }
   ],
