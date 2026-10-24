@@ -2557,6 +2557,19 @@ expression: out
         }
       }
     },
+    "ExposureMode": {
+      "kind": "enum",
+      "doc": "How the camera exposes the scene.",
+      "module": "render",
+      "variants": {
+        "auto": {
+          "doc": "Meter the frame's luminance and adapt within `minEv100`..`maxEv100`."
+        },
+        "manual": {
+          "doc": "Fixed photographic exposure `ev100`."
+        }
+      }
+    },
     "Flipbook": {
       "kind": "component",
       "doc": "Tick-driven flipbook state, wholly contained in an ECS component.",
@@ -3137,6 +3150,44 @@ expression: out
         },
         "isometric": {
           "doc": "Diamond grid, cell size equal to a diamond's bounding box."
+        }
+      }
+    },
+    "HeightFog": {
+      "kind": "component",
+      "doc": "Exponential height fog lit by the sun, the sky and local lights (volumetric shafts where shadows cut the beams). Density halves every `falloff × ln 2` metres above `baseHeight`. The first entity in ID order wins.",
+      "module": "render",
+      "fields": {
+        "density": {
+          "type": "f32",
+          "doc": "Extinction at `baseHeight`, per metre. 0.002 is a light haze (visibility ≈ 1.5 km), 0.02 a thick fog (≈ 150 m).",
+          "default": 0.002,
+          "range": [0, 0.1],
+          "examples": [0.004]
+        },
+        "baseHeight": {
+          "type": "f32",
+          "doc": "World altitude where the fog has its full density.",
+          "default": 0,
+          "unit": "m"
+        },
+        "falloff": {
+          "type": "f32",
+          "doc": "Scale height: density falls by a factor of e over this many metres of altitude.",
+          "default": 60,
+          "unit": "m",
+          "range": [1, 10000]
+        },
+        "albedo": {
+          "type": "color",
+          "doc": "Scattering colour (single-scattering albedo, linear). Grey-white for water fog, warm for dust.",
+          "default": [0.9, 0.9, 0.9, 1]
+        },
+        "anisotropy": {
+          "type": "f32",
+          "doc": "Forward-scattering bias: 0 is uniform, toward 1 the fog glows around the sun and lamps.",
+          "default": 0.3,
+          "range": [0, 0.9]
         }
       }
     },
@@ -5421,6 +5472,93 @@ expression: out
         }
       }
     },
+    "PostProcess": {
+      "kind": "component",
+      "doc": "Camera exposure, tone mapping, bloom and colour grading. The first entity in ID order wins; without one, renderers meter automatically with Filmic tone mapping.",
+      "module": "render",
+      "fields": {
+        "exposure": {
+          "type": "ExposureMode",
+          "doc": "Automatic metering or a fixed exposure.",
+          "default": "auto",
+          "options": [
+            "auto",
+            "manual"
+          ]
+        },
+        "ev100": {
+          "type": "f32",
+          "doc": "Manual exposure value at ISO 100. Sunny day ≈ 15, overcast ≈ 12, sunset ≈ 10, lit interior ≈ 7, night street ≈ 3.",
+          "default": 10,
+          "range": [-10, 24]
+        },
+        "compensation": {
+          "type": "f32",
+          "doc": "Exposure compensation in stops, applied in both modes; +1 doubles the brightness.",
+          "default": 0,
+          "range": [-8, 8]
+        },
+        "minEv100": {
+          "type": "f32",
+          "doc": "Darkest exposure automatic metering may pick (lower = brighter in dark scenes).",
+          "default": -2,
+          "range": [-10, 24]
+        },
+        "maxEv100": {
+          "type": "f32",
+          "doc": "Brightest exposure automatic metering may pick.",
+          "default": 16,
+          "range": [-10, 24]
+        },
+        "adaptationSpeed": {
+          "type": "f32",
+          "doc": "How fast automatic exposure adapts, per second; higher reacts faster.",
+          "default": 2,
+          "range": [0.1, 20]
+        },
+        "toneMapping": {
+          "type": "ToneMapping",
+          "doc": "Display transform.",
+          "default": "filmic",
+          "options": [
+            "filmic",
+            "neutral",
+            "acesFit"
+          ]
+        },
+        "bloom": {
+          "type": "f32",
+          "doc": "Fraction of light spread into the bloom glow around bright pixels.",
+          "default": 0.04,
+          "range": [0, 0.25]
+        },
+        "whiteBalance": {
+          "type": "f32",
+          "doc": "White balance: the colour temperature that renders as neutral white. Lower warms the image's whites to neutral (tungsten ≈ 3200), higher cools them.",
+          "default": 6500,
+          "unit": "K",
+          "range": [1500, 15000]
+        },
+        "saturation": {
+          "type": "f32",
+          "doc": "Colour saturation; 0 is greyscale, 1 unchanged.",
+          "default": 1,
+          "range": [0, 2]
+        },
+        "contrast": {
+          "type": "f32",
+          "doc": "Contrast around middle grey; 1 unchanged.",
+          "default": 1,
+          "range": [0.5, 2]
+        },
+        "vignette": {
+          "type": "f32",
+          "doc": "Darkening toward the frame corners; 0 disables it.",
+          "default": 0,
+          "range": [0, 1]
+        }
+      }
+    },
     "PrefabInstantiateParams": {
       "kind": "params",
       "doc": "Parameters of `prefab.instantiate`.",
@@ -5520,6 +5658,28 @@ expression: out
         }
       }
     },
+    "QualitySetting": {
+      "kind": "enum",
+      "doc": "Rendering quality. `auto` picks from the GPU: High on ray-tracing GPUs (Medium below 8 GiB of video memory), Low without ray tracing. Epic is never automatic.",
+      "module": "render",
+      "variants": {
+        "auto": {
+          "doc": "Detect from the GPU."
+        },
+        "low": {
+          "doc": "Raster renderer with temporal antialiasing; no ray tracing."
+        },
+        "medium": {
+          "doc": "Ray-traced lighting at half resolution, upscaled temporally; no ReSTIR."
+        },
+        "high": {
+          "doc": "Ray-traced lighting at two-thirds resolution, upscaled temporally; ReSTIR in scenes lit by emissive surfaces or many lights."
+        },
+        "epic": {
+          "doc": "Native-resolution ray tracing with ReSTIR everywhere. The most expensive."
+        }
+      }
+    },
     "RagdollBone": {
       "kind": "struct",
       "doc": "One capsule and parent constraint in a canonical powered-ragdoll asset.",
@@ -5576,6 +5736,25 @@ expression: out
           "type": "list<RagdollBone>",
           "doc": "Bodies in stable parent-before-child order.",
           "default": []
+        }
+      }
+    },
+    "RenderSettings": {
+      "kind": "struct",
+      "doc": "Project-wide rendering settings, stored under `rendering` in `ara.project.json`. A player's `--quality` flag overrides `quality` for that run.",
+      "module": "render",
+      "fields": {
+        "quality": {
+          "type": "QualitySetting",
+          "doc": "Default quality preset for Play, the editor's lit viewport and exported players.",
+          "default": "auto",
+          "options": [
+            "auto",
+            "low",
+            "medium",
+            "high",
+            "epic"
+          ]
         }
       }
     },
@@ -5916,6 +6095,39 @@ expression: out
           "type": "list<AnimMatrix>",
           "doc": "Explicit mesh-space inverse binds, in joint order. Empty derives them from bind transforms; glTF importers preserve the skin accessor here instead.",
           "default": []
+        }
+      }
+    },
+    "SkyAtmosphere": {
+      "kind": "component",
+      "doc": "A physical sky and aerial perspective lit by the scene's directional light. The sun's elevation sets the time of day; without this component the scene uses its `Environment` gradient. The first entity in ID order wins.",
+      "module": "render",
+      "fields": {
+        "seaLevel": {
+          "type": "f32",
+          "doc": "World altitude of the planet surface (sea level); the sky and fog measure height from here.",
+          "default": 0,
+          "unit": "m",
+          "examples": [0]
+        },
+        "aerosols": {
+          "type": "f32",
+          "doc": "Aerosol (haze, dust) density relative to clear Earth air. Raise it for dusty or humid skies: a whiter horizon, a wider sun glow and stronger aerial perspective.",
+          "default": 1,
+          "range": [0, 20]
+        },
+        "cloudCoverage": {
+          "type": "f32",
+          "doc": "Fraction of the sky covered by the lit cloud layer; 0 disables clouds.",
+          "default": 0,
+          "range": [0, 1]
+        },
+        "cloudHeight": {
+          "type": "f32",
+          "doc": "Altitude of the cloud layer above sea level.",
+          "default": 2200,
+          "unit": "m",
+          "range": [500, 20000]
         }
       }
     },
@@ -6834,6 +7046,22 @@ expression: out
         }
       }
     },
+    "ToneMapping": {
+      "kind": "enum",
+      "doc": "The display transform that compresses scene radiance into the screen's range.",
+      "module": "render",
+      "variants": {
+        "filmic": {
+          "doc": "Filmic ACES-style curve with a soft toe and highlight desaturation, similar to Unreal's default; the most cinematic."
+        },
+        "neutral": {
+          "doc": "Khronos PBR Neutral: keeps material colours accurate up to bright highlights."
+        },
+        "acesFit": {
+          "doc": "Narkowicz's per-channel ACES fit (the legacy curve; saturated highlights)."
+        }
+      }
+    },
     "Transform": {
       "kind": "component",
       "doc": "Position, rotation and scale of an entity relative to its parent.",
@@ -7401,13 +7629,25 @@ expression: out
     },
     "VisualEffect": {
       "kind": "component",
-      "doc": "A GPU particle effect drawn at this entity. Presentation only: gameplay reads ara-vfx CPU events, never GPU particles. `effect` names a cooked library effect (`campfire`, `sparks`, `magic_swirl`, `smoke`, `muzzle_flash`, `rain`).",
+      "doc": "A GPU particle effect drawn at this entity. Presentation only: gameplay reads ara-vfx CPU events, never GPU particles. `effect` names a cooked library effect (`campfire`, `sparks`, `depth_sparks`, `magic_swirl`, `smoke`, `muzzle_flash`, `rain`, `dust`).",
       "module": "vfx",
       "fields": {
         "effect": {
           "type": "string",
           "doc": "Cooked library effect name.",
           "default": "campfire"
+        },
+        "scale": {
+          "type": "f32",
+          "doc": "Uniform size: the effect's shape, sprite sizes and speeds grow together (2 doubles a campfire's height and spread).",
+          "default": 1,
+          "range": [0.05, 50]
+        },
+        "intensity": {
+          "type": "f32",
+          "doc": "Brightness multiplier on the effect's emitted and lit colour; its opacity is unchanged. Lower it for effects that glow too hot under a scene's exposure.",
+          "default": 1,
+          "range": [0, 50]
         }
       }
     },
@@ -9239,7 +9479,7 @@ expression: out
       "scope": "edit:scene",
       "examples": [
         {
-          "source": "{\n  \"name\": \"campfire\",\n  \"seed\": 17,\n  \"hz\": 60,\n  \"quality\": {\n    \"particles\": 1000000,\n    \"overdraw\": 16,\n    \"lights\": 8,\n    \"events\": 4096\n  },\n  \"emitters\": [\n    {\n      \"name\": \"flame\",\n      \"capacity\": 512,\n      \"bounds\": {\n        \"min\": [-8, -2, -8],\n        \"max\": [8, 12, 8]\n      },\n      \"stacks\": {\n        \"spawn\": [\n          {\n            \"name\": \"rate\",\n            \"module\": {\n              \"op\": \"rate\",\n              \"per_second\": 65\n            }\n          }\n        ],\n        \"initialize\": [\n          {\n            \"name\": \"lifetime\",\n            \"module\": {\n              \"op\": \"lifetime\",\n              \"seconds\": 1.25,\n              \"size\": 0.42,\n              \"color\": [5, 0.6, 0.03, 0.5]\n            }\n          },\n          {\n            \"name\": \"hearth\",\n            \"module\": {\n              \"op\": \"sphere\",\n              \"center\": [0, 0.2, 0],\n              \"radius\": 0.22\n            }\n          },\n          {\n            \"name\": \"rise\",\n            \"module\": {\n              \"op\": \"velocity\",\n              \"value\": [0, 1.15, 0],\n              \"spread\": [0.15, 0.2, 0.15]\n            }\n          }\n        ],\n        \"update\": [\n          {\n            \"name\": \"curl\",\n            \"module\": {\n              \"op\": \"curl_noise\",\n              \"frequency\": 3,\n              \"strength\": 0.65\n            }\n          },\n          {\n            \"name\": \"drag\",\n            \"module\": {\n              \"op\": \"drag\",\n              \"coefficient\": 0.6\n            }\n          },\n          {\n            \"name\": \"fade\",\n            \"module\": {\n              \"op\": \"color_over_life\",\n              \"keys\": [\n                {\n                  \"t\": 0,\n                  \"value\": [5, 2, 0.4, 0]\n                },\n                {\n                  \"t\": 0.15,\n                  \"value\": [4, 1.5, 0.25, 0.65]\n                },\n                {\n                  \"t\": 0.65,\n                  \"value\": [3, 0.6, 0.04, 0.5]\n                },\n                {\n                  \"t\": 1,\n                  \"value\": [0.5, 0.03, 0, 0]\n                }\n              ]\n            }\n          },\n          {\n            \"name\": \"shrink\",\n            \"module\": {\n              \"op\": \"size_over_life\",\n              \"keys\": [\n                {\n                  \"t\": 0,\n                  \"value\": 0.36\n                },\n                {\n                  \"t\": 0.4,\n                  \"value\": 0.48\n                },\n                {\n                  \"t\": 1,\n                  \"value\": 0.12\n                }\n              ]\n            }\n          }\n        ],\n        \"render\": [\n          {\n            \"name\": \"sprite\",\n            \"module\": {\n              \"op\": \"sprite\",\n              \"domain\": \"unlit\",\n              \"soft_distance\": 0.15,\n              \"sorting\": \"none\"\n            }\n          },\n          {\n            \"name\": \"appearance\",\n            \"module\": {\n              \"op\": \"appearance\",\n              \"texture\": \"fire\",\n              \"blend\": \"additive\",\n              \"alignment\": \"camera\",\n              \"stretch\": 1,\n              \"shutter\": 0\n            }\n          },\n          {\n            \"name\": \"flipbook\",\n            \"module\": {\n              \"op\": \"flipbook\",\n              \"grid\": [4, 4],\n              \"fps\": 16\n            }\n          },\n          {\n            \"name\": \"hearth_light\",\n            \"module\": {\n              \"op\": \"light\",\n              \"color\": [1, 0.32, 0.055],\n              \"lumens\": 650,\n              \"radius\": 4\n            }\n          }\n        ]\n      }\n    },\n    {\n      \"name\": \"smoke\",\n      \"capacity\": 2048,\n      \"bounds\": {\n        \"min\": [-8, -2, -8],\n        \"max\": [8, 12, 8]\n      },\n      \"stacks\": {\n        \"spawn\": [\n          {\n            \"name\": \"rate\",\n            \"module\": {\n              \"op\": \"rate\",\n              \"per_second\": 16\n            }\n          }\n        ],\n        \"initialize\": [\n          {\n            \"name\": \"lifetime\",\n            \"module\": {\n              \"op\": \"lifetime\",\n              \"seconds\": 4,\n              \"size\": 0.45,\n              \"color\": [0.2, 0.23, 0.28, 0.14]\n            }\n          },\n          {\n            \"name\": \"source\",\n            \"module\": {\n              \"op\": \"cone\",\n              \"origin\": [0, 0.1, 0],\n              \"height\": 0.4,\n              \"radius\": 0.3\n            }\n          },\n          {\n            \"name\": \"rise\",\n            \"module\": {\n              \"op\": \"velocity\",\n              \"value\": [0, 0.8, 0],\n              \"spread\": [0.15, 0.2, 0.15]\n            }\n          }\n        ],\n        \"update\": [\n          {\n            \"name\": \"curl\",\n            \"module\": {\n              \"op\": \"curl_noise\",\n              \"frequency\": 1.5,\n              \"strength\": 0.45\n            }\n          },\n          {\n            \"name\": \"grow\",\n            \"module\": {\n              \"op\": \"size_over_life\",\n              \"keys\": [\n                {\n                  \"t\": 0,\n                  \"value\": 0.45\n                },\n                {\n                  \"t\": 1,\n                  \"value\": 1.5\n                }\n              ]\n            }\n          },\n          {\n            \"name\": \"fade\",\n            \"module\": {\n              \"op\": \"color_over_life\",\n              \"keys\": [\n                {\n                  \"t\": 0,\n                  \"value\": [0.35, 0.39, 0.44, 0]\n                },\n                {\n                  \"t\": 0.15,\n                  \"value\": [0.55, 0.58, 0.63, 0.55]\n                },\n                {\n                  \"t\": 0.75,\n                  \"value\": [0.55, 0.58, 0.63, 0.2]\n                },\n                {\n                  \"t\": 1,\n                  \"value\": [0.55, 0.58, 0.63, 0]\n                }\n              ]\n            }\n          }\n        ],\n        \"render\": [\n          {\n            \"name\": \"sprite\",\n            \"module\": {\n              \"op\": \"sprite\",\n              \"domain\": \"surface\",\n              \"soft_distance\": 0.3,\n              \"sorting\": \"depth\"\n            }\n          },\n          {\n            \"name\": \"appearance\",\n            \"module\": {\n              \"op\": \"appearance\",\n              \"texture\": \"smoke\",\n              \"blend\": \"alpha\",\n              \"alignment\": \"camera\",\n              \"stretch\": 1,\n              \"shutter\": 0\n            }\n          },\n          {\n            \"name\": \"flipbook\",\n            \"module\": {\n              \"op\": \"flipbook\",\n              \"grid\": [4, 4],\n              \"fps\": 16\n            }\n          }\n        ]\n      }\n    },\n    {\n      \"name\": \"embers\",\n      \"capacity\": 4096,\n      \"bounds\": {\n        \"min\": [-8, -2, -8],\n        \"max\": [8, 12, 8]\n      },\n      \"stacks\": {\n        \"spawn\": [\n          {\n            \"name\": \"rate\",\n            \"module\": {\n              \"op\": \"rate\",\n              \"per_second\": 18\n            }\n          }\n        ],\n        \"initialize\": [\n          {\n            \"name\": \"lifetime\",\n            \"module\": {\n              \"op\": \"lifetime\",\n              \"seconds\": 2,\n              \"size\": 0.012,\n              \"color\": [14, 4.5, 0.7, 0.85]\n            }\n          },\n          {\n            \"name\": \"source\",\n            \"module\": {\n              \"op\": \"point\",\n              \"position\": [0, 0.7, 0]\n            }\n          },\n          {\n            \"name\": \"spray\",\n            \"module\": {\n              \"op\": \"velocity\",\n              \"value\": [0, 2, 0],\n              \"spread\": [0.4, 0.7, 0.4]\n            }\n          }\n        ],\n        \"update\": [\n          {\n            \"name\": \"gravity\",\n            \"module\": {\n              \"op\": \"gravity\",\n              \"acceleration\": [0, -9.81, 0]\n            }\n          },\n          {\n            \"name\": \"floor\",\n            \"module\": {\n              \"op\": \"plane_collision\",\n              \"normal\": [0, 1, 0],\n              \"offset\": 0,\n              \"restitution\": 0.6\n            }\n          },\n          {\n            \"name\": \"cool\",\n            \"module\": {\n              \"op\": \"color_over_life\",\n              \"keys\": [\n                {\n                  \"t\": 0,\n                  \"value\": [18, 8, 2, 1]\n                },\n                {\n                  \"t\": 0.5,\n                  \"value\": [9, 1.8, 0.1, 0.8]\n                },\n                {\n                  \"t\": 1,\n                  \"value\": [1, 0.05, 0, 0]\n                }\n              ]\n            }\n          }\n        ],\n        \"render\": [\n          {\n            \"name\": \"sprite\",\n            \"module\": {\n              \"op\": \"sprite\",\n              \"domain\": \"unlit\",\n              \"soft_distance\": 0.15,\n              \"sorting\": \"none\"\n            }\n          },\n          {\n            \"name\": \"appearance\",\n            \"module\": {\n              \"op\": \"appearance\",\n              \"texture\": \"spark\",\n              \"blend\": \"additive\",\n              \"alignment\": \"velocity\",\n              \"stretch\": 3,\n              \"shutter\": 0.85\n            }\n          },\n          {\n            \"name\": \"flipbook\",\n            \"module\": {\n              \"op\": \"flipbook\",\n              \"grid\": [4, 4],\n              \"fps\": 16\n            }\n          }\n        ]\n      }\n    }\n  ]\n}\n"
+          "source": "{\n  \"name\": \"campfire\",\n  \"seed\": 17,\n  \"hz\": 60,\n  \"quality\": {\n    \"particles\": 1000000,\n    \"overdraw\": 16,\n    \"lights\": 8,\n    \"events\": 4096\n  },\n  \"emitters\": [\n    {\n      \"name\": \"flame\",\n      \"capacity\": 512,\n      \"bounds\": {\n        \"min\": [-8, -2, -8],\n        \"max\": [8, 12, 8]\n      },\n      \"stacks\": {\n        \"spawn\": [\n          {\n            \"name\": \"rate\",\n            \"module\": {\n              \"op\": \"rate\",\n              \"per_second\": 80\n            }\n          }\n        ],\n        \"initialize\": [\n          {\n            \"name\": \"lifetime\",\n            \"module\": {\n              \"op\": \"lifetime\",\n              \"seconds\": 0.85,\n              \"size\": 0.3,\n              \"color\": [5, 0.6, 0.03, 0.5]\n            }\n          },\n          {\n            \"name\": \"hearth\",\n            \"module\": {\n              \"op\": \"sphere\",\n              \"center\": [0, 0.12, 0],\n              \"radius\": 0.2\n            }\n          },\n          {\n            \"name\": \"rise\",\n            \"module\": {\n              \"op\": \"velocity\",\n              \"value\": [0, 0.95, 0],\n              \"spread\": [0.12, 0.2, 0.12]\n            }\n          }\n        ],\n        \"update\": [\n          {\n            \"name\": \"curl\",\n            \"module\": {\n              \"op\": \"curl_noise\",\n              \"frequency\": 3,\n              \"strength\": 0.55\n            }\n          },\n          {\n            \"name\": \"drag\",\n            \"module\": {\n              \"op\": \"drag\",\n              \"coefficient\": 0.6\n            }\n          },\n          {\n            \"name\": \"fade\",\n            \"module\": {\n              \"op\": \"color_over_life\",\n              \"keys\": [\n                {\n                  \"t\": 0,\n                  \"value\": [4, 1.6, 0.35, 0]\n                },\n                {\n                  \"t\": 0.1,\n                  \"value\": [4, 1.5, 0.25, 0.75]\n                },\n                {\n                  \"t\": 0.55,\n                  \"value\": [2.6, 0.65, 0.06, 0.5]\n                },\n                {\n                  \"t\": 1,\n                  \"value\": [0.4, 0.04, 0, 0]\n                }\n              ]\n            }\n          },\n          {\n            \"name\": \"shrink\",\n            \"module\": {\n              \"op\": \"size_over_life\",\n              \"keys\": [\n                {\n                  \"t\": 0,\n                  \"value\": 0.24\n                },\n                {\n                  \"t\": 0.35,\n                  \"value\": 0.34\n                },\n                {\n                  \"t\": 1,\n                  \"value\": 0.08\n                }\n              ]\n            }\n          }\n        ],\n        \"render\": [\n          {\n            \"name\": \"sprite\",\n            \"module\": {\n              \"op\": \"sprite\",\n              \"domain\": \"unlit\",\n              \"soft_distance\": 0.15,\n              \"sorting\": \"none\"\n            }\n          },\n          {\n            \"name\": \"appearance\",\n            \"module\": {\n              \"op\": \"appearance\",\n              \"texture\": \"fire\",\n              \"blend\": \"additive\",\n              \"alignment\": \"camera\",\n              \"stretch\": 1,\n              \"shutter\": 0\n            }\n          },\n          {\n            \"name\": \"flipbook\",\n            \"module\": {\n              \"op\": \"flipbook\",\n              \"grid\": [4, 4],\n              \"fps\": 16\n            }\n          },\n          {\n            \"name\": \"hearth_light\",\n            \"module\": {\n              \"op\": \"light\",\n              \"color\": [1, 0.32, 0.055],\n              \"lumens\": 900,\n              \"radius\": 6\n            }\n          }\n        ]\n      }\n    },\n    {\n      \"name\": \"smoke\",\n      \"capacity\": 2048,\n      \"bounds\": {\n        \"min\": [-8, -2, -8],\n        \"max\": [8, 12, 8]\n      },\n      \"stacks\": {\n        \"spawn\": [\n          {\n            \"name\": \"rate\",\n            \"module\": {\n              \"op\": \"rate\",\n              \"per_second\": 12\n            }\n          }\n        ],\n        \"initialize\": [\n          {\n            \"name\": \"lifetime\",\n            \"module\": {\n              \"op\": \"lifetime\",\n              \"seconds\": 4.5,\n              \"size\": 0.45,\n              \"color\": [0.2, 0.23, 0.28, 0.14]\n            }\n          },\n          {\n            \"name\": \"source\",\n            \"module\": {\n              \"op\": \"cone\",\n              \"origin\": [0, 0.55, 0],\n              \"height\": 0.2,\n              \"radius\": 0.12\n            }\n          },\n          {\n            \"name\": \"rise\",\n            \"module\": {\n              \"op\": \"velocity\",\n              \"value\": [0, 0.55, 0],\n              \"spread\": [0.12, 0.15, 0.12]\n            }\n          }\n        ],\n        \"update\": [\n          {\n            \"name\": \"curl\",\n            \"module\": {\n              \"op\": \"curl_noise\",\n              \"frequency\": 1.2,\n              \"strength\": 0.35\n            }\n          },\n          {\n            \"name\": \"grow\",\n            \"module\": {\n              \"op\": \"size_over_life\",\n              \"keys\": [\n                {\n                  \"t\": 0,\n                  \"value\": 0.25\n                },\n                {\n                  \"t\": 1,\n                  \"value\": 1\n                }\n              ]\n            }\n          },\n          {\n            \"name\": \"fade\",\n            \"module\": {\n              \"op\": \"color_over_life\",\n              \"keys\": [\n                {\n                  \"t\": 0,\n                  \"value\": [0.1, 0.095, 0.09, 0]\n                },\n                {\n                  \"t\": 0.15,\n                  \"value\": [0.12, 0.115, 0.11, 0.2]\n                },\n                {\n                  \"t\": 0.6,\n                  \"value\": [0.16, 0.16, 0.16, 0.11]\n                },\n                {\n                  \"t\": 1,\n                  \"value\": [0.2, 0.2, 0.2, 0]\n                }\n              ]\n            }\n          }\n        ],\n        \"render\": [\n          {\n            \"name\": \"sprite\",\n            \"module\": {\n              \"op\": \"sprite\",\n              \"domain\": \"surface\",\n              \"soft_distance\": 0.3,\n              \"sorting\": \"depth\"\n            }\n          },\n          {\n            \"name\": \"appearance\",\n            \"module\": {\n              \"op\": \"appearance\",\n              \"texture\": \"smoke\",\n              \"blend\": \"alpha\",\n              \"alignment\": \"camera\",\n              \"stretch\": 1,\n              \"shutter\": 0\n            }\n          },\n          {\n            \"name\": \"flipbook\",\n            \"module\": {\n              \"op\": \"flipbook\",\n              \"grid\": [4, 4],\n              \"fps\": 16\n            }\n          }\n        ]\n      }\n    },\n    {\n      \"name\": \"embers\",\n      \"capacity\": 4096,\n      \"bounds\": {\n        \"min\": [-8, -2, -8],\n        \"max\": [8, 12, 8]\n      },\n      \"stacks\": {\n        \"spawn\": [\n          {\n            \"name\": \"rate\",\n            \"module\": {\n              \"op\": \"rate\",\n              \"per_second\": 12\n            }\n          }\n        ],\n        \"initialize\": [\n          {\n            \"name\": \"lifetime\",\n            \"module\": {\n              \"op\": \"lifetime\",\n              \"seconds\": 2,\n              \"size\": 0.012,\n              \"color\": [14, 4.5, 0.7, 0.85]\n            }\n          },\n          {\n            \"name\": \"source\",\n            \"module\": {\n              \"op\": \"point\",\n              \"position\": [0, 0.7, 0]\n            }\n          },\n          {\n            \"name\": \"spray\",\n            \"module\": {\n              \"op\": \"velocity\",\n              \"value\": [0, 2, 0],\n              \"spread\": [0.4, 0.7, 0.4]\n            }\n          }\n        ],\n        \"update\": [\n          {\n            \"name\": \"gravity\",\n            \"module\": {\n              \"op\": \"gravity\",\n              \"acceleration\": [0, -9.81, 0]\n            }\n          },\n          {\n            \"name\": \"floor\",\n            \"module\": {\n              \"op\": \"plane_collision\",\n              \"normal\": [0, 1, 0],\n              \"offset\": 0,\n              \"restitution\": 0.6\n            }\n          },\n          {\n            \"name\": \"cool\",\n            \"module\": {\n              \"op\": \"color_over_life\",\n              \"keys\": [\n                {\n                  \"t\": 0,\n                  \"value\": [18, 8, 2, 1]\n                },\n                {\n                  \"t\": 0.5,\n                  \"value\": [9, 1.8, 0.1, 0.8]\n                },\n                {\n                  \"t\": 1,\n                  \"value\": [1, 0.05, 0, 0]\n                }\n              ]\n            }\n          }\n        ],\n        \"render\": [\n          {\n            \"name\": \"sprite\",\n            \"module\": {\n              \"op\": \"sprite\",\n              \"domain\": \"unlit\",\n              \"soft_distance\": 0.15,\n              \"sorting\": \"none\"\n            }\n          },\n          {\n            \"name\": \"appearance\",\n            \"module\": {\n              \"op\": \"appearance\",\n              \"texture\": \"spark\",\n              \"blend\": \"additive\",\n              \"alignment\": \"velocity\",\n              \"stretch\": 3,\n              \"shutter\": 0.85\n            }\n          },\n          {\n            \"name\": \"flipbook\",\n            \"module\": {\n              \"op\": \"flipbook\",\n              \"grid\": [4, 4],\n              \"fps\": 16\n            }\n          }\n        ]\n      }\n    }\n  ]\n}\n"
         }
       ]
     }

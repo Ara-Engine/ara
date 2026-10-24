@@ -57,6 +57,9 @@ saturation, vignette) follows it in scene-linear, then the tone mapper (AcesFit,
 PbrNeutral, Filmic) and the LUT. `post_process` replays the last frame (TAA kept). Capture is explicit; ordinary
 frames never read back image data. GPU pipelines only consume cooked artifacts.
 Every bindless input is declared to the graph, including masked textures.
+After merging shader changes, recook the merged source tree: neither parent's
+cooked cohort represents their combined scene/frame ABI. Keep the native
+shared-transform/emissive-UV GPU assertion enabled when checking the new cohort.
 Feature inputs remain owned by the view; consume them at a completed boundary.
 External HDR post input returns Graphics/ShaderRead; output remains CopySource.
 Keep the first 28 target slots, FILTER0=12 and the frame's seven read/write rows
