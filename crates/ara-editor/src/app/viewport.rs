@@ -323,10 +323,10 @@ mod tests {
         // No source assets: initialize an empty publication without launching a worker.
         let _assets = ara_play_host::assets::Assets::new(&root, &root.join("unused-worker"))
             .map_err(anyhow::Error::msg)?;
-        let editor = Editor::open(&root)?;
+        let mut editor = Editor::open(&root)?;
         let view = editor.view()?;
         let mut renderer = Renderer::new(
-            view.scene(editor.host.root(), &editor.state, None)?,
+            view.scene(editor.host.root(), &editor.state, None, &mut editor.models)?,
             [192, 108],
             &[],
             root.join("gpu"),

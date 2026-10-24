@@ -361,7 +361,14 @@ fn agent_presence_does_not_take_the_human_camera_and_agent_deletes_apply_with_tu
     // D24: the delete just applies (no reviewable ghost); the turn can be undone.
     let view = editor.view().unwrap();
     assert!(view.entities().is_empty());
-    let scene = view.scene(&project.0, &editor.state, None).unwrap();
+    let scene = view
+        .scene(
+            &project.0,
+            &editor.state,
+            None,
+            &mut ara_editor::world::ModelCache::new(&project.0).unwrap(),
+        )
+        .unwrap();
     assert!(
         !scene.meshes.iter().any(|m| m.name.contains("deleted")),
         "{:?}",
@@ -988,7 +995,14 @@ fn missing_model_sources_open_with_placeholders_and_name_the_path() {
     );
     let mut editor = project.open();
     let view = editor.view().unwrap();
-    let scene = view.scene(&project.0, &editor.state, None).unwrap();
+    let scene = view
+        .scene(
+            &project.0,
+            &editor.state,
+            None,
+            &mut ara_editor::world::ModelCache::new(&project.0).unwrap(),
+        )
+        .unwrap();
     assert!(
         scene.meshes.iter().any(|m| m.name == "Hangar"),
         "a placeholder"
