@@ -436,6 +436,38 @@ pub(super) fn upload_content(
     shader_metadata: &crate::capture::ShaderMetadata,
     compute_frame: Buffer,
 ) -> Result<Content> {
+    let mut allocated = Vec::new();
+    let mut pipelines = Vec::new();
+    let result = upload_content_inner(
+        gpu,
+        scene,
+        artifacts,
+        shader_metadata,
+        compute_frame,
+        &mut allocated,
+        &mut pipelines,
+    );
+    if result.is_err() {
+        for pipeline in pipelines {
+            gpu.retire_pipeline(pipeline)?;
+        }
+        for resource in allocated.into_iter().rev() {
+            gpu.retire(resource)?;
+        }
+        gpu.collect()?;
+    }
+    result
+}
+
+fn upload_content_inner(
+    gpu: &mut VulkanDevice,
+    scene: Scene,
+    artifacts: &Path,
+    shader_metadata: &crate::capture::ShaderMetadata,
+    compute_frame: Buffer,
+    allocated: &mut Vec<Resource>,
+    pipelines: &mut Vec<Pipeline>,
+) -> Result<Content> {
     ensure!(
         scene.sun_direction.is_finite()
             && scene.sun_direction.length_squared() > 0.001
@@ -473,37 +505,39 @@ pub(super) fn upload_content(
             vk::Format::R8G8B8A8_UNORM
         };
         let image = upload_image(gpu, texture.size, format, &texture.rgba)?;
+        allocated.push(Resource::Image(image));
         static_owned.push(Resource::Image(image));
         texture_indices.push(gpu.sampled_image(image, false)?.index);
         static_inputs.push((Resource::Image(image), Access::ShaderRead));
     }
-    let geometry = match upload_geometry(
+    let geometry = upload_geometry(
         gpu,
         scene.materials,
         scene.meshes,
         scene.lights,
         &texture_indices,
-    ) {
-        Ok(geometry) => geometry,
-        Err(error) => {
-            for resource in static_owned {
-                gpu.retire(resource)?;
-            }
-            gpu.collect()?;
-            return Err(error);
-        }
-    };
+    )?;
+    allocated.extend(geometry.owned.iter().copied());
+    allocated.extend(geometry.meshes.iter().flat_map(|mesh| {
+        [
+            Resource::Buffer(mesh.vertices),
+            Resource::Buffer(mesh.indices),
+        ]
+    }));
     let environment_image = upload_image(
         gpu,
         scene.environment_size,
         vk::Format::R32G32B32A32_SFLOAT,
         bytemuck::cast_slice(&scene.environment),
     )?;
+    allocated.push(Resource::Image(environment_image));
     let environment = gpu.sampled_image(environment_image, false)?.index;
     static_inputs.push((Resource::Image(environment_image), Access::ShaderRead));
     let usage = vk::ImageUsageFlags::SAMPLED | vk::ImageUsageFlags::STORAGE;
     let diffuse = gpu.create_image(32, 16, vk::Format::R32G32B32A32_SFLOAT, usage)?;
+    allocated.push(Resource::Image(diffuse));
     let specular = gpu.create_image(256, 640, vk::Format::R32G32B32A32_SFLOAT, usage)?;
+    allocated.push(Resource::Image(specular));
     static_owned.extend([
         Resource::Image(environment_image),
         Resource::Image(diffuse),
@@ -592,7 +626,9 @@ pub(super) fn upload_content(
         Ok(gpu.create_pipeline(&cooked, artifacts)?)
     };
     let irradiance_pipeline = load(gpu, "irradiance")?;
+    pipelines.push(irradiance_pipeline);
     let specular_pipeline = load(gpu, "prefilter")?;
+    pipelines.push(specular_pipeline);
     let compiled = graph.compile()?;
     let mut points = Vec::new();
     for (index, pass) in compiled.passes.iter().enumerate() {

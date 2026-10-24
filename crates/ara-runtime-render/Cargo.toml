@@ -7,6 +7,7 @@ rust-version.workspace = true
 publish.workspace = true
 
 [dependencies]
+ara-asset = { path = "../ara-asset" }
 anyhow = { workspace = true }
 ara-2d = { path = "../ara-2d" }
 ara-asset-format = { path = "../ara-asset-format" }
@@ -36,7 +37,6 @@ glam34 = { workspace = true }
 glam30.workspace = true
 
 [dev-dependencies]
-ara-asset = { path = "../ara-asset" }
 ara-importers = { path = "../ara-importers" }
 ara-input = { path = "../ara-input" }
 serde_json = { workspace = true, features = ["preserve_order", "float_roundtrip"] }
