@@ -72,6 +72,7 @@ lighting and the generated kit geometry are original Ara work.
 | Metal Toolbox (`metal_toolbox`) | model | Mateusz Sadek | outpost | <https://polyhaven.com/a/metal_toolbox> |
 | Metal Trash Can (`metal_trash_can`) | model | GurJas Studios | outpost | <https://polyhaven.com/a/metal_trash_can> |
 | Modular Airduct Rectangular 01 (`modular_airduct_rectangular_01`) | model | James Ray Cock | outpost | <https://polyhaven.com/a/modular_airduct_rectangular_01> |
+| Modular Chainlink Fence (`modular_chainlink_fence`) | model | James Ray Cock, Amal Kumar | outpost | <https://polyhaven.com/a/modular_chainlink_fence> |
 | Modular Electric Cables (`modular_electric_cables`) | model | Kuutti Siitonen | outpost | <https://polyhaven.com/a/modular_electric_cables> |
 | Modular Electricity Poles (`modular_electricity_poles`) | model | James Ray Cock | outpost | <https://polyhaven.com/a/modular_electricity_poles> |
 | Modular Industrial Pipes 01 (`modular_industrial_pipes_01`) | model | Jorge Camacho | outpost | <https://polyhaven.com/a/modular_industrial_pipes_01> |

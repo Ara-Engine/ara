@@ -4,7 +4,7 @@
   "records": {
     "i_settings": {
       "importer": "ara.audio",
-      "version": "2",
+      "version": "4",
       "settings": {
         "codec": "pcm",
         "usage": "shortEffect"

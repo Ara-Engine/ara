@@ -193,6 +193,8 @@ target/release/ara-samples editor outpost levels/outpost.scene outpost --camera 
     problem because `entity.create` accepts an ID.
     **Fixed (`27f3523`):** strokes/exclusions accept stable IDs and batch symbols;
     terrain tile IDs derive from coordinates. Sample builders supply these IDs.
+    **Rule metadata fixed (`600e8a1`):** runtime scatter retains qualified rule IDs
+    and stable catalog indices for resolving original assets and native prefabs.
 28. **What worked well:** typed batches with `@file` args, deterministic record IDs,
     exact diagnostics with JSON paths (`commands[6].args.components[NavMeshSurface].size`),
     `ara check`, terrain/foliage commands, the import worker (107 assets cook in 166 s

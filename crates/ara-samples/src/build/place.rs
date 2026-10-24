@@ -1,16 +1,22 @@
 //! Placement helpers: `entity.create` calls for props, colliders and lights, model
 //! bounds read from glTF, and terrain heights from the authored terrain document.
 use super::Ctx;
-use anyhow::{Context, Result, ensure};
-use glam::{Mat4, Quat, Vec3};
+use anyhow::{Context, Result};
+use glam::{Quat, Vec3};
 use serde_json::{Value, json};
-use std::{collections::BTreeMap, path::Path};
+use std::collections::BTreeMap;
 
 /// A model registered in the project: its `@path#id` reference and rest bounds.
 #[derive(Debug, Clone)]
 pub struct Model {
-    /// `@assets/…#as_…`.
+    /// Source model or prefab asset reference.
     pub reference: String,
+    /// Native prefab instance instead of a direct model renderer.
+    pub prefab: bool,
+    /// Renderer defaults for a direct source model.
+    pub renderer: Value,
+    /// Renderer child IDs in a native prefab, for per-prop overrides.
+    pub parts: Vec<String>,
     /// Model-space AABB minimum (metres).
     pub min: Vec3,
     /// Model-space AABB maximum (metres).
@@ -34,12 +40,15 @@ impl Ctx {
     /// Registers a model file: writes its glTF sidecar and records its bounds.
     pub fn model(&self, models: &mut Models, name: &str, path: &str, id: &str) -> Result<()> {
         self.sidecar(path, id, Value::Null)?;
-        let (min, max) =
-            gltf_bounds(&self.root.join(path)).with_context(|| format!("bounds of {path}"))?;
+        let (min, max) = super::bounds::file(&self.root.join(path), None)
+            .with_context(|| format!("bounds of {path}"))?;
         models.0.insert(
             name.to_owned(),
             Model {
                 reference: format!("@{path}#{id}"),
+                prefab: false,
+                renderer: json!({"model":format!("@{path}#{id}")}),
+                parts: Vec::new(),
                 min,
                 max,
             },
@@ -49,15 +58,7 @@ impl Ctx {
 
     /// Registers a fetched third-party model by lock ID (its first glTF/GLB).
     pub fn third_party(&self, models: &mut Models, name: &str, asset: &str) -> Result<()> {
-        let entry = self
-            .lock
-            .get(asset)
-            .with_context(|| format!("{asset} is not in the lock"))?;
-        let file = entry
-            .entry(&[".gltf", ".glb"])
-            .with_context(|| format!("{asset} has no glTF"))?;
-        let id = format!("as_{}", short(asset));
-        self.model(models, name, &entry.relative(&file.path), &id)
+        super::native::whole(self, models, name, asset, &[])
     }
 }
 
@@ -73,91 +74,7 @@ pub fn short(id: &str) -> String {
     body
 }
 
-/// Model-space bounds of a glTF/GLB's default scene, from accessor min/max.
-pub fn gltf_bounds(path: &Path) -> Result<(Vec3, Vec3)> {
-    let bytes = std::fs::read(path)?;
-    let doc: Value = if bytes.starts_with(b"glTF") {
-        ensure!(bytes.len() > 20, "short GLB");
-        let len = u32::from_le_bytes([bytes[12], bytes[13], bytes[14], bytes[15]]) as usize;
-        serde_json::from_slice(&bytes[20..20 + len])?
-    } else {
-        serde_json::from_slice(&bytes)?
-    };
-    let nodes = doc["nodes"].as_array().cloned().unwrap_or_default();
-    let local = |n: &Value| -> Mat4 {
-        if let Some(m) = n["matrix"].as_array().filter(|m| m.len() == 16) {
-            let cols: Vec<f32> = m.iter().map(|v| v.as_f64().unwrap_or(0.0) as f32).collect();
-            return Mat4::from_cols_slice(&cols);
-        }
-        let f = |v: &Value, d: &[f32]| -> Vec<f32> {
-            (0..d.len())
-                .map(|i| v[i].as_f64().map_or(d[i], |x| x as f32))
-                .collect()
-        };
-        let t = f(&n["translation"], &[0.0; 3]);
-        let r = f(&n["rotation"], &[0.0, 0.0, 0.0, 1.0]);
-        let s = f(&n["scale"], &[1.0; 3]);
-        Mat4::from_scale_rotation_translation(
-            Vec3::new(s[0], s[1], s[2]),
-            Quat::from_xyzw(r[0], r[1], r[2], r[3]).normalize(),
-            Vec3::new(t[0], t[1], t[2]),
-        )
-    };
-    let scene = doc["scene"].as_u64().unwrap_or(0) as usize;
-    let mut stack: Vec<(usize, Mat4)> = doc["scenes"][scene]["nodes"]
-        .as_array()
-        .into_iter()
-        .flatten()
-        .filter_map(Value::as_u64)
-        .map(|n| (n as usize, Mat4::IDENTITY))
-        .collect();
-    let (mut min, mut max) = (Vec3::splat(f32::MAX), Vec3::splat(f32::MIN));
-    while let Some((index, parent)) = stack.pop() {
-        let node = &nodes[index];
-        let world = parent * local(node);
-        for child in node["children"].as_array().into_iter().flatten() {
-            if let Some(c) = child.as_u64() {
-                stack.push((c as usize, world));
-            }
-        }
-        let Some(mesh) = node["mesh"].as_u64() else {
-            continue;
-        };
-        for primitive in doc["meshes"][mesh as usize]["primitives"]
-            .as_array()
-            .into_iter()
-            .flatten()
-        {
-            let accessor = &doc["accessors"][primitive["attributes"]["POSITION"]
-                .as_u64()
-                .context("primitive without positions")?
-                as usize];
-            let corner = |v: &Value| {
-                Vec3::new(
-                    v[0].as_f64().unwrap_or(0.0) as f32,
-                    v[1].as_f64().unwrap_or(0.0) as f32,
-                    v[2].as_f64().unwrap_or(0.0) as f32,
-                )
-            };
-            let (lo, hi) = (corner(&accessor["min"]), corner(&accessor["max"]));
-            for i in 0..8 {
-                let p = Vec3::new(
-                    if i & 1 == 0 { lo.x } else { hi.x },
-                    if i & 2 == 0 { lo.y } else { hi.y },
-                    if i & 4 == 0 { lo.z } else { hi.z },
-                );
-                let w = world.transform_point3(p);
-                min = min.min(w);
-                max = max.max(w);
-            }
-        }
-    }
-    ensure!(min.x <= max.x, "no geometry");
-    Ok((min, max))
-}
-
-/// A placed prop: the visual entity plus an optional static box collider entity
-/// (colliders have no offset, so the box is its own entity at the bounds centre).
+/// A direct model or native prefab, with an optional centered collider on its root.
 #[derive(Debug, Clone)]
 pub struct Prop {
     /// Record ID (`e_…`).
@@ -221,10 +138,10 @@ impl Prop {
         self
     }
 
-    /// The `entity.create` calls for this prop; colliders take the next physics ID.
-    pub fn commands(&self, models: &Models, physics: &mut u64) -> Vec<(&'static str, Value)> {
+    /// Native authoring calls for the prop and its centered collision.
+    pub fn commands(&self, models: &Models) -> Vec<(&'static str, Value)> {
         let model = models.get(&self.model);
-        let mut renderer = json!({"model": model.reference});
+        let mut renderer = model.renderer.clone();
         merge(&mut renderer, self.renderer.clone());
         let yaw = Quat::from_rotation_y(self.yaw.to_radians());
         let origin = if self.grounded {
@@ -235,34 +152,45 @@ impl Prop {
         } else {
             self.position
         };
-        let mut components = json!({
-            "Transform": transform(origin, self.yaw, self.scale),
-            "MeshRenderer": renderer,
-        });
-        merge(&mut components, self.extra.clone());
-        let mut out = vec![create(&self.id, &self.name, components)];
+        let mut components = json!({"Transform":transform(origin,self.yaw,self.scale)});
+        if !model.prefab {
+            components["MeshRenderer"] = renderer;
+        }
         if self.solid {
             let center = (model.min + model.max) * 0.5 * self.scale;
             let half = ((model.max - model.min) * 0.5 * self.scale).max(Vec3::splat(0.05));
-            out.push(create(
-                &format!("{}c", self.id),
-                &format!("{} collider", self.name),
-                json!({
-                    "Transform": transform(origin + yaw * center, self.yaw, 1.0),
-                    "RigidBody": {},
-                    "PhysicsId": {"value": next(physics)},
-                    "Collider": {"halfExtents": half.to_array()},
-                }),
-            ));
+            components["RigidBody"] = json!({});
+            components["Collider"] =
+                json!({"center":center.to_array(),"halfExtents":half.to_array()});
         }
+        merge(&mut components, self.extra.clone());
+        let mut out = Vec::new();
+        if model.prefab {
+            out.push(("prefab.instantiate",json!({"id":self.id,"name":self.name,"prefab":model.reference,"position":origin.to_array()})));
+            for (component, value) in components.as_object().into_iter().flatten() {
+                if component == "Transform" {
+                    out.push((
+                        "property.set",
+                        json!({"entity":self.id,"path":"Transform","value":value}),
+                    ));
+                } else {
+                    out.push((
+                        "component.add",
+                        json!({"entity":self.id,"component":component,"value":value}),
+                    ));
+                }
+            }
+            for child in &model.parts {
+                for (field, value) in self.renderer.as_object().into_iter().flatten() {
+                    out.push(("property.set",json!({"entity":format!("{}/{child}",self.id),"path":format!("MeshRenderer.{field}"),"value":value})));
+                }
+            }
+        } else {
+            out.push(create(&self.id, &self.name, components));
+        }
+
         out
     }
-}
-
-/// The next unique physics ID (`PhysicsId` must be unique within a world).
-pub fn next(counter: &mut u64) -> u64 {
-    *counter += 1;
-    *counter
 }
 
 /// Accumulates one scene's `entity.create` calls.
@@ -271,8 +199,6 @@ pub struct Scene<'a> {
     pub models: &'a Models,
     /// Calls in creation order.
     pub commands: Vec<(&'static str, Value)>,
-    /// Last physics ID handed out.
-    pub physics: u64,
 }
 
 impl<'a> Scene<'a> {
@@ -281,53 +207,16 @@ impl<'a> Scene<'a> {
         Self {
             models,
             commands: Vec::new(),
-            physics: 0,
         }
     }
     /// Adds a prop (and its collider).
     pub fn prop(&mut self, prop: Prop) {
-        let calls = prop.commands(self.models, &mut self.physics);
+        let calls = prop.commands(self.models);
         self.commands.extend(calls);
     }
     /// Adds an entity.
     pub fn entity(&mut self, id: &str, name: &str, components: Value) {
         self.commands.push(create(id, name, components));
-    }
-    /// The next physics ID.
-    pub fn physics_id(&mut self) -> u64 {
-        next(&mut self.physics)
-    }
-
-    /// Moves every created entity by `by` (layout → world): `Transform.position` and
-    /// world-space `NavMeshSurface` bounds. Terrain entities stay put (their grid
-    /// places them).
-    pub fn shift(&mut self, by: Vec3) {
-        let add = |v: &mut Value| {
-            if let Some(a) = v.as_array_mut().filter(|a| a.len() == 3) {
-                for (c, d) in a.iter_mut().zip(by.to_array()) {
-                    *c = json!(c.as_f64().unwrap_or(0.0) + f64::from(d));
-                }
-            }
-        };
-        for (cmd, args) in &mut self.commands {
-            if *cmd != "entity.create" {
-                continue;
-            }
-            let components = &mut args["components"];
-            if components.get("Terrain").is_some() {
-                continue;
-            }
-            if let Some(t) = components.get_mut("Transform") {
-                if t.get("position").is_none() {
-                    t["position"] = json!([0.0, 0.0, 0.0]);
-                }
-                add(&mut t["position"]);
-            }
-            if let Some(nav) = components.get_mut("NavMeshSurface") {
-                add(&mut nav["min"]);
-                add(&mut nav["max"]);
-            }
-        }
     }
 }
 
@@ -375,11 +264,9 @@ pub fn merge(a: &mut Value, b: Value) {
     }
 }
 
-/// Evaluated terrain heights for placing things on the ground, sampled in layout
-/// coordinates (world = layout + `shift`).
+/// Evaluated terrain heights in authored world coordinates.
 pub struct Ground {
     data: ara_runtime::terrain::TerrainData,
-    shift: Vec3,
 }
 
 impl Ground {
@@ -410,21 +297,12 @@ impl Ground {
                 foliage: Vec::new(),
                 foliage_rules: Vec::new(),
             },
-            shift: Vec3::ZERO,
         })
-    }
-
-    /// Samples layout coordinates `shift` away from the terrain's world coordinates.
-    pub fn shifted(mut self, shift: Vec3) -> Self {
-        self.shift = shift;
-        self
     }
 
     /// Ground height at layout X/Z (0 outside the terrain).
     pub fn height(&self, x: f32, z: f32) -> f32 {
-        self.data
-            .height(x + self.shift.x, z + self.shift.z)
-            .map_or(0.0, |h| h - self.shift.y)
+        self.data.height(x, z).unwrap_or(0.0)
     }
 
     /// A point on the ground.

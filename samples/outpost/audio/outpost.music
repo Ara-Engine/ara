@@ -2,7 +2,7 @@
   "$schema": "ara://schema/music/1",
   "id": "mu_outpost1",
   "records": {
-    "ms_outpost": {
+    "ms_settings": {
       "initial": "dusk",
       "seed": 7
     },
