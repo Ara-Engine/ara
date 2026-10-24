@@ -21,6 +21,8 @@ pub(crate) struct Package {
 
 #[derive(Deserialize)]
 pub(crate) struct Target {
+    #[serde(default)]
+    pub(crate) name: String,
     pub(crate) kind: Vec<String>,
 }
 

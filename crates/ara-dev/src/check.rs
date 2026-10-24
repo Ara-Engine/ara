@@ -41,6 +41,7 @@ pub(crate) struct Logs {
     rows: Vec<Row>,
     deadline: Option<Instant>,
     no_compiler_cache: bool,
+    test_binaries: crate::binaries::Binaries,
 }
 
 impl Logs {
@@ -58,6 +59,7 @@ impl Logs {
             rows: Vec::new(),
             deadline: None,
             no_compiler_cache,
+            test_binaries: Default::default(),
         })
     }
 
@@ -65,6 +67,24 @@ impl Logs {
         let log = self.directory.join(format!("{name}.log"));
         let file = File::create(&log)?;
         self.execute(root, name, args, &file, &file, &log)
+    }
+
+    pub(crate) fn json_command(
+        &mut self,
+        root: &Path,
+        name: &str,
+        args: &[String],
+    ) -> Result<bool> {
+        let output = self.directory.join(format!("{name}.json"));
+        let log = self.directory.join(format!("{name}.log"));
+        self.execute(
+            root,
+            name,
+            args,
+            &File::create(output)?,
+            &File::create(&log)?,
+            &log,
+        )
     }
 
     fn capture(&mut self, root: &Path, name: &str, args: &[String]) -> Result<Vec<u8>> {
@@ -109,6 +129,11 @@ impl Logs {
         if self.no_compiler_cache {
             // An empty wrapper overrides Cargo config; clippy's workspace wrapper stays active.
             command.env("RUSTC_WRAPPER", "");
+        }
+        if name == "tests" {
+            for (binary, path) in &self.test_binaries {
+                command.env(format!("CARGO_BIN_EXE_{binary}"), path);
+            }
         }
         let status = process::run(&mut command, self.deadline);
         let passed = status.as_ref().is_ok_and(process::Outcome::success);
@@ -352,7 +377,19 @@ pub(crate) fn run(root: &Path, options: Options<'_>) -> Result<bool> {
         let clippy_passed = logs.command(root, "clippy", &clippy)?;
         let mut tests = selection("test", affected, whole_workspace);
         tests.extend(["--locked".into(), "--no-fail-fast".into()]);
-        if clippy_passed
+        let tests_ready = if clippy_passed {
+            if let Some(paths) =
+                crate::binaries::prepare(root, &metadata, affected, &tests, &mut logs)?
+            {
+                logs.test_binaries = paths;
+                true
+            } else {
+                false
+            }
+        } else {
+            false
+        };
+        if tests_ready
             && !logs.command(root, "tests", &tests)?
             && !allowed.is_empty()
             && !logs.rows.last().is_some_and(|row| row.timed_out)

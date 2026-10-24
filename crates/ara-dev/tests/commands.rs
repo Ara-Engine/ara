@@ -128,6 +128,70 @@ fn check_selects_reverse_dependencies_and_keeps_json_stdout_clean() {
 }
 
 #[test]
+fn test_helpers_receive_fresh_peer_binaries_with_separate_build_directories() {
+    let _serial = SERIAL.lock().unwrap_or_else(|p| p.into_inner());
+    let root = fixture();
+    fs::write(
+        root.join("tool/src/main.rs"),
+        "fn main() { println!(\"old peer\"); }\n",
+    )
+    .unwrap();
+    git(&root, &["add", "."]);
+    git(&root, &["commit", "-m", "peer binary"]);
+    ok(&root, "cargo", &["build", "-p", "mini-tool", "--offline"]);
+    fs::write(
+        root.join("tool/src/main.rs"),
+        "fn main() {\n    println!(\"fresh peer\");\n}\n",
+    )
+    .unwrap();
+    fs::write(
+        root.join("core/src/lib.rs"),
+        "pub fn value() -> u32 {\n    2\n}\n",
+    )
+    .unwrap();
+    fs::create_dir_all(root.join("core/tests")).unwrap();
+    fs::write(
+        root.join("core/tests/peer.rs"),
+        r#"#[test]
+fn invokes_fresh_peer() {
+    let peer = std::env::var_os("CARGO_BIN_EXE_mini-tool").expect("peer binary");
+    let output = std::process::Command::new(peer).output().unwrap();
+    assert!(output.status.success());
+    assert_eq!(output.stdout, b"fresh peer\n");
+}
+"#,
+    )
+    .unwrap();
+    let output = configured_command(
+        &root,
+        env!("CARGO_BIN_EXE_ara-dev"),
+        &["check", "--json", "--no-compiler-cache"],
+    )
+    .env("CARGO_BUILD_BUILD_DIR", root.join("target/intermediates"))
+    .output()
+    .unwrap();
+    assert!(
+        output.status.success(),
+        "{}\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let report: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(report["passed"], true);
+    assert_eq!(
+        report["affected"],
+        serde_json::json!(["mini-core", "mini-tool"])
+    );
+    assert!(
+        report["checks"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|row| row["check"] == "test-build" && row["passed"] == true)
+    );
+}
+
+#[test]
 fn compiler_cache_bypass_preserves_clippy_and_records_total_time() {
     let _serial = SERIAL.lock().unwrap_or_else(|p| p.into_inner());
     let root = fixture();

@@ -1,6 +1,7 @@
 //! Local integration and machine hygiene commands; no daemon or engine startup.
 #![cfg_attr(test, allow(clippy::unwrap_used))]
 
+mod binaries;
 mod check;
 mod git;
 mod gpu;

@@ -30,6 +30,14 @@ bootstrap bypass, and the script restored it afterwards. CARGO_BUILD_JOBS was 2.
 The initial 33-package cold cache fill reached the 40-minute deadline while
 compiling tests; it was reported as a timeout, with no test execution claimed.
 
+The gate compiles selected tests with Cargo's JSON artifact messages before
+execution, then builds any missing selected binary targets once. It exposes the
+exact regular executables as runtime CARGO_BIN_EXE_* variables for process-test
+helpers. This keeps final binaries separate from hashed test executables, handles
+custom build directories, and avoids nested builds with a different feature set.
+`test-build` and optional `test-binaries` rows account for compilation; `tests`
+accounts for execution, including doctests. All phases share the same deadline.
+
 Cargo 1.99 can reuse intermediate artifacts through `CARGO_BUILD_BUILD_DIR` while
 keeping final executables in each worktree's local target directory. Prefer this
 to sharing `CARGO_TARGET_DIR`: final executable names collide across branches.
@@ -229,3 +237,10 @@ After merging main's quality shaders, the required cook regenerated nine baselin
 renderer pipelines from the merged baseline.slang. Fidelity and VFX cohorts passed
 the same cooker with matching artifacts reused. No cooked conflict was resolved
 by selecting one side.
+
+Player fixtures reuse the gate's current import-worker artifact. Standalone
+player tests still build the worker with --locked and read its actual executable
+path from Cargo's messages. The fixture assertions and importer-version checks
+are unchanged. A cross-crate CLI fixture verifies freshness after a peer edit
+with separate build/intermediate directories; test harnesses are never exported
+as regular binaries.
