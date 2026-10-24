@@ -37,17 +37,19 @@ float3 previewBackdrop(float2 uv){
 [shader("fragment")]
 PreviewOutput previewFragment(PreviewVarying v){
     float3 eye=6*float3(0.5305,0.4078,0.7432),forward=normalize(-eye),right=normalize(cross(forward,float3(0,1,0))),up=cross(right,forward);
-    bool plane=(draw.flags&1)!=0;float2 pixel=float2(ddx(v.uv.x),ddy(v.uv.y));
+    // Flags (material_preview.rs Shot): 1 plane, 2 raw data values, 4 head-on UV swatch.
+    bool plane=(draw.flags&1)!=0,data=(draw.flags&2)!=0,swatch=(draw.flags&4)!=0;float2 pixel=float2(ddx(v.uv.x),ddy(v.uv.y));
     float3 sum=0;float covered=0;
     for(uint s=0;s<4;s++){
         float2 uv=v.uv+PREVIEW_GRID[s]*pixel;float2 xy=uv*float2(2,-2)+float2(-1,1);float3 ray=normalize(forward+(right*xy.x+up*xy.y)*0.192);
         float b=dot(eye,ray),c=dot(eye,eye)-1,disc=b*b-c;
         float distance=plane?-eye.z/ray.z:-b-sqrt(max(disc,0));
         float3 p=eye+distance*ray;bool hit=distance>0 && (plane?max(abs(p.x),abs(p.y))<1.15:disc>0);
+        if(swatch){p=float3(uv.x*2-1,1-uv.y*2,0);hit=true;}
         // Every sample evaluates the material so texture derivatives stay uniform.
-        float3 n=plane?float3(0,0,1):normalize(p);float3 tangent=normalize(cross(abs(n.y)>0.99?float3(0,0,1):float3(0,1,0),n));
-        AraMaterialInput input;input.worldPosition=p;input.worldNormal=n;input.worldTangent=tangent;input.worldBitangent=cross(n,tangent);input.viewDirection=normalize(eye-p);
-        input.uv=plane?p.xy*0.5+0.5:float2(atan2(n.z,n.x)/(2*3.14159265)+0.5,acos(clamp(n.y,-1,1))/3.14159265);
+        float3 n=plane||swatch?float3(0,0,1):normalize(p);float3 tangent=normalize(cross(abs(n.y)>0.99?float3(0,0,1):float3(0,1,0),n));
+        AraMaterialInput input;input.worldPosition=p;input.worldNormal=n;input.worldTangent=tangent;input.worldBitangent=cross(n,tangent);input.viewDirection=swatch?float3(0,0,1):normalize(eye-p);
+        input.uv=swatch?uv:plane?p.xy*0.5+0.5:float2(atan2(n.z,n.x)/(2*3.14159265)+0.5,acos(clamp(n.y,-1,1))/3.14159265);
         AraSurface surface=ara_evaluate(input);
         float3 radiance=surface.color;
         if(PREVIEW_SURFACE){
@@ -60,7 +62,9 @@ PreviewOutput previewFragment(PreviewVarying v){
             float3 coating=coat*previewEnvBrdf(float3(0.04),saturate(surface.clearCoatRoughness),nv)*previewStudio(reflected,surface.clearCoatRoughness*surface.clearCoatRoughness*1.5);
             radiance=0.8*(ara_engine_light(surface,input,PREVIEW_KEY,float3(1.8,1.75,1.66),float3(0))+diffuse+specular+coating);
         }
-        sum+=hit?previewTone(radiance):previewBackdrop(uv);covered+=hit?1:0;
+        // Raw data reads as its value (sRGB-encoded); lit shots go through the tone curve.
+        float3 shown=data?pow(saturate(radiance),1./2.2):previewTone(radiance);
+        sum+=hit?shown:previewBackdrop(uv);covered+=hit?1:0;
     }
     PreviewOutput output;output.entity=covered>0?1:0;output.color=float4(sum*0.25,1);return output;
 }

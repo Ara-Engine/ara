@@ -31,6 +31,8 @@ pub(super) struct Look {
     pub shape: Shape,
     /// The state machine's default (entry) state.
     pub initial: bool,
+    /// Reserves an in-node preview of the value (material operations, Shader Graph style).
+    pub preview: bool,
 }
 
 /// Presentation of a node in its graph's domain.
@@ -55,6 +57,7 @@ pub(super) fn look(graph: &Graph, id: &str, node: &Node) -> Look {
         accent: Accent::Neutral,
         shape: Shape::Pins,
         initial: false,
+        preview: false,
     }
 }
 
@@ -123,6 +126,12 @@ fn material(graph: &Graph, op: &str, name: String, node: &Node) -> Look {
         accent,
         shape: Shape::Pins,
         initial: false,
+        // Operations whose value can be seen; parameters and constants show values.
+        preview: !matches!(op, "parameter" | "literal" | "output" | "custom")
+            && matches!(
+                ty.as_str(),
+                "float" | "bool" | "vec2" | "vec3" | "vec4" | "ColorLinear" | "ColorSRGB"
+            ),
     }
 }
 
@@ -146,6 +155,7 @@ fn animation(kind: &str, name: String, node: &Node) -> Look {
             },
             shape: Shape::State,
             initial: kind == "entry",
+            preview: false,
         },
         _ => Look {
             title: name,
@@ -165,6 +175,7 @@ fn animation(kind: &str, name: String, node: &Node) -> Look {
             },
             shape: Shape::Pins,
             initial: false,
+            preview: false,
         },
     }
 }

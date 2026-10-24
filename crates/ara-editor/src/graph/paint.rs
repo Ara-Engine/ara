@@ -497,6 +497,25 @@ impl Canvas {
                 );
             }
         }
+        if let Some(top) = node.preview_top {
+            // The value as Shader Graph shows it; a quiet tile until the render lands.
+            let size = PREVIEW * z;
+            let tile = Box2 {
+                x: r.x + (r.w - size) * 0.5,
+                y: r.y + (top + PAD) * z,
+                w: size,
+                h: size,
+            };
+            match self.previews.get(&node.id) {
+                Some(image) => list.commands.push(Draw::Image {
+                    node: id,
+                    rect: tile,
+                    image: *image,
+                    tint: Color(255, 255, 255, 255),
+                }),
+                _ => fill(list, id, tile, size / 16., theme.raised),
+            }
+        }
         if let Some(error) = error {
             self.labels.paint(
                 list,

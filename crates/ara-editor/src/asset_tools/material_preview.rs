@@ -1,4 +1,6 @@
 //! Full generated material evaluation on analytic sphere/plane geometry, off the UI thread.
+//! A [`Shot`] picks the geometry and whether values show lit and tone mapped (thumbnails)
+//! or raw (in-node previews of intermediate values).
 use super::studio::MASTER;
 use ara_gpu::{
     Access, Barrier, Queue, Resource, RootConstants,
@@ -8,10 +10,48 @@ use ara_gpu::{
 };
 use ara_render::capture::{Capture, CaptureRequest, FeatureCapture, ShaderMetadata, ViewMode};
 use std::{collections::BTreeMap, path::Path};
+/// How a material is photographed.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub(crate) struct Shot {
+    /// Geometry under the camera.
+    pub shape: Shape,
+    /// Show the raw value (sRGB-encoded, no tone curve): an intermediate node's output.
+    pub data: bool,
+}
+/// Preview geometry.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub(crate) enum Shape {
+    /// The studio sphere (thumbnails, world-space values).
+    Sphere,
+    /// A quad at the studio bearing.
+    Plane,
+    /// The UV square filling the image head-on (2D values such as UVs and noise).
+    Swatch,
+}
+impl Shot {
+    /// A lit thumbnail on the sphere or the plane.
+    pub fn surface(plane: bool) -> Self {
+        Self {
+            shape: if plane { Shape::Plane } else { Shape::Sphere },
+            data: false,
+        }
+    }
+    /// Root-constant flags read by `material_preview.slang`.
+    fn flags(self) -> u32 {
+        u32::from(self.shape == Shape::Plane)
+            | u32::from(self.data) << 1
+            | u32::from(self.shape == Shape::Swatch) << 2
+    }
+    /// Stable cache identity.
+    pub fn tag(self) -> u8 {
+        self.flags() as u8
+    }
+}
+
 pub(super) fn capture(
     root: &Path,
     material: &ara_material::Material,
-    plane: bool,
+    shot: Shot,
 ) -> anyhow::Result<image::RgbaImage> {
     let generated = ara_material::generate(material, &Default::default())
         .map_err(|d| anyhow::anyhow!("{d:?}"))?;
@@ -127,7 +167,7 @@ pub(super) fn capture(
     });
     recorder.push(Command::Pipeline(program));
     recorder.push(Command::Constants(RootConstants {
-        words: [0, 0, index, u32::from(plane), 0, 1f32.to_bits(), 0, 0],
+        words: [0, 0, index, shot.flags(), 0, 1f32.to_bits(), 0, 0],
     }));
     recorder.push(Command::Fullscreen);
     recorder.push(Command::EndRendering);

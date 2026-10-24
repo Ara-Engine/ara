@@ -2,7 +2,8 @@
 //! (registered by `ara_play_host::open_project`); native importers run only in
 //! disposable workers.
 pub(crate) mod cooked_mesh;
-mod material_preview;
+pub(crate) mod material_preview;
+pub(crate) mod node_preview;
 mod studio;
 pub(crate) mod thumbnails;
 mod vfx_preview;

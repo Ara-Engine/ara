@@ -19,7 +19,10 @@ pub(super) struct Verification {
     interactions: Vec<&'static str>,
     /// The Add node search popup has been captured.
     palette_shot: bool,
+    /// The plain material page has been captured; the in-node previews come next.
+    material_shot: bool,
 }
+
 pub(super) fn fixtures(root: &std::path::Path) -> ara_ui::Result<()> {
     if !root.join("ara.project.json").exists() {
         std::fs::create_dir_all(root.join("levels"))?;
@@ -128,6 +131,7 @@ impl Verification {
             bench_frames: 0,
             interactions: Vec::new(),
             palette_shot: false,
+            material_shot: false,
         })
     }
     pub fn finished(&self) -> bool {
@@ -347,7 +351,32 @@ impl Verification {
                 if !shell.preview_ready("material") || self.age < 30 {
                     return Ok(false);
                 }
-                self.capture_pair("material", editor, shell, gpu, ui, renderer, scene_view)?;
+                if !self.material_shot {
+                    self.capture_pair("material", editor, shell, gpu, ui, renderer, scene_view)?;
+                    self.material_shot = true;
+                    // Then a richer graph, authored as text, for the in-node previews.
+                    editor.apply_to(
+                        &self.material,
+                        vec![json!({"cmd":"material.text.apply","args":{"text":crate::asset_tools::node_preview::SHOWCASE}})],
+                        "Show in-node previews",
+                    )?;
+                    shell.rebuild(editor)?;
+                    shell.frame_graph(editor)?;
+                    shell.rebuild(editor)?;
+                    return Ok(false);
+                }
+                if !shell.node_previews_ready() {
+                    return Ok(false);
+                }
+                self.capture_pair(
+                    "material-previews",
+                    editor,
+                    shell,
+                    gpu,
+                    ui,
+                    renderer,
+                    scene_view,
+                )?;
                 editor.action(
                     "editor.workspace",
                     json!({"resource":self.vfx,"item":"flame|update|curl"}),

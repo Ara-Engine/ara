@@ -1507,6 +1507,17 @@ fn build() -> Vec<Spec> {
             },
         ),
         cmd(
+            "material.node_previews",
+            "Node Previews",
+            "image",
+            "",
+            "Show or hide each material node's value preview.",
+            |s, _, _| {
+                s.node_previews.hidden = !s.node_previews.hidden;
+                Ok(())
+            },
+        ),
+        cmd(
             "animation.view_states",
             "Animation States",
             "person-standing",

@@ -113,6 +113,8 @@ pub struct Shell {
     pub(crate) game_fault: Option<String>,
     /// The Material tool shows its DSL source instead of the node graph.
     pub(crate) material_source_view: bool,
+    /// In-node material previews (requests and the show/hide toggle).
+    pub(crate) node_previews: crate::asset_tools::node_preview::NodePreviews,
     /// Colour swatches outside the Inspector (material parameters): node id and
     /// colour, painted after layout like the Inspector's.
     value_swatches: Vec<(String, ara_ui::style::Color)>,
@@ -377,6 +379,7 @@ impl Shell {
             game_stats: true,
             game_fault: None,
             material_source_view: false,
+            node_previews: Default::default(),
             value_swatches: Vec::new(),
             console_open: None,
             explained_problems: std::collections::BTreeSet::new(),
@@ -982,14 +985,23 @@ impl Shell {
     /// Paint-time decorations shared by every surface. They are spliced in under the
     /// popup layer (menus, palette, dialogs, tooltips), which stays on top.
     fn paint_decorations(&mut self) {
-        let start = self.ui.display.commands.len();
+        let mut start = self.ui.display.commands.len();
         self.paint_swatches();
         self.paint_polish();
-        self.paint_graph();
+        // The canvas splices in under its own panel, inside the dock tree: indices
+        // after that point (`start`, and the popup start measured before painting)
+        // move by what it inserted.
+        let (canvas_at, inserted) = self.paint_graph();
+        if canvas_at <= start {
+            start += inserted;
+        }
         self.paint_drop_preview();
-        if let Some(at) = self.popup_start()
+        if let Some(mut at) = self.popup_start()
             && at < start
         {
+            if canvas_at <= at {
+                at += inserted;
+            }
             let decorations: Vec<_> = self.ui.display.commands.drain(start..).collect();
             self.ui.display.commands.splice(at..at, decorations);
         }
