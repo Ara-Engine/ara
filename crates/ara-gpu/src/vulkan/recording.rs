@@ -53,7 +53,8 @@ pub(super) fn access(
         ),
         Access::AsInput => (
             S::ACCELERATION_STRUCTURE_BUILD_KHR,
-            A::ACCELERATION_STRUCTURE_READ_KHR,
+            // Builds read vertex/index/instance buffers as shader reads, and BLAS as AS reads.
+            A::SHADER_READ | A::ACCELERATION_STRUCTURE_READ_KHR,
             L::GENERAL,
         ),
         Access::AsRead => (shader, A::ACCELERATION_STRUCTURE_READ_KHR, L::GENERAL),
