@@ -9,6 +9,7 @@ mod axis;
 pub(crate) mod build;
 mod chrome;
 pub mod commands;
+mod compound;
 mod dialog;
 mod drag;
 pub(crate) mod icons;
@@ -117,6 +118,12 @@ pub struct Shell {
     /// Colour swatches outside the Inspector (material parameters): node id and
     /// colour, painted after layout like the Inspector's.
     value_swatches: Vec<(String, ara_ui::style::Color)>,
+    /// Whether the Problems chip counts this machine's Vulkan loader and overlay-layer
+    /// diagnostics (`ARA_GPU_ENVIRONMENT`); bounded runs turn it off so captures are
+    /// the same on every machine.
+    pub host_problems: bool,
+    /// Colour swatches of compound Inspector elements: control ID and linear value.
+    nested_swatches: Vec<(String, Value)>,
     /// Create > C# Behaviour opens the IDE (verification routes turn it off).
     pub(crate) open_ide: bool,
     /// The running export (Build > Build Current Profile).
@@ -313,6 +320,9 @@ pub(crate) enum Binding {
     PickField(String),
     /// An asset field's picker popup: the field's path and declared asset kind.
     AssetPicker(String, Option<String>),
+    /// A typed text box inside a compound field: its `path#pointer` target, how its
+    /// text parses, and whether empty text clears it.
+    Nested(String, compound::Leaf, bool),
     RenameValue,
     ColorPicker(String),
     ComponentCollapse(String),
@@ -381,6 +391,8 @@ impl Shell {
             game_fault: None,
             material_source_view: false,
             value_swatches: Vec::new(),
+            nested_swatches: Vec::new(),
+            host_problems: true,
             console_open: None,
             explained_problems: std::collections::BTreeSet::new(),
             hierarchy_view: None,

@@ -133,6 +133,23 @@ pub fn local_transform(record: &ara_doc::Record) -> Mat4 {
 pub fn world_transforms(entities: &Resolved) -> BTreeMap<String, Mat4> {
     transforms_with(entities, None)
 }
+/// One entity's world transform: its local transform composed up its parent chain
+/// (a cycle stops at the repeat, as in [`world_transforms`]). For the few selected
+/// entities a frame needs, without composing the whole scene.
+pub fn world_transform(entities: &Resolved, id: &str) -> Option<Mat4> {
+    let entity = entities.get(id)?;
+    let mut matrix = local_transform(&entity.record);
+    let mut seen = BTreeSet::from([id]);
+    let mut current = entity.parent.as_deref();
+    while let Some(addr) = current {
+        let Some(parent) = entities.get(addr).filter(|_| seen.insert(addr)) else {
+            break;
+        };
+        matrix = local_transform(&parent.record) * matrix;
+        current = parent.parent.as_deref();
+    }
+    Some(matrix)
+}
 pub(super) fn transforms_with(
     entities: &Resolved,
     overrides: Option<&BTreeMap<String, Mat4>>,

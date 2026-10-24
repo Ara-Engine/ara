@@ -70,6 +70,7 @@ pub struct MeshRenderer {
     pub metallic: f32,
     /// Default procedural radiance, or an RGB emission multiplier with a model/material asset.
     /// Models treat zero RGB as neutral; use `emissiveEnabled` to switch them off.
+    #[ara(editor(color))]
     pub emissive: [f32; 3],
     /// Enables emission without modifying the source model or its materials.
     #[ara(default = true)]
@@ -78,7 +79,7 @@ pub struct MeshRenderer {
     #[ara(default = 1, range(min = 0))]
     pub emissive_strength: f32,
     /// Optional linear RGB replacement for the source emissive factor, useful for lamps.
-    #[ara(range(min = 0))]
+    #[ara(range(min = 0), editor(color))]
     pub emissive_factor: Option<[f32; 3]>,
     /// Source material names or numeric indices affected by `emissiveFactor`.
     /// Empty targets all; `name:3` disambiguates a numeric material name.

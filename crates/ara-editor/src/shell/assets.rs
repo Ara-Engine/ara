@@ -13,8 +13,9 @@ pub(crate) struct Asset {
     pub stamp: u64,
 }
 /// What an asset field of declared `kind` at `field` takes, as `(extensions, phrase)`:
-/// a document kind takes its own files, `audio` the audio formats, and
-/// `MeshRenderer.model` model sources; other fields take any asset (empty list).
+/// a document kind takes its own files, `audio` the audio formats, `MeshRenderer.model`
+/// model sources and `material` fields material graphs; other fields take any asset
+/// (empty list).
 pub(crate) fn field_accepts(
     kind: Option<&str>,
     field: &str,
@@ -31,6 +32,9 @@ pub(crate) fn field_accepts(
         Some("world") => (&["world"], "a world"),
         Some(_) => (&[], "an asset"),
         None if field.ends_with(".model") => (&["gltf", "glb", "fbx"], "a glTF or FBX model"),
+        None if field.rsplit(['.', '/']).next() == Some("material") => {
+            (&["material", "graph"], "a material")
+        }
         None => (&[], "an asset"),
     }
 }

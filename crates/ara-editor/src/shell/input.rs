@@ -395,6 +395,14 @@ impl Shell {
                         }
                         rebuild = true;
                     }
+                    Binding::Nested(target, leaf, nullable) => {
+                        let text = action
+                            .value
+                            .as_str()
+                            .map(str::to_owned)
+                            .unwrap_or_else(|| action.value.to_string());
+                        self.drafts.insert(leaf.draft(target, *nullable), text);
+                    }
                     Binding::Field(path, axis) => {
                         if !action.value.is_boolean() {
                             let gesture_path = axis.map_or_else(
@@ -403,7 +411,7 @@ impl Shell {
                                     let color = self.fields.get(path).is_some_and(|f| {
                                         matches!(
                                             f.widget,
-                                            crate::inspector::Widget::Vector { color: true, .. }
+                                            crate::inspector::Widget::Vector { rgba: true, .. }
                                         )
                                     });
                                     format!(
@@ -549,12 +557,22 @@ impl Shell {
         asset: &assets::Asset,
         path: &str,
     ) -> Result<String, String> {
-        let kind = self.fields.get(path).and_then(|f| match &f.widget {
-            crate::inspector::Widget::Asset { kind } => Some(kind.clone()),
-            _ => None,
-        });
+        // A compound element (`path#pointer`) declares its kind on its picker.
+        let kind = match path.split_once('#') {
+            None => self.fields.get(path).and_then(|f| match &f.widget {
+                crate::inspector::Widget::Asset { kind } => Some(kind.clone()),
+                _ => None,
+            }),
+            Some(_) => self.bindings.values().find_map(|b| match b {
+                Binding::AssetPicker(target, kind) if target == path => Some(kind.clone()),
+                _ => None,
+            }),
+        };
         let kind = kind.flatten();
-        let label = self.fields.get(path).map_or(path, |f| f.label.as_str());
+        let label = match path.split_once('#') {
+            Some((_, pointer)) => pointer.rsplit('/').next().unwrap_or(pointer),
+            None => self.fields.get(path).map_or(path, |f| f.label.as_str()),
+        };
         if !asset.fits(kind.as_deref(), path) {
             let wants = assets::field_accepts(kind.as_deref(), path).1;
             return Err(format!(
@@ -689,10 +707,10 @@ impl Shell {
             self.rebuild(editor)?;
             return Ok(true);
         }
-        if self.drafts.is_empty() {
+        let mut commands = self.nested_commands(&editor.state.selection)?;
+        if self.drafts.is_empty() && commands.is_empty() {
             return Ok(false);
         }
-        let mut commands = Vec::new();
         for (key, text) in &self.drafts {
             if key == "@name" {
                 commands.extend(crate::inspector::edit_commands(
@@ -738,14 +756,17 @@ impl Shell {
             let channel = |n: usize| -> ara_ui::Result<f64> {
                 Ok((u8::from_str_radix(&hex[n * 2..n * 2 + 2], 16)? as f64 / 255.).powf(2.2))
             };
-            let alpha = field.value.get(3).and_then(Value::as_f64).unwrap_or(1.);
             let round = |v: f64| (v * 10000.).round() / 10000.;
-            json!([
-                round(channel(0)?),
-                round(channel(1)?),
-                round(channel(2)?),
-                alpha
-            ])
+            let mut rgb = vec![
+                json!(round(channel(0)?)),
+                json!(round(channel(1)?)),
+                json!(round(channel(2)?)),
+            ];
+            // A `color` keeps its alpha; a colour-hinted vec3 has none.
+            if let crate::inspector::Widget::Vector { count: 4, .. } = field.widget {
+                rgb.push(field.value.get(3).cloned().unwrap_or(json!(1.)));
+            }
+            Value::Array(rgb)
         } else if matches!(
             field.widget,
             crate::inspector::Widget::Number { .. } | crate::inspector::Widget::Vector { .. }
@@ -814,7 +835,7 @@ impl DraftEdit<'_> {
         };
         let color = matches!(
             self.field.widget,
-            crate::inspector::Widget::Vector { color: true, .. }
+            crate::inspector::Widget::Vector { rgba: true, .. }
         );
         let names = if color {
             ["r", "g", "b", "a"]

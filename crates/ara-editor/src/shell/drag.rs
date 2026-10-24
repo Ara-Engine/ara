@@ -185,34 +185,25 @@ impl Shell {
                     self.rebuild(editor)?;
                     return Ok(true);
                 }
-                let field = self
-                    .fields
-                    .values()
-                    .find(|field| {
-                        matches!(field.widget, crate::inspector::Widget::Asset { .. })
-                            && self
-                                .shown_node(&format!(
-                                    "asset-field-{}",
-                                    field.path.replace('.', "-")
-                                ))
-                                .is_some_and(|i| {
-                                    self.ui.nodes[i]
-                                        .rect
-                                        .contains(self.pointer[0], self.pointer[1])
-                                })
-                    })
-                    .map(|f| f.path.clone());
+                // Any asset field under the pointer: a field, or an element of one.
+                let field = self.bindings.iter().find_map(|(node, binding)| {
+                    let Binding::AssetPicker(target, _) = binding else {
+                        return None;
+                    };
+                    let i = self.ui.by_id(*node)?;
+                    (self.ui.shown(i)
+                        && self.ui.nodes[i]
+                            .rect
+                            .contains(self.pointer[0], self.pointer[1]))
+                    .then(|| target.clone())
+                });
                 if let Some(field) = field {
                     if let Err(why) = self.asset_for_field(editor, &asset, &field) {
                         self.status_note = Some(why.clone());
                         return Err(why.into());
                     }
                     editor.apply(
-                        crate::inspector::edit_commands(
-                            &editor.state.selection,
-                            &field,
-                            &json!(reference),
-                        ),
+                        self.field_commands(&editor.state.selection, &field, json!(reference))?,
                         "Drop asset reference",
                         None,
                     )?;

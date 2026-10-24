@@ -1910,11 +1910,13 @@ fn build() -> Vec<Spec> {
             let value = s.field_clipboard.clone().ok_or("copy a value first")?;
             apply(e, crate::inspector::edit_commands(&e.state.selection, path, &value), "Paste value")
         }).when(|c| if c.clipboard_value { Avail::Ready } else { Avail::Blocked("Copy a value first".into()) }),
-        cmd("field.set", "Set Value", "", "", "Set a field on the selection (target `Path=json`).", |_, e, t| {
+        cmd("field.set", "Set Value", "", "", "Set a field on the selection (target `Path=json`, or `Path#/pointer=json` inside a compound field).", |s, e, t| {
             let Target::Text(text) = t else { return Err("expected Path=value".into()) };
             let (path, value) = text.split_once('=').ok_or("expected Path=value")?;
             let value: Value = serde_json::from_str(value)?;
-            apply(e, crate::inspector::edit_commands(&e.state.selection, path, &value), &format!("Set {path}"))
+            let commands = s.field_commands(&e.state.selection, path, value)?;
+            let field = path.split('#').next().unwrap_or(path);
+            apply(e, commands, &format!("Set {field}"))
         }).when(has_entity),
         cmd("field.reset", "Reset to Default", "undo-2", "", "Reset to the default or prefab value.", |_, e, t| {
             let Target::Field(path) = t else { return Err("choose a field".into()) };

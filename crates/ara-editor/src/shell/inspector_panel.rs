@@ -47,6 +47,7 @@ impl Shell {
             return self.import_panel(editor, out);
         }
         let resolved = self.resolved(editor)?;
+        self.nested_swatches.clear();
         if editor.state.selection.is_empty() {
             self.empty(
                 out,
@@ -243,7 +244,26 @@ impl Shell {
         let unit = field.unit.as_deref().unwrap_or("");
         out.push_str(&format!("<panel id='field-{id}' class='prop-label' style='width:{label}px' description='{}'><text id='label-{id}' text='{}' /></panel><panel id='value-{id}' class='prop-value'>",escape(&field.doc),escape(&sentence(&field.label))));
         match &field.widget {
-            Widget::Vector { count, color: true } => {
+            // An unset optional vector (`emissiveFactor`): None until set.
+            Widget::Vector { count, color, .. } if field.value.is_null() && !field.mixed => {
+                let start = json!(vec![if *color { 1. } else { 0. }; *count]);
+                let button = format!("set-{id}");
+                self.bindings.insert(
+                    ara_ui::source::stable_id(&button),
+                    Binding::Content(
+                        crate::inspector::edit_commands(
+                            &editor.state.selection,
+                            &field.path,
+                            &start,
+                        ),
+                        format!("Set {}", sentence(&field.label).to_lowercase()),
+                    ),
+                );
+                out.push_str(&format!("<text id='none-{id}' class='caption fill' text='None' /><button id='{button}' class='ghost icon-button' label='Set' description='Set a value' action='Dispatch'>{}</button>",icons::icon_in(&button,"plus","icon-sm")));
+            }
+            Widget::Vector {
+                count, color: true, ..
+            } => {
                 self.bindings.insert(
                     ara_ui::source::stable_id(&format!("swatch-{id}")),
                     Binding::ColorPicker(field.path.clone()),
@@ -286,6 +306,7 @@ impl Shell {
             Widget::Vector {
                 count,
                 color: false,
+                ..
             } => {
                 for axis in 0..*count {
                     let widget = format!("edit-{id}-{axis}");
@@ -390,6 +411,7 @@ impl Shell {
                     out.push_str(&format!("<button id='clear-{id}' class='ghost icon-button' label='Clear' description='Clear the reference' action='Dispatch'>{}</button>",icons::icon(&format!("clear-{id}"),"x")));
                 }
             }
+            Widget::Compound { .. } => self.compound_head(editor, field, &id, out),
             Widget::Entity => {
                 let widget = format!("edit-{id}");
                 self.bindings.insert(
@@ -447,7 +469,10 @@ impl Shell {
             ));
         }
         out.push_str("</panel>");
-        if let Widget::Vector { count, color: true } = &field.widget
+        self.compound_rows(editor, field, label, out);
+        if let Widget::Vector {
+            count, color: true, ..
+        } = &field.widget
             && self.color_picker.as_deref() == Some(field.path.as_str())
         {
             for axis in 0..*count {

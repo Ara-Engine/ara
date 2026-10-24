@@ -7,8 +7,8 @@ Public boundaries:
 - `Editor`: host, navigation commands, content batches, agent activity and per-turn undo.
 - `state`: navigation/layout op document; deliberately separate from content undo.
 - `world::EditWorldView`: replace the document extraction with ara-sim later.
-- `inspector`: schema-driven fields, mixed values, units and provenance.
-- `shell`: retained panel tree and semantic interaction helpers.
+- `inspector`: schema fields, mixed values, units, provenance; lists/maps/structs edit
+  per element (`shell/compound.rs`, `path#pointer`). `shell`: retained panel tree.
 - `gpu`: 64-byte instance ABI, raster/MSDF atlases, ordered draws and clip masks.
 - `transport`: authenticated localhost EP and MCP; no project state on IO threads.
 - `build.rs`: embeds `assets/brand/ara.ico` as the Windows exe icon (embed-resource;
@@ -43,11 +43,11 @@ Gate with targeted check/test/clippy. The GPU gate (`run.ps1 -Mode Verify`, `tes
 --ignored`) needs validation layers, SDL3 and this machine's GPU. Goldens live in
 `tests/goldens` (update only with `ARA_EDITOR_UPDATE_GOLDENS=1`); evidence in `evidence`.
 
-Polish assets: Lucide SVGs (ISC), Inter and JetBrains Mono (OFL; THIRD_PARTY_NOTICES).
-The fidelity view and its bounded settling live in app/viewport.rs; destroy it before
-its GPU. Raster IDs drive picking, outlines and GPU-only hover. Physical Scene extents
-and UI glyph scale change together; keep the SDL window, editor logical, IME and UIA
-coordinate conversions. Motion is paint-only, ≤140 ms, off with editor.preferences.
+Polish assets: Lucide SVGs (ISC), Inter, JetBrains Mono (OFL; THIRD_PARTY_NOTICES). The
+fidelity view and its bounded settling live in app/viewport.rs; destroy it before its GPU.
+Raster IDs drive picking, outlines and GPU-only hover. Physical Scene extents and UI glyph
+scale change together; keep the SDL window, editor logical, IME and UIA coordinate
+conversions. Motion is paint-only, ≤140 ms, off with editor.preferences.
 verify-polish.ps1 captures 1440x900 at 1x and 2560x1440 at 2x (palettes, Agents).
 
 Panel authoring: asset_tools owns isolated import jobs and cached off-thread
