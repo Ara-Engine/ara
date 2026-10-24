@@ -71,6 +71,12 @@ impl Renderer {
         )?;
         let compute_frame_index = gpu.storage_buffer(compute_frame)?.index;
         let content = upload_content(&mut gpu, scene, artifacts, &shader_metadata, compute_frame)?;
+        let look = crate::look::gpu::LookGpu::new(
+            &mut gpu,
+            artifacts,
+            &shader_metadata.content_key,
+            size,
+        )?;
         Ok(Self {
             gpu,
             size,
@@ -86,7 +92,8 @@ impl Renderer {
             artifacts: artifacts.to_path_buf(),
             shader_metadata,
             last_timings: Vec::new(),
-            tone_curve: super::post::ToneCurve::AcesFit,
+            look,
+            native: None,
         })
     }
 
@@ -95,6 +102,7 @@ impl Renderer {
     /// structural changes (spawns, asset reloads); per-frame motion uses `update_mesh`.
     /// On error the previous content stays live (last-good).
     pub fn replace_scene(&mut self, scene: Scene) -> Result<()> {
+        ensure!(!scene.meshes.is_empty(), "Scene has no geometry");
         let content = upload_content(
             &mut self.gpu,
             scene,
@@ -207,6 +215,9 @@ impl Renderer {
         }
         let mut hash = Sha256::new();
         hash.update(self.content.base_hash.as_bytes());
+        if let Some(native) = &self.native {
+            native.hash(&mut hash);
+        }
         for mesh in &self.content.meshes {
             if let Some(latest) = &mesh.latest {
                 hash.update(mesh.entity.to_le_bytes());
@@ -265,10 +276,7 @@ pub(super) fn upload_geometry(
     lights: Vec<Light>,
     texture_indices: &[u32],
 ) -> Result<Geometry> {
-    ensure!(
-        !materials.is_empty() && !meshes.is_empty(),
-        "Scene has no geometry/materials"
-    );
+    ensure!(!materials.is_empty(), "Scene has no materials");
     ensure!(
         lights.len() <= MAX_LIGHTS,
         "Tiled baseline supports at most 64 local lights"

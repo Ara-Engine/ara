@@ -14,6 +14,7 @@ extern crate glam34 as glam;
 mod composite;
 pub mod fidelity;
 pub mod geometry;
+mod gi;
 mod gpu_costs;
 pub use gpu_costs::GpuFrameCosts;
 pub mod landscape;
@@ -102,6 +103,10 @@ pub struct Presenter {
     output: Option<ara_gpu::Image>,
     /// Whether the over-budget texture note was printed.
     warned_budget: bool,
+    /// Background probe GI acquisition for raster content (`set_probe_gi`).
+    probe_gi: Option<gi::Acquisition>,
+    /// Renderer selection (`set_render_options`).
+    options: ara_render_fidelity::presets::RenderOptions,
 }
 
 fn fnv(hash: u64, bytes: &[u8]) -> u64 {
@@ -181,6 +186,10 @@ impl Presenter {
             composite: None,
             output: None,
             warned_budget: false,
+            probe_gi: None,
+            // Hosts keep the ray-traced tiers until the D27 cut-over lands with
+            // native raster geometry (raster everywhere by default).
+            options: ara_render_fidelity::presets::RenderOptions { ray_tracing: true },
         }
     }
 
@@ -248,6 +257,14 @@ impl Presenter {
         } else {
             self.update(frame)?;
         }
+        let look = look(frame).raster();
+        let renderer = self
+            .renderer
+            .as_mut()
+            .context("renderer missing after prepare")?;
+        if *renderer.look() != look {
+            renderer.set_look(look)?;
+        }
         self.stats.prepare = started.elapsed();
         Ok(())
     }
@@ -256,12 +273,15 @@ impl Presenter {
     fn present_baseline(&mut self, frame: &RenderFrame) -> Result<()> {
         self.draw_terrain = frame.terrain.is_none();
         let camera = camera(frame)?;
-        let exposure = frame.environment.exposure;
+        let exposure = look(frame).manual_exposure(frame.environment.exposure);
         let started = Instant::now();
         let renderer = self
             .renderer
             .as_mut()
             .context("renderer missing after prepare")?;
+        // Landscape and particles composite into the lit HDR before it is graded.
+        let compositing = frame.terrain.is_some() || !frame.effects.is_empty();
+        renderer.set_deferred_post(compositing);
         renderer.render(&camera, exposure)?;
         let terrain = self.landscapes.present(renderer, frame, &camera)?;
         let (image, sampled_index, state) = renderer.feature_color();
@@ -276,7 +296,7 @@ impl Presenter {
             sampled_index,
             state,
         };
-        if terrain.is_some() || !frame.effects.is_empty() {
+        if compositing {
             if self
                 .composite
                 .as_ref()
@@ -296,7 +316,7 @@ impl Presenter {
             color = self
                 .effects
                 .present(renderer, frame, &camera, color, depth)?;
-            self.output = Some(composite.finish(renderer.gpu_mut(), color, exposure)?);
+            self.output = Some(renderer.finish(color.image, color.sampled_index, color.state)?);
         } else {
             self.output = Some(renderer.output());
         }
@@ -316,6 +336,7 @@ impl Presenter {
         // Terrain comes from the landscape composite below.
         self.draw_terrain = false;
         self.prepare_baseline(frame)?;
+        self.wait_probe_gi()?;
         let request = CaptureRequest {
             camera: camera(frame)?,
             size,
@@ -323,7 +344,7 @@ impl Presenter {
             // Renderer::capture resets the jitter sequence and history itself;
             // live TAA can remain enabled in a reproducible Low capture.
             deterministic: false,
-            exposure: frame.environment.exposure,
+            exposure: look(frame).manual_exposure(frame.environment.exposure),
             settle_frames: 4,
             tick: frame.tick,
             seed,
@@ -358,12 +379,13 @@ impl Presenter {
     ) -> Result<Capture> {
         self.draw_terrain = true;
         self.prepare(frame)?;
+        self.wait_probe_gi()?;
         let request = CaptureRequest {
             camera: camera(frame)?,
             size,
             mode: ViewMode::Lit,
             deterministic: true,
-            exposure: frame.environment.exposure,
+            exposure: look(frame).manual_exposure(frame.environment.exposure),
             settle_frames: 4,
             tick: frame.tick,
             seed,
@@ -725,6 +747,14 @@ fn bytes(light: &scene::Light) -> [u32; 16] {
         out[i] = v.to_bits();
     }
     out
+}
+
+/// The frame's authored look (sky, fog, exposure and display), shared with fidelity.
+fn look(frame: &RenderFrame) -> ara_render_fidelity::environment::FrameEnvironment {
+    ara_render_fidelity::environment::FrameEnvironment::resolve(
+        &frame.look,
+        frame.environment.exposure,
+    )
 }
 
 /// The frame's sun, or a dim default so the renderer always has a directional light.

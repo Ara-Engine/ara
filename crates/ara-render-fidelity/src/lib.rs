@@ -16,6 +16,7 @@ mod render;
 mod replacement;
 mod resampling;
 mod shadow_source;
+mod surface_bake;
 pub use shadow_source::SunShadowSource;
 pub mod scene;
 pub mod settings;

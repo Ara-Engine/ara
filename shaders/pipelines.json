@@ -73,6 +73,219 @@
       "vertex_stride": 0
     }
   },
+  "look_ao_denoise": {
+    "entries": {
+      "aoDenoiseMain": "compute"
+    },
+    "source": "look-ao.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
+  "look_ao_trace": {
+    "entries": {
+      "aoTraceMain": "compute"
+    },
+    "source": "look-ao.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
+  "look_bloom": {
+    "entries": {
+      "bloomMain": "compute"
+    },
+    "source": "look-post.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
+  "look_exposure": {
+    "entries": {
+      "exposureMain": "compute"
+    },
+    "source": "look-post.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
+  "look_fog": {
+    "entries": {
+      "fogMain": "compute"
+    },
+    "source": "look-sky.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
+  "look_gi_relight": {
+    "entries": {
+      "giRelightMain": "compute"
+    },
+    "source": "look-gi.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
+  "look_multiscatter": {
+    "entries": {
+      "multiScatterMain": "compute"
+    },
+    "source": "look-sky.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
+  "look_post": {
+    "entries": {
+      "postMain": "compute"
+    },
+    "source": "look-post.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
+  "look_sky_irradiance": {
+    "entries": {
+      "skyIrradianceMain": "compute"
+    },
+    "source": "look-sky.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
+  "look_sky_prefilter": {
+    "entries": {
+      "skyPrefilterMain": "compute"
+    },
+    "source": "look-sky.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
+  "look_sky_view": {
+    "entries": {
+      "skyViewMain": "compute"
+    },
+    "source": "look-sky.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
+  "look_transmittance": {
+    "entries": {
+      "transmittanceMain": "compute"
+    },
+    "source": "look-sky.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
+  "native_forward": {
+    "entries": {
+      "nativeForwardFragment": "fragment",
+      "nativeGeometryVertex": "vertex"
+    },
+    "source": "native-raster.slang",
+    "state": {
+      "blend": true,
+      "color_formats": [109, 100, 109, 109, 109, 109, 83],
+      "depth_format": 126,
+      "depth_test": true,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
+  "native_gbuffer": {
+    "entries": {
+      "nativeGeometryFragment": "fragment",
+      "nativeGeometryVertex": "vertex"
+    },
+    "source": "native-raster.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [109, 109, 109, 109, 100, 83],
+      "depth_format": 126,
+      "depth_test": true,
+      "depth_write": true,
+      "vertex_stride": 0
+    }
+  },
+  "native_shadow": {
+    "entries": {
+      "nativeShadowFragment": "fragment",
+      "nativeShadowVertex": "vertex"
+    },
+    "source": "native-raster.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": 126,
+      "depth_test": true,
+      "depth_write": true,
+      "vertex_stride": 0
+    }
+  },
   "prefilter": {
     "entries": {
       "prefilterMain": "compute"

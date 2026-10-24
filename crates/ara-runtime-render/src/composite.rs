@@ -1,25 +1,22 @@
-//! GPU-only landscape/scene depth composition, followed by the shared HDR post pass.
+//! GPU-only landscape/scene depth composition; `Renderer::finish` grades the result.
 use anyhow::Result;
 use ara_gpu::{
     Access, Barrier, Device, Image, Pipeline, Queue, Resource, RootConstants, commands::Command,
     vk, vulkan::VulkanDevice,
 };
-use ara_render::{graph::State, renderer::post::ToneMap};
+use ara_render::graph::State;
 use ara_vfx_gpu::{SceneColor, SceneDepth};
 #[cfg(test)]
 use std::path::Path;
 
 pub struct Composite {
     pipeline: Pipeline,
-    post: ToneMap,
     pub size: [u32; 2],
     hdr: Image,
     depth: Image,
-    pub output: Image,
     sampled: [u32; 2],
-    storage: [u32; 3],
+    storage: [u32; 2],
     access: Access,
-    output_access: Access,
 }
 
 fn barrier(image: Image, before: Access, after: Access) -> Barrier {
@@ -47,19 +44,11 @@ impl Composite {
             usage | vk::ImageUsageFlags::COLOR_ATTACHMENT,
         )?;
         let depth = gpu.create_image(size[0], size[1], vk::Format::R32G32B32A32_SFLOAT, usage)?;
-        let output = gpu.create_image(
-            size[0],
-            size[1],
-            vk::Format::R8G8B8A8_UNORM,
-            vk::ImageUsageFlags::STORAGE | vk::ImageUsageFlags::TRANSFER_SRC,
-        )?;
         Ok(Self {
             pipeline,
-            post: ToneMap::new(gpu)?,
             size,
             hdr,
             depth,
-            output,
             sampled: [
                 gpu.sampled_image(hdr, false)?.index,
                 gpu.sampled_image(depth, false)?.index,
@@ -67,10 +56,8 @@ impl Composite {
             storage: [
                 gpu.storage_image(hdr)?.index,
                 gpu.storage_image(depth)?.index,
-                gpu.storage_image(output)?.index,
             ],
             access: Access::Undefined,
-            output_access: Access::Undefined,
         })
     }
 
@@ -139,36 +126,9 @@ impl Composite {
         ))
     }
 
-    pub fn finish(
-        &mut self,
-        gpu: &mut VulkanDevice,
-        color: SceneColor,
-        exposure: f32,
-    ) -> Result<Image> {
-        self.post
-            .prepare(gpu, self.size, exposure, self.storage[2], true)?;
-        let mut r = gpu.begin(Queue::Graphics);
-        r.barriers([
-            barrier(self.output, self.output_access, Access::Storage),
-            Barrier {
-                resource: Resource::Buffer(self.post.frame_buffer()),
-                before: Access::HostWrite,
-                after: Access::ShaderRead,
-                handoff: None,
-            },
-        ]);
-        self.post.record(&mut r, color.sampled_index, self.size);
-        r.barriers([barrier(self.output, Access::Storage, Access::CopySource)]);
-        let point = gpu.submit(r.finish(), &[])?;
-        gpu.resolve(point)?;
-        self.output_access = Access::CopySource;
-        Ok(self.output)
-    }
-
     pub fn retire(self, gpu: &mut VulkanDevice) -> Result<()> {
-        self.post.retire(gpu)?;
         gpu.retire_pipeline(self.pipeline)?;
-        for image in [self.hdr, self.depth, self.output] {
+        for image in [self.hdr, self.depth] {
             gpu.retire(Resource::Image(image))?;
         }
         Ok(())
@@ -245,6 +205,16 @@ mod tests {
             queue: Queue::Graphics,
         };
         let mut composite = Composite::new(&mut gpu, size)?;
+        // The default raster look grades exactly like the shared baseline tone map.
+        let post = ara_render::renderer::post::ToneMap::new(&mut gpu)?;
+        let image = gpu.create_image(
+            8,
+            8,
+            vk::Format::R8G8B8A8_UNORM,
+            vk::ImageUsageFlags::STORAGE | vk::ImageUsageFlags::TRANSFER_SRC,
+        )?;
+        let output = gpu.storage_image(image)?.index;
+        let mut image_access = Access::Undefined;
         for exposure in [1.0, 0.0022] {
             let (hdr, _) = composite.merge(
                 &mut gpu,
@@ -261,9 +231,21 @@ mod tests {
                 (color, land_depth),
                 exposure,
             )?;
-            let image = composite.finish(&mut gpu, hdr, exposure)?;
+            post.prepare(&gpu, size, exposure, output, true)?;
             let read = gpu.create_buffer(8 * 8 * 4, vk::BufferUsageFlags::TRANSFER_DST, true)?;
             let mut r = gpu.begin(Queue::Graphics);
+            r.barriers([
+                barrier(image, image_access, Access::Storage),
+                Barrier {
+                    resource: Resource::Buffer(post.frame_buffer()),
+                    before: Access::HostWrite,
+                    after: Access::ShaderRead,
+                    handoff: None,
+                },
+            ]);
+            post.record(&mut r, hdr.sampled_index, size);
+            r.barriers([barrier(image, Access::Storage, Access::CopySource)]);
+            image_access = Access::CopySource;
             r.push(Command::ReadImage {
                 source: image,
                 destination: read,

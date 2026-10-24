@@ -1,7 +1,9 @@
 //! Renderer orchestration. Extraction snapshots are uploaded once; frames record handles.
 mod edit;
 mod frame;
+mod gi;
 mod hash;
+mod native;
 mod passes;
 pub mod post;
 mod readback;
@@ -31,7 +33,8 @@ const HDR: usize = 7;
 const HISTORY0: usize = 8;
 const HISTORY1: usize = 9;
 const OUTPUT: usize = 10;
-const TARGET_COUNT: usize = 11;
+const MOTION: usize = 11;
+const TARGET_COUNT: usize = 12;
 
 struct Mesh {
     /// Stable external identity, the key for `Renderer::update_mesh`.
@@ -87,7 +90,9 @@ pub struct Renderer {
     artifacts: PathBuf,
     shader_metadata: crate::capture::ShaderMetadata,
     last_timings: Vec<PassTiming>,
-    tone_curve: post::ToneCurve,
+    /// Sky, fog, exposure, bloom and display grading after the G-buffer.
+    look: crate::look::gpu::LookGpu,
+    native: Option<native::Native>,
 }
 
 impl Renderer {
@@ -126,8 +131,22 @@ impl Renderer {
         extensions: &[std::ffi::CString],
         cache: impl Into<PathBuf>,
     ) -> Result<Self> {
+        Self::new_device(scene, size, extensions, cache.into(), false)
+    }
+    fn new_device(
+        scene: Scene,
+        size: [u32; 2],
+        extensions: &[std::ffi::CString],
+        cache: PathBuf,
+        raster: bool,
+    ) -> Result<Self> {
         ensure!(!size.contains(&0), "Render extent is zero");
-        let mut gpu = VulkanDevice::new(extensions, cache)?;
+        ensure!(raster || !scene.meshes.is_empty(), "Scene has no geometry");
+        let mut gpu = if raster {
+            VulkanDevice::new_raster(extensions, cache)?
+        } else {
+            VulkanDevice::new(extensions, cache)?
+        };
         let artifacts = ara_gpu::cooked::resource_dir(
             env!("CARGO_PKG_NAME"),
             concat!(env!("CARGO_MANIFEST_DIR"), "/cooked"),
@@ -157,7 +176,7 @@ impl Renderer {
             taa: load("taa")?,
             tonemap: load("tonemap")?,
         };
-        let targets = Self::targets(&mut gpu, size)?;
+        let targets = Self::targets(&mut gpu, size, crate::look::Shadows::default().resolution)?;
         Self::upload_scene(
             gpu,
             pipelines,
@@ -195,7 +214,8 @@ impl Renderer {
         if size == self.size {
             return Ok(());
         }
-        let replacement = Self::targets(&mut self.gpu, size)?;
+        let replacement = Self::targets(&mut self.gpu, size, self.look.quality.shadows.resolution)?;
+        self.look.resize(&mut self.gpu, size)?;
         let previous = std::mem::replace(&mut self.targets, replacement);
         for image in previous.images {
             self.gpu.retire(Resource::Image(image))?;
@@ -210,13 +230,69 @@ impl Renderer {
     }
     /// Select the display curve applied after exposure (Lit view only).
     pub fn set_tone_curve(&mut self, curve: post::ToneCurve) {
-        self.tone_curve = curve;
+        self.look.look.curve = curve;
     }
-    /// Render live with TAA jitter and camera reprojection at a locked physical exposure.
+    /// Apply an authored look (exposure, display, sky and fog) from the next frame.
+    pub fn set_look(&mut self, look: crate::look::Look) -> Result<()> {
+        look.validate()?;
+        self.look.look = look;
+        Ok(())
+    }
+    /// The look applied to rendered frames.
+    pub fn look(&self) -> &crate::look::Look {
+        &self.look.look
+    }
+    /// Apply per-preset raster budgets (shadow cascades, probe GI, bloom) from the
+    /// next frame. A new shadow resolution reallocates the atlas.
+    pub fn set_quality(&mut self, quality: crate::look::Quality) -> Result<()> {
+        quality.validate()?;
+        let resolution = quality.shadows.resolution;
+        if resolution != self.look.quality.shadows.resolution {
+            let image = self.gpu.create_image(
+                resolution * 2,
+                resolution * 2,
+                vk::Format::D32_SFLOAT,
+                vk::ImageUsageFlags::SAMPLED
+                    | vk::ImageUsageFlags::TRANSFER_SRC
+                    | vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT,
+            )?;
+            let sampled = self.gpu.sampled_image(image, true)?.index;
+            let old = std::mem::replace(&mut self.targets.images[SHADOW], image);
+            self.gpu.retire(Resource::Image(old))?;
+            self.targets.sampled[SHADOW] = sampled;
+            self.targets.states[SHADOW] = State {
+                access: Access::Undefined,
+                queue: Queue::Graphics,
+            };
+        }
+        self.look.quality = quality;
+        Ok(())
+    }
+    /// The per-preset raster budgets in effect.
+    pub fn quality(&self) -> &crate::look::Quality {
+        &self.look.quality
+    }
+    /// Shadow-atlas viewports (origin, size) of the active cascades, in cascade
+    /// order: the shadow pass renders cascade `i` into viewport `i`.
+    pub fn cascade_viewports(&self) -> Vec<([u32; 2], [u32; 2])> {
+        let shadows = self.look.quality.shadows;
+        let r = shadows.resolution;
+        (0..shadows.cascades)
+            .map(|c| ([c % 2 * r, c / 2 * r], [r, r]))
+            .collect()
+    }
+    /// Render live with TAA jitter and camera reprojection. `exposure` is the linear
+    /// multiplier of a manual look; automatic looks meter instead.
     pub fn render(&mut self, camera: &CameraSpec, exposure: f32) -> Result<()> {
         #[cfg(feature = "profiling")]
         ara_profile::scope!("render.frame");
-        self.render_frame(camera, exposure, false, crate::capture::ViewMode::Lit)?;
+        self.render_frame(
+            camera,
+            exposure,
+            false,
+            crate::capture::ViewMode::Lit,
+            false,
+        )?;
         Ok(())
     }
     /// Render live in a debug view mode (base color, normals, depth, …), as captures do,
@@ -227,7 +303,7 @@ impl Renderer {
         exposure: f32,
         mode: crate::capture::ViewMode,
     ) -> Result<()> {
-        self.render_frame(camera, exposure, false, mode)?;
+        self.render_frame(camera, exposure, false, mode, false)?;
         Ok(())
     }
     /// Render an agent request, with reset history and an explicit settle frame count.
@@ -242,6 +318,7 @@ impl Renderer {
                 request.exposure,
                 request.deterministic,
                 request.mode,
+                true,
             )?;
         }
         self.readback(true)?;
@@ -268,7 +345,8 @@ impl Renderer {
             },
         )
     }
-    fn targets(gpu: &mut VulkanDevice, size: [u32; 2]) -> Result<Targets> {
+    /// View targets; the shadow atlas holds 2x2 cascades of `shadow` texels.
+    fn targets(gpu: &mut VulkanDevice, size: [u32; 2], shadow: u32) -> Result<Targets> {
         let mut graph = Graph::default();
         let mut images = Vec::new();
         let mut sampled = Vec::new();
@@ -277,6 +355,7 @@ impl Renderer {
                 ID => vk::Format::R32_SFLOAT,
                 DEPTH | SHADOW => vk::Format::D32_SFLOAT,
                 OUTPUT => vk::Format::R8G8B8A8_UNORM,
+                MOTION => vk::Format::R16G16_SFLOAT,
                 _ => vk::Format::R32G32B32A32_SFLOAT,
             };
             let depth = target == DEPTH || target == SHADOW;
@@ -284,12 +363,16 @@ impl Renderer {
                 | vk::ImageUsageFlags::TRANSFER_SRC
                 | if depth {
                     vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT
-                } else if target >= HISTORY0 {
+                } else if (HISTORY0..=OUTPUT).contains(&target) {
                     vk::ImageUsageFlags::STORAGE
                 } else {
                     vk::ImageUsageFlags::COLOR_ATTACHMENT
                 };
-            let extent = if target == SHADOW { [1024, 1024] } else { size };
+            let extent = if target == SHADOW {
+                [shadow * 2; 2]
+            } else {
+                size
+            };
             let (_, image) = graph.transient(
                 gpu,
                 TransientImage {

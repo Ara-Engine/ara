@@ -28,6 +28,8 @@ pub struct Request<'a> {
     pub presets: &'a [ara_render_fidelity::presets::QualityPreset],
     /// Reference samples per pixel for RMSE/FLIP scoring; zero skips it.
     pub reference_samples: u32,
+    /// Medium and above use the opt-in ray-traced renderer.
+    pub ray_tracing: bool,
 }
 
 /// Runs the captures for one look of one project.
@@ -123,7 +125,9 @@ pub fn run(samples: &Path, lock: &Lock, request: &Request<'_>) -> Result<()> {
             presets: request.presets,
             environment: &environment,
             pipeline_cache: &cache,
+            content: &|frame| world.content(frame),
             reference_samples: request.reference_samples,
+            ray_tracing: request.ray_tracing,
         },
     )?;
     gpu.assert_clean()?;

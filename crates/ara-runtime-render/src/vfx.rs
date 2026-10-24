@@ -233,9 +233,12 @@ impl Effects {
                 other => *other,
             };
             let seed = u64::from(library(&effect.effect)?.seed);
+            // The replay is always deterministic (authored seed, fixed tick), even
+            // over a Low capture whose scene keeps live TAA.
             let replay = CaptureRequest {
                 camera,
                 seed,
+                deterministic: true,
                 tick: frame.tick.clamp(1, MAX_REPLAY),
                 settle_frames: 1,
                 marks: None,
@@ -254,6 +257,11 @@ impl Effects {
             capture.image = composited.image;
             background = system.hdr_output();
         }
+        // Grade the composited HDR with the renderer's look (exposure stays locked to
+        // the request), exactly as presented frames are.
+        let output =
+            renderer.finish(background.image, background.sampled_index, background.state)?;
+        crate::readback::replace(renderer, output, capture)?;
         Ok(())
     }
 }
