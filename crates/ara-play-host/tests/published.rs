@@ -137,6 +137,14 @@ fn driver() -> Result<(), Box<dyn std::error::Error>> {
         "publication reads must not wait for pending imports"
     );
     let wanted = ["as_ready".to_owned(), "as_pending".to_owned()].into();
+    let start = Instant::now();
+    let live = assets.ready_pins(&wanted);
+    assert_eq!(live.len(), 1);
+    assert!(live.contains_key("as_ready") && !live.contains_key("as_pending"));
+    assert!(
+        start.elapsed() < Duration::from_millis(100),
+        "Play pins must not wait for the held import"
+    );
     let mut progress = Vec::new();
     let stalled = assets
         .pins_with_progress(&wanted, Duration::from_millis(30), |state| {

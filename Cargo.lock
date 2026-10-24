@@ -1457,6 +1457,7 @@ dependencies = [
  "ara-asset",
  "ara-audio",
  "ara-crash",
+ "ara-diag",
  "ara-doc",
  "ara-gpu",
  "ara-host",

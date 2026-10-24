@@ -96,6 +96,17 @@ impl Player {
         params: &Value,
         timeout: Duration,
     ) -> Result<Result<Value, Value>, Value> {
+        self.call_checked(method, params, timeout, || Ok(()))
+    }
+
+    /// Startup-only cancellable wait. Ordinary calls retain their synchronous contract.
+    pub(crate) fn call_checked(
+        &mut self,
+        method: &str,
+        params: &Value,
+        timeout: Duration,
+        mut check: impl FnMut() -> Result<(), &'static str>,
+    ) -> Result<Result<Value, Value>, Value> {
         let id = match self.link.request(method, params) {
             Ok(id) => json!(id),
             Err(_) => return Err(self.closed()),
@@ -103,6 +114,9 @@ impl Player {
         let started = Instant::now();
         self.seen = Instant::now();
         loop {
+            if let Err(message) = check() {
+                return Ok(Err(error(-32000, message, Value::Null)));
+            }
             match self.link.wait(Duration::from_millis(20)) {
                 Ok(Some(Message::Response { id: got, result })) if got == id => {
                     // The announced long work belonged to this request.
@@ -261,6 +275,7 @@ pub struct Pool {
     next: u32,
     scripts: Option<ara_play::ScriptScene>,
     rendering: ara_play::RenderSettings,
+    graphics_prewarm: bool,
     /// Launch results, sent by each launch thread.
     launches: (mpsc::Sender<Launched>, mpsc::Receiver<Launched>),
     /// Launches in flight, `[headless, windowed]`.
@@ -294,6 +309,17 @@ impl Pool {
         scripts: Option<ara_play::ScriptScene>,
         rendering: ara_play::RenderSettings,
     ) -> std::io::Result<Self> {
+        Self::with_presenter(config, token, scripts, rendering, false)
+    }
+
+    /// Surface-attached services warm a small headless presenter before hello.
+    pub(crate) fn with_presenter(
+        config: PoolConfig,
+        token: String,
+        scripts: Option<ara_play::ScriptScene>,
+        rendering: ara_play::RenderSettings,
+        graphics_prewarm: bool,
+    ) -> std::io::Result<Self> {
         let listener = TcpListener::bind("127.0.0.1:0")?;
         listener.set_nonblocking(true)?;
         std::fs::create_dir_all(&config.logs)?;
@@ -306,6 +332,7 @@ impl Pool {
             next: 0,
             scripts,
             rendering,
+            graphics_prewarm,
             launches: mpsc::channel(),
             launching: [0; 2],
             failures: 0,
@@ -370,6 +397,11 @@ impl Pool {
             .stdout(Stdio::null());
         if window {
             command.arg("--window");
+            if std::env::var_os("ARA_PLAY_OFFSCREEN").is_some() {
+                command.arg("--offscreen");
+            }
+        } else if self.graphics_prewarm {
+            command.arg("--prewarm-graphics");
         }
         command.arg(format!("--ray-tracing={}", self.rendering.ray_tracing));
         if let Some(scripts) = &self.scripts {
@@ -552,9 +584,20 @@ impl Pool {
         window: bool,
         timeout: Duration,
     ) -> Result<Vec<Player>, String> {
+        self.take_checked(count, window, timeout, || Ok(()))
+    }
+
+    pub(crate) fn take_checked(
+        &mut self,
+        count: usize,
+        window: bool,
+        timeout: Duration,
+        mut check: impl FnMut() -> Result<(), &'static str>,
+    ) -> Result<Vec<Player>, String> {
         let start = Instant::now();
         let mut problems = Vec::new();
         loop {
+            check().map_err(str::to_owned)?;
             let observed = self.poll();
             if !observed.is_empty() {
                 problems = observed;

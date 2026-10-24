@@ -56,6 +56,9 @@ struct Args {
     /// Experimental hardware ray tracing; omit to use the project setting.
     #[arg(long, num_args = 0..=1, default_missing_value = "true")]
     ray_tracing: Option<bool>,
+    /// Internal pool warm-up; only services with a Surfaces attachment request it.
+    #[arg(long, hide = true)]
+    prewarm_graphics: bool,
     #[command(flatten)]
     standalone: standalone::Options,
 }
@@ -194,9 +197,22 @@ fn run(args: Args, launched: Instant) -> Result<()> {
     };
     // Windowed pool players create the window, device and pipelines before Play.
     let (window, presenter) = if args.window {
-        let (window, presenter) = device::Windowed::open(&args.name, size, &args.gpu_cache, args.quality.unwrap_or_default(), RenderOptions { ray_tracing: args.ray_tracing.unwrap_or(false) })
+        let open = if args.standalone.offscreen {
+            device::Windowed::open_offscreen
+        } else {
+            device::Windowed::open
+        };
+        let (window, presenter) = open(&args.name, size, &args.gpu_cache, args.quality.unwrap_or_default(), RenderOptions { ray_tracing: args.ray_tracing.unwrap_or(false) })
             .context("ARA_GPU_BACKEND: cannot open the player renderer; run `ara doctor` and check the Vulkan loader, Vulkan 1.3 GPU/driver, and validation layers")?;
         (Some(window), Some(presenter))
+    } else if args.prewarm_graphics {
+        let presenter = embed::prewarm(
+            &args.gpu_cache,
+            RenderOptions {
+                ray_tracing: args.ray_tracing.unwrap_or(false),
+            },
+        )?;
+        (None, Some(presenter))
     } else {
         (None, None)
     };
@@ -604,6 +620,35 @@ impl Player {
     /// Owner notifications: slot releases, raw input and asynchronous resizes of
     /// embedded players. Bad params are logged; there is no one to answer.
     fn notification(&mut self, method: &str, params: Value) -> Result<()> {
+        // Asset publication must not make the editor wait for a player frame.
+        // This is separate from D19 surface/input notifications below.
+        if method == method::ASSETS {
+            let result = self.world_method(method, params);
+            let messages: Vec<String> = match result {
+                Ok(value) => value
+                    .as_array()
+                    .into_iter()
+                    .flatten()
+                    .filter_map(|row| row["error"].as_str().map(str::to_owned))
+                    .collect(),
+                Err(Failure::Engine(error)) => vec![format!("{error:#}")],
+                Err(Failure::Params(error)) => vec![error],
+                Err(Failure::Unknown) => vec!["unknown asset update method".into()],
+            };
+            for message in messages {
+                self.link.notify(
+                    ara_play::EVENT,
+                    &ara_play::Event::Diagnostic {
+                        diagnostic: serde_json::to_value(ara_diag::Diagnostic::warning(
+                            ara_diag::Code(7310),
+                            message,
+                        ))?,
+                    },
+                )?;
+            }
+            self.link.flush()?;
+            return Ok(());
+        }
         let Some(embed) = &mut self.embed else {
             return Ok(());
         };
@@ -642,6 +687,7 @@ impl Player {
             &self.args.gpu_cache,
             self.quality,
             self.render_options,
+            self.presenter.take(),
         )?;
         let desc = embedded.desc();
         self.size = [params.width, params.height];

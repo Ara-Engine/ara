@@ -82,6 +82,12 @@ fn sidecars(root: &Path, dir: &Path, out: &mut Vec<PathBuf>) {
 }
 
 impl Assets {
+    /// Snapshot completed generations immediately. A live Play world can start
+    /// with placeholders while this same owner continues importing/publishing.
+    pub fn ready_pins(&mut self, wanted: &BTreeSet<String>) -> BTreeMap<String, String> {
+        self.poll(false, true);
+        self.finished_pins(wanted)
+    }
     /// Waits while requested cooks make progress, without imposing a total export
     /// deadline. Completed generations reset `stall_timeout`; queue/admission and
     /// importer progress messages do not. Reports changes and five-second heartbeats.
