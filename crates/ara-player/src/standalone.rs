@@ -12,7 +12,7 @@ mod perf;
 #[derive(clap::Args)]
 pub(super) struct Options {
     #[command(flatten)]
-    perf: perf::Options,
+    perf: perf::PerfOptions,
     /// Export folder containing ara-launch.json (defaults to the executable folder).
     #[arg(long)]
     root: Option<PathBuf>,

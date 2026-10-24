@@ -9,7 +9,7 @@ use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
 #[derive(clap::Args)]
-pub(super) struct Options {
+pub(super) struct PerfOptions {
     /// Publish detailed frame-window metrics to this JSON file (development only).
     #[arg(long)]
     perf_output: Option<PathBuf>,
@@ -36,7 +36,7 @@ struct Control {
 }
 
 pub(super) struct Window {
-    options: Options,
+    options: PerfOptions,
     frames: BTreeMap<String, Vec<f64>>,
     passes: BTreeMap<String, Vec<f64>>,
     seen: u32,
@@ -64,7 +64,7 @@ impl Window {
     pub fn enabled(&self) -> bool {
         self.options.perf_output.is_some()
     }
-    pub fn new(options: Options) -> Self {
+    pub fn new(options: PerfOptions) -> Self {
         let collecting = options.perf_output.is_some();
         Self {
             options,
