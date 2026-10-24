@@ -68,6 +68,8 @@ Owner feedback (preview 4): the Animation, Material and VFX pages "look ugly and
 
 **Canvas:** `background` with a 16 px dot grid and faint 128 px major lines; the minimap (bottom right) shows nodes in their category colours and hides when everything fits. Groups are translucent titled regions; comments are sticky notes.
 
+**In-node previews** (Shader Graph): every operation node whose output is a value (float, vector or colour) shows a 144 px preview of that output under its pins. Each preview is the material cut at that node: an Unlit material whose colour is the node's value (scalars and vectors as grey or RGB), rendered on a sphere when the value depends on the surface (normals, view, position, fresnel) and as a flat swatch otherwise. Previews render on the thumbnail workers from the material's revision, cache by content, and keep the last good image while a new one renders; the toolbar's image toggle hides them. Parameters, constants and the output node stay compact.
+
 **Add node (Space, Tab or the toolbar):** a search popup over the canvas. Results are grouped by category (Inputs, Math, Texture, Colour, Utility) with a colour dot, the human name, the signature in `muted-foreground` and the doc line on the selected row. Enter adds at the canvas centre (or at the pointer when opened there).
 
 ---
@@ -92,7 +94,8 @@ Owner feedback (preview 4): the Animation, Material and VFX pages "look ugly and
 └──────────────────────┘└────────────────────────────────────────────────────────────┘
  ✓ Compiled                          2 emitters · 9 modules · capacity 1024 · fixed 60 Hz
 ```
-- **Stack (320 px):** emitter header rows (collapse, sparkles icon, name, live/capacity, Hide, Isolate). Each stage is a group: a 24 px header with an uppercase 11 px caption and a (+), and its module rows beneath, all sharing one unbroken 2 px left rail in the stage colour (Spawn `chart-6`, Initialize `chart-2`, Update `chart-3`, Render `chart-4`). Module rows: 24 px; the module's name, its kind muted after it, and an inline summary of the key values that fit (never a value cut mid-way). Up/Down/Duplicate/Delete appear only on the selected row (and in the context menu and palette); they are never repeated on every row.
+- **Stack (320 px):** emitter header rows (collapse, sparkles icon, name, live/capacity, Hide, Isolate). Each stage is a group: a 24 px header with an uppercase 11 px caption and a (+), and its module rows beneath, all sharing one unbroken 2 px left rail in the stage colour (Spawn `chart-6`, Initialize `chart-2`, Update `chart-3`, Render `chart-4`). Module rows: 24 px; the module's name, its kind muted after it, and an inline summary of the key values that fit (never a value cut mid-way), with an enable checkbox at the right edge (Niagara). Up/Down/Duplicate/Delete appear only on the selected row (and in the context menu and palette); they are never repeated on every row.
+- **Enable:** unchecking a module keeps it in place, dimmed, with "disabled" as its summary; its settings and bindings stay authored, and simulation, code generation and rendering skip it. It is the `enabled` field of the stack module and the typed command `vfx.module.enable`, so agents and undo see the same edit.
 - **Preview:** the largest square the area allows, framed on the simulated particles (see thumbnails); the transport row sits under it: restart, play/pause, step one tick, time and tick, rate segment, particles.
 - **Inspector:** module header with its doc line, then 24 px property rows with units.
 
@@ -114,13 +117,14 @@ Owner feedback (preview 4): the Animation, Material and VFX pages "look ugly and
 │   speed > 0.2   ││                 default                                           │
 │ 2 Run → Idle    ││                        ┌────────────┐                             │
 └─────────────────┘└────────────────────────┤ Locomotion ├─────────────────────────────┘
- 3 states · 2 transitions · 1 parameter · fixed step 800 ticks
+ ✓ Valid                    3 states · 2 transitions · 1 parameter · default Idle · 60 Hz
 ```
 - **States view:** states are 160 × 40 rounded nodes with no visible ports: `card` body, a state glyph, centred 12 px title, a 3 px left accent (`primary` for the default state, which also gets an "Entry ▶" pill linked to it). Transitions are straight 2 px arrows between node edges with arrowheads; a reverse pair is drawn as two parallel arrows offset by 6 px. Each arrow carries its condition summary ("speed > 0.2", "always") as a small label at its midpoint. Dragging from a state's edge handle (shown on hover) to another state adds a transition.
 - **Blend spaces view:** pose nodes (clips, 1D and 2D blends) keep the node-and-pin style of the material canvas; blend nodes list their samples as pins.
 - **Sidebar (240 px):** **Parameters** with inline typed values (number fields for float and int, a toggle for bool, a trigger glyph) and **Transitions** in priority order, each a two-line row: "1 · Idle → Run" and its conditions. Clicking selects the transition.
-- **Inspector:** typed widgets: the pose operation is a full-width segmented choice (Clip, 1D, 2D, Add, Layer, Match), looping a toggle, durations numeric with a "ticks" unit; blend samples are a plot (labelled dots on one axis, or crossed axes for 2D) plus a sample table (name, X, Y). Transitions show their crossfade, exit tick and conditions ("When speed > 0.2").
+- **Inspector:** typed widgets: the pose operation is a full-width segmented choice (Clip, 1D, 2D, Add, Layer, Match), looping a toggle, durations in seconds with their frames beside them (ticks only in the tooltip); blend samples are a plot (labelled dots on one axis, or crossed axes for 2D) plus a sample table (name, X, Y). Transitions show their crossfade, exit tick and conditions ("When speed > 0.2").
 - **Views:** States ↔ Blend spaces are registry commands (`animation.view_states`, `animation.view_blends`) that frame the new projection.
+- **Play:** while Play runs and the page is in front, it follows the first scene entity (the selected one first) whose `Animator` uses the open controller, reading `play.read <entity>.AnimatorState` ten times a second. The playing state gets a `success` ring and a progress bar along its bottom; a cross-fade target fills its bar with the fade and its arrow turns `success`; parameter values in the sidebar become live read-outs; the status strip reads "Playing Run · 0.42 s". Progress repaints the canvas only; a new state or parameter value rebuilds the page.
 
 ---
 
@@ -132,9 +136,9 @@ Owner feedback (preview 4): the Animation, Material and VFX pages "look ugly and
 
 ## Next in build order
 
-- Material: in-node previews (Shader Graph), node search at the pointer and pin-drag search filtered by type, sticky-note colours, Stats with instruction counts per platform.
-- VFX: per-module enable toggles (needs an `enabled` flag in `ara_vfx` stacks), curve and gradient editors, an emitter timeline for multi-emitter systems, GPU ms in the transport.
-- Animation: the playing state highlighted with its progress during Play (needs play-host controller telemetry), an Any State node, condition editing in the Inspector, a draggable live parameter dot on the blend plot.
+- Material: node search at the pointer and pin-drag search filtered by type, sticky-note colours, Stats with instruction counts per platform.
+- VFX: curve and gradient editors, an emitter timeline for multi-emitter systems, GPU ms in the transport.
+- Animation: an Any State node, condition editing in the Inspector, a draggable live parameter dot on the blend plot (and the live value on it during Play).
 - Thumbnails: a per-asset turntable on hover in the grid.
 
 ## Verification
