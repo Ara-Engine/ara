@@ -146,7 +146,9 @@ impl LookGpu {
             true,
         )?;
         let frame_index = gpu.storage_buffer(frame)?.index;
-        let state = gpu.create_buffer(16, vk::BufferUsageFlags::STORAGE_BUFFER, false)?;
+        // Zeroed on the host so the first frame's history readers have a producer.
+        let state = gpu.create_buffer(16, vk::BufferUsageFlags::STORAGE_BUFFER, true)?;
+        gpu.upload(state, &[0; 16])?;
         let state_index = gpu.storage_buffer(state)?.index;
         Ok(Self {
             look: Look::default(),
@@ -156,7 +158,7 @@ impl LookGpu {
             frame_index,
             state,
             state_index,
-            state_access: Access::Undefined,
+            state_access: Access::HostWrite,
             images: [None; IMAGES],
             sampled: [0; IMAGES],
             storage: [0; IMAGES],

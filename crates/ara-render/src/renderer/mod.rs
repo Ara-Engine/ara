@@ -356,6 +356,8 @@ impl Renderer {
                 DEPTH | SHADOW => vk::Format::D32_SFLOAT,
                 OUTPUT => vk::Format::R8G8B8A8_UNORM,
                 MOTION => vk::Format::R16G16_SFLOAT,
+                // Pre-exposed (look.slangh exposureState), so half floats suffice.
+                HISTORY0 | HISTORY1 => vk::Format::R16G16B16A16_SFLOAT,
                 _ => vk::Format::R32G32B32A32_SFLOAT,
             };
             let depth = target == DEPTH || target == SHADOW;
