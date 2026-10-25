@@ -8,25 +8,13 @@ use ara_render_fidelity::{
 use ara_runtime_render::fidelity::native::{self, FrameChange, NativeConfig, Prepared};
 use ara_runtime_render::{PresentationImage, fidelity::vfx::Effects};
 mod content;
-#[expect(
-    dead_code,
-    reason = "Game panel wiring follows the renderer API checkpoint"
-)]
 mod preview;
-#[expect(
-    unused_imports,
-    reason = "Game panel wiring follows the renderer API checkpoint"
-)]
 pub(super) use preview::{GamePreview, PreviewCamera};
 
 #[derive(Clone, Copy)]
 enum RasterWork {
     Live(u32),
     Capture(u32),
-    #[expect(
-        dead_code,
-        reason = "Game panel wiring follows the renderer API checkpoint"
-    )]
     Prepare,
 }
 #[derive(Default)]

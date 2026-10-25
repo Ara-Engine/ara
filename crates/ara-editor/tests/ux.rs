@@ -810,6 +810,31 @@ fn game_view_waits_for_play_and_play_starts_embedded_in_it() {
     // Before Play: an empty state with Play; input capture explains what to do first.
     assert!(shell.ui.find("game-empty").is_some());
     assert!(shell.ui.find("game-play").is_some());
+    // A scene without a Camera says so and offers one; once it has one, the view
+    // waits for the camera's first preview frame (`app/game_preview.rs`).
+    let mut clip = MemoryClipboard::default();
+    shell.click("game-camera", &mut clip).unwrap();
+    shell.dispatch(&mut editor).unwrap();
+    shell.rebuild(&mut editor).unwrap();
+    assert!(shell.ui.find("game-camera").is_none());
+    assert!(shell.ui.find("game-play").is_some());
+    // Its preview shows letterboxed to the aspect preset, until Play starts.
+    shell
+        .run_command(&mut editor, "game.aspect.16x9", &Default::default())
+        .unwrap();
+    shell.show_game_preview_for_test(&mut editor, [1280, 720]);
+    let image = shell.ui.find("game-image").unwrap();
+    assert_eq!(
+        shell.ui.nodes[image]
+            .element
+            .attrs
+            .get("src")
+            .map(String::as_str),
+        Some("game-preview")
+    );
+    let frame = shell.ui.nodes[shell.ui.find("game-frame").unwrap()].rect;
+    assert!((frame.w / frame.h - 16. / 9.).abs() < 0.01);
+    assert!(shell.ui.find("game-empty").is_none());
     assert!(
         shell
             .run_command(&mut editor, "game.capture", &Default::default())
@@ -835,6 +860,26 @@ fn game_view_waits_for_play_and_play_starts_embedded_in_it() {
     let mut params = json!({"window": true});
     ara_editor::testing_embed_play(&editor, &mut params);
     assert_eq!(params["window"], true);
+}
+
+/// Play's accent line draws over the menubar's edge: starting Play never moves the UI.
+#[test]
+fn starting_play_marks_the_title_bar_without_moving_the_ui() {
+    let project = Project::new();
+    let mut editor = Editor::open(&project.0).unwrap();
+    let mut shell = Shell::new(&mut editor, [1440., 900.]).unwrap();
+    let dock = |shell: &Shell| {
+        let r = shell.ui.nodes[shell.ui.find("dock-root").unwrap()].rect;
+        [r.x, r.y, r.w, r.h]
+    };
+    let before = dock(&shell);
+    assert!(shell.ui.find("play-line").is_none());
+    editor
+        .action("editor.view", json!({"play": "playing"}))
+        .unwrap();
+    shell.rebuild(&mut editor).unwrap();
+    assert!(shell.ui.find("play-line").is_some());
+    assert_eq!(dock(&shell), before);
 }
 
 /// The Scene view's Lit menu offers the project's default, Auto and the four presets

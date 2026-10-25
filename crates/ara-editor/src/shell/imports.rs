@@ -115,10 +115,24 @@ impl Shell {
         let p = self.imports.progress.as_deref()?;
         Some((p.pending.len(), p.failed.len(), p.total))
     }
-    /// The status bar's import chip: "Importing 37 / 120" with a bar while sources are
-    /// pending, else how many failed; nothing once every import is done.
-    pub(super) fn import_chip(&mut self, out: &mut String) {
+    /// The status bar's import chip: "Preparing imports…" while the project has
+    /// imports and the pipeline has not reported yet, "Importing 37 / 120" with a
+    /// bar while sources are pending, else how many failed; nothing once every import
+    /// is done.
+    pub(super) fn import_chip(&mut self, editor: &Editor, out: &mut String) {
         let Some(progress) = self.imports.progress.clone() else {
+            if editor
+                .host
+                .store()
+                .workspace()
+                .index()
+                .imports()
+                .next()
+                .is_some()
+            {
+                self.bind_command("status-imports", "window.assets", Target::None);
+                out.push_str(&format!("<button id='status-imports' class='chip' label='Imports' description='Checking which sources need importing; open Assets' action='Dispatch'>{}<text id='status-imports-text' text='Preparing imports…' /></button>",icons::icon_in("status-imports","loader-circle","accent")));
+            }
             return;
         };
         if !progress.pending.is_empty() {

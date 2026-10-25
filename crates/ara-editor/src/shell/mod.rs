@@ -117,6 +117,10 @@ pub struct Shell {
     pub(crate) game_captured: bool,
     pub(crate) game_aspect: &'static str,
     pub(crate) game_stats: bool,
+    /// Outside Play: the gameplay camera's preview image size (physical px) once one
+    /// is shown (`app/game_preview.rs`), and the camera by `resolved_key`.
+    pub(crate) game_preview: Option<[u32; 2]>,
+    game_camera: Option<((String, u64, usize), Option<crate::state::Camera>)>,
     /// The shown Play world's fault (`play.status`), shown instead of the game.
     pub(crate) game_fault: Option<String>,
     /// The shown Play world is still starting (`play.status`): its progress.
@@ -413,6 +417,8 @@ impl Shell {
             game_target: [0, 0],
             game_captured: false,
             game_aspect: "free",
+            game_preview: None,
+            game_camera: None,
             game_stats: true,
             game_fault: None,
             game_start: None,

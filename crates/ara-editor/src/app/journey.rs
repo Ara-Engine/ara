@@ -1,8 +1,9 @@
 //! `--verify-journey`: the 0.0.1-alpha's essential journey through the editor's own
 //! UI paths (registry commands, the asset drag, menus, the Game view), captured at
 //! each step: open a scene, import, place, make a prefab and override it, build the
-//! hangar as a real game and run it headless for one frame, create a C# behaviour and
-//! hot-reload it while playing in the Game view, break it and see the compile failure
+//! hangar as a real game and run it headless for one frame, create a C# behaviour,
+//! see the hangar through its gameplay camera in the Game view before Play (compared
+//! with Play's first frames), hot-reload it while playing, break it and see the compile failure
 //! explained in Problems, undo, save, reopen, then build again with the C# module
 //! shipped (NativeAOT) and run that game too.
 //! Offscreen only (hidden window). Writes `NN-step.png` per step and, after every
@@ -12,6 +13,7 @@ use std::time::{Duration, Instant};
 
 use ara_editor_gpu::NativeUi;
 use ara_render::Renderer;
+use ara_ui::paint::Box2;
 use ara_ui_render::gpu::Renderer as UiRenderer;
 use serde_json::{Value, json};
 
@@ -35,6 +37,11 @@ const WALK: u32 = 360;
 /// How long a step's capture may wait for the Scene's content: captures take only
 /// complete scenes, and on a fresh project the importer is still cooking models.
 const CAPTURE_PATIENCE: Duration = Duration::from_secs(900);
+/// The 1-SSIM within which the Game view's camera preview counts as the view Play
+/// starts with. Measured on the hangar: 0.22 for the preview against Play's first
+/// frames (the Salvager animates out of its bind pose, exposure adapts), 0.58 against
+/// another camera or the same view shifted by 48 px.
+const PREVIEW_MATCH: f64 = 0.35;
 
 pub(super) struct Journey {
     step: usize,
@@ -61,6 +68,11 @@ pub(super) struct Journey {
     previous_build: Option<PathBuf>,
     /// The frame a Stop step clicked Stop.
     stopped: Option<u32>,
+    /// The frames the camera preview, then Play's first frame, showed in the Game view.
+    preview_seen: Option<u32>,
+    live_at: Option<u32>,
+    /// The preview step's capture and its Game frame (logical), for the comparison.
+    preview_frame: Option<(PathBuf, Box2)>,
 }
 
 impl Journey {
@@ -87,6 +99,9 @@ impl Journey {
             capturing: None,
             previous_build: None,
             stopped: None,
+            preview_seen: None,
+            live_at: None,
+            preview_frame: None,
         })
     }
 
@@ -409,12 +424,33 @@ impl Journey {
                 }
                 Ok(stopped && settled)
             }
-            "play" => {
+            "game-preview" => {
+                if first {
+                    editor.action("editor.layout.show", json!({"panel": "game"}))?;
+                    self.note =
+                        "the Game tab before Play: the hangar through its follow camera".into();
+                    return Ok(false);
+                }
+                if shell.game_preview.is_none() {
+                    return Ok(false);
+                }
+                // A few frames more: temporal history settles.
+                let seen = *self.preview_seen.get_or_insert(self.age);
+                Ok(self.age > seen + 90)
+            }
+            "play-start" => {
                 if first {
                     shell.run_command(editor, "play.start", &Target::None)?;
                     self.note = "Play (F5) in the Game view".into();
                     return Ok(false);
                 }
+                if !shell.game_live {
+                    return Ok(false);
+                }
+                let live = *self.live_at.get_or_insert(self.age);
+                Ok(self.age > live + 12)
+            }
+            "play" => {
                 if !shell.game_live {
                     return Ok(false);
                 }
@@ -424,8 +460,7 @@ impl Journey {
                     shell.run_command(editor, "game.capture", &Target::None)?;
                     key(editor, shell, KEY_W, true);
                     self.walking = Some(self.age);
-                    self.note
-                        .push_str("; clicked the Game view and held W: the Salvager walks");
+                    self.note = "clicked the Game view and held W: the Salvager walks".into();
                     return Ok(false);
                 };
                 if self.age == from + WALK {
@@ -622,15 +657,62 @@ impl Journey {
 
     /// Clean up after a capture.
     fn after(&mut self, editor: &mut Editor, shell: &mut Shell) -> ara_ui::Result<()> {
-        if STEPS[self.step].0 == "undo" {
+        let name = STEPS[self.step].0;
+        let capture = self.output.join(format!("{:02}-{name}.png", self.step + 1));
+        let frame = shell.ui.find("game-frame").map(|i| shell.ui.nodes[i].rect);
+        if name == "game-preview" {
+            self.preview_frame = frame.map(|rect| (capture.clone(), rect));
+        }
+        if name == "play-start"
+            && let (Some((preview, before)), Some(after)) = (self.preview_frame.clone(), frame)
+        {
+            let scale = image::image_dimensions(&capture)
+                .map(|(w, _)| w as f32 / shell.ui.size[0])
+                .unwrap_or(1.);
+            let score = game_frames_differ((&preview, before), (&capture, after), scale)?;
+            let matches = score <= PREVIEW_MATCH;
+            if let Some(entry) = self.report.last_mut() {
+                entry["previewVsPlay"] = json!(score);
+                entry["note"] = json!(format!(
+                    "{}; the camera preview before Play and Play's first frames differ by 1-SSIM {score:.3} (at most {PREVIEW_MATCH})",
+                    self.note
+                ));
+                if !matches {
+                    entry["ok"] = json!(false);
+                }
+            }
+        }
+        if name == "undo" {
             shell.menu = None;
             shell.rebuild(editor)?;
         }
-        if STEPS[self.step].0 == "play" && shell.game_captured {
+        if name == "play" && shell.game_captured {
             key(editor, shell, KEY_ESCAPE, true);
         }
         Ok(())
     }
+}
+
+/// 1-SSIM between the Game frame in two captures, each cropped to its `game-frame`
+/// rectangle (logical, times `scale` for the capture's pixels) at their common size.
+fn game_frames_differ(a: (&Path, Box2), b: (&Path, Box2), scale: f32) -> ara_ui::Result<f64> {
+    let size = [
+        (a.1.w.min(b.1.w) * scale).floor() as u32,
+        (a.1.h.min(b.1.h) * scale).floor() as u32,
+    ];
+    let crop = |(path, rect): (&Path, Box2)| -> ara_ui::Result<image::RgbaImage> {
+        let image = image::open(path)?.into_rgba8();
+        Ok(image::imageops::crop_imm(
+            &image,
+            (rect.x * scale).round() as u32,
+            (rect.y * scale).round() as u32,
+            size[0],
+            size[1],
+        )
+        .to_image())
+    };
+    let comparison = ara_render::capture::compare(&crop(a)?, &crop(b)?, 1.)?;
+    Ok(comparison.score)
 }
 
 /// A key event through the Game view's input routing, as the window would send it.
@@ -691,6 +773,14 @@ const STEPS: &[(&str, &str)] = &[
         "Stop cancels a Play that is still starting; Play comes back",
     ),
     ("stop-window", "Play in a player window, then Stop ends it"),
+    (
+        "game-preview",
+        "the Game tab before Play shows the scene through its gameplay camera",
+    ),
+    (
+        "play-start",
+        "Play's first frames in the Game view match the camera preview",
+    ),
     ("play", "Play inside the Game view, walking with W"),
     ("hot-reload", "the edited script hot-reloads while playing"),
     (

@@ -1,4 +1,10 @@
 //! Read-only attachment to an owner's completed asset generations.
+//!
+//! Each project has one feed per process: published snapshots and import progress.
+//! Exactly one [`Publisher`] owns it at a time, the first one created. Another
+//! pipeline on the same project (export packaging's own `Assets`) publishes nothing
+//! until the owner is dropped, so views never see its from-scratch progress ("every
+//! source pending") or a snapshot revision that repeats or goes back.
 use ara_asset::{ArtifactKind, CacheBackend, Digest, FileCache, HotReload};
 use ara_runtime::assets::AssetSource;
 use std::{
@@ -6,7 +12,7 @@ use std::{
     path::{Path, PathBuf},
     sync::{
         Arc, Mutex, OnceLock, RwLock, Weak,
-        atomic::{AtomicU64, Ordering},
+        atomic::{AtomicBool, AtomicU64, Ordering},
     },
 };
 
@@ -92,6 +98,8 @@ struct Shared {
     snapshot: RwLock<Option<Arc<PublishedSnapshot>>>,
     progress_revision: AtomicU64,
     progress: RwLock<Option<Arc<ImportProgress>>>,
+    /// A [`Publisher`] owns this feed; others publish nothing until it is dropped.
+    owned: AtomicBool,
 }
 // Only project attachment takes this registry lock. Frame loops read an atomic
 // revision and retain their immutable snapshot; no registry or import lock is used.
@@ -151,12 +159,17 @@ impl crate::PlayService {
     }
 }
 
+/// A pipeline's side of the project feed. Only the owner (see the module docs)
+/// writes to it; the owner calls [`Self::tick`] every poll, so a publication a
+/// reader's lock deferred lands on the next one.
 pub(crate) struct Publisher {
     reader: PublishedAssets,
     current: Arc<PublishedSnapshot>,
     dirty: bool,
     progress: Option<Arc<ImportProgress>>,
     progress_dirty: bool,
+    /// This publisher owns the feed.
+    owner: bool,
 }
 impl Publisher {
     pub(crate) fn import_revision(&self) -> u64 {
@@ -187,9 +200,15 @@ impl Publisher {
             dirty: true,
             progress: None,
             progress_dirty: false,
+            owner: false,
         };
         publisher.flush();
         Ok(publisher)
+    }
+    /// Publishes whatever is still waiting: a write a reader's lock deferred, or this
+    /// pipeline's state once it takes over a feed whose owner was dropped.
+    pub(crate) fn tick(&mut self) {
+        self.flush();
     }
     // Called at publication boundaries. Metadata copies occur only for completed
     // changes, never for pending work or ordinary unchanged frame polls.
@@ -255,7 +274,50 @@ impl Publisher {
         }
         self.flush();
     }
+    /// Takes the feed when no publisher owns it. The new owner keeps every generation
+    /// the feed already shows (a previous owner may have published more than this
+    /// pipeline has seen) and republishes its state.
+    fn claim(&mut self) -> bool {
+        if self.owner {
+            return true;
+        }
+        if self
+            .reader
+            .shared
+            .owned
+            .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+            .is_err()
+        {
+            return false;
+        }
+        self.owner = true;
+        if let Some(feed) = self.reader.snapshot()
+            && feed
+                .entries
+                .keys()
+                .any(|id| !self.current.entries.contains_key(id))
+        {
+            let mut entries = feed.entries.clone();
+            entries.extend(
+                self.current
+                    .entries
+                    .iter()
+                    .map(|(id, generation)| (id.clone(), generation.clone())),
+            );
+            self.current = Arc::new(PublishedSnapshot {
+                revision: self.current.revision,
+                entries,
+                cache: self.current.cache.clone(),
+            });
+        }
+        self.dirty = true;
+        self.progress_dirty = self.progress.is_some();
+        true
+    }
     fn flush(&mut self) {
+        if !self.claim() {
+            return;
+        }
         if self.progress_dirty
             && let Ok(mut value) = self.reader.shared.progress.try_write()
         {
@@ -266,6 +328,15 @@ impl Publisher {
                 .progress_revision
                 .fetch_add(1, Ordering::Release);
             self.progress_dirty = false;
+        }
+        // Snapshot revisions only grow per feed, across owners too: readers key on them.
+        let published = self.reader.revision();
+        if self.dirty && self.current.revision <= published {
+            self.current = Arc::new(PublishedSnapshot {
+                revision: published + 1,
+                entries: self.current.entries.clone(),
+                cache: self.current.cache.clone(),
+            });
         }
         if self.dirty
             && let Ok(mut value) = self.reader.shared.snapshot.try_write()
@@ -281,3 +352,13 @@ impl Publisher {
         }
     }
 }
+impl Drop for Publisher {
+    fn drop(&mut self) {
+        if self.owner {
+            self.reader.shared.owned.store(false, Ordering::Release);
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests;

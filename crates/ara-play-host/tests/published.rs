@@ -1,5 +1,6 @@
 //! A real protocol worker holds one import pending while the reader consumes others,
-//! and the import-progress feed follows each source through pending, done and failed.
+//! the import-progress feed follows each source through pending, done and failed, and
+//! export packaging's own pipeline (Build in the editor) never publishes into it.
 use ara_asset::{
     Artifact, ArtifactKind, ImportContext, ImportInput, ImportOutput, Importer, ImporterRegistry,
 };
@@ -220,8 +221,40 @@ fn driver() -> Result<(), Box<dyn std::error::Error>> {
         "{:?}",
         failed.failed
     );
+    // Build in the editor packages an export with its own pipeline in this process.
+    // That pipeline starts from scratch (every source pending) but never owns the
+    // feed: the Importing chip neither flashes back during the export nor sticks after.
+    fs::write(
+        root.join("ara.project.json"),
+        ara_json::to_canonical_string(&serde_json::json!({"name":"Feed","main":"main.scene"})),
+    )?;
+    fs::write(
+        root.join("main.scene"),
+        ara_json::to_canonical_string(
+            &serde_json::json!({"$schema":"ara://schema/scene/1","id":"sc_feed0001","records":{}}),
+        ),
+    )?;
+    let before = (
+        reader.revision(),
+        reader.progress_revision(),
+        reader.progress(),
+    );
+    let same = |reader: &ara_play_host::PublishedAssets| {
+        (
+            reader.revision(),
+            reader.progress_revision(),
+            reader.progress(),
+        ) == before
+    };
+    ara_play_host::package_scene_for_export(&root, &std::env::current_exe()?, None, |_| {
+        assert!(same(&reader), "export packaging published into the feed");
+        Ok(())
+    })?;
+    assert!(same(&reader), "export packaging published into the feed");
+    assets.poll(false, true);
+    assert!(same(&reader), "the feed changed after export packaging");
     println!(
-        "completed imports publish immutable snapshots; pending imports never block readers; progress follows each source"
+        "completed imports publish immutable snapshots; pending imports never block readers; progress follows each source; export packaging leaves the feed alone"
     );
     Ok(())
 }

@@ -91,8 +91,12 @@ fn import_progress_shows_in_the_status_bar_assets_and_the_scene() {
         assert!(start.elapsed().as_secs() < 10, "asset scan never arrived");
         std::thread::sleep(Duration::from_millis(20));
     }
-    // Before the pipeline starts there is nothing to report.
-    assert!(shell.ui.find("status-imports").is_none());
+    // Before the pipeline first reports, the chip says imports are being prepared;
+    // there are no counts for the Scene yet.
+    assert_eq!(
+        text(&shell, "status-imports-text").as_deref(),
+        Some("Preparing imports…")
+    );
     assert!(shell.ui.find("scene-loading").is_none());
     // The pipeline owner, as the play host runs it. Its worker is absent, so both
     // imports are pending from the start and then fail.
