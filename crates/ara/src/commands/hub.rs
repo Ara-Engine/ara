@@ -1,5 +1,6 @@
 //! User-level Hub commands and global MCP installation snippets.
-use ara_proto::Endpoint;
+use ara_diag::{Diagnostic, codes};
+use ara_proto::{Endpoint, RpcError};
 use clap::{Subcommand, ValueEnum};
 use serde_json::json;
 use std::{io, path::PathBuf};
@@ -82,7 +83,7 @@ pub enum McpClient {
     Codex,
 }
 
-pub fn hub(command: HubCommand) -> Result<bool, String> {
+pub fn hub(command: HubCommand) -> Result<bool, RpcError> {
     if let HubCommand::InstallMcp { client } = command {
         match client {
             McpClient::Claude => println!(
@@ -95,35 +96,30 @@ pub fn hub(command: HubCommand) -> Result<bool, String> {
         }
         return Ok(true);
     }
-    let executable = std::env::current_exe().map_err(|e| e.to_string())?;
+    let executable = std::env::current_exe().map_err(io_error)?;
     if let HubCommand::Serve { port, config_dir } = command {
         let directory = match config_dir {
             Some(directory) => directory,
-            None => ara_hub_service::config_dir().map_err(|e| e.to_string())?,
+            None => ara_hub_service::config_dir().map_err(io_error)?,
         };
-        let config = ara_hub_service::HubConfig::for_directory(executable, directory)
-            .map_err(|e| e.to_string())?;
+        let config =
+            ara_hub_service::HubConfig::for_directory(executable, directory).map_err(io_error)?;
         let log = config.directory.join("hub-start.log");
         if let Err(error) = ara_hub_service::serve(config, port) {
             let _ = std::fs::write(log, error.to_string());
-            return Err(error.to_string());
+            return Err(error);
         }
         return Ok(true);
     }
-    let directory = ara_hub_service::config_dir().map_err(|e| e.to_string())?;
-    let mut client =
-        ara_hub_service::connect_or_start(&directory, &executable).map_err(|e| e.to_string())?;
+    let directory = ara_hub_service::config_dir().map_err(io_error)?;
+    let mut client = ara_hub_service::connect_or_start(&directory, &executable)?;
     if let HubCommand::Install { version } = command {
         available_releases(&mut client, "preview")?;
-        let job = client
-            .call("hub.engine.install", json!({"version":version}))
-            .map_err(|e| e.to_string())?;
+        let job = client.call("hub.engine.install", json!({"version":version}))?;
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(14_400);
         let mut last_progress: Option<u64> = None;
         loop {
-            let jobs = client
-                .call("hub.downloads", json!({}))
-                .map_err(|e| e.to_string())?;
+            let jobs = client.call("hub.downloads", json!({}))?;
             if let Some(current) = jobs["jobs"]
                 .as_array()
                 .and_then(|jobs| jobs.iter().find(|j| j["id"] == job["id"]))
@@ -133,7 +129,15 @@ pub fn hub(command: HubCommand) -> Result<bool, String> {
                         println!("{}", ara_json::to_canonical_string(&current["result"]));
                         return Ok(true);
                     }
-                    Some("failed" | "cancelled") => return Err(current["error"].to_string()),
+                    Some("failed" | "cancelled") => {
+                        return Err(
+                            serde_json::from_value::<Diagnostic>(current["error"].clone())
+                                .map(RpcError::from)
+                                .unwrap_or_else(|_| {
+                                    io_error(format!("Engine installation {}", current["state"]))
+                                }),
+                        );
+                    }
                     _ => {}
                 }
                 if let (Some(received), Some(total)) = (
@@ -150,10 +154,10 @@ pub fn hub(command: HubCommand) -> Result<bool, String> {
                 }
             }
             if std::time::Instant::now() >= deadline {
-                return Err(format!(
+                return Err(io_error(format!(
                     "installation still running; inspect hub.downloads or cancel {}",
                     job["id"]
-                ));
+                )));
             }
             std::thread::sleep(std::time::Duration::from_millis(250));
         }
@@ -161,7 +165,7 @@ pub fn hub(command: HubCommand) -> Result<bool, String> {
     let (method, params) = match command {
         HubCommand::Add { path, name } => (
             "hub.register",
-            json!({"path":std::path::absolute(path).map_err(|e|e.to_string())?,"name":name}),
+            json!({"path":std::path::absolute(path).map_err(io_error)?,"name":name}),
         ),
         HubCommand::Remove { project } => ("hub.remove", json!({"project":project})),
         HubCommand::Rename { project, name } => {
@@ -175,7 +179,7 @@ pub fn hub(command: HubCommand) -> Result<bool, String> {
             template,
         } => (
             "hub.create",
-            json!({"path":std::path::absolute(path).map_err(|e|e.to_string())?,"name":name,"template":template}),
+            json!({"path":std::path::absolute(path).map_err(io_error)?,"name":name,"template":template}),
         ),
         HubCommand::Open { project, headless } => {
             ("hub.open", json!({"project":project,"headless":headless}))
@@ -194,7 +198,7 @@ pub fn hub(command: HubCommand) -> Result<bool, String> {
         HubCommand::Uninstall { version } => ("hub.engine.uninstall", json!({"version":version})),
         HubCommand::Cancel { job } => ("hub.download.cancel", json!({"job":job})),
         HubCommand::RegisterEngine | HubCommand::UnregisterEngine => {
-            let config = ara_hub_service::HubConfig::user(executable).map_err(|e| e.to_string())?;
+            let config = ara_hub_service::HubConfig::user(executable).map_err(io_error)?;
             (
                 if matches!(command, HubCommand::RegisterEngine) {
                     "hub.engine.register"
@@ -210,7 +214,7 @@ pub fn hub(command: HubCommand) -> Result<bool, String> {
             unreachable!("handled above")
         }
     };
-    let result = client.call(method, params).map_err(|e| e.to_string())?;
+    let result = client.call(method, params)?;
     println!("{}", ara_json::to_canonical_string(&result));
     Ok(true)
 }
@@ -218,23 +222,23 @@ pub fn hub(command: HubCommand) -> Result<bool, String> {
 fn available_releases(
     client: &mut ara_rpc::Client,
     channel: &str,
-) -> Result<serde_json::Value, String> {
-    client
-        .call("hub.releases.check", json!({}))
-        .map_err(|e| e.to_string())?;
+) -> Result<serde_json::Value, RpcError> {
+    client.call("hub.releases.check", json!({}))?;
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(240);
     loop {
-        let result = client
-            .call("hub.engines.available", json!({"channel":channel}))
-            .map_err(|e| e.to_string())?;
+        let result = client.call("hub.engines.available", json!({"channel":channel}))?;
         if result["checking"] != true {
             return Ok(result);
         }
         if std::time::Instant::now() >= deadline {
-            return Err("release check still running; retry shortly".into());
+            return Err(io_error("release check still running; retry shortly"));
         }
         std::thread::sleep(std::time::Duration::from_millis(100));
     }
+}
+
+fn io_error(error: impl std::fmt::Display) -> RpcError {
+    Diagnostic::error(codes::IO, error.to_string()).into()
 }
 
 pub fn global_mcp() -> Result<bool, String> {
