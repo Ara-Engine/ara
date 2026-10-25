@@ -1,5 +1,7 @@
 //! Signed releases shared by the Hub, its service and release tooling.
 pub mod bootstrap;
+pub mod build;
+pub use build::BuildIdentity;
 mod download;
 mod feed;
 mod manifest;

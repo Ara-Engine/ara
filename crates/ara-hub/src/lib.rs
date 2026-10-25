@@ -10,3 +10,12 @@ pub mod connection;
 pub mod model;
 pub mod native;
 pub mod view;
+/// Source identity compiled into this Hub, independent of mutable installation metadata.
+pub fn build_identity() -> Option<ara_update::BuildIdentity> {
+    let commit = env!("ARA_HUB_COMMIT");
+    let generation = env!("ARA_HUB_GENERATION").parse().ok()?;
+    (!commit.is_empty()).then(|| ara_update::BuildIdentity {
+        commit: commit.into(),
+        generation,
+    })
+}

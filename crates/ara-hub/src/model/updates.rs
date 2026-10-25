@@ -63,9 +63,12 @@ impl Default for Releases {
 impl Releases {
     /// A running transfer for this release.
     pub fn running(&self, kind: &str, version: &str) -> Option<&Download> {
-        self.jobs
-            .iter()
-            .find(|j| j.kind == kind && j.version == version && j.state == "running")
+        self.jobs.iter().find(|j| {
+            j.kind == kind
+                && j.version == version
+                && j.state == "running"
+                && (kind != "hub" || self.hub.as_ref().is_some_and(|hub| matches_release(j, hub)))
+        })
     }
     /// Verified Hub archive ready for the external updater.
     pub fn prepared(&self) -> Option<&Value> {
@@ -74,14 +77,19 @@ impl Releases {
             .find(|j| {
                 j.kind == "hub"
                     && j.state == "complete"
-                    && self
-                        .hub
-                        .as_ref()
-                        .is_some_and(|hub| hub.version == j.version)
+                    && self.hub.as_ref().is_some_and(|hub| matches_release(j, hub))
             })
             .and_then(|j| j.result.as_ref())
     }
 }
+fn matches_release(job: &Download, release: &Manifest) -> bool {
+    let id = match &release.build {
+        Some(build) => format!("hub-{}-{}", release.version, build.commit),
+        None => format!("hub-{}", release.version),
+    };
+    job.id == id
+}
+
 impl Hub {
     pub(super) fn release_call(&mut self, method: &'static str, params: Value) {
         let call = Call::Release { method, params };
@@ -145,11 +153,23 @@ impl Hub {
                 if method == "hub.engines.available" {
                     self.releases.available = releases;
                 } else {
-                    let current = ara_update::version(env!("CARGO_PKG_VERSION")).ok();
+                    let current = crate::build_identity();
                     self.releases.hub = releases
                         .into_iter()
-                        .filter(|r| ara_update::version(&r.version).ok() > current)
-                        .max_by_key(|r| ara_update::version(&r.version).ok());
+                        .filter(|r| {
+                            ara_update::build::newer(
+                                &r.version,
+                                r.build.as_ref(),
+                                env!("CARGO_PKG_VERSION"),
+                                current.as_ref(),
+                            )
+                        })
+                        .max_by_key(|r| {
+                            (
+                                ara_update::version(&r.version).ok(),
+                                r.build.as_ref().map(|b| b.generation),
+                            )
+                        });
                     if let Ok(channel) = serde_json::from_value(value["channel"].clone()) {
                         if channel != self.releases.channel {
                             self.release_call("hub.engines.available", json!({"channel":channel}));
@@ -165,7 +185,7 @@ impl Hub {
                             .releases
                             .jobs
                             .iter()
-                            .any(|j| j.kind == "hub" && j.version == hub.version)
+                            .any(|j| j.kind == "hub" && matches_release(j, hub))
                     {
                         self.release_call(
                             "hub.update.prepare",
@@ -259,5 +279,48 @@ impl Hub {
                 .into(),
             ),
         );
+    }
+}
+
+#[cfg(test)]
+mod build_tests {
+    use super::*;
+    #[test]
+    fn newer_same_version_hub_does_not_reuse_an_older_prepared_download() {
+        let mut hub = Hub::new(Default::default(), "target/hub-build-model".into(), None);
+        hub.releases.can_self_update = true;
+        let current = crate::build_identity();
+        let generation = current.as_ref().map_or(0, |b| b.generation) + 1;
+        let commit = if current.as_ref().is_some_and(|b| b.commit == "a".repeat(40)) {
+            "b"
+        } else {
+            "a"
+        }
+        .repeat(40);
+        let version = env!("CARGO_PKG_VERSION");
+        hub.releases.jobs.push(serde_json::from_value(json!({"id":format!("hub-{version}-old"),"kind":"hub","version":version,"state":"complete","result":{"archive":"old.zip"}})).expect("old download"));
+        hub.release_reply("hub.updates",Ok(json!({"releases":[{
+            "format":"ara.release/1","kind":"hub","version":version,"build":{"commit":commit,"generation":generation},"channel":"preview",
+            "minHubVersion":version,"notes":"New preview","platform":"windows-x64","assets":[]
+        }],"checking":false,"channel":"preview","repo":"Snowy7/ara"})));
+        assert_eq!(
+            hub.releases
+                .hub
+                .as_ref()
+                .and_then(|r| r.build.as_ref())
+                .map(|b| b.generation),
+            Some(generation)
+        );
+        assert!(
+            hub.releases.prepared().is_none(),
+            "old build archive is not ready for this update"
+        );
+        assert!(hub.take_calls().iter().any(|call| matches!(
+            call,
+            Call::Release {
+                method: "hub.update.prepare",
+                ..
+            }
+        )));
     }
 }

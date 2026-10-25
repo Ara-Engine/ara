@@ -18,6 +18,13 @@ Each release includes `release.json`, detached hexadecimal ed25519
 The signed manifest includes notes, platform, minimum Hub version and each
 asset's exact byte count, SHA-256 and URL. Signatures are checked before metadata
 is used; the complete streamed asset is hashed before extraction.
+Hub packages also record `build {commit,generation}` in hub.json and the signed
+manifest; generation is the publishing branch's Git ancestry count. Build and
+publish from clean committed source. Setup and self-update compare semver, then
+generation, so a newer same-version preview replaces a legacy Hub. Engine setup
+keeps a newer standalone Hub and updates older copies under the shared update lock.
+Running Hubs/locked files must be closed before replacement; editors and versioned
+services remain separate. Packaging checks the Hub executable's embedded commit.
 
 The default feed is `Snowy7/ara`. Settings → Release source persists an
 owner/name in `<Ara config>/update.json`; `ARA_RELEASE_REPO` overrides that value.
@@ -40,7 +47,7 @@ Generate a key **outside every repository**; never put a key or token in Git.
 `--key` and `ARA_RELEASE_SIGNING_KEY` accept a file path, never raw secret text.
 
 ```powershell
-$env:CARGO_BUILD_JOBS = '4'
+$env:CARGO_BUILD_JOBS = '2'
 $env:VULKAN_SDK = 'C:\VulkanSDK\1.4.363.0'
 cargo run -p ara-release -- keygen --output "$env:APPDATA\Ara\release-signing.key"
 ```

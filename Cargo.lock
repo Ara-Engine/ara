@@ -1914,6 +1914,7 @@ dependencies = [
  "ara-export-installer",
  "embed-resource",
  "image",
+ "semver",
  "serde_json",
  "tempfile",
  "windows-sys 0.61.2",
