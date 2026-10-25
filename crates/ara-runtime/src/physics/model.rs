@@ -13,7 +13,8 @@ use glam::Vec3;
 #[derive(Component)]
 pub(super) struct Generation {
     collider: Collider,
-    digest: Digest,
+    /// None keeps a bounded placeholder until the first model cook arrives.
+    digest: Option<Digest>,
     scale: Vec3,
 }
 
@@ -39,8 +40,7 @@ pub(super) fn cook(world: &mut World) -> Result<()> {
         let id = asset_id(reference)?;
         let model = world
             .get_resource::<Library>()
-            .and_then(|library| library.models.get(id))
-            .ok_or_else(|| RuntimeError(format!("model collider asset {id} is not loaded")))?;
+            .and_then(|library| library.models.get(id));
         let scale = world_scale(world, entity)?;
         if cooked.is_some()
             && generation.is_some_and(|g| {
@@ -48,7 +48,8 @@ pub(super) fn cook(world: &mut World) -> Result<()> {
                     && g.collider.asset == collider.asset
                     && g.collider.node == collider.node
                     && g.collider.primitive == collider.primitive
-                    && g.digest == model.digest
+                    && g.digest == model.map(|model| model.digest)
+                    && (model.is_some() || g.collider.half_extents == collider.half_extents)
                     && same_scale(g.scale, scale)
             })
         {
@@ -78,8 +79,27 @@ pub(super) fn cook(world: &mut World) -> Result<()> {
         let id = asset_id(reference)?;
         let model = world
             .get_resource::<Library>()
-            .and_then(|library| library.models.get(id))
-            .ok_or_else(|| RuntimeError("model collider asset disappeared".into()))?;
+            .and_then(|library| library.models.get(id));
+        let Some(model) = model else {
+            // Match presentation's first-cook placeholder policy. Keep the ECS
+            // body and its authored centre, but cook conservative box bounds;
+            // None distinguishes this from a real generation and avoids doing
+            // work again until the asset, selection or world scale changes.
+            let half_extents = (Vec3::from_array(collider.half_extents) * scale.abs()).to_array();
+            let handle = world
+                .resource_mut::<PhysicsWorld<JoltBackend>>()
+                .backend_mut()
+                .create_shape(Shape::Box { half_extents })?;
+            world.entity_mut(entity).insert((
+                CookedCollider(handle),
+                Generation {
+                    collider,
+                    digest: None,
+                    scale,
+                },
+            ));
+            continue;
+        };
         let selection = model.select(collider.node.as_deref(), collider.primitive)?;
         let offset = Vec3::from_array(selection.offset);
         let mut vertices = Vec::new();
@@ -130,7 +150,7 @@ pub(super) fn cook(world: &mut World) -> Result<()> {
             CookedCollider(handle),
             Generation {
                 collider,
-                digest,
+                digest: Some(digest),
                 scale,
             },
         ));

@@ -52,6 +52,8 @@ renderer-neutral presentation extraction. No GPU, window or process code (see
   prepare their reachable models at the live-edit control boundary before adoption.
 - Missing/broken model generations produce `asset_errors()` (`ARA7310`) and magenta
   shape placeholders. Failed IDs remain eligible for a later hot-reload recovery.
+  Model colliders use authored box bounds until a model arrives, with an entity
+  diagnostic; the first generation replaces that cooked placeholder at a tick boundary.
 - `model::Model` decodes a glTF import generation (FORMAT.md v1); `skin::Skin` turns
   the cooked skeleton/clips into ara-anim data (parent-first reorder, `joint_map`).
   ModelVertex retains UV0/UV1; ModelMaterial retains independent slot transforms,
