@@ -121,6 +121,9 @@ pub(super) struct FirstHour {
     entity: Option<String>,
     clip: Clip,
     previous_build: Option<PathBuf>,
+    /// Frames in a row the Scene has wanted no more frames (its content loaded and
+    /// published, accumulation done).
+    scene_quiet: u32,
 }
 
 impl FirstHour {
@@ -142,6 +145,7 @@ impl FirstHour {
             entity: None,
             clip: Clip::default(),
             previous_build: None,
+            scene_quiet: 0,
         })
     }
 
@@ -156,16 +160,19 @@ impl FirstHour {
         self.frames.view.push(view_ms);
     }
 
-    /// Advance one frame; returns whether the UI changed.
+    /// Advance one frame; returns whether the UI changed. `scene_busy`: the Scene
+    /// still wants frames (`SceneView::needs_frame`).
     pub fn step(
         &mut self,
         editor: &mut Editor,
         shell: &mut Shell,
         gpu: &mut NativeUi,
+        scene_busy: bool,
     ) -> ara_ui::Result<bool> {
         if self.finished() {
             return Ok(false);
         }
+        self.scene_quiet = if scene_busy { 0 } else { self.scene_quiet + 1 };
         // The frame presented after the step settled is what the user saw.
         if let Some(ok) = self.capture.take() {
             return self.record(ok, editor, shell, gpu);
@@ -430,12 +437,15 @@ impl FirstHour {
             }
             "imports-done" => {
                 if first {
-                    self.note = "waited for every import".into();
+                    self.note = "waited for every import and the Scene showing them".into();
                 }
+                // The last import's publication reaches the Scene a little after the
+                // count hits zero: wait until the Scene stops wanting frames too.
                 Ok(shell
                     .import_counts()
                     .is_some_and(|(pending, _, _)| pending == 0)
-                    && self.age > 60)
+                    && self.age > 60
+                    && self.scene_quiet > 10)
             }
             "material-overrides" => {
                 if first {
@@ -609,6 +619,13 @@ impl FirstHour {
                 if first {
                     shell.run_command(editor, "window.problems", &Target::None)?;
                 }
+                let unknown = unknown_world_errors(editor)?;
+                if unknown > 0 {
+                    return Err(format!(
+                        "{unknown} ARA7302 errors: the editor asked a Play world that was not running"
+                    )
+                    .into());
+                }
                 Ok(settled)
             }
             "console" => {
@@ -631,4 +648,15 @@ impl FirstHour {
         }
         Ok(())
     }
+}
+
+/// How often Problems recorded ARA7302 (no such Play world): the editor reading a
+/// world that is still starting or already gone. Routes assert none after their
+/// Play → Stop → Play cycles.
+pub(super) fn unknown_world_errors(editor: &mut Editor) -> ara_ui::Result<u64> {
+    let logs = editor.action(
+        "logs",
+        json!({"codes": ["ARA7302"], "group": true, "limit": 20}),
+    )?;
+    Ok(logs["summary"]["occurrences"].as_u64().unwrap_or(0))
 }

@@ -32,7 +32,7 @@ pub use ara_schema_derive::Schema;
 pub use db::SchemaDb;
 pub use desc::{
     Audience, DocKindDesc, EditorHints, FieldDesc, Interpolate, Range, RecordInfo, Replication,
-    Shape, StructRole, TypeDesc, Unit, UpgradeFn, VariantDesc,
+    Shape, ShowIf, ShowWhen, StructRole, TypeDesc, Unit, UpgradeFn, VariantDesc,
 };
 pub use jsonschema::DIALECT;
 pub use layout::{FieldLayout, StructLayout, ValueLayout};

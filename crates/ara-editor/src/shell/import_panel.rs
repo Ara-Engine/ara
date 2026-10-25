@@ -179,7 +179,7 @@ impl Shell {
                 (ara_asset::CookPreset::Balanced, "Balanced"),
                 (ara_asset::CookPreset::HighQuality, "High"),
             ] {
-                out.push_str(&self.bind_button(&format!("import-quality-{preset:?}"),name,Binding::ResourceContent(doc.id.to_string(),vec![json!({"cmd":"import.configure","args":{"source":path,"preset":preset}})],"Change import quality".into()),if preset==settings.preset{"segment-button selected"}else{"segment-button"}));
+                out.push_str(&self.bind_button(&format!("import-quality-{preset:?}"),name,Binding::ResourceContent(doc.id.to_string(),vec![json!({"cmd":"import.configure","args":{"source":path,"preset":preset}})],"Change import quality".into()),if Some(preset)==settings.preset{"segment-button selected"}else{"segment-button"}));
             }
             out.push_str("</panel></panel></panel><panel id='import-actions' class='row' style='flex-shrink:0;padding:8px;padding-left:12px'>");
             out.push_str(&self.bind_button(

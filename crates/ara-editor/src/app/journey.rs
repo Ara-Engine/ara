@@ -14,7 +14,7 @@ use std::time::{Duration, Instant};
 use ara_editor_gpu::NativeUi;
 use ara_render::Renderer;
 use ara_ui::paint::Box2;
-use ara_ui_render::gpu::Renderer as UiRenderer;
+use ara_ui_render::{atlas::TextMode, gpu::Renderer as UiRenderer};
 use serde_json::{Value, json};
 
 use crate::shell::commands::Target;
@@ -74,6 +74,8 @@ pub(super) struct Journey {
     live_at: Option<u32>,
     /// The preview step's capture and its Game frame (logical), for the comparison.
     preview_frame: Option<(PathBuf, Box2)>,
+    /// The frame the floating Game window first showed its preview.
+    float_seen: Option<u32>,
 }
 
 impl Journey {
@@ -103,6 +105,7 @@ impl Journey {
             preview_seen: None,
             live_at: None,
             preview_frame: None,
+            float_seen: None,
         })
     }
 
@@ -111,6 +114,10 @@ impl Journey {
     }
 
     /// Advance one frame; returns whether the UI changed.
+    #[allow(
+        clippy::too_many_arguments,
+        reason = "the loop's GPU owners are borrowed separately"
+    )]
     pub fn step(
         &mut self,
         editor: &mut Editor,
@@ -119,12 +126,13 @@ impl Journey {
         ui: &mut UiRenderer,
         renderer: &mut Renderer,
         scene_view: &mut super::viewport::SceneView,
+        floats: &super::windows::Floats,
     ) -> ara_ui::Result<bool> {
         if self.finished() {
             return Ok(false);
         }
         if let Some((ok, _)) = self.capturing {
-            return self.capture(ok, editor, shell, gpu, ui, renderer, scene_view);
+            return self.capture(ok, editor, shell, gpu, ui, renderer, scene_view, floats);
         }
         self.age += 1;
         let (name, _) = STEPS[self.step];
@@ -151,7 +159,7 @@ impl Journey {
         }
         let ok = !timed_out && !self.note.starts_with("failed");
         self.capturing = Some((ok, Instant::now()));
-        self.capture(ok, editor, shell, gpu, ui, renderer, scene_view)
+        self.capture(ok, editor, shell, gpu, ui, renderer, scene_view, floats)
     }
 
     /// Capture the finished step and record it; until the Scene's content is
@@ -169,6 +177,7 @@ impl Journey {
         ui: &mut UiRenderer,
         renderer: &mut Renderer,
         scene_view: &mut super::viewport::SceneView,
+        floats: &super::windows::Floats,
     ) -> ara_ui::Result<bool> {
         shell.rebuild(editor)?;
         if let Some(label) = self.hover
@@ -195,6 +204,36 @@ impl Journey {
                 return Ok(true);
             }
             return Err(error);
+        }
+        // The floating Game window's own image (`NN-step-window.png`).
+        if matches!(name, "game-float" | "play-float") {
+            let id = shell
+                .game_host()
+                .and_then(|(host, _)| host.map(str::to_owned))
+                .ok_or("the Game view is not in a floating window")?;
+            // Its OS window opens a few frames after the layout change.
+            let Some(float) = floats.windows.iter().find(|f| f.id == id) else {
+                let waited = self
+                    .capturing
+                    .map_or(Duration::ZERO, |(_, at)| at.elapsed());
+                if waited < CAPTURE_PATIENCE {
+                    return Ok(true);
+                }
+                return Err("the floating Game window never opened".into());
+            };
+            shell.frame_surface(&id)?;
+            let surface = shell.surface(&id).ok_or("floating surface")?;
+            gpu.select_target(float.key);
+            ui.render(
+                gpu,
+                &surface.ui.display,
+                &shell.text.assets,
+                surface.ui.size.map(|v| v.round() as u32),
+                TextMode::Raster,
+            )?;
+            gpu.pixels()?
+                .save(self.output.join(format!("{file}-window.png")))?;
+            gpu.select_target(0);
         }
         self.capturing = None;
         self.hover = None;
@@ -440,6 +479,56 @@ impl Journey {
                 // A few frames more: temporal history settles.
                 let seen = *self.preview_seen.get_or_insert(self.age);
                 Ok(self.age > seen + 90)
+            }
+            "game-float" => {
+                if first {
+                    editor.action(
+                        "editor.layout.move",
+                        json!({"panel": "game", "slot": "float", "rect": [160, 120, 960, 600]}),
+                    )?;
+                    self.note =
+                        "Game tab torn into its own window: the camera preview renders there"
+                            .into();
+                    return Ok(false);
+                }
+                let floating = shell.game_host().is_some_and(|(host, _)| host.is_some());
+                if !floating || shell.game_preview.is_none() {
+                    return Ok(false);
+                }
+                let seen = *self.float_seen.get_or_insert(self.age);
+                Ok(self.age > seen + 90)
+            }
+            "play-float" => {
+                if first {
+                    shell.run_command(editor, "play.start", &Target::None)?;
+                    self.note = "Play in the floating Game window, at its size".into();
+                    return Ok(false);
+                }
+                Ok(shell.game_live && settled)
+            }
+            "game-dock" => {
+                if first {
+                    shell.run_command(editor, "play.stop", &Target::None)?;
+                    editor.action(
+                        "editor.layout.move",
+                        json!({"panel": "game", "slot": "view"}),
+                    )?;
+                    self.note = "Stop, and the Game tab docks back beside the Scene".into();
+                    return Ok(false);
+                }
+                let docked = shell.game_host().is_some_and(|(host, _)| host.is_none());
+                if !(docked && editor.state.playing.is_none() && !shell.game_live && settled) {
+                    return Ok(false);
+                }
+                // Every Play → Stop → Play so far: nothing read a world that wasn't running.
+                let unknown = super::qa::unknown_world_errors(editor)?;
+                if unknown > 0 {
+                    return Err(format!(
+                        "{unknown} ARA7302 errors: the editor asked a Play world that was not running"
+                    )
+                    .into());
+                }
+                Ok(true)
             }
             "play-start" => {
                 if first {
@@ -791,6 +880,15 @@ const STEPS: &[(&str, &str)] = &[
         "a broken script: the compile error in Problems with its why",
     ),
     ("stop", "the script fixed, Play stopped"),
+    (
+        "game-float",
+        "the Game tab in its own window shows the gameplay camera preview",
+    ),
+    (
+        "play-float",
+        "Play embeds in the floating Game window, sized to it",
+    ),
+    ("game-dock", "Stop, and the Game tab docks back"),
     ("undo", "Edit > Undo names the change"),
     (
         "save-reopen",

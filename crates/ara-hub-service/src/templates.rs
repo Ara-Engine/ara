@@ -117,6 +117,7 @@ impl TemplateSource for DirectoryTemplates {
                 &destination.join("levels/main.scene"),
                 &json!({"$schema":"ara://schema/scene/1","id":"sc_main001","records":{}}),
             )?;
+            write_import_defaults(destination)?;
             return Ok(());
         }
         let found = self
@@ -127,8 +128,20 @@ impl TemplateSource for DirectoryTemplates {
         if let Some(error) = found.incomplete() {
             return Err(error);
         }
-        copy_tree(&self.0.join(template), destination)
+        copy_tree(&self.0.join(template), destination)?;
+        write_import_defaults(destination)
     }
+}
+
+fn write_import_defaults(destination: &Path) -> Result<(), RpcError> {
+    let path = destination.join(ara_asset::PROJECT_IMPORT_SETTINGS_FILE);
+    if !path.exists() {
+        let text = ara_asset::ProjectImportSettings::default()
+            .canonical_text()
+            .map_err(|error| invalid(error.to_string()))?;
+        fs::write(path, text).map_err(io_error)?;
+    }
+    Ok(())
 }
 
 fn describe(

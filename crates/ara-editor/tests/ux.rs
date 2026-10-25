@@ -884,6 +884,31 @@ fn camera_moves_do_not_rebuild_the_panels() {
     assert!(shell.rebuild_if_stale(&mut editor).unwrap());
 }
 
+/// Play's embed and the camera preview follow the Game view into a floating window:
+/// they size from the window that hosts it.
+#[test]
+fn a_floating_game_tab_hosts_play_and_the_preview() {
+    let project = Project::new();
+    let mut editor = Editor::open(&project.0).unwrap();
+    editor
+        .action("editor.layout.show", json!({"panel": "game"}))
+        .unwrap();
+    let mut shell = Shell::new(&mut editor, [1440., 900.]).unwrap();
+    let (host, _) = shell.game_host().expect("the Game view in the main window");
+    assert_eq!(host, None);
+    editor
+        .action(
+            "editor.layout.move",
+            json!({"panel": "game", "slot": "float", "rect": [200, 120, 800, 520]}),
+        )
+        .unwrap();
+    shell.rebuild(&mut editor).unwrap();
+    let window = editor.state.floating[0].id.clone();
+    let (host, frame) = shell.game_host().expect("the Game view in its window");
+    assert_eq!(host, Some(window.as_str()));
+    assert!(frame[0] > 400. && frame[0] <= 800. && frame[1] > 200. && frame[1] <= 520.);
+}
+
 /// Play's accent line draws over the menubar's edge: starting Play never moves the UI.
 #[test]
 fn starting_play_marks_the_title_bar_without_moving_the_ui() {
@@ -1474,6 +1499,12 @@ fn the_title_bar_names_the_scene_without_its_extension() {
     let mut editor = Editor::open(&project.0).unwrap();
     let mut shell = Shell::new(&mut editor, [1440., 900.]).unwrap();
     shell.rebuild(&mut editor).unwrap();
+    // The project by its manifest name, not its folder (the loading window too).
+    let name = &shell.ui.nodes[shell.ui.find("crumb-project").unwrap()];
+    assert_eq!(
+        name.text.as_ref().map(|t| t.value.as_str()),
+        Some("UX test")
+    );
     let crumb = &shell.ui.nodes[shell.ui.find("crumb-scene").unwrap()];
     assert_eq!(crumb.text.as_ref().map(|t| t.value.as_str()), Some("main"));
     assert_eq!(

@@ -1,5 +1,5 @@
 //! Child lifetime and admission are independent of consuming its protocol reply.
-use super::{background_priority, limit::Permit};
+use super::limit::Permit;
 use std::{
     process::Child,
     sync::mpsc::{self, RecvTimeoutError, Sender},
@@ -22,7 +22,8 @@ impl Running {
             cancellation,
         };
         thread::spawn(move || {
-            background_priority();
+            // Reaping/admission are control work. Keep the host's normal priority
+            // so loaded native encoders cannot starve completed-child releases.
             // Reap even when the owner leaves a completed reply unpolled. Keep
             // admission until exit is confirmed, including kill/wait failures.
             loop {

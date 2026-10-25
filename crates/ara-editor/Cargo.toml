@@ -15,6 +15,7 @@ tracy = ["ara-gpu/tracy", "ara-profile/tracy"]
 embed-resource.workspace = true
 
 [dependencies]
+ara-texture-gpu = { path = "../ara-texture-gpu" }
 ara-crash = { path = "../ara-crash" }
 ara-asset = { path = "../ara-asset" }
 ara-asset-format = { path = "../ara-asset-format" }

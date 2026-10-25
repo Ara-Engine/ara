@@ -13,7 +13,7 @@ fn registry() -> ara_asset::Result<ara_asset::ImporterRegistry> {
 }
 
 fn main() -> std::process::ExitCode {
-    match registry().and_then(|registry| ara_asset::serve_worker(&registry)) {
+    match registry().and_then(|registry| ara_texture_gpu::serve_worker(&registry)) {
         Ok(()) => std::process::ExitCode::SUCCESS,
         Err(error) => {
             eprintln!("{error}");

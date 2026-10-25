@@ -33,15 +33,25 @@ validated by ara-geo; its reflected settings are VirtualGeometrySettings.
 Run cargo check/test/clippy -p ara-importers (clippy --all-targets).
 Set CARGO_BUILD_JOBS=2 on this shared PC. Release benchmarks are explicit cargo run --release examples; see MEASUREMENTS.md.
 
-Importer implementations must consume only ImportInput. No filesystem, clocks,
+Importer implementations consume ImportInput and explicitly supplied memo services.
+ImportServices also supplies an optional integer block encoder. Keep device setup
+and filesystem access in the worker service. GPU/CPU identities never alias; normal
+maps retain ISPC BC5 after measured GPU angular outliers. Packing, preset and mip
+order must stay deterministic; raw HDR inputs use finite positive half codes.
+No other filesystem, clocks,
 unseeded RNG or environment reads. Dependency discovery is also pure and runs in
 the worker: even discovering FBX dependencies must never run in the editor.
 
 Changing algorithms, dependencies or output policy requires an importer version
 bump. Intel ISPC is pinned and precompiled. CookPreset explicitly selects quality; HQ
-is the shipping default. Keep output byte-identical across Rayon thread budgets.
+is selectable; Balanced is the import default. Keep output byte-identical across Rayon thread budgets.
 ASTC belongs behind a mobile importer plugin; never emit BCn for mobile silently.
 FORMAT.md in ara-asset-format and INTEGRATION.md here define runtime adoption.
 
 Downloaded third-party fixtures live in .fixtures (gitignored). Tests should not
 download from the network. See MEASUREMENTS.md for reproducible real-scene checks.
+
+Project quality is a typed ara.imports document (import.project.configure). Sources
+inherit it unless preset is explicit; TextureSettings.preset and MeshSettings.texturePresets
+override individual images. Presets/version/settings key the intermediate memo; changing
+one texture reuses geometry and the other texture tasks.

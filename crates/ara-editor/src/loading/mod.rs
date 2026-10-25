@@ -77,10 +77,7 @@ pub(crate) fn run(
         std::thread::sleep(Duration::from_millis(10));
     }
     let root = editor.host.root();
-    let project = root
-        .file_name()
-        .map(|n| n.to_string_lossy().into_owned())
-        .unwrap_or_else(|| "Project".into());
+    let project = crate::shell::project_name(editor);
     let folder = dunce::simplified(root).display().to_string();
     let light = editor.state.light;
     let mut splash = match Splash::new(&project, light, capture) {

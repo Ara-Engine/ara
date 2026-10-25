@@ -215,3 +215,173 @@ VQ's temporary `ARA_RASTER_TRIANGLES` replay hook can repeat the CPU counts at
 `ARA_LOD_PIXELS=1`. To measure through `ara-dev perf`, export a **new** frozen
 pack with the matching worker and select it with `--scene <export-folder>`.
 Existing immutable packs keep their old geometry when source assets are re-cooked.
+
+## Cold import CPU checkpoint, 2026-10-25
+
+An empty project cache, created with `ara hub create --template showcase|outpost`,
+then opened through `ara hub open --headless`, published every asset through the
+normal daemon `Assets` pipeline. Pinned source art and generated kits were present
+before timing. OS file pages were warm; Ara action/object/intermediate caches were
+empty. This is the real import path, not an encoder-only benchmark or shipped cache.
+The Windows RTX 4070 SUPER host was shared with other agents; CARGO_BUILD_JOBS=2.
+
+| Sample | Assets | Original HQ import | New default Balanced import | Create time (new) |
+|---|---:|---:|---:|---:|
+| Showcase | 33 | 129.784 s | 27.071 s | 2.266 s |
+| Outpost | 115 | 250.668 s | 47.995 s | 3.607 s |
+
+The original aggregate worker-stage times were 338.5 s compression / 354.4 s total
+for Showcase, and 753.2 s compression / 848.7 s total for Outpost. Concurrent worker
+stage sums exceed project wall time. Outpost mesh work was 43.7 s, including 22.2 s
+LOD simplification; Showcase mesh work was 4.1 s. Decode/mips totaled 10.3 s and
+25.0 s respectively. Hashing was 0.29/1.11 s; sidecar reads 0.001/0.007 s. Queue
+and IPC-read time include waiting and must not be attributed to hashing or decoding.
+The main cost is BC encoding. Existing tiled ISPC kernels saturate their bounded
+Rayon pools; ~750 CPU-seconds for Showcase HQ imply about 47 s even with ideal
+16-logical-thread utilization on this machine. That is a current-codec work floor,
+not a lower bound on other algorithms or GPU hardware.
+
+Changes bound retained decode/mip memory, deduplicate texture tasks before decode,
+share content-addressed intermediate texture/geometry work between disposable
+workers, transmit dependencies as MessagePack binary, reuse immutable object
+payloads, and reserve admission for short discovery requests. Discovery/transport/
+reaping keep normal scheduling priority so loaded native encoders cannot starve
+control work. Intermediate memo writes are disposable; final object-before-action
+publication remains durable. Three pre-default runs compared all final action keys,
+manifests and object bytes against the original HQ baseline: all 33/115 assets and
+331/1,459 artifact references matched. Those optimizations alone did not establish
+a repeatable wall-time improvement on the contended host. The table above includes
+the explicitly approved Balanced default and must not be called a same-mode speedup.
+
+Quality is a reflected typed project policy, `ara.imports`, edited with
+`ara do import.project.configure -p preset=highQuality`. New sidecars inherit it;
+`import.configure` sets `preset` or resets `useProjectPreset=true`. Standalone
+`TextureSettings.preset` and model `MeshSettings.texturePresets` override individual
+textures (image URI or `#index`, FBX texture ID or relative filename). Overrides,
+effective quality and importer ABI versions enter action/intermediate keys. Geometry
+and other texture tasks are reused on a per-texture quality edit. No export-time HQ
+re-encode is implemented; that remains a possible later improvement.
+
+CPU quality QA used 142 distinct albedos and 135 normal contents across 286 semantic
+paths. Worst sRGB RGB PSNR loss was Showcase boombox speakers: 62.495 HQ -> 59.863 dB
+Balanced (2.633 dB); Outpost airduct parts02: 52.194 -> 51.539 dB (0.655 dB). Lowest
+Balanced PSNR was denim, 39.205 dB vs 39.228 HQ. All 135 BC5 full mip chains were
+byte-identical between presets. Inspected source/HQ/Balanced crops for boombox,
+denim and airduct, plus decoded and neutral-lit normal plane/sphere sheets for camera
+strap and rusted aircon: subtle extra albedo error, no preset-specific normal change.
+These are decoded texture/diagnostic-light checks, not engine scene captures. Source
+negative-Z normals explain some large baseline BC5 reconstruction outliers in both
+presets. All three authored foliage cutout alphas exactly match their opacity maps.
+
+Raw per-asset/stage JSON, cache byte-equality reports, commands and screenshots live
+under the worktree's ignored `target/ara-dev/import-speed/`; codec QA scratch is in
+the dedicated D: validation target. No user profile or tracked source asset is changed
+by the measurements. GPU encoders and end-to-end GPU measurements are a separate
+checkpoint; this CPU checkpoint does not meet the 20-50x per-mode request.
+Focused checkpoint validation: 102 tests passed across ara-asset, ara-importers,
+ara-import-worker, ara-play-host, ara-hub-service, CLI and editor asset tests; two
+fixture/GPU tests were intentionally ignored. The admission fixture completed 28
+cold imports at peak 4 (cap 4). Strict Clippy passed for the touched libraries,
+unit targets and relevant integration suites; formatting and snapshot verification
+passed with updates disabled after reviewing the reflected policy changes. Latest
+main at this checkpoint: bae0034d. No full workspace gate was run.
+
+## Headless GPU worker checkpoint, 2026-10-25
+
+These are single fresh-project runs through `ara hub create`, then
+`ara hub open --headless`, ending when every expected asset is published by the
+daemon. Each run starts with empty Ara action/object/intermediate caches and an
+empty engine-profile Vulkan pipeline cache. OS file pages and the driver's own
+disk cache are not flushed. Art/kits are already downloaded/generated. Other
+agents and the main integration build remained active. The GPU lock's queue wait
+is outside the timer. All CLI/worker/player executables are owned copies under
+`D:/AraBuild/ara-dev-infra-target`; none comes from main's target.
+
+| Sample | Assets | Verified owned ISPC HQ import s | GPU Balanced import s | GPU HQ import s | Create-through-ready Balanced / HQ s |
+|---|---:|---:|---:|---:|---:|
+| Showcase | 33 | 91.768 | 11.484 | 21.166 | 13.294 / 22.620 |
+| Outpost | 115 | 159.061 | 34.441 | 47.452 | 37.794 / 50.670 |
+
+The owner separately measured about **135 s** for cold Outpost before the editor
+was usable in installed preview 13. The new 34.441 s result is the daemon's
+assets-ready boundary, not a measurement of total interactive editor startup.
+The earlier 250.668 s contended development baseline is retained above as history,
+not used as the installed-build headline baseline. Balanced Outpost meets 45 s;
+Showcase remains above 10 s, and HQ Outpost remains above 45 s.
+
+Against the verified owned ISPC HQ runs, same-quality GPU HQ is 4.34x faster for
+Showcase / 3.35x Outpost. The new default Balanced is 7.99x / 4.62x faster, including
+the approved preset change. **The requested 20-50x wall-time acceleration is not
+established**, nor is sub-second encoding of the whole Showcase set. These runs
+do not prove an irreducible hardware floor; device startup, CPU preparation and
+full integer candidate searches remain opportunities.
+
+| Sample / backend | Import-worker CPU seconds | Sum mesh elapsed s | Sum decode s | Sum mips s | Sum compression elapsed s |
+|---|---:|---:|---:|---:|---:|
+| Showcase ISPC HQ | 768.969 | 3.542 | 4.295 | 2.984 | 240.125 |
+| Showcase GPU Balanced | 34.531 | 3.191 | 2.598 | 1.158 | 21.733 |
+| Showcase GPU HQ | 36.781 | 2.582 | 2.595 | 1.140 | 54.033 |
+| Outpost ISPC HQ | 1371.828 | 21.704 | 7.448 | 5.038 | 444.643 |
+| Outpost GPU Balanced | 105.750 | 18.342 | 5.213 | 2.129 | 56.895 |
+| Outpost GPU HQ | 105.344 | 17.143 | 5.180 | 2.048 | 114.769 |
+
+CPU seconds sum the last recorded process CPU counter for each actual import
+worker, excluding daemon, CLI, discovery/probe workers and other agents. Stage
+columns are elapsed spans across concurrent workers and nested Rayon work, not
+additive CPU self-time or a critical-path decomposition. LOD spans are nested in
+mesh; GPU packing/device initialization/wait are nested in compression. Artifact
+validation is separate. Worker count is bounded to four, with four Rayon threads
+per import; queued metadata gets admission priority. N-of-M publication remains
+33/33 and 115/115. Balanced recorded 20/98 workers with nonzero GPU encode work;
+HQ recorded 20/99. Every run had zero backend-fallback events.
+
+The previous verified GPU implementation took 30.560 / 50.486 s Balanced. Its
+profile showed multiple workers spending about 5 s creating the same cold kernels
+and texture-free models initializing devices. The current worker negotiates and
+executes one tiny BC7 warm-up, drops it before replying, then shares its engine
+pipeline cache. Each disposable asset worker creates Vulkan only on first encode;
+memo hits and texture-free models avoid it. In the current Balanced runs the
+warm-up was 0.458 / 0.407 s; maximum per-worker pipeline creation was 20.5 / 29.2 ms.
+This is a measured combined implementation/run difference, not an isolated
+driver-cold A/B attribution to warm-up alone.
+
+Remaining Balanced spans include 6.535 / 32.048 s summed device initialization,
+3.256 / 12.313 s durable cache stores (including 2.033 / 7.550 s cache sync), and
+0.570 / 1.249 s hashing. Per-process GPU encode timestamp spans summed to
+13.117 / 19.088 s Balanced and 45.335 / 77.508 s HQ. Different device queues can
+overlap on the shared GPU: those sums are not serial GPU time or a hardware floor.
+Hashing and sidecar reads are small; removing them cannot supply the missing
+20-50x wall speedup. Outpost's final audio asset alone took 5.294 s in its worker.
+Showcase's longest Balanced assets were camera_01 (3.612 s), FlightHelmet
+(3.402 s), SciFiHelmet (2.996 s) and vintage radio (2.926 s).
+
+The checked-in `measurements/gpu-v4-*.json` records contain binary hashes,
+aggregate stages and per-asset stages/CPU counters for these explicit benchmark
+runs. Full raw traces, publication keys and commands remain under the worktree's
+ignored `target/ara-dev/import-speed/{gpu-v4-balanced,gpu-v4-hq}-*` directories.
+`ARA_IMPORT_TRACE_DIR` enables the same opt-in tracing for another real daemon
+run. `ARA_TEXTURE_ENCODER=cpu` selects the qualified fallback for a control.
+Use a fresh private `ARA_CONFIG_DIR`/`ARA_CRASH_DIR`, point `ARA_IMPORT_WORKER` and
+`ARA_PLAYER` at matching owned binaries, and wrap timed imports in `ara-dev gpu`.
+
+GPU algorithm timings, full-texture PSNR/visual checks, the normal-map CPU policy,
+determinism scope and evidence are in
+[`ara-texture-gpu/MEASUREMENTS.md`](../ara-texture-gpu/MEASUREMENTS.md). This work
+ships shader/worker support, not pre-imported template content caches or an
+export-time HQ re-encode. No D26/D27 runtime acceptance claim follows from import
+measurements.
+
+The v3/v4 Balanced production-cache comparison matched artifact names, kinds and
+content hashes for all 33/115 assets and 331/1,459 artifact references. Action keys
+can differ because the immutable codec cohort identity changed. The post-merge
+unified Compute test and production-worker protocol test both passed, including
+blocking resolve/readback, scalar/dot integer-oracle equality and clean Vulkan
+validation after merging the deferred-completion API.
+
+Focused checkpoint verification: 88 standard core tests and both custom worker
+harnesses pass, including 28 cold imports at peak 4/cap 4. Four editor import and
+progress unit tests, the typed import-settings/undo integration test and the CLI
+reflection snapshot pass. The snapshot updates exactly three preset doc strings,
+then passes with updates disabled. Formatting and strict all-target Clippy cover
+the touched packages; no full workspace integration gate was run. Five core tests
+are declared ignored in the normal run; the two GPU probes above ran explicitly.

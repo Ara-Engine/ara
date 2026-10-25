@@ -25,17 +25,25 @@ impl Hub {
         }
         match &p.path {
             None => problems.push(field("path", "Choose where to create the project".into())),
-            Some(path) if path.exists() => problems.push(field(
+            Some(path) if path.symlink_metadata().is_ok() => problems.push(field(
                 "path",
                 format!("`{}` already exists; choose a new folder", path.display()),
             )),
-            Some(path) if !path.parent().is_some_and(Path::is_dir) => problems.push(field(
-                "path",
-                format!(
-                    "The folder `{}` does not exist",
-                    path.parent().unwrap_or(path).display()
-                ),
-            )),
+            Some(path)
+                if path
+                    .ancestors()
+                    .skip(1)
+                    .find(|parent| parent.exists())
+                    .is_some_and(|parent| !parent.is_dir()) =>
+            {
+                problems.push(field(
+                    "path",
+                    format!(
+                        "The parent of `{}` is not a folder",
+                        path.parent().unwrap_or(path).display()
+                    ),
+                ))
+            }
             Some(_) => {}
         }
         let id = p.template.clone().unwrap_or_default();

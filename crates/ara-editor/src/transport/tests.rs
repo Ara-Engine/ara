@@ -81,3 +81,61 @@ fn websocket_edits_and_mcp_capture_share_the_window_authority() {
     std::fs::remove_dir_all(root).unwrap();
 }
 use std::time::Instant;
+
+/// The window's own edit changes no review state: its `history` notification and its
+/// collaboration echoes neither rebuild the panels a second time nor re-prepare the
+/// Scene. An agent's turn does both.
+#[test]
+fn only_history_that_changes_review_state_rebuilds_after_an_edit() {
+    let root = std::env::temp_dir().join(format!("ara-editor-history-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    std::fs::create_dir_all(root.join("levels")).unwrap();
+    std::fs::write(
+        root.join("ara.project.json"),
+        ara_json::to_canonical_string(&json!({"name":"History test"})),
+    )
+    .unwrap();
+    std::fs::write(root.join("levels/main.scene"),ara_json::to_canonical_string(&json!({"$schema":"ara://schema/scene/1","id":"sc_hist0001","records":{"e_crate001":{"name":"Crate","Transform":{}}}}))).unwrap();
+    let mut editor = Editor::open(&root).unwrap();
+    let mut server = Server::start(&root).unwrap();
+    server.pump(&mut editor);
+    let revisions = |editor: &Editor| (editor.panels_revision, editor.review_revision);
+    let before = revisions(&editor);
+    let store = editor.host.store().revision();
+    let mv = |x: f32| json!([{"cmd":"transform.set","args":{"entities":["e_crate001"],"position":[x,0,0]}}]);
+    editor
+        .apply(mv(1.).as_array().unwrap().clone(), "Move", None)
+        .unwrap();
+    server.pump(&mut editor);
+    assert_eq!(editor.host.store().revision(), store + 1);
+    assert_eq!(revisions(&editor), before, "a human edit bumped the panels");
+    let agent = editor
+        .host
+        .call(
+            ConnId::LOCAL,
+            "session.begin",
+            json!({"client":"history-test","author":"agent:history"}),
+        )
+        .unwrap()["session"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    editor
+        .host
+        .call(
+            ConnId::LOCAL,
+            "cmd.apply",
+            json!({"session":agent,"doc":"sc_hist0001","why":"Agent move","commands":mv(2.)}),
+        )
+        .unwrap();
+    server.pump(&mut editor);
+    let after = revisions(&editor);
+    assert!(
+        after.0 > before.0 && after.1 > before.1,
+        "{before:?} → {after:?}"
+    );
+    drop(server);
+    drop(editor);
+    assert!(root.starts_with(std::env::temp_dir()));
+    let _ = std::fs::remove_dir_all(root);
+}

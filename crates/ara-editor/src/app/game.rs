@@ -163,11 +163,13 @@ impl GameView {
             shell.game_fault = None;
             shell.game_start = None;
             shell.game_start_failed = false;
+            shell.game_running = false;
             return;
         }
         if self.checked_world != editor.play_world {
             self.checked_world = editor.play_world.clone();
             self.checked = None;
+            shell.game_running = false;
         }
         let every = if shell.game_start.is_some() { 100 } else { 500 };
         if self

@@ -113,14 +113,17 @@ fn seed_with(hub: &mut Hub, with_projects: bool) {
         {"id":"blank","name":"Blank project","thumbnail":null,"description":"An empty scene, ready for your first entity."},
         {"id":"outpost","name":"Outpost","thumbnail":evidence("outpost","outpost-player.png")},
         {"id":"showcase","name":"Material and character showcase","thumbnail":evidence("showcase","showcase-player.png"),
-         "setup":{"message":"Material and character showcase needs its third-party art: 212 of 212 pinned files are not downloaded","command":"ara-samples fetch showcase"}},
+         "setup":with_projects.then(|| json!({"message":"Material and character showcase needs its third-party art: 212 of 212 pinned files are not downloaded","command":"ara-samples fetch showcase"}))},
         {"id":"starter","name":"Starter","thumbnail":null}
     ]});
     let install = r"C:\Users\tester\AppData\Local\Programs\Ara";
-    let engines = json!({"engines":[
+    let mut engines = json!({"engines":[
         {"version":"0.0.1-alpha","executable":format!(r"{install}\0.0.1-alpha\ara.exe"),"editor":format!(r"{install}\0.0.1-alpha\ara-editor.exe")},
         {"version":"0.0.2-nightly","executable":r"C:\Users\tester\AppData\Local\Ara\Engines\0.0.2-nightly\ara.exe","editor":r"C:\Users\tester\AppData\Local\Ara\Engines\0.0.2-nightly\ara-editor.exe","managed":true}
     ]});
+    if !with_projects && let Some(builds) = engines["engines"].as_array_mut() {
+        builds.truncate(1);
+    }
     let activity = json!({"activity":[
         {"project":"project-1","participants":[
             {"id":"ses_ed01","kind":"human","name":"ara-editor","joinedMs":0},
@@ -168,6 +171,12 @@ fn seed_with(hub: &mut Hub, with_projects: bool) {
         AgentClient::Codex,
         "[mcp_servers.ara]\ncommand = \"ara\"\nargs = [\"mcp\"]\n".into(),
     );
+    // Releases and incomplete samples are separate demonstration states, not
+    // the default state of a newly installed current build.
+    if !with_projects {
+        hub.take_calls();
+        return;
+    }
     let release = |kind: &str, version: &str, channel: &str| {
         json!({
             "format":"ara.release/1","kind":kind,"version":version,"channel":channel,

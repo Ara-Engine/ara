@@ -394,6 +394,71 @@ pub struct EditorHints {
     /// Edit a `vec3`/`vec4` of linear RGB(A) with a colour swatch and picker.
     #[serde(default, skip_serializing_if = "is_default")]
     pub color: bool,
+    /// Show the field only while a sibling field matches ([`ShowIf`]).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub show_if: Option<ShowIf>,
+}
+
+impl EditorHints {
+    /// Whether the inspector shows the field: not `hidden`, and its `show_if` sibling
+    /// matches. `sibling` gives a sibling field's effective value (its default when the
+    /// value is absent).
+    pub fn shows(&self, sibling: impl FnOnce(&str) -> Value) -> bool {
+        !self.hidden
+            && self
+                .show_if
+                .as_ref()
+                .is_none_or(|s| s.when.matches(&sibling(&s.field)))
+    }
+}
+
+/// Show a field only while a sibling field of the same struct matches: a model's
+/// node beside `model`, a spot light's cone beside `kind`. Presentation only: a
+/// hidden field keeps its value, validates as usual and stays settable through
+/// commands, `cmd.apply` and MCP.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ShowIf {
+    /// The sibling's field name, as serialized (`model`, `kind`).
+    pub field: String,
+    /// What the sibling's value must be.
+    pub when: ShowWhen,
+}
+
+/// The sibling value a [`ShowIf`] field waits for, judged on the effective value (a
+/// sibling absent from the record has its default).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ShowWhen {
+    /// The sibling is not empty. Empty is `null` (an unset option, entity or asset
+    /// reference), `""` (a string or an asset path), `[]` (a list or keyed list) or
+    /// `{}` (a map). Numbers, booleans, vectors and enums are never empty.
+    Set,
+    /// The sibling is empty, as defined for `set`.
+    Empty,
+    /// The enum sibling is one of these variants, by their serialized names (as
+    /// reflection and MCP show them).
+    OneOf(Vec<String>),
+}
+
+impl ShowWhen {
+    /// Whether the sibling's effective value satisfies this condition.
+    pub fn matches(&self, sibling: &Value) -> bool {
+        let empty = match sibling {
+            Value::Null => true,
+            Value::String(s) => s.is_empty(),
+            Value::Array(a) => a.is_empty(),
+            Value::Object(o) => o.is_empty(),
+            _ => false,
+        };
+        match self {
+            Self::Set => !empty,
+            Self::Empty => empty,
+            Self::OneOf(names) => sibling
+                .as_str()
+                .is_some_and(|v| names.iter().any(|n| n == v)),
+        }
+    }
 }
 
 fn is_default<T: Default + PartialEq>(v: &T) -> bool {

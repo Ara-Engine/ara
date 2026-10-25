@@ -146,10 +146,7 @@ impl Server {
         }
         for (conn, value) in editor.host.drain_outbox() {
             if conn == ConnId::LOCAL {
-                editor.panels_revision += 1;
-                if value["method"] == "history" {
-                    editor.review_revision += 1;
-                }
+                editor.notified(&value);
             } else {
                 let _ = self.notifications.send((conn, value.to_string()));
             }

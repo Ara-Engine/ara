@@ -236,7 +236,9 @@ fn item_title(db: &SchemaDb, elem: &ValueType, item: &Value, n: usize) -> String
     }
     if let ValueType::Named(name) = elem
         && let Some(Shape::Struct { fields, .. }) = db.get(name).map(|t| &t.shape)
-        && let Some(first) = fields.iter().find(|f| !f.editor.hidden)
+        && let Some(first) = fields
+            .iter()
+            .find(|f| crate::inspector::shows(db, fields, f, Some(item)))
     {
         let value = item
             .get(&first.name)
@@ -483,7 +485,8 @@ impl Shell {
                 let Some(Shape::Struct { fields, .. }) = db.get(name).map(|t| &t.shape) else {
                     return;
                 };
-                for desc in fields.iter().filter(|f| !f.editor.hidden) {
+                let shown = |f: &&FieldDesc| crate::inspector::shows(db, fields, f, Some(value));
+                for desc in fields.iter().filter(shown) {
                     let child = value
                         .get(&desc.name)
                         .cloned()
