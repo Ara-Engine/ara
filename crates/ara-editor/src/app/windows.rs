@@ -177,6 +177,14 @@ impl Floats {
         self.windows.clear();
     }
 }
+impl Floats {
+    /// Logical-to-physical scale of floating window `id` (its display scale times the
+    /// UI scale), if it is open.
+    pub fn scale(&self, id: &str, editor: &Editor) -> Option<f32> {
+        let float = self.windows.iter().find(|f| f.id == id)?;
+        Some(float.window.display_scale().max(0.25) * ui_scale(editor))
+    }
+}
 /// The UI scale preference multiplies the monitor's display scale.
 pub(super) fn ui_scale(editor: &Editor) -> f32 {
     editor
