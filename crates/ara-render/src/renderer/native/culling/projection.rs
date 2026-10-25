@@ -2,6 +2,30 @@
 //! cameras and perspective local lights. No camera distance leaks into shadows.
 use super::*;
 
+/// Pose-dependent inputs shared by every camera and shadow LOD test. Rebuilt
+/// only when the instance transform or skinned bounds change.
+#[derive(Clone, Copy)]
+pub(super) struct LodBounds {
+    centre: Vec3,
+    radius: f32,
+    scale: f32,
+}
+impl LodBounds {
+    pub fn new(world: Mat4, bounds: [Vec3; 2]) -> Self {
+        Self {
+            centre: (bounds[0] + bounds[1]) * 0.5,
+            radius: (bounds[1] - bounds[0]).length() * 0.5,
+            scale: world
+                .x_axis
+                .truncate()
+                .length_squared()
+                .max(world.y_axis.truncate().length_squared())
+                .max(world.z_axis.truncate().length_squared())
+                .sqrt(),
+        }
+    }
+}
+
 impl View {
     pub(super) fn new(matrix: Mat4, size: [u32; 2], error: f32, minimum: f32) -> Self {
         Self {
@@ -15,26 +39,18 @@ impl View {
                 matrix.row(1).truncate().length(),
                 matrix.row(3).truncate().length(),
             ),
+            axes: [matrix.row(0), matrix.row(1), matrix.row(3)],
         }
     }
     pub(in crate::renderer::native) fn shadow(matrix: Mat4, resolution: u32, minimum: f32) -> Self {
         Self::new(matrix, [resolution; 2], 1., minimum.max(2.))
     }
 
-    pub(super) fn lod(self, group: &Group, row: &InstanceRow, bounds: [Vec3; 2]) -> Option<usize> {
-        let radius = (bounds[1] - bounds[0]).length() * 0.5;
-        let pixels = self.density((bounds[0] + bounds[1]) * 0.5, radius);
-        if radius * pixels < self.minimum {
+    pub(super) fn lod(&self, group: &Group, bounds: LodBounds) -> Option<usize> {
+        let pixels = self.density(bounds.centre, bounds.radius);
+        if bounds.radius * pixels < self.minimum {
             return None;
         }
-        let scale = row
-            .world
-            .x_axis
-            .truncate()
-            .length_squared()
-            .max(row.world.y_axis.truncate().length_squared())
-            .max(row.world.z_axis.truncate().length_squared())
-            .sqrt();
         let error = self.error / pixels;
         Some(
             group
@@ -42,7 +58,7 @@ impl View {
                 .iter()
                 .enumerate()
                 .rev()
-                .find_map(|(lod, value)| (*value * scale <= error).then_some(lod))
+                .find_map(|(lod, value)| (*value * bounds.scale <= error).then_some(lod))
                 .unwrap_or(0),
         )
     }
@@ -50,8 +66,8 @@ impl View {
     /// Conservative per-axis pixels per world metre over the bounding sphere. Crossing
     /// the eye plane keeps full detail; the six-plane frustum test still rejects
     /// bounds wholly outside the view. Orthographic projection has constant W.
-    fn density(self, centre: Vec3, radius: f32) -> f32 {
-        let w = self.matrix.row(3);
+    fn density(&self, centre: Vec3, radius: f32) -> f32 {
+        let w = self.axes[2];
         let nearest = w.dot(centre.extend(1.)) - radius * self.row_lengths.z;
         if nearest <= 1e-6 {
             return f32::INFINITY;
@@ -60,8 +76,8 @@ impl View {
             let ndc = (row.dot(centre.extend(1.)).abs() + radius * length) / nearest;
             length + ndc * self.row_lengths.z
         };
-        let x = rate(self.matrix.row(0), self.row_lengths.x) * self.size[0] as f32;
-        let y = rate(self.matrix.row(1), self.row_lengths.y) * self.size[1] as f32;
+        let x = rate(self.axes[0], self.row_lengths.x) * self.size[0] as f32;
+        let y = rate(self.axes[1], self.row_lengths.y) * self.size[1] as f32;
         0.5 * x.max(y) / nearest
     }
 }

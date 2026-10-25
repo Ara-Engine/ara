@@ -71,7 +71,7 @@ fn raster_quality_controls_native_lod_and_small_instance_culling_without_idle_wo
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../../target/ara-render/cull-budgets")
         .join(std::process::id().to_string());
-    let scene = scene();
+    let mut scene = scene();
     let mut renderer = Renderer::new_native(
         &scene,
         Box::new(EmptyTextures),
@@ -181,6 +181,46 @@ fn raster_quality_controls_native_lod_and_small_instance_culling_without_idle_wo
     assert_eq!(triangles(&renderer, 6), 0);
     renderer.cull_native_shadow_with_resolution(shadow, 512)?;
     assert_eq!(triangles(&renderer, 6), 1);
+
+    // Camera LOD is independent of a shadow face's texel LOD. Moving the
+    // camera must not invalidate an unchanged local-light face or its casters.
+    renderer.render_view(&camera, 1., ViewMode::Albedo)?;
+    renderer.cull_native_shadow_pass_with_resolution(0, shadow, 2048)?;
+    let near_triangles = triangles(&renderer, 4);
+    let distant_camera = CameraSpec::LookAt {
+        position: Vec3::new(0., 0., 60.),
+        target: Vec3::new(0., 0., -10.),
+        vertical_fov: 1.,
+    };
+    renderer.render_view(&distant_camera, 1., ViewMode::Albedo)?;
+    assert!(triangles(&renderer, 4) < near_triangles);
+    let casters = renderer.native_caster_changes().unwrap();
+    assert!(!casters.all && casters.bounds.is_empty());
+    let before = renderer.native_frame_work().unwrap();
+    renderer.cull_native_shadow_pass_with_resolution(0, shadow, 2048)?;
+    let after = renderer.native_frame_work().unwrap();
+    assert_eq!(
+        (before.cull_tests, before.visible_rows),
+        (after.cull_tests, after.visible_rows)
+    );
+    renderer.cull_native_shadow_pass_with_resolution(0, shadow, 128)?;
+    assert_eq!(triangles(&renderer, pass), 0);
+    scene.instances[0].world *= Mat4::from_scale(Vec3::splat(8.));
+    renderer.update_native_changed(
+        &scene,
+        &instanced::Changes {
+            instances: vec![0],
+            ..Default::default()
+        },
+    )?;
+    renderer.render_view(&distant_camera, 1., ViewMode::Albedo)?;
+    assert!(!renderer.native_caster_changes().unwrap().bounds.is_empty());
+    renderer.cull_native_shadow_pass_with_resolution(0, shadow, 128)?;
+    assert_eq!(
+        triangles(&renderer, pass),
+        2,
+        "a changed scale refreshes the cached radius and LOD error scale"
+    );
     renderer.gpu().assert_clean()?;
     Ok(())
 }

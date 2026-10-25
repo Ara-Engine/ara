@@ -192,7 +192,7 @@ impl Native {
         let next = instance.bounds(&scene.geometry[instance.geometry]);
         self.changes.caster(i, self.bounds[i], next);
         self.bounds[i] = next;
-        self.culling.instance(&self.groups, i);
+        self.culling.instance(&self.groups, i, instance.world, next);
     }
 
     pub(in crate::renderer) fn prepare(
@@ -256,12 +256,10 @@ impl Native {
             gpu,
             self.visible,
             &self.groups,
-            &self.rows,
             &self.bounds,
             frame,
             camera,
             quality.shadows.resolution,
-            &mut self.changes.caster_bounds,
             &mut self.changes.work,
         )?;
         Ok(())

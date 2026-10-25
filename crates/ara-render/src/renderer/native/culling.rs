@@ -15,12 +15,14 @@ pub(super) struct View {
     error: f32,
     minimum: f32,
     row_lengths: Vec3,
+    axes: [Vec4; 3],
 }
 
 pub(super) struct Culling {
     pub draws: Vec<Vec<Batch>>,
     pub(super) visible: Vec<[u32; 2]>,
     selected: Vec<Option<usize>>,
+    projections: Vec<projection::LodBounds>,
     dirty: Vec<Indices>,
     views: Vec<Option<View>>,
     lod_view: Option<View>,
@@ -31,7 +33,8 @@ pub(super) struct Culling {
     scratch: Vec<Vec<[u32; 2]>>,
 }
 impl Culling {
-    pub fn new(groups: &Groups, instances: usize) -> Self {
+    pub fn new(groups: &Groups, scene: &NativeScene) -> Self {
+        let instances = scene.instances.len();
         Self {
             draws: (0..BASE_PASSES)
                 .map(|p| {
@@ -44,6 +47,11 @@ impl Culling {
                 .collect(),
             visible: vec![[0; 2]; instances * BASE_PASSES],
             selected: vec![Some(0); instances],
+            projections: scene
+                .instances
+                .iter()
+                .map(|i| projection::LodBounds::new(i.world, i.bounds(&scene.geometry[i.geometry])))
+                .collect(),
             dirty: (0..BASE_PASSES)
                 .map(|_| Indices::new(groups.groups.len()))
                 .collect(),
@@ -83,7 +91,8 @@ impl Culling {
             dirty.insert(index);
         }
     }
-    pub fn instance(&mut self, groups: &Groups, index: usize) {
+    pub fn instance(&mut self, groups: &Groups, index: usize, world: Mat4, bounds: [Vec3; 2]) {
+        self.projections[index] = projection::LodBounds::new(world, bounds);
         self.lod_dirty.insert(index);
         self.group(groups.instance_group[index]);
         if groups.groups[groups.instance_group[index]].transparent {
@@ -112,12 +121,10 @@ impl Culling {
         gpu: &VulkanDevice,
         buffer: Buffer,
         groups: &Groups,
-        rows: &[InstanceRow],
         bounds: &[[Vec3; 2]],
         frame: &frame::Frame,
         camera: &crate::scene::Camera,
         shadow_resolution: u32,
-        casters: &mut Vec<[Vec3; 2]>,
         work: &mut FrameWork,
     ) -> Result<()> {
         ara_gpu::cpu_scope!("RasterNative.cull_lod");
@@ -128,14 +135,14 @@ impl Culling {
             self.pixels[1],
         );
         if self.lod_view != Some(view) {
-            for i in 0..rows.len() {
-                self.lod(groups, rows, bounds, i, view, casters, work);
+            for i in 0..self.projections.len() {
+                self.lod(groups, i, &view, work);
             }
             self.lod_view = Some(view);
         } else {
             for n in 0..self.lod_dirty.list.len() {
                 let i = self.lod_dirty.list[n];
-                self.lod(groups, rows, bounds, i, view, casters, work);
+                self.lod(groups, i, &view, work);
             }
         }
         self.lod_dirty.clear();
@@ -153,7 +160,6 @@ impl Culling {
                     gpu,
                     buffer,
                     groups,
-                    rows,
                     bounds,
                     pass,
                     if pass < 4 {
@@ -178,27 +184,18 @@ impl Culling {
         result
     }
 
-    #[allow(clippy::too_many_arguments)]
-    fn lod(
-        &mut self,
-        groups: &Groups,
-        rows: &[InstanceRow],
-        bounds: &[[Vec3; 2]],
-        i: usize,
-        view: View,
-        casters: &mut Vec<[Vec3; 2]>,
-        work: &mut FrameWork,
-    ) {
+    fn lod(&mut self, groups: &Groups, i: usize, view: &View, work: &mut FrameWork) {
         work.lod_tests += 1;
         let group = groups.instance_group[i];
-        let next = view.lod(&groups.groups[group], &rows[i], bounds[i]);
+        let next = view.lod(&groups.groups[group], self.projections[i]);
         if next != self.selected[i] {
             self.selected[i] = next;
-            self.group(group);
+            // Shadow views choose LOD from their own texel density. A camera
+            // LOD switch changes only the camera lists, never shadow casters.
+            self.dirty[4].insert(group);
             if groups.groups[group].transparent {
                 self.transparent_dirty = true;
             }
-            casters.push(bounds[i]);
         }
     }
 
@@ -208,7 +205,6 @@ impl Culling {
         gpu: &VulkanDevice,
         buffer: Buffer,
         groups: &Groups,
-        rows: &[InstanceRow],
         bounds: &[[Vec3; 2]],
         pass: usize,
         view: View,
@@ -237,7 +233,7 @@ impl Culling {
                     let lod = if pass == 4 {
                         self.selected[i]
                     } else {
-                        view.lod(group, &rows[i], bounds[i])
+                        view.lod(group, self.projections[i])
                     };
                     if let Some(lod) = lod {
                         self.scratch[lod].push([i as u32, group.first + lod as u32]);

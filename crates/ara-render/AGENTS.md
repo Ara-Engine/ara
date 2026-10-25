@@ -30,13 +30,13 @@ Owns the M1 baseline renderer and agent visual feedback. Gameplay state stays in
   image ownership at publication; rejected content keeps its previous environment.
 - `update_native_changed(scene, instanced::Changes)` consumes exact instance,
   material and skin indices. Coherent writes/culling touch dirty groups only;
-  idle frames retain visible lists and settle motion history once. `native_frame_work`
+  idle frames retain visible lists and settle motion once; LOD bounds cache per pose. `native_frame_work`
   reports traversals/writes. `native_caster_changes` exposes old-union-new bounds;
   `cull_native_shadow(matrix)` caches opaque/masked casters for pass 6 using the
   light's texel density. Camera lists consume `Quality::lod_pixels/min_pixels`;
   shadows independently choose LODs within one texel and omit bound radii below
   max(2, min_pixels) texels. Explicit `*_with_resolution` shadow methods take the
-  actual far-map/local-face viewport size; resolution is part of the cache key.
+  actual far-map/local-face viewport size (a cache key); camera LOD never dirties these shadow lists.
   Local shadows reserve `reserve_native_shadow_passes(count)` before graph imports;
   `cull_native_shadow_pass_with_resolution(slot, matrix, resolution)` returns a cached pass index,
   recorded as cascade 4+slot (its matrix comes from `look::local`'s table).
