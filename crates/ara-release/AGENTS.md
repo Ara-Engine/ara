@@ -32,6 +32,8 @@ unchecked version string. Repackaging uses a fresh stage and refuses to replace
 an existing distribution. Remove only packager-owned target outputs explicitly
 when re-running after a code change. Installer/uninstaller refuse unrelated or
 existing directories, preserve user projects, and use Hub RPC for registration.
+Ship `paths.ps1` with both packages and any engine-installed Hub: their scripts
+normalize verbatim drive/UNC prefixes before Windows PowerShell 5.1 provider calls.
 
 Notices use cargo metadata (including transitive packages) and actual license
 files, plus checked-in vendor and shader-tool notices. Microsoft .NET is a

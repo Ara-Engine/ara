@@ -1527,6 +1527,7 @@ dependencies = [
  "ara-update",
  "blake3",
  "clap",
+ "dunce",
  "getrandom 0.3.4",
  "hex",
  "serde_json",
