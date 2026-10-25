@@ -39,10 +39,12 @@ pub(super) fn run(env: &Environment, project: &Path) -> Result<()> {
         );
         thread::sleep(Duration::from_millis(100));
     };
+    // This smoke drives the human File -> Build flow and owns the editor it
+    // gracefully shuts down. An omitted author defaults to an agent session.
     let session = client
         .call(
             "session.begin",
-            json!({"client":"ara-release-smoke","label":"Installed export smoke"}),
+            json!({"client":"ara-release-smoke","author":"human","label":"Installed export smoke"}),
         )
         .map_err(|e| anyhow::anyhow!("{e}"))?;
     let queued = client
@@ -117,7 +119,8 @@ pub(super) fn run(env: &Environment, project: &Path) -> Result<()> {
     );
     client
         .call("daemon.shutdown", json!({"session":session["session"]}))
-        .map_err(|e| anyhow::anyhow!("{e}"))?;
+        .map_err(|e| anyhow::anyhow!("{e}"))
+        .context("stop the smoke's export editor authority through its human session")?;
     drop(client);
     let until = Instant::now() + Duration::from_secs(10);
     while editor.0.try_wait()?.is_none() {

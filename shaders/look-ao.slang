@@ -39,7 +39,10 @@ void aoTraceMain(uint3 tid:SV_DispatchThreadID){
                 float sampleDepth=pixel(f.extra.x,int2(q)).x;if(sampleDepth<=0)continue;
                 float3 delta=worldAtDepth(f,floor(q)+0.5,sampleDepth)-P;float len=length(delta);
                 float falloff=saturate(1-len*len/(l.ao.x*l.ao.x));float cosine=dot(delta/max(len,1e-5),V);
-                horizons[sideIndex]=max(horizons[sideIndex],lerp(-1.,cosine,falloff));
+                // Distant samples and cutouts (gbufferOccluder, read only where the
+                // sample would raise the horizon) raise no horizon.
+                if(lerp(-1.,cosine,falloff)>horizons[sideIndex])
+                    horizons[sideIndex]=max(horizons[sideIndex],lerp(-1.,cosine,falloff*gbufferOccluder(f,int2(q))));
             }
         }
         // The positive side runs along sliceDirection (angles grow towards it).

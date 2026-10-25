@@ -301,6 +301,18 @@ fn shots<'a>(look: &'a Look, options: &Options<'_>) -> Vec<&'a Shot> {
     }
 }
 
+/// The raster capture's view: `ARA_CAPTURE_VIEW` = albedo, normals, cascades or
+/// material (roughness/metal) for diagnosis; lit otherwise.
+fn view_mode() -> ViewMode {
+    match std::env::var("ARA_CAPTURE_VIEW").as_deref() {
+        Ok("albedo") => ViewMode::Albedo,
+        Ok("normals") => ViewMode::Normals,
+        Ok("cascades") => ViewMode::ShadowCascades,
+        Ok("material") => ViewMode::RoughnessMetal,
+        _ => ViewMode::Lit,
+    }
+}
+
 fn save(image: &RgbaImage, options: &Options<'_>, label: &str, shot: &str) -> Result<()> {
     image.save(
         options
@@ -570,10 +582,59 @@ fn baseline(
                 before,
             );
         }
+        // `ARA_CAPTURE_LIVE=N` saves every fourth of N live frames as Play shows
+        // them (TAA, jitter and half-resolution history running, no capture
+        // reset); with `ARA_CAPTURE_MOTION` the camera walks while it turns.
+        if let Some(frames) = std::env::var("ARA_CAPTURE_LIVE")
+            .ok()
+            .and_then(|v| v.parse::<u32>().ok())
+        {
+            let motion = std::env::var_os("ARA_CAPTURE_MOTION").is_some();
+            // `ARA_CAPTURE_DOLLY=<m/s>` moves the camera straight along its view.
+            let dolly = std::env::var("ARA_CAPTURE_DOLLY")
+                .ok()
+                .and_then(|v| v.parse::<f32>().ok());
+            for k in 0..frames {
+                if motion {
+                    frame.camera = Some(moving(shot, k as f32 / 60.));
+                }
+                if let Some(speed) = dolly {
+                    let from = glam::Vec3::from_array(shot.position);
+                    let forward = (glam::Vec3::from_array(shot.target) - from).normalize();
+                    frame.camera = Some(CameraView {
+                        position: (from + forward * speed * k as f32 / 60.).to_array(),
+                        forward: forward.to_array(),
+                        fov: shot.fov,
+                    });
+                }
+                presenter.present(frame)?;
+                if k % 4 == 3 {
+                    let request = CaptureRequest {
+                        camera: camera(shot),
+                        size,
+                        mode: ViewMode::Lit,
+                        deterministic: false,
+                        exposure: frame.environment.exposure,
+                        settle_frames: 1,
+                        tick: frame.tick,
+                        seed: 0,
+                        marks: None,
+                    };
+                    let live = presenter
+                        .renderer_mut()
+                        .context("live raster renderer")?
+                        .capture_completed(&request)?;
+                    live.image.save(options.scratch.join(format!(
+                        "{}-{name}-{}-live{k:03}.png",
+                        options.name, shot.name
+                    )))?;
+                }
+            }
+        }
         let request = CaptureRequest {
             camera: camera(shot),
             size,
-            mode: ViewMode::Lit,
+            mode: view_mode(),
             deterministic: false,
             exposure: frame.environment.exposure,
             settle_frames: options.settle.min(1024),

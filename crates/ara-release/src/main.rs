@@ -42,6 +42,9 @@ enum Command {
     Smoke {
         #[arg(long, default_value = env!("CARGO_PKG_VERSION"))]
         version: String,
+        /// Existing packaged artifacts (default target/release-dist).
+        #[arg(long)]
+        artifacts: Option<PathBuf>,
     },
     /// Convert a private symbol archive using ara-crash (explicit opt-in).
     Symbols { directory: PathBuf },
@@ -98,9 +101,9 @@ fn main() -> Result<()> {
             }
             Ok(())
         }
-        Command::Smoke { version } => {
+        Command::Smoke { version, artifacts } => {
             valid_version(&version)?;
-            smoke::smoke(&root, &version)
+            smoke::smoke(&artifacts.unwrap_or_else(|| support::dist(&root)), &version)
         }
         Command::Symbols { directory } => package::symbols(&root, &directory),
         Command::Keygen { output } => publish::keygen(&root, &output),

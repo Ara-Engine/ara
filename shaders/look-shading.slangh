@@ -40,6 +40,23 @@ float farVisibility(Look l,float3 world,float3 normal){
     }
     return sum;
 }
+// One bilinear compare (a single gather) of `world` in a sun map: lit share, or -1
+// outside the map.
+float bilinearShadow(uint map,float4x4 m,float res,float3 world){
+    float4 h=mul(m,float4(world,1));float3 q=h.xyz/h.w;float2 uv=float2(q.x*0.5+0.5,0.5-q.y*0.5);
+    if(any(uv<0)||any(uv>1)||q.z<0||q.z>1)return -1;
+    float texel=2/(length(m[0].xyz)*res);float depth=q.z+texel*length(m[2].xyz);
+    float2 position=uv*res-0.5,base=floor(position),t=position-base;
+    float4 lit=step(textures[NonUniformResourceIndex(map)].GatherRed(samplers[2],(clamp(base,0,res-2)+1)/res),depth);
+    return lerp(lerp(lit.w,lit.z,t.x),lerp(lit.x,lit.y,t.x),t.y);
+}
+// Cheap sun visibility for fog samples: the cascade holding `world`, else the far map.
+float fogVisibility(Frame f,Look l,float3 world){
+    uint c=cascadeIndex(f,world);float d=dot(world-f.camera.xyz,f.forward.xyz);
+    if(c<f.look.z && d<f.splits[c]){float v=bilinearShadow(l.cascadeMaps[c],f.shadows[c],float(f.look.y),world);if(v>=0)return v;}
+    if(l.farInfo.z!=0){float v=bilinearShadow(l.farInfo.x,l.farShadow,float(l.farInfo.y),world);if(v>=0)return v;}
+    return 1;
+}
 // Local-shadow table layout (ara_render look::local::{FACES, RECORDS}).
 static const uint LOCAL_FACES=2048,LOCAL_RECORDS=8192;
 // Visibility of `world` from shadowed local light `index` (look::local): the
@@ -90,14 +107,17 @@ float3 brdf(Surface s,float3 v,float3 l) {
 }
 // Screen-space ambient visibility at full-resolution pixel `p` (camera distance
 // `distance`): a depth-aware bilinear upsample of the denoised half-resolution GTAO.
+// Where no neighbour shares the pixel's depth (silhouettes), the nearest in depth
+// stands in rather than a blend of the other side's surfaces.
 float screenOcclusion(Frame f,Look l,int2 p,float distance){
     if((l.flags.y&LOOK_AMBIENT_OCCLUSION)==0)return 1;
-    int2 half=int2((f.extent.xy+1)/2);float2 h=(float2(p)+0.5)*0.5-0.5;int2 b=int2(floor(h));float2 t=h-float2(b);float sum=0,total=0;
+    int2 half=int2((f.extent.xy+1)/2);float2 h=(float2(p)+0.5)*0.5-0.5;int2 b=int2(floor(h));float2 t=h-float2(b);
+    float sum=0,total=0,best=1e30,nearest=1;
     for(uint k=0;k<4;k++){
-        int2 o=int2(k&1,k>>1);float2 v=pixel(l.aoImages.y,clamp(b+o,int2(0),half-1)).rg;
-        float w=(o.x==1?t.x:1-t.x)*(o.y==1?t.y:1-t.y)*exp(-abs(v.g-distance)/max(distance*0.02,0.05))+1e-4;
-        sum+=v.r*w;total+=w;
-    }return sum/total;
+        int2 o=int2(k&1,k>>1);float2 v=pixel(l.aoImages.y,clamp(b+o,int2(0),half-1)).rg;float dz=abs(v.g-distance);
+        float w=(o.x==1?t.x:1-t.x)*(o.y==1?t.y:1-t.y)*exp(-dz/max(distance*0.02,0.05));
+        sum+=v.r*w;total+=w;if(dz<best){best=dz;nearest=v.r;}
+    }return total>1e-3?sum/total:nearest;
 }
 // Multi-bounce ambient occlusion (Jimenez et al. 2016): light inter-reflected
 // inside the occluded cavity brightens AO on bright albedo.
@@ -114,12 +134,14 @@ float specularOcclusion(float nv,float ao,float roughness){
 // Returns the volume coverage; zero when no lobe was gathered nearby.
 float gatheredLobes(Frame f,Look l,int2 p,float distance,out float3 diffuse,out float3 specular){
     int2 half=int2((f.extent.xy+1)/2);float2 h=(float2(p)+0.5)*0.5-0.5;int2 b=int2(floor(h));float2 t=h-float2(b);
-    diffuse=0;specular=0;float coverage=0,total=0;
+    diffuse=0;specular=0;float coverage=0,total=0,best=1e30;float4 nearestD=0,nearestS=0;
     for(uint k=0;k<4;k++){
-        int2 o=int2(k&1,k>>1),q=clamp(b+o,int2(0),half-1);float4 d=pixel(l.giGather.x,q),s=pixel(l.giGather.y,q);
-        float w=(o.x==1?t.x:1-t.x)*(o.y==1?t.y:1-t.y)*exp(-abs(d.w-distance)/max(distance*0.02,0.05))+1e-5;
-        diffuse+=d.rgb*w;specular+=s.rgb*w;coverage+=s.w*w;total+=w;
+        int2 o=int2(k&1,k>>1),q=clamp(b+o,int2(0),half-1);float4 d=pixel(l.giGather.x,q),s=pixel(l.giGather.y,q);float dz=abs(d.w-distance);
+        float w=(o.x==1?t.x:1-t.x)*(o.y==1?t.y:1-t.y)*exp(-dz/max(distance*0.02,0.05));
+        diffuse+=d.rgb*w;specular+=s.rgb*w;coverage+=s.w*w;total+=w;if(dz<best){best=dz;nearestD=d;nearestS=s;}
     }
+    // No neighbour at this depth (a silhouette): the nearest in depth, as for AO.
+    if(total<=1e-3){diffuse=nearestD.rgb;specular=nearestS.rgb;return nearestS.w;}
     diffuse/=total;specular/=total;return coverage/total;
 }
 // Screen-space reflection at full-resolution pixel `p`: rgb radiance, a confidence
@@ -127,12 +149,12 @@ float gatheredLobes(Frame f,Look l,int2 p,float distance,out float3 diffuse,out 
 float4 screenReflection(Frame f,Look l,int2 p){
     if((l.flags.y&LOOK_REFLECTIONS)==0)return 0;
     int2 half=int2((f.extent.xy+1)/2);float2 h=(float2(p)+0.5)*0.5-0.5;int2 b=int2(floor(h));float2 t=h-float2(b);
-    float depth=pixel(f.extra.x,p).x;float4 sum=0;float total=0;
+    float depth=pixel(f.extra.x,p).x;float4 sum=0,nearest=0;float total=0,best=1e30;
     for(uint k=0;k<4;k++){
-        int2 o=int2(k&1,k>>1),q=clamp(b+o,int2(0),half-1);float d=pixel(f.extra.x,q*2).x;
-        float w=(o.x==1?t.x:1-t.x)*(o.y==1?t.y:1-t.y)*exp(-abs(d/max(depth,1e-7)-1)*40)+1e-5;
-        sum+=pixel(l.ssrImages.y,q)*w;total+=w;
-    }return sum/total;
+        int2 o=int2(k&1,k>>1),q=clamp(b+o,int2(0),half-1);float d=pixel(f.extra.x,q*2).x;float dz=abs(d/max(depth,1e-7)-1);
+        float w=(o.x==1?t.x:1-t.x)*(o.y==1?t.y:1-t.y)*exp(-dz*40);float4 r=pixel(l.ssrImages.y,q);
+        sum+=r*w;total+=w;if(dz<best){best=dz;nearest=r;}
+    }return total>1e-3?sum/total:nearest;
 }
 // Ambient light: the physical sky's IBL under a sky atmosphere, otherwise the
 // environment map's (32x16 irradiance, five-level 256x640 GGX prefilter strip for

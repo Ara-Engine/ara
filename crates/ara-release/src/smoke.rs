@@ -91,8 +91,8 @@ impl Drop for Environment {
         }
     }
 }
-pub fn smoke(root: &Path, version: &str) -> Result<()> {
-    let dist = support::dist(root);
+pub fn smoke(dist: &Path, version: &str) -> Result<()> {
+    let dist = dist.canonicalize().context("release artifacts directory")?;
     let directory = dist.join(format!(
         "smoke-{}-{}",
         std::process::id(),
