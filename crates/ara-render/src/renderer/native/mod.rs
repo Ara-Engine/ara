@@ -15,8 +15,10 @@ mod environment;
 #[cfg(test)]
 mod tests;
 mod updates;
+mod view;
 use batches::Groups;
 use culling::Culling;
+pub(in crate::renderer) use view::NativeView;
 
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable)]
@@ -32,6 +34,7 @@ pub(super) struct Native {
     textures: Box<dyn Textures>,
     texture_digest: [u8; 32],
     geometry_revisions: Vec<u64>,
+    view_revision: u64,
     materials: Buffer,
     material_index: u32,
     material_data: Vec<crate::instanced::Material>,
@@ -553,6 +556,7 @@ impl Native {
                 .iter()
                 .map(|geometry| geometry.revision)
                 .collect(),
+            view_revision: 0,
             materials,
             instances,
             visible,

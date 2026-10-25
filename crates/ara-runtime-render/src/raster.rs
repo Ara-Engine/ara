@@ -504,6 +504,24 @@ impl RasterView {
         })
     }
 
+    /// Draw another camera over the retained native scene, without rendering the
+    /// primary camera. Arrival fades belong to the shared scene and advance only
+    /// after a successful presentation; the renderer owns each camera's history.
+    pub fn render_secondary(
+        &mut self,
+        renderer: &mut Renderer,
+        view: &mut ara_render::ViewId,
+        request: &ara_render::ViewRequest<'_>,
+    ) -> Result<ara_render::ViewOutput> {
+        let prepared = self.prepared.as_mut().context("native raster content")?;
+        with_emitter_lights(&mut prepared.scene, &self.emitter_lights, |scene| {
+            self.fades.apply(scene, renderer)
+        })?;
+        let output = renderer.render_secondary(view, request)?;
+        self.fades.presented();
+        Ok(output)
+    }
+
     /// Wait only at an explicit capture/measurement boundary, never in live rendering.
     pub fn wait_probe_gi(&mut self, renderer: &mut Renderer) -> Result<()> {
         while self.emitter_search.is_busy() {
