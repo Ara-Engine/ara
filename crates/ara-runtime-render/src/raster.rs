@@ -344,9 +344,7 @@ impl RasterView {
                     self.search_emission_edits()?;
                 }
             }
-            if renderer.size() != plan.render_size {
-                renderer.resize(plan.render_size)?;
-            }
+            renderer.resize_upscaled(plan.render_size, plan.display_size)?;
             if *renderer.quality() != plan.quality {
                 ara_gpu::cpu_scope!("RasterView.apply_quality");
                 renderer.set_quality(plan.quality)?;

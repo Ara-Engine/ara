@@ -1,5 +1,7 @@
 // Ara raster core ABI: bindings, the frame record and scene records shared by every
 // raster shader. Column-major matrices, metres, linear HDR, reversed-Z.
+// `cascade`: the shadow pass; native G-buffer and forward passes carry the texture
+// footprint scale there instead (f32 bits of Frame.upscale.z; zero reads as one).
 struct Root { uint frame; uint materials; uint material; uint entity; uint cascade; uint mode; uint sample; uint flags; };
 #ifdef VULKAN
 #define BIND(n) [[vk::binding(n,0)]]
@@ -15,7 +17,7 @@ BIND(3) RWTexture2D<float4> images[64] : register(u0,space3);
 static const float PI=3.14159265359;
 struct Frame {
     float4x4 vp;
-    float4x4 previousVp;
+    float4x4 previousVp; // last frame's, unjittered (history is in unjittered screen space)
     float4x4 inverseVp;
     float4x4 shadows[4];
     float4 camera;
@@ -29,9 +31,17 @@ struct Frame {
     uint4 lighting;
     uint4 post;
     uint4 temporal;
-    // x: look constants buffer (look.slangh); w: sampled native motion (RG16F,
-    // unjittered current-minus-previous UV), u32::MAX without; yz reserved.
+    // x: look constants buffer (look.slangh); y cascade texels, z cascades; w:
+    // sampled native motion (RG16F, unjittered current-minus-previous UV),
+    // u32::MAX without.
     uint4 look;
+    // Temporal upscaling (Renderer::resize_upscaled): xy render size (scene passes,
+    // G-buffer, HDR), zw display size (history, output). `extent` holds one of the
+    // two: render in the scene passes' record, display in the resolve/post record.
+    uint4 sizes;
+    // xy this frame's sample offset from render pixel centres in render pixels (+y
+    // down; zero without jitter), z texture footprint scale (render / display), w unused.
+    float4 upscale;
 };
 // Shaded surface. `ao` is material ambient occlusion (opaque G-buffer albedo.a).
 // `transmission` (0..1, resolved factor times map) is the share of diffuse light

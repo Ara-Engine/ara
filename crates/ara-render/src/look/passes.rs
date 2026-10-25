@@ -21,7 +21,8 @@ pub(crate) enum LookPass {
     SkyIrradiance,
     SkyPrefilter,
     Fog,
-    Exposure,
+    /// Metering: 0 bins the history, 1 meters the bins into the exposure state.
+    Exposure(u32),
     Bloom(u32),
     Post,
     GiRelight,
@@ -35,6 +36,17 @@ pub(crate) enum LookPass {
     /// Reflection colour pyramid level (1..4) from the previous history.
     SsrPyramid(u32),
     SsrTrace,
+}
+
+/// The frame records look passes run with: scene passes at the render size; the
+/// post chain (exposure, bloom, grading) at the display size, after the temporal
+/// resolve (`Renderer::resize_upscaled`).
+#[derive(Clone, Copy)]
+pub(crate) struct Frames {
+    /// Frame record (bindless index) and extent of the scene passes.
+    pub render: (u32, [u32; 2]),
+    /// Frame record and extent of the post chain.
+    pub display: (u32, [u32; 2]),
 }
 
 impl LookGpu {
@@ -346,12 +358,14 @@ impl LookGpu {
             );
             passes.push((id, pass));
         };
-        add(
-            graph,
-            "Exposure.Histogram",
-            LookPass::Exposure,
-            vec![(ids.state, Access::Storage)],
-        );
+        for (pass, name) in ["Exposure.Histogram", "Exposure.Meter"].iter().enumerate() {
+            add(
+                graph,
+                name,
+                LookPass::Exposure(pass as u32),
+                vec![(ids.state, Access::Storage)],
+            );
+        }
         let bloom = self.effective().bloom > 0.;
         if bloom {
             const NAMES: [&str; 9] = [
@@ -390,17 +404,20 @@ impl LookGpu {
 
     /// Records one look dispatch. `input` is the sampled index of the scene HDR
     /// (post passes; the history for the reflection pyramid), `exposed` whether it is
-    /// the pre-exposed TAA history rather than linear HDR; `size` is the render extent.
+    /// the pre-exposed TAA history rather than linear HDR.
     pub(crate) fn record(
         &self,
         recorder: &mut Recorder,
         pass: LookPass,
-        frame_index: u32,
+        frames: Frames,
         input: u32,
         exposed: bool,
-        size: [u32; 2],
     ) {
         let p = &self.pipelines;
+        let (frame_index, size) = match pass {
+            LookPass::Exposure(_) | LookPass::Bloom(_) | LookPass::Post => frames.display,
+            _ => frames.render,
+        };
         if let LookPass::GiClear | LookPass::GiScatter(_) = pass {
             self.record_scatter(recorder, pass);
             return;
@@ -413,7 +430,8 @@ impl LookGpu {
             LookPass::SkyIrradiance => (p.sky_irradiance, 0, groups([32, 16])),
             LookPass::SkyPrefilter => (p.sky_prefilter, 0, groups([256, 640])),
             LookPass::Fog => (p.fog, 0, groups([64, 36])),
-            LookPass::Exposure => (p.exposure, 0, [1, 1, 1]),
+            // One grid sample per thread (128x72), then one metering group.
+            LookPass::Exposure(n) => (p.exposure, n, [if n == 0 { 36 } else { 1 }, 1, 1]),
             LookPass::Bloom(n) => {
                 // Levels 2..6 (quarter resolution down), as in look-post.slang.
                 let level = if n < 5 { n } else { 8 - n } + 2;

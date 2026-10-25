@@ -245,6 +245,7 @@ fn scene_submission_retains_completed_color_ids_and_pick_while_gpu_is_blocked() 
         &crate::ViewRequest {
             camera: &game_camera,
             size: [72, 44],
+            render_size: [72, 44],
             quality: *renderer.quality(),
             exposure: 1.,
         },

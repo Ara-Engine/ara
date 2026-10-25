@@ -159,7 +159,7 @@ impl Landscapes {
         let Some(terrain) = &frame.terrain else {
             return Ok(None);
         };
-        let size = renderer.size();
+        let size = renderer.render_size();
         if self
             .built
             .as_ref()

@@ -91,37 +91,64 @@ float3 historyCatmullRom(Frame f,float2 uv){
         +historyTex(f.post.y,float2(p12.x,p3.y)).rgb*(w12.x*w3.y);
     return max(sum/(w12.x*w0.y+w0.x*w12.y+w12.x*w12.y+w3.x*w12.y+w12.x*w3.y),0);
 }
-// Temporal antialiasing of the lit HDR in `root.materials` (the renderer's HDR, or
-// a composite handed to `Renderer::finish`) into the history image `f.post.z`.
+// Temporal antialiasing and upscaling of the lit HDR in `root.materials` (the
+// renderer's HDR, or a composite handed to `Renderer::finish`) into the history
+// image `f.post.z`. Runs with the display frame record: the input, depth and motion
+// are at the render size f.sizes.xy, the history at the display extent.
 // History reprojects with the native motion texture (Frame.look.w: unjittered
 // current-minus-previous UV) when present, otherwise with the static world position;
-// it is clipped to the current 3x3 neighbourhood's YCoCg mean and variance and
+// it is clipped to the 3x3 render neighbourhood's YCoCg mean and variance and
 // blended with exposed-luminance weights (no flicker from bright subpixel detail).
+// Upscaled, the current frame is reconstructed from the jittered samples around the
+// pixel (Frame.upscale.xy places them): a Blackman-Harris-like Gaussian in display
+// pixels, each sample weighted by its exposed luminance so lone HDR points (lamps,
+// sparks) cannot spill over the window. It blends in by how near its nearest
+// sample lies, so history gathers the detail between samples. Native frames take
+// their own pixel, as plain TAA.
 // History is RGBA16F, pre-exposed (look.slangh exposureState); w keeps the depth.
 [shader("compute")]
 [numthreads(8,8,1)]
 void taaMain(uint3 t:SV_DispatchThreadID){
     Frame f=frame();if(any(t.xy>=f.extent.xy))return;int2 p=int2(t.xy);uint input=root.materials;
     float4 state=exposureState(look(f));float exposure=exposureScale(f,state.x),previous=exposureScale(f,state.y);
-    float3 current=pixel(input,p).rgb;float depth=pixel(f.extra.x,p).x;float3 result=current;
-    if(f.temporal.x!=0 && f.temporal.y==0){
-        float2 uv;bool valid;
-        if(f.look.w!=0xffffffffu){
-            uv=(float2(p)+0.5)/float2(f.extent.xy)-pixel(f.look.w,p).xy;valid=all(uv>0)&&all(uv<1);
-        }else{
-            bool covered;float3 world=gbufferWorld(f,p,covered);float4 previous=mul(f.previousVp,float4(world,1));uv=float2(previous.x/previous.w*0.5+0.5,0.5-previous.y/previous.w*0.5);
-            float4 history=historyTex(f.post.y,uv);
-            valid=covered && previous.w>0 && all(uv>0)&&all(uv<1)&&abs(history.w-previous.z/previous.w)<0.002;
+    int2 size=int2(f.sizes.xy);bool upscaled=any(size<int2(f.extent.xy));
+    // This pixel's centre in render pixels, and the render pixel whose jittered
+    // sample lies nearest it (the pixel itself when native).
+    float2 uv=(float2(p)+0.5)/float2(f.extent.xy),at=uv*float2(size),toDisplay=float2(f.extent.xy)/float2(size);
+    int2 c=clamp(int2(floor(at-f.upscale.xy)),int2(0),size-1);
+    float3 current=pixel(input,c).rgb;float depth=pixel(f.extra.x,c).x;float3 result=current;
+    bool temporal=f.temporal.x!=0 && f.temporal.y==0;
+    if(temporal || upscaled){
+        float3 mean=0,square=0,sum=0;float total=0;
+        for(int y=-1;y<=1;y++)for(int x=-1;x<=1;x++){
+            int2 q=clamp(c+int2(x,y),int2(0),size-1);float3 s=pixel(input,q).rgb,v=toYCoCg(s);mean+=v;square+=v*v;
+            float2 d=(float2(q)+0.5+f.upscale.xy-at)*toDisplay;float w=exp(-5.56*dot(d,d))/(1+luminance(s)*exposure);sum+=s*w;total+=w;
+        }
+        mean/=9;float3 sigma=sqrt(max(square/9-mean*mean,0));
+        if(upscaled)current=sum/total;
+        result=current;
+        float2 hv=0;bool valid=false;
+        if(temporal && f.look.w!=0xffffffffu){
+            hv=uv-pixel(f.look.w,c).xy;valid=all(hv>0)&&all(hv<1);
+        }else if(temporal){
+            // The sample's world point, and how far it moved from where last
+            // frame's (unjittered) history saw it.
+            float2 s=(float2(c)+0.5)/float2(size);float4 h=mul(f.inverseVp,float4(s.x*2-1,1-s.y*2,depth,1));
+            float4 prior=mul(f.previousVp,float4(h.xyz/h.w,1));
+            hv=uv-(s+f.upscale.xy/float2(size))+float2(prior.x/prior.w*0.5+0.5,0.5-prior.y/prior.w*0.5);
+            float4 history=historyTex(f.post.y,hv);
+            valid=depth>0 && prior.w>0 && all(hv>0)&&all(hv<1)&&abs(history.w-prior.z/prior.w)<0.002;
         }
         if(valid){
-            float3 mean=0,square=0;
-            for(int y=-1;y<=1;y++)for(int x=-1;x<=1;x++){float3 c=toYCoCg(pixel(input,clamp(p+int2(x,y),int2(0),int2(f.extent.xy)-1)).rgb);mean+=c;square+=c*c;}
-            mean/=9;float3 sigma=sqrt(max(square/9-mean*mean,0));
-            float3 history=toYCoCg(historyCatmullRom(f,uv)/previous),low=mean-1.25*sigma,high=mean+1.25*sigma;
+            float3 history=toYCoCg(historyCatmullRom(f,hv)/previous),low=mean-1.25*sigma,high=mean+1.25*sigma;
             // Clip towards the neighbourhood mean (not a per-channel clamp).
             float3 delta=history-mean,extent=max(high-mean,1e-5);float3 scale=abs(delta)/extent;float m=max(scale.x,max(scale.y,scale.z));
             history=fromYCoCg(m>1?mean+delta/m:history);
-            float wc=0.1/(1+luminance(current)*exposure),wh=0.9/(1+luminance(history)*exposure);
+            // Upscaled, the nearest sample's distance in display pixels sets how much
+            // the current frame counts.
+            float2 near=(float2(c)+0.5+f.upscale.xy-at)*toDisplay;
+            float alpha=upscaled?0.15*exp(-2.29*dot(near,near)):0.1;
+            float wc=alpha/(1+luminance(current)*exposure),wh=(1-alpha)/(1+luminance(history)*exposure);
             result=(current*wc+history*wh)/(wc+wh);
         }
     }
@@ -131,12 +158,14 @@ float3 displayCurve(Frame f,float3 x){uint curve=uint(f.forward.w);return curve=
 [shader("compute")]
 [numthreads(8,8,1)]
 void tonemapMain(uint3 t:SV_DispatchThreadID){Frame f=frame();if(any(t.xy>=f.extent.xy))return;int2 p=int2(t.xy);float3 color=pixel(root.materials,p).rgb;
-    if(f.temporal.z==1)color=gbufferAlbedo(f,p).rgb;
-    else if(f.temporal.z==2)color=gbufferDepth(f,p)>0?gbufferNormal(f,p)*0.5+0.5:0.5;
-    else if(f.temporal.z==3)color=float3(pow(pixel(f.extra.x,p).x,0.25));
-    else if(f.temporal.z==4)color=float3(gbufferMaterial(f,p),0);
-    else if(f.temporal.z==5){uint id=uint(pixel(f.extra.y,p).x);color=id==0?float3(0):frac(float3(id)*float3(0.6180339,0.381966,0.7548776));}
-    else if(f.temporal.z==6){bool covered;float3 w=gbufferWorld(f,p,covered);uint c=cascadeIndex(f,w);color=!covered?float3(0):(c==0?float3(0.85,0.2,0.1):c==1?float3(0.2,0.8,0.25):c==2?float3(0.2,0.35,0.9):float3(0.8,0.3,0.8))*visibility(f,look(f),w,gbufferNormal(f,p));}
+    // Debug views read the render-size G-buffer pixel `r` under this display pixel.
+    Frame g=f;g.extent.xy=f.sizes.xy;int2 r=int2((float2(p)+0.5)*float2(f.sizes.xy)/float2(f.extent.xy));
+    if(f.temporal.z==1)color=gbufferAlbedo(g,r).rgb;
+    else if(f.temporal.z==2)color=gbufferDepth(g,r)>0?gbufferNormal(g,r)*0.5+0.5:0.5;
+    else if(f.temporal.z==3)color=float3(pow(pixel(f.extra.x,r).x,0.25));
+    else if(f.temporal.z==4)color=float3(gbufferMaterial(g,r),0);
+    else if(f.temporal.z==5){uint id=uint(pixel(f.extra.y,r).x);color=id==0?float3(0):frac(float3(id)*float3(0.6180339,0.381966,0.7548776));}
+    else if(f.temporal.z==6){bool covered;float3 w=gbufferWorld(g,r,covered);uint c=cascadeIndex(f,w);color=!covered?float3(0):(c==0?float3(0.85,0.2,0.1):c==1?float3(0.2,0.8,0.25):c==2?float3(0.2,0.35,0.9):float3(0.8,0.3,0.8))*visibility(f,look(f),w,gbufferNormal(g,r));}
     if(f.temporal.z==0)color=displayCurve(f,max(color,0)*f.sunColorExposure.w);
     images[NonUniformResourceIndex(f.post.w)][p]=float4(srgb(saturate(color)),1);
 }

@@ -6,6 +6,8 @@ use bytemuck::{Pod, Zeroable};
 #[derive(Clone, Copy, Pod, Zeroable)]
 pub(super) struct Frame {
     pub vp: Mat4,
+    /// Last frame's view-projection without its jitter: history and the
+    /// reflection colour are accumulated in unjittered screen space.
     pub previous_vp: Mat4,
     pub inverse_vp: Mat4,
     pub shadows: [Mat4; 4],
@@ -20,8 +22,15 @@ pub(super) struct Frame {
     pub lighting: [u32; 4],
     pub post: [u32; 4],
     pub temporal: [u32; 4],
-    /// x: look constants buffer (look::frame::LookFrame).
+    /// x: look constants buffer (look::frame::LookFrame), y cascade texels, z
+    /// cascades, w sampled native motion.
     pub look: [u32; 4],
+    /// Temporal upscaling: xy render size (scene passes), zw display size.
+    pub sizes: [u32; 4],
+    /// xy this frame's sample offset from render pixel centres in render pixels
+    /// (+y down; zero without jitter), z the texture-footprint scale
+    /// (render / display width: a negative mip bias when upscaled), w unused.
+    pub upscale: [f32; 4],
 }
 impl Renderer {
     pub(super) fn frame_data(
@@ -33,14 +42,23 @@ impl Renderer {
         output_history: usize,
     ) -> Frame {
         let mut projection = camera.projection;
+        let [render, display] = [self.render, self.size].map(|s| s.map(|v| v as f32));
+        let mut offset = glam::Vec2::ZERO;
         if !deterministic {
-            let sample = self.frame_number % 8 + 1;
+            // Halton(2,3) phases grow with the upscale (eight times the display
+            // pixels per render pixel), so samples land near every display pixel.
+            let ratio = display[0] * display[1] / (render[0] * render[1]);
+            let phases = ((8. * ratio).round() as u32).clamp(8, 32);
+            let sample = self.frame_number % phases + 1;
             let jitter = glam::Vec2::new(halton(sample, 2) - 0.5, halton(sample, 3) - 0.5);
             projection = Mat4::from_translation(Vec3::new(
-                jitter.x * 2. / self.size[0] as f32,
-                jitter.y * 2. / self.size[1] as f32,
+                jitter.x * 2. / render[0],
+                jitter.y * 2. / render[1],
                 0.,
             )) * projection;
+            // Content moves right and up by the jitter, so each pixel centre shows
+            // the unjittered image at centre - (x, -y).
+            offset = glam::Vec2::new(-jitter.x, jitter.y);
         }
         let vp = projection * camera.view;
         let light_count = self.content.lights.len() as u32;
@@ -49,7 +67,7 @@ impl Renderer {
         let previous = if self.targets.history.is_some() {
             self.previous_vp
         } else {
-            vp
+            camera.projection * camera.view
         };
         Frame {
             vp,
@@ -70,7 +88,12 @@ impl Renderer {
             sun_direction: self.content.sun_direction.extend(0.).to_array(),
             sun_color_exposure: self.content.sun_lux.extend(exposure).to_array(),
             splits,
-            extent: [self.size[0], self.size[1], light_count, self.frame_number],
+            extent: [
+                self.render[0],
+                self.render[1],
+                light_count,
+                self.frame_number,
+            ],
             gbuffer: [
                 self.targets.sampled[ALBEDO],
                 self.targets.sampled[NORMAL],
@@ -113,6 +136,8 @@ impl Renderer {
                     u32::MAX
                 },
             ],
+            sizes: [self.render[0], self.render[1], self.size[0], self.size[1]],
+            upscale: [offset.x, offset.y, render[0] / display[0], 0.],
         }
     }
 }
@@ -135,20 +160,10 @@ pub(super) fn cascade_splits(shadows: &crate::look::Shadows) -> [f32; 4] {
         0.75 * near * (far / near).powf(t) + 0.25 * (near + (far - near) * t)
     })
 }
-/// Light view-projections of the cascades. The light space has a fixed rotation
-/// and world origin, and each cascade's centre snaps to whole texels, so shadows
-/// stay still while the camera moves (no swimming edges). Cascades past the first
-/// snap coarsely instead (a tenth of their radius, inside a matching margin), so
-/// their cached maps (look::cascades) survive camera moves and turns for many
-/// frames; the first keeps texel snapping for the sharpest near shadows.
-fn shadow_cascades(camera: &Camera, sun: Vec3, splits: [f32; 4], resolution: u32) -> [Mat4; 4] {
+/// Bounding spheres (centre, radius rounded up to 1/16 m) of the view-frustum
+/// slices the cascades cover; a sphere keeps the extent independent of rotation.
+pub(super) fn cascade_slices(camera: &Camera, splits: [f32; 4]) -> [(Vec3, f32); 4] {
     let inverse = (camera.projection * camera.view).inverse();
-    let up = if sun.dot(Vec3::Y).abs() > 0.99 {
-        Vec3::Z
-    } else {
-        Vec3::Y
-    };
-    let light = Mat4::look_at_rh(Vec3::ZERO, -sun, up);
     let mut near = 0.1;
     std::array::from_fn(|i| {
         let far = splits[i];
@@ -165,7 +180,6 @@ fn shadow_cascades(camera: &Camera, sun: Vec3, splits: [f32; 4], resolution: u32
         }
         near = far;
         let centre = corners.iter().copied().sum::<Vec3>() / 8.;
-        // A bounding sphere keeps the extent independent of view rotation.
         let radius = (corners
             .iter()
             .map(|p| p.distance(centre))
@@ -173,6 +187,25 @@ fn shadow_cascades(camera: &Camera, sun: Vec3, splits: [f32; 4], resolution: u32
             * 16.)
             .ceil()
             / 16.;
+        (centre, radius)
+    })
+}
+/// Light view-projections of the cascades. The light space has a fixed rotation
+/// and world origin, and each cascade's centre snaps to whole texels, so shadows
+/// stay still while the camera moves (no swimming edges). Cascades past the first
+/// snap coarsely instead (a tenth of their radius, inside a matching margin), so
+/// their cached maps (look::cascades) survive camera moves and turns for many
+/// frames; the first keeps texel snapping for the sharpest near shadows.
+fn shadow_cascades(camera: &Camera, sun: Vec3, splits: [f32; 4], resolution: u32) -> [Mat4; 4] {
+    let up = if sun.dot(Vec3::Y).abs() > 0.99 {
+        Vec3::Z
+    } else {
+        Vec3::Y
+    };
+    let light = Mat4::look_at_rh(Vec3::ZERO, -sun, up);
+    let slices = cascade_slices(camera, splits);
+    std::array::from_fn(|i| {
+        let (centre, radius) = slices[i];
         let radius = if i == 0 { radius } else { radius * 1.1 };
         let texel = radius * 2. / resolution as f32;
         let step = if i == 0 {

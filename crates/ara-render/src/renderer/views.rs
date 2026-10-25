@@ -22,6 +22,10 @@ pub struct ViewRequest<'a> {
     pub camera: &'a CameraSpec,
     /// Physical pixels of this view, independent of the primary output extent.
     pub size: [u32; 2],
+    /// Render size of its scene passes, at most `size` per axis: smaller sizes
+    /// are temporally upscaled (`Renderer::resize_upscaled`; a `RasterPlan`'s
+    /// `render_size`); `size` renders natively.
+    pub render_size: [u32; 2],
     /// Raster feature budgets for this view. Probe GI uses the shared volume.
     pub quality: crate::look::Quality,
     /// Positive authored exposure multiplier; auto exposure keeps per-view state.
@@ -143,7 +147,7 @@ impl Renderer {
         self.look.probe_writes = std::mem::take(&mut writes);
         self.secondary_active = true;
         let result = (|| {
-            self.resize(request.size)?;
+            self.resize_upscaled(request.render_size, request.size)?;
             if self.look.quality != request.quality {
                 self.set_quality(request.quality)?;
             }

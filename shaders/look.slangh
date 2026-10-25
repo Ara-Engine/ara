@@ -34,7 +34,7 @@ struct Look {
     float4 terrain;    // x terrain detail distance (m): layer normal/MR maps end there
     uint4 localShadows; // x shading table (storage), y atlas (sampled; 0 none), zw atlas texels
 };
-static const uint LOOK_PHYSICAL_SKY=1,LOOK_FOG=2,LOOK_RESET=4,LOOK_AMBIENT_OCCLUSION=8,LOOK_REFLECTIONS=16;
+static const uint LOOK_PHYSICAL_SKY=1,LOOK_FOG=2,LOOK_RESET=4,LOOK_AMBIENT_OCCLUSION=8,LOOK_REFLECTIONS=16,LOOK_SNAP=32;
 Look look(Frame f){return buffers[NonUniformResourceIndex(f.look.x)].Load<Look>(0);}
 // Exposure state (look-post.slang exposureMain): applied multiplier, the previous
 // one, EV100 and metered luminance. The TAA history (RGBA16F) is stored pre-exposed
@@ -42,6 +42,9 @@ Look look(Frame f){return buffers[NonUniformResourceIndex(f.look.x)].Load<Look>(
 // as y, so history readers after it, and the next frame's readers before it, decode
 // with y. The buffer starts zeroed and captures zero it again (reproducible
 // convergence): `exposureScale` then substitutes the frame's exposure argument.
+// The metering histogram's 256 counts follow the state, at byte EXPOSURE_BINS;
+// they are zero between frames.
+static const uint EXPOSURE_BINS=16;
 float4 exposureState(Look l){return buffers[NonUniformResourceIndex(l.state.x)].Load<float4>(0);}
 float exposureScale(Frame f,float s){
     float fallback=f.sunColorExposure.w;return s>0 && s<1e30?s:fallback>0 && fallback<1e30?fallback:1;
