@@ -72,8 +72,8 @@ Owns the M1 baseline renderer and agent visual feedback. Gameplay state stays in
 - `look::Quality` (`Renderer::set_quality`): per-preset budgets from
   `ara_render_fidelity::presets::RasterPlan`: shadow cascades (count, texels,
   distance; stable light space, practical splits, gather PCF, cascade blend; one
-  cached D32 map per cascade, redrawn only when its matrix or casters in its light
-  volume change, outer cascades snapped coarsely), a cached far map (`look::far`),
+  cached D32 map per cascade, redrawn only when its matrix or casters in its light volume change, outer cascades
+  snapped coarsely and redrawn at most one per frame, `Cascades::plan`), a cached far map (`look::far`),
   local-light shadows (`look::local`), half-res GTAO and SSR (cone footprint into
   last frame's colour pyramid), GI relight, bloom, emitter lights, LOD/cull pixels,
   terrain detail. Look images are allocated lazily (the bindless heap is shared);

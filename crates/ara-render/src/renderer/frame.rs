@@ -160,20 +160,10 @@ pub(super) fn cascade_splits(shadows: &crate::look::Shadows) -> [f32; 4] {
         0.75 * near * (far / near).powf(t) + 0.25 * (near + (far - near) * t)
     })
 }
-/// Light view-projections of the cascades. The light space has a fixed rotation
-/// and world origin, and each cascade's centre snaps to whole texels, so shadows
-/// stay still while the camera moves (no swimming edges). Cascades past the first
-/// snap coarsely instead (a tenth of their radius, inside a matching margin), so
-/// their cached maps (look::cascades) survive camera moves and turns for many
-/// frames; the first keeps texel snapping for the sharpest near shadows.
-fn shadow_cascades(camera: &Camera, sun: Vec3, splits: [f32; 4], resolution: u32) -> [Mat4; 4] {
+/// Bounding spheres (centre, radius rounded up to 1/16 m) of the view-frustum
+/// slices the cascades cover; a sphere keeps the extent independent of rotation.
+pub(super) fn cascade_slices(camera: &Camera, splits: [f32; 4]) -> [(Vec3, f32); 4] {
     let inverse = (camera.projection * camera.view).inverse();
-    let up = if sun.dot(Vec3::Y).abs() > 0.99 {
-        Vec3::Z
-    } else {
-        Vec3::Y
-    };
-    let light = Mat4::look_at_rh(Vec3::ZERO, -sun, up);
     let mut near = 0.1;
     std::array::from_fn(|i| {
         let far = splits[i];
@@ -190,7 +180,6 @@ fn shadow_cascades(camera: &Camera, sun: Vec3, splits: [f32; 4], resolution: u32
         }
         near = far;
         let centre = corners.iter().copied().sum::<Vec3>() / 8.;
-        // A bounding sphere keeps the extent independent of view rotation.
         let radius = (corners
             .iter()
             .map(|p| p.distance(centre))
@@ -198,6 +187,25 @@ fn shadow_cascades(camera: &Camera, sun: Vec3, splits: [f32; 4], resolution: u32
             * 16.)
             .ceil()
             / 16.;
+        (centre, radius)
+    })
+}
+/// Light view-projections of the cascades. The light space has a fixed rotation
+/// and world origin, and each cascade's centre snaps to whole texels, so shadows
+/// stay still while the camera moves (no swimming edges). Cascades past the first
+/// snap coarsely instead (a tenth of their radius, inside a matching margin), so
+/// their cached maps (look::cascades) survive camera moves and turns for many
+/// frames; the first keeps texel snapping for the sharpest near shadows.
+fn shadow_cascades(camera: &Camera, sun: Vec3, splits: [f32; 4], resolution: u32) -> [Mat4; 4] {
+    let up = if sun.dot(Vec3::Y).abs() > 0.99 {
+        Vec3::Z
+    } else {
+        Vec3::Y
+    };
+    let light = Mat4::look_at_rh(Vec3::ZERO, -sun, up);
+    let slices = cascade_slices(camera, splits);
+    std::array::from_fn(|i| {
+        let (centre, radius) = slices[i];
         let radius = if i == 0 { radius } else { radius * 1.1 };
         let texel = radius * 2. / resolution as f32;
         let step = if i == 0 {

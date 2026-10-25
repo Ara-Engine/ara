@@ -55,15 +55,10 @@ impl Renderer {
         } else {
             HISTORY0
         };
-        let frame = self.frame_data(&camera, exposure, deterministic, mode, output_history);
+        let mut frame = self.frame_data(&camera, exposure, deterministic, mode, output_history);
         if let Some(native) = &mut self.native {
             native.prepare(&mut self.gpu, &frame, &camera, &self.look.quality)?;
         }
-        self.gpu.upload(self.frame, bytemuck::bytes_of(&frame))?;
-        let mut display_frame = frame;
-        display_frame.extent[..2].copy_from_slice(&self.size);
-        self.gpu
-            .upload(self.display_frame, bytemuck::bytes_of(&display_frame))?;
         // The far map redraws only when its view, content or casters inside it
         // changed; its draws read the far matrix as cascade 0 of their own frame
         // record, and native casters come from a culled pass of their own.
@@ -91,11 +86,20 @@ impl Renderer {
             local.cache.observe(all, bounds);
         }
         (self.look.far, self.look.cascades, self.look.local) = (far, cascades, local);
-        let cascade_draw: Vec<usize> = self.look.cascades.as_ref().map_or_else(Vec::new, |c| {
-            (0..c.images.len())
-                .filter(|&i| c.needs_draw(i, frame.shadows[i]))
-                .collect()
-        });
+        // Cascades that wait for their redraw keep their drawn matrices in the
+        // frame record, so the record is uploaded after this plan.
+        let cascade_draw = match &mut self.look.cascades {
+            Some(cascades) => cascades.plan(
+                &mut frame.shadows,
+                &frame::cascade_slices(&camera, frame.splits),
+            ),
+            None => Vec::new(),
+        };
+        self.gpu.upload(self.frame, bytemuck::bytes_of(&frame))?;
+        let mut display_frame = frame;
+        display_frame.extent[..2].copy_from_slice(&self.size);
+        self.gpu
+            .upload(self.display_frame, bytemuck::bytes_of(&display_frame))?;
         let far_draw = match &self.look.far {
             Some(far) => {
                 let (matrix, view) = crate::look::far::FarMap::fit(
