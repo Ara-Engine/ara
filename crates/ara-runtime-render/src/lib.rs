@@ -228,6 +228,15 @@ impl Presenter {
         self.stats
     }
 
+    /// Cumulative host time in this device's explicit GPU/presentation waits.
+    /// Snapshot around a whole windowed frame, including swapchain presentation.
+    /// No counter exists until the renderer's device has been created.
+    pub fn host_wait_stats(&self) -> Option<ara_gpu::vulkan::HostWaitStats> {
+        self.renderer
+            .as_ref()
+            .map(|r| r.gpu().context().host_wait_stats())
+    }
+
     /// Resizes the output (history resets).
     pub fn resize(&mut self, size: [u32; 2]) -> Result<()> {
         ensure!(!size.contains(&0), "presentation extent must be nonzero");

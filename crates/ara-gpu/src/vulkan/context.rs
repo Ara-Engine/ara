@@ -190,6 +190,7 @@ pub struct DeviceInfo {
 
 /// Owns the instance, queues, allocations and validation callback lifetime.
 pub struct Gpu {
+    host_waits: super::waits::Counter,
     /// Loader lifetime; must outlive all native function tables.
     pub _entry: Entry,
     /// Owned Vulkan instance for native integrations.
@@ -226,6 +227,16 @@ pub struct Gpu {
 }
 
 impl Gpu {
+    /// Cumulative host time in explicit GPU/presentation waits on this device.
+    pub fn host_wait_stats(&self) -> super::HostWaitStats {
+        self.host_waits.snapshot()
+    }
+
+    /// Native integrations wrap one leaf driver wait with this. Do not nest
+    /// measured waits: frame accounting subtracts each interval exactly once.
+    pub fn measure_host_wait<T>(&self, operation: impl FnOnce() -> T) -> T {
+        self.host_waits.measure(operation)
+    }
     /// Allocate one primary command buffer for the selected queue family.
     pub fn commands(&self, compute: bool) -> Result<vk::CommandBuffer> {
         // SAFETY: Pools belong to their respective queue families and outlive commands.
@@ -274,7 +285,7 @@ impl Gpu {
                 &[vk::SubmitInfo2::default().command_buffer_infos(&buffers)],
                 vk::Fence::null(),
             )?;
-            self.device.queue_wait_idle(self.graphics)?;
+            self.measure_host_wait(|| self.device.queue_wait_idle(self.graphics))?;
             self.device.free_command_buffers(self.graphics_pool, &[cmd]);
         }
         Ok(())

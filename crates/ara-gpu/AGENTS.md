@@ -13,6 +13,8 @@ Owns the native GPU boundary. Vulkan uses ash revision
 - `Command::CopyBufferRange` copies aligned ranges with checked capacities/overflow;
   it preserves unrelated destination bytes and is rejected inside rendering.
 - `VulkanDevice`: Vulkan backend; `context()` is read-only native integration access.
+- `Gpu::host_wait_stats` snapshots cumulative host time in explicit driver waits.
+  Native integration uses `measure_host_wait` for leaf waits only; never nest it.
 - `upload_range(buffer, byte_offset, bytes)` writes only changed coherent rows,
   with the same bounds and in-flight-use checks as `upload`.
 - `VulkanDevice::create_mip_image`: native sampled mip chains, including BC4/5/7.
