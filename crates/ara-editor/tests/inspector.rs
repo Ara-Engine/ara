@@ -173,6 +173,20 @@ fn press(shell: &mut Shell, editor: &mut Editor, id: &str) {
     shell.dispatch(editor).unwrap();
 }
 
+/// Until the asset pipeline first reports, a project with imports says they are being
+/// prepared rather than showing nothing (the loading window shows the same stage).
+#[test]
+fn the_status_bar_says_imports_are_preparing_before_the_pipeline_reports() {
+    let project = Project::new();
+    let mut editor = Editor::open(&project.0).unwrap();
+    let shell = Shell::new(&mut editor, [1440., 900.]).unwrap();
+    let chip = shell.ui.find("status-imports-text").expect("import chip");
+    assert_eq!(
+        shell.ui.nodes[chip].text.as_ref().map(|t| t.value.as_str()),
+        Some("Preparing imports…")
+    );
+}
+
 /// Revealing a field (diagnostics, agents, `editor.focus`) scrolls the Inspector to
 /// it, also when an earlier reveal already scrolled it.
 #[test]

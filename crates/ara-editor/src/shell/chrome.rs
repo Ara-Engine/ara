@@ -281,7 +281,7 @@ impl Shell {
         };
         let description = format!("Scene quality {quality}: {source}. Change it in the Lit menu");
         out.push_str(&format!("<button id='status-quality' class='chip' label='Scene quality' description='{}' action='Dispatch'>{}<text id='status-quality-text' text='{}' /></button>",escape(&description),icons::icon("status-quality","sun-medium"),escape(&quality)));
-        self.import_chip(out);
+        self.import_chip(editor, out);
         self.bind_command("status-jobs", "window.assets", Target::None);
         // A running build leads (its stage, or cooking counts), then other jobs.
         let build = self.build.as_ref().map(|job| match job.cooking {
