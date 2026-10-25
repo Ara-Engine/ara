@@ -43,6 +43,18 @@ pub(super) struct Updates {
     pub work: FrameWork,
 }
 impl Updates {
+    /// A secondary camera adopts the current instance rows at a content boundary.
+    pub(super) fn invalidate(&mut self, count: usize) {
+        self.rows.clear();
+        for index in 0..count {
+            self.rows.insert(index);
+        }
+        self.settle.clear();
+        self.skins.clear();
+        self.casters.clear();
+        self.header = None;
+        self.all = true;
+    }
     pub fn new(count: usize) -> Self {
         let mut rows = Indices::new(count);
         for i in 0..count {
@@ -184,6 +196,12 @@ impl Native {
             self.changes.rows.insert(i);
             self.update_bounds(i, scene);
         }
+        if !changes.instances.is_empty()
+            || !changes.materials.is_empty()
+            || !changes.geometries.is_empty()
+        {
+            self.view_revision = self.view_revision.wrapping_add(1);
+        }
         Ok(())
     }
 
@@ -265,7 +283,11 @@ impl Native {
         Ok(())
     }
 
-    pub(in crate::renderer) fn presented(&mut self, camera: &crate::scene::Camera) {
+    pub(in crate::renderer) fn presented(
+        &mut self,
+        camera: &crate::scene::Camera,
+        advance_geometry: bool,
+    ) {
         for &i in &self.changes.rows.list {
             let row = &self.rows[i];
             self.presented[i] = row.world;
@@ -280,6 +302,8 @@ impl Native {
         self.changes.materials = 0;
         self.previous_vp = Some(camera.projection * camera.view);
         self.material_dirty = false;
-        self.pool.presented();
+        if advance_geometry {
+            self.pool.presented();
+        }
     }
 }

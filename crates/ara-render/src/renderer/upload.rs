@@ -94,6 +94,8 @@ impl Renderer {
             last_timings: Vec::new(),
             look,
             native: None,
+            views: views::Views::default(),
+            secondary_active: false,
         })
     }
 

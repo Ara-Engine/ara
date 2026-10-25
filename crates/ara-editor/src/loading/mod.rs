@@ -108,6 +108,12 @@ pub(crate) fn run(
         status.skip = started.elapsed() >= SKIP_AFTER;
         status.imports = tracker.imports();
         status.latest = tracker.latest.clone();
+        // One sweep of Preparing's bar every 1.6 s.
+        status.sweep = if status.imports.is_none() {
+            (started.elapsed().as_secs_f32() / 1.6).fract()
+        } else {
+            0.
+        };
         if status.imports.is_none() && started.elapsed() >= GIVE_UP {
             status.opening = true;
         }

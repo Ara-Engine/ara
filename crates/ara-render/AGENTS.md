@@ -11,6 +11,10 @@ Owns the M1 baseline renderer and agent visual feedback. Gameplay state stays in
   Compilation indexes resource uses once; declaration-order versions and queue handoffs stay deterministic.
 - `Renderer::new`, `render`, `render_view` (live debug view mode), `resize`, `capture`: cooked Vulkan rendering; read-only
   `gpu()` access for diagnostics/native presentation. Resize resets history.
+- `create_view` / `render_secondary(ViewId, ViewRequest)`: lazy owned cameras on
+  the shared device/content, with independent color, IDs, motion, exposure and TAA.
+  No primary render or readback; GI/residency continue even if only this view draws.
+  Drop queues retirement; `release_view` releases now. Keep the handle while sampling.
 - `Scene`, `Mesh`, `Material`, `Light`, `CameraSpec`: extracted world data and camera pose/bounds requests. Materials use bindless texture indices.
 - `instanced::Scene`: native model-space content contract for shared geometry,
   current/previous instance transforms, deforming revisions, 64-byte UV0/UV1

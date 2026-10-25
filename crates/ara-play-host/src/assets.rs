@@ -421,6 +421,8 @@ impl Assets {
             self.progress_stale = false;
         }
         self.busy = busy;
+        // Deferred writes and a feed taken over from a dropped owner publish now.
+        self.published.tick();
         changes
     }
 

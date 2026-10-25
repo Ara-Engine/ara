@@ -8,6 +8,15 @@ use ara_render_fidelity::{
 use ara_runtime_render::fidelity::native::{self, FrameChange, NativeConfig, Prepared};
 use ara_runtime_render::{PresentationImage, fidelity::vfx::Effects};
 mod content;
+mod preview;
+pub(super) use preview::{GamePreview, PreviewCamera};
+
+#[derive(Clone, Copy)]
+enum RasterWork {
+    Live(u32),
+    Capture(u32),
+    Prepare,
+}
 #[derive(Default)]
 pub(super) struct SceneView {
     raster: Option<ara_runtime_render::RasterView>,
@@ -158,7 +167,7 @@ impl SceneView {
     ) -> ara_ui::Result<()> {
         self.render(renderer, editor, view, 1)?;
         if self.content_job.is_some() {
-            self.render_raster_inner(renderer, editor, view, 1, true)?;
+            self.render_raster_inner(renderer, editor, view, RasterWork::Capture(1))?;
         }
         if self.failed.is_some() {
             return Err("Scene capture could not prepare the requested content generation".into());
@@ -171,7 +180,7 @@ impl SceneView {
                 .as_mut()
                 .ok_or("raster Scene view")?
                 .reset_capture(renderer)?;
-            return self.render_raster_inner(renderer, editor, view, settle, true);
+            return self.render_raster_inner(renderer, editor, view, RasterWork::Capture(settle));
         }
         self.fidelity
             .as_mut()
@@ -260,17 +269,21 @@ impl SceneView {
         view: &crate::world::DocumentView,
         settle: u32,
     ) -> ara_ui::Result<()> {
-        self.render_raster_inner(renderer, editor, view, settle, false)
+        self.render_raster_inner(renderer, editor, view, RasterWork::Live(settle))
     }
     fn render_raster_inner(
         &mut self,
         renderer: &mut Renderer,
         editor: &Editor,
         view: &crate::world::DocumentView,
-        settle: u32,
-        wait_for_content: bool,
+        work: RasterWork,
     ) -> ara_ui::Result<()> {
         ara_gpu::cpu_scope!("SceneView.render_raster");
+        let wait_for_content = matches!(work, RasterWork::Capture(_));
+        let settle = match work {
+            RasterWork::Live(settle) | RasterWork::Capture(settle) => settle,
+            RasterWork::Prepare => 0,
+        };
         let store = editor.host.store();
         let settings = crate::world::gltf::render_settings(store.workspace())?;
         let choice = editor
@@ -415,6 +428,9 @@ impl SceneView {
                 raster.prepare_unchanged(renderer, frame, plan, look, resolve)?;
             }
             self.raster_snapshot_dirty = false;
+        }
+        if matches!(work, RasterWork::Prepare) {
+            return Ok(());
         }
         if self.camera != Some(editor.state.camera) {
             self.remaining = self.remaining.max(8);

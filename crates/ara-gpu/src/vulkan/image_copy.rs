@@ -11,6 +11,7 @@ fn block(format: vk::Format) -> Result<(u32, u64)> {
         vk::Format::R32G32B32A32_SFLOAT => (1, 16),
         vk::Format::R16G16B16A16_SFLOAT => (1, 8),
         vk::Format::A2B10G10R10_UNORM_PACK32
+        | vk::Format::R16G16_SFLOAT
         | vk::Format::R8G8B8A8_UNORM
         | vk::Format::R8G8B8A8_SRGB
         | vk::Format::D32_SFLOAT
