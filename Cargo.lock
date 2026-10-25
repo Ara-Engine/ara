@@ -396,6 +396,7 @@ name = "ara"
 version = "0.0.1-alpha"
 dependencies = [
  "ara-ai",
+ "ara-asset",
  "ara-audio-why",
  "ara-crash",
  "ara-diag",
@@ -1033,6 +1034,7 @@ dependencies = [
 name = "ara-hub-service"
 version = "0.0.1-alpha"
 dependencies = [
+ "ara-asset",
  "ara-diag",
  "ara-host",
  "ara-json",
@@ -1449,6 +1451,7 @@ dependencies = [
  "ara-schema",
  "serde",
  "serde_json",
+ "tempfile",
 ]
 
 [[package]]

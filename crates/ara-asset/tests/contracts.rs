@@ -1,11 +1,38 @@
 #![allow(clippy::unwrap_used)]
 use ara_asset::*;
+
+#[test]
+fn project_quality_defaults_round_trip_and_reject_invalid_settings() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = ara_schema::SchemaDb::new();
+    register_schema(&mut db);
+    assert_eq!(
+        ProjectImportSettings::read(root.path(), &db)
+            .unwrap()
+            .preset,
+        CookPreset::Balanced
+    );
+    let settings = ProjectImportSettings {
+        preset: CookPreset::HighQuality,
+    };
+    let text = settings.canonical_text().unwrap();
+    let path = root.path().join(PROJECT_IMPORT_SETTINGS_FILE);
+    std::fs::write(&path, &text).unwrap();
+    assert_eq!(
+        ProjectImportSettings::read(root.path(), &db).unwrap(),
+        settings
+    );
+    let parsed = ara_doc::read(&text, PROJECT_IMPORT_SETTINGS_FILE, &db, None);
+    assert_eq!(text, ara_doc::write(&parsed.doc.unwrap(), &db));
+    std::fs::write(&path, text.replace("highQuality", "invalid")).unwrap();
+    assert!(ProjectImportSettings::read(root.path(), &db).is_err());
+}
 use serde_json::json;
 use std::collections::{BTreeMap, BTreeSet};
 
 fn input() -> ImportInput {
     ImportInput {
-        preset: Default::default(),
+        preset: CookPreset::HighQuality,
         thread_budget: 16,
         source_path: "test.bin".into(),
         source: b"source".to_vec(),
@@ -128,7 +155,7 @@ fn sidecars_are_kernel_transactions_and_canonical_indexable_documents() {
     );
     let mut store = ara_ops::Store::new(db, ws);
     let settings = ImportSettings {
-        preset: Default::default(),
+        preset: Some(CookPreset::HighQuality),
         importer: "test.gltf".into(),
         version: "1".into(),
         settings: json!({"lodCount":4}),
@@ -148,10 +175,13 @@ fn sidecars_are_kernel_transactions_and_canonical_indexable_documents() {
     let sidecar = Sidecar::read(&before, "mesh.glb.import.json", store.schema()).unwrap();
     assert_eq!(before, sidecar.write(store.schema()));
     assert_eq!(sidecar.settings().unwrap().importer, "test.gltf");
-    assert_eq!(sidecar.settings().unwrap().preset, CookPreset::HighQuality);
+    assert_eq!(
+        sidecar.settings().unwrap().preset,
+        Some(CookPreset::HighQuality)
+    );
     let desc = store.schema().get("ImportSettings").unwrap();
     let field = desc.fields().iter().find(|f| f.name == "preset").unwrap();
-    assert_eq!(store.schema().field_default(field), json!("highQuality"));
+    assert_eq!(store.schema().field_default(field), serde_json::Value::Null);
     let mut index = ara_doc::AssetIndex::new();
     sidecar.index("models/mesh.glb", &mut index);
     assert_eq!(
@@ -180,7 +210,7 @@ fn sidecars_are_kernel_transactions_and_canonical_indexable_documents() {
             .settings()
             .unwrap()
             .preset,
-        CookPreset::Balanced
+        Some(CookPreset::Balanced)
     );
     store.undo_last(&ara_ops::Author::Human).unwrap();
     assert_eq!(

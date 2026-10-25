@@ -11,7 +11,7 @@ cargo clippy -p ara-import-worker --all-targets. Set CARGO_BUILD_JOBS=2.
 Worker crash fixtures live only under tests; never add a crash switch to production.
 Do not watch CI/PRs or spawn persistent background services here.
 
-Process jobs honor ImportInput preset and thread_budget (default HQ / 16 threads).
+Process jobs honor ImportInput preset and thread_budget (default Balanced / bounded per-worker threads).
 HotReload orchestrates preview/HQ as separate disposable processes/cache actions.
 Progressive integration tests gate HQ persistence to test boundary/failure races.
 examples/progressive_bench measures real worker publication in release mode.

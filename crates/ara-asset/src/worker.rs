@@ -15,7 +15,7 @@ use std::{
 
 mod limit;
 mod process;
-use limit::Permit;
+use limit::Admission;
 use process::Running;
 
 const MAX_FRAME: u64 = 512 * 1024 * 1024;
@@ -73,7 +73,10 @@ enum Request {
     Versions,
 }
 fn write_frame(writer: &mut impl Write, value: &impl Serialize) -> Result<()> {
+    let encode = crate::trace::Scope::new("ipc.encode", "frame");
     let bytes = rmp_serde::to_vec_named(value).map_err(|e| Error::Worker(e.to_string()))?;
+    drop(encode);
+    let _write = crate::trace::Scope::new("ipc.write", "frame").bytes(bytes.len());
     if bytes.len() as u64 > MAX_FRAME {
         return Err(Error::Worker("frame exceeds 512 MiB".into()));
     }
@@ -83,6 +86,7 @@ fn write_frame(writer: &mut impl Write, value: &impl Serialize) -> Result<()> {
     Ok(())
 }
 fn read_frame<T: serde::de::DeserializeOwned>(reader: &mut impl Read) -> Result<T> {
+    let _read = crate::trace::Scope::new("ipc.read", "frame");
     let mut len = [0; 8];
     reader.read_exact(&mut len)?;
     let len = u64::from_le_bytes(len);
@@ -91,12 +95,13 @@ fn read_frame<T: serde::de::DeserializeOwned>(reader: &mut impl Read) -> Result<
     }
     let mut bytes = vec![0; len as usize];
     reader.read_exact(&mut bytes)?;
+    drop(_read);
+    let _decode = crate::trace::Scope::new("ipc.decode", "frame").bytes(bytes.len());
     rmp_serde::from_slice(&bytes).map_err(|e| Error::Worker(e.to_string()))
 }
 /// Runs exactly one import in a disposable process. Plugins register in this worker.
 /// Panics/native crashes terminate this process; no importer code runs in the host.
 pub fn serve_worker(registry: &ImporterRegistry) -> Result<()> {
-    background_priority();
     #[cfg(windows)]
     {
         use windows_sys::Win32::System::Diagnostics::Debug::{
@@ -138,13 +143,20 @@ pub fn serve_worker(registry: &ImporterRegistry) -> Result<()> {
             );
         }
     };
+    background_priority();
     let cancellation = Cancellation::default();
+    let memo = std::env::var_os("ARA_IMPORT_MEMO_DIR")
+        .map(|root| crate::FileCache::intermediates(Path::new(&root)))
+        .transpose()?;
+    let metrics = crate::ImportMetrics::default();
+    let traced = crate::trace::enabled();
     let mut output = std::io::stdout();
     let mut transport_error = None;
-    let result = registry.import(
+    let import_trace = crate::trace::Scope::new("worker.import", &input.source_path);
+    let result = registry.import_with_memo(
         &input,
         &mut ImportContext {
-            metrics: None,
+            metrics: traced.then_some(&metrics),
             cancellation: &cancellation,
             progress: &mut |p| {
                 if let Err(e) = write_frame(&mut output, &Message::Progress(p)) {
@@ -153,7 +165,21 @@ pub fn serve_worker(registry: &ImporterRegistry) -> Result<()> {
                 }
             },
         },
+        memo.as_ref().map(|cache| cache as &dyn crate::CacheBackend),
     );
+    drop(import_trace);
+    if traced {
+        crate::trace::event(
+            "worker.stages",
+            &input.source_path,
+            serde_json::json!({
+                "stages":metrics.snapshot(),"threads":input.thread_budget,"preset":input.preset,
+                "peakRssBytes":crate::trace::peak_rss_bytes(),
+                "sourceBytes":input.source.len(),"dependencyBytes":input.dependencies.values().map(Vec::len).sum::<usize>(),
+                "outputBytes":result.as_ref().map_or(0,|o| o.artifacts.iter().map(|a| a.bytes.len()).sum::<usize>())
+            }),
+        );
+    }
     if let Some(e) = transport_error {
         return Err(e);
     }
@@ -178,6 +204,7 @@ pub enum JobEvent {
 /// Explicit worker executable and deadline, shared by CLI and editor.
 #[derive(Debug, Clone)]
 pub struct ProcessWorker {
+    memo: Option<PathBuf>,
     executable: PathBuf,
     arguments: Vec<std::ffi::OsString>,
     timeout: Duration,
@@ -186,6 +213,7 @@ impl ProcessWorker {
     /// Chooses the binary; production default deadline is ten minutes.
     pub fn new(executable: impl Into<PathBuf>) -> Self {
         Self {
+            memo: None,
             executable: executable.into(),
             arguments: Vec::new(),
             timeout: Duration::from_secs(600),
@@ -273,6 +301,13 @@ impl ProcessWorker {
     }
     fn start_request(&self, request: Request) -> Result<ImportJob> {
         let mut command = Command::new(&self.executable);
+        // Never inherit a different project's memo from the parent's environment.
+        command.env_remove("ARA_IMPORT_MEMO_DIR");
+        if matches!(&request, Request::Import(_))
+            && let Some(root) = &self.memo
+        {
+            command.env("ARA_IMPORT_MEMO_DIR", root);
+        }
         command
             .args(&self.arguments)
             .stdin(Stdio::piped())
@@ -282,14 +317,26 @@ impl ProcessWorker {
         {
             use std::os::windows::process::CommandExt;
             command.creation_flags(
-                windows_sys::Win32::System::Threading::BELOW_NORMAL_PRIORITY_CLASS
-                    | windows_sys::Win32::System::Threading::CREATE_NO_WINDOW,
+                (if matches!(&request, Request::Import(_)) {
+                    windows_sys::Win32::System::Threading::BELOW_NORMAL_PRIORITY_CLASS
+                } else {
+                    windows_sys::Win32::System::Threading::NORMAL_PRIORITY_CLASS
+                }) | windows_sys::Win32::System::Threading::CREATE_NO_WINDOW,
             );
         }
         let (tx, rx) = mpsc::channel();
         let mut job = ImportJob {
             child: None,
             pending: Some(Pending {
+                admission: Admission::new(!matches!(&request, Request::Import(_))),
+                _queue: crate::trace::Scope::new(
+                    "worker.queue",
+                    match &request {
+                        Request::Import(input) => &input.source_path,
+                        Request::Discover { importer, .. } => importer,
+                        Request::Versions => "versions",
+                    },
+                ),
                 command,
                 request,
                 events: tx,
@@ -304,7 +351,16 @@ impl ProcessWorker {
     }
 }
 
+impl ProcessWorker {
+    pub(crate) fn with_memo(mut self, root: Option<&Path>) -> Self {
+        self.memo = root.map(Path::to_path_buf);
+        self
+    }
+}
+
 struct Pending {
+    admission: Admission,
+    _queue: crate::trace::Scope,
     command: Command,
     request: Request,
     events: mpsc::Sender<Result<Message>>,
@@ -322,10 +378,10 @@ pub struct ImportJob {
 }
 impl ImportJob {
     fn try_launch(&mut self) -> Result<()> {
-        if self.pending.is_none() {
+        let Some(pending) = &self.pending else {
             return Ok(());
-        }
-        let Some(permit) = Permit::try_acquire() else {
+        };
+        let Some(permit) = pending.admission.try_acquire() else {
             return Ok(());
         };
         let Some(mut pending) = self.pending.take() else {
@@ -333,6 +389,13 @@ impl ImportJob {
         };
         self.started = Instant::now();
         let mut child = pending.command.spawn()?;
+        if crate::trace::enabled() {
+            crate::trace::event(
+                "worker.spawn",
+                "child",
+                serde_json::json!({"child":child.id()}),
+            );
+        }
         let mut stdin = child
             .stdin
             .take()
@@ -346,13 +409,11 @@ impl ImportJob {
         let request = pending.request;
         let writer_tx = tx.clone();
         thread::spawn(move || {
-            background_priority();
             if let Err(e) = write_frame(&mut stdin, &request) {
                 let _ = writer_tx.send(Err(e));
             }
         });
         thread::spawn(move || {
-            background_priority();
             loop {
                 match read_frame::<Message>(&mut stdout) {
                     Ok(message) => {

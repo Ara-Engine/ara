@@ -193,6 +193,13 @@ pub fn init(dir: Option<&Path>, name: Option<&str>, json_out: bool) -> Result<bo
         &json!({ "name": name, "main": "levels/main.scene", "engineVersion": ara_hub_service::ALPHA_VERSION }),
     );
     r.write(&root, MARKER, &marker)?;
+    r.write(
+        &root,
+        ara_asset::PROJECT_IMPORT_SETTINGS_FILE,
+        &ara_asset::ProjectImportSettings::default()
+            .canonical_text()
+            .map_err(|e| e.to_string())?,
+    )?;
     r.write(&root, "AGENTS.md", &AGENTS.replace("{name}", &name))?;
     r.lines(&root, ".gitattributes", GITATTRIBUTES)?;
     r.lines(&root, ".gitignore", GITIGNORE)?;

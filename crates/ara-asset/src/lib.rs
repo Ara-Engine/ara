@@ -7,8 +7,10 @@ mod hot_reload;
 mod importer;
 mod metrics;
 mod preset;
+mod project_settings;
 mod sidecar;
 mod source;
+mod trace;
 mod worker;
 
 pub use cache::{CacheBackend, CachedImport, FileCache, GcStats};
@@ -20,6 +22,7 @@ pub use importer::{
 };
 pub use metrics::{ImportMetrics, ImportStage, StageTimer, StageTimes};
 pub use preset::{CookPreset, DEFAULT_THREAD_BUDGET};
+pub use project_settings::{PROJECT_IMPORT_SETTINGS_FILE, ProjectImportSettings};
 pub use sidecar::{ImportSettings, Sidecar, SidecarCommand, VersionCheck, register_schema};
 pub use source::{AssetPipeline, SourceAsset, snapshot};
 pub use worker::{ImportJob, JobEvent, ProcessWorker, serve_worker};

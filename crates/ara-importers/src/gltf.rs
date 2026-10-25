@@ -17,7 +17,7 @@ impl Importer for GltfImporter {
         "ara.gltf"
     }
     fn version(&self) -> &str {
-        "6-gltf14-meshopt070-ispc050-tiled-f32text-arag1-khr-opacity-deep-lods-prefix"
+        "7-gltf14-meshopt070-ispc050-texture-presets-tiled-f32text-arag1-khr-opacity-deep-lods-prefix"
     }
     fn register_settings(&self, db: &mut ara_schema::SchemaDb) {
         db.register::<MeshSettings>();
@@ -56,13 +56,27 @@ impl Importer for GltfImporter {
         Ok(dependencies.into_iter().collect())
     }
     fn import(&self, input: &ImportInput, ctx: &mut ImportContext<'_>) -> Result<ImportOutput> {
+        self.import_with_memo(input, ctx, None)
+    }
+    fn import_with_memo(
+        &self,
+        input: &ImportInput,
+        ctx: &mut ImportContext<'_>,
+        memo: Option<&dyn ara_asset::CacheBackend>,
+    ) -> Result<ImportOutput> {
         let mesh_settings = if input.settings.is_null() {
             MeshSettings::default()
         } else {
             serde_json::from_value(input.settings.clone())?
         };
+        let parse_timer = ctx.metrics.map(|m| m.start(ara_asset::ImportStage::Parse));
         let gltf = gltf::Gltf::from_slice(&input.source).map_err(invalid)?;
+        drop(parse_timer);
+        let opacity_timer = ctx
+            .metrics
+            .map(|m| m.start(ara_asset::ImportStage::Opacity));
         let opacity_maps = opacity::resolve(&gltf, input, &mesh_settings.opacity_maps)?;
+        drop(opacity_timer);
         let mut buffers = Vec::new();
         for b in gltf.buffers() {
             let data = match b.source() {
@@ -86,19 +100,27 @@ impl Importer for GltfImporter {
             .filter(|n| n.skin().is_some())
             .filter_map(|n| n.mesh().map(|m| m.index()))
             .collect();
-        let material_counts: BTreeMap<_, _> = gltf
-            .meshes()
-            .map(|m| (m.index(), m.primitives().count()))
-            .collect();
-        let primitives: Vec<_> = gltf
-            .meshes()
-            .flat_map(|mesh| {
-                let index = mesh.index();
-                mesh.primitives().map(move |p| (index, p))
-            })
-            .collect();
-        let mesh_timer = metrics.map(|m| m.start(ara_asset::ImportStage::Mesh));
-        let meshes: Result<Vec<_>> = primitives.into_par_iter().map(|(mesh_index, primitive)| {
+        let geometry_key = memo
+            .map(|_| crate::geometry_memo::key(input, &mesh_settings))
+            .transpose()?;
+        let mut mesh_map;
+        if let Some(geometry) = crate::geometry_memo::load(memo, geometry_key)? {
+            output.artifacts.extend(geometry.artifacts);
+            mesh_map = geometry.meshes;
+        } else {
+            let material_counts: BTreeMap<_, _> = gltf
+                .meshes()
+                .map(|m| (m.index(), m.primitives().count()))
+                .collect();
+            let primitives: Vec<_> = gltf
+                .meshes()
+                .flat_map(|mesh| {
+                    let index = mesh.index();
+                    mesh.primitives().map(move |p| (index, p))
+                })
+                .collect();
+            let mesh_timer = metrics.map(|m| m.start(ara_asset::ImportStage::Mesh));
+            let meshes: Result<Vec<_>> = primitives.into_par_iter().map(|(mesh_index, primitive)| {
                 cancellation.check()?;
                 let reader = primitive.reader(|b| buffers.get(b.index()).map(Vec::as_slice));
                 let positions: Vec<_> = reader
@@ -184,7 +206,7 @@ impl Importer for GltfImporter {
                         .is_some_and(|texture| opacity_maps.contains_key(&texture.texture().source().index()));
                 let artifact = Artifact {
                     name: name.clone(), kind: ArtifactKind::Mesh,
-                    bytes: crate::mesh::cook_mesh_with_tangent_uv(&vertices, &indices, &mesh_settings, deformed, preserve_card_area, |v| normal_uv.apply(v))?,
+                    bytes: crate::mesh::cook_mesh_with_tangent_uv(&vertices, &indices, &mesh_settings, deformed, preserve_card_area, metrics, |v| normal_uv.apply(v))?,
                 };
                 let (virtual_artifact, virtual_metadata) = crate::virtual_geometry::cook(
                     &name, &vertices, &indices, &mesh_settings, deformed,
@@ -197,12 +219,14 @@ impl Importer for GltfImporter {
                 let metadata = json!({"mesh":mesh_index,"primitive":primitive.index(),"material":primitive.material().index(),"artifact":name,"morphTargets":targets,"virtualGeometry":virtual_metadata});
                 Ok((artifact, virtual_artifact, metadata))
         }).collect();
-        drop(mesh_timer);
-        let mut mesh_map = Vec::new();
-        for (artifact, virtual_artifact, metadata) in meshes? {
-            output.artifacts.push(artifact);
-            output.artifacts.extend(virtual_artifact);
-            mesh_map.push(metadata);
+            drop(mesh_timer);
+            mesh_map = Vec::new();
+            for (artifact, virtual_artifact, metadata) in meshes? {
+                output.artifacts.push(artifact);
+                output.artifacts.extend(virtual_artifact);
+                mesh_map.push(metadata);
+            }
+            crate::geometry_memo::store(memo, geometry_key, &output.artifacts, &mesh_map)?;
         }
         let mut texture_usages: BTreeMap<(usize, u8), (TextureUsage, Vec<u8>)> = BTreeMap::new();
         for material in gltf.materials() {
@@ -258,6 +282,9 @@ impl Importer for GltfImporter {
                         if usage == TextureUsage::Color
                             && let Some(mask) = opacity_maps.get(&image.index())
                         {
+                            let _timer = ctx
+                                .metrics
+                                .map(|m| m.start(ara_asset::ImportStage::Opacity));
                             bytes = opacity::merge(&bytes, mask)?;
                         }
                         entry.insert((usage, bytes));
@@ -266,20 +293,36 @@ impl Importer for GltfImporter {
             }
         }
         let mut texture_map = Vec::new();
-        let textures: Vec<_> = texture_usages.into_iter().collect();
+        let mut textures: Vec<_> = texture_usages.into_iter().collect();
         let jobs: Vec<_> = textures
-            .iter()
-            .map(|(_, (usage, bytes))| {
+            .iter_mut()
+            .map(|((image, _), (usage, bytes))| {
+                let preset = mesh_settings
+                    .texture_presets
+                    .get(&format!("#{image}"))
+                    .copied()
+                    .or_else(|| {
+                        gltf.images()
+                            .nth(*image)
+                            .and_then(|image| match image.source() {
+                                gltf::image::Source::Uri { uri, .. } => {
+                                    mesh_settings.texture_presets.get(uri).copied()
+                                }
+                                _ => None,
+                            })
+                    });
                 (
                     TextureSettings {
+                        preset,
                         usage: *usage,
                         ..Default::default()
                     },
-                    bytes.clone(),
+                    std::mem::take(bytes),
                 )
             })
             .collect();
-        let cooked = crate::texture::cook_texture_batch(&jobs, input.target, input.preset, ctx)?;
+        let cooked =
+            crate::texture::cook_texture_batch(&jobs, input.target, input.preset, ctx, memo)?;
         for (((image, _), (usage, _)), bytes) in textures.into_iter().zip(cooked) {
             let name = format!("textures/{image}-{usage:?}.ktx2");
             output.artifacts.push(Artifact {

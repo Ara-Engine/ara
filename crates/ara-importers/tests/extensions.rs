@@ -36,6 +36,60 @@ fn cook(input: &ImportInput) -> ara_asset::Result<ImportOutput> {
     )
 }
 
+#[test]
+fn changing_one_texture_preset_reuses_geometry_and_other_texture_tasks() {
+    let registry = ara_importers::registry().expect("registry");
+    let directory = tempfile::tempdir().expect("memo");
+    let memo = ara_asset::FileCache::at(directory.path()).expect("cache");
+    let cancel = Cancellation::default();
+    let mut input = input(SOURCE.to_vec(), json!({"virtualGeometry":false}));
+    input.preset = CookPreset::Balanced;
+    let run = |input: &ImportInput, metrics: &ara_asset::ImportMetrics| {
+        registry
+            .import_with_memo(
+                input,
+                &mut ImportContext {
+                    metrics: Some(metrics),
+                    cancellation: &cancel,
+                    progress: &mut |_| {},
+                },
+                Some(&memo),
+            )
+            .expect("cook")
+    };
+    let first_metrics = ara_asset::ImportMetrics::default();
+    let first = run(&input, &first_metrics);
+    assert!(first_metrics.snapshot().texture_cooks > 1);
+    input.settings["texturePresets"] = json!({"#0":"highQuality"});
+    let changed_metrics = ara_asset::ImportMetrics::default();
+    let changed = run(&input, &changed_metrics);
+    let times = changed_metrics.snapshot();
+    assert_eq!(times.mesh_ms, 0.0, "geometry/LOD work must stay cached");
+    assert!(
+        times.texture_cache_hits > 0,
+        "unaffected images stay cached"
+    );
+    let textures_on_image0 = first
+        .artifacts
+        .iter()
+        .filter(|a| a.name.starts_with("textures/0-"))
+        .count();
+    assert_eq!(times.texture_cooks, textures_on_image0 as u64);
+    for artifact in first
+        .artifacts
+        .iter()
+        .filter(|a| !a.name.starts_with("textures/0-"))
+    {
+        assert_eq!(
+            changed.artifacts.iter().find(|a| a.name == artifact.name),
+            Some(artifact)
+        );
+    }
+    let warm_metrics = ara_asset::ImportMetrics::default();
+    assert_eq!(run(&input, &warm_metrics), changed);
+    assert_eq!(warm_metrics.snapshot().texture_cooks, 0);
+}
+
 fn manifest(output: &ImportOutput) -> Value {
     serde_json::from_slice(
         &output

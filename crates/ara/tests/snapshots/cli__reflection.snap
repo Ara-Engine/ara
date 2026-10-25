@@ -2336,17 +2336,17 @@ expression: out
     },
     "CookPreset": {
       "kind": "enum",
-      "doc": "Encoding quality is an explicit cook input, independent of the execution budget. Direct/ shipping cooks default to high quality; editor previews use `Fast`.",
+      "doc": "Encoding quality is an explicit cook input, independent of the execution budget. New imports default to Balanced; projects and individual textures can select HQ.",
       "module": "asset",
       "variants": {
+        "balanced": {
+          "doc": "ISPC BC7/BC6H basic, the default for interactive project imports."
+        },
         "highQuality": {
           "doc": "ISPC BC7 slow and BC6H very slow, for background recooks and shipping."
         },
         "fast": {
           "doc": "ISPC BC7 ultrafast and BC6H fast, for the first interactive generation."
-        },
-        "balanced": {
-          "doc": "ISPC BC7/BC6H basic, for projects choosing a middle quality/speed tradeoff."
         }
       }
     },
@@ -3238,10 +3238,15 @@ expression: out
           "doc": "Replacement shipping preset; omitted retains it.",
           "default": null,
           "options": [
+            "balanced",
             "highQuality",
-            "fast",
-            "balanced"
+            "fast"
           ]
+        },
+        "useProjectPreset": {
+          "type": "bool",
+          "doc": "Remove the source quality override and follow the project import policy.",
+          "default": false
         },
         "dependencies": {
           "type": "option<list<asset>>",
@@ -3272,18 +3277,35 @@ expression: out
         },
         "preset": {
           "type": "option<CookPreset>",
-          "doc": "Shipping cook quality; defaults to the engine's shipping preset.",
+          "doc": "Source texture quality override; omitted inherits the project preset.",
           "default": null,
           "options": [
+            "balanced",
             "highQuality",
-            "fast",
-            "balanced"
+            "fast"
           ]
         },
         "dependencies": {
           "type": "option<list<asset>>",
           "doc": "Referenced authoring assets used by the cook.",
           "default": null
+        }
+      }
+    },
+    "ImportProjectConfigureParams": {
+      "kind": "params",
+      "doc": "Parameters of `import.project.configure`; reflected in the inspector and MCP.",
+      "module": "asset",
+      "fields": {
+        "preset": {
+          "type": "CookPreset",
+          "doc": "Default texture quality for sources and model textures without an override.",
+          "required": true,
+          "options": [
+            "balanced",
+            "highQuality",
+            "fast"
+          ]
         }
       }
     },
@@ -3294,13 +3316,13 @@ expression: out
       "prefix": "i",
       "fields": {
         "preset": {
-          "type": "CookPreset",
-          "doc": "Final shipping quality; the editor may show a fast generation first.",
-          "default": "highQuality",
+          "type": "option<CookPreset>",
+          "doc": "Texture encoding quality override. Omit this field to inherit the project preset in ara.imports; Balanced is the default for new projects.",
+          "default": null,
           "options": [
+            "balanced",
             "highQuality",
-            "fast",
-            "balanced"
+            "fast"
           ]
         },
         "importer": {
@@ -4355,6 +4377,11 @@ expression: out
       "doc": "Deterministic geometry cook policy.",
       "module": "asset",
       "fields": {
+        "texturePresets": {
+          "type": "map<CookPreset>",
+          "doc": "Texture quality overrides by image URI or #image-index (FBX: #texture-id). Other images inherit the model/project preset and retain their cached work.",
+          "default": {}
+        },
         "lodCount": {
           "type": "u32",
           "doc": "Maximum LODs including the original (1–8). Skin/morph meshes retain at most four.",
@@ -5619,6 +5646,24 @@ expression: out
         }
       }
     },
+    "ProjectImportSettings": {
+      "kind": "record",
+      "doc": "Defaults inherited by import sidecars which do not specify a preset.",
+      "module": "asset",
+      "prefix": "pi",
+      "fields": {
+        "preset": {
+          "type": "CookPreset",
+          "doc": "Default texture encoding quality. Balanced opens new projects quickly; HighQuality performs the full search. Source/texture overrides take priority.",
+          "default": "balanced",
+          "options": [
+            "balanced",
+            "highQuality",
+            "fast"
+          ]
+        }
+      }
+    },
     "ProjectSetMainParams": {
       "kind": "params",
       "doc": "Parameters of `project.setMain`.",
@@ -6683,6 +6728,16 @@ expression: out
       "doc": "Declarative texture import settings.",
       "module": "asset",
       "fields": {
+        "preset": {
+          "type": "option<CookPreset>",
+          "doc": "Optional quality override; absent inherits the source/project preset. Changing it does not re-encode other texture tasks.",
+          "default": null,
+          "options": [
+            "balanced",
+            "highQuality",
+            "fast"
+          ]
+        },
         "usage": {
           "type": "TextureUsage",
           "doc": "How color/normal/mask values are interpreted.",
@@ -7823,6 +7878,15 @@ expression: out
         "ImportSettings"
       ]
     },
+    "imports": {
+      "doc": "Project texture import defaults, overridden by individual sources/textures.",
+      "schema": "ara://schema/imports/1",
+      "idPrefix": "ip",
+      "extension": "imports",
+      "records": [
+        "ProjectImportSettings"
+      ]
+    },
     "l10n": {
       "doc": "One locale's messages, review provenance and explicit font fallback.",
       "schema": "ara://schema/l10n/1",
@@ -8579,6 +8643,21 @@ expression: out
         {
           "source": "models/crate.glb",
           "id": "as_crate"
+        }
+      ]
+    },
+    "import.project.configure": {
+      "kind": "command",
+      "summary": "Set the project's default texture import quality.",
+      "params": "ImportProjectConfigureParams",
+      "hints": {
+        "idempotent": false,
+        "destructive": false
+      },
+      "scope": "edit:scene",
+      "examples": [
+        {
+          "preset": "balanced"
         }
       ]
     },

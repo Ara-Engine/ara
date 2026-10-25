@@ -99,6 +99,7 @@ pub struct HotReload {
 impl HotReload {
     /// Starts with no active generations; does not create a daemon or watcher.
     pub fn new(worker: ProcessWorker, cache: Arc<dyn CacheBackend>) -> Self {
+        let worker = worker.with_memo(cache.worker_memo_root());
         let (tx, rx) = mpsc::channel();
         let (retired, retired_rx) = mpsc::channel::<CachedImport>();
         thread::spawn(move || {
@@ -276,6 +277,13 @@ impl HotReload {
                     let _ = self.retired.send(old);
                 }
                 slot.generation += 1;
+                if crate::trace::enabled() {
+                    crate::trace::event(
+                        "asset.published",
+                        &asset,
+                        serde_json::json!({"key":current.to_string(),"generation":slot.generation}),
+                    );
+                }
                 events.push(AssetChanged {
                     asset,
                     previous,

@@ -28,6 +28,43 @@ fn engine(version: &str) -> EngineBuild {
         editor: None,
     }
 }
+
+#[test]
+fn new_templates_get_balanced_import_policy_and_authored_policy_is_preserved() {
+    use ara_asset::{CookPreset, PROJECT_IMPORT_SETTINGS_FILE, ProjectImportSettings};
+    let root = scratch("import-policy");
+    let templates = DirectoryTemplates(root.join("templates"));
+    let blank = root.join("blank");
+    fs::create_dir_all(&blank).expect("blank");
+    templates.instantiate("blank", &blank).expect("instantiate");
+    assert_eq!(
+        fs::read_to_string(blank.join(PROJECT_IMPORT_SETTINGS_FILE)).expect("policy"),
+        ProjectImportSettings {
+            preset: CookPreset::Balanced
+        }
+        .canonical_text()
+        .expect("canonical")
+    );
+    let custom = templates.0.join("custom");
+    fs::create_dir_all(&custom).expect("template");
+    fs::write(custom.join("ara.project.json"), "{\"name\":\"Custom\"}").expect("marker");
+    let text = ProjectImportSettings {
+        preset: CookPreset::HighQuality,
+    }
+    .canonical_text()
+    .expect("canonical");
+    fs::write(custom.join(PROJECT_IMPORT_SETTINGS_FILE), &text).expect("policy");
+    let project = root.join("project");
+    fs::create_dir_all(&project).expect("project");
+    templates
+        .instantiate("custom", &project)
+        .expect("instantiate");
+    assert_eq!(
+        fs::read_to_string(project.join(PROJECT_IMPORT_SETTINGS_FILE)).expect("copy"),
+        text
+    );
+    fs::remove_dir_all(root).expect("scratch cleanup");
+}
 fn config(directory: &Path) -> HubConfig {
     HubConfig {
         directory: directory.into(),
