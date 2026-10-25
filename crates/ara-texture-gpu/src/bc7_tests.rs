@@ -1,0 +1,129 @@
+//! Independent bcdec decoding checks packing, fix-ups and the encoder's exact metric.
+use super::*;
+
+fn decoded(words: [u32; 4]) -> [u8; 64] {
+    let bytes: Vec<_> = words.into_iter().flat_map(u32::to_le_bytes).collect();
+    let mut rgba = [0; 64];
+    bcdec_rs::bc7(&bytes, &mut rgba, 16);
+    rgba
+}
+
+fn error(pixels: &[u32; 16], words: [u32; 4]) -> u32 {
+    let rgba = decoded(words);
+    pixels
+        .iter()
+        .enumerate()
+        .map(|(i, pixel)| {
+            (0..4)
+                .map(|c| {
+                    let d = ((pixel >> (c * 8)) & 255) as i32 - i32::from(rgba[i * 4 + c]);
+                    (d * d) as u32
+                })
+                .sum::<u32>()
+        })
+        .sum()
+}
+
+fn corpus() -> Vec<[u32; 16]> {
+    let mut blocks = Vec::new();
+    for color in [0, u32::MAX, 0xff000000, 0xff808080, 0x0180ff00, 0x7f0180fe] {
+        blocks.push([color; 16]);
+    }
+    blocks.push(std::array::from_fn(|i| {
+        let x = (i % 4) as u32;
+        let y = (i / 4) as u32;
+        (x * 85) | ((y * 85) << 8) | (((x + y) * 42) << 16) | 0xff000000
+    }));
+    blocks.push(std::array::from_fn(|i| {
+        let x = (i % 4) as u32;
+        let y = (i / 4) as u32;
+        (96 + x * 21) | ((96 + y * 21) << 8) | ((255 - (x + y) * 7) << 16) | 0xff000000
+    }));
+    for mask in [0x0001_u32, 0x8000, 0xaaaa, 0x5a5a, 0x6996, 0xfffe] {
+        blocks.push(std::array::from_fn(|i| {
+            if mask & (1 << i) == 0 {
+                0x00f3124c
+            } else {
+                0xff17e891
+            }
+        }));
+    }
+    // Smooth RGB with an unrelated alpha mask exercises separate index streams.
+    blocks.push(std::array::from_fn(|i| {
+        let v = i as u32 * 17;
+        v | (v << 8) | ((255 - v) << 16) | (if i % 3 == 0 { 255 << 24 } else { 0 })
+    }));
+    let mut state = 0x9e3779b9_u32;
+    for n in 0..12 {
+        blocks.push(std::array::from_fn(|_| {
+            state ^= state << 13;
+            state ^= state >> 17;
+            state ^= state << 5;
+            if n % 2 == 0 {
+                state | 0xff000000
+            } else {
+                state
+            }
+        }));
+    }
+    blocks
+}
+
+#[test]
+fn every_mode_partition_rotation_and_index_selection_matches_independent_decoder() {
+    // Force all candidates, including ones which lose the final search. This
+    // catches wrong anchor tables/endpoint order even when mode 6 would hide it.
+    for (block_id, pixels) in corpus().iter().enumerate() {
+        for id in 0..candidate_count(2) {
+            let (mode, partition, rotation, selection) = candidate_parameters(id, 2);
+            let (metric, words) = candidate(pixels, mode, partition, rotation, selection, 2);
+            assert_eq!(words[0].trailing_zeros(), mode as u32);
+            assert_eq!(
+                error(pixels, words),
+                metric,
+                "block {block_id}, mode {mode}, partition {partition}, rotation {rotation}, selection {selection}"
+            );
+        }
+    }
+}
+
+#[test]
+fn presets_are_nested_and_repeat_byte_for_byte() {
+    for pixels in corpus() {
+        let fast = encode_block(&pixels, 0);
+        let balanced = encode_block(&pixels, 1);
+        let hq = encode_block(&pixels, 2);
+        assert!(error(&pixels, balanced) <= error(&pixels, fast));
+        assert!(error(&pixels, hq) <= error(&pixels, balanced));
+        assert_eq!(encode_block(&pixels, 2), hq);
+        assert_eq!(encode_block(&pixels, u32::MAX), hq);
+    }
+}
+
+#[test]
+fn candidate_enumeration_is_complete_and_unique() {
+    let mut counts = [0; 8];
+    let mut seen = std::collections::BTreeSet::new();
+    for id in 0..candidate_count(2) {
+        let parameters = candidate_parameters(id, 2);
+        assert!(seen.insert(parameters));
+        counts[parameters.0] += 1;
+    }
+    assert_eq!(counts, [16, 64, 64, 64, 8, 4, 1, 64]);
+    for id in 0..candidate_count(1) {
+        assert!(seen.contains(&candidate_parameters(id, 1)));
+    }
+}
+
+#[test]
+fn exact_opaque_extremes_and_binary_alpha_survive() {
+    for color in [0xff000000, 0xffffffff, 0xff00ff00, 0xffff0000, 0xff0000ff] {
+        assert_eq!(error(&[color; 16], encode_block(&[color; 16], 2)), 0);
+    }
+    for pixels in corpus().into_iter().skip(8).take(6) {
+        let rgba = decoded(encode_block(&pixels, 2));
+        for i in 0..16 {
+            assert_eq!(u32::from(rgba[i * 4 + 3]), pixels[i] >> 24);
+        }
+    }
+}
