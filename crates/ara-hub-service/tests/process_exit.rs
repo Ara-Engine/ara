@@ -153,6 +153,11 @@ fn editor_exit_notifies_without_discovery_polling() {
         hub.call_for(ConnId(9), "hub.subscribe", json!({}))
             .expect("subscribe");
         hub.outbox();
+        assert_eq!(
+            hub.call("hub.shutdown", json!({"onlyIfIdle":true}))
+                .expect("busy editor is retained")["stopping"],
+            false
+        );
         match way {
             "hub-close" => {
                 hub.call("hub.close", json!({"project":id}))

@@ -53,7 +53,7 @@ commit that public metadata before packaging. Alternatively set build-time
 service and release tool. An empty embedded trust list rejects every release.
 For rotation, ship both old and new public keys first. Complete that rollout,
 including restarting the Hub service from the new build, before changing the
-signing key. GUI self-update deliberately preserves the running service.
+signing key. A busy service keeps supervising its open projects until they close.
 Keep the old public key while its engine releases remain installable.
 
 ## Package, verify, publish
@@ -65,8 +65,8 @@ last two commands. Packaging refuses existing output directories.
 ```powershell
 $env:ARA_RELEASE_SIGNING_KEY = "$env:APPDATA\Ara\release-signing.key"
 cargo run -p ara-release -- package --kind engine --version 0.0.1-alpha
-cargo run -p ara-release -- smoke --version 0.0.1-alpha
 cargo run -p ara-release -- package --kind hub --version 0.0.1-alpha
+cargo run -p ara-release -- smoke --version 0.0.1-alpha
 cargo run -p ara-release -- publish --repo Snowy7/ara --tag engine-v0.0.1-alpha --prerelease --dry-run
 cargo run -p ara-release -- publish --repo Snowy7/ara --tag hub-v0.0.1-alpha --prerelease --dry-run
 ```
@@ -102,9 +102,13 @@ registered builds have **Remove** (unregister); Hub-owned builds have **Uninstal
 Importing a project with a missing semantic-version pin offers **Install and open**.
 
 The standalone Hub lives in `%LOCALAPPDATA%\Programs\Ara Hub`. Its bootstrap
-`ara` service is copied once into `%LOCALAPPDATA%\Ara\Services\<version>`,
+`ara` service is staged into `%LOCALAPPDATA%\Ara\Services\<version>\<build-hash>`,
 separate from both the GUI and installed engines. A bootstrap service is not an
-engine build. The installer adds this external CLI directory to the user PATH;
+engine build. Same-version previews get distinct immutable copies; `service.json`
+records the executable build and payload hashes. Templates come from registered
+engines, newest semantic version first, then service/checkout fallbacks. Creation
+copies the selected engine's files, checks its asset lock and pins that engine.
+The installer adds its external CLI directory to the user PATH;
 restart the terminal before using `ara hub` or configuring the global MCP.
 The existing engine installer stays compatible under
 `%LOCALAPPDATA%\Programs\Ara\<version>` and installs/reuses the separate Hub for
@@ -115,11 +119,12 @@ requires installing the standalone Hub for GUI self-update. Smoke mode with
 Standalone Hub updates download in the background. **Restart to update** starts
 an updater copied outside the Hub directory. It waits only for that GUI PID,
 rechecks the signature/hash, extracts to a sibling, swaps current → `.old` and
-new → current, and launches the new Hub with the existing service path. Only
+new → current, and launches the new Hub with its own bootstrap. Only
 after the GUI renders a frame does it acknowledge health and permit `.old`
 cleanup. Startup failure/timeout restores and relaunches the previous Hub.
-Inspect `<Ara config>/hub-update.log` for failed restarts. Open editors and the
-running Hub service are never terminated by GUI updates.
+Inspect `<Ara config>/hub-update.log` for failed restarts. The build handshake
+gracefully replaces an idle older service. A service supervising editors, daemons
+or downloads stays connected, with a non-fatal restart notice; open projects survive.
 
 ## CLI and RPC
 
@@ -135,8 +140,10 @@ Checkout binaries refuse the real user profile before accessing discovery or
 registry files. Worktree engine/editor paths cannot be registered in that real
 profile by an installed service either. Test harnesses fail if ARA_CONFIG_DIR
 resolves outside target/. Stop every service/updater started by a check;
-GUI checks use offscreen captures only. Smoke uses its own isolated config and
-cleans up the service on failure as well as success.
+GUI checks use offscreen captures only. Smoke isolates config, LOCALAPPDATA and
+APPDATA and cleans up on failure as well as success. It installs both setups,
+seeds a stale same-version service, launches the standalone Hub without a window,
+checks outpost/showcase/starter discovery and creates Starter from the engine.
 
 ```powershell
 ara hub engines --available --channel preview

@@ -1,6 +1,7 @@
 //! The shipped binaries are the test subjects; no development executable is used.
 use crate::support::{self, run};
 use anyhow::{Context, Result, ensure};
+use ara_proto::Endpoint;
 use serde_json::{Value, json};
 use std::{
     fs,
@@ -22,8 +23,19 @@ impl Environment {
         if !discovery.is_file() {
             return Ok(());
         }
-        let _ = self.cli(&["hub", "close", "Release smoke"], "cleanup-close.log");
-        self.cli(&["hub", "shutdown"], "cleanup-shutdown.log")?;
+        if let Some(mut client) = ara_rpc::Client::for_project(&self.directory.join("config/hub")) {
+            let projects = client
+                .call("hub.projects", json!({}))
+                .map_err(|e| anyhow::anyhow!("{e}"))?;
+            for project in projects["projects"].as_array().into_iter().flatten() {
+                client
+                    .call("hub.close", json!({"project":project["id"]}))
+                    .map_err(|e| anyhow::anyhow!("{e}"))?;
+            }
+            client
+                .call("hub.shutdown", json!({}))
+                .map_err(|e| anyhow::anyhow!("{e}"))?;
+        }
         let deadline = Instant::now() + Duration::from_secs(10);
         while discovery.exists() {
             ensure!(Instant::now() < deadline, "smoke Hub did not stop");
@@ -53,6 +65,8 @@ impl Environment {
             )
             .env("PATH", std::env::join_paths(paths).unwrap_or_default())
             .env("ARA_CONFIG_DIR", self.directory.join("config"))
+            .env("LOCALAPPDATA", self.directory.join("local"))
+            .env("APPDATA", self.directory.join("roaming"))
             .env("GIT_CEILING_DIRECTORIES", &self.directory)
             .env("ARA_CRASH_DIR", self.directory.join("crashes"));
         command
@@ -106,6 +120,10 @@ pub fn smoke(root: &Path, version: &str) -> Result<()> {
         ),
     )?;
     let result = (|| -> Result<()> {
+        step(
+            "standalone Hub setup, stale service replacement and engine templates",
+            standalone_hub(&env, &dist, version),
+        )?;
         step(
             "ara --version",
             env.cli(&["--version"], "version.log").and_then(|()| {
@@ -334,7 +352,7 @@ pub fn smoke(root: &Path, version: &str) -> Result<()> {
     fs::write(
         dist.join("SMOKE_RESULTS.txt"),
         format!(
-            "Ara {version}: PASS\nEvidence: {}\nSilent SFX install; version; doctor without VULKAN_SDK; init; headless scene capture; native editor screenshot; every installed template opens in the editor (20 offscreen frames); global MCP project list; installed player 120 ticks; engine registration; uninstall.\nShell integration was disabled to keep the real user's PATH and Start menu unchanged.\n",
+            "Ara {version}: PASS\nEvidence: {}\nSilent engine and standalone Hub SFX installs; same-version stale service replacement; standalone Hub lists outpost/showcase/starter from the installed engine and creates Starter; version; doctor without VULKAN_SDK; init; headless scene capture; native editor screenshot; every installed template opens in the editor (20 offscreen frames); global MCP project list; installed player 120 ticks; engine registration; uninstall.\nShell integration was disabled and every child used isolated config, local and roaming profile directories.\n",
             env.directory.display()
         ),
     )?;
@@ -343,6 +361,131 @@ pub fn smoke(root: &Path, version: &str) -> Result<()> {
         env.directory.display()
     );
     Ok(())
+}
+
+/// Exercise the installed standalone Hub's bootstrap/handshake without opening a window.
+fn standalone_hub(env: &Environment, dist: &Path, version: &str) -> Result<()> {
+    let installed = env.directory.join("standalone Hub");
+    run(
+        env.command(dist.join(format!("ara-hub-{version}-windows-x64-setup.exe")))
+            .arg("--destination")
+            .arg(&installed)
+            .args(["--silent", "--no-system-integration"]),
+        &env.directory.join("standalone-install.log"),
+    )?;
+    // Preserve the real registered engine, but start a distinct same-version
+    // executable. PE overlays don't change execution and do change its build hash.
+    env.cli(&["hub", "engines"], "standalone-engines.log")?;
+    env.stop_hub()?;
+    let stale_dir = env.directory.join("local/Ara/Services").join(version);
+    fs::create_dir_all(&stale_dir)?;
+    let stale_exe = stale_dir.join("ara.exe");
+    fs::copy(installed.join("bootstrap/ara.exe"), &stale_exe)?;
+    fs::OpenOptions::new()
+        .append(true)
+        .open(&stale_exe)?
+        .write_all(b"stale-preview-smoke")?;
+    support::json(
+        &stale_dir.join("service.json"),
+        &json!({"version":version,"build":"stale-preview"}),
+    )?;
+    for entry in fs::read_dir(installed.join("bootstrap"))? {
+        let path = entry?.path();
+        if path
+            .extension()
+            .is_some_and(|ext| ext.eq_ignore_ascii_case("dll"))
+        {
+            fs::copy(
+                &path,
+                stale_dir.join(path.file_name().context("bootstrap DLL")?),
+            )?;
+        }
+    }
+    let mut stale = OwnedService(
+        env.command(&stale_exe)
+            .args(["hub", "serve"])
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(fs::File::create(env.directory.join("stale-service.log"))?)
+            .spawn()?,
+    );
+    let discovery = env.directory.join("config/hub");
+    let until = Instant::now() + Duration::from_secs(20);
+    loop {
+        if let Some(mut client) = ara_rpc::Client::for_project(&discovery) {
+            client
+                .call("hub.status", json!({}))
+                .map_err(|e| anyhow::anyhow!("{e}"))?;
+            break;
+        }
+        ensure!(
+            stale.0.try_wait()?.is_none(),
+            "seeded stale service exited before the Hub connected"
+        );
+        ensure!(
+            Instant::now() < until,
+            "seeded stale service startup timed out"
+        );
+        thread::sleep(Duration::from_millis(25));
+    }
+    let report = env.directory.join("standalone-service.json");
+    run(
+        env.command(installed.join("ara-hub.exe"))
+            .arg("--service-check")
+            .arg(&report)
+            .arg("--ara")
+            .arg(&stale_exe),
+        &env.directory.join("standalone-service-check.log"),
+    )?;
+    let report: Value = serde_json::from_slice(&fs::read(report)?)?;
+    let executable = PathBuf::from(report["executable"].as_str().context("bootstrap path")?);
+    ensure!(
+        executable.starts_with(env.directory.join("local/Ara/Services")),
+        "Hub used a service outside the isolated profile: {}",
+        executable.display()
+    );
+    ensure!(
+        report["status"]["build"] == ara_update::sha256_file(&installed.join("bootstrap/ara.exe"))?,
+        "Hub reused the stale service: {report}"
+    );
+    let info = ara_rpc::DaemonInfo::read(&discovery).context("Hub service discovery")?;
+    ensure!(
+        info.pid != stale.0.id(),
+        "Hub retained the seeded stale service"
+    );
+    let templates = report["templates"].as_array().context("templates")?;
+    for id in ["outpost", "showcase", "starter"] {
+        let tile = templates
+            .iter()
+            .find(|tile| tile["id"] == id)
+            .with_context(|| format!("standalone Hub didn't list {id}: {report}"))?;
+        ensure!(
+            tile["engineVersion"] == version,
+            "template {id} did not come from the installed engine: {tile}"
+        );
+    }
+    let mut client = ara_rpc::Client::for_project(&discovery).context("standalone service")?;
+    let project = env.directory.join("Standalone Starter");
+    let created = client
+        .call(
+            "hub.create",
+            json!({"template":"starter","name":"Standalone Starter","path":project}),
+        )
+        .map_err(|e| anyhow::anyhow!("Starter creation failed: {e}"))?;
+    ensure!(
+        created["engineVersion"] == version && project.join("ara.project.json").is_file(),
+        "standalone Hub Starter creation failed: {created}"
+    );
+    support::json(&env.directory.join("standalone-starter.json"), &created)?;
+    Ok(())
+}
+
+struct OwnedService(Child);
+impl Drop for OwnedService {
+    fn drop(&mut self) {
+        let _ = self.0.kill();
+        let _ = self.0.wait();
+    }
 }
 
 struct Mcp {
@@ -415,5 +558,38 @@ impl Drop for Mcp {
         drop(self.input.take());
         let _ = self.child.kill();
         let _ = self.child.wait();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn every_smoke_child_has_isolated_config_and_local_profile() {
+        let directory = std::path::absolute(
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/release-smoke-env-test"),
+        )
+        .expect("target path");
+        let env = Environment {
+            installed: directory.join("engine"),
+            directory: directory.clone(),
+        };
+        let command = env.command("fixture-do-not-run");
+        for (key, suffix) in [
+            ("ARA_CONFIG_DIR", "config"),
+            ("LOCALAPPDATA", "local"),
+            ("APPDATA", "roaming"),
+            ("ARA_CRASH_DIR", "crashes"),
+        ] {
+            let value = command
+                .get_envs()
+                .find(|(name, _)| *name == key)
+                .and_then(|(_, value)| value)
+                .expect("isolated child env");
+            assert_eq!(Path::new(value), directory.join(suffix));
+        }
+        // The environment fixture didn't start a process; don't run cleanup.
+        std::mem::forget(env);
     }
 }

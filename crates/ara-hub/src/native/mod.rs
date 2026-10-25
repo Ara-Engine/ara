@@ -33,6 +33,8 @@ use std::{
 /// Command-line options of `ara-hub`.
 #[derive(Clone, Debug)]
 pub struct Options {
+    /// Internal, windowless installed-service check used by release smoke.
+    pub service_check: Option<PathBuf>,
     /// Internal updater acknowledgment, written after the first rendered GUI frame.
     pub update_health: Option<PathBuf>,
     /// Initial window size in physical pixels.
@@ -49,6 +51,7 @@ pub struct Options {
 impl Default for Options {
     fn default() -> Self {
         Self {
+            service_check: None,
             update_health: None,
             size: [1440, 900],
             dpi: None,
@@ -193,6 +196,23 @@ pub fn run(options: Options) -> anyhow::Result<()> {
     };
     let config = std::path::absolute(config)?;
     ara_hub_service::validate_development_config(&config)?;
+    if let Some(report) = &options.service_check {
+        use ara_proto::Endpoint;
+        let ara = updates::service(&exe_dir, options.ara.as_deref())?;
+        let mut client =
+            ara_hub_service::connect_or_start(&config, &ara).map_err(|e| anyhow::anyhow!("{e}"))?;
+        let status = client
+            .call("hub.status", serde_json::json!({}))
+            .map_err(|e| anyhow::anyhow!("{e}"))?;
+        let templates = client
+            .call("hub.templates", serde_json::json!({}))
+            .map_err(|e| anyhow::anyhow!("{e}"))?;
+        ara_update::write_json(
+            report,
+            &serde_json::json!({"executable":ara,"status":status,"templates":templates["templates"]}),
+        )?;
+        return Ok(());
+    }
     let prefs = if options.capture.is_some() {
         Prefs::default()
     } else {
@@ -206,10 +226,7 @@ pub fn run(options: Options) -> anyhow::Result<()> {
         return capture::run(&mut offscreen, &mut app, &mut hub, &directory);
     }
     let mut host = Host::new(&options, hub.prefs.light)?;
-    let ara = match &options.ara {
-        Some(ara) => std::path::absolute(ara)?,
-        None => updates::service(&exe_dir)?,
-    };
+    let ara = updates::service(&exe_dir, options.ara.as_deref())?;
     hub.releases.can_self_update = exe_dir.join("hub.json").is_file();
     let mut app = App::new(host.logical(), docs).map_err(err)?;
     interactive(

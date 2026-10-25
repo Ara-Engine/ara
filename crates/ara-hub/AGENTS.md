@@ -63,7 +63,9 @@ contract is `crates/ara-hub-service/AGENTS.md`.
   Settings configures channel/repository and checks for updates. Native checks
   at startup and every four hours; standalone Hubs prepare updates automatically.
 - Standalone `hub.json` builds bootstrap the immutable service into
-  LOCALAPPDATA/Ara/Services/version. `ara-hub-updater` runs from config/updater,
+  LOCALAPPDATA/Ara/Services/version/content-hash (service.json records the build).
+  A build handshake replaces idle services; busy services stay connected with a notice.
+  `ara-hub-updater` runs from config/updater,
   waits for this GUI only, verifies again and swaps with rollback. Health is
   acknowledged after the first rendered GUI frame. Captures never bootstrap,
   connect or check releases. Engine-bundled Hubs cannot replace their engine dir.

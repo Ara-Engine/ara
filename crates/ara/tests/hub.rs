@@ -71,6 +71,162 @@ impl Drop for TestHub {
     }
 }
 
+#[test]
+fn service_build_handshake_replaces_idle_builds_and_preserves_open_projects() {
+    let hub = TestHub::new("service-build");
+    let executable = PathBuf::from(env!("CARGO_BIN_EXE_ara"));
+    let alternate = hub
+        .directory
+        .join(format!("preview9{}", std::env::consts::EXE_SUFFIX));
+    fs::copy(&executable, &alternate).expect("copy service");
+    // Executable overlays preserve execution, with a distinct build identity.
+    fs::OpenOptions::new()
+        .append(true)
+        .open(&alternate)
+        .expect("overlay")
+        .write_all(b"different preview build")
+        .expect("overlay bytes");
+    let mut initial =
+        ara_hub_service::connect_checked(&hub.config(), &executable).expect("initial service");
+    let original = ara_rpc::DaemonInfo::read(&hub.config().join("hub"))
+        .expect("discovery")
+        .pid;
+    let build = initial
+        .client
+        .call("hub.status", json!({}))
+        .expect("status")["build"]
+        .clone();
+    assert_eq!(build.as_str().expect("build hash").len(), 64);
+    let mut same = ara_hub_service::connect_checked(&hub.config(), &executable).expect("reuse");
+    assert!(!same.update_pending);
+    assert_eq!(
+        ara_rpc::DaemonInfo::read(&hub.config().join("hub"))
+            .expect("same pid")
+            .pid,
+        original
+    );
+    let project = same
+        .client
+        .call(
+            "hub.create",
+            json!({"name":"Live","template":"blank","path":hub.directory.join("Live")}),
+        )
+        .expect("create");
+    let opened = same
+        .client
+        .call("hub.open", json!({"project":project["id"],"headless":true}))
+        .expect("open");
+    let mut busy =
+        ara_hub_service::connect_checked(&hub.config(), &alternate).expect("keep busy service");
+    assert!(busy.update_pending);
+    assert_eq!(
+        busy.client
+            .call("hub.status", json!({"project":project["id"]}))
+            .expect("still open")["pid"],
+        opened["pid"]
+    );
+    assert_eq!(
+        busy.client
+            .call("hub.shutdown", json!({"onlyIfIdle":true}))
+            .expect("conditional shutdown")["stopping"],
+        false
+    );
+    busy.client
+        .call("hub.close", json!({"project":project["id"]}))
+        .expect("close");
+    drop(busy);
+    drop(same);
+    drop(initial);
+    let mut replacement =
+        ara_hub_service::connect_checked(&hub.config(), &alternate).expect("replace idle build");
+    assert!(!replacement.update_pending);
+    assert_ne!(
+        replacement
+            .client
+            .call("hub.status", json!({}))
+            .expect("replacement status")["build"],
+        build
+    );
+    assert_ne!(
+        ara_rpc::DaemonInfo::read(&hub.config().join("hub"))
+            .expect("new pid")
+            .pid,
+        original
+    );
+    assert!(
+        !ara_hub_service::connect_checked(&hub.config(), &alternate)
+            .expect("reuse replacement")
+            .update_pending
+    );
+}
+
+#[test]
+fn legacy_service_without_build_is_gracefully_replaced() {
+    use ara_proto::{ConnId, Incoming, jsonrpc};
+    use ara_rpc::{DaemonInfo, Handler, ServeOptions};
+    use std::sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    };
+    struct Legacy(Arc<AtomicBool>);
+    impl Handler for Legacy {
+        fn message(&mut self, _: ConnId, text: &str) -> Option<String> {
+            let Ok(Incoming::Request { id, method, params }) = Incoming::parse(text) else {
+                return None;
+            };
+            let value = if method == "hub.shutdown" {
+                assert_eq!(params, json!({}), "legacy previews cannot parse onlyIfIdle");
+                self.0.store(true, Ordering::Release);
+                json!({"stopping":true})
+            } else {
+                json!({"projects":[],"revision":0})
+            };
+            Some(jsonrpc::reply(id, Ok(value)).to_string())
+        }
+        fn stopping(&self) -> bool {
+            self.0.load(Ordering::Acquire)
+        }
+    }
+    let hub = TestHub::new("legacy-service");
+    let discovery = hub.config().join("hub");
+    let listener = std::net::TcpListener::bind(("127.0.0.1", 0)).expect("listener");
+    let info = DaemonInfo {
+        pid: std::process::id(),
+        port: listener.local_addr().expect("port").port(),
+        token: "legacy-test".into(),
+        protocol: ara_proto::PROTOCOL.into(),
+    };
+    info.write(&discovery).expect("legacy discovery");
+    let stop = Arc::new(AtomicBool::new(false));
+    let flag = stop.clone();
+    let server = thread::spawn(move || {
+        let result = ara_rpc::serve(
+            &mut Legacy(flag),
+            ServeOptions {
+                listener: Some(listener),
+                token: info.token,
+                stdio: false,
+                tick: Duration::from_millis(10),
+            },
+        );
+        DaemonInfo::remove(&discovery);
+        result.expect("legacy server");
+    });
+    let result =
+        ara_hub_service::connect_checked(&hub.config(), Path::new(env!("CARGO_BIN_EXE_ara")));
+    stop.store(true, Ordering::Release);
+    server.join().expect("legacy stopped");
+    let mut connected = result.expect("replace legacy");
+    assert!(!connected.update_pending);
+    assert!(
+        connected
+            .client
+            .call("hub.status", json!({}))
+            .expect("status")["build"]
+            .is_string()
+    );
+}
+
 struct Mcp {
     agent: &'static str,
     trace: fs::File,
