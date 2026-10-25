@@ -184,10 +184,12 @@ impl Shell {
     }
 
     /// Follow the open controller's running animator during Play, at most every
-    /// [`LIVE_EVERY`] and only while the Animation page is in front. Clears the live
-    /// state when Play stops.
+    /// [`LIVE_EVERY`] and only while the Animation page is in front and the world is
+    /// running (`game_running`: a starting world has nothing to read, and asking logs
+    /// ARA7302 into Problems). Clears the live state when Play stops.
     pub(crate) fn poll_animation(&mut self, editor: &mut Editor) -> Option<LiveChange> {
         let front = editor.state.playing.is_some()
+            && self.game_running
             && (in_front(&editor.state.layout, "animation")
                 || editor
                     .state

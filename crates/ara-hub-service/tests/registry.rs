@@ -184,6 +184,38 @@ fn engine_installations_register_durably_and_remove_only_the_matching_build() {
 }
 
 #[test]
+fn create_makes_missing_parents_but_never_reuses_a_target() {
+    let root = scratch("create-parents");
+    let mut hub = Hub::open(config(&root.join("config"))).expect("Hub");
+    let path = root.join("missing/nested/Project");
+    let params = json!({"name":"Nested", "template":"blank", "path":path});
+    let mut dry_run = params.clone();
+    dry_run["dryRun"] = json!(true);
+    hub.call("hub.create", dry_run)
+        .expect("valid missing parents");
+    assert!(
+        !root.join("missing").exists(),
+        "dry runs never create folders"
+    );
+    hub.call("hub.create", params.clone())
+        .expect("mkdir-p parents");
+    assert!(path.join("ara.project.json").is_file());
+    fs::write(path.join("keep.txt"), "preserved").expect("sentinel");
+    let mut duplicate = params;
+    duplicate["name"] = json!("Different");
+    assert!(
+        hub.call("hub.create", duplicate).is_err(),
+        "existing target"
+    );
+    assert_eq!(
+        fs::read_to_string(path.join("keep.txt")).expect("sentinel"),
+        "preserved"
+    );
+    fs::write(root.join("file"), "not a directory").expect("file parent");
+    assert!(hub.call("hub.create", json!({"name":"Blocked", "template":"blank", "path":root.join("file/nested/project"),"dryRun":true})).is_err());
+}
+
+#[test]
 fn canonical_registry_survives_restart_and_pins_the_project() {
     let root = scratch("registry");
     let config_dir = root.join("config");

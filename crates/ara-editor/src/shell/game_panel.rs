@@ -140,14 +140,30 @@ impl Shell {
 }
 
 impl Shell {
-    /// The Game frame's size (logical px): the surface as last laid out, letterboxed
-    /// to the aspect preset; `None` before it is laid out. Play's surface and the
-    /// camera preview render at it.
+    /// The Game frame's size (logical px) in the current surface: the Game surface as
+    /// last laid out, letterboxed to the aspect preset; `None` when this surface does
+    /// not show it (or before layout).
     pub(crate) fn game_frame(&self) -> Option<[f32; 2]> {
-        let r = self
-            .ui
+        self.game_frame_in(&self.ui)
+    }
+    /// Where the Game view is on screen: the floating window hosting it (`None` for
+    /// the main window) and its frame (logical px). Play's surface and the camera
+    /// preview render at that window's scale. Call with the main window current.
+    pub fn game_host(&self) -> Option<(Option<&str>, [f32; 2])> {
+        if self.current.is_some() {
+            return None;
+        }
+        if let Some(frame) = self.game_frame() {
+            return Some((None, frame));
+        }
+        self.floats
+            .iter()
+            .find_map(|surface| Some((Some(surface.id.as_str()), self.game_frame_in(&surface.ui)?)))
+    }
+    fn game_frame_in(&self, ui: &Ui) -> Option<[f32; 2]> {
+        let r = ui
             .find("game-surface")
-            .map(|i| self.ui.nodes[i].rect)
+            .map(|i| ui.nodes[i].rect)
             .filter(|r| r.w > 1. && r.h > 1.)?;
         let ratio = ASPECTS
             .iter()
@@ -235,6 +251,7 @@ impl Shell {
             .filter(|_| matches!(state, "starting" | "stopping"))
             .map(StartProgress::from_status);
         self.game_start_failed = state == "failed";
+        self.game_running = state == "running";
         self.game_fault = shown.and_then(|w| {
             if self.game_start_failed {
                 return Some(

@@ -97,7 +97,29 @@ pub struct Field {
     /// Schema marks this property read-only.
     pub read_only: bool,
 }
-/// Generate common component fields, preserving mixed values and defaults.
+/// Whether the Inspector shows field `desc` of a struct value (`value`, whose type has
+/// `fields`): not `hidden`, and its `showIf` sibling matches. Siblings absent from the
+/// value have their defaults. Hidden fields keep their values and stay settable.
+pub(crate) fn shows(
+    db: &SchemaDb,
+    fields: &[FieldDesc],
+    desc: &FieldDesc,
+    value: Option<&Value>,
+) -> bool {
+    desc.editor.shows(|name| {
+        value
+            .and_then(|v| v.get(name))
+            .cloned()
+            .or_else(|| {
+                let sibling = fields.iter().find(|f| f.name == name)?;
+                Some(db.field_default(sibling))
+            })
+            .unwrap_or(Value::Null)
+    })
+}
+
+/// Generate common component fields, preserving mixed values and defaults. A field
+/// shows when it [`shows`] for every selected entity.
 pub fn fields(
     db: &SchemaDb,
     document: &ara_doc::Document,
@@ -126,7 +148,12 @@ pub fn fields(
         let Shape::Struct { fields, .. } = &ty.shape else {
             continue;
         };
-        for desc in fields.iter().filter(|f| !f.editor.hidden) {
+        let shown = |desc: &FieldDesc| {
+            selected
+                .iter()
+                .all(|(_, e)| shows(db, fields, desc, e.record.get(component)))
+        };
+        for desc in fields.iter().filter(|f| shown(f)) {
             let path = format!("{component}.{}", desc.name);
             let field_path = match path.parse::<FieldPath>() {
                 Ok(p) => p,

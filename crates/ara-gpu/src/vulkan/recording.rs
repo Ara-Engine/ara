@@ -70,6 +70,33 @@ impl VulkanDevice {
     pub fn submit(&mut self, list: CommandList, waits: &[TimelinePoint]) -> Result<TimelinePoint> {
         self.poll_shader_reload();
         crate::cpu_scope!("GPU.submit");
+        // A synchronous helper's resolve used to finish its writes before the
+        // next helper could submit. Preserve that boundary with GPU waits when
+        // resolution is deferred, including across independently compiled graphs.
+        let mut merged = [TimelinePoint {
+            queue: Queue::Graphics,
+            value: 0,
+        }; 2];
+        let mut count = 0;
+        if self.deferred.is_some() {
+            let mut dependencies = self.deferred_waits;
+            for &point in waits {
+                dependencies[point.queue.index()] =
+                    dependencies[point.queue.index()].max(point.value);
+            }
+            for queue in [Queue::Graphics, Queue::Compute] {
+                let value = dependencies[queue.index()];
+                if value > 0 {
+                    merged[count] = TimelinePoint { queue, value };
+                    count += 1;
+                }
+            }
+        }
+        let waits = if self.deferred.is_some() {
+            &merged[..count]
+        } else {
+            waits
+        };
         for wait in waits {
             if wait.value > self.submitted[wait.queue.index()] {
                 return Err(GpuError::Contract("Wait targets unsubmitted work".into()));
@@ -247,6 +274,11 @@ impl VulkanDevice {
     pub fn resolve(&mut self, point: TimelinePoint) -> Result<Vec<PassTiming>> {
         crate::cpu_scope!("GPU.resolve");
         if self.deferred.is_some() {
+            if !self.pending.iter().any(|pending| pending.point == point) {
+                return Err(GpuError::Contract("Unknown deferred submission".into()));
+            }
+            self.deferred_waits[point.queue.index()] =
+                self.deferred_waits[point.queue.index()].max(point.value);
             return Ok(Vec::new());
         }
         self.wait(point)?;

@@ -52,10 +52,11 @@ pub struct Preview {
 }
 
 impl Preview {
-    /// The camera and size a preview would render now, if the Game view wants one.
+    /// The camera and size a preview would render now, if the Game view (in the main
+    /// window or a floating one) wants one.
     fn want(editor: &Editor, shell: &mut Shell) -> Option<(Camera, [u32; 2])> {
         let target = shell.game_target;
-        let visible = shell.game_frame().is_some() && target.iter().all(|v| *v >= 64);
+        let visible = shell.game_host().is_some() && target.iter().all(|v| *v >= 64);
         if !visible || editor.state.playing.is_some() || shell.game_live {
             return None;
         }

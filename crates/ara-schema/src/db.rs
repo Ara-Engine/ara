@@ -7,7 +7,10 @@ use ara_diag::{Diagnostic, codes, did_you_mean};
 use serde_json::{Map, Value};
 
 use crate::grammar::{is_field_name, is_id_prefix, is_kind_name, is_type_name};
-use crate::{DocKindDesc, FieldDesc, Schema, Shape, StructRole, TypeDesc, Validator, ValueType};
+use crate::{
+    DocKindDesc, FieldDesc, Schema, Shape, ShowIf, ShowWhen, StructRole, TypeDesc, Validator,
+    ValueType,
+};
 
 /// The registry of every reflected type and document kind.
 ///
@@ -320,6 +323,90 @@ impl SchemaDb {
                         }
                     }
                     self.verify_field(t, role, f, &mut problem);
+                }
+                for f in fields {
+                    if let Some(show) = &f.editor.show_if {
+                        self.verify_show_if(f, show, fields, &mut problem);
+                    }
+                }
+            }
+        }
+    }
+
+    /// A `showIf` names another, unconditional sibling that its condition can judge:
+    /// one that can be empty for `set`/`empty`, an enum with those variants for `oneOf`.
+    fn verify_show_if(
+        &self,
+        f: &FieldDesc,
+        show: &ShowIf,
+        fields: &[FieldDesc],
+        problem: &mut impl FnMut(String),
+    ) {
+        let name = &f.name;
+        let Some(sibling) = fields
+            .iter()
+            .find(|s| s.name == show.field && s.name != *name)
+        else {
+            return problem(format!(
+                "field `{name}`: `showIf` names no other field `{}`",
+                show.field
+            ));
+        };
+        if sibling.editor.show_if.is_some() {
+            problem(format!(
+                "field `{name}`: `showIf` field `{}` is itself conditional",
+                show.field
+            ));
+        }
+        match &show.when {
+            ShowWhen::Set | ShowWhen::Empty => {
+                let can_be_empty = matches!(
+                    sibling.ty,
+                    ValueType::Option(_)
+                        | ValueType::Entity
+                        | ValueType::Asset(_)
+                        | ValueType::String
+                        | ValueType::Json
+                        | ValueType::List(_)
+                        | ValueType::Keyed(_)
+                        | ValueType::Map(_)
+                );
+                if !can_be_empty {
+                    problem(format!(
+                        "field `{name}`: `showIf` field `{}` ({}) is never empty",
+                        show.field, sibling.ty
+                    ));
+                }
+            }
+            ShowWhen::OneOf(names) => {
+                let base = match &sibling.ty {
+                    ValueType::Option(inner) => inner.as_ref(),
+                    other => other,
+                };
+                let variants = match base {
+                    ValueType::Named(n) => match self.types.get(n).map(|t| &t.shape) {
+                        Some(Shape::Enum { variants }) => Some(variants),
+                        _ => None,
+                    },
+                    _ => None,
+                };
+                let Some(variants) = variants else {
+                    return problem(format!(
+                        "field `{name}`: `showIf` `oneOf` needs an enum field; `{}` is {}",
+                        show.field, sibling.ty
+                    ));
+                };
+                if names.is_empty() {
+                    problem(format!("field `{name}`: `showIf` `oneOf` lists no variant"));
+                }
+                for n in names
+                    .iter()
+                    .filter(|n| !variants.iter().any(|v| v.name == **n))
+                {
+                    problem(format!(
+                        "field `{name}`: `showIf` field `{}` has no variant `{n}`",
+                        show.field
+                    ));
                 }
             }
         }

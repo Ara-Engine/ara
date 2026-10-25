@@ -380,6 +380,11 @@ impl Hub {
                 if p.dry_run == Some(true) {
                     return Ok(json!({"valid":true,"path":path}));
                 }
+                if let Some(parent) = path.parent() {
+                    fs::create_dir_all(parent).map_err(io_error)?;
+                }
+                // Only parents are mkdir-p: the target must be new, including
+                // when another process creates it after validation.
                 fs::create_dir(&path).map_err(io_error)?;
                 if let Some(directory) = template.directory {
                     DirectoryTemplates(directory).instantiate(&template.tile.id, &path)?;

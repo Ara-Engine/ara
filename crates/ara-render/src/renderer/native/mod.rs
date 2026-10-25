@@ -170,6 +170,7 @@ impl Renderer {
             next.owns_pipelines = true;
         }
         let old = self.native.replace(next);
+        self.entity_epoch = self.entity_epoch.wrapping_add(1);
         let previous_content = content.map(|content| std::mem::replace(&mut self.content, content));
         self.content.base_hash = base_hash;
         self.content.entity_names = names;
@@ -234,7 +235,8 @@ impl Renderer {
                 &scene.lights[..]
             };
             for buffer in [self.content.light_buffer, self.content.compute_lights] {
-                self.gpu.upload(buffer, bytemuck::cast_slice(lights))?;
+                self.gpu
+                    .upload_queued(buffer, bytemuck::cast_slice(lights))?;
             }
             self.content.lights.clear();
             self.content.lights.extend_from_slice(&scene.lights);
@@ -290,7 +292,7 @@ impl Renderer {
             .as_mut()
             .ok_or_else(|| anyhow::anyhow!("Native raster content required"))?;
         native.culling.opaque(
-            &self.gpu,
+            &mut self.gpu,
             native.visible,
             &native.groups,
             &native.bounds,
@@ -359,7 +361,7 @@ impl Renderer {
         );
         ensure!(matrix.is_finite(), "Native shadow matrix must be finite");
         native.culling.opaque(
-            &self.gpu,
+            &mut self.gpu,
             native.visible,
             &native.groups,
             &native.bounds,

@@ -1549,6 +1549,7 @@ dependencies = [
  "ara-json",
  "ara-platform",
  "ara-profile",
+ "ash 0.38.0+1.4.352",
  "bytemuck",
  "glam 0.30.9",
  "gltf",

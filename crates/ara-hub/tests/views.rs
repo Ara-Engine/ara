@@ -29,6 +29,44 @@ fn render(hub: &Hub, size: [f32; 2], light: bool) -> Ui {
 }
 
 #[test]
+fn first_run_has_no_demo_update_or_missing_art_and_template_titles_are_complete() {
+    let mut hub = Hub::new(Prefs::default(), "C:/Ara Projects".into(), None);
+    capture::seed_first_run(&mut hub);
+    assert!(hub.releases.hub.is_none());
+    assert!(hub.releases.jobs.is_empty());
+    assert_eq!(hub.engines.len(), 1);
+    assert!(hub.templates.iter().all(|t| t.setup.is_none()));
+    for size in [[1440., 900.], [1280., 720.]] {
+        let ui = render(&hub, size, false);
+        let label = ui
+            .nodes
+            .iter()
+            .find(|n| {
+                n.element.attrs.get("text").map(String::as_str)
+                    == Some("Material and character showcase")
+            })
+            .expect("complete template name");
+        assert!(label.rect.h > 14., "title wraps inside its card");
+        let page = view::page(
+            &hub,
+            &Ctx {
+                now_ms: capture::NOW,
+                size,
+                thumbnail: &|_| None,
+                anchor: None,
+                docs: &[],
+            },
+        );
+        assert!(
+            page.markup.contains("template-starter"),
+            "embedded real Starter preview"
+        );
+        assert!(!page.markup.contains("Restart to update"));
+        assert!(!page.markup.contains("Needs art download"));
+    }
+}
+
+#[test]
 fn every_view_lays_out_in_both_themes_and_sizes() {
     let mut hub = Hub::new(Prefs::default(), std::env::temp_dir(), None);
     capture::seed(&mut hub);
