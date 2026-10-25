@@ -5,10 +5,10 @@ use ara_asset::{Cancellation, CookPreset, Result};
 use ara_asset_format::TextureFormat;
 use rayon::prelude::*;
 
-fn quantize(v: f32) -> u8 {
+pub(crate) fn quantize(v: f32) -> u8 {
     (v.clamp(0.0, 1.0) * 255.0 + 0.5) as u8
 }
-fn linear_to_srgb(v: f32) -> f32 {
+pub(crate) fn linear_to_srgb(v: f32) -> f32 {
     if v <= 0.0031308 {
         v * 12.92
     } else {

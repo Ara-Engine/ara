@@ -7,6 +7,22 @@ use ara_asset::{
 use ara_asset_format::{TextureFormat, write_ktx2};
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
+mod gpu_input;
+
+// ISPC BC5 is already very fast and retains the qualified normal-map output.
+// The experimental GPU BC5 encoder has larger angular-error outliers, so normals
+// keep CPU encoding even when the model's colour/HDR textures use the GPU.
+fn encoder_for<'a>(
+    settings: &TextureSettings,
+    encoder: Option<&'a dyn ara_asset::BlockEncoder>,
+) -> Option<&'a dyn ara_asset::BlockEncoder> {
+    if settings.usage == TextureUsage::Normal {
+        None
+    } else {
+        encoder
+    }
+}
+mod memo;
 
 /// Semantic texture usage selects transfer functions, mip filtering and BC format.
 #[derive(
@@ -32,6 +48,9 @@ pub enum TextureUsage {
 #[ara(module = "asset")]
 #[serde(rename_all = "camelCase", default, deny_unknown_fields)]
 pub struct TextureSettings {
+    /// Optional quality override; absent inherits the source/project preset.
+    /// Changing it does not re-encode other texture tasks.
+    pub preset: Option<CookPreset>,
     /// How color/normal/mask values are interpreted.
     pub usage: TextureUsage,
     /// Generate the complete mip chain through 1×1.
@@ -49,6 +68,7 @@ pub struct TextureSettings {
 impl Default for TextureSettings {
     fn default() -> Self {
         Self {
+            preset: None,
             usage: TextureUsage::Color,
             mipmaps: true,
             flip_normal_y: false,
@@ -57,19 +77,43 @@ impl Default for TextureSettings {
         }
     }
 }
-/// PNG, JPEG, Radiance HDR and OpenEXR importer with Intel ISPC BCn encoding.
+/// PNG, JPEG, Radiance HDR and OpenEXR importer with optional worker BCn encoding.
+/// Without an explicit encoding service, compression uses the qualified ISPC path.
 pub struct TextureImporter;
 impl Importer for TextureImporter {
     fn id(&self) -> &str {
         "ara.texture"
     }
     fn version(&self) -> &str {
-        "3-image025-ispc050-tiled-f32text"
+        "4-image025-ispc050-texture-presets-tiled-f32text"
     }
     fn register_settings(&self, db: &mut ara_schema::SchemaDb) {
         db.register::<TextureSettings>();
     }
     fn import(&self, input: &ImportInput, ctx: &mut ImportContext<'_>) -> Result<ImportOutput> {
+        self.import_with_memo(input, ctx, None)
+    }
+    fn import_with_memo(
+        &self,
+        input: &ImportInput,
+        ctx: &mut ImportContext<'_>,
+        memo: Option<&dyn ara_asset::CacheBackend>,
+    ) -> Result<ImportOutput> {
+        self.import_with_services(
+            input,
+            ctx,
+            ara_asset::ImportServices {
+                memo,
+                encoder: None,
+            },
+        )
+    }
+    fn import_with_services(
+        &self,
+        input: &ImportInput,
+        ctx: &mut ImportContext<'_>,
+        services: ara_asset::ImportServices<'_>,
+    ) -> Result<ImportOutput> {
         let settings = if input.settings.is_null() {
             TextureSettings::default()
         } else {
@@ -79,12 +123,13 @@ impl Importer for TextureImporter {
             artifacts: vec![Artifact {
                 name: "texture.ktx2".into(),
                 kind: ArtifactKind::Texture,
-                bytes: cook_texture_with_preset(
+                bytes: cook_texture_serviced(
                     &input.source,
                     &settings,
                     input.target,
                     input.preset,
                     ctx,
+                    services,
                 )?,
             }],
         })
@@ -98,7 +143,7 @@ pub fn cook_texture(
     target: TargetPlatform,
     ctx: &mut ImportContext<'_>,
 ) -> Result<Vec<u8>> {
-    cook_texture_with_preset(source, settings, target, CookPreset::HighQuality, ctx)
+    cook_texture_with_preset(source, settings, target, CookPreset::default(), ctx)
 }
 /// Cooks a specific cacheable quality preset, using the caller's current Rayon pool.
 /// Registry execution supplies a bounded pool; direct callers can use `pool.install`.
@@ -109,6 +154,63 @@ pub fn cook_texture_with_preset(
     preset: CookPreset,
     ctx: &mut ImportContext<'_>,
 ) -> Result<Vec<u8>> {
+    cook_texture_memo(source, settings, target, preset, ctx, None)
+}
+fn cook_texture_memo(
+    source: &[u8],
+    settings: &TextureSettings,
+    target: TargetPlatform,
+    preset: CookPreset,
+    ctx: &mut ImportContext<'_>,
+    memo: Option<&dyn ara_asset::CacheBackend>,
+) -> Result<Vec<u8>> {
+    cook_texture_serviced(
+        source,
+        settings,
+        target,
+        preset,
+        ctx,
+        ara_asset::ImportServices {
+            memo,
+            encoder: None,
+        },
+    )
+}
+fn cook_texture_serviced(
+    source: &[u8],
+    settings: &TextureSettings,
+    target: TargetPlatform,
+    preset: CookPreset,
+    ctx: &mut ImportContext<'_>,
+    services: ara_asset::ImportServices<'_>,
+) -> Result<Vec<u8>> {
+    let memo = services.memo;
+    let services = ara_asset::ImportServices {
+        memo,
+        encoder: encoder_for(settings, services.encoder),
+    };
+    ctx.cancellation.check()?;
+    let preset = settings.preset.unwrap_or(preset);
+    let key = memo
+        .map(|_| {
+            memo::key_with_backend(
+                source,
+                settings,
+                target,
+                preset,
+                services.encoder.map(|e| e.backend()),
+            )
+        })
+        .transpose()?;
+    if let Some(key) = key
+        && let Some(bytes) = memo::load(memo, key)?
+    {
+        if let Some(metrics) = ctx.metrics {
+            metrics.texture_task(true);
+        }
+        ctx.report(1.0, "texture ready (shared work)")?;
+        return Ok(bytes);
+    }
     let decoded = {
         ctx.report(0.0, "decode texture")?;
         let _timer = ctx.metrics.map(|m| m.start(ara_asset::ImportStage::Decode));
@@ -123,7 +225,20 @@ pub fn cook_texture_with_preset(
     let _timer = ctx
         .metrics
         .map(|m| m.start(ara_asset::ImportStage::Compression));
-    let result = encode_texture(prepared, preset, ctx.cancellation)?;
+    let result = encode_texture(
+        prepared,
+        preset,
+        ctx.cancellation,
+        services.encoder,
+        ctx.metrics,
+    )?;
+    if let Some(metrics) = ctx.metrics {
+        metrics.texture_task(false);
+    }
+    drop(_timer);
+    if let Some(key) = key {
+        memo::store(memo, key, &result)?;
+    }
     ctx.report(1.0, "texture ready")?;
     Ok(result)
 }
@@ -145,34 +260,156 @@ struct MippedTexture {
 // Finish each phase across the entire batch before the next, so nested work
 // stealing cannot starve decode/mips behind a slow BC kernel. Stage timings are
 // elapsed wall time for the complete phase, including its parallel work.
+#[cfg(test)]
 pub(crate) fn cook_texture_batch(
     jobs: &[(TextureSettings, Vec<u8>)],
     target: TargetPlatform,
     preset: CookPreset,
     ctx: &mut ImportContext<'_>,
+    memo: Option<&dyn ara_asset::CacheBackend>,
 ) -> Result<Vec<Vec<u8>>> {
-    // Bound retained float/mip buffers for scenes with hundreds of images.
-    const BATCH_IMAGES: usize = 8;
-    let count = jobs.len().div_ceil(BATCH_IMAGES).max(1);
-    let mut output = Vec::with_capacity(jobs.len());
-    for (index, batch) in jobs.chunks(BATCH_IMAGES).enumerate() {
-        output.extend(cook_texture_batch_inner(
-            batch,
-            target,
-            preset,
-            ctx,
-            [0.3 + index as f32 / count as f32 * 0.6, 0.6 / count as f32],
-        )?);
-    }
-    ctx.report(0.9, "textures ready")?;
-    Ok(output)
+    cook_texture_batch_serviced(
+        jobs,
+        target,
+        preset,
+        ctx,
+        ara_asset::ImportServices {
+            memo,
+            encoder: None,
+        },
+    )
 }
-fn cook_texture_batch_inner(
+pub(crate) fn cook_texture_batch_serviced(
     jobs: &[(TextureSettings, Vec<u8>)],
     target: TargetPlatform,
     preset: CookPreset,
     ctx: &mut ImportContext<'_>,
+    services: ara_asset::ImportServices<'_>,
+) -> Result<Vec<Vec<u8>>> {
+    let memo = services.memo;
+    // Image indices/URIs can alias the same bytes. Deduplicate before decoding,
+    // preserving original artifact order and all semantic texture settings.
+    let mut unique = std::collections::BTreeMap::new();
+    let mut keys = Vec::new();
+    let mut remap = Vec::with_capacity(jobs.len());
+    let mut sources = Vec::new();
+    for (index, (settings, source)) in jobs.iter().enumerate() {
+        let key = memo::key_with_backend(
+            source,
+            settings,
+            target,
+            preset,
+            encoder_for(settings, services.encoder).map(|e| e.backend()),
+        )?;
+        let next = sources.len();
+        let entry = *unique.entry(key).or_insert_with(|| {
+            sources.push(index);
+            keys.push(key);
+            next
+        });
+        remap.push(entry);
+    }
+    let mut results = vec![None; sources.len()];
+    let mut missing = Vec::new();
+    for (index, key) in keys.iter().enumerate() {
+        ctx.cancellation.check()?;
+        results[index] = memo::load(memo, *key)?;
+        if results[index].is_some()
+            && let Some(metrics) = ctx.metrics
+        {
+            metrics.texture_task(true);
+        }
+        if results[index].is_none() {
+            missing.push(index);
+        }
+    }
+    // A count-only cap retained gigabytes for eight 4K images per worker. Each
+    // image already parallelizes mip rows and BC tiles, so large images do not
+    // need to coexist to keep the bounded Rayon pool busy.
+    let weights: Vec<_> = missing
+        .iter()
+        .map(|&i| texture_working_set(&jobs[sources[i]].1))
+        .collect();
+    let mut start = 0;
+    while start < missing.len() {
+        let end = start + batch_len(&weights[start..]);
+        let batch = &missing[start..end];
+        let batch_jobs: Vec<_> = batch.iter().map(|&i| &jobs[sources[i]]).collect();
+        let cooked = cook_texture_batch_inner(
+            &batch_jobs,
+            target,
+            preset,
+            ctx,
+            [
+                0.3 + start as f32 / missing.len() as f32 * 0.6,
+                (end - start) as f32 / missing.len() as f32 * 0.6,
+            ],
+            services.encoder,
+        )?;
+        for (&index, bytes) in batch.iter().zip(cooked) {
+            if let Some(metrics) = ctx.metrics {
+                metrics.texture_task(false);
+            }
+            memo::store(memo, keys[index], &bytes)?;
+            results[index] = Some(bytes);
+        }
+        start = end;
+    }
+    ctx.report(0.9, "textures ready")?;
+    let mut uses = vec![0usize; results.len()];
+    for &index in &remap {
+        uses[index] += 1;
+    }
+    Ok(remap
+        .into_iter()
+        .map(|i| {
+            uses[i] -= 1;
+            if uses[i] == 0 {
+                results[i]
+                    .take()
+                    .expect("every unique texture was loaded or cooked")
+            } else {
+                results[i]
+                    .as_ref()
+                    .expect("shared texture still has a consumer")
+                    .clone()
+            }
+        })
+        .collect())
+}
+
+const BATCH_MEMORY_BYTES: usize = 512 * 1024 * 1024;
+fn texture_working_set(source: &[u8]) -> usize {
+    image::ImageReader::new(std::io::Cursor::new(source))
+        .with_guessed_format()
+        .ok()
+        .and_then(|reader| reader.into_dimensions().ok())
+        // Float RGBA + full mip chain + native packing/decoder scratch. The
+        // decoder still enforces its real limits; malformed headers run alone.
+        .map_or(BATCH_MEMORY_BYTES, |(w, h)| {
+            (w as usize).saturating_mul(h as usize).saturating_mul(32)
+        })
+}
+fn batch_len(weights: &[usize]) -> usize {
+    let mut used = 0usize;
+    let mut count = 0;
+    for &weight in weights.iter().take(8) {
+        if count > 0 && used.saturating_add(weight) > BATCH_MEMORY_BYTES {
+            break;
+        }
+        used = used.saturating_add(weight);
+        count += 1;
+    }
+    count
+}
+
+fn cook_texture_batch_inner(
+    jobs: &[&(TextureSettings, Vec<u8>)],
+    target: TargetPlatform,
+    preset: CookPreset,
+    ctx: &mut ImportContext<'_>,
     progress: [f32; 2],
+    encoder: Option<&dyn ara_asset::BlockEncoder>,
 ) -> Result<Vec<Vec<u8>>> {
     let cancellation = ctx.cancellation;
     ctx.report(progress[0], "decode textures in parallel")?;
@@ -205,7 +442,16 @@ fn cook_texture_batch_inner(
     prepared
         .into_par_iter()
         .with_max_len(1)
-        .map(|p| encode_texture(p, preset, cancellation))
+        .zip(jobs.par_iter())
+        .map(|(p, (settings, _))| {
+            encode_texture(
+                p,
+                settings.preset.unwrap_or(preset),
+                cancellation,
+                encoder_for(settings, encoder),
+                ctx.metrics,
+            )
+        })
         .collect()
 }
 fn decode_texture(
@@ -350,6 +596,8 @@ fn encode_texture(
     prepared: MippedTexture,
     preset: CookPreset,
     cancellation: &ara_asset::Cancellation,
+    encoder: Option<&dyn ara_asset::BlockEncoder>,
+    metrics: Option<&ara_asset::ImportMetrics>,
 ) -> Result<Vec<u8>> {
     let MippedTexture {
         width,
@@ -358,6 +606,20 @@ fn encode_texture(
         format,
         mips,
     } = prepared;
+    if let Some(encoder) = encoder
+        && matches!(
+            format,
+            TextureFormat::Bc4
+                | TextureFormat::Bc5
+                | TextureFormat::Bc6h
+                | TextureFormat::Bc7
+                | TextureFormat::Bc7Srgb
+        )
+    {
+        let levels =
+            gpu_input::encode(&mips, usage, format, preset, cancellation, encoder, metrics)?;
+        return Ok(write_ktx2(width, height, format, &levels)?);
+    }
     let levels: Result<Vec<_>> = mips
         .into_par_iter()
         .with_max_len(1)
@@ -435,4 +697,17 @@ fn downsample(
             sum
         })
         .collect()
+}
+
+#[cfg(test)]
+mod batch_tests {
+    use super::*;
+    #[test]
+    fn large_images_bound_retained_mips_without_excluding_a_single_large_image() {
+        assert_eq!(batch_len(&[4096 * 4096 * 32; 8]), 1);
+        assert_eq!(batch_len(&[2048 * 2048 * 32; 8]), 4);
+        assert_eq!(batch_len(&[1024 * 1024 * 32; 16]), 8);
+        assert_eq!(batch_len(&[usize::MAX; 2]), 1);
+        assert_eq!(batch_len(&[]), 0);
+    }
 }

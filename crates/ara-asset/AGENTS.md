@@ -26,6 +26,9 @@ requests; a background supervisor reaps children and releases their slots even i
 their completed replies have not been polled. Cancellation returns without waiting
 for the child. The cold-batch process test is
 `cargo test -p ara-asset --test worker_limit` (artifacts under `target/`).
+Queued discovery/version calls reserve one slot within the same process cap.
+Control processes, transport and reaping keep normal priority; native cooks stay
+below normal. Dependency discovery does not wait behind an entire encoder queue.
 HotReload only publishes from apply_boundary; never install results from poll.
 Cancellation/supersession invalidate epochs. Keep current assets alive on errors.
 Settings-selected source files use Importer::dependencies_with_settings and
@@ -44,9 +47,22 @@ installed importer versions; ImportSettings::check_version says Current, Upgrade
 GC requires writers to be quiescent and roots from every active/staged/undo
 generation in every process. CacheBackend is the shared cache server seam.
 
-CookPreset is a semantic input (default HQ); thread_budget defaults to 16 and only
+CookPreset is a semantic input (default Balanced); thread_budget defaults to 16 and only
 controls the private Rayon pool. Keep scheduling out of action identities.
 HotReload stages Fast then final quality on misses; Ready.final_pass distinguishes
 them. Cancel/supersede the entire epoch, including HQ. Never downgrade a final hit.
 Export via exact ProcessWorker preset, or disable HotReload.progressive explicitly.
 ImportContext.metrics is optional offline profiling; never encode timing values.
+`ARA_IMPORT_TRACE_DIR` enables canonical JSON event streams (blank-line separated)
+for stage, CPU, queue, IPC, cache and final boundary-publication measurements.
+Importer/ImporterRegistry::import_with_memo optionally share pure texture tasks;
+custom importers and remote caches keep their existing default behavior. FileCache
+uses a disposable `intermediates/` namespace without fsync; final publication still
+validates and durably publishes immutable objects/actions. Quiescent GC evicts memo
+entries. Memo availability and thread scheduling never change final action keys.
+
+ImportServices supplies an optional BlockEncoder. Resolve its immutable backend
+before action lookup; encoded actions and texture memo keys include it. Capability
+negotiation calls prepare once. EncoderUnavailable retries retained inputs with
+the CPU key and disables that backend for the session. CPU contract fixtures use
+ProcessWorker::with_texture_encoder(false); legacy CPU request bytes stay unchanged.

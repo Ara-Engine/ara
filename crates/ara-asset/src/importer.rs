@@ -1,4 +1,5 @@
 use crate::{Error, Result};
+mod dependency_bytes;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::BTreeMap,
@@ -14,6 +15,7 @@ pub struct Digest(pub [u8; 32]);
 impl Digest {
     /// Hashes exact bytes.
     pub fn of(bytes: &[u8]) -> Self {
+        let _trace = crate::trace::Scope::new("hash.blake3", "bytes").bytes(bytes.len());
         Self(*blake3::hash(bytes).as_bytes())
     }
 }
@@ -65,6 +67,7 @@ pub struct ImportInput {
     /// Platform-specific cook profile.
     pub target: TargetPlatform,
     /// Exact external dependencies, keyed by normalized URI relative to source.
+    #[serde(with = "dependency_bytes")]
     pub dependencies: BTreeMap<String, Vec<u8>>,
     /// Content identities for referenced assets whose cooked output is an input.
     pub asset_dependencies: BTreeMap<String, Digest>,
@@ -73,6 +76,7 @@ impl ImportInput {
     /// Action digest covers semantic inputs and dependency hashes, length-framed.
     /// Thread budgets affect scheduling only and never fragment the cache.
     pub fn key(&self) -> Result<Digest> {
+        let _trace = crate::trace::Scope::new("action.hash", &self.source_path);
         let mut h = blake3::Hasher::new_derive_key("Ara import action v2");
         let mut add = |b: &[u8]| {
             h.update(&(b.len() as u64).to_le_bytes());
@@ -252,6 +256,26 @@ pub trait Importer: Send + Sync {
     }
     /// Cooks only the supplied snapshot, with no environment-dependent state.
     fn import(&self, input: &ImportInput, context: &mut ImportContext<'_>) -> Result<ImportOutput>;
+    /// Optional memoization service for deterministic intermediate results. A miss
+    /// must produce the same bytes; plugins without shared work need no override.
+    fn import_with_memo(
+        &self,
+        input: &ImportInput,
+        context: &mut ImportContext<'_>,
+        _memo: Option<&dyn crate::CacheBackend>,
+    ) -> Result<ImportOutput> {
+        self.import(input, context)
+    }
+    /// Cooks with a resolved encoder and optional intermediate cache. The caller
+    /// includes the selected encoder identity in its final action key.
+    fn import_with_services(
+        &self,
+        input: &ImportInput,
+        context: &mut ImportContext<'_>,
+        services: crate::ImportServices<'_>,
+    ) -> Result<ImportOutput> {
+        self.import_with_memo(input, context, services.memo)
+    }
 }
 /// Explicit importer installation; no dynamic code loading in the editor process.
 #[derive(Default)]
@@ -291,6 +315,33 @@ impl ImporterRegistry {
     /// Runs an exact preset/version in a private bounded pool and validates it.
     /// Editor callers execute this through ProcessWorker, never on a frame thread.
     pub fn import(&self, input: &ImportInput, ctx: &mut ImportContext<'_>) -> Result<ImportOutput> {
+        self.import_with_memo(input, ctx, None)
+    }
+    /// Executes with a supplied content-addressed intermediate cache. Scheduling,
+    /// memo availability and cache hits never affect the final action identity.
+    pub fn import_with_memo(
+        &self,
+        input: &ImportInput,
+        ctx: &mut ImportContext<'_>,
+        memo: Option<&dyn crate::CacheBackend>,
+    ) -> Result<ImportOutput> {
+        self.import_with_services(
+            input,
+            ctx,
+            crate::ImportServices {
+                memo,
+                encoder: None,
+            },
+        )
+    }
+    /// Executes using explicitly resolved services, preserving deterministic input
+    /// validation, bounded CPU work and the normal result validation contract.
+    pub fn import_with_services(
+        &self,
+        input: &ImportInput,
+        ctx: &mut ImportContext<'_>,
+        services: crate::ImportServices<'_>,
+    ) -> Result<ImportOutput> {
         let importer = self.get(&input.importer)?;
         if importer.version() != input.version {
             return Err(Error::Invalid("importer version mismatch".into()));
@@ -304,7 +355,7 @@ impl ImporterRegistry {
             .thread_name(|i| format!("ara-import-{i}"))
             .build()
             .map_err(|e| Error::Invalid(e.to_string()))?;
-        let mut output = pool.install(|| importer.import(input, ctx))?;
+        let mut output = pool.install(|| importer.import_with_services(input, ctx, services))?;
         output.artifacts.sort_by(|a, b| a.name.cmp(&b.name));
         {
             let _timer = ctx.metrics.map(|m| m.start(crate::ImportStage::Validation));

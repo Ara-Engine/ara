@@ -165,6 +165,7 @@ impl Gpu {
                 && mesh_features.task_shader != 0;
             let buffer_int64_atomics =
                 core_supported.shader_int64 != 0 && v12.shader_buffer_int64_atomics != 0;
+            let shader_integer_dot_product = v13.shader_integer_dot_product != 0;
             if mesh_shading {
                 device_extensions.push(ash::ext::mesh_shader::NAME.as_ptr());
             }
@@ -235,6 +236,7 @@ impl Gpu {
                 .descriptor_binding_storage_image_update_after_bind(true)
                 .shader_storage_image_array_non_uniform_indexing(true);
             let mut v13 = vk::PhysicalDeviceVulkan13Features::default()
+                .shader_integer_dot_product(shader_integer_dot_product)
                 .shader_demote_to_helper_invocation(true)
                 .dynamic_rendering(true)
                 .synchronization2(true);
@@ -297,6 +299,7 @@ impl Gpu {
             let memory = instance.get_physical_device_memory_properties(physical);
             let mut as_properties = vk::PhysicalDeviceAccelerationStructurePropertiesKHR::default();
             let mut mesh_properties = vk::PhysicalDeviceMeshShaderPropertiesEXT::default();
+            let mut v13_properties = vk::PhysicalDeviceVulkan13Properties::default();
             let mut indexing = vk::PhysicalDeviceDescriptorIndexingProperties::default();
             let mut id_properties = vk::PhysicalDeviceIDProperties::default();
             instance.get_physical_device_properties2(
@@ -305,6 +308,7 @@ impl Gpu {
                     .push(&mut as_properties)
                     .push(&mut indexing)
                     .push(&mut mesh_properties)
+                    .push(&mut v13_properties)
                     .push(&mut id_properties),
             );
             // Retain bindings 0..4 for existing material-preview cooks. Both the
@@ -368,6 +372,9 @@ impl Gpu {
                 geometry_shader: core_supported.geometry_shader != 0,
                 hdr_metadata,
                 buffer_int64_atomics,
+                shader_integer_dot_product,
+                packed_integer_dot_accelerated: shader_integer_dot_product
+                    && v13_properties.integer_dot_product4x8_bit_packed_unsigned_accelerated != 0,
                 max_image_dimension: properties.limits.max_image_dimension2_d,
                 driver_version: properties.driver_version,
                 graphics_family,
@@ -392,7 +399,7 @@ impl Gpu {
                         .then_some(id_properties.device_luid),
                 },
             };
-            println!(
+            eprintln!(
                 "{}; graphics family {graphics_family}; compute-only family {compute_family}",
                 info.name
             );

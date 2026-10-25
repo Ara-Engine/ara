@@ -17,9 +17,9 @@ use std::{
 /// Host-side source registration. Configuration changes come from typed sidecar ops.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SourceAsset {
-    /// Final project quality, also used by nonprogressive shipping cooks.
+    /// Source quality override; None inherits the reflected project import policy.
     #[serde(default)]
-    pub preset: crate::CookPreset,
+    pub preset: Option<crate::CookPreset>,
     /// Maximum import worker threads; does not affect artifact identity.
     #[serde(default = "crate::preset::default_thread_budget")]
     pub thread_budget: u16,
@@ -46,6 +46,7 @@ pub fn snapshot(
     worker: &ProcessWorker,
     cancellation: &Cancellation,
 ) -> Result<ImportInput> {
+    let _trace = crate::trace::Scope::new("source.snapshot", &asset.path);
     let root = root
         .canonicalize()
         .map_err(|e| io_at(e, &root.display().to_string()))?;
@@ -68,8 +69,29 @@ pub fn snapshot(
         dependencies.insert(uri, bytes);
     }
     cancellation.check()?;
+    let mut preset = match asset.preset {
+        Some(preset) => preset,
+        None if matches!(
+            asset.importer.as_str(),
+            "ara.texture" | "ara.gltf" | "ara.fbx"
+        ) =>
+        {
+            let mut db = SchemaDb::new();
+            crate::register_schema(&mut db);
+            crate::ProjectImportSettings::read(&root, &db)?.preset
+        }
+        None => crate::CookPreset::default(),
+    };
+    if asset.importer == "ara.texture"
+        && let Some(value) = asset
+            .settings
+            .get("preset")
+            .filter(|value| !value.is_null())
+    {
+        preset = serde_json::from_value(value.clone())?;
+    }
     Ok(ImportInput {
-        preset: asset.preset,
+        preset,
         thread_budget: asset.thread_budget,
         source_path: asset.path.replace('\\', "/"),
         source,
@@ -124,6 +146,7 @@ pub struct AssetPipeline {
     watcher: FileWatcher,
     sources: BTreeMap<String, SourceAsset>,
     configurations: BTreeMap<String, ImportSettings>,
+    project_preset: Option<crate::CookPreset>,
     epochs: BTreeMap<String, u64>,
     snapshots: BTreeMap<String, Cancellation>,
     snapshot_changes: BTreeSet<String>,
@@ -142,6 +165,7 @@ impl AssetPipeline {
     ) -> Result<Self> {
         let root = root.as_ref().canonicalize()?;
         let watcher = FileWatcher::new(&root)?;
+        let project_preset = Some(crate::ProjectImportSettings::read(&root, &schema)?.preset);
         let (tx, rx) = mpsc::channel();
         Ok(Self {
             root,
@@ -150,6 +174,7 @@ impl AssetPipeline {
             watcher,
             sources: BTreeMap::new(),
             configurations: BTreeMap::new(),
+            project_preset,
             epochs: BTreeMap::new(),
             snapshots: BTreeMap::new(),
             snapshot_changes: BTreeSet::new(),
@@ -206,6 +231,31 @@ impl AssetPipeline {
         Ok(())
     }
 
+    /// Applies a command-authored project policy without waiting for its file save.
+    /// Explicit source overrides and non-texture importers keep their generations.
+    pub fn configure_project(&mut self, preset: crate::CookPreset) -> Result<bool> {
+        if self.project_preset == Some(preset) {
+            return Ok(false);
+        }
+        self.project_preset = Some(preset);
+        let affected: Vec<_> = self
+            .sources
+            .iter()
+            .filter(|(_, source)| {
+                source.preset.is_none()
+                    && matches!(
+                        source.importer.as_str(),
+                        "ara.texture" | "ara.gltf" | "ara.fbx"
+                    )
+            })
+            .map(|(id, _)| id.clone())
+            .collect();
+        for id in affected {
+            self.request(&id)?;
+        }
+        Ok(true)
+    }
+
     /// Stops requesting an undone/deleted import. Published generations remain cached
     /// for existing players and redo, but no late job can publish a deleted source.
     pub fn unregister(&mut self, id: &str) {
@@ -238,6 +288,7 @@ impl AssetPipeline {
         let worker = self.worker.clone();
         let schema = Arc::clone(&self.schema);
         let configuration = self.configurations.get(id).cloned();
+        let project_preset = self.project_preset;
         let known_assets: BTreeMap<_, _> = self
             .sources
             .iter()
@@ -275,6 +326,7 @@ impl AssetPipeline {
                                         .into(),
                                 ));
                             }
+                            asset.preset = sidecar.preset_override()?;
                             Some(sidecar.settings()?)
                         }
                         Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
@@ -285,7 +337,6 @@ impl AssetPipeline {
                     asset.importer = settings.importer;
                     asset.version = settings.version;
                     asset.settings = settings.settings;
-                    asset.preset = settings.preset;
                     for reference in settings.dependencies {
                         let parts =
                             ara_schema::grammar::parse_ref(&reference.0).map_err(Error::Invalid)?;
@@ -305,6 +356,12 @@ impl AssetPipeline {
                             asset.asset_dependencies.insert(id.to_owned(), digest);
                         }
                     }
+                }
+                if matches!(
+                    asset.importer.as_str(),
+                    "ara.texture" | "ara.gltf" | "ara.fbx"
+                ) {
+                    asset.preset = asset.preset.or(project_preset);
                 }
                 snapshot(&root, &asset, &worker, &cancellation)
             })();
@@ -340,10 +397,23 @@ impl AssetPipeline {
         let mut invalidated = BTreeSet::new();
         let mut handled = Vec::new();
         for path in &self.snapshot_changes {
+            if *path == crate::PROJECT_IMPORT_SETTINGS_FILE {
+                self.project_preset = None;
+            }
             let users = self.reload.graph.invalidated_by(path);
             let mut known = !users.is_empty();
             invalidated.extend(users);
             for (id, asset) in &self.sources {
+                if *path == crate::PROJECT_IMPORT_SETTINGS_FILE
+                    && asset.preset.is_none()
+                    && matches!(
+                        asset.importer.as_str(),
+                        "ara.texture" | "ara.gltf" | "ara.fbx"
+                    )
+                {
+                    invalidated.insert(id.clone());
+                    known = true;
+                }
                 if *path == asset.path || *path == format!("{}.import.json", asset.path) {
                     invalidated.insert(id.clone());
                     known = true;

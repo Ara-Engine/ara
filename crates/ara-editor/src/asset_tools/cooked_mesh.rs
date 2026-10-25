@@ -33,10 +33,12 @@ pub(super) fn load(root: &Path, path: &str) -> anyhow::Result<Vec<Mesh>> {
             .as_ref()
             .map(|s| s.settings.clone())
             .unwrap_or_else(|| serde_json::json!({})),
-        preset: settings
-            .as_ref()
-            .map(|s| s.preset)
-            .unwrap_or(ara_asset::CookPreset::Fast),
+        preset: Some(
+            settings
+                .as_ref()
+                .and_then(|s| s.preset)
+                .unwrap_or(ara_asset::CookPreset::Fast),
+        ),
         thread_budget: 2,
         target: TargetPlatform::Windows,
         asset_dependencies: BTreeMap::new(),

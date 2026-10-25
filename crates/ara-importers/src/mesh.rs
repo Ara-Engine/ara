@@ -37,6 +37,10 @@ pub struct Vertex {
 #[ara(module = "asset")]
 #[serde(rename_all = "camelCase", default, deny_unknown_fields)]
 pub struct MeshSettings {
+    /// Texture quality overrides by image URI or #image-index (FBX: #texture-id).
+    /// Other images inherit the model/project preset and retain their cached work.
+    #[serde(default)]
+    pub texture_presets: std::collections::BTreeMap<String, ara_asset::CookPreset>,
     /// Maximum LODs including the original (1–8). Skin/morph meshes retain at most four.
     #[ara(default = 8, range(min = 1, max = 8))]
     pub lod_count: u32,
@@ -55,6 +59,7 @@ pub struct MeshSettings {
 impl Default for MeshSettings {
     fn default() -> Self {
         Self {
+            texture_presets: std::collections::BTreeMap::new(),
             lod_count: 8,
             lod_error: 0.1,
             virtual_geometry: true,
@@ -107,7 +112,7 @@ pub fn cook_mesh(
     let deformed = vertices
         .iter()
         .any(|v| v.weights.iter().chain(&v.weights1).any(|w| *w > 0.0));
-    cook_mesh_with_tangent_uv(vertices, indices, settings, deformed, true, |v| v.uv0)
+    cook_mesh_with_tangent_uv(vertices, indices, settings, deformed, true, None, |v| v.uv0)
 }
 
 /// Generates missing tangents from the normal texture's selected/transformed UVs,
@@ -118,6 +123,7 @@ pub(crate) fn cook_mesh_with_tangent_uv(
     settings: &MeshSettings,
     deformed: bool,
     preserve_card_area: bool,
+    metrics: Option<&ara_asset::ImportMetrics>,
     tangent_uv: impl Fn(&Vertex) -> [f32; 2],
 ) -> Result<Vec<u8>> {
     if !cfg!(target_endian = "little") {
@@ -262,6 +268,7 @@ pub(crate) fn cook_mesh_with_tangent_uv(
             }
         })
         .collect();
+    let lod_timer = metrics.map(|m| m.start(ara_asset::ImportStage::Lods));
     let lods = lods::append(
         &vertices,
         &adapter,
@@ -270,6 +277,7 @@ pub(crate) fn cook_mesh_with_tangent_uv(
         deformed,
         preserve_card_area,
     );
+    drop(lod_timer);
     let mut b = Builder::new(Kind::Mesh);
     b.section(*b"BNDS", 24, bytemuck::cast_slice(&bounds).to_vec())
         .section(*b"VERT", 52, bytemuck::cast_slice(&quantized).to_vec())

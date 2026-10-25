@@ -8,8 +8,9 @@ use serde::{Deserialize, Serialize};
 #[ara(record(prefix = "i"), module = "asset")]
 #[serde(rename_all = "camelCase", default, deny_unknown_fields)]
 pub struct ImportSettings {
-    /// Final shipping quality; the editor may show a fast generation first.
-    pub preset: crate::CookPreset,
+    /// Texture encoding quality override. Omit this field to inherit the project
+    /// preset in ara.imports; Balanced is the default for new projects.
+    pub preset: Option<crate::CookPreset>,
     /// Stable worker importer ID.
     pub importer: String,
     /// Exact importer version, including encoder implementation versions.
@@ -22,7 +23,7 @@ pub struct ImportSettings {
 impl Default for ImportSettings {
     fn default() -> Self {
         Self {
-            preset: crate::CookPreset::default(),
+            preset: None,
             importer: String::new(),
             version: String::new(),
             settings: serde_json::Value::Null,
@@ -62,6 +63,7 @@ impl ImportSettings {
 pub fn register_schema(db: &mut SchemaDb) {
     db.register::<crate::CookPreset>();
     db.register::<ImportSettings>();
+    crate::project_settings::register(db);
     let _ = db.add_kind(DocKindDesc {
         name: "import".into(),
         version: 1,
@@ -85,6 +87,7 @@ impl Sidecar {
     }
     /// Parses/validates a sidecar through the kernel canonical reader.
     pub fn read(text: &str, path: &str, db: &SchemaDb) -> Result<Self> {
+        let _trace = crate::trace::Scope::new("sidecar.read", path);
         let read = ara_doc::read(text, path, db, None);
         if ara_diag::has_errors(&read.diags) {
             return Err(Error::Invalid(
@@ -135,6 +138,15 @@ impl Sidecar {
         }
         Ok(settings)
     }
+    /// Explicit quality override; an absent field inherits the project policy.
+    pub fn preset_override(&self) -> Result<Option<crate::CookPreset>> {
+        self.document
+            .record("i_settings")
+            .and_then(|r| r.get("preset"))
+            .filter(|value| !value.is_null())
+            .map(|value| serde_json::from_value(value.clone()).map_err(Error::from))
+            .transpose()
+    }
     /// Indexes the source media path (without `.import.json`) for `@path#id` repair.
     pub fn index(&self, source_path: &str, index: &mut AssetIndex) {
         index.insert(self.document.id.to_string(), source_path, None);
@@ -144,10 +156,14 @@ impl Sidecar {
 pub enum SidecarCommand {
     /// Initialize the settings record in an empty document.
     Initialize(ImportSettings),
+    /// Initialize a source which inherits the project quality policy.
+    InitializeInherited(ImportSettings),
     /// Replace only importer-specific settings; inverse restores prior settings.
     Settings(serde_json::Value),
     /// Change final shipping quality; this op is undoable like other settings.
     Preset(crate::CookPreset),
+    /// Remove the override so subsequent imports follow the project policy.
+    InheritPreset,
     /// Replace declared asset dependencies.
     Dependencies(Vec<AssetRef>),
     /// Record the importer version the asset is cooked with (after an importer upgrade).
@@ -157,15 +173,19 @@ impl SidecarCommand {
     /// Produces a validated-op request for `Store::transact` or `Document::apply`.
     pub fn edit(self, doc: AssetId) -> Result<Edit> {
         let id = RecordId::parse("i_settings").map_err(Error::Invalid)?;
+        let inherit = matches!(&self, Self::InitializeInherited(_));
         Ok(match self {
-            Self::Initialize(settings) => {
+            Self::Initialize(settings) | Self::InitializeInherited(settings) => {
                 if settings.importer.is_empty() || settings.version.is_empty() {
                     return Err(Error::Invalid("importer and version must be set".into()));
                 }
-                let record = ara_json::to_value(&settings)?
+                let mut record = ara_json::to_value(&settings)?
                     .as_object()
                     .cloned()
                     .ok_or_else(|| Error::Invalid("settings must be an object".into()))?;
+                if inherit {
+                    record.remove("preset");
+                }
                 Edit::Create { doc, id, record }
             }
             Self::Settings(settings) => Edit::Set {
@@ -179,6 +199,12 @@ impl SidecarCommand {
                 id,
                 path: FieldPath::field("preset"),
                 value: Some(ara_json::to_value(&preset)?),
+            },
+            Self::InheritPreset => Edit::Set {
+                doc,
+                id,
+                path: FieldPath::field("preset"),
+                value: None,
             },
             Self::Dependencies(deps) => Edit::Set {
                 doc,

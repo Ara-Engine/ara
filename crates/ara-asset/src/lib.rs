@@ -2,16 +2,20 @@
 #![deny(missing_docs)]
 
 mod cache;
+mod encoder;
 mod graph;
 mod hot_reload;
 mod importer;
 mod metrics;
 mod preset;
+mod project_settings;
 mod sidecar;
 mod source;
+mod trace;
 mod worker;
 
 pub use cache::{CacheBackend, CachedImport, FileCache, GcStats};
+pub use encoder::{BlockEncoder, ImportServices};
 pub use graph::DependencyGraph;
 pub use hot_reload::{ApplyPolicy, AssetChanged, AssetSlot, FileWatcher, HotReload, ReloadEvent};
 pub use importer::{
@@ -20,9 +24,12 @@ pub use importer::{
 };
 pub use metrics::{ImportMetrics, ImportStage, StageTimer, StageTimes};
 pub use preset::{CookPreset, DEFAULT_THREAD_BUDGET};
+pub use project_settings::{PROJECT_IMPORT_SETTINGS_FILE, ProjectImportSettings};
 pub use sidecar::{ImportSettings, Sidecar, SidecarCommand, VersionCheck, register_schema};
 pub use source::{AssetPipeline, SourceAsset, snapshot};
-pub use worker::{ImportJob, JobEvent, ProcessWorker, serve_worker};
+pub use worker::{
+    EncoderFactory, ImportJob, JobEvent, ProcessWorker, serve_worker, serve_worker_with_encoder,
+};
 
 /// Asset errors preserve the last published generation.
 #[derive(Debug, thiserror::Error)]
@@ -42,6 +49,9 @@ pub enum Error {
     /// A child process failed or violated the worker protocol.
     #[error("import worker: {0}")]
     Worker(String),
+    /// An explicitly selected optional encoder failed; retry under the CPU key.
+    #[error("texture encoder unavailable: {0}")]
+    EncoderUnavailable(String),
 }
 impl From<ara_asset_format::FormatError> for Error {
     fn from(e: ara_asset_format::FormatError) -> Self {
