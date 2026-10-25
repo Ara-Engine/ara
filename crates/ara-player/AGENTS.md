@@ -38,6 +38,8 @@ presenter before hello and reuse its device at embed; surface-less services allo
 
 - `packed.rs` and `standalone.rs`: the authored exported world and immutable pack source;
   ara-pack's bounded `native-decode` is linked into this player and its runtime templates.
+- `standalone/startup.rs`: shaderless progress (`device/loading.rs`, 225 KiB image + staging) precedes runtime/presenter workers. The temporary surface drops before game presentation.
+  Startup JSON separates `loading_device_ms`/`loading_frame_ms`, `runtime_ready_ms`, `presenter_warmup_ms`/`presenter_ready_ms`, and `full_scene_frame_ms`.
 - `main.rs`: pool lifecycle, the loop (link polling, host-time ticking with bounded
   catch-up, deferred patch acks, 250 ms `play.status` heartbeats, presentation),
   method dispatch.
@@ -63,15 +65,13 @@ presenter before hello and reuse its device at embed; surface-less services allo
 - `crash.rs`: panic hook + Windows unhandled-exception filter + no WER dialog; one
   `ARA_PLAYER_CRASH {json}` stderr line per fatal path. `play.debug.crash` triggers a
   panic, a real `STATUS_ACCESS_VIOLATION` (RaiseException) or a hang.
+  Startup monitor mode precedes argument parsing; the retained Capture guard writes minidumps/panics to pool logs' `crashes/` (`ARA_CRASH_DIR` for direct probes).
 - `link::Pump` owns Play transport on a dedicated heartbeat thread, so C# calls,
   simulation and uploads cannot suppress liveness. Bounded queues preserve order.
   `tests/watchdog.rs` holds simulation past the watchdog, then checks real silence.
 - Import-state notifications style first-cook bounds translucent grey, failed or
   missing sources magenta, and retain last-good models during reimport. Native
   root/foliage arrivals fade over twelve presented frames; captures finish the fade.
-- Startup enters `ara-crash` monitor mode before parsing player arguments; normal
-  players retain a `Capture` guard for native minidumps and panic reports. Dumps go
-  under the pool logs' `crashes/` directory (`ARA_CRASH_DIR` for direct probes).
 - Pools pass `ARA_PLAY_SCRIPTS`; modules and their empty ECS world are warmed before
   hello, then handed to Play without rebinding component IDs or running gameplay early.
 - Windowed frames include GPU-composited foliage/VFX and a native 2D path without

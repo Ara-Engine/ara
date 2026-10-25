@@ -1,9 +1,8 @@
-//! Main-thread presentation while the same shipping runtime prepares on a worker.
+//! Shaderless main-thread presentation while runtime and presenter workers prepare.
 use super::*;
-use ara_runtime::extract::{CameraView, Draw, Geometry};
-use ara_runtime_render::{QualityChoice, QualityPreset, RenderOptions, fidelity::native::Content};
+use ara_runtime_render::{QualityChoice, RenderOptions};
 use std::{collections::BTreeMap, path::Path, thread, time::Duration};
-
+mod graphics;
 #[cfg(test)]
 mod tests;
 
@@ -23,8 +22,9 @@ pub(super) struct Loaded {
     pub presenter: Presenter,
 }
 
-/// Only the prepared Runtime crosses threads; network/SDL owners stay on main.
-/// Closing the loading window exits immediately, without waiting on asset I/O.
+/// SDL and the loading device stay on main. The full presenter and its pipelines
+/// move here only after warming; no GPU owner is concurrently accessed. Closing
+/// the loading window drops worker handles without waiting on import/compilation.
 pub(super) fn load(
     scene: Arc<ara_play::PlayScene>,
     source: Arc<dyn ara_runtime::assets::AssetSource>,
@@ -32,74 +32,88 @@ pub(super) fn load(
     began: Instant,
     phases: &mut BTreeMap<&'static str, u128>,
 ) -> Result<Option<Loaded>> {
-    let job = thread::Builder::new()
-        .name("ara-player-startup".into())
-        .spawn(move || World::prepare_packed(&scene, source))?;
-    let open = if settings.hidden {
-        device::Windowed::open_offscreen
-    } else {
-        device::Windowed::open
-    };
-    let (mut window, mut presenter) = open(
-        settings.name,
-        settings.size,
-        settings.cache,
-        if settings.options.ray_tracing {
-            QualityChoice::Preset(QualityPreset::Low)
-        } else {
-            settings.quality
-        },
-        settings.options,
-    )?;
+    let mut world_job = Some(
+        thread::Builder::new()
+            .name("ara-player-startup".into())
+            .spawn(move || World::prepare_packed(&scene, source))?,
+    );
+    let (mut window, extensions, size) =
+        device::Windowed::open_unprepared(settings.name, settings.size, settings.hidden)?;
+    let loading_started = Instant::now();
+    let mut loading = device::Loading::new(&extensions, settings.cache)?;
+    phases.insert("loading_device_ms", loading_started.elapsed().as_millis());
     phases.insert("device_ready_ms", began.elapsed().as_millis());
-    presenter.set_probe_gi(false);
-    window.title(&format!("{} — Loading scene", settings.name))?;
-    let mut loading = loading_frame();
     let mut capture = std::env::var_os("ARA_LOADING_CAPTURE").map(PathBuf::from);
+    let mut graphics = None;
+    let mut graphics_inputs = Some(extensions);
+    let mut ready_presenter = None;
+    let mut prepared = None;
+    let mut shown_phase = "";
     loop {
         let frame_start = Instant::now();
         if window.events(ara_input::PlayerId(0))?.0 {
-            window.shutdown(&presenter)?;
             return Ok(None);
         }
-        loading.draws[1].world = glam::Mat4::from_translation(glam::Vec3::new(
-            (began.elapsed().as_secs_f32() * 2.).sin() * 0.95,
-            0.,
-            0.02,
-        ));
-        window.present(&mut presenter, &loading, || Ok(Content::default()))?;
-        phases
-            .entry("loading_frame_ms")
-            .or_insert_with(|| began.elapsed().as_millis());
-        phases
-            .entry("first_frame_ms")
-            .or_insert_with(|| began.elapsed().as_millis());
-        if let Some(path) = capture.take() {
-            let request = ara_render::capture::CaptureRequest {
-                camera: ara_render::scene::CameraSpec::LookAt {
-                    position: [0., 0., 4.].into(),
-                    target: [0.; 3].into(),
-                    vertical_fov: 50_f32.to_radians(),
-                },
-                size: settings.size,
-                mode: ara_render::capture::ViewMode::Lit,
-                deterministic: true,
-                exposure: 1.,
-                settle_frames: 2,
-                tick: 0,
-                seed: 0,
-                marks: None,
-            };
-            presenter
-                .capture_with(&loading, &request, || Ok(Content::default()))?
-                .write(&path)?;
+        if world_job.as_ref().is_some_and(|job| job.is_finished()) {
+            prepared = Some(
+                world_job
+                    .take()
+                    .context("runtime worker")?
+                    .join()
+                    .map_err(|_| anyhow::anyhow!("shipping runtime preparation panicked"))??,
+            );
+            phases.insert("runtime_ready_ms", began.elapsed().as_millis());
         }
-        if job.is_finished() {
-            let (prepared, build_ms) = job
-                .join()
-                .map_err(|_| anyhow::anyhow!("shipping runtime preparation panicked"))??;
+        if graphics
+            .as_ref()
+            .is_some_and(graphics::Graphics::is_finished)
+        {
+            let (presenter, elapsed) = graphics.take().context("graphics worker")?.finish()?;
+            phases.insert("presenter_warmup_ms", elapsed.as_millis());
+            phases.insert("presenter_ready_ms", began.elapsed().as_millis());
+            ready_presenter = Some(presenter);
+        }
+        let phase = if prepared.is_some() {
+            "Preparing renderer"
+        } else {
+            "Loading scene"
+        };
+        if phase != shown_phase {
+            window.title(&format!("{} — {phase}", settings.name))?;
+            shown_phase = phase;
+        }
+        let completed = u8::from(prepared.is_some()) + u8::from(ready_presenter.is_some());
+        if window.present_loading(&mut loading, 0.1 + f32::from(completed) * 0.4)? {
+            phases
+                .entry("loading_frame_ms")
+                .or_insert_with(|| began.elapsed().as_millis());
+            phases
+                .entry("first_frame_ms")
+                .or_insert_with(|| began.elapsed().as_millis());
+            if let Some(path) = capture.take() {
+                loading.capture(&path, size)?;
+            }
+            // Start compilation only after a real frame has reached the window.
+            // The main-thread first presentation can never wait behind it.
+            if let Some(extensions) = graphics_inputs.take() {
+                graphics = Some(graphics::Graphics::start(
+                    size,
+                    extensions,
+                    settings.cache.to_path_buf(),
+                    settings.quality,
+                    settings.options,
+                )?);
+            }
+        }
+        if prepared.is_some() && ready_presenter.is_some() {
+            let (prepared, build_ms) = prepared.take().context("prepared runtime")?;
             let world = prepared.map_runtime(|runtime| Ok(crate::net::Play::Local(runtime)))?;
+            let mut presenter = ready_presenter.take().context("warmed presenter")?;
             presenter.set_probe_gi(true);
+            presenter.set_quality(settings.quality);
+            // Drop the temporary swapchain/device before the game presenter
+            // creates its surface. The same SDL window remains alive throughout.
+            drop(loading);
             window.title(settings.name)?;
             window.begin_game();
             return Ok(Some(Loaded {
@@ -113,42 +127,4 @@ pub(super) fn load(
             thread::sleep(wait.min(Duration::from_millis(8)));
         }
     }
-}
-
-fn loading_frame() -> RenderFrame {
-    let mut frame = RenderFrame::default();
-    frame.camera = Some(CameraView {
-        position: [0., 0., 4.],
-        forward: [0., 0., -1.],
-        fov: 50.,
-    });
-    frame.sun = Some(([0., 0., 1.], [3.; 3]));
-    frame.environment.sky.0 = [0.005, 0.008, 0.016, 1.];
-    frame.environment.horizon.0 = frame.environment.sky.0;
-    frame.environment.ground.0 = frame.environment.sky.0;
-    frame.environment.intensity = 1.;
-    frame.environment.exposure = 1.;
-    for (i, (width, color)) in [(2.4, [0.025, 0.035, 0.05, 1.]), (0.4, [0.1, 0.45, 0.9, 1.])]
-        .into_iter()
-        .enumerate()
-    {
-        frame.draws.push(Draw {
-            entity: i as u64 + 1,
-            address: format!("loading-{i}"),
-            label: "Loading scene".into(),
-            geometry: Geometry::Shape {
-                shape: ara_runtime::components::MeshShape::Box,
-                size: [width, 0.06, 0.01],
-            },
-            world: glam::Mat4::IDENTITY,
-            color,
-            roughness: 1.,
-            metallic: 0.,
-            emissive: [0.; 3],
-            emissive_factor: None,
-            material: None,
-            skin: None,
-        });
-    }
-    frame
 }
