@@ -1053,6 +1053,7 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
         }
         Ok(())
     })();
+    game_preview.destroy(&mut renderer, &mut gpu)?;
     scene_view.destroy(&mut renderer)?;
     // SAFETY: Complete all presentation/UI submissions before native swapchain/surface destruction.
     unsafe {
