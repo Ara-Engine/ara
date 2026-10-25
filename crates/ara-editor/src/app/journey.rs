@@ -27,7 +27,8 @@ const IMPORT: &str = concat!(
 );
 /// Frames a step may wait for its effect (jobs, Play, reloads) before giving up.
 const PATIENCE: u32 = 144 * 90;
-/// The build step cooks and packs the whole hangar: it may take much longer.
+/// The build steps cook and pack the whole hangar, and the import step waits behind the
+/// project's cold imports: they may take much longer.
 const BUILD_PATIENCE: u32 = 144 * 900;
 /// SDL scancodes the Play step types into the Game view: W walks, Esc releases.
 const KEY_W: i32 = 26;
@@ -134,7 +135,9 @@ impl Journey {
                 true
             }
         };
-        let patience = if matches!(name, "export" | "export-csharp") {
+        // An import on a cold project queues behind the project's own imports; patience
+        // counts frames, so a faster editor would otherwise give up sooner.
+        let patience = if matches!(name, "import" | "export" | "export-csharp") {
             BUILD_PATIENCE
         } else {
             PATIENCE
