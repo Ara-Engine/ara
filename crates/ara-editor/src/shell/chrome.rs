@@ -140,7 +140,8 @@ impl Shell {
             }
             out.push_str("</button>");
         }
-        let scene_name = s.scene.rsplit('/').next().unwrap_or(&s.scene);
+        // The scene's name as people read it; the tooltip has its project path.
+        let scene_name = names::stem(names::file_name(&s.scene));
         out.push_str(&format!("</panel><panel id='crumbs' class='crumbs'><text id='crumb-project' class='crumb-strong' text='{}' />{}<text id='crumb-scene' class='crumb' text='{}' description='{}' />",escape(&s.project),icons::icon("crumb-sep","chevron-right"),escape(scene_name),escape(&s.scene)));
         if s.dirty {
             out.push_str("<panel id='crumb-dirty' class='dirty-dot' description='Unsaved changes; Ctrl+S saves now' />");

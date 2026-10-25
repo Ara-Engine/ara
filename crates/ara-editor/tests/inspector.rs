@@ -173,6 +173,34 @@ fn press(shell: &mut Shell, editor: &mut Editor, id: &str) {
     shell.dispatch(editor).unwrap();
 }
 
+/// Revealing a field (diagnostics, agents, `editor.focus`) scrolls the Inspector to
+/// it, also when an earlier reveal already scrolled it.
+#[test]
+fn revealing_a_field_scrolls_the_inspector_to_it_from_anywhere() {
+    let project = Project::new();
+    let mut editor = Editor::open(&project.0).unwrap();
+    editor
+        .action("editor.select", json!({"entities":["e_crate001"]}))
+        .unwrap();
+    // A short window: the Inspector shows a few rows at a time.
+    let mut shell = Shell::new(&mut editor, [1440., 640.]).unwrap();
+    for path in ["MeshRenderer.metallic", "MeshRenderer.size"] {
+        editor
+            .action("editor.focus", json!({"panel":"inspector","field":path}))
+            .unwrap();
+        shell.rebuild(&mut editor).unwrap();
+        let rect = |id: &str| shell.ui.nodes[shell.ui.find(id).unwrap()].rect;
+        let (view, row) = (
+            rect("inspector-scroll"),
+            rect(&format!("field-{}", path.replace('.', "-"))),
+        );
+        assert!(
+            row.y >= view.y - 0.5 && row.y + row.h <= view.y + view.h + 0.5,
+            "{path} at {row:?} is outside the Inspector's view {view:?}"
+        );
+    }
+}
+
 #[test]
 fn an_asset_field_opens_a_picker_of_the_assets_that_fit_it() {
     let project = Project::new();
@@ -182,14 +210,25 @@ fn an_asset_field_opens_a_picker_of_the_assets_that_fit_it() {
         .click("asset-field-MeshRenderer-model", &mut clip)
         .unwrap();
     shell.dispatch(&mut editor).unwrap();
-    // Models with an asset ID: not the texture, not the model still importing.
+    // Models with an asset ID: not the texture, not the model still importing. Rows
+    // name assets without their extension, like Assets.
     assert!(menu_row(&shell, "None").is_some());
-    assert!(menu_row(&shell, "rock.png").is_none());
-    assert!(menu_row(&shell, "barrel.gltf").is_none());
-    let row = menu_row(&shell, "crate.gltf").expect("the imported model is offered");
+    assert!(menu_row(&shell, "rock").is_none());
+    assert!(menu_row(&shell, "barrel").is_none());
+    assert!(menu_row(&shell, "crate.gltf").is_none());
+    let row = menu_row(&shell, "crate").expect("the imported model is offered");
     shell.click(&row, &mut clip).unwrap();
     shell.dispatch(&mut editor).unwrap();
     assert_eq!(model(&editor), "@models/crate.gltf#as_crate0001");
+    shell.rebuild(&mut editor).unwrap();
+    let field = shell.ui.find("asset-name-MeshRenderer-model").unwrap();
+    assert_eq!(
+        shell.ui.nodes[field]
+            .text
+            .as_ref()
+            .map(|t| t.value.as_str()),
+        Some("crate")
+    );
     // None clears it.
     shell
         .click("asset-field-MeshRenderer-model", &mut clip)
@@ -384,10 +423,10 @@ fn material_overrides_add_slots_by_picking_a_material() {
         .unwrap();
     shell.dispatch(&mut editor).unwrap();
     assert!(menu_row(&shell, "None").is_none());
-    assert!(menu_row(&shell, "crate.gltf").is_none());
+    assert!(menu_row(&shell, "crate").is_none());
     let start = std::time::Instant::now();
     let row = loop {
-        if let Some(row) = menu_row(&shell, "steel.graph") {
+        if let Some(row) = menu_row(&shell, "steel") {
             break row;
         }
         assert!(

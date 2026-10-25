@@ -54,11 +54,11 @@ thumbnails and material node previews (`node_preview.rs`). authoring registers g
 the shared culled canvas and pre-shaped label cache. Preserve domain identities.
 The shared play-host schema world owns engine kinds and material/VFX commands;
 register only editor and generic graph commands on top of it.
-
-Shared graph gestures return intents only. Material and VFX edits lower through
-their ASTs to graph ops; animation projections are read-only and edit controller
-data. Animation canvas annotations live in `.ara/editor/animation-<id>.graph`.
-Graph labels are shaped once and use scalable MSDF runs across pan/zoom. Keep
+Shared graph gestures return intents only. Material and VFX edits lower through their ASTs to
+graph ops; animation projections are read-only and edit controller data. Animation canvas
+annotations live in `.ara/editor/animation-<id>.graph`. Each graph page owns its canvas
+(`Shell::graphs`, `<page>-canvas`); the focused one (`follow_focus`) carries `editor.canvas` and
+takes graph commands. Labels are shaped once (scalable MSDF runs across pan/zoom). Keep
 node/wire culling, the stable lookup table and the bounded thumbnail image pool.
 Thumbnails: models via `asset_tools/studio.rs` (published materials, fitted 3/4 shot),
 material spheres, VFX framed on simulated particles; 512 masters resampled to 2× each

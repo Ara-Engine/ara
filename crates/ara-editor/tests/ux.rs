@@ -1402,6 +1402,165 @@ fn the_default_layout_puts_the_views_left_tools_right_and_a_collapsed_bar_below(
 }
 
 #[test]
+fn the_title_bar_names_the_scene_without_its_extension() {
+    let project = Project::new();
+    let mut editor = Editor::open(&project.0).unwrap();
+    let mut shell = Shell::new(&mut editor, [1440., 900.]).unwrap();
+    shell.rebuild(&mut editor).unwrap();
+    let crumb = &shell.ui.nodes[shell.ui.find("crumb-scene").unwrap()];
+    assert_eq!(crumb.text.as_ref().map(|t| t.value.as_str()), Some("main"));
+    assert_eq!(
+        crumb.element.attrs.get("description").map(String::as_str),
+        Some("levels/main.scene")
+    );
+}
+
+/// Parts are parsed one by one, so the markup parser cannot see an ID that two
+/// panels both declare. Every panel open in one window at once, each in an area of
+/// its own (two graph pages side by side included), declares each ID once.
+#[test]
+fn element_ids_stay_unique_with_every_panel_open_in_one_window() {
+    let project = Project::new();
+    let mut editor = Editor::open(&project.0).unwrap();
+    for (domain, path) in [
+        ("material", "paint.graph"),
+        ("vfx", "spark.graph"),
+        ("animation", "motion.animation"),
+    ] {
+        let doc = editor
+            .action(
+                "editor.resource.create",
+                json!({"domain": domain, "path": path}),
+            )
+            .unwrap()["doc"]
+            .as_str()
+            .unwrap()
+            .to_owned();
+        editor
+            .action("editor.workspace", json!({"resource": doc}))
+            .unwrap();
+    }
+    // Split areas breadth first, so no area ends up much smaller than the rest.
+    let mut areas = std::collections::VecDeque::from(["view".to_owned()]);
+    for (n, panel) in [
+        "game",
+        "hierarchy",
+        "inspector",
+        "assets",
+        "console",
+        "problems",
+        "agents",
+        "material",
+        "vfx",
+        "animation",
+        "profiler",
+        "settings",
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        editor
+            .action("editor.layout.show", json!({"panel": panel}))
+            .unwrap();
+        let area = areas.pop_front().unwrap();
+        let own = format!("own-{panel}");
+        editor
+            .action(
+                "editor.layout",
+                json!({"panel": panel, "area": area, "newArea": own, "vertical": n % 2 == 1}),
+            )
+            .unwrap();
+        areas.extend([area, own]);
+    }
+    assert!(editor.state.floating.is_empty());
+    let mut shell = Shell::new(&mut editor, [3840., 2160.]).unwrap();
+    shell.rebuild(&mut editor).unwrap();
+    let mut seen = std::collections::BTreeSet::new();
+    let repeated: std::collections::BTreeSet<_> = shell
+        .ui
+        .nodes
+        .iter()
+        .map(|n| n.element.id.as_str())
+        .filter(|id| !seen.insert(*id))
+        .collect();
+    assert!(repeated.is_empty(), "IDs declared twice: {repeated:?}");
+    for canvas in ["material-canvas", "animation-canvas"] {
+        assert!(shell.ui.find(canvas).is_some(), "{canvas} is not on screen");
+    }
+}
+
+/// Material and Animation side by side: each keeps its own canvas and view; a press
+/// on one makes it the page the navigation state, graph commands and keys follow.
+#[test]
+fn two_graph_pages_keep_their_own_view_and_a_press_picks_the_active_one() {
+    use ara_platform::Event;
+    let project = Project::new();
+    let mut editor = Editor::open(&project.0).unwrap();
+    for (domain, path) in [
+        ("material", "paint.graph"),
+        ("animation", "motion.animation"),
+    ] {
+        let doc = editor
+            .action(
+                "editor.resource.create",
+                json!({"domain": domain, "path": path}),
+            )
+            .unwrap()["doc"]
+            .as_str()
+            .unwrap()
+            .to_owned();
+        editor
+            .action("editor.workspace", json!({"resource": doc}))
+            .unwrap();
+    }
+    editor
+        .action(
+            "editor.layout.move",
+            json!({"panel": "material", "slot": "view"}),
+        )
+        .unwrap();
+    editor
+        .action(
+            "editor.layout",
+            json!({"panel": "animation", "area": "view", "newArea": "beside"}),
+        )
+        .unwrap();
+    let mut shell = Shell::new(&mut editor, [2560., 1440.]).unwrap();
+    shell.rebuild(&mut editor).unwrap();
+    let centre = |shell: &Shell, id: &str| {
+        let r = shell.ui.nodes[shell.ui.find(id).unwrap()].rect;
+        [r.x + r.w * 0.5, r.y + r.h * 0.5]
+    };
+    let press = |shell: &mut Shell, editor: &mut Editor, at: [f32; 2]| {
+        shell.pointer = at;
+        for pressed in [true, false] {
+            shell
+                .graph_event(editor, &Event::MouseButton { button: 1, pressed })
+                .unwrap();
+        }
+        shell.rebuild(editor).unwrap();
+    };
+    // Animation was docked last, so it has focus: the wheel zooms its canvas.
+    assert_eq!(editor.state.focus, "animation");
+    shell.pointer = centre(&shell, "animation-canvas");
+    shell
+        .graph_event(&mut editor, &Event::Wheel([0., 3.]))
+        .unwrap();
+    let zoomed = editor.state.canvas;
+    shell.rebuild(&mut editor).unwrap();
+    // A press on the Material canvas makes it active, with its own view.
+    let at = centre(&shell, "material-canvas");
+    press(&mut shell, &mut editor, at);
+    assert_eq!(editor.state.focus, "material");
+    assert_ne!(editor.state.canvas, zoomed);
+    // Back on Animation, its zoom is where it was left.
+    let at = centre(&shell, "animation-canvas");
+    press(&mut shell, &mut editor, at);
+    assert_eq!(editor.state.focus, "animation");
+    assert_eq!(editor.state.canvas, zoomed);
+}
+
+#[test]
 fn tool_pages_open_floating_and_stay_where_they_are_docked() {
     let project = Project::new();
     let mut editor = Editor::open(&project.0).unwrap();

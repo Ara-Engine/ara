@@ -289,7 +289,8 @@ impl Shell {
                 root.push(Row::Command {
                     id: "field.set",
                     target: Target::Text(format!("{path}={}", json!(reference))),
-                    label: Some(asset.name().to_owned()),
+                    // Without its extension, like Assets (the folder is beside it).
+                    label: Some(names::stem(asset.name()).to_owned()),
                     path: asset
                         .path
                         .rsplit_once('/')
@@ -726,8 +727,15 @@ impl Shell {
                 "asset-grid" | "asset-rows" | "assets-content" | "assets-empty" => {
                     return Some((Context::Assets, Target::None));
                 }
-                "graph-canvas" => {
-                    let node = self.canvas.as_ref().and_then(|c| c.node_at(point, n.rect));
+                canvas
+                    if canvas
+                        .strip_suffix("-canvas")
+                        .is_some_and(|page| graph_panel::GRAPH_PAGES.contains(&page)) =>
+                {
+                    let node = canvas
+                        .strip_suffix("-canvas")
+                        .and_then(|page| self.graphs.get(page))
+                        .and_then(|g| g.canvas.node_at(point, n.rect));
                     return Some(match node {
                         Some(node) => (Context::Node, Target::Node(node)),
                         None => (Context::Canvas, Target::None),

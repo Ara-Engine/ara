@@ -1,8 +1,33 @@
-//! Shared authoring-tool plumbing: the graph canvas (loaded per document), the
-//! resource toolbar, the node palette and canvas painting. The Material, VFX and
-//! Animation tools build on it.
+//! Shared authoring-tool plumbing: the graph canvases (one per graph page, loaded
+//! per document), the resource toolbar, the node palette and canvas painting. The
+//! Material, VFX and Animation tools build on it.
 use super::commands::Target;
 use super::*;
+use std::collections::BTreeSet;
+
+/// Pages with a node-graph canvas. Each keeps its own [`GraphCanvas`], so both can be
+/// on screen at once; the active one ([`Shell::follow_focus`]) follows the navigation
+/// state (`editor.canvas`) and takes graph commands and keys.
+pub(super) const GRAPH_PAGES: [&str; 2] = ["material", "animation"];
+
+/// One graph page's canvas and the document it shows.
+pub(super) struct GraphCanvas {
+    pub canvas: crate::graph::Canvas,
+    pub doc: String,
+    /// Store revision the canvas was built at.
+    pub revision: u64,
+    /// A newly opened document, not yet fitted to its laid-out canvas.
+    pub fresh: bool,
+}
+
+/// The canvas panel's ID on a graph page (`material-canvas`).
+pub(super) fn canvas_id(page: &str) -> String {
+    format!("{page}-canvas")
+}
+
+/// No selection, for pages without a canvas.
+static NO_SELECTION: BTreeSet<String> = BTreeSet::new();
+
 impl Shell {
     pub(super) fn resource_for(&self, editor: &Editor, domain: &str) -> Option<String> {
         let matches = |doc: &ara_doc::Document| {
@@ -71,7 +96,7 @@ impl Shell {
             out.push_str("<panel id='graph-sep' class='toolbar-sep' />");
             self.tool_text(out, "graph-add", "graph.add", "plus", "Add node", "ghost");
             out.push_str("<panel id='graph-tools-sep' class='toolbar-sep' />");
-            self.tool_icon(out, "graph-frame", "graph.frame", "focus", editor, false);
+            self.tool_icon(out, "material-frame", "graph.frame", "focus", editor, false);
             self.tool_icon(
                 out,
                 "graph-comment",
@@ -129,30 +154,127 @@ impl Shell {
         };
         self.empty(out, &format!("{domain}-empty"), icon, title, "Open one from Assets, or create a new one. Graph and text views edit the same document.", &[(&format!("{domain}-empty-new"), action, command)]);
     }
-    pub(super) fn load_canvas(&mut self, editor: &Editor, doc: &str) -> ara_ui::Result<()> {
-        if self.canvas_doc.as_deref() != Some(doc)
-            || self.canvas_revision != editor.host.store().revision()
+    /// Load `doc` into `page`'s canvas unless it already shows it at this revision.
+    pub(super) fn load_canvas(
+        &mut self,
+        editor: &Editor,
+        page: &'static str,
+        doc: &str,
+    ) -> ara_ui::Result<()> {
+        let revision = editor.host.store().revision();
+        if self
+            .graphs
+            .get(page)
+            .is_some_and(|g| g.doc == doc && g.revision == revision)
         {
-            let document = editor
-                .host
-                .store()
-                .workspace()
-                .doc(doc)
-                .ok_or("graph document disappeared")?;
-            let graph = ara_graph::Graph::from_document(document).map_err(|d| d.to_string())?;
-            if let Some(canvas) = self
-                .canvas
-                .as_mut()
-                .filter(|_| self.canvas_doc.as_deref() == Some(doc))
-            {
-                canvas.refresh(graph, &mut self.text);
-            } else {
-                self.canvas = Some(crate::graph::Canvas::new(graph, &mut self.text));
-            }
-            self.canvas_doc = Some(doc.into());
-            self.canvas_revision = editor.host.store().revision();
+            return Ok(());
         }
+        let document = editor
+            .host
+            .store()
+            .workspace()
+            .doc(doc)
+            .ok_or("graph document disappeared")?;
+        let graph = ara_graph::Graph::from_document(document).map_err(|d| d.to_string())?;
+        self.set_graph(page, doc, graph, revision);
         Ok(())
+    }
+    /// Show `graph` on `page`: the same document refreshes in place (its view and
+    /// selection stay); another starts a fresh canvas.
+    pub(super) fn set_graph(
+        &mut self,
+        page: &'static str,
+        doc: &str,
+        graph: ara_graph::Graph,
+        revision: u64,
+    ) {
+        match self.graphs.get_mut(page).filter(|g| g.doc == doc) {
+            Some(shown) => {
+                shown.canvas.refresh(graph, &mut self.text);
+                shown.revision = revision;
+            }
+            None => {
+                let canvas = crate::graph::Canvas::new(graph, &mut self.text);
+                self.graphs.insert(
+                    page,
+                    GraphCanvas {
+                        canvas,
+                        doc: doc.into(),
+                        revision,
+                        fresh: true,
+                    },
+                );
+            }
+        }
+    }
+    /// The active graph page's canvas and document.
+    pub(super) fn active_graph(&self) -> Option<&GraphCanvas> {
+        self.graphs.get(self.graph_page)
+    }
+    /// A graph page's node selection: the navigation state's while the page is
+    /// active, its canvas's own otherwise.
+    pub(super) fn graph_selection<'a>(
+        &'a self,
+        editor: &'a Editor,
+        page: &str,
+    ) -> &'a BTreeSet<String> {
+        if page == self.graph_page {
+            &editor.state.canvas_selection
+        } else {
+            self.graphs
+                .get(page)
+                .map_or(&NO_SELECTION, |g| &g.canvas.selection)
+        }
+    }
+    /// The active graph page follows panel focus (a tab, a press inside the page, an
+    /// opened document). On a switch the page's own view and selection become the
+    /// navigation state; a page about to show another document starts unframed.
+    pub(super) fn follow_focus(&mut self, editor: &mut Editor) -> ara_ui::Result<()> {
+        let Some(page) = GRAPH_PAGES.into_iter().find(|p| *p == editor.state.focus) else {
+            return Ok(());
+        };
+        if page == self.graph_page {
+            return Ok(());
+        }
+        self.graph_page = page;
+        self.canvas_dragging = false;
+        let doc = self.resource_for(editor, page);
+        let (camera, selection) = self
+            .graphs
+            .get(page)
+            .filter(|g| Some(&g.doc) == doc.as_ref())
+            .map(|g| (g.canvas.camera, g.canvas.selection.clone()))
+            .unwrap_or_default();
+        editor.action(
+            "editor.canvas",
+            json!({"pan": camera.pan, "zoom": camera.zoom, "selection": selection}),
+        )?;
+        Ok(())
+    }
+    /// Fit newly opened graphs at a readable zoom once their canvas is laid out: the
+    /// active page through the navigation state (unless a view was already set),
+    /// the others directly. True if any canvas moved.
+    pub(super) fn frame_new_graphs(&mut self, editor: &mut Editor) -> ara_ui::Result<bool> {
+        let mut framed = false;
+        for page in GRAPH_PAGES {
+            let Some(node) = self.ui.find(&canvas_id(page)) else {
+                continue;
+            };
+            let rect = self.ui.nodes[node].rect;
+            let Some(shown) = self.graphs.get_mut(page).filter(|g| g.fresh) else {
+                continue;
+            };
+            shown.fresh = false;
+            if page != self.graph_page {
+                shown.canvas.camera = shown.canvas.framed_readable(rect);
+                self.ui.nodes[node].dirty.paint = true;
+                framed = true;
+            } else if editor.state.canvas == crate::graph::Camera::default() {
+                self.edit_graph_layout(editor, "open")?;
+                framed = true;
+            }
+        }
+        Ok(framed)
     }
     /// Add node: a search popup. With no query, nodes are grouped by category (the
     /// canvas header accents); typing ranks every node by its name and title. Rows
@@ -204,12 +326,13 @@ impl Shell {
         found.sort_by(|a, b| (a.0, &a.1).cmp(&(b.0, &b.1)));
         let centre = self
             .ui
-            .find("graph-canvas")
+            .find(&canvas_id("material"))
             .map(|i| self.ui.nodes[i].rect)
             .unwrap_or_default();
         let position = self
-            .canvas
-            .as_ref()
+            .graphs
+            .get("material")
+            .map(|g| &g.canvas)
             .map(|c| {
                 c.world(
                     [centre.x + centre.w * 0.45, centre.y + centre.h * 0.4],
@@ -242,18 +365,19 @@ impl Shell {
         out.push_str("</scroll></panel>");
         Ok(())
     }
-    /// Paint the canvas into the display list right after the canvas panel's own
-    /// background. Returns the splice index and how many commands went in there, so
-    /// the caller can shift indices it holds past that point.
-    pub(super) fn paint_graph(&mut self) -> (usize, usize) {
-        let none = (usize::MAX, 0);
-        let Some(index) = self.ui.find("graph-canvas") else {
-            return none;
-        };
-        let rect = self.ui.nodes[index].rect;
-        let Some(canvas) = &self.canvas else {
-            return none;
-        };
+    /// Paint every graph page's canvas on screen into the display list, each right
+    /// after its canvas panel's own background. Returns each splice (index, commands
+    /// inserted) in order, so the caller can shift indices it holds past them.
+    pub(super) fn paint_graphs(&mut self) -> Vec<(usize, usize)> {
+        GRAPH_PAGES
+            .into_iter()
+            .filter_map(|page| self.paint_graph(page))
+            .collect()
+    }
+    fn paint_graph(&mut self, page: &str) -> Option<(usize, usize)> {
+        let id = canvas_id(page);
+        let rect = self.ui.nodes[self.ui.find(&id)?].rect;
+        let canvas = &self.graphs.get(page)?.canvas;
         let token = |name: &str| {
             self.ui
                 .sheet
@@ -290,14 +414,14 @@ impl Shell {
             }
         }
         self.ui.display.glyphs.append(&mut display.glyphs);
-        let id = ara_ui::source::stable_id("graph-canvas");
+        let id = ara_ui::source::stable_id(&id);
         let at=self.ui.display.commands.iter().position(|d|matches!(d,ara_ui::paint::Draw::Rect{node,..}|ara_ui::paint::Draw::RoundedRect{node,..} if *node==id)).map(|i|i+1).unwrap_or(self.ui.display.commands.len());
         let count = display.commands.len();
         self.ui
             .display
             .commands
             .splice(at..at, display.commands.drain(..));
-        (at, count)
+        Some((at, count))
     }
 }
 

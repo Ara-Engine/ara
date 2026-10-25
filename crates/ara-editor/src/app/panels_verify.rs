@@ -133,6 +133,14 @@ impl Verification {
         let animation = resource(editor, "animation")?;
         let controller = json!({"initial":"Idle","parameters":{"speed":{}},"nodes":{"idle":{"clip":null},"run":{"clip":null},"locomotion":{"kind":"blend1d","parameterX":"speed","samples":[{"node":"idle","x":0},{"node":"run","x":1}]}},"states":{"Idle":{"node":"idle","duration":48000},"Run":{"node":"run","duration":24000},"Locomotion":{"node":"locomotion","duration":48000}},"transitions":[{"id":"idle_to_run","from":"Idle","to":"Run","duration":4800,"conditions":[{"parameter":"speed","comparison":"greater","floatValue":0.2}]},{"id":"run_to_idle","from":"Run","to":"Idle","duration":4800}]});
         editor.apply_to(&animation,vec![json!({"cmd":"editor.animation.controller.set","args":{"record":"an_controller","controller":controller}})],"Prepare animation panel verification")?;
+        // The route reads the main window: tool pages (floating by default) dock as
+        // tabs beside the Scene view.
+        for panel in ["material", "vfx", "animation", "profiler"] {
+            editor.action(
+                "editor.layout.move",
+                json!({"panel": panel, "slot": "view"}),
+            )?;
+        }
         editor.action("editor.focus", json!({"panel":"scene"}))?;
         editor.action("editor.focus", json!({"panel":"assets"}))?;
         let job =
@@ -586,7 +594,7 @@ impl Verification {
                 }
                 let rect = shell
                     .ui
-                    .find("graph-canvas")
+                    .find("material-canvas")
                     .map(|i| shell.ui.nodes[i].rect)
                     .ok_or("benchmark canvas")?;
                 shell.pointer = [rect.x + rect.w * 0.5, rect.y + rect.h * 0.5];
@@ -643,7 +651,7 @@ impl Verification {
                 }
                 let rect = shell
                     .ui
-                    .find("graph-canvas")
+                    .find("material-canvas")
                     .map(|i| shell.ui.nodes[i].rect)
                     .ok_or("benchmark canvas")?;
                 let t = self.bench_frames as f32 * 0.017;

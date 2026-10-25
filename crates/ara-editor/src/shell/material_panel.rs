@@ -19,12 +19,13 @@ impl Shell {
             self.resource_empty(out, "material");
             return Ok(());
         };
-        self.load_canvas(editor, &doc)?;
+        self.load_canvas(editor, "material", &doc)?;
         self.apply_canvas_view(editor);
         let graph = self
-            .canvas
-            .as_ref()
+            .graphs
+            .get("material")
             .ok_or("material canvas missing")?
+            .canvas
             .graph()
             .clone();
         let material = ara_material::Material::from_graph(&graph).ok();
@@ -66,8 +67,8 @@ impl Shell {
                 }
             }
         }
-        if let Some(canvas) = &mut self.canvas {
-            canvas.diagnostics(&diagnostics, &mut self.text);
+        if let Some(shown) = self.graphs.get_mut("material") {
+            shown.canvas.diagnostics(&diagnostics, &mut self.text);
         }
         out.push_str("<panel id='material-content' class='tool-body'>");
         out.push_str(&format!(
@@ -82,7 +83,7 @@ impl Shell {
         if self.material_source_view {
             self.material_source(&doc, &source, out);
         } else {
-            out.push_str("<panel id='graph-canvas' style='flex-grow:1;flex-basis:0px;background:var(--background);overflow:hidden' label='Material node canvas' />");
+            out.push_str("<panel id='material-canvas' style='flex-grow:1;flex-basis:0px;background:var(--background);overflow:hidden' label='Material node canvas' />");
         }
         out.push_str("</panel></panel>");
         self.material_status(material.as_ref(), &diagnostics, used, out);
@@ -99,7 +100,7 @@ impl Shell {
         material: Option<&ara_material::Material>,
     ) {
         use crate::asset_tools::{node_preview, thumbnails};
-        let Some(canvas) = self.canvas.as_mut() else {
+        let Some(canvas) = self.graphs.get_mut("material").map(|g| &mut g.canvas) else {
             return;
         };
         canvas.show_previews(!self.node_previews.hidden, &mut self.text);
@@ -244,9 +245,14 @@ impl Shell {
     ) -> ara_ui::Result<()> {
         let add = "material-param-add";
         let centre = self
-            .canvas
-            .as_ref()
-            .zip(self.ui.find("graph-canvas").map(|i| self.ui.nodes[i].rect))
+            .graphs
+            .get("material")
+            .map(|g| &g.canvas)
+            .zip(
+                self.ui
+                    .find("material-canvas")
+                    .map(|i| self.ui.nodes[i].rect),
+            )
             .map(|(canvas, r)| canvas.world([r.x + r.w * 0.3, r.y + r.h * 0.3], r))
             .unwrap_or([120., 120.]);
         self.bindings.insert(
@@ -270,7 +276,7 @@ impl Shell {
         }
         for (n, (id, parameter)) in parameters.into_iter().enumerate() {
             let row = format!("mparam-{n}");
-            let selected = editor.state.canvas_selection.iter().any(|s| s == id);
+            let selected = self.graph_selection(editor, "material").contains(id);
             let ty = parameter.ty.to_string();
             self.bindings.insert(
                 ara_ui::source::stable_id(&format!("{row}-pick")),
