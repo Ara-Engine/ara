@@ -9,6 +9,7 @@ use ara_runtime::{
     model::{ModelMaterial, ModelTexture, TextureTransform, TextureUsage},
 };
 
+mod bounds;
 mod document;
 mod generations;
 mod geometry;

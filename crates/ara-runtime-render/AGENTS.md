@@ -24,7 +24,8 @@ device and per-view upload state; no simulation, window or process code.
   `prepare` and its exact dirty rows. Any failed preparation discards that candidate
   CPU snapshot so retry cannot forget an accepted pose; GPU last-good stays live.
 - `ModelPlaceholders` styles unpublished models from read-only import status:
-  pending bounds are translucent grey; failed/missing stay magenta. Raster arrivals
+  pending bounds are short grey corner marks (no filled faces or distant clutter);
+  failed/missing stay solid magenta. Raster arrivals
   fade over 12 presented frames using material rows only; captures finish the fade.
 - Probe GI is enabled by default, acquired asynchronously and disk-cached; live
   frames poll without waiting. `wait_probe_gi` is an explicit capture boundary.

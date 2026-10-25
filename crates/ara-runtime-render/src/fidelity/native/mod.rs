@@ -159,7 +159,9 @@ impl Builder {
                 material = index;
             } else {
                 let index = self.scene.materials.len();
-                self.scene.materials.push(self.scene.materials[material]);
+                let mut bounds = self.scene.materials[material];
+                bounds.pbr.flags[1] |= ara_render::scene::MODEL_BOUNDS;
+                self.scene.materials.push(bounds);
                 self.unpublished
                     .entry(asset.to_owned())
                     .or_default()

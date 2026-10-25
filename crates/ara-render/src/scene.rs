@@ -8,6 +8,9 @@ pub const BASE_COLOR_DECODE_SRGB: u32 = 1 << 25;
 /// `Material.flags[1]`: decode emissive RGB after raw UNORM filtering.
 /// Source glTF textures use hardware sRGB views and leave this bit clear.
 pub const EMISSIVE_DECODE_SRGB: u32 = 1 << 26;
+/// `Material.flags[1]`: unpublished model bounds. Blended loading bounds draw
+/// short screen-space corner marks; opaque missing/broken bounds stay solid.
+pub const MODEL_BOUNDS: u32 = 1 << 27;
 
 /// Interleaved position/normal/UV/tangent vertex ABI, 48 bytes.
 #[repr(C)]
@@ -35,7 +38,8 @@ pub struct Material {
     /// Scene texture indices: base color (sRGB), normal, metallic/roughness (G/B), emissive (sRGB).
     pub textures: [u32; 4],
     /// Word 0: alpha mode (opaque/mask/blend). Word 1: layer/AO bits 0..24 and
-    /// decode-after-sampling bits 25/26. Word 3 is reserved for the fidelity tag.
+    /// decode-after-sampling bits 25/26 and unpublished model bounds bit 27.
+    /// Word 3 is reserved for the fidelity tag.
     pub flags: [u32; 4],
 }
 impl Default for Material {
