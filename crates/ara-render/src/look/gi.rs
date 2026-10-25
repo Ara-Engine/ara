@@ -16,6 +16,11 @@ pub const STATIC_VECTORS: usize = 66;
 /// Irradiance kept from the previous frame; relighting is noise-free, so this
 /// only smooths changes (camera-dependent shadowing at cache hits).
 pub(crate) const HYSTERESIS: f32 = 0.6;
+/// Frames after a capture reset that relight every probe as reset frames (no
+/// hysteresis, exposure snaps to its meter): each adds one full bounce, so a
+/// capture's GI and exposure converge within its settle frames whatever the
+/// preset's per-frame budget.
+pub(crate) const CONVERGE_FRAMES: u32 = 8;
 
 /// What each probe of a lattice sees, from a one-time acquisition.
 #[derive(Debug, Clone, PartialEq)]
@@ -211,9 +216,19 @@ pub(crate) struct GiGpu {
     pub access: [Access; 2],
     pub slot: usize,
     pub cursor: u32,
+    /// Remaining [`CONVERGE_FRAMES`] (set by a capture reset).
+    pub converge: u32,
 }
 
 impl GiGpu {
+    /// Probes relit this frame: `budget`, or all of them while converging.
+    fn window(&self, budget: u32) -> u32 {
+        if self.converge > 0 {
+            self.probes
+        } else {
+            budget.min(self.probes)
+        }
+    }
     /// Fills the shader record's GI rows for this frame (`budget` probes relit).
     pub(crate) fn write(&self, frame: &mut super::frame::LookFrame, budget: u32) {
         let [ox, oy, oz] = self.origin;
@@ -224,7 +239,7 @@ impl GiGpu {
         frame.gi_spacing = [sx, sy, sz, self.bias];
         frame.gi_counts = [cx, cy, cz, self.probes];
         frame.gi_buffers = [self.indices[0], self.indices[1], 0, 0];
-        frame.gi_update = [self.cursor, budget.min(self.probes), self.atlas, 0];
+        frame.gi_update = [self.cursor, self.window(budget), self.atlas, 0];
         frame.gi_images = [
             self.irradiance_sampled[read],
             self.irradiance_sampled[write],
@@ -235,7 +250,8 @@ impl GiGpu {
     /// Advances the ping-pong slot and update window after a completed frame.
     pub(crate) fn advance(&mut self, budget: u32) {
         self.slot = 1 - self.slot;
-        self.cursor = (self.cursor + budget.min(self.probes)) % self.probes;
+        self.cursor = (self.cursor + self.window(budget)) % self.probes;
+        self.converge = self.converge.saturating_sub(1);
     }
 }
 

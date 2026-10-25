@@ -379,7 +379,8 @@ impl Renderer {
         self.frame_number = 0;
     }
     /// Reset capture convergence, including the exposure state (it scales the
-    /// pre-exposed history), relit GI bounce history and the local-shadow
+    /// pre-exposed history), relit GI bounce history (the next frames relight
+    /// every probe, `look::gi::CONVERGE_FRAMES`) and the local-shadow
     /// selection. The baked surfaces and
     /// their residency remain intact; live camera changes use the cheaper
     /// temporal-only reset instead.
@@ -421,6 +422,7 @@ impl Renderer {
         self.gpu.retire(Resource::Buffer(source))?;
         gi.slot = 0;
         gi.cursor = 0;
+        gi.converge = crate::look::gi::CONVERGE_FRAMES;
         Ok(())
     }
     /// Read the completed live frame once, including its IDs and native metadata.

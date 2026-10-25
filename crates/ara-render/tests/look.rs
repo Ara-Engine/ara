@@ -79,3 +79,65 @@ fn every_raster_look_feature_renders_validation_clean() -> Result<()> {
     renderer.gpu().assert_clean()?;
     Ok(())
 }
+
+/// A capture's probe GI converges within its settle frames whatever the relight
+/// budget. Every probe sees a grey (albedo 0.5) surface 1 m away emitting 512, so
+/// bounces through the volume approach twice the emission. With one probe relit
+/// per frame, an 8-frame capture matches a 64-frame one instead of stopping
+/// after a single, partial bounce.
+#[test]
+fn a_capture_converges_probe_gi_within_its_settle_frames() -> Result<()> {
+    let cache = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../target/ara-render/gi-converge")
+        .join(std::process::id().to_string());
+    let mut renderer = Renderer::new(common::scene()?, [160, 90], &[], cache)?;
+    renderer.set_quality(Quality {
+        gi_budget: 1,
+        ..Quality::default()
+    })?;
+    // Packed per ProbeSurfaces::texels: albedo 128 grey, no sky; the octahedral
+    // centre normal; f16 emission (0x6000 is 512) and hit distance 1 (0x3c00).
+    let surfaces = |emission: u32| {
+        let probes = 8;
+        // Distance moments of 100 m: the volume reaches every shaded point.
+        let mut statics = vec![[100., 10_000., 0., 0.]; probes * STATIC_VECTORS];
+        for p in 0..probes {
+            statics[p * STATIC_VECTORS + 64] = [0., 0., 0., 1.];
+        }
+        let texel = [
+            0x0080_8080,
+            0x8000_8000,
+            emission | emission << 16,
+            emission | 0x3c00 << 16,
+        ];
+        ProbeSurfaces {
+            origin: [-6., 0.5, -6.],
+            spacing: [12., 6., 12.],
+            counts: [2, 2, 2],
+            texels: vec![texel; probes * SURFACE_TEXELS],
+            statics,
+        }
+    };
+    let mean = |image: &image::RgbaImage| {
+        image.as_raw().iter().map(|&v| f64::from(v)).sum::<f64>() / image.as_raw().len() as f64
+    };
+    let mut request = common::request([160, 90]);
+    request.exposure *= 0.25;
+    request.settle_frames = 64;
+    renderer.set_probe_surfaces(Some(&surfaces(0)))?;
+    let dark = mean(&renderer.capture(&request)?.image);
+    renderer.set_probe_surfaces(Some(&surfaces(0x6000)))?;
+    let settled = mean(&renderer.capture(&request)?.image);
+    request.settle_frames = 8;
+    let converged = mean(&renderer.capture(&request)?.image);
+    ensure!(
+        settled > dark + 5.,
+        "the probe GI made no visible difference: {settled} vs {dark}"
+    );
+    ensure!(
+        (converged - settled).abs() < 0.5,
+        "an 8-frame capture's GI differs from a 64-frame one: {converged} vs {settled}"
+    );
+    renderer.gpu().assert_clean()?;
+    Ok(())
+}

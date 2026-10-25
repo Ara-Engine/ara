@@ -62,7 +62,8 @@ pub(crate) struct FrameInputs {
     pub sun_lux: Vec3,
     /// Manual linear exposure multiplier; used unless the look meters automatically.
     pub exposure: f32,
-    /// Snap adaptation (first frame or history reset).
+    /// Snap exposure and drop GI hysteresis (first frame, history reset or a
+    /// capture's `gi::CONVERGE_FRAMES`).
     pub reset: bool,
     pub frame_number: u32,
     pub sampled: [[u32; 4]; 2],
