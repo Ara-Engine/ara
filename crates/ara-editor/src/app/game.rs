@@ -3,11 +3,10 @@
 //! poll the play host, import a new surface generation when one appears (keep the
 //! old one on screen until the new one has a frame), show the newest frame,
 //! release the one it replaces, and ask for a resize when the panel changed size.
-//! While Play runs, the host's `play.status` is read twice a second so a faulted
-//! world shows its fault instead of "Starting Play…".
+//! While Play runs, the host's `play.status` is read twice a second (ten times while
+//! the world starts) so the Game view shows the start's phase and progress, a start
+//! that failed, or a faulted world, instead of a bare "Starting Play…".
 use std::time::{Duration, Instant};
-
-use serde_json::{Value, json};
 
 use ara_editor_gpu::{NativeUi, PlaySurface};
 use ara_gpu::vulkan::Context as Gpu;
@@ -29,6 +28,8 @@ pub struct GameView {
     resized: Option<Instant>,
     frames: Vec<Instant>,
     checked: Option<Instant>,
+    /// The world `checked` refers to: a new Play is read at once.
+    checked_world: Option<String>,
 }
 
 impl GameView {
@@ -40,7 +41,7 @@ impl GameView {
         ui: &mut NativeUi,
         gpu: &Gpu,
     ) -> ara_ui::Result<bool> {
-        self.check_fault(editor, shell);
+        self.check_status(editor, shell);
         let Some(surfaces) = editor.play_surfaces.as_mut() else {
             return Ok(false);
         };
@@ -146,36 +147,28 @@ impl GameView {
         Ok(showed)
     }
 
-    /// The shown world's classified fault (`play.status`), at most twice a second.
-    fn check_fault(&mut self, editor: &mut Editor, shell: &mut Shell) {
+    /// The shown world's start progress, failed start or classified fault
+    /// (`play.status`): ten times a second while it starts, twice a second after.
+    fn check_status(&mut self, editor: &mut Editor, shell: &mut Shell) {
         if editor.state.playing.is_none() {
             shell.game_fault = None;
+            shell.game_start = None;
+            shell.game_start_failed = false;
             return;
         }
+        if self.checked_world != editor.play_world {
+            self.checked_world = editor.play_world.clone();
+            self.checked = None;
+        }
+        let every = if shell.game_start.is_some() { 100 } else { 500 };
         if self
             .checked
-            .is_some_and(|t| t.elapsed() < Duration::from_millis(500))
+            .is_some_and(|t| t.elapsed() < Duration::from_millis(every))
         {
             return;
         }
         self.checked = Some(Instant::now());
-        let status = editor
-            .action("play.status", json!({}))
-            .unwrap_or(Value::Null);
-        let worlds = status["worlds"].as_array().cloned().unwrap_or_default();
-        let shown = worlds
-            .iter()
-            .find(|w| w["world"].as_str() == editor.play_world.as_deref())
-            .or(worlds.last());
-        shell.game_fault = shown.and_then(|w| {
-            let fault = &w["fault"];
-            (!fault.is_null()).then(|| {
-                fault["message"]
-                    .as_str()
-                    .unwrap_or("the player stopped")
-                    .to_owned()
-            })
-        });
+        shell.read_play_status(editor);
     }
 
     /// Stops showing every surface and returns their frames to the players.

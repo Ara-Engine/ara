@@ -964,6 +964,8 @@ fn build() -> Vec<Spec> {
                 } else {
                     let mut params = play_params(e);
                     params["scene"] = json!(e.state.doc);
+                    // The reply is immediate; the Game view follows the start's progress.
+                    params["background"] = json!(true);
                     e.embed_play(&mut params);
                     if params["embed"].is_object() {
                         act(e, "editor.layout.show", json!({"panel": "game"}))?;
