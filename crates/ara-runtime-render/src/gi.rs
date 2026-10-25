@@ -608,25 +608,40 @@ fn bake_shading(prepared: &mut native::Prepared) -> Vec<crate::gi_cpu::Shading> 
     shading
 }
 
-/// Bakes the probe surfaces of `frame`'s content on a ray-tracing device.
-/// Each material's diffuse albedo (metal removed) and emissive radiance for the
-/// CPU bake: factors times the mean texel of their maps; terrain splats average
-/// their layer materials.
+/// Per-material diffuse albedo, emission and cutout for the CPU bake, from the
+/// materials' factors and their maps' CPU means (terrain splats average their
+/// layers here; the tracer blends them per hit).
 pub(crate) fn shading(prepared: &native::Prepared) -> Vec<crate::gi_cpu::Shading> {
+    shade(prepared, true)
+}
+
+/// Emission only (albedo and cutout left zero): what the emitter search snapshots
+/// on the render thread, without decoding colour or alpha maps.
+pub(crate) fn emission(prepared: &native::Prepared) -> Vec<crate::gi_cpu::Shading> {
+    shade(prepared, false)
+}
+
+/// [`shading`] (`surface`) or [`emission`]. Each map's mean and each cutout's
+/// coverage is decoded once per call, however many materials share the map.
+fn shade(prepared: &native::Prepared, surface: bool) -> Vec<crate::gi_cpu::Shading> {
     use ara_render::{
         instanced::NO_TEXTURE,
         scene::{BASE_COLOR_DECODE_SRGB, EMISSIVE_DECODE_SRGB},
     };
     use glam30::Vec3;
-    let missing = std::cell::Cell::new(0usize);
+    use std::cell::{Cell, RefCell};
+    let missing = Cell::new(0usize);
+    let means = RefCell::new(HashMap::new());
     // `decode`: the material decodes this raw map's sRGB itself (graph views).
     let mean = |id: u32, decode: bool| {
         if id == NO_TEXTURE {
             return [1.; 4];
         }
-        prepared.textures.mean_texel(id, decode).unwrap_or_else(|| {
-            missing.set(missing.get() + 1);
-            [1.; 4]
+        *means.borrow_mut().entry((id, decode)).or_insert_with(|| {
+            prepared.textures.mean_texel(id, decode).unwrap_or_else(|| {
+                missing.set(missing.get() + 1);
+                [1.; 4]
+            })
         })
     };
     // Share of rays an alpha-tested (mode 1) or blended (mode 2) material lets
@@ -634,28 +649,32 @@ pub(crate) fn shading(prepared: &native::Prepared) -> Vec<crate::gi_cpu::Shading
     // over the base colour's texels at up to CUTOUT_SIDE a side, where thin
     // features (fence wire) still hold their coverage.
     const CUTOUT_SIDE: u32 = 256;
+    let cutouts = RefCell::new(HashMap::new());
     let cutout = |m: &ara_render::instanced::Material| {
         let (mode, alpha, cutoff) = (m.pbr.flags[0], m.pbr.base_color[3], m.pbr.surface[3]);
         if mode == 0 {
             return 0.;
         }
-        let alphas: Vec<f32> = match m.pbr.textures[0] {
-            NO_TEXTURE => vec![alpha],
-            id => prepared
-                .textures
-                .texels(id, CUTOUT_SIDE, false)
-                .map_or_else(
-                    || vec![alpha],
-                    |(_, t)| t.iter().map(|t| alpha * t[3]).collect(),
-                ),
-        };
-        let n = alphas.len().max(1) as f32;
-        let kept = if mode == 1 {
-            alphas.iter().filter(|&&a| a >= cutoff).count() as f32 / n
-        } else {
-            alphas.iter().sum::<f32>() / n
-        };
-        (1. - kept).clamp(0., 1.)
+        let key = (m.pbr.textures[0], mode, alpha.to_bits(), cutoff.to_bits());
+        *cutouts.borrow_mut().entry(key).or_insert_with(|| {
+            let alphas: Vec<f32> = match m.pbr.textures[0] {
+                NO_TEXTURE => vec![alpha],
+                id => prepared
+                    .textures
+                    .texels(id, CUTOUT_SIDE, false)
+                    .map_or_else(
+                        || vec![alpha],
+                        |(_, t)| t.iter().map(|t| alpha * t[3]).collect(),
+                    ),
+            };
+            let n = alphas.len().max(1) as f32;
+            let kept = if mode == 1 {
+                alphas.iter().filter(|&&a| a >= cutoff).count() as f32 / n
+            } else {
+                alphas.iter().sum::<f32>() / n
+            };
+            (1. - kept).clamp(0., 1.)
+        })
     };
     let materials = &prepared.scene.materials;
     let own: Vec<_> = materials
@@ -663,13 +682,20 @@ pub(crate) fn shading(prepared: &native::Prepared) -> Vec<crate::gi_cpu::Shading
         .map(|m| {
             let (c, e) = (m.pbr.base_color, m.pbr.emissive_roughness);
             let decode = |bit: u32| m.pbr.flags[1] & bit != 0;
-            let t = mean(m.pbr.textures[0], decode(BASE_COLOR_DECODE_SRGB));
             let et = mean(m.pbr.textures[3], decode(EMISSIVE_DECODE_SRGB));
+            let emissive = Vec3::new(e[0] * et[0], e[1] * et[1], e[2] * et[2]);
+            if !surface {
+                return crate::gi_cpu::Shading {
+                    emissive,
+                    ..Default::default()
+                };
+            }
+            let t = mean(m.pbr.textures[0], decode(BASE_COLOR_DECODE_SRGB));
             // glTF metalness lives in the blue channel of the metal/roughness map.
             let metal = (m.pbr.surface[0] * mean(m.pbr.textures[2], false)[2]).clamp(0., 1.);
             crate::gi_cpu::Shading {
                 albedo: Vec3::new(c[0] * t[0], c[1] * t[1], c[2] * t[2]) * (1. - metal),
-                emissive: Vec3::new(e[0] * et[0], e[1] * et[1], e[2] * et[2]),
+                emissive,
                 cutout: cutout(m),
             }
         })
@@ -703,6 +729,7 @@ pub(crate) fn shading(prepared: &native::Prepared) -> Vec<crate::gi_cpu::Shading
         .collect()
 }
 
+/// Bakes the probe surfaces of `frame`'s content on a ray-tracing device.
 fn bake(
     gpu: &mut VulkanDevice,
     frame: &RenderFrame,
@@ -838,6 +865,21 @@ mod tests {
             draw(2, [2., 3., 2.], [x, 1.5, 0.]),
         ];
         native::prepare(&frame, Content::default(), config())
+    }
+
+    #[test]
+    fn emission_is_shadings_emission_without_its_surface() -> Result<()> {
+        let mut prepared = yard(0.)?;
+        prepared.scene.materials[0].pbr.emissive_roughness[..3].copy_from_slice(&[3., 2., 1.]);
+        let (full, emitted) = (shading(&prepared), emission(&prepared));
+        assert_eq!(full.len(), emitted.len());
+        for (f, e) in full.iter().zip(&emitted) {
+            assert_eq!(f.emissive, e.emissive);
+            assert_eq!((e.albedo, e.cutout), (glam30::Vec3::ZERO, 0.));
+        }
+        assert!(full.iter().any(|f| f.albedo != glam30::Vec3::ZERO));
+        assert!(emitted.iter().any(|e| e.emissive != glam30::Vec3::ZERO));
+        Ok(())
     }
 
     fn probe(s: &ProbeSurfaces, id: usize) -> (&[[u32; 4]], &[[f32; 4]]) {

@@ -590,7 +590,7 @@ const PROBES_PER_FRAME: usize = 4096;
 fn emitter_job(prepared: &Prepared) -> crate::emitters::Job {
     crate::emitters::Job::new(
         &prepared.scene,
-        &crate::gi::shading(prepared),
+        &crate::gi::emission(prepared),
         |texture, side, decode| prepared.textures.texels(texture, side, decode),
     )
 }
