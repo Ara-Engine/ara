@@ -23,6 +23,9 @@ Local developer binary. No engine dependencies; uses git and cargo as subprocess
   Also flags configured Cargo outputs inside another checkout's target.
 - `perf`: optimized incremental build, once-frozen Outpost pack, GPU-locked frame
   windows, JSON/deltas, warm-player file controls and local stdio MCP bridge.
+- `d26`: the release scoreboard (`src/d26/`). It reuses `perf` windows on Outpost, Hangar and
+  Showcase packs, `ara-samples capture --reference` (ꟻLIP) and the editor's responsiveness
+  probe, and writes `target/d26/<ts>/report.{json,html}`. Unmeasured rows stay "not measured".
 
 Agent checkpoints: `cargo test -p ara-dev`, `cargo clippy -p ara-dev --all-targets -- -D warnings`
 and `cargo fmt --all -- --check`. Set CARGO_BUILD_JOBS=2 on the shared PC.

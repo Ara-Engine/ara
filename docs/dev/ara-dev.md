@@ -305,6 +305,27 @@ across new cohort keys. A shader-only iteration needs neither Cargo nor a new
 player process. Cook into an ignored scratch directory for experiments; tracked
 cooked files are refreshed only deliberately.
 
+### D26 scoreboard
+
+`cargo run -p ara-dev -- d26` measures every D26/D27 release target in one pass and writes
+`target/d26/<timestamp>/report.json` and a self-contained `report.html` (pass/fail per gate,
+value and limit per row). It builds the perf roots plus `ara-editor` and `ara-samples` in one
+feature resolution, freezes Outpost, Hangar and Showcase packs once per sample tree
+(`target/d26/packs`), then runs, each step under the GPU lock:
+
+- per scene, a cold High player window (fresh pipeline cache, only the first frame skipped:
+  cold startup and hitches) and a steady window per preset (GPU p50/p95, CPU wall, warm startup);
+- `ara-samples capture <project> <look> --quality all --reference 256` per scene (ꟻLIP/RMSE),
+  or `--flip-from <capture-dir>` to reuse a sweep;
+- the editor's `--verify-responsiveness` on a fresh `samples/outpost` copy with
+  `--settle-imports after` (interactions during imports), then again on that copy with
+  `--settle-imports before` (warm startup, Scene orbit, Play, interactions after imports).
+
+A row without a measurement reads "not measured", never "pass". Wall-clock CPU values only
+bound CPU work, so they pass at or under the limit and are unmeasured above it. `--skip
+player|flip|editor` leaves a section out; `--no-build` reuses the last d26 build;
+`--profile release` confirms on D26's named profile. The report's footer defines each metric.
+
 ### Measured iteration loop
 
 On 2026-10-24, both profiles were warmed with the same four package roots, four
