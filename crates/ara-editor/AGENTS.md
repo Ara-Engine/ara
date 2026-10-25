@@ -85,10 +85,10 @@ Tests never touch the owner's profile: `.cargo/config.toml` gives every cargo-ru
 process `ARA_CONFIG_DIR`/`ARA_CRASH_DIR` under `target/`, `config_dir()` refuses the OS
 profile under tests and cargo, and bounded runs (`Options::isolate_profile`) start
 from a fresh `<output>/.ara-profile`. Never write user state anywhere else.
-Scene quality: `EditorState.render_quality` mirrors the preference `viewport.quality`
-(None = the project's `rendering.quality`); `state.quality` derives in `apply_settings`
-(false only for Low); the window keeps `detected_quality` (Auto). Commands
+Scene quality: `EditorState.render_quality` mirrors `viewport.quality` (None = project);
+`state.quality` derives in `apply_settings` (false only for Low); the window keeps Auto's `detected_quality`. Commands
 `view.quality.{project,auto,low,medium,high,epic}`; agents: `editor.preferences`.
+`SceneView` submits raster frames without GPU waits and retains completed color/IDs; input coalesces while busy. Capture/shutdown drain explicitly (renderer contract: `ara-render/AGENTS.md`).
 Scene camera: `state::Camera` (orbit pose, `fov_y_degrees` 10–120, default 50) feeds
 `spec()`. `editor.camera` reads it (no fields) or sets any subset (`fovYDegrees`;
 `entity` looks through a scene `Camera`). UI: toolbar FOV field, Camera menu presets,
@@ -132,16 +132,16 @@ Build (`shell/build.rs`): `build.current` exports the main scene with the first
 `presets/*.export.json` (else `build.profile.create` writes the portable, unpinned
 Windows runtime profile) into `builds/<profile>-<time>/build` on a thread, pinning
 this engine's runtime template (player + PDB, cooked shaders) under `.ara/export/`;
-C# modules ship NativeAOT. `build.run` launches it (offscreen: headless, `run.png`). Bounded
-runs are offscreen (hidden windows, UI readback); no capture route shows a window. `--verify-journey` (`app/journey.rs`)
-writes `journey.json` after every step; `--verify-first-hour` (`app/qa.rs`) replays a new
-user's first hour on a fresh (Hub-created) project into `first-hour.json`. `--verify-responsiveness` (`app/responsiveness.rs`) injects SDL-level clicks/moves into the
-real loop and writes per-frame costs, UI work, click results, Play click-to-first-Game-
-frame, a Scene orbit and startup timings (`--settle-imports before|after`; `ara-dev d26`). Shell rebuilds reconcile into the retained `Ui` once per revision (`rebuild_if_stale`),
-menubar, status bar, area headers and tab bodies as parts (`Ui::reconcile_parts`); inactive
-`panels::keep_alive` tabs stay mounted, hidden (geometry via `Shell::shown_node`). Memoized
-panels (`shell/memo.rs`: Assets) reuse markup+bindings while their input digest holds; `cargo
-test` sets `ARA_EDITOR_MEMO_CHECK=1`, which regenerates each reuse and fails on a difference.
+C# modules ship NativeAOT. `build.run` launches it (offscreen: headless, `run.png`). Bounded runs are offscreen (hidden
+windows, UI readback); no capture route shows a window. `--verify-journey` (`app/journey.rs`) writes `journey.json` after
+every step; `--verify-first-hour` (`app/qa.rs`) replays a new user's first hour on a fresh (Hub-created) project into
+`first-hour.json`. `--verify-responsiveness` (`app/responsiveness.rs`, read by `ara-dev d26`) injects SDL-level input into
+the real loop: per-frame costs, clicks, typing, drags, Play, startup. Shell rebuilds reconcile into the retained `Ui` once
+per revision (`rebuild_if_stale`), menubar, status bar, area headers and tab bodies as parts (`Ui::reconcile_parts`);
+inactive `panels::keep_alive` tabs stay mounted, hidden (geometry via `Shell::shown_node`). Memoized panels
+(`shell/memo.rs`: Assets) reuse markup+bindings while their input digest holds; `cargo test` sets `ARA_EDITOR_MEMO_CHECK=1`,
+which regenerates each reuse and fails on a difference. A commit frame resolves once (`Shell::document_view`), rebuilds once
+(`coalesce_rebuilds`), keeps Hierarchy rows unless the ops change what rows show, and defers the Scene a frame.
 `ImportProgress` drives `loading/` (the window before the main one, `--verify-loading`) and
 `shell/imports.rs` (chip, Assets badges, Scene notice; `tests/loading.rs`); names drop file extensions (`shell/names.rs`). Only `scene_changed` state re-renders the Scene.
 Tool pages (`docs/design/editor-tool-pages.md`) share a breadcrumb toolbar, side column,

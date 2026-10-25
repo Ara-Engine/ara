@@ -174,7 +174,7 @@ impl Native {
             if bytemuck::bytes_of(&material) == bytemuck::bytes_of(&self.material_data[i]) {
                 continue;
             }
-            gpu.upload_range(
+            gpu.upload_queued_range(
                 self.materials,
                 (i * std::mem::size_of_val(&material)) as u64,
                 bytemuck::bytes_of(&material),
@@ -244,7 +244,7 @@ impl Native {
         let vp = camera.projection * camera.view;
         let header = [vp, self.previous_vp.unwrap_or(vp)];
         if self.changes.header != Some(header) {
-            gpu.upload_range(self.instances, 0, bytemuck::cast_slice(&header))?;
+            gpu.upload_queued_range(self.instances, 0, bytemuck::cast_slice(&header))?;
             self.changes.header = Some(header);
         }
         let dirty = &self.changes.rows.list;
@@ -256,7 +256,7 @@ impl Native {
             }
             let first = dirty[start];
             let last = dirty[end - 1] + 1;
-            gpu.upload_range(
+            gpu.upload_queued_range(
                 self.instances,
                 (128 + first * std::mem::size_of::<InstanceRow>()) as u64,
                 bytemuck::cast_slice(&self.rows[first..last]),

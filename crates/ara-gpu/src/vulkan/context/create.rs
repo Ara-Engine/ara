@@ -121,6 +121,15 @@ impl Gpu {
                 && has_extension(ash::khr::ray_query::NAME)
                 && has_extension(ash::khr::deferred_host_operations::NAME);
             let mut device_extensions = Vec::new();
+            let timestamp_clock = if has_extension(ash::khr::calibrated_timestamps::NAME) {
+                device_extensions.push(ash::khr::calibrated_timestamps::NAME.as_ptr());
+                Some("VK_KHR_calibrated_timestamps")
+            } else if has_extension(ash::ext::calibrated_timestamps::NAME) {
+                device_extensions.push(ash::ext::calibrated_timestamps::NAME.as_ptr());
+                Some("VK_EXT_calibrated_timestamps")
+            } else {
+                None
+            };
             if !window_extensions.is_empty() {
                 device_extensions.push(ash::khr::swapchain::NAME.as_ptr());
             }
@@ -208,14 +217,15 @@ impl Gpu {
                     && core_supported.independent_blend != 0,
                 "Missing required bindless/raster/sync features"
             );
-            let priorities = [1.0];
+            let priorities = [1.0, 0.5];
+            let graphics_count = families[graphics_family as usize].queue_count.min(2) as usize;
             let queues = [
                 vk::DeviceQueueCreateInfo::default()
                     .queue_family_index(graphics_family)
-                    .queue_priorities(&priorities),
+                    .queue_priorities(&priorities[..graphics_count]),
                 vk::DeviceQueueCreateInfo::default()
                     .queue_family_index(compute_family)
-                    .queue_priorities(&priorities),
+                    .queue_priorities(&priorities[..1]),
             ];
             let mut v11 =
                 vk::PhysicalDeviceVulkan11Features::default().shader_draw_parameters(true);
@@ -275,6 +285,8 @@ impl Gpu {
             let device = instance.create_device(physical, &device_info, None)?;
             guard.device = Some(device.clone());
             let graphics = device.get_device_queue(graphics_family, 0);
+            let scene_graphics =
+                device.get_device_queue(graphics_family, (graphics_count - 1) as u32);
             let compute = device.get_device_queue(compute_family, 0);
             let graphics_pool = device.create_command_pool(
                 &vk::CommandPoolCreateInfo::default()
@@ -380,6 +392,7 @@ impl Gpu {
                     families[graphics_family as usize].timestamp_valid_bits,
                     families[compute_family as usize].timestamp_valid_bits,
                 ],
+                timestamp_clock,
                 pipeline_cache_uuid: properties.pipeline_cache_uuid.to_vec(),
                 external_memory,
                 identity: crate::shared::DeviceIdentity {
@@ -402,6 +415,7 @@ impl Gpu {
                 physical,
                 device,
                 graphics,
+                scene_graphics,
                 compute,
                 graphics_pool,
                 compute_pool,

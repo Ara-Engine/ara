@@ -4,7 +4,7 @@ use anyhow::Context;
 use std::sync::{Arc, Weak, mpsc};
 mod state;
 #[cfg(test)]
-mod tests;
+pub(super) mod tests;
 use state::ViewState;
 
 /// An independent camera's targets and temporal state on its creating renderer.
@@ -177,6 +177,9 @@ impl Renderer {
         self.look.gi = gi;
         self.look.probe_staging = staging;
         self.look.probe_writes = writes;
+        if !self.gpu.deferring_completion() {
+            self.gpu.publish_completed_to_ui()?;
+        }
         result
     }
 }

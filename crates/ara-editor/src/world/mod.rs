@@ -17,6 +17,7 @@ use serde_json::Value;
 use std::{
     collections::{BTreeMap, BTreeSet},
     path::Path,
+    sync::Arc,
 };
 
 /// Read-only extraction boundary; ara-sim can replace the document adapter without changing panels.
@@ -34,15 +35,21 @@ pub trait EditWorldView {
 }
 /// Document-backed edit-world view used until ara-sim is integrated.
 pub struct DocumentView {
-    entities: Resolved,
+    /// Shared with the Shell's resolve of the same revision (`Shell::document_view`).
+    entities: Arc<Resolved>,
     ghosts: BTreeMap<String, ara_doc::Record>,
     imports: BTreeMap<String, ara_asset::ImportSettings>,
 }
 impl DocumentView {
     /// Resolve a scene once per committed document revision.
     pub fn new(store: &Store, doc: &str) -> Result<Self, Vec<Diagnostic>> {
-        Ok(Self {
-            entities: resolve(store, doc)?,
+        Ok(Self::with_entities(store, Arc::new(resolve(store, doc)?)))
+    }
+    /// The view of `entities`, the open scene already resolved at the store's current
+    /// revision (no second resolve).
+    pub fn with_entities(store: &Store, entities: Arc<Resolved>) -> Self {
+        Self {
+            entities,
             ghosts: BTreeMap::new(),
             imports: store
                 .workspace()
@@ -56,7 +63,7 @@ impl DocumentView {
                     Some((path.to_owned(), settings))
                 })
                 .collect(),
-        })
+        }
     }
     /// Model sources the scene references, other than the `known` paths, each checked
     /// on disk once: `Some(entity)` (one that uses it; it draws a placeholder) when
@@ -68,7 +75,7 @@ impl DocumentView {
     ) -> Vec<(String, Option<String>)> {
         // One disk check per path, not per entity: scenes reuse a few models widely.
         let mut checked: BTreeMap<String, Option<String>> = BTreeMap::new();
-        for (id, entity) in &self.entities {
+        for (id, entity) in self.entities.iter() {
             let Some(reference) = entity
                 .record
                 .get("MeshRenderer")
@@ -259,7 +266,7 @@ impl DocumentView {
         if let Some(gesture) = preview {
             gesture.preview_world(&self.entities, &mut transforms);
         }
-        for (id, entity) in &self.entities {
+        for (id, entity) in self.entities.iter() {
             if state.hidden.contains(id) {
                 continue;
             }

@@ -105,6 +105,8 @@ impl Renderer {
             native: None,
             views: views::Views::default(),
             secondary_active: false,
+            live: None,
+            entity_epoch: 0,
         })
     }
 
@@ -203,7 +205,7 @@ impl Renderer {
             "Non-finite light"
         );
         write_lights(
-            &self.gpu,
+            &mut self.gpu,
             [self.content.light_buffer, self.content.compute_lights],
             lights,
         )?;
@@ -262,13 +264,13 @@ impl Renderer {
 }
 
 /// Writes `lights` (or one zeroed placeholder) into both host-visible light lists.
-fn write_lights(gpu: &VulkanDevice, buffers: [Buffer; 2], lights: &[Light]) -> Result<()> {
+fn write_lights(gpu: &mut VulkanDevice, buffers: [Buffer; 2], lights: &[Light]) -> Result<()> {
     let mut padded = lights.to_vec();
     if padded.is_empty() {
         padded.push(Light::zeroed());
     }
     for buffer in buffers {
-        gpu.upload(buffer, bytemuck::cast_slice(&padded))?;
+        gpu.upload_queued(buffer, bytemuck::cast_slice(&padded))?;
     }
     Ok(())
 }
@@ -571,7 +573,7 @@ fn upload_content_inner(
     let compute_frame_index = gpu.storage_buffer(compute_frame)?.index;
     let mut ibl_frame = frame::Frame::zeroed();
     ibl_frame.extra[3] = environment;
-    gpu.upload(compute_frame, bytemuck::bytes_of(&ibl_frame))?;
+    gpu.upload_queued(compute_frame, bytemuck::bytes_of(&ibl_frame))?;
     let mut graph = Graph::default();
     let env = graph.import(
         Resource::Image(environment_image),

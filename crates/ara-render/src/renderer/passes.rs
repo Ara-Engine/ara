@@ -95,11 +95,12 @@ impl Renderer {
             ),
             None => Vec::new(),
         };
-        self.gpu.upload(self.frame, bytemuck::bytes_of(&frame))?;
+        self.gpu
+            .upload_queued(self.frame, bytemuck::bytes_of(&frame))?;
         let mut display_frame = frame;
         display_frame.extent[..2].copy_from_slice(&self.size);
         self.gpu
-            .upload(self.display_frame, bytemuck::bytes_of(&display_frame))?;
+            .upload_queued(self.display_frame, bytemuck::bytes_of(&display_frame))?;
         let far_draw = match &self.look.far {
             Some(far) => {
                 let (matrix, view) = crate::look::far::FarMap::fit(
@@ -114,7 +115,8 @@ impl Renderer {
         if let (Some((matrix, _)), Some(far)) = (far_draw, &self.look.far) {
             let mut far_frame = frame;
             far_frame.shadows[0] = matrix;
-            self.gpu.upload(far.frame, bytemuck::bytes_of(&far_frame))?;
+            self.gpu
+                .upload_queued(far.frame, bytemuck::bytes_of(&far_frame))?;
             if self.native.is_some() {
                 self.cull_native_shadow(matrix)?;
             }
@@ -143,7 +145,7 @@ impl Renderer {
                     )?;
                     local_draws.push((face, pass, matrix));
                 }
-                self.gpu.upload(local.table, &plan.table)?;
+                self.gpu.upload_queued(local.table, &plan.table)?;
                 Ok(())
             })();
             self.look.local = Some(local);
@@ -152,7 +154,7 @@ impl Renderer {
         let mut compute_frame = frame;
         compute_frame.lighting[3] = self.content.compute_light_index;
         self.gpu
-            .upload(self.compute_frame, bytemuck::bytes_of(&compute_frame))?;
+            .upload_queued(self.compute_frame, bytemuck::bytes_of(&compute_frame))?;
         self.look.ensure(&mut self.gpu)?;
         let (sampled, storage) = self.look.indices();
         // Exposure snaps to its meter on a reset unless a host seeded it, and
@@ -217,7 +219,7 @@ impl Renderer {
             look_frame.ao_images = self.look.ao_indices();
         }
         self.gpu
-            .upload(self.look.frame, bytemuck::bytes_of(&look_frame))?;
+            .upload_queued(self.look.frame, bytemuck::bytes_of(&look_frame))?;
         let mut graph = Graph::default();
         let mut recipes = Vec::new();
         let ids = self
@@ -884,6 +886,9 @@ impl Renderer {
         if let Some(native) = &mut self.native {
             native.presented(&camera, !self.secondary_active);
         }
+        if !deferred {
+            self.publish_sync_scene()?;
+        }
         Ok(())
     }
 }
@@ -1019,6 +1024,7 @@ impl Renderer {
         }
         self.look.finish(&look, &compiled.final_states);
         self.gpu.assert_clean()?;
+        self.publish_sync_scene()?;
         Ok(self.targets.images[OUTPUT])
     }
 }

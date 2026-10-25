@@ -6,7 +6,10 @@
 //! scene has a camera, and only when what it shows changes: the scene (store
 //! revision), the camera, the frame size or newly published assets. Each change runs
 //! a short burst so temporal history and arrival fades settle. Until the scene's
-//! content is published it asks again every frame, keeping the empty state.
+//! content is published it asks again every frame, keeping the empty state. The
+//! image is always detached from the UI before the preview camera is released.
+//! It does not poll the shared content's own work (GI, emitter search): each preview
+//! frame currently restarts that work, so polling it never settles.
 use std::time::{Duration, Instant};
 
 use ara_editor_gpu::NativeUi;
@@ -59,8 +62,8 @@ impl Preview {
         Some((shell.gameplay_camera(editor)?, target))
     }
 
-    /// Whether this frame has preview work: a change to show, a burst still settling,
-    /// content not published yet, or an image to detach.
+    /// Whether this frame has preview work: a change to show, a burst still settling
+    /// (it also runs while content is not published yet), or an image to detach.
     pub fn wants_frame(&mut self, editor: &Editor, shell: &mut Shell) -> bool {
         match Self::want(editor, shell) {
             None => self.attached,
@@ -145,6 +148,14 @@ impl Preview {
         let appeared = shell.game_preview.is_none();
         shell.game_preview = Some(output.size);
         Ok(appeared)
+    }
+
+    /// Detach and free the preview at shutdown, before the Scene view is destroyed.
+    pub fn destroy(mut self, renderer: &mut Renderer, gpu: &mut NativeUi) -> ara_ui::Result<()> {
+        if self.attached {
+            gpu.forget_external(texture());
+        }
+        self.camera.release(renderer)
     }
 
     /// Detach and free the preview (Play started, the Game view hid, no camera).

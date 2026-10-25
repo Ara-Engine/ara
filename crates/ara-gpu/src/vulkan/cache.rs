@@ -71,6 +71,7 @@ mod tests {
             descriptor_heap_available: false,
             timestamp_period_ns: 1.,
             timestamp_valid_bits: [64; 2],
+            timestamp_clock: None,
             pipeline_cache_uuid: vec![7; 16],
             external_memory: false,
             identity: Default::default(),

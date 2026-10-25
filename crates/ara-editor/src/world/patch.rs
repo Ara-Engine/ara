@@ -90,8 +90,9 @@ impl DocumentView {
             return None;
         }
         let mut patch = Patch::default();
-        let mut transforms = false;
-        for ((id, a), (other, b)) in self.entities.iter().zip(&next.entities) {
+        // Entities whose own Transform changed: only they and their descendants move.
+        let mut transformed = BTreeSet::new();
+        for ((id, a), (other, b)) in self.entities.iter().zip(next.entities.iter()) {
             if id != other || a.parent != b.parent {
                 return None;
             }
@@ -105,7 +106,9 @@ impl DocumentView {
                 return None;
             }
             // A hidden entity's transform still moves its children.
-            transforms |= a.record.get("Transform") != b.record.get("Transform");
+            if a.record.get("Transform") != b.record.get("Transform") {
+                transformed.insert(id.as_str());
+            }
             if hidden.contains(id) {
                 continue;
             }
@@ -130,10 +133,23 @@ impl DocumentView {
                 }
             }
         }
-        if transforms {
-            let before = world_transforms(&self.entities);
-            let after = world_transforms(&next.entities);
-            moved(&before, &after, &next.entities, hidden, &mut patch);
+        if !transformed.is_empty() {
+            // Parents are unchanged here, so world matrices are composed only for the
+            // moved subtrees, not for the whole scene twice.
+            let world = |entities: &Resolved| -> BTreeMap<String, Mat4> {
+                next.entities
+                    .keys()
+                    .filter(|id| under(&next.entities, id, &transformed))
+                    .filter_map(|id| Some((id.clone(), world_transform(entities, id)?)))
+                    .collect()
+            };
+            moved(
+                &world(&self.entities),
+                &world(&next.entities),
+                &next.entities,
+                hidden,
+                &mut patch,
+            );
         }
         Some(patch)
     }
@@ -155,14 +171,14 @@ impl DocumentView {
     /// This view with some entities' records replaced (an uncommitted Inspector
     /// draft); unknown entities are ignored.
     pub(crate) fn with_records(&self, records: BTreeMap<String, ara_doc::Record>) -> DocumentView {
-        let mut entities = self.entities.clone();
+        let mut entities = (*self.entities).clone();
         for (id, record) in records {
             if let Some(entity) = entities.get_mut(&id) {
                 entity.record = record;
             }
         }
         DocumentView {
-            entities,
+            entities: std::sync::Arc::new(entities),
             ghosts: self.ghosts.clone(),
             imports: self.imports.clone(),
         }
@@ -209,7 +225,7 @@ impl DocumentView {
     /// `MeshRenderer` (as `extract` pushes them).
     fn materials(&self, state: &EditorState) -> Vec<Material> {
         let mut materials = vec![Material::default()];
-        for (id, entity) in &self.entities {
+        for (id, entity) in self.entities.iter() {
             if let Some(record) = entity.record.get("MeshRenderer")
                 && !state.hidden.contains(id)
             {
@@ -220,6 +236,21 @@ impl DocumentView {
         }
         materials
     }
+}
+
+/// Whether `id` or one of its ancestors is in `set` (a parent cycle stops the walk).
+fn under(entities: &Resolved, id: &str, set: &BTreeSet<&str>) -> bool {
+    let mut current = Some(id);
+    for _ in 0..=entities.len() {
+        let Some(at) = current else {
+            return false;
+        };
+        if set.contains(at) {
+            return true;
+        }
+        current = entities.get(at).and_then(|e| e.parent.as_deref());
+    }
+    false
 }
 
 /// Record the drawn meshes and lights whose world matrix differs.
@@ -289,7 +320,7 @@ mod tests {
     fn view() -> DocumentView {
         let mesh = |x: f64| json!({"name": "Crate", "Transform": {"position": [x, 0., 0.]}, "MeshRenderer": {"color": [1., 0., 0., 1.]}});
         DocumentView {
-            entities: [
+            entities: std::sync::Arc::new(Resolved::from([
                 ("e_crate".to_owned(), entity(None, mesh(0.))),
                 ("e_lid".to_owned(), entity(Some("e_crate"), mesh(1.))),
                 (
@@ -300,8 +331,7 @@ mod tests {
                     "e_lamp".to_owned(),
                     entity(None, json!({"Light": {"intensity": 800.}})),
                 ),
-            ]
-            .into(),
+            ])),
             ghosts: BTreeMap::new(),
             imports: BTreeMap::new(),
         }
@@ -417,10 +447,13 @@ mod tests {
         );
         assert_eq!(before.patch_to(&reshaped, &BTreeSet::new()), None);
         let mut fewer = view();
-        fewer.entities.remove("e_pivot");
+        std::sync::Arc::make_mut(&mut fewer.entities).remove("e_pivot");
         assert_eq!(before.patch_to(&fewer, &BTreeSet::new()), None);
         let mut moved_out = view();
-        moved_out.entities.get_mut("e_lid").expect("lid").parent = None;
+        std::sync::Arc::make_mut(&mut moved_out.entities)
+            .get_mut("e_lid")
+            .expect("lid")
+            .parent = None;
         assert_eq!(before.patch_to(&moved_out, &BTreeSet::new()), None);
     }
 }

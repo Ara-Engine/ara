@@ -3,6 +3,7 @@ mod edit;
 mod frame;
 mod gi;
 mod hash;
+mod live;
 mod native;
 mod passes;
 pub mod post;
@@ -106,6 +107,8 @@ pub struct Renderer {
     native: Option<native::Native>,
     views: views::Views,
     secondary_active: bool,
+    live: Option<live::Live>,
+    entity_epoch: u64,
 }
 
 impl Renderer {
@@ -222,11 +225,33 @@ impl Renderer {
     }
     /// Current SDR output, in CopySource layout after rendering.
     pub fn output(&self) -> Image {
-        self.targets.images[OUTPUT]
+        if self.secondary_active {
+            return self.targets.images[OUTPUT];
+        }
+        self.live
+            .as_ref()
+            .and_then(live::Live::color)
+            .unwrap_or(self.targets.images[OUTPUT])
+    }
+    /// Extent of `output()`, which may retain the previous size during an
+    /// asynchronous resize until its replacement frame has completed.
+    pub fn output_size(&self) -> [u32; 2] {
+        if self.secondary_active {
+            return self.size;
+        }
+        self.live
+            .as_ref()
+            .and_then(live::Live::size)
+            .unwrap_or(self.size)
     }
     /// Whether color and IDs belong to a completed frame and can be attached to
     /// the editor. Fresh/failed/resized targets must never be sampled or copied.
     pub fn presentation_ready(&self) -> bool {
+        if !self.secondary_active
+            && let Some(live) = &self.live
+        {
+            return live.color().is_some();
+        }
         [OUTPUT, ID].iter().all(|&slot| {
             self.targets.states[slot].access == Access::CopySource
                 && self.targets.states[slot].queue == Queue::Graphics
@@ -235,11 +260,23 @@ impl Renderer {
     /// Last completed entity-ID texture (render size), in CopySource layout after
     /// rendering. The editor samples this on the same device for selection/review outlines.
     pub fn entity_channel(&self) -> Image {
-        self.targets.images[ID]
+        if self.secondary_active {
+            return self.targets.images[ID];
+        }
+        self.live
+            .as_ref()
+            .and_then(live::Live::ids)
+            .unwrap_or(self.targets.images[ID])
     }
     /// Compact channel index (slice index + 1) to external entity identity and label.
     pub fn entities(&self) -> &[(u64, String)] {
-        &self.content.entity_names
+        if self.secondary_active {
+            return &self.content.entity_names;
+        }
+        self.live
+            .as_ref()
+            .and_then(live::Live::labels)
+            .unwrap_or(&self.content.entity_names)
     }
     /// Last measured pass timings, including actual dedicated-queue execution.
     pub fn timings(&self) -> &[PassTiming] {
@@ -264,6 +301,12 @@ impl Renderer {
             render[0] <= display[0] && render[1] <= display[1],
             "Render size {render:?} exceeds the display {display:?}"
         );
+        if let Some(live) = &mut self.live
+            && live.pending()
+        {
+            live.resize = Some((render, display));
+            return Ok(());
+        }
         if render == self.render && display == self.size {
             return Ok(());
         }

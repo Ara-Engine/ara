@@ -292,6 +292,40 @@ impl VulkanDevice {
                             .size(*size)],
                     );
                 }
+                Command::UpdateBuffer {
+                    destination,
+                    offset,
+                    bytes,
+                } => {
+                    let buffer = self.buffers.get(*destination)?.raw.handle;
+                    let barrier = vk::BufferMemoryBarrier2::default()
+                        .buffer(buffer)
+                        .offset(*offset)
+                        .size(bytes.len() as u64)
+                        .src_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
+                        .dst_queue_family_index(vk::QUEUE_FAMILY_IGNORED);
+                    device.cmd_pipeline_barrier2(
+                        cmd,
+                        &vk::DependencyInfo::default().buffer_memory_barriers(&[barrier
+                            .src_stage_mask(vk::PipelineStageFlags2::ALL_COMMANDS)
+                            .src_access_mask(
+                                vk::AccessFlags2::MEMORY_READ | vk::AccessFlags2::MEMORY_WRITE,
+                            )
+                            .dst_stage_mask(vk::PipelineStageFlags2::CLEAR)
+                            .dst_access_mask(vk::AccessFlags2::TRANSFER_WRITE)]),
+                    );
+                    device.cmd_update_buffer(cmd, buffer, *offset, bytes);
+                    device.cmd_pipeline_barrier2(
+                        cmd,
+                        &vk::DependencyInfo::default().buffer_memory_barriers(&[barrier
+                            .src_stage_mask(vk::PipelineStageFlags2::CLEAR)
+                            .src_access_mask(vk::AccessFlags2::TRANSFER_WRITE)
+                            .dst_stage_mask(vk::PipelineStageFlags2::ALL_COMMANDS)
+                            .dst_access_mask(
+                                vk::AccessFlags2::MEMORY_READ | vk::AccessFlags2::MEMORY_WRITE,
+                            )]),
+                    );
+                }
                 Command::CopyImage {
                     source,
                     destination,
@@ -333,11 +367,7 @@ impl VulkanDevice {
                 Command::BeginPass(_) | Command::EndPass => {
                     device.cmd_write_timestamp2(
                         cmd,
-                        if matches!(command, Command::BeginPass(_)) {
-                            vk::PipelineStageFlags2::TOP_OF_PIPE
-                        } else {
-                            vk::PipelineStageFlags2::ALL_COMMANDS
-                        },
+                        vk::PipelineStageFlags2::ALL_COMMANDS,
                         query,
                         *timestamp,
                     );

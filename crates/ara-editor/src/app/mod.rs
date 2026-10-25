@@ -269,6 +269,13 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
             let mut events = Window::poll_tagged()?;
             let main_dpi = options.dpi.unwrap_or_else(|| native.dpi()) * windows::ui_scale(&editor);
             let mut inject_ms = 0.;
+            // What this frame's input edits (scripted input included): typed drafts and
+            // commits defer the Scene render.
+            let edit_before = (
+                editor.host.store().revision(),
+                shell.drafts().clone(),
+                editor.state.camera,
+            );
             if let Some(probe) = &mut probe {
                 let scale = crate::native::points_to_logical(window.raw(), main_dpi);
                 let at = Instant::now();
@@ -519,7 +526,8 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
             if editor.host.store().revision() != last_revision {
                 last_revision = editor.host.store().revision();
                 let at = Instant::now();
-                let next = editor.view()?;
+                // The panels' resolve of this revision (shared, not repeated).
+                let next = shell.document_view(&editor)?;
                 editor.report_missing_sources(&next);
                 view_ms = at.elapsed().as_secs_f64() * 1000.;
                 stages =
@@ -538,7 +546,7 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
             }
             if editor.review_revision != last_review {
                 last_review = editor.review_revision;
-                let next = editor.view()?;
+                let next = shell.document_view(&editor)?;
                 if next.ghosts() != view.ghosts() {
                     scene_sync.rebuild(&next, &mut editor, &mut renderer, &mut scene_view);
                 }
@@ -701,6 +709,16 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                 scene_dirty = true;
             }
             dirty |= game_preview.wants_frame(&editor, &mut shell);
+            // Typing and committing present the UI first: the Scene follows on the next
+            // frame without such input, so a keystroke or Enter never waits for a Scene
+            // render. Gestures and camera moves render at once.
+            let defer_scene = scene_dirty
+                && (interaction_start.is_some() || probe.as_ref().is_some_and(|p| p.acted()))
+                && editor.gesture.is_none()
+                && editor.state.camera == edit_before.2
+                && (editor.host.store().revision() != edit_before.0
+                    || shell.drafts() != &edit_before.1);
+            dirty |= scene_dirty;
             if dirty {
                 let _render_scope = profile_frame.map(|_| ara_profile::scope("editor.render"));
                 profile_gpu = shell.viewport().is_some() && scene_dirty;
@@ -712,6 +730,7 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                     // source) keeps its last frame and is reported; the next change or
                     // publication retries. It never closes the editor.
                     if scene_dirty
+                        && !defer_scene
                         && let Err(error) = scene_view.render(&mut renderer, &editor, &view, 1)
                     {
                         editor.report_failure(&*error);
@@ -844,7 +863,7 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                 profile_draws = ui_renderer.batches.len() as u64;
                 profile_triangles = ui_renderer.instances.len() as u64 * 2;
                 dirty = false;
-                scene_dirty = false;
+                scene_dirty = defer_scene;
                 if let Some(start) = interaction_start {
                     interaction_samples.push(start.elapsed().as_secs_f64() * 1000.);
                 }
@@ -1053,6 +1072,7 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
         }
         Ok(())
     })();
+    game_preview.destroy(&mut renderer, &mut gpu)?;
     scene_view.destroy(&mut renderer)?;
     // SAFETY: Complete all presentation/UI submissions before native swapchain/surface destruction.
     unsafe {

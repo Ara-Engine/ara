@@ -179,6 +179,9 @@ pub struct DeviceInfo {
     pub timestamp_period_ns: f32,
     /// Significant timestamp bits, graphics then compute.
     pub timestamp_valid_bits: [u32; 2],
+    /// Enabled common device-clock extension, KHR preferred over EXT. Without
+    /// this guarantee, timestamps from different queues cannot be combined.
+    pub timestamp_clock: Option<&'static str>,
     /// Native driver pipeline-cache compatibility UUID.
     pub pipeline_cache_uuid: Vec<u8>,
     /// Enabled `VK_KHR_external_memory_win32` (enabled whenever available):
@@ -199,8 +202,11 @@ pub struct Gpu {
     pub physical: vk::PhysicalDevice,
     /// Owned logical device; unsafe native calls must respect engine ownership.
     pub device: ash::Device,
-    /// Native graphics queue, serialized by the renderer.
+    /// Native graphics queue for UI and presentation integrations.
     pub graphics: vk::Queue,
+    /// A second queue in the same family when available; asynchronous scene work
+    /// uses it so a UI fence never waits behind an unfinished scene submission.
+    pub scene_graphics: vk::Queue,
     /// Native dedicated compute queue.
     pub compute: vk::Queue,
     /// Graphics-family recording pool.

@@ -17,8 +17,8 @@ device and per-view upload state; no simulation, window or process code.
   terrain/foliage and particles through the shared look. `capture` settles residency,
   probe acquisition and temporal history. It never discovers, cooks or imports.
   `render_secondary` draws an owned renderer camera over that content and shares
-  model-arrival fades. It draws geometry/look only; particle compositing belongs
-  to the primary `render` path until per-camera VFX targets are shared.
+  model-arrival fades. Release follow-up: compose VFX in secondary Game previews
+  too, with per-camera particle targets; particles currently use primary `render`.
 - `RasterContent::new(frame, content)` prepares immutable CPU geometry/materials
   and the content key on a worker. `RasterView::publish_content` adopts it on the
   device thread, preserving last-good content if GPU publication fails.
@@ -113,6 +113,9 @@ device and per-view upload state; no simulation, window or process code.
   `Presenter2d::capture(world, atlases, tick, size, marks, seed)`.
 
 ## Gotchas
+
+- `PresentStats.gpu_span_ms` measures prepare through publication on the device
+  clock; `gpu_ms` remains the legacy timestamp sum, not the D26 whole-frame gate.
 
 - `ara-render` takes glam 0.30 types (`glam30`); runtime math is glam 0.34.
 - Skinning is CPU-side: GPU skinning needs a skinned vertex ABI in the cooked

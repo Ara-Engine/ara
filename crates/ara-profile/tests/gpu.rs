@@ -19,16 +19,22 @@ fn resolved_timestamp_import_preserves_submission_frame_and_queue() {
                 pass: "shadow".into(),
                 queue: ara_gpu::Queue::Graphics,
                 milliseconds: 1.25,
+                start_ms: 0.,
+                end_ms: 1.25,
             },
             ara_gpu::commands::PassTiming {
                 pass: "cull".into(),
                 queue: ara_gpu::Queue::Compute,
                 milliseconds: 0.5,
+                start_ms: 0.,
+                end_ms: 0.5,
             },
             ara_gpu::commands::PassTiming {
                 pass: "invalid".into(),
                 queue: ara_gpu::Queue::Graphics,
                 milliseconds: f64::NAN,
+                start_ms: 0.,
+                end_ms: f64::NAN,
             },
         ],
     );

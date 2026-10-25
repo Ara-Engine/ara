@@ -257,7 +257,16 @@ completed window (NDJSON). `--no-build` reuses prior Cargo artifact paths;
 `--player <exe>` can supply an explicit prebuilt player. The same selected package
 set is kept after initial setup, preserving the build feature union.
 
-`player.gpu_other` reports scene-update, texture-upload, VFX, raster, fidelity and
+`player.gpu_span_ms` is the whole presenter-device interval, including uploads,
+view, particles, post, publication and inter-submission gaps. Overlap counts once.
+`gpu_span_coverage` must cover every measured frame for D26 to gate it; unsupported
+cross-queue clocks and failed frames stay unavailable. `gpu_span_samples_ms`
+preserves each frame (null when unavailable). Pass begins follow leading barriers
+at ALL_COMMANDS; `gpu_pass_sum_ms` is the exclusive view-pass sum for attribution,
+not the whole-frame budget. KHR/EXT calibrated timestamps provide the common queue
+clock. Native swapchain/UI copies and compositor latency are outside this span.
+
+`player.gpu_other` retains scene-update, texture-upload, VFX, raster, fidelity and
 publication timestamp quantiles, plus uploaded/resident texture bytes and pending
 promotions. `accounted_ms`, `unaccounted_ms` and `outside_view_ms` are calculated
 for each frame before quantiles; do not subtract or sum independently computed

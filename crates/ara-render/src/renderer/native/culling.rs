@@ -150,7 +150,7 @@ impl Culling {
     #[allow(clippy::too_many_arguments)]
     pub fn prepare(
         &mut self,
-        gpu: &VulkanDevice,
+        gpu: &mut VulkanDevice,
         buffer: Buffer,
         groups: &Groups,
         bounds: &[[Vec3; 2]],
@@ -234,7 +234,7 @@ impl Culling {
     #[allow(clippy::too_many_arguments)]
     pub(super) fn opaque(
         &mut self,
-        gpu: &VulkanDevice,
+        gpu: &mut VulkanDevice,
         buffer: Buffer,
         groups: &Groups,
         bounds: &[[Vec3; 2]],
@@ -284,7 +284,7 @@ impl Culling {
                 cursor += entries.len();
             }
             if cursor > first {
-                gpu.upload_range(
+                gpu.upload_queued_range(
                     buffer,
                     (first * 8) as u64,
                     bytemuck::cast_slice(&self.visible[first..cursor]),
@@ -299,7 +299,7 @@ impl Culling {
 
     fn transparency(
         &mut self,
-        gpu: &VulkanDevice,
+        gpu: &mut VulkanDevice,
         buffer: Buffer,
         groups: &Groups,
         bounds: &[[Vec3; 2]],
@@ -336,7 +336,7 @@ impl Culling {
         }
         let count = self.transparent.len();
         if count > 0 {
-            gpu.upload_range(
+            gpu.upload_queued_range(
                 buffer,
                 (first * 8) as u64,
                 bytemuck::cast_slice(&self.visible[first..first + count]),
