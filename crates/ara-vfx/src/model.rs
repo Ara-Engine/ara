@@ -83,6 +83,27 @@ pub struct StackModule {
     /// Module field to parameter address. Values must match that field's exact type.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub bindings: BTreeMap<String, String>,
+    /// Whether the module runs. A disabled module keeps its name, position, settings
+    /// and bindings, but simulation, code generation and rendering skip it.
+    #[serde(default = "enabled", skip_serializing_if = "is_enabled")]
+    pub enabled: bool,
+}
+impl StackModule {
+    /// An enabled module with no parameter bindings.
+    pub fn new(name: impl Into<String>, module: Module) -> Self {
+        Self {
+            name: name.into(),
+            module,
+            bindings: BTreeMap::new(),
+            enabled: true,
+        }
+    }
+}
+fn enabled() -> bool {
+    true
+}
+fn is_enabled(enabled: &bool) -> bool {
+    *enabled
 }
 /// Processing stages, always evaluated in this order.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -213,6 +234,7 @@ impl Effect {
         Ok(ara_json::to_canonical_string(&encode(self)?))
     }
     /// Resolve typed instance overrides and bindings into a detached executable effect.
+    /// Disabled modules are left out: this is what simulation and code generation run.
     pub fn resolve(&self, overrides: &BTreeMap<String, Value>) -> Result<Self, Diagnostic> {
         let mut values = self
             .parameters
@@ -229,6 +251,12 @@ impl Effect {
             values.insert(key.clone(), value);
         }
         let mut result = self.clone();
+        // Disabled modules stay authored but never execute.
+        for emitter in &mut result.emitters {
+            for stage in Stacks::STAGES {
+                emitter.stacks.get_mut(stage).retain(|item| item.enabled);
+            }
+        }
         for emitter in &mut result.emitters {
             for stage in Stacks::STAGES {
                 for item in emitter.stacks.get_mut(stage) {

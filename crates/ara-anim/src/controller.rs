@@ -76,6 +76,34 @@ pub(crate) struct Scratch {
     pub root: RootMotion,
 }
 
+/// What an animator is doing, for tools (the editor's live state machine). Indexes
+/// follow the controller's states and parameters in name order.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Status {
+    /// The playing state, an index into the states sorted by name.
+    pub state: usize,
+    /// Ticks into the playing state, in the clips' timebase.
+    pub time: u64,
+    /// The playing state's cycle length in ticks.
+    pub duration: u32,
+    /// A cross-fade in progress.
+    pub fade: Option<FadeStatus>,
+    /// Current parameter values, in name order.
+    pub parameters: Vec<ParameterValue>,
+}
+/// A cross-fade in progress.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FadeStatus {
+    /// The state being faded to (index into the states sorted by name).
+    pub target: usize,
+    /// Ticks elapsed.
+    pub elapsed: u32,
+    /// Total cross-fade ticks.
+    pub duration: u32,
+}
+
 /// Per-entity playback state and preallocated derived buffers. Keep this in ECS.
 /// Programs and cooked assets are shared immutable resources, never cloned per tick.
 #[derive(Debug)]
@@ -187,6 +215,21 @@ impl Animator {
     /// Borrows scalar outputs in Controller::curve_properties order.
     pub fn curves(&self) -> &[f32] {
         &self.curves
+    }
+    /// The playing state, its time, any cross-fade and the parameters, for tools.
+    pub fn status(&self, controller: &Controller) -> Status {
+        let lane = self.state.lane;
+        Status {
+            state: lane.state,
+            time: lane.time,
+            duration: controller.states.get(lane.state).map_or(0, |s| s.duration),
+            fade: self.state.fade.map(|fade| FadeStatus {
+                target: fade.target.state,
+                elapsed: fade.elapsed,
+                duration: fade.duration,
+            }),
+            parameters: self.state.parameters.clone(),
+        }
     }
     /// Creates rollback storage. Use snapshot_into to reuse it on subsequent ticks.
     pub fn snapshot(&self) -> Snapshot {

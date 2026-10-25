@@ -69,6 +69,7 @@ impl Shell {
         if let Some(canvas) = &mut self.canvas {
             canvas.diagnostics(&diagnostics, &mut self.text);
         }
+        self.node_previews(editor, &doc, material.as_ref());
         out.push_str("<panel id='material-content' class='tool-body'>");
         out.push_str(&format!(
             "<panel id='material-side' class='tool-side' style='width:{SIDE}px'>"
@@ -85,6 +86,69 @@ impl Shell {
         out.push_str("</panel></panel>");
         self.material_status(material.as_ref(), &diagnostics, used, out);
         Ok(())
+    }
+
+    /// In-node previews: derived when the graph changes (at most `node_preview::MAX`),
+    /// queued on their own worker and assigned as renders land; until then each node
+    /// keeps its last good image. Dropped requests are retried on the next rebuild.
+    fn node_previews(
+        &mut self,
+        editor: &Editor,
+        doc: &str,
+        material: Option<&ara_material::Material>,
+    ) {
+        use crate::asset_tools::{node_preview, thumbnails};
+        let Some(canvas) = self.canvas.as_mut() else {
+            return;
+        };
+        canvas.show_previews(!self.node_previews.hidden, &mut self.text);
+        let pixels = (2. * crate::graph::PREVIEW) as u32;
+        let identity = (doc.to_owned(), editor.host.store().revision());
+        if self.node_previews.revision.as_ref() != Some(&identity) {
+            self.node_previews.revision = Some(identity);
+            self.node_previews.requests.clear();
+            if let Some(material) = material {
+                for node in canvas.preview_nodes().take(node_preview::MAX) {
+                    if let Some((derived, shot)) = node_preview::derive(material, node) {
+                        let key = thumbnails::Thumbnails::material_key(&derived, shot, pixels);
+                        self.node_previews
+                            .requests
+                            .insert(node.to_owned(), (key, derived, shot));
+                    }
+                }
+            }
+        }
+        if self.node_previews.hidden {
+            return;
+        }
+        let path = editor
+            .host
+            .store()
+            .workspace()
+            .path_of(doc)
+            .unwrap_or("material");
+        for (node, (key, derived, shot)) in &self.node_previews.requests {
+            match self.thumbnail_slots.get(key) {
+                Some(slot) => {
+                    canvas
+                        .previews
+                        .insert(node.clone(), thumbnails::image_id(*slot));
+                }
+                None => self
+                    .thumbnails
+                    .request_material(path, key, derived, *shot, pixels),
+            }
+        }
+    }
+
+    /// Whether every derived in-node preview has rendered (capture routes).
+    pub(crate) fn node_previews_ready(&self) -> bool {
+        !self.node_previews.requests.is_empty()
+            && self
+                .node_previews
+                .requests
+                .values()
+                .all(|(key, ..)| self.thumbnail_slots.contains_key(key))
     }
 
     /// The live preview (a checked render of the current graph) and its shape.

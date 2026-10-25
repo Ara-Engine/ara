@@ -1,14 +1,9 @@
 //! Art direction over the reusable sample motion stacks, outside runtime code.
 use crate::*;
 use ara_material::Domain;
-use std::collections::BTreeMap;
 
 fn item(name: &str, module: Module) -> StackModule {
-    StackModule {
-        name: name.into(),
-        module,
-        bindings: BTreeMap::new(),
-    }
+    StackModule::new(name, module)
 }
 fn appearance(
     e: &mut Emitter,

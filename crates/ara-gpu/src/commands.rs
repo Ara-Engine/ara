@@ -56,6 +56,16 @@ pub enum Command {
         /// Pixel extent.
         size: [u32; 2],
     },
+    /// Clears a rectangle of the rendering scope's depth attachment to `depth`
+    /// (reversed-Z far is zero), leaving the rest: one shadow-atlas tile.
+    ClearDepth {
+        /// Top-left pixel.
+        origin: [u32; 2],
+        /// Pixel extent, within the rendering scope.
+        size: [u32; 2],
+        /// Clear value.
+        depth: f32,
+    },
     /// Indexed mesh draw.
     Draw(Draw),
     /// One GPU-generated non-indexed instanced draw (four u32 argument words).

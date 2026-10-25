@@ -30,7 +30,11 @@ pub fn cook_source(effect: &Effect, materials: Option<&[Material]>) -> Result<St
             .replace("Sample(linearSampler,", "Sample(samplers[0],"),
     );
     source.push_str(&ara_vfx::generate(effect).map_err(|d| anyhow::anyhow!("{d:?}"))?);
-    for (i, e) in effect.emitters.iter().enumerate() {
+    // Render domains come from the modules that run (disabled ones are skipped).
+    let active = effect
+        .resolve(&Default::default())
+        .map_err(|d| anyhow::anyhow!("{d:?}"))?;
+    for (i, e) in active.emitters.iter().enumerate() {
         let domain = e
             .stacks
             .render

@@ -27,6 +27,8 @@ const ROW: f32 = 22.;
 const PAD: f32 = 6.;
 /// State-machine state size.
 const STATE: [f32; 2] = [168., 44.];
+/// In-node preview square (rendered at 2x by the thumbnail queue).
+pub const PREVIEW: f32 = 144.;
 
 /// Presentation camera, in graph coordinates independent of the host viewport.
 #[derive(
@@ -62,6 +64,8 @@ struct NodeView {
     width: f32,
     height: f32,
     ports: Vec<Pin>,
+    /// Top of the preview square, in graph units from the node top.
+    preview_top: Option<f32>,
 }
 impl NodeView {
     /// Top of the first pin row, below the header and any value line.
@@ -114,6 +118,16 @@ impl Theme {
         }
     }
 }
+/// A state machine's live state during Play.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Live {
+    /// The playing state's node.
+    pub node: String,
+    /// Normalized time through the playing state's cycle.
+    pub progress: f32,
+    /// A cross-fade in progress: the target state's node and the fade's progress.
+    pub fade: Option<(String, f32)>,
+}
 /// Graph edit produced only at a gesture boundary. Submit through the host command path.
 #[derive(Debug)]
 pub enum Edit {
@@ -134,6 +148,11 @@ pub struct Canvas {
     pub diagnostic: Option<String>,
     /// Edges drawn as selected (a transition chosen in the Animation sidebar).
     pub highlight: BTreeSet<String>,
+    /// In-node preview images by node ID (UI image handles; the last good one stays).
+    pub previews: BTreeMap<String, u32>,
+    /// The state machine's live state during Play (playing state, cross-fade).
+    pub live: Option<Live>,
+    show_previews: bool,
     graph: Graph,
     nodes: Vec<NodeView>,
     index: BTreeMap<String, usize>,
@@ -151,6 +170,9 @@ impl Canvas {
             selection: BTreeSet::new(),
             diagnostic: None,
             highlight: BTreeSet::new(),
+            previews: BTreeMap::new(),
+            live: None,
+            show_previews: true,
             graph,
             nodes: Vec::new(),
             index: BTreeMap::new(),
@@ -162,6 +184,20 @@ impl Canvas {
         };
         canvas.refresh_views(text);
         canvas
+    }
+    /// Show or hide in-node previews; node heights change, so views are rebuilt.
+    pub fn show_previews(&mut self, shown: bool, text: &mut ara_ui_text::TextSystem) {
+        if self.show_previews != shown {
+            self.show_previews = shown;
+            self.refresh_views(text);
+        }
+    }
+    /// Nodes that reserve an in-node preview, in graph order.
+    pub fn preview_nodes(&self) -> impl Iterator<Item = &str> {
+        self.nodes
+            .iter()
+            .filter(|n| n.preview_top.is_some())
+            .map(|n| n.id.as_str())
     }
     /// Replace a read-only graph snapshot after the host publishes ops.
     pub fn refresh(&mut self, graph: Graph, text: &mut ara_ui_text::TextSystem) {
@@ -188,7 +224,7 @@ impl Canvas {
     }
     /// Semantic node/port geometry for agents, including culled nodes and annotations.
     pub fn report(&self, rect: Box2) -> serde_json::Value {
-        serde_json::json!({"camera":self.camera,"selection":self.selection,"nodes":self.nodes.iter().map(|n|serde_json::json!({"id":n.id,"kind":n.kind,"title":n.look.title,"box":self.node_rect(n,rect),"ports":n.ports.iter().map(|pin|serde_json::json!({"port":pin.name,"label":pin.label,"direction":pin.direction,"type":pin.ty,"connected":pin.connected,"position":self.port_position(&Endpoint{node:n.id.clone(),port:pin.name.clone()},rect)})).collect::<Vec<_>>(),"error":self.errors.get(&n.id)})).collect::<Vec<_>>(),"editor":self.graph.editor})
+        serde_json::json!({"camera":self.camera,"selection":self.selection,"nodes":self.nodes.iter().map(|n|serde_json::json!({"id":n.id,"kind":n.kind,"title":n.look.title,"box":self.node_rect(n,rect),"ports":n.ports.iter().map(|pin|serde_json::json!({"port":pin.name,"label":pin.label,"direction":pin.direction,"type":pin.ty,"connected":pin.connected,"position":self.port_position(&Endpoint{node:n.id.clone(),port:pin.name.clone()},rect)})).collect::<Vec<_>>(),"error":self.errors.get(&n.id)})).collect::<Vec<_>>(),"editor":self.graph.editor,"live":self.live.as_ref().map(|l|serde_json::json!({"node":l.node,"progress":l.progress,"fade":l.fade}))})
     }
     fn refresh_views(&mut self, text: &mut ara_ui_text::TextSystem) {
         self.nodes.clear();
@@ -201,34 +237,16 @@ impl Canvas {
             .flat_map(|edge| [&edge.from, &edge.to])
             .map(|endpoint| (endpoint.node.as_str(), endpoint.port.as_str()))
             .collect::<BTreeSet<_>>();
-        for (index, (id, node)) in self.graph.nodes.iter().enumerate() {
+        for (id, node) in &self.graph.nodes {
             let look = style::look(&self.graph, id, node);
+            // Unplaced nodes (text-authored) are laid out below, once heights are known.
             let position = self
                 .graph
                 .editor
                 .positions
                 .get(id)
                 .copied()
-                .unwrap_or_else(|| {
-                    if self.graph.header.domain == "material" && self.graph.nodes.len() < 12 {
-                        if id == "n_output" {
-                            [320., 112.]
-                        } else {
-                            [
-                                0.,
-                                self.graph
-                                    .nodes
-                                    .keys()
-                                    .filter(|key| key.as_str() != "n_output")
-                                    .position(|key| key == id)
-                                    .unwrap_or(index) as f32
-                                    * 136.,
-                            ]
-                        }
-                    } else {
-                        [(index % 4) as f32 * 256., (index / 4) as f32 * 196.]
-                    }
-                });
+                .unwrap_or([f32::NAN; 2]);
             let ports = node
                 .ports
                 .iter()
@@ -245,13 +263,18 @@ impl Canvas {
                 .filter(|p| p.direction == Direction::Input)
                 .count();
             let rows = inputs.max(ports.len() - inputs) as f32;
-            let (width, height) = match look.shape {
+            let (width, mut height) = match look.shape {
                 Shape::State => (STATE[0], STATE[1]),
                 Shape::Pins => (
                     WIDTH,
                     HEADER + if look.value.is_some() { VALUE } else { 0. } + PAD * 2. + rows * ROW,
                 ),
             };
+            let preview_top = (look.preview && self.show_previews).then(|| {
+                let top = height;
+                height += PREVIEW + PAD * 2.;
+                top
+            });
             for label in [&look.title, &look.caption]
                 .into_iter()
                 .chain(look.value.as_ref())
@@ -268,8 +291,10 @@ impl Canvas {
                 width,
                 height,
                 ports,
+                preview_top,
             });
         }
+        self.layout_unplaced();
         let transitions = self.graph.header.payload.get("transitions");
         for (id, edge) in &self.graph.edges {
             let label = transitions
@@ -302,6 +327,78 @@ impl Canvas {
         }
         self.selection
             .retain(|id| self.graph.nodes.contains_key(id));
+        self.previews
+            .retain(|id, _| self.graph.nodes.contains_key(id));
+    }
+    /// Lay out nodes without a stored position (text-authored graphs) left to right:
+    /// each node sits one column before its nearest consumer, so inputs and constants
+    /// land next to what uses them, and lines up with its consumers' average height.
+    /// Stored positions are never moved.
+    fn layout_unplaced(&mut self) {
+        if self.nodes.iter().all(|n| n.position[0].is_finite()) {
+            return;
+        }
+        let count = self.nodes.len();
+        let mut consumers = vec![Vec::new(); count];
+        for edge in self.graph.edges.values() {
+            if let (Some(&from), Some(&to)) = (
+                self.index.get(&edge.from.node),
+                self.index.get(&edge.to.node),
+            ) && from != to
+            {
+                consumers[from].push(to);
+            }
+        }
+        // Longest distance to a sink; bounded rounds also terminate on cycles.
+        let mut reach = vec![0usize; count];
+        for _ in 0..count.min(64) {
+            let mut changed = false;
+            for (from, tos) in consumers.iter().enumerate() {
+                for &to in tos {
+                    if reach[from] < reach[to] + 1 {
+                        reach[from] = reach[to] + 1;
+                        changed = true;
+                    }
+                }
+            }
+            if !changed {
+                break;
+            }
+        }
+        let last = reach.iter().copied().max().unwrap_or(0);
+        // Right to left: a column's consumers are already placed.
+        for column in (0..=last).rev() {
+            let mut members = (0..count)
+                .filter(|&i| last - reach[i] == column && !self.nodes[i].position[0].is_finite())
+                .map(|i| {
+                    let centres = consumers[i]
+                        .iter()
+                        .map(|&c| &self.nodes[c])
+                        .filter(|c| c.position[1].is_finite())
+                        .map(|c| c.position[1] + c.height * 0.5)
+                        .collect::<Vec<_>>();
+                    let target = if centres.is_empty() {
+                        f32::NAN
+                    } else {
+                        centres.iter().sum::<f32>() / centres.len() as f32
+                    };
+                    (i, target)
+                })
+                .collect::<Vec<_>>();
+            members.sort_by(|a, b| a.1.total_cmp(&b.1).then(a.0.cmp(&b.0)));
+            let mut floor = f32::NEG_INFINITY;
+            for (i, target) in members {
+                let node = &mut self.nodes[i];
+                let wanted = if target.is_finite() {
+                    target - node.height * 0.5
+                } else {
+                    floor.max(0.)
+                };
+                let y = wanted.max(floor);
+                node.position = [column as f32 * (WIDTH + 72.), y];
+                floor = y + node.height + 24.;
+            }
+        }
     }
     /// Borrow the current model for domain inspectors and commands.
     pub fn graph(&self) -> &Graph {

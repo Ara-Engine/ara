@@ -26,7 +26,7 @@ use std::path::{Path, PathBuf};
 const ALBEDO: usize = 0;
 const NORMAL: usize = 1;
 const MATERIAL: usize = 2;
-const WORLD: usize = 3;
+const EMISSIVE: usize = 3;
 const ID: usize = 4;
 const DEPTH: usize = 5;
 const HDR: usize = 6;
@@ -439,7 +439,8 @@ impl Renderer {
             },
         )
     }
-    /// View targets; the shadow atlas holds 2x2 cascades of `shadow` texels.
+    /// View targets: the compact G-buffer (decoded by raster.slangh's gbuffer*
+    /// helpers), depth, ID, HDR, TAA histories, output and motion.
     fn targets(gpu: &mut VulkanDevice, size: [u32; 2]) -> Result<Targets> {
         let mut allocated = Vec::new();
         let result = (|| {
@@ -448,6 +449,11 @@ impl Renderer {
             let mut sampled = Vec::new();
             for target in 0..TARGET_COUNT {
                 let format = match target {
+                    // The compact G-buffer (raster.slangh gbuffer* helpers).
+                    ALBEDO => vk::Format::R8G8B8A8_SRGB,
+                    NORMAL => vk::Format::R16G16_UNORM,
+                    MATERIAL => vk::Format::R8G8B8A8_UNORM,
+                    EMISSIVE => vk::Format::B10G11R11_UFLOAT_PACK32,
                     ID => vk::Format::R32_SFLOAT,
                     DEPTH => vk::Format::D32_SFLOAT,
                     OUTPUT => vk::Format::R8G8B8A8_UNORM,

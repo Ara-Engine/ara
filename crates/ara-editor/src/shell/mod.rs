@@ -40,6 +40,7 @@ mod inspector_panel;
 mod log_panels;
 mod material_panel;
 mod memo;
+pub(crate) use animation_panel::LiveChange;
 pub(crate) use log_panels::LogView;
 mod material_inspector;
 pub mod overlay;
@@ -119,6 +120,10 @@ pub struct Shell {
     pub(crate) game_start_failed: bool,
     /// The Material tool shows its DSL source instead of the node graph.
     pub(crate) material_source_view: bool,
+    /// In-node material previews (requests and the show/hide toggle).
+    pub(crate) node_previews: crate::asset_tools::node_preview::NodePreviews,
+    /// The running animator the Animation page follows during Play.
+    pub(crate) animation_live: animation_panel::AnimationLive,
     /// Colour swatches outside the Inspector (material parameters): node id and
     /// colour, painted after layout like the Inspector's.
     value_swatches: Vec<(String, ara_ui::style::Color)>,
@@ -147,6 +152,8 @@ pub struct Shell {
     pub(crate) log_view: LogView,
     /// Console row whose details are expanded (bus sequence number).
     pub(crate) console_open: Option<u64>,
+    /// Profiler scope outlined in the timeline (picked in the Scopes table).
+    pub(crate) profile_scope: Option<String>,
     /// Problems whose "Why" explanation is expanded.
     pub(crate) explained_problems: std::collections::BTreeSet<u64>,
     /// Failures found while polling (thumbnails), logged by the window owner.
@@ -396,10 +403,13 @@ impl Shell {
             game_start: None,
             game_start_failed: false,
             material_source_view: false,
+            node_previews: Default::default(),
+            animation_live: Default::default(),
             value_swatches: Vec::new(),
             nested_swatches: Vec::new(),
             host_problems: true,
             console_open: None,
+            profile_scope: None,
             explained_problems: std::collections::BTreeSet::new(),
             hierarchy_view: None,
             hierarchy_surface: None,
@@ -1004,14 +1014,23 @@ impl Shell {
     /// Paint-time decorations shared by every surface. They are spliced in under the
     /// popup layer (menus, palette, dialogs, tooltips), which stays on top.
     fn paint_decorations(&mut self) {
-        let start = self.ui.display.commands.len();
+        let mut start = self.ui.display.commands.len();
         self.paint_swatches();
         self.paint_polish();
-        self.paint_graph();
+        // The canvas splices in under its own panel, inside the dock tree: indices
+        // after that point (`start`, and the popup start measured before painting)
+        // move by what it inserted.
+        let (canvas_at, inserted) = self.paint_graph();
+        if canvas_at <= start {
+            start += inserted;
+        }
         self.paint_drop_preview();
-        if let Some(at) = self.popup_start()
+        if let Some(mut at) = self.popup_start()
             && at < start
         {
+            if canvas_at <= at {
+                at += inserted;
+            }
             let decorations: Vec<_> = self.ui.display.commands.drain(start..).collect();
             self.ui.display.commands.splice(at..at, decorations);
         }

@@ -11,7 +11,6 @@ struct Turn {
     key: String,
     author: String,
     why: String,
-    revision: u64,
     txns: Vec<ara_ops::TxnId>,
     undone: bool,
 }
@@ -30,7 +29,7 @@ impl Shell {
             self.bind_command(&view, "agents.view", target.clone());
             self.bind_command(&follow, "agents.follow", target);
             let following = editor.state.follow.as_ref() == Some(id);
-            out.push_str(&format!("<panel id='presence-{id}' class='presence-pill'><panel id='presence-dot-{id}' class='presence-dot' /><text id='presence-name-{id}' class='fg' text='{}' /><button id='{view}' class='ghost icon-button' label='View' description='Jump to what {} sees, once' action='Dispatch'>{}</button><button id='{follow}' class='{} icon-button' label='{}' description='{}' action='Dispatch'>{}</button></panel>",escape(&name),escape(&name),icons::icon(&view,"eye"),if following{"selected"}else{"ghost"},if following{"Stop following"}else{"Follow"},if following{"Stop following".to_owned()}else{format!("Follow {name}'s view")},if following{icons::icon_in(&follow,"bot","on-selection")}else{icons::icon(&follow,"bot")}));
+            out.push_str(&format!("<panel id='presence-{id}' class='presence-pill'><panel id='presence-dot-{id}' class='presence-dot' /><text id='presence-name-{id}' class='fg' text='{}' /><button id='{view}' class='ghost icon-button' label='View' description='Jump to what {} sees, once' action='Dispatch'>{}</button><button id='{follow}' class='{} icon-button' label='{}' description='{}' action='Dispatch'>{}</button></panel>",escape(&name),escape(&name),icons::icon(&view,"eye"),if following{"selected"}else{"ghost"},if following{"Stop following"}else{"Follow"},escape(&if following{"Stop following".to_owned()}else{format!("Follow {name}'s view")}),if following{icons::icon_in(&follow,"bot","on-selection")}else{icons::icon(&follow,"bot")}));
         }
         out.push_str("</panel>");
         let turns = self.turns(editor);
@@ -65,17 +64,18 @@ impl Shell {
                 .first()
                 .and_then(|t| editor.activity.seen_at(t))
                 .map(|at| ago(now.duration_since(at)))
-                .unwrap_or_else(|| format!("r{}", turn.revision));
-            let mut counts = Vec::new();
-            if created > 0 {
-                counts.push(format!("+{created}"));
-            }
-            if changed > 0 {
-                counts.push(format!("~{changed}"));
-            }
-            if deleted > 0 {
-                counts.push(format!("−{deleted}"));
-            }
+                // Turns from before this editor session opened.
+                .unwrap_or_else(|| "earlier".into());
+            // What the turn did, in words: "2 edits · 1 new · 1 removed".
+            let counts: Vec<String> = [
+                (changed, "edit", "edits"),
+                (created, "new", "new"),
+                (deleted, "removed", "removed"),
+            ]
+            .into_iter()
+            .filter(|(n, ..)| *n > 0)
+            .map(|(n, one, many)| format!("{n} {}", if n == 1 { one } else { many }))
+            .collect();
             let expanded = self.expanded_turns.contains(&turn.key);
             let toggle = format!("{id}-toggle");
             self.bind_command(
@@ -90,7 +90,7 @@ impl Shell {
                 escape(&short_author(&turn.author).chars().next().map(String::from).unwrap_or_default()),
                 escape(&turn.why),
                 escape(&short_author(&turn.author)),
-                escape(&counts.join(" ")),
+                escape(&counts.join(" · ")),
             ));
             if turn.undone {
                 out.push_str(&format!(
@@ -201,7 +201,6 @@ impl Shell {
                         })
                     })
                     .unwrap_or_else(|| "Edit".into()),
-                revision: txn.result,
                 txns: vec![txn.id.clone()],
                 undone,
             });

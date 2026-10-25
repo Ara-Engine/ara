@@ -1509,6 +1509,17 @@ fn build() -> Vec<Spec> {
             },
         ),
         cmd(
+            "material.node_previews",
+            "Node Previews",
+            "image",
+            "",
+            "Show or hide each material node's value preview.",
+            |s, _, _| {
+                s.node_previews.hidden = !s.node_previews.hidden;
+                Ok(())
+            },
+        ),
+        cmd(
             "animation.view_states",
             "Animation States",
             "person-standing",
@@ -1965,6 +1976,7 @@ fn build() -> Vec<Spec> {
         cmd("vfx.module.up", "Move Module Up", "chevron-up", "Alt+Up", "Move the module earlier in its stage.", |s, e, t| vfx_module(s, e, t, "up")).when(vfx_module_target),
         cmd("vfx.module.down", "Move Module Down", "chevron-down", "Alt+Down", "Move the module later in its stage.", |s, e, t| vfx_module(s, e, t, "down")).when(vfx_module_target),
         cmd("vfx.module.duplicate", "Duplicate Module", "copy", "", "Insert a copy after the module.", |s, e, t| vfx_module(s, e, t, "duplicate")).when(vfx_module_target),
+        cmd("vfx.module.toggle", "Enable or Disable Module", "check", "", "Turn the module off without removing it, or back on.", |s, e, t| vfx_module(s, e, t, "toggle")).when(vfx_module_target),
         cmd("vfx.module.delete", "Delete Module", "trash", "", "Remove the module from its stage.", |s, e, t| vfx_module(s, e, t, "delete")).when(vfx_module_target),
         cmd("vfx.restart", "Restart Effect", "rotate-ccw", "", "Run the VFX preview again from tick 0.", |s, _, _| {
             s.vfx_stream.restart();
@@ -2009,6 +2021,12 @@ fn build() -> Vec<Spec> {
         cmd("profiler.record", "Record", "circle-dot", "", "Start recording editor frames.", |s, e, _| s.profiler_record(e)),
         cmd("profiler.freeze", "Freeze Capture", "pause", "", "Freeze and save the current trace.", |_, e, _| act(e, "editor.profile.freeze", json!({}))),
         cmd("profiler.baseline", "Set Baseline", "flag", "", "Freeze the trace as the comparison baseline.", |_, e, _| act(e, "editor.profile.freeze", json!({"baseline": true}))),
+        cmd("profiler.scope", "Outline Scope", "crosshair", "", "Outline a scope's spans in the Profiler timeline; again clears it.", |s, _, t| {
+            if let Target::Text(label) = t {
+                s.profile_scope = (s.profile_scope.as_deref() != Some(label.as_str())).then(|| label.clone());
+            }
+            Ok(())
+        }),
         cmd("profiler.compare", "Compare", "git-compare", "", "Compare the frozen capture with the baseline.", |_, e, _| act(e, "editor.workspace", json!({"compare": !e.state.profiler_compare})))
             .when(|c| Avail::Checked(c.state.profiler_compare)),
         cmd("settings.close", "Close Settings", "x", "", "Close the Settings window.", |_, e, _| act(e, "editor.layout.close", json!({"panel": "settings"}))),

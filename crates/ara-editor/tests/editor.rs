@@ -697,6 +697,20 @@ fn material_canvas_create_connect_and_keyboard_undo() {
         .unwrap();
     shell.sync_canvas(&editor);
     shell.frame().unwrap();
+    // The canvas splices in under its panel; decorations still move as a block, so
+    // clip pushes and pops stay balanced and in order.
+    let mut depth = 0i32;
+    for draw in &shell.ui.display.commands {
+        match draw {
+            ara_ui::paint::Draw::PushClip { .. } | ara_ui::paint::Draw::PushRoundedClip { .. } => {
+                depth += 1
+            }
+            ara_ui::paint::Draw::PopClip => depth -= 1,
+            _ => {}
+        }
+        assert!(depth >= 0, "a clip pop precedes its push");
+    }
+    assert_eq!(depth, 0, "unbalanced clips");
     let a = shell.graph_port(&from).unwrap();
     let b = shell.graph_port(&to).unwrap();
     shell.pointer = a;

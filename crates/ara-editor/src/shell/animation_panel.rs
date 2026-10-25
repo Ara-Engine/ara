@@ -2,6 +2,8 @@
 //! transitions in priority order on the left, the state machine (or pose graph)
 //! canvas in the middle, the selection in the Inspector and a status strip.
 //! Every edit replaces the controller through `editor.animation.controller.set`.
+//! During Play the page follows a running animator ([`AnimationLive`]): the playing
+//! state lights up on the canvas and parameters show their live values.
 use super::*;
 use ara_anim::graph::{
     BlendSample, ControllerData, Node, NodeKind, Parameter, ParameterKind, State, Transition,
@@ -9,6 +11,31 @@ use ara_anim::graph::{
 
 /// Width of the parameters + transitions column, in logical pixels.
 const SIDE: f32 = 240.;
+/// How often the page reads the running animator during Play.
+const LIVE_EVERY: std::time::Duration = std::time::Duration::from_millis(100);
+
+/// The running animator the Animation page follows during Play: the first scene
+/// entity (the selected one first) whose `Animator.controller` is the open controller,
+/// read through `play.read <entity>.AnimatorState`.
+#[derive(Default)]
+pub(crate) struct AnimationLive {
+    polled: Option<std::time::Instant>,
+    /// Scene revision and controller the entity was found for.
+    found: Option<(u64, String)>,
+    /// The followed entity's address.
+    entity: Option<String>,
+    /// The latest `AnimatorState` (`ara_anim::Status` as JSON).
+    status: Option<Value>,
+}
+
+/// What a live poll changed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum LiveChange {
+    /// Only the canvas moved (state progress): repaint.
+    Canvas,
+    /// The playing state, a parameter or the followed entity changed: rebuild.
+    Page,
+}
 
 impl Shell {
     pub(super) fn animation_panel(
@@ -134,11 +161,18 @@ impl Shell {
             .resource_item
             .as_deref()
             .and_then(|s| s.strip_prefix("transition:"));
+        let live = self
+            .animation_live
+            .status
+            .as_ref()
+            .filter(|_| !editor.state.animation_blends)
+            .and_then(|status| crate::authoring::animation::live(&controller, status));
         if let Some(canvas) = &mut self.canvas {
             canvas.highlight = picked
                 .map(crate::authoring::animation::transition_edge)
                 .into_iter()
                 .collect();
+            canvas.live = live;
         }
         out.push_str("<panel id='animation-content' class='tool-body'>");
         out.push_str(&format!(
@@ -150,6 +184,88 @@ impl Shell {
         out.push_str("<panel id='animation-main' class='tool-main'><panel id='graph-canvas' style='flex-grow:1;flex-basis:0px;background:var(--background);overflow:hidden' label='Animation controller canvas' /></panel></panel>");
         self.animation_status(&controller, out);
         Ok(())
+    }
+
+    /// Follow the open controller's running animator during Play, at most every
+    /// [`LIVE_EVERY`] and only while the Animation page is in front. Clears the live
+    /// state when Play stops.
+    pub(crate) fn poll_animation(&mut self, editor: &mut Editor) -> Option<LiveChange> {
+        let front = editor.state.playing.is_some()
+            && (in_front(&editor.state.layout, "animation")
+                || editor
+                    .state
+                    .floating
+                    .iter()
+                    .any(|f| in_front(&f.root, "animation")));
+        let doc = self.resource_for(editor, "animation").filter(|_| front);
+        let Some(doc) = doc else {
+            let was = self.animation_live.status.is_some();
+            self.animation_live = AnimationLive::default();
+            if let Some(canvas) = self.canvas.as_mut().filter(|c| c.live.is_some()) {
+                canvas.live = None;
+            }
+            return was.then_some(LiveChange::Page);
+        };
+        if self
+            .animation_live
+            .polled
+            .is_some_and(|at| at.elapsed() < LIVE_EVERY)
+        {
+            return None;
+        }
+        self.animation_live.polled = Some(std::time::Instant::now());
+        let revision = editor.host.store().revision();
+        let key = Some((revision, doc.clone()));
+        if self.animation_live.found != key {
+            self.animation_live.found = key;
+            self.animation_live.entity = animated_entity(editor, &doc);
+        }
+        let status = self.animation_live.entity.as_ref().and_then(|entity| {
+            let path = format!("{entity}.{}", ara_runtime::animation::STATUS);
+            let mut params = json!({ "paths": [path] });
+            if let Some(world) = &editor.play_world {
+                params["world"] = json!(world);
+            }
+            let read = editor.action("play.read", params).ok()?;
+            Some(read["values"][&path].clone()).filter(|v| v.is_object())
+        });
+        if status == self.animation_live.status {
+            return None;
+        }
+        // The page shows the playing state's name and rounded parameter values; only a
+        // change there rebuilds it. State progress moves the canvas alone.
+        let shown = |status: &Option<Value>| {
+            status.as_ref().map(|s| {
+                let parameters = s["parameters"].as_array().map(|p| {
+                    p.iter()
+                        .map(crate::authoring::animation::live_value)
+                        .collect::<Vec<_>>()
+                });
+                (s["state"].clone(), s["fade"]["target"].clone(), parameters)
+            })
+        };
+        let page = shown(&status) != shown(&self.animation_live.status);
+        self.animation_live.status = status;
+        let document = editor.host.store().workspace().doc(&doc)?;
+        let (_, controller) = crate::authoring::animation::controller(document).ok()?;
+        let live = self
+            .animation_live
+            .status
+            .as_ref()
+            .filter(|_| !editor.state.animation_blends)
+            .and_then(|status| crate::authoring::animation::live(&controller, status));
+        if let Some(canvas) = self
+            .canvas
+            .as_mut()
+            .filter(|_| self.canvas_doc.as_deref() == Some(doc.as_str()))
+        {
+            canvas.live = live;
+        }
+        Some(if page {
+            LiveChange::Page
+        } else {
+            LiveChange::Canvas
+        })
     }
 
     /// Switch between the state machine and the pose graph, framing the new projection.
@@ -172,6 +288,11 @@ impl Shell {
         if controller.parameters.is_empty() {
             out.push_str("<panel id='animation-params-empty-row' style='flex-shrink:0;padding:8px;padding-top:0px'><text id='animation-params-empty' class='caption' style='white-space:normal' text='No parameters. Add a blend state to create speed, or edit the controller source.' /></panel>");
         }
+        let live = self
+            .animation_live
+            .status
+            .as_ref()
+            .and_then(|s| s["parameters"].as_array());
         for (n, (name, parameter)) in controller.parameters.iter().enumerate() {
             let row = format!("anim-param-{n}");
             let item = format!("param:{name}");
@@ -183,6 +304,11 @@ impl Shell {
             };
             out.push_str(&format!("<panel id='{row}' class='param-row'><text id='{row}-name' class='fg' text='{}' /><text id='{row}-kind' class='caption' text='{kind}' /><panel id='{row}-fill' class='fill' />",escape(name)));
             let id = format!("{row}-value");
+            // Play: the running value replaces the initial-value editor.
+            if let Some(value) = live.and_then(|values| values.get(n)) {
+                out.push_str(&format!("<text id='{id}-live' class='success' text='{}' description='Live value in Play' /></panel>",escape(&crate::authoring::animation::live_value(value))));
+                continue;
+            }
             if !key.is_empty() {
                 self.bindings.insert(
                     ara_ui::source::stable_id(&id),
@@ -253,6 +379,18 @@ impl Shell {
                 icons::icon_in("animation-status-icon", "circle-check", "success")
             )),
             Err(error) => out.push_str(&format!("{}<text id='animation-status-state' class='destructive' text='Invalid' /><text id='animation-status-error' class='fg' text='{}' />",icons::icon_in("animation-status-icon","circle-x","destructive"),escape(&error.message))),
+        }
+        if let (Some(entity), Some(status)) =
+            (&self.animation_live.entity, &self.animation_live.status)
+        {
+            let state = status["state"]
+                .as_u64()
+                .and_then(|i| controller.states.keys().nth(i as usize))
+                .map_or("?", String::as_str);
+            let time = crate::authoring::animation::seconds(
+                u32::try_from(status["time"].as_u64().unwrap_or(0)).unwrap_or(u32::MAX),
+            );
+            out.push_str(&format!("<panel id='animation-status-live-sep' class='toolbar-sep' />{}<text id='animation-status-live' class='success' text='Playing {} · {time}' description='Live in Play on {}' />",icons::icon_in("animation-status-live-icon","play","success"),escape(state),escape(entity)));
         }
         let count = |n: usize, one: &str| format!("{n} {one}{}", if n == 1 { "" } else { "s" });
         out.push_str(&format!("<panel id='animation-status-fill' class='fill' /><text id='animation-status-stats' class='caption' text='{} · {} · {} · default {} · {}' description='Fixed step: {} ticks at the {} kHz clip timebase' /></panel>",count(controller.states.len(),"state"),count(controller.transitions.len(),"transition"),count(controller.parameters.len(),"parameter"),escape(if controller.initial.is_empty(){"none"}else{&controller.initial}),rate(controller.fixed_step),controller.fixed_step,crate::authoring::animation::ticks_per_second()/1000));
@@ -915,6 +1053,41 @@ fn blend_plot(out: &mut String, node: &Node, width: f32) {
 }
 
 /// A controller's fixed step as a rate ("60 Hz").
+/// Whether `panel` is the active tab of its area in `node`.
+fn in_front(node: &ara_ui::docking::DockNode, panel: &str) -> bool {
+    match node {
+        ara_ui::docking::DockNode::Area { tabs, active, .. } => {
+            tabs.get(*active).is_some_and(|t| t == panel)
+        }
+        ara_ui::docking::DockNode::Split { first, second, .. } => {
+            in_front(first, panel) || in_front(second, panel)
+        }
+    }
+}
+
+/// The scene entity Play animates with controller `doc`: the selected entity when its
+/// `Animator.controller` points at the document, else the first in address order.
+fn animated_entity(editor: &Editor, doc: &str) -> Option<String> {
+    let path = editor.host.store().workspace().path_of(doc)?;
+    let entities = crate::world::resolve(editor.host.store(), &editor.state.doc).ok()?;
+    let uses = |id: &String| {
+        entities[id]
+            .record
+            .get("Animator")
+            .and_then(|a| a.get("controller"))
+            .and_then(Value::as_str)
+            .and_then(|r| ara_schema::grammar::parse_ref(r).ok())
+            .is_some_and(|r| r.path == Some(path))
+    };
+    editor
+        .state
+        .selection
+        .iter()
+        .find(|id| entities.contains_key(*id) && uses(id))
+        .or_else(|| entities.keys().find(|id| uses(id)))
+        .cloned()
+}
+
 fn rate(step: u32) -> String {
     if step == 0 {
         return "no fixed step".into();

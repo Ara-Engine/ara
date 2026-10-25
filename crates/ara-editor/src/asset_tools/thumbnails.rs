@@ -3,6 +3,7 @@
 //! on a sphere, effects at a fixed tick) and is cached by content; each view gets a
 //! Lanczos resample at its pixel size with rounded corners, so the UI's single-mip
 //! bilinear sampler never minifies more than 2:1.
+use super::material_preview::Shot;
 use super::studio::{self, MASTER};
 use ara_render::Renderer;
 use image::RgbaImage;
@@ -25,56 +26,54 @@ pub(crate) struct Thumbnail {
 struct Request {
     path: String,
     key: String,
-    source: Option<Vec<u8>>,
-    plane: bool,
+    source: Source,
+    shot: Shot,
     pixels: u32,
+}
+/// What a request renders: the project file, unsaved bytes of it, or a derived material.
+enum Source {
+    File,
+    Bytes(Vec<u8>),
+    Material(Box<ara_material::Material>),
 }
 pub(crate) struct Thumbnails {
     send: SyncSender<Request>,
+    /// In-node previews queue on their own worker: behind nothing, blocking nothing.
+    nodes: SyncSender<Request>,
     receive: Receiver<Result<Thumbnail, (String, String)>>,
     requested: BTreeSet<String>,
 }
+/// Key prefix of in-node previews; their failures are not reported (the node's are).
+const NODE: &str = "live:node:";
 impl Thumbnails {
     pub fn new(root: &Path) -> Self {
-        let root = root.to_owned();
-        let (send, rx) = mpsc::sync_channel::<Request>(48);
-        let (tx, receive) = mpsc::sync_channel(8);
-        std::thread::spawn(move || {
-            let mut renderer = None;
-            for request in rx {
-                let result = match master(
-                    &root,
-                    &request.path,
-                    request.source.as_deref(),
-                    request.plane,
-                    &mut renderer,
-                ) {
-                    Ok(image) => Ok(Thumbnail {
-                        key: request.key,
-                        image: present(&image, request.pixels),
-                    }),
-                    Err(error) => Err((request.key, error.to_string())),
-                };
-                if tx.send(result).is_err() {
-                    break;
-                }
-            }
-        });
+        let (send, requests) = mpsc::sync_channel::<Request>(48);
+        let (nodes, node_requests) = mpsc::sync_channel::<Request>(32);
+        let (results, receive) = mpsc::sync_channel(8);
+        worker(root.to_owned(), requests, results.clone());
+        worker(root.to_owned(), node_requests, results);
         Self {
             send,
+            nodes,
             receive,
             requested: BTreeSet::new(),
         }
     }
     /// An Assets grid tile, keyed by its project path.
     pub fn request(&mut self, path: &str) {
-        self.enqueue(path, path.into(), None, false, TILE);
+        self.enqueue(path, path.into(), Source::File, Shot::surface(false), TILE);
     }
     /// A larger view of a project asset (import preview), `pixels` square; returns
     /// its image key. Like live previews it survives browser refreshes as last good.
     pub fn request_sized(&mut self, path: &str, pixels: u32) -> String {
         let key = format!("live:{pixels}:{path}");
-        self.enqueue(path, key.clone(), None, false, pixels);
+        self.enqueue(
+            path,
+            key.clone(),
+            Source::File,
+            Shot::surface(false),
+            pixels,
+        );
         key
     }
     /// A preview of unsaved source (the material editor's live render); returns its key.
@@ -86,17 +85,46 @@ impl Thumbnails {
         pixels: u32,
     ) -> String {
         let key = format!("live:{}:{plane}:{pixels}", ara_asset::Digest::of(&source));
-        self.enqueue(path, key.clone(), Some(source), plane, pixels);
+        self.enqueue(
+            path,
+            key.clone(),
+            Source::Bytes(source),
+            Shot::surface(plane),
+            pixels,
+        );
         key
     }
-    fn enqueue(
+    /// The key of a derived material's preview (a graph node's value); identical
+    /// previews share it.
+    pub fn material_key(material: &ara_material::Material, shot: Shot, pixels: u32) -> String {
+        let text = ara_material::dsl::print(material).unwrap_or_default();
+        format!(
+            "{NODE}{}:{}:{pixels}",
+            ara_asset::Digest::of(text.as_bytes()),
+            shot.tag()
+        )
+    }
+    /// Queue a derived material's preview under its `material_key`; `path` is the
+    /// material it came from. A full queue drops it: call again to retry.
+    pub fn request_material(
         &mut self,
         path: &str,
-        key: String,
-        source: Option<Vec<u8>>,
-        plane: bool,
+        key: &str,
+        material: &ara_material::Material,
+        shot: Shot,
         pixels: u32,
     ) {
+        if !self.requested.contains(key) {
+            self.enqueue(
+                path,
+                key.into(),
+                Source::Material(Box::new(material.clone())),
+                shot,
+                pixels,
+            );
+        }
+    }
+    fn enqueue(&mut self, path: &str, key: String, source: Source, shot: Shot, pixels: u32) {
         if self.requested.contains(&key) {
             return;
         }
@@ -104,15 +132,23 @@ impl Thumbnails {
             path: path.into(),
             key: key.clone(),
             source,
-            plane,
+            shot,
             pixels: pixels.clamp(16, MASTER),
         };
-        if self.send.try_send(request).is_ok() {
+        let queue = if matches!(request.source, Source::Material(_)) {
+            &self.nodes
+        } else {
+            &self.send
+        };
+        if queue.try_send(request).is_ok() {
             self.requested.insert(key);
         }
     }
     pub fn poll(&mut self) -> impl Iterator<Item = Result<Thumbnail, (String, String)>> + '_ {
-        self.receive.try_iter().take(8)
+        self.receive
+            .try_iter()
+            .take(8)
+            .filter(|result| !matches!(result, Err((key, _)) if key.starts_with(NODE)))
     }
     pub fn invalidate_all(&mut self) {
         self.requested.clear();
@@ -122,13 +158,47 @@ impl Thumbnails {
     }
 }
 
+/// One thumbnail worker thread: renders requests in order and sends the results on.
+fn worker(
+    root: std::path::PathBuf,
+    requests: Receiver<Request>,
+    results: SyncSender<Result<Thumbnail, (String, String)>>,
+) {
+    std::thread::spawn(move || {
+        let mut renderer = None;
+        for request in requests {
+            let image = match request.source {
+                Source::Material(material) => derived(&root, &material, request.shot),
+                Source::Bytes(bytes) => master(
+                    &root,
+                    &request.path,
+                    Some(&bytes),
+                    request.shot,
+                    &mut renderer,
+                ),
+                Source::File => master(&root, &request.path, None, request.shot, &mut renderer),
+            };
+            let result = match image {
+                Ok(image) => Ok(Thumbnail {
+                    key: request.key,
+                    image: present(&image, request.pixels),
+                }),
+                Err(error) => Err((request.key, error.to_string())),
+            };
+            if results.send(result).is_err() {
+                break;
+            }
+        }
+    });
+}
+
 /// The square master image for a source, from the content-addressed cache when the
 /// source, its import settings and its dependencies are unchanged.
 fn master(
     root: &Path,
     path: &str,
     override_source: Option<&[u8]>,
-    plane: bool,
+    shot: Shot,
     renderer: &mut Option<Renderer>,
 ) -> anyhow::Result<RgbaImage> {
     let source = root.join(path).canonicalize()?;
@@ -151,7 +221,7 @@ fn master(
         dependency_bytes(root, source.parent().unwrap_or(root), &value, &mut inputs);
     }
     inputs.extend(format!("ara-thumb-v4-{MASTER}").as_bytes());
-    inputs.push(u8::from(plane));
+    inputs.push(shot.tag());
     let key = ara_asset::Digest::of(&inputs).to_string();
     let cache = root.join(".ara/cache/thumbnails");
     std::fs::create_dir_all(&cache)?;
@@ -192,10 +262,31 @@ fn master(
                 }
                 ara_material::Material::from_graph(&graph).map_err(|d| anyhow::anyhow!("{d:?}"))?
             };
-            super::material_preview::capture(root, &material, plane)?
+            super::material_preview::capture(root, &material, shot)?
         }
         _ => anyhow::bail!("no thumbnail decoder for {extension}"),
     };
+    image.save(&target)?;
+    Ok(image)
+}
+
+/// A derived material's preview, cached by its text and shot like file masters.
+fn derived(
+    root: &Path,
+    material: &ara_material::Material,
+    shot: Shot,
+) -> anyhow::Result<RgbaImage> {
+    let text = ara_material::dsl::print(material).map_err(|d| anyhow::anyhow!("{d:?}"))?;
+    let mut inputs = text.into_bytes();
+    inputs.extend(format!("ara-node-preview-v1-{MASTER}").as_bytes());
+    inputs.push(shot.tag());
+    let cache = root.join(".ara/cache/thumbnails");
+    std::fs::create_dir_all(&cache)?;
+    let target = cache.join(format!("{}.png", ara_asset::Digest::of(&inputs)));
+    if target.exists() {
+        return Ok(image::open(target)?.to_rgba8());
+    }
+    let image = super::material_preview::capture(root, material, shot)?;
     image.save(&target)?;
     Ok(image)
 }
@@ -305,6 +396,11 @@ fn dependency_bytes(root: &Path, relative: &Path, value: &serde_json::Value, byt
 /// Stable image resource identity; thumbnail resources use a bounded rotating slot pool.
 pub(crate) fn image_name(slot: usize) -> String {
     format!("asset-thumbnail-{slot}")
+}
+
+/// The UI image handle of a slot (what `<image src>` resolves `image_name` to).
+pub(crate) fn image_id(slot: usize) -> u32 {
+    ara_ui::source::stable_id(&image_name(slot)) as u32 & 0x7fff_ffff
 }
 
 #[cfg(test)]

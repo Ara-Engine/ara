@@ -49,6 +49,8 @@ pub(crate) struct LookFrame {
     pub far_info: [u32; 4],
     /// Sampled cascade maps, in cascade order.
     pub cascade_maps: [u32; 4],
+    /// x: terrain detail distance in metres (`Quality::terrain_detail`).
+    pub terrain: [f32; 4],
 }
 
 /// Per-frame inputs that are not part of the authored look.
@@ -131,6 +133,7 @@ impl LookFrame {
             far_shadow: [[0.; 4]; 4],
             far_info: [0; 4],
             cascade_maps: [0; 4],
+            terrain: [0.; 4],
         }
     }
 }

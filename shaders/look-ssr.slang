@@ -6,9 +6,6 @@
 // reflections by its confidence.
 #include "raster.slangh"
 #include "look.slangh"
-float3 ssrWorldAt(Frame f,float2 p,float depth){
-    float2 uv=p/float2(f.extent.xy);float4 h=mul(f.inverseVp,float4(uv.x*2-1,1-uv.y*2,depth,1));return h.xyz/h.w;
-}
 // Pixel position (and reversed-Z depth) of a world point in the current frame.
 float3 ssrProject(Frame f,float3 world){
     float4 c=mul(f.vp,float4(world,1));float3 n=c.xyz/c.w;return float3((n.x*0.5+0.5)*f.extent.x,(0.5-n.y*0.5)*f.extent.y,n.z);
@@ -36,9 +33,9 @@ void ssrPyramidMain(uint3 tid:SV_DispatchThreadID){
 [shader("compute")][numthreads(8,8,1)]
 void ssrTraceMain(uint3 tid:SV_DispatchThreadID){
     Frame f=frame();Look l=look(f);uint2 half=(f.extent.xy+1)/2;if(any(tid.xy>=half))return;
-    int2 p=int2(tid.xy)*2;float4 world=pixel(f.gbuffer.w,p);float roughness=pixel(f.gbuffer.y,p).w;float4 result=0;
-    if(world.w>0 && roughness<l.ssr.x){
-        float3 n=normalize(pixel(f.gbuffer.y,p).xyz),v=normalize(world.xyz-f.camera.xyz),r=reflect(v,n);
+    int2 p=int2(tid.xy)*2;bool covered;float3 world=gbufferWorld(f,p,covered);float roughness=gbufferMaterial(f,p).x;float4 result=0;
+    if(covered && roughness<l.ssr.x){
+        float3 n=normalize(gbufferNormal(f,p)),v=normalize(world.xyz-f.camera.xyz),r=reflect(v,n);
         // Clip the ray to the near plane, then march its screen-space projection.
         float distance=length(world.xyz-f.camera.xyz),reach=min(l.ssr.y,distance*2);
         float3 a=ssrProject(f,world.xyz+n*0.01),b=ssrProject(f,world.xyz+r*reach);
@@ -55,7 +52,7 @@ void ssrTraceMain(uint3 tid:SV_DispatchThreadID){
                 for(uint k=0;k<5;k++){float m=(lo+hi)*0.5;float3 c=lerp(a,b,m);float s=pixel(f.extra.x,int2(c.xy)).x;if(c.z<s)hi=m;else lo=m;}
                 at=lerp(a,b,hi);float s=pixel(f.extra.x,int2(at.xy)).x;
                 // Reject hits behind thick geometry: compare world distances.
-                float3 surface=ssrWorldAt(f,floor(at.xy)+0.5,s),ray=ssrWorldAt(f,at.xy,at.z);
+                float3 surface=worldAtDepth(f,floor(at.xy)+0.5,s),ray=worldAtDepth(f,at.xy,at.z);
                 hit=length(surface-ray)<max(0.1,length(surface-f.camera.xyz)*0.02);
                 break;
             }
@@ -63,7 +60,7 @@ void ssrTraceMain(uint3 tid:SV_DispatchThreadID){
         }
         if(hit){
             // Last frame's colour at the hit, reprojected.
-            float3 hitWorld=ssrWorldAt(f,floor(at.xy)+0.5,pixel(f.extra.x,int2(at.xy)).x);
+            float3 hitWorld=worldAtDepth(f,floor(at.xy)+0.5,gbufferDepth(f,int2(at.xy)));
             float4 h=mul(f.previousVp,float4(hitWorld,1));float2 uv=float2(h.x/h.w*0.5+0.5,0.5-h.y/h.w*0.5);
             if(h.w>0 && all(uv>0) && all(uv<1)){
                 // Cone footprint: the GGX lobe (half-angle ~ alpha) spreads over twice

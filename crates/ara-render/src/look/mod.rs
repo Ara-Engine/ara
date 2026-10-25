@@ -33,6 +33,15 @@ pub struct Quality {
     /// Local lights emissive surfaces become (patches cluster until they fit),
     /// within the scene's `MAX_LOCAL_LIGHTS`.
     pub emitter_lights: u32,
+    /// Projected geometric error, in pixels, a selected LOD may show; larger
+    /// values pick coarser LODs.
+    pub lod_pixels: f32,
+    /// Projected bound radius, in pixels, below which an instance is culled.
+    pub min_pixels: f32,
+    /// Distance in metres to which terrain splat layers sample their normal and
+    /// metal/roughness maps; beyond it (blended over a quarter more) they keep
+    /// colour maps and the metal/roughness maps' means. Zero: none, anywhere.
+    pub terrain_detail: f32,
 }
 impl Default for Quality {
     fn default() -> Self {
@@ -43,6 +52,9 @@ impl Default for Quality {
             gi_budget: 2048,
             bloom: true,
             emitter_lights: 8,
+            lod_pixels: 1.,
+            min_pixels: 1.5,
+            terrain_detail: 150.,
         }
     }
 }

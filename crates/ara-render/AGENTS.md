@@ -73,7 +73,7 @@ ECS; `Scene` is an immutable render extraction snapshot, not authoritative state
   light volume change, outer cascades snapped coarsely so they survive motion),
   a cached far map past them (`look::far`), half-res GTAO, half-res SSR (cone
   footprint into a colour pyramid of last frame), GI relight budget, bloom,
-  emitter light budget. Look images are allocated lazily (the bindless storage
+  emitter light budget, LOD/cull pixel budgets, terrain detail distance. Look images are allocated lazily (the bindless storage
   heap is shared). Probe GI is
   gathered at half resolution for G-buffer pixels.
 - `set_deferred_post` + `finish(color, sampled, state)`: temporally resolve and grade
@@ -102,6 +102,10 @@ linear multiplier. See README.md for the exact tone mapper and GPU measurements.
 The TAA history alone is RGBA16F and pre-exposed (`look.slangh` exposureState):
 history readers decode with the state's previous multiplier; look passes learn
 whether their input is history or linear HDR from root word 7.
+The G-buffer is compact: RGBA8 sRGB albedo + AO, RG16 octahedral normal, RGBA8
+roughness/metal, B10G11R11 emissive, R32 ID and RG16F motion; world positions are
+rebuilt from depth. Shaders read and write it only through raster.slangh's
+`gbuffer*` helpers, so the formats change there and in `Renderer::targets` together.
 Local light lists are tiled 16x16: `scene::MAX_LOCAL_LIGHTS` (256) per scene, the
 first `TILE_LIGHTS` (128) per tile. Spot lumens are point-equivalent (the cone
 masks), as in the path tracer; `Light::parameters.z` softens the near field and

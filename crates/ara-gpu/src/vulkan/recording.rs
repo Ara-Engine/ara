@@ -276,6 +276,7 @@ impl VulkanDevice {
         let mut bound = None;
         let mut color_formats = Vec::new();
         let mut depth_format = None;
+        let mut extent = [0u32; 2];
         for c in &list.commands {
             match c {
                 Command::Barrier(_) if rendering => {
@@ -331,7 +332,29 @@ impl VulkanDevice {
                         .as_ref()
                         .map(|a| self.images.get(a.image).map(|i| i.raw.format))
                         .transpose()?;
+                    extent = *size;
                     rendering = true;
+                }
+                Command::ClearDepth {
+                    origin,
+                    size,
+                    depth,
+                } => {
+                    let inside = (0..2).all(|i| {
+                        origin[i]
+                            .checked_add(size[i])
+                            .is_some_and(|end| end <= extent[i])
+                    });
+                    if !rendering
+                        || depth_format.is_none()
+                        || size.contains(&0)
+                        || !inside
+                        || !depth.is_finite()
+                    {
+                        return Err(GpuError::Contract(
+                            "Depth clear outside the rendering scope's depth attachment".into(),
+                        ));
+                    }
                 }
                 Command::EndRendering => {
                     if !rendering {

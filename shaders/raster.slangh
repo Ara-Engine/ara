@@ -47,5 +47,36 @@ float4 tex(uint index,float2 uv) {return textures[NonUniformResourceIndex(index)
 float4 envTex(uint index,float2 uv) {return textures[NonUniformResourceIndex(index)].SampleLevel(samplers[1],uv,0);}
 float4 historyTex(uint index,float2 uv) {return textures[NonUniformResourceIndex(index)].SampleLevel(samplers[2],uv,0);}
 float4 pixel(uint index,int2 p) {return textures[NonUniformResourceIndex(index)].Load(int3(p,0));}
+// World position at a (sub)pixel `position` and reversed-Z `depth`, through the
+// jittered inverse view-projection the G-buffer was drawn with.
+float3 worldAtDepth(Frame f,float2 position,float depth){
+    float2 uv=position/float2(f.extent.xy);float4 h=mul(f.inverseVp,float4(uv.x*2-1,1-uv.y*2,depth,1));return h.xyz/h.w;
+}
+// Octahedral unit-vector encoding into [0,1]^2 (G-buffer normals, probe atlases).
+float2 octEncode(float3 n){n/=abs(n.x)+abs(n.y)+abs(n.z);float2 p=n.xy;if(n.z<0)p=(1-abs(p.yx))*float2(p.x>=0?1:-1,p.y>=0?1:-1);return p*0.5+0.5;}
+float3 octDecode(float2 p){p=p*2-1;float3 n=float3(p,1-abs(p.x)-abs(p.y));float t=saturate(-n.z);n.xy+=float2(n.x>=0?-t:t,n.y>=0?-t:t);return normalize(n);}
+// The compact G-buffer (Renderer targets): RGBA8 sRGB albedo + material AO,
+// RG16 octahedral normal, RGBA8 roughness/metal, B10G11R11 emissive; positions
+// come from depth. The fill and forward outputs encode with gbufferEncode*, and
+// every consumer decodes through these, so the formats change in one place.
+// Base colour (rgb) and material ambient occlusion (a).
+float4 gbufferAlbedo(Frame f,int2 p){return pixel(f.gbuffer.x,p);}
+// Unit world normal (arbitrary where no surface was drawn).
+float3 gbufferNormal(Frame f,int2 p){return octDecode(pixel(f.gbuffer.y,p).xy);}
+// Perceptual roughness (x) and metalness (y).
+float2 gbufferMaterial(Frame f,int2 p){return pixel(f.gbuffer.z,p).xy;}
+// Emitted radiance.
+float3 gbufferEmissive(Frame f,int2 p){return pixel(f.gbuffer.w,p).rgb;}
+// Fill-side encodings; `alpha` is the forward pass's blend weight (one for opaque).
+float4 gbufferEncodeNormal(float3 n,float alpha){return float4(octEncode(n),0,alpha);}
+float4 gbufferEncodeMaterial(float roughness,float metal,float alpha){return float4(roughness,metal,0,alpha);}
+float4 gbufferEncodeEmissive(float3 emissive,float alpha){return float4(min(emissive,65000),alpha);}
+// Reversed-Z depth: zero where no opaque surface was drawn.
+float gbufferDepth(Frame f,int2 p){return pixel(f.extra.x,p).x;}
+// World position of pixel `p`'s opaque surface, rebuilt from depth; `covered` is
+// false where none was drawn.
+float3 gbufferWorld(Frame f,int2 p,out bool covered){
+    float depth=gbufferDepth(f,p);covered=depth>0;return worldAtDepth(f,float2(p)+0.5,depth);
+}
 float2 environmentUv(float3 d) {return float2(atan2(d.z,d.x)/(2*PI)+0.5,acos(clamp(d.y,-1.,1.))/PI);}
 float3 environmentDirection(float2 uv) {float phi=(uv.x-0.5)*2*PI;float theta=uv.y*PI;return float3(cos(phi)*sin(theta),cos(theta),sin(phi)*sin(theta));}

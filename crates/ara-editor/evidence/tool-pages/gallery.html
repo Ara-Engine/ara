@@ -16,18 +16,22 @@ figure img{width:100%;height:auto;display:block;border-radius:4px}figcaption{mar
 <main>
 <nav aria-label="Page"><span id="pages"></span><span class="sep"></span><span id="themes"></span></nav>
 <section class="shots">
-<figure><figcaption>Before · preview 4 (497e8dec)</figcaption><img id="before" alt="Before"></figure>
-<figure><figcaption>After · this branch</figcaption><img id="after" alt="After"></figure>
+<figure><figcaption id="before-caption"></figcaption><img id="before" alt="Before"></figure>
+<figure><figcaption id="after-caption"></figcaption><img id="after" alt="After"></figure>
 </section>
 <p style="color:#818181">1440×900 at 1×, captured offscreen by <code>--verify-panels</code>. See README.md for the method and the 2560×1440 set.</p>
 </main>
 <script>
-const pages=[["assets","Model thumbnail + Import"],["assets-samples","Material + VFX thumbnails"],["material","Material"],["material-add","Add node"],["vfx","VFX"],["animation-states","Animation states"],["animation-blends","Animation blends"]];
+// [key, label, before image prefix, after image prefix, before caption, after caption]
+const r1=["Before · preview 4 (497e8dec)","After · round 1"],r2=["Before · 7c728927 + dda5b934","After · round 2"];
+const pages=[["assets","Model thumbnail + Import","before/1440/assets","after/1440/assets",...r1],["assets-samples","Material + VFX thumbnails","before/1440/assets-samples","after/1440/assets-samples",...r1],["material","Material","before/1440/material","after/1440/material",...r1],["material-add","Add node","before/1440/material-add","after/1440/material-add",...r1],["vfx","VFX","before/1440/vfx","after/1440/vfx",...r1],["animation-states","Animation states","before/1440/animation-states","after/1440/animation-states",...r1],["animation-blends","Animation blends","before/1440/animation-blends","after/1440/animation-blends",...r1],
+["material-previews","In-node previews","after/1440/material","r2/after/1440/material-previews","Round 1 · no previews","After · in-node previews"],["vfx-enable","VFX module enable","after/1440/vfx","r2/after/1440/vfx","Round 1 · no enable","After · per-module checkbox"],
+["profiler","Profiler","r2/before/1440/profiler","r2/after/1440/profiler",...r2],["profiler-compare","Profiler compare","r2/before/1440/profiler-compare","r2/after/1440/profiler-compare",...r2],["console","Console","r2/before/1440/console","r2/after/1440/console",...r2],["problems","Problems","r2/before/1440/problems","r2/after/1440/problems",...r2],["agents","Agents","r2/before/1440/agents","r2/after/1440/agents",...r2],["settings","Preferences","r2/before/1440/settings","r2/after/1440/settings",...r2],["settings-project","Project Settings","r2/before/1440/settings-project","r2/after/1440/settings-project",...r2],["shortcuts","Keyboard shortcuts","r2/before/1440/shortcuts","r2/after/1440/shortcuts",...r2]];
 const themes=["dark","light"];let page=pages[0][0],theme="dark";
 function group(id,items,get,set){const el=document.getElementById(id);el.replaceChildren(...items.map(([key,label])=>{const b=document.createElement("button");b.textContent=label;b.onclick=()=>{set(key);render()};b.dataset.key=key;return b}));return el}
 const p=group("pages",pages,()=>page,k=>page=k),t=group("themes",themes.map(x=>[x,x[0].toUpperCase()+x.slice(1)]),()=>theme,k=>theme=k);
 function render(){for(const b of p.children)b.setAttribute("aria-pressed",b.dataset.key===page);for(const b of t.children)b.setAttribute("aria-pressed",b.dataset.key===theme);
-for(const side of["before","after"])document.getElementById(side).src=`${side}/1440/${page}-${theme}.webp`}
+const entry=pages.find(x=>x[0]===page);[["before",2,4],["after",3,5]].forEach(([side,image,caption])=>{document.getElementById(side).src=`${entry[image]}-${theme}.webp`;document.getElementById(`${side}-caption`).textContent=entry[caption]})}
 render();
 </script>
 </html>

@@ -426,6 +426,37 @@ fn demo_animation_document_is_canonical_and_current() {
 }
 
 #[test]
+fn the_fox_reports_its_live_animator_to_tools() {
+    let mut rt = runtime_with(3, |scene| scene);
+    let status = |rt: &Runtime, name: &str| {
+        let world = rt.world();
+        let fox = world
+            .iter_entities()
+            .find(|e| e.get::<Identity>().is_some_and(|id| id.0 == "e_fox"))
+            .unwrap()
+            .id();
+        ara_runtime::animation::read_status(world, fox, name)
+    };
+    rt.step(1, &[]).unwrap();
+    // States in name order: idle 0, move 1.
+    let idle = status(&rt, ara_runtime::animation::STATUS).unwrap();
+    assert_eq!(idle["state"], 0, "{idle}");
+    assert!(
+        status(&rt, "Animator").is_none(),
+        "only AnimatorState reads"
+    );
+    rt.step(60, &walk(60)).unwrap();
+    let walking = status(&rt, ara_runtime::animation::STATUS).unwrap();
+    assert_eq!(walking["state"], 1, "{walking}");
+    assert_eq!(walking["duration"], 44_800);
+    assert!(
+        walking["parameters"][0]["value"].as_f64().unwrap() > 0.15,
+        "{walking}"
+    );
+    assert!(walking["fault"].is_null(), "{walking}");
+}
+
+#[test]
 fn motion_matching_controller_drives_the_fox_deterministically() {
     let matched = |seed| {
         runtime_with(seed, |scene| {

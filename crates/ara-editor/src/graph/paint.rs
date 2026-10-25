@@ -227,7 +227,16 @@ impl Canvas {
             let related = self.selection.contains(&a.id)
                 || self.selection.contains(&b.id)
                 || self.highlight.contains(&wire.id);
-            let color = if related { theme.accent } else { theme.muted };
+            let fading = self.live.as_ref().is_some_and(|live| {
+                live.node == a.id && live.fade.as_ref().is_some_and(|(to, _)| *to == b.id)
+            });
+            let color = if fading {
+                theme.success
+            } else if related {
+                theme.accent
+            } else {
+                theme.muted
+            };
             let id = stable_id(&wire.id);
             if a.id == b.id {
                 // A self-transition loops over the top edge.
@@ -497,6 +506,25 @@ impl Canvas {
                 );
             }
         }
+        if let Some(top) = node.preview_top {
+            // The value as Shader Graph shows it; a quiet tile until the render lands.
+            let size = PREVIEW * z;
+            let tile = Box2 {
+                x: r.x + (r.w - size) * 0.5,
+                y: r.y + (top + PAD) * z,
+                w: size,
+                h: size,
+            };
+            match self.previews.get(&node.id) {
+                Some(image) => list.commands.push(Draw::Image {
+                    node: id,
+                    rect: tile,
+                    image: *image,
+                    tint: Color(255, 255, 255, 255),
+                }),
+                _ => fill(list, id, tile, size / 16., theme.raised),
+            }
+        }
         if let Some(error) = error {
             self.labels.paint(
                 list,
@@ -553,6 +581,45 @@ impl Canvas {
                 [r.x + (r.w - width) * 0.5, r.y + 24. * z],
                 small,
                 theme.muted,
+            );
+        }
+        // Play: the playing state rings in the live colour with its cycle along the
+        // bottom; a cross-fade target fills with the fade's progress.
+        let live = self.live.as_ref().and_then(|live| {
+            if live.node == node.id {
+                Some((live.progress, true))
+            } else {
+                live.fade
+                    .as_ref()
+                    .filter(|(to, _)| *to == node.id)
+                    .map(|(_, progress)| (*progress, false))
+            }
+        });
+        if let Some((progress, playing)) = live {
+            if playing {
+                border(list, id, grow(r, 3.), radius + 3., 2., theme.success);
+            }
+            let inset = radius.min(r.h * 0.5);
+            let track = Box2 {
+                x: r.x + inset,
+                y: r.y + r.h - 5. * z,
+                w: r.w - inset * 2.,
+                h: 2.5 * z,
+            };
+            fill(list, id, track, track.h * 0.5, alpha(theme.success, 50));
+            fill(
+                list,
+                id,
+                Box2 {
+                    w: track.w * progress.clamp(0., 1.),
+                    ..track
+                },
+                track.h * 0.5,
+                if playing {
+                    theme.success
+                } else {
+                    alpha(theme.success, 160)
+                },
             );
         }
         if selected || r.contains(self.pointer[0], self.pointer[1]) {

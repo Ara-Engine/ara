@@ -1,7 +1,7 @@
 # Tool pages: before and after
 
 Design: [`docs/design/editor-tool-pages.md`](../../../../docs/design/editor-tool-pages.md).
-Open `gallery.html` to compare each page side by side.
+Open `gallery.html` to compare each page side by side (round 1 and round 2).
 
 ## Method
 
@@ -51,9 +51,36 @@ node popup (`material-add-*`), and switches animation views through the toolbar.
 
 Canvas paint cost did not regress; the totals vary with the shared machine's load.
 
+## Round 2: node previews, module enable, Play, and the remaining tool panels
+
+Same method and machine. `r2/before/1440` is `7c728927` plus `dda5b934`: without that
+fix the Agents panel could not be built once an agent was connected (its Follow
+tooltip broke the markup), so there was nothing to capture. `r2/after/1440` is
+`abe931af`. In-node previews and the VFX checkbox are compared with round 1's after
+shots. The panels route now seeds the four panels: diagnostics on the bus, an agent
+presence and three agent turns, and Settings docked in the document area. Full PNG sets
+for both sizes are at `D:\AraBuild\tool-pages-evidence\r2-{before,after}`, and the
+2-{before,after}`, and the
+reviewed PNGs are in `target/tool-pages-png/r2`. The 500-node benchmark was not
+re-measured: these builds overlapped other compiles on the shared machine.
+
+| Page | Before | After |
+|---|---|---|
+| Material | No node previews | 144 px value previews on every operation node (sphere when the value depends on the surface, swatch otherwise); text-authored graphs laid out left to right |
+| VFX | A module could only be removed | An enable checkbox per module; a disabled one stays in place, dimmed, skipped by simulation, codegen and rendering |
+| Animation (Play) | Nothing live | The playing state rings green with its cycle; fades fill; parameters read live (not capturable offscreen: needs Play) |
+| Profiler | Cards: a mostly empty flame graph, GPU passes and counters as cards, frame bars without a budget line | Frame strip with a labelled budget line, ruler, thread lanes plus GPU queue lanes, Scopes table (calls, total, self, share), Frame counters column, dense Compare with diverging bars |
+| Console | In the 240 px dock: time, message and source drawn over each other | Two-line rows: message and count, then time, origin and a left-aligned source link |
+| Problems | Go and Why buttons over the message; text cut after a few words | Message at full width; code, source, Go and Why on the second line; fixes on their own line |
+| Settings | A third line per setting for its key; reset at the far edge | One description line (key in the tooltip); reset beside its control; shortcuts grouped by menu |
+| Agents | Reasons cut on one line; "r22"; "~1 +1" | Reasons on two lines; "Claude · just now · 1 edit" |
+
 ## Known issues found (not from this change)
 
-- `tests/native.rs` golden `ara-dark` fails on the base commit with the identical score
-  (1-SSIM 0.00866): the golden predates the current title bar (problems chip).
-- `tests/ux.rs::inactive_list_tabs_stay_mounted_hidden_and_come_back_as_they_were` is
-  flaky under the full suite on the base commit too (2 of 8 runs).
+- `tests/native.rs` golden `ara-dark` failed on round 1's base commit (it predated the
+  title bar's problems chip). It passes at `7c728927`.
+- `tests/ux.rs::inactive_list_tabs_stay_mounted_hidden_and_come_back_as_they_were` was
+  flaky on round 1's base (2 of 8 runs). It passed in every full run this round (6 of 6).
+- `ara_noise` in `ara-material/shaders/engine.slang` is discontinuous across lattice
+  cells: its sine hash, multiplied by 43758.5453, amplifies rounding differences.
+  Visible in the noise node's preview.
