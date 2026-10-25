@@ -14,6 +14,8 @@ mod recording;
 mod reload;
 pub use reload::ShaderStatus;
 mod surface;
+mod waits;
+pub use waits::HostWaitStats;
 
 pub use crate::commands::{Attachment, Command, CommandList, Draw, PassTiming, Recorder};
 use crate::{arena::Arena, *};

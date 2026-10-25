@@ -8,7 +8,15 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
+mod cpu;
 mod gpu;
+
+pub(super) struct CpuFrame {
+    pub phases: [f64; 4],
+    pub total_ms: f64,
+    pub wait_ms: Option<f64>,
+    pub first_presented: bool,
+}
 
 #[derive(clap::Args)]
 pub(super) struct PerfOptions {
@@ -43,6 +51,7 @@ pub(super) struct Window {
     frames: BTreeMap<String, Vec<f64>>,
     passes: BTreeMap<String, Vec<f64>>,
     gpu: gpu::Samples,
+    cpu: cpu::Samples,
     seen: u32,
     measured: u32,
     collecting: bool,
@@ -79,6 +88,7 @@ impl Window {
             frames: BTreeMap::new(),
             passes: BTreeMap::new(),
             gpu: gpu::Samples::default(),
+            cpu: cpu::Samples::default(),
             seen: 0,
             measured: 0,
             collecting,
@@ -93,6 +103,7 @@ impl Window {
         self.frames.clear();
         self.passes.clear();
         self.gpu = gpu::Samples::default();
+        self.cpu = cpu::Samples::default();
         self.seen = 0;
         self.measured = 0;
         self.collecting = true;
@@ -158,8 +169,7 @@ impl Window {
         presenter: &Presenter,
         phases: &BTreeMap<&str, u128>,
         camera: Value,
-        cpu: [f64; 4],
-        total: f64,
+        frame: CpuFrame,
     ) -> Result<bool> {
         if !self.collecting {
             return Ok(false);
@@ -184,6 +194,8 @@ impl Window {
         if self.seen <= self.options.perf_warmup {
             return Ok(false);
         }
+        let total = frame.total_ms;
+        self.cpu.record(total, frame.wait_ms, frame.first_presented);
         for (name, value) in [
             "simulation_and_extraction",
             "presentation_prepare",
@@ -191,7 +203,7 @@ impl Window {
             "audio",
         ]
         .into_iter()
-        .zip(cpu)
+        .zip(frame.phases)
         {
             self.frames.entry(name.into()).or_default().push(value);
         }
@@ -233,11 +245,12 @@ impl Window {
         if let Some(parent) = output.parent() {
             std::fs::create_dir_all(parent)?;
         }
-        let cpu: BTreeMap<_, _> = self
+        let mut cpu: BTreeMap<_, _> = self
             .frames
             .iter()
-            .map(|(name, samples)| (name, quantiles(samples)))
+            .map(|(name, samples)| (name.to_owned(), quantiles(samples)))
             .collect();
+        cpu.extend(self.cpu.report());
         let passes: BTreeMap<_, _> = self
             .passes
             .iter()

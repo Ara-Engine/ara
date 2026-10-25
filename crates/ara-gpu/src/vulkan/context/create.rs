@@ -396,6 +396,7 @@ impl Gpu {
             guard.disarm();
             let mesh = ash::ext::mesh_shader::Device::load(&instance, &device);
             Ok(Self {
+                host_waits: Default::default(),
                 _entry: entry,
                 instance,
                 physical,

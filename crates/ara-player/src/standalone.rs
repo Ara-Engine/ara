@@ -161,6 +161,11 @@ pub(super) fn run(args: Args, began: Instant) -> Result<()> {
                 break;
             }
             let frame_start = Instant::now();
+            let waits_before = if perf.enabled() {
+                presenter.host_wait_stats()
+            } else {
+                None
+            };
             let (quit, inputs) = window.events(world.runtime.player())?;
             if quit {
                 break;
@@ -232,16 +237,27 @@ pub(super) fn run(args: Args, began: Instant) -> Result<()> {
                     &presenter,
                     &phases,
                     json!(camera),
-                    [
-                        simulation_done.duration_since(frame_start).as_secs_f64() * 1000.,
-                        presenter.stats().prepare.as_secs_f64() * 1000.,
-                        presentation_done
-                            .duration_since(simulation_done)
-                            .as_secs_f64()
-                            * 1000.,
-                        presentation_done.elapsed().as_secs_f64() * 1000.,
-                    ],
-                    frame_start.elapsed().as_secs_f64() * 1000.,
+                    perf::CpuFrame {
+                        phases: [
+                            simulation_done.duration_since(frame_start).as_secs_f64() * 1000.,
+                            presenter.stats().prepare.as_secs_f64() * 1000.,
+                            presentation_done
+                                .duration_since(simulation_done)
+                                .as_secs_f64()
+                                * 1000.,
+                            presentation_done.elapsed().as_secs_f64() * 1000.,
+                        ],
+                        wait_ms: if is_2d {
+                            None
+                        } else {
+                            presenter
+                                .host_wait_stats()
+                                .and_then(|after| after.elapsed_since(waits_before))
+                                .map(|elapsed| elapsed.as_secs_f64() * 1000.)
+                        },
+                        total_ms: frame_start.elapsed().as_secs_f64() * 1000.,
+                        first_presented: frames == 1,
+                    },
                 )? {
                     break;
                 }

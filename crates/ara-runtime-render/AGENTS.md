@@ -46,6 +46,8 @@ device and per-view upload state; no simulation, window or process code.
   native captures read the same view as windows and embedded Game. Raster puts
   terrain/foliage in the G-buffer, then particles before shared temporal/post.
 - `stats()`: rebuilt flag, updated poses/skins, CPU prepare/render time and GPU ms.
+  `host_wait_stats()` exposes cumulative host waits; snapshot around the whole
+  windowed frame (including presentation), never subtract GPU timestamps from wall time.
 - Raster look: `set_render_options(RenderOptions)` (D27: raster by default; RT opt-in),
   `set_look_override` (look development/scoring), `set_probe_gi(true)` +
   `probe_gi_pending()` / `wait_probe_gi()`: probe GI acquired per content key on a

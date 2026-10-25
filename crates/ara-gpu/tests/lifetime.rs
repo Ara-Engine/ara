@@ -36,7 +36,11 @@ fn raster_only_device_omits_ray_tracing_and_keeps_normal_gpu_work_valid() -> Res
         handoff: None,
     }]);
     let point = gpu.submit(commands.finish(), &[])?;
+    let waits_before = gpu.context().host_wait_stats();
     gpu.resolve(point)?;
+    let waits_after = gpu.context().host_wait_stats();
+    assert_eq!(waits_after.calls, waits_before.calls + 1);
+    assert!(waits_after.elapsed_since(Some(waits_before)).is_some());
     assert_eq!(
         gpu.read(destination)?,
         bytemuck::cast_slice::<_, u8>(&expected)
