@@ -293,6 +293,7 @@ impl QualityPreset {
                 emitter_lights: 4,
                 lod_pixels: 4.,
                 min_pixels: 3.,
+                terrain_detail: 0.,
             },
             Self::Medium => Quality {
                 shadows: shadows(3, 1024, 100., (1024, 1000.)),
@@ -303,6 +304,7 @@ impl QualityPreset {
                 emitter_lights: 6,
                 lod_pixels: 2.,
                 min_pixels: 2.,
+                terrain_detail: 40.,
             },
             Self::High => Quality {
                 shadows: shadows(4, 2048, 150., (2048, 1500.)),
@@ -313,6 +315,7 @@ impl QualityPreset {
                 emitter_lights: 8,
                 lod_pixels: 1.,
                 min_pixels: 1.5,
+                terrain_detail: 150.,
             },
             Self::Epic => Quality {
                 shadows: shadows(4, 2048, 250., (2048, 2000.)),
@@ -323,6 +326,7 @@ impl QualityPreset {
                 emitter_lights: 16,
                 lod_pixels: 1.,
                 min_pixels: 1.,
+                terrain_detail: 300.,
             },
         }
     }

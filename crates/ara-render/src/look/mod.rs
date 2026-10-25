@@ -38,6 +38,10 @@ pub struct Quality {
     pub lod_pixels: f32,
     /// Projected bound radius, in pixels, below which an instance is culled.
     pub min_pixels: f32,
+    /// Distance in metres to which terrain splat layers sample their normal and
+    /// metal/roughness maps; beyond it (blended over a quarter more) they keep
+    /// colour maps and the metal/roughness maps' means. Zero: none, anywhere.
+    pub terrain_detail: f32,
 }
 impl Default for Quality {
     fn default() -> Self {
@@ -50,6 +54,7 @@ impl Default for Quality {
             emitter_lights: 8,
             lod_pixels: 1.,
             min_pixels: 1.5,
+            terrain_detail: 150.,
         }
     }
 }

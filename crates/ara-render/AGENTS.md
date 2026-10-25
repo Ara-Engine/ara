@@ -73,7 +73,7 @@ ECS; `Scene` is an immutable render extraction snapshot, not authoritative state
   light volume change, outer cascades snapped coarsely so they survive motion),
   a cached far map past them (`look::far`), half-res GTAO, half-res SSR (cone
   footprint into a colour pyramid of last frame), GI relight budget, bloom,
-  emitter light budget. Look images are allocated lazily (the bindless storage
+  emitter light budget, LOD/cull pixel budgets, terrain detail distance. Look images are allocated lazily (the bindless storage
   heap is shared). Probe GI is
   gathered at half resolution for G-buffer pixels.
 - `set_deferred_post` + `finish(color, sampled, state)`: temporally resolve and grade
