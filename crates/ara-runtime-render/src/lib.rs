@@ -24,7 +24,7 @@ mod presentation;
 pub use placeholders::{ModelPlaceholders, PENDING_MODEL_COLOR};
 pub use presentation::{PresentationImage, QualityChoice, QualityPreset, RenderOptions};
 mod raster;
-pub use raster::{RasterUpdate, RasterView};
+pub use raster::{RasterContent, RasterUpdate, RasterView};
 mod readback;
 pub mod terrain_mesh;
 pub mod two_d;
