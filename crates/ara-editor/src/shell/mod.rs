@@ -140,6 +140,8 @@ pub struct Shell {
     pub(crate) log_view: LogView,
     /// Console row whose details are expanded (bus sequence number).
     pub(crate) console_open: Option<u64>,
+    /// Profiler scope outlined in the timeline (picked in the Scopes table).
+    pub(crate) profile_scope: Option<String>,
     /// Problems whose "Why" explanation is expanded.
     pub(crate) explained_problems: std::collections::BTreeSet<u64>,
     /// Failures found while polling (thumbnails), logged by the window owner.
@@ -386,6 +388,7 @@ impl Shell {
             animation_live: Default::default(),
             value_swatches: Vec::new(),
             console_open: None,
+            profile_scope: None,
             explained_problems: std::collections::BTreeSet::new(),
             hierarchy_view: None,
             hierarchy_surface: None,

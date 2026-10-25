@@ -217,8 +217,6 @@ scroll { overflow:hidden; flex-basis:0px; min-height:0px; min-width:0px; }
 /* Stage rails run unbroken down a stage (header and its module rows). */
 .stage-rail { width:2px; height:24px; flex-shrink:0; border-radius:0px; }
 .stage-header { height:24px; flex-shrink:0; flex-direction:row; align-items:center; gap:8px; padding-left:4px; padding-right:2px; }
-.profile-delta { flex-direction:row; align-items:center; gap:12px; height:22px; padding-left:8px; padding-right:8px; }
-.profile-delta:hover { background:var(--raised); }
 
 .settings-side { width:200px; flex-basis:200px; flex-shrink:0; padding:6px; gap:1px; background:var(--panel-header); }
 .settings-cat { height:24px; justify-content:start; background:transparent; border-width:0px; color:var(--muted-foreground); padding-left:8px; }
@@ -260,6 +258,66 @@ scroll { overflow:hidden; flex-basis:0px; min-height:0px; min-width:0px; }
 .feed-diff { padding-left:44px; padding-top:2px; padding-bottom:6px; gap:2px; flex-shrink:0; background:var(--background); }
 .feed-op { font-size:11px; font-family:JetBrains Mono; overflow:hidden; }
 
+/* Profiler: frame strip, thread lanes, scopes and counters (profiler_panel.rs). */
+.profile-content { flex-grow:1; flex-basis:0px; min-height:0px; gap:0px; background:var(--background); }
+.profile-strip { height:56px; flex-shrink:0; flex-direction:row; align-items:end; gap:1px; padding-left:8px; padding-right:8px; background:var(--background); }
+.profile-bar { height:3px; flex-grow:1; flex-basis:0px; min-width:1px; padding:0px; border-width:0px; border-radius:1px; background:var(--separator-strong); }
+.profile-bar:hover { background:var(--muted-foreground); }
+.profile-bar-hitch { background:var(--destructive-foreground); }
+.profile-bar-hitch:hover { background:var(--destructive-foreground); }
+.profile-bar-on { background:var(--primary); }
+.profile-bar-on:hover { background:var(--primary); }
+.profile-budget { position:absolute; left:0px; right:0px; height:1px; background:var(--warning); }
+.profile-budget-label { position:absolute; right:10px; padding-left:4px; padding-right:4px; border-radius:var(--radius-xs); background:var(--background); font-size:11px; color:var(--warning); }
+.profile-ruler { height:20px; flex-shrink:0; flex-direction:row; gap:0px; background:var(--panel-header); }
+.profile-tick { height:20px; flex-shrink:0; flex-direction:row; align-items:center; gap:4px; overflow:hidden; }
+.profile-tick-line { width:1px; height:20px; flex-shrink:0; background:var(--separator-strong); }
+.profile-lanes { flex-grow:0; flex-shrink:1; flex-basis:auto; min-height:48px; gap:0px; }
+.profile-lane { flex-direction:row; flex-shrink:0; gap:0px; padding-top:4px; padding-bottom:4px; }
+.profile-lane-name { width:96px; flex-shrink:0; gap:0px; padding-left:8px; padding-right:8px; overflow:hidden; }
+.profile-lane-edge { height:1px; flex-shrink:0; background:var(--border); }
+.profile-track { flex-grow:1; flex-basis:0px; min-width:0px; flex-direction:row; gap:0px; padding-right:8px; overflow:hidden; }
+.profile-rows { flex-grow:1; flex-basis:0px; min-width:0px; gap:1px; padding-right:8px; overflow:hidden; }
+.profile-row { height:18px; flex-shrink:0; flex-direction:row; gap:0px; }
+.profile-gap { height:18px; flex-shrink:0; }
+.pspan { height:18px; flex-shrink:0; flex-direction:row; align-items:center; padding-left:4px; padding-right:2px; border-width:1px; border-color:var(--background); border-radius:4px; overflow:hidden; }
+.pspan-on { border-color:var(--foreground); }
+.pspan-label { font-size:11px; color:var(--background); white-space:nowrap; }
+.pc1 { background:var(--chart-1); }
+.pc2 { background:var(--chart-2); }
+.pc3 { background:var(--chart-3); }
+.pc4 { background:var(--chart-4); }
+.pc5 { background:var(--chart-5); }
+.pc6 { background:var(--chart-6); }
+.profile-edge { height:1px; flex-shrink:0; background:var(--separator-strong); }
+.profile-scopes { flex-grow:1; flex-basis:0px; min-width:0px; min-height:0px; gap:0px; }
+.profile-table-head { height:28px; flex-shrink:0; flex-direction:row; align-items:center; gap:0px; padding-left:8px; padding-right:8px; background:var(--panel-header); }
+.profile-table { flex-grow:1; flex-basis:0px; min-height:0px; gap:0px; }
+.profile-scope-row { height:22px; flex-shrink:0; justify-content:start; gap:0px; padding-left:8px; padding-right:8px; border-width:0px; border-radius:0px; background:transparent; }
+.profile-scope-row:hover { background:var(--raised); }
+.profile-scope-on { background:var(--selection-surface-inactive); }
+.profile-col-calls { width:56px; flex-shrink:0; }
+.profile-col-time { width:84px; flex-shrink:0; }
+.profile-col-share { width:128px; flex-shrink:0; }
+.profile-share { flex-direction:row; align-items:center; gap:6px; padding-left:16px; }
+.profile-share-track { flex-grow:1; flex-basis:0px; height:6px; gap:0px; border-radius:3px; background:var(--raised); overflow:hidden; }
+.profile-share-fill { height:6px; border-radius:3px; background:var(--primary); }
+.profile-details { width:232px; flex-basis:232px; flex-grow:0; flex-shrink:0; gap:0px; }
+.profile-group { flex-shrink:0; padding-left:8px; padding-top:10px; padding-bottom:2px; }
+.profile-stat { height:22px; flex-shrink:0; flex-direction:row; align-items:center; gap:6px; padding-left:8px; padding-right:8px; }
+.profile-compare-head { height:32px; flex-shrink:0; flex-direction:row; align-items:center; gap:8px; padding-left:8px; padding-right:8px; }
+.profile-delta-row { height:22px; flex-shrink:0; flex-direction:row; align-items:center; gap:0px; padding-left:8px; padding-right:8px; }
+.profile-delta-row:hover { background:var(--raised); }
+.profile-delta-regression { background:var(--warning-surface); }
+.profile-col-delta { width:144px; flex-shrink:0; }
+.profile-delta-bar { height:22px; flex-direction:row; align-items:center; gap:0px; padding-left:16px; }
+.profile-delta-half { height:8px; flex-grow:1; flex-basis:0px; flex-direction:row; gap:0px; }
+.profile-delta-left { justify-content:end; }
+.profile-delta-axis { width:1px; height:14px; flex-shrink:0; background:var(--separator-strong); }
+.profile-delta-better { height:8px; border-radius:2px; background:var(--success); }
+.profile-delta-worse { height:8px; border-radius:2px; background:var(--warning); }
+.profile-delta-slower { height:8px; border-radius:2px; background:var(--muted-foreground); }
+.profile-lower { flex-direction:row; flex-grow:1; flex-basis:0px; min-height:160px; gap:0px; }
 /* Console and Problems. */
 .count-toggle { height:22px; padding-left:6px; padding-right:8px; gap:4px; border-width:0px; border-radius:var(--radius-sm); font-size:12px; }
 .segment-on { background:var(--raised); color:var(--foreground); }

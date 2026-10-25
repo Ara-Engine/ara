@@ -1,4 +1,4 @@
-# Editor tool pages: thumbnails, Material, VFX, Animation
+# Editor tool pages: thumbnails, Material, VFX, Animation, Profiler
 
 Owner feedback (preview 4): the Animation, Material and VFX pages "look ugly and nothing like the polished pages in other engines", and model previews in Assets are "unreadable". This doc is the design each page is built to. It follows D18 (tokens only), the UX v2 density scale (`D:\AraRefs\editor-ui\ANALYSIS.md`, Appendix B) and the container rule: cards only for things you can select or drag; groups are a header plus rows.
 
@@ -7,6 +7,7 @@ Owner feedback (preview 4): the Animation, Material and VFX pages "look ugly and
 - Material: `unreal5/material-editor-1`, `unity/shader-graph-1`, `unity/shader-graph-2`, `unity/shader-graph-3`.
 - VFX: `unreal/niagara-1`, `unreal/niagara-2`, `unity/vfx-graph-1`, `unity/vfx-graph-3`.
 - Animation: `unity/animator-1`, `unity/blend-tree-1`, `unreal5/anim-state-machine-1`, `unreal5/anim-state-machine-3`.
+- Profiler: `unreal/insights-1`, `unreal/stats-1`, `unity/profiler-1`, `unity/profiler-2`, `godot/profiler-1`.
 
 **Shared rules for every tool page**
 - **Regions:** a 28 px toolbar, a left sidebar (the document's own data), the main surface (canvas, stack or preview), and a 24 px status strip. The global Inspector stays the property sidebar for the selected item, so no page grows a second details panel.
@@ -134,12 +135,45 @@ Owner feedback (preview 4): the Animation, Material and VFX pages "look ugly and
 
 ---
 
+## 6. Profiler
+
+**Benchmarks:** Unreal Insights' Timing view: a frames graph with 16.7/33.3/50 ms lines, per-thread tracks on a shared time axis, and a Timers table (Count, Incl, Excl) beside it. Unity's Profiler: a frame chart with labelled budget lines, a Timeline of thread lanes with blocks coloured by category, and a Hierarchy table (Total, Self, Calls). Both read as instruments: dense, mostly chrome-free, numbers in tabular columns.
+
+**Where Ara beats them:** the profiler is a tab of the editor that profiles itself and Play from the same captures `ara profile` and agents read; Freeze, Baseline and Compare give a regression verdict in place, with no separate app (Insights) and no second look (O3DE's ImGui profiler).
+
+**Regions**
+```
+[● Record][❚❚ Freeze][⚑ Baseline][⇄ Compare] | ‹ Frame 239 ›               CPU 4.90 ms  GPU 3.12 ms  of 16.67 ms
+▁▂▁▁█▁▁▂▁▁▁▃▁▁▁▂▁▁▁▁▂▁▁▁▂▁▁▁▃▁▁▁▂▁▁ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ 16.67 ms budget
+            0          1 ms          2 ms          3 ms          4 ms
+Main       [editor.frame·································································]
+           [ui.build·····][paint··][render.submit·························]
+Worker 1         [import··]
+GPU        [shadows][gbuffer······][lighting····][taa]
+───────────────────────────────────────────────────────────────────────┬───────────────────
+Scopes                          Calls    Total     Self   Share         │ Frame 239
+render.submit                       1  1.92 ms  1.80 ms  ████░░░  37%   │ FRAME
+ui.build                            1  0.94 ms  0.61 ms  ██░░░░░  12%   │ Wall time   4.90 ms
+…                                                                       │ WORLD · MEMORY …
+ ● Frozen capture                                       120 frames · 2 hitches · p50 4.12 ms · p95 4.81 ms
+```
+- **Toolbar:** Record (a red dot; Stop while recording), Freeze, Baseline and Compare as icon + word ghost buttons; then a frame stepper (‹ Frame 239 ›). On the right, the selected frame's CPU wall time (`success` under budget, `warning` over), the sum of its GPU passes, and the budget.
+- **Frame strip (56 px):** one bar per frame for the newest 120, height ∝ duration, the budget as a labelled `warning` line. Bars over budget are `destructive-foreground`, the selected frame `primary`; click selects.
+- **Timeline:** a ruler whose step keeps labels about 90 px apart, then one lane per CPU thread (named from the capture's thread table, in order of their first scope, so the main thread leads). Spans nest by depth in 18 px rows, coloured by a stable hash of their name into `chart-1..6` with `background` text, and are labelled only when the name fits. GPU passes get one lane per queue, laid end to end: their timestamps are durations on the device clock, never aligned to the CPU (the lane's tooltip says so). Geometry is in percentages of the frame, so the timeline never waits for a measured width.
+- **Scopes:** the frame's spans by name: Calls, Total (inclusive), Self (exclusive) and Share of the frame with an inline bar, most self time first, 22 px rows with tabular numerals. Clicking a scope outlines its spans in the timeline (again clears).
+- **Details (232 px):** the selected frame's numbers as label/value rows in three groups: Frame (wall time, GPU passes, scopes, jobs), World (entities, draws, triangles, particles, physics bodies, voices) and Memory (CPU heap, allocated this frame, allocations, GPU textures and buffers). Lost records show as a `warning` in the header: that frame is incomplete.
+- **Compare:** a verdict line (icon + "Within the regression budget" or "3 regressions", then p95 frame before → after), then every metric's p95: Baseline, Current, Change and a diverging bar (faster `success` to the left, slower to the right, `warning` for regressions, whose rows tint `warning-surface`), regressions first, then by size of change.
+- **Status strip:** Recording, Frozen capture or Live, then frames, hitches, p50 and p95 frame times, and whether a baseline is set.
+
+---
+
 ## Next in build order
 
 - Material: node search at the pointer and pin-drag search filtered by type, sticky-note colours, Stats with instruction counts per platform.
 - VFX: curve and gradient editors, an emitter timeline for multi-emitter systems, GPU ms in the transport.
 - Animation: an Any State node, condition editing in the Inspector, a draggable live parameter dot on the blend plot (and the live value on it during Play).
 - Thumbnails: a per-asset turntable on hover in the grid.
+- Profiler: zoom and pan in the timeline (W/S, A/D, double-click a span), callers and callees for a scope, the viewport Stats overlay, budgets in Project Settings.
 
 ## Verification
 

@@ -2017,6 +2017,12 @@ fn build() -> Vec<Spec> {
         cmd("profiler.record", "Record", "circle-dot", "", "Start recording editor frames.", |s, e, _| s.profiler_record(e)),
         cmd("profiler.freeze", "Freeze Capture", "pause", "", "Freeze and save the current trace.", |_, e, _| act(e, "editor.profile.freeze", json!({}))),
         cmd("profiler.baseline", "Set Baseline", "flag", "", "Freeze the trace as the comparison baseline.", |_, e, _| act(e, "editor.profile.freeze", json!({"baseline": true}))),
+        cmd("profiler.scope", "Outline Scope", "crosshair", "", "Outline a scope's spans in the Profiler timeline; again clears it.", |s, _, t| {
+            if let Target::Text(label) = t {
+                s.profile_scope = (s.profile_scope.as_deref() != Some(label.as_str())).then(|| label.clone());
+            }
+            Ok(())
+        }),
         cmd("profiler.compare", "Compare", "git-compare", "", "Compare the frozen capture with the baseline.", |_, e, _| act(e, "editor.workspace", json!({"compare": !e.state.profiler_compare})))
             .when(|c| Avail::Checked(c.state.profiler_compare)),
         cmd("settings.close", "Close Settings", "x", "", "Close the Settings window.", |_, e, _| act(e, "editor.layout.close", json!({"panel": "settings"}))),
