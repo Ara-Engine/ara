@@ -61,10 +61,11 @@ ECS; `Scene` is an immutable render extraction snapshot, not authoritative state
   `SceneLook` with `FrameEnvironment::raster` (ara-render-fidelity).
 - `look::gi::ProbeSurfaces` (`Renderer::set_probe_surfaces`): probe GI. A one-time
   acquisition (`FidelityView::bake_probe_surfaces` on RT devices) records 8x8 oct
-  surface caches; each frame `GI.Relight` relights them (sun via CSM, local lights,
-  sky, emissive, last frame's probes) into 6x6 irradiance, sampled DDGI-style.
-  No runtime rays, no per-pixel noise. `update_probe_surfaces` adopts re-traced
-  surfaces of the same lattice keeping the irradiance, so edits blend in.
+  surface caches; `GI.Relight` relights a budget per frame (sun via CSM, local
+  lights, sky, emissive, last frame's probes) into 6x6 irradiance, DDGI-style.
+  Capture resets relight all for `gi::CONVERGE_FRAMES` reset frames (exposure
+  re-meters), so captures converge at any budget. No runtime rays or noise.
+  `update_probe_surfaces` adopts re-traced same-lattice surfaces keeping irradiance.
 - `look::Quality` (`Renderer::set_quality`): per-preset budgets from
   `ara_render_fidelity::presets::RasterPlan`: shadow cascades (count, texels,
   distance; stable light space, practical splits, gather PCF, cascade blend; one
@@ -102,11 +103,10 @@ The G-buffer is compact: RGBA8 sRGB albedo + AO, RG16 octahedral normal, RGBA8
 roughness/metal, B10G11R11 emissive, R32 ID and RG16F motion; world positions are
 rebuilt from depth. Shaders read and write it only through raster.slangh's
 `gbuffer*` helpers, so the formats change there and in `Renderer::targets` together.
-Local light lists are tiled 16x16: `scene::MAX_LOCAL_LIGHTS` (256) per scene, the
-first `TILE_LIGHTS` (128) per tile. `look::local` shadows the brightest few in view
-(cube or spot faces in one cached D32 atlas). Spot lumens are point-equivalent
-(the cone masks), as in the path tracer; `Light::parameters.z` softens the near
-field and `parameters.w` = 1 keeps a light out of fog (unshadowed emitter lights).
+Local light lists are tiled 16x16 (`scene::MAX_LOCAL_LIGHTS` 256 per scene, the
+first `TILE_LIGHTS` 128 per tile); `look::local` shadows the brightest few in view
+(cube or spot faces, one cached D32 atlas). Spot lumens are point-equivalent, as in
+the path tracer; `Light::parameters.z` softens the near field, `w` = 1 keeps it out of fog.
 
 Capture determinism resets history, fixes host tick/seed, disables jitter/history
 blending, locks exposure and renders the explicit settle count. No wall clock or

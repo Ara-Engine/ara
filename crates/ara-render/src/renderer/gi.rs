@@ -142,6 +142,7 @@ impl Renderer {
             access: [Access::ShaderRead; 2],
             slot: 0,
             cursor: 0,
+            converge: 0,
         };
         Ok(volume)
     }

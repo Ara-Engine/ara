@@ -147,7 +147,8 @@ impl Renderer {
             &FrameInputs {
                 sun_lux: self.content.sun_lux,
                 exposure,
-                reset: self.targets.history.is_none(),
+                reset: self.targets.history.is_none()
+                    || self.look.gi.as_ref().is_some_and(|gi| gi.converge > 0),
                 frame_number: self.frame_number,
                 sampled,
                 storage,
