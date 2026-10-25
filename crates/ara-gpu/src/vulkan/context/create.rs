@@ -121,6 +121,15 @@ impl Gpu {
                 && has_extension(ash::khr::ray_query::NAME)
                 && has_extension(ash::khr::deferred_host_operations::NAME);
             let mut device_extensions = Vec::new();
+            let timestamp_clock = if has_extension(ash::khr::calibrated_timestamps::NAME) {
+                device_extensions.push(ash::khr::calibrated_timestamps::NAME.as_ptr());
+                Some("VK_KHR_calibrated_timestamps")
+            } else if has_extension(ash::ext::calibrated_timestamps::NAME) {
+                device_extensions.push(ash::ext::calibrated_timestamps::NAME.as_ptr());
+                Some("VK_EXT_calibrated_timestamps")
+            } else {
+                None
+            };
             if !window_extensions.is_empty() {
                 device_extensions.push(ash::khr::swapchain::NAME.as_ptr());
             }
@@ -383,6 +392,7 @@ impl Gpu {
                     families[graphics_family as usize].timestamp_valid_bits,
                     families[compute_family as usize].timestamp_valid_bits,
                 ],
+                timestamp_clock,
                 pipeline_cache_uuid: properties.pipeline_cache_uuid.to_vec(),
                 external_memory,
                 identity: crate::shared::DeviceIdentity {

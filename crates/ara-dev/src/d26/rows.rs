@@ -37,7 +37,7 @@ pub(super) const DEFINITIONS: &[(&str, &str)] = &[
     ),
     (
         "GPU frame",
-        "gpu_other.total_ms from `ara-dev perf`: the sum of the presenter's GPU timestamps per frame. Async-compute passes overlapping graphics stretch their timestamps, so the sum can overstate the frame.",
+        "gpu_span_ms from `ara-dev perf`: earliest submission begin to latest completed submission end per presenter frame, including uploads, particles, post, publication and gaps. Overlapping queues count once; a common calibrated clock and complete window coverage are required. Legacy pass sums never gate GPU performance.",
     ),
     (
         "CPU work",
@@ -290,8 +290,18 @@ fn gpu(results: &Results, rows: &mut Vec<Row>) {
             let subject = format!("{} · {}", scene.name, title(preset));
             let window = results.steady.get(&(scene.name, preset.name()));
             for stat in ["p50", "p95"] {
-                let (value, source) =
-                    window_metric(results, window, &["gpu_other", "total_ms", stat]);
+                let (mut value, source) = window_metric(results, window, &["gpu_span_ms", stat]);
+                if let Some(Ok(window)) = window {
+                    let player = &window.player;
+                    let frames = player["frames"].as_u64().filter(|v| *v > 0);
+                    if frames.is_none()
+                        || player["gpu_span_coverage"]["measured"].as_u64() != frames
+                        || player["gpu_span_coverage"]["unavailable"].as_u64() != Some(0)
+                        || player["gpu_span_ms"]["samples"].as_u64() != frames
+                    {
+                        value = Err("GPU span does not cover every measured frame".into());
+                    }
+                }
                 rows.push(
                     Row::new("GPU frame", &subject, format!("GPU frame {stat}"))
                         .gate("D26", D26_GPU[index])
@@ -793,7 +803,7 @@ mod tests {
             ("Outpost", "high"),
             Ok(Window {
                 report: PathBuf::from("r.json"),
-                player: json!({"gpu_other": {"total_ms": {"p50": 4.0, "p95": 6.5}}}),
+                player: json!({"frames":2,"gpu_span_ms": {"p50":4.0,"p95":6.5,"samples":2},"gpu_span_coverage":{"measured":2,"unavailable":0}}),
             }),
         );
         let rows = rows(&results);
@@ -821,6 +831,31 @@ mod tests {
         );
         let summary = Summary::of(&rows);
         assert_eq!(Summary::word(&summary.gates["D26"]), "FAIL");
+    }
+
+    #[test]
+    fn gpu_rows_never_gate_on_legacy_sums_or_partial_spans() {
+        for player in [
+            json!({"frames":2,"gpu_other":{"total_ms":{"p50":1.,"p95":1.}},"cpu":{"gpu_ms":{"p95":1.}}}),
+            json!({"frames":2,"gpu_span_ms":{"p50":1.,"p95":1.,"samples":1},"gpu_span_coverage":{"measured":1,"unavailable":1}}),
+            json!({"frames":2,"gpu_span_ms":{"p50":1.,"p95":1.,"samples":1},"gpu_span_coverage":{"measured":1,"unavailable":0}}),
+        ] {
+            let mut results = Results::default();
+            results.steady.insert(
+                ("Outpost", "high"),
+                Ok(Window {
+                    report: PathBuf::from("r.json"),
+                    player,
+                }),
+            );
+            let rows = rows(&results);
+            let row = rows
+                .iter()
+                .find(|r| r.subject == "Outpost · High" && r.metric == "GPU frame p95")
+                .expect("GPU row");
+            assert_eq!(row.status, Status::NotMeasured);
+            assert!(row.gates.iter().all(|g| g.status == Status::NotMeasured));
+        }
     }
 
     #[test]

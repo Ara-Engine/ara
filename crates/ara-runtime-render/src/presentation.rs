@@ -176,6 +176,7 @@ impl Presenter {
             .renderer
             .as_mut()
             .context("presentation device initialized")?;
+        renderer.gpu_mut().reset_timing_window();
         let plan = Plan::resolve(
             self.choice,
             &Capabilities::of(renderer.gpu()),
@@ -337,6 +338,11 @@ impl Presenter {
                 self.output.context("legacy completed output")?
             };
             self.publish(source)?;
+            self.stats.gpu_span_ms = self
+                .renderer
+                .as_ref()
+                .and_then(|renderer| renderer.gpu().timing_window())
+                .map(ara_gpu::vulkan::TimestampSpan::milliseconds);
             self.stats.render = started.elapsed();
             self.published_quality = self.plan.map(|plan| plan.preset);
             Ok(())
@@ -347,6 +353,7 @@ impl Presenter {
                 Ok(())
             }
             Err(error) => {
+                self.stats.gpu_span_ms = None;
                 if self.failure.is_none() {
                     eprintln!(
                         "ARA_GPU_BACKEND: presentation retains last completed frame: {error:#}"

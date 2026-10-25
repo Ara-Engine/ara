@@ -195,4 +195,24 @@ pub struct PassTiming {
     pub queue: Queue,
     /// Device timestamp delta in milliseconds.
     pub milliseconds: f64,
+    /// Device-clock start after leading barriers, in milliseconds relative to the
+    /// device's measurement epoch. Cross-queue comparison requires calibration.
+    pub start_ms: f64,
+    /// Device-clock end in the same epoch as `start_ms`.
+    pub end_ms: f64,
+}
+
+/// One interval on a device clock, including gaps between its submissions.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize)]
+pub struct TimestampSpan {
+    /// Earliest device timestamp in milliseconds relative to the device epoch.
+    pub start_ms: f64,
+    /// Latest completed device timestamp in that epoch.
+    pub end_ms: f64,
+}
+impl TimestampSpan {
+    /// Elapsed device time; overlapping passes are counted only once.
+    pub fn milliseconds(self) -> f64 {
+        self.end_ms - self.start_ms
+    }
 }

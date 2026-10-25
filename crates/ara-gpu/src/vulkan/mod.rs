@@ -19,10 +19,12 @@ mod recording;
 mod reload;
 pub use reload::ShaderStatus;
 mod surface;
+mod timestamps;
 mod ui_readback;
 mod waits;
 pub use waits::HostWaitStats;
 
+pub use crate::commands::TimestampSpan;
 pub use crate::commands::{Attachment, Command, CommandList, Draw, PassTiming, Recorder};
 use crate::{arena::Arena, *};
 use context::{BufferAllocation, ImageAllocation};
@@ -77,6 +79,8 @@ pub struct VulkanDevice {
     completion_pending: bool,
     deferred_waits: [u64; 2],
     scene_queue: bool,
+    clock: timestamps::Clock,
+    timing_window: timestamps::Window,
 }
 
 impl VulkanDevice {
@@ -155,6 +159,7 @@ impl VulkanDevice {
             .map_err(anyhow::Error::from)?;
             guard.push(guard::Object::Semaphore(*semaphore));
         }
+        let clock = timestamps::Clock::new(&context)?;
         let heap = Heap::new(&context)?;
         let shader_worker = if std::env::var_os("ARA_SHADER_DIR").is_some() {
             Some(reload::Worker::new(
@@ -187,6 +192,8 @@ impl VulkanDevice {
             completion_pending: false,
             deferred_waits: [0; 2],
             scene_queue: false,
+            clock,
+            timing_window: Default::default(),
         })
     }
 

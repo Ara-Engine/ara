@@ -10,6 +10,7 @@ use std::time::{Duration, Instant};
 
 mod cpu;
 mod gpu;
+mod span;
 
 pub(super) struct CpuFrame {
     pub phases: [f64; 4],
@@ -52,6 +53,7 @@ pub(super) struct Window {
     passes: BTreeMap<String, Vec<f64>>,
     gpu: gpu::Samples,
     cpu: cpu::Samples,
+    span: span::Samples,
     seen: u32,
     measured: u32,
     collecting: bool,
@@ -70,7 +72,7 @@ fn quantiles(samples: &[f64]) -> Value {
     let rank = |fraction: f64| {
         sorted[((sorted.len() as f64 * fraction).ceil() as usize).saturating_sub(1)]
     };
-    json!({"p50":rank(0.5),"p95":rank(0.95),"max":sorted[sorted.len()-1],"mean":sorted.iter().sum::<f64>()/sorted.len() as f64,"samples":sorted.len()})
+    json!({"p50":rank(0.5),"p95":rank(0.95),"p99":rank(0.99),"max":sorted[sorted.len()-1],"mean":sorted.iter().sum::<f64>()/sorted.len() as f64,"samples":sorted.len()})
 }
 
 impl Window {
@@ -89,6 +91,7 @@ impl Window {
             passes: BTreeMap::new(),
             gpu: gpu::Samples::default(),
             cpu: cpu::Samples::default(),
+            span: span::Samples::default(),
             seen: 0,
             measured: 0,
             collecting,
@@ -104,6 +107,7 @@ impl Window {
         self.passes.clear();
         self.gpu = gpu::Samples::default();
         self.cpu = cpu::Samples::default();
+        self.span = span::Samples::default();
         self.seen = 0;
         self.measured = 0;
         self.collecting = true;
@@ -227,6 +231,8 @@ impl Window {
             *per_frame.entry(pass).or_default() += milliseconds;
         }
         self.gpu.record(presenter.stats(), per_frame.values().sum());
+        self.span
+            .record(presenter.stats().gpu_span_ms, per_frame.values().sum());
         for (pass, milliseconds) in per_frame {
             self.passes
                 .entry(pass.to_owned())
@@ -260,7 +266,15 @@ impl Window {
             !passes.is_empty(),
             "perf window did not receive GPU timestamp samples"
         );
-        let report = json!({"format":"ara.player.perf/1","pid":std::process::id(),"quality":presenter.quality().map(|q|q.name()),"presentation":if self.offscreen {"hiddenWindow"} else {"window"},"validation":cfg!(debug_assertions),"startup":phases,"camera":camera,"frames":self.measured,"warmup":self.options.perf_warmup,"cpu":cpu,"gpu_passes":passes,"gpu_other":self.gpu.report(),"gpu_coverage":self.gpu.coverage(),"shaders":presenter.shader_status()});
+        let mut report = json!({"format":"ara.player.perf/1","pid":std::process::id(),"quality":presenter.quality().map(|q|q.name()),"presentation":if self.offscreen {"hiddenWindow"} else {"window"},"validation":cfg!(debug_assertions),"startup":phases,"camera":camera,"frames":self.measured,"warmup":self.options.perf_warmup,"cpu":cpu,"gpu_passes":passes,"gpu_other":self.gpu.report(),"gpu_coverage":self.gpu.coverage(),"shaders":presenter.shader_status()});
+        report
+            .as_object_mut()
+            .context("performance report object")?
+            .extend(self.span.report());
+        report["gpu_timestamp_clock"] = presenter.renderer().map_or(Value::Null, |renderer| {
+            let info = &renderer.gpu().context().info;
+            json!({"extension":info.timestamp_clock,"period_ns":info.timestamp_period_ns,"valid_bits":info.timestamp_valid_bits})
+        });
         let temporary = output.with_extension("json.tmp");
         std::fs::write(&temporary, serde_json::to_vec_pretty(&report)?)?;
         std::fs::rename(temporary, output)?;

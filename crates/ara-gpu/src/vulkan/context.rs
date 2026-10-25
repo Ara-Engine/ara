@@ -179,6 +179,9 @@ pub struct DeviceInfo {
     pub timestamp_period_ns: f32,
     /// Significant timestamp bits, graphics then compute.
     pub timestamp_valid_bits: [u32; 2],
+    /// Enabled common device-clock extension, KHR preferred over EXT. Without
+    /// this guarantee, timestamps from different queues cannot be combined.
+    pub timestamp_clock: Option<&'static str>,
     /// Native driver pipeline-cache compatibility UUID.
     pub pipeline_cache_uuid: Vec<u8>,
     /// Enabled `VK_KHR_external_memory_win32` (enabled whenever available):
