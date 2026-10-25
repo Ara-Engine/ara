@@ -2,7 +2,7 @@
 use super::{ImportJob, Message, ProcessWorker, Request};
 use crate::{Cancellation, Digest, Error, ImportInput, ImportOutput, Progress, Result};
 use std::sync::{
-    Arc, OnceLock,
+    Arc, Mutex, OnceLock,
     atomic::{AtomicBool, Ordering},
 };
 
@@ -10,6 +10,7 @@ use std::sync::{
 pub(super) struct State {
     identity: OnceLock<Option<String>>,
     failed: AtomicBool,
+    service: Mutex<Option<std::net::TcpStream>>,
 }
 
 impl ProcessWorker {
@@ -59,6 +60,15 @@ impl ProcessWorker {
         loop {
             match job.message()? {
                 Some(Message::Encoder(identity)) => return Ok(identity),
+                Some(Message::EncoderService { identity, endpoint }) => {
+                    let lease = endpoint.lease()?;
+                    *self
+                        .encoder
+                        .service
+                        .lock()
+                        .map_err(|_| Error::Worker("encoder lease poisoned".into()))? = Some(lease);
+                    return Ok(Some(identity));
+                }
                 Some(Message::Failed(error)) => return Err(Error::Worker(error)),
                 Some(_) => return Err(Error::Worker("unexpected encoder reply".into())),
                 None => std::thread::sleep(std::time::Duration::from_millis(2)),
@@ -99,6 +109,9 @@ impl ProcessWorker {
         match result {
             Err(Error::EncoderUnavailable(reason)) if backend.is_some() => {
                 self.encoder.failed.store(true, Ordering::Release);
+                if let Ok(mut service) = self.encoder.service.lock() {
+                    service.take();
+                }
                 crate::trace::event(
                     "texture.backend_fallback",
                     &input.source_path,

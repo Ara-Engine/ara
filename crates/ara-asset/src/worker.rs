@@ -60,6 +60,10 @@ enum Message {
     Versions(BTreeMap<String, String>),
     Failed(String),
     Encoder(Option<String>),
+    EncoderService {
+        identity: String,
+        endpoint: crate::EncoderEndpoint,
+    },
     EncoderFailed(String),
 }
 #[derive(Serialize, Deserialize)]
@@ -158,9 +162,20 @@ fn serve(registry: &ImporterRegistry, factory: Option<EncoderFactory>) -> Result
                 }
             });
             let identity = encoder.as_ref().map(|encoder| encoder.backend().to_owned());
+            let endpoint = encoder
+                .as_ref()
+                .and_then(|encoder| encoder.service_endpoint());
             drop(encoder);
             drop(_prepare);
-            return write_frame(&mut std::io::stdout().lock(), &Message::Encoder(identity));
+            return write_frame(
+                &mut std::io::stdout().lock(),
+                &match (identity, endpoint) {
+                    (Some(identity), Some(endpoint)) => {
+                        Message::EncoderService { identity, endpoint }
+                    }
+                    (identity, _) => Message::Encoder(identity),
+                },
+            );
         }
         Request::Versions => {
             return write_frame(
@@ -240,8 +255,9 @@ fn serve(registry: &ImporterRegistry, factory: Option<EncoderFactory>) -> Result
                 serde_json::json!(encoder.metrics()),
             );
         }
-        // Finish device teardown/cache persistence before the host consumes Complete
-        // and releases the disposable process. No GPU work survives publication.
+        // Finish this worker's encoder/connection before Complete. Every encode
+        // has resolved and read back; a leased device may outlive this process,
+        // but none of this job's GPU work survives publication.
         drop(encoder);
         result
     })();
@@ -417,6 +433,7 @@ impl ProcessWorker {
         }
         let (tx, rx) = mpsc::channel();
         let mut job = ImportJob {
+            _encoder: std::sync::Arc::clone(&self.encoder),
             child: None,
             pending: Some(Pending {
                 admission: Admission::new(match &request {
@@ -466,6 +483,9 @@ struct Pending {
 /// A nonblocking queued/process job. Dropping cancels queued work or kills/reaps
 /// its child without joining on UI. Worker deadlines exclude time in the queue.
 pub struct ImportJob {
+    // A queued/running job keeps a negotiated GPU service alive even when the
+    // caller drops its ProcessWorker handle before consuming the result.
+    _encoder: std::sync::Arc<encoder::State>,
     child: Option<Running>,
     pending: Option<Pending>,
     events: Receiver<Result<Message>>,
@@ -563,7 +583,9 @@ impl ImportJob {
             Some(Message::Dependencies(deps)) => Ok(Some(JobEvent::Dependencies(deps))),
             Some(Message::Failed(error)) => Err(Error::Worker(error)),
             Some(Message::EncoderFailed(error)) => Err(Error::EncoderUnavailable(error)),
-            Some(Message::Encoder(_)) => Err(Error::Worker("unexpected encoder identity".into())),
+            Some(Message::Encoder(_) | Message::EncoderService { .. }) => {
+                Err(Error::Worker("unexpected encoder identity".into()))
+            }
             Some(Message::Versions(_)) => Err(Error::Worker("unexpected importer versions".into())),
             None => Ok(None),
         }
