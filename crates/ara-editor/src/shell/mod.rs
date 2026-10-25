@@ -914,14 +914,15 @@ impl Shell {
         }
         if let (Some(cube), Some(rect)) = (self.ui.find("view-cube"), self.viewport()) {
             let r = self.ui.nodes[cube].rect;
-            self.ui.nodes[cube].paint_offset = [rect.x + rect.w - 68. - r.x, rect.y + 12. - r.y];
+            self.ui.nodes[cube].paint_offset =
+                [rect.x + rect.w - axis::SIZE - 12. - r.x, rect.y + 12. - r.y];
             self.ui.nodes[cube].dirty.paint = true;
         }
         self.stats.work += self.ui.frame(&mut self.text)?;
         if previous_canvas != self.canvas_doc.as_deref().map(ara_ui::source::stable_id)
             && editor.state.canvas == crate::graph::Camera::default()
         {
-            self.edit_graph_layout(editor, "frame")?;
+            self.edit_graph_layout(editor, "open")?;
             self.stats.work += self.ui.frame(&mut self.text)?;
         }
         if allow_asset_reflow
@@ -1174,11 +1175,16 @@ impl Shell {
                 .retain(|key, _| key.starts_with("live:"));
         }
         let mut changed = browser_changed || std::mem::take(&mut self.asset_grid_dirty);
-        changed |= self.imports.poll();
-        let completed = self.thumbnails.poll().collect::<Vec<_>>();
+        // An import published (or failed): tiles that were waiting on one ask again now,
+        // not on a timer.
+        if self.imports.poll() {
+            changed = true;
+            self.thumbnails.retry_pending();
+        }
+        let completed = self.thumbnails.poll();
         for result in completed {
             match result {
-                Ok(thumb) => {
+                crate::asset_tools::thumbnails::Done::Image(thumb) => {
                     self.thumbnail_errors.remove(&thumb.key);
                     let slot = if let Some(slot) = self.thumbnail_slots.get(&thumb.key) {
                         *slot
@@ -1209,9 +1215,17 @@ impl Shell {
                     ));
                     changed = true;
                 }
-                Err((key, error)) => {
-                    self.pending_reports.push(("thumbnail", error.clone()));
-                    self.thumbnail_errors.insert(key, error);
+                // Waiting on its import: the tile shows the import's pending state.
+                crate::asset_tools::thumbnails::Done::Pending(_) => {}
+                crate::asset_tools::thumbnails::Done::Failed(key, path, error) => {
+                    // A node preview that cannot render: its node keeps a compact body.
+                    if key.starts_with(crate::asset_tools::thumbnails::NODE) {
+                        self.node_previews.failed.insert(key);
+                    } else {
+                        self.pending_reports
+                            .push(("thumbnail", format!("{path}: no preview ({error})")));
+                        self.thumbnail_errors.insert(key, error);
+                    }
                     changed = true;
                 }
             }

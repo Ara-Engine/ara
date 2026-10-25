@@ -1,8 +1,14 @@
-//! Bounded thumbnail queue. Source decoding, Vulkan capture and cache IO stay off-frame.
+//! Bounded thumbnail queues. Source decoding, Vulkan capture and cache IO stay off-frame.
 //! Every preview renders once as a square master (models through `studio`, materials
 //! on a sphere, effects at a fixed tick) and is cached by content; each view gets a
 //! Lanczos resample at its pixel size with rounded corners, so the UI's single-mip
 //! bilinear sampler never minifies more than 2:1.
+//!
+//! Asset tiles queue on one worker; the material page's live and in-node previews on
+//! another, so an open material never waits behind a folder of models. A model whose
+//! import has not published yet is [`Done::Pending`], not a failure: nothing waits on
+//! it and nothing is reported; call [`Thumbnails::retry_pending`] when the import
+//! progress moves.
 use super::material_preview::Shot;
 use super::studio::{self, MASTER};
 use ara_render::Renderer;
@@ -11,17 +17,23 @@ use std::{
     collections::BTreeSet,
     path::Path,
     sync::mpsc::{self, Receiver, SyncSender},
-    time::Duration,
 };
 
 /// Pixel size of Assets grid tiles: 2× their 64 px logical thumbnail.
 pub(crate) const TILE: u32 = 128;
-/// Longest wait for an in-flight import to publish a model before reporting it.
-const PUBLISH_WAIT: Duration = Duration::from_secs(30);
-
 pub(crate) struct Thumbnail {
     pub key: String,
     pub image: RgbaImage,
+}
+/// What a finished request produced.
+pub(crate) enum Done {
+    /// The image, ready to upload.
+    Image(Thumbnail),
+    /// The source's import has not published: show its pending state; it is asked
+    /// again by [`Thumbnails::retry_pending`].
+    Pending(String),
+    /// It cannot render: key, project path and a project-relative error.
+    Failed(String, String, String),
 }
 struct Request {
     path: String,
@@ -38,25 +50,28 @@ enum Source {
 }
 pub(crate) struct Thumbnails {
     send: SyncSender<Request>,
-    /// In-node previews queue on their own worker: behind nothing, blocking nothing.
-    nodes: SyncSender<Request>,
-    receive: Receiver<Result<Thumbnail, (String, String)>>,
+    /// Live and in-node previews queue on their own worker: behind nothing, blocking nothing.
+    previews: SyncSender<Request>,
+    receive: Receiver<Done>,
     requested: BTreeSet<String>,
+    /// Keys whose source had not published, asked again by `retry_pending`.
+    pending: BTreeSet<String>,
 }
 /// Key prefix of in-node previews; their failures are not reported (the node's are).
-const NODE: &str = "live:node:";
+pub(crate) const NODE: &str = "live:node:";
 impl Thumbnails {
     pub fn new(root: &Path) -> Self {
         let (send, requests) = mpsc::sync_channel::<Request>(48);
-        let (nodes, node_requests) = mpsc::sync_channel::<Request>(32);
+        let (previews, preview_requests) = mpsc::sync_channel::<Request>(32);
         let (results, receive) = mpsc::sync_channel(8);
         worker(root.to_owned(), requests, results.clone());
-        worker(root.to_owned(), node_requests, results);
+        worker(root.to_owned(), preview_requests, results);
         Self {
             send,
-            nodes,
+            previews,
             receive,
             requested: BTreeSet::new(),
+            pending: BTreeSet::new(),
         }
     }
     /// An Assets grid tile, keyed by its project path.
@@ -135,8 +150,8 @@ impl Thumbnails {
             shot,
             pixels: pixels.clamp(16, MASTER),
         };
-        let queue = if matches!(request.source, Source::Material(_)) {
-            &self.nodes
+        let queue = if matches!(request.source, Source::Material(_) | Source::Bytes(_)) {
+            &self.previews
         } else {
             &self.send
         };
@@ -144,11 +159,26 @@ impl Thumbnails {
             self.requested.insert(key);
         }
     }
-    pub fn poll(&mut self) -> impl Iterator<Item = Result<Thumbnail, (String, String)>> + '_ {
-        self.receive
-            .try_iter()
-            .take(8)
-            .filter(|result| !matches!(result, Err((key, _)) if key.starts_with(NODE)))
+    /// Finished requests (up to 8 a frame).
+    pub fn poll(&mut self) -> Vec<Done> {
+        let done: Vec<Done> = self.receive.try_iter().take(8).collect();
+        for result in &done {
+            if let Done::Pending(key) = result {
+                self.pending.insert(key.clone());
+            }
+        }
+        done
+    }
+    /// Ask again for every source that had not published (call when the import
+    /// progress moves); true when there were any.
+    pub fn retry_pending(&mut self) -> bool {
+        if self.pending.is_empty() {
+            return false;
+        }
+        for key in std::mem::take(&mut self.pending) {
+            self.requested.remove(&key);
+        }
+        true
     }
     pub fn invalidate_all(&mut self) {
         self.requested.clear();
@@ -158,49 +188,105 @@ impl Thumbnails {
     }
 }
 
-/// One thumbnail worker thread: renders requests in order and sends the results on.
-fn worker(
-    root: std::path::PathBuf,
-    requests: Receiver<Request>,
-    results: SyncSender<Result<Thumbnail, (String, String)>>,
-) {
+/// One thumbnail worker thread. It takes whatever is queued as a batch: sources and
+/// live previews render in order, while the batch's derived materials cook their
+/// preview shaders side by side (each cook is a compiler process); those render last.
+fn worker(root: std::path::PathBuf, requests: Receiver<Request>, results: SyncSender<Done>) {
     std::thread::spawn(move || {
         let mut renderer = None;
-        for request in requests {
-            let image = match request.source {
-                Source::Material(material) => derived(&root, &material, request.shot),
-                Source::Bytes(bytes) => master(
-                    &root,
-                    &request.path,
-                    Some(&bytes),
-                    request.shot,
-                    &mut renderer,
-                ),
-                Source::File => master(&root, &request.path, None, request.shot, &mut renderer),
-            };
-            let result = match image {
-                Ok(image) => Ok(Thumbnail {
-                    key: request.key,
-                    image: present(&image, request.pixels),
-                }),
-                Err(error) => Err((request.key, error.to_string())),
-            };
-            if results.send(result).is_err() {
-                break;
+        while let Ok(first) = requests.recv() {
+            let mut batch = vec![first];
+            batch.extend(requests.try_iter());
+            let (derived_requests, rest): (Vec<_>, Vec<_>) = batch
+                .into_iter()
+                .partition(|r| matches!(r.source, Source::Material(_)));
+            let mut done = Vec::new();
+            std::thread::scope(|scope| {
+                let cooks = scope.spawn(|| cook_all(&root, &derived_requests));
+                for request in &rest {
+                    done.push(finish(&root, request, &mut renderer));
+                }
+                let _ = cooks.join();
+            });
+            for request in &derived_requests {
+                done.push(finish(&root, request, &mut renderer));
+            }
+            for result in done {
+                if results.send(result).is_err() {
+                    return;
+                }
             }
         }
     });
 }
 
+/// Cooks the preview shaders of derived materials, three compiler processes at a time.
+/// Errors surface again when each request renders.
+fn cook_all(root: &Path, requests: &[Request]) {
+    let materials: Vec<&ara_material::Material> = requests
+        .iter()
+        .filter_map(|r| match &r.source {
+            Source::Material(material) => Some(&**material),
+            _ => None,
+        })
+        .collect();
+    for chunk in materials.chunks(3) {
+        std::thread::scope(|scope| {
+            for material in chunk {
+                scope.spawn(|| super::material_preview::cook(root, material));
+            }
+        });
+    }
+}
+
+/// Renders one request into its result.
+fn finish(root: &Path, request: &Request, renderer: &mut Option<Renderer>) -> Done {
+    let image = match &request.source {
+        Source::Material(material) => derived(root, material, request.shot).map(Some),
+        Source::Bytes(bytes) => master(root, &request.path, Some(bytes), request.shot, renderer),
+        Source::File => master(root, &request.path, None, request.shot, renderer),
+    };
+    match image {
+        Ok(Some(image)) => Done::Image(Thumbnail {
+            key: request.key.clone(),
+            image: present(&image, request.pixels),
+        }),
+        Ok(None) => Done::Pending(request.key.clone()),
+        Err(error) => Done::Failed(
+            request.key.clone(),
+            request.path.clone(),
+            relative(&error.to_string(), root),
+        ),
+    }
+}
+
+/// `message` with the project root taken out of its paths (`\\?\C:\…\Outpost\a.gltf`
+/// reads `a.gltf`), so reports name project files as people see them.
+fn relative(message: &str, root: &Path) -> String {
+    let mut text = message.to_owned();
+    let mut roots = vec![root.to_path_buf()];
+    if let Ok(canonical) = root.canonicalize() {
+        roots.push(canonical);
+    }
+    for root in roots {
+        let root = root.display().to_string();
+        for prefix in [format!("{root}\\"), format!("{root}/")] {
+            text = text.replace(&prefix, "");
+        }
+    }
+    text
+}
+
 /// The square master image for a source, from the content-addressed cache when the
-/// source, its import settings and its dependencies are unchanged.
+/// source, its import settings and its dependencies are unchanged. `None` while a
+/// model's import has not published.
 fn master(
     root: &Path,
     path: &str,
     override_source: Option<&[u8]>,
     shot: Shot,
     renderer: &mut Option<Renderer>,
-) -> anyhow::Result<RgbaImage> {
+) -> anyhow::Result<Option<RgbaImage>> {
     let source = root.join(path).canonicalize()?;
     anyhow::ensure!(
         source.starts_with(root.canonicalize()?),
@@ -227,7 +313,7 @@ fn master(
     std::fs::create_dir_all(&cache)?;
     let target = cache.join(format!("{key}.png"));
     if target.exists() {
-        return Ok(image::open(target)?.to_rgba8());
+        return Ok(Some(image::open(target)?.to_rgba8()));
     }
     let extension = source.extension().and_then(|s| s.to_str()).unwrap_or("");
     let image = match extension {
@@ -237,11 +323,17 @@ fn master(
             renderer,
             &root.join(".ara/cache/thumbnail-gpu"),
         )?,
-        "glb" | "gltf" => studio::shoot(
-            studio::Subject::model(&*crate::world::gltf::published(&source, PUBLISH_WAIT)?)?,
-            renderer,
-            &root.join(".ara/cache/thumbnail-gpu"),
-        )?,
+        "glb" | "gltf" => {
+            // Never wait on an import: a model that has not published is pending.
+            let Some(model) = crate::world::gltf::published(&source)? else {
+                return Ok(None);
+            };
+            studio::shoot(
+                studio::Subject::model(&model)?,
+                renderer,
+                &root.join(".ara/cache/thumbnail-gpu"),
+            )?
+        }
         "material" | "graph" => {
             let text = std::str::from_utf8(&inputs[..source_len])?;
             // Both views compile the same material AST; cached images are presentation only.
@@ -258,7 +350,7 @@ fn master(
                         .map_err(|d| anyhow::anyhow!("{d:?}"))?;
                     let image = super::vfx_preview::capture(root, &effect)?;
                     image.save(&target)?;
-                    return Ok(image);
+                    return Ok(Some(image));
                 }
                 ara_material::Material::from_graph(&graph).map_err(|d| anyhow::anyhow!("{d:?}"))?
             };
@@ -267,7 +359,7 @@ fn master(
         _ => anyhow::bail!("no thumbnail decoder for {extension}"),
     };
     image.save(&target)?;
-    Ok(image)
+    Ok(Some(image))
 }
 
 /// A derived material's preview, cached by its text and shot like file masters.
@@ -406,6 +498,47 @@ pub(crate) fn image_id(slot: usize) -> u32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_model_whose_import_has_not_published_is_pending_at_once() {
+        let root = std::env::temp_dir().join(format!("ara-thumb-pending-{}", std::process::id()));
+        std::fs::create_dir_all(root.join("models")).expect("scratch project");
+        std::fs::write(root.join("ara.project.json"), r#"{"name":"Pending"}"#).expect("project");
+        std::fs::write(
+            root.join("models/box.gltf"),
+            r#"{"asset":{"version":"2.0"}}"#,
+        )
+        .expect("model");
+        std::fs::write(
+            root.join("models/box.gltf.import.json"),
+            r#"{"id":"as_box"}"#,
+        )
+        .expect("sidecar");
+        let started = std::time::Instant::now();
+        let image = master(
+            &root,
+            "models/box.gltf",
+            None,
+            Shot::surface(false),
+            &mut None,
+        )
+        .expect("pending is not an error");
+        assert!(image.is_none(), "no image until the import publishes");
+        assert!(
+            started.elapsed() < std::time::Duration::from_secs(5),
+            "never waits on the import"
+        );
+        // Reports name project files as people see them.
+        let message = format!(
+            "{} could not be read",
+            root.join("models/box.gltf").display()
+        );
+        assert_eq!(
+            relative(&message, &root),
+            "models/box.gltf could not be read"
+        );
+        let _ = std::fs::remove_dir_all(&root);
+    }
 
     #[test]
     fn present_resamples_and_rounds_only_the_corners() {

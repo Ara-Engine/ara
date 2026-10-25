@@ -805,7 +805,7 @@ impl Canvas {
     }
 }
 
-fn union(a: Box2, b: Box2) -> Box2 {
+pub(super) fn union(a: Box2, b: Box2) -> Box2 {
     Box2 {
         x: a.x.min(b.x),
         y: a.y.min(b.y),

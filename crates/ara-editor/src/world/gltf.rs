@@ -71,13 +71,12 @@ impl ModelCache {
 }
 
 /// One-shot thumbnail worker entry: the published generation of a source model,
-/// with its materials and textures. Scene extraction uses its persistent cache; an
-/// isolated preview resolves its sidecar once and waits (bounded, off the UI thread)
-/// for an in-flight import to publish.
+/// with its materials and textures, or `None` while its import has not published (a
+/// pending import is not an error; the caller asks again when import progress moves).
+/// Scene extraction uses its persistent cache instead.
 pub(crate) fn published(
     path: &Path,
-    wait: std::time::Duration,
-) -> anyhow::Result<std::sync::Arc<ara_runtime::model::Model>> {
+) -> anyhow::Result<Option<std::sync::Arc<ara_runtime::model::Model>>> {
     let root = path
         .ancestors()
         .find(|root| root.join("ara.project.json").is_file())
@@ -89,23 +88,12 @@ pub(crate) fn published(
         .as_str()
         .context("model sidecar has no asset ID")?;
     let mut cache = ModelCache::new(root)?;
-    let deadline = std::time::Instant::now() + wait;
-    loop {
-        cache.revision();
-        let source = cache
-            .snapshot
-            .as_deref()
-            .map(|snapshot| snapshot as &dyn AssetSource);
-        if let Some(model) = cache.decoded.get(source, asset)? {
-            return Ok(model.clone());
-        }
-        anyhow::ensure!(
-            std::time::Instant::now() < deadline,
-            "{} has not been imported yet",
-            path.display()
-        );
-        std::thread::sleep(std::time::Duration::from_millis(100));
-    }
+    cache.revision();
+    let source = cache
+        .snapshot
+        .as_deref()
+        .map(|snapshot| snapshot as &dyn AssetSource);
+    Ok(cache.decoded.get(source, asset)?.cloned())
 }
 
 #[derive(Default)]

@@ -27,6 +27,9 @@ const ROW: f32 = 22.;
 const PAD: f32 = 6.;
 /// State-machine state size.
 const STATE: [f32; 2] = [168., 44.];
+/// The lowest zoom a graph opens at: node titles stay readable (12 px titles at
+/// 10 px or more).
+pub const READABLE: f32 = 0.85;
 /// In-node preview square (rendered at 2x by the thumbnail queue).
 pub const PREVIEW: f32 = 144.;
 
@@ -153,6 +156,8 @@ pub struct Canvas {
     /// The state machine's live state during Play (playing state, cross-fade).
     pub live: Option<Live>,
     show_previews: bool,
+    /// Nodes that have, or are rendering, an in-node preview; others stay compact.
+    previewed: std::collections::BTreeSet<String>,
     graph: Graph,
     nodes: Vec<NodeView>,
     index: BTreeMap<String, usize>,
@@ -173,6 +178,7 @@ impl Canvas {
             previews: BTreeMap::new(),
             live: None,
             show_previews: true,
+            previewed: Default::default(),
             graph,
             nodes: Vec::new(),
             index: BTreeMap::new(),
@@ -192,12 +198,24 @@ impl Canvas {
             self.refresh_views(text);
         }
     }
-    /// Nodes that reserve an in-node preview, in graph order.
+    /// Nodes whose look can show an in-node preview, in graph order.
     pub fn preview_nodes(&self) -> impl Iterator<Item = &str> {
         self.nodes
             .iter()
-            .filter(|n| n.preview_top.is_some())
+            .filter(|n| n.look.preview)
             .map(|n| n.id.as_str())
+    }
+    /// The nodes that get a preview tile: those with a preview rendered or on its way.
+    /// A node whose preview cannot be made keeps a compact body, never an empty tile.
+    pub fn set_previewed(
+        &mut self,
+        nodes: std::collections::BTreeSet<String>,
+        text: &mut ara_ui_text::TextSystem,
+    ) {
+        if self.previewed != nodes {
+            self.previewed = nodes;
+            self.refresh_views(text);
+        }
     }
     /// Replace a read-only graph snapshot after the host publishes ops.
     pub fn refresh(&mut self, graph: Graph, text: &mut ara_ui_text::TextSystem) {
@@ -270,11 +288,12 @@ impl Canvas {
                     HEADER + if look.value.is_some() { VALUE } else { 0. } + PAD * 2. + rows * ROW,
                 ),
             };
-            let preview_top = (look.preview && self.show_previews).then(|| {
-                let top = height;
-                height += PREVIEW + PAD * 2.;
-                top
-            });
+            let preview_top = (look.preview && self.show_previews && self.previewed.contains(id))
+                .then(|| {
+                    let top = height;
+                    height += PREVIEW + PAD * 2.;
+                    top
+                });
             for label in [&look.title, &look.caption]
                 .into_iter()
                 .chain(look.value.as_ref())
@@ -451,6 +470,53 @@ impl Canvas {
             pan: [
                 32. + (width - bounds.w * zoom) * 0.5 - bounds.x * zoom,
                 40. + (height - bounds.h * zoom) * 0.5 - bounds.y * zoom,
+            ],
+        }
+    }
+    /// Framing for a graph that just opened: like [`Self::framed`], but never below
+    /// [`READABLE`]. Along an axis the graph does not fit at that zoom, its output end
+    /// stays in view: the nodes nothing consumes sit at the right, centred vertically,
+    /// since graphs read into their outputs.
+    pub fn framed_readable(&self, rect: Box2) -> Camera {
+        let fit = self.framed(rect);
+        if fit.zoom >= READABLE {
+            return fit;
+        }
+        let zoom = READABLE;
+        let bounds = self.bounds();
+        let consumed: std::collections::BTreeSet<&str> = self
+            .graph
+            .edges
+            .values()
+            .map(|e| e.from.node.as_str())
+            .collect();
+        let sinks = self
+            .nodes
+            .iter()
+            .filter(|n| !consumed.contains(n.id.as_str()))
+            .map(|n| Box2 {
+                x: n.position[0],
+                y: n.position[1],
+                w: n.width,
+                h: n.height,
+            })
+            .reduce(paint::union)
+            .unwrap_or(bounds);
+        let width = (rect.w - 64.).max(1.);
+        let height = (rect.h - 96.).max(1.);
+        Camera {
+            zoom,
+            pan: [
+                if bounds.w * zoom <= width {
+                    32. + (width - bounds.w * zoom) * 0.5 - bounds.x * zoom
+                } else {
+                    32. + width - (sinks.x + sinks.w) * zoom
+                },
+                if bounds.h * zoom <= height {
+                    40. + (height - bounds.h * zoom) * 0.5 - bounds.y * zoom
+                } else {
+                    40. + height * 0.5 - (sinks.y + sinks.h * 0.5) * zoom
+                },
             ],
         }
     }

@@ -48,11 +48,13 @@ impl Shot {
     }
 }
 
-pub(super) fn capture(
+/// Generates and cooks a material's preview shader into the project cache (once per
+/// source: cooks are keyed by the generated source); returns the cooked folder. Cooks
+/// are separate compiler processes, so a batch of them can run side by side.
+pub(super) fn cook(
     root: &Path,
     material: &ara_material::Material,
-    shot: Shot,
-) -> anyhow::Result<image::RgbaImage> {
+) -> anyhow::Result<std::path::PathBuf> {
     let generated = ara_material::generate(material, &Default::default())
         .map_err(|d| anyhow::anyhow!("{d:?}"))?;
     let body = generated
@@ -84,6 +86,22 @@ pub(super) fn capture(
 
         ara_shader_cook::cook(&path, &cooked, &ara_shader_cook::Toolchain::discover())?;
     }
+    Ok(cooked)
+}
+
+pub(super) fn capture(
+    root: &Path,
+    material: &ara_material::Material,
+    shot: Shot,
+) -> anyhow::Result<image::RgbaImage> {
+    let cooked = cook(root, material)?;
+    // The cooked folder is named by the generated source's hash.
+    let hash = cooked
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or_default()
+        .to_owned();
+    let base = root.join(".ara/cache/material-previews");
     let pipeline: ara_gpu::cooked::CookedPipeline =
         serde_json::from_slice(&std::fs::read(cooked.join("preview.json"))?)?;
     let mut gpu = VulkanDevice::new(&[], base.join("gpu"))?;

@@ -6,7 +6,8 @@ use super::*;
 use ara_ui::{paint::Draw, source::stable_id, style::Color};
 use glam::Vec3;
 
-const SIZE: f32 = 60.;
+/// Widget size; it sits 12 px inside the viewport's top-right corner.
+pub(super) const SIZE: f32 = 60.;
 const RADIUS: f32 = 21.;
 /// Cap diameters: positive (lettered) and negative (hollow) axes.
 const POSITIVE: f32 = 16.;
