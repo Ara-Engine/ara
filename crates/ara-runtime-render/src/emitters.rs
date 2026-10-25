@@ -12,6 +12,7 @@
 //! (the GI bake zeroes [`is_emitter`] materials' emission). The search runs off
 //! the render thread: [`Job::new`] copies what it needs and [`Job::run`] traces.
 use crate::gi_cpu::{Mesh, Shading};
+use anyhow::{Context, Result};
 use ara_render::{
     instanced::{
         Geometry, Lod, Material, NO_TEXTURE, Scene, TextureSlot, TextureTransform, Vertex,
@@ -19,7 +20,11 @@ use ara_render::{
     scene::Light,
 };
 use glam30::{Mat3, Mat4, Vec2, Vec3};
-use std::{collections::BTreeMap, f32::consts::PI, sync::Arc};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    f32::consts::PI,
+    sync::Arc,
+};
 
 /// Emitted radiance (mean luminance, cd/m2) above which a material lights the
 /// scene directly; dimmer glow stays in the probe volume.
@@ -265,6 +270,8 @@ struct Emitter {
 /// instances' current transforms.
 pub(crate) struct Emitters {
     emitters: Vec<Emitter>,
+    /// Materials the search found emitting, so an edit to one re-runs it.
+    materials: BTreeSet<usize>,
     /// The light budget the current lights were clustered for.
     budget: Option<usize>,
 }
@@ -273,6 +280,8 @@ pub(crate) struct Emitters {
 struct Source {
     /// The scene's geometry index (meshes build once per geometry).
     geometry: usize,
+    /// The scene's material index.
+    material_index: usize,
     /// The finest LOD alone.
     copy: Geometry,
     material: Material,
@@ -321,6 +330,7 @@ impl Job {
                     .flatten();
                 sources.push(Source {
                     geometry: i.geometry,
+                    material_index: i.material,
                     copy: Geometry {
                         key: geometry.key,
                         vertices: geometry.vertices.clone(),
@@ -347,6 +357,7 @@ impl Job {
         Self { instances, sources }
     }
 
+    #[cfg(test)]
     pub(crate) fn is_empty(&self) -> bool {
         self.instances.is_empty()
     }
@@ -376,15 +387,108 @@ impl Job {
                     placed: None,
                 })
                 .collect(),
+            materials: self.sources.iter().map(|s| s.material_index).collect(),
             budget: None,
         };
-        eprintln!(
-            "ara-runtime-render: {} emissive surfaces ({:.0} lm escaping) found in {:.1} ms",
-            emitters.len(),
-            emitters.lumens(),
-            started.elapsed().as_secs_f64() * 1e3
-        );
+        if !emitters.is_empty() {
+            eprintln!(
+                "ara-runtime-render: {} emissive surfaces ({:.0} lm escaping) found in {:.1} ms",
+                emitters.len(),
+                emitters.lumens(),
+                started.elapsed().as_secs_f64() * 1e3
+            );
+        }
         emitters
+    }
+}
+
+/// Whether editing the `changed` materials of `scene` changes its emitter lights:
+/// one of `current`'s emitters was edited (strength, colour or its emissive
+/// switch), or a material now emits enough to become one. `mean` gives a map's
+/// mean texel.
+pub(crate) fn emission_edited(
+    current: Option<&Emitters>,
+    scene: &Scene,
+    mean: impl Fn(u32) -> Option<[f32; 4]>,
+    changed: &[usize],
+) -> bool {
+    changed.iter().any(|&index| {
+        current.is_some_and(|e| e.materials.contains(&index))
+            || scene.materials.get(index).is_some_and(|m| {
+                let texture = m.pbr.textures[3];
+                let map = (texture != NO_TEXTURE)
+                    .then(|| mean(texture))
+                    .flatten()
+                    .unwrap_or([1.; 4]);
+                let e = m.pbr.emissive_roughness;
+                is_emitter(Shading {
+                    albedo: Vec3::ZERO,
+                    emissive: Vec3::new(e[0] * map[0], e[1] * map[1], e[2] * map[2]),
+                })
+            })
+    })
+}
+
+/// The emitter search off the render thread: at most one running job and one
+/// queued rerun, so a burst of edits (a strength slider) runs one search at a
+/// time and the last edit always lands. The current lights stay until then.
+#[derive(Default)]
+pub(crate) struct Search {
+    running: Option<std::thread::JoinHandle<Emitters>>,
+    queued: bool,
+}
+
+impl Search {
+    /// Searches with `job` now, or once the running search lands (built then,
+    /// from the content of that moment).
+    pub(crate) fn request(&mut self, job: impl FnOnce() -> Job) -> Result<()> {
+        if self.running.is_some() {
+            self.queued = true;
+            return Ok(());
+        }
+        self.start(job())
+    }
+
+    /// Starts over for new content: a search of the old content is left to
+    /// finish unobserved, and a queued rerun is dropped.
+    pub(crate) fn restart(&mut self, job: Job) -> Result<()> {
+        self.running = None;
+        self.queued = false;
+        self.start(job)
+    }
+
+    fn start(&mut self, job: Job) -> Result<()> {
+        self.running = Some(
+            std::thread::Builder::new()
+                .name("ara-emitters".into())
+                .spawn(move || job.run())
+                .context("emitter search thread")?,
+        );
+        Ok(())
+    }
+
+    /// Whether a search is running or queued.
+    pub(crate) fn is_busy(&self) -> bool {
+        self.running.is_some() || self.queued
+    }
+
+    /// The finished search, if any (waiting for the running one when `wait`); a
+    /// queued rerun then starts from `job`.
+    pub(crate) fn poll(
+        &mut self,
+        wait: bool,
+        job: impl FnOnce() -> Job,
+    ) -> Result<Option<Emitters>> {
+        let Some(running) = self.running.take_if(|r| wait || r.is_finished()) else {
+            return Ok(None);
+        };
+        let emitters = running
+            .join()
+            .map_err(|_| anyhow::anyhow!("the emitter search panicked"))?;
+        if std::mem::take(&mut self.queued) {
+            self.start(job())?;
+        }
+        Ok(Some(emitters))
     }
 }
 
@@ -739,6 +843,60 @@ mod tests {
         assert!(lights.iter().any(|l| l.direction_outer[1] > 0.999));
         let face = 100. * PI * 0.36;
         assert!(lights.iter().all(|l| (flux(l) - face).abs() < 0.2));
+    }
+
+    #[test]
+    fn emission_edits_rerun_the_search_and_the_last_edit_lands() -> Result<()> {
+        let quad = [-0.125, -0.125, 0.875, 0.875, 3., 0.];
+        let mut scene = scene(&[quad], 100., NO_TEXTURE);
+        let mut dark = Material::default();
+        dark.pbr.emissive_roughness = [1., 1., 1., 0.5];
+        scene.materials.push(dark);
+        let shading = |scene: &Scene| -> Vec<Shading> {
+            scene
+                .materials
+                .iter()
+                .map(|m| Shading {
+                    albedo: Vec3::ONE,
+                    emissive: Vec3::from_slice(&m.pbr.emissive_roughness[..3]),
+                })
+                .collect()
+        };
+        let job = |scene: &Scene| Job::new(scene, &shading(scene), |_, _| None);
+        let current = job(&scene).run();
+        let none = |_| None;
+        assert!(
+            !emission_edited(Some(&current), &scene, none, &[1]),
+            "still dark"
+        );
+        assert!(
+            emission_edited(Some(&current), &scene, none, &[0]),
+            "an emitter edited"
+        );
+        scene.materials[1].pbr.emissive_roughness = [50., 50., 50., 0.5];
+        assert!(
+            emission_edited(Some(&current), &scene, none, &[1]),
+            "now an emitter"
+        );
+
+        // A slider: edits while a search runs queue one rerun of the newest scene.
+        let mut search = Search::default();
+        scene.materials[0].pbr.emissive_roughness = [200., 200., 200., 0.5];
+        search.request(|| job(&scene))?;
+        scene.materials[0].pbr.emissive_roughness = [300., 300., 300., 0.5];
+        search.request(|| unreachable!("queued, not built"))?;
+        search.request(|| unreachable!("queued, not built"))?;
+        assert!(search.is_busy());
+        let first = search
+            .poll(true, || job(&scene))?
+            .expect("the first search");
+        let second = search.poll(true, || unreachable!())?.expect("the rerun");
+        assert!(!search.is_busy());
+        assert!(
+            second.lumens() > first.lumens() * 1.4,
+            "the last edit landed"
+        );
+        Ok(())
     }
 
     #[test]

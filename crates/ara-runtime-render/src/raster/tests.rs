@@ -57,14 +57,9 @@ fn first_capture_uploads_finished_emitter_search_without_another_prepare() -> Re
     raster.set_probe_gi(false);
     raster.look = Some(look);
     raster.prepared = Some(prepared);
-    // Keep the result out of prepare deterministically: capture itself must
-    // adopt it and upload the lights, rather than relying on worker timing.
-    let (release, wait) = std::sync::mpsc::channel();
-    raster.emitter_job = Some(std::thread::spawn(move || {
-        wait.recv().expect("fixture releases the emitter search");
-        job.run()
-    }));
-    release.send(())?;
+    // No prepare runs before the capture: capture itself must adopt the search
+    // and upload the lights, rather than relying on worker timing.
+    raster.emitter_search.restart(job)?;
     let request = CaptureRequest {
         camera: CameraSpec::LookAt {
             position: glam30::Vec3::new(0., 3., 7.),
