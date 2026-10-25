@@ -1,6 +1,50 @@
 use super::*;
 mod crash;
 
+thread_local! {
+    static PUBLISH_FAILURE: std::cell::Cell<Option<bool>> = const { std::cell::Cell::new(None) };
+}
+
+pub(super) fn fail_publish(after: bool) -> std::io::Result<()> {
+    let fail = PUBLISH_FAILURE.with(|state| {
+        if state.get() == Some(after) {
+            if after {
+                state.set(None);
+            }
+            true
+        } else {
+            false
+        }
+    });
+    if fail {
+        Err(std::io::Error::from_raw_os_error(5))
+    } else {
+        Ok(())
+    }
+}
+
+#[test]
+fn failed_publication_only_succeeds_when_the_live_bytes_verify() {
+    for after in [false, true] {
+        let root = tempfile::tempdir().expect("root");
+        let cache = FileCache::at(root.path()).expect("cache");
+        let key = Digest::of(b"publication race");
+        PUBLISH_FAILURE.with(|state| state.set(Some(after)));
+        let result = cache.store(key, &output());
+        PUBLISH_FAILURE.with(|state| state.set(None));
+        if after {
+            result.expect("complete racing publication is usable");
+            assert_eq!(
+                cache.load(key).expect("read").expect("hit").output,
+                output()
+            );
+        } else {
+            assert!(matches!(result, Err(Error::Io(error)) if error.raw_os_error() == Some(5)));
+            assert!(cache.load(key).expect("nothing published").is_none());
+        }
+    }
+}
+
 fn output() -> ImportOutput {
     ImportOutput {
         artifacts: vec![Artifact {
@@ -95,15 +139,34 @@ fn matching_hash_does_not_bypass_payload_validation() {
     let entry = Entry {
         version: 1,
         artifacts: vec![Blob {
-            name: "mesh".into(), kind: ArtifactKind::Mesh, hash, length: bytes.len() as u64,
+            name: "mesh".into(),
+            kind: ArtifactKind::Mesh,
+            hash,
+            length: bytes.len() as u64,
         }],
     };
-    let text = ara_json::to_canonical_string(&ara_json::sort_keys(&serde_json::to_value(entry).expect("entry")));
+    let text = ara_json::to_canonical_string(&ara_json::sort_keys(
+        &serde_json::to_value(entry).expect("entry"),
+    ));
     fs::write(cache.action(key), text).expect("action");
-    assert!(cache.load(key).expect("invalid payload is a miss").is_none());
+    assert!(
+        cache
+            .load(key)
+            .expect("invalid payload is a miss")
+            .is_none()
+    );
     let expected = output();
-    cache.store(key, &expected).expect("recook replaces the invalid record");
-    assert_eq!(cache.load(key).expect("verified repair").expect("hit").output, expected);
+    cache
+        .store(key, &expected)
+        .expect("recook replaces the invalid record");
+    assert_eq!(
+        cache
+            .load(key)
+            .expect("verified repair")
+            .expect("hit")
+            .output,
+        expected
+    );
 }
 
 pub(super) fn pause_at(stage: &str, path: &Path) -> bool {

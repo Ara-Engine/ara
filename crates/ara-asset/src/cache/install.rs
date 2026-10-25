@@ -8,9 +8,32 @@ enum Existing {
     Damaged,
 }
 
+fn busy(error: &std::io::Error) -> bool {
+    cfg!(windows) && matches!(error.raw_os_error(), Some(5 | 32 | 33))
+}
+
+/// Windows can temporarily deny opening a name being atomically replaced.
+/// Retry safe reads briefly; persistent ACL/I/O failures remain errors.
+pub(super) fn read(path: &Path) -> std::io::Result<Vec<u8>> {
+    let mut result = fs::read(path);
+    for delay in [1, 2, 4, 8, 16, 32] {
+        if !result.as_ref().is_err_and(busy) {
+            break;
+        }
+        crate::trace::event(
+            "cache.io_retry",
+            &path.display().to_string(),
+            serde_json::json!({"operation":"read","delayMs":delay}),
+        );
+        std::thread::sleep(std::time::Duration::from_millis(delay));
+        result = fs::read(path);
+    }
+    result
+}
+
 fn inspect(path: &Path, bytes: &[u8], valid: &impl Fn(&[u8]) -> Result<bool>) -> Result<Existing> {
     let _part = detail_scope("cache.install.read", &path.display().to_string());
-    match fs::read(path) {
+    match read(path) {
         Ok(existing) if existing == bytes => Ok(Existing::Same),
         Ok(existing) if valid(&existing)? => Err(Error::Invalid(
             "immutable cache entry conflicts (nondeterministic cook)".into(),
@@ -32,7 +55,7 @@ pub(super) fn bytes(
     let parent = path
         .parent()
         .ok_or_else(|| Error::Invalid("cache path without parent".into()))?;
-    for _ in 0..8 {
+    for attempt in 0..8 {
         let state = inspect(path, bytes, &valid)?;
         let mut repair = None;
         let replace = match state {
@@ -67,8 +90,26 @@ pub(super) fn bytes(
         drop(repair);
         match result {
             Ok(()) => return Ok(()),
-            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {}
-            Err(e) => return Err(e.into()),
+            Err(error) => {
+                // Windows can deny a losing no-clobber rename while another
+                // publisher has already installed the expected complete bytes.
+                // Accept only a verified match; real write failures remain errors.
+                if matches!(inspect(path, bytes, &valid)?, Existing::Same) {
+                    return Ok(());
+                }
+                if busy(&error) && attempt < 7 {
+                    crate::trace::event(
+                        "cache.io_retry",
+                        &label,
+                        serde_json::json!({"operation":"publish","attempt":attempt,"code":error.raw_os_error()}),
+                    );
+                    std::thread::sleep(std::time::Duration::from_millis(1 << attempt));
+                    continue;
+                }
+                if error.kind() != std::io::ErrorKind::AlreadyExists {
+                    return Err(error.into());
+                }
+            }
         }
     }
     Err(Error::Invalid(
@@ -77,6 +118,8 @@ pub(super) fn bytes(
 }
 
 fn publish(path: &Path, bytes: &[u8], replace: bool) -> std::io::Result<()> {
+    #[cfg(test)]
+    super::tests::fail_publish(false)?;
     let label = path.display().to_string();
     let parent = path.parent().expect("cache parent validated by caller");
     let mut temp = {
@@ -106,6 +149,8 @@ fn publish(path: &Path, bytes: &[u8], replace: bool) -> std::io::Result<()> {
         };
         result.map_err(|e| e.error)?;
     }
+    #[cfg(test)]
+    super::tests::fail_publish(true)?;
     #[cfg(test)]
     if super::tests::pause_at("object-published", path)
         || super::tests::pause_at("action-published", path)

@@ -82,7 +82,7 @@ impl FileCache {
             let label = memo.display().to_string();
             let matches = {
                 let _part = detail_scope("cache.object.memo_read", &label);
-                fs::read(&memo).is_ok_and(|existing| existing == bytes)
+                install::read(&memo).is_ok_and(|existing| existing == bytes)
             };
             if matches {
                 let linked = {
@@ -143,7 +143,7 @@ impl FileCache {
         self.root.join("actions").join(key.to_string())
     }
     fn entry(&self, key: Digest) -> Result<Option<Entry>> {
-        let bytes = match fs::read(self.action(key)) {
+        let bytes = match install::read(&self.action(key)) {
             Ok(b) => b,
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
             Err(e) => return Err(e.into()),
@@ -158,7 +158,7 @@ impl FileCache {
     fn verified_output(&self, entry: Entry) -> Result<Option<ImportOutput>> {
         let mut artifacts = Vec::with_capacity(entry.artifacts.len());
         for a in entry.artifacts {
-            let bytes = match fs::read(self.object(a.hash)) {
+            let bytes = match install::read(&self.object(a.hash)) {
                 Ok(bytes) => bytes,
                 Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
                 Err(e) => return Err(e.into()),
