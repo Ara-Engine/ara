@@ -16,10 +16,11 @@ use ara_render::look::{AmbientOcclusion, FarShadows, LocalShadows, Quality, Refl
 /// High GPU <= 6 ms, Medium <= 3.5, Epic <= 10).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum QualityPreset {
-    /// Raster: two shadow cascades, probe GI, no bloom (the cheapest look).
+    /// Raster: 0.45 render scale, two 512 shadow cascades, probe GI, coarse LODs,
+    /// no bloom (the cheapest look).
     Low,
-    /// Raster: three cascades and bloom. Ray traced: ReSTIR at 0.4 scale, rough
-    /// reflections from the probe field above roughness 0.35.
+    /// Raster: 0.55 render scale, three cascades and bloom. Ray traced: ReSTIR at
+    /// 0.4 scale, rough reflections from the probe field above roughness 0.35.
     Medium,
     /// Raster: four 2048 cascades to 150 m. Ray traced: ReSTIR at half scale,
     /// paths ending in the probe field after one traced event.
@@ -258,11 +259,14 @@ pub enum RenderPath {
 impl QualityPreset {
     /// Raster render scale per display axis: the scene renders at this fraction of
     /// the display and the temporal resolve reconstructs the display resolution
-    /// (TAAU, `Renderer::resize_upscaled`). Low renders natively.
+    /// (TAAU, `Renderer::resize_upscaled`). Chosen with the budgets below for the
+    /// D26 frame targets at 1440p (Low 2, Medium 3.5, High 6, Epic 10 ms, p50 and
+    /// p95 on Outpost, Hangar and Showcase).
     pub fn raster_scale(self) -> f32 {
         match self {
-            Self::Low => 1.,
-            Self::Medium | Self::High => 2. / 3.,
+            Self::Low => 0.45,
+            Self::Medium => 0.55,
+            Self::High => 2. / 3.,
             Self::Epic => 0.77,
         }
     }
@@ -296,15 +300,17 @@ impl QualityPreset {
             })
         };
         match self {
+            // LOD error and the cull size are in render pixels (two display
+            // pixels at Low's scale).
             Self::Low => Quality {
-                shadows: shadows(2, 1024, 60., (1024, 600.)),
+                shadows: shadows(2, 512, 60., (1024, 600.)),
                 ambient_occlusion: None,
                 reflections: None,
-                gi_budget: 1024,
+                gi_budget: 256,
                 bloom: false,
                 emitter_lights: 4,
-                lod_pixels: 4.,
-                min_pixels: 3.,
+                lod_pixels: 8.,
+                min_pixels: 8.,
                 terrain_detail: 0.,
                 local_shadows: None,
             },
@@ -312,11 +318,11 @@ impl QualityPreset {
                 shadows: shadows(3, 1024, 100., (1024, 1000.)),
                 ambient_occlusion: ao(2, 4),
                 reflections: ssr(0.4, 20., 16),
-                gi_budget: 2048,
+                gi_budget: 1024,
                 bloom: true,
                 emitter_lights: 6,
-                lod_pixels: 2.,
-                min_pixels: 2.,
+                lod_pixels: 3.,
+                min_pixels: 3.,
                 terrain_detail: 40.,
                 local_shadows: Some(LocalShadows {
                     lights: 2,
