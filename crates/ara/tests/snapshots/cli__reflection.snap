@@ -4318,7 +4318,10 @@ expression: out
         "emissive": {
           "type": "vec3",
           "doc": "Default procedural radiance, or an RGB emission multiplier with a model/material asset. Models treat zero RGB as neutral; use `emissiveEnabled` to switch them off.",
-          "default": [0, 0, 0]
+          "default": [0, 0, 0],
+          "editor": {
+            "color": true
+          }
         },
         "emissiveEnabled": {
           "type": "bool",
@@ -4335,7 +4338,10 @@ expression: out
           "type": "option<vec3>",
           "doc": "Optional linear RGB replacement for the source emissive factor, useful for lamps.",
           "default": null,
-          "range": [0, null]
+          "range": [0, null],
+          "editor": {
+            "color": true
+          }
         },
         "emissiveMaterials": {
           "type": "list<string>",
