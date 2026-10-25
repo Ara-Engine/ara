@@ -6,6 +6,7 @@
 //! a shipped runtime necessarily has the decryption key.
 
 #![warn(missing_docs)]
+mod decode;
 mod model;
 mod owned;
 mod read;

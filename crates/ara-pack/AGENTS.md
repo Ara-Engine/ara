@@ -8,8 +8,10 @@ the same manifest. Individual reads still check decompressed identities; repeate
 asset loads never rehash the whole pack or clone its manifest.
 
 Run `cargo test -p ara-pack`, `cargo clippy -p ara-pack --all-targets`.
-The `write` feature enables native zstd compression; disable it in cross-built
-runtime templates. Reading uses pure Rust and bounds decompression to 16 MiB.
+The `write` feature enables native zstd compression. `native-decode` selects the
+vendored zstd reader, built through `cc` without CMake, in ara-player and its runtime
+templates. Without it reading uses pure Rust. Both bound chunks to 16 MiB and keep
+stored, raw and file hash checks; native decoding also limits the history window.
 Source paths and timestamps never enter identities. JSON uses ara-json's writer.
 Encryption is a deterrent, not DRM: clients necessarily possess the key.
 Keys never enter manifests. Nonces derive from keyed chunk identity; immutable

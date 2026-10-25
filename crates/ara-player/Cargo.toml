@@ -22,7 +22,7 @@ ara-gpu = { path = "../ara-gpu" }
 ara-input = { path = "../ara-input" }
 ara-platform = { path = "../ara-platform" }
 ara-play = { path = "../ara-play" }
-ara-pack = { path = "../ara-pack", default-features = false }
+ara-pack = { path = "../ara-pack", default-features = false, features = ["native-decode"] }
 ara-render = { path = "../ara-render" }
 ara-runtime = { path = "../ara-runtime" }
 ara-runtime-audio = { path = "../ara-runtime-audio" }
