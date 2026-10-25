@@ -57,6 +57,14 @@ pub struct GcStats {
     /// Logical bytes removed; other hard links may still retain an object.
     pub bytes_removed: u64,
 }
+
+fn detail_scope(stage: &'static str, subject: &str) -> Option<crate::trace::Scope> {
+    static DETAIL: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    (crate::trace::enabled()
+        && *DETAIL.get_or_init(|| std::env::var_os("ARA_IMPORT_TRACE_CACHE_DETAIL").is_some()))
+    .then(|| crate::trace::Scope::new(stage, subject).with_thread_cpu())
+}
+
 impl FileCache {
     fn install_object(&self, hash: Digest, bytes: &[u8]) -> Result<()> {
         let path = self.object(hash);
@@ -68,12 +76,26 @@ impl FileCache {
                 .root
                 .join("intermediates/objects")
                 .join(hash.to_string());
-            if fs::read(&memo).is_ok_and(|existing| existing == bytes)
-                && let Ok(file) = fs::OpenOptions::new().read(true).write(true).open(&memo)
-            {
-                let _sync = crate::trace::Scope::new("cache.sync", &memo.display().to_string());
-                file.sync_all()?;
-                if fs::hard_link(&memo, &path).is_ok() {
+            let label = memo.display().to_string();
+            let matches = {
+                let _part = detail_scope("cache.object.memo_read", &label);
+                fs::read(&memo).is_ok_and(|existing| existing == bytes)
+            };
+            let file = matches.then(|| {
+                let _part = detail_scope("cache.object.open", &label);
+                fs::OpenOptions::new().read(true).write(true).open(&memo)
+            });
+            if let Some(Ok(file)) = file {
+                let _sync = crate::trace::Scope::new("cache.sync", &label);
+                {
+                    let _part = detail_scope("cache.object.sync", &label);
+                    file.sync_all()?;
+                }
+                let linked = {
+                    let _part = detail_scope("cache.object.link", &label);
+                    fs::hard_link(&memo, &path).is_ok()
+                };
+                if linked {
                     crate::trace::event(
                         "cache.reuse_object",
                         &hash.to_string(),
@@ -182,10 +204,7 @@ impl FileCache {
 fn install(path: &Path, bytes: &[u8], durable: bool) -> Result<()> {
     let label = path.display().to_string();
     let _trace = crate::trace::Scope::new("cache.install", &label).bytes(bytes.len());
-    static DETAIL: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
-    let detail = crate::trace::enabled()
-        && *DETAIL.get_or_init(|| std::env::var_os("ARA_IMPORT_TRACE_CACHE_DETAIL").is_some());
-    let part = |stage| detail.then(|| crate::trace::Scope::new(stage, &label));
+    let part = |stage| detail_scope(stage, &label);
     let parent = path
         .parent()
         .ok_or_else(|| Error::Invalid("cache path without parent".into()))?;
@@ -215,6 +234,7 @@ fn install(path: &Path, bytes: &[u8], durable: bool) -> Result<()> {
     }
     if durable {
         let _sync = crate::trace::Scope::new("cache.sync", &path.display().to_string());
+        let _part = part("cache.install.sync");
         temp.as_file().sync_all()?;
     }
     let persisted = {
