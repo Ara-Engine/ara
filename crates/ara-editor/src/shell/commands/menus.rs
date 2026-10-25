@@ -672,6 +672,7 @@ pub(crate) fn context(kind: Context) -> &'static [Item] {
             C("vfx.module.up"),
             C("vfx.module.down"),
             C("vfx.module.duplicate"),
+            C("vfx.module.toggle"),
             S,
             C("vfx.module.delete"),
         ],

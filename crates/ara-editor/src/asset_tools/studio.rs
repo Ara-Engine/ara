@@ -462,11 +462,26 @@ mod tests {
             );
             let material =
                 ara_material::dsl::parse(&source, "gr_preview").expect("material source");
-            let sphere = super::super::material_preview::capture(&output, &material, false)
-                .expect("material preview");
+            let sphere = super::super::material_preview::capture(
+                &output,
+                &material,
+                super::super::material_preview::Shot::surface(false),
+            )
+            .expect("material preview");
             sphere
                 .save(output.join(format!("material-{name}-master.png")))
                 .expect("save");
+        }
+        // In-node previews of the showcase's operations (swatches and spheres).
+        let showcase = ara_material::dsl::parse(super::super::node_preview::SHOWCASE, "gr_preview")
+            .expect("showcase");
+        for (id, binding) in &showcase.bindings {
+            if let Some((derived, shot)) = super::super::node_preview::derive(&showcase, id) {
+                super::super::material_preview::capture(&output, &derived, shot)
+                    .expect("node preview")
+                    .save(output.join(format!("node-{}.png", binding.name)))
+                    .expect("save");
+            }
         }
     }
 

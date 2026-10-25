@@ -19,7 +19,10 @@ pub(super) struct Verification {
     interactions: Vec<&'static str>,
     /// The Add node search popup has been captured.
     palette_shot: bool,
+    /// The plain material page has been captured; the in-node previews come next.
+    material_shot: bool,
 }
+
 pub(super) fn fixtures(root: &std::path::Path) -> ara_ui::Result<()> {
     if !root.join("ara.project.json").exists() {
         std::fs::create_dir_all(root.join("levels"))?;
@@ -128,6 +131,7 @@ impl Verification {
             bench_frames: 0,
             interactions: Vec::new(),
             palette_shot: false,
+            material_shot: false,
         })
     }
     pub fn finished(&self) -> bool {
@@ -347,7 +351,32 @@ impl Verification {
                 if !shell.preview_ready("material") || self.age < 30 {
                     return Ok(false);
                 }
-                self.capture_pair("material", editor, shell, gpu, ui, renderer, scene_view)?;
+                if !self.material_shot {
+                    self.capture_pair("material", editor, shell, gpu, ui, renderer, scene_view)?;
+                    self.material_shot = true;
+                    // Then a richer graph, authored as text, for the in-node previews.
+                    editor.apply_to(
+                        &self.material,
+                        vec![json!({"cmd":"material.text.apply","args":{"text":crate::asset_tools::node_preview::SHOWCASE}})],
+                        "Show in-node previews",
+                    )?;
+                    shell.rebuild(editor)?;
+                    shell.frame_graph(editor)?;
+                    shell.rebuild(editor)?;
+                    return Ok(false);
+                }
+                if !shell.node_previews_ready() {
+                    return Ok(false);
+                }
+                self.capture_pair(
+                    "material-previews",
+                    editor,
+                    shell,
+                    gpu,
+                    ui,
+                    renderer,
+                    scene_view,
+                )?;
                 editor.action(
                     "editor.workspace",
                     json!({"resource":self.vfx,"item":"flame|update|curl"}),
@@ -487,6 +516,7 @@ impl Verification {
                 )?;
                 self.interactions
                     .push("two real frame/GPU captures frozen and compared");
+                self.tool_panels(editor, shell, gpu, ui, renderer, scene_view)?;
                 self.load_large_graph(editor, shell)?;
                 self.next();
             }
@@ -620,6 +650,104 @@ impl Verification {
         editor.action("editor.theme", json!({"light":false}))?;
         shell.rebuild(editor)?;
         crate::shell::icons::install(ui, gpu.dpi())?;
+        Ok(())
+    }
+    /// Console, Problems, Agents and Settings with real content: diagnostics on the
+    /// bus (an import failure with its fix, a C# allocation on the tick path, an
+    /// unknown field with a rename), an agent's presence and three turns through the
+    /// Engine Protocol, then Preferences, Project and Keyboard shortcuts docked in the
+    /// document area.
+    #[allow(clippy::too_many_arguments)]
+    fn tool_panels(
+        &mut self,
+        editor: &mut Editor,
+        shell: &mut Shell,
+        gpu: &mut NativeUi,
+        ui: &mut UiRenderer,
+        renderer: &mut Renderer,
+        scene_view: &mut super::viewport::SceneView,
+    ) -> ara_ui::Result<()> {
+        // Protocol calls as an agent session would make them.
+        let call = |editor: &mut Editor, method: &str, params: Value| {
+            ara_proto::Endpoint::call(editor, method, params).map_err(|e| e.message)
+        };
+        let doc = editor.state.doc.clone();
+        let entity = crate::world::resolve(editor.host.store(), &doc)
+            .map_err(|d| format!("{d:?}"))?
+            .iter()
+            .find(|(_, e)| e.record.get("name") == Some(&json!("Salvage crate")))
+            .map(|(id, _)| id.clone())
+            .ok_or("Salvage crate")?;
+        editor.action("diag.report", json!({"engine": true, "diagnostics": [
+            {"code":"ARA2101","severity":"error","message":"Import of `models/Crate.fbx` failed: FBX 6.1 binary files are not supported","location":{"file":"models/Crate.fbx"},"fixes":[{"title":"Convert to glTF","action":"cli","args":["ara","import","models/Crate.fbx","--as","gltf"]}]},
+            {"code":"ARA0300","severity":"warning","message":"`Spinner.Tick` allocates a `List<int>` every tick","location":{"file":"scripts/Outpost/Spinner.cs","line":42}},
+            {"code":"ARA1101","severity":"warning","message":"Unknown field `positon` in `Transform`","location":{"doc":doc,"record":entity,"path":"Transform.positon"},"fixes":[{"title":"Rename `positon` to `position`","action":"rename","record":entity,"path":"Transform.positon","to":"Transform.position"}]},
+            {"code":"ARA3309","severity":"info","message":"`Salvage crate` is beyond its draw distance (212 m > 200 m)","location":{"doc":doc,"record":entity}}
+        ]}))?;
+        let session = call(
+            editor,
+            "session.begin",
+            json!({"client":"panels-verification","author":"agent:claude"}),
+        )?["session"]
+            .as_str()
+            .ok_or("agent session")?
+            .to_owned();
+        call(
+            editor,
+            "editor.select",
+            json!({"session":session,"entities":[entity]}),
+        )?;
+        for (why, command) in [
+            (
+                "Move the salvage crate clear of the patrol route",
+                json!({"cmd":"property.set","args":{"entity":entity,"path":"Transform.position.x","value":3.5}}),
+            ),
+            (
+                "Add a waypoint for the dusk patrol",
+                json!({"cmd":"entity.create","args":{"id":"$waypoint","name":"Patrol waypoint","components":{"Transform":{"position":[6,0,-4]}}}}),
+            ),
+            (
+                "Turn the crate to face the gate",
+                json!({"cmd":"property.set","args":{"entity":entity,"path":"Transform.rotation.y","value":35}}),
+            ),
+        ] {
+            call(
+                editor,
+                "cmd.apply",
+                json!({"session":session,"doc":doc,"why":why,"commands":[command]}),
+            )?;
+        }
+        // A frame boundary, as in the window loop: the agent turns get their time.
+        editor.tick();
+        for (panel, name) in [
+            ("console", "console"),
+            ("problems", "problems"),
+            ("agents", "agents"),
+        ] {
+            editor.action("editor.focus", json!({ "panel": panel }))?;
+            shell.rebuild(editor)?;
+            self.capture_pair(name, editor, shell, gpu, ui, renderer, scene_view)?;
+        }
+        editor.action(
+            "editor.layout.move",
+            json!({"panel":"settings","slot":"view"}),
+        )?;
+        for (name, scope, category) in [
+            ("settings", "user", ""),
+            ("settings-project", "project", ""),
+            ("shortcuts", "user", "Keyboard shortcuts"),
+        ] {
+            editor.action(
+                "editor.settings.view",
+                json!({"scope": scope, "category": category}),
+            )?;
+            editor.action("editor.focus", json!({"panel":"settings"}))?;
+            shell.rebuild(editor)?;
+            self.capture_pair(name, editor, shell, gpu, ui, renderer, scene_view)?;
+        }
+        editor.action("editor.layout.close", json!({"panel":"settings"}))?;
+        self.interactions
+            .push("Console, Problems, Agents and Settings captured with real content");
         Ok(())
     }
     fn material_interaction(

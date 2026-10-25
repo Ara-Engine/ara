@@ -51,7 +51,7 @@ conversions. Motion is paint-only, ≤140 ms, off with editor.preferences.
 verify-polish.ps1 captures 1440x900 at 1x and 2560x1440 at 2x (palettes, Agents).
 
 Panel authoring: asset_tools owns isolated import jobs and cached off-thread
-thumbnails. authoring registers graph/material/VFX/animation commands; graph is
+thumbnails and material node previews (`node_preview.rs`). authoring registers graph/material/VFX/animation commands; graph is
 the shared culled canvas and pre-shaped label cache. Preserve domain identities.
 The shared play-host schema world owns engine kinds and material/VFX commands;
 register only editor and generic graph commands on top of it.
@@ -146,4 +146,5 @@ test` sets `ARA_EDITOR_MEMO_CHECK=1`, which regenerates each reuse and fails on 
 Scene loading notice; `tests/loading.rs`). Only `scene_changed` state re-renders the Scene.
 Tool pages (`docs/design/editor-tool-pages.md`) share a breadcrumb toolbar, side column and
 status strip; `graph/style.rs` names nodes/pins; swatches paint after layout. VFX Hide/Isolate
-are preview-only; its timeline drives `vfx_stream`. Imports use `import.initialize`/`import.configure`.
+are preview-only; its timeline drives `vfx_stream`. In Play the Animation page polls
+`play.read <entity>.AnimatorState` (`AnimationLive`). Imports use `import.initialize`/`configure`.

@@ -81,7 +81,7 @@ the renderer, a C# object or a static.
 
 Register `ara_graph::register` and `commands::register` with the shared schemas
 and command registry. Initial imports use `Effect::to_graph`; live edits use
-`vfx.text.apply`, `vfx.stack.edit` or `vfx.parameter.set`. These produce kernel
+`vfx.text.apply`, `vfx.stack.edit`, `vfx.module.enable` or `vfx.parameter.set`. These produce kernel
 ops with attribution, dry-run, revision checks and undo/redo. Module names are
 stable graph identity, so moving a module preserves IDs and layout. Renaming in
 text intentionally creates a new identity. Graph edges must agree with stack

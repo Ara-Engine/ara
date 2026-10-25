@@ -510,6 +510,13 @@ fn any_scene_opens_with_its_own_camera_and_agents_only_move_their_presence() {
         .unwrap();
     assert_eq!(editor.state.doc, "sc_hangar001");
     assert!(editor.state.follow.is_none());
+    // The Agents panel lists the presence with View and Follow (names with an
+    // apostrophe in their tooltip used to break its markup).
+    editor
+        .action("editor.focus", json!({"panel":"agents"}))
+        .unwrap();
+    shell.rebuild(&mut editor).unwrap();
+    assert!(shell.ui.find(&format!("presence-follow-{agent}")).is_some());
 }
 #[test]
 fn console_logs_problems_explain_and_editor_failures_reach_the_bus() {

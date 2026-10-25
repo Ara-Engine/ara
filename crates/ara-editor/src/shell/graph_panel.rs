@@ -96,6 +96,18 @@ impl Shell {
                 editor,
                 false,
             );
+            if domain == "material" {
+                out.push_str("<panel id='graph-view-sep' class='toolbar-sep' />");
+                let shown = !self.node_previews.hidden;
+                self.tool_icon(
+                    out,
+                    "graph-previews",
+                    "material.node_previews",
+                    "image",
+                    editor,
+                    shown,
+                );
+            }
         }
         out.push_str(&format!(
             "<panel id='{domain}-toolbar-fill' class='fill' /></panel>"
@@ -230,13 +242,17 @@ impl Shell {
         out.push_str("</scroll></panel>");
         Ok(())
     }
-    pub(super) fn paint_graph(&mut self) {
+    /// Paint the canvas into the display list right after the canvas panel's own
+    /// background. Returns the splice index and how many commands went in there, so
+    /// the caller can shift indices it holds past that point.
+    pub(super) fn paint_graph(&mut self) -> (usize, usize) {
+        let none = (usize::MAX, 0);
         let Some(index) = self.ui.find("graph-canvas") else {
-            return;
+            return none;
         };
         let rect = self.ui.nodes[index].rect;
         let Some(canvas) = &self.canvas else {
-            return;
+            return none;
         };
         let token = |name: &str| {
             self.ui
@@ -276,10 +292,12 @@ impl Shell {
         self.ui.display.glyphs.append(&mut display.glyphs);
         let id = ara_ui::source::stable_id("graph-canvas");
         let at=self.ui.display.commands.iter().position(|d|matches!(d,ara_ui::paint::Draw::Rect{node,..}|ara_ui::paint::Draw::RoundedRect{node,..} if *node==id)).map(|i|i+1).unwrap_or(self.ui.display.commands.len());
+        let count = display.commands.len();
         self.ui
             .display
             .commands
             .splice(at..at, display.commands.drain(..));
+        (at, count)
     }
 }
 

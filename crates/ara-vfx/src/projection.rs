@@ -16,6 +16,15 @@ struct Item {
     order: usize,
     name: String,
     bindings: BTreeMap<String, String>,
+    /// Omitted while enabled, so older graphs stay byte-identical.
+    #[serde(default = "enabled", skip_serializing_if = "is_enabled")]
+    enabled: bool,
+}
+fn enabled() -> bool {
+    true
+}
+fn is_enabled(enabled: &bool) -> bool {
+    *enabled
 }
 fn identity(asset: &str, emitter: &str, module: &str) -> String {
     format!(
@@ -69,6 +78,7 @@ impl Effect {
                                 order,
                                 name: item.name.clone(),
                                 bindings: item.bindings.clone(),
+                                enabled: item.enabled,
                             })?,
                             subgraph: None,
                         },
@@ -147,6 +157,7 @@ impl Effect {
                 name: d.name,
                 module,
                 bindings: d.bindings,
+                enabled: d.enabled,
             });
         }
         effect.validate()?;
