@@ -7,6 +7,11 @@ use ara_asset_format::TextureFormat;
 pub trait BlockEncoder: Send + Sync {
     /// Stable, portable content identity; never a device name or filesystem path.
     fn backend(&self) -> &str;
+    /// Checks availability and optionally warms immutable kernels once before a
+    /// batch. Ordinary imports can then initialize their device only on first use.
+    fn prepare(&self) -> Result<()> {
+        Ok(())
+    }
     /// Cumulative offline telemetry; excluded from cache identity and artifacts.
     fn metrics(&self) -> std::collections::BTreeMap<String, f64> {
         Default::default()

@@ -140,19 +140,26 @@ fn serve(registry: &ImporterRegistry, factory: Option<EncoderFactory>) -> Result
         Request::ImportEncoded { input, backend } => (input, Some(backend)),
         Request::Encoder => {
             let root = std::env::var_os("ARA_IMPORT_MEMO_DIR").map(PathBuf::from);
-            let encoder = factory.and_then(|make| match make(root.as_deref()) {
-                Ok(encoder) => Some(encoder),
-                Err(error) => {
-                    crate::trace::event(
-                        "texture.backend_unavailable",
-                        "encoder",
-                        serde_json::json!({"reason":error.to_string()}),
-                    );
-                    None
+            let _prepare = crate::trace::Scope::new("texture.backend_prepare", "encoder");
+            let encoder = factory.and_then(|make| {
+                match make(root.as_deref()).and_then(|encoder| {
+                    encoder.prepare()?;
+                    Ok(encoder)
+                }) {
+                    Ok(encoder) => Some(encoder),
+                    Err(error) => {
+                        crate::trace::event(
+                            "texture.backend_unavailable",
+                            "encoder",
+                            serde_json::json!({"reason":error.to_string()}),
+                        );
+                        None
+                    }
                 }
             });
             let identity = encoder.as_ref().map(|encoder| encoder.backend().to_owned());
             drop(encoder);
+            drop(_prepare);
             return write_frame(&mut std::io::stdout().lock(), &Message::Encoder(identity));
         }
         Request::Versions => {

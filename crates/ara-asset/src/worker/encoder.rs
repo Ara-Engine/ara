@@ -53,7 +53,9 @@ impl ProcessWorker {
 
     fn query_encoder(&self) -> Result<Option<String>> {
         let mut job = self.start_request(Request::Encoder)?;
-        job.timeout = self.timeout.min(std::time::Duration::from_secs(15));
+        // Cold driver compilation happens once here, rather than racing in
+        // every below-normal-priority asset worker on the first batch.
+        job.timeout = self.timeout.min(std::time::Duration::from_secs(60));
         loop {
             match job.message()? {
                 Some(Message::Encoder(identity)) => return Ok(identity),

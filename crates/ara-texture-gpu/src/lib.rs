@@ -23,17 +23,17 @@ fn create_worker_encoder(
         "ara-texture-gpu",
         std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("cooked"),
     );
-    let cache = match memo {
-        Some(root) => root.join("gpu-codec-pipelines"),
-        None => std::env::var_os("ARA_CONFIG_DIR")
-            .map(std::path::PathBuf::from)
-            .ok_or_else(|| {
-                ara_asset::Error::EncoderUnavailable(
-                    "set a private ARA_CONFIG_DIR for a worker without a project cache".into(),
-                )
-            })?
-            .join("gpu-codec-pipelines"),
-    };
+    // Driver code belongs to the engine profile, not each project's content
+    // cache. All workers in a batch reuse the cache warmed by negotiation.
+    let cache = std::env::var_os("ARA_CONFIG_DIR")
+        .map(std::path::PathBuf::from)
+        .or_else(|| memo.map(std::path::Path::to_path_buf))
+        .ok_or_else(|| {
+            ara_asset::Error::EncoderUnavailable(
+                "set a private ARA_CONFIG_DIR for a worker without a project cache".into(),
+            )
+        })?
+        .join("gpu-codec-pipelines");
     Ok(Box::new(Encoder::new(&cooked, &cache)?))
 }
 

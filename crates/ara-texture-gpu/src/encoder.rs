@@ -15,7 +15,7 @@ struct Kernel {
     pipeline: Option<Pipeline>,
 }
 struct State {
-    gpu: VulkanDevice,
+    gpu: Option<VulkanDevice>,
     kernels: Vec<Kernel>,
     transfers: Option<Transfers>,
     timings: std::collections::BTreeMap<String, f64>,
@@ -25,11 +25,13 @@ struct State {
 /// One headless, raster-only Vulkan device and its immutable BC codec cohort.
 pub struct Encoder {
     identity: String,
+    cache: PathBuf,
+    allow_dot: bool,
     state: Mutex<State>,
 }
 impl Encoder {
-    /// Opens a cooked cohort and a driver-local pipeline cache, with no window or
-    /// runtime shader compilation. Call only inside an isolated worker/background job.
+    /// Opens immutable codec manifests. The headless device is created on first
+    /// encode; texture-free model imports never initialize Vulkan.
     pub fn new(cooked: &Path, cache: &Path) -> Result<Self> {
         Self::with_optional_dot(cooked, cache, true)
     }
@@ -108,22 +110,17 @@ impl Encoder {
                 pipeline: None,
             });
         }
-        let gpu = VulkanDevice::new_raster(&[], cache).map_err(unavailable)?;
-        if !gpu.context().info.buffer_int64_atomics {
-            return Err(unavailable(
-                "integer BC6H/BC7 shaders require shaderInt64 on this device",
-            ));
-        }
-        let dot = allow_dot && gpu.context().info.packed_integer_dot_accelerated;
         Ok(Self {
             identity: format!("gpu-bcn-cpu-normals-v1:{}", Digest::of(&identity)),
+            cache: cache.to_owned(),
+            allow_dot,
             state: Mutex::new(State {
-                gpu,
+                gpu: None,
                 kernels,
                 transfers: None,
-                dot,
+                dot: false,
                 timings: std::collections::BTreeMap::from([(
-                    "initialize.wall_ms".into(),
+                    "manifests.wall_ms".into(),
                     start.elapsed().as_secs_f64() * 1000.0,
                 )]),
             }),
@@ -133,6 +130,17 @@ impl Encoder {
 impl BlockEncoder for Encoder {
     fn backend(&self) -> &str {
         &self.identity
+    }
+    fn prepare(&self) -> Result<()> {
+        // Warm the shared driver cache before disposable asset workers start.
+        // This also proves the selected feature path actually creates and runs.
+        self.encode(
+            TextureFormat::Bc7,
+            CookPreset::Balanced,
+            &[0; 16],
+            &Cancellation::default(),
+        )?;
+        Ok(())
     }
     fn metrics(&self) -> std::collections::BTreeMap<String, f64> {
         self.state
@@ -171,6 +179,21 @@ impl BlockEncoder for Encoder {
             .state
             .lock()
             .map_err(|_| unavailable("GPU codec state poisoned"))?;
+        if state.gpu.is_none() {
+            let start = std::time::Instant::now();
+            let gpu = VulkanDevice::new_raster(&[], &self.cache).map_err(unavailable)?;
+            if !gpu.context().info.buffer_int64_atomics {
+                return Err(unavailable(
+                    "integer BC6H/BC7 shaders require shaderInt64 on this device",
+                ));
+            }
+            state.dot = self.allow_dot && gpu.context().info.packed_integer_dot_accelerated;
+            state.gpu = Some(gpu);
+            state.timings.insert(
+                "initialize.wall_ms".into(),
+                start.elapsed().as_secs_f64() * 1000.0,
+            );
+        }
         let State {
             gpu,
             kernels,
@@ -178,6 +201,7 @@ impl BlockEncoder for Encoder {
             timings,
             dot,
         } = &mut *state;
+        let gpu = gpu.as_mut().expect("encoding initialized the device");
         let start = std::time::Instant::now();
         let mut modes;
         let pipelines = if index == 3 && preset > 0 {

@@ -22,6 +22,39 @@ fn blocks() -> Vec<[u32; 16]> {
 }
 
 #[test]
+fn opening_manifests_and_rejecting_empty_or_invalid_inputs_does_not_initialize_vulkan()
+-> Result<(), Box<dyn std::error::Error>> {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let scratch = root.join("../../target/ara-texture-gpu/lazy-device");
+    std::fs::create_dir_all(&scratch)?;
+    let temporary = tempfile::tempdir_in(scratch)?;
+    let cache = temporary.path().join("unopened-driver-cache");
+    let encoder = crate::Encoder::new(&root.join("cooked"), &cache)?;
+    let cancellation = Cancellation::default();
+    assert!(
+        encoder
+            .encode(TextureFormat::Bc7, CookPreset::Balanced, &[], &cancellation)?
+            .is_empty()
+    );
+    assert!(
+        encoder
+            .encode(
+                TextureFormat::Bc7,
+                CookPreset::Balanced,
+                &[0; 15],
+                &cancellation
+            )
+            .is_err()
+    );
+    assert!(
+        !cache.exists(),
+        "no driver cache or device side effects before actual work"
+    );
+    assert!(!encoder.metrics().contains_key("initialize.wall_ms"));
+    Ok(())
+}
+
+#[test]
 #[ignore = "requires Vulkan; run through ara-dev gpu with a private profile"]
 fn unified_host_matches_integer_oracles_and_reuses_transfers()
 -> Result<(), Box<dyn std::error::Error>> {
