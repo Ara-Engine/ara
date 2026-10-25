@@ -116,6 +116,31 @@ Upload the byte slices directly; create a vertex decode path for UNORM positions
 SNORM normals/tangents and half UVs. Meshlet and index sections are ready for a
 GPU-driven path. Source-vertex mappings address original glTF morph targets.
 
+Static classic chains default to eight levels and a relative error ceiling of
+0.1. Targets halve triangle counts until reaching 2% of LOD0 or 200 triangles,
+whichever comes first. Levels must shrink by at least 25%; error is nondecreasing.
+The previous geometric-error prefix is retained wherever it remains useful and
+passes the card safeguards, so existing foliage does not select finer levels
+because of newly combined attribute error. Attribute-aware meshoptimizer extends
+the chain and recovers stalled/unindexed meshes; it weights normals, tangents, UVs and colour, protects
+UV/colour/handedness seams, and locks geometric open borders even when source
+vertices are split. Material primitives are simplified separately. Mask/blend
+glTF materials (including companion opacity maps) retain at least 90% of each
+connected thin card's area, including rotated cards with coincident backfaces.
+Thinness uses a component-local frame; long cylindrical stems are not cards.
+FBX and material-unknown `cook_mesh` calls apply
+that guard conservatively. Border/seam/error/area constraints can stop a chain
+early; a leaf already represented by two border triangles cannot shrink safely.
+Skin/morph meshes retain the previous four-level, 0.01 error ceiling.
+
+ARAF v1 `Lod.error` remains relative to the model extent. The native adapter
+converts it to model metres once, then runtime LOD selection applies instance
+scale and projected pixels per metre. Attribute-aware levels include attribute
+error conservatively;
+no runtime format or selection threshold changes accompany these deeper chains.
+glTF/FBX generation 6 invalidates prior cooks through the normal importer version
+and sidecar upgrade path. Re-cook through the worker rather than editing caches.
+
 The canonical `scene.json` artifact maps source mesh primitives, images/usages,
 skins and clips to stable artifact names. glTF's source document retains
 scene hierarchy, PBR factors, samplers, texture transforms, extensions, cameras and

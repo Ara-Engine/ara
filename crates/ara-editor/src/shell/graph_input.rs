@@ -59,9 +59,15 @@ impl Shell {
         editor: &mut Editor,
         kind: &str,
     ) -> ara_ui::Result<()> {
-        if kind == "frame" {
+        // "frame" fits the whole graph (F); "open" frames a graph that just opened at
+        // a readable zoom.
+        if kind == "frame" || kind == "open" {
             if let (Some(canvas), Some(rect)) = (&self.canvas, self.graph_rect()) {
-                let camera = canvas.framed(rect);
+                let camera = if kind == "open" {
+                    canvas.framed_readable(rect)
+                } else {
+                    canvas.framed(rect)
+                };
                 editor.action(
                     "editor.canvas",
                     json!({"pan":camera.pan,"zoom":camera.zoom}),

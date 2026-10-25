@@ -16,8 +16,7 @@ Owns the M1 baseline renderer and agent visual feedback. Gameplay state stays in
   current/previous instance transforms, deforming revisions, 64-byte UV0/UV1
   vertices and 320-byte materials with six independent map transforms, AO,
   transmission and authored terrain layer IDs. Texture IDs address the native
-  residency table; u32::MAX means neutral texels. This input is separate from
-  the legacy `Scene` ABI.
+  residency table; u32::MAX means neutral texels (separate from the legacy `Scene` ABI).
   Validate only at content publication; do not hash/traverse static vertices
   when moving instances. Culling bounds handle mirrored/nonuniform transforms.
 - `Renderer::new_native` consumes this scene and an owned `instanced::Textures`
@@ -131,8 +130,7 @@ and an empty implicit-layer directory to its process and restores the environmen
 by `ara-sdl3-src`; there is no SDL setup script, native directory or runtime DLL requirement.
 
 Per-crate gates: `cargo check -p ara-render`, `cargo test -p ara-render`,
-`cargo clippy -p ara-render --all-targets -- -D warnings`,
-`cargo fmt -p ara-render -- --check`.
+`cargo clippy -p ara-render --all-targets -- -D warnings`, `cargo fmt -p ara-render -- --check`.
 GPU goldens require this device/driver baseline with tolerance 1-SSIM <= 0.005.
 They also check repeated deterministic captures, all 14 visible entities/picking,
 and odd-resolution bounds framing. Update only deliberately with process-local

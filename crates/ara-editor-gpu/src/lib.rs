@@ -40,6 +40,14 @@ pub enum Overlay {
         /// Semantic token colour, in sRGB numeric space.
         color: [f32; 4],
     },
+    /// Antialiased filled convex quad in logical pixels, corners in order (either
+    /// winding); a triangle repeats a corner. Gizmo cones, plane squares and cubes.
+    Quad {
+        /// Corners in order around the quad.
+        corners: [[f32; 2]; 4],
+        /// Semantic token colour, in sRGB numeric space.
+        color: [f32; 4],
+    },
     /// Analytic antialiased ground grid, faded by distance and occluded by scene IDs.
     Grid {
         /// Camera position and yaw, in world metres/radians.

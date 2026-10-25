@@ -71,8 +71,7 @@ renderer-neutral presentation extraction. No GPU, window or process code (see
 - Networked play (`ara-runtime-net`): `step_with_adapter(adapter)` runs one boundary
   for an ara-net server (plugins around `Session::step_with_adapter`; the server's
   timeline is the clock). `present_mirror(tick)` advances a never-stepped client
-  mirror's presentation (animation, cameras, world poses); `tick()` then reports the
-  presented authoritative tick.
+  mirror's presentation (animation, cameras, world poses); `tick()` reports that tick.
 - `controller`: `.animation` controllers (`Animator.controller`): `Documents` (every
   `AnimAsset` record by `@path#record`; several clips/controllers per file), `compile` (clip records bind model animations by `name`
   when they hold no keys; motion-matching nodes cook their `motionDatabase`),
@@ -120,8 +119,7 @@ plugin Late → poses.resolve.
   `NavMeshSurface` (cached by tile content in `nav_cache`). `NavMeshSurface.geometry`
   assets are not baked yet (structured error). Streamed navigation needs terrain
   tiles that are whole nav tiles on the same grid; streamed cells' static colliders
-  do not carve it (use `NavObstacle` with `Avoid`), and carve/area obstacles only
-  rebake static (non-streamed) meshes.
+  do not carve it (use `NavObstacle` with `Avoid`); carve/area obstacles rebake static meshes.
 - Terrain: one `Terrain` per level; tiles evaluate on worker threads at load (strokes
   only; imported bases are not available in play yet). Chunk bodies are cooked Jolt
   heightfields, re-cooked after every native rebuild.

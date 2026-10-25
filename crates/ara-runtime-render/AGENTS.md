@@ -52,14 +52,15 @@ device and per-view upload state; no simulation, window or process code.
   `set_look_override` (look development/scoring), `set_probe_gi(true)` +
   `probe_gi_pending()` / `wait_probe_gi()`: probe GI acquired per content key on a
   worker (one job at a time, newest request queued, full bakes disk-cached under the
-  pipeline cache). RT adapters bake with a temporary `VulkanDevice::new` + fidelity
-  view (`gi.rs`); others bake on the CPU (`gi_cpu.rs`: per-geometry SAH BVHs under
-  an instance top level, map means via `NativeResidency::mean_texel`).
-  `ARA_PROBE_GI_CPU=1` forces the CPU bake. GI follows edits: `gi::Mobility` keeps
-  instances that moved within 30 frames (and deforming geometry) out of the
-  surfaces; when that set changes, or a new generation fits the lattice, the
-  worker's persistent CPU tracer re-traces only nearby probes
-  (`gi_cpu::affected`), which `Renderer::update_probe_surfaces` blends in.
+  pipeline cache). The CPU bakes (`gi_cpu.rs`: per-geometry SAH BVHs under an
+  instance top level, map means via `NativeResidency::mean_texel` with the
+  material's sRGB-decode bit for raw graph maps, terrain hits splat-weighted);
+  `ARA_PROBE_GI_RT=1` opts into a temporary ray-tracing `VulkanDevice` + fidelity
+  view, which contends with presentation for the driver.
+  GI follows edits: `gi::Mobility` keeps instances that moved within 30 frames (and
+  deforming geometry) out of the surfaces; when that set changes, or a new
+  generation fits the lattice, the worker's persistent CPU tracer re-traces only
+  nearby probes (`gi_cpu::affected`), which `Renderer::update_probe_surfaces` blends in.
   `tests/gi_edits.rs` checks a moved block's old spot against a fresh view.
   Emissive surfaces (`emitters.rs`, above 5 cd/m2) light the scene directly. A
   worker thread samples each emitter's triangles through its emissive map into

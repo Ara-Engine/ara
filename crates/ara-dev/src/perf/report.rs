@@ -138,7 +138,9 @@ impl Destination<'_> {
         let baseline = options.baseline.as_ref().unwrap_or(&previous);
         let mut metrics = BTreeMap::new();
         numbers(&player, "", &mut metrics);
-        let deltas = if baseline.is_file() {
+        let deltas = if options.scoreboard {
+            BTreeMap::new()
+        } else if baseline.is_file() {
             let before: Report = serde_json::from_slice(&fs::read(baseline)?)?;
             if options.baseline.is_some() {
                 ensure!(
@@ -173,6 +175,9 @@ impl Destination<'_> {
         };
         let bytes = serde_json::to_vec_pretty(&report)?;
         fs::write(directory.join("report.json"), &bytes)?;
+        if options.scoreboard {
+            return Ok(());
+        }
         fs::write(&previous, &bytes)?;
         if options.json {
             if options.keep_alive {

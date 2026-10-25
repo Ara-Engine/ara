@@ -29,6 +29,9 @@ editor verification route, with process-local empty VK_IMPLICIT_LAYER_PATH.
 Scene overlays are inserted immediately after the viewport image, before later
 UI controls/popovers. Grid and hover execute on the GPU against the scene ID map.
 The grid uses derivatives for antialiasing and distance fade, with theme axis tints.
+Gizmos draw antialiased `Line`s and filled convex `Quad`s (cones, plane squares,
+cubes; shader mode 8). After editing `shaders/ui.slang`, re-cook with
+`shaders/compile.ps1` (slangc + spirv-val from VULKAN_SDK) and commit both .spv.
 
 Play surfaces (D19 Game view, `shared.rs`): `import_play_surface(gpu, &SharedSurface)`
 imports an embedded player's ring; `PlaySurface::show(ui, id, frame)` acquires the

@@ -69,12 +69,13 @@ impl Shell {
         if let Some(canvas) = &mut self.canvas {
             canvas.diagnostics(&diagnostics, &mut self.text);
         }
-        self.node_previews(editor, &doc, material.as_ref());
         out.push_str("<panel id='material-content' class='tool-body'>");
         out.push_str(&format!(
             "<panel id='material-side' class='tool-side' style='width:{SIDE}px'>"
         ));
+        // The page preview is requested before the in-node previews: it renders first.
         self.material_preview(editor, &doc, &graph, out)?;
+        self.node_previews(editor, &doc, material.as_ref());
         self.material_parameters(editor, &doc, material.as_ref(), out)?;
         out.push_str("</panel><panel id='material-side-edge' class='tool-edge' />");
         out.push_str("<panel id='material-main' class='tool-main'>");
@@ -118,6 +119,15 @@ impl Shell {
                 }
             }
         }
+        // Tiles only for nodes with a preview rendered or on its way.
+        let previewed = self
+            .node_previews
+            .requests
+            .iter()
+            .filter(|(_, (key, ..))| !self.node_previews.failed.contains(key))
+            .map(|(node, _)| node.clone())
+            .collect();
+        canvas.set_previewed(previewed, &mut self.text);
         if self.node_previews.hidden {
             return;
         }
@@ -128,6 +138,9 @@ impl Shell {
             .path_of(doc)
             .unwrap_or("material");
         for (node, (key, derived, shot)) in &self.node_previews.requests {
+            if self.node_previews.failed.contains(key) {
+                continue;
+            }
             match self.thumbnail_slots.get(key) {
                 Some(slot) => {
                     canvas
@@ -144,11 +157,9 @@ impl Shell {
     /// Whether every derived in-node preview has rendered (capture routes).
     pub(crate) fn node_previews_ready(&self) -> bool {
         !self.node_previews.requests.is_empty()
-            && self
-                .node_previews
-                .requests
-                .values()
-                .all(|(key, ..)| self.thumbnail_slots.contains_key(key))
+            && self.node_previews.requests.values().all(|(key, ..)| {
+                self.thumbnail_slots.contains_key(key) || self.node_previews.failed.contains(key)
+            })
     }
 
     /// The live preview (a checked render of the current graph) and its shape.
@@ -277,6 +288,8 @@ impl Shell {
                 Binding::MaterialValue(doc.into(), id.clone()),
             );
             let draft = self.drafts.get(&format!("@material|{doc}|{id}")).cloned();
+            // Texture names are long: the whole name gets its own line under the row.
+            let mut below = None;
             match &parameter.default {
                 ara_material::ParameterValue::Bool(on) => out.push_str(&format!(
                     "<toggle id='{value}' checked='{on}' label='{}' action='Dispatch' />",
@@ -311,13 +324,17 @@ impl Shell {
                             format!("{default:?}")
                         }
                     };
-                    out.push_str(&format!(
-                        "<text id='{value}-texture' class='caption param-value' text='{}' />",
-                        escape(&text)
-                    ));
+                    below = Some(text);
                 }
             }
             out.push_str("</panel>");
+            if let Some(text) = below {
+                out.push_str(&format!(
+                    "<panel id='{value}-texture-line' class='param-texture'><text id='{value}-texture' class='caption wrap-text' text='{}' description='{}' /></panel>",
+                    escape(&text),
+                    escape(&text)
+                ));
+            }
         }
         out.push_str("</scroll>");
         Ok(())

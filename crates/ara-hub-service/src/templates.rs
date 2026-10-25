@@ -9,6 +9,8 @@ use std::{
     path::{Path, PathBuf},
 };
 
+mod kits;
+
 /// A template tile shown by the Hub's create-project view.
 #[derive(Debug, Clone, Default, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -70,7 +72,8 @@ pub trait TemplateSource: Send {
 /// is `thumbnail.png`, else the Play capture of its main scene
 /// (`evidence/<main-scene>-player.png`). An `assets.lock.json` beside the
 /// templates (the `samples/` lock) marks templates whose pinned third-party files
-/// are not present yet; those carry a [`TemplateSetup`].
+/// are not present yet, or whose declared generated kit sources/companions are
+/// missing; those carry a [`TemplateSetup`].
 pub struct DirectoryTemplates(pub PathBuf);
 impl TemplateSource for DirectoryTemplates {
     fn list(&self) -> Result<Vec<Template>, RpcError> {
@@ -92,7 +95,7 @@ impl TemplateSource for DirectoryTemplates {
             if entry.file_type().map_err(io_error)?.is_dir() && marker.is_file() {
                 let id = entry.file_name().to_string_lossy().into_owned();
                 if id != "blank" {
-                    list.push(describe(&id, &entry.path(), &marker, lock.as_ref()));
+                    list.push(describe(&id, &entry.path(), &marker, lock.as_ref())?);
                 }
             }
         }
@@ -113,14 +116,24 @@ impl TemplateSource for DirectoryTemplates {
             )?;
             return Ok(());
         }
-        if !self.list()?.iter().any(|t| t.id == template) {
-            return Err(invalid(format!("no template `{template}`")));
+        let found = self
+            .list()?
+            .into_iter()
+            .find(|t| t.id == template)
+            .ok_or_else(|| invalid(format!("no template `{template}`")))?;
+        if let Some(error) = found.incomplete() {
+            return Err(error);
         }
         copy_tree(&self.0.join(template), destination)
     }
 }
 
-fn describe(id: &str, root: &Path, marker: &Path, lock: Option<&Lock>) -> Template {
+fn describe(
+    id: &str,
+    root: &Path,
+    marker: &Path,
+    lock: Option<&Lock>,
+) -> Result<Template, RpcError> {
     let marker: Value = fs::read(marker)
         .ok()
         .and_then(|bytes| serde_json::from_slice(&bytes).ok())
@@ -140,13 +153,22 @@ fn describe(id: &str, root: &Path, marker: &Path, lock: Option<&Lock>) -> Templa
         .chain(main.map(|stem| root.join("evidence").join(format!("{stem}-player.png"))))
         .find(|path| path.is_file());
     let name = text("name").unwrap_or_else(|| id.to_owned());
-    Template {
+    // The samples lock identifies Ara sample templates; arbitrary custom
+    // templates do not acquire a dependency on the Ara sample generator.
+    let setup = match lock {
+        Some(lock) => match lock.missing(id, root, &name) {
+            Some(setup) => Some(setup),
+            None => kits::missing(id, root, &name)?,
+        },
+        None => None,
+    };
+    Ok(Template {
         id: id.to_owned(),
-        setup: lock.and_then(|lock| lock.missing(id, root, &name)),
+        setup,
         name,
         thumbnail,
         description: text("description"),
-    }
+    })
 }
 
 /// The subset of `samples/assets.lock.json` needed to detect unfetched art.

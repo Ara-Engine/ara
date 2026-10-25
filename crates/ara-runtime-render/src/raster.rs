@@ -121,7 +121,7 @@ impl RasterView {
             && crate::emitters::emission_edited(
                 self.emitters.as_ref(),
                 &prepared.scene,
-                |texture| prepared.textures.mean_texel(texture),
+                |texture, decode| prepared.textures.mean_texel(texture, decode),
                 changed,
             )
         {
@@ -590,7 +590,7 @@ fn emitter_job(prepared: &Prepared) -> crate::emitters::Job {
     crate::emitters::Job::new(
         &prepared.scene,
         &crate::gi::shading(prepared),
-        |texture, side| prepared.textures.texels(texture, side),
+        |texture, side, decode| prepared.textures.texels(texture, side, decode),
     )
 }
 

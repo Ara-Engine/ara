@@ -62,8 +62,11 @@ fn first_capture_uploads_finished_emitter_search_without_another_prepare() -> Re
     let config = texture_config();
     let mut prepared = native::prepare(&frame, Content::default(), config)?;
     prepared.enable_motion();
-    let job =
-        crate::emitters::Job::new(&prepared.scene, &crate::gi::shading(&prepared), |_, _| None);
+    let job = crate::emitters::Job::new(
+        &prepared.scene,
+        &crate::gi::shading(&prepared),
+        |_, _, _| None,
+    );
     ensure!(!job.is_empty(), "fixture needs a real emitter search");
     let mut renderer = Renderer::new_native(
         &prepared.scene,

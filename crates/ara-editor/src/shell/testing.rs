@@ -194,6 +194,10 @@ impl Shell {
         self.game_start = Some(super::game_panel::StartProgress::from_status(&row));
         let _ = self.rebuild(editor);
     }
+    /// The Hierarchy's rows as shown (collapsed groups hide their children).
+    pub fn hierarchy_rows(&self) -> usize {
+        self.hierarchy.items.len()
+    }
     /// Palette rows for `query` as (group, title, command id) without opening it.
     pub fn palette_rows(
         &mut self,

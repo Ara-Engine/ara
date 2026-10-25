@@ -928,7 +928,7 @@ Fixes:
 ## ARA1812 SESSION_APPROVED: Session approved
 owner: ara-host
 
-A session was created and journaled. This informational log records its client, author, granted scopes and approval authority; separately denied scopes may still be reported by `ARA1805`.
+A session was created and journaled. Its client, author, granted scopes and approval authority are a `tracing` debug event (not a Console log: every launch and connection begins one); the journal and `session.status` keep the approval. Separately denied scopes are still reported by `ARA1805`.
 
 Causes:
 - A successful `session.begin`, including one created automatically by a CLI or per-connection MCP client.
@@ -1116,12 +1116,14 @@ Fixes:
 ## ARA1913 TEMPLATE_INCOMPLETE: Project template needs setup
 owner: ara-hub-service
 
-`hub.create` refused a template because files pinned by its `assets.lock.json` are not present. The real-art samples keep third-party binaries out of git; a checkout or a build packaged without them lists the template but cannot create a working project from it. The Hub shows the same message on the template tile.
+`hub.create` refused a template because third-party files pinned by its `assets.lock.json` or required generated kit files are missing or incomplete. The samples keep third-party binaries and generated kits out of git; the Hub shows the same setup message on the template tile and refuses creation before writing the project.
 
 Causes:
 - The sample's third-party art was never downloaded, or a download was interrupted.
+- The checkout has not run the sample kit generator, or a generated source, glTF buffer or texture is missing.
 - The engine package was built on a machine that had not fetched the sample art.
 
 Fixes:
 - In an Ara source checkout, run the command in the message (`ara-samples fetch <sample>`), then create the project again.
+- After fetching art, run `cargo run -p ara-samples -- kits <sample>` for missing kits, then create the project again. Installed templates ship their generated kits.
 - Pick another template, such as `blank`.

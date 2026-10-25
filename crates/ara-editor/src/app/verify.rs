@@ -11,6 +11,8 @@ pub(super) struct Verification {
     scene: Vec<image::RgbaImage>,
     samples: Vec<Value>,
     started: Instant,
+    /// Gizmo hover/drag state drawn into captures (the panels route's Scene states).
+    gizmo: overlay::GizmoState,
 }
 impl Verification {
     pub fn new(output: &std::path::Path) -> Self {
@@ -23,6 +25,7 @@ impl Verification {
             scene: Vec::new(),
             samples: Vec::new(),
             started: Instant::now(),
+            gizmo: Default::default(),
         }
     }
     pub fn finished(&self) -> bool {
@@ -355,6 +358,11 @@ impl Verification {
         }
         Ok(())
     }
+    /// Draw the gizmo with this hover/drag state in later captures.
+    pub(super) fn with_gizmo(mut self, gizmo: overlay::GizmoState) -> Self {
+        self.gizmo = gizmo;
+        self
+    }
     #[allow(clippy::too_many_arguments)]
     pub(super) fn screenshot(
         &self,
@@ -410,14 +418,7 @@ impl Verification {
             gpu.overlays(
                 rect,
                 overlay::ENTITY_IMAGE,
-                overlay::build(
-                    &view,
-                    &editor.state,
-                    rect,
-                    renderer,
-                    &changed,
-                    Default::default(),
-                )?,
+                overlay::build(&view, &editor.state, rect, renderer, &changed, self.gizmo)?,
             );
         }
         crate::shell::icons::install(ui_renderer, gpu.dpi())?;

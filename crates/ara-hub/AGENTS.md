@@ -43,6 +43,8 @@ contract is `crates/ara-hub-service/AGENTS.md`.
 - `App::frame` consumes a retained presentation request: rebuilding must present
   even if its layout work was already consumed. Pointer activations apply before
   the next queued event. Worker results wake SDL; idle waits follow clock/toast deadlines.
+- Notifications have one place each (docs/design/hub.md): errors are inline banners,
+  a Hub update is the sidebar card (in full on Settings), results are toasts.
 - Every toast/banner has Dismiss. Informational toasts expire after 8 s (Undo: 20 s);
   errors remain until dismissed. Preference writes are coalesced off the UI thread.
 - Create validation is the service's: every edit sends `hub.create {dryRun:true}`;

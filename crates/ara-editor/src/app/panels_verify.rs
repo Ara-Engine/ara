@@ -21,6 +21,8 @@ pub(super) struct Verification {
     palette_shot: bool,
     /// The plain material page has been captured; the in-node previews come next.
     material_shot: bool,
+    /// Gizmo hover/drag state for the Scene captures.
+    gizmo: overlay::GizmoState,
 }
 
 pub(super) fn fixtures(root: &std::path::Path) -> ara_ui::Result<()> {
@@ -132,6 +134,7 @@ impl Verification {
             interactions: Vec::new(),
             palette_shot: false,
             material_shot: false,
+            gizmo: Default::default(),
         })
     }
     pub fn finished(&self) -> bool {
@@ -471,6 +474,7 @@ impl Verification {
                 }
                 shell.rebuild(editor)?;
                 self.capture_pair("scene", editor, shell, gpu, ui, renderer, scene_view)?;
+                self.scene_states(editor, shell, gpu, ui, renderer, scene_view)?;
                 editor.action("profile.start", json!({}))?;
                 shell.rebuild(editor)?;
                 self.next();
@@ -632,7 +636,7 @@ impl Verification {
         if actual != self.pixels {
             return Err(format!("capture requested {:?}, actual {actual:?}", self.pixels).into());
         }
-        let capture = super::verify::Verification::new(&self.output);
+        let capture = super::verify::Verification::new(&self.output).with_gizmo(self.gizmo);
         for (theme, light) in [("dark", false), ("light", true)] {
             editor.action("editor.theme", json!({"light":light}))?;
             shell.rebuild(editor)?;
@@ -650,6 +654,69 @@ impl Verification {
         editor.action("editor.theme", json!({"light":false}))?;
         shell.rebuild(editor)?;
         crate::shell::icons::install(ui, gpu.dpi())?;
+        Ok(())
+    }
+    /// The Scene view's gizmo states (hovered axis, dragged plane, rotate, scale) and
+    /// the viewport toolbar's view-mode and camera menus, with the crate selected.
+    #[allow(clippy::too_many_arguments)]
+    fn scene_states(
+        &mut self,
+        editor: &mut Editor,
+        shell: &mut Shell,
+        gpu: &mut NativeUi,
+        ui: &mut UiRenderer,
+        renderer: &mut Renderer,
+        scene_view: &mut super::viewport::SceneView,
+    ) -> ara_ui::Result<()> {
+        use crate::shell::commands::{Target, menus::Context};
+        use overlay::{GizmoState, Handle};
+        for (name, gizmo) in [
+            (
+                "scene-hover",
+                GizmoState {
+                    hover: Some(Handle::Axis(0)),
+                    active: None,
+                },
+            ),
+            (
+                "scene-drag",
+                GizmoState {
+                    hover: None,
+                    active: Some(Handle::Plane(1)),
+                },
+            ),
+        ] {
+            self.gizmo = gizmo;
+            self.capture_pair(name, editor, shell, gpu, ui, renderer, scene_view)?;
+        }
+        self.gizmo = Default::default();
+        for (name, command) in [
+            ("scene-rotate", "view.tool.rotate"),
+            ("scene-scale", "view.tool.scale"),
+        ] {
+            shell.run_command(editor, command, &Target::None)?;
+            shell.rebuild(editor)?;
+            self.capture_pair(name, editor, shell, gpu, ui, renderer, scene_view)?;
+        }
+        shell.run_command(editor, "view.tool.move", &Target::None)?;
+        for (name, button, context) in [
+            ("scene-menu-view", "view-mode", Context::ViewModes),
+            ("scene-menu-camera", "view-camera", Context::Camera),
+        ] {
+            shell.rebuild(editor)?;
+            let r = shell
+                .ui
+                .find(button)
+                .map(|i| shell.ui.nodes[i].rect)
+                .ok_or("viewport menu button not visible")?;
+            shell.pointer = [r.x, r.y + r.h];
+            shell.open_viewport_menu(editor, context, Target::None)?;
+            self.capture_pair(name, editor, shell, gpu, ui, renderer, scene_view)?;
+            shell.menu = None;
+        }
+        shell.rebuild(editor)?;
+        self.interactions
+            .push("Scene gizmo states and viewport menus captured");
         Ok(())
     }
     /// Console, Problems, Agents and Settings with real content: diagnostics on the

@@ -3,8 +3,10 @@
 
 mod binaries;
 mod build_paths;
+mod cargo_wait;
 mod check;
 mod compile_cache;
+mod d26;
 mod editor;
 mod git;
 mod gpu;
@@ -43,6 +45,8 @@ enum Command {
     },
     /// Build and measure a frozen packed scene, or control a warm perf session.
     Perf(perf::Options),
+    /// Measure every D26/D27 release target; writes target/d26/<timestamp>/report.html.
+    D26(d26::Options),
     /// Check changed crates and their reverse dependencies before handing off work.
     Check {
         #[arg(long, default_value = "main")]
@@ -59,7 +63,7 @@ enum Command {
         /// Show affected packages without running build/test gates.
         #[arg(long, conflicts_with = "full")]
         plan: bool,
-        /// Total seconds including cache waits (default 2400; --full unlimited; 0 unlimited).
+        /// Seconds excluding Cargo package-cache waits (default 2400; --full/0 unlimited).
         #[arg(long)]
         timeout: Option<u64>,
         /// Bypass RUSTC_WRAPPER when a shared compiler cache is contended.
@@ -126,6 +130,7 @@ fn run() -> Result<bool> {
     match cli.command {
         Command::Cargo { args } => compile_cache::cargo(&root, &args),
         Command::Perf(options) => perf::run(&root, options),
+        Command::D26(options) => d26::run(&root, options),
         Command::Check {
             base,
             json,

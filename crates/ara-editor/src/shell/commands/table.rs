@@ -1651,6 +1651,17 @@ fn build() -> Vec<Spec> {
         )
         .when(|c| Avail::Checked(c.logs.info)),
         cmd(
+            "console.machine",
+            "Show This Computer's Messages",
+            "monitor",
+            "",
+            "Show or hide messages from this computer's graphics drivers and overlay layers.",
+            |s, _, _| {
+                s.machine_open = !s.machine_open;
+                Ok(())
+            },
+        ),
+        cmd(
             "console.select",
             "Show Message Details",
             "info",

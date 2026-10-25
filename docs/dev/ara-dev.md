@@ -129,7 +129,9 @@ budget for contended fixture builds. The overall gate deadline still caps every 
 `ARA_TEST_TIMEOUT_SECONDS` remains an explicit override. Timeout kills the process tree
 and fails the gate. Separate suite logs and
 `test-execution.json` record results/times. Doctests and diagnostic coverage remain checked
-through Cargo, each with a 180-second phase deadline as well as the overall gate deadline.
+through Cargo using the overall gate deadline, without an independent phase cap.
+`--timeout 0` leaves those Cargo phases unlimited. Reported Cargo package-cache
+lock waits pause the execution budget until Cargo emits progress again.
 No nextest installation is required; the built-in scheduler is used when that optional
 developer tool is absent. This is an admission estimate, not an OS memory sandbox.
 
@@ -305,6 +307,29 @@ across new cohort keys. A shader-only iteration needs neither Cargo nor a new
 player process. Cook into an ignored scratch directory for experiments; tracked
 cooked files are refreshed only deliberately.
 
+### D26 scoreboard
+
+`cargo run -p ara-dev -- d26` measures every D26/D27 release target in one pass and writes
+`target/d26/<timestamp>/report.json` and a self-contained `report.html` (pass/fail per gate,
+value and limit per row). It builds the perf roots plus `ara-editor` and `ara-samples` in one
+feature resolution, freezes Outpost, Hangar and Showcase packs once per sample tree
+(`target/d26/packs`), then runs, each step under the GPU lock:
+
+- per scene, a cold High player window (fresh pipeline cache, only the first frame skipped:
+  cold startup and hitches) and a steady window per preset (GPU p50/p95, CPU wall, warm startup);
+- `ara-samples capture <project> <look> --quality all --reference 256` per scene (ꟻLIP/RMSE),
+  or `--flip-from <capture-dir>` to reuse a sweep;
+- the editor's `--verify-responsiveness` on a fresh `samples/outpost` copy with
+  `--settle-imports after` (interactions during imports), then again on that copy with
+  `--settle-imports before` (warm startup, Scene orbit, Play, interactions after imports).
+
+A row without a measurement reads "not measured", never "pass". Player CPU rows gate on
+`cpu.work_ms` when its `work_coverage` covers every measured frame, and hitch rows on
+`cpu.hitches_over_16ms`. Otherwise wall-clock CPU values only bound CPU work, so they pass
+at or under the limit and are unmeasured above it. `--skip
+player|flip|editor` leaves a section out; `--no-build` reuses the last d26 build;
+`--profile release` confirms on D26's named profile. The report's footer defines each metric.
+
 ### Measured iteration loop
 
 On 2026-10-24, both profiles were warmed with the same four package roots, four
@@ -368,9 +393,12 @@ across failing targets so one run reports all failing suites. Diagnostic coverag
 is reused when already passed in the selected test set. `--plan` prints the exact
 selection and reasons without building; JSON plans say `planned`, never `passed`.
 
-An affected gate has a total 2400-second deadline, including metadata and Cargo
-cache waits. Timeout returns failure with the command log and terminates its
-process tree (a kill-on-close Windows job). It cannot waive an unfinished test.
+An affected gate has a 2400-second execution budget, including metadata.
+Reported Cargo package-cache lock waits are excluded and carried forward to later
+phases; command details record excluded waits, while reported seconds remain wall time.
+Build-directory/shared-lane waits still count. Timeout returns failure with the
+command log and terminates its process tree (a kill-on-close Windows job).
+It cannot waive an unfinished test.
 `--timeout <seconds>` overrides the budget; `--timeout 0` disables it. `--full`
 selects workspace clippy/tests and has no default deadline for nightly use. The
 deadline starts inside ara-dev; the Windows helper isolates the bootstrap build.

@@ -149,3 +149,69 @@ persistence, preview/HQ swapping, final-cache bypass, cancellation and failed HQ
 last-good fallback under Play/idle/approval policies. Sidecar preset edits are typed
 kernel transactions with undo, and schema/serde/Rust defaults all select HQ.
 Mesh/skeleton/clip formats and runtime readers remain v1. See INTEGRATION.md.
+
+## Deeper static LODs, 2026-10-25
+
+Generation 6 reduces selected main-view triangles by **23.8–27.8%** in the
+144-tile Outpost. Both runs use the same authored scene, 8,344 instances,
+273 shared geometries, seed 7, look simulation tick, four look cameras,
+2560×1440 resolution and 1 px projected-error threshold.
+
+| Camera | Before main triangles | After main triangles | Reduction | Before casters ≤64 m | After casters ≤64 m |
+|---|---:|---:|---:|---:|---:|
+| gate | 2,848,843 | 2,056,685 | 27.8% | 1,678,587 | 1,484,289 |
+| campfire | 2,414,267 | 1,831,979 | 24.1% | 1,450,341 | 1,200,105 |
+| yard | 2,241,937 | 1,708,591 | 23.8% | 1,530,599 | 1,296,007 |
+| vista | 3,502,478 | 2,587,588 | 26.1% | 1,414,946 | 1,299,888 |
+
+The visual-quality agent's CPU replay runs on the shipping adapter's prepared
+scene, before device creation. It reproduces frustum bounds and projected-error
+LOD selection. The 64 m caster proxy falls 8.1–17.3%; it counts nearby candidate
+triangles and does not measure actual cascades or GPU time. These results carry
+no D26 timing or visual acceptance claim.
+
+The normal `ara_play_host::assets::Assets` / `ProcessWorker` pipeline upgraded
+101 tracked sidecars through typed version transactions and pinned all 115 assets.
+All 452 mesh artifacts retain their LOD0 triangle counts, positive LOD counts,
+finite nondecreasing errors and at least 25% reduction per accepted level.
+103 chains gain levels; 3 of the 18 previously single-LOD meshes above 200
+triangles gain a chain. The explicit HQ re-cook, pinning and artifact audit took
+366.0 s with one worker and four threads per cook on the shared machine.
+The generation-5 cache-hit baseline took 52.2 s; these are different cache states.
+
+`namaqualand_rocks_02_d` extends from `[24910,12454,6226,3112]` to
+`[24910,12454,6226,3112,1556,778,388]` (1.56% of LOD0).
+Shrub `[2385,1191,863]` and rooibos stem `[1452,656,334,236]` levels retain
+their geometric-error prefix. Weighted attribute errors apply to new levels;
+retaining the prefix prevents finer runtime selections on existing foliage.
+
+The requested 0.8–1.2M triangles per view is **not reached** with the specified
+border and card safeguards. Rooibos C's 708- and 2,044-triangle leaf parts have
+all 786 and 3,078 source vertices on geometric open borders, respectively.
+They cannot collapse while those vertices remain locked. Thin connected cards
+keep at least 90% area; rotated coincident backfaces are covered, while long
+three-dimensional masked stems are classified separately.
+
+Focused validation: 29 importer tests, strict all-target Clippy (including the
+worker and benchmark example), and package formatting pass. Unchanged engine
+libraries were reused from a frozen build; only owned code was recompiled.
+Raw runs are under this worktree's ignored `target/ara-dev/lod/`:
+`{before,after}-normal.json`, `{before,after}-triangles.log`, `comparison.json`
+and `card-topology.jsonl`. Regular tests generate no sample recipes or captures.
+
+For another normal re-cook and visual/timing follow-up, use a warm target with
+matching sample and worker binaries:
+
+```powershell
+$env:CARGO_BUILD_JOBS = '2'
+cargo build --profile perf -p ara-samples -p ara-import-worker
+$tools = Join-Path $env:CARGO_TARGET_DIR 'perf'
+$env:ARA_IMPORT_WORKERS = '1'
+$env:ARA_IMPORT_WORKER = Join-Path $tools 'ara-import-worker.exe'
+cargo run -p ara-dev -- gpu -- "$tools/ara-samples.exe" --samples samples capture outpost outpost --quality high
+```
+
+VQ's temporary `ARA_RASTER_TRIANGLES` replay hook can repeat the CPU counts at
+`ARA_LOD_PIXELS=1`. To measure through `ara-dev perf`, export a **new** frozen
+pack with the matching worker and select it with `--scene <export-folder>`.
+Existing immutable packs keep their old geometry when source assets are re-cooked.

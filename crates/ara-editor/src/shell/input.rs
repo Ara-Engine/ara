@@ -357,7 +357,13 @@ impl Shell {
                                 && row.is_some_and(|r| x < r.x + 24. + s.depth.min(32) as f32 * 16.)
                         });
                         if chevron {
-                            editor.action("editor.collapse",json!({"entity":entity,"enabled":!editor.state.collapsed.contains(entity)}))?;
+                            // The row's shown state: large groups start collapsed.
+                            let collapsed =
+                                self.hierarchy_style.get(&key).is_some_and(|s| s.collapsed);
+                            editor.action(
+                                "editor.collapse",
+                                json!({"entity":entity,"enabled":!collapsed}),
+                            )?;
                             rebuild = true;
                             continue;
                         }

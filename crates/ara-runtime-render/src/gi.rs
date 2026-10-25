@@ -1,7 +1,8 @@
 //! Probe GI acquisition for the raster path. A content generation's static
-//! instances are traced once into probe surfaces, on a ray-tracing device where
-//! available (`bake_probe_surfaces` on a temporary fidelity view) or on the CPU
-//! (`gi_cpu`); the raster renderer relights them every frame without rays.
+//! instances are traced once into probe surfaces on the CPU (`gi_cpu`), or with
+//! `ARA_PROBE_GI_RT=1` on a second, ray-tracing device where available
+//! (`bake_probe_surfaces` on a temporary fidelity view); the raster renderer
+//! relights them every frame without rays.
 //!
 //! [`Acquisition`] runs one job at a time on a worker thread, caches full bakes
 //! on disk by content key, and keeps the worker's CPU tracer between jobs, so
@@ -31,7 +32,7 @@ use std::{
 };
 
 /// Bumped whenever the bake or the cache layout changes.
-const VERSION: u32 = 3;
+const VERSION: u32 = 4;
 const MAGIC: &[u8; 8] = b"ARAGI\0\0\x01";
 
 /// Residency used only while baking (full-resolution albedo for the caches).
@@ -159,7 +160,9 @@ struct Active {
 /// incremental updates build on the ones before them.
 pub(crate) struct Acquisition {
     cache: PathBuf,
-    /// Trace on the CPU even where ray queries exist (`ARA_PROBE_GI_CPU=1`).
+    /// Trace on the CPU, the default: a second ray-tracing device contends with
+    /// presentation for the driver (100+ ms submits), and the CPU bake matches
+    /// its quality. `ARA_PROBE_GI_RT=1` opts into the ray-traced bake.
     cpu: bool,
     /// Newest generation key (content key and bake version).
     key: Option<u64>,
@@ -175,11 +178,11 @@ pub(crate) struct Acquisition {
 
 impl Acquisition {
     pub(crate) fn new(cache: PathBuf) -> Self {
-        Self::with_method(cache, std::env::var_os("ARA_PROBE_GI_CPU").is_some())
+        Self::with_method(cache, std::env::var_os("ARA_PROBE_GI_RT").is_none())
     }
 
-    /// `cpu` forces the CPU bake on ray-tracing adapters too; each method caches
-    /// separately.
+    /// `cpu` false bakes on a ray-tracing device where one exists (the CPU
+    /// otherwise); each method caches separately.
     pub(crate) fn with_method(cache: PathBuf, cpu: bool) -> Self {
         Self {
             cache: cache.join("probe-gi"),
@@ -610,29 +613,64 @@ fn bake_shading(prepared: &mut native::Prepared) -> Vec<crate::gi_cpu::Shading> 
 /// CPU bake: factors times the mean texel of their maps; terrain splats average
 /// their layer materials.
 pub(crate) fn shading(prepared: &native::Prepared) -> Vec<crate::gi_cpu::Shading> {
-    use ara_render::instanced::NO_TEXTURE;
+    use ara_render::{
+        instanced::NO_TEXTURE,
+        scene::{BASE_COLOR_DECODE_SRGB, EMISSIVE_DECODE_SRGB},
+    };
     use glam30::Vec3;
     let missing = std::cell::Cell::new(0usize);
-    let mean = |id: u32| {
+    // `decode`: the material decodes this raw map's sRGB itself (graph views).
+    let mean = |id: u32, decode: bool| {
         if id == NO_TEXTURE {
             return [1.; 4];
         }
-        prepared.textures.mean_texel(id).unwrap_or_else(|| {
+        prepared.textures.mean_texel(id, decode).unwrap_or_else(|| {
             missing.set(missing.get() + 1);
             [1.; 4]
         })
+    };
+    // Share of rays an alpha-tested (mode 1) or blended (mode 2) material lets
+    // through, as the ray-traced bake's any-hit test (`nativeAccept`) decides:
+    // over the base colour's texels at up to CUTOUT_SIDE a side, where thin
+    // features (fence wire) still hold their coverage.
+    const CUTOUT_SIDE: u32 = 256;
+    let cutout = |m: &ara_render::instanced::Material| {
+        let (mode, alpha, cutoff) = (m.pbr.flags[0], m.pbr.base_color[3], m.pbr.surface[3]);
+        if mode == 0 {
+            return 0.;
+        }
+        let alphas: Vec<f32> = match m.pbr.textures[0] {
+            NO_TEXTURE => vec![alpha],
+            id => prepared
+                .textures
+                .texels(id, CUTOUT_SIDE, false)
+                .map_or_else(
+                    || vec![alpha],
+                    |(_, t)| t.iter().map(|t| alpha * t[3]).collect(),
+                ),
+        };
+        let n = alphas.len().max(1) as f32;
+        let kept = if mode == 1 {
+            alphas.iter().filter(|&&a| a >= cutoff).count() as f32 / n
+        } else {
+            alphas.iter().sum::<f32>() / n
+        };
+        (1. - kept).clamp(0., 1.)
     };
     let materials = &prepared.scene.materials;
     let own: Vec<_> = materials
         .iter()
         .map(|m| {
             let (c, e) = (m.pbr.base_color, m.pbr.emissive_roughness);
-            let (t, et) = (mean(m.pbr.textures[0]), mean(m.pbr.textures[3]));
+            let decode = |bit: u32| m.pbr.flags[1] & bit != 0;
+            let t = mean(m.pbr.textures[0], decode(BASE_COLOR_DECODE_SRGB));
+            let et = mean(m.pbr.textures[3], decode(EMISSIVE_DECODE_SRGB));
             // glTF metalness lives in the blue channel of the metal/roughness map.
-            let metal = (m.pbr.surface[0] * mean(m.pbr.textures[2])[2]).clamp(0., 1.);
+            let metal = (m.pbr.surface[0] * mean(m.pbr.textures[2], false)[2]).clamp(0., 1.);
             crate::gi_cpu::Shading {
                 albedo: Vec3::new(c[0] * t[0], c[1] * t[1], c[2] * t[2]) * (1. - metal),
                 emissive: Vec3::new(e[0] * et[0], e[1] * et[1], e[2] * et[2]),
+                cutout: cutout(m),
             }
         })
         .collect();
@@ -659,6 +697,7 @@ pub(crate) fn shading(prepared: &native::Prepared) -> Vec<crate::gi_cpu::Shading
             crate::gi_cpu::Shading {
                 albedo: layers.iter().map(|s| s.albedo).sum::<Vec3>() / n,
                 emissive: layers.iter().map(|s| s.emissive).sum::<Vec3>() / n,
+                ..shading
             }
         })
         .collect()
@@ -745,7 +784,7 @@ mod tests {
         for (key, origin) in [(1u64, 1.), (2, 2.), (3, 3.)] {
             let key = key ^ u64::from(VERSION);
             std::fs::write(
-                root.join(format!("probe-gi/{key:016x}-auto.gi")),
+                root.join(format!("probe-gi/{key:016x}-cpu.gi")),
                 encode(&lattice(origin)),
             )?;
         }

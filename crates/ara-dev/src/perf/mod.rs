@@ -1,6 +1,6 @@
 //! Optimized iteration builds and serialized measurements of immutable exported scenes.
 mod control;
-mod freeze;
+pub(crate) mod freeze;
 mod report;
 
 use std::fs::{self, File};
@@ -22,7 +22,8 @@ pub(crate) enum Preset {
 }
 
 impl Preset {
-    fn name(self) -> &'static str {
+    pub(crate) const ALL: [Self; 4] = [Self::Low, Self::Medium, Self::High, Self::Epic];
+    pub(crate) fn name(self) -> &'static str {
         match self {
             Self::Low => "low",
             Self::Medium => "medium",
@@ -68,8 +69,46 @@ pub(crate) struct Options {
     json: bool,
     #[arg(long, default_value_t = 3600)]
     timeout: u64,
+    /// Pipeline cache folder (default: shared under target/ara-dev/perf); a fresh
+    /// folder measures a cold start.
+    #[arg(long)]
+    gpu_cache: Option<PathBuf>,
+    /// A scoreboard window (`ara-dev d26`): no console table, no baseline comparison.
+    #[arg(skip)]
+    scoreboard: bool,
     #[command(subcommand)]
     action: Option<Action>,
+}
+
+impl Options {
+    /// One measurement window on a frozen scene, as `ara-dev d26` takes it.
+    pub(crate) fn window(
+        preset: Preset,
+        frames: u32,
+        warmup: u32,
+        profile: &str,
+        gpu_cache: PathBuf,
+    ) -> Self {
+        Self {
+            scene: None,
+            preset,
+            frames,
+            warmup,
+            width: 2560,
+            height: 1440,
+            keep_alive: false,
+            no_build: true,
+            player: None,
+            capture: None,
+            profile: profile.into(),
+            baseline: None,
+            json: false,
+            timeout: 3600,
+            gpu_cache: Some(gpu_cache),
+            scoreboard: true,
+            action: None,
+        }
+    }
 }
 
 #[derive(Subcommand)]
@@ -103,7 +142,14 @@ fn run_command(root: &Path, command: &mut Command, label: &str, timeout: u64) ->
     Ok(())
 }
 
-fn build(root: &Path, directory: &Path, profile: &str) -> Result<(Binaries, f64)> {
+/// Build the perf roots (plus `extra` packages, in the same feature resolution) and
+/// return their executables and the build time.
+pub(crate) fn build(
+    root: &Path,
+    directory: &Path,
+    profile: &str,
+    extra: &[&str],
+) -> Result<(Binaries, f64)> {
     let started = Instant::now();
     let directories = Directories::from_env(root)?;
     let _lease = crate::compile_cache::acquire(started.checked_add(Duration::from_secs(3600)))?;
@@ -122,7 +168,10 @@ fn build(root: &Path, directory: &Path, profile: &str) -> Result<(Binaries, f64)
         "ara-shader-cook",
         "ara-export",
         "ara-import-worker",
-    ] {
+    ]
+    .iter()
+    .chain(extra)
+    {
         command.args(["-p", package]);
     }
     command
@@ -169,7 +218,7 @@ pub(crate) fn run(root: &Path, mut options: Options) -> Result<bool> {
     let started = Instant::now();
     let base = root.join("target/ara-dev/perf");
     if options.scene.is_none() && !base.join("outpost/ara-launch.json").is_file() {
-        freeze::preflight(root)?;
+        freeze::preflight(root, "outpost")?;
     }
     let id = SystemTime::now().duration_since(UNIX_EPOCH)?.as_millis();
     let directory = base.join(format!("run-{id}-{}", std::process::id()));
@@ -177,7 +226,7 @@ pub(crate) fn run(root: &Path, mut options: Options) -> Result<bool> {
     let (mut binaries, build_seconds) = if options.no_build {
         (Binaries::new(), 0.)
     } else {
-        build(root, &directory, &options.profile)?
+        build(root, &directory, &options.profile, &[])?
     };
     let paths_cache = base.join(format!("build-paths-{}.json", options.profile));
     if let Some(player) = &options.player {
@@ -206,11 +255,37 @@ pub(crate) fn run(root: &Path, mut options: Options) -> Result<bool> {
     let player = binaries
         .get("ara-player")
         .context("Cargo did not produce ara-player")?;
+    session(
+        root,
+        &options,
+        player,
+        &scene,
+        &directory,
+        build_seconds,
+        started,
+    )?;
+    Ok(true)
+}
+
+/// Launch `player` on a frozen scene, measure one window under the GPU lock and
+/// publish `report.json` in `directory`; returns its path. `run` and `ara-dev d26`
+/// share it.
+pub(crate) fn session(
+    root: &Path,
+    options: &Options,
+    player: &Path,
+    scene: &Path,
+    directory: &Path,
+    build_seconds: f64,
+    started: Instant,
+) -> Result<PathBuf> {
     ensure!(
         player.is_file(),
         "player binary is missing: {}",
         player.display()
     );
+    let base = root.join("target/ara-dev/perf");
+    fs::create_dir_all(directory)?;
     let raw = directory.join("player.json");
     let control = directory.join("control");
     fs::create_dir_all(&control)?;
@@ -225,7 +300,7 @@ pub(crate) fn run(root: &Path, mut options: Options) -> Result<bool> {
     Directories::from_env(root)?.apply(&mut command);
     command
         .args(["--root"])
-        .arg(&scene)
+        .arg(scene)
         .args([
             "--size",
             &format!("{}x{}", options.width, options.height),
@@ -241,7 +316,12 @@ pub(crate) fn run(root: &Path, mut options: Options) -> Result<bool> {
         .arg("--perf-control")
         .arg(&control)
         .arg("--gpu-cache")
-        .arg(base.join("gpu-cache"))
+        .arg(
+            options
+                .gpu_cache
+                .clone()
+                .unwrap_or_else(|| base.join("gpu-cache")),
+        )
         .env(
             "ARA_SHADER_DIR",
             std::env::var_os("ARA_SHADER_DIR").unwrap_or_else(|| root.as_os_str().to_owned()),
@@ -263,9 +343,9 @@ pub(crate) fn run(root: &Path, mut options: Options) -> Result<bool> {
     let report = report::Destination {
         root,
         base: &base,
-        directory: &directory,
-        scene: &scene,
-        options: &options,
+        directory,
+        scene,
+        options,
         executable: player,
     };
     crate::gpu::locked(options.timeout, || {
@@ -299,5 +379,5 @@ pub(crate) fn run(root: &Path, mut options: Options) -> Result<bool> {
         let player: serde_json::Value = serde_json::from_slice(&bytes)?;
         report.publish(player, build_seconds, started.elapsed().as_secs_f64())?;
     }
-    Ok(true)
+    Ok(directory.join("report.json"))
 }

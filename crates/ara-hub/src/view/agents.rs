@@ -7,13 +7,15 @@ use crate::model::{AgentClient, Hub, Intent, Participant, Presence, State, text}
 pub const CLAUDE_ADD: &str = "claude mcp add --scope user ara -- ara mcp";
 
 pub(super) fn body(p: &mut Page, hub: &Hub) {
-    connect(p, hub);
-    p.text("section-title", "Live activity");
     let live: Vec<_> = hub
         .activity
         .iter()
         .filter(|a| !a.participants.is_empty())
         .collect();
+    if live.is_empty() {
+        connect(p, hub);
+    }
+    p.text("section-title", "Live activity");
     if live.is_empty() {
         p.panel("empty", |p| {
             p.panel("empty-icon", |p| p.icon("users", "icon-lg"));
@@ -54,6 +56,7 @@ pub(super) fn body(p: &mut Page, hub: &Hub) {
             }
         });
     }
+    connect(p, hub);
 }
 
 fn participant(p: &mut Page, person: &Participant, presence: Option<&Presence>) {

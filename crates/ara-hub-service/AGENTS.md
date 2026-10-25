@@ -19,8 +19,9 @@ directory, enforced by an OS file lock; projects run in separate processes.
   built-in `blank` plus child directories containing `ara.project.json`. Names and
   `description` come from that marker; the preview is `thumbnail.png`, else
   `evidence/<main-scene>-player.png`. An `assets.lock.json` beside the templates
-  (the samples lock) sets `setup {message,command}` while pinned files under
-  `assets/third_party/` are missing; `hub.create` then fails with ARA1913.
+  (the samples lock) sets `setup {message,command}` for missing third-party pins
+  or generated kit sources/local glTF companions. `hub.create` fails with ARA1913
+  before writing; `cargo run -p ara-samples -- kits <sample>` restores kits.
 - When the engine runs from `<checkout>/target/<profile>/`, `Hub::open` layers the
   checkout's `samples/` after the configured templates (installed builds ship them
   in `<install>/templates`).

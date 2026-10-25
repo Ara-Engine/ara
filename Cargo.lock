@@ -839,6 +839,7 @@ dependencies = [
  "sdl3-sys",
  "serde",
  "serde_json",
+ "sha2 0.10.9",
  "windows",
 ]
 
@@ -998,6 +999,7 @@ dependencies = [
  "notify",
  "serde",
  "serde_json",
+ "tracing",
 ]
 
 [[package]]

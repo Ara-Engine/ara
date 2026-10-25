@@ -91,16 +91,11 @@ impl Shell {
                 .and_then(|logs| logs["total"].as_u64())
                 .unwrap_or(0)
         };
-        // Bounded runs leave out this machine's Vulkan loader and overlay layers.
+        // This machine's Vulkan loader and overlay layers (OBS, Overwolf hooks) are not the
+        // project's problems: Problems and Console list them, the chip does not count them.
         let host: &[&str] = &["ARA_GPU_ENVIRONMENT"];
-        let mut count = |severity: &str| {
-            let all = total(severity, None);
-            if self.host_problems {
-                all
-            } else {
-                all.saturating_sub(total(severity, Some(host)))
-            }
-        };
+        let mut count =
+            |severity: &str| total(severity, None).saturating_sub(total(severity, Some(host)));
         let errors = count("error");
         let warnings = count("warning").saturating_sub(errors);
         MenubarState {
@@ -224,7 +219,8 @@ impl Shell {
         let stopping = self
             .game_start
             .as_ref()
-            .filter(|_| editor.state.playing.is_some())
+            // Once the game shows, it is playing whatever the last status read said.
+            .filter(|_| editor.state.playing.is_some() && !self.game_live)
             .map(|start| start.stopping);
         if let Some(stopping) = stopping {
             self.bind_command("status-play", "window.game", Target::None);
@@ -241,7 +237,7 @@ impl Shell {
         self.bind_command("status-entities", "window.hierarchy", Target::None);
         out.push_str(&format!("<button id='status-entities' class='chip' label='Entities' action='Dispatch'>{}<text id='status-docs' text='{} entities{}' /></button><text id='status-saved' class='caption' text='{}' style='padding-left:8px' /><panel id='status-fill' class='fill' /><text id='status-hint' class='caption' text='{}' style='padding-right:12px' />",
             icons::icon("status-entities","box"),
-            self.hierarchy.items.len(),
+            self.entity_count,
             if editor.state.selection.is_empty(){String::new()}else{format!(" · {} selected",editor.state.selection.len())},
             escape(&saved),
             escape(hint)));

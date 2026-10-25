@@ -78,19 +78,22 @@ pub(super) fn body(p: &mut Page, hub: &Hub) {
                 });
             }
             p.text("small muted wrap", &excerpt);
-            p.action(
-                &format!("notes-{}", release.version),
-                "compact",
-                "book-open",
-                "Release notes",
-                Some(Intent::OpenPath(
-                    format!(
-                        "https://github.com/{}/releases/tag/engine-v{}",
-                        hub.releases.repo, release.version
-                    )
-                    .into(),
-                )),
-            );
+            // A button, not a full-width bar: rows keep it to its own width.
+            p.panel("row", |p| {
+                p.action(
+                    &format!("notes-{}", release.version),
+                    "compact",
+                    "book-open",
+                    "Release notes",
+                    Some(Intent::OpenPath(
+                        format!(
+                            "https://github.com/{}/releases/tag/engine-v{}",
+                            hub.releases.repo, release.version
+                        )
+                        .into(),
+                    )),
+                );
+            });
         });
     }
     p.panel("section-head", |p| {

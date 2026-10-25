@@ -43,8 +43,7 @@ Gate with targeted check/test/clippy. The GPU gate (`run.ps1 -Mode Verify`, `tes
 --ignored`) needs validation layers, SDL3 and this machine's GPU. Goldens live in
 `tests/goldens` (update only with `ARA_EDITOR_UPDATE_GOLDENS=1`); evidence in `evidence`.
 
-Polish assets: Lucide SVGs (ISC), Inter, JetBrains Mono (OFL; THIRD_PARTY_NOTICES). The
-fidelity view and its bounded settling live in app/viewport.rs; destroy it before its GPU.
+Polish assets: Lucide SVGs (ISC), Inter, JetBrains Mono (OFL; THIRD_PARTY_NOTICES). Fidelity view, bounded settling: app/viewport.rs; destroy it before its GPU.
 Raster IDs drive picking, outlines and GPU-only hover. Physical Scene extents and UI glyph
 scale change together; keep the SDL window, editor logical, IME and UIA coordinate
 conversions. Motion is paint-only, ≤140 ms, off with editor.preferences.
@@ -135,9 +134,10 @@ this engine's runtime template (player + PDB, cooked shaders) under `.ara/export
 C# modules ship NativeAOT. `build.run` launches it (offscreen: headless, `run.png`).
 Bounded runs are offscreen (`Options::offscreen`: hidden windows, UI readback);
 never add a capture route that shows a window. `--verify-journey` (`app/journey.rs`)
-writes `journey.json` after every step. `--verify-responsiveness` (`app/responsiveness.rs`) injects SDL-level clicks/moves into the
-real loop and writes per-frame costs, UI work, click results and Play click-to-first-Game-
-frame. Shell rebuilds reconcile into the retained `Ui` once per revision (`rebuild_if_stale`),
+writes `journey.json` after every step; `--verify-first-hour` (`app/qa.rs`) replays a new
+user's first hour on a fresh (Hub-created) project into `first-hour.json`. `--verify-responsiveness` (`app/responsiveness.rs`) injects SDL-level clicks/moves into the
+real loop and writes per-frame costs, UI work, click results, Play click-to-first-Game-
+frame, a Scene orbit and startup timings (`--settle-imports before|after`; `ara-dev d26`). Shell rebuilds reconcile into the retained `Ui` once per revision (`rebuild_if_stale`),
 menubar, status bar, area headers and tab bodies as parts (`Ui::reconcile_parts`); inactive
 `panels::keep_alive` tabs stay mounted, hidden (geometry via `Shell::shown_node`). Memoized
 panels (`shell/memo.rs`: Assets) reuse markup+bindings while their input digest holds; `cargo
