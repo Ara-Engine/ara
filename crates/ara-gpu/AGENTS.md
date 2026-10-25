@@ -77,6 +77,9 @@ Debug creation requires Khronos validation and synchronization validation.
 `assert_clean` rejects warnings and errors; `diagnostics` returns stable codes,
 layer identifiers, severity and message. The diagnostic callback mutex protects
 messages only, never frame resources or gameplay state.
+Loader/overlay GENERAL notices are informational and emitted once per exact
+message/process, with a stable bus key across child processes. Mixed GENERAL plus
+VALIDATION/PERFORMANCE messages retain their original severity and counters.
 
 Shared surfaces: `VK_KHR_external_memory_win32` is enabled whenever offered (the
 editor's device must import without knowing about Play). Opaque NT handles,

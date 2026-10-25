@@ -68,7 +68,7 @@ Fixes:
 owner: ara-gpu
 shown as: ARA_GPU_ENVIRONMENT
 
-The Vulkan loader, a layer or the driver reported something about the environment rather than about Ara's API use (for example an implicit layer from another program). It is not counted as a validation error.
+The Vulkan loader, a layer or the driver reported something about the environment rather than about Ara's API use (for example an implicit layer from another program). It is informational, never counted as a validation warning/error, and emitted once per exact message in a process. A stable diagnostic key groups the same message from editor/player/worker processes in the session's Console.
 
 Causes:
 - Third-party implicit layers (overlays, capture tools) loaded into the process.
