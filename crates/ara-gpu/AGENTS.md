@@ -79,6 +79,15 @@ and must lie within the scope's extent.
 Native presentation and raw ash integration remain unsafe, with documented
 lifetime/layout requirements. Never reset a pending native command buffer.
 
+Interactive Scene frames can use `begin_deferred_completion` / `end_deferred_completion`:
+retain the returned `Completion`, poll it before reusing resources, and keep showing
+the last completed color/ID pair. One frame is admitted at a time. `upload_queued`
+writes busy constants through ordered GPU updates; ordinary `upload` still rejects
+overwrites. A second graphics-family queue isolates Scene work from the native UI
+queue where available; completion publishes a GPU memory dependency to that UI queue.
+Capture/shutdown may use `wait_completion`. `tests/deferred.rs` blocks Scene work
+behind a host gate and checks UI progress, polling and byte-exact ordered updates.
+
 Debug creation requires Khronos validation and synchronization validation.
 `assert_clean` rejects warnings and errors; `diagnostics` returns stable codes,
 layer identifiers, severity and message. The diagnostic callback mutex protects

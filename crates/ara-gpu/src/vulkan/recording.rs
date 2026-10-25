@@ -186,7 +186,11 @@ impl VulkanDevice {
                         if queue == Queue::Compute {
                             self.context.compute
                         } else {
-                            self.context.graphics
+                            if self.scene_queue {
+                                self.context.scene_graphics
+                            } else {
+                                self.context.graphics
+                            }
                         },
                         &[vk::SubmitInfo2::default()
                             .wait_semaphore_infos(&waits)
@@ -224,12 +228,31 @@ impl VulkanDevice {
             query_capacity,
             labels,
         });
+        if let Some(points) = &mut self.deferred {
+            points.push(point);
+        }
+        for command in &list.commands {
+            if let Command::Barrier(Barrier {
+                resource: Resource::Buffer(buffer),
+                handoff,
+                ..
+            }) = command
+            {
+                self.buffers.get_mut(*buffer)?.owner = handoff.map_or(queue, |h| h.to);
+            }
+        }
         Ok(point)
     }
     /// Wait, read timestamps, recycle its query pool and release recording storage.
     pub fn resolve(&mut self, point: TimelinePoint) -> Result<Vec<PassTiming>> {
         crate::cpu_scope!("GPU.resolve");
+        if self.deferred.is_some() {
+            return Ok(Vec::new());
+        }
         self.wait(point)?;
+        self.resolve_completed(point)
+    }
+    pub(super) fn resolve_completed(&mut self, point: TimelinePoint) -> Result<Vec<PassTiming>> {
         let index = self
             .pending
             .iter()
@@ -557,6 +580,27 @@ impl VulkanDevice {
                         || source.handle == destination.handle
                     {
                         return Err(GpuError::Contract("Invalid buffer copy range".into()));
+                    }
+                }
+                Command::UpdateBuffer {
+                    destination,
+                    offset,
+                    bytes,
+                } => {
+                    let destination = self.buffers.get(*destination)?.raw;
+                    if rendering
+                        || bytes.is_empty()
+                        || bytes.len() > 65536
+                        || bytes.len() % 4 != 0
+                        || offset % 4 != 0
+                        || offset
+                            .checked_add(bytes.len() as u64)
+                            .is_none_or(|end| end > destination.size)
+                        || !destination
+                            .usage
+                            .contains(vk::BufferUsageFlags::TRANSFER_DST)
+                    {
+                        return Err(GpuError::Contract("Invalid buffer update".into()));
                     }
                 }
                 Command::CopyImage {
