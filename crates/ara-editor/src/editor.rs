@@ -387,6 +387,27 @@ impl Editor {
         }
         changed
     }
+    /// A host notification for this window (`diagnostics`, `history`, `jobs` and
+    /// collaboration): the panels showing them rebuild, and history that changes
+    /// review state (an agent's turn, an undo or redo, accept or reject) re-tints the
+    /// Scene. A window's own edit changes neither: the store revision it advanced
+    /// already rebuilt the panels and patched the Scene, so its plain human history
+    /// and its own collaboration echoes (`collab.op`, `collab.presence`) are skipped.
+    /// Bumping for them rebuilt the shell again and re-prepared the whole Scene a
+    /// frame after every commit.
+    pub(crate) fn notified(&mut self, value: &Value) {
+        let params = &value["params"];
+        if params["participant"] == self.session.as_str() {
+            return;
+        }
+        if value["method"] == "history" {
+            if params["author"] == "human" && params["reverts"].is_null() {
+                return;
+            }
+            self.review_revision += 1;
+        }
+        self.panels_revision += 1;
+    }
     /// Advance file watching and job completion at a frame boundary.
     pub fn tick(&mut self) {
         self.host.tick();
