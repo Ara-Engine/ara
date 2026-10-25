@@ -1,8 +1,10 @@
 //! Vulkan 1.3 backend. Raw Vulkan access is confined to backend integrations.
 mod acceleration;
 mod cache;
+mod completion;
 mod context;
 use ash::vk::TaggedStructure;
+pub use completion::Completion;
 mod encode;
 pub mod external;
 mod guard;
@@ -17,6 +19,7 @@ mod recording;
 mod reload;
 pub use reload::ShaderStatus;
 mod surface;
+mod ui_readback;
 mod waits;
 pub use waits::HostWaitStats;
 
@@ -32,6 +35,7 @@ struct Owned<V> {
     raw: V,
     last: [u64; 2],
     heap: Option<HeapIndex>,
+    owner: Queue,
 }
 enum Retired {
     Buffer(Owned<BufferAllocation>),
@@ -69,6 +73,10 @@ pub struct VulkanDevice {
     #[cfg(test)]
     query_pool_creations: usize,
     shader_worker: Option<reload::Worker>,
+    deferred: Option<Vec<TimelinePoint>>,
+    completion_pending: bool,
+    deferred_waits: [u64; 2],
+    scene_queue: bool,
 }
 
 impl VulkanDevice {
@@ -175,6 +183,10 @@ impl VulkanDevice {
             #[cfg(test)]
             query_pool_creations: 0,
             shader_worker,
+            deferred: None,
+            completion_pending: false,
+            deferred_waits: [0; 2],
+            scene_queue: false,
         })
     }
 
@@ -188,11 +200,17 @@ impl VulkanDevice {
         if size == 0 || usage.is_empty() {
             return Err(GpuError::Contract("Empty buffer".into()));
         }
+        let usage = if host {
+            usage | vk::BufferUsageFlags::TRANSFER_DST
+        } else {
+            usage
+        };
         let raw = self.context.buffer(size, usage, host)?;
         self.buffers.insert(Owned {
             raw,
             last: [0; 2],
             heap: None,
+            owner: Queue::Graphics,
         })
     }
     /// Allocate a single-level image; graph transients use the same owned path.
@@ -285,6 +303,7 @@ impl VulkanDevice {
             raw,
             last: [0; 2],
             heap: None,
+            owner: Queue::Graphics,
         })
     }
     /// Write a coherent buffer after every preceding use has completed.
@@ -400,6 +419,11 @@ impl VulkanDevice {
     /// Native image view for native integrations.
     pub fn image_view(&self, image: Image) -> Result<vk::ImageView> {
         Ok(self.images.get(image)?.raw.view)
+    }
+    /// Native mip-zero extent, including render-size ID targets under upscaling.
+    pub fn image_extent(&self, image: Image) -> Result<[u32; 2]> {
+        let image = self.images.get(image)?.raw;
+        Ok([image.width, image.height])
     }
     /// Return structured driver validation diagnostics recorded since device creation.
     pub fn diagnostics(&self) -> Vec<context::Diagnostic> {

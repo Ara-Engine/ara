@@ -85,10 +85,10 @@ Tests never touch the owner's profile: `.cargo/config.toml` gives every cargo-ru
 process `ARA_CONFIG_DIR`/`ARA_CRASH_DIR` under `target/`, `config_dir()` refuses the OS
 profile under tests and cargo, and bounded runs (`Options::isolate_profile`) start
 from a fresh `<output>/.ara-profile`. Never write user state anywhere else.
-Scene quality: `EditorState.render_quality` mirrors the preference `viewport.quality`
-(None = the project's `rendering.quality`); `state.quality` derives in `apply_settings`
-(false only for Low); the window keeps `detected_quality` (Auto). Commands
+Scene quality: `EditorState.render_quality` mirrors `viewport.quality` (None = project);
+`state.quality` derives in `apply_settings` (false only for Low); the window keeps Auto's `detected_quality`. Commands
 `view.quality.{project,auto,low,medium,high,epic}`; agents: `editor.preferences`.
+`SceneView` submits raster frames without GPU waits and retains completed color/IDs; input coalesces while busy. Capture/shutdown drain explicitly (renderer contract: `ara-render/AGENTS.md`).
 Scene camera: `state::Camera` (orbit pose, `fov_y_degrees` 10–120, default 50) feeds
 `spec()`. `editor.camera` reads it (no fields) or sets any subset (`fovYDegrees`;
 `entity` looks through a scene `Camera`). UI: toolbar FOV field, Camera menu presets,

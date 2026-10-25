@@ -46,6 +46,9 @@ impl SceneView {
             return Ok(None);
         }
         self.render_raster_inner(renderer, editor, document, RasterWork::Prepare)?;
+        if renderer.scene_frame_pending() {
+            return Ok(None);
+        }
         if self.raster_frame.is_none() || !renderer.is_native() {
             return Ok(None);
         }

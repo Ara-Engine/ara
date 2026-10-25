@@ -169,6 +169,7 @@ impl VulkanDevice {
             },
             last: [0; 2],
             heap: None,
+            owner: Queue::Graphics,
         })
     }
     /// Publish a TLAS into the optional update-after-bind AS descriptor table.
