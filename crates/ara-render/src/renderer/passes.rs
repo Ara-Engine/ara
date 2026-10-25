@@ -21,6 +21,8 @@ enum Recipe {
     Shadow,
     /// The far shadow map (`look::far`), only when its view changed.
     FarShadow,
+    /// Local-light shadow faces (`look::local`) that must be redrawn.
+    LocalShadow,
     GBuffer,
     Tile,
     Lighting,
@@ -54,7 +56,7 @@ impl Renderer {
         };
         let frame = self.frame_data(&camera, exposure, deterministic, mode, output_history);
         if let Some(native) = &mut self.native {
-            native.prepare(&mut self.gpu, &frame, &camera)?;
+            native.prepare(&mut self.gpu, &frame, &camera, &self.look.quality)?;
         }
         self.gpu.upload(self.frame, bytemuck::bytes_of(&frame))?;
         // The far map redraws only when its view, content or casters inside it
@@ -65,7 +67,11 @@ impl Renderer {
         if self.look.cascades.is_none() {
             self.ensure_cascades()?;
         }
-        let (mut far, mut cascades) = (self.look.far.take(), self.look.cascades.take());
+        let (mut far, mut cascades, mut local) = (
+            self.look.far.take(),
+            self.look.cascades.take(),
+            self.look.local.take(),
+        );
         let (all, bounds) = match self.native_caster_changes() {
             Some(changes) => (changes.all, changes.bounds),
             None => (true, &[][..]),
@@ -76,7 +82,10 @@ impl Renderer {
         if let Some(cascades) = &mut cascades {
             cascades.observe(all, bounds);
         }
-        (self.look.far, self.look.cascades) = (far, cascades);
+        if let Some(local) = &mut local {
+            local.cache.observe(all, bounds);
+        }
+        (self.look.far, self.look.cascades, self.look.local) = (far, cascades, local);
         let cascade_draw: Vec<usize> = self.look.cascades.as_ref().map_or_else(Vec::new, |c| {
             (0..c.images.len())
                 .filter(|&i| c.needs_draw(i, frame.shadows[i]))
@@ -100,6 +109,36 @@ impl Renderer {
             if self.native.is_some() {
                 self.cull_native_shadow(matrix)?;
             }
+        }
+        // Local-light shadows (look::local): this frame's faces are culled as
+        // native shadow passes 7+face and drawn as cascade 4+face, whose matrix
+        // the table (rewritten every frame) holds.
+        let mut local_draws: Vec<(usize, usize, glam::Mat4)> = Vec::new();
+        if self.native.is_some()
+            && let Some(mut local) = self.look.local.take()
+        {
+            let result = (|| -> Result<()> {
+                self.reserve_native_shadow_passes(crate::look::local::capacity(local.settings))?;
+                let plan = local.cache.plan(
+                    &self.content.lights,
+                    camera.projection * camera.view,
+                    camera.position,
+                    local.size,
+                    capture || deterministic,
+                );
+                for &(face, matrix) in &plan.draws {
+                    let pass = self.cull_native_shadow_pass_with_resolution(
+                        face,
+                        matrix,
+                        local.settings.resolution,
+                    )?;
+                    local_draws.push((face, pass, matrix));
+                }
+                self.gpu.upload(local.table, &plan.table)?;
+                Ok(())
+            })();
+            self.look.local = Some(local);
+            result?;
         }
         let mut compute_frame = frame;
         compute_frame.lighting[3] = self.content.compute_light_index;
@@ -137,7 +176,17 @@ impl Renderer {
         if let Some(gi) = &self.look.gi {
             gi.write(&mut look_frame, self.look.quality.gi_budget);
             look_frame.gi_gather = self.look.gather_indices();
-            look_frame.terrain[0] = self.look.quality.terrain_detail;
+        }
+        look_frame.terrain[0] = self.look.quality.terrain_detail;
+        if let Some(local) = &self.look.local
+            && self.native.is_some()
+        {
+            look_frame.local_shadows = [
+                local.table_index,
+                local.sampled,
+                local.size[0],
+                local.size[1],
+            ];
         }
         if let Some(r) = self.look.quality.reflections
             && self.targets.history.is_some()
@@ -247,6 +296,26 @@ impl Renderer {
             shadow_passes.push(pass);
         }
         let far_read = look.far.map(|far| (far, Access::ShaderRead));
+        if let (Some(local), false) = (look.local, local_draws.is_empty()) {
+            let pass = graph.pass(
+                "ShadowAtlas.Local",
+                Queue::Graphics,
+                [(local, Access::Depth)],
+            );
+            declare(pass, Recipe::LocalShadow);
+            shadow_passes.push(pass);
+        }
+        // Read only once the atlas holds a face (the table names no other).
+        let local_written = !local_draws.is_empty()
+            || self
+                .look
+                .local
+                .as_ref()
+                .is_some_and(|l| l.state.access != Access::Undefined);
+        let local_read = look
+            .local
+            .filter(|_| local_written)
+            .map(|local| (local, Access::ShaderRead));
         let gbuffer = graph.pass(
             "GBuffer",
             Queue::Graphics,
@@ -314,6 +383,7 @@ impl Renderer {
             .into_iter()
             .chain(cascade_reads.iter().copied())
             .chain(far_read)
+            .chain(local_read)
             .chain(look_reads.iter().copied()),
         );
         declare(lighting, Recipe::Lighting);
@@ -333,6 +403,7 @@ impl Renderer {
             .into_iter()
             .chain(cascade_reads.iter().copied())
             .chain(far_read)
+            .chain(local_read)
             .chain(look_reads.iter().copied())
             .chain(self.native.as_ref().map(|_| (ids[MOTION], Access::Color))),
         );
@@ -386,7 +457,8 @@ impl Renderer {
                 ]
                 .into_iter()
                 .chain(cascade_reads.iter().copied())
-                .chain(far_read),
+                .chain(far_read)
+                .chain(local_read),
             );
             declare(tonemap, Recipe::Tonemap);
             shaded.push(tonemap);
@@ -542,6 +614,41 @@ impl Renderer {
                             constants.words[3] = index as u32 + 1;
                             recorder.push(Command::Constants(constants));
                             recorder.push(Command::Draw(draw(mesh)));
+                        }
+                        recorder.push(Command::EndRendering);
+                    }
+                    Recipe::LocalShadow => {
+                        let local = self
+                            .look
+                            .local
+                            .as_ref()
+                            .expect("a local shadow pass is declared only with a local map");
+                        let tile = local.settings.resolution;
+                        recorder.push(Command::Pipeline(self.pipelines.shadow));
+                        recorder.push(Command::BeginRendering {
+                            colors: Vec::new(),
+                            depth: Some(Attachment {
+                                image: local.atlas,
+                                clear: None,
+                            }),
+                            size: local.size,
+                        });
+                        for &(face, pass, _) in &local_draws {
+                            let origin = crate::look::local::origin(face, tile);
+                            recorder.push(Command::Viewport {
+                                origin,
+                                size: [tile; 2],
+                            });
+                            recorder.push(Command::ClearDepth {
+                                origin,
+                                size: [tile; 2],
+                                depth: 0.,
+                            });
+                            let mut constants = root;
+                            constants.words[4] = 4 + face as u32;
+                            if let Some(native) = &self.native {
+                                native.record(&mut recorder, constants, pass);
+                            }
                         }
                         recorder.push(Command::EndRendering);
                     }
@@ -725,6 +832,11 @@ impl Renderer {
         self.look.finish(&look, &compiled.final_states);
         if let (Some(far), Some((matrix, view))) = (&mut self.look.far, far_draw) {
             far.cache.drawn(matrix, view);
+        }
+        if let Some(local) = &mut self.look.local {
+            for &(face, _, matrix) in &local_draws {
+                local.cache.drawn(face, matrix);
+            }
         }
         if let Some(cascades) = &mut self.look.cascades {
             for &index in &cascade_draw {
