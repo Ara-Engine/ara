@@ -323,9 +323,10 @@ scroll { overflow:hidden; flex-basis:0px; min-height:0px; min-width:0px; }
 .count-toggle { height:22px; padding-left:6px; padding-right:8px; gap:4px; border-width:0px; border-radius:var(--radius-sm); font-size:12px; }
 .segment-on { background:var(--raised); color:var(--foreground); }
 .log-list { gap:0px; }
-.machine-group { height:28px; flex-shrink:0; justify-content:start; gap:6px; padding-left:8px; padding-right:8px; border-width:0px; border-radius:0px; background:var(--panel-header); overflow:hidden; }
+.machine-group { height:24px; flex-shrink:0; justify-content:start; gap:6px; padding-left:8px; padding-right:8px; border-width:0px; border-radius:0px; background:var(--panel-header); overflow:hidden; }
 .machine-group:hover { background:var(--raised); }
-.machine-what { flex-shrink:1; min-width:0px; overflow:hidden; }
+.machine-note { flex-shrink:0; padding-left:30px; padding-right:8px; padding-top:4px; padding-bottom:6px; }
+.wrap-text { white-space:normal; }
 .log-row { flex-shrink:0; gap:0px; padding-bottom:4px; overflow:hidden; }
 .log-row:hover { background:var(--hover-surface); }
 .log-open { background:var(--raised); }
@@ -377,7 +378,7 @@ scroll { overflow:hidden; flex-basis:0px; min-height:0px; min-width:0px; }
 .param-name { flex-grow:1; flex-basis:0px; min-width:0px; height:22px; flex-direction:row; align-items:center; justify-content:start; gap:6px; padding:0px; background:transparent; border-width:0px; overflow:hidden; font-size:12px; }
 .param-name:hover { background:transparent; }
 .param-value { width:104px; flex-shrink:0; height:22px; text-align:left; }
-.param-texture { flex-shrink:0; padding-left:24px; padding-right:8px; padding-bottom:4px; font-size:11px; color:var(--muted-foreground); white-space:normal; }
+.param-texture { flex-shrink:0; padding-left:24px; padding-right:8px; padding-bottom:4px; }
 .type-dot { width:10px; height:10px; flex-shrink:0; }
 .node-result { height:26px; }
 .dep-row { padding-left:12px; flex-shrink:0; }

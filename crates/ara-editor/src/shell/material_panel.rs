@@ -330,7 +330,7 @@ impl Shell {
             out.push_str("</panel>");
             if let Some(text) = below {
                 out.push_str(&format!(
-                    "<text id='{value}-texture' class='param-texture' text='{}' description='{}' />",
+                    "<panel id='{value}-texture-line' class='param-texture'><text id='{value}-texture' class='caption wrap-text' text='{}' description='{}' /></panel>",
                     escape(&text),
                     escape(&text)
                 ));

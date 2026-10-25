@@ -323,13 +323,16 @@ impl Shell {
         out.push_str("</scroll>");
     }
 
-    /// The collapsed "This computer" group header: how many messages came from this
-    /// PC's graphics drivers and overlay layers; it opens and closes in both panels.
+    /// The "This computer" group header (collapsed by default, like a Problems file
+    /// group): how many messages came from this PC's graphics drivers and overlay
+    /// layers. Opened, a note under it says why they are not the project's.
     fn machine_group(&mut self, out: &mut String, panel: &str, records: &[Entry]) {
         let id = format!("{panel}-machine");
-        let total: u64 = records.iter().map(|e| e.count).sum();
         self.bind_command(&id, "console.machine", Target::None);
-        out.push_str(&format!("<button id='{id}' class='machine-group' label='This computer' description='Messages from this computer&apos;s graphics drivers and overlay layers, not the project' action='Dispatch'>{}{}<text id='{id}-title' class='fg' text='This computer' /><text id='{id}-count' class='caption' text='{total}' /><text id='{id}-what' class='caption machine-what' text='graphics drivers and overlays, not the project' /></button>",icons::icon_in(&format!("{id}-chevron"),if self.machine_open{"chevron-down"}else{"chevron-right"},"icon-sm"),icons::icon(&id,"monitor")));
+        out.push_str(&format!("<button id='{id}' class='machine-group' label='This computer' description='Messages from this computer&apos;s graphics drivers and overlay layers, not the project' action='Dispatch'>{}{}<text id='{id}-title' class='fg' text='This computer' /><text id='{id}-count' class='caption' text='{}' /></button>",icons::icon_in(&format!("{id}-chevron"),if self.machine_open{"chevron-down"}else{"chevron-right"},"icon-sm"),icons::icon(&id,"monitor"),records.len()));
+        if self.machine_open {
+            out.push_str(&format!("<panel id='{id}-note' class='machine-note'><text id='{id}-note-text' class='caption wrap-text' text='From this PC&apos;s graphics drivers and other apps&apos; overlay layers (screen recorders, game overlays), not the project. They never count as errors or warnings.' /></panel>"));
+        }
     }
 
     /// One Console row: the message (and its repeat count), then time, origin and
