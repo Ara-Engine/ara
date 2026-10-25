@@ -1,6 +1,7 @@
 //! Native raster content: local geometry, compressed residency and draw instances.
 use super::*;
 use crate::instanced::{GeometryGpu, Scene as NativeScene, TextureStats, Textures};
+use anyhow::Context;
 use ara_gpu::{
     RootConstants,
     commands::{Command, Recorder},
@@ -251,14 +252,59 @@ impl Renderer {
             .native
             .as_mut()
             .ok_or_else(|| anyhow::anyhow!("Native raster content required"))?;
-        native.culling.shadow(
+        native.culling.opaque(
             &self.gpu,
             native.visible,
             &native.groups,
             &native.bounds,
+            6,
             matrix,
             &mut native.changes.work,
         )
+    }
+
+    /// Reserve independently cached local-light shadow lists. Call before graph
+    /// resource declarations; growth preserves the camera/cascade/far lists and
+    /// is transactional on GPU allocation/upload failure. No storage is allocated
+    /// for local shadows until requested, and repeated reservations are O(1).
+    pub fn reserve_native_shadow_passes(&mut self, count: usize) -> Result<()> {
+        let native = self
+            .native
+            .as_mut()
+            .context("Native raster content required")?;
+        native.reserve_shadow_passes(&mut self.gpu, count)
+    }
+
+    /// Cull opaque/masked casters for one reserved local-light face using camera
+    /// LODs. Call after native preparation and before graph resource declarations.
+    /// The returned native pass index is recorded with the shadow pipeline; bind
+    /// a Frame with this matrix in shadows[0] and root word 4 set to zero. Lists
+    /// remain independent of each other and of far-shadow pass 6.
+    /// Arbitrary perspective and orthographic matrices test all six clip planes.
+    /// Unculled slots keep their lists without traversal or visible-buffer writes.
+    pub fn cull_native_shadow_pass(&mut self, slot: usize, matrix: Mat4) -> Result<usize> {
+        let native = self
+            .native
+            .as_mut()
+            .context("Native raster content required")?;
+        let pass = culling::BASE_PASSES
+            .checked_add(slot)
+            .context("Native shadow slot overflow")?;
+        ensure!(
+            pass < native.culling.draws.len(),
+            "Native shadow slot was not reserved"
+        );
+        ensure!(matrix.is_finite(), "Native shadow matrix must be finite");
+        native.culling.opaque(
+            &self.gpu,
+            native.visible,
+            &native.groups,
+            &native.bounds,
+            pass,
+            matrix,
+            &mut native.changes.work,
+        )?;
+        Ok(pass)
     }
 
     /// Compressed texture upload costs of the last completed native frame.
@@ -288,6 +334,47 @@ impl Renderer {
 }
 
 impl Native {
+    fn reserve_shadow_passes(&mut self, gpu: &mut VulkanDevice, count: usize) -> Result<()> {
+        let passes = culling::BASE_PASSES
+            .checked_add(count)
+            .context("Native shadow count overflow")?;
+        if passes <= self.culling.draws.len() {
+            return Ok(());
+        }
+        ara_gpu::cpu_scope!("RasterNative.reserve_shadow_passes");
+        let rows = self
+            .rows
+            .len()
+            .checked_mul(passes)
+            .context("Native shadow row count overflow")?;
+        ensure!(
+            rows <= u32::MAX as usize,
+            "Native shadow row index exceeds u32"
+        );
+        let bytes = rows
+            .checked_mul(8)
+            .context("Native shadow buffer size overflow")?
+            .max(16);
+        let buffer = gpu.create_buffer(bytes as u64, vk::BufferUsageFlags::STORAGE_BUFFER, true)?;
+        let staged = (|| {
+            if !self.culling.visible.is_empty() {
+                gpu.upload_range(buffer, 0, bytemuck::cast_slice(&self.culling.visible))?;
+            }
+            Ok::<_, anyhow::Error>(gpu.storage_buffer(buffer)?.index)
+        })();
+        let index = match staged {
+            Ok(index) => index,
+            Err(error) => {
+                gpu.retire(Resource::Buffer(buffer))?;
+                return Err(error);
+            }
+        };
+        self.culling.reserve(&self.groups, passes);
+        let previous = std::mem::replace(&mut self.visible, buffer);
+        self.visible_index = index;
+        gpu.retire(Resource::Buffer(previous))?;
+        Ok(())
+    }
     fn new(
         gpu: &mut VulkanDevice,
         scene: &NativeScene,
@@ -340,7 +427,11 @@ impl Native {
                 128 + scene.instances.len() * std::mem::size_of::<InstanceRow>(),
                 &mut owned,
             )?;
-            let visible = host_buffer(gpu, (scene.instances.len() * 7 * 8).max(16), &mut owned)?;
+            let visible = host_buffer(
+                gpu,
+                (scene.instances.len() * culling::BASE_PASSES * 8).max(16),
+                &mut owned,
+            )?;
             {
                 ara_gpu::cpu_scope!("RasterNative.create_pipelines");
                 for name in ["native_shadow", "native_gbuffer", "native_forward"] {
@@ -436,7 +527,7 @@ impl Native {
     pub(super) fn record(&self, recorder: &mut Recorder, root: RootConstants, pass: usize) {
         ara_gpu::cpu_scope!("RasterNative.record");
         recorder.push(Command::Pipeline(
-            self.pipelines[if pass < 4 || pass == 6 {
+            self.pipelines[if !(4..6).contains(&pass) {
                 0
             } else if pass == 4 {
                 1

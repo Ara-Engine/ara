@@ -4,6 +4,9 @@ use crate::instanced::FrameWork;
 use batches::{Batch, Group};
 use updates::Indices;
 
+/// Cascades, opaque/forward camera lists and the existing far-shadow list.
+pub(super) const BASE_PASSES: usize = 7;
+
 #[derive(Clone, Copy, PartialEq)]
 struct LodView {
     position: Vec3,
@@ -12,11 +15,11 @@ struct LodView {
 }
 
 pub(super) struct Culling {
-    pub draws: [Vec<Batch>; 7],
-    visible: Vec<[u32; 2]>,
+    pub draws: Vec<Vec<Batch>>,
+    pub(super) visible: Vec<[u32; 2]>,
     selected: Vec<usize>,
-    dirty: [Indices; 7],
-    matrices: [Option<Mat4>; 7],
+    dirty: Vec<Indices>,
+    matrices: Vec<Option<Mat4>>,
     lod_view: Option<LodView>,
     lod_dirty: Indices,
     transparent_dirty: bool,
@@ -26,17 +29,21 @@ pub(super) struct Culling {
 impl Culling {
     pub fn new(groups: &Groups, instances: usize) -> Self {
         Self {
-            draws: std::array::from_fn(|p| {
-                if p == 5 {
-                    Vec::with_capacity(instances)
-                } else {
-                    vec![Batch::default(); groups.batches]
-                }
-            }),
-            visible: vec![[0; 2]; instances * 7],
+            draws: (0..BASE_PASSES)
+                .map(|p| {
+                    if p == 5 {
+                        Vec::with_capacity(instances)
+                    } else {
+                        vec![Batch::default(); groups.batches]
+                    }
+                })
+                .collect(),
+            visible: vec![[0; 2]; instances * BASE_PASSES],
             selected: vec![0; instances],
-            dirty: std::array::from_fn(|_| Indices::new(groups.groups.len())),
-            matrices: [None; 7],
+            dirty: (0..BASE_PASSES)
+                .map(|_| Indices::new(groups.groups.len()))
+                .collect(),
+            matrices: vec![None; BASE_PASSES],
             lod_view: None,
             lod_dirty: Indices::new(instances),
             transparent_dirty: true,
@@ -50,6 +57,15 @@ impl Culling {
                 .map(|_| Vec::new())
                 .collect(),
         }
+    }
+    /// Called only after the larger coherent GPU buffer was successfully staged.
+    pub fn reserve(&mut self, groups: &Groups, passes: usize) {
+        self.visible.resize(self.selected.len() * passes, [0; 2]);
+        self.draws
+            .resize_with(passes, || vec![Batch::default(); groups.batches]);
+        self.dirty
+            .resize_with(passes, || Indices::new(groups.groups.len()));
+        self.matrices.resize(passes, None);
     }
     fn group(&mut self, index: usize) {
         for dirty in &mut self.dirty {
@@ -140,7 +156,7 @@ impl Culling {
             Ok(())
         })();
         if result.is_err() {
-            self.matrices = [None; 7];
+            self.matrices.fill(None);
         }
         result
     }
@@ -169,20 +185,8 @@ impl Culling {
         }
     }
 
-    pub fn shadow(
-        &mut self,
-        gpu: &VulkanDevice,
-        buffer: Buffer,
-        groups: &Groups,
-        bounds: &[[Vec3; 2]],
-        matrix: Mat4,
-        work: &mut FrameWork,
-    ) -> Result<()> {
-        self.opaque(gpu, buffer, groups, bounds, 6, matrix, work)
-    }
-
     #[allow(clippy::too_many_arguments)]
-    fn opaque(
+    pub(super) fn opaque(
         &mut self,
         gpu: &VulkanDevice,
         buffer: Buffer,
@@ -328,6 +332,32 @@ fn visible(planes: &[Vec4; 6], bounds: [Vec3; 2]) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn local_shadow_perspective_culls_all_six_planes_including_near() {
+        let pose = Mat4::from_rotation_translation(
+            glam::Quat::from_rotation_y(0.7),
+            Vec3::new(11., 3., -7.),
+        );
+        let planes = planes(
+            Mat4::perspective_rh(std::f32::consts::FRAC_PI_2, 1., 20., 0.05) * pose.inverse(),
+        );
+        let bounds = |p| {
+            let center = pose.transform_point3(p);
+            [center - Vec3::splat(0.001), center + Vec3::splat(0.001)]
+        };
+        assert!(visible(&planes, bounds(Vec3::new(0., 0., -1.))));
+        for point in [
+            Vec3::new(-2., 0., -1.),
+            Vec3::new(2., 0., -1.),
+            Vec3::new(0., -2., -1.),
+            Vec3::new(0., 2., -1.),
+            Vec3::new(0., 0., -21.),
+            Vec3::new(0., 0., -0.02),
+        ] {
+            assert!(!visible(&planes, bounds(point)), "{point:?}");
+        }
+    }
+
     #[test]
     fn reversed_z_culling_keeps_intersections_and_rejects_offscreen_bounds() {
         let camera = crate::scene::CameraSpec::LookAt {
