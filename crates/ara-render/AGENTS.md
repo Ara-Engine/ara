@@ -10,7 +10,7 @@ Owns the M1 baseline renderer and agent visual feedback. Gameplay state stays in
 - `Graph`: declared accesses, stable topological ordering, barriers, explicit queue release/acquire pairs, timeline dependencies, transient images.
   Compilation indexes resource uses once; declaration-order versions and queue handoffs stay deterministic.
 - `Renderer::new`, `render`, `render_view` (live debug view mode), `resize`, `capture`: cooked Vulkan rendering; read-only
-  `gpu()` access for diagnostics/native presentation. Resize resets history. `resize_upscaled(render, display)` is TAAU:
+  `gpu()` access for diagnostics/native presentation. Unchanged display resizes retain TAAU targets/history. `resize_upscaled(render, display)` is TAAU:
   scene passes, feature color/depth and IDs at `render_size()`; history, output, captures and picks at `size()`.
 - `create_view` / `submit_secondary`: lazy Game cameras with retained completed color/IDs, independent motion,
   exposure and TAA(U). Shared Prepare uploads and draws defer together; `poll_scene_frame` drains either camera.
