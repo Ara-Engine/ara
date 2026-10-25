@@ -7,4 +7,4 @@ pub mod instanced;
 pub mod look;
 pub mod renderer;
 pub mod scene;
-pub use renderer::Renderer;
+pub use renderer::{Renderer, ViewId, ViewOutput, ViewRequest};

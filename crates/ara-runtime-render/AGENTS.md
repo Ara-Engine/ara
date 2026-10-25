@@ -16,6 +16,9 @@ device and per-view upload state; no simulation, window or process code.
   Presenter. `prepare` adopts published native generations, `render` draws native
   terrain/foliage and particles through the shared look. `capture` settles residency,
   probe acquisition and temporal history. It never discovers, cooks or imports.
+  `render_secondary` draws an owned renderer camera over that content and shares
+  model-arrival fades. It draws geometry/look only; particle compositing belongs
+  to the primary `render` path until per-camera VFX targets are shared.
 - `RasterContent::new(frame, content)` prepares immutable CPU geometry/materials
   and the content key on a worker. `RasterView::publish_content` adopts it on the
   device thread, preserving last-good content if GPU publication fails.

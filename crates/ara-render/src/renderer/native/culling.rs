@@ -35,6 +35,26 @@ pub(super) struct Culling {
 impl Culling {
     pub fn new(groups: &Groups, scene: &NativeScene) -> Self {
         let instances = scene.instances.len();
+        Self::with_projections(
+            groups,
+            instances,
+            scene
+                .instances
+                .iter()
+                .map(|i| projection::LodBounds::new(i.world, i.bounds(&scene.geometry[i.geometry])))
+                .collect(),
+        )
+    }
+    /// A camera's lists reference the shared groups and geometry; only its bounds
+    /// cache and visible ranges are independent.
+    pub(super) fn fork(&self, groups: &Groups) -> Self {
+        Self::with_projections(groups, self.selected.len(), self.projections.to_vec())
+    }
+    fn with_projections(
+        groups: &Groups,
+        instances: usize,
+        projections: Vec<projection::LodBounds>,
+    ) -> Self {
         Self {
             draws: (0..BASE_PASSES)
                 .map(|p| {
@@ -47,11 +67,7 @@ impl Culling {
                 .collect(),
             visible: vec![[0; 2]; instances * BASE_PASSES],
             selected: vec![Some(0); instances],
-            projections: scene
-                .instances
-                .iter()
-                .map(|i| projection::LodBounds::new(i.world, i.bounds(&scene.geometry[i.geometry])))
-                .collect(),
+            projections,
             dirty: (0..BASE_PASSES)
                 .map(|_| Indices::new(groups.groups.len()))
                 .collect(),
@@ -70,6 +86,22 @@ impl Culling {
                 .map(|_| Vec::new())
                 .collect(),
         }
+    }
+    /// A publication/pose revision invalidates this camera's lists, without
+    /// copying local vertices, materials, textures or any GPU geometry.
+    pub(super) fn refresh(&mut self, source: &Self, groups: &Groups) {
+        self.projections.copy_from_slice(&source.projections);
+        self.views.fill(None);
+        self.lod_view = None;
+        for index in 0..self.selected.len() {
+            self.lod_dirty.insert(index);
+        }
+        for dirty in &mut self.dirty {
+            for group in 0..groups.groups.len() {
+                dirty.insert(group);
+            }
+        }
+        self.transparent_dirty = true;
     }
     /// Called only after the larger coherent GPU buffer was successfully staged.
     pub fn reserve(&mut self, groups: &Groups, passes: usize) {
