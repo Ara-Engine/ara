@@ -3,6 +3,7 @@ use crate::{
     capture::{CaptureRequest, ViewMode},
     instanced,
 };
+mod budgets;
 mod shadows;
 
 struct EmptyTextures;

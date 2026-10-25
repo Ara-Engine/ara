@@ -153,6 +153,10 @@ impl Quality {
                         && far.distance > s.distance
                 })
                 && self.gi_budget > 0
+                && self.lod_pixels.is_finite()
+                && self.lod_pixels > 0.
+                && self.min_pixels.is_finite()
+                && self.min_pixels >= 0.
                 && self.reflections.is_none_or(|r| {
                     (0.0..=1.0).contains(&r.max_roughness)
                         && r.distance.is_finite()
