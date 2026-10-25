@@ -64,6 +64,22 @@ impl Importer for GltfImporter {
         ctx: &mut ImportContext<'_>,
         memo: Option<&dyn ara_asset::CacheBackend>,
     ) -> Result<ImportOutput> {
+        self.import_with_services(
+            input,
+            ctx,
+            ara_asset::ImportServices {
+                memo,
+                encoder: None,
+            },
+        )
+    }
+    fn import_with_services(
+        &self,
+        input: &ImportInput,
+        ctx: &mut ImportContext<'_>,
+        services: ara_asset::ImportServices<'_>,
+    ) -> Result<ImportOutput> {
+        let memo = services.memo;
         let mesh_settings = if input.settings.is_null() {
             MeshSettings::default()
         } else {
@@ -321,8 +337,13 @@ impl Importer for GltfImporter {
                 )
             })
             .collect();
-        let cooked =
-            crate::texture::cook_texture_batch(&jobs, input.target, input.preset, ctx, memo)?;
+        let cooked = crate::texture::cook_texture_batch_serviced(
+            &jobs,
+            input.target,
+            input.preset,
+            ctx,
+            services,
+        )?;
         for (((image, _), (usage, _)), bytes) in textures.into_iter().zip(cooked) {
             let name = format!("textures/{image}-{usage:?}.ktx2");
             output.artifacts.push(Artifact {

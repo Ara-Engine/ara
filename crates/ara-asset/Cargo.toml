@@ -38,5 +38,9 @@ ara-ops = { path = "../ara-ops" }
 name = "worker_limit"
 harness = false
 
+[[test]]
+name = "encoder_fallback"
+harness = false
+
 [lints]
 workspace = true

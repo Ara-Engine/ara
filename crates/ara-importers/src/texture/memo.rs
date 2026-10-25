@@ -3,11 +3,21 @@
 use super::*;
 use ara_asset::{CachedImport, Digest};
 
+#[cfg(test)]
 pub(super) fn key(
     source: &[u8],
     settings: &TextureSettings,
     target: TargetPlatform,
     preset: CookPreset,
+) -> Result<Digest> {
+    key_with_backend(source, settings, target, preset, None)
+}
+pub(super) fn key_with_backend(
+    source: &[u8],
+    settings: &TextureSettings,
+    target: TargetPlatform,
+    preset: CookPreset,
+    backend: Option<&str>,
 ) -> Result<Digest> {
     let preset = settings.preset.unwrap_or(preset);
     let mut settings = serde_json::to_value(settings)?;
@@ -15,12 +25,13 @@ pub(super) fn key(
         settings.remove("preset");
     }
     let value = serde_json::json!([
-        "Ara intermediate texture v1",
+        "Ara intermediate texture v2",
         TextureImporter.version(),
         Digest::of(source),
         settings,
         target,
-        preset
+        preset,
+        backend.unwrap_or("cpu-ispc050")
     ]);
     Ok(Digest::of(
         ara_json::to_canonical_string(&ara_json::sort_keys(&value)).as_bytes(),

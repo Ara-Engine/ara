@@ -195,6 +195,15 @@ impl VulkanDevice {
             heap: None,
         })
     }
+    /// Allocate coherent transfer readback memory, preferring CPU-cached RAM.
+    /// This avoids slow CPU reads from uncached host-visible/BAR device memory;
+    /// devices without cached coherent memory retain the coherent fallback.
+    pub fn create_readback_buffer(&mut self, size: u64) -> Result<Buffer> {
+        if size == 0 { return Err(GpuError::Contract("Empty readback buffer".into())); }
+        let raw = self.context.readback_buffer(size)?;
+        self.buffers.insert(Owned { raw, last: [0; 2], heap: None })
+    }
+
     /// Allocate a single-level image; graph transients use the same owned path.
     pub fn create_image(
         &mut self,

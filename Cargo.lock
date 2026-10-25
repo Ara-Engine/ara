@@ -821,6 +821,7 @@ dependencies = [
  "ara-runtime-render",
  "ara-schema",
  "ara-shader-cook",
+ "ara-texture-gpu",
  "ara-ui",
  "ara-ui-render",
  "ara-ui-text",
@@ -1060,6 +1061,7 @@ dependencies = [
  "ara-importers",
  "ara-json",
  "ara-schema",
+ "ara-texture-gpu",
  "gltf",
  "image",
  "serde_json",
@@ -1968,6 +1970,19 @@ dependencies = [
  "blake3",
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "ara-texture-gpu"
+version = "0.0.1-alpha"
+dependencies = [
+ "ara-asset",
+ "ara-asset-format",
+ "ara-gpu",
+ "bcdec_rs",
+ "bytemuck",
+ "serde_json",
+ "tempfile",
 ]
 
 [[package]]

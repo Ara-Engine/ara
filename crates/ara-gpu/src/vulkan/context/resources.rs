@@ -36,6 +36,20 @@ impl Gpu {
         usage: vk::BufferUsageFlags,
         host: bool,
     ) -> Result<BufferAllocation> {
+        self.buffer_preferred(size, usage, host, vk::MemoryPropertyFlags::empty())
+    }
+
+    pub(crate) fn readback_buffer(&mut self, size: u64) -> Result<BufferAllocation> {
+        self.buffer_preferred(size, vk::BufferUsageFlags::TRANSFER_DST, true, vk::MemoryPropertyFlags::HOST_CACHED)
+    }
+
+    fn buffer_preferred(
+        &mut self,
+        size: u64,
+        usage: vk::BufferUsageFlags,
+        host: bool,
+        preferred: vk::MemoryPropertyFlags,
+    ) -> Result<BufferAllocation> {
         // SAFETY: Allocations satisfy queried requirements; resources are retained
         // until device idle in Drop. Exclusive ownership is managed in render.rs.
         unsafe {
@@ -60,7 +74,8 @@ impl Gpu {
                 } else {
                     vk::MemoryPropertyFlags::DEVICE_LOCAL
                 };
-                let memory_type_index = self.memory_type(requirements.memory_type_bits, flags)?;
+                let memory_type_index = self.memory_type(requirements.memory_type_bits, flags | preferred)
+                    .or_else(|_| self.memory_type(requirements.memory_type_bits, flags))?;
                 let key = MemoryKey {
                     size: requirements.size,
                     memory_type: memory_type_index,

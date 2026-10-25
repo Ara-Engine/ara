@@ -6,6 +6,7 @@ rust-version.workspace = true
 publish.workspace = true
 
 [dependencies]
+ara-texture-gpu = { path = "../ara-texture-gpu" }
 ara-acoustics = { path = "../ara-acoustics" }
 ara-asset = { path = "../ara-asset" }
 ara-audio = { path = "../ara-audio" }

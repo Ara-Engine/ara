@@ -1,0 +1,226 @@
+{
+    "bc4":  {
+                "entries":  {
+                                "encodeBc4":  "compute"
+                            },
+                "source":  "bc45.slang",
+                "state":  {
+                              "blend":  false,
+                              "color_formats":  [
+
+                                                ],
+                              "depth_format":  null,
+                              "depth_test":  false,
+                              "depth_write":  false,
+                              "vertex_stride":  0
+                          }
+            },
+    "bc5":  {
+                "entries":  {
+                                "encodeBc5":  "compute"
+                            },
+                "source":  "bc45.slang",
+                "state":  {
+                              "blend":  false,
+                              "color_formats":  [
+
+                                                ],
+                              "depth_format":  null,
+                              "depth_test":  false,
+                              "depth_write":  false,
+                              "vertex_stride":  0
+                          }
+            },
+    "bc6h":  {
+                 "entries":  {
+                                 "encodeBc6h":  "compute"
+                             },
+                 "source":  "bc6h.slang",
+                 "state":  {
+                               "blend":  false,
+                               "color_formats":  [
+
+                                                 ],
+                               "depth_format":  null,
+                               "depth_test":  false,
+                               "depth_write":  false,
+                               "vertex_stride":  0
+                           }
+             },
+    "bc7":  {
+                "entries":  {
+                                "encodeBc7":  "compute"
+                            },
+                "source":  "bc7.slang",
+                "state":  {
+                              "blend":  false,
+                              "color_formats":  [
+
+                                                ],
+                              "depth_format":  null,
+                              "depth_test":  false,
+                              "depth_write":  false,
+                              "vertex_stride":  0
+                          }
+            },
+    "bc7_mode0":  {
+                      "entries":  {
+                                      "encodeBc7Mode0":  "compute"
+                                  },
+                      "source":  "bc7.slang",
+                      "state":  {
+                                    "blend":  false,
+                                    "color_formats":  [
+
+                                                      ],
+                                    "depth_format":  null,
+                                    "depth_test":  false,
+                                    "depth_write":  false,
+                                    "vertex_stride":  0
+                                }
+                  },
+    "bc7_mode1":  {
+                      "entries":  {
+                                      "encodeBc7Mode1":  "compute"
+                                  },
+                      "source":  "bc7.slang",
+                      "state":  {
+                                    "blend":  false,
+                                    "color_formats":  [
+
+                                                      ],
+                                    "depth_format":  null,
+                                    "depth_test":  false,
+                                    "depth_write":  false,
+                                    "vertex_stride":  0
+                                }
+                  },
+    "bc7_mode2":  {
+                      "entries":  {
+                                      "encodeBc7Mode2":  "compute"
+                                  },
+                      "source":  "bc7.slang",
+                      "state":  {
+                                    "blend":  false,
+                                    "color_formats":  [
+
+                                                      ],
+                                    "depth_format":  null,
+                                    "depth_test":  false,
+                                    "depth_write":  false,
+                                    "vertex_stride":  0
+                                }
+                  },
+    "bc7_mode3":  {
+                      "entries":  {
+                                      "encodeBc7Mode3":  "compute"
+                                  },
+                      "source":  "bc7.slang",
+                      "state":  {
+                                    "blend":  false,
+                                    "color_formats":  [
+
+                                                      ],
+                                    "depth_format":  null,
+                                    "depth_test":  false,
+                                    "depth_write":  false,
+                                    "vertex_stride":  0
+                                }
+                  },
+    "bc7_mode4":  {
+                      "entries":  {
+                                      "encodeBc7Mode4":  "compute"
+                                  },
+                      "source":  "bc7.slang",
+                      "state":  {
+                                    "blend":  false,
+                                    "color_formats":  [
+
+                                                      ],
+                                    "depth_format":  null,
+                                    "depth_test":  false,
+                                    "depth_write":  false,
+                                    "vertex_stride":  0
+                                }
+                  },
+    "bc7_mode5":  {
+                      "entries":  {
+                                      "encodeBc7Mode5":  "compute"
+                                  },
+                      "source":  "bc7.slang",
+                      "state":  {
+                                    "blend":  false,
+                                    "color_formats":  [
+
+                                                      ],
+                                    "depth_format":  null,
+                                    "depth_test":  false,
+                                    "depth_write":  false,
+                                    "vertex_stride":  0
+                                }
+                  },
+    "bc7_mode6":  {
+                      "entries":  {
+                                      "encodeBc7Mode6":  "compute"
+                                  },
+                      "source":  "bc7.slang",
+                      "state":  {
+                                    "blend":  false,
+                                    "color_formats":  [
+
+                                                      ],
+                                    "depth_format":  null,
+                                    "depth_test":  false,
+                                    "depth_write":  false,
+                                    "vertex_stride":  0
+                                }
+                  },
+    "bc7_mode7":  {
+                      "entries":  {
+                                      "encodeBc7Mode7":  "compute"
+                                  },
+                      "source":  "bc7.slang",
+                      "state":  {
+                                    "blend":  false,
+                                    "color_formats":  [
+
+                                                      ],
+                                    "depth_format":  null,
+                                    "depth_test":  false,
+                                    "depth_write":  false,
+                                    "vertex_stride":  0
+                                }
+                  },
+    "bc7_select":  {
+                       "entries":  {
+                                       "selectBc7Finalists":  "compute"
+                                   },
+                       "source":  "bc7.slang",
+                       "state":  {
+                                     "blend":  false,
+                                     "color_formats":  [
+
+                                                       ],
+                                     "depth_format":  null,
+                                     "depth_test":  false,
+                                     "depth_write":  false,
+                                     "vertex_stride":  0
+                                 }
+                   },
+    "bc7_reduce":  {
+                       "entries":  {
+                                       "reduceBc7Finalists":  "compute"
+                                   },
+                       "source":  "bc7.slang",
+                       "state":  {
+                                     "blend":  false,
+                                     "color_formats":  [
+
+                                                       ],
+                                     "depth_format":  null,
+                                     "depth_test":  false,
+                                     "depth_write":  false,
+                                     "vertex_stride":  0
+                                 }
+                   }
+}

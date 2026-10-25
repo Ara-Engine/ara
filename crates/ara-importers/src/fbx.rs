@@ -57,6 +57,22 @@ impl Importer for FbxImporter {
         ctx: &mut ImportContext<'_>,
         memo: Option<&dyn ara_asset::CacheBackend>,
     ) -> Result<ImportOutput> {
+        self.import_with_services(
+            input,
+            ctx,
+            ara_asset::ImportServices {
+                memo,
+                encoder: None,
+            },
+        )
+    }
+    fn import_with_services(
+        &self,
+        input: &ImportInput,
+        ctx: &mut ImportContext<'_>,
+        services: ara_asset::ImportServices<'_>,
+    ) -> Result<ImportOutput> {
+        let memo = services.memo;
         ctx.report(0.0, "decode FBX with ufbx")?;
         let scene = load(&input.source)?;
         let settings = if input.settings.is_null() {
@@ -323,8 +339,13 @@ impl Importer for FbxImporter {
                 )
             })
             .unzip();
-        let cooked =
-            crate::texture::cook_texture_batch(&jobs, input.target, input.preset, ctx, memo)?;
+        let cooked = crate::texture::cook_texture_batch_serviced(
+            &jobs,
+            input.target,
+            input.preset,
+            ctx,
+            services,
+        )?;
         output
             .artifacts
             .extend(names.into_iter().zip(cooked).map(|(name, bytes)| Artifact {

@@ -58,6 +58,10 @@ fn output() -> ImportOutput {
 fn action_keys_cover_every_input_and_ignore_json_insertion_order() {
     let base = input();
     let key = base.key().unwrap();
+    assert_eq!(base.key_with_backend(None).unwrap(), key);
+    let gpu = base.key_with_backend(Some("gpu-fixture-v1")).unwrap();
+    assert_ne!(gpu, key, "GPU and CPU artifacts cannot alias");
+    assert_ne!(gpu, base.key_with_backend(Some("gpu-fixture-v2")).unwrap());
     let mut reordered = base.clone();
     reordered.settings = json!({"a":1,"b":2});
     assert_eq!(key, reordered.key().unwrap());

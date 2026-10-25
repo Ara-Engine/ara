@@ -5,7 +5,7 @@ fn main() -> ara_ui::Result<()> {
         return Ok(());
     }
     if std::env::args().nth(1).as_deref() == Some("--import-worker") {
-        ara_asset::serve_worker(&ara_importers::registry()?)?;
+        ara_texture_gpu::serve_worker(&ara_importers::registry()?)?;
         return Ok(());
     }
     let mut options = ara_editor::Options::default();

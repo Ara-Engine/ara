@@ -266,6 +266,16 @@ pub trait Importer: Send + Sync {
     ) -> Result<ImportOutput> {
         self.import(input, context)
     }
+    /// Cooks with a resolved encoder and optional intermediate cache. The caller
+    /// includes the selected encoder identity in its final action key.
+    fn import_with_services(
+        &self,
+        input: &ImportInput,
+        context: &mut ImportContext<'_>,
+        services: crate::ImportServices<'_>,
+    ) -> Result<ImportOutput> {
+        self.import_with_memo(input, context, services.memo)
+    }
 }
 /// Explicit importer installation; no dynamic code loading in the editor process.
 #[derive(Default)]
@@ -315,6 +325,23 @@ impl ImporterRegistry {
         ctx: &mut ImportContext<'_>,
         memo: Option<&dyn crate::CacheBackend>,
     ) -> Result<ImportOutput> {
+        self.import_with_services(
+            input,
+            ctx,
+            crate::ImportServices {
+                memo,
+                encoder: None,
+            },
+        )
+    }
+    /// Executes using explicitly resolved services, preserving deterministic input
+    /// validation, bounded CPU work and the normal result validation contract.
+    pub fn import_with_services(
+        &self,
+        input: &ImportInput,
+        ctx: &mut ImportContext<'_>,
+        services: crate::ImportServices<'_>,
+    ) -> Result<ImportOutput> {
         let importer = self.get(&input.importer)?;
         if importer.version() != input.version {
             return Err(Error::Invalid("importer version mismatch".into()));
@@ -328,7 +355,7 @@ impl ImporterRegistry {
             .thread_name(|i| format!("ara-import-{i}"))
             .build()
             .map_err(|e| Error::Invalid(e.to_string()))?;
-        let mut output = pool.install(|| importer.import_with_memo(input, ctx, memo))?;
+        let mut output = pool.install(|| importer.import_with_services(input, ctx, services))?;
         output.artifacts.sort_by(|a, b| a.name.cmp(&b.name));
         {
             let _timer = ctx.metrics.map(|m| m.start(crate::ImportStage::Validation));

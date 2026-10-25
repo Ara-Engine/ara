@@ -155,17 +155,19 @@ impl HotReload {
         let progressive = self.progressive;
         thread::spawn(move || {
             crate::worker::background_priority();
+            let input = Arc::new(input);
             let result = (|| {
                 cancellation.check()?;
-                let key = input.key()?;
+                let key = input.key_with_backend(worker.texture_encoder(&input))?;
                 if let Some(hit) = cache.load(key)? {
                     cancellation.check()?;
                     return Ok((hit, true));
                 }
                 if progressive && input.preset != crate::CookPreset::Fast {
-                    let mut preview = input.clone();
+                    let mut preview = input.as_ref().clone();
                     preview.preset = crate::CookPreset::Fast;
-                    let preview_key = preview.key()?;
+                    let preview = Arc::new(preview);
+                    let preview_key = preview.key_with_backend(worker.texture_encoder(&preview))?;
                     if let Some(hit) = cache.load(preview_key)? {
                         cancellation.check()?;
                         let _ = tx.send(Background::Complete(
@@ -175,9 +177,10 @@ impl HotReload {
                             Ok((hit, true)),
                         ));
                     } else {
-                        let output = worker.start(preview)?.wait(&cancellation, |p| {
-                            let _ = tx.send(Background::Progress(asset.clone(), epoch, p));
-                        })?;
+                        let (preview_key, output) =
+                            worker.encode_with_fallback(preview, &cancellation, |p| {
+                                let _ = tx.send(Background::Progress(asset.clone(), epoch, p));
+                            })?;
                         cancellation.check()?;
                         // Publish validated bytes before potentially slow disk persistence.
                         // This copy and the write stay on the background job, never a frame.
@@ -339,17 +342,17 @@ impl Drop for HotReload {
 fn cook_cached(
     worker: &ProcessWorker,
     cache: &dyn CacheBackend,
-    input: ImportInput,
+    input: Arc<ImportInput>,
     cancellation: &Cancellation,
     progress: impl FnMut(Progress),
 ) -> Result<(CachedImport, bool)> {
     cancellation.check()?;
-    let key = input.key()?;
+    let key = input.key_with_backend(worker.texture_encoder(&input))?;
     if let Some(hit) = cache.load(key)? {
         cancellation.check()?;
         return Ok((hit, true));
     }
-    let output = worker.start(input)?.wait(cancellation, progress)?;
+    let (key, output) = worker.encode_with_fallback(input, cancellation, progress)?;
     cancellation.check()?;
     cache.store(key, &output)?;
     cancellation.check()?;

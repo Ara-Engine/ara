@@ -7,6 +7,21 @@ use ara_asset::{
 use ara_asset_format::{TextureFormat, write_ktx2};
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
+mod gpu_input;
+
+// ISPC BC5 is already very fast and retains the qualified normal-map output.
+// The experimental GPU BC5 encoder has larger angular-error outliers, so normals
+// keep CPU encoding even when the model's colour/HDR textures use the GPU.
+fn encoder_for<'a>(
+    settings: &TextureSettings,
+    encoder: Option<&'a dyn ara_asset::BlockEncoder>,
+) -> Option<&'a dyn ara_asset::BlockEncoder> {
+    if settings.usage == TextureUsage::Normal {
+        None
+    } else {
+        encoder
+    }
+}
 mod memo;
 
 /// Semantic texture usage selects transfer functions, mip filtering and BC format.
@@ -83,6 +98,21 @@ impl Importer for TextureImporter {
         ctx: &mut ImportContext<'_>,
         memo: Option<&dyn ara_asset::CacheBackend>,
     ) -> Result<ImportOutput> {
+        self.import_with_services(
+            input,
+            ctx,
+            ara_asset::ImportServices {
+                memo,
+                encoder: None,
+            },
+        )
+    }
+    fn import_with_services(
+        &self,
+        input: &ImportInput,
+        ctx: &mut ImportContext<'_>,
+        services: ara_asset::ImportServices<'_>,
+    ) -> Result<ImportOutput> {
         let settings = if input.settings.is_null() {
             TextureSettings::default()
         } else {
@@ -92,13 +122,13 @@ impl Importer for TextureImporter {
             artifacts: vec![Artifact {
                 name: "texture.ktx2".into(),
                 kind: ArtifactKind::Texture,
-                bytes: cook_texture_memo(
+                bytes: cook_texture_serviced(
                     &input.source,
                     &settings,
                     input.target,
                     input.preset,
                     ctx,
-                    memo,
+                    services,
                 )?,
             }],
         })
@@ -133,10 +163,43 @@ fn cook_texture_memo(
     ctx: &mut ImportContext<'_>,
     memo: Option<&dyn ara_asset::CacheBackend>,
 ) -> Result<Vec<u8>> {
+    cook_texture_serviced(
+        source,
+        settings,
+        target,
+        preset,
+        ctx,
+        ara_asset::ImportServices {
+            memo,
+            encoder: None,
+        },
+    )
+}
+fn cook_texture_serviced(
+    source: &[u8],
+    settings: &TextureSettings,
+    target: TargetPlatform,
+    preset: CookPreset,
+    ctx: &mut ImportContext<'_>,
+    services: ara_asset::ImportServices<'_>,
+) -> Result<Vec<u8>> {
+    let memo = services.memo;
+    let services = ara_asset::ImportServices {
+        memo,
+        encoder: encoder_for(settings, services.encoder),
+    };
     ctx.cancellation.check()?;
     let preset = settings.preset.unwrap_or(preset);
     let key = memo
-        .map(|_| memo::key(source, settings, target, preset))
+        .map(|_| {
+            memo::key_with_backend(
+                source,
+                settings,
+                target,
+                preset,
+                services.encoder.map(|e| e.backend()),
+            )
+        })
         .transpose()?;
     if let Some(key) = key
         && let Some(bytes) = memo::load(memo, key)?
@@ -161,7 +224,7 @@ fn cook_texture_memo(
     let _timer = ctx
         .metrics
         .map(|m| m.start(ara_asset::ImportStage::Compression));
-    let result = encode_texture(prepared, preset, ctx.cancellation)?;
+    let result = encode_texture(prepared, preset, ctx.cancellation, services.encoder)?;
     if let Some(metrics) = ctx.metrics {
         metrics.texture_task(false);
     }
@@ -190,6 +253,7 @@ struct MippedTexture {
 // Finish each phase across the entire batch before the next, so nested work
 // stealing cannot starve decode/mips behind a slow BC kernel. Stage timings are
 // elapsed wall time for the complete phase, including its parallel work.
+#[cfg(test)]
 pub(crate) fn cook_texture_batch(
     jobs: &[(TextureSettings, Vec<u8>)],
     target: TargetPlatform,
@@ -197,6 +261,25 @@ pub(crate) fn cook_texture_batch(
     ctx: &mut ImportContext<'_>,
     memo: Option<&dyn ara_asset::CacheBackend>,
 ) -> Result<Vec<Vec<u8>>> {
+    cook_texture_batch_serviced(
+        jobs,
+        target,
+        preset,
+        ctx,
+        ara_asset::ImportServices {
+            memo,
+            encoder: None,
+        },
+    )
+}
+pub(crate) fn cook_texture_batch_serviced(
+    jobs: &[(TextureSettings, Vec<u8>)],
+    target: TargetPlatform,
+    preset: CookPreset,
+    ctx: &mut ImportContext<'_>,
+    services: ara_asset::ImportServices<'_>,
+) -> Result<Vec<Vec<u8>>> {
+    let memo = services.memo;
     // Image indices/URIs can alias the same bytes. Deduplicate before decoding,
     // preserving original artifact order and all semantic texture settings.
     let mut unique = std::collections::BTreeMap::new();
@@ -204,7 +287,13 @@ pub(crate) fn cook_texture_batch(
     let mut remap = Vec::with_capacity(jobs.len());
     let mut sources = Vec::new();
     for (index, (settings, source)) in jobs.iter().enumerate() {
-        let key = memo::key(source, settings, target, preset)?;
+        let key = memo::key_with_backend(
+            source,
+            settings,
+            target,
+            preset,
+            encoder_for(settings, services.encoder).map(|e| e.backend()),
+        )?;
         let next = sources.len();
         let entry = *unique.entry(key).or_insert_with(|| {
             sources.push(index);
@@ -248,6 +337,7 @@ pub(crate) fn cook_texture_batch(
                 0.3 + start as f32 / missing.len() as f32 * 0.6,
                 (end - start) as f32 / missing.len() as f32 * 0.6,
             ],
+            services.encoder,
         )?;
         for (&index, bytes) in batch.iter().zip(cooked) {
             if let Some(metrics) = ctx.metrics {
@@ -312,6 +402,7 @@ fn cook_texture_batch_inner(
     preset: CookPreset,
     ctx: &mut ImportContext<'_>,
     progress: [f32; 2],
+    encoder: Option<&dyn ara_asset::BlockEncoder>,
 ) -> Result<Vec<Vec<u8>>> {
     let cancellation = ctx.cancellation;
     ctx.report(progress[0], "decode textures in parallel")?;
@@ -346,7 +437,12 @@ fn cook_texture_batch_inner(
         .with_max_len(1)
         .zip(jobs.par_iter())
         .map(|(p, (settings, _))| {
-            encode_texture(p, settings.preset.unwrap_or(preset), cancellation)
+            encode_texture(
+                p,
+                settings.preset.unwrap_or(preset),
+                cancellation,
+                encoder_for(settings, encoder),
+            )
         })
         .collect()
 }
@@ -492,6 +588,7 @@ fn encode_texture(
     prepared: MippedTexture,
     preset: CookPreset,
     cancellation: &ara_asset::Cancellation,
+    encoder: Option<&dyn ara_asset::BlockEncoder>,
 ) -> Result<Vec<u8>> {
     let MippedTexture {
         width,
@@ -500,6 +597,19 @@ fn encode_texture(
         format,
         mips,
     } = prepared;
+    if let Some(encoder) = encoder
+        && matches!(
+            format,
+            TextureFormat::Bc4
+                | TextureFormat::Bc5
+                | TextureFormat::Bc6h
+                | TextureFormat::Bc7
+                | TextureFormat::Bc7Srgb
+        )
+    {
+        let levels = gpu_input::encode(&mips, usage, format, preset, cancellation, encoder)?;
+        return Ok(write_ktx2(width, height, format, &levels)?);
+    }
     let levels: Result<Vec<_>> = mips
         .into_par_iter()
         .with_max_len(1)
