@@ -188,55 +188,62 @@ impl Thumbnails {
     }
 }
 
-/// One thumbnail worker thread. It takes whatever is queued as a batch: sources and
-/// live previews render in order, while the batch's derived materials cook their
-/// preview shaders side by side (each cook is a compiler process); those render last.
+/// One thumbnail worker thread; each result is sent the moment it lands. Sources and
+/// the page's live preview always go next, even ahead of in-node previews queued
+/// before them (they matter most). Derived materials (in-node previews) go three at a
+/// time: their preview shaders cook side by side (each cook is compiler processes),
+/// then they render one by one, letting any newly queued page preview in between.
 fn worker(root: std::path::PathBuf, requests: Receiver<Request>, results: SyncSender<Done>) {
     std::thread::spawn(move || {
         let mut renderer = None;
-        while let Ok(first) = requests.recv() {
-            let mut batch = vec![first];
-            batch.extend(requests.try_iter());
-            let (derived_requests, rest): (Vec<_>, Vec<_>) = batch
-                .into_iter()
-                .partition(|r| matches!(r.source, Source::Material(_)));
-            let mut done = Vec::new();
-            std::thread::scope(|scope| {
-                let cooks = scope.spawn(|| cook_all(&root, &derived_requests));
-                for request in &rest {
-                    done.push(finish(&root, request, &mut renderer));
+        // Queued requests in arrival order, and derived ones already cooked.
+        let mut queue: Vec<Request> = Vec::new();
+        let mut cooked: std::collections::VecDeque<Request> = Default::default();
+        loop {
+            if queue.is_empty() && cooked.is_empty() {
+                match requests.recv() {
+                    Ok(request) => queue.push(request),
+                    Err(_) => return,
                 }
-                let _ = cooks.join();
-            });
-            for request in &derived_requests {
-                done.push(finish(&root, request, &mut renderer));
             }
-            for result in done {
-                if results.send(result).is_err() {
-                    return;
+            queue.extend(requests.try_iter());
+            let first = queue
+                .iter()
+                .position(|r| !matches!(r.source, Source::Material(_)));
+            let next = match (first, cooked.pop_front()) {
+                (Some(index), held) => {
+                    if let Some(held) = held {
+                        cooked.push_front(held);
+                    }
+                    queue.remove(index)
                 }
+                (None, Some(request)) => request,
+                (None, None) => {
+                    cooked.extend(queue.drain(..queue.len().min(3)));
+                    cook_all(&root, cooked.make_contiguous());
+                    let Some(request) = cooked.pop_front() else {
+                        continue;
+                    };
+                    request
+                }
+            };
+            if results.send(finish(&root, &next, &mut renderer)).is_err() {
+                return;
             }
         }
     });
 }
 
-/// Cooks the preview shaders of derived materials, three compiler processes at a time.
-/// Errors surface again when each request renders.
+/// Cooks the preview shaders of derived materials side by side. Errors surface again
+/// when each request renders.
 fn cook_all(root: &Path, requests: &[Request]) {
-    let materials: Vec<&ara_material::Material> = requests
-        .iter()
-        .filter_map(|r| match &r.source {
-            Source::Material(material) => Some(&**material),
-            _ => None,
-        })
-        .collect();
-    for chunk in materials.chunks(3) {
-        std::thread::scope(|scope| {
-            for material in chunk {
+    std::thread::scope(|scope| {
+        for request in requests {
+            if let Source::Material(material) = &request.source {
                 scope.spawn(|| super::material_preview::cook(root, material));
             }
-        });
-    }
+        }
+    });
 }
 
 /// Renders one request into its result.

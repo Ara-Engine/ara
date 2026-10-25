@@ -7,6 +7,8 @@ use ara_ui::{paint::Draw, source::stable_id};
 
 /// Caption and pin text size relative to the shaping size.
 const SMALL: f32 = 11. / text::SIZE;
+/// Caption of an in-node preview tile whose render has not landed yet.
+pub(super) const RENDERING: &str = "Rendering…";
 
 impl Canvas {
     pub(super) fn paint_impl(&self, list: &mut DisplayList, rect: Box2, theme: Theme) {
@@ -507,7 +509,8 @@ impl Canvas {
             }
         }
         if let Some(top) = node.preview_top {
-            // The value as Shader Graph shows it; a quiet tile until the render lands.
+            // The value as Shader Graph shows it; a quiet tile saying so until the
+            // render lands.
             let size = PREVIEW * z;
             let tile = Box2 {
                 x: r.x + (r.w - size) * 0.5,
@@ -522,7 +525,20 @@ impl Canvas {
                     image: *image,
                     tint: Color(255, 255, 255, 255),
                 }),
-                _ => fill(list, id, tile, size / 16., theme.raised),
+                _ => {
+                    fill(list, id, tile, size / 16., theme.raised);
+                    self.labels.paint(
+                        list,
+                        id,
+                        RENDERING,
+                        [
+                            tile.x + (tile.w - self.labels.width(RENDERING) * small) * 0.5,
+                            tile.y + tile.h * 0.5 - 7. * small,
+                        ],
+                        small,
+                        theme.muted,
+                    );
+                }
             }
         }
         if let Some(error) = error {

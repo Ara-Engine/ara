@@ -1169,9 +1169,11 @@ impl Shell {
     pub(crate) fn poll_assets(&mut self) -> bool {
         let browser_changed = self.browser.poll();
         if browser_changed {
+            // Any project file changed (every autosave does): every tile asks again,
+            // since a thumbnail depends on its source's dependencies too. Unchanged ones
+            // come straight back from the content cache; until then each tile keeps its
+            // image instead of flashing back to its icon.
             self.thumbnails.invalidate_all();
-            self.thumbnail_slots
-                .retain(|key, _| key.starts_with("live:"));
         }
         let mut changed = browser_changed || std::mem::take(&mut self.asset_grid_dirty);
         // An import published (or failed): tiles that were waiting on one ask again now,

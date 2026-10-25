@@ -338,6 +338,7 @@ impl Canvas {
             });
         }
         self.labels.prepare("Entry", text);
+        self.labels.prepare(paint::RENDERING, text);
         for comment in self.graph.editor.comments.values() {
             self.labels.prepare(&comment.text, text);
         }

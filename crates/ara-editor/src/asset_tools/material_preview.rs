@@ -48,9 +48,14 @@ impl Shot {
     }
 }
 
-/// Generates and cooks a material's preview shader into the project cache (once per
-/// source: cooks are keyed by the generated source); returns the cooked folder. Cooks
-/// are separate compiler processes, so a batch of them can run side by side.
+/// Generates and cooks a material's preview shader into the project cache, once per
+/// generated source (the cooked folder is named by its hash); returns that folder.
+///
+/// Previews only run on Vulkan, so this is a SPIR-V-only cook with both stages
+/// compiled side by side (one compiler process each) instead of the engine cook's
+/// sequential SPIR-V and DXIL compiles: the compiler is most of a cold preview's
+/// latency. Cooks publish by renaming a private staging folder, so concurrent cooks of
+/// one source (the page preview and an in-node preview) never see half a folder.
 pub(super) fn cook(
     root: &Path,
     material: &ara_material::Material,
@@ -66,7 +71,9 @@ pub(super) fn cook(
         .replace("return buffers[NonUniformResourceIndex(draw.bufferIndex)][draw.materialIndex + offset];","return buffers[NonUniformResourceIndex(draw.bufferIndex)].Load<float4>((draw.materialIndex+offset)*16);")
         .replace("linearSampler","samplers[0]");
     let source = format!(
-        "#define PREVIEW_SURFACE {}\n{source}\n{}",
+        "#define PREVIEW_SURFACE {}
+{source}
+{}",
         u32::from(matches!(
             material.domain,
             ara_material::Domain::Surface | ara_material::Domain::Decal
@@ -75,18 +82,146 @@ pub(super) fn cook(
     );
     let hash = ara_asset::Digest::of(source.as_bytes()).to_string();
     let base = root.join(".ara/cache/material-previews");
-    let folder = base.join("source").join(&hash);
     let cooked = base.join(&hash);
-    if !cooked.join("preview.json").exists() {
-        std::fs::create_dir_all(&folder)?;
-        std::fs::write(folder.join("preview.slang"), source)?;
-        let manifest = serde_json::json!({"preview":{"source":"preview.slang","entries":{"previewVertex":"vertex","previewFragment":"fragment"},"state":ara_gpu::cooked::RenderState{color_formats:vec![37,100],..Default::default()}}});
-        let path = folder.join("pipelines.json");
-        std::fs::write(&path, ara_json::to_canonical_string(&manifest))?;
-
-        ara_shader_cook::cook(&path, &cooked, &ara_shader_cook::Toolchain::discover())?;
+    if cooked.join("preview.json").exists() {
+        return Ok(cooked);
     }
-    Ok(cooked)
+    static STAGING: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let staging = base.join("staging").join(format!(
+        "{hash}-{}-{}",
+        std::process::id(),
+        STAGING.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+    ));
+    let _ = std::fs::remove_dir_all(&staging);
+    std::fs::create_dir_all(&staging)?;
+    let result = compile(&staging, &source, &hash).and_then(|()| {
+        match std::fs::rename(&staging, &cooked) {
+            Ok(()) => Ok(()),
+            // Another cook of the same source published first.
+            Err(_) if cooked.join("preview.json").exists() => Ok(()),
+            Err(error) => Err(error.into()),
+        }
+    });
+    let _ = std::fs::remove_dir_all(&staging);
+    result.map(|()| cooked)
+}
+
+/// Compiles the preview's two stages into `folder` side by side, validates them and
+/// writes `preview.json` there.
+fn compile(folder: &Path, source: &str, hash: &str) -> anyhow::Result<()> {
+    use ara_gpu::cooked::{CookedPipeline, CookedStage, RenderState, Stage};
+    use sha2::Digest as _;
+    use std::process::{Command, Stdio};
+    let tools = ara_shader_cook::Toolchain::discover();
+    let path = folder.join("preview.slang");
+    std::fs::write(&path, source)?;
+    let stages = [
+        ("previewVertex", Stage::Vertex),
+        ("previewFragment", Stage::Fragment),
+    ];
+    let spawn = |command: &mut Command| {
+        command
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .map_err(|e| anyhow::anyhow!("starting {command:?}: {e}"))
+    };
+    let finish = |child: std::process::Child| -> anyhow::Result<String> {
+        let output = child.wait_with_output()?;
+        let text = format!(
+            "{}{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+        anyhow::ensure!(output.status.success(), "{text}");
+        Ok(text)
+    };
+    let compiles = stages
+        .iter()
+        .map(|&(entry, stage)| {
+            let vertex = stage == Stage::Vertex;
+            let mut command = Command::new(&tools.slangc);
+            command.arg(&path).args([
+                "-entry",
+                entry,
+                "-stage",
+                if vertex { "vertex" } else { "fragment" },
+                "-target",
+                "spirv",
+                "-profile",
+                "sm_6_6+spirv_1_6",
+                "-O2",
+                "-matrix-layout-column-major",
+                "-D",
+                "VULKAN=1",
+            ]);
+            if vertex {
+                command.arg("-fvk-invert-y");
+            }
+            command.arg("-o").arg(folder.join(format!("{entry}.spv")));
+            spawn(&mut command)
+        })
+        .collect::<anyhow::Result<Vec<_>>>()?;
+    // The compiler's version (cook provenance) is asked once per process, alongside.
+    static COMPILER: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+    let version = match COMPILER.get() {
+        Some(_) => None,
+        None => Some(spawn(Command::new(&tools.slangc).arg("-version"))?),
+    };
+    for child in compiles {
+        finish(child)?;
+    }
+    if let Some(version) = version {
+        let _ = COMPILER.set(finish(version)?.trim().to_owned());
+    }
+    let compiler = COMPILER.get().cloned().unwrap_or_default();
+    let validations = stages
+        .iter()
+        .map(|(entry, _)| {
+            spawn(
+                Command::new(&tools.spirv_val)
+                    .args(["--target-env", "vulkan1.3"])
+                    .arg(folder.join(format!("{entry}.spv"))),
+            )
+        })
+        .collect::<anyhow::Result<Vec<_>>>()?;
+    for child in validations {
+        finish(child)?;
+    }
+    let stages = stages
+        .iter()
+        .map(|&(entry, stage)| -> anyhow::Result<CookedStage> {
+            let spirv = format!("{entry}.spv");
+            Ok(CookedStage {
+                source_entry: entry.into(),
+                spirv_entry: "main".into(),
+                stage,
+                spirv_hash: format!(
+                    "{:x}",
+                    sha2::Sha256::digest(std::fs::read(folder.join(&spirv))?)
+                ),
+                spirv,
+                // Previews never leave Vulkan.
+                dxil: String::new(),
+                dxil_hash: String::new(),
+                metal: None,
+            })
+        })
+        .collect::<anyhow::Result<Vec<_>>>()?;
+    ara_gpu::cooked::write_json(
+        &folder.join("preview.json"),
+        &CookedPipeline {
+            version: 1,
+            key: hash.into(),
+            binding_layout_hash: ara_gpu::cooked::binding_layout_hash(),
+            compiler,
+            stages,
+            state: RenderState {
+                color_formats: vec![37, 100],
+                ..Default::default()
+            },
+        },
+    )
 }
 
 pub(super) fn capture(
@@ -341,4 +476,55 @@ fn texture(
         Access::ShaderRead,
     );
     Ok(texture)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Needs slangc (`VULKAN_SDK`). The page preview and an in-node preview may cook
+    /// one source at the same time: both get the one published folder, whole.
+    #[test]
+    fn concurrent_cooks_of_one_source_publish_one_valid_folder() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../target/ara-editor/preview-cook")
+            .join(std::process::id().to_string());
+        let _ = std::fs::remove_dir_all(&root);
+        let material = ara_material::dsl::parse(
+            "material Tint : surface budget 1 { param tint : ColorLinear = linear(0.8, 0.4, 0.1); output baseColor = tint; }",
+            "gr_tint",
+        )
+        .expect("material");
+        let folders: Vec<std::path::PathBuf> = std::thread::scope(|scope| {
+            let cooks: Vec<_> = (0..2)
+                .map(|_| scope.spawn(|| cook(&root, &material).expect("cook")))
+                .collect();
+            cooks
+                .into_iter()
+                .map(|c| c.join().expect("cook thread"))
+                .collect()
+        });
+        assert_eq!(folders[0], folders[1]);
+        let pipeline: ara_gpu::cooked::CookedPipeline = serde_json::from_slice(
+            &std::fs::read(folders[0].join("preview.json")).expect("published"),
+        )
+        .expect("pipeline");
+        assert_eq!(pipeline.stages.len(), 2);
+        for stage in &pipeline.stages {
+            use sha2::Digest as _;
+            let bytes = std::fs::read(folders[0].join(&stage.spirv)).expect("SPIR-V");
+            assert_eq!(
+                format!("{:x}", sha2::Sha256::digest(&bytes)),
+                stage.spirv_hash
+            );
+            assert_eq!(stage.spirv_entry, "main");
+        }
+        let staging = root.join(".ara/cache/material-previews/staging");
+        assert_eq!(
+            std::fs::read_dir(&staging).map_or(0, |d| d.count()),
+            0,
+            "no staging folder is left behind"
+        );
+        let _ = std::fs::remove_dir_all(&root);
+    }
 }

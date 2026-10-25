@@ -69,12 +69,13 @@ impl Shell {
         if let Some(canvas) = &mut self.canvas {
             canvas.diagnostics(&diagnostics, &mut self.text);
         }
-        self.node_previews(editor, &doc, material.as_ref());
         out.push_str("<panel id='material-content' class='tool-body'>");
         out.push_str(&format!(
             "<panel id='material-side' class='tool-side' style='width:{SIDE}px'>"
         ));
+        // The page preview is requested before the in-node previews: it renders first.
         self.material_preview(editor, &doc, &graph, out)?;
+        self.node_previews(editor, &doc, material.as_ref());
         self.material_parameters(editor, &doc, material.as_ref(), out)?;
         out.push_str("</panel><panel id='material-side-edge' class='tool-edge' />");
         out.push_str("<panel id='material-main' class='tool-main'>");
