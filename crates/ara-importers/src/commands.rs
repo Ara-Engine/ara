@@ -1,5 +1,7 @@
 //! Import sidecar commands. Selection and versioning come from the installed registry.
-use ara_asset::{CookPreset, ImportSettings, SidecarCommand};
+use ara_asset::{
+    CookPreset, ImportSettings, PROJECT_IMPORT_SETTINGS_FILE, ProjectImportSettings, SidecarCommand,
+};
 use ara_cmd::{Command, EditCtx, Registry};
 use ara_diag::{Diagnostic, codes};
 use ara_schema::{AssetRef, Schema, SchemaDb, Validator};
@@ -71,7 +73,7 @@ pub struct ImportInitializeParams {
     pub id: Option<String>,
     /// Importer-specific settings; defaults when omitted.
     pub settings: Option<Value>,
-    /// Shipping cook quality; defaults to the engine's shipping preset.
+    /// Source texture quality override; omitted inherits the project preset.
     pub preset: Option<CookPreset>,
     /// Referenced authoring assets used by the cook.
     pub dependencies: Option<Vec<AssetRef>>,
@@ -98,17 +100,22 @@ impl Command for Initialize {
         validate_settings(importer, &settings, cx.read().schema())?;
         let path = format!("{}.import.json", p.source);
         let id = cx.create_document(&path, "import", p.id.as_deref())?;
+        let inherit = p.preset.is_none();
         let settings = ImportSettings {
             importer: importer.into(),
             version,
             settings,
-            preset: p.preset.unwrap_or_default(),
+            preset: p.preset,
             dependencies: p.dependencies.unwrap_or_default(),
         };
         cx.apply_edit(
-            SidecarCommand::Initialize(settings.clone())
-                .edit(id.clone())
-                .map_err(invalid)?,
+            (if inherit {
+                SidecarCommand::InitializeInherited(settings.clone())
+            } else {
+                SidecarCommand::Initialize(settings.clone())
+            })
+            .edit(id.clone())
+            .map_err(invalid)?,
         )?;
         Ok(json!({"id":id,"path":path,"importer":settings.importer,"version":settings.version}))
     }
@@ -125,6 +132,10 @@ pub struct ImportConfigureParams {
     pub settings: Option<Value>,
     /// Replacement shipping preset; omitted retains it.
     pub preset: Option<CookPreset>,
+    /// Remove the source quality override and follow the project import policy.
+    #[serde(default)]
+    #[ara(default = false)]
+    pub use_project_preset: bool,
     /// Replacement authoring dependencies; omitted retains them.
     pub dependencies: Option<Vec<AssetRef>>,
 }
@@ -139,6 +150,9 @@ impl Command for Configure {
         vec![json!({"source":"models/crate.glb","settings":{"lodCount":3}})]
     }
     fn run(cx: &mut EditCtx<'_, '_>, p: Self::Params) -> Result<Value, Diagnostic> {
+        if p.use_project_preset && p.preset.is_some() {
+            return Err(invalid("choose either preset or useProjectPreset"));
+        }
         let path = format!("{}.import.json", p.source);
         let doc = cx
             .read()
@@ -179,6 +193,13 @@ impl Command for Configure {
                     .map_err(invalid)?,
             )?;
         }
+        if p.use_project_preset {
+            cx.apply_edit(
+                SidecarCommand::InheritPreset
+                    .edit(id.clone())
+                    .map_err(invalid)?,
+            )?;
+        }
         if let Some(dependencies) = p.dependencies {
             cx.apply_edit(
                 SidecarCommand::Dependencies(dependencies)
@@ -201,6 +222,60 @@ impl Command for Configure {
 pub fn register(registry: &mut Registry, db: &mut SchemaDb) -> Result<(), Diagnostic> {
     ara_asset::register_schema(db);
     crate::registry().map_err(invalid)?.register_schemas(db);
-    registry.command::<Initialize>(db).command::<Configure>(db);
+    registry
+        .command::<Initialize>(db)
+        .command::<Configure>(db)
+        .command::<ConfigureProject>(db);
     Ok(())
+}
+
+/// Parameters of `import.project.configure`; reflected in the inspector and MCP.
+#[derive(Schema, Deserialize)]
+#[ara(params, module = "asset")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ImportProjectConfigureParams {
+    /// Default texture quality for sources and model textures without an override.
+    pub preset: CookPreset,
+}
+struct ConfigureProject;
+impl Command for ConfigureProject {
+    type Params = ImportProjectConfigureParams;
+    type Output = Value;
+    const NAME: &'static str = "import.project.configure";
+    const SUMMARY: &'static str = "Set the project's default texture import quality.";
+    fn examples() -> Vec<Value> {
+        vec![json!({"preset":"balanced"})]
+    }
+    fn run(cx: &mut EditCtx<'_, '_>, p: Self::Params) -> Result<Value, Diagnostic> {
+        let existing = cx
+            .read()
+            .workspace()
+            .docs()
+            .find(|(path, _)| *path == PROJECT_IMPORT_SETTINGS_FILE)
+            .map(|(_, doc)| doc.id.clone());
+        let record = ara_doc::RecordId::parse("pi_settings").map_err(invalid)?;
+        let id = if let Some(id) = existing {
+            cx.apply_edit(ara_doc::Edit::Set {
+                doc: id.clone(),
+                id: record,
+                path: ara_schema::FieldPath::field("preset"),
+                value: Some(json!(p.preset)),
+            })?;
+            id
+        } else {
+            let id =
+                cx.create_document(PROJECT_IMPORT_SETTINGS_FILE, "imports", Some("ip_project"))?;
+            cx.apply_edit(ara_doc::Edit::Create {
+                doc: id.clone(),
+                id: record,
+                record: serde_json::to_value(ProjectImportSettings { preset: p.preset })
+                    .map_err(invalid)?
+                    .as_object()
+                    .cloned()
+                    .ok_or_else(|| invalid("project import settings must be an object"))?,
+            })?;
+            id
+        };
+        Ok(json!({"id":id,"path":PROJECT_IMPORT_SETTINGS_FILE,"preset":p.preset}))
+    }
 }

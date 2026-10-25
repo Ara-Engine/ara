@@ -114,6 +114,9 @@ device and per-view upload state; no simulation, window or process code.
 
 ## Gotchas
 
+- `PresentStats.gpu_span_ms` measures prepare through publication on the device
+  clock; `gpu_ms` remains the legacy timestamp sum, not the D26 whole-frame gate.
+
 - `ara-render` takes glam 0.30 types (`glam30`); runtime math is glam 0.34.
 - Skinning is CPU-side: GPU skinning needs a skinned vertex ABI in the cooked
   shaders (M3). Fox (1728 vertices) costs well under a millisecond.

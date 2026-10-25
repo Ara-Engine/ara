@@ -4,6 +4,7 @@
 pub mod audio;
 pub mod commands;
 mod fbx;
+mod geometry_memo;
 mod gltf;
 mod mesh;
 mod texture;

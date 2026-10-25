@@ -154,7 +154,7 @@ fn commands_need_a_project_marker_and_skip_nested_projects() {
     let report = json_of(&out);
     assert_eq!(
         (code, report["files"].clone(), report["errors"].clone()),
-        (0, json!(1), json!(0)),
+        (0, json!(2), json!(0)),
         "{out}"
     );
 }
@@ -173,6 +173,7 @@ fn init_writes_the_project_template() {
         .collect();
     for f in [
         "ara.project.json",
+        ara_asset::PROJECT_IMPORT_SETTINGS_FILE,
         "AGENTS.md",
         ".gitattributes",
         ".gitignore",

@@ -81,6 +81,110 @@ impl Drop for Gate {
 }
 
 #[test]
+fn scene_probe_content_and_skin_uploads_share_the_deferred_frame() -> Result<()> {
+    use crate::look::gi::{ProbeSurfaces, ProbeUpdate, STATIC_VECTORS, SURFACE_TEXELS};
+    let root =
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/ara-render/async-scene-uploads");
+    let mut scene = fixture::scene();
+    let mut renderer = Renderer::new_native(&scene, Box::new(Textures), [64, 48], &[], root)?;
+    let camera = CameraSpec::LookAt {
+        position: Vec3::new(0., 0., 3.),
+        target: Vec3::ZERO,
+        vertical_fov: 55f32.to_radians(),
+    };
+    let update = ProbeUpdate::new(
+        &ProbeSurfaces {
+            origin: [-1.; 3],
+            spacing: [2.; 3],
+            counts: [2; 3],
+            texels: vec![[0; 4]; 8 * SURFACE_TEXELS],
+            statics: vec![[0.; 4]; 8 * STATIC_VECTORS],
+        },
+        None,
+    )?;
+    let mut gate = Gate::new(renderer.gpu())?;
+    scene.geometry[0].revision += 1;
+    scene.geometry[0].vertices[0].position[0] += 0.01;
+    renderer.submit_scene_frame(|renderer| {
+        // A real earlier submission is held on compute, as upload/prepare can
+        // precede the frame's G-buffer work without completing on the host.
+        let point = renderer
+            .gpu
+            .submit(renderer.gpu.begin(Queue::Compute).finish(), &[])?;
+        renderer.gpu.resolve(point)?;
+        renderer.update_probe_surfaces(&update)?;
+        renderer.replace_native_scene(&scene, Box::new(Textures))?;
+        scene.geometry[0].revision += 1;
+        scene.geometry[0].vertices[0].position[0] += 0.01;
+        renderer.update_native(&scene)?;
+        renderer.render_view(&camera, 1., ViewMode::Lit)
+    })?;
+    assert!(renderer.scene_frame_pending());
+    assert!(!renderer.poll_scene_frame()?);
+    gate.open()?;
+    renderer.wait_scene_frame()?;
+    renderer.gpu.assert_clean()?;
+    Ok(())
+}
+
+#[test]
+fn failed_probe_and_content_allocations_preserve_heap_and_last_good_volume() -> Result<()> {
+    use crate::look::gi::{ProbeSurfaces, ProbeUpdate, STATIC_VECTORS, SURFACE_TEXELS};
+    let root =
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/ara-render/async-scene-rollback");
+    let scene = fixture::scene();
+    let mut renderer = Renderer::new_native(&scene, Box::new(Textures), [64, 48], &[], root)?;
+    let surfaces = ProbeSurfaces {
+        origin: [-1.; 3],
+        spacing: [2.; 3],
+        counts: [2; 3],
+        texels: vec![[0; 4]; 8 * SURFACE_TEXELS],
+        statics: vec![[0.; 4]; 8 * STATIC_VECTORS],
+    };
+    renderer.update_probe_surfaces(&ProbeUpdate::new(&surfaces, None)?)?;
+    let previous = renderer.look.gi.as_ref().expect("published GI").cache;
+    let mut changed = surfaces;
+    changed.origin[0] += 1.;
+    let update = ProbeUpdate::new(&changed, None)?;
+    // Leave one descriptor: the new cache binds, then meta binding fails. Every
+    // partially allocated buffer/image must retire and the previous GI survive.
+    let mut pressure = Vec::new();
+    while renderer.gpu.descriptor_usage().storage_buffers < 63 {
+        let buffer = renderer
+            .gpu
+            .create_buffer(16, vk::BufferUsageFlags::STORAGE_BUFFER, true)?;
+        renderer.gpu.storage_buffer(buffer)?;
+        pressure.push(buffer);
+    }
+    let baseline = renderer.gpu.descriptor_usage();
+    for _ in 0..8 {
+        assert!(renderer.update_probe_surfaces(&update).is_err());
+        assert_eq!(
+            renderer.look.gi.as_ref().expect("last good GI").cache,
+            previous
+        );
+        assert!(
+            renderer
+                .replace_native_scene(&scene, Box::new(Textures))
+                .is_err()
+        );
+        renderer.gpu.collect()?;
+        assert_eq!(renderer.gpu.descriptor_usage(), baseline);
+    }
+    for buffer in pressure {
+        renderer.gpu.retire(Resource::Buffer(buffer))?;
+    }
+    renderer.gpu.collect()?;
+    renderer.update_probe_surfaces(&update)?;
+    assert_ne!(
+        renderer.look.gi.as_ref().expect("replacement GI").cache,
+        previous
+    );
+    renderer.gpu.assert_clean()?;
+    Ok(())
+}
+
+#[test]
 fn scene_submission_retains_completed_color_ids_and_pick_while_gpu_is_blocked() -> Result<()> {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/ara-render/async-scene");
     let mut scene = fixture::scene();

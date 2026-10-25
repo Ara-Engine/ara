@@ -13,9 +13,10 @@ use std::{
     time::{Duration, Instant},
 };
 
+mod encoder;
 mod limit;
 mod process;
-use limit::Permit;
+use limit::{Admission, Work};
 use process::Running;
 
 const MAX_FRAME: u64 = 512 * 1024 * 1024;
@@ -58,10 +59,18 @@ enum Message {
     Dependencies(Vec<String>),
     Versions(BTreeMap<String, String>),
     Failed(String),
+    Encoder(Option<String>),
+    EncoderFailed(String),
 }
 #[derive(Serialize, Deserialize)]
 enum Request {
-    Import(ImportInput),
+    Import(#[serde(with = "encoder::shared_input")] std::sync::Arc<ImportInput>),
+    ImportEncoded {
+        #[serde(with = "encoder::shared_input")]
+        input: std::sync::Arc<ImportInput>,
+        backend: String,
+    },
+    Encoder,
     Discover {
         importer: String,
         version: String,
@@ -73,7 +82,10 @@ enum Request {
     Versions,
 }
 fn write_frame(writer: &mut impl Write, value: &impl Serialize) -> Result<()> {
+    let encode = crate::trace::Scope::new("ipc.encode", "frame");
     let bytes = rmp_serde::to_vec_named(value).map_err(|e| Error::Worker(e.to_string()))?;
+    drop(encode);
+    let _write = crate::trace::Scope::new("ipc.write", "frame").bytes(bytes.len());
     if bytes.len() as u64 > MAX_FRAME {
         return Err(Error::Worker("frame exceeds 512 MiB".into()));
     }
@@ -83,6 +95,7 @@ fn write_frame(writer: &mut impl Write, value: &impl Serialize) -> Result<()> {
     Ok(())
 }
 fn read_frame<T: serde::de::DeserializeOwned>(reader: &mut impl Read) -> Result<T> {
+    let _read = crate::trace::Scope::new("ipc.read", "frame");
     let mut len = [0; 8];
     reader.read_exact(&mut len)?;
     let len = u64::from_le_bytes(len);
@@ -91,12 +104,25 @@ fn read_frame<T: serde::de::DeserializeOwned>(reader: &mut impl Read) -> Result<
     }
     let mut bytes = vec![0; len as usize];
     reader.read_exact(&mut bytes)?;
+    drop(_read);
+    let _decode = crate::trace::Scope::new("ipc.decode", "frame").bytes(bytes.len());
     rmp_serde::from_slice(&bytes).map_err(|e| Error::Worker(e.to_string()))
 }
 /// Runs exactly one import in a disposable process. Plugins register in this worker.
 /// Panics/native crashes terminate this process; no importer code runs in the host.
 pub fn serve_worker(registry: &ImporterRegistry) -> Result<()> {
-    background_priority();
+    serve(registry, None)
+}
+/// Constructs an optional encoder in the disposable worker, never in the host.
+pub type EncoderFactory = fn(Option<&Path>) -> Result<Box<dyn crate::BlockEncoder>>;
+/// Worker frontend with optional GPU encoding; ordinary requests remain CPU-only.
+pub fn serve_worker_with_encoder(
+    registry: &ImporterRegistry,
+    factory: EncoderFactory,
+) -> Result<()> {
+    serve(registry, Some(factory))
+}
+fn serve(registry: &ImporterRegistry, factory: Option<EncoderFactory>) -> Result<()> {
     #[cfg(windows)]
     {
         use windows_sys::Win32::System::Diagnostics::Debug::{
@@ -109,8 +135,33 @@ pub fn serve_worker(registry: &ImporterRegistry) -> Result<()> {
         }
     }
     let request: Request = read_frame(&mut std::io::stdin().lock())?;
-    let input = match request {
-        Request::Import(input) => input,
+    let (input, backend) = match request {
+        Request::Import(input) => (input, None),
+        Request::ImportEncoded { input, backend } => (input, Some(backend)),
+        Request::Encoder => {
+            let root = std::env::var_os("ARA_IMPORT_MEMO_DIR").map(PathBuf::from);
+            let _prepare = crate::trace::Scope::new("texture.backend_prepare", "encoder");
+            let encoder = factory.and_then(|make| {
+                match make(root.as_deref()).and_then(|encoder| {
+                    encoder.prepare()?;
+                    Ok(encoder)
+                }) {
+                    Ok(encoder) => Some(encoder),
+                    Err(error) => {
+                        crate::trace::event(
+                            "texture.backend_unavailable",
+                            "encoder",
+                            serde_json::json!({"reason":error.to_string()}),
+                        );
+                        None
+                    }
+                }
+            });
+            let identity = encoder.as_ref().map(|encoder| encoder.backend().to_owned());
+            drop(encoder);
+            drop(_prepare);
+            return write_frame(&mut std::io::stdout().lock(), &Message::Encoder(identity));
+        }
         Request::Versions => {
             return write_frame(
                 &mut std::io::stdout().lock(),
@@ -138,22 +189,75 @@ pub fn serve_worker(registry: &ImporterRegistry) -> Result<()> {
             );
         }
     };
+    background_priority();
     let cancellation = Cancellation::default();
+    let memo = std::env::var_os("ARA_IMPORT_MEMO_DIR")
+        .map(|root| crate::FileCache::intermediates(Path::new(&root)))
+        .transpose()?;
+    let metrics = crate::ImportMetrics::default();
+    let traced = crate::trace::enabled();
     let mut output = std::io::stdout();
     let mut transport_error = None;
-    let result = registry.import(
-        &input,
-        &mut ImportContext {
-            metrics: None,
-            cancellation: &cancellation,
-            progress: &mut |p| {
-                if let Err(e) = write_frame(&mut output, &Message::Progress(p)) {
-                    transport_error = Some(e);
-                    cancellation.cancel();
+    let import_trace = crate::trace::Scope::new("worker.import", &input.source_path);
+    let result = (|| {
+        let encoder = backend
+            .as_deref()
+            .map(|requested| {
+                let make = factory
+                    .ok_or_else(|| Error::EncoderUnavailable("worker has no GPU encoder".into()))?;
+                let root = std::env::var_os("ARA_IMPORT_MEMO_DIR").map(PathBuf::from);
+                let encoder = make(root.as_deref())
+                    .map_err(|error| Error::EncoderUnavailable(error.to_string()))?;
+                if encoder.backend() != requested {
+                    return Err(Error::EncoderUnavailable(
+                        "cooked codec revision changed; retry with a fresh backend identity".into(),
+                    ));
                 }
+                Ok(encoder)
+            })
+            .transpose()?;
+        let result = registry.import_with_services(
+            &input,
+            &mut ImportContext {
+                metrics: traced.then_some(&metrics),
+                cancellation: &cancellation,
+                progress: &mut |p| {
+                    if let Err(e) = write_frame(&mut output, &Message::Progress(p)) {
+                        transport_error = Some(e);
+                        cancellation.cancel();
+                    }
+                },
             },
-        },
-    );
+            crate::ImportServices {
+                memo: memo.as_ref().map(|cache| cache as &dyn crate::CacheBackend),
+                encoder: encoder.as_deref(),
+            },
+        );
+        if traced && let Some(encoder) = &encoder {
+            crate::trace::event(
+                "texture.gpu",
+                &input.source_path,
+                serde_json::json!(encoder.metrics()),
+            );
+        }
+        // Finish device teardown/cache persistence before the host consumes Complete
+        // and releases the disposable process. No GPU work survives publication.
+        drop(encoder);
+        result
+    })();
+    drop(import_trace);
+    if traced {
+        crate::trace::event(
+            "worker.stages",
+            &input.source_path,
+            serde_json::json!({
+                "stages":metrics.snapshot(),"threads":input.thread_budget,"preset":input.preset,"encoder":backend,
+                "peakRssBytes":crate::trace::peak_rss_bytes(),
+                "sourceBytes":input.source.len(),"dependencyBytes":input.dependencies.values().map(Vec::len).sum::<usize>(),
+                "outputBytes":result.as_ref().map_or(0,|o| o.artifacts.iter().map(|a| a.bytes.len()).sum::<usize>())
+            }),
+        );
+    }
     if let Some(e) = transport_error {
         return Err(e);
     }
@@ -161,6 +265,7 @@ pub fn serve_worker(registry: &ImporterRegistry) -> Result<()> {
         &mut output,
         &match result {
             Ok(out) => Message::Complete(out),
+            Err(Error::EncoderUnavailable(error)) => Message::EncoderFailed(error),
             Err(e) => Message::Failed(e.to_string()),
         },
     )
@@ -178,6 +283,9 @@ pub enum JobEvent {
 /// Explicit worker executable and deadline, shared by CLI and editor.
 #[derive(Debug, Clone)]
 pub struct ProcessWorker {
+    encoder: std::sync::Arc<encoder::State>,
+    texture_encoder_enabled: bool,
+    memo: Option<PathBuf>,
     executable: PathBuf,
     arguments: Vec<std::ffi::OsString>,
     timeout: Duration,
@@ -186,10 +294,19 @@ impl ProcessWorker {
     /// Chooses the binary; production default deadline is ten minutes.
     pub fn new(executable: impl Into<PathBuf>) -> Self {
         Self {
+            encoder: std::sync::Arc::default(),
+            texture_encoder_enabled: true,
+            memo: None,
             executable: executable.into(),
             arguments: Vec::new(),
             timeout: Duration::from_secs(600),
         }
+    }
+    /// Selects optional texture encoding for this handle. Disable for CPU-only
+    /// contract tests or controlled ISPC measurements; ordinary imports default on.
+    pub fn with_texture_encoder(mut self, enabled: bool) -> Self {
+        self.texture_encoder_enabled = enabled;
+        self
     }
     /// Adds worker-specific configuration arguments (also useful for plugin hosts).
     pub fn with_arguments(
@@ -212,7 +329,7 @@ impl ProcessWorker {
     /// Admission is process-wide: `ARA_IMPORT_WORKERS` defaults to four, capped by
     /// available CPU parallelism. Polling starts queued work as slots become free.
     pub fn start(&self, input: ImportInput) -> Result<ImportJob> {
-        self.start_request(Request::Import(input))
+        self.start_request(Request::Import(std::sync::Arc::new(input)))
     }
     /// Discovers external files out of process; call from a snapshot/background job.
     pub fn discover(
@@ -273,6 +390,15 @@ impl ProcessWorker {
     }
     fn start_request(&self, request: Request) -> Result<ImportJob> {
         let mut command = Command::new(&self.executable);
+        // Never inherit a different project's memo from the parent's environment.
+        command.env_remove("ARA_IMPORT_MEMO_DIR");
+        if matches!(
+            &request,
+            Request::Import(_) | Request::ImportEncoded { .. } | Request::Encoder
+        ) && let Some(root) = &self.memo
+        {
+            command.env("ARA_IMPORT_MEMO_DIR", root);
+        }
         command
             .args(&self.arguments)
             .stdin(Stdio::piped())
@@ -282,14 +408,32 @@ impl ProcessWorker {
         {
             use std::os::windows::process::CommandExt;
             command.creation_flags(
-                windows_sys::Win32::System::Threading::BELOW_NORMAL_PRIORITY_CLASS
-                    | windows_sys::Win32::System::Threading::CREATE_NO_WINDOW,
+                (if matches!(&request, Request::Import(_) | Request::ImportEncoded { .. }) {
+                    windows_sys::Win32::System::Threading::BELOW_NORMAL_PRIORITY_CLASS
+                } else {
+                    windows_sys::Win32::System::Threading::NORMAL_PRIORITY_CLASS
+                }) | windows_sys::Win32::System::Threading::CREATE_NO_WINDOW,
             );
         }
         let (tx, rx) = mpsc::channel();
         let mut job = ImportJob {
             child: None,
             pending: Some(Pending {
+                admission: Admission::new(match &request {
+                    Request::Import(_) => Work::Cpu,
+                    Request::ImportEncoded { .. } => Work::Encoded,
+                    _ => Work::Metadata,
+                }),
+                _queue: crate::trace::Scope::new(
+                    "worker.queue",
+                    match &request {
+                        Request::Import(input) => &input.source_path,
+                        Request::ImportEncoded { input, .. } => &input.source_path,
+                        Request::Encoder => "encoder",
+                        Request::Discover { importer, .. } => importer,
+                        Request::Versions => "versions",
+                    },
+                ),
                 command,
                 request,
                 events: tx,
@@ -304,7 +448,16 @@ impl ProcessWorker {
     }
 }
 
+impl ProcessWorker {
+    pub(crate) fn with_memo(mut self, root: Option<&Path>) -> Self {
+        self.memo = root.map(Path::to_path_buf);
+        self
+    }
+}
+
 struct Pending {
+    admission: Admission,
+    _queue: crate::trace::Scope,
     command: Command,
     request: Request,
     events: mpsc::Sender<Result<Message>>,
@@ -322,10 +475,10 @@ pub struct ImportJob {
 }
 impl ImportJob {
     fn try_launch(&mut self) -> Result<()> {
-        if self.pending.is_none() {
+        let Some(pending) = &self.pending else {
             return Ok(());
-        }
-        let Some(permit) = Permit::try_acquire() else {
+        };
+        let Some(permit) = pending.admission.try_acquire() else {
             return Ok(());
         };
         let Some(mut pending) = self.pending.take() else {
@@ -333,6 +486,13 @@ impl ImportJob {
         };
         self.started = Instant::now();
         let mut child = pending.command.spawn()?;
+        if crate::trace::enabled() {
+            crate::trace::event(
+                "worker.spawn",
+                "child",
+                serde_json::json!({"child":child.id()}),
+            );
+        }
         let mut stdin = child
             .stdin
             .take()
@@ -346,13 +506,11 @@ impl ImportJob {
         let request = pending.request;
         let writer_tx = tx.clone();
         thread::spawn(move || {
-            background_priority();
             if let Err(e) = write_frame(&mut stdin, &request) {
                 let _ = writer_tx.send(Err(e));
             }
         });
         thread::spawn(move || {
-            background_priority();
             loop {
                 match read_frame::<Message>(&mut stdout) {
                     Ok(message) => {
@@ -404,6 +562,8 @@ impl ImportJob {
             Some(Message::Complete(output)) => Ok(Some(JobEvent::Complete(output))),
             Some(Message::Dependencies(deps)) => Ok(Some(JobEvent::Dependencies(deps))),
             Some(Message::Failed(error)) => Err(Error::Worker(error)),
+            Some(Message::EncoderFailed(error)) => Err(Error::EncoderUnavailable(error)),
+            Some(Message::Encoder(_)) => Err(Error::Worker("unexpected encoder identity".into())),
             Some(Message::Versions(_)) => Err(Error::Worker("unexpected importer versions".into())),
             None => Ok(None),
         }

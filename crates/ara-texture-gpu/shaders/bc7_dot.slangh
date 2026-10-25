@@ -1,0 +1,208 @@
+// Optional packed-u8-dot variants of the split mode entries. Cook each *Dot
+// entry into a separate artifact and load it only when shaderIntegerDotProduct
+// is enabled. The scalar mode/default/select/reduce entries never call these
+// functions; their artifacts must remain free of DotProduct capabilities.
+// The root/scratch ABI, dispatch dimensions and protocols 1/2 are unchanged.
+// Use Dot entries for modes 0,4,6,7 and scalar entries for modes 1,2,3,5
+// (mode mask 0xd1). These retained variants improved aggregate RTX 4070 SUPER
+// timings on both real sample blocks and high-frequency random blocks.
+// Only palette SSE changes arithmetic: ||p-q||^2 = p.p + q.q - 2*p.q.
+// Each component is a byte, so every unsigned intermediate fits u32 (<=520200).
+// Keep fit policy, candidate enumeration, packing and ties in sync with
+// bc7_split.slangh and the scalar CPU oracle in src/bc7_reference.rs.
+
+uint splitDotPixel(int4 color, uint channelMask) {
+    return (uint(color.x) | (uint(color.y) << 8) | (uint(color.z) << 16) | (uint(color.w) << 24)) & channelMask;
+}
+
+void splitAssignDot<let first:uint, let channels:uint, let indexBits:uint>(int4 pixels[16], uint mask, bool uniform, inout Fit f) {
+    // A single alpha channel needs only one scalar product per palette entry.
+    if (channels == 1) {
+        splitAssign<first,channels,indexBits>(pixels,mask,uniform,f);
+        return;
+    }
+    static const uint channelMask = channels == 3 ? 0x00ffffffu : 0xffffffffu;
+    // Both palette length and channel mask specialize at compile time. A pair
+    // keeps a palette color and its squared norm together under one index.
+    uint2 palette[1u << indexBits];
+    for (uint j = 0; j < (1u << indexBits); ++j) {
+        int w = WEIGHTS[(indexBits-2)*16+j];
+        int4 color = ((64-w)*f.ep0+w*f.ep1+32)>>6;
+        uint packed = splitDotPixel(color,channelMask);
+        palette[j] = uint2(packed,dot4add_u8packed(packed,packed,0));
+    }
+    if (uniform) {
+        uint pixel = splitDotPixel(pixels[firstbitlow(mask)],channelMask);
+        uint norm = dot4add_u8packed(pixel,pixel,0);
+        uint error = 0xffffffff, index = 0;
+        for (uint j = 0; j < (1u << indexBits); ++j) {
+            uint2 entry = palette[j];
+            uint e = norm+entry.y-2u*dot4add_u8packed(pixel,entry.x,0);
+            if (e < error) { error = e; index = j; }
+        }
+        f.error = error*countbits(mask);
+        f.indices = uint2(index*0x11111111u);
+        return;
+    }
+    f.error = 0;
+    for (uint i = 0; i < 16; ++i) if ((mask & (1u << i)) != 0) {
+        uint pixel = splitDotPixel(pixels[i],channelMask);
+        uint norm = dot4add_u8packed(pixel,pixel,0);
+        uint error = 0xffffffff, index = 0;
+        for (uint j = 0; j < (1u << indexBits); ++j) {
+            uint2 entry = palette[j];
+            uint e = norm+entry.y-2u*dot4add_u8packed(pixel,entry.x,0);
+            if (e < error) { error = e; index = j; }
+        }
+        setIndex(f,i,index); f.error += error;
+    }
+}
+
+Fit splitFitDot<let first:uint, let channels:uint, let bits:uint, let indexBits:uint, let pbits:uint>(int4 pixels[16], uint mask, uint preset) {
+    uint rounds = preset == 3 ? 2 : (preset >= 2 ? 4 : 3), seeds = preset == 0 || preset == 3 ? 1 : 2;
+    int4 active = activeChannels(first,channels);
+    Fit best = emptyFit();
+    for (uint s = 0; s < seeds; ++s) {
+        int4 loEndpoint, hiEndpoint;
+        bool uniform;
+        splitSeed<first,channels>(pixels,mask,s != 0,loEndpoint,hiEndpoint,uniform);
+        for (uint iteration = 0; iteration < rounds; ++iteration) {
+            Fit current = emptyFit();
+            for (uint pattern = 0; pattern < (1u << pbits); ++pattern) {
+                Fit trial = emptyFit();
+                trial.p0 = pbits == 1 ? pattern : pattern & 1;
+                trial.p1 = pbits == 1 ? pattern : (pattern >> 1) & 1;
+                [unroll] for (uint c = 0; c < 4; ++c) if (active[c] != 0) {
+                    quantizeEndpoint(loEndpoint[c],bits,pbits != 0,trial.p0,trial.q0[c],trial.ep0[c]);
+                    quantizeEndpoint(hiEndpoint[c],bits,pbits != 0,trial.p1,trial.q1[c],trial.ep1[c]);
+                }
+                splitAssignDot<first,channels,indexBits>(pixels,mask,uniform,trial);
+                if (trial.error < current.error) current = trial;
+                if (current.error == 0) return current;
+            }
+            if (current.error < best.error) best = current;
+            int4 nextLo, nextHi;
+            splitRefit<first,channels,indexBits>(pixels,mask,current,nextLo,nextHi);
+            bool converged = all((nextLo-loEndpoint)*active == 0) && all((nextHi-hiEndpoint)*active == 0);
+            loEndpoint = nextLo; hiEndpoint = nextHi;
+            if (converged) break;
+        }
+        // Preserve singular p-bit re-quantization before skipping the box seed.
+        if (uniform) return best;
+    }
+    return best;
+}
+
+uint splitEncodeDot<let mode:uint, let subsets:uint, let partitionBits:uint, let colorBits:uint, let alphaBits:uint, let indexBits:uint, let pbits:uint, let selection:uint, let scoreOnly:bool>(uint block, uint partition, uint rotation, uint preset, out uint4 words) {
+    static const bool dual = mode == 4 || mode == 5;
+    static const uint colorIndex = indexBits+selection;
+    static const uint alphaIndex = mode == 4 ? 3-selection : 2;
+    int4 pixels[16];
+    for (uint i = 0; i < 16; ++i) {
+        uint packed = buffers[NonUniformResourceIndex(root.input)].Load(block*64+i*4);
+        pixels[i] = int4(packed & 255,(packed >> 8) & 255,(packed >> 16) & 255,packed >> 24);
+        if (rotation != 0) { int swap = pixels[i].w; pixels[i].w = pixels[i][rotation-1]; pixels[i][rotation-1] = swap; }
+    }
+    Fit fits[subsets];
+    Fit scalar = emptyFit();
+    uint error = 0;
+    for (uint s = 0; s < subsets; ++s) {
+        uint mask = 0;
+        for (uint i = 0; i < 16; ++i) if (splitSubset<subsets>(partition,i) == s) mask |= 1u << i;
+        Fit fitted = splitFitDot<0,(mode == 6 || mode == 7) ? 4 : 3,colorBits,indexBits+selection,pbits>(pixels,mask,preset);
+        error += fitted.error;
+        if (!scoreOnly) {
+            if ((getIndex(fitted,splitAnchor<subsets>(partition,s)) & (1u << (colorIndex-1))) != 0) {
+                uint4 qSwap = fitted.q0; fitted.q0 = fitted.q1; fitted.q1 = qSwap;
+                uint swap = fitted.p0; fitted.p0 = fitted.p1; fitted.p1 = swap;
+                fitted.indices ^= uint2(0x11111111u*((1u << colorIndex)-1));
+            }
+            fits[s] = fitted;
+        }
+    }
+    if (dual) {
+        scalar = splitFitDot<3,1,alphaBits,mode == 4 ? 3-selection : 2,0>(pixels,65535,preset);
+        error += scalar.error;
+        if (!scoreOnly) {
+            if ((getIndex(scalar,0) & (1u << (alphaIndex-1))) != 0) {
+                uint4 qSwap = scalar.q0; scalar.q0 = scalar.q1; scalar.q1 = qSwap;
+                scalar.indices ^= uint2(0x11111111u*((1u << alphaIndex)-1));
+            }
+            fits[0].q0.w = scalar.q0.w; fits[0].q1.w = scalar.q1.w;
+        }
+    } else if (alphaBits == 0) {
+        for (uint i = 0; i < 16; ++i) { int d = 255-pixels[i].w; error += uint(d*d); }
+    }
+    words = uint4(0);
+    if (scoreOnly) return error;
+    uint cursor = 0;
+    putBits(words, cursor, 1u << mode, mode+1);
+    putBits(words, cursor, partition, partitionBits);
+    if (dual) putBits(words, cursor, rotation, 2);
+    if (mode == 4) putBits(words, cursor, selection, 1);
+    for (uint c = 0; c < 4; ++c) {
+        uint precision = c == 3 ? alphaBits : colorBits;
+        if (precision != 0) {
+            for (uint s = 0; s < subsets; ++s) for (uint e = 0; e < 2; ++e) putBits(words, cursor, (e == 0 ? fits[s].q0[c] : fits[s].q1[c]), precision);
+        }
+    }
+    for (uint s = 0; s < subsets; ++s) {
+        if (pbits != 0) { putBits(words, cursor, fits[s].p0, 1); if (pbits == 2) putBits(words, cursor, fits[s].p1, 1); }
+    }
+    for (uint stream = 0; stream < (dual ? 2u : 1u); ++stream) {
+        bool useScalar = dual && stream == 1-selection;
+        uint precision = useScalar ? alphaIndex : colorIndex;
+        for (uint i = 0; i < 16; ++i) {
+            uint s = splitSubset<subsets>(partition,i);
+            uint index = useScalar ? getIndex(scalar,i) : getIndex(fits[s],i);
+            putBits(words, cursor, index, precision - (i == splitAnchor<subsets>(partition,s) ? 1u : 0u));
+        }
+    }
+    return error;
+}
+
+void splitModeDot<let mode:uint, let subsets:uint, let partitionBits:uint, let colorBits:uint, let alphaBits:uint, let indexBits:uint, let pbits:uint>(uint linear) {
+    if ((root.d != 1 && root.d != 2) || root.preset == 0 || root.c > 1) return;
+    uint preset = min(root.preset,2u);
+    uint count = mode == 6 ? 1 : (mode == 4 ? 8 : (mode == 5 ? 4 : (mode == 0 ? (preset == 1 ? 8 : 16) : (preset == 1 ? 16 : 64))));
+    uint base = mode == 6 ? 0 : (mode == 4 ? 1 : (mode == 5 ? 9 : (mode == 0 ? 13 : ((preset == 1 ? 21 : 29)+(mode == 7 ? 3 : mode-1)*(preset == 1 ? 16 : 64)))));
+    uint jobs = root.c == 0 ? count : (preset == 1 ? 9 : 17);
+    uint block = linear/jobs, slot = linear%jobs;
+    if (block >= root.blockCount) return;
+    uint record = splitBase(block);
+    uint id = root.c == 0 ? base+slot : buffers[NonUniformResourceIndex(root.a)].Load(record+1140+slot*4);
+    if (id < base || id >= base+count) return;
+    if (mode != 6 && root.d == 2 && buffers[NonUniformResourceIndex(root.a)].Load(record) == 0) {
+        if (root.c == 0) buffers[NonUniformResourceIndex(root.a)].Store(record+id*4,0xffffffff);
+        else {
+            buffers[NonUniformResourceIndex(root.a)].Store(record+1208+slot*20,0xffffffff);
+            buffers[NonUniformResourceIndex(root.a)].Store4(record+1212+slot*20,uint4(0));
+        }
+        return;
+    }
+    uint candidate = id-base;
+    uint partition = mode == 4 || mode == 5 || mode == 6 ? 0 : candidate;
+    uint rotation = mode == 4 ? candidate/2 : (mode == 5 ? candidate : 0);
+    uint selection = mode == 4 ? candidate & 1 : 0;
+    uint4 words;
+    uint error;
+    if (root.c == 0) {
+        if (mode == 4 && selection != 0) error = splitEncodeDot<mode,subsets,partitionBits,colorBits,alphaBits,indexBits,pbits,1,true>(block,partition,rotation,3,words);
+        else error = splitEncodeDot<mode,subsets,partitionBits,colorBits,alphaBits,indexBits,pbits,0,true>(block,partition,rotation,3,words);
+        buffers[NonUniformResourceIndex(root.a)].Store(record+id*4,error);
+    } else {
+        if (mode == 4 && selection != 0) error = splitEncodeDot<mode,subsets,partitionBits,colorBits,alphaBits,indexBits,pbits,1,false>(block,partition,rotation,preset,words);
+        else error = splitEncodeDot<mode,subsets,partitionBits,colorBits,alphaBits,indexBits,pbits,0,false>(block,partition,rotation,preset,words);
+        buffers[NonUniformResourceIndex(root.a)].Store(record+1208+slot*20,error);
+        buffers[NonUniformResourceIndex(root.a)].Store4(record+1212+slot*20,words);
+    }
+}
+
+[shader("compute")][numthreads(64,1,1)]
+void encodeBc7Mode0Dot(uint3 id : SV_DispatchThreadID) { splitModeDot<0,3,4,4,0,3,2>(id.x); }
+[shader("compute")][numthreads(64,1,1)]
+void encodeBc7Mode4Dot(uint3 id : SV_DispatchThreadID) { splitModeDot<4,1,0,5,6,2,0>(id.x); }
+[shader("compute")][numthreads(64,1,1)]
+void encodeBc7Mode6Dot(uint3 id : SV_DispatchThreadID) { splitModeDot<6,1,0,7,7,4,2>(id.x); }
+[shader("compute")][numthreads(64,1,1)]
+void encodeBc7Mode7Dot(uint3 id : SV_DispatchThreadID) { splitModeDot<7,2,6,5,5,2,2>(id.x); }

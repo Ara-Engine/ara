@@ -33,7 +33,7 @@ impl Importer for FbxImporter {
         "ara.fbx"
     }
     fn version(&self) -> &str {
-        "6-ufbx0115-meshopt070-ispc050-tiled-f32text-arag1-opacity-settings-deep-lods-prefix"
+        "7-ufbx0115-meshopt070-ispc050-texture-presets-tiled-f32text-arag1-opacity-settings-deep-lods-prefix"
     }
     fn register_settings(&self, db: &mut ara_schema::SchemaDb) {
         db.register::<MeshSettings>();
@@ -49,6 +49,30 @@ impl Importer for FbxImporter {
         Ok(deps.into_iter().collect())
     }
     fn import(&self, input: &ImportInput, ctx: &mut ImportContext<'_>) -> Result<ImportOutput> {
+        self.import_with_memo(input, ctx, None)
+    }
+    fn import_with_memo(
+        &self,
+        input: &ImportInput,
+        ctx: &mut ImportContext<'_>,
+        memo: Option<&dyn ara_asset::CacheBackend>,
+    ) -> Result<ImportOutput> {
+        self.import_with_services(
+            input,
+            ctx,
+            ara_asset::ImportServices {
+                memo,
+                encoder: None,
+            },
+        )
+    }
+    fn import_with_services(
+        &self,
+        input: &ImportInput,
+        ctx: &mut ImportContext<'_>,
+        services: ara_asset::ImportServices<'_>,
+    ) -> Result<ImportOutput> {
+        let memo = services.memo;
         ctx.report(0.0, "decode FBX with ufbx")?;
         let scene = load(&input.source)?;
         let settings = if input.settings.is_null() {
@@ -62,138 +86,150 @@ impl Importer for FbxImporter {
             ));
         }
         let mut output = ImportOutput::default();
-        let mut meshes = Vec::new();
-        let mut mesh_jobs = Vec::new();
         let cancellation = ctx.cancellation;
         let metrics = ctx.metrics;
-        for mesh in &scene.meshes {
-            ctx.report(0.1, "optimize FBX geometry")?;
-            let mut vertices = Vec::with_capacity(mesh.num_indices);
-            for i in 0..mesh.num_indices {
-                let mut v = Vertex {
-                    position: vec3(mesh.vertex_position[i]),
-                    normal: vec3(mesh.vertex_normal[i]),
-                    source_index: mesh.vertex_indices[i],
-                    color: [1.0; 4],
-                    ..Default::default()
-                };
-                if mesh.vertex_uv.exists {
-                    let uv = mesh.vertex_uv[i];
-                    v.uv0 = [uv.x as f32, uv.y as f32];
-                }
-                if mesh.uv_sets.len() > 1 {
-                    let uv = mesh.uv_sets[1].vertex_uv[i];
-                    v.uv1 = [uv.x as f32, uv.y as f32];
-                }
-                if mesh.vertex_tangent.exists {
-                    let t = vec3(mesh.vertex_tangent[i]);
-                    let n = v.normal;
-                    let sign = if mesh.vertex_bitangent.exists {
-                        let b = vec3(mesh.vertex_bitangent[i]);
-                        let cross = [
-                            n[1] * t[2] - n[2] * t[1],
-                            n[2] * t[0] - n[0] * t[2],
-                            n[0] * t[1] - n[1] * t[0],
-                        ];
-                        if cross.iter().zip(b).map(|(a, b)| a * b).sum::<f32>() < 0.0 {
-                            -1.0
+        let geometry_key = memo
+            .map(|_| crate::geometry_memo::key(input, &settings))
+            .transpose()?;
+        let mut meshes;
+        if let Some(geometry) = crate::geometry_memo::load(memo, geometry_key)? {
+            output.artifacts.extend(geometry.artifacts);
+            meshes = geometry.meshes;
+        } else {
+            meshes = Vec::new();
+            let mut mesh_jobs = Vec::new();
+            for mesh in &scene.meshes {
+                ctx.report(0.1, "optimize FBX geometry")?;
+                let mut vertices = Vec::with_capacity(mesh.num_indices);
+                for i in 0..mesh.num_indices {
+                    let mut v = Vertex {
+                        position: vec3(mesh.vertex_position[i]),
+                        normal: vec3(mesh.vertex_normal[i]),
+                        source_index: mesh.vertex_indices[i],
+                        color: [1.0; 4],
+                        ..Default::default()
+                    };
+                    if mesh.vertex_uv.exists {
+                        let uv = mesh.vertex_uv[i];
+                        v.uv0 = [uv.x as f32, uv.y as f32];
+                    }
+                    if mesh.uv_sets.len() > 1 {
+                        let uv = mesh.uv_sets[1].vertex_uv[i];
+                        v.uv1 = [uv.x as f32, uv.y as f32];
+                    }
+                    if mesh.vertex_tangent.exists {
+                        let t = vec3(mesh.vertex_tangent[i]);
+                        let n = v.normal;
+                        let sign = if mesh.vertex_bitangent.exists {
+                            let b = vec3(mesh.vertex_bitangent[i]);
+                            let cross = [
+                                n[1] * t[2] - n[2] * t[1],
+                                n[2] * t[0] - n[0] * t[2],
+                                n[0] * t[1] - n[1] * t[0],
+                            ];
+                            if cross.iter().zip(b).map(|(a, b)| a * b).sum::<f32>() < 0.0 {
+                                -1.0
+                            } else {
+                                1.0
+                            }
                         } else {
                             1.0
-                        }
-                    } else {
-                        1.0
-                    };
-                    v.tangent = [t[0], t[1], t[2], sign];
-                }
-                if mesh.vertex_color.exists {
-                    let c = mesh.vertex_color[i];
-                    v.color = [c.x as f32, c.y as f32, c.z as f32, c.w as f32];
-                }
-                if let Some(skin) = mesh.skin_deformers.first() {
-                    let sv = skin
-                        .vertices
-                        .get(mesh.vertex_indices[i] as usize)
-                        .ok_or_else(|| invalid("invalid FBX skin vertex"))?;
-                    let end = sv.weight_begin as usize + sv.num_weights as usize;
-                    let weights = skin
-                        .weights
-                        .get(sv.weight_begin as usize..end)
-                        .ok_or_else(|| invalid("invalid FBX skin weights"))?;
-                    if weights.len() > 8 {
-                        return Err(invalid(
-                            "FBX vertex has more than eight skin influences; reduce weights explicitly in the source",
-                        ));
+                        };
+                        v.tangent = [t[0], t[1], t[2], sign];
                     }
-                    for (j, w) in weights.iter().enumerate() {
-                        if j < 4 {
-                            v.joints[j] = u16::try_from(w.cluster_index).map_err(invalid)?;
-                            v.weights[j] = w.weight as f32;
-                        } else {
-                            v.joints1[j - 4] = u16::try_from(w.cluster_index).map_err(invalid)?;
-                            v.weights1[j - 4] = w.weight as f32;
+                    if mesh.vertex_color.exists {
+                        let c = mesh.vertex_color[i];
+                        v.color = [c.x as f32, c.y as f32, c.z as f32, c.w as f32];
+                    }
+                    if let Some(skin) = mesh.skin_deformers.first() {
+                        let sv = skin
+                            .vertices
+                            .get(mesh.vertex_indices[i] as usize)
+                            .ok_or_else(|| invalid("invalid FBX skin vertex"))?;
+                        let end = sv.weight_begin as usize + sv.num_weights as usize;
+                        let weights = skin
+                            .weights
+                            .get(sv.weight_begin as usize..end)
+                            .ok_or_else(|| invalid("invalid FBX skin weights"))?;
+                        if weights.len() > 8 {
+                            return Err(invalid(
+                                "FBX vertex has more than eight skin influences; reduce weights explicitly in the source",
+                            ));
+                        }
+                        for (j, w) in weights.iter().enumerate() {
+                            if j < 4 {
+                                v.joints[j] = u16::try_from(w.cluster_index).map_err(invalid)?;
+                                v.weights[j] = w.weight as f32;
+                            } else {
+                                v.joints1[j - 4] =
+                                    u16::try_from(w.cluster_index).map_err(invalid)?;
+                                v.weights1[j - 4] = w.weight as f32;
+                            }
                         }
                     }
+                    vertices.push(v);
                 }
-                vertices.push(v);
-            }
-            let mut by_material: BTreeMap<u32, Vec<u32>> = BTreeMap::new();
-            let mut triangulated = vec![0; mesh.max_face_triangles * 3];
-            for (i, &face) in mesh.faces.iter().enumerate() {
-                let count = ufbx::triangulate_face(&mut triangulated, mesh, face) as usize * 3;
-                let material = mesh.face_material.get(i).copied().unwrap_or(0);
-                by_material
-                    .entry(material)
-                    .or_default()
-                    .extend_from_slice(&triangulated[..count]);
-            }
-            let vertices = Arc::new(vertices);
-            let material_count = by_material.len();
-            let deformed = !mesh.skin_deformers.is_empty() || !mesh.blend_deformers.is_empty();
-            for (material, indices) in by_material {
-                if indices.is_empty() {
-                    continue;
+                let mut by_material: BTreeMap<u32, Vec<u32>> = BTreeMap::new();
+                let mut triangulated = vec![0; mesh.max_face_triangles * 3];
+                for (i, &face) in mesh.faces.iter().enumerate() {
+                    let count = ufbx::triangulate_face(&mut triangulated, mesh, face) as usize * 3;
+                    let material = mesh.face_material.get(i).copied().unwrap_or(0);
+                    by_material
+                        .entry(material)
+                        .or_default()
+                        .extend_from_slice(&triangulated[..count]);
                 }
-                let name = format!("meshes/{}-{material}.mesh", mesh.element.typed_id);
-                mesh_jobs.push((
-                    name.clone(),
-                    Arc::clone(&vertices),
-                    indices,
-                    deformed,
-                    material_count,
-                ));
-                meshes.push(json!({"mesh":mesh.element.typed_id,"primitive":material,"artifact":name,"material":mesh.materials.get(material as usize).map(|m|m.element.typed_id),"skin":mesh.skin_deformers.first().map(|s|s.element.typed_id)}));
-            }
-        }
-        let mesh_timer = metrics.map(|m| m.start(ara_asset::ImportStage::Mesh));
-        let artifacts: Result<Vec<_>> = mesh_jobs
-            .into_par_iter()
-            .map(|(name, vertices, indices, deformed, materials)| {
-                cancellation.check()?;
-                let (virtual_artifact, virtual_metadata) = crate::virtual_geometry::cook(
-                    &name, &vertices, &indices, &settings, deformed, materials,
-                )?;
-                let artifact = Artifact {
-                    name: name.clone(),
-                    kind: ArtifactKind::Mesh,
-                    bytes: crate::mesh::cook_mesh_with_tangent_uv(
-                        &vertices,
-                        &indices,
-                        &settings,
+                let vertices = Arc::new(vertices);
+                let material_count = by_material.len();
+                let deformed = !mesh.skin_deformers.is_empty() || !mesh.blend_deformers.is_empty();
+                for (material, indices) in by_material {
+                    if indices.is_empty() {
+                        continue;
+                    }
+                    let name = format!("meshes/{}-{material}.mesh", mesh.element.typed_id);
+                    mesh_jobs.push((
+                        name.clone(),
+                        Arc::clone(&vertices),
+                        indices,
                         deformed,
-                        true,
-                        |v| v.uv0,
-                    )?,
-                };
-                Ok((artifact, virtual_artifact, virtual_metadata))
-            })
-            .collect();
-        drop(mesh_timer);
-        for (metadata, (artifact, virtual_artifact, virtual_metadata)) in
-            meshes.iter_mut().zip(artifacts?)
-        {
-            metadata["virtualGeometry"] = virtual_metadata;
-            output.artifacts.push(artifact);
-            output.artifacts.extend(virtual_artifact);
+                        material_count,
+                    ));
+                    meshes.push(json!({"mesh":mesh.element.typed_id,"primitive":material,"artifact":name,"material":mesh.materials.get(material as usize).map(|m|m.element.typed_id),"skin":mesh.skin_deformers.first().map(|s|s.element.typed_id)}));
+                }
+            }
+            let mesh_timer = metrics.map(|m| m.start(ara_asset::ImportStage::Mesh));
+            let artifacts: Result<Vec<_>> = mesh_jobs
+                .into_par_iter()
+                .map(|(name, vertices, indices, deformed, materials)| {
+                    cancellation.check()?;
+                    let (virtual_artifact, virtual_metadata) = crate::virtual_geometry::cook(
+                        &name, &vertices, &indices, &settings, deformed, materials,
+                    )?;
+                    let artifact = Artifact {
+                        name: name.clone(),
+                        kind: ArtifactKind::Mesh,
+                        bytes: crate::mesh::cook_mesh_with_tangent_uv(
+                            &vertices,
+                            &indices,
+                            &settings,
+                            deformed,
+                            true,
+                            metrics,
+                            |v| v.uv0,
+                        )?,
+                    };
+                    Ok((artifact, virtual_artifact, virtual_metadata))
+                })
+                .collect();
+            drop(mesh_timer);
+            for (metadata, (artifact, virtual_artifact, virtual_metadata)) in
+                meshes.iter_mut().zip(artifacts?)
+            {
+                metadata["virtualGeometry"] = virtual_metadata;
+                output.artifacts.push(artifact);
+                output.artifacts.extend(virtual_artifact);
+            }
+            crate::geometry_memo::store(memo, geometry_key, &output.artifacts, &meshes)?;
         }
         let mut skins = Vec::new();
         for skin in &scene.skin_deformers {
@@ -268,7 +304,17 @@ impl Importer for FbxImporter {
                                 .cloned()
                                 .ok_or_else(|| invalid(format!("missing FBX texture {path}")))?
                         };
-                        texture_jobs.push((name.clone(), usage, bytes));
+                        let preset = settings
+                            .texture_presets
+                            .get(&format!("#{id}"))
+                            .copied()
+                            .or_else(|| {
+                                settings
+                                    .texture_presets
+                                    .get(t.relative_filename.as_ref())
+                                    .copied()
+                            });
+                        texture_jobs.push((name.clone(), usage, preset, bytes));
                         textures.push(json!({"texture":id,"usage":usage,"artifact":name}));
                     }
                 }
@@ -279,11 +325,12 @@ impl Importer for FbxImporter {
         }
         let (names, jobs): (Vec<_>, Vec<_>) = texture_jobs
             .into_iter()
-            .map(|(name, usage, source)| {
+            .map(|(name, usage, preset, source)| {
                 (
                     name,
                     (
                         TextureSettings {
+                            preset,
                             usage,
                             ..Default::default()
                         },
@@ -292,7 +339,13 @@ impl Importer for FbxImporter {
                 )
             })
             .unzip();
-        let cooked = crate::texture::cook_texture_batch(&jobs, input.target, input.preset, ctx)?;
+        let cooked = crate::texture::cook_texture_batch_serviced(
+            &jobs,
+            input.target,
+            input.preset,
+            ctx,
+            services,
+        )?;
         output
             .artifacts
             .extend(names.into_iter().zip(cooked).map(|(name, bytes)| Artifact {

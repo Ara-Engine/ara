@@ -159,6 +159,10 @@ pub struct DeviceInfo {
     pub hdr_metadata: bool,
     /// Enabled 64-bit shader integer operations and buffer atomics.
     pub buffer_int64_atomics: bool,
+    /// Enabled optional Vulkan 1.3 integer dot products. Scalar shaders remain valid.
+    pub shader_integer_dot_product: bool,
+    /// Packed unsigned 4x8 integer dot products are accelerated in hardware.
+    pub packed_integer_dot_accelerated: bool,
     /// Maximum supported 2D extent.
     pub max_image_dimension: u32,
     /// Supported Vulkan version.
@@ -179,6 +183,9 @@ pub struct DeviceInfo {
     pub timestamp_period_ns: f32,
     /// Significant timestamp bits, graphics then compute.
     pub timestamp_valid_bits: [u32; 2],
+    /// Enabled common device-clock extension, KHR preferred over EXT. Without
+    /// this guarantee, timestamps from different queues cannot be combined.
+    pub timestamp_clock: Option<&'static str>,
     /// Native driver pipeline-cache compatibility UUID.
     pub pipeline_cache_uuid: Vec<u8>,
     /// Enabled `VK_KHR_external_memory_win32` (enabled whenever available):
