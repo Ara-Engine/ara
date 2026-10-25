@@ -103,10 +103,22 @@ impl Server {
     }
     /// Add a signed release and archive routes; return its GitHub API listing entry.
     pub fn release(&self, kind: Kind, version: &str, channel: Channel, archive: Vec<u8>) -> Value {
+        self.release_build(kind, version, channel, archive, None)
+    }
+    /// Publish a signed same-version source build through the local fixture feed.
+    pub fn release_build(
+        &self,
+        kind: Kind,
+        version: &str,
+        channel: Channel,
+        archive: Vec<u8>,
+        build: Option<crate::BuildIdentity>,
+    ) -> Value {
         let tag = format!("{}-v{version}", kind.name());
         let name = format!("ara-{}-{version}-windows-x64.zip", kind.name());
         let prefix = format!("/assets/{tag}");
         let manifest = Manifest {
+            build,
             format: "ara.release/1".into(),
             kind,
             version: version.into(),

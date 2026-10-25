@@ -108,11 +108,13 @@ fn apply_trusted(plan: &Plan, keys: &[String]) -> Result<(), Error> {
     let result = apply_inner(plan, keys);
     let target = verify(plan.manifest.as_bytes(), plan.signature.as_bytes(), keys)
         .ok()
-        .map(|release| release.manifest().version.clone());
-    let current = fs::read(plan.current.join("hub.json"))
-        .ok()
-        .and_then(|bytes| serde_json::from_slice::<serde_json::Value>(&bytes).ok())
-        .and_then(|value| value["version"].as_str().map(str::to_owned));
+        .map(|release| {
+            (
+                release.manifest().version.clone(),
+                release.manifest().build.clone(),
+            )
+        });
+    let current = installed_identity(&plan.current);
     if result.is_err()
         && (target.is_none() || current != target)
         && plan.current.join("ara-hub.exe").is_file()
@@ -149,6 +151,19 @@ fn apply_inner(plan: &Plan, keys: &[String]) -> Result<(), Error> {
     let lock = fs::File::create(parent.join(".ara-hub-update.lock"))?;
     lock.try_lock()
         .map_err(|_| Error::new(ROLLBACK, "another Hub update is already running"))?;
+    // An engine setup may have won this lock after the old GUI exited. Recheck
+    // under the lock and launch its current/newer Hub instead of downgrading it.
+    if let Some((version, build)) = installed_identity(&plan.current)
+        && !crate::build::newer(
+            &release.manifest().version,
+            release.manifest().build.as_ref(),
+            &version,
+            build.as_ref(),
+        )
+    {
+        hub_command(&plan.current, plan).spawn()?;
+        return Ok(());
+    }
     let staged = parent.join(".ara-hub-new");
     if staged.exists() {
         return Err(Error::new(
@@ -182,11 +197,14 @@ fn apply_inner(plan: &Plan, keys: &[String]) -> Result<(), Error> {
             return Err(error);
         }
     };
-    if marker["format"] != "ara.hub/1" || marker["version"] != release.manifest().version {
+    if marker["format"] != "ara.hub/1"
+        || marker["version"] != release.manifest().version
+        || marker["build"] != serde_json::to_value(&release.manifest().build)?
+    {
         fs::remove_dir_all(&staged)?;
         return Err(Error::new(
             MANIFEST,
-            "Hub archive version differs from signed manifest",
+            "Hub archive version/build differs from signed manifest",
         ));
     }
     let marker = plan
@@ -223,18 +241,28 @@ fn apply_inner(plan: &Plan, keys: &[String]) -> Result<(), Error> {
         }
         health
     });
-    let current_version = fs::read(plan.current.join("hub.json"))
-        .ok()
-        .and_then(|bytes| serde_json::from_slice::<serde_json::Value>(&bytes).ok())
-        .and_then(|value| value["version"].as_str().map(str::to_owned));
+    let current_identity = installed_identity(&plan.current);
     if result.as_ref().is_err_and(|error| error.code == ROLLBACK)
         && !plan.current.with_extension("old").exists()
         && staged.exists()
-        && current_version.as_deref() != Some(release.manifest().version.as_str())
+        && current_identity
+            != Some((
+                release.manifest().version.clone(),
+                release.manifest().build.clone(),
+            ))
     {
         let _ = fs::remove_dir_all(&staged);
     }
     result
+}
+fn installed_identity(current: &Path) -> Option<(String, Option<crate::BuildIdentity>)> {
+    let bytes = fs::read(current.join("hub.json")).ok()?;
+    let bytes = bytes.strip_prefix(b"\xef\xbb\xbf").unwrap_or(&bytes);
+    let marker: serde_json::Value = serde_json::from_slice(bytes).ok()?;
+    Some((
+        marker["version"].as_str()?.to_owned(),
+        serde_json::from_value(marker["build"].clone()).ok()?,
+    ))
 }
 fn hub_command(current: &Path, plan: &Plan) -> Command {
     let mut command = Command::new(current.join("ara-hub.exe"));

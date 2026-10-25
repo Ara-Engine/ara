@@ -17,7 +17,7 @@ public static class FixtureAra {
 }
 '@
 Copy-Item -LiteralPath (Join-Path $Root 'fixture.exe') -Destination (Join-Path $source 'ara.exe')
-foreach ($file in @('install.ps1','uninstall.ps1','launch-hub.ps1','launch-editor.ps1','paths.ps1')) {
+foreach ($file in @('install.ps1','uninstall.ps1','launch-hub.ps1','launch-editor.ps1','paths.ps1','hub-installation.ps1')) {
     $path = Join-Path $Release $file
     if (Test-Path -LiteralPath $path) { Copy-Item -LiteralPath $path -Destination (Join-Path $source $file) }
 }
@@ -43,6 +43,7 @@ $hubSource = Join-Path $Root 'source [hub]'
 $hubDestination = Join-Path $Root 'installed [hub]'
 [IO.Directory]::CreateDirectory($hubSource) | Out-Null
 Copy-Item -LiteralPath $HubInstall -Destination (Join-Path $hubSource 'install.ps1')
+Copy-Item -LiteralPath (Join-Path $Release 'hub-installation.ps1') -Destination (Join-Path $hubSource 'hub-installation.ps1')
 $helper = Join-Path $Release 'paths.ps1'
 if (Test-Path -LiteralPath $helper) { Copy-Item -LiteralPath $helper -Destination (Join-Path $hubSource 'paths.ps1') }
 Set-Content -LiteralPath (Join-Path $hubSource 'hub.json') -Value '{"format":"ara.hub/1","version":"0.0.1-alpha"}'
