@@ -1273,3 +1273,55 @@ fn one_entity_world_transform_matches_the_whole_scene() {
     }
     assert_eq!(all.len(), 4);
 }
+
+/// A large group (a terrain's 144 chunks) starts collapsed so the scene's content
+/// stays in view; expanding it is remembered, and the status bar counts entities.
+#[test]
+fn large_hierarchy_groups_start_collapsed() {
+    let project = Project::new();
+    let mut records = serde_json::Map::new();
+    records.insert("e_terrain".into(), json!({"name":"Terrain","Transform":{}}));
+    for n in 0..40 {
+        records.insert(
+            format!("e_chunk{n:03}"),
+            json!({"name":"Terrain chunk","parent":"e_terrain"}),
+        );
+    }
+    records.insert(
+        "e_crate001".into(),
+        json!({"name":"Salvage crate","Transform":{},"MeshRenderer":{}}),
+    );
+    write(
+        &project.0.join("levels/main.scene"),
+        json!({"$schema":"ara://schema/scene/1","id":"sc_test0001","records": records}),
+    );
+    let mut editor = project.open();
+    let mut shell = Shell::new(&mut editor, [1440., 900.]).unwrap();
+    assert_eq!(
+        shell.hierarchy_rows(),
+        2,
+        "Terrain (collapsed) and the crate"
+    );
+    let docs = shell.ui.find("status-docs").unwrap();
+    assert_eq!(
+        shell.ui.nodes[docs].text.as_ref().unwrap().value,
+        "42 entities"
+    );
+    // Expanding shows the chunks and stays expanded; collapsing again hides them.
+    editor
+        .action(
+            "editor.collapse",
+            json!({"entity":"e_terrain","enabled":false}),
+        )
+        .unwrap();
+    shell.rebuild(&mut editor).unwrap();
+    assert_eq!(shell.hierarchy_rows(), 42);
+    editor
+        .action(
+            "editor.collapse",
+            json!({"entity":"e_terrain","enabled":true}),
+        )
+        .unwrap();
+    shell.rebuild(&mut editor).unwrap();
+    assert_eq!(shell.hierarchy_rows(), 2);
+}

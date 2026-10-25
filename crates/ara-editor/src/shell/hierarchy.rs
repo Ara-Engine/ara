@@ -44,12 +44,14 @@ impl Shell {
             scene: self.resolved_key(),
             selection: editor.state.selection.clone(),
             collapsed: editor.state.collapsed.clone(),
+            expanded: editor.state.expanded.clone(),
             hidden: editor.state.hidden.clone(),
             locked: editor.state.locked.clone(),
             query: query.clone(),
             changed: changed_entities.iter().map(|s| (*s).to_owned()).collect(),
             tints: tints.clone(),
         };
+        self.entity_count = resolved.len();
         if self.hierarchy_key.as_ref() != Some(&key) {
             self.hierarchy_key = Some(key);
             self.hierarchy_tints = tints;
@@ -79,6 +81,9 @@ impl Shell {
             self.hierarchy_entities.clear();
             while let Some((id, depth)) = stack.pop() {
                 let e = &resolved[id];
+                let kids = children.get(&Some(id.as_str())).map_or(0, Vec::len);
+                let collapsed = editor.state.collapsed.contains(id)
+                    || (kids >= LARGE_GROUP && !editor.state.expanded.contains(id));
                 let name = e.record.get("name").and_then(Value::as_str).unwrap_or(id);
                 let component_filter = query
                     .strip_prefix("type:")
@@ -122,7 +127,7 @@ impl Shell {
                             icon,
                             tint,
                             children: children.contains_key(&Some(id.as_str())),
-                            collapsed: editor.state.collapsed.contains(id),
+                            collapsed,
                             locked: editor.state.locked.contains(id),
                             hidden: editor.state.hidden.contains(id),
                         },
@@ -130,7 +135,7 @@ impl Shell {
                     self.hierarchy.items.push((key, name.to_owned()));
                     self.hierarchy_entities.insert(key, id.clone());
                 }
-                if (!editor.state.collapsed.contains(id) || !query.is_empty())
+                if (!collapsed || !query.is_empty())
                     && let Some(kids) = children.get(&Some(id.as_str()))
                 {
                     stack.extend(kids.iter().rev().map(|kid| (*kid, depth + 1)));
@@ -237,6 +242,10 @@ impl Shell {
     }
 }
 
+/// A Hierarchy group this large (generated terrain chunks, streamed cells) starts
+/// collapsed until the user expands it.
+pub const LARGE_GROUP: usize = 32;
+
 /// What the Hierarchy's row model is built from; `hierarchy_panel` rebuilds the rows
 /// only when this changes.
 #[derive(PartialEq)]
@@ -244,6 +253,7 @@ pub(super) struct HierarchyKey {
     scene: Option<(String, u64, usize)>,
     selection: Vec<String>,
     collapsed: std::collections::BTreeSet<String>,
+    expanded: std::collections::BTreeSet<String>,
     hidden: std::collections::BTreeSet<String>,
     locked: std::collections::BTreeSet<String>,
     query: String,

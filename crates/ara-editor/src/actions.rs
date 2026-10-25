@@ -142,7 +142,7 @@ impl Service for EditorService {
             Method::new::<EditorEntityView>(
                 db,
                 "editor.collapse",
-                "Collapse or expand a hierarchy subtree.",
+                "Collapse or expand a hierarchy subtree. Groups of 32 or more children (generated terrain chunks, streamed cells) start collapsed.",
             ),
             Method::new::<EditorSearch>(db, "editor.search", "Search a panel's indexed model."),
             Method::new::<EditorPalette>(
@@ -859,12 +859,22 @@ impl EditorService {
                     }
                 }
             }
-            "editor.visibility" | "editor.lock" | "editor.collapse" => {
+            "editor.collapse" => {
+                // Expanding records the choice: a large group otherwise starts collapsed.
+                let p: EditorEntityView = parse(params)?;
+                if p.enabled {
+                    state.expanded.remove(&p.entity);
+                    state.collapsed.insert(p.entity);
+                } else {
+                    state.collapsed.remove(&p.entity);
+                    state.expanded.insert(p.entity);
+                }
+            }
+            "editor.visibility" | "editor.lock" => {
                 let p: EditorEntityView = parse(params)?;
                 let set = match method {
                     "editor.visibility" => &mut state.hidden,
-                    "editor.lock" => &mut state.locked,
-                    _ => &mut state.collapsed,
+                    _ => &mut state.locked,
                 };
                 if p.enabled {
                     set.insert(p.entity);

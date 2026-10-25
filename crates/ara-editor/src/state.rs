@@ -181,6 +181,9 @@ pub struct EditorState {
     pub scale_snap: f32,
     /// Collapsed hierarchy addresses.
     pub collapsed: BTreeSet<String>,
+    /// Large hierarchy groups the user expanded: groups of
+    /// [`LARGE_GROUP`](crate::shell::LARGE_GROUP) or more children start collapsed.
+    pub expanded: BTreeSet<String>,
     /// Entities hidden in the scene viewport only.
     pub hidden: BTreeSet<String>,
     /// Soft editor selection locks; no effect on agent command permissions.
@@ -274,6 +277,7 @@ impl Default for EditorState {
             rotate_snap: 15.,
             scale_snap: 0.1,
             collapsed: BTreeSet::new(),
+            expanded: BTreeSet::new(),
             hidden: BTreeSet::new(),
             locked: BTreeSet::new(),
             searches: BTreeMap::new(),
@@ -349,6 +353,7 @@ impl EditorState {
             || self.centre != other.centre
             || self.snapping != other.snapping
             || self.collapsed != other.collapsed
+            || self.expanded != other.expanded
             || self.hidden != other.hidden
             || self.locked != other.locked
             || self.searches != other.searches
