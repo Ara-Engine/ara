@@ -1,0 +1,70 @@
+// Exact BC6H UF16 palette evaluation, anchor-constrained assignment and packing.
+uint64_t bc6Assign(Bc6Endpoints q, uint mode, uint partition, out Bc6Indices indices) {
+    indices=(Bc6Indices)0;
+    uint count=mode<10 ? 8 : 16;
+    Bc6Endpoints decoded;
+    for (uint c=0;c<12;++c) decoded.v[c]=bc6Unquantize(q.v[c],BC6_PRECISION[mode]);
+    uint64_t error=0;
+    for (uint s=0;s<(mode<10 ? 2u : 1u);++s) {
+        uint3 palette[16],light[16];
+        for (uint j=0;j<count;++j) for (uint c=0;c<3;++c) {
+            uint w=bc6Weight(mode,j);
+            palette[j][c]=(((64-w)*decoded.v[s*6+c]+w*decoded.v[s*6+3+c]+32)>>6)*31>>6;
+            light[j][c]=bc6Linear(palette[j][c],bc6Shift);
+        }
+        for (uint i=0;i<16;++i) {
+            if (mode<10 && bc6Subset(partition,i)!=s) continue;
+            bool anchor=i==0 || (mode<10 && i==BC6_ANCHORS[partition]);
+            uint64_t bestError=~uint64_t(0); uint best=0;
+            for (uint j=0;j<(anchor ? count/2 : count);++j) {
+                uint64_t current=bc6Distance(i,palette[j],light[j]);
+                if (current<bestError) { bestError=current; best=j; }
+            }
+            error+=bestError; indices.v[i]=best;
+        }
+    }
+    return error;
+}
+
+void bc6Put(inout uint4 words, uint offset, uint value, uint count) {
+    uint word=offset>>5, shift=offset&31;
+    words[word]|=value<<shift;
+    if (shift+count>32) words[word+1]|=value>>(32-shift);
+}
+
+uint4 bc6Pack(Bc6Endpoints q, Bc6Indices indices, uint mode, uint partition) {
+    Bc6Endpoints raw=q;
+    if (mode!=9 && mode!=10) for (uint e=1;e<(mode<10 ? 4u : 2u);++e) for (uint c=0;c<3;++c) {
+        raw.v[e*3+c]=(q.v[e*3+c]-q.v[c])&((1u<<BC6_DELTA[mode][c])-1);
+    }
+    uint4 words=uint4(BC6_PREFIXES[mode],0,0,0);
+    uint start=mode<2 ? 2 : 5, count=mode<2 ? 75 : mode<10 ? 72 : 60;
+    for (uint i=0;i<count;++i) {
+        uint source=BC6_LAYOUT[mode][i];
+        bc6Put(words,start+i,(raw.v[source>>4]>>(source&15))&1,1);
+    }
+    uint offset=65;
+    if (mode<10) { bc6Put(words,77,partition,5); offset=82; }
+    for (uint i=0;i<16;++i) {
+        bool anchor=i==0 || (mode<10 && i==BC6_ANCHORS[partition]);
+        uint bits=(mode<10 ? 3 : 4)-(anchor ? 1 : 0);
+        bc6Put(words,offset,indices.v[i],bits); offset+=bits;
+    }
+    return words;
+}
+
+Bc6Candidate bc6Search(Bc6Endpoints endpoints, uint mode, uint partition, uint rounds) {
+    Bc6Candidate best=bc6Worst();
+    for (uint round=0;round<rounds;++round) {
+        bc6Orient(endpoints,partition,mode<10);
+        Bc6Endpoints q=bc6Quantized(endpoints,mode);
+        Bc6Indices indices;
+        uint64_t error=bc6Assign(q,mode,partition,indices);
+        if (error<=best.error) {
+            Bc6Candidate candidate; candidate.error=error; candidate.words=bc6Pack(q,indices,mode,partition);
+            bc6Keep(best,candidate);
+        }
+        if (round+1<rounds) bc6Refine(endpoints,indices,mode,partition);
+    }
+    return best;
+}
