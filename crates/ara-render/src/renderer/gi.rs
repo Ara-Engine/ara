@@ -53,8 +53,8 @@ impl Renderer {
             gi.origin == update.origin && gi.spacing == update.spacing && gi.counts == update.counts
         });
         if !same {
-            self.drop_probe_volume()?;
             let volume = self.empty_volume(update)?;
+            self.drop_probe_volume()?;
             self.look.gi = Some(volume);
         }
         if records.is_empty() {
@@ -88,7 +88,13 @@ impl Renderer {
         let buffer =
             self.gpu
                 .create_buffer(capacity as u64, vk::BufferUsageFlags::STORAGE_BUFFER, true)?;
-        let index = self.gpu.storage_buffer(buffer)?.index;
+        let index = match self.gpu.storage_buffer(buffer) {
+            Ok(index) => index.index,
+            Err(error) => {
+                self.gpu.retire(Resource::Buffer(buffer))?;
+                return Err(error.into());
+            }
+        };
         Ok(ProbeStaging {
             buffer,
             capacity,
@@ -133,6 +139,22 @@ impl Renderer {
     /// bordered moment tiles and both irradiance atlases, uninitialized until the
     /// next frame clears it (`fresh`).
     fn empty_volume(&mut self, update: &ProbeUpdate) -> Result<GiGpu> {
+        let mut allocated = Vec::new();
+        let result = self.allocate_probe_volume(update, &mut allocated);
+        if result.is_err() {
+            for resource in allocated.into_iter().rev() {
+                self.gpu.retire(resource)?;
+            }
+            self.gpu.collect()?;
+        }
+        result
+    }
+
+    fn allocate_probe_volume(
+        &mut self,
+        update: &ProbeUpdate,
+        allocated: &mut Vec<Resource>,
+    ) -> Result<GiGpu> {
         let probes = update.probes();
         let atlas = atlas_width(probes);
         let rows = (probes as u32).div_ceil(atlas);
@@ -140,19 +162,23 @@ impl Renderer {
         let cache =
             self.gpu
                 .create_buffer((probes * SURFACE_TEXELS * 16) as u64, storage, false)?;
+        allocated.push(Resource::Buffer(cache));
         let meta = self
             .gpu
             .create_buffer((probes * 16) as u64, storage, false)?;
+        allocated.push(Resource::Buffer(meta));
         // Capture boundaries zero the irradiance with a copy (`reset_capture_history`).
-        let image = |gpu: &mut VulkanDevice, size: u32, format| {
-            gpu.create_image(
+        let mut image = |gpu: &mut VulkanDevice, size: u32, format| {
+            let image = gpu.create_image(
                 atlas * size,
                 rows * size,
                 format,
                 vk::ImageUsageFlags::SAMPLED
                     | vk::ImageUsageFlags::STORAGE
                     | vk::ImageUsageFlags::TRANSFER_DST,
-            )
+            )?;
+            allocated.push(Resource::Image(image));
+            Ok::<_, ara_gpu::GpuError>(image)
         };
         let moments = image(&mut self.gpu, 10, vk::Format::R32G32B32A32_SFLOAT)?;
         let irradiance = [

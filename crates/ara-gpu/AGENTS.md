@@ -17,6 +17,10 @@ Owns the native GPU boundary. Vulkan uses ash revision
   Native integration uses `measure_host_wait` for leaf waits only; never nest it.
 - Completed timestamp pools are reused (32 pools, at most 1024 queries each).
   In-flight pools stay exclusive; oversized/burst overflow pools are freed on resolve.
+- Pass begins follow leading barriers at ALL_COMMANDS; `PassTiming` carries device
+  start/end. `reset_timing_window`/`timing_window` include every resolved submission
+  and gaps. KHR/EXT calibrated timestamps enable a shared clock; mixed queues without
+  that guarantee have no whole-frame span. Tests cover ordering, overlap and wrap.
 - `upload_range(buffer, byte_offset, bytes)` writes only changed coherent rows,
   with the same bounds and in-flight-use checks as `upload`.
 - `VulkanDevice::create_mip_image`: native sampled mip chains, including BC4/5/7.

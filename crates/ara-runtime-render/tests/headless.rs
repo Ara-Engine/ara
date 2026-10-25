@@ -152,6 +152,26 @@ fn demo_renders_moves_skins_and_relights_headless() {
     presenter.present(&frame).unwrap();
     let stats = presenter.stats();
     assert!(!stats.rebuilt && stats.updated >= 5, "{stats:?}");
+    if presenter
+        .renderer()
+        .unwrap()
+        .gpu()
+        .context()
+        .info
+        .timestamp_clock
+        .is_some()
+    {
+        let span = stats.gpu_span_ms.expect("calibrated whole presenter span");
+        assert!(span > 0.);
+        let interval = presenter.renderer().unwrap().gpu().timing_window().unwrap();
+        assert_eq!(span, interval.milliseconds());
+        for pass in presenter.pass_timings() {
+            assert!(
+                pass.start_ms >= interval.start_ms && pass.end_ms <= interval.end_ms,
+                "view pass must lie inside the prepare-through-publication span: {pass:?} {interval:?}"
+            );
+        }
+    }
     if presenter.quality() == Some(ara_runtime_render::QualityPreset::High) {
         let costs = stats
             .gpu

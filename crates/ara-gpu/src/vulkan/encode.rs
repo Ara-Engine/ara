@@ -367,11 +367,7 @@ impl VulkanDevice {
                 Command::BeginPass(_) | Command::EndPass => {
                     device.cmd_write_timestamp2(
                         cmd,
-                        if matches!(command, Command::BeginPass(_)) {
-                            vk::PipelineStageFlags2::TOP_OF_PIPE
-                        } else {
-                            vk::PipelineStageFlags2::ALL_COMMANDS
-                        },
+                        vk::PipelineStageFlags2::ALL_COMMANDS,
                         query,
                         *timestamp,
                     );

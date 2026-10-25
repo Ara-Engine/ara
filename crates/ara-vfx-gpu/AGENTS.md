@@ -38,6 +38,9 @@ Depth/age sorts use deterministic bitonic passes with slot-ID ties.
 All heap-reachable resources must appear in graph accesses. Frame resources are
 owned; no mutexes, interior mutability or per-frame resource clones. Frame constants
 use `upload_queued` so an enclosing deferred Scene scope orders writes on the GPU.
+Constructors initialize host rows before submitting transfers and retire partial
+resources/pipelines on failure. `tests/deferred.rs` checks this with a blocked
+atlas transfer and repeated descriptor-exhaustion retries.
 Async compute is opt-in and must be measured on the target workload.
 Shader/pipeline replacement happens at frame boundaries after worker completion.
 
