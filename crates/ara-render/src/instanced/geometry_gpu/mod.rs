@@ -26,6 +26,12 @@ pub struct GeometryUpload {
     pub geometries: usize,
     /// Shared vertex/index and geometry-table payload, including three skin-pose slots.
     pub bytes: u64,
+    /// Bytes written from the host for this generation, including skin slots/table.
+    pub uploaded_bytes: u64,
+    /// Unchanged static vertex/index bytes copied directly from the previous pool.
+    pub reused_bytes: u64,
+    /// Source geometries whose static data was copied from the resident generation.
+    pub reused_geometries: usize,
     /// Native BLAS objects, one per unique geometry LOD when RT is requested.
     pub blas: usize,
     /// GPU staging transfer duration.

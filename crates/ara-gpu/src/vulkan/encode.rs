@@ -244,6 +244,23 @@ impl VulkanDevice {
                         &[vk::BufferCopy::default().size(*size)],
                     );
                 }
+                Command::CopyBufferRange {
+                    source,
+                    source_offset,
+                    destination,
+                    destination_offset,
+                    size,
+                } => {
+                    device.cmd_copy_buffer(
+                        cmd,
+                        self.buffers.get(*source)?.raw.handle,
+                        self.buffers.get(*destination)?.raw.handle,
+                        &[vk::BufferCopy::default()
+                            .src_offset(*source_offset)
+                            .dst_offset(*destination_offset)
+                            .size(*size)],
+                    );
+                }
                 Command::CopyImage {
                     source,
                     destination,

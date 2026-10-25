@@ -1,5 +1,9 @@
 # ara-render
 
+Native publications validate once per immutable upload borrow and copy unchanged
+key/revision geometry directly from the previous GPU pool. Candidate buffers stay
+independent until publication, so rejected content retains the previous frame.
+
 Owns the M1 baseline renderer and agent visual feedback. Gameplay state stays in
 ECS; `Scene` is an immutable render extraction snapshot, not authoritative state.
 

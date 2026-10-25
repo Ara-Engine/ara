@@ -1,6 +1,6 @@
 //! Native raster content: local geometry, compressed residency and draw instances.
 use super::*;
-use crate::instanced::{GeometryGpu, Scene as NativeScene, TextureStats, Textures};
+use crate::instanced::{GeometryGpu, Scene as NativeScene, TextureStats, Textures, ValidatedScene};
 use anyhow::Context;
 use ara_gpu::{
     RootConstants,
@@ -47,6 +47,7 @@ pub(super) struct Native {
     culling: Culling,
     changes: updates::Updates,
     pipelines: [Pipeline; 3],
+    owns_pipelines: bool,
     upload: TextureStats,
     material_dirty: bool,
     update_gpu_ms: f64,
@@ -75,10 +76,13 @@ impl Renderer {
         extensions: &[std::ffi::CString],
         cache: impl Into<PathBuf>,
     ) -> Result<Self> {
-        scene.validate()?;
+        let validated = scene.validated()?;
         let environment = environment::snapshot(scene);
         let mut renderer = Self::new_device(environment, size, extensions, cache.into(), true)?;
-        renderer.replace_native_scene(scene, textures)?;
+        {
+            ara_gpu::cpu_scope!("RasterNative.publish");
+            renderer.publish_native(validated, textures)?;
+        }
         Ok(renderer)
     }
 
@@ -90,12 +94,21 @@ impl Renderer {
         textures: Box<dyn Textures>,
     ) -> Result<()> {
         ara_gpu::cpu_scope!("RasterNative.publish");
+        self.publish_native(scene.validated()?, textures)
+    }
+
+    fn publish_native(
+        &mut self,
+        validated: ValidatedScene<'_>,
+        textures: Box<dyn Textures>,
+    ) -> Result<()> {
+        let scene = validated.scene();
         let mut next = Native::new(
             &mut self.gpu,
-            scene,
+            validated,
             textures,
             &self.artifacts,
-            self.native.as_ref().map(|native| native.textures.as_ref()),
+            self.native.as_ref(),
         )?;
         // The first native generation replaces bootstrap/legacy geometry. HDRI
         // changes rebuild the actual environment and its IBL, rather than merely
@@ -148,6 +161,10 @@ impl Renderer {
                 self.retire_content(content)?;
             }
             return Err(error);
+        }
+        if let Some(previous) = &mut self.native {
+            previous.owns_pipelines = false;
+            next.owns_pipelines = true;
         }
         let old = self.native.replace(next);
         let previous_content = content.map(|content| std::mem::replace(&mut self.content, content));
@@ -377,18 +394,29 @@ impl Native {
     }
     fn new(
         gpu: &mut VulkanDevice,
-        scene: &NativeScene,
+        validated: ValidatedScene<'_>,
         mut textures: Box<dyn Textures>,
         artifacts: &Path,
-        previous: Option<&dyn Textures>,
+        previous: Option<&Self>,
     ) -> Result<Self> {
         ara_gpu::cpu_scope!("RasterNative.create_content");
-        scene.validate()?;
+        let scene = validated.scene();
         let texture_digest = textures.content_digest();
+        // Local-light face slots belong to the view's quality configuration,
+        // which is not re-applied when only a content generation changes.
+        let passes = previous.map_or(culling::BASE_PASSES, |old| old.culling.draws.len());
+        let visible_bytes = scene
+            .instances
+            .len()
+            .checked_mul(passes)
+            .filter(|rows| *rows <= u32::MAX as usize)
+            .and_then(|rows| rows.checked_mul(8))
+            .context("Native shadow visibility capacity overflow")?
+            .max(16);
         let upload = {
             ara_gpu::cpu_scope!("RasterNative.publish_textures");
             let initialized = match previous {
-                Some(previous) => textures.initialize_reusing(gpu, previous),
+                Some(previous) => textures.initialize_reusing(gpu, previous.textures.as_ref()),
                 None => textures.initialize(gpu),
             };
             match initialized {
@@ -405,7 +433,7 @@ impl Native {
         }
         let pool = {
             ara_gpu::cpu_scope!("RasterNative.publish_geometry");
-            match GeometryGpu::new(gpu, scene, false) {
+            match GeometryGpu::new_validated(gpu, validated, false, previous.map(|v| &v.pool)) {
                 Ok(pool) => pool,
                 Err(error) => {
                     textures.destroy(gpu)?;
@@ -414,7 +442,7 @@ impl Native {
             }
         };
         let mut owned = Vec::new();
-        let mut pipelines = Vec::new();
+        let mut pipelines = previous.map_or_else(Vec::new, |old| old.pipelines.to_vec());
         let prepared = (|| {
             let materials = host_buffer(
                 gpu,
@@ -427,12 +455,8 @@ impl Native {
                 128 + scene.instances.len() * std::mem::size_of::<InstanceRow>(),
                 &mut owned,
             )?;
-            let visible = host_buffer(
-                gpu,
-                (scene.instances.len() * culling::BASE_PASSES * 8).max(16),
-                &mut owned,
-            )?;
-            {
+            let visible = host_buffer(gpu, visible_bytes, &mut owned)?;
+            if previous.is_none() {
                 ara_gpu::cpu_scope!("RasterNative.create_pipelines");
                 for name in ["native_shadow", "native_gbuffer", "native_forward"] {
                     let cooked = serde_json::from_slice(&std::fs::read(
@@ -460,8 +484,10 @@ impl Native {
                     for resource in owned {
                         gpu.retire(resource)?;
                     }
-                    for pipeline in pipelines {
-                        gpu.retire_pipeline(pipeline)?;
+                    if previous.is_none() {
+                        for pipeline in pipelines {
+                            gpu.retire_pipeline(pipeline)?;
+                        }
                     }
                     gpu.collect()?;
                     return Err(error);
@@ -469,7 +495,8 @@ impl Native {
             };
         let rows = scene.instances.iter().map(|i| row(i, i.world)).collect();
         let groups = Groups::new(scene, &pool)?;
-        let culling = Culling::new(&groups, scene.instances.len());
+        let mut culling = Culling::new(&groups, scene.instances.len());
+        culling.reserve(&groups, passes);
         let result = Self {
             material_index,
             instance_index,
@@ -500,6 +527,7 @@ impl Native {
             pipelines: pipelines
                 .try_into()
                 .map_err(|_| anyhow::anyhow!("Native raster pipeline count"))?,
+            owns_pipelines: previous.is_none(),
             upload,
             material_dirty: true,
             update_gpu_ms: 0.,
@@ -575,8 +603,10 @@ impl Native {
         for buffer in [self.materials, self.instances, self.visible] {
             gpu.retire(Resource::Buffer(buffer))?;
         }
-        for pipeline in self.pipelines {
-            gpu.retire_pipeline(pipeline)?;
+        if self.owns_pipelines {
+            for pipeline in self.pipelines {
+                gpu.retire_pipeline(pipeline)?;
+            }
         }
         gpu.collect()?;
         Ok(())

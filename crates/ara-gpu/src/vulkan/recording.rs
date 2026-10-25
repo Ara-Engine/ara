@@ -465,6 +465,35 @@ impl VulkanDevice {
                         return Err(GpuError::Contract("Invalid buffer copy".into()));
                     }
                 }
+                Command::CopyBufferRange {
+                    source,
+                    source_offset,
+                    destination,
+                    destination_offset,
+                    size,
+                } => {
+                    let source = self.buffers.get(*source)?.raw;
+                    let destination = self.buffers.get(*destination)?.raw;
+                    if rendering
+                        || *size == 0
+                        || size % 4 != 0
+                        || source_offset % 4 != 0
+                        || destination_offset % 4 != 0
+                        || source_offset
+                            .checked_add(*size)
+                            .is_none_or(|end| end > source.size)
+                        || destination_offset
+                            .checked_add(*size)
+                            .is_none_or(|end| end > destination.size)
+                        || !source.usage.contains(vk::BufferUsageFlags::TRANSFER_SRC)
+                        || !destination
+                            .usage
+                            .contains(vk::BufferUsageFlags::TRANSFER_DST)
+                        || source.handle == destination.handle
+                    {
+                        return Err(GpuError::Contract("Invalid buffer copy range".into()));
+                    }
+                }
                 Command::CopyImage {
                     source,
                     destination,
