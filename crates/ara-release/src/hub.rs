@@ -72,6 +72,7 @@ pub fn package(root: &Path, version: &str) -> Result<()> {
     }
     support::copy_tree(&root.join("assets/brand"), &stage.join("assets/brand"))?;
     copy(&root.join("release/LICENSE"), &stage.join("LICENSE"))?;
+    copy(&root.join("release/paths.ps1"), &stage.join("paths.ps1"))?;
     fs::write(
         stage.join("install.ps1"),
         include_str!("../hub-install.ps1"),

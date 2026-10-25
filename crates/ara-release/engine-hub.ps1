@@ -1,23 +1,24 @@
 
 # Keep the launcher outside this versioned engine: its updater must not swap a running service.
 if (-not $NoSystemIntegration -and (Test-Path -LiteralPath (Join-Path $source 'ara-hub.exe'))) {
-    $hubRoot = Join-Path $env:LOCALAPPDATA 'Programs\Ara Hub'
+    $hubRoot = Join-Path (ConvertTo-AraPath $env:LOCALAPPDATA) 'Programs\Ara Hub'
     if (-not (Test-Path -LiteralPath $hubRoot)) {
-        $hubParent = Split-Path -Parent $hubRoot
-        New-Item -ItemType Directory -Path $hubParent -Force | Out-Null
+        $hubParent = [IO.Path]::GetDirectoryName($hubRoot)
+        [IO.Directory]::CreateDirectory($hubParent) | Out-Null
         $hubStage = Join-Path $hubParent ('.ara-hub-install-' + [guid]::NewGuid().ToString('N'))
-        New-Item -ItemType Directory -Path (Join-Path $hubStage 'bootstrap') -Force | Out-Null
+        [IO.Directory]::CreateDirectory((Join-Path $hubStage 'bootstrap')) | Out-Null
         foreach ($file in @('ara-hub.exe','ara-hub-updater.exe')) {
             Copy-Item -LiteralPath (Join-Path $source $file) -Destination (Join-Path $hubStage $file)
         }
         Copy-Item -LiteralPath (Join-Path $source 'ara.exe') -Destination (Join-Path $hubStage 'bootstrap\ara.exe')
         Copy-Item -LiteralPath (Join-Path $source 'hub-service.json') -Destination (Join-Path $hubStage 'bootstrap\service.json')
         Copy-Item -LiteralPath (Join-Path $source 'standalone-hub-install.ps1') -Destination (Join-Path $hubStage 'install.ps1')
+        Copy-Item -LiteralPath (Join-Path $source 'paths.ps1') -Destination (Join-Path $hubStage 'paths.ps1')
         Get-ChildItem -LiteralPath $source -Filter '*.dll' | ForEach-Object {
             Copy-Item -LiteralPath $_.FullName -Destination $hubStage
             Copy-Item -LiteralPath $_.FullName -Destination (Join-Path $hubStage 'bootstrap')
         }
-        New-Item -ItemType Directory -Path (Join-Path $hubStage 'assets') -Force | Out-Null
+        [IO.Directory]::CreateDirectory((Join-Path $hubStage 'assets')) | Out-Null
         Copy-Item -LiteralPath (Join-Path $source 'assets\brand') -Destination (Join-Path $hubStage 'assets') -Recurse
         Copy-Item -LiteralPath (Join-Path $source 'hub-launcher.json') -Destination (Join-Path $hubStage 'hub.json')
         Copy-Item -LiteralPath (Join-Path $source 'THIRD_PARTY_NOTICES.txt') -Destination $hubStage
