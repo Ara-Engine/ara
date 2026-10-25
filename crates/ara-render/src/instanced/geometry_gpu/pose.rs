@@ -96,7 +96,7 @@ impl GeometryGpu {
         let owner = self.table.expect("populated skin pool has a table").0;
         let mut allocated = Vec::new();
         let result = (|| {
-            gpu.upload(buffers[slot], bytemuck::cast_slice(&self.staging))?;
+            gpu.upload_queued(buffers[slot], bytemuck::cast_slice(&self.staging))?;
             let pool = self
                 .static_pool
                 .expect("populated skin pool has static indices");

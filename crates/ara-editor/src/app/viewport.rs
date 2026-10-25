@@ -172,15 +172,17 @@ impl SceneView {
         self.frame_pending = false;
         if super::scene_sync::native(editor, renderer) {
             self.lit = matches!(view_mode(&editor.state.view_mode), ViewMode::Lit);
-            self.render_raster_inner(renderer, editor, view, RasterWork::Capture(1))?;
+            // Capture is an explicit blocking boundary. Drain superseded CPU
+            // snapshots and pending GPU work until the requested view is ready;
+            // live rendering instead retains the completed image and polls.
+            loop {
+                self.render_raster_inner(renderer, editor, view, RasterWork::Capture(1))?;
+                if self.content_job.is_none() {
+                    break;
+                }
+            }
         } else {
             self.render(renderer, editor, view, 1)?;
-        }
-        if self.content_job.is_some() {
-            self.render_raster_inner(renderer, editor, view, RasterWork::Capture(1))?;
-        }
-        if self.failed.is_some() {
-            return Err("Scene capture could not prepare the requested content generation".into());
         }
         if !self.active {
             return Ok(());
@@ -360,7 +362,9 @@ impl SceneView {
             pose: pose_key(editor.gesture.as_ref()),
             scene: content::scene_key(editor),
         };
-        if self.failed == Some(revision) {
+        if self.failed == Some(revision)
+            && matches!(work, RasterWork::Live(_) | RasterWork::Submitted(_))
+        {
             // Retry only when content/publication/preview changes, rather than
             // allocating a failed generation on every UI frame.
             return Ok(());
@@ -480,6 +484,7 @@ impl SceneView {
             }
             self.raster_snapshot_dirty = false;
         }
+        self.failed = None;
         if matches!(work, RasterWork::Prepare) {
             return Ok(());
         }
@@ -510,6 +515,7 @@ impl SceneView {
         let output = renderer.output();
         let size = renderer.size();
         PresentationImage::publish(&mut self.published, renderer.gpu_mut(), output, size)?;
+        self.failed = None;
         self.active = true;
         Ok(())
     }
@@ -939,10 +945,14 @@ mod tests {
                         .is_finished()
                 );
                 release.send(())?;
+                // An earlier transient upload failure must not suppress an
+                // explicit capture's retry/drain of the requested generation.
+                scene.failed = scene.revision;
                 scene
                     .render_capture(&mut renderer, &editor, &view, 2)
                     .map_err(|error| anyhow::anyhow!("{error}"))?;
                 assert!(scene.content_job.is_none());
+                assert!(scene.failed.is_none());
                 assert_eq!(
                     scene
                         .raster_frame
@@ -953,6 +963,30 @@ mod tests {
                     patched_allocation,
                     "stale worker must not rebuild already-patched input"
                 );
+                scene.failed = scene.revision;
+                let mut preview = GamePreview::default();
+                let camera = editor.state.camera.spec();
+                let output = scene
+                    .preview_game(
+                        &mut renderer,
+                        &editor,
+                        &view,
+                        &mut preview,
+                        PreviewCamera {
+                            camera: &camera,
+                            size: [96, 54],
+                            quality: None,
+                        },
+                    )
+                    .map_err(|error| anyhow::anyhow!("{error}"))?;
+                assert!(
+                    output.is_some(),
+                    "explicit preview retries the failed generation"
+                );
+                assert!(scene.failed.is_none());
+                preview
+                    .release(&mut renderer)
+                    .map_err(|error| anyhow::anyhow!("{error}"))?;
             }
             assert_eq!(scene.content.as_ref().expect("Scene content").revision(), 0);
             // The empty publication lands later. Neither no snapshot nor an

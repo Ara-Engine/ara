@@ -330,18 +330,22 @@ impl VulkanDevice {
         })
     }
     /// Write a coherent buffer after every preceding use has completed.
+    #[track_caller]
     pub fn upload(&self, buffer: Buffer, bytes: &[u8]) -> Result<()> {
         self.upload_range(buffer, 0, bytes)
     }
     /// Write a byte range without copying unchanged rows. Like `upload`, this
     /// requires coherent host storage and completion of every preceding GPU use.
+    #[track_caller]
     pub fn upload_range(&self, buffer: Buffer, offset: u64, bytes: &[u8]) -> Result<()> {
         let b = self.buffers.get(buffer)?;
         let completed = self.completed()?;
         if (0..2).any(|q| completed[q] < b.last[q]) {
-            return Err(GpuError::Contract(
-                "Upload would overwrite in-flight storage".into(),
-            ));
+            return Err(GpuError::Contract(format!(
+                "Upload would overwrite in-flight storage at {} ({buffer:?}; completed {completed:?}, last {:?})",
+                std::panic::Location::caller(),
+                b.last
+            )));
         }
         self.context.upload_range(b.raw, offset, bytes)?;
         Ok(())

@@ -434,7 +434,7 @@ impl Renderer {
     /// temporal-only reset instead.
     pub fn reset_capture_history(&mut self) -> Result<()> {
         self.reset_temporal_history();
-        self.look.reset_exposure(&self.gpu)?;
+        self.look.reset_exposure(&mut self.gpu)?;
         self.look.settle = crate::look::gi::CONVERGE_FRAMES;
         // Local shadows start over: which lights a capture shadows must not
         // depend on the lights live frames held.
