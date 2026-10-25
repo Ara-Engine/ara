@@ -94,10 +94,14 @@ pub(super) fn panel_icon(panel: &str) -> &'static str {
     }
 }
 impl Shell {
+    /// Markup for a dock tree. `edge` is true while the subtree touches the main
+    /// window's bottom edge: its areas can collapse to their tab strip (a chevron in
+    /// their header), like the default layout's bottom bar.
     pub(super) fn dock(
         &mut self,
         node: &DockNode,
         path: &str,
+        edge: bool,
         editor: &mut Editor,
         out: &mut String,
     ) -> ara_ui::Result<()> {
@@ -109,12 +113,35 @@ impl Shell {
                 second,
             } => {
                 let row = *axis == Axis::Horizontal;
-                out.push_str(&format!("<panel id='split-{path}' style='flex-grow:1; flex-basis:0px; flex-direction:{}; gap:0px'><panel id='dock-first-{path}' style='flex-grow:{}; flex-basis:0px; min-width:0px; min-height:0px'>",if row{"row"}else{"column"},ratio));
-                self.dock(first, &format!("{path}-a"), editor, out)?;
-                // Only the main-axis size is set: the cross axis stretches, so the
-                // splitter spans its split (an explicit 0 there left nothing to grab).
-                out.push_str(&format!("</panel><splitter id='splitter-{path}' class='splitter' style='{}:4px; flex-shrink:0' action='ResizeDock' /><panel id='dock-second-{path}' style='flex-grow:{}; flex-basis:0px; min-width:0px; min-height:0px'>",if row{"width"}else{"height"},1.-ratio));
-                self.dock(second, &format!("{path}-b"), editor, out)?;
+                let folded = |n: &DockNode| matches!(n, DockNode::Area { id, .. } if editor.state.collapsed_areas.contains(id));
+                // A collapsed area is just as tall as its tab strip; its sibling takes
+                // the rest, and there is nothing to resize between them.
+                let (fold_first, fold_second) = (folded(first), folded(second));
+                let pane = |folded: bool, other: bool, grow: f32| {
+                    if folded {
+                        "flex-grow:0; flex-shrink:0; flex-basis:auto; min-width:0px".to_owned()
+                    } else {
+                        let grow = if other { 1. } else { grow };
+                        format!("flex-grow:{grow}; flex-basis:0px; min-width:0px; min-height:0px")
+                    }
+                };
+                out.push_str(&format!("<panel id='split-{path}' style='flex-grow:1; flex-basis:0px; min-width:0px; min-height:0px; flex-direction:{}; gap:0px'><panel id='dock-first-{path}' style='{}'>",if row{"row"}else{"column"},pane(fold_first, fold_second, *ratio)));
+                self.dock(first, &format!("{path}-a"), edge && row, editor, out)?;
+                if fold_first || fold_second {
+                    out.push_str(&format!(
+                        "</panel><panel id='gap-{path}' style='{}:4px; flex-shrink:0' />",
+                        if row { "width" } else { "height" }
+                    ));
+                } else {
+                    // Only the main-axis size is set: the cross axis stretches, so the
+                    // splitter spans its split (an explicit 0 there left nothing to grab).
+                    out.push_str(&format!("</panel><splitter id='splitter-{path}' class='splitter' style='{}:4px; flex-shrink:0' action='ResizeDock' />",if row{"width"}else{"height"}));
+                }
+                out.push_str(&format!(
+                    "<panel id='dock-second-{path}' style='{}'>",
+                    pane(fold_second, fold_first, 1. - ratio)
+                ));
+                self.dock(second, &format!("{path}-b"), edge, editor, out)?;
                 out.push_str("</panel></panel>");
             }
             DockNode::Area { id, tabs, active } => {
@@ -124,12 +151,19 @@ impl Shell {
                 // so switching to one is a visibility change; other panels render only
                 // while active.
                 let area = escape(id);
+                let collapsed = editor.state.collapsed_areas.contains(id);
                 let mut head = String::new();
-                let head_id = self.area_head(&area, tabs, *active, &mut head);
+                let head_id =
+                    self.area_head(&area, tabs, *active, edge.then_some(collapsed), &mut head);
                 out.push_str(&format!(
                     "<panel id='area-{area}' class='dock'><panel id='{head_id}' />"
                 ));
                 self.parts.push((head_id, head));
+                if collapsed {
+                    // Just the tab strip: a tab expands the area again.
+                    out.push_str("</panel>");
+                    return Ok(());
+                }
                 match tabs.get(*active) {
                     None => self.empty(
                         out,
@@ -163,13 +197,15 @@ impl Shell {
         }
         Ok(())
     }
-    /// One dock area's header part: its tab bar (or a lone panel's title) and the
-    /// active panel's options button. Returns the part's host ID.
+    /// One dock area's header part: its tab bar (or a lone panel's title), a
+    /// collapse/expand chevron when `fold` is `Some(collapsed)` (bottom-edge areas),
+    /// and the active panel's options button. Returns the part's host ID.
     fn area_head(
         &mut self,
         area: &str,
         tabs: &[String],
         active: usize,
+        fold: Option<bool>,
         out: &mut String,
     ) -> String {
         let current = tabs.get(active).cloned();
@@ -220,6 +256,22 @@ impl Shell {
             out.push_str(&format!("<panel id='tabs-fill-{area}' class='fill' />"));
             format!("tabs-{area}")
         };
+        if let Some(collapsed) = fold {
+            let id = format!("fold-{area}");
+            self.bindings.insert(
+                ara_ui::source::stable_id(&id),
+                Binding::Protocol(
+                    "editor.layout.collapse",
+                    json!({"area": area, "collapsed": !collapsed}),
+                ),
+            );
+            let (icon, label) = if collapsed {
+                ("chevron-up", "Expand")
+            } else {
+                ("chevron-down", "Collapse")
+            };
+            out.push_str(&format!("<button id='{id}' class='ghost icon-button' label='{label}' description='{label} this area' action='Dispatch'>{}</button>",icons::icon(&id,icon)));
+        }
         if let Some(panel) = &current {
             // One options button per area (its binding names the panel), so switching
             // tabs keeps the header's shape.

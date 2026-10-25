@@ -55,7 +55,7 @@ text { flex-shrink:0; white-space:nowrap; color:inherit; }
 .play-line { height:2px; flex-shrink:0; background:var(--success-foreground); }
 
 .dock-root { flex-grow:1; flex-basis:0px; min-height:0px; padding-left:4px; padding-right:4px; padding-bottom:4px; }
-.dock { flex-grow:1; flex-basis:0px; background:var(--card); border-radius:var(--radius-md); overflow:hidden; }
+.dock { flex-grow:1; flex-basis:0px; min-width:0px; min-height:0px; background:var(--card); border-radius:var(--radius-md); overflow:hidden; }
 .tab-body { flex-grow:1; flex-basis:0px; min-width:0px; min-height:0px; }
 .tab-label-hidden { display:none; }
 .dock-focused { border-width:1px; border-color:var(--separator-strong); }

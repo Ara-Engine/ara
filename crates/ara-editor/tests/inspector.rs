@@ -69,7 +69,9 @@ impl Project {
         editor
             .action("editor.workspace", json!({"folder":"models"}))
             .unwrap();
-        let mut shell = Shell::new(&mut editor, [1440., 900.]).unwrap();
+        // Hierarchy shares the right column with the Inspector and Assets is open:
+        // a tall window keeps every Inspector field the tests click on screen.
+        let mut shell = Shell::new(&mut editor, [1440., 2100.]).unwrap();
         let start = std::time::Instant::now();
         while !shell.poll_assets_for_test(&mut editor) {
             assert!(start.elapsed().as_secs() < 10, "asset scan never arrived");

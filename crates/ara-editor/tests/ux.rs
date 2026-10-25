@@ -346,6 +346,12 @@ fn panels_show_real_empty_states() {
         ("material", "material-empty"),
         ("animation", "animation-empty"),
     ] {
+        // Tool pages and the Profiler open floating: dock them where the main shell shows them.
+        if ara_editor::state::float_size(panel).is_some() {
+            editor
+                .action("editor.layout.move", json!({"panel":panel,"slot":"view"}))
+                .unwrap();
+        }
         editor
             .action("editor.focus", json!({"panel":panel}))
             .unwrap();
@@ -1247,7 +1253,7 @@ fn every_dock_splitter_can_be_grabbed_and_dragged() {
         .filter(|n| n.element.id.starts_with("splitter-") && n.visible)
         .map(|n| n.element.id.clone())
         .collect();
-    assert!(splitters.len() >= 3, "{splitters:?}");
+    assert!(splitters.len() >= 2, "{splitters:?}");
     for id in splitters {
         let i = shell.ui.find(&id).unwrap();
         let r = shell.ui.nodes[i].rect;
@@ -1346,4 +1352,165 @@ fn a_lone_panel_drags_by_its_header_into_another_area() {
         target.0,
         "{panel} joined the other area"
     );
+}
+
+fn panels(node: &ara_ui::docking::DockNode) -> Vec<(String, Vec<String>)> {
+    match node {
+        ara_ui::docking::DockNode::Area { id, tabs, .. } => vec![(id.clone(), tabs.clone())],
+        ara_ui::docking::DockNode::Split { first, second, .. } => {
+            let mut out = panels(first);
+            out.extend(panels(second));
+            out
+        }
+    }
+}
+
+#[test]
+fn the_default_layout_puts_the_views_left_tools_right_and_a_collapsed_bar_below() {
+    let project = Project::new();
+    let mut editor = Editor::open(&project.0).unwrap();
+    let areas = panels(&editor.state.layout);
+    let s = |v: &[&str]| v.iter().map(|t| t.to_string()).collect::<Vec<_>>();
+    assert_eq!(
+        areas,
+        [
+            ("view".into(), s(&["scene", "game"])),
+            ("outline".into(), s(&["hierarchy"])),
+            ("right".into(), s(&["inspector"])),
+            (
+                "bottom".into(),
+                s(&["assets", "console", "problems", "agents"])
+            ),
+        ]
+    );
+    assert!(editor.state.collapsed_areas.contains("bottom"));
+    // The collapsed bar shows its tabs, no body; a tab opens the area on that panel.
+    let mut shell = Shell::new(&mut editor, [1440., 900.]).unwrap();
+    shell.rebuild(&mut editor).unwrap();
+    assert!(shell.ui.find("tab-console").is_some());
+    assert!(shell.ui.find("body-assets").is_none());
+    let mut clip = MemoryClipboard::default();
+    shell.click("tab-console", &mut clip).unwrap();
+    shell.dispatch(&mut editor).unwrap();
+    shell.rebuild(&mut editor).unwrap();
+    assert!(!editor.state.collapsed_areas.contains("bottom"));
+    assert!(shell.ui.find("body-console").is_some());
+    // The chevron folds it again.
+    shell.click("fold-bottom", &mut clip).unwrap();
+    shell.dispatch(&mut editor).unwrap();
+    assert!(editor.state.collapsed_areas.contains("bottom"));
+}
+
+#[test]
+fn tool_pages_open_floating_and_stay_where_they_are_docked() {
+    let project = Project::new();
+    let mut editor = Editor::open(&project.0).unwrap();
+    for panel in ["material", "vfx", "animation", "profiler"] {
+        assert!(
+            panels(&editor.state.layout)
+                .iter()
+                .all(|(_, tabs)| !tabs.iter().any(|t| t == panel))
+        );
+        editor
+            .action("editor.layout.show", json!({"panel": panel}))
+            .unwrap();
+        assert!(
+            editor.state.floating.iter().any(|f| panels(&f.root)
+                .iter()
+                .any(|(_, tabs)| tabs.iter().any(|t| t == panel))),
+            "{panel} opens in a floating window"
+        );
+    }
+    // Docked, the Material page stays docked when shown again and after a reopen.
+    editor
+        .action(
+            "editor.layout.move",
+            json!({"panel":"material","slot":"view"}),
+        )
+        .unwrap();
+    editor
+        .action("editor.layout.show", json!({"panel": "material"}))
+        .unwrap();
+    let docked = |editor: &Editor| {
+        panels(&editor.state.layout)
+            .iter()
+            .any(|(id, tabs)| id == "view" && tabs.iter().any(|t| t == "material"))
+    };
+    assert!(docked(&editor));
+    drop(editor);
+    let editor = Editor::open(&project.0).unwrap();
+    assert!(docked(&editor));
+}
+
+#[test]
+fn only_an_untouched_old_default_layout_moves_to_the_new_default() {
+    use ara_ui::docking::{Axis, DockNode};
+    let area = |id: &str, tabs: &[&str]| DockNode::Area {
+        id: id.into(),
+        tabs: tabs.iter().map(|t| t.to_string()).collect(),
+        active: 0,
+    };
+    let split = |axis, ratio, first, second| DockNode::Split {
+        axis,
+        ratio,
+        first: Box::new(first),
+        second: Box::new(second),
+    };
+    // The old default, resized (ratios differ): still the old default.
+    let old = split(
+        Axis::Horizontal,
+        0.22,
+        split(
+            Axis::Vertical,
+            0.6,
+            area("left", &["hierarchy"]),
+            area("bottom", &["assets", "console", "problems", "agents"]),
+        ),
+        split(
+            Axis::Horizontal,
+            0.7,
+            area(
+                "view",
+                &["scene", "game", "material", "vfx", "animation", "profiler"],
+            ),
+            area("right", &["inspector"]),
+        ),
+    );
+    // A rearranged layout: the user's.
+    let custom = split(
+        Axis::Horizontal,
+        0.5,
+        area(
+            "view",
+            &["scene", "game", "material", "vfx", "animation", "profiler"],
+        ),
+        area(
+            "right",
+            &[
+                "inspector",
+                "hierarchy",
+                "assets",
+                "console",
+                "problems",
+                "agents",
+            ],
+        ),
+    );
+    for (layout, migrates) in [(old, true), (custom.clone(), false)] {
+        let project = Project::new();
+        std::fs::create_dir_all(project.0.join(".ara")).unwrap();
+        std::fs::write(
+            project.0.join(".ara/editor-layout.json"),
+            ara_json::to_canonical_string(&serde_json::to_value(&layout).unwrap()),
+        )
+        .unwrap();
+        let editor = Editor::open(&project.0).unwrap();
+        if migrates {
+            assert_eq!(editor.state.layout, ara_editor::state::default_layout());
+            assert!(editor.state.collapsed_areas.contains("bottom"));
+        } else {
+            assert_eq!(editor.state.layout, custom);
+            assert!(editor.state.collapsed_areas.is_empty());
+        }
+    }
 }

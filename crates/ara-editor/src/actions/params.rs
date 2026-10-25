@@ -435,6 +435,19 @@ pub(super) struct EditorLayoutPanel {
     /// Desktop rectangle (x, y, width, height) for a floating window.
     pub rect: Option<[f32; 4]>,
 }
+/// Collapse or expand a dock area.
+#[derive(Schema, Deserialize)]
+#[ara(params)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(super) struct EditorLayoutCollapse {
+    /// Live protocol session, validated by the host.
+    #[expect(dead_code, reason = "Host validates sessions before dispatch")]
+    pub session: String,
+    /// Area id, e.g. `bottom`.
+    pub area: String,
+    /// Show just the area's tab strip (`true`), or the whole area.
+    pub collapsed: bool,
+}
 /// Record a floating window's position after the OS moved or resized it.
 #[derive(Schema, Deserialize)]
 #[ara(params)]

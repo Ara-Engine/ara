@@ -59,6 +59,8 @@ pub(super) struct Journey {
     capturing: Option<(bool, Instant)>,
     /// The build folder before a build step: the step needs a new one.
     previous_build: Option<PathBuf>,
+    /// The frame a Stop step clicked Stop.
+    stopped: Option<u32>,
 }
 
 impl Journey {
@@ -84,6 +86,7 @@ impl Journey {
             note: String::new(),
             capturing: None,
             previous_build: None,
+            stopped: None,
         })
     }
 
@@ -258,7 +261,9 @@ impl Journey {
             }
             "place" => {
                 if first {
-                    // Typed into the Assets search box: the new model's card is on screen.
+                    // The Assets tab (it expands the collapsed bottom bar), then typed into
+                    // its search box: the new model's card is on screen.
+                    editor.action("editor.layout.show", json!({"panel": "assets"}))?;
                     editor.action(
                         "editor.search",
                         json!({"panel": "assets", "query": "rock.glb"}),
@@ -283,7 +288,8 @@ impl Journey {
                     self.placed = Some(created);
                     editor.action("editor.search", json!({"panel": "assets", "query": ""}))?;
                     self.note =
-                        "searched Assets for rock.glb, dragged it into the Scene view".into();
+                        "opened Assets, searched for rock.glb, dragged it into the Scene view"
+                            .into();
                 }
                 Ok(self.age > 30)
             }
@@ -336,6 +342,72 @@ impl Journey {
                     self.note = "Create > C# Behaviour (Spinner.cs; outside verification it opens in the IDE)".into();
                 }
                 Ok(settled)
+            }
+            "stop-starting" => {
+                if first {
+                    self.stopped = None;
+                    shell.run_command(editor, "play.start", &Target::None)?;
+                    self.note = "Play, then Stop while it is still starting".into();
+                    return Ok(false);
+                }
+                if self.stopped.is_none() {
+                    if shell.game_live {
+                        return Err("Play went live before Stop could cancel it".into());
+                    }
+                    // The toolbar's Stop: it must be there and enabled while starting.
+                    if shell.shown_node("stop").is_none() {
+                        return Err("the toolbar shows no Stop while Play starts".into());
+                    }
+                    shell.run_command(editor, "play.stop", &Target::None)?;
+                    self.stopped = Some(self.age);
+                    return Ok(false);
+                }
+                let stopped = editor.state.playing.is_none()
+                    && editor.play_world.is_none()
+                    && !shell.game_live
+                    && shell.shown_node("play").is_some();
+                const BACK: &str = "; the start was cancelled and Play is back";
+                if stopped && !self.note.ends_with(BACK) {
+                    self.note.push_str(BACK);
+                }
+                Ok(stopped && settled)
+            }
+            "stop-window" => {
+                if first {
+                    self.stopped = None;
+                    editor.action(
+                        "editor.settings.set",
+                        json!({"key": "play.inGameView", "value": false}),
+                    )?;
+                    shell.run_command(editor, "play.start", &Target::None)?;
+                    self.note =
+                        "Play in a player window (hidden in verification), then Stop".into();
+                    return Ok(false);
+                }
+                if self.stopped.is_none() {
+                    let status = editor.action("play.status", json!({}))?;
+                    let live = status["worlds"].as_array().is_some_and(|worlds| {
+                        worlds.iter().any(|w| {
+                            w["world"].as_str() == editor.play_world.as_deref()
+                                && w["status"] == "running"
+                        })
+                    });
+                    if live {
+                        shell.run_command(editor, "play.stop", &Target::None)?;
+                        self.stopped = Some(self.age);
+                    }
+                    return Ok(false);
+                }
+                const ENDED: &str = "; Stop ended the windowed world";
+                let stopped = editor.state.playing.is_none() && editor.play_world.is_none();
+                if stopped && !self.note.ends_with(ENDED) {
+                    editor.action(
+                        "editor.settings.set",
+                        json!({"key": "play.inGameView", "value": true}),
+                    )?;
+                    self.note.push_str(ENDED);
+                }
+                Ok(stopped && settled)
             }
             "play" => {
                 if first {
@@ -614,6 +686,11 @@ const STEPS: &[(&str, &str)] = &[
         "Run Build: the exported game runs headless for one frame",
     ),
     ("script", "a C# behaviour created in the project's module"),
+    (
+        "stop-starting",
+        "Stop cancels a Play that is still starting; Play comes back",
+    ),
+    ("stop-window", "Play in a player window, then Stop ends it"),
     ("play", "Play inside the Game view, walking with W"),
     ("hot-reload", "the edited script hot-reloads while playing"),
     (
