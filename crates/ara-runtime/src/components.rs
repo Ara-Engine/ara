@@ -40,10 +40,11 @@ pub struct PrimitiveMaterialOverride {
 #[serde(default, rename_all = "camelCase", deny_unknown_fields)]
 pub struct MeshRenderer {
     /// Procedural shape, drawn when `model` is empty.
+    #[ara(editor(show_if(field = "model", empty)))]
     pub shape: MeshShape,
     /// Shape size: box extents, sphere/capsule diameter in x and capsule height in y,
     /// plane extents in x and z.
-    #[ara(default = [1, 1, 1], unit = Meters, range(min = 0.0001))]
+    #[ara(default = [1, 1, 1], unit = Meters, range(min = 0.0001), editor(show_if(field = "model", empty)))]
     pub size: [f32; 3],
     /// Imported model (`@path#id` of a glTF/FBX source). Its meshes are drawn instead
     /// of the shape; skinned meshes follow this entity's Animator.
@@ -53,8 +54,10 @@ pub struct MeshRenderer {
     /// Source node name or numeric glTF index. `name:3` selects a numeric name.
     /// The drawable subtree retains source rotation/scale and restores its pivot
     /// to the entity origin. Absent selects the complete default scene.
+    #[ara(editor(show_if(field = "model", set)))]
     pub node: Option<String>,
     /// Zero-based primitive within the selected subtree (or whole model).
+    #[ara(editor(show_if(field = "model", set)))]
     pub primitive: Option<u32>,
     /// Native material assets by subtree-local primitive slot; omitted slots use the model.
     pub material_overrides: Vec<PrimitiveMaterialOverride>,
@@ -154,13 +157,13 @@ pub struct Light {
     #[ara(default = 800, range(min = 0))]
     pub intensity: f32,
     /// Influence radius of point and spot lights.
-    #[ara(default = 10, unit = Meters, range(min = 0.01))]
+    #[ara(default = 10, unit = Meters, range(min = 0.01), editor(show_if(field = "kind", one_of = ["point", "spot"])))]
     pub range: f32,
     /// Spot inner cone half-angle.
-    #[ara(default = 20, unit = Degrees, range(min = 0, max = 89))]
+    #[ara(default = 20, unit = Degrees, range(min = 0, max = 89), editor(show_if(field = "kind", one_of = ["spot"])))]
     pub inner_angle: f32,
     /// Spot outer cone half-angle.
-    #[ara(default = 30, unit = Degrees, range(min = 0.1, max = 89))]
+    #[ara(default = 30, unit = Degrees, range(min = 0.1, max = 89), editor(show_if(field = "kind", one_of = ["spot"])))]
     pub outer_angle: f32,
 }
 impl Default for Light {
