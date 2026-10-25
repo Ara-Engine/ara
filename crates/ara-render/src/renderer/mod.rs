@@ -350,13 +350,15 @@ impl Renderer {
     /// `exposure` returns): automatic exposure adapts from it at the look's rate
     /// instead of snapping to its first meter, and history pre-exposes with it.
     /// Hosts carry a converged exposure across views (Game preview into Play).
-    /// Capture resets still start from zero and snap.
+    /// Capture resets still start from zero and snap. Inside a deferred Scene
+    /// submission the write is GPU-ordered (`upload_queued`); outside one, call it
+    /// with no frame in flight.
     pub fn seed_exposure(&mut self, multiplier: f32) -> Result<()> {
         ensure!(
             multiplier.is_finite() && multiplier > 0.,
             "Exposure seed must be a finite positive multiplier"
         );
-        self.look.seed_exposure(&self.gpu, multiplier)
+        self.look.seed_exposure(&mut self.gpu, multiplier)
     }
     /// Select the display curve applied after exposure (Lit view only).
     pub fn set_tone_curve(&mut self, curve: post::ToneCurve) {
@@ -486,7 +488,7 @@ impl Renderer {
     /// temporal-only reset instead.
     pub fn reset_capture_history(&mut self) -> Result<()> {
         self.reset_temporal_history();
-        self.look.reset_exposure(&self.gpu)?;
+        self.look.reset_exposure(&mut self.gpu)?;
         self.look.settle = crate::look::gi::CONVERGE_FRAMES;
         // Local shadows start over: which lights a capture shadows must not
         // depend on the lights live frames held.

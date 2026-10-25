@@ -348,8 +348,8 @@ impl LookGpu {
     /// Zeroes the exposure state so a capture converges exactly as from a fresh
     /// view (history then pre-exposes by the frame's exposure argument). Call
     /// only between completed frames.
-    pub(crate) fn reset_exposure(&mut self, gpu: &VulkanDevice) -> Result<()> {
-        gpu.upload(self.state, &[0; STATE_BYTES])?;
+    pub(crate) fn reset_exposure(&mut self, gpu: &mut VulkanDevice) -> Result<()> {
+        gpu.upload_queued(self.state, &[0; STATE_BYTES])?;
         self.state_access = Access::HostWrite;
         self.seeded = false;
         Ok(())
@@ -357,13 +357,13 @@ impl LookGpu {
 
     /// Writes `multiplier` as the applied and previous exposure (EV100 as manual
     /// exposure computes it), with empty metering bins; the next frame adapts from it.
-    pub(crate) fn seed_exposure(&mut self, gpu: &VulkanDevice, multiplier: f32) -> Result<()> {
+    pub(crate) fn seed_exposure(&mut self, gpu: &mut VulkanDevice, multiplier: f32) -> Result<()> {
         let ev100 = (1. / (1.2 * multiplier)).log2();
         let mut bytes = [0u8; STATE_BYTES];
         for (i, value) in [multiplier, multiplier, ev100, 0.].into_iter().enumerate() {
             bytes[i * 4..i * 4 + 4].copy_from_slice(&value.to_le_bytes());
         }
-        gpu.upload(self.state, &bytes)?;
+        gpu.upload_queued(self.state, &bytes)?;
         self.state_access = Access::HostWrite;
         self.seeded = true;
         Ok(())
