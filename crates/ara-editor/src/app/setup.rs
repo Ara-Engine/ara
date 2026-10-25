@@ -41,6 +41,9 @@ pub struct Options {
     /// Replay a new user's first hour on a fresh project (`app/qa.rs`); writes
     /// `first-hour.json` and a capture per step.
     pub verify_first_hour: bool,
+    /// Run the loading window offscreen on the project (`loading`): its real run's
+    /// milestones and every state, in both themes, as PNGs in the output folder.
+    pub verify_loading: bool,
     /// With `verify_responsiveness`: wait for imports to finish and the Scene to show
     /// them, before or after the interactions (`ara-dev d26` measures both).
     pub settle: Option<Settle>,
@@ -66,6 +69,7 @@ impl Options {
             || self.verify_journey
             || self.verify_responsiveness
             || self.verify_first_hour
+            || self.verify_loading
             || self.headless
     }
 
@@ -111,6 +115,7 @@ impl Default for Options {
             play: false,
             verify_journey: false,
             verify_first_hour: false,
+            verify_loading: false,
             verify_responsiveness: false,
             settle: None,
         }

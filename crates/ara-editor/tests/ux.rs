@@ -714,27 +714,45 @@ fn assets_show_folders_then_files_hide_noise_and_search_everywhere() {
             .filter_map(|n| n.text.as_ref().map(|t| t.value.clone()))
             .collect()
     };
+    // Tiles show names without extensions; the tooltip starts with the file name.
+    let files = |shell: &Shell| -> Vec<String> {
+        shell
+            .ui
+            .nodes
+            .iter()
+            .filter(|n| {
+                n.element
+                    .id
+                    .strip_prefix("asset-card-")
+                    .is_some_and(|rest| rest.chars().all(|c| c.is_ascii_digit()))
+            })
+            .filter_map(|n| n.element.attrs.get("description"))
+            .filter_map(|d| d.split(" · ").next().map(str::to_owned))
+            .collect()
+    };
     // Root: the folders, then root files; notes and glTF buffers stay hidden.
     let root = names(&shell);
     assert!(
         root.contains(&"models".to_owned()) && root.contains(&"textures".to_owned()),
         "{root:?}"
     );
+    let root_files = files(&shell);
     assert!(
-        !root
+        !root_files
             .iter()
             .any(|n| n.ends_with(".md") || n.ends_with(".bin")),
-        "{root:?}"
+        "{root_files:?}"
     );
     editor
         .action("editor.workspace", json!({"folder":"models"}))
         .unwrap();
     shell.rebuild(&mut editor).unwrap();
-    assert_eq!(names(&shell), ["crate.gltf"]);
+    assert_eq!(names(&shell), ["crate"]);
+    assert_eq!(files(&shell), ["crate.gltf"]);
     shell
         .run_command(&mut editor, "assets.show_all", &Default::default())
         .unwrap();
-    assert!(names(&shell).contains(&"crate.bin".to_owned()));
+    assert!(files(&shell).contains(&"crate.bin".to_owned()));
     // A type filter searches every folder.
     editor
         .action(
@@ -743,7 +761,7 @@ fn assets_show_folders_then_files_hide_noise_and_search_everywhere() {
         )
         .unwrap();
     shell.rebuild(&mut editor).unwrap();
-    assert_eq!(names(&shell), ["albedo.png"]);
+    assert_eq!(names(&shell), ["albedo"]);
 
     // The memoized panel follows each of its inputs: under ARA_EDITOR_MEMO_CHECK=1
     // (every `cargo test`) a rebuild that reuses markup an input made stale fails.
@@ -768,11 +786,11 @@ fn assets_show_folders_then_files_hide_noise_and_search_everywhere() {
     shell
         .run_command(&mut editor, "assets.show_all", &Default::default())
         .unwrap();
-    assert!(!names(&shell).contains(&"crate.bin".to_owned()));
+    assert!(!files(&shell).contains(&"crate.bin".to_owned()));
     // A file that appears on disk shows up once the browser rescans.
     std::fs::write(project.0.join("models/barrel.gltf"), "{}").unwrap();
     let start = std::time::Instant::now();
-    while !names(&shell).contains(&"barrel.gltf".to_owned()) {
+    while !files(&shell).contains(&"barrel.gltf".to_owned()) {
         assert!(
             start.elapsed().as_secs() < 10,
             "the new file never appeared"

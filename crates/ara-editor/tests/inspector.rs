@@ -100,7 +100,7 @@ impl ara_ui_text::Clipboard for MemoryClipboard {
         Ok(())
     }
 }
-/// The Assets card showing `name`.
+/// The Assets card showing `name` (tiles show names without their extension).
 fn card(shell: &Shell, name: &str) -> String {
     shell
         .ui
@@ -210,7 +210,7 @@ fn the_pick_button_fills_an_asset_field_from_assets() {
     shell.dispatch(&mut editor).unwrap();
     // Picking shows under the field until an asset is picked.
     assert!(shell.ui.find("picking-MeshRenderer-model").is_some());
-    let card = card(&shell, "crate.gltf");
+    let card = card(&shell, "crate");
     shell.click(&card, &mut clip).unwrap();
     shell.dispatch(&mut editor).unwrap();
     assert_eq!(model(&editor), "@models/crate.gltf#as_crate0001");
@@ -224,11 +224,11 @@ fn picks_that_cannot_fill_a_field_say_why_and_picking_goes_on() {
     let mut clip = MemoryClipboard::default();
     shell.click("pick-MeshRenderer-model", &mut clip).unwrap();
     shell.dispatch(&mut editor).unwrap();
-    for (file, why) in [
-        ("rock.png", "Model takes a glTF or FBX model, not rock.png"),
-        ("barrel.gltf", "barrel.gltf has no asset ID yet"),
+    for (name, why) in [
+        ("rock", "Model takes a glTF or FBX model, not rock.png"),
+        ("barrel", "barrel.gltf has no asset ID yet"),
     ] {
-        let card = card(&shell, file);
+        let card = card(&shell, name);
         shell.click(&card, &mut clip).unwrap();
         shell.dispatch(&mut editor).unwrap();
         assert_eq!(model(&editor), Value::Null);
@@ -246,13 +246,13 @@ fn picks_that_cannot_fill_a_field_say_why_and_picking_goes_on() {
 fn dropping_an_asset_from_assets_fills_the_field() {
     let project = Project::new();
     let (mut editor, mut shell) = project.open();
-    shell.pointer = centre(&shell, &card(&shell, "crate.gltf"));
+    shell.pointer = centre(&shell, &card(&shell, "crate"));
     shell.begin_drag();
     shell.pointer = centre(&shell, "asset-field-MeshRenderer-model");
     assert!(shell.drop_at(&mut editor).unwrap());
     assert_eq!(model(&editor), "@models/crate.gltf#as_crate0001");
     // A texture dropped on the model field is refused, with the reason.
-    shell.pointer = centre(&shell, &card(&shell, "rock.png"));
+    shell.pointer = centre(&shell, &card(&shell, "rock"));
     shell.begin_drag();
     shell.pointer = centre(&shell, "asset-field-MeshRenderer-model");
     assert!(shell.drop_at(&mut editor).is_err());
@@ -292,7 +292,7 @@ fn clicking_an_asset_in_assets_selects_it() {
     let project = Project::new();
     let (mut editor, mut shell) = project.open();
     let mut clip = MemoryClipboard::default();
-    let card = card(&shell, "crate.gltf");
+    let card = card(&shell, "crate");
     shell.click(&card, &mut clip).unwrap();
     shell.dispatch(&mut editor).unwrap();
     assert_eq!(

@@ -1,9 +1,15 @@
 //! Folder projection, bounded thumbnail cards and import/dependency inspection.
+//!
+//! Tiles follow UE's Content Browser and Unity's Project window: one box per asset (so
+//! rows align), a 64 px thumbnail and the name without its extension centred under it
+//! on at most two lines; the type shows as the icon (no thumbnail) or a corner badge,
+//! and the full file name in the tooltip. Files come in by drag and drop or the
+//! context menu's Import.
 use super::*;
 impl Shell {
     /// A digest of everything [`assets_panel`](Self::assets_panel) reads: the files,
     /// the folder, search, view mode and selection, density, thumbnails, import progress,
-    /// the content's size and scroll, Show All and the keymap (the Import shortcut).
+    /// the content's size and scroll, Show All and the keymap.
     pub(super) fn assets_key(&self, editor: &Editor) -> u64 {
         let content = self.ui.find("assets-content").map(|i| {
             let rect = self.ui.nodes[i].rect;
@@ -37,27 +43,8 @@ impl Shell {
             .find("assets-content")
             .map(|i| self.ui.nodes[i].rect.w)
             .unwrap_or(self.ui.size[0]);
-        // Narrow docks show Import as an icon and drop the breadcrumb and folder column.
+        // Narrow docks drop the breadcrumb and the folder column.
         let narrow = content < 420.;
-        if narrow {
-            self.tool_icon(
-                out,
-                "asset-import",
-                "assets.import",
-                "file-plus",
-                editor,
-                false,
-            );
-        } else {
-            self.tool_text(
-                out,
-                "asset-import",
-                "assets.import",
-                "file-plus",
-                "Import",
-                "ghost",
-            );
-        }
         let folder = editor.state.asset_folder.clone();
         if !narrow {
             self.bindings.insert(
@@ -218,7 +205,18 @@ impl Shell {
         self.asset_entries.clear();
         for asset in &items {
             let key = ara_ui::source::stable_id(&asset.path);
-            self.asset_rows.items.push((key, asset.path.clone()));
+            // Searches span folders: the list says where each result lives.
+            let detail = if searching {
+                asset
+                    .path
+                    .rsplit_once('/')
+                    .map_or("Project", |(f, _)| f)
+                    .to_owned()
+            } else {
+                names::kind_label(asset).to_owned()
+            };
+            let name = names::stem(names::file_name(&asset.path)).to_owned();
+            self.asset_rows.items.push((key, name, detail));
             self.asset_entries.insert(key, asset.clone());
         }
         if items.is_empty() {
@@ -232,24 +230,42 @@ impl Shell {
                     "No matching assets"
                 },
                 if query.is_empty() {
-                    "Import files, or drop them into this folder from your file manager."
+                    "Drop files here from your file manager, or right-click to import."
                 } else {
                     "Try type:mesh, type:texture or type:material."
                 },
-                &[
-                    ("assets-empty-import", "Import…", "assets.import"),
-                    (
-                        "assets-empty-material",
-                        "New material",
-                        "assets.create.material",
-                    ),
-                ],
+                &[(
+                    "assets-empty-material",
+                    "New material",
+                    "assets.create.material",
+                )],
             );
             out.push_str("</panel>");
             self.asset_footer(out, items.len(), editor);
             return;
         }
         if !editor.state.asset_grid {
+            // Names (and searched folders) end in "…" at their column, not mid-glyph:
+            // the same columns `Shell::mount_rows` gives the row pool.
+            let width = self
+                .ui
+                .find("asset-rows")
+                .map_or(content - side, |i| self.ui.nodes[i].rect.w)
+                .max(120.)
+                - 8.;
+            let detail = names::detail_width(width);
+            for (_, name, folder) in &mut self.asset_rows.items {
+                *name = self
+                    .name_fit
+                    .lines(&mut self.text, name, width - detail - 34., 12., 1)[0]
+                    .clone();
+                if searching {
+                    *folder = self
+                        .name_fit
+                        .lines(&mut self.text, folder, detail - 10., 11., 1)[0]
+                        .clone();
+                }
+            }
             // The row height is in the markup: a density change remounts the row pool.
             let row = if editor.state.comfortable() { 26 } else { 22 };
             out.push_str(&format!(
@@ -269,16 +285,19 @@ impl Shell {
             .map(|i| self.ui.nodes[i].rect.h)
             .unwrap_or(190.);
         self.asset_grid_size = [width, height];
-        // Short drawers keep filenames visible beside the thumbnail.
-        let compact = height < 124.;
-        let (card_width, card_height, thumbnail) = if compact {
-            (168., 64., 48.)
+        // Short drawers put the name beside a smaller thumbnail.
+        let compact = height < TILE[1] + 16.;
+        let ([card_width, card_height], thumbnail) = if compact {
+            (SIDE_TILE, 48.)
         } else {
-            (92., 104., 64.)
+            (TILE, 64.)
         };
-        let column_step = card_width + 8.;
-        let row_step = card_height + 8.;
-        let columns = ((width - 16.) / column_step).floor().max(1.) as usize;
+        let column_step = card_width + GAP;
+        let row_step = card_height + GAP;
+        let columns = ((width - GAP) / column_step).floor().max(1.) as usize;
+        // The columns are centred: the space a partial column would take is shared by
+        // both sides instead of piling up on the right.
+        let left = ((width - columns as f32 * column_step + GAP) * 0.5).max(GAP);
         self.asset_grid_extent = items.len().div_ceil(columns) as f32 * row_step;
         self.asset_offset = self
             .asset_offset
@@ -290,6 +309,17 @@ impl Shell {
         // scroll is a translation (ARA4014 rejects negative lengths, FINDINGS #18).
         let scroll = self.asset_offset - first_row as f32 * row_step;
         out.push_str(&format!("<panel id='asset-grid' style='flex-grow:1;flex-basis:0px;overflow:hidden'><panel id='asset-grid-rows' style='position:absolute;left:0px;top:0px;width:100%;height:100%;translate-y:-{scroll}px'>"));
+        // Where the thumbnail sits in its card (badges hang off its corners).
+        let thumb = if compact {
+            [8., (card_height - thumbnail) * 0.5]
+        } else {
+            [(card_width - thumbnail) * 0.5, 6.]
+        };
+        let caption = if compact {
+            card_width - thumbnail - 24.
+        } else {
+            card_width - 12.
+        };
         for (n, asset) in items.iter().enumerate().skip(first).take(count) {
             let id = format!("asset-card-{n}");
             self.bindings.insert(
@@ -300,43 +330,62 @@ impl Shell {
                     Binding::Asset(asset.clone())
                 },
             );
-            out.push_str(&format!("<button id='{id}' class='asset-card {}' style='position:absolute;left:{}px;top:{}px;width:{card_width}px;height:{card_height}px;flex-direction:{}' label='{}' description='{}' action='Dispatch'>",if editor.state.asset_path.as_deref()==Some(&asset.path){"asset-selected"}else{""},8.+(n%columns) as f32*column_step,8.+(n/columns-first_row) as f32*row_step,if compact{"row"}else{"column"},escape(&asset.path),escape(&asset.path)));
-            self.asset_thumbnail(asset, out, &id, thumbnail);
-            // Importing and failed assets carry a badge and say so under their name.
-            let import = self.imports.of(asset);
-            let kind = match &import {
-                Some(imports::Import::Pending) => "Importing…",
-                Some(imports::Import::Failed(_)) => "Import failed",
-                None => asset.domain.as_deref().unwrap_or(&asset.kind),
-            };
-            if let Some(import) = &import {
-                let (icon, tint, why) = match import {
-                    imports::Import::Pending => ("loader-circle", "accent", "Importing"),
-                    imports::Import::Failed(error) => ("triangle-alert", "warning", *error),
-                };
-                out.push_str(&format!("<panel id='{id}-import' class='import-badge' style='left:{}px;top:6px' description='{}'>{}</panel>",if compact{thumbnail-16.}else{(card_width+thumbnail)*0.5-20.},escape(why),icons::icon_in(&format!("{id}-import"),icon,&format!("icon-sm {tint}"))));
-            }
-            if compact {
-                out.push_str(&format!("<panel id='{id}-caption' style='flex-grow:1;flex-basis:0px;min-width:0px;gap:3px'>"));
-            }
-            let color = match asset.kind.as_str() {
-                "glb" | "gltf" | "fbx" => "chart-1",
-                "png" | "jpg" | "jpeg" | "hdr" | "exr" => "chart-2",
-                "graph" | "material" => match asset.domain.as_deref() {
-                    Some("vfx") => "chart-5",
-                    _ => "chart-3",
-                },
-                "scene" | "prefab" => "chart-4",
-                "animation" => "chart-6",
-                _ => "muted-foreground",
-            };
-            out.push_str(&format!("<panel id='{id}-bar' class='type-bar' style='width:{}px;background:var(--{color})' />",if compact{40.}else{thumbnail}));
             let selected = editor.state.asset_path.as_deref() == Some(&asset.path);
-            out.push_str(&format!("<text id='{id}-name' style='width:{}px;font-size:11px;overflow:hidden' class='{}' text='{}' /><text id='{id}-kind' class='{}' style='font-size:10px' text='{}' />",card_width-8.,if selected{"on-selection"}else{"fg"},escape(asset.path.rsplit('/').next().unwrap_or(&asset.path)),if selected{"on-selection"}else if matches!(import,Some(imports::Import::Failed(_))){"warning"}else{"caption"},escape(kind)));
-            if compact {
-                out.push_str("</panel>");
+            let file = names::file_name(&asset.path);
+            // Importing or failed: the tooltip's note, the badge's icon, tint and reason.
+            let import = self.imports.of(asset).map(|import| match import {
+                imports::Import::Pending => (
+                    " · importing",
+                    "loader-circle",
+                    "accent",
+                    "Importing".to_owned(),
+                ),
+                imports::Import::Failed(error) => (
+                    " · import failed",
+                    "triangle-alert",
+                    "warning",
+                    error.to_owned(),
+                ),
+            });
+            let state = import.as_ref().map_or("", |i| i.0);
+            // The tooltip carries what the tile leaves out: the extension and the type.
+            let tip = format!("{file} · {}{state}", names::kind_label(asset));
+            out.push_str(&format!("<button id='{id}' class='{}' style='position:absolute;left:{}px;top:{}px;width:{card_width}px;height:{card_height}px' label='{}' description='{}' action='Dispatch'>",match (compact,selected){(true,true)=>"asset-card asset-card-side asset-selected",(true,false)=>"asset-card asset-card-side",(false,true)=>"asset-card asset-selected",(false,false)=>"asset-card"},left+(n%columns) as f32*column_step,GAP+(n/columns-first_row) as f32*row_step,escape(names::stem(file)),escape(&tip)));
+            let shown = self.asset_thumbnail(asset, out, &id, thumbnail);
+            // A thumbnail shows the asset, not its type: a corner badge does.
+            if shown {
+                out.push_str(&format!("<panel id='{id}-type' class='type-badge' style='left:{}px;top:{}px'>{}</panel>",thumb[0]+thumbnail-14.,thumb[1]+thumbnail-14.,icons::icon_in(&format!("{id}-type"),asset_icon(asset),&format!("icon-xs {}",names::kind_color(asset)))));
             }
-            out.push_str("</button>");
+            // Importing and failed assets carry a badge on the thumbnail's top corner.
+            if let Some((_, icon, tint, why)) = &import {
+                out.push_str(&format!("<panel id='{id}-import' class='import-badge' style='left:{}px;top:{}px' description='{}'>{}</panel>",thumb[0]+thumbnail-14.,thumb[1]-4.,escape(why),icons::icon_in(&format!("{id}-import"),icon,&format!("icon-sm {tint}"))));
+            }
+            let lines = self
+                .name_fit
+                .lines(&mut self.text, names::stem(file), caption, 11., 2)
+                .to_vec();
+            out.push_str(&format!(
+                "<panel id='{id}-label' class='{}'>",
+                if compact {
+                    "asset-label-side"
+                } else {
+                    "asset-label"
+                }
+            ));
+            // `{card}-name` is the first line (what tests and routes look up).
+            for (l, line) in lines.iter().enumerate() {
+                let line_id = if l == 0 {
+                    format!("{id}-name")
+                } else {
+                    format!("{id}-name-{}", l + 1)
+                };
+                out.push_str(&format!(
+                    "<text id='{line_id}' class='asset-name {}' text='{}' />",
+                    if selected { "on-selection" } else { "fg" },
+                    escape(line)
+                ));
+            }
+            out.push_str("</panel></button>");
         }
         out.push_str("</panel></panel></panel>");
         self.asset_footer(out, items.len(), editor);
@@ -344,18 +393,21 @@ impl Shell {
     fn asset_footer(&mut self, out: &mut String, count: usize, editor: &Editor) {
         out.push_str(&format!("<panel id='assets-footer' class='footer'><text id='assets-count' text='{count} item{}{}' /></panel>",if count==1{""}else{"s"},if editor.state.asset_path.is_some(){" · 1 selected"}else{""}));
     }
+    /// The asset's thumbnail, or its type icon on a quiet square until one exists (or
+    /// when it has none); true when the thumbnail image is shown.
     pub(super) fn asset_thumbnail(
         &mut self,
         asset: &assets::Asset,
         out: &mut String,
         id: &str,
         size: f32,
-    ) {
+    ) -> bool {
         if let Some(slot) = self.thumbnail_slots.get(&asset.path) {
             out.push_str(&format!(
                 "<image id='{id}-thumbnail' src='{}' style='width:{size}px;height:{size}px' />",
                 crate::asset_tools::thumbnails::image_name(*slot)
             ));
+            true
         } else {
             if !asset.path.starts_with("live:")
                 && matches!(
@@ -374,7 +426,8 @@ impl Shell {
             {
                 self.thumbnails.request(&asset.path);
             }
-            out.push_str(&format!("<panel id='{id}-placeholder' style='width:{size}px;height:{size}px;align-items:center;justify-content:center;background:var(--background);border-radius:var(--radius-sm)'>{}</panel>",icons::icon_in(id,asset_icon(asset),"icon-lg")));
+            out.push_str(&format!("<panel id='{id}-placeholder' class='asset-placeholder' style='width:{size}px;height:{size}px'>{}</panel>",icons::icon_in(id,asset_icon(asset),&format!("icon-lg {}",names::kind_color(asset)))));
+            false
         }
     }
 }
@@ -444,6 +497,11 @@ pub(super) fn is_noise(asset: &assets::Asset) -> bool {
             | "gitattributes"
     )
 }
+/// Grid tile size: a 64 px thumbnail and two caption lines; and the short-drawer tile
+/// (48 px thumbnail, the name beside it). Tiles are `GAP` apart.
+const TILE: [f32; 2] = [96., 116.];
+const SIDE_TILE: [f32; 2] = [184., 64.];
+const GAP: f32 = 8.;
 /// The type chips above the asset grid: label and the `type:` query each sets.
 pub(super) const TYPE_CHIPS: &[(&str, &str)] = &[
     ("Models", "mesh"),

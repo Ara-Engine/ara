@@ -2,7 +2,7 @@ use anyhow::Result;
 use std::{fs, io::Write, path::Path};
 use zip::{CompressionMethod, ZipWriter, write::SimpleFileOptions};
 
-/// Stable sorted file order and ZIP timestamps; no PDB enters the engine ZIP.
+/// Stable sorted file order and ZIP timestamps; callers select the payload files.
 pub fn zip(source: &Path, destination: &Path) -> Result<()> {
     let mut archive = ZipWriter::new(fs::File::create(destination)?);
     let options = SimpleFileOptions::default()
