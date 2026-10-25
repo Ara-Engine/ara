@@ -16,7 +16,7 @@ use ara_render::look::{AmbientOcclusion, FarShadows, LocalShadows, Quality, Refl
 /// High GPU <= 6 ms, Medium <= 3.5, Epic <= 10).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum QualityPreset {
-    /// Raster: 0.45 render scale, two 512 shadow cascades, probe GI, coarse LODs,
+    /// Raster: 0.45 render scale, two 512 shadow cascades, probe GI, coarser LODs,
     /// no bloom (the cheapest look).
     Low,
     /// Raster: 0.55 render scale, three cascades and bloom. Ray traced: ReSTIR at
@@ -300,8 +300,8 @@ impl QualityPreset {
             })
         };
         match self {
-            // LOD error and the cull size are in render pixels (two display
-            // pixels at Low's scale).
+            // LOD error and the cull size are in render pixels (about two
+            // display pixels each at Low's scale).
             Self::Low => Quality {
                 shadows: shadows(2, 512, 60., (1024, 600.)),
                 ambient_occlusion: None,
@@ -309,8 +309,8 @@ impl QualityPreset {
                 gi_budget: 256,
                 bloom: false,
                 emitter_lights: 4,
-                lod_pixels: 8.,
-                min_pixels: 8.,
+                lod_pixels: 6.,
+                min_pixels: 6.,
                 terrain_detail: 0.,
                 local_shadows: None,
             },
