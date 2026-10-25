@@ -69,11 +69,26 @@ impl Pose {
     }
 
     /// Presentation interpolation: lerped translation/scale, shortest-arc slerp.
+    /// Unchanged parts stay exact: lerp and slerp between equal values return
+    /// them with last-bit noise that varies with `t`, which made static lights
+    /// and their shadows shimmer and static instances read as moved in Play.
     pub fn lerp(self, to: Self, t: f32) -> Self {
         Self {
-            translation: self.translation.lerp(to.translation, t),
-            rotation: self.rotation.slerp(to.rotation, t),
-            scale: self.scale.lerp(to.scale, t),
+            translation: if self.translation == to.translation {
+                to.translation
+            } else {
+                self.translation.lerp(to.translation, t)
+            },
+            rotation: if self.rotation == to.rotation {
+                to.rotation
+            } else {
+                self.rotation.slerp(to.rotation, t)
+            },
+            scale: if self.scale == to.scale {
+                to.scale
+            } else {
+                self.scale.lerp(to.scale, t)
+            },
         }
     }
 
@@ -139,5 +154,24 @@ mod tests {
         assert_ne!(stable_id("e_0001"), stable_id("e_0002"));
         // Yaw 90 turns +Z toward +X.
         assert!((yaw_rotation(90.0) * Vec3::Z).abs_diff_eq(Vec3::X, 1e-6));
+    }
+
+    #[test]
+    fn an_unmoved_pose_interpolates_exactly_at_every_phase() {
+        let pose = Pose::from_transform(&Transform {
+            position: [96.0, 40.0, 96.0],
+            rotation: [-10.969784, -68.47948, -10.221746],
+            scale: [1.0; 3],
+        });
+        for i in 0..64 {
+            let at = pose.lerp(pose, i as f32 / 63.0);
+            assert_eq!(
+                at.rotation.to_array(),
+                pose.rotation.to_array(),
+                "phase {i}"
+            );
+            assert_eq!(at.translation, pose.translation);
+            assert_eq!(at.scale, pose.scale);
+        }
     }
 }

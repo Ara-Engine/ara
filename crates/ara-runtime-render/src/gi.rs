@@ -608,25 +608,39 @@ fn bake_shading(prepared: &mut native::Prepared) -> Vec<crate::gi_cpu::Shading> 
     shading
 }
 
-/// Bakes the probe surfaces of `frame`'s content on a ray-tracing device.
-/// Each material's diffuse albedo (metal removed) and emissive radiance for the
-/// CPU bake: factors times the mean texel of their maps; terrain splats average
-/// their layer materials.
+/// Per-material diffuse albedo, emission and cutout for the CPU bake, from the
+/// materials' factors and their maps' CPU means (terrain splats average their
+/// layers here; the tracer blends them per hit).
 pub(crate) fn shading(prepared: &native::Prepared) -> Vec<crate::gi_cpu::Shading> {
+    shade(prepared, true)
+}
+
+/// Emission only (albedo and cutout left zero): what the emitter search snapshots
+/// on the render thread, without decoding colour or alpha maps.
+pub(crate) fn emission(prepared: &native::Prepared) -> Vec<crate::gi_cpu::Shading> {
+    shade(prepared, false)
+}
+
+/// [`shading`] (`surface`) or [`emission`]. Each map's mean and each cutout's
+/// coverage is decoded once per call, however many materials share the map.
+fn shade(prepared: &native::Prepared, surface: bool) -> Vec<crate::gi_cpu::Shading> {
     use ara_render::{
         instanced::NO_TEXTURE,
         scene::{BASE_COLOR_DECODE_SRGB, EMISSIVE_DECODE_SRGB},
     };
     use glam30::Vec3;
-    let missing = std::cell::Cell::new(0usize);
+    let mut missing = 0usize;
+    let mut means = HashMap::new();
     // `decode`: the material decodes this raw map's sRGB itself (graph views).
-    let mean = |id: u32, decode: bool| {
+    let mut mean = |id: u32, decode: bool| {
         if id == NO_TEXTURE {
             return [1.; 4];
         }
-        prepared.textures.mean_texel(id, decode).unwrap_or_else(|| {
-            missing.set(missing.get() + 1);
-            [1.; 4]
+        *means.entry((id, decode)).or_insert_with(|| {
+            prepared.textures.mean_texel(id, decode).unwrap_or_else(|| {
+                missing += 1;
+                [1.; 4]
+            })
         })
     };
     // Share of rays an alpha-tested (mode 1) or blended (mode 2) material lets
@@ -634,28 +648,32 @@ pub(crate) fn shading(prepared: &native::Prepared) -> Vec<crate::gi_cpu::Shading
     // over the base colour's texels at up to CUTOUT_SIDE a side, where thin
     // features (fence wire) still hold their coverage.
     const CUTOUT_SIDE: u32 = 256;
-    let cutout = |m: &ara_render::instanced::Material| {
+    let mut cutouts = HashMap::new();
+    let mut cutout = |m: &ara_render::instanced::Material| {
         let (mode, alpha, cutoff) = (m.pbr.flags[0], m.pbr.base_color[3], m.pbr.surface[3]);
         if mode == 0 {
             return 0.;
         }
-        let alphas: Vec<f32> = match m.pbr.textures[0] {
-            NO_TEXTURE => vec![alpha],
-            id => prepared
-                .textures
-                .texels(id, CUTOUT_SIDE, false)
-                .map_or_else(
-                    || vec![alpha],
-                    |(_, t)| t.iter().map(|t| alpha * t[3]).collect(),
-                ),
-        };
-        let n = alphas.len().max(1) as f32;
-        let kept = if mode == 1 {
-            alphas.iter().filter(|&&a| a >= cutoff).count() as f32 / n
-        } else {
-            alphas.iter().sum::<f32>() / n
-        };
-        (1. - kept).clamp(0., 1.)
+        let key = (m.pbr.textures[0], mode, alpha.to_bits(), cutoff.to_bits());
+        *cutouts.entry(key).or_insert_with(|| {
+            let alphas: Vec<f32> = match m.pbr.textures[0] {
+                NO_TEXTURE => vec![alpha],
+                id => prepared
+                    .textures
+                    .texels(id, CUTOUT_SIDE, false)
+                    .map_or_else(
+                        || vec![alpha],
+                        |(_, t)| t.iter().map(|t| alpha * t[3]).collect(),
+                    ),
+            };
+            let n = alphas.len().max(1) as f32;
+            let kept = if mode == 1 {
+                alphas.iter().filter(|&&a| a >= cutoff).count() as f32 / n
+            } else {
+                alphas.iter().sum::<f32>() / n
+            };
+            (1. - kept).clamp(0., 1.)
+        })
     };
     let materials = &prepared.scene.materials;
     let own: Vec<_> = materials
@@ -663,21 +681,27 @@ pub(crate) fn shading(prepared: &native::Prepared) -> Vec<crate::gi_cpu::Shading
         .map(|m| {
             let (c, e) = (m.pbr.base_color, m.pbr.emissive_roughness);
             let decode = |bit: u32| m.pbr.flags[1] & bit != 0;
-            let t = mean(m.pbr.textures[0], decode(BASE_COLOR_DECODE_SRGB));
             let et = mean(m.pbr.textures[3], decode(EMISSIVE_DECODE_SRGB));
+            let emissive = Vec3::new(e[0] * et[0], e[1] * et[1], e[2] * et[2]);
+            if !surface {
+                return crate::gi_cpu::Shading {
+                    emissive,
+                    ..Default::default()
+                };
+            }
+            let t = mean(m.pbr.textures[0], decode(BASE_COLOR_DECODE_SRGB));
             // glTF metalness lives in the blue channel of the metal/roughness map.
             let metal = (m.pbr.surface[0] * mean(m.pbr.textures[2], false)[2]).clamp(0., 1.);
             crate::gi_cpu::Shading {
                 albedo: Vec3::new(c[0] * t[0], c[1] * t[1], c[2] * t[2]) * (1. - metal),
-                emissive: Vec3::new(e[0] * et[0], e[1] * et[1], e[2] * et[2]),
+                emissive,
                 cutout: cutout(m),
             }
         })
         .collect();
-    if missing.get() > 0 {
+    if missing > 0 {
         eprintln!(
-            "ara-runtime-render: CPU probe bake: {} maps have no CPU mean (taken as white)",
-            missing.get()
+            "ara-runtime-render: CPU probe bake: {missing} maps have no CPU mean (taken as white)"
         );
     }
     materials
@@ -703,6 +727,7 @@ pub(crate) fn shading(prepared: &native::Prepared) -> Vec<crate::gi_cpu::Shading
         .collect()
 }
 
+/// Bakes the probe surfaces of `frame`'s content on a ray-tracing device.
 fn bake(
     gpu: &mut VulkanDevice,
     frame: &RenderFrame,
@@ -838,6 +863,59 @@ mod tests {
             draw(2, [2., 3., 2.], [x, 1.5, 0.]),
         ];
         native::prepare(&frame, Content::default(), config())
+    }
+
+    /// A constant BC4 map (red `value`/255) registered in `prepared`'s residency.
+    fn constant_map(prepared: &mut native::Prepared, value: u8) -> Result<u32> {
+        use ara_asset_format::{TextureFormat, write_ktx2};
+        let mut level = vec![0u8; 4 * 8];
+        for block in level.as_chunks_mut::<8>().0 {
+            block[..2].fill(value);
+        }
+        let ktx2 = write_ktx2(8, 8, TextureFormat::Bc4, &[level])?;
+        let source = ara_texture_stream::NativeSource::from_cooked(ktx2.into())?;
+        Ok(prepared
+            .textures
+            .register([value; 32], std::sync::Arc::new(source))?
+            .index())
+    }
+
+    #[test]
+    fn emission_is_shadings_emission_without_its_surface() -> Result<()> {
+        use ara_render::{instanced::NO_TEXTURE, scene::EMISSIVE_DECODE_SRGB};
+        let mut prepared = yard(0.)?;
+        // One emissive map read raw, then by a material that decodes its sRGB
+        // itself (a graph view), and a terrain splat layering those two.
+        let map = constant_map(&mut prepared, 200)?;
+        let base = prepared.scene.materials[0];
+        let emitting = |decode: bool| {
+            let mut m = base;
+            m.pbr.textures[3] = map;
+            m.pbr.emissive_roughness[..3].copy_from_slice(&[4., 2., 1.]);
+            m.pbr.flags[1] = if decode { EMISSIVE_DECODE_SRGB } else { 0 };
+            m
+        };
+        let first = prepared.scene.materials.len();
+        let mut terrain = base;
+        terrain.extras.terrain_layers = 2;
+        terrain.extras.layer_materials = [first as u32, first as u32 + 1, NO_TEXTURE, NO_TEXTURE];
+        prepared
+            .scene
+            .materials
+            .extend([emitting(false), emitting(true), terrain]);
+        let (full, emitted) = (shading(&prepared), emission(&prepared));
+        assert_eq!(full.len(), emitted.len());
+        for (f, e) in full.iter().zip(&emitted) {
+            assert_eq!(f.emissive, e.emissive);
+            assert_eq!((e.albedo, e.cutout), (glam30::Vec3::ZERO, 0.));
+        }
+        assert!(full.iter().any(|f| f.albedo != glam30::Vec3::ZERO));
+        let [raw, decoded, splat] = [first, first + 1, first + 2].map(|i| emitted[i].emissive.x);
+        let linear = ((200. / 255. + 0.055) / 1.055f32).powf(2.4);
+        assert!((raw - 4. * 200. / 255.).abs() < 1e-3, "{raw}");
+        assert!((decoded - 4. * linear).abs() < 1e-3, "{decoded}");
+        assert!((splat - (raw + decoded) / 2.).abs() < 1e-4, "{splat}");
+        Ok(())
     }
 
     fn probe(s: &ProbeSurfaces, id: usize) -> (&[[u32; 4]], &[[f32; 4]]) {

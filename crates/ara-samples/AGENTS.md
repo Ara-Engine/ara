@@ -62,7 +62,9 @@ captures leave tracked sample evidence unchanged.
   (linear radiance RMSE, sRGB RMSE, LDR FLIP). `ARA_CAPTURE_SHOTS=a,b` limits shots,
   `ARA_CAPTURE_SIGNALS=1` dumps direct/incident/radiance signals to scratch,
   `ARA_CAPTURE_SCORED=1` saves each raster frame FLIP scored (`*-scored.png`, at the
-  reference's exposure).
+  reference's exposure). `ARA_CAPTURE_LIVE=N` saves every 4th of N live raster
+  frames as Play shows them (no capture reset), walking (`ARA_CAPTURE_MOTION`) or
+  dollying (`ARA_CAPTURE_DOLLY=<m/s>`); `ARA_CAPTURE_VIEW=albedo|normals|cascades|material`.
 - `ARA_CAPTURE_AUTHORED_ONLY=1` keeps look cameras/ticks but disables temporary
   environment, material and effect overrides for matched four-path evidence.
 - Outpost's exterior uses one world space in metres: terrain and resident chunks span `[-96, 288]` on X/Z around the compound at `(96, 96)`, and props, roads, foliage exclusions, world-space nav bounds and look poses use those same coordinates with parent/prefab transforms applied once.
