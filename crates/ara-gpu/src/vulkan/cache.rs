@@ -53,6 +53,8 @@ mod tests {
             geometry_shader: false,
             hdr_metadata: false,
             buffer_int64_atomics: false,
+            shader_integer_dot_product: false,
+            packed_integer_dot_accelerated: false,
             name: String::new(),
             vendor_id: 1,
             device_id: 2,

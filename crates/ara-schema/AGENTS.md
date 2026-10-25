@@ -60,6 +60,11 @@ Independent of bevy_ecs; depends on ara-diag and ara-json.
   `reflect.rs` the single definition of both directions.
 - `options` on enum-typed fields in reflection.json is derived output and is
   ignored on import.
+- `editor.showIf` (`#[ara(editor(show_if(field = "model", set)))]`, `empty`, or
+  `one_of = ["spot"]`) shows a field only while a sibling matches;
+  `EditorHints::shows` is the one rule (the Inspector uses it). Presentation only:
+  hidden fields keep their values and stay settable. `verify` rejects missing or
+  conditional siblings, `set`/`empty` on never-empty types and unknown variants.
 
 ## Testing
 

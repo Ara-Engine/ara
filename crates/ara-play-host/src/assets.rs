@@ -34,10 +34,14 @@ pub type ImportDoc = (String, String, ara_doc::Record);
 pub fn import_docs(workspace: &ara_doc::Workspace) -> Result<Vec<ImportDoc>, String> {
     workspace
         .docs()
-        .filter(|(_, doc)| doc.kind == "import")
+        .filter(|(_, doc)| doc.kind == "import" || doc.kind == "imports")
         .map(|(path, doc)| {
             let record = doc
-                .record("i_settings")
+                .record(if doc.kind == "imports" {
+                    "pi_settings"
+                } else {
+                    "i_settings"
+                })
                 .ok_or_else(|| format!("{path}: missing import settings"))?;
             Ok((path.to_owned(), doc.id.to_string(), record.clone()))
         })
@@ -275,13 +279,40 @@ impl Assets {
         imports: Vec<ImportDoc>,
         revision: u64,
     ) -> Result<(), String> {
+        let project_preset = imports
+            .iter()
+            .find(|(path, _, _)| path == ara_asset::PROJECT_IMPORT_SETTINGS_FILE)
+            .map(|(_, _, record)| {
+                serde_json::from_value::<ara_asset::ProjectImportSettings>(
+                    serde_json::Value::Object(record.clone()),
+                )
+                .map(|settings| settings.preset)
+            })
+            .transpose()
+            .map_err(|error| error.to_string())?
+            .unwrap_or_default();
+        let project_changed = self
+            .pipeline
+            .configure_project(project_preset)
+            .map_err(|error| error.to_string())?;
+        self.progress_stale |= project_changed;
         let mut current = BTreeMap::new();
         for (path, id, record) in imports {
+            if path == ara_asset::PROJECT_IMPORT_SETTINGS_FILE {
+                continue;
+            }
             let source = path
                 .strip_suffix(".import.json")
                 .ok_or_else(|| format!("{path}: import document must name a sidecar"))?;
             let configuration = (source.to_owned(), record);
-            if self.configurations.get(&id) != Some(&configuration) {
+            let inherits_changed_project = project_changed
+                && !configuration.1.contains_key("preset")
+                && configuration
+                    .1
+                    .get("importer")
+                    .and_then(serde_json::Value::as_str)
+                    .is_some_and(|id| matches!(id, "ara.texture" | "ara.gltf" | "ara.fbx"));
+            if self.configurations.get(&id) != Some(&configuration) || inherits_changed_project {
                 let mut settings: ImportSettings =
                     serde_json::from_value(serde_json::Value::Object(configuration.1.clone()))
                         .map_err(|e| format!("{path}: {e}"))?;
@@ -505,4 +536,38 @@ fn upgrade(file: &Path, sidecar: Sidecar, version: &str, schema: &SchemaDb) -> R
         .doc(id.as_str())
         .ok_or_else(|| format!("{} vanished during the upgrade", file.display()))?;
     std::fs::write(file, ara_doc::write(doc, store.schema())).map_err(|e| e.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn project_quality_is_loaded_as_a_host_document_before_import_synchronization() {
+        let root = tempfile::tempdir().expect("project");
+        std::fs::write(root.path().join("ara.project.json"), "{}").expect("marker");
+        let policy = ara_asset::ProjectImportSettings {
+            preset: ara_asset::CookPreset::HighQuality,
+        };
+        std::fs::write(
+            root.path().join(ara_asset::PROJECT_IMPORT_SETTINGS_FILE),
+            policy.canonical_text().expect("canonical"),
+        )
+        .expect("policy");
+        let project = ara_host::Project::open_with(root.path(), |db, _| {
+            ara_asset::register_schema(db);
+            Vec::new()
+        })
+        .expect("open");
+        let (workspace, diagnostics) = project.load(&[]);
+        assert!(
+            diagnostics.values().flatten().all(|d| !d.is_error()),
+            "{diagnostics:?}"
+        );
+        let documents = super::import_docs(&workspace).expect("import documents");
+        let (path, _, record) = documents
+            .iter()
+            .find(|(path, _, _)| path == ara_asset::PROJECT_IMPORT_SETTINGS_FILE)
+            .expect("project policy is loaded");
+        assert_eq!(path, ara_asset::PROJECT_IMPORT_SETTINGS_FILE);
+        assert_eq!(record["preset"], "highQuality");
+    }
 }

@@ -119,7 +119,9 @@ fn setup(fail: bool) -> (tempfile::TempDir, ImportInput, Arc<GateCache>, HotRelo
         fast_loads: AtomicUsize::new(0),
     });
     let reload = HotReload::new(
-        ProcessWorker::new(env!("CARGO_BIN_EXE_ara-import-worker")),
+        // These tests gate CPU action persistence/boundaries, independently of
+        // available Vulkan hardware. GPU protocol/byte equality has its own probes.
+        ProcessWorker::new(env!("CARGO_BIN_EXE_ara-import-worker")).with_texture_encoder(false),
         cache.clone(),
     );
     (dir, input, cache, reload)

@@ -1,0 +1,98 @@
+// Covariance seeds and integer least-squares updates; mirrored in bc6h_reference.rs.
+Bc6Endpoints bc6Seed(uint partition, bool two, uint kind) {
+    Bc6Endpoints endpoints=(Bc6Endpoints)0;
+    for (uint s=0;s<(two ? 2u : 1u);++s) {
+        uint3 lo=uint3(31743), hi=uint3(0), mean=uint3(0); uint n=0;
+        for (uint i=0;i<16;++i) {
+            if (two && bc6Subset(partition,i)!=s) continue;
+            ++n;
+            for (uint c=0;c<3;++c) { lo[c]=min(lo[c],bc6Half[i][c]); hi[c]=max(hi[c],bc6Half[i][c]); mean[c]+=bc6Half[i][c]; }
+        }
+        mean/=n;
+        uint dominant=0;
+        for (uint c=1;c<3;++c) if (hi[c]-lo[c]>hi[dominant]-lo[dominant]) dominant=c;
+        int64_t covariance[3][3];
+        for (uint c=0;c<3;++c) for (uint d=0;d<3;++d) covariance[c][d]=0;
+        for (uint i=0;i<16;++i) {
+            if (two && bc6Subset(partition,i)!=s) continue;
+            for (uint c=0;c<3;++c) for (uint d=0;d<3;++d) {
+                covariance[c][d]+=(int64_t(bc6Half[i][c])-int64_t(mean[c]))*(int64_t(bc6Half[i][d])-int64_t(mean[d]));
+            }
+        }
+        if (kind==0) {
+            for (uint c=0;c<3;++c) {
+                bool reverse=covariance[dominant][c]<0;
+                endpoints.v[s*6+c]=reverse ? hi[c] : lo[c];
+                endpoints.v[s*6+3+c]=reverse ? lo[c] : hi[c];
+            }
+        } else {
+            int64_t direction[3]={0,0,0}; direction[dominant]=1024;
+            for (uint iteration=0;iteration<3;++iteration) {
+                int64_t next[3]={0,0,0};
+                for (uint c=0;c<3;++c) for (uint d=0;d<3;++d) next[c]+=covariance[c][d]*direction[d];
+                int64_t scale=0;
+                for (uint c=0;c<3;++c) scale=max(scale,abs(next[c]));
+                if (scale!=0) for (uint c=0;c<3;++c) direction[c]=next[c]*1024/scale;
+            }
+            int64_t low=int64_t(0x7fffffffffffffffull), high=-int64_t(0x7fffffffffffffffull);
+            uint lowI=0, highI=0;
+            for (uint i=0;i<16;++i) {
+                if (two && bc6Subset(partition,i)!=s) continue;
+                int64_t projection=0;
+                for (uint c=0;c<3;++c) projection+=(int64_t(bc6Half[i][c])-int64_t(mean[c]))*direction[c];
+                if (projection<low) { low=projection; lowI=i; }
+                if (projection>high) { high=projection; highI=i; }
+            }
+            for (uint c=0;c<3;++c) { endpoints.v[s*6+c]=bc6Half[lowI][c]; endpoints.v[s*6+3+c]=bc6Half[highI][c]; }
+        }
+    }
+    return endpoints;
+}
+
+void bc6Orient(inout Bc6Endpoints endpoints, uint partition, bool two) {
+    for (uint s=0;s<(two ? 2u : 1u);++s) {
+        uint anchor=s==0 ? 0 : BC6_ANCHORS[partition];
+        uint3 a,b,al,bl;
+        for (uint c=0;c<3;++c) {
+            a[c]=endpoints.v[s*6+c]; b[c]=endpoints.v[s*6+3+c];
+            al[c]=bc6Linear(a[c],bc6Shift); bl[c]=bc6Linear(b[c],bc6Shift);
+        }
+        if (bc6Distance(anchor,b,bl)<bc6Distance(anchor,a,al)) for (uint c=0;c<3;++c) {
+            uint temporary=endpoints.v[s*6+c]; endpoints.v[s*6+c]=endpoints.v[s*6+3+c]; endpoints.v[s*6+3+c]=temporary;
+        }
+    }
+}
+
+Bc6Endpoints bc6Quantized(Bc6Endpoints endpoints, uint mode) {
+    uint bits=BC6_PRECISION[mode], mask=(1u<<bits)-1, count=mode<10 ? 12 : 6;
+    Bc6Endpoints q=(Bc6Endpoints)0;
+    for (uint c=0;c<count;++c) q.v[c]=bc6Quantize(endpoints.v[c],bits);
+    if (mode!=9 && mode!=10) for (uint e=1;e<count/3;++e) for (uint c=0;c<3;++c) {
+        uint deltaBits=BC6_DELTA[mode][c]; int limit=1<<(deltaBits-1);
+        uint wrapped=(q.v[e*3+c]-q.v[c]+(1u<<(bits-1)))&mask;
+        int delta=clamp(int(wrapped)-(1<<(bits-1)),-limit,limit-1);
+        q.v[e*3+c]=uint(int(q.v[c])+delta)&mask;
+    }
+    return q;
+}
+
+int64_t bc6RoundDiv(int64_t numerator, int64_t denominator) {
+    return numerator>=0 ? (numerator+denominator/2)/denominator : -((-numerator+denominator/2)/denominator);
+}
+
+void bc6Refine(inout Bc6Endpoints endpoints, Bc6Indices indices, uint mode, uint partition) {
+    for (uint s=0;s<(mode<10 ? 2u : 1u);++s) {
+        int64_t aa=0,ab=0,bb=0,ax[3]={0,0,0},bx[3]={0,0,0};
+        for (uint i=0;i<16;++i) {
+            if (mode<10 && bc6Subset(partition,i)!=s) continue;
+            int64_t b=int64_t(bc6Weight(mode,indices.v[i])), a=64-b;
+            aa+=a*a; ab+=a*b; bb+=b*b;
+            for (uint c=0;c<3;++c) { ax[c]+=a*int64_t(bc6Half[i][c])*64; bx[c]+=b*int64_t(bc6Half[i][c])*64; }
+        }
+        int64_t determinant=aa*bb-ab*ab;
+        if (determinant!=0) for (uint c=0;c<3;++c) {
+            endpoints.v[s*6+c]=uint(clamp(bc6RoundDiv(ax[c]*bb-bx[c]*ab,determinant),int64_t(0),int64_t(31743)));
+            endpoints.v[s*6+3+c]=uint(clamp(bc6RoundDiv(bx[c]*aa-ax[c]*ab,determinant),int64_t(0),int64_t(31743)));
+        }
+    }
+}

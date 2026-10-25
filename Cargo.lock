@@ -396,6 +396,7 @@ name = "ara"
 version = "0.0.1-alpha"
 dependencies = [
  "ara-ai",
+ "ara-asset",
  "ara-audio-why",
  "ara-crash",
  "ara-diag",
@@ -820,6 +821,7 @@ dependencies = [
  "ara-runtime-render",
  "ara-schema",
  "ara-shader-cook",
+ "ara-texture-gpu",
  "ara-ui",
  "ara-ui-render",
  "ara-ui-text",
@@ -1033,6 +1035,7 @@ dependencies = [
 name = "ara-hub-service"
 version = "0.0.1-alpha"
 dependencies = [
+ "ara-asset",
  "ara-diag",
  "ara-host",
  "ara-json",
@@ -1058,6 +1061,7 @@ dependencies = [
  "ara-importers",
  "ara-json",
  "ara-schema",
+ "ara-texture-gpu",
  "gltf",
  "image",
  "serde_json",
@@ -1449,6 +1453,7 @@ dependencies = [
  "ara-schema",
  "serde",
  "serde_json",
+ "tempfile",
 ]
 
 [[package]]
@@ -1966,6 +1971,19 @@ dependencies = [
  "blake3",
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "ara-texture-gpu"
+version = "0.0.1-alpha"
+dependencies = [
+ "ara-asset",
+ "ara-asset-format",
+ "ara-gpu",
+ "bcdec_rs",
+ "bytemuck",
+ "serde_json",
+ "tempfile",
 ]
 
 [[package]]

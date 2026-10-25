@@ -1,20 +1,20 @@
 use serde::{Deserialize, Serialize};
 
 /// Encoding quality is an explicit cook input, independent of the execution budget.
-/// Direct/ shipping cooks default to high quality; editor previews use `Fast`.
+/// New imports default to Balanced; projects and individual textures can select HQ.
 #[derive(
     Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, ara_schema::Schema,
 )]
 #[ara(module = "asset")]
 #[serde(rename_all = "camelCase")]
 pub enum CookPreset {
-    /// ISPC BC7 slow and BC6H very slow, for background recooks and shipping.
+    /// Balanced compression search, the default for interactive project imports.
     #[default]
-    HighQuality,
-    /// ISPC BC7 ultrafast and BC6H fast, for the first interactive generation.
-    Fast,
-    /// ISPC BC7/BC6H basic, for projects choosing a middle quality/speed tradeoff.
     Balanced,
+    /// Deeper compression search for higher-quality assets and background recooks.
+    HighQuality,
+    /// Reduced compression search for the first interactive generation.
+    Fast,
 }
 
 /// Default worker concurrency. Editors can lower it without changing cache identity.

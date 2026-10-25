@@ -438,11 +438,19 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
             server.pump(&mut editor);
             editor.tick();
             let tick_ms = tick_at.elapsed().as_secs_f64() * 1000.;
-            // The Game view: its size (physical pixels) is where embedded Play starts and
-            // what it resizes to; new frames redraw the UI.
-            if let Some(frame) = shell.game_frame() {
-                let scale =
-                    options.dpi.unwrap_or_else(|| native.dpi()) * windows::ui_scale(&editor);
+            // The Game view, in the main window or a floating one: its size (physical
+            // pixels, at its window's scale) is where embedded Play starts, what it
+            // resizes to and what the camera preview renders at; new frames redraw.
+            let host = shell.game_host().map(|(id, frame)| {
+                let scale = match id {
+                    None => Some(
+                        options.dpi.unwrap_or_else(|| native.dpi()) * windows::ui_scale(&editor),
+                    ),
+                    Some(id) => floats.scale(id, &editor),
+                };
+                (scale, frame)
+            });
+            if let Some((Some(scale), frame)) = host {
                 let size = frame.map(|v| (v * scale).round() as u32);
                 if size[0] >= 64 && size[1] >= 64 {
                     shell.game_target = size;
@@ -594,12 +602,14 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                     &mut ui_renderer,
                     &mut renderer,
                     &mut scene_view,
+                    &floats,
                 )?;
                 dirty |= changed;
                 scene_dirty |= changed;
             }
             if let Some(route) = &mut first_hour {
-                let changed = route.step(&mut editor, &mut shell, &mut gpu)?;
+                let busy = scene_view.needs_frame(editor.state.quality);
+                let changed = route.step(&mut editor, &mut shell, &mut gpu, busy)?;
                 dirty |= changed;
             }
             if let Some(suite) = &mut ux_verification {

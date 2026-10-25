@@ -12,7 +12,7 @@ use std::{
 };
 
 fn worker() -> ProcessWorker {
-    ProcessWorker::new(env!("CARGO_BIN_EXE_ara-import-worker"))
+    ProcessWorker::new(env!("CARGO_BIN_EXE_ara-import-worker")).with_texture_encoder(false)
 }
 fn png(red: u8) -> Vec<u8> {
     let pixels = [red, 64, 128, 255].repeat(64);
@@ -21,6 +21,54 @@ fn png(red: u8) -> Vec<u8> {
         .write_image(&pixels, 8, 8, image::ExtendedColorType::Rgba8)
         .unwrap();
     bytes
+}
+
+#[test]
+fn project_quality_changes_only_inherited_texture_inputs() {
+    let root = tempfile::tempdir().unwrap();
+    std::fs::write(root.path().join("color.png"), png(97)).unwrap();
+    let mut source = SourceAsset {
+        preset: None,
+        thread_budget: 2,
+        id: "as_color".into(),
+        path: "color.png".into(),
+        importer: ara_asset::Importer::id(&TextureImporter).into(),
+        version: ara_asset::Importer::version(&TextureImporter).into(),
+        settings: json!({}),
+        target: TargetPlatform::Windows,
+        asset_dependencies: BTreeMap::new(),
+    };
+    let worker = worker();
+    let cancel = Cancellation::default();
+    let inherited = snapshot(root.path(), &source, &worker, &cancel).unwrap();
+    assert_eq!(inherited.preset, CookPreset::Balanced);
+    std::fs::write(
+        root.path().join(PROJECT_IMPORT_SETTINGS_FILE),
+        ProjectImportSettings {
+            preset: CookPreset::HighQuality,
+        }
+        .canonical_text()
+        .unwrap(),
+    )
+    .unwrap();
+    let high = snapshot(root.path(), &source, &worker, &cancel).unwrap();
+    assert_eq!(high.preset, CookPreset::HighQuality);
+    assert_ne!(inherited.key().unwrap(), high.key().unwrap());
+    source.preset = Some(CookPreset::Balanced);
+    assert_eq!(
+        snapshot(root.path(), &source, &worker, &cancel)
+            .unwrap()
+            .key()
+            .unwrap(),
+        inherited.key().unwrap()
+    );
+    source.settings = json!({"preset":"fast"});
+    assert_eq!(
+        snapshot(root.path(), &source, &worker, &cancel)
+            .unwrap()
+            .preset,
+        CookPreset::Fast
+    );
 }
 
 #[test]
@@ -39,7 +87,7 @@ fn settings_selected_opacity_is_snapshotted_in_process_and_invalidates_cooked_al
     let worker = worker();
     let installed = worker.versions().unwrap();
     let source = SourceAsset {
-        preset: CookPreset::Fast,
+        preset: Some(CookPreset::Fast),
         thread_budget: 4,
         id: "as_panel".into(),
         path: "panel.gltf".into(),
@@ -178,6 +226,50 @@ fn wait_reload(reload: &mut HotReload) -> Vec<ReloadEvent> {
         thread::sleep(Duration::from_millis(5));
     }
 }
+#[test]
+fn cold_assets_share_texture_work_without_sharing_final_action_identity() {
+    let dir = tempfile::tempdir().unwrap();
+    let cache = Arc::new(FileCache::new(dir.path()).unwrap());
+    let mut reload = HotReload::new(worker(), cache.clone());
+    reload.progressive = false;
+    let mut keys = Vec::new();
+    for asset in ["as_first", "as_second"] {
+        let mut request = input(37);
+        request.source_path = format!("{asset}.png");
+        keys.push(request.key().unwrap());
+        reload.request(asset, request);
+        assert!(wait_reload(&mut reload).iter().any(|event| matches!(
+            event,
+            ReloadEvent::Ready {
+                cache_hit: false,
+                final_pass: true,
+                ..
+            }
+        )));
+        assert_eq!(
+            reload.apply_boundary(true, false, &BTreeSet::new()).len(),
+            1
+        );
+    }
+    assert_ne!(keys[0], keys[1]);
+    assert_eq!(
+        cache.load(keys[0]).unwrap().unwrap().output,
+        cache.load(keys[1]).unwrap().unwrap().output
+    );
+    assert_eq!(
+        std::fs::read_dir(dir.path().join(".ara/cache/actions"))
+            .unwrap()
+            .count(),
+        2
+    );
+    assert_eq!(
+        std::fs::read_dir(dir.path().join(".ara/cache/intermediates/actions"))
+            .unwrap()
+            .count(),
+        1
+    );
+}
+
 #[test]
 fn cache_hits_last_good_fallback_supersession_and_human_application_policy() {
     let dir = tempfile::tempdir().unwrap();

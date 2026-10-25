@@ -18,6 +18,8 @@
 //! - `since = 2`, `deprecated = "why"`, `alias = "old"`;
 //! - `replicate(audience = Relevant, quantize = 0.01, interpolate = Linear, rollback)`;
 //! - `editor(group = "...", slider, step = 0.1, multiline, hidden, read_only, color)`;
+//! - `editor(show_if(field = "model", set))`, `show_if(field = "model", empty)` or
+//!   `show_if(field = "kind", one_of = ["spot"])` (an `ara_schema::ShowIf`);
 //! - `keyed` (a `Vec` of structs with `id`, addressed by ID), `asset_kind = "prefab"`.
 //!
 //! Variant attributes: `rename`, `alias`, `deprecated`.
@@ -296,6 +298,8 @@ struct FieldAttrs {
     hidden: bool,
     read_only: bool,
     color: bool,
+    /// `show_if`: the sibling field and the condition's tokens.
+    show_if: Option<(String, Ts)>,
     keyed: bool,
     asset_kind: Option<String>,
 }
@@ -371,8 +375,10 @@ impl FieldAttrs {
                     self.read_only = true;
                 } else if m.path.is_ident("color") {
                     self.color = true;
+                } else if m.path.is_ident("show_if") {
+                    self.show_if = Some(show_if(&m)?);
                 } else {
-                    return Err(m.error("ara: expected `group`, `slider`, `step`, `multiline`, `hidden`, `read_only` or `color`"));
+                    return Err(m.error("ara: expected `group`, `slider`, `step`, `multiline`, `hidden`, `read_only`, `color` or `show_if`"));
                 }
                 Ok(())
             })?;
@@ -441,6 +447,12 @@ fn field_tokens(f: &syn::Field, a: &FieldAttrs, params: bool) -> syn::Result<Ts>
     let step = as_f64(&a.step);
     let (slider, multiline, hidden, read_only, color) =
         (a.slider, a.multiline, a.hidden, a.read_only, a.color);
+    let show_if = a.show_if.as_ref().map_or(none.clone(), |(field, when)| {
+        some(quote!(::ara_schema::ShowIf {
+            field: ::std::string::String::from(#field),
+            when: #when,
+        }))
+    });
     Ok(quote!(::ara_schema::FieldDesc {
         name: ::std::string::String::from(#name),
         ty: #ty_expr,
@@ -467,8 +479,48 @@ fn field_tokens(f: &syn::Field, a: &FieldAttrs, params: bool) -> syn::Result<Ts>
             hidden: #hidden,
             read_only: #read_only,
             color: #color,
+            show_if: #show_if,
         },
     }))
+}
+
+/// Parses `show_if(field = "...", set | empty | one_of = ["..."])`: the sibling's
+/// serialized name and an `ara_schema::ShowWhen` expression.
+fn show_if(meta: &ParseNestedMeta<'_>) -> syn::Result<(String, Ts)> {
+    let (mut field, mut when) = (None, None);
+    meta.parse_nested_meta(|m| {
+        if m.path.is_ident("field") {
+            field = Some(string(&m)?);
+        } else if m.path.is_ident("set") {
+            when = Some(quote!(::ara_schema::ShowWhen::Set));
+        } else if m.path.is_ident("empty") {
+            when = Some(quote!(::ara_schema::ShowWhen::Empty));
+        } else if m.path.is_ident("one_of") {
+            let list: syn::ExprArray = m.value()?.parse()?;
+            let names = list
+                .elems
+                .iter()
+                .map(|e| match e {
+                    Expr::Lit(syn::ExprLit {
+                        lit: Lit::Str(s), ..
+                    }) => Ok(s.value()),
+                    other => Err(syn::Error::new_spanned(other, "ara: expected a string")),
+                })
+                .collect::<syn::Result<Vec<_>>>()?;
+            when = Some(quote!(::ara_schema::ShowWhen::OneOf(::std::vec![
+                #(::std::string::String::from(#names)),*
+            ])));
+        } else {
+            return Err(m.error("ara: expected `field`, `set`, `empty` or `one_of`"));
+        }
+        Ok(())
+    })?;
+    match (field, when) {
+        (Some(field), Some(when)) => Ok((field, when)),
+        _ => Err(meta.error(
+            "ara: `show_if` needs `field = \"...\"` and one of `set`, `empty`, `one_of = [...]`",
+        )),
+    }
 }
 
 fn string(meta: &ParseNestedMeta<'_>) -> syn::Result<String> {

@@ -487,6 +487,16 @@ fn standalone_hub(env: &Environment, dist: &Path, version: &str) -> Result<()> {
             tile["engineVersion"] == version,
             "template {id} did not come from the installed engine: {tile}"
         );
+        ensure!(
+            tile["setup"].is_null(),
+            "installed template {id} needs missing art: {tile}"
+        );
+        ensure!(
+            tile["thumbnail"]
+                .as_str()
+                .is_some_and(|path| Path::new(path).is_file()),
+            "installed template {id} has no thumbnail: {tile}"
+        );
     }
     let mut client = ara_rpc::Client::for_project(&discovery).context("standalone service")?;
     let project = env.directory.join("Standalone Starter");

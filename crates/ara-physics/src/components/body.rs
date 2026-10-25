@@ -78,19 +78,22 @@ pub struct Collider {
     #[ara(unit = Meters)]
     pub center: [f32; 3],
     /// Box half extents; scale must be baked before physics extraction.
-    #[ara(default = [0.5,0.5,0.5], unit = Meters, range(min = 0.0001))]
+    #[ara(default = [0.5,0.5,0.5], unit = Meters, range(min = 0.0001), editor(show_if(field = "kind", one_of = ["box", "modelConvex", "modelMesh"])))]
     pub half_extents: [f32; 3],
     /// Sphere, capsule or cylinder radius.
-    #[ara(default = 0.5, unit = Meters, range(min = 0.0001))]
+    #[ara(default = 0.5, unit = Meters, range(min = 0.0001), editor(show_if(field = "kind", one_of = ["sphere", "capsule", "cylinder"])))]
     pub radius: f32,
     /// Cylinder half height, excluding the capsule hemispheres.
-    #[ara(default = 0.5, unit = Meters, range(min = 0))]
+    #[ara(default = 0.5, unit = Meters, range(min = 0), editor(show_if(field = "kind", one_of = ["capsule", "cylinder"])))]
     pub half_height: f32,
     /// Cooked collision asset (`@path#id`); resolve into `CookedCollider` before ticking.
+    #[ara(editor(show_if(field = "kind", one_of = ["cooked", "modelConvex", "modelMesh"])))]
     pub asset: Option<AssetRef>,
     /// Source model node name/index for model-derived geometry; absent uses its default scene.
+    #[ara(editor(show_if(field = "kind", one_of = ["modelConvex", "modelMesh"])))]
     pub node: Option<String>,
     /// Subtree-local primitive for model-derived geometry; absent uses the complete subtree.
+    #[ara(editor(show_if(field = "kind", one_of = ["modelConvex", "modelMesh"])))]
     pub primitive: Option<u32>,
     /// Zero selects static/moving defaults from the body; 1..15 select an explicit group.
     #[ara(range(min = 0, max = 15))]
