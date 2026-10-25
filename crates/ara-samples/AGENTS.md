@@ -73,6 +73,8 @@ captures leave tracked sample evidence unchanged.
   from intended changes.
 - Agent edits apply immediately under amended D24, with attribution, why and undo.
   Terrain strokes and foliage exclusions use stable IDs so rebuilds retain identity.
+  Outpost's 144 `TerrainChunk` entities are children of `e_terrain` (identity transform,
+  world-space heights): one Terrain row in the Hierarchy, which starts large groups collapsed.
 
 ## Testing
 

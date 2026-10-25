@@ -7,10 +7,12 @@ use anyhow::{Context, Result, ensure};
 
 use crate::binaries::Binaries;
 
-pub(super) fn preflight(root: &Path) -> Result<()> {
+/// Fail early when a sample (`samples/<name>`) lacks fetched art or generated kits.
+pub(crate) fn preflight(root: &Path, sample: &str) -> Result<()> {
+    let folder = Path::new("samples").join(sample);
     let missing: Vec<_> = crate::git::files(root)?
         .into_iter()
-        .filter(|path| path.starts_with("samples/outpost"))
+        .filter(|path| path.starts_with(&folder))
         .filter_map(|path| {
             let source = path.file_name()?.to_str()?.strip_suffix(".import.json")?;
             let source = path.with_file_name(source);
@@ -19,7 +21,7 @@ pub(super) fn preflight(root: &Path) -> Result<()> {
         .collect();
     ensure!(
         missing.is_empty(),
-        "Outpost needs fetched art and generated kit assets before its first freeze ({} missing, e.g. {}). Prepare the sample or pass --scene <existing-export-folder>",
+        "{sample} needs fetched art and generated kit assets before its first freeze ({} missing, e.g. {}). Prepare the sample or pass --scene <existing-export-folder>",
         missing.len(),
         missing
             .iter()
@@ -32,10 +34,32 @@ pub(super) fn preflight(root: &Path) -> Result<()> {
 }
 
 pub(super) fn outpost(root: &Path, base: &Path, binaries: &Binaries) -> Result<PathBuf> {
-    let frozen = base.join("outpost");
+    pack(
+        root,
+        base,
+        &base.join("outpost"),
+        &root.join("samples/outpost"),
+        binaries,
+    )
+}
+
+/// Export `project`'s main scene through the production exporter into `frozen`, once:
+/// an existing `frozen/ara-launch.json` is reused. The export cache lives in `base`.
+pub(crate) fn pack(
+    root: &Path,
+    base: &Path,
+    frozen: &Path,
+    project: &Path,
+    binaries: &Binaries,
+) -> Result<PathBuf> {
     if frozen.join("ara-launch.json").is_file() {
-        return Ok(frozen);
+        return Ok(frozen.to_owned());
     }
+    let name = frozen
+        .file_name()
+        .context("frozen folder name")?
+        .to_string_lossy()
+        .into_owned();
     let exporter = binaries
         .get("ara-export")
         .context("first perf run needs ara-export (omit --no-build)")?;
@@ -45,7 +69,7 @@ pub(super) fn outpost(root: &Path, base: &Path, binaries: &Binaries) -> Result<P
     let worker = binaries
         .get("ara-import-worker")
         .context("missing built ara-import-worker")?;
-    let setup = base.join(format!("freeze-{}", std::process::id()));
+    let setup = base.join(format!("freeze-{name}-{}", std::process::id()));
     fs::create_dir_all(&setup)?;
     let template = setup.join("runtime.zip");
     ensure!(
@@ -108,12 +132,12 @@ pub(super) fn outpost(root: &Path, base: &Path, binaries: &Binaries) -> Result<P
     let mut command = Command::new(exporter);
     command.arg("preset-fmt").arg(&preset);
     super::run_command(root, &mut command, "canonical perf export preset", 30)?;
-    let candidate = setup.join("outpost");
+    let candidate = setup.join(&name);
     let mut command = Command::new(exporter);
     command
         .arg("export")
         .arg("--project")
-        .arg(root.join("samples/outpost"))
+        .arg(project)
         .arg("--preset")
         .arg(&preset)
         .arg("--output")
@@ -123,9 +147,9 @@ pub(super) fn outpost(root: &Path, base: &Path, binaries: &Binaries) -> Result<P
         .env("ARA_IMPORT_WORKER", worker)
         .stdout(File::create(setup.join("export.jsonl"))?)
         .stderr(Stdio::inherit());
-    eprintln!("Freezing the authored Outpost once; {}", setup.display());
+    eprintln!("Freezing {} once; {}", project.display(), setup.display());
     crate::gpu::locked(3600, || {
-        super::run_command(root, &mut command, "Outpost export", 1800)
+        super::run_command(root, &mut command, "sample export", 1800)
     })?;
     // Export publishes a dist folder; accept only the actual runtime launch contract.
     let dist = if candidate.join("ara-launch.json").is_file() {
@@ -137,6 +161,9 @@ pub(super) fn outpost(root: &Path, base: &Path, binaries: &Binaries) -> Result<P
         dist.join("ara-launch.json").is_file(),
         "export did not publish ara-launch.json"
     );
-    fs::rename(dist, &frozen)?;
-    Ok(frozen)
+    if let Some(parent) = frozen.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    fs::rename(dist, frozen)?;
+    Ok(frozen.to_owned())
 }

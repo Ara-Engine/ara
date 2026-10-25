@@ -32,13 +32,16 @@ use ara_ui_render::{
 };
 use glam::Vec3;
 use serde_json::{Value, json};
-pub use setup::Options;
+pub use setup::{Options, Settle};
 use std::{
     path::PathBuf,
     time::{Duration, Instant},
 };
 /// How long after the last input progressive Scene frames resume.
 const INTERACTION_PAUSE: Duration = Duration::from_millis(250);
+/// When the process started: `main` sets it first. Startup timings
+/// (`--verify-responsiveness`) count from it.
+pub static LAUNCHED: std::sync::OnceLock<Instant> = std::sync::OnceLock::new();
 /// Open the SDL3 editor, host the project authority and serve authenticated EP/MCP.
 pub fn run(options: Options) -> ara_ui::Result<()> {
     if options.headless {
@@ -161,7 +164,7 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
     };
     let mut probe = options
         .verify_responsiveness
-        .then(|| responsiveness::Probe::new(&options.output));
+        .then(|| responsiveness::Probe::new(&options.output, options.settle));
     if probe.is_some() {
         // Measure what a release build does: memoized panels are not double-checked.
         shell.memo_check = false;
@@ -918,6 +921,7 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                     present_ms,
                     presented,
                     game_frame,
+                    presentation_ready: renderer.presentation_ready(),
                     ..Default::default()
                 };
                 probe.end(&editor, &mut shell, sample);

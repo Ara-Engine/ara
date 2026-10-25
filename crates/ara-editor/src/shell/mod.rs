@@ -59,6 +59,7 @@ use ara_ui::{
 use ara_ui_text::TextSystem;
 pub(crate) use dialog::Dialog;
 pub(crate) use game_panel::game_stats_text;
+pub use hierarchy::LARGE_GROUP;
 pub(crate) use ops::{WindowRequest, open_docs, open_external, open_terminal};
 use panels::{button, escape};
 use serde_json::{Value, json};
@@ -100,6 +101,8 @@ pub struct Shell {
     hierarchy_tints: BTreeMap<u64, &'static str>,
     /// What the Hierarchy rows were last built from.
     hierarchy_key: Option<hierarchy::HierarchyKey>,
+    /// Entities in the open scene (the Hierarchy may show fewer rows: collapsed groups).
+    entity_count: usize,
     hierarchy_ghosts: std::collections::BTreeSet<u64>,
     /// Game view: players of the shown world, the selected one, whether a frame is
     /// showing, frames per second, the surface size, the wanted size (physical px),
@@ -376,6 +379,7 @@ impl Shell {
             hierarchy_entities: BTreeMap::new(),
             hierarchy_tints: BTreeMap::new(),
             hierarchy_key: None,
+            entity_count: 0,
             hierarchy_ghosts: std::collections::BTreeSet::new(),
             expanded_turns: std::collections::BTreeSet::new(),
             pending_reports: Vec::new(),

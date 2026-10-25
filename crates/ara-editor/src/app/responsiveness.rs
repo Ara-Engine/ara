@@ -7,7 +7,13 @@
 //! `responsiveness.json` (per-scenario frame costs, UI work counters, GPU UI time,
 //! input-to-present latency and click results). The Play scenario clicks Play and
 //! measures to the first presented frame showing an embedded Game image (cold, then
-//! warm), then clicks Stop.
+//! warm), then clicks Stop. A Scene orbit moves the editor camera every frame.
+//!
+//! Startup is timed from [`LAUNCHED`]: the first presented frame, when imports
+//! settled, and the first Scene frame after that (the full first scene; texture
+//! streaming is not tracked). With `--settle-imports before|after` the run waits for
+//! imports (capped at [`SETTLE_TIMEOUT`]) before or after the interactions; every
+//! frame records whether imports were pending.
 use super::*;
 use crate::shell::commands::Target;
 
@@ -60,7 +66,16 @@ enum Act {
     /// Drag a selected mesh with the move gizmo's gesture for `DRAG_FRAMES` frames,
     /// then release (the commit).
     Drag,
+    /// Orbit the Scene camera a step every frame for this many frames.
+    Orbit(u32),
+    /// Wait until imports settle and the Scene shows them (`SETTLE_TIMEOUT`).
+    Settle,
 }
+/// Frames the Scene orbit lasts, and its step per frame (radians).
+const ORBIT_FRAMES: u32 = 240;
+const ORBIT_STEP: f32 = 0.02;
+/// The longest a Settle act waits for imports.
+const SETTLE_TIMEOUT: Duration = Duration::from_secs(20 * 60);
 /// Frames a Drag act moves the gesture before releasing it.
 const DRAG_FRAMES: u32 = 12;
 /// What a Type act types, and where.
@@ -163,6 +178,22 @@ pub(super) struct Sample {
     pub work: ara_ui::Work,
     /// Injected input to the end of present, when this frame carried input.
     pub input_to_present_ms: Option<f64>,
+    /// The renderer holds a completed Scene frame (`Renderer::presentation_ready`).
+    pub presentation_ready: bool,
+    /// Imports were pending this frame (or the pipeline had not reported yet).
+    pub importing: bool,
+}
+
+/// Startup timings in milliseconds from [`LAUNCHED`].
+#[derive(Default, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct Startup {
+    /// The first presented frame (the shell, with import progress while loading).
+    first_present_ms: Option<f64>,
+    /// The first frame with no import pending.
+    imports_settled_ms: Option<f64>,
+    /// The first Scene frame rendered and presented after imports settled.
+    scene_complete_ms: Option<f64>,
 }
 
 pub(super) struct Probe {
@@ -179,15 +210,20 @@ pub(super) struct Probe {
     clicks: Vec<Value>,
     play: Option<PlayRun>,
     plays: Vec<Value>,
+    startup: Startup,
+    /// When the current Settle act began.
+    settle_began: Option<Instant>,
+    /// Whether a Settle act gave up at `SETTLE_TIMEOUT`.
+    settle_timed_out: bool,
 }
 
 impl Probe {
-    pub fn new(output: &std::path::Path) -> Self {
-        let mut acts = vec![
-            Act::Idle("warmup", 60),
-            Act::Idle("idle", 240),
-            Act::Hover(160),
-        ];
+    pub fn new(output: &std::path::Path, settle: Option<Settle>) -> Self {
+        let mut acts = vec![Act::Idle("warmup", 60)];
+        if settle == Some(Settle::Before) {
+            acts.push(Act::Settle);
+        }
+        acts.extend([Act::Idle("idle", 240), Act::Hover(160)]);
         for control in [Control::Toolbar, Control::Tab, Control::Menu] {
             for timing in TIMINGS {
                 for _ in 0..CLICKS {
@@ -211,9 +247,13 @@ impl Probe {
             acts.push(Act::Drag);
         }
         acts.push(Act::Idle("idle-after", 120));
+        acts.push(Act::Orbit(ORBIT_FRAMES));
         for _ in 0..3 {
             acts.push(Act::Play);
             acts.push(Act::Idle("after-play", 60));
+        }
+        if settle == Some(Settle::After) {
+            acts.push(Act::Settle);
         }
         Self {
             output: output.into(),
@@ -228,6 +268,9 @@ impl Probe {
             clicks: Vec::new(),
             play: None,
             plays: Vec::new(),
+            startup: Startup::default(),
+            settle_began: None,
+            settle_timed_out: false,
         }
     }
 
@@ -243,6 +286,8 @@ impl Probe {
             Some(Act::Theme(_)) => "theme".into(),
             Some(Act::Play) => "play".into(),
             Some(Act::Edit) => "edit".into(),
+            Some(Act::Orbit(_)) => "scene-orbit".into(),
+            Some(Act::Settle) => "settle".into(),
             Some(Act::Drag) => match self.age {
                 0 | 1 => "drag-begin".into(),
                 n if n < 2 + DRAG_FRAMES => "drag-move".into(),
@@ -450,6 +495,12 @@ impl Probe {
                     None,
                 )?;
             }
+            Some(Act::Orbit(_)) => {
+                let mut camera = editor.state.camera;
+                camera.yaw += ORBIT_STEP;
+                self.injected = Some(Instant::now());
+                set_camera(editor, &camera)?;
+            }
             Some(Act::Theme(command)) if self.age == 0 => {
                 self.injected = Some(Instant::now());
                 shell.run_command(editor, command, &Target::None)?;
@@ -472,6 +523,10 @@ impl Probe {
         if sample.presented {
             sample.input_to_present_ms = self.injected.map(|t| t.elapsed().as_secs_f64() * 1000.);
         }
+        sample.importing = shell
+            .import_counts()
+            .is_none_or(|(pending, _, _)| pending > 0);
+        self.startup_frame(&sample);
         let game_frame = sample.game_frame;
         self.samples.push((self.label(), sample));
         if std::mem::take(&mut self.sleep_after) {
@@ -522,6 +577,12 @@ impl Probe {
             Some(Act::Theme(_) | Act::Edit) => self.age >= 8,
             Some(Act::Type(typed)) => self.age >= 12 + typed.text(self.index).len() as u32,
             Some(Act::Drag) => self.age >= 10 + DRAG_FRAMES,
+            Some(Act::Orbit(frames)) => self.age >= *frames,
+            Some(Act::Settle) => {
+                let began = *self.settle_began.get_or_insert_with(Instant::now);
+                self.settle_timed_out = began.elapsed() > SETTLE_TIMEOUT;
+                self.startup.scene_complete_ms.is_some() || self.settle_timed_out
+            }
             // A click's target was not on screen yet (`inject` retries, then fails).
             Some(Act::Click(..) | Act::Play) => false,
             None => true,
@@ -534,6 +595,28 @@ impl Probe {
     fn advance(&mut self) {
         self.index += 1;
         self.age = 0;
+    }
+
+    /// Startup milestones, from this frame's sample.
+    fn startup_frame(&mut self, sample: &Sample) {
+        let Some(now) = LAUNCHED.get().map(|t| t.elapsed().as_secs_f64() * 1000.) else {
+            return;
+        };
+        let startup = &mut self.startup;
+        if sample.presented && startup.first_present_ms.is_none() {
+            startup.first_present_ms = Some(now);
+        }
+        if startup.imports_settled_ms.is_none() {
+            if !sample.importing {
+                startup.imports_settled_ms = Some(now);
+            }
+        } else if startup.scene_complete_ms.is_none()
+            && sample.presented
+            && sample.presentation_ready
+            && sample.scene_ms > 0.
+        {
+            startup.scene_complete_ms = Some(now);
+        }
     }
 
     /// Write `responsiveness.json`: per-scenario statistics, every click and frame.
@@ -585,6 +668,8 @@ impl Probe {
         let report = json!({
             "clicks": {"total": self.clicks.len(), "landed": landed, "each": self.clicks},
             "play": self.plays,
+            "startup": self.startup,
+            "settleTimedOut": self.settle_timed_out,
             "scenarios": scenarios,
             "frames": self.samples.iter().map(|(name, s)| json!({"scenario": name, "sample": s})).collect::<Vec<_>>(),
             "device": device,

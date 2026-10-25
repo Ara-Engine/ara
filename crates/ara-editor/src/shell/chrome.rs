@@ -237,7 +237,7 @@ impl Shell {
         self.bind_command("status-entities", "window.hierarchy", Target::None);
         out.push_str(&format!("<button id='status-entities' class='chip' label='Entities' action='Dispatch'>{}<text id='status-docs' text='{} entities{}' /></button><text id='status-saved' class='caption' text='{}' style='padding-left:8px' /><panel id='status-fill' class='fill' /><text id='status-hint' class='caption' text='{}' style='padding-right:12px' />",
             icons::icon("status-entities","box"),
-            self.hierarchy.items.len(),
+            self.entity_count,
             if editor.state.selection.is_empty(){String::new()}else{format!(" · {} selected",editor.state.selection.len())},
             escape(&saved),
             escape(hint)));

@@ -5,6 +5,7 @@ mod binaries;
 mod build_paths;
 mod check;
 mod compile_cache;
+mod d26;
 mod editor;
 mod git;
 mod gpu;
@@ -43,6 +44,8 @@ enum Command {
     },
     /// Build and measure a frozen packed scene, or control a warm perf session.
     Perf(perf::Options),
+    /// Measure every D26/D27 release target; writes target/d26/<timestamp>/report.html.
+    D26(d26::Options),
     /// Check changed crates and their reverse dependencies before handing off work.
     Check {
         #[arg(long, default_value = "main")]
@@ -126,6 +129,7 @@ fn run() -> Result<bool> {
     match cli.command {
         Command::Cargo { args } => compile_cache::cargo(&root, &args),
         Command::Perf(options) => perf::run(&root, options),
+        Command::D26(options) => d26::run(&root, options),
         Command::Check {
             base,
             json,

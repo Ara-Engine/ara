@@ -755,14 +755,18 @@ fn exterior(ctx: &Ctx, models: &Models, ground: &Ground) -> Result<()> {
         json!({"Transform": {}, "Terrain": {"terrain": reference(TERRAIN), "foliage": reference(FOLIAGE)}}),
     );
     // This level is not streamed: native presentation follows chunk residency,
-    // including the road and mountain rim outside the walkable compound.
+    // including the road and mountain rim outside the walkable compound. The 144
+    // chunks are children of the Terrain (identity transform; chunk heights are in
+    // world space), so the Hierarchy shows one Terrain row above the scene's content.
     for z in 0..TERRAIN_TILES {
         for x in 0..TERRAIN_TILES {
-            s.entity(
+            let mut chunk = create(
                 &format!("e_chunk{x}z{z}"),
                 "Terrain chunk",
                 json!({"TerrainChunk": {"x": x, "z": z}, "AcousticSurface": {"preset": "gravel"}}),
             );
+            chunk.1["parent"] = json!("e_terrain");
+            s.commands.push(chunk);
         }
     }
     s.entity(
