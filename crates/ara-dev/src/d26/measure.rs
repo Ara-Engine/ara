@@ -151,7 +151,7 @@ impl Context<'_> {
     }
 
     /// The scene's frozen pack, exported once per sample tree.
-    fn pack(&self, scene: &Scene) -> Measured<PathBuf> {
+    pub(super) fn pack(&self, scene: &Scene) -> Measured<PathBuf> {
         (|| -> Result<PathBuf> {
             perf::freeze::preflight(self.root, scene.project)?;
             let folder = Path::new("samples").join(scene.project);
