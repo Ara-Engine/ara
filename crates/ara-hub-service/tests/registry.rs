@@ -286,6 +286,106 @@ fn templates_read_their_marker_and_report_unfetched_sample_art() {
 }
 
 #[test]
+fn missing_generated_kits_block_creation_even_after_third_party_art_is_fetched() {
+    let root = scratch("missing-kits");
+    let templates = root.join("templates");
+    let sample = templates.join("outpost");
+    let kit = sample.join("assets/kit");
+    fs::create_dir_all(&kit).expect("kit descriptors");
+    fs::create_dir_all(sample.join("assets/third_party/art")).expect("fetched art");
+    fs::write(sample.join("assets/third_party/art/palette.png"), "image").expect("art");
+    fs::write(sample.join("ara.project.json"), r#"{"name":"Outpost"}"#).expect("marker");
+    fs::write(
+        templates.join("assets.lock.json"),
+        r#"{"assets":[{"id":"art","projects":["outpost"],"files":[{"path":"palette.png"}]}]}"#,
+    )
+    .expect("lock");
+    for name in ["mesh.gltf", "palette.png"] {
+        fs::write(kit.join(format!("{name}.import.json")), "{}").expect("descriptor");
+    }
+    let mut settings = config(&root.join("config"));
+    settings.templates = Box::new(DirectoryTemplates(templates.clone()));
+    let mut hub = Hub::open(settings).expect("Hub");
+    let setup = hub.call("hub.templates", json!({})).expect("templates")["templates"]
+        .as_array()
+        .expect("tiles")
+        .iter()
+        .find(|t| t["id"] == "outpost")
+        .expect("Outpost")["setup"]
+        .clone();
+    assert_eq!(setup["command"], "cargo run -p ara-samples -- kits outpost");
+    assert!(
+        setup["message"]
+            .as_str()
+            .is_some_and(|s| s.contains("mesh.gltf"))
+    );
+    let destination = root.join("Created");
+    for dry_run in [true, false] {
+        let error = hub
+            .call(
+                "hub.create",
+                json!({"template":"outpost","name":"Created","path":destination,"dryRun":dry_run}),
+            )
+            .expect_err("missing kits");
+        let diagnostic = error.diagnostics().into_iter().next().expect("diagnostic");
+        assert_eq!(diagnostic.code, ara_diag::codes::TEMPLATE_INCOMPLETE);
+        assert_eq!(diagnostic.location.path.as_deref(), Some("template"));
+        assert!(
+            diagnostic
+                .message
+                .contains("cargo run -p ara-samples -- kits outpost")
+        );
+        assert!(
+            !destination.exists(),
+            "refuse before creating a broken project"
+        );
+    }
+    assert!(
+        hub.call("hub.projects", json!({})).expect("projects")["projects"]
+            .as_array()
+            .is_some_and(Vec::is_empty)
+    );
+    let direct = root.join("Direct");
+    fs::create_dir(&direct).expect("empty destination");
+    DirectoryTemplates(templates.clone())
+        .instantiate("outpost", &direct)
+        .expect_err("direct copying must also reject missing kits");
+    assert_eq!(fs::read_dir(&direct).expect("destination").count(), 0);
+
+    // A partial cook can leave the glTF and texture while its binary is absent.
+    fs::write(kit.join("palette.png"), "image").expect("generated palette");
+    fs::write(kit.join("mesh.gltf"), r#"{"buffers":[{"uri":"mesh.bin"},{"uri":"data:application/octet-stream;base64,AA=="}],"images":[{"uri":"palette.png"},{"uri":"../third_party/art/palette.png"}]}"#).expect("generated mesh");
+    let source = DirectoryTemplates(templates);
+    let incomplete = source
+        .list()
+        .expect("list")
+        .into_iter()
+        .find(|t| t.id == "outpost")
+        .expect("Outpost")
+        .setup
+        .expect("missing binary");
+    assert!(incomplete.message.contains("mesh.bin"));
+    fs::write(kit.join("mesh.bin"), [0]).expect("generated buffer");
+    assert!(
+        source
+            .list()
+            .expect("list")
+            .into_iter()
+            .find(|t| t.id == "outpost")
+            .expect("Outpost")
+            .setup
+            .is_none()
+    );
+    hub.call(
+        "hub.create",
+        json!({"template":"outpost","name":"Created","path":destination}),
+    )
+    .expect("complete generated kits");
+    assert!(destination.join("assets/kit/mesh.bin").is_file());
+    assert!(destination.join("assets/kit/palette.png").is_file());
+}
+
+#[test]
 fn create_dry_run_reports_every_field_problem_with_its_field() {
     let root = scratch("dry-run");
     let directory = root.join("config");

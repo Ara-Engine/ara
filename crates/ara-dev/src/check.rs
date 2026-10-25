@@ -45,6 +45,11 @@ pub(crate) struct Logs {
     cargo_directories: crate::build_paths::Directories,
 }
 
+struct CargoStep {
+    command: Command,
+    deadline: Option<Instant>,
+}
+
 impl Logs {
     pub(crate) fn new(root: &Path, no_compiler_cache: bool) -> Result<Self> {
         let cargo_directories = crate::build_paths::Directories::from_env(root)?;
@@ -68,8 +73,7 @@ impl Logs {
 
     pub(crate) fn command(&mut self, root: &Path, name: &str, args: &[String]) -> Result<bool> {
         let log = self.directory.join(format!("{name}.log"));
-        let file = File::create(&log)?;
-        self.execute(root, name, args, &file, &file, &log)
+        self.execute(root, name, args, &log, &log)
     }
 
     pub(crate) fn json_command(
@@ -80,27 +84,13 @@ impl Logs {
     ) -> Result<bool> {
         let output = self.directory.join(format!("{name}.json"));
         let log = self.directory.join(format!("{name}.log"));
-        self.execute(
-            root,
-            name,
-            args,
-            &File::create(output)?,
-            &File::create(&log)?,
-            &log,
-        )
+        self.execute(root, name, args, &output, &log)
     }
 
     fn capture(&mut self, root: &Path, name: &str, args: &[String]) -> Result<Vec<u8>> {
         let output = self.directory.join(format!("{name}.json"));
         let log = self.directory.join(format!("{name}.log"));
-        if !self.execute(
-            root,
-            name,
-            args,
-            &File::create(&output)?,
-            &File::create(&log)?,
-            &log,
-        )? {
+        if !self.execute(root, name, args, &output, &log)? {
             bail!(
                 "{}; {}",
                 self.rows.last().context("command result")?.detail,
@@ -115,49 +105,41 @@ impl Logs {
         root: &Path,
         name: &str,
         args: &[String],
-        stdout: &File,
-        stderr: &File,
+        stdout: &Path,
         log: &Path,
     ) -> Result<bool> {
         eprintln!("{name}: cargo {} (log: {})", args.join(" "), log.display());
         let start = Instant::now();
-        let mut command = Command::new("cargo");
-        self.cargo_directories.apply(&mut command);
-        crate::compile_cache::configure(&mut command);
-        command
-            .current_dir(root)
-            .args(args)
-            .env("CARGO_BUILD_JOBS", "2")
-            .env("CARGO_TERM_COLOR", "never")
-            .stdout(Stdio::from(stdout.try_clone()?))
-            .stderr(Stdio::from(stderr.try_clone()?));
-        if self.no_compiler_cache {
-            // An empty wrapper overrides Cargo config; clippy's workspace wrapper stays active.
-            command.env("RUSTC_WRAPPER", "");
-        }
-        if name == "tests" {
-            for (binary, path) in &self.test_binaries {
-                command.env(format!("CARGO_BIN_EXE_{binary}"), path);
-            }
-        }
-        let deadline = if matches!(name, "doctests" | "diagnostic-coverage") {
-            command.env("RUST_TEST_THREADS", "2");
-            let limit = start + Duration::from_secs(180);
-            Some(self.deadline.map_or(limit, |gate| gate.min(limit)))
+        let output = File::create(stdout)?;
+        let errors = if stdout == log {
+            output.try_clone()?
         } else {
-            self.deadline
+            File::create(log)?
         };
-        let status = process::run(&mut command, deadline);
+        let mut step = self.cargo_step(root, name, args);
+        step.command
+            .stdout(Stdio::from(output))
+            .stderr(Stdio::from(errors));
+        let result = crate::cargo_wait::run(&mut step.command, &mut step.deadline, stdout, log);
+        self.deadline = step.deadline;
+        let waited = result.as_ref().map_or(Duration::ZERO, |(_, wait)| *wait);
+        let status = result.map(|(outcome, _)| outcome);
         let passed = status.as_ref().is_ok_and(process::Outcome::success);
         let timed_out = matches!(status, Ok(process::Outcome::TimedOut));
-        let detail = match status {
+        let mut detail = match status {
             Ok(process::Outcome::Exited(s)) => format!("{s}; {}", log.display()),
             Ok(process::Outcome::TimedOut) => format!(
-                "timed out at the command/check deadline (including Cargo cache waits); {}",
+                "timed out at the check deadline (package-cache waits excluded); {}",
                 log.display()
             ),
             Err(e) => format!("{e}; {}", log.display()),
         };
+        if !waited.is_zero() {
+            detail.push_str(&format!(
+                "; {:.2}s package-cache wait excluded",
+                waited.as_secs_f64()
+            ));
+        }
         self.rows.push(Row {
             check: name.into(),
             passed,
@@ -167,6 +149,33 @@ impl Logs {
             detail,
         });
         Ok(passed)
+    }
+
+    fn cargo_step(&self, root: &Path, name: &str, args: &[String]) -> CargoStep {
+        let mut command = Command::new("cargo");
+        self.cargo_directories.apply(&mut command);
+        crate::compile_cache::configure(&mut command);
+        command
+            .current_dir(root)
+            .args(args)
+            .env("CARGO_BUILD_JOBS", "2")
+            .env("CARGO_TERM_COLOR", "never");
+        if self.no_compiler_cache {
+            // An empty wrapper overrides Cargo config; clippy's workspace wrapper stays active.
+            command.env("RUSTC_WRAPPER", "");
+        }
+        if name == "tests" {
+            for (binary, path) in &self.test_binaries {
+                command.env(format!("CARGO_BIN_EXE_{binary}"), path);
+            }
+        }
+        if matches!(name, "doctests" | "diagnostic-coverage") {
+            command.env("RUST_TEST_THREADS", "2");
+        }
+        CargoStep {
+            command,
+            deadline: self.deadline,
+        }
     }
 
     fn findings(&mut self, name: &str, findings: Vec<String>) {
@@ -614,4 +623,23 @@ pub(crate) fn run(root: &Path, options: Options<'_>) -> Result<bool> {
         println!("Total: {:.1}s", report.elapsed_seconds);
     }
     Ok(report.passed)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn cargo_steps_preserve_unlimited_and_explicit_gate_deadlines() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let mut logs = Logs::new(&root, true).unwrap();
+        let now = Instant::now();
+        for deadline in [None, Some(now + Duration::from_secs(600))] {
+            logs.deadline = deadline;
+            for name in ["doctests", "diagnostic-coverage", "test-build", "clippy"] {
+                let step = logs.cargo_step(&root, name, &[]);
+                assert_eq!(step.deadline, deadline, "{name}");
+            }
+        }
+    }
 }
