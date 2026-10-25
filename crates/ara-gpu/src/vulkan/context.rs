@@ -159,6 +159,8 @@ pub struct DeviceInfo {
     pub hdr_metadata: bool,
     /// Enabled 64-bit shader integer operations and buffer atomics.
     pub buffer_int64_atomics: bool,
+    /// Enabled optional Vulkan 1.3 integer dot products. Scalar shaders remain valid.
+    pub shader_integer_dot_product: bool,
     /// Maximum supported 2D extent.
     pub max_image_dimension: u32,
     /// Supported Vulkan version.

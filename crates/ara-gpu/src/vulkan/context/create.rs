@@ -165,6 +165,7 @@ impl Gpu {
                 && mesh_features.task_shader != 0;
             let buffer_int64_atomics =
                 core_supported.shader_int64 != 0 && v12.shader_buffer_int64_atomics != 0;
+            let shader_integer_dot_product = v13.shader_integer_dot_product != 0;
             if mesh_shading {
                 device_extensions.push(ash::ext::mesh_shader::NAME.as_ptr());
             }
@@ -234,6 +235,7 @@ impl Gpu {
                 .descriptor_binding_storage_image_update_after_bind(true)
                 .shader_storage_image_array_non_uniform_indexing(true);
             let mut v13 = vk::PhysicalDeviceVulkan13Features::default()
+                .shader_integer_dot_product(shader_integer_dot_product)
                 .shader_demote_to_helper_invocation(true)
                 .dynamic_rendering(true)
                 .synchronization2(true);
@@ -365,6 +367,7 @@ impl Gpu {
                 geometry_shader: core_supported.geometry_shader != 0,
                 hdr_metadata,
                 buffer_int64_atomics,
+                shader_integer_dot_product,
                 max_image_dimension: properties.limits.max_image_dimension2_d,
                 driver_version: properties.driver_version,
                 graphics_family,

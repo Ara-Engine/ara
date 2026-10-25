@@ -12,10 +12,10 @@ ara-asset-format = { path = "../ara-asset-format" }
 ara-gpu = { path = "../ara-gpu" }
 bytemuck.workspace = true
 serde_json.workspace = true
-tempfile.workspace = true
 
 [dev-dependencies]
 bcdec_rs = "0.2.1"
+tempfile.workspace = true
 
 [lints]
 workspace = true

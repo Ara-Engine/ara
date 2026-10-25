@@ -15,7 +15,9 @@ fn create_worker_encoder(
     memo: Option<&std::path::Path>,
 ) -> ara_asset::Result<Box<dyn ara_asset::BlockEncoder>> {
     if std::env::var("ARA_TEXTURE_ENCODER").is_ok_and(|value| value.eq_ignore_ascii_case("cpu")) {
-        return Err(ara_asset::Error::EncoderUnavailable("CPU encoding explicitly selected".into()));
+        return Err(ara_asset::Error::EncoderUnavailable(
+            "CPU encoding explicitly selected".into(),
+        ));
     }
     let cooked = ara_gpu::cooked::resource_dir(
         "ara-texture-gpu",
@@ -44,6 +46,6 @@ mod bc6h_reference;
 #[cfg(test)]
 mod bc7_reference;
 #[cfg(test)]
-mod tests;
-#[cfg(test)]
 mod readback_tests;
+#[cfg(test)]
+mod tests;

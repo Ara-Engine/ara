@@ -217,7 +217,11 @@ fn serve(registry: &ImporterRegistry, factory: Option<EncoderFactory>) -> Result
             },
         );
         if traced && let Some(encoder) = &encoder {
-            crate::trace::event("texture.gpu", &input.source_path, serde_json::json!(encoder.metrics()));
+            crate::trace::event(
+                "texture.gpu",
+                &input.source_path,
+                serde_json::json!(encoder.metrics()),
+            );
         }
         // Finish device teardown/cache persistence before the host consumes Complete
         // and releases the disposable process. No GPU work survives publication.

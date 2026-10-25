@@ -77,7 +77,8 @@ impl Default for TextureSettings {
         }
     }
 }
-/// PNG, JPEG, Radiance HDR and OpenEXR importer with Intel ISPC BCn encoding.
+/// PNG, JPEG, Radiance HDR and OpenEXR importer with optional worker BCn encoding.
+/// Without an explicit encoding service, compression uses the qualified ISPC path.
 pub struct TextureImporter;
 impl Importer for TextureImporter {
     fn id(&self) -> &str {

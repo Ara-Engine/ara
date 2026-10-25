@@ -6,15 +6,15 @@ use ara_gpu::{
 
 pub(super) const SCRATCH_BYTES: usize = 1552;
 #[derive(Clone, Copy)]
-pub(super) enum Pipelines {
+pub(super) enum Pipelines<'a> {
     Single(Pipeline),
     Bc7 {
-        modes: [Pipeline; 8],
+        modes: &'a [Pipeline; 8],
         select: Pipeline,
         reduce: Pipeline,
     },
 }
-impl Pipelines {
+impl Pipelines<'_> {
     pub(super) fn split(&self) -> bool {
         matches!(self, Self::Bc7 { .. })
     }
@@ -66,7 +66,7 @@ impl Pipelines {
                 barrier(commands);
                 root[6] = 1;
                 let finalists = if root[3] == 1 { 9 } else { 17 };
-                for pipeline in modes {
+                for &pipeline in modes {
                     stage(commands, pipeline, root, (count * finalists).div_ceil(64));
                     barrier(commands);
                 }

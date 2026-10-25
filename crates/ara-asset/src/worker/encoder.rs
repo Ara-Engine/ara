@@ -16,7 +16,13 @@ impl ProcessWorker {
     /// Resolves an optional texture encoder on a background/CLI thread. Old or
     /// CPU-only workers retain the original CPU action keys without an error.
     pub fn texture_encoder(&self, input: &ImportInput) -> Option<&str> {
-        if input.importer == "ara.texture" && input.settings.get("usage").and_then(serde_json::Value::as_str) == Some("normal") {
+        if input.importer == "ara.texture"
+            && input
+                .settings
+                .get("usage")
+                .and_then(serde_json::Value::as_str)
+                == Some("normal")
+        {
             return None;
         }
         if !matches!(
@@ -110,5 +116,71 @@ pub(super) mod shared_input {
         deserializer: D,
     ) -> std::result::Result<Arc<ImportInput>, D::Error> {
         ImportInput::deserialize(deserializer).map(Arc::new)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde::Serialize;
+
+    #[derive(Serialize)]
+    enum LegacyRequest {
+        Import(ImportInput),
+        Discover {
+            importer: String,
+            version: String,
+            #[serde(with = "serde_bytes")]
+            source: Vec<u8>,
+            settings: serde_json::Value,
+        },
+        Versions,
+    }
+
+    #[test]
+    fn optional_encoder_protocol_preserves_all_legacy_cpu_requests() {
+        let input = ImportInput {
+            preset: crate::CookPreset::Balanced,
+            thread_budget: 2,
+            source_path: "fixture.bin".into(),
+            source: vec![0, 127, 255],
+            importer: "fixture".into(),
+            version: "fixture-1".into(),
+            settings: serde_json::Value::Null,
+            target: crate::TargetPlatform::Windows,
+            dependencies: Default::default(),
+            asset_dependencies: Default::default(),
+        };
+        let discover = Request::Discover {
+            importer: input.importer.clone(),
+            version: input.version.clone(),
+            source: input.source.clone(),
+            settings: input.settings.clone(),
+        };
+        let legacy_discover = LegacyRequest::Discover {
+            importer: input.importer.clone(),
+            version: input.version.clone(),
+            source: input.source.clone(),
+            settings: input.settings.clone(),
+        };
+        for (current, legacy) in [
+            (
+                Request::Import(Arc::new(input.clone())),
+                LegacyRequest::Import(input),
+            ),
+            (discover, legacy_discover),
+            (Request::Versions, LegacyRequest::Versions),
+        ] {
+            let bytes = rmp_serde::to_vec_named(&current).expect("current wire");
+            assert_eq!(
+                bytes,
+                rmp_serde::to_vec_named(&legacy).expect("legacy wire")
+            );
+            let decoded: Request = rmp_serde::from_slice(&bytes).expect("current decode");
+            assert_eq!(
+                bytes,
+                rmp_serde::to_vec_named(&decoded).expect("round trip")
+            );
+        }
     }
 }

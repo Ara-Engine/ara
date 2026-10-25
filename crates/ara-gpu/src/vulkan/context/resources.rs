@@ -40,7 +40,12 @@ impl Gpu {
     }
 
     pub(crate) fn readback_buffer(&mut self, size: u64) -> Result<BufferAllocation> {
-        self.buffer_preferred(size, vk::BufferUsageFlags::TRANSFER_DST, true, vk::MemoryPropertyFlags::HOST_CACHED)
+        self.buffer_preferred(
+            size,
+            vk::BufferUsageFlags::TRANSFER_DST,
+            true,
+            vk::MemoryPropertyFlags::HOST_CACHED,
+        )
     }
 
     fn buffer_preferred(
@@ -74,7 +79,8 @@ impl Gpu {
                 } else {
                     vk::MemoryPropertyFlags::DEVICE_LOCAL
                 };
-                let memory_type_index = self.memory_type(requirements.memory_type_bits, flags | preferred)
+                let memory_type_index = self
+                    .memory_type(requirements.memory_type_bits, flags | preferred)
                     .or_else(|_| self.memory_type(requirements.memory_type_bits, flags))?;
                 let key = MemoryKey {
                     size: requirements.size,

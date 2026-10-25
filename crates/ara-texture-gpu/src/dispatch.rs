@@ -9,7 +9,7 @@ use ara_gpu::{
 pub(super) const MAX_BLOCKS: usize = 65_535;
 
 pub(super) struct Encoding<'a> {
-    pub(super) pipelines: Pipelines,
+    pub(super) pipelines: Pipelines<'a>,
     pub(super) preset: u32,
     pub(super) words: &'a [u32],
     pub(super) count: usize,
@@ -69,7 +69,9 @@ impl Transfers {
                 false,
             )
             .map_err(unavailable)?;
-        let readback = gpu.create_readback_buffer(output_capacity as u64).map_err(unavailable)?;
+        let readback = gpu
+            .create_readback_buffer(output_capacity as u64)
+            .map_err(unavailable)?;
         let input_slot = gpu.storage_buffer(input).map_err(unavailable)?.index;
         let output_slot = gpu.storage_buffer(output).map_err(unavailable)?.index;
         let scratch = if scratch_capacity > 0 {
@@ -121,11 +123,13 @@ impl Transfers {
         gpu: &mut VulkanDevice,
         encoding: Encoding<'_>,
         cancel: &Cancellation,
-    ) -> Result<(Vec<u8>, Vec<ara_gpu::vulkan::PassTiming>)> {
+    ) -> Result<(Vec<u8>, std::collections::BTreeMap<String, f64>)> {
         cancel.check()?;
         let input: &[u8] = bytemuck::cast_slice(encoding.words);
         let bytes = encoding.count * encoding.block_bytes;
+        let start = std::time::Instant::now();
         gpu.upload(self.staging, input).map_err(unavailable)?;
+        let upload_ms = start.elapsed().as_secs_f64() * 1000.0;
         let mut commands = gpu.begin(Queue::Compute);
         commands.push(Command::BeginPass("Texture.Upload".into()));
         commands.barriers([
@@ -211,11 +215,31 @@ impl Transfers {
             Access::HostRead,
         )]);
         commands.push(Command::EndPass);
+        let start = std::time::Instant::now();
         let submitted = gpu.submit(commands.finish(), &[]).map_err(unavailable)?;
-        let timings = gpu.resolve(submitted).map_err(unavailable)?;
+        let submit_ms = start.elapsed().as_secs_f64() * 1000.0;
+        let start = std::time::Instant::now();
+        let passes = gpu.resolve(submitted).map_err(unavailable)?;
+        let wait_ms = start.elapsed().as_secs_f64() * 1000.0;
         self.used = true;
         cancel.check()?;
-        let readback = gpu.read(self.readback).map_err(unavailable)?;
-        Ok((readback[..bytes].to_vec(), timings))
+        let start = std::time::Instant::now();
+        let mut readback = gpu.read(self.readback).map_err(unavailable)?;
+        readback.truncate(bytes);
+        let mut timings = std::collections::BTreeMap::from([
+            ("upload.cpu_ms".into(), upload_ms),
+            ("submit.cpu_ms".into(), submit_ms),
+            ("wait.wall_ms".into(), wait_ms),
+            (
+                "readback.cpu_ms".into(),
+                start.elapsed().as_secs_f64() * 1000.0,
+            ),
+            ("uploaded_bytes".into(), input.len() as f64),
+            ("readback_bytes".into(), bytes as f64),
+        ]);
+        for pass in passes {
+            *timings.entry(format!("{}.gpu_ms", pass.pass)).or_default() += pass.milliseconds;
+        }
+        Ok((readback, timings))
     }
 }

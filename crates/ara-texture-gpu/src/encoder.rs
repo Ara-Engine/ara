@@ -30,6 +30,7 @@ impl Encoder {
     /// Opens a cooked cohort and a driver-local pipeline cache, with no window or
     /// runtime shader compilation. Call only inside an isolated worker/background job.
     pub fn new(cooked: &Path, cache: &Path) -> Result<Self> {
+        let start = std::time::Instant::now();
         let mut identity = Vec::new();
         let mut kernels = Vec::new();
         for name in [
@@ -56,12 +57,19 @@ impl Encoder {
             if manifest.key.len() != 64 || !manifest.key.bytes().all(|b| b.is_ascii_hexdigit()) {
                 return Err(unavailable("codec cook key must be a content digest"));
             }
-            if manifest.stages.len() != 1 || manifest.stages[0].stage != ara_gpu::cooked::Stage::Compute {
+            if manifest.stages.len() != 1
+                || manifest.stages[0].stage != ara_gpu::cooked::Stage::Compute
+            {
                 return Err(unavailable("codec pipeline must contain one compute stage"));
             }
-            let (stage_key, _) = manifest.stages[0].spirv.split_once('/').ok_or_else(|| unavailable("codec stage has no immutable artifact directory"))?;
+            let (stage_key, _) = manifest.stages[0]
+                .spirv
+                .split_once('/')
+                .ok_or_else(|| unavailable("codec stage has no immutable artifact directory"))?;
             if stage_key.len() != 64 || !stage_key.bytes().all(|b| b.is_ascii_hexdigit()) {
-                return Err(unavailable("codec artifact directory must be a content digest"));
+                return Err(unavailable(
+                    "codec artifact directory must be a content digest",
+                ));
             }
             let prefix = format!("{stage_key}/");
             let directory = cooked.join(stage_key);
@@ -102,7 +110,10 @@ impl Encoder {
                 gpu,
                 kernels,
                 transfers: None,
-                    timings: Default::default(),
+                timings: std::collections::BTreeMap::from([(
+                    "initialize.wall_ms".into(),
+                    start.elapsed().as_secs_f64() * 1000.0,
+                )]),
             }),
         })
     }
@@ -112,7 +123,10 @@ impl BlockEncoder for Encoder {
         &self.identity
     }
     fn metrics(&self) -> std::collections::BTreeMap<String, f64> {
-        self.state.lock().map(|state| state.timings.clone()).unwrap_or_default()
+        self.state
+            .lock()
+            .map(|state| state.timings.clone())
+            .unwrap_or_default()
     }
     fn encode(
         &self,
@@ -151,19 +165,23 @@ impl BlockEncoder for Encoder {
             transfers,
             timings,
         } = &mut *state;
+        let start = std::time::Instant::now();
+        let mut modes;
         let pipelines = if index == 3 && preset > 0 {
-            let mut modes = [pipeline(gpu, &mut kernels[4])?; 8];
+            modes = [pipeline(gpu, &mut kernels[4])?; 8];
             for mode in 1..8 {
                 modes[mode] = pipeline(gpu, &mut kernels[4 + mode])?;
             }
             Pipelines::Bc7 {
-                modes,
+                modes: &modes,
                 select: pipeline(gpu, &mut kernels[12])?,
                 reduce: pipeline(gpu, &mut kernels[13])?,
             }
         } else {
             Pipelines::Single(pipeline(gpu, &mut kernels[index])?)
         };
+        *timings.entry("pipelines.wall_ms".into()).or_default() +=
+            start.elapsed().as_secs_f64() * 1000.0;
         let max_count = (blocks.len() / words).min(MAX_BLOCKS);
         let input_capacity = max_count * words * 4;
         let output_capacity = max_count * format.block_bytes();
@@ -172,6 +190,7 @@ impl BlockEncoder for Encoder {
         } else {
             0
         };
+        let start = std::time::Instant::now();
         if transfers
             .as_ref()
             .is_some_and(|t| !t.fits(input_capacity, output_capacity, scratch_capacity))
@@ -187,10 +206,12 @@ impl BlockEncoder for Encoder {
                 scratch_capacity,
             )?);
         }
+        *timings.entry("allocation.wall_ms".into()).or_default() +=
+            start.elapsed().as_secs_f64() * 1000.0;
         let transfer = transfers.as_mut().expect("transfer set was allocated");
         let mut result = Vec::with_capacity(blocks.len() / words * format.block_bytes());
         for chunk in blocks.chunks(MAX_BLOCKS * words) {
-            let (output, passes) = transfer.run(
+            let (output, measured) = transfer.run(
                 gpu,
                 Encoding {
                     pipelines,
@@ -201,7 +222,9 @@ impl BlockEncoder for Encoder {
                 },
                 cancellation,
             )?;
-            for pass in passes { *timings.entry(format!("{}.gpu_ms", pass.pass)).or_default() += pass.milliseconds; }
+            for (name, value) in measured {
+                *timings.entry(name).or_default() += value;
+            }
             result.extend_from_slice(&output);
         }
         gpu.assert_clean().map_err(unavailable)?;

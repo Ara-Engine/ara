@@ -8,12 +8,12 @@ use serde::{Deserialize, Serialize};
 #[ara(module = "asset")]
 #[serde(rename_all = "camelCase")]
 pub enum CookPreset {
-    /// ISPC BC7/BC6H basic, the default for interactive project imports.
+    /// Balanced compression search, the default for interactive project imports.
     #[default]
     Balanced,
-    /// ISPC BC7 slow and BC6H very slow, for background recooks and shipping.
+    /// Deeper compression search for higher-quality assets and background recooks.
     HighQuality,
-    /// ISPC BC7 ultrafast and BC6H fast, for the first interactive generation.
+    /// Reduced compression search for the first interactive generation.
     Fast,
 }
 

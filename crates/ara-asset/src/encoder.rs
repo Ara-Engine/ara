@@ -8,7 +8,9 @@ pub trait BlockEncoder: Send + Sync {
     /// Stable, portable content identity; never a device name or filesystem path.
     fn backend(&self) -> &str;
     /// Cumulative offline telemetry; excluded from cache identity and artifacts.
-    fn metrics(&self) -> std::collections::BTreeMap<String, f64> { Default::default() }
+    fn metrics(&self) -> std::collections::BTreeMap<String, f64> {
+        Default::default()
+    }
     /// Encodes block-major texels: 16 RGBA8 words, or 32 RGB-half words for BC6H,
     /// per block. Output blocks retain input order, independently of scheduling.
     fn encode(
