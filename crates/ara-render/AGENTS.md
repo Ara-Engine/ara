@@ -37,9 +37,9 @@ Owns the M1 baseline renderer and agent visual feedback. Gameplay state stays in
   shadows independently choose LODs within one texel and omit bound radii below
   max(2, min_pixels) texels. Explicit `*_with_resolution` shadow methods take the
   actual far-map/local-face viewport size; resolution is part of the cache key.
-  Local lights reserve `reserve_native_shadow_passes(count)` before graph imports;
-  `cull_native_shadow_pass(slot, matrix)` returns an independent cached pass index.
-  Record it with its own Frame matrix in shadows[0] and root cascade word 4 = 0.
+  Local shadows reserve `reserve_native_shadow_passes(count)` before graph imports;
+  `cull_native_shadow_pass_with_resolution(slot, matrix, resolution)` returns a cached pass index,
+  recorded as cascade 4+slot (its matrix comes from `look::local`'s table).
 - `instanced::GeometryGpu` uploads static local vertices/LOD indices once. Changed
   deforming revisions use `prepare_pose` then `commit_pose`/`cancel_pose`; retire
   the old dependent TLAS before committing. Three skin slots retain presented and
@@ -52,10 +52,9 @@ Owns the M1 baseline renderer and agent visual feedback. Gameplay state stays in
 - `update_materials` replaces parameters in their existing order and remaps scene
   texture slots without uploading geometry. `rename` updates an entity's capture
   label. Invalid edits retain the previous content.
-- Live frames keep output/IDs on the GPU. Captures copy the final settled frame
-  once; `entity_at(&mut self, pixel)` reads IDs only when explicitly picking.
-  Consecutive graph passes on one queue share a submission; every pass retains
-  its barriers and timestamps, and cross-queue edges wait on the batch signal.
+- Live frames keep output/IDs on the GPU; captures copy the settled frame once and
+  `entity_at(&mut self, pixel)` reads IDs only when picking. Same-queue passes share
+  a submission (barriers and timestamps kept); cross-queue edges wait on batches.
 - `look::Look` (`Renderer::set_look`): D27 raster look after the G-buffer:
   physical sky LUTs and their IBL, CSM-shadowed froxel fog, histogram or manual
   exposure, bloom, grading and the display curve. Defaults reproduce M1. Hosts map
@@ -69,13 +68,12 @@ Owns the M1 baseline renderer and agent visual feedback. Gameplay state stays in
 - `look::Quality` (`Renderer::set_quality`): per-preset budgets from
   `ara_render_fidelity::presets::RasterPlan`: shadow cascades (count, texels,
   distance; stable light space, practical splits, gather PCF, cascade blend; one
-  cached D32 map per cascade, redrawn only when its matrix or the casters in its
-  light volume change, outer cascades snapped coarsely so they survive motion),
-  a cached far map past them (`look::far`), half-res GTAO, half-res SSR (cone
-  footprint into a colour pyramid of last frame), GI relight budget, bloom,
-  emitter light budget, LOD/cull pixel budgets, terrain detail distance. Look images are allocated lazily (the bindless storage
-  heap is shared). Probe GI is
-  gathered at half resolution for G-buffer pixels.
+  cached D32 map per cascade, redrawn only when its matrix or casters in its light
+  volume change, outer cascades snapped coarsely), a cached far map (`look::far`),
+  local-light shadows (`look::local`), half-res GTAO and SSR (cone footprint into
+  last frame's colour pyramid), GI relight, bloom, emitter lights, LOD/cull pixels,
+  terrain detail. Look images are allocated lazily (the bindless heap is shared);
+  probe GI is gathered at half resolution for G-buffer pixels.
 - `set_deferred_post` + `finish(color, sampled, state)`: temporally resolve and grade
   an externally composited HDR frame (landscape, particles) with the same look post.
   TAA reprojects with native motion (Frame.look.w) when present.
@@ -96,20 +94,19 @@ is the look record, look.w the native motion texture). `look*.slang(h)` belong t
 the look; never use 16-bit intrinsics (f16tof32) there: the device enables no
 Int16/Float16 capability, so pack halves with bit math.
 
-Frames use reversed-Z, metres and linear HDR. Sun input is lux, point/spot flux
-is lumens and HDR environment input is radiance in cd/m?. Exposure is a positive
-linear multiplier. See README.md for the exact tone mapper and GPU measurements.
-The TAA history alone is RGBA16F and pre-exposed (`look.slangh` exposureState):
-history readers decode with the state's previous multiplier; look passes learn
-whether their input is history or linear HDR from root word 7.
+Frames use reversed-Z, metres and linear HDR: sun in lux, point/spot flux in
+lumens, environments in cd/m2, exposure a linear multiplier (README.md: tone mapper,
+GPU numbers). Only the TAA history is RGBA16F and pre-exposed (`look.slangh`
+exposureState); look passes learn from root word 7 whether input is history.
 The G-buffer is compact: RGBA8 sRGB albedo + AO, RG16 octahedral normal, RGBA8
 roughness/metal, B10G11R11 emissive, R32 ID and RG16F motion; world positions are
 rebuilt from depth. Shaders read and write it only through raster.slangh's
 `gbuffer*` helpers, so the formats change there and in `Renderer::targets` together.
 Local light lists are tiled 16x16: `scene::MAX_LOCAL_LIGHTS` (256) per scene, the
-first `TILE_LIGHTS` (128) per tile. Spot lumens are point-equivalent (the cone
-masks), as in the path tracer; `Light::parameters.z` softens the near field and
-`parameters.w` = 1 keeps a light out of fog (unshadowed emitter lights).
+first `TILE_LIGHTS` (128) per tile. `look::local` shadows the brightest few in view
+(cube or spot faces in one cached D32 atlas). Spot lumens are point-equivalent
+(the cone masks), as in the path tracer; `Light::parameters.z` softens the near
+field and `parameters.w` = 1 keeps a light out of fog (unshadowed emitter lights).
 
 Capture determinism resets history, fixes host tick/seed, disables jitter/history
 blending, locks exposure and renders the explicit settle count. No wall clock or

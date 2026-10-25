@@ -10,6 +10,7 @@ pub(crate) mod far;
 pub(crate) mod frame;
 pub mod gi;
 pub(crate) mod gpu;
+pub(crate) mod local;
 pub(crate) mod passes;
 
 pub use crate::renderer::post::ToneCurve;
@@ -38,6 +39,9 @@ pub struct Quality {
     pub lod_pixels: f32,
     /// Projected bound radius, in pixels, below which an instance is culled.
     pub min_pixels: f32,
+    /// Cached shadows for the brightest local lights in view; `None` leaves
+    /// local lights unshadowed.
+    pub local_shadows: Option<LocalShadows>,
     /// Distance in metres to which terrain splat layers sample their normal and
     /// metal/roughness maps; beyond it (blended over a quarter more) they keep
     /// colour maps and the metal/roughness maps' means. Zero: none, anywhere.
@@ -55,8 +59,21 @@ impl Default for Quality {
             lod_pixels: 1.,
             min_pixels: 1.5,
             terrain_detail: 150.,
+            local_shadows: None,
         }
     }
+}
+
+/// Cached local-light shadows (`look::local`): one D32 atlas of face tiles.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct LocalShadows {
+    /// Lights shadowed at once: the brightest at the camera among those in view.
+    pub lights: u32,
+    /// Texels per face side (power of two, 128 to 1024).
+    pub resolution: u32,
+    /// Faces redrawn per frame at most (moved lights, changed casters, new
+    /// lights); a light shades unshadowed until all its faces are drawn.
+    pub redraws: u32,
 }
 
 /// Ground-truth-based ambient occlusion (horizon search per screen slice).
@@ -157,6 +174,12 @@ impl Quality {
                 && self.lod_pixels > 0.
                 && self.min_pixels.is_finite()
                 && self.min_pixels >= 0.
+                && self.local_shadows.is_none_or(|l| {
+                    (1..=16).contains(&l.lights) // local::MAX_FACES
+                        && l.resolution.is_power_of_two()
+                        && (128..=1024).contains(&l.resolution)
+                        && l.redraws > 0
+                })
                 && self.reflections.is_none_or(|r| {
                     (0.0..=1.0).contains(&r.max_roughness)
                         && r.distance.is_finite()

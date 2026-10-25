@@ -311,20 +311,24 @@ impl Renderer {
     }
 
     /// Cull opaque/masked casters for one reserved local-light face using the
-    /// cascade texel budget. Use `cull_native_shadow_pass_with_resolution` when
+    /// local-light texel budget. Use `cull_native_shadow_pass_with_resolution` when
     /// the local-light tile has a different resolution. Call after native
     /// preparation and before graph resource declarations.
-    /// The returned native pass index is recorded with the shadow pipeline; bind
-    /// a Frame with this matrix in shadows[0] and root word 4 set to zero. Lists
+    /// The renderer records the returned pass with its main Frame, cascade word
+    /// 4+slot and the look's local-matrix table. External passes may instead bind
+    /// their own Frame with this matrix in shadows[0] and cascade zero. Lists
     /// remain independent of each other and of far-shadow pass 6.
     /// Arbitrary perspective and orthographic matrices test all six clip planes.
     /// Unculled slots keep their lists without traversal or visible-buffer writes.
     pub fn cull_native_shadow_pass(&mut self, slot: usize, matrix: Mat4) -> Result<usize> {
-        self.cull_native_shadow_pass_with_resolution(
-            slot,
-            matrix,
-            self.look.quality.shadows.resolution,
-        )
+        let resolution = self
+            .look
+            .quality
+            .local_shadows
+            .map_or(self.look.quality.shadows.resolution, |local| {
+                local.resolution
+            });
+        self.cull_native_shadow_pass_with_resolution(slot, matrix, resolution)
     }
 
     /// Cull a reserved local face with its actual square tile resolution. Matrix,

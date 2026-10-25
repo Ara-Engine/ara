@@ -51,6 +51,9 @@ pub(crate) struct LookFrame {
     pub cascade_maps: [u32; 4],
     /// x: terrain detail distance in metres (`Quality::terrain_detail`).
     pub terrain: [f32; 4],
+    /// Local-light shadows (`look::local`): x shading table (storage), y atlas
+    /// (sampled; zero: none), z/w atlas texels.
+    pub local_shadows: [u32; 4],
 }
 
 /// Per-frame inputs that are not part of the authored look.
@@ -134,6 +137,7 @@ impl LookFrame {
             far_info: [0; 4],
             cascade_maps: [0; 4],
             terrain: [0.; 4],
+            local_shadows: [0; 4],
         }
     }
 }
