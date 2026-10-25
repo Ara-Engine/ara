@@ -29,11 +29,30 @@ const TOP_LEAF: usize = 2;
 const BINS: usize = 16;
 const EMPTY: (Vec3, Vec3) = (Vec3::splat(f32::INFINITY), Vec3::splat(f32::NEG_INFINITY));
 
-/// Diffuse albedo (metal removed), emissive radiance.
+/// Diffuse albedo (metal removed), emissive radiance and the share of rays an
+/// alpha-tested or blended surface lets through.
 #[derive(Clone, Copy, Default, PartialEq)]
 pub(crate) struct Shading {
     pub albedo: Vec3,
     pub emissive: Vec3,
+    /// Share of rays passing through, as the ray-traced bake's any-hit test
+    /// (alpha mask coverage, or one minus blend alpha); 0 is opaque.
+    pub cutout: f32,
+}
+
+/// Whether the ray `seed` passes a triangle of a surface with `cutout`: a
+/// stable hash per ray and triangle, so bakes stay deterministic.
+fn passes(cutout: f32, seed: u32, triangle: u32) -> bool {
+    if cutout <= 0. {
+        return false;
+    }
+    let mut h = seed ^ triangle.wrapping_mul(0x9e37_79b9);
+    h ^= h >> 16;
+    h = h.wrapping_mul(0x7feb_352d);
+    h ^= h >> 15;
+    h = h.wrapping_mul(0x846c_a68b);
+    h ^= h >> 16;
+    ((h >> 8) as f32) < cutout * (1u32 << 24) as f32
 }
 
 /// A model-space triangle.
@@ -44,6 +63,8 @@ struct Triangle {
     e2: Vec3,
     /// Geometric normal oriented with the vertex normals.
     normal: Vec3,
+    /// Mean of the vertices' terrain splat bytes (zero for models).
+    weights: [u8; 4],
 }
 
 impl Triangle {
@@ -296,11 +317,15 @@ impl Mesh {
             if normal.dot(shading) < 0. {
                 normal = -normal;
             }
+            let splat = [a, b, c].map(|v| v.terrain_weights.to_le_bytes());
             triangles.push(Triangle {
                 a: pa,
                 e1,
                 e2,
                 normal,
+                weights: std::array::from_fn(|i| {
+                    (splat.iter().map(|w| u32::from(w[i])).sum::<u32>() / 3) as u8
+                }),
             });
         }
         Self::new(triangles)
@@ -311,9 +336,28 @@ impl Mesh {
         self.nodes.first().map_or(EMPTY, |n| (n.min, n.max))
     }
 
-    /// Closest hit with 0.001 < t < `limit`: distance and model-space normal.
-    /// `direction` need not be unit length; t is in its units.
-    pub(crate) fn trace(&self, origin: Vec3, direction: Vec3, limit: f32) -> Option<(f32, Vec3)> {
+    /// Closest hit with 0.001 < t < `limit`: distance, model-space normal and the
+    /// triangle's splat weights. `direction` need not be unit length; t is in its
+    /// units.
+    pub(crate) fn trace(
+        &self,
+        origin: Vec3,
+        direction: Vec3,
+        limit: f32,
+    ) -> Option<(f32, Vec3, [u8; 4])> {
+        self.trace_cut(origin, direction, limit, 0., 0)
+    }
+
+    /// [`Self::trace`] through a surface with `cutout`: the ray `seed` passes the
+    /// triangles [`passes`] picks.
+    fn trace_cut(
+        &self,
+        origin: Vec3,
+        direction: Vec3,
+        limit: f32,
+        cutout: f32,
+        seed: u32,
+    ) -> Option<(f32, Vec3, [u8; 4])> {
         let mut normal = None;
         let distance = traverse(
             &self.nodes,
@@ -323,7 +367,8 @@ impl Mesh {
             |first, count, limit| {
                 let mut closest = None;
                 let mut limit = limit;
-                for t in &self.triangles[first as usize..(first + count) as usize] {
+                let leaf = &self.triangles[first as usize..(first + count) as usize];
+                for (index, t) in (first..).zip(leaf) {
                     // Moller-Trumbore.
                     let p = direction.cross(t.e2);
                     let det = t.e1.dot(p);
@@ -342,16 +387,39 @@ impl Mesh {
                         continue;
                     }
                     let d = t.e2.dot(q) * inv;
-                    if d > 0.001 && d < limit {
+                    if d > 0.001 && d < limit && !passes(cutout, seed, index) {
                         limit = d;
                         closest = Some(d);
-                        normal = Some(t.normal);
+                        normal = Some((t.normal, t.weights));
                     }
                 }
                 closest
             },
         );
-        normal.map(|n| (distance, n))
+        normal.map(|(n, w)| (distance, n, w))
+    }
+}
+
+/// A terrain instance's splat layers (`MaterialExtras`): its layer materials'
+/// albedos, blended per hit like native-raster's `terrainSurface`.
+#[derive(Clone, Copy, PartialEq)]
+struct Layers {
+    albedo: [Vec3; 4],
+    /// Slots in use (`terrain_layers`); later slots weigh nothing.
+    count: usize,
+}
+
+impl Layers {
+    /// The albedo where the splat bytes are `weights`: unused slots dropped, the
+    /// rest normalised, layer 0 alone when nothing remains.
+    fn albedo(&self, weights: [u8; 4]) -> Vec3 {
+        let mut w = weights.map(f32::from);
+        w[self.count.min(4)..].fill(0.);
+        let sum: f32 = w.iter().sum();
+        if sum <= 0. {
+            return self.albedo[0];
+        }
+        self.albedo.iter().zip(w).map(|(&a, w)| a * (w / sum)).sum()
     }
 }
 
@@ -367,6 +435,8 @@ struct Placed {
     /// Inverse transpose of `world`'s linear part.
     normal: Mat3,
     shading: Shading,
+    /// Terrain splat layers (their hits replace `shading.albedo`).
+    layers: Option<Layers>,
     /// Model bounds of the mesh.
     local: (Vec3, Vec3),
     /// World bounds.
@@ -500,6 +570,17 @@ impl Tracer {
             let local = mesh.map_or((geometry.bounds[0], geometry.bounds[1]), |m| {
                 self.meshes[m].bounds()
             });
+            let layers = scene
+                .materials
+                .get(instance.material)
+                .filter(|m| m.extras.terrain_layers > 0)
+                .map(|m| Layers {
+                    albedo: m
+                        .extras
+                        .layer_materials
+                        .map(|id| shading.get(id as usize).map_or(Vec3::ZERO, |s| s.albedo)),
+                    count: m.extras.terrain_layers as usize,
+                });
             let mut placed = Placed {
                 entity: instance.entity,
                 key: geometry.key,
@@ -508,6 +589,7 @@ impl Tracer {
                 inverse: Mat4::IDENTITY,
                 normal: Mat3::IDENTITY,
                 shading: shading.get(instance.material).copied().unwrap_or_default(),
+                layers,
                 local,
                 bounds: EMPTY,
                 deforming: geometry.deforming || mesh.is_none(),
@@ -520,7 +602,8 @@ impl Tracer {
                     && (!placed.included
                         || (old.world == placed.world
                             && old.key == placed.key
-                            && old.shading == placed.shading));
+                            && old.shading == placed.shading
+                            && old.layers == placed.layers));
                 if !same && old.included {
                     changed.push(old.bounds);
                 }
@@ -596,6 +679,12 @@ impl Tracer {
 
     /// Closest hit along `origin + t * direction` (unit `direction`), 0.001 < t < `maximum`.
     fn trace(&self, origin: Vec3, direction: Vec3, maximum: f32) -> Option<Hit> {
+        let seed = [origin, direction]
+            .iter()
+            .flat_map(|v| v.to_array())
+            .fold(0x811c_9dc5u32, |h, v| {
+                (h ^ v.to_bits()).wrapping_mul(0x0100_0193)
+            });
         let mut hit = None;
         let distance = traverse(
             &self.top,
@@ -611,19 +700,25 @@ impl Tracer {
                         placed.inverse.transform_point3(origin),
                         placed.inverse.transform_vector3(direction),
                     );
-                    if let Some((t, n)) = self.meshes[placed.mesh].trace(o, d, limit) {
+                    let mesh = &self.meshes[placed.mesh];
+                    if let Some((t, n, w)) =
+                        mesh.trace_cut(o, d, limit, placed.shading.cutout, seed)
+                    {
                         limit = t;
                         closest = Some(t);
-                        hit = Some((placed, n));
+                        hit = Some((placed, n, w));
                     }
                 }
                 closest
             },
         );
-        hit.map(|(placed, n)| Hit {
+        hit.map(|(placed, n, w)| Hit {
             distance,
             normal: (placed.normal * n).normalize_or_zero(),
-            shading: placed.shading,
+            shading: Shading {
+                albedo: placed.layers.map_or(placed.shading.albedo, |l| l.albedo(w)),
+                ..placed.shading
+            },
         })
     }
 }
@@ -936,7 +1031,7 @@ fn probe(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ara_render::instanced::{Instance, Lod, Vertex};
+    use ara_render::instanced::{Instance, Lod, NO_TEXTURE, Vertex};
 
     /// The quad `q` (two triangles) with normals facing `inside`.
     fn facing(q: [Vec3; 4], inside: Vec3) -> Vec3 {
@@ -1018,12 +1113,13 @@ mod tests {
                     e1: b - q[0],
                     e2: c - q[0],
                     normal,
+                    weights: [0; 4],
                 });
             }
         }
         let mesh = Mesh::new(triangles);
         assert!(mesh.nodes.len() > 1, "the BVH split");
-        let (distance, normal) = mesh
+        let (distance, normal, _) = mesh
             .trace(Vec3::new(0.2, 100., 0.1), Vec3::NEG_Y, RANGE)
             .context("the ray hits the top floor")?;
         assert!((distance - (100. - 31.5)).abs() < 1e-3);
@@ -1033,6 +1129,81 @@ mod tests {
                 .is_none()
         );
         Ok(())
+    }
+
+    #[test]
+    fn terrain_hits_blend_their_layers_by_splat_weight() -> Result<()> {
+        let floor = [
+            Vec3::new(-1., 0., -1.),
+            Vec3::new(-1., 0., 1.),
+            Vec3::new(1., 0., 1.),
+            Vec3::new(1., 0., -1.),
+        ];
+        let mut ground = geometry(1, &[floor], Vec3::Y);
+        // A quarter layer 0, three quarters layer 1.
+        for v in &mut ground.vertices {
+            v.terrain_weights = u32::from_le_bytes([64, 192, 0, 0]);
+        }
+        let mut scene = scene(vec![ground]);
+        let mut terrain = ara_render::instanced::Material::default();
+        terrain.extras.terrain_layers = 2;
+        terrain.extras.layer_materials = [1, 2, NO_TEXTURE, NO_TEXTURE];
+        scene.materials = vec![terrain, Default::default(), Default::default()];
+        let shading = [Vec3::splat(0.5), Vec3::X, Vec3::Y].map(|albedo| Shading {
+            albedo,
+            ..Shading::default()
+        });
+        let albedo = |scene: &Scene| {
+            Tracer::new(scene, &shading, &BTreeSet::new())
+                .trace(Vec3::new(0.2, 5., 0.1), Vec3::NEG_Y, RANGE)
+                .map(|hit| hit.shading.albedo)
+                .context("the ground")
+        };
+        let blended = albedo(&scene)?;
+        assert!(
+            (blended - Vec3::new(0.25, 0.75, 0.)).length() < 0.01,
+            "{blended}"
+        );
+        // A slot past `terrain_layers` weighs nothing: layer 0 alone remains.
+        scene.materials[0].extras.terrain_layers = 1;
+        assert_eq!(albedo(&scene)?, Vec3::X);
+        Ok(())
+    }
+
+    #[test]
+    fn rays_pass_cut_out_surfaces_by_their_share() {
+        // A floor and, 1 m above it, a canopy letting through `cutout` of the rays.
+        let quad = |y: f32| {
+            [
+                Vec3::new(-1., y, -1.),
+                Vec3::new(-1., y, 1.),
+                Vec3::new(1., y, 1.),
+                Vec3::new(1., y, -1.),
+            ]
+        };
+        let scene = scene(vec![
+            geometry(1, &[quad(0.)], Vec3::Y),
+            geometry(2, &[quad(1.)], Vec3::NEG_Y),
+        ]);
+        let through = |cutout: f32| {
+            let canopy = Shading {
+                cutout,
+                ..Shading::default()
+            };
+            let tracer = Tracer::new(&scene, &[Shading::default(), canopy], &BTreeSet::new());
+            (0..1000)
+                .filter(|&i| {
+                    let at = Vec3::new(i as f32 / 1000. * 1.6 - 0.8, 5., (i % 7) as f32 * 0.1);
+                    tracer
+                        .trace(at, Vec3::NEG_Y, RANGE)
+                        .is_some_and(|hit| (hit.distance - 5.).abs() < 1e-3)
+                })
+                .count()
+        };
+        assert_eq!(through(0.), 0, "an opaque canopy stops every ray");
+        assert_eq!(through(1.), 1000);
+        let half = through(0.5);
+        assert!((400..600).contains(&half), "{half}");
     }
 
     #[test]
@@ -1048,7 +1219,7 @@ mod tests {
         scene.instances[0].world = Mat4::from_translation(Vec3::new(0., 2., 0.));
         let shading = [Shading {
             albedo: Vec3::splat(0.5),
-            emissive: Vec3::ZERO,
+            ..Shading::default()
         }];
         let mut tracer = Tracer::new(&scene, &shading, &BTreeSet::new());
         let hit = tracer
@@ -1100,11 +1271,11 @@ mod tests {
         let shading = [
             Shading {
                 albedo: Vec3::splat(0.5),
-                emissive: Vec3::ZERO,
+                ..Shading::default()
             },
             Shading {
-                albedo: Vec3::ZERO,
                 emissive: Vec3::splat(4.),
+                ..Shading::default()
             },
         ];
         let tracer = Tracer::new(&scene, &shading, &BTreeSet::new());

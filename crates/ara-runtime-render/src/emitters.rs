@@ -17,7 +17,7 @@ use ara_render::{
     instanced::{
         Geometry, Lod, Material, NO_TEXTURE, Scene, TextureSlot, TextureTransform, Vertex,
     },
-    scene::Light,
+    scene::{EMISSIVE_DECODE_SRGB, Light},
 };
 use glam30::{Mat3, Mat4, Vec2, Vec3};
 use std::{
@@ -299,13 +299,14 @@ pub(crate) struct Job {
 
 impl Job {
     /// Collects the emitters of `scene`; `shading` is indexed by material and
-    /// `map` decodes an emissive texture (at most `side` texels a side).
+    /// `map` decodes an emissive texture (at most `side` texels a side, linear
+    /// where the material decodes sRGB itself: `EMISSIVE_DECODE_SRGB`).
     pub(crate) fn new(
         scene: &Scene,
         shading: &[Shading],
-        mut map: impl FnMut(u32, u32) -> Option<Map>,
+        mut map: impl FnMut(u32, u32, bool) -> Option<Map>,
     ) -> Self {
-        let mut maps: BTreeMap<u32, Option<Map>> = BTreeMap::new();
+        let mut maps: BTreeMap<(u32, bool), Option<Map>> = BTreeMap::new();
         let mut keys: BTreeMap<(usize, usize), usize> = BTreeMap::new();
         let (mut instances, mut sources) = (Vec::new(), Vec::new());
         for (instance, i) in scene.instances.iter().enumerate() {
@@ -321,10 +322,11 @@ impl Job {
             }
             let source = *keys.entry((i.geometry, i.material)).or_insert_with(|| {
                 let texture = material.pbr.textures[3];
+                let decode = material.pbr.flags[1] & EMISSIVE_DECODE_SRGB != 0;
                 let map = (texture != NO_TEXTURE)
                     .then(|| {
-                        maps.entry(texture)
-                            .or_insert_with(|| map(texture, MAP_SIDE))
+                        maps.entry((texture, decode))
+                            .or_insert_with(|| map(texture, MAP_SIDE, decode))
                             .clone()
                     })
                     .flatten();
@@ -405,25 +407,26 @@ impl Job {
 /// Whether editing the `changed` materials of `scene` changes its emitter lights:
 /// one of `current`'s emitters was edited (strength, colour or its emissive
 /// switch), or a material now emits enough to become one. `mean` gives a map's
-/// mean texel.
+/// mean texel (linear where the material decodes sRGB itself).
 pub(crate) fn emission_edited(
     current: Option<&Emitters>,
     scene: &Scene,
-    mean: impl Fn(u32) -> Option<[f32; 4]>,
+    mean: impl Fn(u32, bool) -> Option<[f32; 4]>,
     changed: &[usize],
 ) -> bool {
     changed.iter().any(|&index| {
         current.is_some_and(|e| e.materials.contains(&index))
             || scene.materials.get(index).is_some_and(|m| {
                 let texture = m.pbr.textures[3];
+                let decode = m.pbr.flags[1] & EMISSIVE_DECODE_SRGB != 0;
                 let map = (texture != NO_TEXTURE)
-                    .then(|| mean(texture))
+                    .then(|| mean(texture, decode))
                     .flatten()
                     .unwrap_or([1.; 4]);
                 let e = m.pbr.emissive_roughness;
                 is_emitter(Shading {
-                    albedo: Vec3::ZERO,
                     emissive: Vec3::new(e[0] * map[0], e[1] * map[1], e[2] * map[2]),
+                    ..Shading::default()
                 })
             })
     })
@@ -494,7 +497,11 @@ impl Search {
 
 impl Emitters {
     #[cfg(test)]
-    fn new(scene: &Scene, shading: &[Shading], map: impl FnMut(u32, u32) -> Option<Map>) -> Self {
+    fn new(
+        scene: &Scene,
+        shading: &[Shading],
+        map: impl FnMut(u32, u32, bool) -> Option<Map>,
+    ) -> Self {
         Job::new(scene, shading, map).run()
     }
 
@@ -734,6 +741,7 @@ mod tests {
     const BRIGHT: Shading = Shading {
         albedo: Vec3::ONE,
         emissive: Vec3::splat(100.),
+        cutout: 0.,
     };
 
     #[test]
@@ -759,7 +767,7 @@ mod tests {
         // 100 cd/m2 from both faces.
         let quad = [-0.125, -0.125, 0.875, 0.875, 3., 0.];
         let mut scene = scene(&[quad], 100., NO_TEXTURE);
-        let mut emitters = Emitters::new(&scene, &[BRIGHT], |_, _| None);
+        let mut emitters = Emitters::new(&scene, &[BRIGHT], |_, _, _| None);
         let lights = emitters.update(&scene, 8).expect("first placement");
         let [down, up] = lights.as_slice() else {
             panic!("one open panel, two lights: {}", lights.len());
@@ -788,13 +796,32 @@ mod tests {
             7,
         );
         let map: Map = ([2, 1], vec![[0.; 4], [1.; 4]]);
-        let mut emitters = Emitters::new(&scene, &[BRIGHT], |texture, _| {
+        let mut emitters = Emitters::new(&scene, &[BRIGHT], |texture, _, _| {
             (texture == 7).then(|| map.clone())
         });
         let lights = emitters.update(&scene, 8).expect("placed");
         assert_eq!(lights.len(), 2, "the small quad's two faces");
         assert!((flux(&lights[0]) - 100. * PI * 0.25).abs() < 0.2);
         assert_eq!(lights[0].position_range[..3], [3.25, 3., 3.25]);
+    }
+
+    #[test]
+    fn emissive_maps_decode_where_their_material_decodes_srgb() {
+        // A graph (raw view) material decodes its emissive map in the shader; the
+        // CPU sampling must be asked for linear texels too.
+        let mut scene = scene(&[[-1., -1., 1., 1., 3., 0.5]], 100., 7);
+        let decoded = std::cell::Cell::new(None);
+        let search = |scene: &Scene| {
+            Emitters::new(scene, &[BRIGHT], |_, _, decode| {
+                decoded.set(Some(decode));
+                None
+            })
+        };
+        search(&scene);
+        assert_eq!(decoded.take(), Some(false), "cooked views arrive linear");
+        scene.materials[0].pbr.flags[1] = EMISSIVE_DECODE_SRGB;
+        search(&scene);
+        assert_eq!(decoded.take(), Some(true));
     }
 
     #[test]
@@ -810,7 +837,7 @@ mod tests {
             7,
         );
         let map: Map = ([2, 1], vec![[0.; 4], [1.; 4]]);
-        let mut emitters = Emitters::new(&scene, &[BRIGHT], |_, _| Some(map.clone()));
+        let mut emitters = Emitters::new(&scene, &[BRIGHT], |_, _, _| Some(map.clone()));
         let lights = emitters.update(&scene, 8).expect("placed");
         let [down] = lights.as_slice() else {
             panic!("only the downward lobe escapes: {}", lights.len());
@@ -836,7 +863,7 @@ mod tests {
             .collect();
         geometry.vertices.extend(top);
         geometry.lods[0].indices.extend([4, 6, 5, 4, 7, 6]);
-        let mut emitters = Emitters::new(&scene, &[BRIGHT], |_, _| None);
+        let mut emitters = Emitters::new(&scene, &[BRIGHT], |_, _, _| None);
         let lights = emitters.update(&scene, 8).expect("placed");
         assert_eq!(lights.len(), 2, "one spot per face, none mirrored");
         assert!(lights.iter().any(|l| l.direction_outer[1] < -0.999));
@@ -859,12 +886,13 @@ mod tests {
                 .map(|m| Shading {
                     albedo: Vec3::ONE,
                     emissive: Vec3::from_slice(&m.pbr.emissive_roughness[..3]),
+                    ..Shading::default()
                 })
                 .collect()
         };
-        let job = |scene: &Scene| Job::new(scene, &shading(scene), |_, _| None);
+        let job = |scene: &Scene| Job::new(scene, &shading(scene), |_, _, _| None);
         let current = job(&scene).run();
-        let none = |_| None;
+        let none = |_, _| None;
         assert!(
             !emission_edited(Some(&current), &scene, none, &[1]),
             "still dark"
