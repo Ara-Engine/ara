@@ -145,6 +145,36 @@ fn exercise() -> std::result::Result<(), Box<dyn std::error::Error>> {
     for job in blockers {
         let _ = job.wait(&Cancellation::default(), |_| {})?;
     }
+    // Queued jobs launch only when polled. A ticket at the head of a strict
+    // FIFO would deadlock this later job even though a native slot is free.
+    let mut blockers = Vec::new();
+    for index in 0..capacity {
+        let label = format!("cpu-{index}");
+        blockers.push(worker.start(input(root, &label))?);
+        wait_for_marker(root, &label);
+    }
+    let older = worker.start(input(root, "unpolled"))?;
+    let mut later = worker.start(input(root, "polled"))?;
+    release(root, "cpu-0")?;
+    let deadline = Instant::now() + Duration::from_secs(30);
+    while !root.join("started-polled").exists() {
+        let _ = later.poll()?;
+        assert!(
+            Instant::now() < deadline,
+            "unpolled pending job blocked a later job"
+        );
+        thread::sleep(Duration::from_millis(2));
+    }
+    assert!(!root.join("started-unpolled").exists());
+    drop(older);
+    release(root, "polled")?;
+    let _ = later.wait(&Cancellation::default(), |_| {})?;
+    for index in 0..capacity {
+        release(root, &format!("cpu-{index}"))?;
+    }
+    for job in blockers {
+        let _ = job.wait(&Cancellation::default(), |_| {})?;
+    }
     println!(
         "CPU admission shared {capacity} slots with encoded work; metadata and unpolled exit passed"
     );

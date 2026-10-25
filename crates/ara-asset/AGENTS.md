@@ -27,6 +27,9 @@ their completed replies have not been polled. Cancellation returns without waiti
 for the child. The cold-batch process test is
 `cargo test -p ara-asset --test worker_limit` (artifacts under `target/`).
 Queued discovery/version calls reserve one slot within the same process cap.
+CPU-only and encoded imports each retain one slot when the other class is queued;
+idle classes reserve none. Admission stays non-FIFO so an unpolled pending job
+cannot block later polled work. `worker_fairness` covers both cases with real children.
 Control processes, transport and reaping keep normal priority; native cooks stay
 below normal. Dependency discovery does not wait behind an entire encoder queue.
 HotReload only publishes from apply_boundary; never install results from poll.
