@@ -3,6 +3,7 @@ use crate::{
     capture::{CaptureRequest, ViewMode},
     instanced,
 };
+mod shadows;
 
 struct EmptyTextures;
 impl Textures for EmptyTextures {
@@ -129,9 +130,14 @@ fn native_raster_keeps_instances_local_and_tracks_moving_and_skinned_poses_witho
     let artifacts = std::mem::replace(&mut renderer.artifacts, root.join("missing-cohort"));
     for _ in 0..80 {
         assert!(
-            renderer
-                .replace_native_scene(&scene, Box::new(EmptyTextures))
-                .is_err()
+            Native::new(
+                &mut renderer.gpu,
+                scene.validated()?,
+                Box::new(EmptyTextures),
+                &renderer.artifacts,
+                None,
+            )
+            .is_err()
         );
         assert_eq!(
             renderer.gpu().descriptor_usage(),
@@ -139,6 +145,14 @@ fn native_raster_keeps_instances_local_and_tracks_moving_and_skinned_poses_witho
             "failed native upload must retire its buffers"
         );
     }
+    // Published pipelines need no artifact I/O on a content-only replacement.
+    let cached_pipelines = renderer.native.as_ref().unwrap().pipelines;
+    renderer.replace_native_scene(&scene, Box::new(EmptyTextures))?;
+    assert_eq!(
+        renderer.native.as_ref().unwrap().pipelines,
+        cached_pipelines
+    );
+    assert_eq!(renderer.gpu().descriptor_usage(), descriptors);
     renderer.artifacts = artifacts;
     for _ in 0..80 {
         assert!(
@@ -251,7 +265,12 @@ fn native_raster_keeps_instances_local_and_tracks_moving_and_skinned_poses_witho
     // Authored environments replace both the background and its IBL. Transmission
     // uses the forward blend even for an otherwise opaque glTF material.
     scene.environment[0] = [0.04, 0.3, 0.1, 1.];
+    let native_pipelines = renderer.native.as_ref().unwrap().pipelines;
     renderer.replace_native_scene(&scene, Box::new(EmptyTextures))?;
+    assert_eq!(
+        renderer.native.as_ref().unwrap().pipelines,
+        native_pipelines
+    );
     let lit = CaptureRequest {
         mode: ViewMode::Lit,
         settle_frames: 4,
@@ -270,6 +289,10 @@ fn native_raster_keeps_instances_local_and_tracks_moving_and_skinned_poses_witho
         );
         assert_eq!(renderer.content.static_hash, previous_environment);
         assert_eq!(renderer.gpu().descriptor_usage(), previous_usage);
+        assert_eq!(
+            renderer.native.as_ref().unwrap().pipelines,
+            native_pipelines
+        );
         renderer.render_view(&lit.camera, 1., ViewMode::Lit)?;
         renderer.gpu().assert_clean()?;
     }

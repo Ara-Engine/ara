@@ -10,7 +10,17 @@ impl GeometryGpu {
     /// Uploads shared geometry and builds every requested BLAS in one submission.
     /// No instance duplicates, texture pixels or CPU-generated mip levels are packed.
     pub fn new(gpu: &mut VulkanDevice, scene: &Scene, rt: bool) -> Result<Self> {
-        scene.validate()?;
+        Self::new_validated(gpu, scene.validated()?, rt, None)
+    }
+
+    pub(crate) fn new_validated(
+        gpu: &mut VulkanDevice,
+        validated: super::super::ValidatedScene<'_>,
+        rt: bool,
+        previous: Option<&Self>,
+    ) -> Result<Self> {
+        ara_gpu::cpu_scope!("NativeGeometry.create");
+        let scene = validated.scene();
         ensure!(
             !rt || gpu.context().info.ray_tracing,
             "native geometry RT tier unavailable"
@@ -22,7 +32,15 @@ impl GeometryGpu {
                 .get_physical_device_properties(gpu.context().physical)
         }
         .limits;
-        let packed = pack::Packed::new(scene, u64::from(limits.max_storage_buffer_range))?;
+        let previous = previous.filter(|_| !rt);
+        let packed = match previous {
+            Some(previous) => pack::Packed::new_reusing(
+                scene,
+                u64::from(limits.max_storage_buffer_range),
+                Some(previous),
+            )?,
+            None => pack::Packed::new(scene, u64::from(limits.max_storage_buffer_range))?,
+        };
         let layout = scene
             .geometry
             .iter()
@@ -39,7 +57,13 @@ impl GeometryGpu {
             })
             .collect();
         let mut allocated = Vec::new();
-        match Self::upload(gpu, packed, rt, &mut allocated) {
+        match Self::upload(
+            gpu,
+            packed,
+            rt,
+            previous.and_then(|p| p.static_pool),
+            &mut allocated,
+        ) {
             Ok((pool, stage)) => {
                 if let Some(stage) = stage {
                     gpu.retire(Resource::Buffer(stage))?;
@@ -61,8 +85,10 @@ impl GeometryGpu {
         gpu: &mut VulkanDevice,
         packed: pack::Packed,
         rt: bool,
+        resident: Option<Buffer>,
         allocated: &mut Vec<Resource>,
     ) -> Result<(Self, Option<Buffer>)> {
+        ara_gpu::cpu_scope!("NativeGeometry.upload");
         let mut result = Self {
             static_pool: None,
             dynamic: None,
@@ -78,6 +104,7 @@ impl GeometryGpu {
             stats: GeometryUpload::default(),
         };
         result.stats.geometries = result.ranges.len();
+        result.stats.reused_geometries = packed.reused_geometries;
         if packed.lods.is_empty() {
             return Ok((result, None));
         }
@@ -90,20 +117,25 @@ impl GeometryGpu {
             };
         let pool = allocate(
             gpu,
-            packed.static_bytes.len() as u64,
-            usage | vk::BufferUsageFlags::TRANSFER_DST,
+            packed.static_size,
+            usage | vk::BufferUsageFlags::TRANSFER_DST | vk::BufferUsageFlags::TRANSFER_SRC,
             false,
             allocated,
         )?;
         result.static_pool = Some(pool);
-        let stage = allocate(
-            gpu,
-            packed.static_bytes.len() as u64,
-            vk::BufferUsageFlags::TRANSFER_SRC,
-            true,
-            allocated,
-        )?;
-        gpu.upload(stage, &packed.static_bytes)?;
+        let stage = if packed.static_bytes.is_empty() {
+            None
+        } else {
+            let stage = allocate(
+                gpu,
+                packed.static_bytes.len() as u64,
+                vk::BufferUsageFlags::TRANSFER_SRC,
+                true,
+                allocated,
+            )?;
+            gpu.upload(stage, &packed.static_bytes)?;
+            Some(stage)
+        };
         let pool_index = gpu.storage_buffer(pool)?.index;
         let dynamic_bytes = bytemuck::cast_slice(&packed.dynamic);
         let dynamic = if dynamic_bytes.is_empty() {
@@ -172,23 +204,48 @@ impl GeometryGpu {
         result.table = Some((table, gpu.storage_buffer(table)?.index));
         let mut commands = gpu.begin(Queue::Graphics);
         commands.push(Command::BeginPass("Scene.Geometry.Upload".into()));
-        commands.barriers([
-            edge(
+        if let Some(stage) = stage {
+            commands.barriers([edge(
                 Resource::Buffer(stage),
                 Access::HostWrite,
                 Access::CopySource,
-            ),
-            edge(
-                Resource::Buffer(pool),
-                Access::Undefined,
-                Access::CopyDestination,
-            ),
-        ]);
-        commands.push(Command::CopyBuffer {
-            source: stage,
-            destination: pool,
-            size: packed.static_bytes.len() as u64,
-        });
+            )]);
+        }
+        let reuses = packed.copies.iter().any(|copy| copy.resident);
+        if reuses {
+            commands.barriers([edge(
+                Resource::Buffer(
+                    resident.ok_or_else(|| anyhow::anyhow!("missing resident geometry source"))?,
+                ),
+                Access::ShaderRead,
+                Access::CopySource,
+            )]);
+        }
+        commands.barriers([edge(
+            Resource::Buffer(pool),
+            Access::Undefined,
+            Access::CopyDestination,
+        )]);
+        for copy in &packed.copies {
+            let source = if copy.resident { resident } else { stage }
+                .ok_or_else(|| anyhow::anyhow!("missing native geometry copy source"))?;
+            commands.push(Command::CopyBufferRange {
+                source,
+                source_offset: copy.source,
+                destination: pool,
+                destination_offset: copy.destination,
+                size: copy.size,
+            });
+        }
+        if reuses {
+            commands.barriers([edge(
+                Resource::Buffer(
+                    resident.ok_or_else(|| anyhow::anyhow!("missing resident geometry source"))?,
+                ),
+                Access::CopySource,
+                Access::ShaderRead,
+            )]);
+        }
         // Both shader reads and AS-build reads consume the original transfer write.
         commands.barriers([edge(
             Resource::Buffer(pool),
@@ -243,9 +300,17 @@ impl GeometryGpu {
         }
         let point = gpu.submit(commands.finish(), &[])?;
         let timings = gpu.resolve(point)?;
-        result.stats.bytes = packed.static_bytes.len() as u64
+        result.stats.bytes =
+            packed.static_size + dynamic_bytes.len() as u64 * 3 + row_bytes.len() as u64;
+        result.stats.uploaded_bytes = packed.static_bytes.len() as u64
             + dynamic_bytes.len() as u64 * 3
             + row_bytes.len() as u64;
+        result.stats.reused_bytes = packed
+            .copies
+            .iter()
+            .filter(|c| c.resident)
+            .map(|c| c.size)
+            .sum();
         result.stats.blas = result.structures.len();
         for timing in timings {
             if timing.pass == "Scene.Geometry.Upload" {
@@ -256,7 +321,7 @@ impl GeometryGpu {
         }
         result.lod_data = packed.lods;
         result.staging = packed.dynamic;
-        Ok((result, Some(stage)))
+        Ok((result, stage))
     }
 }
 

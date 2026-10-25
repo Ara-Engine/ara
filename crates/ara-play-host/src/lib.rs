@@ -572,7 +572,16 @@ impl PlayService {
             .synchronize(workspace, revision)
             .map_err(|e| fail(codes::ASSETS, e))?;
         starting::report(progress, "assets", 0, referenced.len())?;
-        let pins = self.assets()?.ready_pins(&referenced);
+        // Only background starts supply this reporter. The editor must never
+        // wait for imports; synchronous daemon/automation starts retain their
+        // fully imported, deterministic world-ready contract.
+        let pins = if progress.is_some() {
+            self.assets()?.ready_pins(&referenced)
+        } else {
+            self.assets()?
+                .pins(&referenced, Duration::from_secs(180))
+                .map_err(|error| fail(codes::ASSETS, error))?
+        };
         starting::report(progress, "assets", pins.len(), referenced.len())?;
         let cache = self.assets()?.cache.to_string_lossy().into_owned();
         let mut types = Vec::new();

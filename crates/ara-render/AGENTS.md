@@ -1,5 +1,9 @@
 # ara-render
 
+Native publications validate once per immutable upload borrow and copy unchanged
+key/revision geometry directly from the previous GPU pool. Candidate buffers stay
+independent until publication, so rejected content retains the previous frame.
+
 Owns the M1 baseline renderer and agent visual feedback. Gameplay state stays in
 ECS; `Scene` is an immutable render extraction snapshot, not authoritative state.
 
@@ -33,6 +37,9 @@ ECS; `Scene` is an immutable render extraction snapshot, not authoritative state
   idle frames retain visible lists and settle motion history once. `native_frame_work`
   reports traversals/writes. `native_caster_changes` exposes old-union-new bounds;
   `cull_native_shadow(matrix)` caches opaque/masked camera-LOD casters for pass 6.
+  Local lights reserve `reserve_native_shadow_passes(count)` before graph imports;
+  `cull_native_shadow_pass(slot, matrix)` returns an independent cached pass index.
+  Record it with its own Frame matrix in shadows[0] and root cascade word 4 = 0.
 - `instanced::GeometryGpu` uploads static local vertices/LOD indices once. Changed
   deforming revisions use `prepare_pose` then `commit_pose`/`cancel_pose`; retire
   the old dependent TLAS before committing. Three skin slots retain presented and
