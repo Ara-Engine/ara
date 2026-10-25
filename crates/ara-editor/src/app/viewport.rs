@@ -298,13 +298,27 @@ impl SceneView {
             raster.prepare(renderer, &frame, plan, look, || {
                 content.content(&frame, store.workspace(), store.schema())
             })?;
+            let arrivals = content.take_arrivals();
+            if !arrivals.is_empty() {
+                raster.fade_models(&arrivals)?;
+            }
             self.raster_frame = Some(frame);
             self.raster_snapshot_dirty = false;
             self.revision = Some(revision);
             self.failed = None;
             self.remaining = 64;
         } else {
-            let frame = self.raster_frame.as_ref().ok_or("raster frame")?;
+            let frame = self.raster_frame.as_mut().ok_or("raster frame")?;
+            if let Some(changed) =
+                content.style_pending(frame, self.preview_view.as_ref().unwrap_or(view))
+            {
+                self.raster_snapshot_dirty |= changed;
+                self.remaining = self.remaining.max(8);
+                self.raster
+                    .as_mut()
+                    .ok_or("raster view")?
+                    .style_unpublished(renderer, |asset| content.model_is_pending(asset))?;
+            }
             let look = FrameEnvironment::resolve(&frame.look, frame.environment.exposure);
             let raster = self.raster.as_mut().ok_or("raster view")?;
             let resolve = || content.content(frame, store.workspace(), store.schema());
@@ -509,6 +523,7 @@ impl SceneView {
                     .is_some_and(ara_runtime_render::RasterView::needs_frame)
                 || self.content.as_ref().is_some_and(|content| {
                     content.revision() != self.revision.map_or(0, |revision| revision.3)
+                        || content.progress_pending()
                 }))
     }
     pub fn attach(

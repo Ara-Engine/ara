@@ -37,6 +37,11 @@ the standalone entry calls `resolve_shipping(export_root)` before building a wor
 - Players connect back; they never listen. The token travels in `player.hello`, set
   through `ARA_PLAY_TOKEN` (never the command line). Section names embed part of it.
 - Windows socket timeouts are ~15.6 ms; `Link` polls with 0.5 ms sleeps instead.
+- Player `link::Pump` owns the socket on a dedicated IO thread after hello, with
+  bounded queues and 250 ms liveness independent of simulation/uploads. `Status`
+  remains a simulation snapshot; `HEARTBEAT` carries only process liveness.
+- `method::IMPORTS` carries read-only `ImportState` before Start and at changed
+  progress revisions. Absent IDs are failed/unregistered; existing pins stay live.
 - Accepted sockets inherit the listener's non-blocking mode; `accept` resets it.
 - Bump `PROTOCOL` only for incompatible changes; new methods are additive.
 - `Role` matches `ara-net` launch roles (Host/Dedicated/Client) plus `Local`.

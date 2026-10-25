@@ -25,6 +25,25 @@ use std::{
     time::{Duration, Instant},
 };
 
+/// An import document as [`Assets::synchronize_imports`] reads it: the sidecar path,
+/// the asset ID and the settings record.
+pub type ImportDoc = (String, String, ara_doc::Record);
+
+/// The import documents of `workspace`, collected on the host thread so a pipeline
+/// built elsewhere can apply them ([`Assets::synchronize_imports`]).
+pub fn import_docs(workspace: &ara_doc::Workspace) -> Result<Vec<ImportDoc>, String> {
+    workspace
+        .docs()
+        .filter(|(_, doc)| doc.kind == "import")
+        .map(|(path, doc)| {
+            let record = doc
+                .record("i_settings")
+                .ok_or_else(|| format!("{path}: missing import settings"))?;
+            Ok((path.to_owned(), doc.id.to_string(), record.clone()))
+        })
+        .collect()
+}
+
 /// The owner's import pipeline and the latest published generation per asset.
 pub struct Assets {
     pipeline: AssetPipeline,
@@ -35,6 +54,10 @@ pub struct Assets {
     configurations: BTreeMap<String, (String, ara_doc::Record)>,
     revision: Option<u64>,
     published: crate::published::Publisher,
+    /// Sources were registered or removed since progress was last published.
+    progress_stale: bool,
+    /// The pipeline was importing at the last poll.
+    busy: bool,
     /// Cache directory shared with players.
     pub cache: PathBuf,
 }
@@ -59,6 +82,18 @@ fn sidecars(root: &Path, dir: &Path, out: &mut Vec<PathBuf>) {
 }
 
 impl Assets {
+    pub(crate) fn import_revision(&self) -> u64 {
+        self.published.import_revision()
+    }
+    pub(crate) fn import_state(&self) -> ara_play::ImportState {
+        self.published.import_state()
+    }
+    /// Snapshot completed generations immediately. A live Play world can start
+    /// with placeholders while this same owner continues importing/publishing.
+    pub fn ready_pins(&mut self, wanted: &BTreeSet<String>) -> BTreeMap<String, String> {
+        self.poll(false, true);
+        self.finished_pins(wanted)
+    }
     /// Waits while requested cooks make progress, without imposing a total export
     /// deadline. Completed generations reset `stall_timeout`; queue/admission and
     /// importer progress messages do not. Reports changes and five-second heartbeats.
@@ -202,7 +237,7 @@ impl Assets {
             }
             sources.insert(id);
         }
-        Ok(Self {
+        let mut assets = Self {
             pipeline,
             sources,
             failures,
@@ -211,8 +246,13 @@ impl Assets {
             configurations: BTreeMap::new(),
             revision: None,
             published,
+            progress_stale: false,
+            busy: true,
             cache: cache_dir,
-        })
+        };
+        // Views show every requested source as pending from the start.
+        assets.published.progress(assets.progress());
+        Ok(assets)
     }
 
     /// Synchronizes command-authored sidecars before Play or hot reload. In-memory
@@ -225,19 +265,25 @@ impl Assets {
         if self.revision == Some(revision) {
             return Ok(());
         }
+        self.synchronize_imports(import_docs(workspace)?, revision)
+    }
+
+    /// [`Self::synchronize`] from import documents collected at `revision` (the
+    /// pipeline's build thread applies the first set).
+    pub fn synchronize_imports(
+        &mut self,
+        imports: Vec<ImportDoc>,
+        revision: u64,
+    ) -> Result<(), String> {
         let mut current = BTreeMap::new();
-        for (path, doc) in workspace.docs().filter(|(_, doc)| doc.kind == "import") {
-            let record = doc
-                .record("i_settings")
-                .ok_or_else(|| format!("{path}: missing import settings"))?;
+        for (path, id, record) in imports {
             let source = path
                 .strip_suffix(".import.json")
                 .ok_or_else(|| format!("{path}: import document must name a sidecar"))?;
-            let id = doc.id.to_string();
-            let configuration = (source.to_owned(), record.clone());
+            let configuration = (source.to_owned(), record);
             if self.configurations.get(&id) != Some(&configuration) {
                 let mut settings: ImportSettings =
-                    serde_json::from_value(serde_json::Value::Object(record.clone()))
+                    serde_json::from_value(serde_json::Value::Object(configuration.1.clone()))
                         .map_err(|e| format!("{path}: {e}"))?;
                 self.sources.insert(id.clone());
                 if let Some(installed) = self.installed.get(&settings.importer) {
@@ -284,6 +330,7 @@ impl Assets {
                 if let Err(error) = self.pipeline.request(&id) {
                     self.failures.insert(id.clone(), error.to_string());
                 }
+                self.progress_stale = true;
             }
             current.insert(id, configuration);
         }
@@ -295,6 +342,7 @@ impl Assets {
             self.pipeline.unregister(id);
             self.sources.remove(id);
             self.failures.remove(id);
+            self.progress_stale = true;
         }
         self.configurations = current;
         self.published.retain(&self.sources);
@@ -309,10 +357,14 @@ impl Assets {
 
     /// Drains import events and publishes ready generations. `playing` blocks
     /// publication unless `allow` (the human's policy for agent/asset changes in Play).
+    /// Import progress is republished only after activity that can move a source
+    /// between pending, done and failed (not on worker progress messages or idle polls).
     pub fn poll(&mut self, playing: bool, allow: bool) -> Vec<AssetChanged> {
+        let mut settled = false;
         match self.pipeline.poll() {
             Ok(events) => {
                 for event in events {
+                    settled |= !matches!(event, ReloadEvent::Progress { .. });
                     if let ReloadEvent::Failed { asset, error } = event {
                         self.failures.insert(asset, error.to_string());
                     }
@@ -327,8 +379,43 @@ impl Assets {
             .pipeline
             .apply_boundary(true, playing, &BTreeSet::new())
             .unwrap_or_default();
+        // A newly published generation means that asset's latest import succeeded.
+        for change in &changes {
+            self.failures.remove(&change.asset);
+        }
         self.published.complete(&changes, &self.pipeline.reload);
+        let busy = self.pipeline.is_importing();
+        if self.progress_stale || settled || !changes.is_empty() || busy != self.busy {
+            self.published.progress(self.progress());
+            self.progress_stale = false;
+        }
+        self.busy = busy;
         changes
+    }
+
+    /// Where each registered source stands ([`crate::ImportProgress`]).
+    fn progress(&self) -> crate::ImportProgress {
+        let mut progress = crate::ImportProgress {
+            total: self.sources.len(),
+            ..Default::default()
+        };
+        for id in &self.sources {
+            if self.pipeline.is_importing_asset(id) {
+                progress.pending.insert(id.clone());
+            } else if let Some(error) = self.failures.get(id) {
+                progress.failed.insert(id.clone(), error.clone());
+            } else if self
+                .pipeline
+                .reload
+                .slot(id)
+                .is_some_and(|slot| slot.current.is_some())
+            {
+                progress.done += 1;
+            } else {
+                progress.pending.insert(id.clone());
+            }
+        }
+        progress
     }
 
     /// Published source generations (hex digests), waiting up to `timeout` for

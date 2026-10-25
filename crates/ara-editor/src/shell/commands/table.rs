@@ -964,6 +964,8 @@ fn build() -> Vec<Spec> {
                 } else {
                     let mut params = play_params(e);
                     params["scene"] = json!(e.state.doc);
+                    // The reply is immediate; the Game view follows the start's progress.
+                    params["background"] = json!(true);
                     e.embed_play(&mut params);
                     if params["embed"].is_object() {
                         act(e, "editor.layout.show", json!({"panel": "game"}))?;
@@ -1507,6 +1509,33 @@ fn build() -> Vec<Spec> {
             },
         ),
         cmd(
+            "material.node_previews",
+            "Node Previews",
+            "image",
+            "",
+            "Show or hide each material node's value preview.",
+            |s, _, _| {
+                s.node_previews.hidden = !s.node_previews.hidden;
+                Ok(())
+            },
+        ),
+        cmd(
+            "animation.view_states",
+            "Animation States",
+            "person-standing",
+            "",
+            "Show the open controller as its state machine.",
+            |s, e, _| s.animation_view(e, false),
+        ),
+        cmd(
+            "animation.view_blends",
+            "Animation Blend Spaces",
+            "layers",
+            "",
+            "Show the open controller's pose and blend graph.",
+            |s, e, _| s.animation_view(e, true),
+        ),
+        cmd(
             "game.client",
             "Show Client",
             "users",
@@ -1894,11 +1923,13 @@ fn build() -> Vec<Spec> {
             let value = s.field_clipboard.clone().ok_or("copy a value first")?;
             apply(e, crate::inspector::edit_commands(&e.state.selection, path, &value), "Paste value")
         }).when(|c| if c.clipboard_value { Avail::Ready } else { Avail::Blocked("Copy a value first".into()) }),
-        cmd("field.set", "Set Value", "", "", "Set a field on the selection (target `Path=json`).", |_, e, t| {
+        cmd("field.set", "Set Value", "", "", "Set a field on the selection (target `Path=json`, or `Path#/pointer=json` inside a compound field).", |s, e, t| {
             let Target::Text(text) = t else { return Err("expected Path=value".into()) };
             let (path, value) = text.split_once('=').ok_or("expected Path=value")?;
             let value: Value = serde_json::from_str(value)?;
-            apply(e, crate::inspector::edit_commands(&e.state.selection, path, &value), &format!("Set {path}"))
+            let commands = s.field_commands(&e.state.selection, path, value)?;
+            let field = path.split('#').next().unwrap_or(path);
+            apply(e, commands, &format!("Set {field}"))
         }).when(has_entity),
         cmd("field.reset", "Reset to Default", "undo-2", "", "Reset to the default or prefab value.", |_, e, t| {
             let Target::Field(path) = t else { return Err("choose a field".into()) };
@@ -1945,6 +1976,7 @@ fn build() -> Vec<Spec> {
         cmd("vfx.module.up", "Move Module Up", "chevron-up", "Alt+Up", "Move the module earlier in its stage.", |s, e, t| vfx_module(s, e, t, "up")).when(vfx_module_target),
         cmd("vfx.module.down", "Move Module Down", "chevron-down", "Alt+Down", "Move the module later in its stage.", |s, e, t| vfx_module(s, e, t, "down")).when(vfx_module_target),
         cmd("vfx.module.duplicate", "Duplicate Module", "copy", "", "Insert a copy after the module.", |s, e, t| vfx_module(s, e, t, "duplicate")).when(vfx_module_target),
+        cmd("vfx.module.toggle", "Enable or Disable Module", "check", "", "Turn the module off without removing it, or back on.", |s, e, t| vfx_module(s, e, t, "toggle")).when(vfx_module_target),
         cmd("vfx.module.delete", "Delete Module", "trash", "", "Remove the module from its stage.", |s, e, t| vfx_module(s, e, t, "delete")).when(vfx_module_target),
         cmd("vfx.restart", "Restart Effect", "rotate-ccw", "", "Run the VFX preview again from tick 0.", |s, _, _| {
             s.vfx_stream.restart();
@@ -1989,6 +2021,12 @@ fn build() -> Vec<Spec> {
         cmd("profiler.record", "Record", "circle-dot", "", "Start recording editor frames.", |s, e, _| s.profiler_record(e)),
         cmd("profiler.freeze", "Freeze Capture", "pause", "", "Freeze and save the current trace.", |_, e, _| act(e, "editor.profile.freeze", json!({}))),
         cmd("profiler.baseline", "Set Baseline", "flag", "", "Freeze the trace as the comparison baseline.", |_, e, _| act(e, "editor.profile.freeze", json!({"baseline": true}))),
+        cmd("profiler.scope", "Outline Scope", "crosshair", "", "Outline a scope's spans in the Profiler timeline; again clears it.", |s, _, t| {
+            if let Target::Text(label) = t {
+                s.profile_scope = (s.profile_scope.as_deref() != Some(label.as_str())).then(|| label.clone());
+            }
+            Ok(())
+        }),
         cmd("profiler.compare", "Compare", "git-compare", "", "Compare the frozen capture with the baseline.", |_, e, _| act(e, "editor.workspace", json!({"compare": !e.state.profiler_compare})))
             .when(|c| Avail::Checked(c.state.profiler_compare)),
         cmd("settings.close", "Close Settings", "x", "", "Close the Settings window.", |_, e, _| act(e, "editor.layout.close", json!({"panel": "settings"}))),

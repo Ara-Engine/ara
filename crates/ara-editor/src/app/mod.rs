@@ -87,6 +87,7 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
         eprintln!("Verification extent {physical:?}; logical {logical:?}; DPI {dpi}");
     }
     let mut shell = Shell::new(&mut editor, logical)?;
+    shell.host_problems = !options.offscreen();
     shell.offscreen = offscreen;
     let mut view = editor.view()?;
     editor.report_missing_sources(&view);
@@ -162,6 +163,8 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
         .verify_responsiveness
         .then(|| responsiveness::Probe::new(&options.output));
     if probe.is_some() {
+        // Measure what a release build does: memoized panels are not double-checked.
+        shell.memo_check = false;
         // Measure from the default layout and theme, whatever an earlier run left.
         editor.action("editor.layout.reset", json!({}))?;
         editor.action("editor.theme", json!({"light": false}))?;
@@ -408,10 +411,14 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
             }
             let was_live = shell.game_live;
             let was_fault = shell.game_fault.clone();
+            let was_start = shell.game_start.clone();
             let game_frame =
                 game.update(&mut editor, &mut shell, &mut gpu, renderer.gpu().context())?;
             dirty |= game_frame;
-            if shell.game_live != was_live || shell.game_fault != was_fault {
+            if shell.game_live != was_live
+                || shell.game_fault != was_fault
+                || shell.game_start != was_start
+            {
                 if !shell.game_live {
                     shell.game_captured = false;
                 }
@@ -450,6 +457,14 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
             if shell.poll_build(&mut editor) {
                 shell.rebuild(&mut editor)?;
                 dirty = true;
+            }
+            match shell.poll_animation(&mut editor) {
+                Some(crate::shell::LiveChange::Page) => {
+                    shell.rebuild(&mut editor)?;
+                    dirty = true;
+                }
+                Some(crate::shell::LiveChange::Canvas) => dirty = true,
+                None => {}
             }
             let assets_changed = shell.poll_assets();
             for (kind, message) in std::mem::take(&mut shell.pending_reports) {

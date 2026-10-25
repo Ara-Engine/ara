@@ -11,6 +11,7 @@ use ara_render::scene::CameraSpec;
 use ara_render_fidelity::{environment::FrameEnvironment, presets::RasterPlan};
 use ara_runtime::extract::RenderFrame;
 use std::path::PathBuf;
+mod fade;
 
 /// Content-boundary result; ordinary movement keeps native allocations resident.
 #[derive(Debug, Default, Clone, Copy)]
@@ -41,6 +42,8 @@ pub struct RasterView {
     key: u64,
     pending_gi: bool,
     look: Option<FrameEnvironment>,
+    fades: fade::Fades,
+    placeholder_changes: ara_render::instanced::Changes,
 }
 
 impl RasterView {
@@ -61,6 +64,8 @@ impl RasterView {
             key: crate::FNV,
             pending_gi: false,
             look: None,
+            fades: Default::default(),
+            placeholder_changes: Default::default(),
         }
     }
 
@@ -78,6 +83,7 @@ impl RasterView {
     /// and moved instances settle back into them.
     pub fn needs_frame(&self) -> bool {
         self.emitter_job.is_some()
+            || self.fades.is_active()
             || self.gi.as_ref().is_some_and(|gi| {
                 gi.is_pending() || self.mobility.settling() || !self.gi_updates.is_empty()
             })
@@ -91,6 +97,51 @@ impl RasterView {
                 Err(_) => eprintln!("ara-runtime-render: the emitter search panicked"),
             }
         }
+    }
+
+    /// Fade newly arrived model asset IDs over twelve presented frames, including
+    /// prefab foliage. Existing generations on a reimport must not enter this set.
+    /// Call only after their content publication succeeds. Motion reserves one
+    /// material per root primitive, so this never changes a sibling's opacity.
+    pub fn fade_models(&mut self, arrivals: &std::collections::BTreeSet<String>) -> Result<()> {
+        let prepared = self.prepared.as_ref().context("native raster content")?;
+        self.fades.begin(prepared, arrivals);
+        Ok(())
+    }
+
+    /// Update loading/failed bounds of unpublished foliage parts from read-only
+    /// status, without extracting geometry or changing decoded-model revisions.
+    pub fn style_unpublished(
+        &mut self,
+        renderer: &mut Renderer,
+        is_pending: impl Fn(&str) -> bool,
+    ) -> Result<()> {
+        let Some(prepared) = &mut self.prepared else {
+            return Ok(());
+        };
+        self.placeholder_changes.clear();
+        for (asset, indices) in &prepared.unpublished_materials {
+            let pending = is_pending(asset);
+            let color = if pending {
+                crate::PENDING_MODEL_COLOR
+            } else {
+                [1., 0., 1., 1.]
+            };
+            for &index in indices {
+                let material = &mut prepared.scene.materials[index].pbr;
+                if material.base_color != color {
+                    material.base_color = color;
+                    material.flags[0] = if pending { 2 } else { 0 };
+                    self.placeholder_changes.materials.push(index);
+                }
+            }
+        }
+        if !self.placeholder_changes.materials.is_empty() {
+            with_emitter_lights(&mut prepared.scene, &self.emitter_lights, |scene| {
+                renderer.update_native_changed(scene, &self.placeholder_changes)
+            })?;
+        }
+        Ok(())
     }
 
     /// Change derived capture/probe labels at an editor control boundary without
@@ -173,6 +224,22 @@ impl RasterView {
                 let textures = prepared.textures.fork_sources(config)?;
                 renderer.replace_native_scene(&prepared.scene, Box::new(textures))?;
                 self.key = content_key(&prepared);
+                let arrivals = self
+                    .prepared
+                    .as_ref()
+                    .into_iter()
+                    .flat_map(|old| old.unpublished_materials.keys())
+                    .filter(|asset| {
+                        prepared
+                            .scene
+                            .instances
+                            .iter()
+                            .enumerate()
+                            .any(|(i, _)| prepared.model_source(i) == Some(asset.as_str()))
+                    })
+                    .cloned()
+                    .collect();
+                self.fades.rebind(&prepared, &arrivals);
                 // Emitter lights arrive from a worker; until then emitters light
                 // nothing (their emission is out of the probes too).
                 let job = crate::emitters::Job::new(
@@ -215,6 +282,9 @@ impl RasterView {
                 self.adopt_emitters();
             }
             let prepared = self.prepared.as_mut().context("native raster content")?;
+            if snapshot_changed {
+                self.fades.refresh(&mut prepared.scene);
+            }
             // Emitter lights follow their instances and ride after the scene's
             // lights, within the shared light budget.
             match &mut self.emitters {
@@ -306,6 +376,10 @@ impl RasterView {
             "raster content must be prepared before rendering"
         );
         let look = self.look.context("raster look must be prepared")?;
+        let prepared = self.prepared.as_mut().context("native raster content")?;
+        with_emitter_lights(&mut prepared.scene, &self.emitter_lights, |scene| {
+            self.fades.apply(scene, renderer)
+        })?;
         let lit = matches!(mode, ViewMode::Lit);
         renderer.set_deferred_post(lit && !frame.effects.is_empty());
         renderer.render_view(
@@ -336,6 +410,7 @@ impl RasterView {
         let textures = renderer
             .native_texture_stats()
             .context("native residency statistics")?;
+        self.fades.presented();
         Ok(GpuFrameCosts {
             scene_update_ms: renderer.native_update_gpu_ms().unwrap_or(0.),
             texture_upload_ms: textures.upload_gpu_ms,
@@ -381,6 +456,11 @@ impl RasterView {
 
     /// Restart reproducible capture state on this allocation, including particles.
     pub fn reset_capture(&mut self, renderer: &mut Renderer) -> Result<()> {
+        if let Some(prepared) = &mut self.prepared {
+            with_emitter_lights(&mut prepared.scene, &self.emitter_lights, |scene| {
+                self.fades.finish(scene, renderer)
+            })?;
+        }
         self.wait_probe_gi(renderer)?;
         for _ in 0..256 {
             let stats = renderer
@@ -414,6 +494,21 @@ impl RasterView {
 /// Probe records applied per presented frame (8 MB): a full 32k-probe volume
 /// lands over eight frames instead of stalling one.
 const PROBES_PER_FRAME: usize = 4096;
+
+/// Runs a native `upload` of `scene` with the emitter `lights` after its own, so
+/// every upload (prepare, arrival fades, placeholder styling) keeps them; the
+/// scene's own list is restored afterwards.
+fn with_emitter_lights<T>(
+    scene: &mut ara_render::instanced::Scene,
+    lights: &[ara_render::scene::Light],
+    upload: impl FnOnce(&mut ara_render::instanced::Scene) -> Result<T>,
+) -> Result<T> {
+    let own = scene.lights.len();
+    scene.lights.extend_from_slice(lights);
+    let result = upload(scene);
+    scene.lights.truncate(own);
+    result
+}
 
 /// Queues a delivered update; one that rewrites every probe supersedes the
 /// updates still waiting.

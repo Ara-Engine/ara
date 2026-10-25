@@ -10,6 +10,8 @@ use std::{
     time::{Duration, Instant},
 };
 use tungstenite::{Message as Frame, WebSocket};
+mod pump;
+pub use pump::Pump;
 
 /// A decoded JSON-RPC message.
 #[derive(Debug, Clone, PartialEq)]

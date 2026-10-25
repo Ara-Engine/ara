@@ -58,7 +58,7 @@ impl Shell {
         out.push_str(&format!(
             "<panel id='vfx-side' class='tool-side' style='width:{STACK}px'>"
         ));
-        out.push_str(&format!("<panel id='vfx-emitters-header' class='side-header'><text id='vfx-emitters-title' class='heading' text='Emitters' /><panel id='vfx-emitters-fill' class='fill' /><text id='vfx-emitters-count' class='caption' text='{} · {}' /></panel>",effect.emitters.len(),escape(&effect.name)));
+        out.push_str(&format!("<panel id='vfx-emitters-header' class='side-header'><text id='vfx-emitters-title' class='heading' text='Emitters' /><text id='vfx-emitters-count' class='caption' text='{}' /><panel id='vfx-emitters-fill' class='fill' /></panel>",effect.emitters.len()));
         out.push_str("<scroll id='vfx-stack-list' style='flex-grow:1;flex-basis:0px;min-height:0px;padding:4px;padding-top:0px;gap:0px'>");
         for emitter in &effect.emitters {
             self.emitter_header(emitter, out);
@@ -197,37 +197,57 @@ impl Shell {
                 let value = ara_json::to_value(&module.module)?;
                 let kind = value["op"].as_str().unwrap_or("module");
                 let selected = editor.state.resource_item.as_deref() == Some(&item);
-                let summary = value
+                // The key values that fit (never a value cut mid-way); the Inspector
+                // has the rest.
+                let mut summary = String::new();
+                for (k, v) in value
                     .as_object()
-                    .map(|m| {
-                        m.iter()
-                            .filter(|(k, _)| *k != "op")
-                            .take(2)
-                            .map(|(k, v)| {
-                                format!(
-                                    "{} {}",
-                                    super::inspector_panel::sentence(k).to_lowercase(),
-                                    short(v)
-                                )
-                            })
-                            .collect::<Vec<_>>()
-                            .join(" · ")
-                    })
-                    .unwrap_or_default();
+                    .into_iter()
+                    .flatten()
+                    .filter(|(k, _)| *k != "op")
+                {
+                    let part = format!(
+                        "{} {}",
+                        super::inspector_panel::sentence(k).to_lowercase(),
+                        short(v)
+                    );
+                    let joined = summary.chars().count() + part.chars().count() + 3;
+                    if !summary.is_empty() && joined > 30 {
+                        break;
+                    }
+                    if !summary.is_empty() {
+                        summary.push_str(" · ");
+                    }
+                    summary.push_str(&part);
+                    if summary.chars().count() > 30 {
+                        break;
+                    }
+                }
                 self.bindings.insert(
                     ara_ui::source::stable_id(&id),
                     Binding::Protocol("editor.workspace", json!({"resource":doc,"item":item})),
                 );
-                let title = if module.name == kind {
-                    super::inspector_panel::sentence(kind)
+                // A named module reads as its name, its kind muted after it.
+                let (title, kind_text) = if module.name == kind {
+                    (super::inspector_panel::sentence(kind), String::new())
                 } else {
-                    format!(
-                        "{} · {}",
-                        module.name,
-                        super::inspector_panel::sentence(kind).to_lowercase()
+                    (
+                        module.name.clone(),
+                        super::inspector_panel::sentence(kind).to_lowercase(),
                     )
                 };
-                out.push_str(&format!("<panel id='{id}-card' class='module-row{}'><panel id='{id}-rail' class='stage-rail' style='height:14px;background:var(--{rail})' /><button id='{id}' class='module-title' label='{}' description='{}' action='Dispatch'><text id='{id}-name' class='{}' text='{}' /><panel id='{id}-gap' class='fill' /><text id='{id}-summary' class='{}' style='font-size:11px;flex-shrink:1;min-width:0px;overflow:hidden' text='{}' /></button>",if selected{" module-selected"}else{""},escape(&module.name),escape(ara_vfx::library::MODULES.iter().find(|k|k.name==kind).map(|k|k.doc).unwrap_or("Typed VFX module")),if selected{"on-selection"}else{"fg"},escape(&title),if selected{"on-selection"}else{"caption"},escape(&summary)));
+                let muted = if selected {
+                    "on-selection-muted"
+                } else {
+                    "caption"
+                };
+                // A disabled module stays in place, dimmed, with its checkbox clear.
+                let name_class = match (selected, module.enabled) {
+                    (true, _) => "on-selection",
+                    (false, true) => "fg",
+                    (false, false) => "muted",
+                };
+                out.push_str(&format!("<panel id='{id}-card' class='module-row{}'><panel id='{id}-rail' class='stage-rail' style='background:var(--{rail})' /><button id='{id}' class='module-title' label='{}' description='{}' action='Dispatch'><text id='{id}-name' class='{name_class}' text='{}' /><text id='{id}-kind' class='{muted}' text='{}' /><panel id='{id}-gap' class='fill' /><text id='{id}-summary' class='{muted}' style='font-size:11px;flex-shrink:1;min-width:0px;overflow:hidden' text='{}' /></button>",if selected{" module-selected"}else{""},escape(&module.name),escape(ara_vfx::library::MODULES.iter().find(|k|k.name==kind).map(|k|k.doc).unwrap_or("Typed VFX module")),escape(&title),escape(&kind_text),escape(&if module.enabled{summary}else{"disabled".into()})));
                 if selected {
                     for (command, icon, label) in [
                         ("vfx.module.up", "chevron-up", "Move up · Alt+Up"),
@@ -240,6 +260,16 @@ impl Shell {
                         out.push_str(&format!("<button id='{button}' class='ghost icon-button' style='width:20px;height:20px;padding:2px' label='{label}' description='{label}' action='Dispatch'>{}</button>",icons::icon_in(&button,icon,"on-selection")));
                     }
                 }
+                let enable = format!("{id}-enabled");
+                self.bindings.insert(
+                    ara_ui::source::stable_id(&enable),
+                    Binding::ResourceContent(
+                        doc.into(),
+                        vec![json!({"cmd":"vfx.module.enable","args":{"emitter":emitter.name,"stage":stage_name,"name":module.name,"enabled":!module.enabled}})],
+                        if module.enabled { "Disable VFX module" } else { "Enable VFX module" }.into(),
+                    ),
+                );
+                out.push_str(&format!("<toggle id='{enable}' class='module-enable' checked='{}' label='Run {}' description='Run this module (unchecked: kept but skipped)' action='Dispatch' />",module.enabled,escape(&module.name)));
                 out.push_str("</panel>");
             }
         }
@@ -559,6 +589,15 @@ impl Shell {
                 copy.name = format!("{}_copy{}", copy.name, editor.host.store().revision());
                 json!({"emitter":emitter_name,"stage":stage,"name":copy.name,"operation":"insert","index":index + 1,"module":copy})
             }
+            "toggle" => {
+                let enabled = !modules[index].enabled;
+                editor.apply_to(
+                    &doc,
+                    vec![json!({"cmd":"vfx.module.enable","args":{"emitter":emitter_name,"stage":stage,"name":name,"enabled":enabled}})],
+                    if enabled { "Enable VFX module" } else { "Disable VFX module" },
+                )?;
+                return Ok(());
+            }
             _ => json!({"emitter":emitter_name,"stage":stage,"name":name,"operation":"remove"}),
         };
         editor.apply_to(
@@ -585,9 +624,5 @@ fn default_module(stage: ara_vfx::Stage, revision: u64) -> ara_vfx::StackModule 
             shutter: 0.,
         },
     };
-    ara_vfx::StackModule {
-        name: format!("module{revision}"),
-        module,
-        bindings: Default::default(),
-    }
+    ara_vfx::StackModule::new(format!("module{revision}"), module)
 }

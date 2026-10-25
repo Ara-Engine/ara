@@ -1,7 +1,10 @@
 //! Shared retained graph canvas for materials and animation projections.
 //! Semantic edits leave as typed commands; gestures retain only a transient preview.
+//! Presentation (titles, accents, pin labels) comes from `style`; geometry helpers
+//! here are shared by painting, hit testing and the agent report so they never drift.
 mod interaction;
 mod paint;
+pub(crate) mod style;
 mod text;
 use ara_graph::{Direction, Endpoint, Graph};
 use ara_ui::{
@@ -9,7 +12,23 @@ use ara_ui::{
     style::Color,
 };
 use std::collections::{BTreeMap, BTreeSet};
+use style::{Accent, Shape};
 use text::Labels;
+
+/// Width of a pin node, in graph units.
+const WIDTH: f32 = 208.;
+/// Header band, including the 3 px category strip.
+const HEADER: f32 = 30.;
+/// Inline value line under the header (parameters and constants).
+const VALUE: f32 = 24.;
+/// One pin row.
+const ROW: f32 = 22.;
+/// Padding above the first and below the last pin row.
+const PAD: f32 = 6.;
+/// State-machine state size.
+const STATE: [f32; 2] = [168., 44.];
+/// In-node preview square (rendered at 2x by the thumbnail queue).
+pub const PREVIEW: f32 = 144.;
 
 /// Presentation camera, in graph coordinates independent of the host viewport.
 #[derive(
@@ -30,19 +49,37 @@ impl Default for Camera {
         }
     }
 }
+struct Pin {
+    name: String,
+    label: String,
+    direction: Direction,
+    ty: String,
+    connected: bool,
+}
 struct NodeView {
     id: String,
-    title: String,
-    subtitle: String,
+    kind: String,
+    look: style::Look,
     position: [f32; 2],
+    width: f32,
     height: f32,
-    ports: Vec<(String, Direction, String)>,
+    ports: Vec<Pin>,
+    /// Top of the preview square, in graph units from the node top.
+    preview_top: Option<f32>,
+}
+impl NodeView {
+    /// Top of the first pin row, below the header and any value line.
+    fn pins_top(&self) -> f32 {
+        HEADER + if self.look.value.is_some() { VALUE } else { 0. } + PAD
+    }
 }
 struct Wire {
     id: String,
     from: Endpoint,
     to: Endpoint,
     points: Vec<[f32; 2]>,
+    /// Transition condition summary, painted at the arrow's midpoint.
+    label: Option<String>,
 }
 /// Theme-derived semantic colors; port colors remain distinct in both themes.
 #[derive(Clone, Copy)]
@@ -51,8 +88,12 @@ pub struct Theme {
     pub background: Color,
     /// Node surface.
     pub card: Color,
+    /// Node headers and raised chips.
+    pub raised: Color,
     /// Subtle divider/grid color.
     pub border: Color,
+    /// Node outlines and region dividers.
+    pub separator: Color,
     /// Primary readable text.
     pub foreground: Color,
     /// Secondary labels.
@@ -61,6 +102,31 @@ pub struct Theme {
     pub accent: Color,
     /// Connection validation errors.
     pub error: Color,
+    /// Entry markers and healthy states.
+    pub success: Color,
+    /// Category accents (`chart-1`..`chart-6`).
+    pub chart: [Color; 6],
+    /// Drop shadow under cards (alpha carries the strength).
+    pub shadow: Color,
+}
+impl Theme {
+    fn accent(&self, accent: Accent) -> Color {
+        match accent {
+            Accent::Neutral => self.muted,
+            Accent::Primary => self.accent,
+            Accent::Chart(index) => self.chart[index.min(5)],
+        }
+    }
+}
+/// A state machine's live state during Play.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Live {
+    /// The playing state's node.
+    pub node: String,
+    /// Normalized time through the playing state's cycle.
+    pub progress: f32,
+    /// A cross-fade in progress: the target state's node and the fade's progress.
+    pub fade: Option<(String, f32)>,
 }
 /// Graph edit produced only at a gesture boundary. Submit through the host command path.
 #[derive(Debug)]
@@ -80,6 +146,13 @@ pub struct Canvas {
     pub selection: BTreeSet<String>,
     /// Connection error retained inline until the next gesture.
     pub diagnostic: Option<String>,
+    /// Edges drawn as selected (a transition chosen in the Animation sidebar).
+    pub highlight: BTreeSet<String>,
+    /// In-node preview images by node ID (UI image handles; the last good one stays).
+    pub previews: BTreeMap<String, u32>,
+    /// The state machine's live state during Play (playing state, cross-fade).
+    pub live: Option<Live>,
+    show_previews: bool,
     graph: Graph,
     nodes: Vec<NodeView>,
     index: BTreeMap<String, usize>,
@@ -96,6 +169,10 @@ impl Canvas {
             camera: Camera::default(),
             selection: BTreeSet::new(),
             diagnostic: None,
+            highlight: BTreeSet::new(),
+            previews: BTreeMap::new(),
+            live: None,
+            show_previews: true,
             graph,
             nodes: Vec::new(),
             index: BTreeMap::new(),
@@ -107,6 +184,20 @@ impl Canvas {
         };
         canvas.refresh_views(text);
         canvas
+    }
+    /// Show or hide in-node previews; node heights change, so views are rebuilt.
+    pub fn show_previews(&mut self, shown: bool, text: &mut ara_ui_text::TextSystem) {
+        if self.show_previews != shown {
+            self.show_previews = shown;
+            self.refresh_views(text);
+        }
+    }
+    /// Nodes that reserve an in-node preview, in graph order.
+    pub fn preview_nodes(&self) -> impl Iterator<Item = &str> {
+        self.nodes
+            .iter()
+            .filter(|n| n.preview_top.is_some())
+            .map(|n| n.id.as_str())
     }
     /// Replace a read-only graph snapshot after the host publishes ops.
     pub fn refresh(&mut self, graph: Graph, text: &mut ara_ui_text::TextSystem) {
@@ -122,7 +213,10 @@ impl Canvas {
         self.errors.clear();
         for diagnostic in diagnostics {
             if let Some(id) = &diagnostic.location.record {
-                let message = diagnostic.message.chars().take(34).collect::<String>();
+                let mut message = diagnostic.message.chars().take(40).collect::<String>();
+                if diagnostic.message.chars().count() > 40 {
+                    message.push('…');
+                }
                 self.labels.prepare(&message, text);
                 self.errors.insert(id.clone(), message);
             }
@@ -130,73 +224,86 @@ impl Canvas {
     }
     /// Semantic node/port geometry for agents, including culled nodes and annotations.
     pub fn report(&self, rect: Box2) -> serde_json::Value {
-        serde_json::json!({"camera":self.camera,"selection":self.selection,"nodes":self.nodes.iter().map(|n|serde_json::json!({"id":n.id,"kind":n.subtitle,"box":self.node_rect(n,rect),"ports":n.ports.iter().map(|(port,direction,ty)|serde_json::json!({"port":port,"direction":direction,"type":ty,"position":self.port_position(&Endpoint{node:n.id.clone(),port:port.clone()},rect)})).collect::<Vec<_>>(),"error":self.errors.get(&n.id)})).collect::<Vec<_>>(),"editor":self.graph.editor})
+        serde_json::json!({"camera":self.camera,"selection":self.selection,"nodes":self.nodes.iter().map(|n|serde_json::json!({"id":n.id,"kind":n.kind,"title":n.look.title,"box":self.node_rect(n,rect),"ports":n.ports.iter().map(|pin|serde_json::json!({"port":pin.name,"label":pin.label,"direction":pin.direction,"type":pin.ty,"connected":pin.connected,"position":self.port_position(&Endpoint{node:n.id.clone(),port:pin.name.clone()},rect)})).collect::<Vec<_>>(),"error":self.errors.get(&n.id)})).collect::<Vec<_>>(),"editor":self.graph.editor,"live":self.live.as_ref().map(|l|serde_json::json!({"node":l.node,"progress":l.progress,"fade":l.fade}))})
     }
     fn refresh_views(&mut self, text: &mut ara_ui_text::TextSystem) {
         self.nodes.clear();
         self.index.clear();
         self.wires.clear();
-        for (index, (id, node)) in self.graph.nodes.iter().enumerate() {
-            let title = node
-                .payload
-                .get("name")
-                .and_then(serde_json::Value::as_str)
-                .unwrap_or(&node.kind)
-                .to_owned();
+        let connected = self
+            .graph
+            .edges
+            .values()
+            .flat_map(|edge| [&edge.from, &edge.to])
+            .map(|endpoint| (endpoint.node.as_str(), endpoint.port.as_str()))
+            .collect::<BTreeSet<_>>();
+        for (id, node) in &self.graph.nodes {
+            let look = style::look(&self.graph, id, node);
+            // Unplaced nodes (text-authored) are laid out below, once heights are known.
             let position = self
                 .graph
                 .editor
                 .positions
                 .get(id)
                 .copied()
-                .unwrap_or_else(|| {
-                    if self.graph.header.domain == "material" && self.graph.nodes.len() < 12 {
-                        if id == "n_output" {
-                            [300., 112.]
-                        } else {
-                            [
-                                0.,
-                                self.graph
-                                    .nodes
-                                    .keys()
-                                    .filter(|key| key.as_str() != "n_output")
-                                    .position(|key| key == id)
-                                    .unwrap_or(index) as f32
-                                    * 136.,
-                            ]
-                        }
-                    } else {
-                        [(index % 4) as f32 * 256., (index / 4) as f32 * 196.]
-                    }
-                });
-            let inputs = node
+                .unwrap_or([f32::NAN; 2]);
+            let ports = node
                 .ports
-                .values()
+                .iter()
+                .map(|(name, port)| Pin {
+                    name: name.clone(),
+                    label: style::pin_label(node, name, port.direction, &port.ty),
+                    direction: port.direction,
+                    ty: port.ty.clone(),
+                    connected: connected.contains(&(id.as_str(), name.as_str())),
+                })
+                .collect::<Vec<_>>();
+            let inputs = ports
+                .iter()
                 .filter(|p| p.direction == Direction::Input)
                 .count();
-            let outputs = node.ports.len() - inputs;
-            let height = 64. + inputs.max(outputs) as f32 * 24.;
-            self.labels.prepare(&title, text);
-            self.labels.prepare(&node.kind, text);
-            for (name, port) in &node.ports {
-                self.labels.prepare(name, text);
-                self.labels.prepare(&port.ty, text);
+            let rows = inputs.max(ports.len() - inputs) as f32;
+            let (width, mut height) = match look.shape {
+                Shape::State => (STATE[0], STATE[1]),
+                Shape::Pins => (
+                    WIDTH,
+                    HEADER + if look.value.is_some() { VALUE } else { 0. } + PAD * 2. + rows * ROW,
+                ),
+            };
+            let preview_top = (look.preview && self.show_previews).then(|| {
+                let top = height;
+                height += PREVIEW + PAD * 2.;
+                top
+            });
+            for label in [&look.title, &look.caption]
+                .into_iter()
+                .chain(look.value.as_ref())
+                .chain(ports.iter().map(|p| &p.label))
+            {
+                self.labels.prepare(label, text);
             }
             self.index.insert(id.clone(), self.nodes.len());
             self.nodes.push(NodeView {
                 id: id.clone(),
-                title,
-                subtitle: node.kind.clone(),
+                kind: node.kind.clone(),
+                look,
                 position,
+                width,
                 height,
-                ports: node
-                    .ports
-                    .iter()
-                    .map(|(k, p)| (k.clone(), p.direction, p.ty.clone()))
-                    .collect(),
+                ports,
+                preview_top,
             });
         }
+        self.layout_unplaced();
+        let transitions = self.graph.header.payload.get("transitions");
         for (id, edge) in &self.graph.edges {
+            let label = transitions
+                .and_then(|t| t.get(id))
+                .and_then(serde_json::Value::as_str)
+                .map(str::to_owned);
+            if let Some(label) = &label {
+                self.labels.prepare(label, text);
+            }
             self.wires.push(Wire {
                 id: id.clone(),
                 from: edge.from.clone(),
@@ -208,8 +315,10 @@ impl Canvas {
                     .get(id)
                     .cloned()
                     .unwrap_or_default(),
+                label,
             });
         }
+        self.labels.prepare("Entry", text);
         for comment in self.graph.editor.comments.values() {
             self.labels.prepare(&comment.text, text);
         }
@@ -218,6 +327,78 @@ impl Canvas {
         }
         self.selection
             .retain(|id| self.graph.nodes.contains_key(id));
+        self.previews
+            .retain(|id, _| self.graph.nodes.contains_key(id));
+    }
+    /// Lay out nodes without a stored position (text-authored graphs) left to right:
+    /// each node sits one column before its nearest consumer, so inputs and constants
+    /// land next to what uses them, and lines up with its consumers' average height.
+    /// Stored positions are never moved.
+    fn layout_unplaced(&mut self) {
+        if self.nodes.iter().all(|n| n.position[0].is_finite()) {
+            return;
+        }
+        let count = self.nodes.len();
+        let mut consumers = vec![Vec::new(); count];
+        for edge in self.graph.edges.values() {
+            if let (Some(&from), Some(&to)) = (
+                self.index.get(&edge.from.node),
+                self.index.get(&edge.to.node),
+            ) && from != to
+            {
+                consumers[from].push(to);
+            }
+        }
+        // Longest distance to a sink; bounded rounds also terminate on cycles.
+        let mut reach = vec![0usize; count];
+        for _ in 0..count.min(64) {
+            let mut changed = false;
+            for (from, tos) in consumers.iter().enumerate() {
+                for &to in tos {
+                    if reach[from] < reach[to] + 1 {
+                        reach[from] = reach[to] + 1;
+                        changed = true;
+                    }
+                }
+            }
+            if !changed {
+                break;
+            }
+        }
+        let last = reach.iter().copied().max().unwrap_or(0);
+        // Right to left: a column's consumers are already placed.
+        for column in (0..=last).rev() {
+            let mut members = (0..count)
+                .filter(|&i| last - reach[i] == column && !self.nodes[i].position[0].is_finite())
+                .map(|i| {
+                    let centres = consumers[i]
+                        .iter()
+                        .map(|&c| &self.nodes[c])
+                        .filter(|c| c.position[1].is_finite())
+                        .map(|c| c.position[1] + c.height * 0.5)
+                        .collect::<Vec<_>>();
+                    let target = if centres.is_empty() {
+                        f32::NAN
+                    } else {
+                        centres.iter().sum::<f32>() / centres.len() as f32
+                    };
+                    (i, target)
+                })
+                .collect::<Vec<_>>();
+            members.sort_by(|a, b| a.1.total_cmp(&b.1).then(a.0.cmp(&b.0)));
+            let mut floor = f32::NEG_INFINITY;
+            for (i, target) in members {
+                let node = &mut self.nodes[i];
+                let wanted = if target.is_finite() {
+                    target - node.height * 0.5
+                } else {
+                    floor.max(0.)
+                };
+                let y = wanted.max(floor);
+                node.position = [column as f32 * (WIDTH + 72.), y];
+                floor = y + node.height + 24.;
+            }
+        }
     }
     /// Borrow the current model for domain inspectors and commands.
     pub fn graph(&self) -> &Graph {
@@ -257,19 +438,19 @@ impl Canvas {
             .filter(|n| self.node_rect(n, rect).intersects(rect))
             .count()
     }
-    /// Frame all cards with a gutter and room for the minimap at the canvas bottom.
+    /// Frame all cards with a gutter, leaving room for the minimap when it shows.
     pub fn framed(&self, rect: Box2) -> Camera {
         let bounds = self.bounds();
-        let width = (rect.w - 48.).max(1.);
-        let height = (rect.h - 136.).max(1.);
+        let width = (rect.w - 64.).max(1.);
+        let height = (rect.h - 96.).max(1.);
         let zoom = (width / bounds.w.max(1.))
             .min(height / bounds.h.max(1.))
-            .clamp(0.15, 0.9);
+            .clamp(0.15, 1.);
         Camera {
             zoom,
             pan: [
-                24. + (width - bounds.w * zoom) * 0.5 - bounds.x * zoom,
-                24. + (height - bounds.h * zoom) * 0.5 - bounds.y * zoom,
+                32. + (width - bounds.w * zoom) * 0.5 - bounds.x * zoom,
+                40. + (height - bounds.h * zoom) * 0.5 - bounds.y * zoom,
             ],
         }
     }
@@ -306,7 +487,7 @@ impl Canvas {
         Box2 {
             x: p[0],
             y: p[1],
-            w: 216. * self.camera.zoom,
+            w: node.width * self.camera.zoom,
             h: node.height * self.camera.zoom,
         }
     }
@@ -316,24 +497,40 @@ impl Canvas {
     }
     fn port_position(&self, endpoint: &Endpoint, rect: Box2) -> Option<[f32; 2]> {
         let node = self.nodes.get(*self.index.get(&endpoint.node)?)?;
-        let (_, direction, _) = node
-            .ports
-            .iter()
-            .find(|(name, _, _)| *name == endpoint.port)?;
+        let pin = node.ports.iter().find(|pin| pin.name == endpoint.port)?;
+        let r = self.node_rect(node, rect);
+        let x = if pin.direction == Direction::Input {
+            r.x
+        } else {
+            r.x + r.w
+        };
+        if node.look.shape == Shape::State {
+            // States connect edge to edge; their sockets are the side midpoints.
+            return Some([x, r.y + r.h * 0.5]);
+        }
         let index = node
             .ports
             .iter()
-            .filter(|(_, d, _)| d == direction)
-            .position(|(name, _, _)| *name == endpoint.port)?;
-        let r = self.node_rect(node, rect);
+            .filter(|p| p.direction == pin.direction)
+            .position(|p| p.name == endpoint.port)?;
         Some([
-            if *direction == Direction::Input {
-                r.x
-            } else {
-                r.x + r.w
-            },
-            r.y + (64. + index as f32 * 24.) * self.camera.zoom,
+            x,
+            r.y + (node.pins_top() + (index as f32 + 0.5) * ROW) * self.camera.zoom,
         ])
+    }
+    /// The minimap's screen rectangle, when the graph does not fit the view.
+    fn minimap(&self, rect: Box2) -> Option<Box2> {
+        let bounds = self.bounds();
+        let a = self.screen([bounds.x, bounds.y], rect);
+        let b = self.screen([bounds.x + bounds.w, bounds.y + bounds.h], rect);
+        let fits =
+            a[0] >= rect.x && a[1] >= rect.y && b[0] <= rect.x + rect.w && b[1] <= rect.y + rect.h;
+        (!fits && rect.w > 360. && rect.h > 240.).then_some(Box2 {
+            x: rect.x + rect.w - 156.,
+            y: rect.y + rect.h - 108.,
+            w: 144.,
+            h: 96.,
+        })
     }
 }
 /// Nominal port types share the same color everywhere the widget is used.

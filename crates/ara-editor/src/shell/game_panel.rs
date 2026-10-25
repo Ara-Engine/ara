@@ -60,17 +60,28 @@ impl Shell {
         out.push_str("<panel id='game-surface' class='game-surface'>");
         if let Some(fault) = self.game_fault.clone() {
             let text = format!("{fault} · Details and fixes are in the Console.");
-            self.empty(
-                out,
-                "game-fault",
-                "circle-x",
-                "Play stopped",
-                &text,
-                &[
-                    ("game-restart", "Restart", "play.restart"),
-                    ("game-stop", "Stop", "play.stop"),
-                ],
-            );
+            if self.game_start_failed {
+                self.empty(
+                    out,
+                    "game-fault",
+                    "circle-x",
+                    "Play could not start",
+                    &text,
+                    &[("game-stop", "Stop", "play.stop")],
+                );
+            } else {
+                self.empty(
+                    out,
+                    "game-fault",
+                    "circle-x",
+                    "Play stopped",
+                    &text,
+                    &[
+                        ("game-restart", "Restart", "play.restart"),
+                        ("game-stop", "Stop", "play.stop"),
+                    ],
+                );
+            }
         } else if self.game_live {
             // Letterbox inside the surface using last frame's layout.
             let area = self
@@ -104,7 +115,7 @@ impl Shell {
                 out.push_str("<panel id='game-capture' class='game-hint'><text id='game-capture-text' text='Click the view to play' /></panel>");
             }
         } else if playing {
-            self.empty(out, "game-starting", "gamepad-2", "Starting Play…", "The player process is loading the scene. The game appears here; Esc gives the keyboard back to the editor.", &[("game-stop", "Stop", "play.stop")]);
+            self.starting_markup(out);
         } else {
             let in_view = editor
                 .state
@@ -124,6 +135,119 @@ impl Shell {
                 },
                 &[("game-play", "Play", "play.start")],
             );
+        }
+        out.push_str("</panel>");
+    }
+}
+
+/// A Play world still starting (a `background` start, `play.status`): its phase, the
+/// phase's progress and the time since Play was pressed.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct StartProgress {
+    pub phase: String,
+    pub completed: u64,
+    pub total: u64,
+    /// Tenths of a second since the click (the precision shown).
+    pub tenths: u64,
+    /// Stop was pressed; the start is being cancelled.
+    pub stopping: bool,
+}
+impl StartProgress {
+    /// From a `play.status` world row that is starting or stopping.
+    pub(crate) fn from_status(row: &Value) -> Self {
+        let progress = &row["progress"];
+        Self {
+            phase: progress["phase"].as_str().unwrap_or("queued").to_owned(),
+            completed: progress["completed"].as_u64().unwrap_or(0),
+            total: progress["total"].as_u64().unwrap_or(0),
+            tenths: (progress["elapsedMs"].as_f64().unwrap_or(0.) / 100.) as u64,
+            stopping: row["status"] == "stopping",
+        }
+    }
+    /// What the phase is doing, for people.
+    fn label(&self) -> String {
+        match self.phase.as_str() {
+            "queued" => "Waiting for the previous Play".into(),
+            "snapshot" => "Capturing the scene".into(),
+            "assets" => "Preparing assets".into(),
+            "pool" => "Waiting for a player".into(),
+            "device" => "Starting the renderer".into(),
+            "world" => "Loading the scene".into(),
+            "catalog" => "Loading scripts".into(),
+            other => super::inspector_panel::sentence(other),
+        }
+    }
+}
+impl Shell {
+    /// Reads the shown Play world's row from `play.status`: its start progress, a
+    /// start that failed, or a fault while running (the Game view and status bar
+    /// show them). The window calls it on a cadence; tests call it directly.
+    pub fn read_play_status(&mut self, editor: &mut Editor) {
+        let status = editor
+            .action("play.status", json!({}))
+            .unwrap_or(Value::Null);
+        let worlds = status["worlds"].as_array().cloned().unwrap_or_default();
+        let shown = worlds
+            .iter()
+            .find(|w| w["world"].as_str() == editor.play_world.as_deref())
+            .or(worlds.last());
+        let state = shown.and_then(|w| w["status"].as_str()).unwrap_or("");
+        self.game_start = shown
+            .filter(|_| matches!(state, "starting" | "stopping"))
+            .map(StartProgress::from_status);
+        self.game_start_failed = state == "failed";
+        self.game_fault = shown.and_then(|w| {
+            if self.game_start_failed {
+                return Some(
+                    w["error"]
+                        .as_str()
+                        .or_else(|| w["diagnostics"][0]["message"].as_str())
+                        .unwrap_or("the player could not start")
+                        .to_owned(),
+                );
+            }
+            let fault = &w["fault"];
+            (!fault.is_null()).then(|| {
+                fault["message"]
+                    .as_str()
+                    .unwrap_or("the player stopped")
+                    .to_owned()
+            })
+        });
+    }
+    /// The Game view while Play starts: the phase, its progress (a bar when it has a
+    /// total), the elapsed time and Stop; "Starting Play…" until the first status.
+    fn starting_markup(&mut self, out: &mut String) {
+        let Some(start) = self.game_start.clone() else {
+            self.empty(
+                out,
+                "game-starting",
+                "gamepad-2",
+                "Starting Play…",
+                "The game appears here; Esc gives the keyboard back to the editor.",
+                &[("game-stop", "Stop", "play.stop")],
+            );
+            return;
+        };
+        let (title, detail) = if start.stopping {
+            ("Stopping Play…", String::new())
+        } else {
+            ("Starting Play…", start.label())
+        };
+        let seconds = format!("{:.1} s", start.tenths as f64 / 10.);
+        out.push_str(&format!("<panel id='game-starting' class='empty'>{}<text id='game-starting-title' class='empty-title' text='{title}' /><text id='game-starting-phase' class='empty-hint' text='{}' />",icons::icon_in("game-starting","gamepad-2","icon-lg"),escape(&detail)));
+        // A phase with a total: a bar and its count on one line.
+        if start.total > 0 && !start.stopping {
+            let percent = start.completed as f64 * 100. / start.total as f64;
+            out.push_str(&format!("<panel id='game-starting-progress' class='row' style='gap:8px;align-items:center'><panel id='game-starting-bar' class='progress' style='width:160px'><panel id='game-starting-fill' class='progress-fill' style='width:{percent:.0}%' /></panel><text id='game-starting-count' class='caption' text='{} / {}' /></panel>",start.completed,start.total));
+        }
+        out.push_str(&format!(
+            "<text id='game-starting-time' class='caption' text='{}' />",
+            escape(&seconds)
+        ));
+        if !start.stopping {
+            self.bind_command("game-stop", "play.stop", Target::None);
+            out.push_str("<panel id='game-starting-actions' class='empty-actions'><button id='game-stop' label='Stop' description='Cancel starting Play' action='Dispatch'><text id='game-stop-label' text='Stop' /></button></panel>");
         }
         out.push_str("</panel>");
     }

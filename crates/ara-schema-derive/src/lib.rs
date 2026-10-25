@@ -17,7 +17,7 @@
 //! - `unit = Meters` (an `ara_schema::Unit` variant), `range(min = 0, max = 1)`;
 //! - `since = 2`, `deprecated = "why"`, `alias = "old"`;
 //! - `replicate(audience = Relevant, quantize = 0.01, interpolate = Linear, rollback)`;
-//! - `editor(group = "...", slider, step = 0.1, multiline, hidden, read_only)`;
+//! - `editor(group = "...", slider, step = 0.1, multiline, hidden, read_only, color)`;
 //! - `keyed` (a `Vec` of structs with `id`, addressed by ID), `asset_kind = "prefab"`.
 //!
 //! Variant attributes: `rename`, `alias`, `deprecated`.
@@ -295,6 +295,7 @@ struct FieldAttrs {
     multiline: bool,
     hidden: bool,
     read_only: bool,
+    color: bool,
     keyed: bool,
     asset_kind: Option<String>,
 }
@@ -368,8 +369,10 @@ impl FieldAttrs {
                     self.hidden = true;
                 } else if m.path.is_ident("read_only") {
                     self.read_only = true;
+                } else if m.path.is_ident("color") {
+                    self.color = true;
                 } else {
-                    return Err(m.error("ara: expected `group`, `slider`, `step`, `multiline`, `hidden` or `read_only`"));
+                    return Err(m.error("ara: expected `group`, `slider`, `step`, `multiline`, `hidden`, `read_only` or `color`"));
                 }
                 Ok(())
             })?;
@@ -436,7 +439,8 @@ fn field_tokens(f: &syn::Field, a: &FieldAttrs, params: bool) -> syn::Result<Ts>
     let rollback = a.rollback;
     let group = opt_string(&a.group);
     let step = as_f64(&a.step);
-    let (slider, multiline, hidden, read_only) = (a.slider, a.multiline, a.hidden, a.read_only);
+    let (slider, multiline, hidden, read_only, color) =
+        (a.slider, a.multiline, a.hidden, a.read_only, a.color);
     Ok(quote!(::ara_schema::FieldDesc {
         name: ::std::string::String::from(#name),
         ty: #ty_expr,
@@ -462,6 +466,7 @@ fn field_tokens(f: &syn::Field, a: &FieldAttrs, params: bool) -> syn::Result<Ts>
             multiline: #multiline,
             hidden: #hidden,
             read_only: #read_only,
+            color: #color,
         },
     }))
 }

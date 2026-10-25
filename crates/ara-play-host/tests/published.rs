@@ -1,4 +1,5 @@
-//! A real protocol worker holds one import pending while the reader consumes others.
+//! A real protocol worker holds one import pending while the reader consumes others,
+//! and the import-progress feed follows each source through pending, done and failed.
 use ara_asset::{
     Artifact, ArtifactKind, ImportContext, ImportInput, ImportOutput, Importer, ImporterRegistry,
 };
@@ -24,6 +25,9 @@ impl Importer for Fixture {
         input: &ImportInput,
         _: &mut ImportContext<'_>,
     ) -> ara_asset::Result<ImportOutput> {
+        if input.source == b"broken" {
+            return Err(ara_asset::Error::Invalid("broken fixture".into()));
+        }
         if input.source == b"pending" {
             let gate = input.settings["gate"].as_str().expect("fixture gate");
             while !Path::new(gate).exists() {
@@ -57,6 +61,8 @@ fn driver() -> Result<(), Box<dyn std::error::Error>> {
     let reader = ara_play_host::PublishedAssets::for_project(&root)?;
     assert_eq!(reader.revision(), 0);
     assert!(reader.snapshot().is_none());
+    assert_eq!(reader.progress_revision(), 0);
+    assert!(reader.progress().is_none());
     let mut assets = ara_play_host::assets::Assets::new(&root, &std::env::current_exe()?)?;
     let mut schema = ara_schema::SchemaDb::new();
     ara_doc::register(&mut schema);
@@ -84,6 +90,9 @@ fn driver() -> Result<(), Box<dyn std::error::Error>> {
         );
         thread::sleep(Duration::from_millis(2));
     };
+    let progress = reader.progress().expect("progress after the first cook");
+    assert_eq!((progress.done, progress.total), (1, 1));
+    assert!(progress.pending.is_empty() && progress.failed.is_empty());
     // Start pending work only after the first cook, so the proof also works on a
     // one-core host whose importer admission cap is one.
     fs::write(root.join("pending.bin"), b"pending")?;
@@ -97,6 +106,10 @@ fn driver() -> Result<(), Box<dyn std::error::Error>> {
     );
     assets.synchronize(&workspace, 2)?;
     assert!(assets.importing(), "fixture must have real pending work");
+    assets.poll(false, true);
+    let progress = reader.progress().expect("progress while importing");
+    assert_eq!((progress.done, progress.total), (1, 2));
+    assert_eq!(progress.pending, ["as_pending".to_owned()].into());
     assert!(first.generation("as_pending").is_none());
     assert_eq!(
         first.generation("as_ready").expect("ready").kinds(),
@@ -124,6 +137,14 @@ fn driver() -> Result<(), Box<dyn std::error::Error>> {
         "publication reads must not wait for pending imports"
     );
     let wanted = ["as_ready".to_owned(), "as_pending".to_owned()].into();
+    let start = Instant::now();
+    let live = assets.ready_pins(&wanted);
+    assert_eq!(live.len(), 1);
+    assert!(live.contains_key("as_ready") && !live.contains_key("as_pending"));
+    assert!(
+        start.elapsed() < Duration::from_millis(100),
+        "Play pins must not wait for the held import"
+    );
     let mut progress = Vec::new();
     let stalled = assets
         .pins_with_progress(&wanted, Duration::from_millis(30), |state| {
@@ -159,13 +180,49 @@ fn driver() -> Result<(), Box<dyn std::error::Error>> {
         "retained snapshots must remain immutable"
     );
     let stable = reader.revision();
+    let progressed = reader.progress_revision();
     assets.poll(false, true);
     assert_eq!(
         reader.revision(),
         stable,
         "empty polls do not refresh views"
     );
-    println!("completed imports publish immutable snapshots; pending imports never block readers");
+    assert_eq!(reader.progress_revision(), progressed);
+    let progress = reader.progress().expect("progress after release");
+    assert_eq!((progress.done, progress.total), (2, 2));
+    assert!(progress.pending.is_empty());
+    // A failed import is reported with its error, not left pending.
+    fs::write(root.join("broken.bin"), b"broken")?;
+    let value = serde_json::json!({"$schema":"ara://schema/import/1","id":"as_broken",
+        "records":{"i_settings":{"importer":"published-fixture","version":"1","settings":{}}}});
+    let text = ara_json::to_canonical_string(&ara_json::sort_keys(&value));
+    fs::write(root.join("broken.bin.import.json"), &text)?;
+    workspace.insert(
+        "broken.bin.import.json",
+        ara_asset::Sidecar::read(&text, "broken.bin.import.json", &schema)?.into_document(),
+    );
+    assets.synchronize(&workspace, 3)?;
+    let deadline = Instant::now() + Duration::from_secs(5);
+    let failed = loop {
+        assets.poll(false, true);
+        if let Some(progress) = reader.progress()
+            && !progress.failed.is_empty()
+        {
+            break progress;
+        }
+        assert!(Instant::now() < deadline, "the broken import must fail");
+        thread::sleep(Duration::from_millis(2));
+    };
+    assert_eq!((failed.done, failed.total), (2, 3));
+    assert!(failed.pending.is_empty());
+    assert!(
+        failed.failed["as_broken"].contains("broken fixture"),
+        "{:?}",
+        failed.failed
+    );
+    println!(
+        "completed imports publish immutable snapshots; pending imports never block readers; progress follows each source"
+    );
     Ok(())
 }
 

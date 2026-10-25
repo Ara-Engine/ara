@@ -8,6 +8,7 @@ use std::{collections::BTreeMap, sync::Arc};
 #[cfg(test)]
 mod benchmark;
 mod plan;
+mod reuse;
 #[cfg(test)]
 mod tests;
 mod upload;
@@ -56,6 +57,7 @@ struct Resident {
     image: Image,
     row: Row,
     bytes: u64,
+    borrowed: bool,
 }
 
 struct Entry {
@@ -98,6 +100,16 @@ impl ara_render::instanced::Textures for NativeResidency {
     }
     fn initialize(&mut self, gpu: &mut VulkanDevice) -> Result<NativeStats> {
         Self::initialize(self, gpu)
+    }
+    fn initialize_reusing(
+        &mut self,
+        gpu: &mut VulkanDevice,
+        previous: &dyn ara_render::instanced::Textures,
+    ) -> Result<NativeStats> {
+        self.prepare_reusing(gpu, previous)
+    }
+    fn publish_reuse(&mut self, previous: &mut dyn ara_render::instanced::Textures) -> Result<()> {
+        self.commit_reuse(previous)
     }
     fn refine(&mut self, gpu: &mut VulkanDevice) -> Result<NativeStats> {
         Self::refine(self, gpu)
@@ -348,7 +360,9 @@ impl NativeResidency {
     /// Retires native images and the binding table before the device is destroyed.
     pub fn destroy(self, gpu: &mut VulkanDevice) -> Result<()> {
         for entry in self.entries {
-            if let Some(resident) = entry.resident {
+            if let Some(resident) = entry.resident
+                && !resident.borrowed
+            {
                 gpu.retire(Resource::Image(resident.image))?;
             }
         }

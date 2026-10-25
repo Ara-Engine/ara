@@ -4,6 +4,7 @@ use ara_gpu::{Barrier, Queue, commands::Command, vk};
 use std::time::Instant;
 
 mod raster;
+mod reuse;
 mod views;
 
 enum Probe {

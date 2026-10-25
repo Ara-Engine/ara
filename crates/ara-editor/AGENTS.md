@@ -3,13 +3,12 @@
 Native M2 editor shell, in-process project authority and Engine Protocol server.
 The UI is ara-ui; its display list goes to the Vulkan adapter in `ara-editor-gpu`.
 The viewport samples ara-render's offscreen image on that same device.
-
 Public boundaries:
 - `Editor`: host, navigation commands, content batches, agent activity and per-turn undo.
 - `state`: navigation/layout op document; deliberately separate from content undo.
 - `world::EditWorldView`: replace the document extraction with ara-sim later.
-- `inspector`: schema-driven fields, mixed values, units and provenance.
-- `shell`: retained panel tree and semantic interaction helpers.
+- `inspector`: schema fields, mixed values, units, provenance; lists/maps/structs edit
+  per element (`shell/compound.rs`, `path#pointer`). `shell`: retained panel tree.
 - `gpu`: 64-byte instance ABI, raster/MSDF atlases, ordered draws and clip masks.
 - `transport`: authenticated localhost EP and MCP; no project state on IO threads.
 - `build.rs`: embeds `assets/brand/ara.ico` as the Windows exe icon (embed-resource;
@@ -40,20 +39,19 @@ by asset ID/digest. `Editor::models` survives document edits; extraction selects
 the source node/primitive and pivot without reopening sidecars or decoding per
 entity. Unpublished models use placeholders; failed reloads retain last good.
 
-Set CARGO_BUILD_JOBS=2; gate with targeted cargo check/test/clippy. The GPU gate
-(`run.ps1 -Mode Verify`, `tests/native.rs --ignored`) needs validation layers, SDL3
-and this machine's GPU. Goldens live in `tests/goldens` (update only with
-`ARA_EDITOR_UPDATE_GOLDENS=1`); evidence lives in `evidence`.
+Gate with targeted check/test/clippy. The GPU gate (`run.ps1 -Mode Verify`, `tests/native.rs
+--ignored`) needs validation layers, SDL3 and this machine's GPU. Goldens live in
+`tests/goldens` (update only with `ARA_EDITOR_UPDATE_GOLDENS=1`); evidence in `evidence`.
 
-Polish assets: Lucide SVGs (ISC), Inter and JetBrains Mono (OFL; THIRD_PARTY_NOTICES).
-The fidelity view and its bounded settling live in app/viewport.rs; destroy it before
-its GPU. Raster IDs drive picking, outlines and GPU-only hover. Physical Scene extents
-and UI glyph scale change together; keep the SDL window, editor logical, IME and UIA
-coordinate conversions. Motion is paint-only, ≤140 ms, off with editor.preferences.
+Polish assets: Lucide SVGs (ISC), Inter, JetBrains Mono (OFL; THIRD_PARTY_NOTICES). The
+fidelity view and its bounded settling live in app/viewport.rs; destroy it before its GPU.
+Raster IDs drive picking, outlines and GPU-only hover. Physical Scene extents and UI glyph
+scale change together; keep the SDL window, editor logical, IME and UIA coordinate
+conversions. Motion is paint-only, ≤140 ms, off with editor.preferences.
 verify-polish.ps1 captures 1440x900 at 1x and 2560x1440 at 2x (palettes, Agents).
 
 Panel authoring: asset_tools owns isolated import jobs and cached off-thread
-thumbnails. authoring registers graph/material/VFX/animation commands; graph is
+thumbnails and material node previews (`node_preview.rs`). authoring registers graph/material/VFX/animation commands; graph is
 the shared culled canvas and pre-shaped label cache. Preserve domain identities.
 The shared play-host schema world owns engine kinds and material/VFX commands;
 register only editor and generic graph commands on top of it.
@@ -63,10 +61,10 @@ their ASTs to graph ops; animation projections are read-only and edit controller
 data. Animation canvas annotations live in `.ara/editor/animation-<id>.graph`.
 Graph labels are shaped once and use scalable MSDF runs across pan/zoom. Keep
 node/wire culling, the stable lookup table and the bounded thumbnail image pool.
-Generated material previews and fixed-tick VFX previews own worker GPU devices;
-all thumbnail decode/cook/cache IO is off the UI thread. Failures keep last-good
-images and display diagnostics. Host import sidecars save to `.import.json`
-while their asset IDs index source media; do not alter importer version policy.
+Thumbnails: models via `asset_tools/studio.rs` (published materials, fitted 3/4 shot),
+material spheres, VFX framed on simulated particles; 512 masters resampled to 2× each
+view, on worker GPUs with off-thread IO, last good kept. Host import sidecars save to
+`.import.json` while their asset IDs index source media; keep importer version policy.
 Profiler views consume actual ara-profile frames/spans/GPU queue timings. Frozen
 captures exclude open frames and write asynchronously to `.ara/cache/profiles`.
 `--verify-panels` on a scratch project runs real import/reimport jobs, an asset
@@ -128,8 +126,8 @@ never an override). C#: `shell/scripts.rs` scaffolds a hot module + IDE .csproj.
 Game view (D19): `app/game.rs` imports the play host's shared surfaces
 (`PlayService::surfaces`, taken in `Editor::open`) and shows texture `game-view`;
 `game_input` forwards keys/mouse to the selected client while captured (Esc
-releases); a faulted world (`play.status`) shows its fault with Restart/Stop
-instead of "Starting Play…". Play embeds unless `play.inGameView` is off.
+releases). Play starts in the background (`background:true`); `Shell::read_play_status`
+shows the start's phase/progress, a failed start, or a fault. Embeds unless `play.inGameView` is off.
 Build (`shell/build.rs`): `build.current` exports the main scene with the first
 `presets/*.export.json` (else `build.profile.create` writes the portable, unpinned
 Windows runtime profile) into `builds/<profile>-<time>/build` on a thread, pinning
@@ -140,11 +138,13 @@ never add a capture route that shows a window. `--verify-journey` (`app/journey.
 writes `journey.json` after every step. `--verify-responsiveness` (`app/responsiveness.rs`) injects SDL-level clicks/moves into the
 real loop and writes per-frame costs, UI work, click results and Play click-to-first-Game-
 frame. Shell rebuilds reconcile into the retained `Ui` once per revision (`rebuild_if_stale`),
-area headers and tab bodies as parts (`Ui::reconcile_parts`: unchanged ones keep their rows);
-inactive `panels::keep_alive` tabs stay mounted, hidden (geometry via `Shell::shown_node`).
-Only `scene_changed` state re-renders the Scene; icons re-rasterize on DPI only.
-Tools: `shell/material_panel.rs` (preview + parameters, Graph|Source, compile
-status; swatches are painted after layout, never raw colours in markup) and
-`shell/vfx_panel.rs` (emitter stacks, preview-only Hide/Isolate, timeline driving
-`asset_tools/vfx_stream.rs`: rate, restart, step, GPU counters updated in place).
-Imports use the shared `import.initialize`/`import.configure` commands.
+menubar, status bar, area headers and tab bodies as parts (`Ui::reconcile_parts`); inactive
+`panels::keep_alive` tabs stay mounted, hidden (geometry via `Shell::shown_node`). Memoized
+panels (`shell/memo.rs`: Assets) reuse markup+bindings while their input digest holds; `cargo
+test` sets `ARA_EDITOR_MEMO_CHECK=1`, which regenerates each reuse and fails on a difference.
+`shell/imports.rs` reads ara-play-host's `ImportProgress` (Importing chip, Assets badges,
+Scene loading notice; `tests/loading.rs`). Only `scene_changed` state re-renders the Scene.
+Tool pages (`docs/design/editor-tool-pages.md`) share a breadcrumb toolbar, side column and
+status strip; `graph/style.rs` names nodes/pins; swatches paint after layout. VFX Hide/Isolate
+are preview-only; its timeline drives `vfx_stream`. In Play the Animation page polls
+`play.read <entity>.AnimatorState` (`AnimationLive`). Imports use `import.initialize`/`configure`.

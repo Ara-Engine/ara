@@ -12,7 +12,43 @@ pub(crate) struct Asset {
     pub uses: Vec<String>,
     pub stamp: u64,
 }
+/// What an asset field of declared `kind` at `field` takes, as `(extensions, phrase)`:
+/// a document kind takes its own files, `audio` the audio formats, `MeshRenderer.model`
+/// model sources and `material` fields material graphs; other fields take any asset
+/// (empty list).
+pub(crate) fn field_accepts(
+    kind: Option<&str>,
+    field: &str,
+) -> (&'static [&'static str], &'static str) {
+    match kind {
+        Some("audio") => (&["wav", "ogg", "mp3", "flac"], "an audio file"),
+        Some("prefab") => (&["prefab"], "a prefab"),
+        Some("scene") => (&["scene"], "a scene"),
+        Some("animation") => (&["animation"], "an animation"),
+        Some("graph") => (&["graph"], "a graph"),
+        Some("terrain") => (&["terrain"], "a terrain"),
+        Some("foliage") => (&["foliage"], "a foliage set"),
+        Some("music") => (&["music"], "a music document"),
+        Some("world") => (&["world"], "a world"),
+        Some(_) => (&[], "an asset"),
+        None if field.ends_with(".model") => (&["gltf", "glb", "fbx"], "a glTF or FBX model"),
+        None if field.rsplit(['.', '/']).next() == Some("material") => {
+            (&["material", "graph"], "a material")
+        }
+        None => (&[], "an asset"),
+    }
+}
 impl Asset {
+    /// Whether this file can fill an asset field of declared `kind` at `field`
+    /// ([`field_accepts`]); folders never do.
+    pub fn fits(&self, kind: Option<&str>, field: &str) -> bool {
+        let (extensions, _) = field_accepts(kind, field);
+        self.kind != "folder" && (extensions.is_empty() || extensions.contains(&self.kind.as_str()))
+    }
+    /// The file name, for messages.
+    pub fn name(&self) -> &str {
+        self.path.rsplit('/').next().unwrap_or(&self.path)
+    }
     /// Prefer the authority's current index when a recent import predates the browser scan.
     pub fn current_reference(&self, workspace: &ara_doc::Workspace) -> Option<String> {
         workspace
@@ -24,6 +60,8 @@ impl Asset {
 }
 pub(super) struct Browser {
     pub items: Vec<Asset>,
+    /// Bumped whenever `items` changes (memoized panels list them).
+    pub revision: u64,
     pending: Receiver<Vec<Asset>>,
 }
 impl Browser {
@@ -46,6 +84,7 @@ impl Browser {
         });
         Self {
             items: Vec::new(),
+            revision: 0,
             pending,
         }
     }
@@ -53,6 +92,7 @@ impl Browser {
         if let Ok(items) = self.pending.try_recv() {
             let changed = self.items != items;
             self.items = items;
+            self.revision += u64::from(changed);
             changed
         } else {
             false

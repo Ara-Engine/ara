@@ -21,6 +21,106 @@ pub(crate) fn controller(doc: &ara_doc::Document) -> Result<(String, ControllerD
 pub(crate) fn layout_path(doc: &str) -> String {
     format!(".ara/editor/animation-{doc}.graph")
 }
+/// Clip ticks per second. Controllers share their clips' timebase; the editor reads
+/// times against the default clip frequency (48 kHz) and shows them in seconds.
+pub(crate) fn ticks_per_second() -> u32 {
+    ara_anim::data::ClipData::default().ticks_per_second
+}
+
+/// Clip ticks as people read them: "1 s", "0.1 s", "1.25 s".
+pub(crate) fn seconds(ticks: u32) -> String {
+    format!("{} s", seconds_value(ticks))
+}
+
+/// Clip ticks as a bare seconds number for an editable field ("0.1").
+pub(crate) fn seconds_value(ticks: u32) -> String {
+    let text = format!("{:.3}", f64::from(ticks) / f64::from(ticks_per_second()));
+    text.trim_end_matches('0').trim_end_matches('.').to_owned()
+}
+
+/// A person's time ("0.1", "0.1 s", "100 ms", or a number) as clip ticks; blank is `None`.
+pub(crate) fn ticks(value: &serde_json::Value) -> Result<Option<u32>, String> {
+    let seconds = match value {
+        serde_json::Value::Null => return Ok(None),
+        serde_json::Value::Number(n) => n.as_f64().ok_or("time must be a number")?,
+        serde_json::Value::String(text) => {
+            let text = text.trim();
+            if text.is_empty() {
+                return Ok(None);
+            }
+            if let Some(ms) = text.strip_suffix("ms") {
+                ms.trim()
+                    .parse::<f64>()
+                    .map_err(|_| "time must be a number")?
+                    / 1000.
+            } else {
+                text.trim_end_matches('s')
+                    .trim()
+                    .parse::<f64>()
+                    .map_err(|_| "time must be a number of seconds")?
+            }
+        }
+        _ => return Err("time must be a number of seconds".into()),
+    };
+    if !seconds.is_finite() || seconds < 0. {
+        return Err("time must be zero or more seconds".into());
+    }
+    Ok(Some(
+        (seconds * f64::from(ticks_per_second())).round() as u32
+    ))
+}
+
+/// The canvas's live state from an `AnimatorState` read during Play (`ara_anim::Status`
+/// as JSON). Its indexes follow the controller's states in name order, as Play
+/// compiles them.
+pub(crate) fn live(
+    controller: &ControllerData,
+    status: &serde_json::Value,
+) -> Option<crate::graph::Live> {
+    let state = |index: &serde_json::Value| {
+        let index = usize::try_from(index.as_u64()?).ok()?;
+        controller.states.iter().nth(index)
+    };
+    let (name, data) = state(&status["state"])?;
+    let time = status["time"].as_u64().unwrap_or(0);
+    let duration = status["duration"].as_u64().unwrap_or(0);
+    // Looping states run past their cycle; a one-shot holds at its end.
+    let progress = match duration {
+        0 => 1.,
+        d if data.looping => (time % d) as f32 / d as f32,
+        d => time.min(d) as f32 / d as f32,
+    };
+    let fade = &status["fade"];
+    let fade = state(&fade["target"]).map(|(to, _)| {
+        let elapsed = fade["elapsed"].as_u64().unwrap_or(0) as f32;
+        let total = fade["duration"].as_u64().unwrap_or(0) as f32;
+        (id("n", to), if total > 0. { elapsed / total } else { 1. })
+    });
+    Some(crate::graph::Live {
+        node: id("n", name),
+        progress,
+        fade,
+    })
+}
+
+/// A live parameter value (`ara_anim::ParameterValue` as JSON) as the sidebar shows it.
+pub(crate) fn live_value(value: &serde_json::Value) -> String {
+    match (value["kind"].as_str(), &value["value"]) {
+        (Some("float"), v) => format!("{:.2}", v.as_f64().unwrap_or(0.)),
+        (Some("trigger"), v) => if v.as_bool() == Some(true) {
+            "set"
+        } else {
+            "unset"
+        }
+        .into(),
+        (_, v) => v.to_string(),
+    }
+}
+
+/// The canvas edge id of a transition (stable across projections).
+pub(crate) fn transition_edge(transition: &str) -> String {
+    id("w", transition)
+}
 fn id(prefix: &str, key: &str) -> String {
     let hash = ara_asset::Digest::of(key.as_bytes()).to_string();
     format!("{prefix}_{}", &hash[..20])
@@ -56,7 +156,7 @@ pub(crate) fn projection(
                     version: 1,
                     ports,
                     params: Default::default(),
-                    payload: json!({"name":key,"pose":key}),
+                    payload: json!({"name":key,"pose":key,"samples":node.samples.iter().map(|s|json!({"node":s.node,"x":s.x,"y":s.y})).collect::<Vec<_>>()}),
                     subgraph: None,
                 },
             );
@@ -111,6 +211,13 @@ pub(crate) fn projection(
                 (index / 2) as f32 * 220.,
             ]);
         }
+        // Condition summaries ride on the header for the canvas's arrow labels.
+        graph.header.payload["transitions"] = controller
+            .transitions
+            .iter()
+            .map(|t| (id("w", &t.id), json!(conditions(t, &controller.parameters))))
+            .collect::<serde_json::Map<_, _>>()
+            .into();
         for transition in &controller.transitions {
             graph.edges.insert(
                 id("w", &transition.id),
@@ -130,8 +237,52 @@ pub(crate) fn projection(
     Ok(graph)
 }
 
+/// A transition's conditions as people read them: "speed > 0.2 and grounded",
+/// "jump" for a trigger, "after 4800 ticks" for an exit time, else "always".
+pub(crate) fn conditions(
+    transition: &ara_anim::graph::Transition,
+    parameters: &BTreeMap<String, ara_anim::graph::Parameter>,
+) -> String {
+    use ara_anim::graph::{Comparison, ParameterKind};
+    let parts = transition
+        .conditions
+        .iter()
+        .map(|c| {
+            let kind = parameters
+                .get(&c.parameter)
+                .map(|p| p.kind)
+                .unwrap_or_default();
+            let value = match kind {
+                ParameterKind::Int => c.int_value.to_string(),
+                ParameterKind::Bool => c.bool_value.to_string(),
+                _ => {
+                    let text = format!("{:.3}", c.float_value);
+                    text.trim_end_matches('0').trim_end_matches('.').to_owned()
+                }
+            };
+            match (kind, c.comparison) {
+                (_, Comparison::Trigger) | (ParameterKind::Trigger, _) => c.parameter.clone(),
+                (ParameterKind::Bool, Comparison::Equal) if c.bool_value => c.parameter.clone(),
+                (ParameterKind::Bool, Comparison::NotEqual) if !c.bool_value => c.parameter.clone(),
+                (ParameterKind::Bool, _) => format!("not {}", c.parameter),
+                (_, Comparison::Equal) => format!("{} = {value}", c.parameter),
+                (_, Comparison::NotEqual) => format!("{} ≠ {value}", c.parameter),
+                (_, Comparison::Greater) => format!("{} > {value}", c.parameter),
+                (_, Comparison::Less) => format!("{} < {value}", c.parameter),
+            }
+        })
+        .collect::<Vec<_>>();
+    if !parts.is_empty() {
+        parts.join(" and ")
+    } else if let Some(tick) = transition.exit_tick {
+        format!("after {}", seconds(tick))
+    } else {
+        "always".into()
+    }
+}
+
 /// Authoring permits unassigned clips but never cyclic pose evaluation.
-pub(super) fn validate(
+pub(crate) fn validate(
     controller: &ara_anim::graph::ControllerData,
 ) -> Result<(), ara_diag::Diagnostic> {
     if !controller.states.is_empty() && !controller.states.contains_key(&controller.initial) {
@@ -167,4 +318,56 @@ pub(super) fn validate(
         visit(key, controller, &mut Default::default(), &mut complete)?;
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn times_read_in_seconds_and_type_back_to_ticks() {
+        assert_eq!(seconds(48_000), "1 s");
+        assert_eq!(seconds(4_800), "0.1 s");
+        assert_eq!(seconds_value(60_000), "1.25");
+        assert_eq!(ticks(&json!(0.1)), Ok(Some(4_800)));
+        assert_eq!(ticks(&json!("0.25 s")), Ok(Some(12_000)));
+        assert_eq!(ticks(&json!("100 ms")), Ok(Some(4_800)));
+        assert_eq!(ticks(&json!("")), Ok(None));
+        assert!(ticks(&json!(-1)).is_err());
+    }
+
+    #[test]
+    fn play_status_lights_the_playing_state_and_its_fade_target() {
+        let controller: ControllerData = serde_json::from_value(json!({
+            "states": {"run": {"node": "run"}, "idle": {"node": "idle"}, "jump": {"node": "jump", "looping": false}},
+            "initial": "idle"
+        }))
+        .expect("controller");
+        // States compile in name order: idle 0, jump 1, run 2.
+        let running = live(
+            &controller,
+            &json!({"state": 2, "time": 60_000, "duration": 48_000,
+                    "fade": {"target": 1, "elapsed": 1_200, "duration": 4_800}}),
+        )
+        .expect("live");
+        assert_eq!(running.node, id("n", "run"));
+        assert_eq!(running.progress, 0.25);
+        assert_eq!(running.fade, Some((id("n", "jump"), 0.25)));
+        let held = live(
+            &controller,
+            &json!({"state": 1, "time": 96_000, "duration": 48_000}),
+        )
+        .expect("held");
+        assert_eq!(held.progress, 1.);
+        assert_eq!(held.fade, None);
+        assert_eq!(
+            live_value(&json!({"kind": "float", "value": 0.4231})),
+            "0.42"
+        );
+        assert_eq!(
+            live_value(&json!({"kind": "trigger", "value": false})),
+            "unset"
+        );
+        assert_eq!(live_value(&json!({"kind": "bool", "value": true})), "true");
+    }
 }

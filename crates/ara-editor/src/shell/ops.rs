@@ -185,6 +185,7 @@ impl Shell {
     pub(crate) fn forget_thumbnail(&mut self, path: &str) {
         self.thumbnails.invalidate(path);
         self.thumbnail_slots.remove(path);
+        self.thumbnail_revision += 1;
     }
     pub(crate) fn rebuild_thumbnails(&mut self) {
         self.thumbnails.invalidate_all();

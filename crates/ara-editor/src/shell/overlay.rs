@@ -136,14 +136,14 @@ pub fn handles(view: &DocumentView, state: &EditorState, rect: Box2) -> Option<H
     if state.hide_gizmos || state.game_view {
         return None;
     }
-    let worlds = crate::world::world_transforms(view.entities());
-    let id = state.selection.first()?;
-    let matrix = worlds.get(id)?;
+    // Only the selection's transforms: composing the whole scene cost ~0.5 ms a frame.
+    let world = |id: &str| crate::world::world_transform(view.entities(), id);
+    let matrix = world(state.selection.first()?)?;
     let pivot = if state.centre {
         state
             .selection
             .iter()
-            .filter_map(|s| worlds.get(s))
+            .filter_map(|s| world(s))
             .map(|m| m.transform_point3(Vec3::ZERO))
             .sum::<Vec3>()
             / state.selection.len() as f32
@@ -282,12 +282,17 @@ pub fn build(
             ],
         });
     }
-    for (index, (id, _)) in renderer.entities().iter().enumerate() {
-        let selected = state
+    let outlined: Vec<u64> = if show("viewport.outline") {
+        state
             .selection
             .iter()
-            .any(|s| crate::world::render_id(s) == *id);
-        if (selected && show("viewport.outline")) || changed.contains_key(id) {
+            .map(|s| crate::world::render_id(s))
+            .collect()
+    } else {
+        Vec::new()
+    };
+    for (index, (id, _)) in renderer.entities().iter().enumerate() {
+        if outlined.contains(id) || changed.contains_key(id) {
             let token = changed.get(id).copied().unwrap_or("accent");
             overlays.push(Overlay::Outline {
                 index: index as u32 + 1,

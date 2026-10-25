@@ -4318,7 +4318,10 @@ expression: out
         "emissive": {
           "type": "vec3",
           "doc": "Default procedural radiance, or an RGB emission multiplier with a model/material asset. Models treat zero RGB as neutral; use `emissiveEnabled` to switch them off.",
-          "default": [0, 0, 0]
+          "default": [0, 0, 0],
+          "editor": {
+            "color": true
+          }
         },
         "emissiveEnabled": {
           "type": "bool",
@@ -4335,7 +4338,10 @@ expression: out
           "type": "option<vec3>",
           "doc": "Optional linear RGB replacement for the source emissive factor, useful for lamps.",
           "default": null,
-          "range": [0, null]
+          "range": [0, null],
+          "editor": {
+            "color": true
+          }
         },
         "emissiveMaterials": {
           "type": "list<string>",
@@ -7541,6 +7547,33 @@ expression: out
         }
       }
     },
+    "VfxEnableParams": {
+      "kind": "params",
+      "doc": "Turn one module on or off without removing it.",
+      "module": "vfx",
+      "fields": {
+        "emitter": {
+          "type": "string",
+          "doc": "Stable emitter name.",
+          "required": true
+        },
+        "stage": {
+          "type": "string",
+          "doc": "One of spawn, initialize, update, render.",
+          "required": true
+        },
+        "name": {
+          "type": "string",
+          "doc": "Stable module name.",
+          "required": true
+        },
+        "enabled": {
+          "type": "bool",
+          "doc": "Whether the module runs; a disabled module keeps its place and settings.",
+          "required": true
+        }
+      }
+    },
     "VfxParameterParams": {
       "kind": "params",
       "doc": "Typed default parameter mutation.",
@@ -9432,6 +9465,24 @@ expression: out
       "examples": [
         {
           "source": "<ui id=\"hud\"><text id=\"title\" text=\"Hello\" /></ui>\n"
+        }
+      ]
+    },
+    "vfx.module.enable": {
+      "kind": "command",
+      "summary": "Enable or disable a named VFX module without removing it.",
+      "params": "VfxEnableParams",
+      "hints": {
+        "idempotent": true,
+        "destructive": false
+      },
+      "scope": "edit:scene",
+      "examples": [
+        {
+          "emitter": "flame",
+          "stage": "update",
+          "name": "curl",
+          "enabled": false
         }
       ]
     },

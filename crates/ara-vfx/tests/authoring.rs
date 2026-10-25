@@ -143,3 +143,55 @@ fn typed_bindings_and_quality_diagnostics() {
     assert!(bad.validate().is_err());
     assert!(Effect::parse("{\"name\":\"a\",\"name\":\"b\"}").is_err());
 }
+#[test]
+fn disabled_modules_stay_authored_but_never_run() {
+    let mut db = SchemaDb::new();
+    ara_graph::register(&mut db).unwrap();
+    let mut reg = Registry::default();
+    commands::register(&mut reg, &mut db);
+    let graph = samples::campfire()
+        .to_graph(AssetId::parse("gr_test").unwrap(), Editor::default())
+        .unwrap();
+    let before = graph.write(&db).unwrap();
+    let mut ws = Workspace::default();
+    ws.insert("fx/fire.graph", graph.to_document().unwrap());
+    let mut store = Store::new(db, ws);
+    let disable = (
+        "vfx.module.enable",
+        json!({"emitter":"flame","stage":"update","name":"curl","enabled":false}),
+    );
+    reg.apply(
+        &mut store,
+        &Batch::new("gr_test", [disable]),
+        &Session::human(),
+    )
+    .unwrap();
+    let effect = Effect::from_graph(
+        &Graph::from_document(store.workspace().doc("gr_test").unwrap()).unwrap(),
+    )
+    .unwrap();
+    // Authored: still in its place, flagged off, and the text says so.
+    let update = &effect.emitters[0].stacks.update;
+    assert!(update.iter().any(|m| m.name == "curl" && !m.enabled));
+    assert!(effect.text().unwrap().contains("\"enabled\""));
+    assert!(!samples::campfire().text().unwrap().contains("\"enabled\""));
+    // Executed: resolve, code generation and the CPU reference all skip it.
+    let resolved = effect.resolve(&BTreeMap::new()).unwrap();
+    assert!(
+        !resolved.emitters[0]
+            .stacks
+            .update
+            .iter()
+            .any(|m| m.name == "curl")
+    );
+    assert_ne!(
+        generate(&effect).unwrap(),
+        generate(&samples::campfire()).unwrap()
+    );
+    CpuSystem::new(&effect).unwrap().step(None).unwrap();
+    store.undo_last(&Author::Human).unwrap();
+    assert_eq!(
+        before,
+        ara_doc::write(store.workspace().doc("gr_test").unwrap(), store.schema())
+    );
+}

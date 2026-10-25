@@ -1,7 +1,11 @@
 //! Pre-spawned, single-use `ara-player` processes (S5): spawned ahead of Play,
 //! authenticated by the per-session token in `player.hello`, idle at zero CPU until
 //! taken. Faults are classified from the exit code, the stderr crash line and the
-//! 250 ms heartbeat (a 1 s silence is a hang; the player is killed).
+//! Independent 250 ms heartbeats (five seconds of silence, beyond announced busy
+//! grace, is a hang; the player is killed).
+//! Launches run on background threads (CreateProcess of the player image costs
+//! 10-200 ms on Windows), and players that exit before their hello back the refill
+//! off (0.5 s doubling to 30 s), so a broken player never stalls the host tick.
 use ara_play::{
     BUSY, Busy, CRASH_PREFIX, CrashReport, HELLO, Hello, PROTOCOL, STATUS, Status, TOKEN_ENV,
     link::{Link, Message, error},
@@ -12,11 +16,12 @@ use std::{
     net::TcpListener,
     path::{Path, PathBuf},
     process::{Child, Command, Stdio},
+    sync::mpsc,
     time::{Duration, Instant},
 };
 
 /// How long a running player may stay silent before it is declared hung.
-pub const WATCHDOG: Duration = Duration::from_secs(1);
+pub const WATCHDOG: Duration = Duration::from_secs(5);
 
 /// A connected player process.
 pub struct Player {
@@ -92,6 +97,17 @@ impl Player {
         params: &Value,
         timeout: Duration,
     ) -> Result<Result<Value, Value>, Value> {
+        self.call_checked(method, params, timeout, || Ok(()))
+    }
+
+    /// Startup-only cancellable wait. Ordinary calls retain their synchronous contract.
+    pub(crate) fn call_checked(
+        &mut self,
+        method: &str,
+        params: &Value,
+        timeout: Duration,
+        mut check: impl FnMut() -> Result<(), &'static str>,
+    ) -> Result<Result<Value, Value>, Value> {
         let id = match self.link.request(method, params) {
             Ok(id) => json!(id),
             Err(_) => return Err(self.closed()),
@@ -99,6 +115,9 @@ impl Player {
         let started = Instant::now();
         self.seen = Instant::now();
         loop {
+            if let Err(message) = check() {
+                return Ok(Err(error(-32000, message, Value::Null)));
+            }
             match self.link.wait(Duration::from_millis(20)) {
                 Ok(Some(Message::Response { id: got, result })) if got == id => {
                     // The announced long work belonged to this request.
@@ -110,7 +129,7 @@ impl Player {
                 Ok(None) => {}
                 Err(_) => return Err(self.closed()),
             }
-            // Busy players keep heartbeating between tick chunks; silence is a hang.
+            // IO-thread heartbeats continue through simulation and uploads.
             if self.hung() {
                 let _ = self.child.kill();
                 let _ = self.child.wait();
@@ -224,6 +243,12 @@ struct Spawning {
     spawned: Instant,
 }
 
+/// A launch finished on its thread: the process, or why it could not start.
+struct Launched {
+    window: bool,
+    result: std::io::Result<Spawning>,
+}
+
 /// Where players come from.
 #[derive(Debug, Clone)]
 pub struct PoolConfig {
@@ -251,6 +276,15 @@ pub struct Pool {
     next: u32,
     scripts: Option<ara_play::ScriptScene>,
     rendering: ara_play::RenderSettings,
+    graphics_prewarm: bool,
+    /// Launch results, sent by each launch thread.
+    launches: (mpsc::Sender<Launched>, mpsc::Receiver<Launched>),
+    /// Launches in flight, `[headless, windowed]`.
+    launching: [usize; 2],
+    /// Consecutive players that failed to start or exited before their hello.
+    failures: u32,
+    /// Refills wait until then after a failure.
+    retry_at: Option<Instant>,
 }
 
 impl Pool {
@@ -276,6 +310,17 @@ impl Pool {
         scripts: Option<ara_play::ScriptScene>,
         rendering: ara_play::RenderSettings,
     ) -> std::io::Result<Self> {
+        Self::with_presenter(config, token, scripts, rendering, false)
+    }
+
+    /// Surface-attached services warm a small headless presenter before hello.
+    pub(crate) fn with_presenter(
+        config: PoolConfig,
+        token: String,
+        scripts: Option<ara_play::ScriptScene>,
+        rendering: ara_play::RenderSettings,
+        graphics_prewarm: bool,
+    ) -> std::io::Result<Self> {
         let listener = TcpListener::bind("127.0.0.1:0")?;
         listener.set_nonblocking(true)?;
         std::fs::create_dir_all(&config.logs)?;
@@ -288,6 +333,11 @@ impl Pool {
             next: 0,
             scripts,
             rendering,
+            graphics_prewarm,
+            launches: mpsc::channel(),
+            launching: [0; 2],
+            failures: 0,
+            retry_at: None,
         };
         pool.refill();
         Ok(pool)
@@ -320,6 +370,7 @@ impl Pool {
             .count()
     }
 
+    /// Starts launching a player on a background thread; `poll` collects it.
     fn spawn(&mut self, window: bool) -> std::io::Result<()> {
         self.next += 1;
         let name = format!(
@@ -344,10 +395,14 @@ impl Pool {
             .env(TOKEN_ENV, &self.token)
             .env("ARA_CRASH_DIR", self.config.logs.join("crashes"))
             .stdin(Stdio::null())
-            .stdout(Stdio::null())
-            .stderr(Stdio::from(std::fs::File::create(&log)?));
+            .stdout(Stdio::null());
         if window {
             command.arg("--window");
+            if std::env::var_os("ARA_PLAY_OFFSCREEN").is_some() {
+                command.arg("--offscreen");
+            }
+        } else if self.graphics_prewarm {
+            command.arg("--prewarm-graphics");
         }
         command.arg(format!("--ray-tracing={}", self.rendering.ray_tracing));
         if let Some(scripts) = &self.scripts {
@@ -359,25 +414,55 @@ impl Pool {
             // CREATE_NO_WINDOW: no console; SDL still opens its own window.
             command.creation_flags(0x0800_0000);
         }
-        self.spawning.push(Spawning {
-            child: command.spawn()?,
-            log,
-            window,
-            spawned: Instant::now(),
-        });
+        let launches = self.launches.0.clone();
+        let launch = move || {
+            let result = std::fs::File::create(&log).and_then(|file| {
+                command.stderr(Stdio::from(file));
+                Ok(Spawning {
+                    child: command.spawn()?,
+                    log,
+                    window,
+                    spawned: Instant::now(),
+                })
+            });
+            // The pool is gone: nobody will take this player.
+            if let Err(mpsc::SendError(Launched {
+                result: Ok(mut orphan),
+                ..
+            })) = launches.send(Launched { window, result })
+            {
+                let _ = orphan.child.kill();
+            }
+        };
+        std::thread::Builder::new()
+            .name("ara-player-launch".into())
+            .spawn(launch)?;
+        self.launching[usize::from(window)] += 1;
         Ok(())
     }
 
-    /// Spawns players until the idle targets (counting in-flight spawns) are met.
+    /// After a player failed to start: no refill for 0.5 s, doubling to 30 s.
+    fn back_off(&mut self) {
+        self.failures += 1;
+        let delay = Duration::from_millis(250)
+            .saturating_mul(1 << self.failures.min(7))
+            .min(Duration::from_secs(30));
+        self.retry_at = Some(Instant::now() + delay);
+    }
+
+    /// Launches players until the idle targets (counting launches and spawns in
+    /// flight) are met; nothing while backing off after a failed start.
     pub fn refill(&mut self) {
+        if self.retry_at.is_some_and(|at| Instant::now() < at) {
+            return;
+        }
         for window in [false, true] {
             let target = if window {
                 self.config.windowed
             } else {
                 self.config.headless
             };
-            let have =
-                self.ready(window) + self.spawning.iter().filter(|s| s.window == window).count();
+            let have = self.ready(window) + self.pending(window);
             for _ in have..target {
                 if let Err(e) = self.spawn(window) {
                     eprintln!("ara-play-host: cannot spawn a player: {e}");
@@ -391,6 +476,17 @@ impl Pool {
     /// longer than one hello exchange.
     pub fn poll(&mut self) -> Vec<String> {
         let mut problems = Vec::new();
+        let mut failed = 0;
+        while let Ok(launched) = self.launches.1.try_recv() {
+            self.launching[usize::from(launched.window)] -= 1;
+            match launched.result {
+                Ok(spawning) => self.spawning.push(spawning),
+                Err(e) => {
+                    problems.push(format!("cannot start a player: {e}"));
+                    failed += 1;
+                }
+            }
+        }
         loop {
             match self.listener.accept() {
                 Ok((stream, _)) => match self.handshake(stream) {
@@ -410,6 +506,7 @@ impl Pool {
                     "player exited before hello ({status}): {}",
                     tail(&s.log)
                 ));
+                failed += 1;
                 false
             }
             _ if s.spawned.elapsed() > Duration::from_secs(30) => {
@@ -424,7 +521,16 @@ impl Pool {
         });
         // Idle players heartbeat too; drop dead ones so they are replaced.
         self.idle.retain_mut(|p| p.check().is_none());
+        if failed > 0 {
+            self.back_off();
+        }
         problems
+    }
+
+    /// Players of one kind launching or spawned but not yet ready.
+    fn pending(&self, window: bool) -> usize {
+        self.launching[usize::from(window)]
+            + self.spawning.iter().filter(|s| s.window == window).count()
     }
 
     fn handshake(&mut self, stream: std::net::TcpStream) -> Result<Player, String> {
@@ -454,6 +560,8 @@ impl Pool {
             .position(|s| s.child.id() == hello.pid)
             .ok_or("hello from a process this pool did not spawn")?;
         let spawn = self.spawning.swap_remove(index);
+        self.failures = 0;
+        self.retry_at = None;
         link.respond(id, Ok(json!({}))).map_err(|e| e.to_string())?;
         link.flush().map_err(|e| e.to_string())?;
         Ok(Player {
@@ -477,9 +585,20 @@ impl Pool {
         window: bool,
         timeout: Duration,
     ) -> Result<Vec<Player>, String> {
+        self.take_checked(count, window, timeout, || Ok(()))
+    }
+
+    pub(crate) fn take_checked(
+        &mut self,
+        count: usize,
+        window: bool,
+        timeout: Duration,
+        mut check: impl FnMut() -> Result<(), &'static str>,
+    ) -> Result<Vec<Player>, String> {
         let start = Instant::now();
         let mut problems = Vec::new();
         loop {
+            check().map_err(str::to_owned)?;
             let observed = self.poll();
             if !observed.is_empty() {
                 problems = observed;
@@ -487,8 +606,7 @@ impl Pool {
             if self.ready(window) >= count {
                 break;
             }
-            let pending = self.spawning.iter().filter(|s| s.window == window).count();
-            for _ in (self.ready(window) + pending)..count {
+            for _ in (self.ready(window) + self.pending(window))..count {
                 self.spawn(window).map_err(|e| e.to_string())?;
             }
             if start.elapsed() > timeout {
@@ -507,8 +625,7 @@ impl Pool {
                 .ok_or("pool emptied while taking")?;
             taken.push(self.idle.swap_remove(index));
         }
-        // No refill here: spawning a player (CreateProcess of a large image) costs
-        // ~100 ms on Windows; the host tick refills after Play has started.
+        // No refill here: the host tick refills after Play has started.
         Ok(taken)
     }
 }

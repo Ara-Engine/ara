@@ -26,6 +26,8 @@ ECS; `Scene` is an immutable render extraction snapshot, not authoritative state
   `update_native` updates transforms/skin poses; structural changes use
   `replace_native_scene`. Native draw lists cull and select cooked LODs, and the
   RG16F motion target carries unjittered current-minus-previous screen UV.
+  Texture providers can prepare against the last resident set and transfer reused
+  image ownership at publication; rejected content keeps its previous environment.
 - `update_native_changed(scene, instanced::Changes)` consumes exact instance,
   material and skin indices. Coherent writes/culling touch dirty groups only;
   idle frames retain visible lists and settle motion history once. `native_frame_work`
@@ -45,6 +47,8 @@ ECS; `Scene` is an immutable render extraction snapshot, not authoritative state
   label. Invalid edits retain the previous content.
 - Live frames keep output/IDs on the GPU. Captures copy the final settled frame
   once; `entity_at(&mut self, pixel)` reads IDs only when explicitly picking.
+  Consecutive graph passes on one queue share a submission; every pass retains
+  its barriers and timestamps, and cross-queue edges wait on the batch signal.
 - `look::Look` (`Renderer::set_look`): D27 raster look after the G-buffer:
   physical sky LUTs and their IBL, CSM-shadowed froxel fog, histogram or manual
   exposure, bloom, grading and the display curve. Defaults reproduce M1. Hosts map

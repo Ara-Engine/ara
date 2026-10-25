@@ -73,8 +73,9 @@ pub struct Editor {
     pub(crate) play_world: Option<String>,
     /// The Game view's size in physical pixels: the size embedded Play starts at.
     pub(crate) game_size: [u32; 2],
-    /// Missing asset sources already reported (`report_missing_sources`).
-    missing_reported: BTreeSet<String>,
+    /// Model sources already checked on disk, present or reported missing
+    /// (`report_missing_sources`); each is checked once per session.
+    sources_checked: BTreeSet<String>,
     /// Each scene's last Scene view camera, saved as a user preference.
     cameras: crate::view_camera::SavedCameras,
 }
@@ -226,7 +227,7 @@ impl Editor {
             play_surfaces,
             play_world: None,
             game_size: [1280, 720],
-            missing_reported: BTreeSet::new(),
+            sources_checked: BTreeSet::new(),
             cameras,
         };
         // A scene without a saved camera gets its opening view, like `editor.scene.open`.
@@ -244,6 +245,7 @@ impl Editor {
         if method == "editor.play" {
             // Multi-player Play (palette): the service resolved the `play.start` params.
             let mut start = result;
+            start["background"] = true.into();
             self.embed_play(&mut start);
             return self.action("play.start", start);
         }
@@ -415,11 +417,14 @@ impl Editor {
         }
     }
     /// Report each model source the open scene references but the disk lacks, once
-    /// per path (Problems names it; the entity draws a placeholder).
+    /// per path (Problems names it; the entity draws a placeholder). Only paths not
+    /// seen before touch the disk, so edits cost no file checks; a source deleted
+    /// later surfaces as a failed import instead.
     pub fn report_missing_sources(&mut self, view: &DocumentView) {
         let root = self.host.root().to_owned();
-        for (path, entity) in view.missing_sources(&root) {
-            if self.missing_reported.insert(path.clone()) {
+        for (path, missing) in view.missing_sources(&root, &self.sources_checked) {
+            self.sources_checked.insert(path.clone());
+            if let Some(entity) = missing {
                 self.report(
                     "missing",
                     &format!(

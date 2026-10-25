@@ -10,8 +10,10 @@
 //! - A crashing player writes one [`CRASH_PREFIX`] line ([`CrashReport`]) to stderr.
 #![warn(missing_docs)]
 
+mod imports;
 pub mod link;
 pub mod shm;
+pub use imports::{ImportState, Stall};
 
 use ara_doc::{AssetId, Document, Record, RecordId, Workspace};
 use serde::{Deserialize, Serialize};
@@ -24,6 +26,8 @@ pub const PROTOCOL: &str = "ara-play/1";
 pub const HELLO: &str = "player.hello";
 /// Player → owner notification every 250 ms; also the liveness signal ([`Status`]).
 pub const STATUS: &str = "play.status";
+/// Player IO-thread liveness notification, independent of simulation/status work.
+pub const HEARTBEAT: &str = "play.heartbeat";
 /// Player → owner notification before known-long work (GPU device creation, world
 /// build): the owner's hang watchdog allows silence until the deadline ([`Busy`]).
 pub const BUSY: &str = "play.busy";
@@ -73,6 +77,10 @@ pub mod method {
     pub const DIFF: &str = "play.diff";
     /// Publish new asset generations, applied at the next tick boundary.
     pub const ASSETS: &str = "play.assets";
+    /// Read-only import status notification ([`crate::ImportState`]); may precede Start.
+    pub const IMPORTS: &str = "play.imports";
+    /// Internal fault-test request: stall simulation while transport stays alive ([`crate::Stall`]).
+    pub const STALL: &str = "play.debug.stall";
     /// Test builds: force a panic, access violation or hang ([`crate::Crash`]).
     pub const CRASH: &str = "play.debug.crash";
     /// Run a C# `[Command]` between ticks ([`crate::Command`]); returns its effects.

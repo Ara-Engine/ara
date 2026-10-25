@@ -510,6 +510,13 @@ fn any_scene_opens_with_its_own_camera_and_agents_only_move_their_presence() {
         .unwrap();
     assert_eq!(editor.state.doc, "sc_hangar001");
     assert!(editor.state.follow.is_none());
+    // The Agents panel lists the presence with View and Follow (names with an
+    // apostrophe in their tooltip used to break its markup).
+    editor
+        .action("editor.focus", json!({"panel":"agents"}))
+        .unwrap();
+    shell.rebuild(&mut editor).unwrap();
+    assert!(shell.ui.find(&format!("presence-follow-{agent}")).is_some());
 }
 #[test]
 fn console_logs_problems_explain_and_editor_failures_reach_the_bus() {
@@ -731,6 +738,42 @@ fn assets_show_folders_then_files_hide_noise_and_search_everywhere() {
         .unwrap();
     shell.rebuild(&mut editor).unwrap();
     assert_eq!(names(&shell), ["albedo.png"]);
+
+    // The memoized panel follows each of its inputs: under ARA_EDITOR_MEMO_CHECK=1
+    // (every `cargo test`) a rebuild that reuses markup an input made stale fails.
+    for (action, params) in [
+        ("editor.search", json!({"panel":"assets","query":""})),
+        ("editor.workspace", json!({"asset":"models/crate.gltf"})),
+        ("editor.workspace", json!({"grid":false})),
+        (
+            "editor.settings.set",
+            json!({"key":"appearance.density","value":"comfortable"}),
+        ),
+        ("editor.workspace", json!({"grid":true})),
+        (
+            "editor.settings.set",
+            json!({"key":"input.keymap","value":"blender"}),
+        ),
+    ] {
+        editor.action(action, params).unwrap();
+        shell.rebuild(&mut editor).unwrap();
+        shell.rebuild(&mut editor).unwrap();
+    }
+    shell
+        .run_command(&mut editor, "assets.show_all", &Default::default())
+        .unwrap();
+    assert!(!names(&shell).contains(&"crate.bin".to_owned()));
+    // A file that appears on disk shows up once the browser rescans.
+    std::fs::write(project.0.join("models/barrel.gltf"), "{}").unwrap();
+    let start = std::time::Instant::now();
+    while !names(&shell).contains(&"barrel.gltf".to_owned()) {
+        assert!(
+            start.elapsed().as_secs() < 10,
+            "the new file never appeared"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(50));
+        shell.poll_assets_for_test(&mut editor);
+    }
 }
 #[test]
 fn game_view_waits_for_play_and_play_starts_embedded_in_it() {
@@ -1007,6 +1050,13 @@ fn inactive_list_tabs_stay_mounted_hidden_and_come_back_as_they_were() {
     let project = Project::new();
     let mut editor = Editor::open(&project.0).unwrap();
     let mut shell = Shell::new(&mut editor, [1440., 900.]).unwrap();
+    // The first asset scan arrives on its own thread; were it to land while Assets is
+    // hidden, Assets would rightly render the new files when it comes back.
+    let start = std::time::Instant::now();
+    while !shell.poll_assets_for_test(&mut editor) {
+        assert!(start.elapsed().as_secs() < 10, "asset scan never arrived");
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
     let focus = |shell: &mut Shell, editor: &mut Editor, panel: &str| {
         editor
             .action("editor.focus", json!({ "panel": panel }))

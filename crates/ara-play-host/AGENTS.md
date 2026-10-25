@@ -11,19 +11,23 @@ when it becomes the daemon) and by the editor (`Editor::open`). Depends on ara-h
   `ara-player`/`ara-import-worker` next to the current executable (or `ARA_PLAYER`,
   `ARA_IMPORT_WORKER`), the .NET host (`ScriptPaths::locate`: `ARA_DOTNET_ARTIFACTS`
   or the nearest `dotnet/artifacts/bin`; installed tools beside the executable take
-  precedence); two warm headless players, no warm window.
+  precedence); two warm headless players, no warm window. Surface attachments
+  prewarm a bounded 64x64 Low graphics presenter before hello, without probe GI.
 - `open_project(root)`: opens a project with the engine schema world and commands
   (`ara_runtime::engine`) for a host before `Host::open`; clashes become diagnostics.
 - `pool::{Pool, PoolConfig, Player}`: pre-spawned single-use players (S5), token-
-  checked hellos, heartbeat watchdog (`WATCHDOG` = 1 s), fault classification.
+  checked hellos, heartbeat watchdog (`WATCHDOG` = 5 s), fault classification.
   `Pool::with_scripts` passes module settings for pre-warm before the ready hello.
   Local crash artifacts go beside player logs in `crashes/`; a clean window close
-  stops and reaps the whole Play world without reporting a crash.
+  stops and reaps the whole Play world without reporting a crash. Launches run on
+  threads (CreateProcess costs 10-200 ms) and early exits back refills off (0.5 s
+  doubling to 30 s); `tests/pool.rs`. The host tick never builds the pool or the asset
+  pipeline inline: both build on threads (`pool_now`/`assets_now`); Play waits.
 - `assets::Assets`: every `*.import.json` registered with `ara_asset::AssetPipeline`
-  (imports in worker processes, non-progressive); `pins` waits for published
-  generations, which are always persisted final-preset cooks players can load.
+  (imports in worker processes, non-progressive); `ready_pins` snapshots completed
+  persisted generations immediately, so live Play starts with what's available.
   `synchronize` follows in-memory import document revisions, including imports made
-  after the pipeline started. New Play pins wait for pending configured generations;
+  after the pipeline started. First generations stream in while Play runs;
   failed cooks retain the last good generation and report their existing diagnostic.
 - `package_scene_with_progress`: export snapshots wait on completed-cook progress,
   not a total deadline. `ARA_EXPORT_COOK_STALL_SECONDS` defaults to 600; completion
@@ -34,8 +38,10 @@ when it becomes the daemon) and by the editor (`Editor::open`). Depends on ara-h
   project attachment once. Frame loops read its atomic revision; `snapshot` never
   waits and retains immutable generation IDs, kinds and FileCache provenance.
   Readers cannot initialize/cook/import; only completed owner boundaries publish.
+  `progress_revision`/`progress` is the same pattern for `ImportProgress` (done/total,
+  pending and failed IDs): published at pipeline start and when a source changes state.
   `cargo test -p ara-play-host --test published` holds a real import pending while
-  checking completed generations and retained-snapshot immutability.
+  checking completed generations, retained-snapshot immutability and progress.
 - `codes`: ARA7300 play, 7301 player fault, 7302 unknown world, 7303 assets (real
   import failures only), 7304 test failed, 7305 bad request, 7306 info: a sidecar
   recorded an older importer; it was upgraded (typed `SidecarCommand::Version`
@@ -66,10 +72,16 @@ how each source is heard), and C#:
 toolbar bindings rely on it). Pause/resume/step/input/patch/timescale broadcast to
 every player of a world; reads go to the authority.
 
+`background:true` returns `{world,status:"starting",players:[],progress}` immediately.
+`play.status.worlds` reports starting/stopping/failed or running, with startup
+`progress {phase,completed,total,elapsedMs}`. Stop cancels queued/active preparation
+without joining it; omitted/false keeps the synchronous world-ready response.
+
 - `play.keep`: diff → drop `driven` values unless `includeDriven` → `prev` check
   against the current scene (conflicts reported, not applied) → one `property.set`
   batch through `Cx::apply` (agent edits enter review as usual).
-- Faults: exit code + `ARA_PLAYER_CRASH` stderr line + 1 s silence →
+- Faults: exit code + `ARA_PLAYER_CRASH` stderr line + 5 s silence (extended by
+  announced busy phases; player liveness runs on an independent IO thread) →
   `player_panicked | player_crashed | player_unresponsive | player_exited`, logged with a
   `play.restart` fix; `play.status` holds the structured fault.
 - `play.stop` removes the active world and returns `status: "stopping"` immediately.
@@ -92,10 +104,9 @@ every player of a world; reads go to the authority.
 
 - Host calls are serialized on the daemon thread; long steps block other calls.
   Players heartbeat between 30-tick chunks so the watchdog never kills a busy step.
-- The first Play of a fresh clone waits for the first full-preset cooks. Never turn
-  progressive previews on here: a preview is published before it is on disk, so a
-  player pinned to it fails with "asset … has no published generation" (a race).
-  Generations published during Play reach a world only with `hotReload`.
+- Cold Play uses placeholders until first persisted generations arrive, even with
+  `hotReload:false`; subsequent reimports obey `hotReload`. Progressive previews
+  remain disabled: players only load final cooks already persisted on disk.
 - `host`/`dedicated` worlds are replicated (`ara-runtime-net`): the authority starts
   first, each client then gets its join from the authority (`play.join`) and connects
   through its own proxy (`conditions[i]` simulates the link). `play.capture`,

@@ -24,6 +24,29 @@ impl Textures for EmptyTextures {
     }
 }
 
+struct RejectPublication;
+impl Textures for RejectPublication {
+    fn content_digest(&self) -> [u8; 32] {
+        [0; 32]
+    }
+    fn initialize(&mut self, gpu: &mut VulkanDevice) -> Result<TextureStats> {
+        EmptyTextures.initialize(gpu)
+    }
+    fn refine(&mut self, gpu: &mut VulkanDevice) -> Result<TextureStats> {
+        EmptyTextures.refine(gpu)
+    }
+    fn binding(&self) -> Option<instanced::TextureBinding> {
+        None
+    }
+    fn visit_resources(&self, _: &mut dyn FnMut(Resource, Access)) {}
+    fn publish_reuse(&mut self, _: &mut dyn Textures) -> Result<()> {
+        anyhow::bail!("injected publication rejection")
+    }
+    fn destroy(self: Box<Self>, _: &mut VulkanDevice) -> Result<()> {
+        Ok(())
+    }
+}
+
 #[test]
 fn native_raster_keeps_instances_local_and_tracks_moving_and_skinned_poses_without_rt() -> Result<()>
 {
@@ -235,6 +258,28 @@ fn native_raster_keeps_instances_local_and_tracks_moving_and_skinned_poses_witho
         ..request
     };
     let opaque = renderer.capture(&lit)?;
+    let environment = scene.environment[0];
+    let previous_environment = renderer.content.static_hash.to_owned();
+    let previous_usage = renderer.gpu().descriptor_usage();
+    scene.environment[0] = [0.9, 0.02, 0.01, 1.];
+    for _ in 0..4 {
+        assert!(
+            renderer
+                .replace_native_scene(&scene, Box::new(RejectPublication))
+                .is_err()
+        );
+        assert_eq!(renderer.content.static_hash, previous_environment);
+        assert_eq!(renderer.gpu().descriptor_usage(), previous_usage);
+        renderer.render_view(&lit.camera, 1., ViewMode::Lit)?;
+        renderer.gpu().assert_clean()?;
+    }
+    scene.environment[0] = environment;
+    for name in ["GBuffer", "TiledLightCull", "DeferredLighting"] {
+        assert!(
+            renderer.timings().iter().any(|pass| pass.pass == name),
+            "batched submissions retain the {name} timestamp"
+        );
+    }
     scene.materials[0].extras.transmission_factor = 1.;
     renderer.update_native_changed(
         &scene,

@@ -1,12 +1,15 @@
-//! Node parameters stay typed and share the graph/DSL transaction path.
+//! The selected material node in the Inspector: a header with its operation and doc
+//! line, its editable value, then its inputs (with what feeds them) and its output.
+//! Value edits share the graph/DSL transaction path (`editor.material.value.set`).
 use super::*;
+use crate::graph::style;
 impl Shell {
     pub(super) fn material_inspector(
         &mut self,
         editor: &Editor,
         out: &mut String,
     ) -> ara_ui::Result<()> {
-        out.push_str("<scroll id='material-inspector' class='body'><text id='material-inspector-title' class='heading' text='Node properties' />");
+        out.push_str("<scroll id='material-inspector' style='flex-grow:1;flex-basis:0px;min-height:0px;padding-bottom:12px'>");
         if self.annotation_inspector(editor, out) {
             out.push_str("</scroll>");
             return Ok(());
@@ -28,24 +31,55 @@ impl Shell {
             Ok(material) => Some(material),
             Err(diagnostics) => {
                 for (n, diagnostic) in diagnostics.iter().take(3).enumerate() {
-                    out.push_str(&format!("<text id='material-node-error-{n}' class='destructive' style='white-space:normal' text='{}' />",escape(&diagnostic.message)));
+                    out.push_str(&format!("<panel id='material-node-error-row-{n}' style='flex-shrink:0;padding:6px;padding-left:12px'><text id='material-node-error-{n}' class='destructive' style='white-space:normal' text='{}' /></panel>",escape(&diagnostic.message)));
                 }
                 None
             }
         };
         if editor.state.canvas_selection.is_empty() {
-            out.push_str("<text id='material-inspector-hint' class='muted' text='Select a node to inspect its typed inputs and values.' style='white-space:normal' />");
+            self.empty(
+                out,
+                "material-node-empty",
+                "contrast",
+                "No node selected",
+                "Select a node to edit its value and see what feeds its inputs.",
+                &[],
+            );
         }
+        let width = self
+            .ui
+            .find("material-inspector")
+            .map(|i| self.ui.nodes[i].rect.w)
+            .unwrap_or(300.);
+        let label = self.label_px(width);
         for (n, id) in editor.state.canvas_selection.iter().enumerate() {
             let Some(node) = graph.nodes.get(id) else {
                 continue;
             };
+            let op = node.kind.strip_prefix("material.").unwrap_or(&node.kind);
+            let ty = node.payload.get("ty").and_then(Value::as_str).unwrap_or("");
             let name = node
                 .payload
                 .get("name")
                 .and_then(Value::as_str)
-                .unwrap_or(&node.kind);
-            out.push_str(&format!("<text id='node-title-{n}' class='heading' text='{}' /><text id='node-kind-{n}' class='muted' text='{}' /><panel id='node-divider-{n}' class='divider' />",escape(name),escape(&node.kind)));
+                .map(str::to_owned)
+                .unwrap_or_else(|| style::op_title(op));
+            let kind = match op {
+                "parameter" => format!("Parameter · {}", style::short_type(ty)),
+                "literal" => format!("Constant · {}", style::short_type(ty)),
+                "output" => "Material output".into(),
+                _ => style::op_title(op),
+            };
+            let doc_line = match op {
+                "output" => "The material's typed outputs for its domain.",
+                "parameter" => "A value material instances and scripts can change.",
+                "literal" => "A typed constant, folded into the shader.",
+                _ => ara_material::library::get(op).map_or("", |b| b.doc),
+            };
+            out.push_str(&format!("<panel id='node-header-{n}' class='component-header'>{}<text id='node-title-{n}' class='component-title' text='{}' /><panel id='node-header-fill-{n}' class='fill' /><text id='node-kind-{n}' class='caption' style='padding-right:6px' text='{}' /></panel>",icons::icon(&format!("node-header-{n}"),"contrast"),escape(&name),escape(&kind)));
+            if !doc_line.is_empty() {
+                out.push_str(&format!("<panel id='node-doc-row-{n}' style='flex-shrink:0;padding:6px;padding-left:12px'><text id='node-doc-{n}' class='dialog-text' text='{}' /></panel>",escape(doc_line)));
+            }
             let value = if let Some(p) = material.as_ref().and_then(|m| m.parameters.get(id)) {
                 Some(ara_json::to_value(&p.default)?)
             } else if let Some(b) = material.as_ref().and_then(|m| m.bindings.get(id)) {
@@ -75,10 +109,61 @@ impl Shell {
                                 .map_or(&value, |v| &v[0]),
                         )
                     });
-                out.push_str(&format!("<text id='{key}-label' class='field-label' text='Default value' /><field id='{key}' class='number' text='{}' action='Dispatch' label='Typed numeric lanes, boolean or texture value' />",escape(&draft)));
+                let title = if op == "parameter" {
+                    "Default"
+                } else {
+                    "Value"
+                };
+                out.push_str(&format!("<panel id='{key}-row' class='prop-row'><panel id='{key}-label-cell' class='prop-label' style='width:{label}px'><text id='{key}-label' text='{title}' /></panel><panel id='{key}-cell' class='prop-value'><field id='{key}' class='number' style='flex-grow:1;flex-basis:0px' text='{}' action='Dispatch' label='Typed numeric lanes, boolean or texture value. Enter applies.' /></panel></panel>",escape(&draft)));
             }
-            for (i, (port, socket)) in node.ports.iter().enumerate() {
-                out.push_str(&format!("<panel id='node-port-{n}-{i}' class='field-row'><text id='node-port-name-{n}-{i}' class='field-label' text='{}' /><text id='node-port-type-{n}-{i}' class='badge' text='{}' /></panel>",escape(port),escape(&socket.ty)));
+            let inputs = node
+                .ports
+                .iter()
+                .filter(|(_, p)| p.direction == ara_graph::Direction::Input)
+                .collect::<Vec<_>>();
+            if !inputs.is_empty() {
+                out.push_str(&format!("<panel id='node-inputs-{n}' class='side-header'><text id='node-inputs-title-{n}' class='caption' text='Inputs' /></panel>"));
+            }
+            for (i, (port, socket)) in inputs.into_iter().enumerate() {
+                let source = graph
+                    .edges
+                    .values()
+                    .find(|e| e.to.node == *id && e.to.port == *port)
+                    .and_then(|e| graph.nodes.get(&e.from.node))
+                    .map(|from| {
+                        from.payload
+                            .get("name")
+                            .and_then(Value::as_str)
+                            .map(str::to_owned)
+                            .unwrap_or_else(|| {
+                                style::op_title(from.kind.trim_start_matches("material."))
+                            })
+                    });
+                let row = format!("node-input-{n}-{i}");
+                let pin = style::pin_label(node, port, socket.direction, &socket.ty);
+                out.push_str(&format!("<panel id='{row}' class='prop-row'><panel id='{row}-label-cell' class='prop-label' style='width:{label}px'><text id='{row}-label' text='{}' /></panel><panel id='{row}-cell' class='prop-value'><text id='{row}-source' class='{}' text='{}' /><panel id='{row}-fill' class='fill' /><text id='{row}-type' class='caption' text='{}' /></panel></panel>",escape(&pin),if source.is_some(){"fg"}else{"muted"},escape(source.as_deref().unwrap_or("Not connected")),escape(&style::short_type(&socket.ty))));
+            }
+            for (i, (port, socket)) in node
+                .ports
+                .iter()
+                .filter(|(_, p)| p.direction == ara_graph::Direction::Output)
+                .enumerate()
+            {
+                if i == 0 {
+                    out.push_str(&format!("<panel id='node-output-header-{n}' class='side-header'><text id='node-output-title-{n}' class='caption' text='Output' /></panel>"));
+                }
+                let users = graph
+                    .edges
+                    .values()
+                    .filter(|e| e.from.node == *id && e.from.port == *port)
+                    .count();
+                let uses = match users {
+                    0 => "Unused".to_owned(),
+                    1 => "Feeds 1 input".to_owned(),
+                    n => format!("Feeds {n} inputs"),
+                };
+                let row = format!("node-output-{n}-{i}");
+                out.push_str(&format!("<panel id='{row}' class='prop-row'><panel id='{row}-label-cell' class='prop-label' style='width:{label}px'><text id='{row}-label' text='{}' /></panel><panel id='{row}-cell' class='prop-value'><text id='{row}-uses' class='{}' text='{uses}' /></panel></panel>",escape(&style::short_type(&socket.ty)),if users>0{"fg"}else{"muted"}));
             }
         }
         out.push_str("</scroll>");

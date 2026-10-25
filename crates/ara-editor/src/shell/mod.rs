@@ -9,9 +9,11 @@ mod axis;
 pub(crate) mod build;
 mod chrome;
 pub mod commands;
+mod compound;
 mod dialog;
 mod drag;
 pub(crate) mod icons;
+mod imports;
 mod input;
 mod keyboard;
 mod menu;
@@ -37,6 +39,8 @@ mod import_panel;
 mod inspector_panel;
 mod log_panels;
 mod material_panel;
+mod memo;
+pub(crate) use animation_panel::LiveChange;
 pub(crate) use log_panels::LogView;
 mod material_inspector;
 pub mod overlay;
@@ -110,11 +114,25 @@ pub struct Shell {
     pub(crate) game_stats: bool,
     /// The shown Play world's fault (`play.status`), shown instead of the game.
     pub(crate) game_fault: Option<String>,
+    /// The shown Play world is still starting (`play.status`): its progress.
+    pub(crate) game_start: Option<game_panel::StartProgress>,
+    /// `game_fault` is a start that failed, not a fault while running.
+    pub(crate) game_start_failed: bool,
     /// The Material tool shows its DSL source instead of the node graph.
     pub(crate) material_source_view: bool,
+    /// In-node material previews (requests and the show/hide toggle).
+    pub(crate) node_previews: crate::asset_tools::node_preview::NodePreviews,
+    /// The running animator the Animation page follows during Play.
+    pub(crate) animation_live: animation_panel::AnimationLive,
     /// Colour swatches outside the Inspector (material parameters): node id and
     /// colour, painted after layout like the Inspector's.
     value_swatches: Vec<(String, ara_ui::style::Color)>,
+    /// Whether the Problems chip counts this machine's Vulkan loader and overlay-layer
+    /// diagnostics (`ARA_GPU_ENVIRONMENT`); bounded runs turn it off so captures are
+    /// the same on every machine.
+    pub host_problems: bool,
+    /// Colour swatches of compound Inspector elements: control ID and linear value.
+    nested_swatches: Vec<(String, Value)>,
     /// Create > C# Behaviour opens the IDE (verification routes turn it off).
     pub(crate) open_ide: bool,
     /// The running export (Build > Build Current Profile).
@@ -134,6 +152,8 @@ pub struct Shell {
     pub(crate) log_view: LogView,
     /// Console row whose details are expanded (bus sequence number).
     pub(crate) console_open: Option<u64>,
+    /// Profiler scope outlined in the timeline (picked in the Scopes table).
+    pub(crate) profile_scope: Option<String>,
     /// Problems whose "Why" explanation is expanded.
     pub(crate) explained_problems: std::collections::BTreeSet<u64>,
     /// Failures found while polling (thumbnails), logged by the window owner.
@@ -144,6 +164,8 @@ pub struct Shell {
     /// Surface hosting the hierarchy's virtual rows (`None` is the main window).
     hierarchy_surface: Option<String>,
     browser: assets::Browser,
+    /// The asset pipeline's import progress (status chip, Assets badges, Scene notice).
+    imports: imports::Imports,
     asset_rows: VirtualList,
     asset_entries: BTreeMap<u64, assets::Asset>,
     asset_view: Option<VirtualView>,
@@ -151,6 +173,16 @@ pub struct Shell {
     asset_offset: f32,
     thumbnails: crate::asset_tools::thumbnails::Thumbnails,
     thumbnail_slots: BTreeMap<String, usize>,
+    /// Bumped whenever `thumbnail_slots` changes (memoized panels show thumbnails).
+    thumbnail_revision: u64,
+    /// Memoized panels' markup and bindings, by panel (`memo`).
+    memos: BTreeMap<&'static str, memo::Memo>,
+    /// Regenerate every reused memoized panel and compare (`ARA_EDITOR_MEMO_CHECK=1`,
+    /// set for `cargo test`): a difference means a digest misses an input.
+    pub memo_check: bool,
+    /// Reuse memoized panels at all (`ARA_EDITOR_MEMO=0` turns it off: to measure the
+    /// saving, or to rule out a stale panel).
+    memo_enabled: bool,
     thumbnail_next: usize,
     thumbnail_errors: BTreeMap<String, String>,
     material_previews: BTreeMap<String, String>,
@@ -241,6 +273,8 @@ pub struct Shell {
     key_search: bool,
     label_width: f32,
     keymap: commands::keys::Keymap,
+    /// Bumped whenever `keymap` is rebuilt (memoized panels show shortcuts).
+    keymap_revision: u64,
     /// The settings `keymap` was built from (`input.keymap`, `input.shortcuts`).
     keymap_settings: (Option<Value>, Option<Value>),
     /// Live tab drag target, painted as a lit region with an action label.
@@ -267,6 +301,7 @@ pub struct UiStats {
     /// Runtime work summed over every `Ui::frame` (rebuild mounts and the frame's own).
     pub work: ara_ui::Work,
 }
+#[derive(Clone, PartialEq)]
 pub(crate) enum Binding {
     Protocol(&'static str, Value),
     Command(&'static str, commands::Target),
@@ -294,6 +329,11 @@ pub(crate) enum Binding {
     GraphLabel(String, String),
     Fix(ara_diag::Diagnostic, usize),
     PickField(String),
+    /// An asset field's picker popup: the field's path and declared asset kind.
+    AssetPicker(String, Option<String>),
+    /// A typed text box inside a compound field: its `path#pointer` target, how its
+    /// text parses, and whether empty text clears it.
+    Nested(String, compound::Leaf, bool),
     RenameValue,
     ColorPicker(String),
     ComponentCollapse(String),
@@ -360,13 +400,21 @@ impl Shell {
             game_aspect: "free",
             game_stats: true,
             game_fault: None,
+            game_start: None,
+            game_start_failed: false,
             material_source_view: false,
+            node_previews: Default::default(),
+            animation_live: Default::default(),
             value_swatches: Vec::new(),
+            nested_swatches: Vec::new(),
+            host_problems: true,
             console_open: None,
+            profile_scope: None,
             explained_problems: std::collections::BTreeSet::new(),
             hierarchy_view: None,
             hierarchy_surface: None,
             browser: assets::Browser::new(editor.host.root()),
+            imports: imports::Imports::new(editor.host.root()),
             asset_rows: VirtualList { items: Vec::new() },
             asset_entries: BTreeMap::new(),
             asset_view: None,
@@ -374,6 +422,10 @@ impl Shell {
             asset_offset: 0.,
             thumbnails: crate::asset_tools::thumbnails::Thumbnails::new(editor.host.root()),
             thumbnail_slots: BTreeMap::new(),
+            thumbnail_revision: 0,
+            memos: BTreeMap::new(),
+            memo_check: std::env::var_os("ARA_EDITOR_MEMO_CHECK").is_some_and(|v| v == "1"),
+            memo_enabled: std::env::var_os("ARA_EDITOR_MEMO").is_none_or(|v| v != "0"),
             thumbnail_next: 0,
             thumbnail_errors: BTreeMap::new(),
             material_previews: BTreeMap::new(),
@@ -443,6 +495,7 @@ impl Shell {
             key_search: false,
             label_width: 0.4,
             keymap: commands::keymap(&editor.state),
+            keymap_revision: 0,
             keymap_settings: keymap_settings(&editor.state),
             drop_preview: None,
             main_rect: [0, 0, size[0] as i32, size[1] as i32],
@@ -546,6 +599,7 @@ impl Shell {
         if settings != self.keymap_settings {
             self.keymap = commands::keymap(&editor.state);
             self.keymap_settings = settings;
+            self.keymap_revision += 1;
         }
         self.reduce_motion = editor.state.reduce_motion;
         self.version += 1;
@@ -960,14 +1014,23 @@ impl Shell {
     /// Paint-time decorations shared by every surface. They are spliced in under the
     /// popup layer (menus, palette, dialogs, tooltips), which stays on top.
     fn paint_decorations(&mut self) {
-        let start = self.ui.display.commands.len();
+        let mut start = self.ui.display.commands.len();
         self.paint_swatches();
         self.paint_polish();
-        self.paint_graph();
+        // The canvas splices in under its own panel, inside the dock tree: indices
+        // after that point (`start`, and the popup start measured before painting)
+        // move by what it inserted.
+        let (canvas_at, inserted) = self.paint_graph();
+        if canvas_at <= start {
+            start += inserted;
+        }
         self.paint_drop_preview();
-        if let Some(at) = self.popup_start()
+        if let Some(mut at) = self.popup_start()
             && at < start
         {
+            if canvas_at <= at {
+                at += inserted;
+            }
             let decorations: Vec<_> = self.ui.display.commands.drain(start..).collect();
             self.ui.display.commands.splice(at..at, decorations);
         }
@@ -1111,6 +1174,7 @@ impl Shell {
                 .retain(|key, _| key.starts_with("live:"));
         }
         let mut changed = browser_changed || std::mem::take(&mut self.asset_grid_dirty);
+        changed |= self.imports.poll();
         let completed = self.thumbnails.poll().collect::<Vec<_>>();
         for result in completed {
             match result {
@@ -1128,8 +1192,10 @@ impl Shell {
                         {
                             self.thumbnails.invalidate(&key);
                             self.thumbnail_slots.remove(&key);
+                            self.thumbnail_revision += 1;
                         }
                         self.thumbnail_slots.insert(thumb.key, slot);
+                        self.thumbnail_revision += 1;
                         slot
                     };
                     let name = crate::asset_tools::thumbnails::image_name(slot);

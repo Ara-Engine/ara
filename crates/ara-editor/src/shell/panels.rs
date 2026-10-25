@@ -246,7 +246,13 @@ impl Shell {
             "profiler" => self.profiler_panel(editor, out)?,
             "animation" => self.animation_panel(editor, out)?,
             "inspector" => self.inspector_panel(editor, out)?,
-            "assets" => self.assets_panel(editor, out),
+            "assets" => {
+                let editor: &Editor = editor;
+                let key = self.assets_key(editor);
+                self.memoized("assets", key, out, |shell, out| {
+                    shell.assets_panel(editor, out);
+                });
+            }
             "console" => self.console_panel(editor, out),
             "problems" => self.problems_panel(editor, out),
             "agents" => self.agents_panel(editor, out),
@@ -487,6 +493,7 @@ impl Shell {
             self.axis_markup(editor, out);
         }
         self.notices_markup(editor, out);
+        self.loading_markup(editor, out);
         out.push_str("<panel id='gizmo-readout' class='readout' style='left:0px;top:0px'><text id='gizmo-readout-text' class='mono' text='' /></panel></panel>");
     }
 }

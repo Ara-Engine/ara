@@ -125,8 +125,9 @@ impl Shell {
         out.push_str(&format!(
             "<panel id='setting-head-{id}' class='setting-head'>"
         ));
+        // The key lives in the label's tooltip; the row keeps one description line.
         out.push_str(&format!(
-            "<text id='setting-label-{id}' class='setting-label' text='{}' />",
+            "<text id='setting-label-{id}' class='setting-label' text='{}' description='{key}' />",
             escape(d.label)
         ));
         match d.kind {
@@ -168,7 +169,6 @@ impl Shell {
                 out.push_str(&format!("<field id='set-{id}' style='width:260px' text='{}' label='{}' description='Enter to apply' action='Dispatch' />",escape(value.as_str().unwrap_or("")),escape(d.label)));
             }
         }
-        out.push_str(&format!("<panel id='setting-fill-{id}' class='fill' />"));
         if modified {
             self.bindings.insert(
                 ara_ui::source::stable_id(&format!("reset-{id}")),
@@ -176,7 +176,7 @@ impl Shell {
             );
             out.push_str(&format!("<button id='reset-{id}' class='ghost icon-button' label='Reset {}' description='Reset to {}' action='Dispatch'>{}</button>",escape(d.label),escape(&panels::display(&default_of(d))),icons::icon(&format!("reset-{id}"),"undo-2")));
         }
-        out.push_str(&format!("</panel><text id='setting-desc-{id}' class='setting-desc' text='{}' /><text id='setting-key-{id}' class='setting-key' text='{key}' /></panel>",escape(d.description)));
+        out.push_str(&format!("<panel id='setting-fill-{id}' class='fill' /></panel><text id='setting-desc-{id}' class='setting-desc' text='{}' /></panel>",escape(d.description)));
     }
     fn shortcuts_page(&mut self, editor: &Editor, out: &mut String) {
         let preset = Preset::parse(
@@ -219,7 +219,9 @@ impl Shell {
             .cloned()
             .unwrap_or_default();
         let keymap = self.keymap.clone();
-        let mut shown = 0;
+        // Matching commands under one header per menu, in menu-bar order; commands
+        // outside the menus come last. Rows keep only a deeper sub-path.
+        let mut groups: Vec<(String, Vec<(&commands::Spec, String)>)> = Vec::new();
         for spec in all() {
             if matches!(
                 spec.id,
@@ -246,42 +248,60 @@ impl Shell {
             {
                 continue;
             }
-            shown += 1;
-            let id = spec.id.replace('.', "-");
-            out.push_str(&format!("<panel id='shortcut-{id}' class='shortcut-row' description='{}'><text id='shortcut-title-{id}' text='{}' /><text id='shortcut-path-{id}' class='caption' text='{}' /><panel id='shortcut-fill-{id}' class='fill' />",escape(spec.summary),escape(spec.title),escape(&path)));
-            let conflicts = keymap.conflicts(spec.id);
-            if let Some(other) = conflicts.first().and_then(|c| commands::get(c)) {
-                out.push_str(&format!(
-                    "<text id='shortcut-conflict-{id}' class='conflict' text='Also {}' />",
-                    escape(other.title)
-                ));
+            let (top, sub) = path.split_once(" › ").unwrap_or((path.as_str(), ""));
+            let top = if top.is_empty() { "Other" } else { top }.to_owned();
+            let sub = sub.to_owned();
+            match groups.iter_mut().find(|(t, _)| *t == top) {
+                Some((_, rows)) => rows.push((spec, sub)),
+                None => groups.push((top, vec![(spec, sub)])),
             }
-            if self.recording == Some(spec.id) {
-                out.push_str(&format!("<text id='shortcut-recording-{id}' class='accent' text='Press keys… (Esc cancels)' />"));
-            } else if chords.is_empty() {
-                out.push_str(&format!(
-                    "<text id='shortcut-none-{id}' class='caption' text='—' />"
-                ));
-            } else {
-                out.push_str(&format!("<panel id='shortcut-keys-{id}' class='keys'>"));
-                for (n, cap) in chords[0].caps().iter().enumerate() {
-                    out.push_str(&format!("<panel id='shortcut-key-{id}-{n}' class='keycap'><text id='shortcut-key-text-{id}-{n}' text='{}' /></panel>",escape(cap)));
+        }
+        groups.sort_by_key(|(top, _)| *top == "Other");
+        let shown = groups.iter().map(|(_, rows)| rows.len()).sum::<usize>();
+        for (top, rows) in groups {
+            out.push_str(&format!(
+                "<text id='shortcut-menu-{}' class='shortcut-menu caption' text='{}' />",
+                top.to_lowercase(),
+                escape(&top.to_uppercase())
+            ));
+            for (spec, sub) in rows {
+                let id = spec.id.replace('.', "-");
+                let chords = keymap.chords(spec.id);
+                out.push_str(&format!("<panel id='shortcut-{id}' class='shortcut-row' description='{}'><text id='shortcut-title-{id}' text='{}' /><text id='shortcut-path-{id}' class='caption' text='{}' /><panel id='shortcut-fill-{id}' class='fill' />",escape(spec.summary),escape(spec.title),escape(&sub)));
+                let conflicts = keymap.conflicts(spec.id);
+                if let Some(other) = conflicts.first().and_then(|c| commands::get(c)) {
+                    out.push_str(&format!(
+                        "<text id='shortcut-conflict-{id}' class='conflict' text='Also {}' />",
+                        escape(other.title)
+                    ));
+                }
+                if self.recording == Some(spec.id) {
+                    out.push_str(&format!("<text id='shortcut-recording-{id}' class='accent' text='Press keys… (Esc cancels)' />"));
+                } else if chords.is_empty() {
+                    out.push_str(&format!(
+                        "<text id='shortcut-none-{id}' class='caption' text='—' />"
+                    ));
+                } else {
+                    out.push_str(&format!("<panel id='shortcut-keys-{id}' class='keys'>"));
+                    for (n, cap) in chords[0].caps().iter().enumerate() {
+                        out.push_str(&format!("<panel id='shortcut-key-{id}-{n}' class='keycap'><text id='shortcut-key-text-{id}-{n}' text='{}' /></panel>",escape(cap)));
+                    }
+                    out.push_str("</panel>");
+                }
+                self.bindings.insert(
+                    ara_ui::source::stable_id(&format!("rebind-{id}")),
+                    Binding::ShortcutRecord(spec.id),
+                );
+                out.push_str(&format!("<button id='rebind-{id}' class='ghost icon-button' label='Rebind {}' description='Press a new shortcut' action='Dispatch'>{}</button>",escape(spec.title),icons::icon(&format!("rebind-{id}"),"pencil")));
+                if overrides.contains_key(spec.id) {
+                    self.bindings.insert(
+                        ara_ui::source::stable_id(&format!("unbind-{id}")),
+                        Binding::ShortcutReset(spec.id),
+                    );
+                    out.push_str(&format!("<button id='unbind-{id}' class='ghost icon-button' label='Reset {}' description='Back to the preset binding' action='Dispatch'>{}</button>",escape(spec.title),icons::icon(&format!("unbind-{id}"),"undo-2")));
                 }
                 out.push_str("</panel>");
             }
-            self.bindings.insert(
-                ara_ui::source::stable_id(&format!("rebind-{id}")),
-                Binding::ShortcutRecord(spec.id),
-            );
-            out.push_str(&format!("<button id='rebind-{id}' class='ghost icon-button' label='Rebind {}' description='Press a new shortcut' action='Dispatch'>{}</button>",escape(spec.title),icons::icon(&format!("rebind-{id}"),"pencil")));
-            if overrides.contains_key(spec.id) {
-                self.bindings.insert(
-                    ara_ui::source::stable_id(&format!("unbind-{id}")),
-                    Binding::ShortcutReset(spec.id),
-                );
-                out.push_str(&format!("<button id='unbind-{id}' class='ghost icon-button' label='Reset {}' description='Back to the preset binding' action='Dispatch'>{}</button>",escape(spec.title),icons::icon(&format!("unbind-{id}"),"undo-2")));
-            }
-            out.push_str("</panel>");
         }
         if shown == 0 {
             self.empty(

@@ -32,7 +32,7 @@ impl Shell {
         let field = self.fields.get(&path).ok_or("scrub field disappeared")?;
         let color = matches!(
             field.widget,
-            crate::inspector::Widget::Vector { color: true, .. }
+            crate::inspector::Widget::Vector { rgba: true, .. }
         );
         let resolved = crate::world::resolve(editor.host.store(), &editor.state.doc)
             .map_err(|d| format!("{d:?}"))?;

@@ -15,9 +15,10 @@ pub mod params;
 pub mod pool;
 mod published;
 mod rendering;
-pub use published::{PublishedAssets, PublishedGeneration, PublishedSnapshot};
+pub use published::{ImportProgress, PublishedAssets, PublishedGeneration, PublishedSnapshot};
 mod scripts;
 mod spec;
+mod starting;
 
 pub use scripts::ScriptPaths;
 
@@ -32,7 +33,7 @@ use params::*;
 use pool::{Player, Pool, PoolConfig};
 use serde_json::{Value, json};
 use std::{
-    collections::{BTreeMap, BTreeSet},
+    collections::{BTreeMap, BTreeSet, VecDeque},
     path::{Path, PathBuf},
     time::{Duration, Instant},
 };
@@ -133,6 +134,14 @@ struct World {
     start_paused: bool,
     fault: Option<Value>,
     hot_reload: bool,
+    /// Deliver first generations even when edits are not hot-reloaded.
+    streaming_assets: bool,
+    /// Last read-only import-state revision sent to this world.
+    import_revision: u64,
+    /// Last published C# catalog, reused when stopping without a player RPC.
+    commands: Value,
+    /// Preparation timings and process metadata retained for background callers.
+    startup: Value,
     /// Player events (C# reloads, diagnostics) not yet read with `play.events`.
     events: Vec<Value>,
     /// Simulated link conditions per client (networked worlds).
@@ -146,12 +155,27 @@ pub struct PlayService {
     config: PlayConfig,
     token: String,
     pool: Option<Pool>,
+    /// The pool being built on a background thread (C# module discovery walks the
+    /// project; the first launches start there).
+    pool_init: Option<std::sync::mpsc::Receiver<Result<Pool, Vec<Diagnostic>>>>,
+    /// When the frame tick may retry a failed pool build.
+    pool_retry: Option<std::time::Instant>,
     assets: Option<assets::Assets>,
+    /// The asset pipeline being built on a background thread: the sidecar scan, the
+    /// importer version query and the source watcher take 150-300 ms.
+    assets_init: Option<std::sync::mpsc::Receiver<Result<assets::Assets, String>>>,
+    /// When the frame tick may retry a failed build.
+    assets_retry: Option<std::time::Instant>,
     worlds: BTreeMap<String, World>,
     retiring: Vec<lifecycle::Retiring>,
+    starting: VecDeque<starting::Pending>,
+    starter: Option<starting::Active>,
+    start_failures: BTreeMap<String, Value>,
     next: u32,
     /// The in-process editor's [`embed::Surfaces`] handle, once taken.
     channel: Option<embed::Channel>,
+    /// Warm a bounded headless graphics view only for an attached Game surface.
+    graphics_prewarm: bool,
 }
 
 impl PlayService {
@@ -171,59 +195,213 @@ impl PlayService {
             config,
             token,
             pool: None,
+            pool_init: None,
+            pool_retry: None,
             assets: None,
+            assets_init: None,
+            assets_retry: None,
             worlds: BTreeMap::new(),
             retiring: Vec::new(),
+            starting: VecDeque::new(),
+            starter: None,
+            start_failures: BTreeMap::new(),
             next: 0,
             channel: None,
+            graphics_prewarm: false,
         }
     }
 
-    fn pool(&mut self) -> Result<&mut Pool, Vec<Diagnostic>> {
-        if self.pool.is_none() {
-            if !self.config.pool.executable.exists() {
-                return Err(vec![
-                    Diagnostic::error(
-                        codes::PLAY,
-                        format!(
-                            "player executable `{}` not found",
-                            self.config.pool.executable.display()
-                        ),
-                    )
-                    .with_fix(
-                        "Build it, or set ARA_PLAYER",
-                        FixAction::Cli {
-                            args: vec!["(cargo build -p ara-player)".into()],
-                        },
+    /// Starts building the player pool on a background thread, unless it exists, is
+    /// being built, or failed less than ten seconds ago. A missing player is an error.
+    fn start_pool(&mut self) -> Result<(), Vec<Diagnostic>> {
+        if self.starter.is_some() {
+            return Ok(());
+        }
+        if self.pool.is_some()
+            || self.pool_init.is_some()
+            || self
+                .pool_retry
+                .is_some_and(|at| std::time::Instant::now() < at)
+        {
+            return Ok(());
+        }
+        if !self.config.pool.executable.exists() {
+            return Err(vec![
+                Diagnostic::error(
+                    codes::PLAY,
+                    format!(
+                        "player executable `{}` not found",
+                        self.config.pool.executable.display()
                     ),
-                ]);
-            }
-            let scripts = self.script_scene().ok().flatten();
-            let rendering =
-                rendering::project(&self.root).map_err(|error| fail(codes::REQUEST, error))?;
-            let pool = Pool::with_rendering(
-                self.config.pool.clone(),
-                self.token.clone(),
-                scripts,
-                rendering,
-            )
+                )
+                .with_fix(
+                    "Build it, or set ARA_PLAYER",
+                    FixAction::Cli {
+                        args: vec!["(cargo build -p ara-player)".into()],
+                    },
+                ),
+            ]);
+        }
+        let (tx, rx) = std::sync::mpsc::channel();
+        let root = self.root.clone();
+        let (scripts, config, token) = (
+            self.config.scripts.clone(),
+            self.config.pool.clone(),
+            self.token.clone(),
+        );
+        let graphics_prewarm = self.graphics_prewarm;
+        let build = move || {
+            let scene = scripts::script_scene(&root, scripts.as_ref())
+                .ok()
+                .flatten();
+            let pool = rendering::project(&root)
+                .map_err(|error| fail(codes::REQUEST, error))
+                .and_then(|rendering| {
+                    Pool::with_presenter(config, token, scene, rendering, graphics_prewarm).map_err(
+                        |e| fail(codes::PLAY, format!("cannot start the player pool: {e}")),
+                    )
+                });
+            let _ = tx.send(pool);
+        };
+        std::thread::Builder::new()
+            .name("ara-play-pool".into())
+            .spawn(build)
             .map_err(|e| fail(codes::PLAY, format!("cannot start the player pool: {e}")))?;
-            self.pool = Some(pool);
+        self.pool_init = Some(rx);
+        Ok(())
+    }
+
+    /// The player pool, waiting for its build (Play needs it now).
+    fn pool(&mut self) -> Result<&mut Pool, Vec<Diagnostic>> {
+        if self.starter.is_some() {
+            return Err(fail(
+                codes::PLAY,
+                "player pool is preparing Play; see play.status",
+            ));
+        }
+        self.pool_retry = None;
+        self.start_pool()?;
+        if let Some(init) = self.pool_init.take() {
+            let built = init
+                .recv()
+                .unwrap_or_else(|_| Err(fail(codes::PLAY, "the player pool build panicked")));
+            self.pool = Some(built?);
         }
         self.pool
             .as_mut()
             .ok_or_else(|| fail(codes::PLAY, "pool unavailable"))
     }
 
+    /// The player pool once built, never waiting: the frame tick's view. A failed
+    /// build (Play reports it) is retried after ten seconds.
+    fn pool_now(&mut self) -> Option<&mut Pool> {
+        use std::sync::mpsc::TryRecvError;
+        let retry = || Some(std::time::Instant::now() + std::time::Duration::from_secs(10));
+        if self.start_pool().is_err() {
+            self.pool_retry = retry();
+            return None;
+        }
+        if let Some(init) = &self.pool_init {
+            match init.try_recv() {
+                Err(TryRecvError::Empty) => return None,
+                Ok(Ok(pool)) => self.pool = Some(pool),
+                Ok(Err(_)) | Err(TryRecvError::Disconnected) => self.pool_retry = retry(),
+            }
+            self.pool_init = None;
+        }
+        self.pool.as_mut()
+    }
+
+    /// Starts building the asset pipeline on a background thread, unless it exists,
+    /// is being built, or failed less than ten seconds ago. With `imports` (the host's
+    /// import documents at a revision) the thread applies the first synchronization.
+    fn start_assets(&mut self, imports: Option<(&ara_doc::Workspace, u64)>) {
+        if self.starter.is_some() {
+            return;
+        }
+        if self.assets.is_some()
+            || self.assets_init.is_some()
+            || self
+                .assets_retry
+                .is_some_and(|at| std::time::Instant::now() < at)
+        {
+            return;
+        }
+        let (tx, rx) = std::sync::mpsc::channel();
+        let (root, worker) = (self.root.clone(), self.config.import_worker.clone());
+        let imports = imports.and_then(|(workspace, revision)| {
+            Some((assets::import_docs(workspace).ok()?, revision))
+        });
+        let build = move || {
+            let built = assets::Assets::new(&root, &worker).map(|mut assets| {
+                // On failure the host tick synchronizes again and reports it.
+                if let Some((imports, revision)) = imports {
+                    let _ = assets.synchronize_imports(imports, revision);
+                }
+                assets
+            });
+            let _ = tx.send(built);
+        };
+        match std::thread::Builder::new()
+            .name("ara-assets-init".into())
+            .spawn(build)
+        {
+            Ok(_) => self.assets_init = Some(rx),
+            Err(error) => {
+                self.assets_retry =
+                    Some(std::time::Instant::now() + std::time::Duration::from_secs(10));
+                eprintln!("ara-play-host: cannot start the asset pipeline: {error}");
+            }
+        }
+    }
+
+    /// The asset pipeline, waiting for its build (Play and export need it now).
     fn assets(&mut self) -> Result<&mut assets::Assets, Vec<Diagnostic>> {
-        if self.assets.is_none() {
-            let assets = assets::Assets::new(&self.root, &self.config.import_worker)
-                .map_err(|e| fail(codes::ASSETS, e))?;
-            self.assets = Some(assets);
+        if self.starter.is_some() {
+            return Err(fail(
+                codes::PLAY,
+                "assets are preparing Play; see play.status",
+            ));
+        }
+        self.assets_retry = None;
+        self.start_assets(None);
+        if let Some(init) = self.assets_init.take() {
+            let built = init
+                .recv()
+                .unwrap_or_else(|_| Err("the asset pipeline build panicked".into()));
+            self.assets = Some(built.map_err(|e| fail(codes::ASSETS, e))?);
         }
         self.assets
             .as_mut()
             .ok_or_else(|| fail(codes::ASSETS, "asset pipeline unavailable"))
+    }
+
+    /// The asset pipeline once built, never waiting: the frame tick's view, starting
+    /// the build with the host's `imports`. A failed build is returned once (to log)
+    /// and retried after ten seconds.
+    fn assets_now(
+        &mut self,
+        imports: (&ara_doc::Workspace, u64),
+    ) -> Result<Option<&mut assets::Assets>, String> {
+        use std::sync::mpsc::TryRecvError;
+        self.start_assets(Some(imports));
+        if let Some(init) = &self.assets_init {
+            let built = match init.try_recv() {
+                Err(TryRecvError::Empty) => return Ok(None),
+                Ok(built) => built,
+                Err(TryRecvError::Disconnected) => Err("the asset pipeline build panicked".into()),
+            };
+            self.assets_init = None;
+            match built {
+                Ok(assets) => self.assets = Some(assets),
+                Err(error) => {
+                    self.assets_retry =
+                        Some(std::time::Instant::now() + std::time::Duration::from_secs(10));
+                    return Err(error);
+                }
+            }
+        }
+        Ok(self.assets.as_mut())
     }
 
     /// Logs pending asset notes (upgrades or placeholders) and adds them to a successful
@@ -254,6 +432,9 @@ impl PlayService {
     pub(crate) fn latest(&self) -> Option<String> {
         self.worlds
             .keys()
+            .chain(self.starting.iter().map(|pending| &pending.id))
+            .chain(self.starter.iter().map(|active| &active.id))
+            .chain(self.start_failures.keys())
             .max_by_key(|id| id.trim_start_matches("play:").parse::<u32>().unwrap_or(0))
             .cloned()
     }
@@ -360,15 +541,14 @@ impl PlayService {
 
     fn scene_snapshot(
         &mut self,
-        cx: &Cx<'_>,
+        workspace: &ara_doc::Workspace,
+        revision: u64,
         scene: Option<&str>,
         seed: u64,
         tick_hz: u32,
+        progress: Option<&starting::Reporter>,
     ) -> Result<(String, Vec<u8>), Vec<Diagnostic>> {
-        let store = cx.store();
-        let workspace = store.workspace();
         let wanted = scene
-            .or_else(|| cx.main_scene())
             .map(str::to_owned)
             .ok_or_else(|| fail(codes::REQUEST, "no scene given and no project main scene"))?;
         let (_, doc) = workspace
@@ -389,12 +569,11 @@ impl PlayService {
             }
         }
         self.assets()?
-            .synchronize(workspace, store.revision())
+            .synchronize(workspace, revision)
             .map_err(|e| fail(codes::ASSETS, e))?;
-        let pins = self
-            .assets()?
-            .pins(&referenced, Duration::from_secs(180))
-            .map_err(|e| fail(codes::ASSETS, e))?;
+        starting::report(progress, "assets", 0, referenced.len())?;
+        let pins = self.assets()?.ready_pins(&referenced);
+        starting::report(progress, "assets", pins.len(), referenced.len())?;
         let cache = self.assets()?.cache.to_string_lossy().into_owned();
         let mut types = Vec::new();
         types_files(&self.root, &self.root, &mut types);
@@ -441,6 +620,7 @@ impl PlayService {
         start_paused: bool,
         resume: Option<&str>,
         conditions: &[Option<LinkConditions>],
+        progress: Option<&starting::Reporter>,
     ) -> Result<Launched, Vec<Diagnostic>> {
         let clients = roles.iter().filter(|r| **r == Role::Client).count();
         let net = NetStart {
@@ -455,29 +635,41 @@ impl PlayService {
             .filter(|r| window && **r != Role::Dedicated)
             .count();
         let headless = roles.len() - windowed;
+        let imports = self.assets()?.import_state();
         let pool = self.pool()?;
         let mut windows = pool
-            .take(windowed, true, Duration::from_secs(30))
+            .take_checked(windowed, true, Duration::from_secs(30), || {
+                starting::check(progress)
+            })
             .map_err(|e| fail(codes::PLAY, e))?;
         let mut heads = pool
-            .take(headless, false, Duration::from_secs(30))
+            .take_checked(headless, false, Duration::from_secs(30), || {
+                starting::check(progress)
+            })
             .map_err(|e| fail(codes::PLAY, e))?;
         let mut players: Vec<(Role, Player)> = Vec::new();
         let mut started = Vec::new();
         let mut surfaces = Vec::new();
-        for &role in roles {
+        for (index, &role) in roles.iter().enumerate() {
+            starting::report(progress, "device", index, roles.len())?;
             let mut player = if window && role != Role::Dedicated {
                 windows.pop()
             } else {
                 heads.pop()
             }
             .ok_or_else(|| fail(codes::PLAY, "pool returned too few players"))?;
+            player
+                .link
+                .notify(method::IMPORTS, &imports)
+                .and_then(|_| player.link.flush())
+                .map_err(|e| fail(codes::PLAY, e.to_string()))?;
             let surface = match embed {
                 Some(params) if role != Role::Dedicated => {
                     Some(embed::embed_player(&mut player, params)?)
                 }
                 _ => None,
             };
+            starting::report(progress, "world", index, roles.len())?;
             let net = match role {
                 Role::Local => None,
                 Role::Host | Role::Dedicated => Some(net.clone()),
@@ -523,10 +715,11 @@ impl PlayService {
                 start_paused,
                 resume: resume.map(str::to_owned),
             };
-            match player.call(
+            match player.call_checked(
                 method::START,
                 &serde_json::to_value(&start).unwrap_or_default(),
                 Duration::from_secs(120),
+                || starting::check(progress),
             ) {
                 Ok(Ok(result)) => started.push(json!({
                     "role": role,
@@ -557,7 +750,31 @@ impl PlayService {
     }
 
     fn start(&mut self, cx: &Cx<'_>, p: PlayStartParams) -> Result<Value, Vec<Diagnostic>> {
+        if self.starter.is_some() {
+            return Err(fail(
+                codes::REQUEST,
+                "another Play start is preparing; poll play.status or use background:true",
+            ));
+        }
+        self.start_owned(
+            cx.store().workspace(),
+            cx.store().revision(),
+            cx.main_scene(),
+            p,
+            None,
+        )
+    }
+
+    fn start_owned(
+        &mut self,
+        workspace: &ara_doc::Workspace,
+        revision: u64,
+        main_scene: Option<&str>,
+        p: PlayStartParams,
+        progress: Option<&starting::Reporter>,
+    ) -> Result<Value, Vec<Diagnostic>> {
         let began = Instant::now();
+        starting::report(progress, "snapshot", 0, 1)?;
         let mode = p.mode.as_deref().unwrap_or("local");
         let clients = p.clients.unwrap_or(0) as usize;
         let roles: Vec<Role> = match mode {
@@ -596,10 +813,12 @@ impl PlayService {
             .collect::<Result<Vec<_>, _>>()
             .map_err(|e| fail(codes::REQUEST, format!("conditions: {e}")))?;
         let (scene, bytes) = self.scene_snapshot(
-            cx,
-            p.scene.as_deref(),
+            workspace,
+            revision,
+            p.scene.as_deref().or(main_scene),
             p.seed.unwrap_or(0),
             p.tick_hz.unwrap_or(self.config.tick_hz),
+            progress,
         )?;
         let prepared = Instant::now();
         self.next += 1;
@@ -624,6 +843,7 @@ impl PlayService {
         let window = p.window.unwrap_or(false);
         let start_paused = p.start_paused.unwrap_or(false);
         let launch = Instant::now();
+        starting::report(progress, "pool", 0, roles.len())?;
         let (players, started, surfaces) = self.launch(
             &roles,
             window,
@@ -632,8 +852,15 @@ impl PlayService {
             start_paused,
             None,
             &conditions,
+            progress,
         )?;
+        starting::report(progress, "world", roles.len(), roles.len())?;
         let boot_ms = launch.elapsed().as_secs_f64() * 1000.0;
+        let result = json!({
+            "world": id, "scene": scene, "snapshotBytes":bytes.len(),
+            "transport":if matches!(snapshot, SnapshotRef::Shm { .. }) {"shm"} else {"inline"},
+            "prepareMs":encode_ms,"bootMs":boot_ms,"players":started,
+        });
         self.worlds.insert(
             id.clone(),
             World {
@@ -647,20 +874,19 @@ impl PlayService {
                 start_paused,
                 fault: None,
                 hot_reload: p.hot_reload.unwrap_or(false),
+                streaming_assets: self
+                    .assets
+                    .as_ref()
+                    .is_some_and(|assets| assets.importing()),
+                import_revision: 0,
+                commands: Value::Null,
+                startup: result.clone(),
                 events: Vec::new(),
                 conditions,
             },
         );
         self.announce(&id);
-        Ok(json!({
-            "world": id,
-            "scene": scene,
-            "snapshotBytes": bytes.len(),
-            "transport": if matches!(snapshot, SnapshotRef::Shm { .. }) { "shm" } else { "inline" },
-            "prepareMs": encode_ms,
-            "bootMs": boot_ms,
-            "players": started,
-        }))
+        Ok(result)
     }
 
     /// Restarts a world in fresh players from its start snapshot, or from `resume`
@@ -694,6 +920,10 @@ impl PlayService {
             embed,
             start_paused,
             hot_reload,
+            streaming_assets,
+            import_revision,
+            commands,
+            startup,
             conditions,
             ..
         } = world;
@@ -707,6 +937,7 @@ impl PlayService {
             start_paused,
             resume,
             &conditions,
+            None,
         )?;
         let boot_ms = began.elapsed().as_secs_f64() * 1000.0;
         self.worlds.insert(
@@ -722,6 +953,10 @@ impl PlayService {
                 start_paused,
                 fault: None,
                 hot_reload,
+                streaming_assets,
+                import_revision,
+                commands,
+                startup,
                 events: Vec::new(),
                 conditions,
             },
@@ -732,6 +967,9 @@ impl PlayService {
 
     fn stop(&mut self, id: &str) -> Result<Value, Vec<Diagnostic>> {
         ara_gpu::cpu_scope!("Play.stop_service");
+        if let Some(result) = self.cancel_start(id) {
+            return Ok(result);
+        }
         if !self.worlds.contains_key(id) {
             return Err(fail(codes::UNKNOWN_WORLD, format!("no play world `{id}`")));
         }
@@ -760,14 +998,17 @@ impl PlayService {
                 "targets": {"headless": p.config().headless, "windowed": p.config().windowed},
             })
         });
-        let worlds: Vec<Value> = self
+        let mut worlds: Vec<Value> = self
             .worlds
             .iter()
             .map(|(id, w)| json!({
                 "world": id,
+                "status": "running",
                 "scene": w.scene,
                 "window": w.window,
                 "hotReload": w.hot_reload,
+                "streamingAssets": w.streaming_assets,
+                "startup": w.startup,
                 "fault": w.fault,
                 "players": w.players.iter().zip(&w.surfaces).map(|((role, p), surface)| json!({
                     "role": role,
@@ -780,6 +1021,7 @@ impl PlayService {
                 })).collect::<Vec<_>>(),
             }))
             .collect();
+        worlds.extend(self.starting_status());
         json!({"pool": pool, "worlds": worlds, "stopping": self.retiring.iter().map(|task|
             json!({"world":task.id,"elapsedMs":task.began.elapsed().as_secs_f64()*1000.})
         ).collect::<Vec<_>>()})
@@ -795,6 +1037,7 @@ impl PlayService {
                 PlayStartParams {
                     session: String::new(),
                     scene: p.scene.clone(),
+                    background: None,
                     mode: None,
                     clients: None,
                     window: Some(false),
@@ -930,6 +1173,9 @@ impl Service for PlayService {
         match method {
             "play.start" => {
                 let p: PlayStartParams = parse(params)?;
+                if p.background == Some(true) {
+                    return self.start_background(cx, p);
+                }
                 let result = self.start(cx, p);
                 if let Ok(started) = &result
                     && let Some(id) = started["world"].as_str()
@@ -940,11 +1186,14 @@ impl Service for PlayService {
             }
             "play.stop" => {
                 let result = self.stop(&world_of(&params));
-                if let Some(id) = self.latest() {
-                    self.publish_commands(cx, &id);
-                } else {
-                    cx.publish_commands("play", &Value::Null);
-                }
+                let catalog = self
+                    .worlds
+                    .iter()
+                    .max_by_key(|(id, _)| {
+                        id.trim_start_matches("play:").parse::<u32>().unwrap_or(0)
+                    })
+                    .map_or(&Value::Null, |(_, world)| &world.commands);
+                cx.publish_commands("play", catalog);
                 result
             }
             "play.restart" => {
@@ -1037,10 +1286,11 @@ impl Service for PlayService {
     }
 
     fn tick(&mut self, cx: &mut Cx<'_>) {
+        self.poll_starting(cx);
         for problem in self.collect_stopped() {
             cx.log(problem);
         }
-        if let Ok(pool) = self.pool() {
+        if let Some(pool) = self.pool_now() {
             for problem in pool.poll() {
                 cx.log(Diagnostic::warning(codes::PLAY, problem));
             }
@@ -1105,12 +1355,30 @@ impl Service for PlayService {
             }
         }
         let playing = !self.worlds.is_empty();
-        let allow = self.worlds.values().any(|w| w.hot_reload);
-        if let Ok(assets) = self.assets() {
+        let allow = self
+            .worlds
+            .values()
+            .any(|w| w.hot_reload || w.streaming_assets);
+        let imports = (cx.store().workspace(), cx.store().revision());
+        let world_import_revision = self
+            .worlds
+            .values()
+            .map(|world| world.import_revision)
+            .min();
+        let assets = self.assets_now(imports).unwrap_or_else(|error| {
+            cx.log(Diagnostic::warning(codes::ASSETS, error));
+            None
+        });
+        if let Some(assets) = assets {
             if let Err(error) = assets.synchronize(cx.store().workspace(), cx.store().revision()) {
                 cx.log(Diagnostic::warning(codes::ASSETS, error));
             }
             let changed = assets.poll(playing, allow);
+            let importing = assets.importing();
+            let import_revision = assets.import_revision();
+            let import_state = world_import_revision
+                .filter(|&revision| revision != import_revision)
+                .map(|_| assets.import_state());
             if !changed.is_empty() {
                 let pins: BTreeMap<String, String> = changed
                     .iter()
@@ -1119,15 +1387,55 @@ impl Service for PlayService {
                 let ids: Vec<String> = self
                     .worlds
                     .iter()
-                    .filter(|(_, w)| w.hot_reload)
+                    .filter(|(_, w)| w.hot_reload || w.streaming_assets)
                     .map(|(id, _)| id.clone())
                     .collect();
                 for id in ids {
-                    if let Err(d) = self.call(&id, method::ASSETS, json!({"assets": pins}), true) {
-                        for d in d {
-                            cx.log(d);
+                    if let Some(world) = self.worlds.get_mut(&id) {
+                        for (_, player) in &mut world.players {
+                            let result = player
+                                .link
+                                .notify(method::ASSETS, json!({"assets": pins}))
+                                .and_then(|_| player.link.flush());
+                            if let Err(error) = result {
+                                cx.log(Diagnostic::warning(
+                                    codes::PLAY,
+                                    format!("{id}: asset publication failed: {error}"),
+                                ));
+                            }
                         }
                     }
+                }
+            }
+            // Publish generations before removing their pending marker, so no
+            // intermediate frame can mistake a just-completed import for failure.
+            if let Some(state) = import_state {
+                for (id, world) in &mut self.worlds {
+                    if world.import_revision == import_revision {
+                        continue;
+                    }
+                    let mut delivered = true;
+                    for (_, player) in &mut world.players {
+                        if let Err(error) = player
+                            .link
+                            .notify(method::IMPORTS, &state)
+                            .and_then(|_| player.link.flush())
+                        {
+                            delivered = false;
+                            cx.log(Diagnostic::warning(
+                                codes::PLAY,
+                                format!("{id}: import status failed: {error}"),
+                            ));
+                        }
+                    }
+                    if delivered {
+                        world.import_revision = import_revision;
+                    }
+                }
+            }
+            if !importing {
+                for world in self.worlds.values_mut() {
+                    world.streaming_assets = false;
                 }
             }
         }

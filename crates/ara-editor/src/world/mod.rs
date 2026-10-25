@@ -58,10 +58,16 @@ impl DocumentView {
                 .collect(),
         })
     }
-    /// Model sources the scene references that are not on disk, with an entity that
-    /// uses each (it draws a placeholder), in path order.
-    pub(crate) fn missing_sources(&self, root: &Path) -> Vec<(String, String)> {
-        let mut missing = BTreeMap::new();
+    /// Model sources the scene references, other than the `known` paths, each checked
+    /// on disk once: `Some(entity)` (one that uses it; it draws a placeholder) when
+    /// the file is missing. In path order.
+    pub(crate) fn missing_sources(
+        &self,
+        root: &Path,
+        known: &BTreeSet<String>,
+    ) -> Vec<(String, Option<String>)> {
+        // One disk check per path, not per entity: scenes reuse a few models widely.
+        let mut checked: BTreeMap<String, Option<String>> = BTreeMap::new();
         for (id, entity) in &self.entities {
             let Some(reference) = entity
                 .record
@@ -77,11 +83,12 @@ impl DocumentView {
             else {
                 continue;
             };
-            if !missing.contains_key(&path) && !root.join(&path).is_file() {
-                missing.insert(path, id.clone());
+            if !known.contains(&path) && !checked.contains_key(&path) {
+                let missing = !root.join(&path).is_file();
+                checked.insert(path, missing.then(|| id.clone()));
             }
         }
-        missing.into_iter().collect()
+        checked.into_iter().collect()
     }
     /// Deleted-entity ghosts. Empty since D24 (agent deletions apply like any other
     /// edit); kept as the render seam for future soft-delete previews.
@@ -125,6 +132,23 @@ pub fn local_transform(record: &ara_doc::Record) -> Mat4 {
 /// Parent-ordered transforms, computed without recursive calls even for deep hierarchies.
 pub fn world_transforms(entities: &Resolved) -> BTreeMap<String, Mat4> {
     transforms_with(entities, None)
+}
+/// One entity's world transform: its local transform composed up its parent chain
+/// (a cycle stops at the repeat, as in [`world_transforms`]). For the few selected
+/// entities a frame needs, without composing the whole scene.
+pub fn world_transform(entities: &Resolved, id: &str) -> Option<Mat4> {
+    let entity = entities.get(id)?;
+    let mut matrix = local_transform(&entity.record);
+    let mut seen = BTreeSet::from([id]);
+    let mut current = entity.parent.as_deref();
+    while let Some(addr) = current {
+        let Some(parent) = entities.get(addr).filter(|_| seen.insert(addr)) else {
+            break;
+        };
+        matrix = local_transform(&parent.record) * matrix;
+        current = parent.parent.as_deref();
+    }
+    Some(matrix)
 }
 pub(super) fn transforms_with(
     entities: &Resolved,

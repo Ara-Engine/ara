@@ -92,28 +92,37 @@ fn write_types(root: &Path, path: &Path, doc: &Value) -> Result<(), Diagnostic> 
     Ok(())
 }
 
+/// The C# part of a play scene for the project at `root` (a walk for its modules):
+/// `None` without modules; an error when it has modules but `paths` is not built.
+pub(crate) fn script_scene(
+    root: &Path,
+    paths: Option<&ScriptPaths>,
+) -> Result<Option<ScriptScene>, Vec<Diagnostic>> {
+    let modules = modules(root);
+    if modules.is_empty() {
+        return Ok(None);
+    }
+    let paths = paths.ok_or_else(|| {
+        fail(
+            codes::REQUEST,
+            "the project has C# modules but the .NET host is not built; run `ara doctor` \
+             (`dotnet build dotnet/Ara.slnx -c Release`, or set ARA_DOTNET_ARTIFACTS)",
+        )
+    })?;
+    let text = |p: &Path| p.to_string_lossy().into_owned();
+    Ok(Some(ScriptScene {
+        host: Default::default(),
+        host_dir: text(&paths.host_dir),
+        compile_server: paths.compile_server.as_deref().map(text),
+        modules: modules.iter().map(|m| text(m)).collect(),
+    }))
+}
+
 impl PlayService {
     /// The C# part of a play scene: `None` without modules; an error when the project
     /// has modules but the .NET host is not built.
     pub(crate) fn script_scene(&self) -> Result<Option<ScriptScene>, Vec<Diagnostic>> {
-        let modules = modules(&self.root);
-        if modules.is_empty() {
-            return Ok(None);
-        }
-        let paths = self.config.scripts.as_ref().ok_or_else(|| {
-            fail(
-                codes::REQUEST,
-                "the project has C# modules but the .NET host is not built; run `ara doctor` \
-                 (`dotnet build dotnet/Ara.slnx -c Release`, or set ARA_DOTNET_ARTIFACTS)",
-            )
-        })?;
-        let text = |p: &Path| p.to_string_lossy().into_owned();
-        Ok(Some(ScriptScene {
-            host: Default::default(),
-            host_dir: text(&paths.host_dir),
-            compile_server: paths.compile_server.as_deref().map(text),
-            modules: modules.iter().map(|m| text(m)).collect(),
-        }))
+        script_scene(&self.root, self.config.scripts.as_ref())
     }
 
     /// `script.write`: an agent writes a C# source. Every running world's players
@@ -237,7 +246,12 @@ impl PlayService {
     /// answering is logged (the world is marked faulted), never dropped silently.
     pub(crate) fn publish_commands(&mut self, cx: &mut Cx<'_>, world: &str) {
         match self.call(world, method::COMMANDS, json!({}), false) {
-            Ok(catalog) => cx.publish_commands("play", &catalog),
+            Ok(catalog) => {
+                if let Some(world) = self.worlds.get_mut(world) {
+                    world.commands = catalog.clone();
+                }
+                cx.publish_commands("play", &catalog);
+            }
             Err(problems) => problems.into_iter().for_each(|d| cx.log(d)),
         }
     }

@@ -17,6 +17,8 @@ pub(crate) enum Source {
     Values(&'static str),
     /// An inspector enum field's options.
     Enum(String, Vec<String>),
+    /// An inspector asset field's picker: assets that fit it, and None.
+    Assets(String, Option<String>),
 }
 /// An open menu: its root anchor, open submenus and keyboard highlight.
 #[derive(Clone, Debug)]
@@ -207,7 +209,7 @@ impl Shell {
         match &menu.source {
             Source::Bar(i) => self.expand(editor, MENUS[*i].items, &mut root),
             Source::Context(kind, _) => self.expand(editor, menus::context(*kind), &mut root),
-            Source::Enum(..) => {}
+            Source::Enum(..) | Source::Assets(..) => {}
             Source::Values("fov") => {
                 let current = editor.state.camera.fov_y_degrees;
                 for v in [30., 35., 40., 46., 50., 54., 60., 70., 90.] {
@@ -250,11 +252,7 @@ impl Shell {
             }
         }
         if let Source::Enum(path, options) = &menu.source {
-            let current = self
-                .fields
-                .get(path)
-                .map(|f| f.value.clone())
-                .unwrap_or(Value::Null);
+            let current = self.field_value(path);
             for option in options {
                 root.push(Row::Command {
                     id: "field.set",
@@ -262,6 +260,41 @@ impl Shell {
                     label: Some(super::inspector_panel::sentence(option)),
                     path: String::new(),
                     checked: Some(current.as_str() == Some(option)),
+                });
+            }
+        }
+        if let Source::Assets(path, kind) = &menu.source {
+            let current = self.field_value(path);
+            // Adding an item by picking its asset offers no "None".
+            if !self.appends(path) {
+                root.push(Row::Command {
+                    id: "field.set",
+                    target: Target::Text(format!("{path}=null")),
+                    label: Some("None".into()),
+                    path: String::new(),
+                    checked: Some(current.is_null()),
+                });
+            }
+            let workspace = editor.host.store().workspace();
+            for asset in self
+                .browser
+                .items
+                .iter()
+                .filter(|a| a.fits(kind.as_deref(), path))
+            {
+                // Files still importing have no asset ID to refer to yet.
+                let Some(reference) = asset.current_reference(workspace) else {
+                    continue;
+                };
+                root.push(Row::Command {
+                    id: "field.set",
+                    target: Target::Text(format!("{path}={}", json!(reference))),
+                    label: Some(asset.name().to_owned()),
+                    path: asset
+                        .path
+                        .rsplit_once('/')
+                        .map_or(String::new(), |(folder, _)| folder.to_owned()),
+                    checked: Some(current.as_str() == Some(reference.as_str())),
                 });
             }
         }

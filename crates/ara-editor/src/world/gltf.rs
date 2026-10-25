@@ -6,6 +6,7 @@ use glam::Vec3;
 use std::collections::BTreeMap;
 use std::path::Path;
 mod patch;
+mod pending;
 
 /// Project-owned decoded generations. Publication changes invalidate by digest;
 /// document transforms and repeated prefab instances do not read model payloads.
@@ -60,7 +61,7 @@ impl ModelCache {
             .as_deref()
             .map(|snapshot| snapshot as &dyn AssetSource);
         mesh(
-            self.decoded.get(source, asset)?,
+            self.decoded.get(source, asset)?.map(std::sync::Arc::as_ref),
             renderer,
             entity,
             name,
@@ -69,14 +70,14 @@ impl ModelCache {
     }
 }
 
-/// One-shot thumbnail worker entry. Scene extraction uses its persistent cache;
-/// an isolated preview instead resolves its sidecar once at this control boundary.
-pub(crate) fn load(
+/// One-shot thumbnail worker entry: the published generation of a source model,
+/// with its materials and textures. Scene extraction uses its persistent cache; an
+/// isolated preview resolves its sidecar once and waits (bounded, off the UI thread)
+/// for an in-flight import to publish.
+pub(crate) fn published(
     path: &Path,
-    entity: u64,
-    name: String,
-    material: usize,
-) -> anyhow::Result<Mesh> {
+    wait: std::time::Duration,
+) -> anyhow::Result<std::sync::Arc<ara_runtime::model::Model>> {
     let root = path
         .ancestors()
         .find(|root| root.join("ara.project.json").is_file())
@@ -87,7 +88,24 @@ pub(crate) fn load(
     let asset = value["id"]
         .as_str()
         .context("model sidecar has no asset ID")?;
-    ModelCache::new(root)?.load(asset, &Default::default(), entity, name, material)
+    let mut cache = ModelCache::new(root)?;
+    let deadline = std::time::Instant::now() + wait;
+    loop {
+        cache.revision();
+        let source = cache
+            .snapshot
+            .as_deref()
+            .map(|snapshot| snapshot as &dyn AssetSource);
+        if let Some(model) = cache.decoded.get(source, asset)? {
+            return Ok(model.clone());
+        }
+        anyhow::ensure!(
+            std::time::Instant::now() < deadline,
+            "{} has not been imported yet",
+            path.display()
+        );
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    }
 }
 
 #[derive(Default)]
@@ -101,7 +119,7 @@ impl DecodedModels {
         &mut self,
         source: Option<&dyn AssetSource>,
         asset: &str,
-    ) -> anyhow::Result<Option<&ara_runtime::model::Model>> {
+    ) -> anyhow::Result<Option<&std::sync::Arc<ara_runtime::model::Model>>> {
         if let Some(source) = source
             && let Some(digest) = source.digest(asset)
             && self.failed.get(asset) != Some(&digest)
@@ -116,7 +134,7 @@ impl DecodedModels {
                 self.failed.remove(asset);
             }
         }
-        Ok(self.models.get(asset).map(std::sync::Arc::as_ref))
+        Ok(self.models.get(asset))
     }
 }
 
@@ -202,6 +220,8 @@ pub(crate) struct FidelityContent {
     terrain: Option<(u64, ara_runtime::terrain::TerrainState)>,
     /// Last drawn component values; a material patch deserializes changed rows only.
     mesh_records: BTreeMap<String, serde_json::Value>,
+    progress: pending::Progress,
+    placeholders: ara_runtime_render::ModelPlaceholders,
 }
 impl FidelityContent {
     pub(crate) fn new(root: &Path) -> anyhow::Result<Self> {
@@ -213,6 +233,8 @@ impl FidelityContent {
             materials: None,
             terrain: None,
             mesh_records: BTreeMap::new(),
+            progress: Default::default(),
+            placeholders: Default::default(),
         })
     }
     pub(crate) fn revision(&self) -> u64 {
@@ -239,6 +261,7 @@ impl FidelityContent {
                 self.snapshot = Some(snapshot);
             }
         }
+        self.refresh_progress();
         let empty = ara_runtime::assets::MemoryAssets::default();
         let source: &dyn AssetSource = self
             .snapshot
@@ -310,7 +333,7 @@ impl FidelityContent {
             .as_ref()
             .filter(|(old, _)| *old == stamp)
             .map(|(_, data)| data);
-        let frame = ara_runtime_render::fidelity::native::document_frame(
+        let mut frame = ara_runtime_render::fidelity::native::document_frame(
             view.entities(),
             &transforms,
             workspace,
@@ -325,6 +348,14 @@ impl FidelityContent {
                 ara_runtime::terrain::TerrainState(std::sync::Arc::clone(&terrain.data)),
             )
         });
+        pending::style(
+            &mut self.placeholders,
+            &mut frame,
+            view.entities(),
+            source,
+            self.progress.value.as_deref(),
+            true,
+        );
         self.mesh_records = view
             .entities()
             .iter()
@@ -343,7 +374,7 @@ impl FidelityContent {
         schema: &ara_schema::SchemaDb,
     ) -> anyhow::Result<ara_runtime_render::fidelity::native::Content> {
         let empty = ara_runtime::assets::MemoryAssets::default();
-        ara_runtime_render::fidelity::native::Content::resolve_available(
+        ara_runtime_render::fidelity::native::Content::resolve_available_with_pending(
             frame,
             workspace,
             schema,
@@ -351,6 +382,7 @@ impl FidelityContent {
             self.snapshot
                 .as_deref()
                 .map_or(&empty as &dyn AssetSource, |snapshot| snapshot),
+            &|asset| self.model_is_pending(asset),
         )
     }
 }

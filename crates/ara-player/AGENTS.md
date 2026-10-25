@@ -15,11 +15,10 @@ reads the authored PlayScene/cooked generations from game.arapack, and opens a g
 window. `--headless [--capture PNG] [--ticks N]` captures without a window;
 `--frames N` bounds a windowed probe. Shipped assets never discover or import source
 files. The same World, input mapper, animation/physics and presenters run both modes.
-`--offscreen --frames N` keeps that continuous render/present path hidden from
-creation. Perf mode (`--perf-output`) always implies it; `ara-dev perf` never opens
-a desktop window. GPU pass timestamps remain valid; reports label `hiddenWindow`
-and do not measure desktop compositor latency. `--headless` is a separate still
-capture path and cannot produce perf frame windows.
+`--offscreen --frames N` keeps the continuous render/present path hidden (perf mode,
+`--perf-output`, implies it; reports label `hiddenWindow`, no compositor latency).
+`--headless` is the separate still-capture path. Owner-mode probes honour `--offscreen`;
+`ARA_PLAY_OFFSCREEN=1` adds it to pooled windowed players (hidden entry-latency runs).
 `--read entity.Component.field` adds a value to `ARA_RESULT.reads` after simulation;
 repeat it to inspect shipped C# or Rust component fields. Shipping hosts resolve their
 NativeAOT metadata against the export folder; development host paths are rejected.
@@ -29,17 +28,16 @@ exe icon (`assets/brand/ara.ico`); ara-platform sets the window icon.
 Build with `--features tracy` to record literal CPU zones across Play world build,
 extraction, native instance updates, GPU recording/timeline waits, presentation
 and audio. The optional client starts in the executable; normal builds erase zones.
-`tests/entry_latency.rs` is an ignored real-project probe: set
-`ARA_PLAY_ENTRY_PROJECT`, `ARA_BENCH_PLAYER` to an optimized player and
-`CARGO_BIN_EXE_ara-import-worker` to its worker. It copies input under target,
-settles publication and reports three warm sessions. `ARA_PLAY_ENTRY_WINDOW=1`
-selects windowed Play; default measures the shared-frame notice before editor display.
+`tests/entry_latency.rs` (ignored real-project probe): set `ARA_PLAY_ENTRY_PROJECT`,
+`ARA_BENCH_PLAYER` (optimized player) and `CARGO_BIN_EXE_ara-import-worker`; it reports
+three warm sessions. `ARA_PLAY_ENTRY_WINDOW=1` = windowed, `_BACKGROUND=1` = nonblocking
+start API, `_COLD=1` skips copied caches. Surface-attached pools prewarm a 64x64 Low
+presenter before hello and reuse its device at embed; surface-less services allocate no GPU.
 
 ## Modules
 
 - `packed.rs` and `standalone.rs`: immutable pack AssetSource and the exported entry;
   `ara.player.runtime/1` launches the authored world, never the conformance fixture.
-
 - `main.rs`: pool lifecycle, the loop (link polling, host-time ticking with bounded
   catch-up, deferred patch acks, 250 ms `play.status` heartbeats, presentation),
   method dispatch.
@@ -65,6 +63,12 @@ selects windowed Play; default measures the shared-frame notice before editor di
 - `crash.rs`: panic hook + Windows unhandled-exception filter + no WER dialog; one
   `ARA_PLAYER_CRASH {json}` stderr line per fatal path. `play.debug.crash` triggers a
   panic, a real `STATUS_ACCESS_VIOLATION` (RaiseException) or a hang.
+- `link::Pump` owns Play transport on a dedicated heartbeat thread, so C# calls,
+  simulation and uploads cannot suppress liveness. Bounded queues preserve order.
+  `tests/watchdog.rs` holds simulation past the watchdog, then checks real silence.
+- Import-state notifications style first-cook bounds translucent grey, failed or
+  missing sources magenta, and retain last-good models during reimport. Native
+  root/foliage arrivals fade over twelve presented frames; captures finish the fade.
 - Startup enters `ara-crash` monitor mode before parsing player arguments; normal
   players retain a `Capture` guard for native minidumps and panic reports. Dumps go
   under the pool logs' `crashes/` directory (`ARA_CRASH_DIR` for direct probes).
@@ -84,7 +88,7 @@ selects windowed Play; default measures the shared-frame notice before editor di
   the normal watchdog immediately, after scene-dependent pipelines are prepared.
 - The first presented frame (windowed or embedded) announces `busy("upload")`: real
   scenes upload for seconds, and owner calls (`play.commands` right after start)
-  would otherwise hit the 1 s watchdog mid-upload.
+  otherwise wait behind the upload. Independent liveness still runs throughout.
 
 ## Semantics
 
@@ -93,7 +97,8 @@ selects windowed Play; default measures the shared-frame notice before editor di
 - Device input and agent `play.input` both go through `Session::inject`, so they are
   recorded and replayable. Local and listen-host players are input owner 1; clients
   are players 2.. (movement, orbit, sprint and jump are predicted through `ara-runtime-net`).
-- Headless players create a GPU device only on their first `play.capture` with a path.
+- Headless players without a Surfaces attachment create a GPU device only on their
+  first `play.capture` with a path; attached pools prewarm the bounded graphics view.
 - Replay files carry portable snapshots (native physics checkpoints stay in-process):
   `play.replay` verifies exactly from recordings started at tick 0 (the fresh build);
   a mid-play recording diverges at its first tick once bodies are in contact.
@@ -132,15 +137,10 @@ headless music playback deterministically. It also renders past the end and loop
 through bounded producers, checking aggregate queue accounting and late audibility.
 `tests/model_authoring.rs` selects source kit nodes through MCP and captures lamp
 factor edits, source-pivot changes and enable/disable transitions in headless Play.
-`tests/csharp.rs` (builds `dotnet/Ara.slnx`) plays a demo copy with the Outpost C#
-module (`demo-scripts/Outpost`: Door, UseMedkit, Gravity/Movement): published types,
-agent-added C# components, `play.command`, an agent `script.write` hot reload while
-playing, `restart {keepState}`. `ARA_UPDATE_DEMO=1` refreshes `Outpost.types.json`.
-`tests/valley.rs` (builds .NET) plays `levels/valley.scene` networked (host + 1):
-terrain + foliage, the 4-cell streamed world with baked acoustics, the
-motion-matched Fox walking into the next cell, the guard NPC, campfire VFX + sound,
-music and agent-added C# gameplay; captures from both processes, audio, timings.
-The Valley files are generated by `ara-runtime-world`'s `valley` test.
+`tests/csharp.rs` covers published types, C# commands/hot reload and stateful restart;
+`tests/valley.rs` covers networked C#, terrain/foliage, streamed cells and audio.
+Both build .NET. Valley fixtures come from `ara-runtime-world`'s `valley` test.
+`tests/pending_game.rs` captures pending, failed and published models in a real child.
 `tests/embed.rs` (ignored; `--ignored`) is the D19 gate: the demo embedded through
 `PlayService::surfaces`, 90 frames imported on a second device of the test process
 (not black, close to a presented capture), W via `play.device` walks the Fox, typed

@@ -215,6 +215,10 @@ const ASSETS: &[(&str, &str)] = &[
         include_str!("../../assets/icons/lock-open.svg"),
     ),
     ("lock", include_str!("../../assets/icons/lock.svg")),
+    (
+        "loader-circle",
+        include_str!("../../assets/icons/loader-circle.svg"),
+    ),
     ("magnet", include_str!("../../assets/icons/magnet.svg")),
     ("map", include_str!("../../assets/icons/map.svg")),
     ("maximize", include_str!("../../assets/icons/maximize.svg")),

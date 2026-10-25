@@ -88,12 +88,19 @@ impl Renderer {
         scene: &NativeScene,
         textures: Box<dyn Textures>,
     ) -> Result<()> {
-        let next = Native::new(&mut self.gpu, scene, textures, &self.artifacts)?;
+        ara_gpu::cpu_scope!("RasterNative.publish");
+        let mut next = Native::new(
+            &mut self.gpu,
+            scene,
+            textures,
+            &self.artifacts,
+            self.native.as_ref().map(|native| native.textures.as_ref()),
+        )?;
         // The first native generation replaces bootstrap/legacy geometry. HDRI
         // changes rebuild the actual environment and its IBL, rather than merely
         // changing the capture metadata. Ordinary motion never enters this path.
         let environment = environment::snapshot(scene);
-        if !self.content.meshes.is_empty()
+        let content = if !self.content.meshes.is_empty()
             || super::hash::static_hash(&environment) != self.content.static_hash
         {
             let content = match upload::upload_content(
@@ -109,25 +116,47 @@ impl Renderer {
                     return Err(error);
                 }
             };
-            let previous = std::mem::replace(&mut self.content, content);
-            self.retire_content(previous)?;
-        }
+            Some(content)
+        } else {
+            None
+        };
         let mut hash = sha2::Sha256::new();
         use sha2::Digest;
-        hash.update(self.content.static_hash.as_bytes());
+        hash.update(
+            content
+                .as_ref()
+                .map_or(self.content.static_hash.as_str(), |content| {
+                    content.static_hash.as_str()
+                })
+                .as_bytes(),
+        );
         for geometry in &scene.geometry {
             hash.update(geometry.key);
         }
-        self.content.base_hash = format!("{:x}", hash.finalize());
+        let base_hash = format!("{:x}", hash.finalize());
         let names = scene
             .instances
             .iter()
             .map(|i| (i.entity, i.name.to_owned()))
             .collect();
+        if let Some(previous) = &mut self.native
+            && let Err(error) = next.textures.publish_reuse(previous.textures.as_mut())
+        {
+            next.destroy(&mut self.gpu)?;
+            if let Some(content) = content {
+                self.retire_content(content)?;
+            }
+            return Err(error);
+        }
         let old = self.native.replace(next);
+        let previous_content = content.map(|content| std::mem::replace(&mut self.content, content));
+        self.content.base_hash = base_hash;
         self.content.entity_names = names;
         self.content.revision += 1;
         self.targets.history = None;
+        if let Some(previous) = previous_content {
+            self.retire_content(previous)?;
+        }
         if let Some(old) = old {
             old.destroy(&mut self.gpu)?;
         }
@@ -264,25 +293,37 @@ impl Native {
         scene: &NativeScene,
         mut textures: Box<dyn Textures>,
         artifacts: &Path,
+        previous: Option<&dyn Textures>,
     ) -> Result<Self> {
+        ara_gpu::cpu_scope!("RasterNative.create_content");
         scene.validate()?;
         let texture_digest = textures.content_digest();
-        let upload = match textures.initialize(gpu) {
-            Ok(upload) => upload,
-            Err(error) => {
-                textures.destroy(gpu)?;
-                return Err(error);
+        let upload = {
+            ara_gpu::cpu_scope!("RasterNative.publish_textures");
+            let initialized = match previous {
+                Some(previous) => textures.initialize_reusing(gpu, previous),
+                None => textures.initialize(gpu),
+            };
+            match initialized {
+                Ok(upload) => upload,
+                Err(error) => {
+                    textures.destroy(gpu)?;
+                    return Err(error);
+                }
             }
         };
         if textures.binding().map_or(0, |b| b.textures) != scene.textures {
             textures.destroy(gpu)?;
             anyhow::bail!("Native texture-table count mismatch");
         }
-        let pool = match GeometryGpu::new(gpu, scene, false) {
-            Ok(pool) => pool,
-            Err(error) => {
-                textures.destroy(gpu)?;
-                return Err(error);
+        let pool = {
+            ara_gpu::cpu_scope!("RasterNative.publish_geometry");
+            match GeometryGpu::new(gpu, scene, false) {
+                Ok(pool) => pool,
+                Err(error) => {
+                    textures.destroy(gpu)?;
+                    return Err(error);
+                }
             }
         };
         let mut owned = Vec::new();
@@ -300,12 +341,15 @@ impl Native {
                 &mut owned,
             )?;
             let visible = host_buffer(gpu, (scene.instances.len() * 7 * 8).max(16), &mut owned)?;
-            for name in ["native_shadow", "native_gbuffer", "native_forward"] {
-                let cooked = serde_json::from_slice(&std::fs::read(
-                    artifacts.join(format!("{name}.json")),
-                )?)?;
-                let pipeline = gpu.create_pipeline(&cooked, artifacts)?;
-                pipelines.push(pipeline);
+            {
+                ara_gpu::cpu_scope!("RasterNative.create_pipelines");
+                for name in ["native_shadow", "native_gbuffer", "native_forward"] {
+                    let cooked = serde_json::from_slice(&std::fs::read(
+                        artifacts.join(format!("{name}.json")),
+                    )?)?;
+                    let pipeline = gpu.create_pipeline(&cooked, artifacts)?;
+                    pipelines.push(pipeline);
+                }
             }
             Ok((
                 materials,
@@ -434,6 +478,7 @@ impl Native {
     }
 
     fn destroy(self, gpu: &mut VulkanDevice) -> Result<()> {
+        ara_gpu::cpu_scope!("RasterNative.retire_content");
         self.pool.destroy(gpu)?;
         self.textures.destroy(gpu)?;
         for buffer in [self.materials, self.instances, self.visible] {
