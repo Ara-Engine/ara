@@ -58,7 +58,9 @@ Owns the M1 baseline renderer and agent visual feedback. Gameplay state stays in
 - `look::Look` (`Renderer::set_look`): D27 raster look after the G-buffer:
   physical sky LUTs and their IBL, CSM-shadowed froxel fog, histogram or manual
   exposure, bloom, grading and the display curve. Defaults reproduce M1. Hosts map
-  `SceneLook` with `FrameEnvironment::raster` (ara-render-fidelity).
+  `SceneLook` with `FrameEnvironment::raster` (ara-render-fidelity). The sky IBL,
+  far map and cascades rebuild on any sun change past `SUN_HOLD` (noise only): once
+  something animates the sun, add a threshold with an old/new crossfade.
 - `look::gi::ProbeSurfaces` (`Renderer::set_probe_surfaces`): probe GI. A one-time
   acquisition records 8x8 oct surface caches; `GI.Relight` relights a budget per
   frame (sun via CSM, local lights, sky, emissive, last frame's probes) into 6x6
