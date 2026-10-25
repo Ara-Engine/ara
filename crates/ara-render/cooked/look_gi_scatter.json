@@ -1,13 +1,13 @@
 {
   "binding_layout_hash": "35cd2a62b1ba741ce6823b3c8753d7b5aa97b54c5f0a837b56e542518013fd7e",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "c6500b2d1b049070f195ac85c8958435d959f7d0fe9186ca78c7ec6e2a85fc6e",
+  "key": "034970ceb9a75e7fe6724f387e1bb3d2c24af10ea56b3bea78cf5c275c35fd7b",
   "stages": [
     {
-      "dxil": "c6500b2d1b049070f195ac85c8958435d959f7d0fe9186ca78c7ec6e2a85fc6e/giScatterMain.dxil",
+      "dxil": "034970ceb9a75e7fe6724f387e1bb3d2c24af10ea56b3bea78cf5c275c35fd7b/giScatterMain.dxil",
       "dxil_hash": "45144e4b50f8840f682bb38a2b2daa2048c331ca97d49cabf0d60141b5e6950e",
       "source_entry": "giScatterMain",
-      "spirv": "c6500b2d1b049070f195ac85c8958435d959f7d0fe9186ca78c7ec6e2a85fc6e/giScatterMain.spv",
+      "spirv": "034970ceb9a75e7fe6724f387e1bb3d2c24af10ea56b3bea78cf5c275c35fd7b/giScatterMain.spv",
       "spirv_entry": "main",
       "spirv_hash": "83130db3219f0f2a714d234a20b8d4eb003608e857f5d2a57d010b60a2357af9",
       "stage": "compute"

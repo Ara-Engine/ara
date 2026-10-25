@@ -1,24 +1,24 @@
 {
   "binding_layout_hash": "35cd2a62b1ba741ce6823b3c8753d7b5aa97b54c5f0a837b56e542518013fd7e",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "c6500b2d1b049070f195ac85c8958435d959f7d0fe9186ca78c7ec6e2a85fc6e",
+  "key": "034970ceb9a75e7fe6724f387e1bb3d2c24af10ea56b3bea78cf5c275c35fd7b",
   "stages": [
     {
-      "dxil": "c6500b2d1b049070f195ac85c8958435d959f7d0fe9186ca78c7ec6e2a85fc6e/nativeForwardFragment.dxil",
-      "dxil_hash": "b66c4518dd1ffaa9ee88eb85eeb5d183108eb95f54fcaa5977438d745ef190bd",
+      "dxil": "034970ceb9a75e7fe6724f387e1bb3d2c24af10ea56b3bea78cf5c275c35fd7b/nativeForwardFragment.dxil",
+      "dxil_hash": "86a70bc99030d9d0b7d6db0f7c74ff7e8e91e0520a92155b083aeff34ed5a874",
       "source_entry": "nativeForwardFragment",
-      "spirv": "c6500b2d1b049070f195ac85c8958435d959f7d0fe9186ca78c7ec6e2a85fc6e/nativeForwardFragment.spv",
+      "spirv": "034970ceb9a75e7fe6724f387e1bb3d2c24af10ea56b3bea78cf5c275c35fd7b/nativeForwardFragment.spv",
       "spirv_entry": "main",
-      "spirv_hash": "4dae5c835583459f4a912143193ed05e2d01e7025977628675eace2ab6ec0464",
+      "spirv_hash": "26eb0b61f65be3eca95481f36625a393a1ee98ea47653da898e75f76540f667a",
       "stage": "fragment"
     },
     {
-      "dxil": "c6500b2d1b049070f195ac85c8958435d959f7d0fe9186ca78c7ec6e2a85fc6e/nativeGeometryVertex.dxil",
+      "dxil": "034970ceb9a75e7fe6724f387e1bb3d2c24af10ea56b3bea78cf5c275c35fd7b/nativeGeometryVertex.dxil",
       "dxil_hash": "2aa683842aa85a3c215419ff5f39d806804721a726e6fb8f6b97b558ef89d67a",
       "source_entry": "nativeGeometryVertex",
-      "spirv": "c6500b2d1b049070f195ac85c8958435d959f7d0fe9186ca78c7ec6e2a85fc6e/nativeGeometryVertex.spv",
+      "spirv": "034970ceb9a75e7fe6724f387e1bb3d2c24af10ea56b3bea78cf5c275c35fd7b/nativeGeometryVertex.spv",
       "spirv_entry": "main",
-      "spirv_hash": "5950004334f3ad6486d6a474c186b97e0111ef8e9186464c5699cb3669e3f176",
+      "spirv_hash": "53b06c283387b5511d8a7eea81424b11277e150b436a359d5133363a3c36d3e6",
       "stage": "vertex"
     }
   ],

@@ -295,6 +295,15 @@ impl Renderer {
                 )?);
             }
         }
+        let local = quality.local_shadows;
+        if local != self.look.local.as_ref().map(|l| l.settings) {
+            if let Some(old) = self.look.local.take() {
+                old.destroy(&mut self.gpu)?;
+            }
+            if let Some(local) = local {
+                self.look.local = Some(crate::look::local::LocalMap::new(&mut self.gpu, local)?);
+            }
+        }
         self.look.quality = quality;
         Ok(())
     }
@@ -370,12 +379,19 @@ impl Renderer {
         self.frame_number = 0;
     }
     /// Reset capture convergence, including the exposure state (it scales the
-    /// pre-exposed history) and relit GI bounce history. The baked surfaces and
+    /// pre-exposed history), relit GI bounce history (the next frames relight
+    /// every probe, `look::gi::CONVERGE_FRAMES`) and the local-shadow
+    /// selection. The baked surfaces and
     /// their residency remain intact; live camera changes use the cheaper
     /// temporal-only reset instead.
     pub fn reset_capture_history(&mut self) -> Result<()> {
         self.reset_temporal_history();
         self.look.reset_exposure(&self.gpu)?;
+        // Local shadows start over: which lights a capture shadows must not
+        // depend on the lights live frames held.
+        if let Some(local) = &mut self.look.local {
+            local.cache = crate::look::local::LocalCache::new(local.settings);
+        }
         let Some(gi) = &mut self.look.gi else {
             return Ok(());
         };
@@ -406,6 +422,7 @@ impl Renderer {
         self.gpu.retire(Resource::Buffer(source))?;
         gi.slot = 0;
         gi.cursor = 0;
+        gi.converge = crate::look::gi::CONVERGE_FRAMES;
         Ok(())
     }
     /// Read the completed live frame once, including its IDs and native metadata.

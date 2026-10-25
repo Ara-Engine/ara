@@ -1,20 +1,17 @@
 # ara-render
 
-Native publications validate once per immutable upload borrow and copy unchanged
-key/revision geometry directly from the previous GPU pool. Candidate buffers stay
-independent until publication, so rejected content retains the previous frame.
+Native publications validate once per immutable upload borrow and copy unchanged key/revision geometry from the previous GPU pool.
+Candidate buffers stay independent until publication, so rejected content retains the previous frame.
 
-Owns the M1 baseline renderer and agent visual feedback. Gameplay state stays in
-ECS; `Scene` is an immutable render extraction snapshot, not authoritative state.
+Owns the M1 baseline renderer and agent visual feedback. Gameplay state stays in ECS; `Scene` is a render snapshot, not authoritative state.
 
 ## Public API
 
-- `Graph`: declared resource accesses, stable topological ordering, barriers,
-  explicit queue release/acquire pairs, timeline dependencies, transient images.
+- `Graph`: declared accesses, stable topological ordering, barriers, explicit queue release/acquire pairs, timeline dependencies, transient images.
+  Compilation indexes resource uses once; declaration-order versions and queue handoffs stay deterministic.
 - `Renderer::new`, `render`, `render_view` (live debug view mode), `resize`, `capture`: cooked Vulkan rendering; read-only
   `gpu()` access for diagnostics/native presentation. Resize resets history.
-- `Scene`, `Mesh`, `Material`, `Light`, `CameraSpec`: extracted world data and
-  camera pose/bounds requests. Materials use bindless texture indices.
+- `Scene`, `Mesh`, `Material`, `Light`, `CameraSpec`: extracted world data and camera pose/bounds requests. Materials use bindless texture indices.
 - `instanced::Scene`: native model-space content contract for shared geometry,
   current/previous instance transforms, deforming revisions, 64-byte UV0/UV1
   vertices and 320-byte materials with six independent map transforms, AO,
@@ -35,10 +32,14 @@ ECS; `Scene` is an immutable render extraction snapshot, not authoritative state
   material and skin indices. Coherent writes/culling touch dirty groups only;
   idle frames retain visible lists and settle motion history once. `native_frame_work`
   reports traversals/writes. `native_caster_changes` exposes old-union-new bounds;
-  `cull_native_shadow(matrix)` caches opaque/masked camera-LOD casters for pass 6.
-  Local lights reserve `reserve_native_shadow_passes(count)` before graph imports;
-  `cull_native_shadow_pass(slot, matrix)` returns an independent cached pass index.
-  Record it with its own Frame matrix in shadows[0] and root cascade word 4 = 0.
+  `cull_native_shadow(matrix)` caches opaque/masked casters for pass 6 using the
+  light's texel density. Camera lists consume `Quality::lod_pixels/min_pixels`;
+  shadows independently choose LODs within one texel and omit bound radii below
+  max(2, min_pixels) texels. Explicit `*_with_resolution` shadow methods take the
+  actual far-map/local-face viewport size; resolution is part of the cache key.
+  Local shadows reserve `reserve_native_shadow_passes(count)` before graph imports;
+  `cull_native_shadow_pass_with_resolution(slot, matrix, resolution)` returns a cached pass index,
+  recorded as cascade 4+slot (its matrix comes from `look::local`'s table).
 - `instanced::GeometryGpu` uploads static local vertices/LOD indices once. Changed
   deforming revisions use `prepare_pose` then `commit_pose`/`cancel_pose`; retire
   the old dependent TLAS before committing. Three skin slots retain presented and
@@ -51,29 +52,29 @@ ECS; `Scene` is an immutable render extraction snapshot, not authoritative state
 - `update_materials` replaces parameters in their existing order and remaps scene
   texture slots without uploading geometry. `rename` updates an entity's capture
   label. Invalid edits retain the previous content.
-- Live frames keep output/IDs on the GPU. Captures copy the final settled frame
-  once; `entity_at(&mut self, pixel)` reads IDs only when explicitly picking.
-  Consecutive graph passes on one queue share a submission; every pass retains
-  its barriers and timestamps, and cross-queue edges wait on the batch signal.
+- Live frames keep output/IDs on the GPU; captures copy the settled frame once and
+  `entity_at(&mut self, pixel)` reads IDs only when picking. Same-queue passes share
+  a submission (barriers and timestamps kept); cross-queue edges wait on batches.
 - `look::Look` (`Renderer::set_look`): D27 raster look after the G-buffer:
   physical sky LUTs and their IBL, CSM-shadowed froxel fog, histogram or manual
   exposure, bloom, grading and the display curve. Defaults reproduce M1. Hosts map
   `SceneLook` with `FrameEnvironment::raster` (ara-render-fidelity).
 - `look::gi::ProbeSurfaces` (`Renderer::set_probe_surfaces`): probe GI. A one-time
   acquisition (`FidelityView::bake_probe_surfaces` on RT devices) records 8x8 oct
-  surface caches; each frame `GI.Relight` relights them (sun via CSM, local lights,
-  sky, emissive, last frame's probes) into 6x6 irradiance, sampled DDGI-style.
-  No runtime rays, no per-pixel noise. `update_probe_surfaces` adopts re-traced
-  surfaces of the same lattice keeping the irradiance, so edits blend in.
+  surface caches; `GI.Relight` relights a budget per frame (sun via CSM, local
+  lights, sky, emissive, last frame's probes) into 6x6 irradiance, DDGI-style.
+  Capture resets relight all for `gi::CONVERGE_FRAMES` reset frames (exposure
+  re-meters), so captures converge at any budget. No runtime rays or noise.
+  `update_probe_surfaces` adopts re-traced same-lattice surfaces keeping irradiance.
 - `look::Quality` (`Renderer::set_quality`): per-preset budgets from
   `ara_render_fidelity::presets::RasterPlan`: shadow cascades (count, texels,
   distance; stable light space, practical splits, gather PCF, cascade blend; one
-  cached D32 map per cascade, redrawn only when its matrix or the casters in its
-  light volume change, outer cascades snapped coarsely so they survive motion),
-  a cached far map past them (`look::far`), half-res GTAO, half-res SSR (cone
-  footprint into a colour pyramid of last frame), GI relight budget, bloom,
-  emitter light budget. Look images are allocated lazily (the bindless storage
-  heap is shared). Probe GI is gathered at half resolution for G-buffer pixels.
+  cached D32 map per cascade, redrawn only when its matrix or casters in its light
+  volume change, outer cascades snapped coarsely), a cached far map (`look::far`),
+  local-light shadows (`look::local`), half-res GTAO and SSR (cone footprint into
+  last frame's colour pyramid), GI relight, bloom, emitter lights, LOD/cull pixels,
+  terrain detail. Look images are allocated lazily (the bindless heap is shared);
+  probe GI is gathered at half resolution for G-buffer pixels.
 - `set_deferred_post` + `finish(color, sampled, state)`: temporally resolve and grade
   an externally composited HDR frame (landscape, particles) with the same look post.
   TAA reprojects with native motion (Frame.look.w) when present.
@@ -94,20 +95,18 @@ is the look record, look.w the native motion texture). `look*.slang(h)` belong t
 the look; never use 16-bit intrinsics (f16tof32) there: the device enables no
 Int16/Float16 capability, so pack halves with bit math.
 
-Frames use reversed-Z, metres and linear HDR. Sun input is lux, point/spot flux
-is lumens and HDR environment input is radiance in cd/m?. Exposure is a positive
-linear multiplier. See README.md for the exact tone mapper and GPU measurements.
-The TAA history alone is RGBA16F and pre-exposed (`look.slangh` exposureState):
-history readers decode with the state's previous multiplier; look passes learn
-whether their input is history or linear HDR from root word 7.
+Frames use reversed-Z, metres and linear HDR: sun in lux, point/spot flux in
+lumens, environments in cd/m2, exposure a linear multiplier (README.md: tone mapper,
+GPU numbers). Only the TAA history is RGBA16F and pre-exposed (`look.slangh`
+exposureState); look passes learn from root word 7 whether input is history.
 The G-buffer is compact: RGBA8 sRGB albedo + AO, RG16 octahedral normal, RGBA8
 roughness/metal, B10G11R11 emissive, R32 ID and RG16F motion; world positions are
 rebuilt from depth. Shaders read and write it only through raster.slangh's
 `gbuffer*` helpers, so the formats change there and in `Renderer::targets` together.
-Local light lists are tiled 16x16: `scene::MAX_LOCAL_LIGHTS` (256) per scene, the
-first `TILE_LIGHTS` (128) per tile. Spot lumens are point-equivalent (the cone
-masks), as in the path tracer; `Light::parameters.z` softens the near field and
-`parameters.w` = 1 keeps a light out of fog (unshadowed emitter lights).
+Local light lists are tiled 16x16 (`scene::MAX_LOCAL_LIGHTS` 256 per scene, the
+first `TILE_LIGHTS` 128 per tile); `look::local` shadows the brightest few in view
+(cube or spot faces, one cached D32 atlas). Spot lumens are point-equivalent, as in
+the path tracer; `Light::parameters.z` softens the near field, `w` = 1 keeps it out of fog.
 
 Capture determinism resets history, fixes host tick/seed, disables jitter/history
 blending, locks exposure and renders the explicit settle count. No wall clock or
@@ -126,10 +125,9 @@ startup staging transfers run on the eventual owning queue.
 
 ## Verification
 
-Set `CARGO_BUILD_JOBS=2`. On Windows run `./run.ps1 -Mode Check`.
-It scopes Vulkan validation layers and an empty implicit-layer directory to its
-process and restores the environment. SDL is built statically by `ara-sdl3-src`;
-there is no SDL setup script, native directory or runtime DLL requirement.
+Set `CARGO_BUILD_JOBS=2`. On Windows run `./run.ps1 -Mode Check`: it scopes Vulkan validation layers
+and an empty implicit-layer directory to its process and restores the environment. SDL is built statically
+by `ara-sdl3-src`; there is no SDL setup script, native directory or runtime DLL requirement.
 
 Per-crate gates: `cargo check -p ara-render`, `cargo test -p ara-render`,
 `cargo clippy -p ara-render --all-targets -- -D warnings`, `cargo fmt -p ara-render -- --check`.
@@ -144,7 +142,5 @@ environment variable before the command). Normal checks never update goldens.
 windowed example exercises resize. `--frames=N` bounds its lifetime; Esc closes.
 `cargo run -p ara-render --example timings` records 120 warm pass samples.
 
-The glTF importer is example-only; production asset import belongs to the asset
-pipeline. Example media are CC0; source/licence notices are next to the assets.
-M3 owns material AST/fidelity, animation velocities, streaming/aliasing and richer
-lighting. Metal's native implementation is the cfg-gated ara-gpu backend stub.
+The glTF importer is example-only; production import belongs to the asset pipeline. Example media are CC0; source/licence notices accompany assets.
+M3 owns material AST/fidelity, animation velocities, streaming/aliasing and richer lighting. Metal's native implementation is the cfg-gated ara-gpu stub.

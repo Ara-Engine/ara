@@ -1,5 +1,8 @@
 mod buffer_memory;
 mod create;
+#[cfg(test)]
+mod diagnostics_tests;
+mod environment;
 mod resources;
 pub use resources::image_barrier;
 pub(crate) use resources::{BufferAllocation, ImageAllocation};
@@ -28,7 +31,8 @@ pub struct Validation {
 
 /// Counts validation and performance messages. General messages come from the loader
 /// and third-party implicit layers (overlays, capture hooks with stale manifests); they
-/// describe the machine, not our API usage, so they are recorded but never counted.
+/// describe the machine, not our API usage, so they are informational, recorded
+/// once per message/process and never counted. Stable bus keys join child notices.
 unsafe extern "system" fn debug_callback(
     severity: vk::DebugUtilsMessageSeverityFlagsEXT,
     kind: vk::DebugUtilsMessageTypeFlagsEXT,
@@ -53,7 +57,14 @@ unsafe extern "system" fn debug_callback(
                 &state.warnings
             };
             counter.fetch_add(1, Ordering::Relaxed);
+        } else if !environment::first(&message) {
+            return vk::FALSE;
         }
+        let severity = if counted {
+            severity
+        } else {
+            vk::DebugUtilsMessageSeverityFlagsEXT::INFO
+        };
         let label = if counted { "VALIDATION" } else { "ENVIRONMENT" };
         eprintln!("{label} {severity:?}: {message}");
         // Validation can fire every frame: admission samples it before anything is built.
@@ -64,12 +75,19 @@ unsafe extern "system" fn debug_callback(
         };
         if ara_diag::bus::admit(code) {
             let error = severity.contains(vk::DebugUtilsMessageSeverityFlagsEXT::ERROR);
-            let d = if error {
+            let d = if !counted {
+                ara_diag::Diagnostic::info(code, message.clone())
+            } else if error {
                 ara_diag::Diagnostic::error(code, message.clone())
             } else {
                 ara_diag::Diagnostic::warning(code, message.clone())
             };
-            ara_diag::bus::push(d, ara_diag::bus::Meta::default());
+            let metadata = if counted {
+                ara_diag::bus::Meta::default()
+            } else {
+                environment::metadata(&message)
+            };
+            ara_diag::bus::push(d, metadata);
         }
         if let Ok(mut messages) = state.messages.lock() {
             messages.push(Diagnostic {
@@ -102,7 +120,7 @@ pub struct Diagnostic {
     pub code: String,
     /// Layer message identifier.
     pub id: String,
-    /// Error or warning severity.
+    /// Error/warning for validation, informational for loader/overlay notices.
     pub severity: String,
     /// Full driver-provided explanation.
     pub message: String,
@@ -172,6 +190,7 @@ pub struct DeviceInfo {
 
 /// Owns the instance, queues, allocations and validation callback lifetime.
 pub struct Gpu {
+    host_waits: super::waits::Counter,
     /// Loader lifetime; must outlive all native function tables.
     pub _entry: Entry,
     /// Owned Vulkan instance for native integrations.
@@ -208,8 +227,19 @@ pub struct Gpu {
 }
 
 impl Gpu {
+    /// Cumulative host time in explicit GPU/presentation waits on this device.
+    pub fn host_wait_stats(&self) -> super::HostWaitStats {
+        self.host_waits.snapshot()
+    }
+
+    /// Native integrations wrap one leaf driver wait with this. Do not nest
+    /// measured waits: frame accounting subtracts each interval exactly once.
+    pub fn measure_host_wait<T>(&self, operation: impl FnOnce() -> T) -> T {
+        self.host_waits.measure(operation)
+    }
     /// Allocate one primary command buffer for the selected queue family.
     pub fn commands(&self, compute: bool) -> Result<vk::CommandBuffer> {
+        crate::cpu_scope!("GPU.allocate_commands");
         // SAFETY: Pools belong to their respective queue families and outlive commands.
         unsafe {
             Ok(self.device.allocate_command_buffers(
@@ -256,7 +286,7 @@ impl Gpu {
                 &[vk::SubmitInfo2::default().command_buffer_infos(&buffers)],
                 vk::Fence::null(),
             )?;
-            self.device.queue_wait_idle(self.graphics)?;
+            self.measure_host_wait(|| self.device.queue_wait_idle(self.graphics))?;
             self.device.free_command_buffers(self.graphics_pool, &[cmd]);
         }
         Ok(())

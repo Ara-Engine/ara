@@ -7,7 +7,7 @@
 use crate::{FidelityView, Mode, PostSettings, Settings, Tier, Upscaler};
 use anyhow::{Result, bail};
 use ara_gpu::vulkan::VulkanDevice;
-use ara_render::look::{AmbientOcclusion, FarShadows, Quality, Reflections, Shadows};
+use ara_render::look::{AmbientOcclusion, FarShadows, LocalShadows, Quality, Reflections, Shadows};
 
 /// User-facing quality tier. D27: every tier is raster by default
 /// ([`QualityPreset::raster_quality`]); with [`RenderOptions::ray_tracing`] on an RT
@@ -291,6 +291,10 @@ impl QualityPreset {
                 gi_budget: 1024,
                 bloom: false,
                 emitter_lights: 4,
+                lod_pixels: 4.,
+                min_pixels: 3.,
+                terrain_detail: 0.,
+                local_shadows: None,
             },
             Self::Medium => Quality {
                 shadows: shadows(3, 1024, 100., (1024, 1000.)),
@@ -299,6 +303,14 @@ impl QualityPreset {
                 gi_budget: 2048,
                 bloom: true,
                 emitter_lights: 6,
+                lod_pixels: 2.,
+                min_pixels: 2.,
+                terrain_detail: 40.,
+                local_shadows: Some(LocalShadows {
+                    lights: 2,
+                    resolution: 256,
+                    redraws: 6,
+                }),
             },
             Self::High => Quality {
                 shadows: shadows(4, 2048, 150., (2048, 1500.)),
@@ -307,6 +319,14 @@ impl QualityPreset {
                 gi_budget: 2048,
                 bloom: true,
                 emitter_lights: 8,
+                lod_pixels: 1.,
+                min_pixels: 1.5,
+                terrain_detail: 150.,
+                local_shadows: Some(LocalShadows {
+                    lights: 4,
+                    resolution: 512,
+                    redraws: 12,
+                }),
             },
             Self::Epic => Quality {
                 shadows: shadows(4, 2048, 250., (2048, 2000.)),
@@ -315,6 +335,14 @@ impl QualityPreset {
                 gi_budget: 4096,
                 bloom: true,
                 emitter_lights: 16,
+                lod_pixels: 1.,
+                min_pixels: 1.,
+                terrain_detail: 300.,
+                local_shadows: Some(LocalShadows {
+                    lights: 8,
+                    resolution: 512,
+                    redraws: 24,
+                }),
             },
         }
     }

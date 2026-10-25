@@ -49,6 +49,11 @@ pub(crate) struct LookFrame {
     pub far_info: [u32; 4],
     /// Sampled cascade maps, in cascade order.
     pub cascade_maps: [u32; 4],
+    /// x: terrain detail distance in metres (`Quality::terrain_detail`).
+    pub terrain: [f32; 4],
+    /// Local-light shadows (`look::local`): x shading table (storage), y atlas
+    /// (sampled; zero: none), z/w atlas texels.
+    pub local_shadows: [u32; 4],
 }
 
 /// Per-frame inputs that are not part of the authored look.
@@ -57,7 +62,8 @@ pub(crate) struct FrameInputs {
     pub sun_lux: Vec3,
     /// Manual linear exposure multiplier; used unless the look meters automatically.
     pub exposure: f32,
-    /// Snap adaptation (first frame or history reset).
+    /// Snap exposure and drop GI hysteresis (first frame, history reset or a
+    /// capture's `gi::CONVERGE_FRAMES`).
     pub reset: bool,
     pub frame_number: u32,
     pub sampled: [[u32; 4]; 2],
@@ -131,6 +137,8 @@ impl LookFrame {
             far_shadow: [[0.; 4]; 4],
             far_info: [0; 4],
             cascade_maps: [0; 4],
+            terrain: [0.; 4],
+            local_shadows: [0; 4],
         }
     }
 }

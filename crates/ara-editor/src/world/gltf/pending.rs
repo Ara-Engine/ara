@@ -148,7 +148,8 @@ mod tests {
                 "levels/main.scene",
                 serde_json::json!({"$schema":"ara://schema/scene/1","id":"sc_pending01","records":{
                     "e_pending01":{"Transform":{},"MeshRenderer":{"model":"@models/model.gltf#as_pending1"}},
-                    "e_missing01":{"Transform":{},"MeshRenderer":{"model":"@missing.gltf#as_missing1"}}
+                    "e_missing01":{"Transform":{},"MeshRenderer":{"model":"@missing.gltf#as_missing1"}},
+                    "e_authored01":{"Transform":{},"MeshRenderer":{}}
                 }}),
             ),
             (
@@ -163,7 +164,7 @@ mod tests {
         let mut owner = ara_play_host::assets::Assets::new(&root, &root.join("absent-worker.exe"))
             .map_err(anyhow::Error::msg)?;
         let view = editor.view().map_err(|e| anyhow::anyhow!("{e}"))?;
-        assert_eq!(view.entities().len(), 2);
+        assert_eq!(view.entities().len(), 3);
         let mut content = FidelityContent::new(&root)?;
         let mut frame = content.frame(
             &view,
@@ -184,6 +185,47 @@ mod tests {
             Some(ara_runtime_render::PENDING_MODEL_COLOR)
         );
         assert_eq!(color(&frame, "e_missing01"), Some([1., 0., 1., 1.]));
+        let resolved = content.content(
+            &frame,
+            editor.host.store().workspace(),
+            editor.host.store().schema(),
+        )?;
+        assert_eq!(
+            resolved
+                .unpublished_models
+                .get("e_pending01")
+                .map(String::as_str),
+            Some("as_pending1")
+        );
+        assert_eq!(
+            resolved
+                .unpublished_models
+                .get("e_missing01")
+                .map(String::as_str),
+            Some("as_missing1")
+        );
+        assert_eq!(
+            resolved.unpublished_models.len(),
+            2,
+            "authored shapes have no model source"
+        );
+        let prepared = ara_runtime_render::fidelity::native::prepare(
+            &frame,
+            resolved,
+            ara_runtime_render::fidelity::native::NativeConfig {
+                resident_bytes: 1 << 20,
+                upload_bytes: 1 << 20,
+            },
+        )?;
+        for (draw, instance) in frame.draws.iter().zip(&prepared.scene.instances) {
+            assert_eq!(
+                prepared.scene.materials[instance.material].pbr.flags[1]
+                    & ara_render::scene::MODEL_BOUNDS
+                    != 0,
+                draw.address != "e_authored01",
+                "editor fallback metadata must reach the native corner-mark material"
+            );
+        }
         let revision = content.revision();
         let allocation = frame.draws.as_ptr();
         let start = std::time::Instant::now();

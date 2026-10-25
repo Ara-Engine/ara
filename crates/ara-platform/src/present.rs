@@ -173,15 +173,17 @@ impl Present {
         }
     }
     /// Acquire the next image; OUT_OF_DATE is returned for caller recreation.
-    fn acquire(&self) -> Result<u32> {
+    fn acquire(&self, gpu: &Gpu) -> Result<u32> {
         ara_gpu::cpu_scope!("Platform.acquire");
-        // SAFETY: The prior frame timeline has completed, so acquire is reusable.
-        unsafe {
-            Ok(self
-                .loader
-                .acquire_next_image(self.swapchain, u64::MAX, self.acquire, vk::Fence::null())?
-                .0)
-        }
+        gpu.measure_host_wait(|| {
+            // SAFETY: The prior frame completed, so acquire is reusable.
+            unsafe {
+                Ok(self
+                    .loader
+                    .acquire_next_image(self.swapchain, u64::MAX, self.acquire, vk::Fence::null())?
+                    .0)
+            }
+        })
     }
     /// Per-image binary semaphore, reused only after image reacquisition.
     pub fn rendered(&self, index: u32) -> vk::Semaphore {
@@ -271,17 +273,19 @@ impl Present {
     }
     /// Present the acquired image after its binary render semaphore.
     fn present(&self, gpu: &Gpu, index: u32) -> Result<()> {
-        // SAFETY: Submit signals the semaphore for this acquired image. Reusing
-        // per-image semaphores only after reacquisition also proves present consumed it.
-        unsafe {
-            self.loader.queue_present(
-                gpu.graphics,
-                &vk::PresentInfoKHR::default()
-                    .wait_semaphores(&[self.rendered(index)])
-                    .swapchains(&[self.swapchain])
-                    .image_indices(&[index]),
-            )?;
-        }
+        gpu.measure_host_wait(|| {
+            // SAFETY: Submit signals this acquired image's semaphore; reacquisition
+            // before reuse proves the previous present consumed it.
+            unsafe {
+                self.loader.queue_present(
+                    gpu.graphics,
+                    &vk::PresentInfoKHR::default()
+                        .wait_semaphores(&[self.rendered(index)])
+                        .swapchains(&[self.swapchain])
+                        .image_indices(&[index]),
+                )
+            }
+        })?;
         Ok(())
     }
     /// Destroy after device idle, before the SDL window or Vulkan instance.
@@ -352,7 +356,7 @@ impl Present {
             self.swapchain != vk::SwapchainKHR::null(),
             "Presentation has been destroyed"
         );
-        let index = self.acquire()?;
+        let index = self.acquire(gpu)?;
         let cmd = gpu.commands(false)?;
         // SAFETY: Fresh command buffer, never submitted.
         unsafe {
@@ -382,7 +386,7 @@ impl Present {
         // SAFETY: Waiting includes the blit/present queue operations before command reuse/free.
         unsafe {
             ara_gpu::cpu_scope!("Platform.present_queue_idle");
-            gpu.device.queue_wait_idle(gpu.graphics)?;
+            gpu.measure_host_wait(|| gpu.device.queue_wait_idle(gpu.graphics))?;
             gpu.device.free_command_buffers(gpu.graphics_pool, &[cmd]);
         }
         result
