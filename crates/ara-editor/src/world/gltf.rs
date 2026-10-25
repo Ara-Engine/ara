@@ -7,6 +7,8 @@ use std::collections::BTreeMap;
 use std::path::Path;
 mod patch;
 mod pending;
+mod prepare;
+pub(crate) use prepare::PreparedScene;
 
 /// Project-owned decoded generations. Publication changes invalidate by digest;
 /// document transforms and repeated prefab instances do not read model payloads.
@@ -213,7 +215,7 @@ fn mesh(
 
 /// Source generations and evaluated terrain retained across editor content revisions.
 pub(crate) struct FidelityContent {
-    reader: ara_play_host::PublishedAssets,
+    reader: std::sync::Arc<ara_play_host::PublishedAssets>,
     snapshot: Option<std::sync::Arc<ara_play_host::PublishedSnapshot>>,
     library: ara_runtime::animation::Library,
     materials: Option<(u64, u64)>,
@@ -226,8 +228,9 @@ pub(crate) struct FidelityContent {
 impl FidelityContent {
     pub(crate) fn new(root: &Path) -> anyhow::Result<Self> {
         Ok(Self {
-            reader: ara_play_host::PublishedAssets::for_project(root)
-                .map_err(anyhow::Error::msg)?,
+            reader: std::sync::Arc::new(
+                ara_play_host::PublishedAssets::for_project(root).map_err(anyhow::Error::msg)?,
+            ),
             snapshot: None,
             library: Default::default(),
             materials: None,
@@ -246,6 +249,16 @@ impl FidelityContent {
         workspace: &ara_doc::Workspace,
         schema: &ara_schema::SchemaDb,
         preview: Option<&super::gesture::Gesture>,
+        hidden: &std::collections::BTreeSet<String>,
+    ) -> anyhow::Result<ara_runtime::extract::RenderFrame> {
+        self.frame_with_poses(view, workspace, schema, preview.map(|p| &p.current), hidden)
+    }
+    fn frame_with_poses(
+        &mut self,
+        view: &super::DocumentView,
+        workspace: &ara_doc::Workspace,
+        schema: &ara_schema::SchemaDb,
+        poses: Option<&BTreeMap<String, glam::Mat4>>,
         hidden: &std::collections::BTreeSet<String>,
     ) -> anyhow::Result<ara_runtime::extract::RenderFrame> {
         use super::EditWorldView;
@@ -310,10 +323,7 @@ impl FidelityContent {
             }
             self.materials = Some(materials);
         }
-        let mut transforms = super::world_transforms(view.entities());
-        if let Some(preview) = preview {
-            preview.preview_world(view.entities(), &mut transforms);
-        }
+        let transforms = super::transforms_with(view.entities(), poses);
         for (address, row) in view.entities() {
             if row.record.contains_key("Terrain") {
                 address.hash(&mut terrain_hash);

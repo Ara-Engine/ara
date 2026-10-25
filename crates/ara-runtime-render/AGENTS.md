@@ -16,6 +16,9 @@ device and per-view upload state; no simulation, window or process code.
   Presenter. `prepare` adopts published native generations, `render` draws native
   terrain/foliage and particles through the shared look. `capture` settles residency,
   probe acquisition and temporal history. It never discovers, cooks or imports.
+- `RasterContent::new(frame, content)` prepares immutable CPU geometry/materials
+  and the content key on a worker. `RasterView::publish_content` adopts it on the
+  device thread, preserving last-good content if GPU publication fails.
 - `RasterView::prepare_unchanged` is for a retained immutable extraction (editor
   accumulation/camera frames); it polls GI without revisiting root draws. Edits use
   `prepare` and its exact dirty rows. Any failed preparation discards that candidate
