@@ -4,7 +4,7 @@
   "records": {
     "i_settings": {
       "importer": "ara.gltf",
-      "version": "5-gltf14-meshopt070-ispc050-tiled-f32text-arag1-khr-opacity"
+      "version": "6-gltf14-meshopt070-ispc050-tiled-f32text-arag1-khr-opacity-deep-lods-prefix"
     }
   }
 }
