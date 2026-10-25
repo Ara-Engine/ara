@@ -877,7 +877,7 @@
                             "semanticIndex": 2
                         },
                         {
-                            "name": "world",
+                            "name": "emissive",
                             "type": {
                                 "kind": "vector",
                                 "elementCount": 4,

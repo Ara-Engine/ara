@@ -253,7 +253,7 @@ impl Renderer {
                 (ids[ALBEDO], Access::Color),
                 (ids[NORMAL], Access::Color),
                 (ids[MATERIAL], Access::Color),
-                (ids[WORLD], Access::Color),
+                (ids[EMISSIVE], Access::Color),
                 (ids[ID], Access::Color),
                 (ids[DEPTH], Access::Depth),
             ]
@@ -270,7 +270,7 @@ impl Renderer {
             declare(id, Recipe::Look(pass));
         }
         let mut ssr_reads = ao_reads.clone();
-        ssr_reads.push((ids[WORLD], Access::ShaderRead));
+        ssr_reads.push((ids[MATERIAL], Access::ShaderRead));
         let history = self.targets.history.map(|h| ids[h]);
         for (id, pass) in self.look.ssr_passes(&mut graph, &look, history, &ssr_reads) {
             declare(id, Recipe::Look(pass));
@@ -288,7 +288,7 @@ impl Renderer {
         }
         let mut gather_reads = sky_shared.clone();
         gather_reads.extend([
-            (ids[WORLD], Access::ShaderRead),
+            (ids[DEPTH], Access::ShaderRead),
             (ids[NORMAL], Access::ShaderRead),
         ]);
         for (id, pass) in self.look.gather_passes(&mut graph, &look, &gather_reads) {
@@ -305,7 +305,8 @@ impl Renderer {
                 (ids[ALBEDO], Access::ShaderRead),
                 (ids[NORMAL], Access::ShaderRead),
                 (ids[MATERIAL], Access::ShaderRead),
-                (ids[WORLD], Access::ShaderRead),
+                (ids[EMISSIVE], Access::ShaderRead),
+                (ids[DEPTH], Access::ShaderRead),
                 (tile, Access::ShaderRead),
                 (ids[HDR], Access::Color),
             ]
@@ -323,7 +324,7 @@ impl Renderer {
                 (ids[ALBEDO], Access::Color),
                 (ids[NORMAL], Access::Color),
                 (ids[MATERIAL], Access::Color),
-                (ids[WORLD], Access::Color),
+                (ids[EMISSIVE], Access::Color),
                 (ids[DEPTH], Access::Depth),
                 (ids[ID], Access::Color),
                 (tile, Access::ShaderRead),
@@ -343,7 +344,6 @@ impl Renderer {
         if !deferred {
             let mut taa = vec![
                 (ids[HDR], Access::ShaderRead),
-                (ids[WORLD], Access::ShaderRead),
                 (ids[DEPTH], Access::ShaderRead),
                 (ids[output_history], Access::Storage),
                 // History is stored pre-exposed (look.slangh exposureState).
@@ -379,7 +379,7 @@ impl Renderer {
                     (ids[ALBEDO], Access::ShaderRead),
                     (ids[NORMAL], Access::ShaderRead),
                     (ids[MATERIAL], Access::ShaderRead),
-                    (ids[WORLD], Access::ShaderRead),
+                    (ids[EMISSIVE], Access::ShaderRead),
                     (ids[ID], Access::ShaderRead),
                     (ids[DEPTH], Access::ShaderRead),
                 ]
@@ -547,7 +547,7 @@ impl Renderer {
                     Recipe::GBuffer => {
                         recorder.push(Command::Pipeline(self.pipelines.gbuffer));
                         recorder.push(Command::BeginRendering {
-                            colors: [ALBEDO, NORMAL, MATERIAL, WORLD, ID]
+                            colors: [ALBEDO, NORMAL, MATERIAL, EMISSIVE, ID]
                                 .into_iter()
                                 .chain(self.native.as_ref().map(|_| MOTION))
                                 .map(|i| Attachment {
@@ -629,7 +629,7 @@ impl Renderer {
                                     clear: None,
                                 },
                                 Attachment {
-                                    image: self.targets.images[WORLD],
+                                    image: self.targets.images[EMISSIVE],
                                     clear: None,
                                 },
                             ]
@@ -783,7 +783,6 @@ impl Renderer {
         let resolve = slot.map(|slot| {
             let mut uses = vec![
                 (input, Access::ShaderRead),
-                (import(&mut graph, WORLD), Access::ShaderRead),
                 (import(&mut graph, DEPTH), Access::ShaderRead),
                 (import(&mut graph, slot), Access::Storage),
             ];

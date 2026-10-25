@@ -1,22 +1,22 @@
 {
   "binding_layout_hash": "35cd2a62b1ba741ce6823b3c8753d7b5aa97b54c5f0a837b56e542518013fd7e",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "be775fc658dc5902e42eb60180b791cba653db55a4d67a2b6d27d3757f697850",
+  "key": "c6500b2d1b049070f195ac85c8958435d959f7d0fe9186ca78c7ec6e2a85fc6e",
   "stages": [
     {
-      "dxil": "be775fc658dc5902e42eb60180b791cba653db55a4d67a2b6d27d3757f697850/nativeGeometryFragment.dxil",
-      "dxil_hash": "ec9b7763af30540fae8269e89e3c15b9fa66262c590fa12f68989dbaa7cc7ff6",
+      "dxil": "c6500b2d1b049070f195ac85c8958435d959f7d0fe9186ca78c7ec6e2a85fc6e/nativeGeometryFragment.dxil",
+      "dxil_hash": "09341cc824156e5ca8614a560d928a14d01b3acd2e23f6e56abd3e8d25727e6e",
       "source_entry": "nativeGeometryFragment",
-      "spirv": "be775fc658dc5902e42eb60180b791cba653db55a4d67a2b6d27d3757f697850/nativeGeometryFragment.spv",
+      "spirv": "c6500b2d1b049070f195ac85c8958435d959f7d0fe9186ca78c7ec6e2a85fc6e/nativeGeometryFragment.spv",
       "spirv_entry": "main",
-      "spirv_hash": "24326e9d0895fb9b95a656b314471d1477ffb39b1b6bfa07b62d0f0440220106",
+      "spirv_hash": "a805306d7696d170fd221294fcd1e97391b74f34988011f002ff615df2caba38",
       "stage": "fragment"
     },
     {
-      "dxil": "be775fc658dc5902e42eb60180b791cba653db55a4d67a2b6d27d3757f697850/nativeGeometryVertex.dxil",
+      "dxil": "c6500b2d1b049070f195ac85c8958435d959f7d0fe9186ca78c7ec6e2a85fc6e/nativeGeometryVertex.dxil",
       "dxil_hash": "2aa683842aa85a3c215419ff5f39d806804721a726e6fb8f6b97b558ef89d67a",
       "source_entry": "nativeGeometryVertex",
-      "spirv": "be775fc658dc5902e42eb60180b791cba653db55a4d67a2b6d27d3757f697850/nativeGeometryVertex.spv",
+      "spirv": "c6500b2d1b049070f195ac85c8958435d959f7d0fe9186ca78c7ec6e2a85fc6e/nativeGeometryVertex.spv",
       "spirv_entry": "main",
       "spirv_hash": "5950004334f3ad6486d6a474c186b97e0111ef8e9186464c5699cb3669e3f176",
       "stage": "vertex"
@@ -25,10 +25,10 @@
   "state": {
     "blend": false,
     "color_formats": [
-      109,
-      109,
-      109,
-      109,
+      43,
+      77,
+      37,
+      122,
       100,
       83
     ],

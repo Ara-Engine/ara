@@ -607,7 +607,7 @@
     },
     "entryPoints": [
         {
-            "name": "nativeGeometryFragment",
+            "name": "nativeForwardFragment",
             "stage": "fragment",
             "scope": {
                 "kind": "none",
@@ -1018,13 +1018,13 @@
             ],
             "result": {
                 "stage": "fragment",
-                "binding": {"kind": "varyingOutput", "index": 0, "count": 6},
+                "binding": {"kind": "varyingOutput", "index": 0, "count": 7},
                 "type": {
                     "kind": "struct",
-                    "name": "GBuffer",
+                    "name": "Forward",
                     "fields": [
                         {
-                            "name": "albedo",
+                            "name": "color",
                             "type": {
                                 "kind": "vector",
                                 "elementCount": 4,
@@ -1041,14 +1041,10 @@
                             "semanticName": "SV_TARGET"
                         },
                         {
-                            "name": "normal",
+                            "name": "id",
                             "type": {
-                                "kind": "vector",
-                                "elementCount": 4,
-                                "elementType": {
-                                    "kind": "scalar",
-                                    "scalarType": "float32"
-                                },
+                                "kind": "scalar",
+                                "scalarType": "float32",
                                 "sizes": [
                                     {"kind": "varyingOutput", "value": 1}
                                 ]
@@ -1059,7 +1055,7 @@
                             "semanticIndex": 1
                         },
                         {
-                            "name": "material",
+                            "name": "albedo",
                             "type": {
                                 "kind": "vector",
                                 "elementCount": 4,
@@ -1077,7 +1073,7 @@
                             "semanticIndex": 2
                         },
                         {
-                            "name": "world",
+                            "name": "normal",
                             "type": {
                                 "kind": "vector",
                                 "elementCount": 4,
@@ -1095,10 +1091,14 @@
                             "semanticIndex": 3
                         },
                         {
-                            "name": "id",
+                            "name": "material",
                             "type": {
-                                "kind": "scalar",
-                                "scalarType": "float32",
+                                "kind": "vector",
+                                "elementCount": 4,
+                                "elementType": {
+                                    "kind": "scalar",
+                                    "scalarType": "float32"
+                                },
                                 "sizes": [
                                     {"kind": "varyingOutput", "value": 1}
                                 ]
@@ -1109,10 +1109,10 @@
                             "semanticIndex": 4
                         },
                         {
-                            "name": "velocity",
+                            "name": "emissive",
                             "type": {
                                 "kind": "vector",
-                                "elementCount": 2,
+                                "elementCount": 4,
                                 "elementType": {
                                     "kind": "scalar",
                                     "scalarType": "float32"
@@ -1125,10 +1125,28 @@
                             "binding": {"kind": "varyingOutput", "index": 5},
                             "semanticName": "SV_TARGET",
                             "semanticIndex": 5
+                        },
+                        {
+                            "name": "velocity",
+                            "type": {
+                                "kind": "vector",
+                                "elementCount": 4,
+                                "elementType": {
+                                    "kind": "scalar",
+                                    "scalarType": "float32"
+                                },
+                                "sizes": [
+                                    {"kind": "varyingOutput", "value": 1}
+                                ]
+                            },
+                            "stage": "fragment",
+                            "binding": {"kind": "varyingOutput", "index": 6},
+                            "semanticName": "SV_TARGET",
+                            "semanticIndex": 6
                         }
                     ],
                     "sizes": [
-                        {"kind": "varyingOutput", "value": 6}
+                        {"kind": "varyingOutput", "value": 7}
                     ]
                 }
             },

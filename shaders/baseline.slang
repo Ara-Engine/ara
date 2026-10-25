@@ -33,10 +33,10 @@ Surface surface(Varying v) {
     if((m.flags.y&(1u<<26))!=0)emission=materialLinear(emission);
     s.emissive=emission*m.emissiveRoughness.rgb;return s;
 }
-struct GBuffer {float4 albedo:SV_Target0;float4 normal:SV_Target1;float4 material:SV_Target2;float4 world:SV_Target3;float id:SV_Target4;};
+struct GBuffer {float4 albedo:SV_Target0;float4 normal:SV_Target1;float4 material:SV_Target2;float4 emissive:SV_Target3;float id:SV_Target4;};
 [shader("fragment")]
 GBuffer geometryFragment(Varying v) {
-    Surface s=surface(v);GBuffer g;g.albedo=float4(s.albedo,s.ao);g.normal=float4(s.normal,s.roughness);g.material=float4(s.emissive,s.metal);g.world=float4(v.world,1);g.id=float(root.entity);return g;
+    Surface s=surface(v);GBuffer g;g.albedo=float4(s.albedo,s.ao);g.normal=gbufferEncodeNormal(s.normal,1);g.material=gbufferEncodeMaterial(s.roughness,s.metal,1);g.emissive=gbufferEncodeEmissive(s.emissive,1);g.id=float(root.entity);return g;
 }
 [shader("fragment")]
 void shadowFragment(Varying v) {Surface s=surface(v);}
@@ -50,9 +50,9 @@ float4 lightingFragment(FullscreenVarying v):SV_Target0 {
     Surface s;float4 a=gbufferAlbedo(f,p);float2 m=gbufferMaterial(f,p);s.albedo=a.rgb;s.alpha=1;s.transmission=0;s.ao=min(a.a,screenOcclusion(f,l,p,length(world-f.camera.xyz)));s.normal=gbufferNormal(f,p);s.roughness=m.x;s.metal=m.y;s.emissive=gbufferEmissive(f,p);
     return float4(applyFog(f,l,shade(f,l,s,world,p,true),world,uv),1);
 }
-struct ForwardOut {float4 color:SV_Target0;float id:SV_Target1;float4 albedo:SV_Target2;float4 normal:SV_Target3;float4 material:SV_Target4;float4 world:SV_Target5;};
+struct ForwardOut {float4 color:SV_Target0;float id:SV_Target1;float4 albedo:SV_Target2;float4 normal:SV_Target3;float4 material:SV_Target4;float4 emissive:SV_Target5;};
 [shader("fragment")]
-ForwardOut forwardFragment(Varying v){Frame f=frame();Surface s=surface(v);ForwardOut o;Look l=look(f);o.color=forwardColour(f,l,s,v.world,int2(v.clip.xy));o.id=float(root.entity);o.albedo=float4(s.albedo,s.alpha);o.normal=float4(s.normal,s.roughness);o.material=float4(s.emissive,s.metal);o.world=float4(v.world,1);return o;}
+ForwardOut forwardFragment(Varying v){Frame f=frame();Surface s=surface(v);ForwardOut o;Look l=look(f);o.color=forwardColour(f,l,s,v.world,int2(v.clip.xy));o.id=float(root.entity);o.albedo=float4(s.albedo,s.alpha);o.normal=gbufferEncodeNormal(s.normal,s.alpha);o.material=gbufferEncodeMaterial(s.roughness,s.metal,s.alpha);o.emissive=gbufferEncodeEmissive(s.emissive,s.alpha);return o;}
 float radicalInverse(uint bits){bits=(bits<<16)|(bits>>16);bits=((bits&0x55555555)<<1)|((bits&0xAAAAAAAA)>>1);bits=((bits&0x33333333)<<2)|((bits&0xCCCCCCCC)>>2);bits=((bits&0x0F0F0F0F)<<4)|((bits&0xF0F0F0F0)>>4);bits=((bits&0x00FF00FF)<<8)|((bits&0xFF00FF00)>>8);return float(bits)*2.3283064365386963e-10;}
 float3 basisSample(float3 n,float3 local){float3 t=normalize(cross(abs(n.y)<0.99?float3(0,1,0):float3(1,0,0),n));return t*local.x+cross(n,t)*local.y+n*local.z;}
 [shader("compute")]
@@ -132,7 +132,7 @@ float3 displayCurve(Frame f,float3 x){uint curve=uint(f.forward.w);return curve=
 [numthreads(8,8,1)]
 void tonemapMain(uint3 t:SV_DispatchThreadID){Frame f=frame();if(any(t.xy>=f.extent.xy))return;int2 p=int2(t.xy);float3 color=pixel(root.materials,p).rgb;
     if(f.temporal.z==1)color=gbufferAlbedo(f,p).rgb;
-    else if(f.temporal.z==2)color=gbufferNormal(f,p)*0.5+0.5;
+    else if(f.temporal.z==2)color=gbufferDepth(f,p)>0?gbufferNormal(f,p)*0.5+0.5:0.5;
     else if(f.temporal.z==3)color=float3(pow(pixel(f.extra.x,p).x,0.25));
     else if(f.temporal.z==4)color=float3(gbufferMaterial(f,p),0);
     else if(f.temporal.z==5){uint id=uint(pixel(f.extra.y,p).x);color=id==0?float3(0):frac(float3(id)*float3(0.6180339,0.381966,0.7548776));}

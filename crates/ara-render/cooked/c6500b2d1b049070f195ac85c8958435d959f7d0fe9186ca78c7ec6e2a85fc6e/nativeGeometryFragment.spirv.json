@@ -3,7 +3,7 @@
     "parameters": [
         {
             "name": "root",
-            "binding": {"kind": "constantBuffer", "index": 0},
+            "binding": {"kind": "pushConstantBuffer", "index": 0},
             "type": {
                 "kind": "constantBuffer",
                 "elementType": {
@@ -100,11 +100,11 @@
                         }
                     ],
                     "sizes": [
-                        {"kind": "uniform", "value": 32, "alignment": 16}
+                        {"kind": "uniform", "value": 32, "alignment": 4}
                     ]
                 },
                 "containerVarLayout": {
-                    "binding": {"kind": "constantBuffer", "index": 0}
+                    "binding": {"kind": "pushConstantBuffer", "index": 0}
                 },
                 "elementVarLayout": {
                     "type": {
@@ -201,19 +201,19 @@
                             }
                         ],
                         "sizes": [
-                            {"kind": "uniform", "value": 32, "alignment": 16}
+                            {"kind": "uniform", "value": 32, "alignment": 4}
                         ]
                     },
                     "binding": {"kind": "uniform", "offset": 0, "size": 32, "elementStride": 0}
                 },
                 "sizes": [
-                    {"kind": "constantBuffer", "value": 1}
+                    {"kind": "pushConstantBuffer", "value": 1}
                 ]
             }
         },
         {
             "name": "textures",
-            "binding": {"kind": "shaderResource", "space": 1, "index": 0, "count": "unbounded"},
+            "binding": {"kind": "descriptorTableSlot", "index": 5},
             "type": {
                 "kind": "array",
                 "elementCount": 0,
@@ -229,17 +229,17 @@
                         }
                     },
                     "sizes": [
-                        {"kind": "shaderResource", "value": 1}
+                        {"kind": "descriptorTableSlot", "value": 1}
                     ]
                 },
                 "sizes": [
-                    {"kind": "shaderResource", "value": "unbounded"}
+                    {"kind": "descriptorTableSlot", "value": 1}
                 ]
             }
         },
         {
             "name": "buffers",
-            "binding": {"kind": "unorderedAccess", "space": 2, "index": 0, "count": 64},
+            "binding": {"kind": "descriptorTableSlot", "index": 1},
             "type": {
                 "kind": "array",
                 "elementCount": 64,
@@ -248,34 +248,34 @@
                     "baseShape": "byteAddressBuffer",
                     "access": "readWrite",
                     "sizes": [
-                        {"kind": "unorderedAccess", "value": 1}
+                        {"kind": "descriptorTableSlot", "value": 1}
                     ]
                 },
                 "sizes": [
-                    {"kind": "unorderedAccess", "value": 64}
+                    {"kind": "descriptorTableSlot", "value": 1}
                 ]
             }
         },
         {
             "name": "samplers",
-            "binding": {"kind": "samplerState", "index": 0, "count": 3},
+            "binding": {"kind": "descriptorTableSlot", "index": 2},
             "type": {
                 "kind": "array",
                 "elementCount": 3,
                 "elementType": {
                     "kind": "samplerState",
                     "sizes": [
-                        {"kind": "samplerState", "value": 1}
+                        {"kind": "descriptorTableSlot", "value": 1}
                     ]
                 },
                 "sizes": [
-                    {"kind": "samplerState", "value": 3}
+                    {"kind": "descriptorTableSlot", "value": 1}
                 ]
             }
         },
         {
             "name": "images",
-            "binding": {"kind": "unorderedAccess", "space": 3, "index": 0, "count": 64},
+            "binding": {"kind": "descriptorTableSlot", "index": 3},
             "type": {
                 "kind": "array",
                 "elementCount": 64,
@@ -292,11 +292,11 @@
                         }
                     },
                     "sizes": [
-                        {"kind": "unorderedAccess", "value": 1}
+                        {"kind": "descriptorTableSlot", "value": 1}
                     ]
                 },
                 "sizes": [
-                    {"kind": "unorderedAccess", "value": 64}
+                    {"kind": "descriptorTableSlot", "value": 1}
                 ]
             }
         }
@@ -306,7 +306,7 @@
         "parameters": [
             {
                 "name": "root",
-                "binding": {"kind": "constantBuffer", "index": 0},
+                "binding": {"kind": "pushConstantBuffer", "index": 0},
                 "type": {
                     "kind": "constantBuffer",
                     "elementType": {
@@ -403,11 +403,11 @@
                             }
                         ],
                         "sizes": [
-                            {"kind": "uniform", "value": 32, "alignment": 16}
+                            {"kind": "uniform", "value": 32, "alignment": 4}
                         ]
                     },
                     "containerVarLayout": {
-                        "binding": {"kind": "constantBuffer", "index": 0}
+                        "binding": {"kind": "pushConstantBuffer", "index": 0}
                     },
                     "elementVarLayout": {
                         "type": {
@@ -504,19 +504,19 @@
                                 }
                             ],
                             "sizes": [
-                                {"kind": "uniform", "value": 32, "alignment": 16}
+                                {"kind": "uniform", "value": 32, "alignment": 4}
                             ]
                         },
                         "binding": {"kind": "uniform", "offset": 0, "size": 32, "elementStride": 0}
                     },
                     "sizes": [
-                        {"kind": "constantBuffer", "value": 1}
+                        {"kind": "pushConstantBuffer", "value": 1}
                     ]
                 }
             },
             {
                 "name": "textures",
-                "binding": {"kind": "shaderResource", "space": 1, "index": 0, "count": "unbounded"},
+                "binding": {"kind": "descriptorTableSlot", "index": 5},
                 "type": {
                     "kind": "array",
                     "elementCount": 0,
@@ -532,17 +532,17 @@
                             }
                         },
                         "sizes": [
-                            {"kind": "shaderResource", "value": 1}
+                            {"kind": "descriptorTableSlot", "value": 1}
                         ]
                     },
                     "sizes": [
-                        {"kind": "shaderResource", "value": "unbounded"}
+                        {"kind": "descriptorTableSlot", "value": 1}
                     ]
                 }
             },
             {
                 "name": "buffers",
-                "binding": {"kind": "unorderedAccess", "space": 2, "index": 0, "count": 64},
+                "binding": {"kind": "descriptorTableSlot", "index": 1},
                 "type": {
                     "kind": "array",
                     "elementCount": 64,
@@ -551,34 +551,34 @@
                         "baseShape": "byteAddressBuffer",
                         "access": "readWrite",
                         "sizes": [
-                            {"kind": "unorderedAccess", "value": 1}
+                            {"kind": "descriptorTableSlot", "value": 1}
                         ]
                     },
                     "sizes": [
-                        {"kind": "unorderedAccess", "value": 64}
+                        {"kind": "descriptorTableSlot", "value": 1}
                     ]
                 }
             },
             {
                 "name": "samplers",
-                "binding": {"kind": "samplerState", "index": 0, "count": 3},
+                "binding": {"kind": "descriptorTableSlot", "index": 2},
                 "type": {
                     "kind": "array",
                     "elementCount": 3,
                     "elementType": {
                         "kind": "samplerState",
                         "sizes": [
-                            {"kind": "samplerState", "value": 1}
+                            {"kind": "descriptorTableSlot", "value": 1}
                         ]
                     },
                     "sizes": [
-                        {"kind": "samplerState", "value": 3}
+                        {"kind": "descriptorTableSlot", "value": 1}
                     ]
                 }
             },
             {
                 "name": "images",
-                "binding": {"kind": "unorderedAccess", "space": 3, "index": 0, "count": 64},
+                "binding": {"kind": "descriptorTableSlot", "index": 3},
                 "type": {
                     "kind": "array",
                     "elementCount": 64,
@@ -595,11 +595,11 @@
                             }
                         },
                         "sizes": [
-                            {"kind": "unorderedAccess", "value": 1}
+                            {"kind": "descriptorTableSlot", "value": 1}
                         ]
                     },
                     "sizes": [
-                        {"kind": "unorderedAccess", "value": 64}
+                        {"kind": "descriptorTableSlot", "value": 1}
                     ]
                 }
             }
@@ -607,7 +607,7 @@
     },
     "entryPoints": [
         {
-            "name": "nativeForwardFragment",
+            "name": "nativeGeometryFragment",
             "stage": "fragment",
             "scope": {
                 "kind": "none",
@@ -1018,13 +1018,13 @@
             ],
             "result": {
                 "stage": "fragment",
-                "binding": {"kind": "varyingOutput", "index": 0, "count": 7},
+                "binding": {"kind": "varyingOutput", "index": 0, "count": 6},
                 "type": {
                     "kind": "struct",
-                    "name": "Forward",
+                    "name": "GBuffer",
                     "fields": [
                         {
-                            "name": "color",
+                            "name": "albedo",
                             "type": {
                                 "kind": "vector",
                                 "elementCount": 4,
@@ -1041,10 +1041,14 @@
                             "semanticName": "SV_TARGET"
                         },
                         {
-                            "name": "id",
+                            "name": "normal",
                             "type": {
-                                "kind": "scalar",
-                                "scalarType": "float32",
+                                "kind": "vector",
+                                "elementCount": 4,
+                                "elementType": {
+                                    "kind": "scalar",
+                                    "scalarType": "float32"
+                                },
                                 "sizes": [
                                     {"kind": "varyingOutput", "value": 1}
                                 ]
@@ -1055,7 +1059,7 @@
                             "semanticIndex": 1
                         },
                         {
-                            "name": "albedo",
+                            "name": "material",
                             "type": {
                                 "kind": "vector",
                                 "elementCount": 4,
@@ -1073,7 +1077,7 @@
                             "semanticIndex": 2
                         },
                         {
-                            "name": "normal",
+                            "name": "emissive",
                             "type": {
                                 "kind": "vector",
                                 "elementCount": 4,
@@ -1091,14 +1095,10 @@
                             "semanticIndex": 3
                         },
                         {
-                            "name": "material",
+                            "name": "id",
                             "type": {
-                                "kind": "vector",
-                                "elementCount": 4,
-                                "elementType": {
-                                    "kind": "scalar",
-                                    "scalarType": "float32"
-                                },
+                                "kind": "scalar",
+                                "scalarType": "float32",
                                 "sizes": [
                                     {"kind": "varyingOutput", "value": 1}
                                 ]
@@ -1109,10 +1109,10 @@
                             "semanticIndex": 4
                         },
                         {
-                            "name": "world",
+                            "name": "velocity",
                             "type": {
                                 "kind": "vector",
-                                "elementCount": 4,
+                                "elementCount": 2,
                                 "elementType": {
                                     "kind": "scalar",
                                     "scalarType": "float32"
@@ -1125,54 +1125,36 @@
                             "binding": {"kind": "varyingOutput", "index": 5},
                             "semanticName": "SV_TARGET",
                             "semanticIndex": 5
-                        },
-                        {
-                            "name": "velocity",
-                            "type": {
-                                "kind": "vector",
-                                "elementCount": 4,
-                                "elementType": {
-                                    "kind": "scalar",
-                                    "scalarType": "float32"
-                                },
-                                "sizes": [
-                                    {"kind": "varyingOutput", "value": 1}
-                                ]
-                            },
-                            "stage": "fragment",
-                            "binding": {"kind": "varyingOutput", "index": 6},
-                            "semanticName": "SV_TARGET",
-                            "semanticIndex": 6
                         }
                     ],
                     "sizes": [
-                        {"kind": "varyingOutput", "value": 7}
+                        {"kind": "varyingOutput", "value": 6}
                     ]
                 }
             },
             "bindings": [
                 {
                     "name": "root",
-                    "binding": {"kind": "constantBuffer", "index": 0, "used": 1}
+                    "binding": {"kind": "pushConstantBuffer", "index": 0}
                 },
                 {
                     "name": "textures",
-                    "binding": {"kind": "shaderResource", "space": 1, "index": 0, "count": "unbounded", "used": 1}
+                    "binding": {"kind": "descriptorTableSlot", "index": 5, "used": 1}
                 },
                 {
                     "name": "buffers",
-                    "binding": {"kind": "unorderedAccess", "space": 2, "index": 0, "count": 64, "used": 1}
+                    "binding": {"kind": "descriptorTableSlot", "index": 1, "used": 1}
                 },
                 {
                     "name": "samplers",
-                    "binding": {"kind": "samplerState", "index": 0, "count": 3, "used": 1}
+                    "binding": {"kind": "descriptorTableSlot", "index": 2, "used": 1}
                 },
                 {
                     "name": "images",
-                    "binding": {"kind": "unorderedAccess", "space": 3, "index": 0, "count": 64, "used": 0}
+                    "binding": {"kind": "descriptorTableSlot", "index": 3, "used": 0}
                 }
             ]
         }
     ],
-    "bindlessSpaceIndex": 4
+    "bindlessSpaceIndex": 1
 }
