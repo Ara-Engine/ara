@@ -139,6 +139,46 @@ fn singular_fits_preserve_later_pbit_requantization() {
 }
 
 #[test]
+fn exact_mode6_coarse_fit_is_the_same_full_fit_and_final_winner() {
+    let mut rng = 0x6a09e667_u32;
+    for case in 0..128_u32 {
+        let mut endpoints = [[0_i32; 4]; 2];
+        for (e, endpoint) in endpoints.iter_mut().enumerate() {
+            let parity = (case >> e) & 1;
+            for channel in endpoint {
+                rng ^= rng << 13;
+                rng ^= rng >> 17;
+                rng ^= rng << 5;
+                *channel = ((rng & 254) | parity) as i32;
+            }
+        }
+        // Ensure a nonuniform palette with both endpoint orders at the anchor.
+        endpoints[1][0] = (endpoints[0][0] ^ 128) & 254 | ((case >> 1) & 1) as i32;
+        let pixels = std::array::from_fn(|i| {
+            let index = if case & 1 == 0 { i } else { 15 - i };
+            let weight = WEIGHTS[2][index];
+            let mut pixel = 0;
+            for (c, (&low, &high)) in endpoints[0].iter().zip(&endpoints[1]).enumerate() {
+                let value = ((64 - weight) * low + weight * high + 32) >> 6;
+                pixel |= (value as u32) << (c * 8);
+            }
+            pixel
+        });
+        assert_ne!(pixels[0], pixels[15]);
+        let coarse = candidate(&pixels, 6, 0, 0, 0, 3);
+        assert_eq!(
+            coarse.0, 0,
+            "case {case} must be a lossless nonuniform mode-6 block"
+        );
+        assert_eq!(error(&pixels, coarse.1), 0);
+        for preset in [1, 2] {
+            assert_eq!(candidate(&pixels, 6, 0, 0, 0, preset), coarse);
+            assert_eq!(encode_block(&pixels, preset), coarse.1);
+        }
+    }
+}
+
+#[test]
 fn shader_quantization_table_matches_exhaustive_endpoint_search() {
     let words: Vec<u32> = include_str!("../shaders/bc7_quant.slangh")
         .split(|c: char| c.is_ascii_whitespace() || matches!(c, ',' | '{' | '}' | ';'))

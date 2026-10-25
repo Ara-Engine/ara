@@ -369,3 +369,4 @@ void encodeBc7(uint3 group : SV_GroupID, uint lane : SV_GroupIndex) {
 }
 
 #include "bc7_split.slangh"
+#include "bc7_dot.slangh"

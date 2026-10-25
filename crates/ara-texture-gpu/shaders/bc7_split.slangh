@@ -1,7 +1,7 @@
 // Additive split protocol v1; encodeBc7 keeps its original ABI and default path.
 // input/output/blockCount/preset retain their original meaning (presets 1 and 2).
 // a: scratch storage-buffer heap index; b: aligned scratch base byte offset;
-// c: 0=coarse, 1=refine for mode entries; d: must equal 1 (protocol version).
+// c: 0=coarse, 1=refine for mode entries; d: 1 or 2 (protocol version).
 // Each block owns 1552 bytes: 285 coarse u32 scores at +0, 17 finalist u32 IDs
 // at +1140, 17 {u32 error; uint4 BC7} records (20 bytes each) at +1208; 4 pad.
 // b must be a multiple of 4. All offset products/base/end must fit u32 and the
@@ -12,6 +12,14 @@
 // ceil(blockCount*(preset==1 ? 9 : 17)/64). Select/reduce: blockCount groups.
 // Mode candidate counts [0..7]: HQ [16,64,64,64,8,4,1,64], Balanced
 // [8,16,16,16,8,4,1,16]. Fast stays on encodeBc7. No wave operations are used.
+// Optional v2 uses the identical layout/dispatch sizes, but MUST dispatch coarse
+// mode 6 first and insert a storage barrier before the other seven coarse modes.
+// On an exact candidate-0 coarse fit, other modes write sentinel scores/results;
+// selection emits [0..7], optionally another [0..7] for HQ, then forced ID 0.
+// Mode 6 still performs its full refinement. Its coarse first seed/two rounds
+// prefix the full fit, which returns immediately at the same first zero trial.
+// Thus its bytes stay identical and (SSE=0,id=0) wins every possible final tie.
+// Nonzero candidate-0 blocks follow the complete v1 search and fitting policy.
 static const uint BC7_SPLIT_STRIDE = 1552;
 // The default encoder does not read a..d or depend on this scratch protocol.
 uint splitBase(uint block) { return root.b+block*BC7_SPLIT_STRIDE; }
@@ -222,7 +230,7 @@ uint splitEncode<let mode:uint, let subsets:uint, let partitionBits:uint, let co
 }
 
 void splitMode<let mode:uint, let subsets:uint, let partitionBits:uint, let colorBits:uint, let alphaBits:uint, let indexBits:uint, let pbits:uint>(uint linear) {
-    if (root.d != 1 || root.preset == 0 || root.c > 1) return;
+    if ((root.d != 1 && root.d != 2) || root.preset == 0 || root.c > 1) return;
     uint preset = min(root.preset,2u);
     uint count = mode == 6 ? 1 : (mode == 4 ? 8 : (mode == 5 ? 4 : (mode == 0 ? (preset == 1 ? 8 : 16) : (preset == 1 ? 16 : 64))));
     uint base = mode == 6 ? 0 : (mode == 4 ? 1 : (mode == 5 ? 9 : (mode == 0 ? 13 : ((preset == 1 ? 21 : 29)+(mode == 7 ? 3 : mode-1)*(preset == 1 ? 16 : 64)))));
@@ -232,6 +240,14 @@ void splitMode<let mode:uint, let subsets:uint, let partitionBits:uint, let colo
     uint record = splitBase(block);
     uint id = root.c == 0 ? base+slot : buffers[NonUniformResourceIndex(root.a)].Load(record+1140+slot*4);
     if (id < base || id >= base+count) return;
+    if (mode != 6 && root.d == 2 && buffers[NonUniformResourceIndex(root.a)].Load(record) == 0) {
+        if (root.c == 0) buffers[NonUniformResourceIndex(root.a)].Store(record+id*4,0xffffffff);
+        else {
+            buffers[NonUniformResourceIndex(root.a)].Store(record+1208+slot*20,0xffffffff);
+            buffers[NonUniformResourceIndex(root.a)].Store4(record+1212+slot*20,uint4(0));
+        }
+        return;
+    }
     uint candidate = id-base;
     uint partition = mode == 4 || mode == 5 || mode == 6 ? 0 : candidate;
     uint rotation = mode == 4 ? candidate/2 : (mode == 5 ? candidate : 0);
@@ -269,9 +285,18 @@ void encodeBc7Mode7(uint3 id : SV_DispatchThreadID) { splitMode<7,2,6,5,5,2,2>(i
 
 [shader("compute")][numthreads(64,1,1)]
 void selectBc7Finalists(uint3 group : SV_GroupID,uint lane : SV_GroupIndex) {
-    if (root.d != 1 || root.preset == 0 || group.x >= root.blockCount) return;
+    if ((root.d != 1 && root.d != 2) || root.preset == 0 || group.x >= root.blockCount) return;
     uint preset = min(root.preset,2u), count = preset == 1 ? 85 : 285;
     uint record = splitBase(group.x);
+    // Uniform per block: the prerequisite coarse-mode-6 dispatch is complete.
+    if (root.d == 2 && buffers[NonUniformResourceIndex(root.a)].Load(record) == 0) {
+        if (lane < 8) {
+            buffers[NonUniformResourceIndex(root.a)].Store(record+1140+lane*4,lane);
+            if (preset == 2) buffers[NonUniformResourceIndex(root.a)].Store(record+1172+lane*4,lane);
+        }
+        if (lane == 0) buffers[NonUniformResourceIndex(root.a)].Store(record+1140+(preset == 1 ? 8 : 16)*4,0);
+        return;
+    }
     for (uint id = lane; id < count; id += 64) coarseErrors[id] = buffers[NonUniformResourceIndex(root.a)].Load(record+id*4);
     GroupMemoryBarrierWithGroupSync();
     for (uint id = lane; id < count; id += 64) {
@@ -290,7 +315,7 @@ void selectBc7Finalists(uint3 group : SV_GroupID,uint lane : SV_GroupIndex) {
 }
 [shader("compute")][numthreads(64,1,1)]
 void reduceBc7Finalists(uint3 group : SV_GroupID,uint lane : SV_GroupIndex) {
-    if (root.d != 1 || root.preset == 0 || group.x >= root.blockCount) return;
+    if ((root.d != 1 && root.d != 2) || root.preset == 0 || group.x >= root.blockCount) return;
     uint count = min(root.preset,2u) == 1 ? 9 : 17;
     uint record = splitBase(group.x);
     errors[lane] = 0xffffffff; candidates[lane] = 0xffffffff; blocks[lane] = uint4(0);
