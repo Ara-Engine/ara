@@ -862,6 +862,28 @@ fn game_view_waits_for_play_and_play_starts_embedded_in_it() {
     assert_eq!(params["window"], true);
 }
 
+/// Moving the Scene camera changes no panel: the shell does not rebuild for it, also
+/// once the window has detected its GPU preset (a field navigation updates omit).
+#[test]
+fn camera_moves_do_not_rebuild_the_panels() {
+    let project = Project::new();
+    let mut editor = Editor::open(&project.0).unwrap();
+    editor.state.detected_quality = Some(ara_render_fidelity::presets::QualityPreset::High);
+    let mut shell = Shell::new(&mut editor, [1440., 900.]).unwrap();
+    shell.rebuild(&mut editor).unwrap();
+    editor
+        .action("editor.camera", json!({"yaw": 0.7, "pitch": 0.3}))
+        .unwrap();
+    editor.tick();
+    assert!(!shell.rebuild_if_stale(&mut editor).unwrap());
+    // A panel change still rebuilds.
+    editor
+        .action("editor.view", json!({"play": "playing"}))
+        .unwrap();
+    editor.tick();
+    assert!(shell.rebuild_if_stale(&mut editor).unwrap());
+}
+
 /// Play's accent line draws over the menubar's edge: starting Play never moves the UI.
 #[test]
 fn starting_play_marks_the_title_bar_without_moving_the_ui() {
