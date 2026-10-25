@@ -290,7 +290,6 @@ impl Renderer {
             &self.gpu,
             native.visible,
             &native.groups,
-            &native.rows,
             &native.bounds,
             6,
             view,
@@ -360,7 +359,6 @@ impl Renderer {
             &self.gpu,
             native.visible,
             &native.groups,
-            &native.rows,
             &native.bounds,
             pass,
             view,
@@ -540,7 +538,7 @@ impl Native {
             };
         let rows = scene.instances.iter().map(|i| row(i, i.world)).collect();
         let groups = Groups::new(scene, &pool)?;
-        let mut culling = Culling::new(&groups, scene.instances.len());
+        let mut culling = Culling::new(&groups, scene);
         culling.reserve(&groups, passes);
         let result = Self {
             material_index,
