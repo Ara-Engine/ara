@@ -2,12 +2,10 @@
 use super::*;
 impl Shell {
     pub(super) fn annotation_inspector(&mut self, editor: &Editor, out: &mut String) -> bool {
-        let Some(canvas) = &self.canvas else {
+        let Some(shown) = self.graphs.get(self.graph_page) else {
             return false;
         };
-        let Some(doc) = &self.canvas_doc else {
-            return false;
-        };
+        let (canvas, doc) = (&shown.canvas, &shown.doc);
         let selected = editor.state.canvas_selection.iter().find_map(|id| {
             canvas
                 .graph()

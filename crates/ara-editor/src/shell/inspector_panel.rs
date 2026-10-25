@@ -382,11 +382,10 @@ impl Shell {
             }
             Widget::Asset { kind } => {
                 let reference = field.value.as_str().unwrap_or("");
-                let name = reference
-                    .trim_start_matches('@')
-                    .split('#')
-                    .next()
-                    .and_then(|s| s.rsplit('/').next())
+                // Without its extension, like Assets; the tooltip has the reference.
+                let source = reference.trim_start_matches('@').split('#').next();
+                let name = source
+                    .map(|s| names::stem(names::file_name(s)))
                     .filter(|s| !s.is_empty())
                     .unwrap_or("None");
                 self.bindings.insert(

@@ -26,7 +26,7 @@ const LONG_PATIENCE: Duration = Duration::from_secs(1500);
 const STEPS: &[(&str, &str)] = &[
     (
         "cold-open",
-        "the project opens cold while its imports run: loading look, Importing chip, Scene notice",
+        "the project opens cold with its imports running (what \"Open now\" in the loading window leads to; bounded runs skip that window, `--verify-loading` covers it): Importing chip, Scene notice",
     ),
     (
         "assets-browse",
@@ -279,8 +279,8 @@ impl FirstHour {
         Ok(())
     }
 
-    /// The open menu's rows (node ID, label) whose label ends with `suffix`.
-    fn menu_rows(shell: &Shell, suffix: &str) -> Vec<(String, String)> {
+    /// The open menu's rows (node ID, label).
+    fn menu_rows(shell: &Shell) -> Vec<(String, String)> {
         shell
             .ui
             .nodes
@@ -288,11 +288,29 @@ impl FirstHour {
             .filter(|n| n.element.id.starts_with("m0-") && n.element.id.ends_with("-label"))
             .filter_map(|n| {
                 let label = n.text.as_ref()?.value.clone();
-                label
-                    .ends_with(suffix)
-                    .then(|| (n.element.id.trim_end_matches("-label").to_owned(), label))
+                Some((n.element.id.trim_end_matches("-label").to_owned(), label))
             })
             .collect()
+    }
+
+    /// Scrolls the Inspector to the field at `path` (`MeshRenderer.model`), then
+    /// clicks its control `id`, as a person scrolls first: a control below the fold
+    /// would hand the click to whatever is drawn there.
+    fn press_field(
+        &mut self,
+        editor: &mut Editor,
+        shell: &mut Shell,
+        path: &str,
+        id: &str,
+    ) -> ara_ui::Result<()> {
+        shell.rebuild(editor)?;
+        shell.reveal_field(path)?;
+        shell.frame()?;
+        shell
+            .click(id, &mut self.clip)
+            .map_err(|e| format!("{id}: {e}"))?;
+        shell.dispatch(editor)?;
+        Ok(())
     }
 
     /// Clicks the control `id` and dispatches it.
@@ -331,7 +349,9 @@ impl FirstHour {
                 let notice = shell.ui.find("scene-loading").is_some();
                 self.found.insert("importingChip".into(), json!(chip));
                 self.found.insert("sceneNotice".into(), json!(notice));
-                // A second after the window is up, while the first imports cook.
+                // A second after the window is up, while the first imports cook. People
+                // reach this state through the loading window's "Open now"; bounded
+                // runs open at once (`--verify-loading` captures that window).
                 Ok(self.age > 144)
             }
             "assets-browse" => {
@@ -394,9 +414,14 @@ impl FirstHour {
                     return Ok(false);
                 }
                 if self.age == 6 {
-                    self.press(editor, shell, "asset-field-MeshRenderer-model")?;
+                    self.press_field(
+                        editor,
+                        shell,
+                        "MeshRenderer.model",
+                        "asset-field-MeshRenderer-model",
+                    )?;
                 }
-                let rows = Self::menu_rows(shell, "");
+                let rows = Self::menu_rows(shell);
                 self.found.insert(
                     "pickerRows".into(),
                     json!(rows.iter().map(|(_, label)| label).collect::<Vec<_>>()),
@@ -418,10 +443,16 @@ impl FirstHour {
                     return Ok(false);
                 }
                 if self.age == 6 {
-                    self.press(editor, shell, "add-MeshRenderer-materialOverrides")?;
+                    self.press_field(
+                        editor,
+                        shell,
+                        "MeshRenderer.materialOverrides",
+                        "add-MeshRenderer-materialOverrides",
+                    )?;
                 }
                 if self.age == 30 {
-                    let row = Self::menu_rows(shell, ".graph")
+                    // An added slot needs its material: the picker offers no None.
+                    let row = Self::menu_rows(shell)
                         .into_iter()
                         .next()
                         .map(|(id, _)| id)

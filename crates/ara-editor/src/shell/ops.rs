@@ -250,17 +250,19 @@ impl Shell {
         editor.action("editor.workspace", json!({"folder": folder, "asset": path}))?;
         Ok(())
     }
+    /// The active graph page's canvas is in the current surface.
     pub(crate) fn graph_visible(&self) -> bool {
-        self.ui.find("graph-canvas").is_some()
+        self.ui
+            .find(&graph_panel::canvas_id(self.graph_page))
+            .is_some()
     }
     pub(crate) fn frame_graph(&mut self, editor: &mut Editor) -> ara_ui::Result<()> {
         self.edit_graph_layout(editor, "frame")
     }
     pub(crate) fn select_all_nodes(&mut self, editor: &mut Editor) -> ara_ui::Result<()> {
         let ids = self
-            .canvas
-            .as_ref()
-            .map(|c| c.node_ids())
+            .active_graph()
+            .map(|g| g.canvas.node_ids())
             .unwrap_or_default();
         editor.action("editor.canvas", json!({"selection": ids}))?;
         Ok(())
@@ -270,7 +272,10 @@ impl Shell {
         editor: &mut Editor,
         target: &Target,
     ) -> ara_ui::Result<()> {
-        let doc = self.canvas_doc.clone().ok_or("open a graph first")?;
+        let doc = self
+            .active_graph()
+            .map(|g| g.doc.clone())
+            .ok_or("open a graph first")?;
         let nodes: Vec<String> = match target {
             Target::Node(n) => vec![n.clone()],
             _ => editor.state.canvas_selection.iter().cloned().collect(),
