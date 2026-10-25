@@ -23,6 +23,9 @@ pub(crate) const GI_SPECULAR: usize = 11;
 pub(crate) const SSR_PYRAMID: usize = 12;
 pub(crate) const SSR_TRACE: usize = 13;
 const IMAGES: usize = 14;
+/// The exposure state (four floats), then the metering histogram's 256 counts
+/// (look-post.slang exposureMain).
+const STATE_BYTES: usize = 16 + 256 * 4;
 
 /// Fixed LUT extents; the half-resolution effects and reflection pyramid follow
 /// the render size, the bloom atlases the display size.
@@ -174,8 +177,12 @@ impl LookGpu {
         )?;
         let frame_index = gpu.storage_buffer(frame)?.index;
         // Zeroed on the host so the first frame's history readers have a producer.
-        let state = gpu.create_buffer(16, vk::BufferUsageFlags::STORAGE_BUFFER, true)?;
-        gpu.upload(state, &[0; 16])?;
+        let state = gpu.create_buffer(
+            STATE_BYTES as u64,
+            vk::BufferUsageFlags::STORAGE_BUFFER,
+            true,
+        )?;
+        gpu.upload(state, &[0; STATE_BYTES])?;
         let state_index = gpu.storage_buffer(state)?.index;
         Ok(Self {
             look: Look::default(),
@@ -338,7 +345,7 @@ impl LookGpu {
     /// view (history then pre-exposes by the frame's exposure argument). Call
     /// only between completed frames.
     pub(crate) fn reset_exposure(&mut self, gpu: &VulkanDevice) -> Result<()> {
-        gpu.upload(self.state, &[0; 16])?;
+        gpu.upload(self.state, &[0; STATE_BYTES])?;
         self.state_access = Access::HostWrite;
         Ok(())
     }

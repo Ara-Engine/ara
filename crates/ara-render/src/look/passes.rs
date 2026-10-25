@@ -21,7 +21,8 @@ pub(crate) enum LookPass {
     SkyIrradiance,
     SkyPrefilter,
     Fog,
-    Exposure,
+    /// Metering: 0 bins the history, 1 meters the bins into the exposure state.
+    Exposure(u32),
     Bloom(u32),
     Post,
     GiRelight,
@@ -357,12 +358,14 @@ impl LookGpu {
             );
             passes.push((id, pass));
         };
-        add(
-            graph,
-            "Exposure.Histogram",
-            LookPass::Exposure,
-            vec![(ids.state, Access::Storage)],
-        );
+        for (pass, name) in ["Exposure.Histogram", "Exposure.Meter"].iter().enumerate() {
+            add(
+                graph,
+                name,
+                LookPass::Exposure(pass as u32),
+                vec![(ids.state, Access::Storage)],
+            );
+        }
         let bloom = self.effective().bloom > 0.;
         if bloom {
             const NAMES: [&str; 9] = [
@@ -412,7 +415,7 @@ impl LookGpu {
     ) {
         let p = &self.pipelines;
         let (frame_index, size) = match pass {
-            LookPass::Exposure | LookPass::Bloom(_) | LookPass::Post => frames.display,
+            LookPass::Exposure(_) | LookPass::Bloom(_) | LookPass::Post => frames.display,
             _ => frames.render,
         };
         if let LookPass::GiClear | LookPass::GiScatter(_) = pass {
@@ -427,7 +430,8 @@ impl LookGpu {
             LookPass::SkyIrradiance => (p.sky_irradiance, 0, groups([32, 16])),
             LookPass::SkyPrefilter => (p.sky_prefilter, 0, groups([256, 640])),
             LookPass::Fog => (p.fog, 0, groups([64, 36])),
-            LookPass::Exposure => (p.exposure, 0, [1, 1, 1]),
+            // One grid sample per thread (128x72), then one metering group.
+            LookPass::Exposure(n) => (p.exposure, n, [if n == 0 { 36 } else { 1 }, 1, 1]),
             LookPass::Bloom(n) => {
                 // Levels 2..6 (quarter resolution down), as in look-post.slang.
                 let level = if n < 5 { n } else { 8 - n } + 2;

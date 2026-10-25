@@ -622,6 +622,21 @@
 
                             ]
                         }
+                    },
+                    {
+                        "name": "group",
+                        "semanticName": "SV_GROUPID",
+                        "type": {
+                            "kind": "vector",
+                            "elementCount": 3,
+                            "elementType": {
+                                "kind": "scalar",
+                                "scalarType": "uint32"
+                            },
+                            "sizes": [
+
+                            ]
+                        }
                     }
                 ]
             },
@@ -632,6 +647,21 @@
                     "type": {
                         "kind": "scalar",
                         "scalarType": "uint32",
+                        "sizes": [
+
+                        ]
+                    }
+                },
+                {
+                    "name": "group",
+                    "semanticName": "SV_GROUPID",
+                    "type": {
+                        "kind": "vector",
+                        "elementCount": 3,
+                        "elementType": {
+                            "kind": "scalar",
+                            "scalarType": "uint32"
+                        },
                         "sizes": [
 
                         ]

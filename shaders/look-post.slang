@@ -7,26 +7,40 @@
 float inputScale(Frame f,Look l,bool stored){
     if((root.flags&1)==0)return 1;float4 s=exposureState(l);return exposureScale(f,stored?s.y:s.x);
 }
-// Fixed 128x72 sampling grid, 256 log-luminance bins over [-12,20] stops. A single
-// workgroup avoids global histogram clears, atomics or readbacks. The state is
+// Fixed 128x72 sampling grid, 256 log-luminance bins over [-12,20] stops, counted
+// after the exposure state (look.slangh EXPOSURE_BINS). Pass 0 (root word 2; 36
+// groups, one grid sample per thread) bins in groupshared memory and adds each
+// group's counts to the bins; pass 1 (one group) meters their trimmed mean with a
+// parallel prefix sum, zeroes them for the next frame and writes the state
 // (applied multiplier, previous multiplier, EV100, metered luminance).
 groupshared uint histogram[256];
+groupshared float2 reduce[256];
 [shader("compute")][numthreads(256,1,1)]
-void exposureMain(uint lane:SV_GroupIndex){
-    Frame f=frame();Look l=look(f);histogram[lane]=0;GroupMemoryBarrierWithGroupSync();
-    bool automatic=l.exposure.x<=0;
-    if(automatic){
-        float scale=1/inputScale(f,l,false);
-        for(uint i=lane;i<9216;i+=256){float3 c=historyTex(root.materials,(float2(i%128,i/128)+0.5)/float2(128,72)).rgb*scale;
-            float logL=clamp(log2(max(luminance(c),exp2(-12.))),-12.,20.);InterlockedAdd(histogram[min(uint((logL+12)*8),255)],1);}
+void exposureMain(uint lane:SV_GroupIndex,uint3 group:SV_GroupID){
+    Frame f=frame();Look l=look(f);bool automatic=l.exposure.x<=0;uint state=l.state.x;
+    if(root.material==0){
+        if(!automatic)return;
+        histogram[lane]=0;GroupMemoryBarrierWithGroupSync();
+        uint i=group.x*256+lane;float3 c=historyTex(root.materials,(float2(i%128,i/128)+0.5)/float2(128,72)).rgb/inputScale(f,l,false);
+        float logL=clamp(log2(max(luminance(c),exp2(-12.))),-12.,20.);InterlockedAdd(histogram[min(uint((logL+12)*8),255)],1);
+        GroupMemoryBarrierWithGroupSync();
+        uint count=histogram[lane];if(count>0)buffers[NonUniformResourceIndex(state)].InterlockedAdd(EXPOSURE_BINS+lane*4,count);
+        return;
     }
-    GroupMemoryBarrierWithGroupSync();if(lane!=0)return;
     float target=l.exposure.x,metered=0,ev=0;
     if(automatic){
-        float low=l.metering.z*9216,high=l.metering.w*9216,prefix=0,sum=0,mass=0;
-        for(uint bin=0;bin<256;bin++){float count=histogram[bin];float weight=max(0,min(prefix+count,high)-max(prefix,low));sum+=(-12+(bin+0.5)/8)*weight;mass+=weight;prefix+=count;}
-        metered=exp2(sum/max(mass,1));ev=clamp(log2(metered/(0.18*1.2)),l.metering.x,l.metering.y);target=l.exposure.y/(1.2*exp2(ev));
+        float count=float(buffers[NonUniformResourceIndex(state)].Load(EXPOSURE_BINS+lane*4));buffers[NonUniformResourceIndex(state)].Store(EXPOSURE_BINS+lane*4,0);
+        // Inclusive prefix sum of the counts (Hillis-Steele), then this bin's share
+        // of the trimmed [low, high) sample range, summed by a tree reduction.
+        reduce[lane]=float2(count,0);GroupMemoryBarrierWithGroupSync();
+        for(uint step=1;step<256;step*=2){float v=lane>=step?reduce[lane-step].x:0;GroupMemoryBarrierWithGroupSync();reduce[lane].x+=v;GroupMemoryBarrierWithGroupSync();}
+        float prefix=reduce[lane].x-count,low=l.metering.z*9216,high=l.metering.w*9216;
+        float weight=max(0,min(prefix+count,high)-max(prefix,low));GroupMemoryBarrierWithGroupSync();
+        reduce[lane]=float2((-12+(lane+0.5)/8)*weight,weight);GroupMemoryBarrierWithGroupSync();
+        for(uint stride=128;stride>0;stride/=2){if(lane<stride)reduce[lane]+=reduce[lane+stride];GroupMemoryBarrierWithGroupSync();}
+        metered=exp2(reduce[0].x/max(reduce[0].y,1));ev=clamp(log2(metered/(0.18*1.2)),l.metering.x,l.metering.y);target=l.exposure.y/(1.2*exp2(ev));
     }else ev=log2(1/max(1.2*target,1e-12));
+    if(lane!=0)return;
     float old=exposureState(l).x;bool reset=!automatic || (l.flags.y&LOOK_RESET)!=0 || !(old>0);
     float value=reset?target:lerp(old,target,1-exp(-l.exposure.w*l.exposure.z));
     buffers[NonUniformResourceIndex(l.state.x)].Store<float4>(0,float4(value,old,ev,metered));
