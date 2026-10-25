@@ -69,12 +69,12 @@ void prefilterMain(uint3 t:SV_DispatchThreadID){if(t.x>=256||t.y>=640)return;Fra
 }
 [shader("compute")]
 [numthreads(64,1,1)]
-void tileMain(uint3 t:SV_DispatchThreadID){Frame f=frame();uint tilesX=(f.extent.x+15)/16;uint tilesY=(f.extent.y+15)/16;if(t.x>=tilesX*tilesY)return;uint offset=t.x*65;uint count=0;float2 tileMin=float2(t.x%tilesX,t.x/tilesX)*16;float2 tileMax=tileMin+16;
+void tileMain(uint3 t:SV_DispatchThreadID){Frame f=frame();uint tilesX=(f.extent.x+15)/16;uint tilesY=(f.extent.y+15)/16;if(t.x>=tilesX*tilesY)return;uint offset=t.x*TILE_STRIDE;uint count=0;float2 tileMin=float2(t.x%tilesX,t.x/tilesX)*16;float2 tileMax=tileMin+16;
     for(uint i=0;i<f.extent.z;i++){
         Light l=buffers[NonUniformResourceIndex(f.lighting.w)].Load<Light>(i*64);float4 clip=mul(f.vp,float4(l.positionRange.xyz,1));float range=l.positionRange.w;
         bool include=clip.w<=range;
         if(!include){float2 centre=float2(clip.x/clip.w*0.5+0.5,0.5-clip.y/clip.w*0.5)*float2(f.extent.xy);float radius=range*max(abs(f.vp[0][0]),abs(f.vp[1][1]))*max(f.extent.x,f.extent.y)/max(clip.w-range,0.1);include=all(centre+radius>=tileMin)&&all(centre-radius<=tileMax);}
-        if(include){buffers[NonUniformResourceIndex(f.lighting.z)].Store((offset+1+count)*4,i);count++;}
+        if(include && count<TILE_LIGHTS){buffers[NonUniformResourceIndex(f.lighting.z)].Store((offset+1+count)*4,i);count++;}
     }
     buffers[NonUniformResourceIndex(f.lighting.z)].Store(offset*4,count);
 }

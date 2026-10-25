@@ -32,6 +32,12 @@ pub struct RasterView {
     mobility: crate::gi::Mobility,
     /// Delivered probe updates not applied yet (large ones go a slice per frame).
     gi_updates: std::collections::VecDeque<ProbeUpdate>,
+    /// Emissive surfaces of the current generation and their lights, uploaded
+    /// after the scene's own lights.
+    emitters: Option<crate::emitters::Emitters>,
+    /// The emitter search for the current generation, running off this thread.
+    emitter_job: Option<std::thread::JoinHandle<crate::emitters::Emitters>>,
+    emitter_lights: Vec<ara_render::scene::Light>,
     cache: PathBuf,
     key: u64,
     pending_gi: bool,
@@ -51,6 +57,9 @@ impl RasterView {
             gi: Some(crate::gi::Acquisition::new(cache.clone())),
             mobility: Default::default(),
             gi_updates: Default::default(),
+            emitters: None,
+            emitter_job: None,
+            emitter_lights: Vec::new(),
             cache,
             key: crate::FNV,
             pending_gi: false,
@@ -73,10 +82,21 @@ impl RasterView {
     /// Keep progressive editor views polling until acquired probe surfaces arrive
     /// and moved instances settle back into them.
     pub fn needs_frame(&self) -> bool {
-        self.fades.is_active()
+        self.emitter_job.is_some()
+            || self.fades.is_active()
             || self.gi.as_ref().is_some_and(|gi| {
                 gi.is_pending() || self.mobility.settling() || !self.gi_updates.is_empty()
             })
+    }
+
+    /// Installs the finished (or, blocking, the running) emitter search.
+    fn adopt_emitters(&mut self) {
+        if let Some(job) = self.emitter_job.take() {
+            match job.join() {
+                Ok(emitters) => self.emitters = (!emitters.is_empty()).then_some(emitters),
+                Err(_) => eprintln!("ara-runtime-render: the emitter search panicked"),
+            }
+        }
     }
 
     /// Fade newly arrived model asset IDs over twelve presented frames, including
@@ -117,7 +137,9 @@ impl RasterView {
             }
         }
         if !self.placeholder_changes.materials.is_empty() {
-            renderer.update_native_changed(&prepared.scene, &self.placeholder_changes)?;
+            with_emitter_lights(&mut prepared.scene, &self.emitter_lights, |scene| {
+                renderer.update_native_changed(scene, &self.placeholder_changes)
+            })?;
         }
         Ok(())
     }
@@ -218,6 +240,24 @@ impl RasterView {
                     .cloned()
                     .collect();
                 self.fades.rebind(&prepared, &arrivals);
+                // Emitter lights arrive from a worker; until then emitters light
+                // nothing (their emission is out of the probes too).
+                let job = crate::emitters::Job::new(
+                    &prepared.scene,
+                    &crate::gi::shading(&prepared),
+                    |texture, side| prepared.textures.texels(texture, side),
+                );
+                self.emitters = None;
+                self.emitter_job = if job.is_empty() {
+                    None
+                } else {
+                    Some(
+                        std::thread::Builder::new()
+                            .name("ara-emitters".into())
+                            .spawn(move || job.run())
+                            .context("emitter search thread")?,
+                    )
+                };
                 self.prepared = Some(prepared);
                 self.pending_gi = true;
                 update.rebuilt = true;
@@ -234,19 +274,53 @@ impl RasterView {
             if *renderer.look() != raster_look {
                 renderer.set_look(raster_look)?;
             }
+            if self
+                .emitter_job
+                .as_ref()
+                .is_some_and(|job| job.is_finished())
+            {
+                self.adopt_emitters();
+            }
             let prepared = self.prepared.as_mut().context("native raster content")?;
             if snapshot_changed {
                 self.fades.refresh(&mut prepared.scene);
             }
+            // Emitter lights follow their instances and ride after the scene's
+            // lights, within the shared light budget.
+            match &mut self.emitters {
+                Some(emitters) => {
+                    let budget = (plan.quality.emitter_lights as usize).min(
+                        ara_render::scene::MAX_LOCAL_LIGHTS
+                            .saturating_sub(prepared.scene.lights.len()),
+                    );
+                    if let Some(lights) = emitters.update(&prepared.scene, budget) {
+                        self.emitter_lights = lights;
+                        if update.rebuilt {
+                            eprintln!(
+                                "ara-runtime-render: emissive surfaces light the scene as {} lights",
+                                self.emitter_lights.len()
+                            );
+                        }
+                    }
+                }
+                None => self.emitter_lights.clear(),
+            }
+            let own = prepared.scene.lights.len();
+            prepared
+                .scene
+                .lights
+                .extend_from_slice(&self.emitter_lights);
             let unchanged = ara_render::instanced::Changes::default();
-            renderer.update_native_changed(
+            let updated = renderer.update_native_changed(
                 &prepared.scene,
                 if snapshot_changed {
                     prepared.changes()
                 } else {
                     &unchanged
                 },
-            )?;
+            );
+            prepared.scene.lights.truncate(own);
+            updated?;
             self.look = Some(look);
             if plan.quality.gi_budget > 0
                 && let Some(gi) = &mut self.gi
@@ -302,14 +376,10 @@ impl RasterView {
             "raster content must be prepared before rendering"
         );
         let look = self.look.context("raster look must be prepared")?;
-        self.fades.apply(
-            &mut self
-                .prepared
-                .as_mut()
-                .context("native raster content")?
-                .scene,
-            renderer,
-        )?;
+        let prepared = self.prepared.as_mut().context("native raster content")?;
+        with_emitter_lights(&mut prepared.scene, &self.emitter_lights, |scene| {
+            self.fades.apply(scene, renderer)
+        })?;
         let lit = matches!(mode, ViewMode::Lit);
         renderer.set_deferred_post(lit && !frame.effects.is_empty());
         renderer.render_view(
@@ -359,6 +429,7 @@ impl RasterView {
 
     /// Wait only at an explicit capture/measurement boundary, never in live rendering.
     pub fn wait_probe_gi(&mut self, renderer: &mut Renderer) -> Result<()> {
+        self.adopt_emitters();
         if let Some(gi) = &mut self.gi {
             while let Some(update) = gi.poll(true) {
                 queue_probe_gi(&mut self.gi_updates, update);
@@ -386,7 +457,9 @@ impl RasterView {
     /// Restart reproducible capture state on this allocation, including particles.
     pub fn reset_capture(&mut self, renderer: &mut Renderer) -> Result<()> {
         if let Some(prepared) = &mut self.prepared {
-            self.fades.finish(&mut prepared.scene, renderer)?;
+            with_emitter_lights(&mut prepared.scene, &self.emitter_lights, |scene| {
+                self.fades.finish(scene, renderer)
+            })?;
         }
         self.wait_probe_gi(renderer)?;
         for _ in 0..256 {
@@ -422,6 +495,21 @@ impl RasterView {
 /// lands over eight frames instead of stalling one.
 const PROBES_PER_FRAME: usize = 4096;
 
+/// Runs a native `upload` of `scene` with the emitter `lights` after its own, so
+/// every upload (prepare, arrival fades, placeholder styling) keeps them; the
+/// scene's own list is restored afterwards.
+fn with_emitter_lights<T>(
+    scene: &mut ara_render::instanced::Scene,
+    lights: &[ara_render::scene::Light],
+    upload: impl FnOnce(&mut ara_render::instanced::Scene) -> Result<T>,
+) -> Result<T> {
+    let own = scene.lights.len();
+    scene.lights.extend_from_slice(lights);
+    let result = upload(scene);
+    scene.lights.truncate(own);
+    result
+}
+
 /// Queues a delivered update; one that rewrites every probe supersedes the
 /// updates still waiting.
 fn queue_probe_gi(updates: &mut std::collections::VecDeque<ProbeUpdate>, update: ProbeUpdate) {
@@ -447,9 +535,9 @@ fn apply_probe_gi(
         && let Some(mut update) = updates.pop_front()
     {
         if update.len() > budget - applied {
-            let front = update.split_front(budget - applied);
+            let slice = update.split_off(budget - applied);
             updates.push_front(update);
-            update = front;
+            update = slice;
         }
         renderer.update_probe_surfaces(&update)?;
         applied += update.len();

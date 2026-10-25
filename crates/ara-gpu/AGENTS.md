@@ -68,6 +68,8 @@ and handle generations independent; images and shared surfaces do not use this p
 
 Recording validates generations, queue classes, rendering scopes, attachment
 formats, copy capacities and vertex/index usage before touching native commands.
+`ClearDepth` clears one rectangle of the scope's depth attachment (an atlas tile)
+and must lie within the scope's extent.
 Native presentation and raw ash integration remain unsafe, with documented
 lifetime/layout requirements. Never reset a pending native command buffer.
 

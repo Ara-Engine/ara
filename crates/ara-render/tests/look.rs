@@ -48,6 +48,7 @@ fn every_raster_look_feature_renders_validation_clean() -> Result<()> {
         reflections: Some(Reflections::default()),
         gi_budget: 256,
         bloom: true,
+        ..Quality::default()
     })?;
     // A 2x2x2 lattice whose probes see only sky: relight, atlases and gather run.
     let probes = 8;
