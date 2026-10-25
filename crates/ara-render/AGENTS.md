@@ -65,6 +65,7 @@ ECS; `Scene` is an immutable render extraction snapshot, not authoritative state
   irradiance, DDGI-style, without rays or noise. Capture resets relight all for
   `gi::CONVERGE_FRAMES` (exposure re-meters); a new lattice does so out of shading
   once its records land, then fades in. Same-lattice updates keep the irradiance.
+  `update_probe_records` uploads a range; the next frame scatters it (`GI.Scatter`).
 - `look::Quality` (`Renderer::set_quality`): per-preset budgets from
   `ara_render_fidelity::presets::RasterPlan`: shadow cascades (count, texels,
   distance; stable light space, practical splits, gather PCF, cascade blend; one

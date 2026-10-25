@@ -842,6 +842,7 @@ impl Renderer {
         if let Some(gi) = &mut self.look.gi {
             gi.advance(self.look.quality.gi_budget);
         }
+        self.probe_writes_scattered()?;
         self.look.settle = self.look.settle.saturating_sub(1);
         // A deferred frame keeps the previous history for `finish` to resolve against.
         if deferred {

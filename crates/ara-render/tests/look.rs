@@ -7,7 +7,7 @@ use ara_render::{
     capture::{CaptureRequest, compare},
     look::{
         AmbientOcclusion, AutoExposure, FarShadows, Fog, Look, Quality, Reflections, Shadows, Sky,
-        gi::{ProbeSurfaces, STATIC_VECTORS, SURFACE_TEXELS},
+        gi::{ProbeSurfaces, ProbeUpdate, STATIC_VECTORS, SURFACE_TEXELS},
     },
 };
 use std::path::Path;
@@ -178,6 +178,32 @@ fn a_new_volume_fades_into_live_frames_converged() -> Result<()> {
     ensure!(
         (faded - converged).abs() < 1. && (faded - sky).abs() > 2.,
         "the faded-in volume shades converged: {faded} vs {converged} (sky {sky})"
+    );
+    renderer.gpu().assert_clean()?;
+    Ok(())
+}
+
+/// Large updates apply a range of records at a time (live adoption uploads a
+/// frame's chunk straight from the delivered update): three ranges in any order
+/// light the scene as one whole update does.
+#[test]
+fn record_ranges_apply_as_the_whole_update() -> Result<()> {
+    let (mut renderer, request) = gi_renderer("gi-ranges")?;
+    let update = ProbeUpdate::new(&emissive_surfaces(0x6000), None)?;
+    renderer.update_probe_surfaces(&update)?;
+    let whole = mean(&renderer.capture(&request)?.image);
+    renderer.set_probe_surfaces(None)?;
+    for range in [5..8, 0..2, 2..5] {
+        renderer.update_probe_records(&update, range)?;
+    }
+    let ranged = mean(&renderer.capture(&request)?.image);
+    ensure!(
+        (ranged - whole).abs() < 0.01,
+        "ranged {ranged} vs whole {whole}"
+    );
+    ensure!(
+        renderer.update_probe_records(&update, 7..9).is_err(),
+        "a range past the update is refused"
     );
     renderer.gpu().assert_clean()?;
     Ok(())
