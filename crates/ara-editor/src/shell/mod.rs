@@ -166,6 +166,8 @@ pub struct Shell {
     pub(crate) log_view: LogView,
     /// Console row whose details are expanded (bus sequence number).
     pub(crate) console_open: Option<u64>,
+    /// Scene outlines by entity: the renderer channel map and the outline group table.
+    pub outlines: overlay::Outlines,
     /// Whether Console and Problems show this computer's GPU environment messages.
     pub(crate) machine_open: bool,
     /// Profiler scope outlined in the timeline (picked in the Scopes table).
@@ -443,6 +445,7 @@ impl Shell {
             nested_swatches: Vec::new(),
             console_open: None,
             machine_open: false,
+            outlines: Default::default(),
             profile_scope: None,
             explained_problems: std::collections::BTreeSet::new(),
             hierarchy_view: None,

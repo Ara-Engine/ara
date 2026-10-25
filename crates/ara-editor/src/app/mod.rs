@@ -761,7 +761,10 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                             &renderer,
                             &changed,
                             controller.gizmo_state(),
+                            &mut shell.outlines,
+                            editor.host.store().revision(),
                         )?;
+                        shell.outlines.upload(&mut ui_renderer, &mut gpu)?;
                         if rect.contains(shell.pointer[0], shell.pointer[1])
                             && !editor.state.palette
                             && shell.menu.is_none()

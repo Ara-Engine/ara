@@ -44,7 +44,7 @@ Gate with targeted check/test/clippy. The GPU gate (`run.ps1 -Mode Verify`, `tes
 `tests/goldens` (update only with `ARA_EDITOR_UPDATE_GOLDENS=1`); evidence in `evidence`.
 
 Polish assets: Lucide SVGs (ISC), Inter, JetBrains Mono (OFL; THIRD_PARTY_NOTICES). `viewport.rs` owns SceneView and lazy GamePreview cameras: `preview_game` polls native content without drawing Scene; keep its handle while sampling, then release before the GPU.
-Raster IDs drive picking, outlines and GPU-only hover. Physical Scene extents and UI glyph
+Raster IDs drive picking, outlines and GPU-only hover through `world/channels.rs` (channel → entity; terrain is one object). Physical Scene extents and UI glyph
 scale change together; keep the SDL window, editor logical, IME and UIA coordinate
 conversions. Motion is paint-only, ≤140 ms, off with editor.preferences.
 verify-polish.ps1 captures 1440x900 at 1x and 2560x1440 at 2x (palettes, Agents).

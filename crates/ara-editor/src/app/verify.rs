@@ -415,11 +415,18 @@ impl Verification {
             }
             scene_view.attach(gpu, renderer, editor.state.quality)?;
             let changed = editor.agent_tints();
-            gpu.overlays(
+            let overlays = overlay::build(
+                &view,
+                &editor.state,
                 rect,
-                overlay::ENTITY_IMAGE,
-                overlay::build(&view, &editor.state, rect, renderer, &changed, self.gizmo)?,
-            );
+                renderer,
+                &changed,
+                self.gizmo,
+                &mut shell.outlines,
+                editor.host.store().revision(),
+            )?;
+            shell.outlines.upload(ui_renderer, gpu)?;
+            gpu.overlays(rect, overlay::ENTITY_IMAGE, overlays);
         }
         crate::shell::icons::install(ui_renderer, gpu.dpi())?;
         ui_renderer.render(

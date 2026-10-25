@@ -339,6 +339,14 @@ pub fn tile_physics_id(coord: TileCoord) -> u64 {
     0x7e44_0000_0000_0000 | (u64::from(coord.x as u16) << 16) | u64::from(coord.z as u16)
 }
 
+/// Stable render identity of the terrain tile at `x`, `z` (a `TerrainChunk`'s
+/// coordinates): every resident tile draws with it, so an editor maps a tile's pixels
+/// back to its chunk entity (selection, hover and picking treat the terrain as one
+/// object instead of loose tiles).
+pub fn tile_render_id(x: i32, z: i32) -> u64 {
+    crate::math::stable_id(&format!("terrain-tile:{x},{z}"))
+}
+
 /// Gives every `TerrainChunk` without a cooked collider its static heightfield body:
 /// tiles spawned by streaming, and all of them after a native physics rebuild.
 pub fn cook_chunks(world: &mut World) -> Result<()> {
