@@ -526,13 +526,25 @@ impl RasterView {
         view: &mut ara_render::ViewId,
         request: &ara_render::ViewRequest<'_>,
     ) -> Result<ara_render::ViewOutput> {
+        self.prepare_secondary_frame(renderer)?;
+        let output = renderer.render_secondary(view, request)?;
+        self.secondary_frame_submitted();
+        Ok(output)
+    }
+
+    /// Apply shared model-arrival factors before the secondary camera copies its
+    /// native rows. Call inside that frame's ordered preparation scope.
+    pub fn prepare_secondary_frame(&mut self, renderer: &mut Renderer) -> Result<()> {
         let prepared = self.prepared.as_mut().context("native raster content")?;
         with_emitter_lights(&mut prepared.scene, &self.emitter_lights, |scene| {
             self.fades.apply(scene, renderer)
-        })?;
-        let output = renderer.render_secondary(view, request)?;
+        })
+    }
+
+    /// Advance arrival fades only for a successfully submitted secondary frame,
+    /// never while polling a retained image or rejecting/coalescing a request.
+    pub fn secondary_frame_submitted(&mut self) {
         self.fades.presented();
-        Ok(output)
     }
 
     /// Wait only at an explicit capture/measurement boundary, never in live rendering.
