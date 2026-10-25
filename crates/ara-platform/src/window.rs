@@ -101,6 +101,15 @@ impl Window {
             Ok(window)
         }
     }
+    /// Update the native title on the SDL main thread (for example startup progress).
+    pub fn set_title(&self, title: &str) -> Result<()> {
+        let title = CString::new(title)?;
+        // SAFETY: this owner retains the window; SDL copies the live UTF-8 string.
+        let updated = unsafe { SDL_SetWindowTitle(self.handle, title.as_ptr()) };
+        ensure!(updated, "SDL title: {}", error());
+        Ok(())
+    }
+
     /// Set the title-bar and taskbar icon from straight-alpha RGBA8 pixels (`size` = width, height).
     pub fn set_icon(&self, rgba: &[u8], size: [u32; 2]) -> Result<()> {
         ensure!(

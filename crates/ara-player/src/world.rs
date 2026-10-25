@@ -42,9 +42,9 @@ pub struct PendingPatch {
 }
 
 /// The assigned world.
-pub struct World {
+pub struct World<R = Play> {
     /// The simulation and presentation source, in its (network) role.
-    pub runtime: Play,
+    pub runtime: R,
     /// The first error of a frame advance (networked transport faults), for status.
     pub fault: Option<String>,
     scene: ara_doc::AssetId,
@@ -67,6 +67,25 @@ struct Cells {
     events: std::sync::mpsc::Receiver<CellEvent>,
     acoustics: BTreeMap<String, AssetRef>,
     resident: std::collections::BTreeSet<String>,
+}
+
+impl<R> World<R> {
+    /// Attach the runtime's main-thread role without copying its ECS or metadata.
+    pub(crate) fn map_runtime<T>(self, attach: impl FnOnce(R) -> Result<T>) -> Result<World<T>> {
+        Ok(World {
+            runtime: attach(self.runtime)?,
+            fault: self.fault,
+            scene: self.scene,
+            seed: self.seed,
+            cache: self.cache,
+            pins: self.pins,
+            packed: self.packed,
+            loading_models: self.loading_models,
+            pending: self.pending,
+            scripts: self.scripts,
+            cells: self.cells,
+        })
+    }
 }
 
 fn assets(cache: &PathBuf, pins: &BTreeMap<String, Digest>) -> Result<CachedAssets> {
@@ -169,6 +188,28 @@ impl World {
         prewarmed: Option<(ScriptPlugin, std::sync::mpsc::Receiver<ScriptEvent>)>,
         packed: Option<Arc<dyn ara_runtime::assets::AssetSource>>,
     ) -> Result<(Self, f64)> {
+        let started = Instant::now();
+        let (prepared, _) = Self::prepare_with_source(scene, net, windowed, prewarmed, packed)?;
+        let world = prepared.map_runtime(|runtime| Play::new(runtime, role, net))?;
+        Ok((world, started.elapsed().as_secs_f64() * 1000.))
+    }
+
+    /// Prepare a shipping runtime on a worker; attach its local Play role on the
+    /// main thread. Network/SDL owners never cross the preparation boundary.
+    pub(crate) fn prepare_packed(
+        scene: &PlayScene,
+        source: Arc<dyn ara_runtime::assets::AssetSource>,
+    ) -> Result<(World<Runtime>, f64)> {
+        Self::prepare_with_source(scene, None, true, None, Some(source))
+    }
+
+    fn prepare_with_source(
+        scene: &PlayScene,
+        net: Option<&ara_play::NetStart>,
+        windowed: bool,
+        prewarmed: Option<(ScriptPlugin, std::sync::mpsc::Receiver<ScriptEvent>)>,
+        packed: Option<Arc<dyn ara_runtime::assets::AssetSource>>,
+    ) -> Result<(World<Runtime>, f64)> {
         ara_gpu::cpu_scope!("Player.world_build");
         let started = Instant::now();
         let schema = {
@@ -264,12 +305,11 @@ impl World {
                 plugins,
             )?
         };
-        let runtime = Play::new(runtime, role, net)?;
         for error in runtime.asset_errors() {
             eprintln!("{error}");
         }
         Ok((
-            Self {
+            World {
                 runtime,
                 fault: None,
                 scene: id,
