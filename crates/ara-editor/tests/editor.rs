@@ -311,6 +311,62 @@ fn gizmos_use_visible_local_world_axes_and_rotation_rings() {
 }
 
 #[test]
+fn every_gizmo_handle_is_grabbable_where_it_is_drawn() {
+    use ara_editor::{shell::overlay, state::Tool};
+    use glam::Vec2;
+    let project = Project::new();
+    let mut editor = project.open();
+    editor
+        .action("editor.select", json!({"entities":["e_crate001"]}))
+        .unwrap();
+    let view = editor.view().unwrap();
+    let rect = ara_ui::paint::Box2 {
+        x: 0.,
+        y: 0.,
+        w: 800.,
+        h: 600.,
+    };
+    let mut state = editor.state.clone();
+    state.tool = Tool::Translate;
+    let handles = overlay::handles(&view, &state, rect).unwrap();
+    let o = Vec2::from(handles.origin);
+    assert_eq!(
+        overlay::hit(&handles, o.into()),
+        Some(overlay::Handle::Centre)
+    );
+    let mut planes = 0;
+    for axis in 0..3 {
+        let end = Vec2::from(handles.ends[axis]);
+        if o.distance(end) >= 30. {
+            // Along the shaft and at the cone, 7 px off the line: a 16 px target.
+            for t in [0.6, 0.95] {
+                let off = (end - o).perp().normalize() * 7.;
+                let p = o + (end - o) * t + off;
+                assert_eq!(
+                    overlay::hit(&handles, p.into()),
+                    Some(overlay::Handle::Axis(axis)),
+                    "axis {axis} at {t}"
+                );
+            }
+        }
+        // A plane square grabs anywhere inside what is drawn.
+        if let Some(quad) = handles.plane_quad(axis) {
+            planes += 1;
+            let centre = quad.iter().map(|c| Vec2::from(*c)).sum::<Vec2>() / 4.;
+            assert_eq!(
+                overlay::hit(&handles, centre.into()),
+                Some(overlay::Handle::Plane(axis)),
+                "plane {axis}"
+            );
+        }
+    }
+    assert!(
+        planes >= 2,
+        "the default view shows at least two plane squares"
+    );
+}
+
+#[test]
 fn layout_persistence_units_and_multi_edit_are_validated() {
     let project = Project::new();
     let mut editor = project.open();

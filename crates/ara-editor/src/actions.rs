@@ -332,25 +332,11 @@ impl EditorService {
         }
         if method == "editor.report" {
             let p: EditorReport = parse(params)?;
-            let (code, warning) = match p.kind.as_deref().unwrap_or("action") {
-                "thumbnail" => (crate::codes::THUMBNAIL, true),
-                "missing" => (crate::codes::MISSING_SOURCE, true),
-                "settings" => (crate::codes::SETTINGS, true),
-                "transport" => (crate::codes::TRANSPORT, false),
-                "render" => (crate::codes::RENDER, false),
-                _ => (crate::codes::ACTION, false),
-            };
-            let diagnostic = if warning {
-                Diagnostic::warning(code, p.message)
-            } else {
-                Diagnostic::error(code, p.message)
-            };
-            let subject = p
-                .subject
-                .as_deref()
-                .and_then(ara_diag::Subject::parse)
-                .unwrap_or_else(|| ara_diag::Subject::system("editor"));
-            cx.log(diagnostic.subject(subject));
+            cx.log(report_diagnostic(
+                p.kind.as_deref().unwrap_or("action"),
+                p.message,
+                p.subject.as_deref(),
+            ));
             return Ok(json!({"ok":true}));
         }
         if method == "editor.profile.freeze" {
@@ -963,6 +949,27 @@ fn safe_name(name: &str) -> Result<&str, Vec<Diagnostic>> {
         )]);
     }
     Ok(name)
+}
+/// The diagnostic for an editor-side problem of `kind` (`thumbnail`, `missing`,
+/// `settings`, `transport`, `render`, else `action`), about `subject` or the editor.
+pub(crate) fn report_diagnostic(kind: &str, message: String, subject: Option<&str>) -> Diagnostic {
+    let (code, warning) = match kind {
+        "thumbnail" => (crate::codes::THUMBNAIL, true),
+        "missing" => (crate::codes::MISSING_SOURCE, true),
+        "settings" => (crate::codes::SETTINGS, true),
+        "transport" => (crate::codes::TRANSPORT, false),
+        "render" => (crate::codes::RENDER, false),
+        _ => (crate::codes::ACTION, false),
+    };
+    let diagnostic = if warning {
+        Diagnostic::warning(code, message)
+    } else {
+        Diagnostic::error(code, message)
+    };
+    let subject = subject
+        .and_then(ara_diag::Subject::parse)
+        .unwrap_or_else(|| ara_diag::Subject::system("editor"));
+    diagnostic.subject(subject)
 }
 fn ui_error(error: Box<dyn std::error::Error>) -> Vec<Diagnostic> {
     vec![crate::invalid(error.to_string())]

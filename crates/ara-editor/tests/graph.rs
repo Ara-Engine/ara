@@ -168,3 +168,86 @@ fn text_authored_graphs_lay_out_left_to_right_beside_their_consumers() {
         "no overlap: {boxes:?}"
     );
 }
+
+#[test]
+fn a_graph_too_big_to_read_opens_readable_with_its_output_in_view() {
+    let mut graph = ara_graph::Graph::new(
+        ara_doc::AssetId::parse("gr_layout02").expect("fixture ID"),
+        "material",
+    );
+    let port = |direction| ara_graph::Port {
+        ty: "float".into(),
+        direction,
+        doc: "Test port".into(),
+        required: false,
+    };
+    // Twenty constants feeding one output: a column far taller than the canvas.
+    let mut output = std::collections::BTreeMap::new();
+    for i in 0..20 {
+        let id = format!("n_{i:02}");
+        graph.nodes.insert(
+            id.clone(),
+            ara_graph::Node {
+                kind: "material.add".into(),
+                version: 1,
+                ports: std::collections::BTreeMap::from([(
+                    "out".to_owned(),
+                    port(ara_graph::Direction::Output),
+                )]),
+                params: Default::default(),
+                payload: serde_json::json!({"name":id,"ty":"float"}),
+                subgraph: None,
+            },
+        );
+        output.insert(format!("in{i}"), port(ara_graph::Direction::Input));
+        graph.edges.insert(
+            format!("w_{i:02}"),
+            ara_graph::Edge {
+                from: ara_graph::Endpoint {
+                    node: id,
+                    port: "out".into(),
+                },
+                to: ara_graph::Endpoint {
+                    node: "n_output".into(),
+                    port: format!("in{i}"),
+                },
+            },
+        );
+    }
+    output.insert("out".into(), port(ara_graph::Direction::Output));
+    graph.nodes.insert(
+        "n_output".into(),
+        ara_graph::Node {
+            kind: "material.output".into(),
+            version: 1,
+            ports: output,
+            params: Default::default(),
+            payload: serde_json::json!({"name":"n_output"}),
+            subgraph: None,
+        },
+    );
+    let mut text = ara_ui_text::TextSystem::bundled().expect("fonts");
+    let mut canvas = Canvas::new(graph, &mut text);
+    let rect = Box2 {
+        x: 0.,
+        y: 0.,
+        w: 900.,
+        h: 600.,
+    };
+    assert!(canvas.framed(rect).zoom < 0.5, "fit-all zooms far out");
+    canvas.camera = canvas.framed_readable(rect);
+    assert!(canvas.camera.zoom >= ara_editor::graph::READABLE);
+    let report = canvas.report(rect);
+    let output = report["nodes"]
+        .as_array()
+        .expect("nodes")
+        .iter()
+        .find(|n| n["id"] == "n_output")
+        .expect("output")["box"]
+        .clone();
+    let f = |k: &str| output[k].as_f64().expect("box field") as f32;
+    assert!(
+        f("x") >= 0. && f("x") + f("w") <= rect.w && f("y") + f("h") > 0. && f("y") < rect.h,
+        "the output stays in view: {output}"
+    );
+}
