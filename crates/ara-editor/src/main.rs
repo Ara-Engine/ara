@@ -22,6 +22,7 @@ fn main() -> ara_ui::Result<()> {
             "--verify-ux" => options.verify_ux = true,
             "--verify-journey" => options.verify_journey = true,
             "--verify-first-hour" => options.verify_first_hour = true,
+            "--verify-loading" => options.verify_loading = true,
             "--verify-responsiveness" => options.verify_responsiveness = true,
             "--settle-imports" => {
                 options.settle = Some(match args.next().as_deref() {
@@ -61,6 +62,7 @@ fn main() -> ara_ui::Result<()> {
                 println!(
                     "ara-editor <project> [--scene levels/x.scene] [--sample] [--headless] [--frames N] [--verify | --verify-panels | --verify-ux] [--size WxH] [--dpi SCALE] [--panel NAME] [--screenshot] [--output DIR]\n\nNative Vulkan editor + project Engine Protocol authority.\n--scene opens that scene instead of the project's main scene.\n--play starts Play in the Game view once the window is up.\n--headless captures editor-scene.png without creating a native window, then exits.\n--sample creates an undoable sample scene if the scene is empty.\n--verify runs native/protocol interactions, screenshots and timings, then exits.\n--verify-panels runs real imports, panel interactions, both themes and a 500-node navigation benchmark.\n--verify-ux captures menus, context menus, the palette, Settings, a floating Inspector and every tool tab in both themes, then records idle and camera timings.
 --verify-first-hour replays a new user's first hour on a fresh project (imports, Assets, Inspector, the tool pages, Play, Build), capturing each step.
+--verify-loading runs the loading window offscreen on the project and captures its milestones and every state.
 --verify-responsiveness measures clicks, typing, drags, a Scene orbit, Play and startup through the window loop; --settle-imports before|after waits for imports before or after the interactions."
                 );
                 return Ok(());

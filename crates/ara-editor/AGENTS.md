@@ -142,9 +142,9 @@ menubar, status bar, area headers and tab bodies as parts (`Ui::reconcile_parts`
 `panels::keep_alive` tabs stay mounted, hidden (geometry via `Shell::shown_node`). Memoized
 panels (`shell/memo.rs`: Assets) reuse markup+bindings while their input digest holds; `cargo
 test` sets `ARA_EDITOR_MEMO_CHECK=1`, which regenerates each reuse and fails on a difference.
-`shell/imports.rs` reads ara-play-host's `ImportProgress` (Importing chip, Assets badges,
-Scene loading notice; `tests/loading.rs`). Only `scene_changed` state re-renders the Scene.
-Tool pages (`docs/design/editor-tool-pages.md`) share a breadcrumb toolbar, side column and
+`ImportProgress` drives `loading/` (the window before the main one, `--verify-loading`) and
+`shell/imports.rs` (chip, Assets badges, Scene notice; `tests/loading.rs`); names drop file extensions (`shell/names.rs`). Only `scene_changed` state re-renders the Scene.
+Tool pages (`docs/design/editor-tool-pages.md`) share a breadcrumb toolbar, side column,
 status strip; `graph/style.rs` names nodes/pins; swatches paint after layout. VFX Hide/Isolate
 are preview-only; its timeline drives `vfx_stream`. In Play the Animation page polls
 `play.read <entity>.AnimatorState` (`AnimationLive`). Imports use `import.initialize`/`configure`.

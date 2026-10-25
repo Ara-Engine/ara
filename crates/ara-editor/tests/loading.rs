@@ -55,7 +55,12 @@ fn text(shell: &Shell, id: &str) -> Option<String> {
     let i = shell.ui.find(id)?;
     shell.ui.nodes[i].text.as_ref().map(|t| t.value.clone())
 }
-/// The Assets card showing `name`.
+/// An element's tooltip.
+fn description(shell: &Shell, id: &str) -> Option<String> {
+    let i = shell.ui.find(id)?;
+    shell.ui.nodes[i].element.attrs.get("description").cloned()
+}
+/// The Assets card showing `name` (tiles show names without their extension).
 fn card(shell: &Shell, name: &str) -> String {
     shell
         .ui
@@ -104,12 +109,13 @@ fn import_progress_shows_in_the_status_bar_assets_and_the_scene() {
         text(&shell, "scene-loading-text").as_deref(),
         Some("Loading 1 asset…")
     );
-    let crate_card = card(&shell, "crate.gltf");
+    // The tile's corner badge and its tooltip say so.
+    let crate_card = card(&shell, "crate");
     assert_eq!(
-        text(&shell, &format!("{crate_card}-kind")).as_deref(),
-        Some("Importing…")
+        description(&shell, &format!("{crate_card}-import")).as_deref(),
+        Some("Importing")
     );
-    assert!(shell.ui.find(&format!("{crate_card}-import")).is_some());
+    assert!(description(&shell, &crate_card).is_some_and(|d| d.ends_with(" · importing")));
     let start = Instant::now();
     while text(&shell, "status-imports-text").as_deref() != Some("2 imports failed") {
         assert!(
@@ -125,9 +131,14 @@ fn import_progress_shows_in_the_status_bar_assets_and_the_scene() {
         text(&shell, "scene-loading-text").as_deref(),
         Some("1 asset failed to import; showing placeholders")
     );
-    let crate_card = card(&shell, "crate.gltf");
-    assert_eq!(
-        text(&shell, &format!("{crate_card}-kind")).as_deref(),
-        Some("Import failed")
+    let crate_card = card(&shell, "crate");
+    assert!(
+        description(&shell, &crate_card).is_some_and(|d| d.ends_with(" · import failed")),
+        "{:?}",
+        description(&shell, &crate_card)
+    );
+    assert!(
+        description(&shell, &format!("{crate_card}-import")).is_some_and(|d| d != "Importing"),
+        "the badge carries the import's error"
     );
 }

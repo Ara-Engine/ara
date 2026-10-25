@@ -57,6 +57,27 @@ pub(super) fn fixtures(root: &std::path::Path) -> ara_ui::Result<()> {
         })
         .save(texture)?;
     }
+    // Real-world texture names: the Assets grid fits them on two centred lines.
+    for (name, tint) in [
+        ("dry_ground_01_diff_2k", [122, 98, 70]),
+        ("rusty_corrugated_iron_nor_gl_2k", [128, 128, 255]),
+        ("ContainerBlueVariantLarge", [52, 92, 150]),
+        ("concrete_road_barrier_arm_2k", [180, 120, 60]),
+    ] {
+        let path = root.join(format!("textures/{name}.png"));
+        if !path.exists() {
+            image::RgbaImage::from_fn(64, 64, |x, y| {
+                let shade = 0.75 + 0.25 * (((x / 8 + y / 8) % 2) as f32);
+                image::Rgba([
+                    (tint[0] as f32 * shade) as u8,
+                    (tint[1] as f32 * shade) as u8,
+                    (tint[2] as f32 * shade) as u8,
+                    255,
+                ])
+            })
+            .save(path)?;
+        }
+    }
     Ok(())
 }
 pub(super) fn resource(editor: &mut Editor, domain: &str) -> ara_ui::Result<String> {
@@ -284,7 +305,7 @@ impl Verification {
                         .find(|n| {
                             n.element.id.starts_with("asset-card-")
                                 && n.element.id.ends_with("-name")
-                                && n.text.as_ref().is_some_and(|t| t.value == "Avocado.glb")
+                                && n.text.as_ref().is_some_and(|t| t.value == "Avocado")
                         })
                         .ok_or("mesh filename caption")?
                         .rect;
@@ -302,18 +323,52 @@ impl Verification {
                     return Ok(false);
                 }
                 shell.rebuild(editor)?;
-                if !shell.asset_previews_ready(&["samples/material.graph", "samples/vfx.graph"]) {
+                // Textures with long names: the grid, then the same folder as a list.
+                if editor.state.asset_folder == "textures" {
+                    let textures = [
+                        "textures/dry_ground_01_diff_2k.png",
+                        "textures/rusty_corrugated_iron_nor_gl_2k.png",
+                    ];
+                    if editor.state.asset_grid {
+                        if !shell.asset_previews_ready(&textures) {
+                            return Ok(false);
+                        }
+                        self.capture_pair(
+                            "assets-textures",
+                            editor,
+                            shell,
+                            gpu,
+                            ui,
+                            renderer,
+                            scene_view,
+                        )?;
+                        editor.action("editor.workspace", json!({"grid": false}))?;
+                        shell.rebuild(editor)?;
+                        return Ok(false);
+                    }
+                    self.capture_pair("assets-list", editor, shell, gpu, ui, renderer, scene_view)?;
+                    editor.action("editor.workspace", json!({"grid": true}))?;
+                } else {
+                    if !shell.asset_previews_ready(&["samples/material.graph", "samples/vfx.graph"])
+                    {
+                        return Ok(false);
+                    }
+                    self.capture_pair(
+                        "assets-samples",
+                        editor,
+                        shell,
+                        gpu,
+                        ui,
+                        renderer,
+                        scene_view,
+                    )?;
+                    editor.action(
+                        "editor.workspace",
+                        json!({"asset":"textures/dry_ground_01_diff_2k.png","folder":"textures"}),
+                    )?;
+                    shell.rebuild(editor)?;
                     return Ok(false);
                 }
-                self.capture_pair(
-                    "assets-samples",
-                    editor,
-                    shell,
-                    gpu,
-                    ui,
-                    renderer,
-                    scene_view,
-                )?;
                 editor.action(
                     "editor.workspace",
                     json!({"resource":self.material,"asset":""}),

@@ -40,6 +40,7 @@ mod inspector_panel;
 mod log_panels;
 mod material_panel;
 mod memo;
+mod names;
 pub(crate) use animation_panel::LiveChange;
 pub(crate) use log_panels::LogView;
 mod material_inspector;
@@ -168,7 +169,9 @@ pub struct Shell {
     browser: assets::Browser,
     /// The asset pipeline's import progress (status chip, Assets badges, Scene notice).
     imports: imports::Imports,
-    asset_rows: VirtualList,
+    asset_rows: names::AssetRows,
+    /// Caption lines of Assets tile names (fitted once per name and width).
+    name_fit: names::NameFit,
     asset_entries: BTreeMap<u64, assets::Asset>,
     asset_view: Option<VirtualView>,
     asset_surface: Option<String>,
@@ -357,17 +360,22 @@ pub(crate) enum Binding {
     DialogText,
     DialogAction(&'static str),
 }
+/// The editor's fonts: Inter (UI), JetBrains Mono (code, timings) and Noto Naskh
+/// Arabic (right-to-left text). The shell and the loading window share them.
+pub(crate) fn text_system() -> ara_ui::Result<TextSystem> {
+    TextSystem::new(
+        [
+            include_bytes!("../../assets/fonts/InterVariable.ttf").to_vec(),
+            include_bytes!("../../assets/fonts/JetBrainsMono-Regular.ttf").to_vec(),
+            include_bytes!("../../../ara-ui-text/fonts/NotoNaskhArabic.ttf").to_vec(),
+        ],
+        "'Inter Variable', 'Noto Naskh Arabic'",
+    )
+}
 impl Shell {
     /// Build the native shell with the project's initial layout and model snapshots.
     pub fn new(editor: &mut Editor, size: [f32; 2]) -> ara_ui::Result<Self> {
-        let text = TextSystem::new(
-            [
-                include_bytes!("../../assets/fonts/InterVariable.ttf").to_vec(),
-                include_bytes!("../../assets/fonts/JetBrainsMono-Regular.ttf").to_vec(),
-                include_bytes!("../../../ara-ui-text/fonts/NotoNaskhArabic.ttf").to_vec(),
-            ],
-            "'Inter Variable', 'Noto Naskh Arabic'",
-        )?;
+        let text = text_system()?;
         let ui = Ui::editor("<ui id='editor' />", include_str!("editor.css"), size)?;
         let mut shell = Self {
             ui,
@@ -421,7 +429,8 @@ impl Shell {
             hierarchy_surface: None,
             browser: assets::Browser::new(editor.host.root()),
             imports: imports::Imports::new(editor.host.root()),
-            asset_rows: VirtualList { items: Vec::new() },
+            asset_rows: names::AssetRows::default(),
+            name_fit: names::NameFit::default(),
             asset_entries: BTreeMap::new(),
             asset_view: None,
             asset_surface: None,
@@ -744,6 +753,8 @@ impl Shell {
         } else if self.hierarchy_surface == surface {
             self.hierarchy_view = None;
         }
+        // The list's columns: the name, then its type (or folder, when searching).
+        let mut asset_columns = [0.; 2];
         if let Some(index) = ui.find("asset-rows") {
             let kept = self.asset_surface == surface
                 && self.asset_view.as_mut().is_some_and(|v| v.remap(ui));
@@ -753,10 +764,12 @@ impl Shell {
                 }
             } else {
                 let height = ui.nodes[index].rect.h.max(row);
-                let width = ui.nodes[index].rect.w.max(80.);
+                let width = ui.nodes[index].rect.w.max(120.) - 8.;
+                let detail = names::detail_width(width);
+                asset_columns = [width - detail, detail];
                 let view = match self.asset_view.as_mut() {
                     Some(view) if kept => {
-                        view.fit(ui, height, vec![width])?;
+                        view.fit(ui, height, asset_columns.to_vec())?;
                         view
                     }
                     _ => self.asset_view.insert(VirtualView::mount(
@@ -764,7 +777,7 @@ impl Shell {
                         index,
                         row,
                         height,
-                        vec![width],
+                        asset_columns.to_vec(),
                     )?),
                 };
                 view.scroll(ui, &self.asset_rows, self.asset_offset, height)?;
@@ -786,12 +799,54 @@ impl Shell {
         if self.asset_surface == self.current
             && let Some(view) = &self.asset_view
         {
+            // Name cells leave room for the painted type icon (`polish`); the detail
+            // column is muted. The selected asset's row is highlighted.
+            let selected = editor
+                .state
+                .asset_path
+                .as_deref()
+                .map(ara_ui::source::stable_id);
+            let style = |column: usize, selected: bool| match column {
+                0 => format!(
+                    "height:{row}px;width:{}px;padding:2px;padding-left:30px;overflow:hidden;font-size:12px",
+                    asset_columns[0]
+                ),
+                _ => format!(
+                    "height:{row}px;width:{}px;padding:2px;padding-right:8px;overflow:hidden;font-size:11px;color:var(--{})",
+                    asset_columns[1],
+                    if selected {
+                        "selection-muted-foreground"
+                    } else {
+                        "muted-foreground"
+                    }
+                ),
+            };
             for index in view.visible_nodes() {
-                for n in 0..self.ui.nodes[*index].element.children.len() {
-                    let child = self.ui.nodes[*index].element.children[n];
-                    let node = &mut self.ui.nodes[child];
-                    node.element.attrs.insert("style".into(),format!("height:{row}px;width:100%;padding:2px;padding-left:30px;overflow:hidden;font-size:12px"));
+                let key = self.ui.nodes[*index]
+                    .element
+                    .id
+                    .rsplit_once("key-")
+                    .and_then(|(_, s)| s.parse::<u64>().ok());
+                let class = if key.is_some() && key == selected {
+                    "virtual-row row-selected"
+                } else {
+                    "virtual-row"
+                };
+                let node = &mut self.ui.nodes[*index];
+                if node.element.attrs.get("class").map(String::as_str) != Some(class) {
+                    node.element.attrs.insert("class".into(), class.into());
                     node.dirty.style = true;
+                }
+                for n in 0..2 {
+                    let Some(&child) = self.ui.nodes[*index].element.children.get(n) else {
+                        continue;
+                    };
+                    let style = style(n, class.contains("row-selected"));
+                    let node = &mut self.ui.nodes[child];
+                    if node.element.attrs.get("style") != Some(&style) {
+                        node.element.attrs.insert("style".into(), style);
+                        node.dirty.style = true;
+                    }
                 }
             }
         }

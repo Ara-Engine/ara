@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Ara loading window</title>
+<style>
+body{margin:0;background:#0a0a0a;color:#e5e5e5;font:14px/1.5 system-ui,sans-serif}
+main{max-width:1240px;margin:0 auto;padding:24px}
+nav{display:flex;flex-wrap:wrap;gap:6px;margin:12px 0}
+button{background:#1a1a1a;color:#e5e5e5;border:1px solid #333;border-radius:6px;padding:4px 10px;cursor:pointer}
+button[aria-pressed=true]{background:#346bf1;border-color:#346bf1}
+section{display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start}
+figure{margin:0}figcaption{color:#9a9a9a;margin-bottom:6px}
+img{max-width:100%;border-radius:8px;border:1px solid #2a2a2a}
+</style></head><body><main>
+<h1>Ara loading window</h1>
+<p style="color:#9a9a9a">Offscreen captures of <code>--verify-loading</code> on a cold, Hub-created Outpost: live milestones, then every state. Left Ara Dark, right Ara Light.</p>
+<nav id="pages"></nav><nav id="scales"></nav>
+<section><figure><figcaption>Ara Dark</figcaption><img id="dark" alt="Dark"></figure>
+<figure><figcaption>Ara Light</figcaption><img id="light" alt="Light"></figure></section>
+</main><script>
+const pages=[["run-preparing", "live: preparing"], ["run-importing", "live: importing"], ["run-half", "live: half"], ["run-opening", "live: opening"], ["preparing", "preparing"], ["importing", "importing"], ["open-now", "open now"], ["review", "review"], ["review-many", "review many"], ["opening-early", "opening early"], ["opening", "opening"]],scales=[["1x","1×"],["2x","2×"]];let page=pages[0][0],scale="1x";
+function group(id,items,set){const el=document.getElementById(id);el.replaceChildren(...items.map(([k,l])=>{const b=document.createElement("button");b.textContent=l;b.dataset.key=k;b.onclick=()=>{set(k);render()};return b}));return el}
+const p=group("pages",pages,k=>page=k),s=group("scales",scales,k=>scale=k);
+function render(){for(const b of p.children)b.setAttribute("aria-pressed",b.dataset.key===page);for(const b of s.children)b.setAttribute("aria-pressed",b.dataset.key===scale);
+for(const t of["dark","light"])document.getElementById(t).src=`${scale}/${page}-${t}.webp`}
+render();
+</script></body></html>

@@ -15,6 +15,7 @@ pub mod graph;
 /// Editor-only Vulkan adapter over the shared engine device.
 pub use ara_editor_gpu as gpu;
 pub mod inspector;
+mod loading;
 mod native;
 pub mod settings;
 pub mod shell;

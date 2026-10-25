@@ -32,7 +32,8 @@ impl Shell {
             .unwrap_or("");
         let hint = match panel {
             "hierarchy" => "Filter  (t:Light)",
-            "assets" => "Search assets  (type:mesh)",
+            // The type chips filter by type; `type:` is in the empty state's hint.
+            "assets" => "Search assets",
             "console" => "Filter messages",
             "problems" => "Filter problems",
             "settings" => "Search settings",
