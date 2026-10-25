@@ -163,8 +163,17 @@ pub(super) struct Sample {
     /// Re-rasterizing toolbar icons (theme or DPI changes).
     pub icons_ms: f64,
     pub render_ms: f64,
+    /// Waiting for submitted UI work (its fence).
     pub gpu_ms: f64,
     pub present_ms: f64,
+    /// Host time in the renderer device's explicit waits this frame (timeline,
+    /// upload idle and present, `ara_gpu` `HostWaitStats`); `None` when the device was
+    /// replaced.
+    pub host_wait_ms: Option<f64>,
+    /// The frame's CPU work: wall time minus `host_wait_ms` and the UI fence wait;
+    /// `None` when the device waits are unavailable. Another thread's waits on the
+    /// same device count too, so this can understate, never overstate, the work.
+    pub work_ms: Option<f64>,
     pub presented: bool,
     /// A new embedded Game frame was shown (`GameView::update`).
     pub game_frame: bool,
@@ -655,6 +664,12 @@ impl Probe {
                     "rebuilds": frames.iter().map(|s| u64::from(s.rebuilds)).sum::<u64>(),
                     "renderMs": stat(&|s| s.render_ms),
                     "gpuWaitMs": stat(&|s| s.gpu_ms),
+                    "hostWaitMs": statistics(&frames.iter().filter_map(|s| s.host_wait_ms).collect::<Vec<_>>()),
+                    "workMs": statistics(&frames.iter().filter_map(|s| s.work_ms).collect::<Vec<_>>()),
+                    "workCoverage": {
+                        "measured": frames.iter().filter(|s| s.work_ms.is_some()).count(),
+                        "unavailable": frames.iter().filter(|s| s.work_ms.is_none()).count(),
+                    },
                     "presentMs": stat(&|s| s.present_ms),
                     "restyled": stat(&|s| s.work.restyled as f64),
                     "layoutPasses": stat(&|s| s.work.layout_passes as f64),

@@ -45,7 +45,7 @@ pub(super) const DEFINITIONS: &[(&str, &str)] = &[
     ),
     (
         "Wall bound",
-        "Where no complete CPU-work metric exists (older players, the editor), cpu.frame_ms and the editor's frame minus its UI fence wait still include GPU, present and other waits. Such a value passes at or under its limit and measures nothing above it.",
+        "Where no complete CPU-work metric exists (older players; editor runs without work_ms on every frame), cpu.frame_ms and the editor's frame minus its UI fence wait still include GPU, present and other waits. Such a value passes at or under its limit and measures nothing above it. The editor's work_ms is its frame's wall time minus the renderer device's explicit host waits and the UI fence wait.",
     ),
     (
         "Cold / warm",
@@ -462,7 +462,30 @@ fn cpu(results: &Results, rows: &mut Vec<Row>) {
     }
     let orbit = editor_frames(results, false, |name| name == "scene-orbit");
     let subject = "Editor · Outpost Scene orbit (after imports)";
+    // The editor's `work_ms` when every orbit frame reports it; otherwise the wall
+    // bound, which measures nothing above its limit.
+    let work: Option<Vec<f64>> = orbit.as_ref().ok().and_then(|(frames, _)| {
+        frames
+            .iter()
+            .map(|s| s["work_ms"].as_f64())
+            .collect::<Option<Vec<f64>>>()
+            .filter(|work| !work.is_empty())
+    });
     for (stat, fraction) in [("p50", 0.5), ("p95", 0.95)] {
+        if let Some(work) = &work {
+            let mut work = work.clone();
+            rows.push(
+                Row::new("CPU frame", subject, format!("CPU work {stat}"))
+                    .gate("D26", D26_CPU)
+                    .note("D26's CPU limit applied to the editor Scene view")
+                    .source(orbit.as_ref().ok().map(|(_, source)| source.clone()))
+                    .value(
+                        percentile(&mut work, fraction)
+                            .ok_or_else(|| "no Scene orbit frames".into()),
+                    ),
+            );
+            continue;
+        }
         let value = orbit
             .as_ref()
             .map_err(Clone::clone)
@@ -974,5 +997,44 @@ mod tests {
             "First presented frame (loading view), cold",
         );
         assert_eq!(startup.status, Status::Pass);
+    }
+    #[test]
+    fn editor_orbit_gates_on_cpu_work_only_when_every_frame_reports_it() {
+        let frame = |cpu: f64, work: Option<f64>| json!({"scenario": "scene-orbit", "sample": {"cpu_ms": cpu, "gpu_ms": 1.0, "importing": false, "work_ms": work}});
+        let run = |frames: Vec<Value>| {
+            Some(Ok(Output {
+                path: PathBuf::from("responsiveness.json"),
+                value: json!({"frames": frames, "clicks": {"total": 0, "landed": 0}}),
+            }))
+        };
+        let orbit = "Editor · Outpost Scene orbit (after imports)";
+        let rows_for = |frames: Vec<Value>| {
+            rows(&Results {
+                editor_warm: run(frames),
+                ..Results::default()
+            })
+        };
+        // Every frame reports its work: a measured row that can fail.
+        let complete = rows_for(vec![frame(30., Some(3.)), frame(31., Some(6.))]);
+        let p95 = complete
+            .iter()
+            .find(|r| r.subject == orbit && r.metric == "CPU work p95")
+            .expect("CPU work row");
+        assert_eq!((p95.value, p95.status), (Some(6.), Status::Fail));
+        assert!(
+            !complete
+                .iter()
+                .any(|r| r.subject == orbit && r.metric.contains("wall bound"))
+        );
+        // One frame without it: back to the wall bound, which cannot fail.
+        let partial = rows_for(vec![frame(30., Some(3.)), frame(31., None)]);
+        let bound = partial
+            .iter()
+            .find(|r| {
+                r.subject == orbit && r.metric == "Frame minus UI fence wait p95 (wall bound)"
+            })
+            .expect("bound row");
+        assert_eq!(bound.status, Status::NotMeasured);
+        assert!(!partial.iter().any(|r| r.metric == "CPU work p95"));
     }
 }
