@@ -68,17 +68,17 @@ pub(super) fn begin(st: &mut State, p: SessionBeginParams) -> R {
         session: session.clone(),
     });
     let names = |s: &[Scope]| s.iter().map(|x| x.as_str()).collect::<Vec<_>>().join(", ");
-    st.log(Diagnostic::info(
-        codes::SESSION_APPROVED,
-        format!(
-            "session `{}` for `{}` ({}) approved by {}: [{}]",
-            session.id,
-            session.client,
-            session.author,
-            session.approved_by,
-            names(&session.granted)
-        ),
-    ));
+    // Every launch and connection begins a session: a debug event, not a Console
+    // line (ARA1812). The journal and `session.status` keep the approval.
+    tracing::debug!(
+        code = %codes::SESSION_APPROVED,
+        "session `{}` for `{}` ({}) approved by {}: [{}]",
+        session.id,
+        session.client,
+        session.author,
+        session.approved_by,
+        names(&session.granted)
+    );
     if !session.denied.is_empty() {
         st.log(Diagnostic::warning(
             codes::SCOPE_DENIED,

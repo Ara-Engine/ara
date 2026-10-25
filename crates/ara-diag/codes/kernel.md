@@ -928,7 +928,7 @@ Fixes:
 ## ARA1812 SESSION_APPROVED: Session approved
 owner: ara-host
 
-A session was created and journaled. This informational log records its client, author, granted scopes and approval authority; separately denied scopes may still be reported by `ARA1805`.
+A session was created and journaled. Its client, author, granted scopes and approval authority are a `tracing` debug event (not a Console log: every launch and connection begins one); the journal and `session.status` keep the approval. Separately denied scopes are still reported by `ARA1805`.
 
 Causes:
 - A successful `session.begin`, including one created automatically by a CLI or per-connection MCP client.

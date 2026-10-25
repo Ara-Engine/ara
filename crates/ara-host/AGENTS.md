@@ -27,8 +27,8 @@ ara-why, ara-profile, ara-collab.
   `apply(ApplyParams)` (edits = `cmd.apply`), `log`, `notify`, `start_job`,
   `job_progress`, `finish_job`, `job_cancelled`.
 - `Approval` hook (`DefaultPolicy`: humans everything, agents
-  `Scope::agent_default()`); the decision is stored on the session, journaled and
-  logged (ARA1812, denials ARA1805).
+  `Scope::agent_default()`); the decision is stored on the session and journaled;
+  approvals are a `tracing` debug event (ARA1812), denials a warning (ARA1805).
 - `core_methods()`: the catalog of the always-registered services (core, profile,
   diag, why) without a host (offline `ara docs`, MCP tests).
 - `Host::why()`: the `ara why` registry; subsystems `register` explainers and `add`
