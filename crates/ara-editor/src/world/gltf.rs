@@ -384,16 +384,39 @@ impl FidelityContent {
         schema: &ara_schema::SchemaDb,
     ) -> anyhow::Result<ara_runtime_render::fidelity::native::Content> {
         let empty = ara_runtime::assets::MemoryAssets::default();
-        ara_runtime_render::fidelity::native::Content::resolve_available_with_pending(
-            frame,
-            workspace,
-            schema,
-            &self.library,
-            self.snapshot
-                .as_deref()
-                .map_or(&empty as &dyn AssetSource, |snapshot| snapshot),
-            &|asset| self.model_is_pending(asset),
-        )
+        let mut content =
+            ara_runtime_render::fidelity::native::Content::resolve_available_with_pending(
+                frame,
+                workspace,
+                schema,
+                &self.library,
+                self.snapshot
+                    .as_deref()
+                    .map_or(&empty as &dyn AssetSource, |snapshot| snapshot),
+                &|asset| self.model_is_pending(asset),
+            )?;
+        // Extraction intentionally lowers an unavailable model to a shape. Keep
+        // its source identity, just as Play does, so native fill can distinguish
+        // loading bounds from an authored translucent box of the same colour.
+        for draw in &frame.draws {
+            if !matches!(draw.geometry, ara_runtime::extract::Geometry::Shape { .. }) {
+                continue;
+            }
+            let Some(reference) = self
+                .mesh_records
+                .get(&draw.address)
+                .and_then(|record| record.get("model"))
+                .filter(|value| !value.is_null())
+            else {
+                continue;
+            };
+            let reference: ara_schema::AssetRef = serde_json::from_value(reference.to_owned())?;
+            content.unpublished_models.insert(
+                draw.address.to_owned(),
+                ara_runtime::assets::asset_id(&reference)?.to_owned(),
+            );
+        }
+        Ok(content)
     }
 }
 
