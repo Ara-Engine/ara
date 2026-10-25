@@ -1,4 +1,4 @@
-//! Protocol 1 preserves the complete BC7 search with compile-time mode kernels.
+//! Protocol 2 skips work only when mode 6 has already proved the exact zero winner.
 use ara_gpu::{
     Access, Barrier, Buffer, Pipeline, Resource, RootConstants,
     vulkan::{Command, Recorder},
@@ -39,7 +39,7 @@ impl Pipelines<'_> {
             } => {
                 let (scratch, slot) = scratch.expect("split dispatch allocated scratch");
                 root[4] = slot;
-                root[7] = 1;
+                root[7] = 2;
                 let counts = if root[3] == 1 {
                     [8, 16, 16, 16, 8, 4, 1, 16]
                 } else {
@@ -53,10 +53,12 @@ impl Pipelines<'_> {
                         handoff: None,
                     }])
                 };
-                for (mode, &pipeline) in modes.iter().enumerate() {
+                // Mode 6 candidate zero establishes the global minimum before
+                // other modes inspect its score. Every dispatch has a storage barrier.
+                for mode in [6, 0, 1, 2, 3, 4, 5, 7] {
                     stage(
                         commands,
-                        pipeline,
+                        modes[mode],
                         root,
                         (count * counts[mode]).div_ceil(64),
                     );

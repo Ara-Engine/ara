@@ -222,5 +222,69 @@
                                      "depth_write":  false,
                                      "vertex_stride":  0
                                  }
-                   }
+                   },
+    "bc7_mode0_dot":  {
+                          "entries":  {
+                                          "encodeBc7Mode0Dot":  "compute"
+                                      },
+                          "source":  "bc7.slang",
+                          "state":  {
+                                        "blend":  false,
+                                        "color_formats":  [
+
+                                                          ],
+                                        "depth_format":  null,
+                                        "depth_test":  false,
+                                        "depth_write":  false,
+                                        "vertex_stride":  0
+                                    }
+                      },
+    "bc7_mode4_dot":  {
+                          "entries":  {
+                                          "encodeBc7Mode4Dot":  "compute"
+                                      },
+                          "source":  "bc7.slang",
+                          "state":  {
+                                        "blend":  false,
+                                        "color_formats":  [
+
+                                                          ],
+                                        "depth_format":  null,
+                                        "depth_test":  false,
+                                        "depth_write":  false,
+                                        "vertex_stride":  0
+                                    }
+                      },
+    "bc7_mode6_dot":  {
+                          "entries":  {
+                                          "encodeBc7Mode6Dot":  "compute"
+                                      },
+                          "source":  "bc7.slang",
+                          "state":  {
+                                        "blend":  false,
+                                        "color_formats":  [
+
+                                                          ],
+                                        "depth_format":  null,
+                                        "depth_test":  false,
+                                        "depth_write":  false,
+                                        "vertex_stride":  0
+                                    }
+                      },
+    "bc7_mode7_dot":  {
+                          "entries":  {
+                                          "encodeBc7Mode7Dot":  "compute"
+                                      },
+                          "source":  "bc7.slang",
+                          "state":  {
+                                        "blend":  false,
+                                        "color_formats":  [
+
+                                                          ],
+                                        "depth_format":  null,
+                                        "depth_test":  false,
+                                        "depth_write":  false,
+                                        "vertex_stride":  0
+                                    }
+                      }
 }

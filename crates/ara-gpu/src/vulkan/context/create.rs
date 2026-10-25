@@ -296,6 +296,7 @@ impl Gpu {
             let memory = instance.get_physical_device_memory_properties(physical);
             let mut as_properties = vk::PhysicalDeviceAccelerationStructurePropertiesKHR::default();
             let mut mesh_properties = vk::PhysicalDeviceMeshShaderPropertiesEXT::default();
+            let mut v13_properties = vk::PhysicalDeviceVulkan13Properties::default();
             let mut indexing = vk::PhysicalDeviceDescriptorIndexingProperties::default();
             let mut id_properties = vk::PhysicalDeviceIDProperties::default();
             instance.get_physical_device_properties2(
@@ -304,6 +305,7 @@ impl Gpu {
                     .push(&mut as_properties)
                     .push(&mut indexing)
                     .push(&mut mesh_properties)
+                    .push(&mut v13_properties)
                     .push(&mut id_properties),
             );
             // Retain bindings 0..4 for existing material-preview cooks. Both the
@@ -368,6 +370,8 @@ impl Gpu {
                 hdr_metadata,
                 buffer_int64_atomics,
                 shader_integer_dot_product,
+                packed_integer_dot_accelerated: shader_integer_dot_product
+                    && v13_properties.integer_dot_product4x8_bit_packed_unsigned_accelerated != 0,
                 max_image_dimension: properties.limits.max_image_dimension2_d,
                 driver_version: properties.driver_version,
                 graphics_family,

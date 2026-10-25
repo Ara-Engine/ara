@@ -25,11 +25,18 @@ fn blocks() -> Vec<[u32; 16]> {
 #[ignore = "requires Vulkan; run through ara-dev gpu with a private profile"]
 fn unified_host_matches_integer_oracles_and_reuses_transfers()
 -> Result<(), Box<dyn std::error::Error>> {
+    for allow_dot in [false, true] {
+        host_probe(allow_dot)?;
+    }
+    Ok(())
+}
+
+fn host_probe(allow_dot: bool) -> Result<(), Box<dyn std::error::Error>> {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
     let scratch = root.join("../../target/ara-texture-gpu/host-probe");
     std::fs::create_dir_all(&scratch)?;
     let cache = tempfile::tempdir_in(scratch)?;
-    let encoder = crate::Encoder::new(&root.join("cooked"), cache.path())?;
+    let encoder = crate::Encoder::with_optional_dot(&root.join("cooked"), cache.path(), allow_dot)?;
     let cases = blocks();
     let words: Vec<_> = cases.iter().flatten().copied().collect();
     let cancel = Cancellation::default();

@@ -19,6 +19,7 @@ struct State {
     kernels: Vec<Kernel>,
     transfers: Option<Transfers>,
     timings: std::collections::BTreeMap<String, f64>,
+    dot: bool,
 }
 
 /// One headless, raster-only Vulkan device and its immutable BC codec cohort.
@@ -30,6 +31,11 @@ impl Encoder {
     /// Opens a cooked cohort and a driver-local pipeline cache, with no window or
     /// runtime shader compilation. Call only inside an isolated worker/background job.
     pub fn new(cooked: &Path, cache: &Path) -> Result<Self> {
+        Self::with_optional_dot(cooked, cache, true)
+    }
+
+    // Tests also exercise the scalar artifacts on dot-capable hardware.
+    pub(crate) fn with_optional_dot(cooked: &Path, cache: &Path, allow_dot: bool) -> Result<Self> {
         let start = std::time::Instant::now();
         let mut identity = Vec::new();
         let mut kernels = Vec::new();
@@ -48,6 +54,10 @@ impl Encoder {
             "bc7_mode7",
             "bc7_select",
             "bc7_reduce",
+            "bc7_mode0_dot",
+            "bc7_mode4_dot",
+            "bc7_mode6_dot",
+            "bc7_mode7_dot",
         ] {
             let bytes = std::fs::read(cooked.join(format!("{name}.json"))).map_err(unavailable)?;
             let mut manifest: CookedPipeline =
@@ -104,12 +114,14 @@ impl Encoder {
                 "integer BC6H/BC7 shaders require shaderInt64 on this device",
             ));
         }
+        let dot = allow_dot && gpu.context().info.packed_integer_dot_accelerated;
         Ok(Self {
             identity: format!("gpu-bcn-cpu-normals-v1:{}", Digest::of(&identity)),
             state: Mutex::new(State {
                 gpu,
                 kernels,
                 transfers: None,
+                dot,
                 timings: std::collections::BTreeMap::from([(
                     "initialize.wall_ms".into(),
                     start.elapsed().as_secs_f64() * 1000.0,
@@ -164,13 +176,19 @@ impl BlockEncoder for Encoder {
             kernels,
             transfers,
             timings,
+            dot,
         } = &mut *state;
         let start = std::time::Instant::now();
         let mut modes;
         let pipelines = if index == 3 && preset > 0 {
-            modes = [pipeline(gpu, &mut kernels[4])?; 8];
+            let selected = if *dot {
+                [14, 5, 6, 7, 15, 9, 16, 17]
+            } else {
+                [4, 5, 6, 7, 8, 9, 10, 11]
+            };
+            modes = [pipeline(gpu, &mut kernels[selected[0]])?; 8];
             for mode in 1..8 {
-                modes[mode] = pipeline(gpu, &mut kernels[4 + mode])?;
+                modes[mode] = pipeline(gpu, &mut kernels[selected[mode]])?;
             }
             Pipelines::Bc7 {
                 modes: &modes,
