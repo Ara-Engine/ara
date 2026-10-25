@@ -34,7 +34,7 @@ struct Look {
     float4 terrain;    // x terrain detail distance (m): layer normal/MR maps end there
     uint4 localShadows; // x shading table (storage), y atlas (sampled; 0 none), zw atlas texels
 };
-static const uint LOOK_PHYSICAL_SKY=1,LOOK_FOG=2,LOOK_RESET=4,LOOK_AMBIENT_OCCLUSION=8,LOOK_REFLECTIONS=16;
+static const uint LOOK_PHYSICAL_SKY=1,LOOK_FOG=2,LOOK_RESET=4,LOOK_AMBIENT_OCCLUSION=8,LOOK_REFLECTIONS=16,LOOK_SNAP=32;
 Look look(Frame f){return buffers[NonUniformResourceIndex(f.look.x)].Load<Look>(0);}
 // Exposure state (look-post.slang exposureMain): applied multiplier, the previous
 // one, EV100 and metered luminance. The TAA history (RGBA16F) is stored pre-exposed

@@ -97,6 +97,9 @@ pub(crate) struct LookGpu {
     pub deferred_history: Option<usize>,
     /// Remaining frames whose exposure snaps to its meter (capture resets).
     pub settle: u32,
+    /// The state holds a host's exposure seed: the next reset adapts from it
+    /// instead of snapping (`Renderer::seed_exposure`).
+    pub seeded: bool,
     /// Probe-volume GI, when the scene has acquired probe surfaces.
     pub gi: Option<GiGpu>,
     /// Distant shadows past the cascades (`Shadows::far`).
@@ -206,6 +209,7 @@ impl LookGpu {
             deferred: false,
             deferred_history: None,
             settle: 0,
+            seeded: false,
             gi: None,
             far: None,
             cascades: None,
@@ -347,6 +351,21 @@ impl LookGpu {
     pub(crate) fn reset_exposure(&mut self, gpu: &VulkanDevice) -> Result<()> {
         gpu.upload(self.state, &[0; STATE_BYTES])?;
         self.state_access = Access::HostWrite;
+        self.seeded = false;
+        Ok(())
+    }
+
+    /// Writes `multiplier` as the applied and previous exposure (EV100 as manual
+    /// exposure computes it), with empty metering bins; the next frame adapts from it.
+    pub(crate) fn seed_exposure(&mut self, gpu: &VulkanDevice, multiplier: f32) -> Result<()> {
+        let ev100 = (1. / (1.2 * multiplier)).log2();
+        let mut bytes = [0u8; STATE_BYTES];
+        for (i, value) in [multiplier, multiplier, ev100, 0.].into_iter().enumerate() {
+            bytes[i * 4..i * 4 + 4].copy_from_slice(&value.to_le_bytes());
+        }
+        gpu.upload(self.state, &bytes)?;
+        self.state_access = Access::HostWrite;
+        self.seeded = true;
         Ok(())
     }
 

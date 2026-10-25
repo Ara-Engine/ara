@@ -235,6 +235,7 @@ fn fork_look(
         deferred: false,
         deferred_history: None,
         settle: 0,
+        seeded: false,
         gi: None,
         far: None,
         cascades: None,

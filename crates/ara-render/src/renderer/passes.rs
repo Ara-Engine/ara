@@ -151,12 +151,19 @@ impl Renderer {
             .upload(self.compute_frame, bytemuck::bytes_of(&compute_frame))?;
         self.look.ensure(&mut self.gpu)?;
         let (sampled, storage) = self.look.indices();
+        // Exposure snaps to its meter on a reset unless a host seeded it, and
+        // while new probe GI converges or fades in (no adaptation swing as the
+        // scene brightens under it).
+        let reset = self.targets.history.is_none() || self.look.settle > 0;
+        let seeded = std::mem::take(&mut self.look.seeded);
+        let arriving = self.look.gi.as_ref().is_some_and(|gi| gi.arriving());
         let look_frame = LookFrame::new(
             &self.look.effective(),
             &FrameInputs {
                 sun_lux: self.content.sun_lux,
                 exposure,
-                reset: self.targets.history.is_none() || self.look.settle > 0,
+                reset,
+                snap: (reset && !seeded) || arriving,
                 frame_number: self.frame_number,
                 sampled,
                 storage,

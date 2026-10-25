@@ -295,6 +295,26 @@ impl Renderer {
         self.frame_number = 0;
         Ok(())
     }
+    /// Applied linear exposure of the last completed frame (automatic exposure's
+    /// adapted multiplier), or `None` before any metered frame. Read it between
+    /// completed frames, e.g. to seed another view's start (`seed_exposure`).
+    pub fn exposure(&self) -> Result<Option<f32>> {
+        let state = self.gpu.read(self.look.state)?;
+        let value = f32::from_le_bytes(state[..4].try_into()?);
+        Ok((value.is_finite() && value > 0.).then_some(value))
+    }
+    /// Start the next frame's exposure from `multiplier` (a linear exposure, as
+    /// `exposure` returns): automatic exposure adapts from it at the look's rate
+    /// instead of snapping to its first meter, and history pre-exposes with it.
+    /// Hosts carry a converged exposure across views (Game preview into Play).
+    /// Capture resets still start from zero and snap.
+    pub fn seed_exposure(&mut self, multiplier: f32) -> Result<()> {
+        ensure!(
+            multiplier.is_finite() && multiplier > 0.,
+            "Exposure seed must be a finite positive multiplier"
+        );
+        self.look.seed_exposure(&self.gpu, multiplier)
+    }
     /// Select the display curve applied after exposure (Lit view only).
     pub fn set_tone_curve(&mut self, curve: post::ToneCurve) {
         self.look.look.curve = curve;

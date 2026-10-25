@@ -59,10 +59,10 @@ Owns the M1 baseline renderer and agent visual feedback. Gameplay state stays in
 - Live frames keep output/IDs on the GPU; captures copy the settled frame once and
   `entity_at(&mut self, pixel)` reads IDs only when picking. Same-queue passes share
   a submission (barriers and timestamps kept); cross-queue edges wait on batches.
-- `look::Look` (`Renderer::set_look`): D27 raster look after the G-buffer:
-  physical sky LUTs and their IBL, CSM-shadowed froxel fog, histogram or manual
-  exposure, bloom, grading and the display curve. Defaults reproduce M1. Hosts map
-  `SceneLook` with `FrameEnvironment::raster` (ara-render-fidelity). The sky IBL,
+- `look::Look` (`Renderer::set_look`): D27 raster look after the G-buffer: physical sky LUTs and their IBL,
+  CSM-shadowed froxel fog, histogram or manual exposure (snaps to its meter on a reset and while new GI arrives;
+  `exposure`/`seed_exposure` carry a converged exposure across views), bloom, grading and the display curve.
+  Hosts map `SceneLook` with `FrameEnvironment::raster` (ara-render-fidelity). The sky IBL,
   far map and cascades rebuild on any sun change past `SUN_HOLD` (noise only): once
   something animates the sun, add a threshold with an old/new crossfade.
 - `look::gi::ProbeSurfaces` (`Renderer::set_probe_surfaces`): probe GI. One-time 8x8 oct surface caches;

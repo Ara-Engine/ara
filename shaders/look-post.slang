@@ -41,7 +41,9 @@ void exposureMain(uint lane:SV_GroupIndex,uint3 group:SV_GroupID){
         metered=exp2(reduce[0].x/max(reduce[0].y,1));ev=clamp(log2(metered/(0.18*1.2)),l.metering.x,l.metering.y);target=l.exposure.y/(1.2*exp2(ev));
     }else ev=log2(1/max(1.2*target,1e-12));
     if(lane!=0)return;
-    float old=exposureState(l).x;bool reset=!automatic || (l.flags.y&LOOK_RESET)!=0 || !(old>0);
+    // LOOK_SNAP: the meter applies at once (history reset, or new GI arriving);
+    // otherwise exposure adapts from the last frame's (or a host's seed).
+    float old=exposureState(l).x;bool reset=!automatic || (l.flags.y&LOOK_SNAP)!=0 || !(old>0);
     float value=reset?target:lerp(old,target,1-exp(-l.exposure.w*l.exposure.z));
     buffers[NonUniformResourceIndex(l.state.x)].Store<float4>(0,float4(value,old,ev,metered));
 }
