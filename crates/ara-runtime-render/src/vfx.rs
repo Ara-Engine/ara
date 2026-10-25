@@ -63,7 +63,8 @@ impl Effects {
         depth: SceneDepth,
     ) -> Result<SceneColor> {
         self.gpu_ms = 0.;
-        let size = renderer.size();
+        // Particles draw over the scene's HDR, at the render size.
+        let size = renderer.render_size();
         let stale: Vec<u64> = self
             .live
             .iter()

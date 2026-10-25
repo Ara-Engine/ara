@@ -229,7 +229,8 @@ impl FidelityPlan {
 /// resolutions. Apply with `Renderer::set_quality`.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct RasterPlan {
-    /// Render resolution (equal to the display until temporal upscaling lands).
+    /// Render resolution of the scene passes: the display scaled by
+    /// [`QualityPreset::raster_scale`], temporally upscaled to the display.
     pub render_size: [u32; 2],
     /// Display resolution.
     pub display_size: [u32; 2],
@@ -255,6 +256,17 @@ pub enum RenderPath {
 }
 
 impl QualityPreset {
+    /// Raster render scale per display axis: the scene renders at this fraction of
+    /// the display and the temporal resolve reconstructs the display resolution
+    /// (TAAU, `Renderer::resize_upscaled`). Low renders natively.
+    pub fn raster_scale(self) -> f32 {
+        match self {
+            Self::Low => 1.,
+            Self::Medium | Self::High => 2. / 3.,
+            Self::Epic => 0.77,
+        }
+    }
+
     /// Raster budgets for this preset (D27 record targets at 2560x1440 on an RTX
     /// 4070 SUPER: Low 1.0 ms, Medium 1.75, High 3.0, Epic 5.0).
     pub fn raster_quality(self) -> Quality {
@@ -380,12 +392,12 @@ impl Plan {
             QualityChoice::Preset(p) => p,
         };
         let preset = requested;
+        let scaled = |scale: f32| display_size.map(|v| ((v as f32 * scale).round() as u32).max(1));
         let raster = RenderPath::Raster(RasterPlan {
-            render_size: display_size,
+            render_size: scaled(preset.raster_scale()),
             display_size,
             quality: preset.raster_quality(),
         });
-        let scaled = |scale: f32| display_size.map(|v| ((v as f32 * scale).round() as u32).max(1));
         let path = match preset {
             _ if !traced => raster,
             QualityPreset::Low => raster,
@@ -493,7 +505,10 @@ mod tests {
                 let choice = QualityChoice::Preset(preset);
                 let plan = Plan::resolve(choice, &caps, display, RenderOptions::default()).unwrap();
                 assert_eq!(plan.preset, preset);
-                assert!(matches!(plan.path, RenderPath::Raster(r) if r.render_size == display));
+                let scale = preset.raster_scale();
+                let render = display.map(|v| (v as f32 * scale).round() as u32);
+                assert!(matches!(plan.path,
+                    RenderPath::Raster(r) if r.render_size == render && r.display_size == display));
             }
         }
         // Non-RT devices keep the requested preset on raster even when opting in.

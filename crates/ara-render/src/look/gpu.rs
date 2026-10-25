@@ -24,8 +24,9 @@ pub(crate) const SSR_PYRAMID: usize = 12;
 pub(crate) const SSR_TRACE: usize = 13;
 const IMAGES: usize = 14;
 
-/// Fixed LUT extents; bloom atlases follow the render size.
-fn extent(image: usize, size: [u32; 2]) -> [u32; 2] {
+/// Fixed LUT extents; the half-resolution effects and reflection pyramid follow
+/// the render size, the bloom atlases the display size.
+fn extent(image: usize, render: [u32; 2], display: [u32; 2]) -> [u32; 2] {
     match image {
         TRANSMITTANCE => [256, 64],
         MULTISCATTER => [32, 32],
@@ -34,9 +35,10 @@ fn extent(image: usize, size: [u32; 2]) -> [u32; 2] {
         SKY_IRRADIANCE => [32, 16],
         SKY_PREFILTER => [256, 640],
         AO_TRACE | AO_DENOISED | GI_DIFFUSE | GI_SPECULAR | SSR_TRACE => {
-            size.map(|v| v.div_ceil(2))
+            render.map(|v| v.div_ceil(2))
         }
-        _ => [size[0], (size[1] / 2).max(1)],
+        SSR_PYRAMID => [render[0], (render[1] / 2).max(1)],
+        _ => [display[0], (display[1] / 2).max(1)],
     }
 }
 
@@ -80,7 +82,10 @@ pub(crate) struct LookGpu {
     pub sampled: [u32; IMAGES],
     pub storage: [u32; IMAGES],
     pub states: [State; IMAGES],
-    pub size: [u32; 2],
+    /// Render size of the scene passes.
+    pub render: [u32; 2],
+    /// Display size of the post chain.
+    pub display: [u32; 2],
     /// Last computed sky; `None` until the first frame with a physical sky.
     pub sky: Option<SkyKey>,
     /// Lit frames stop before temporal resolve and post (`Renderer::finish`).
@@ -188,7 +193,8 @@ impl LookGpu {
                 access: Access::Undefined,
                 queue: Queue::Graphics,
             }; IMAGES],
-            size,
+            render: size,
+            display: size,
             sky: None,
             deferred: false,
             deferred_history: None,
@@ -214,9 +220,14 @@ impl LookGpu {
         }
     }
 
-    /// Drops the render-size bloom atlases; the next frame reallocates them.
-    pub(crate) fn resize(&mut self, gpu: &mut VulkanDevice, size: [u32; 2]) -> Result<()> {
-        if size == self.size {
+    /// Drops the view-sized images; the next frame reallocates them.
+    pub(crate) fn resize(
+        &mut self,
+        gpu: &mut VulkanDevice,
+        render: [u32; 2],
+        display: [u32; 2],
+    ) -> Result<()> {
+        if render == self.render && display == self.display {
             return Ok(());
         }
         for i in [
@@ -233,7 +244,8 @@ impl LookGpu {
                 gpu.retire(Resource::Image(old))?;
             }
         }
-        self.size = size;
+        self.render = render;
+        self.display = display;
         Ok(())
     }
 
@@ -263,7 +275,7 @@ impl LookGpu {
             if !needed || self.images[i].is_some() {
                 continue;
             }
-            let [width, height] = extent(i, self.size);
+            let [width, height] = extent(i, self.render, self.display);
             let image = gpu.create_image(
                 width,
                 height,

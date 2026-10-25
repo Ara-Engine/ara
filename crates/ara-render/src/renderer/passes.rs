@@ -4,7 +4,7 @@ use crate::{
     graph::{Graph, PassId},
     look::{
         frame::{FrameInputs, LookFrame},
-        passes::LookPass,
+        passes::{Frames, LookPass},
     },
 };
 use ara_gpu::{
@@ -59,6 +59,10 @@ impl Renderer {
             native.prepare(&mut self.gpu, &frame, &camera, &self.look.quality)?;
         }
         self.gpu.upload(self.frame, bytemuck::bytes_of(&frame))?;
+        let mut display_frame = frame;
+        display_frame.extent[..2].copy_from_slice(&self.size);
+        self.gpu
+            .upload(self.display_frame, bytemuck::bytes_of(&display_frame))?;
         // The far map redraws only when its view, content or casters inside it
         // changed; its draws read the far matrix as cascade 0 of their own frame
         // record, and native casters come from a culled pass of their own.
@@ -248,14 +252,16 @@ impl Renderer {
                 graphics.push((id, Access::ShaderRead));
             });
         }
-        let frame_id = graph.import(
-            Resource::Buffer(self.frame),
-            State {
-                access: Access::HostWrite,
-                queue: Queue::Graphics,
-            },
-        );
-        graphics.push((frame_id, Access::ShaderRead));
+        for buffer in [self.frame, self.display_frame] {
+            let id = graph.import(
+                Resource::Buffer(buffer),
+                State {
+                    access: Access::HostWrite,
+                    queue: Queue::Graphics,
+                },
+            );
+            graphics.push((id, Access::ShaderRead));
+        }
         // Host-written storage: dynamic vertices and the light list.
         let host_write = State {
             access: Access::HostWrite,
@@ -529,6 +535,10 @@ impl Renderer {
                 0,
             ],
         };
+        // Native G-buffer and forward fragments read the texture footprint scale
+        // from root word 4 (raster.slangh Root).
+        let mut footprint = root;
+        footprint.words[4] = frame.upscale[2].to_bits();
         for batch in submission::batches(&compiled.passes) {
             let mut recorder = self.gpu.begin(batch[0].queue);
             for pass in batch {
@@ -667,10 +677,10 @@ impl Renderer {
                                 image: self.targets.images[DEPTH],
                                 clear: Some([0.; 4]),
                             }),
-                            size: self.size,
+                            size: self.render,
                         });
                         if let Some(native) = &self.native {
-                            native.record(&mut recorder, root, 4);
+                            native.record(&mut recorder, footprint, 4);
                         }
                         for (index, mesh) in self
                             .content
@@ -693,7 +703,8 @@ impl Renderer {
                         constants.words[0] = self.compute_frame_index;
                         recorder.push(Command::Constants(constants));
                         recorder.push(Command::Dispatch([
-                            (self.size[0].div_ceil(16) * self.size[1].div_ceil(16)).div_ceil(64),
+                            (self.render[0].div_ceil(16) * self.render[1].div_ceil(16))
+                                .div_ceil(64),
                             1,
                             1,
                         ]));
@@ -707,7 +718,7 @@ impl Renderer {
                                 clear: Some([0.; 4]),
                             }],
                             depth: None,
-                            size: self.size,
+                            size: self.render,
                         });
                         recorder.push(Command::Fullscreen);
                         recorder.push(Command::EndRendering);
@@ -751,10 +762,10 @@ impl Renderer {
                                 image: self.targets.images[DEPTH],
                                 clear: None,
                             }),
-                            size: self.size,
+                            size: self.render,
                         });
                         if let Some(native) = &self.native {
-                            native.record(&mut recorder, root, 5);
+                            native.record(&mut recorder, footprint, 5);
                         }
                         let mut transparent = self
                             .content
@@ -785,6 +796,7 @@ impl Renderer {
                             self.pipelines.tonemap
                         }));
                         let mut constants = root;
+                        constants.words[0] = self.display_frame_index;
                         constants.words[1] = if taa {
                             self.targets.sampled[HDR]
                         } else {
@@ -800,7 +812,7 @@ impl Renderer {
                     Recipe::Look(look_pass) => self.look.record(
                         &mut recorder,
                         look_pass,
-                        self.frame_index,
+                        self.frames(),
                         // The reflection pyramid reads last frame's history; post passes
                         // read this frame's.
                         match look_pass {
@@ -810,7 +822,6 @@ impl Renderer {
                             _ => self.targets.sampled[output_history],
                         },
                         true,
-                        self.size,
                     ),
                     Recipe::Empty => {}
                 }
@@ -855,7 +866,7 @@ impl Renderer {
             self.look.deferred_history = None;
             self.targets.history = Some(output_history);
         }
-        self.previous_vp = frame.vp;
+        self.previous_vp = camera.projection * camera.view;
         self.frame_number = self.frame_number.wrapping_add(1);
         self.gpu.assert_clean()?;
         if let Some(native) = &mut self.native {
@@ -875,9 +886,13 @@ impl Renderer {
     /// `color` is linear HDR at the render size, owned by Graphics in `state`, and
     /// stays readable. After a deferred-post `render` it resolves into that frame's
     /// history slot (antialiasing particles and landscape with the scene); otherwise
-    /// it grades `color` directly. Reuses the frame's constants; returns the SDR
-    /// output in CopySource.
+    /// it grades `color` directly, which needs a native (not upscaled) frame.
+    /// Reuses the frame's constants; returns the SDR output in CopySource.
     pub fn finish(&mut self, color: Image, sampled: u32, state: State) -> Result<Image> {
+        ensure!(
+            self.look.deferred_history.is_some() || self.render == self.size,
+            "An upscaled frame is graded only through its temporal resolve"
+        );
         self.look.ensure(&mut self.gpu)?;
         let mut graph = Graph::default();
         let input = graph.import(Resource::Image(color), state);
@@ -908,7 +923,7 @@ impl Renderer {
         });
         let look = self.look.import(&mut graph);
         let frame = graph.import(
-            Resource::Buffer(self.frame),
+            Resource::Buffer(self.display_frame),
             State {
                 access: Access::HostWrite,
                 queue: Queue::Graphics,
@@ -957,15 +972,14 @@ impl Renderer {
                     self.look.record(
                         &mut recorder,
                         *look_pass,
-                        self.frame_index,
+                        self.frames(),
                         post_sampled,
                         resolved.is_some(),
-                        self.size,
                     );
                 } else if resolved.is_some_and(|(id, _, _)| id == pass.id) {
                     recorder.push(Command::Pipeline(self.pipelines.taa));
                     recorder.push(Command::Constants(RootConstants {
-                        words: [self.frame_index, sampled, 0, 0, 0, 0, 0, 0],
+                        words: [self.display_frame_index, sampled, 0, 0, 0, 0, 0, 0],
                     }));
                     recorder.push(Command::Dispatch([
                         self.size[0].div_ceil(8),
@@ -994,6 +1008,16 @@ impl Renderer {
         self.look.finish(&look, &compiled.final_states);
         self.gpu.assert_clean()?;
         Ok(self.targets.images[OUTPUT])
+    }
+}
+
+impl Renderer {
+    /// The frame records look passes record with (`look::passes::Frames`).
+    fn frames(&self) -> Frames {
+        Frames {
+            render: (self.frame_index, self.render),
+            display: (self.display_frame_index, self.size),
+        }
     }
 }
 

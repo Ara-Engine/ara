@@ -127,6 +127,7 @@ impl Renderer {
 
     /// Read the last completed frame's entity-ID channel on demand, without rendering
     /// or PNG encoding. Ordinary live frames never copy pixels to host memory.
+    /// `pixel` is in display pixels; upscaled frames read the render pixel under it.
     pub fn entity_at(&mut self, pixel: [u32; 2]) -> Result<Option<u64>> {
         ensure!(
             pixel[0] < self.size[0] && pixel[1] < self.size[1],
@@ -137,7 +138,7 @@ impl Renderer {
         }
         self.readback(false)?;
         let bytes = self.gpu.read(self.targets.read_ids)?;
-        let index = (pixel[1] as usize * self.size[0] as usize + pixel[0] as usize) * 4;
+        let index = self.render_pixel(pixel) * 4;
         let id = f32::from_le_bytes(bytes[index..index + 4].try_into()?) as usize;
         Ok(id
             .checked_sub(1)

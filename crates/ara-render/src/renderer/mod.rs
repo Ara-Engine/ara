@@ -77,14 +77,23 @@ struct Pipelines {
 pub struct Renderer {
     /// GPU ownership and native window integration surface.
     gpu: VulkanDevice,
+    /// Display size: TAA history, output and captures.
     size: [u32; 2],
+    /// Render size of the scene passes (G-buffer, depth, HDR, IDs, motion); smaller
+    /// than `size` with temporal upscaling (`resize_upscaled`).
+    render: [u32; 2],
     targets: Targets,
     pipelines: Pipelines,
     content: upload::Content,
     frame: Buffer,
     frame_index: u32,
+    /// The frame record of display-size passes (temporal resolve, post, debug
+    /// views): `frame` with the display extent.
+    display_frame: Buffer,
+    display_frame_index: u32,
     compute_frame: Buffer,
     compute_frame_index: u32,
+    /// Unjittered view-projection of the last rendered frame (`Frame::previous_vp`).
     previous_vp: Mat4,
     frame_number: u32,
     artifacts: PathBuf,
@@ -186,7 +195,7 @@ impl Renderer {
             taa: load("taa")?,
             tonemap: load("tonemap")?,
         };
-        let targets = Self::targets(&mut gpu, size)?;
+        let targets = Self::targets(&mut gpu, size, size)?;
         Self::upload_scene(
             gpu,
             pipelines,
@@ -197,9 +206,15 @@ impl Renderer {
             shader_metadata,
         )
     }
-    /// Native frame size; resize replaces history and retires old graph storage.
+    /// Display size (history, output, captures and picking); resize replaces
+    /// history and retires old graph storage.
     pub fn size(&self) -> [u32; 2] {
         self.size
+    }
+    /// Render size of the scene passes and of `feature_color`, `feature_depth` and
+    /// `entity_channel`: the display size unless temporally upscaled.
+    pub fn render_size(&self) -> [u32; 2] {
+        self.render
     }
     /// Current SDR output, in CopySource layout after rendering.
     pub fn output(&self) -> Image {
@@ -213,8 +228,8 @@ impl Renderer {
                 && self.targets.states[slot].queue == Queue::Graphics
         })
     }
-    /// Last completed entity-ID texture, in CopySource layout after rendering.
-    /// The editor samples this on the same device for selection/review outlines.
+    /// Last completed entity-ID texture (render size), in CopySource layout after
+    /// rendering. The editor samples this on the same device for selection/review outlines.
     pub fn entity_channel(&self) -> Image {
         self.targets.images[ID]
     }
@@ -226,14 +241,30 @@ impl Renderer {
     pub fn timings(&self) -> &[PassTiming] {
         &self.last_timings
     }
-    /// Reallocate per-view graph resources and reset temporal history.
+    /// Reallocate per-view graph resources at `size`, rendering natively, and
+    /// reset temporal history.
     pub fn resize(&mut self, size: [u32; 2]) -> Result<()> {
-        ensure!(!size.contains(&0), "Cannot render a minimized window");
-        if size == self.size {
+        self.resize_upscaled(size, size)
+    }
+    /// Temporal upscaling (TAAU): the scene passes (G-buffer, lighting, the
+    /// half-resolution effects, IDs) run at `render`, and the temporal resolve
+    /// reconstructs the `display`-sized history from jittered render samples;
+    /// exposure, bloom and grading run at `display`. Equal sizes render natively.
+    /// Resets temporal history.
+    pub fn resize_upscaled(&mut self, render: [u32; 2], display: [u32; 2]) -> Result<()> {
+        ensure!(
+            !display.contains(&0) && !render.contains(&0),
+            "Cannot render a minimized window"
+        );
+        ensure!(
+            render[0] <= display[0] && render[1] <= display[1],
+            "Render size {render:?} exceeds the display {display:?}"
+        );
+        if render == self.render && display == self.size {
             return Ok(());
         }
-        let replacement = Self::targets(&mut self.gpu, size)?;
-        if let Err(error) = self.look.resize(&mut self.gpu, size) {
+        let replacement = Self::targets(&mut self.gpu, render, display)?;
+        if let Err(error) = self.look.resize(&mut self.gpu, render, display) {
             for image in replacement.images {
                 self.gpu.retire(Resource::Image(image))?;
             }
@@ -255,7 +286,8 @@ impl Renderer {
             self.gpu.retire(Resource::Buffer(buffer))?;
         }
         self.gpu.collect()?;
-        self.size = size;
+        self.size = display;
+        self.render = render;
         self.frame_number = 0;
         Ok(())
     }
@@ -437,7 +469,7 @@ impl Renderer {
         );
         self.readback(true)?;
         let rgba = self.gpu.read(self.targets.read_color)?;
-        let ids = self
+        let low = self
             .gpu
             .read(self.targets.read_ids)?
             .as_chunks::<4>()
@@ -445,6 +477,16 @@ impl Renderer {
             .iter()
             .map(|b| f32::from_le_bytes([b[0], b[1], b[2], b[3]]) as u32)
             .collect::<Vec<_>>();
+        // Upscaled IDs map each display pixel to its render pixel (nearest).
+        let [width, height] = self.size;
+        let ids = if self.render == self.size {
+            low
+        } else {
+            (0..height)
+                .flat_map(|y| (0..width).map(move |x| [x, y]))
+                .map(|pixel| low[self.render_pixel(pixel)])
+                .collect()
+        };
         let hash = self.scene_hash();
         Capture::from_render(
             rgba,
@@ -459,9 +501,17 @@ impl Renderer {
             },
         )
     }
+    /// Row-major index of the render pixel under display pixel `pixel`.
+    fn render_pixel(&self, pixel: [u32; 2]) -> usize {
+        let [x, y] = std::array::from_fn(|i| {
+            (u64::from(pixel[i]) * u64::from(self.render[i]) / u64::from(self.size[i])) as usize
+        });
+        y * self.render[0] as usize + x
+    }
     /// View targets: the compact G-buffer (decoded by raster.slangh's gbuffer*
-    /// helpers), depth, ID, HDR, TAA histories, output and motion.
-    fn targets(gpu: &mut VulkanDevice, size: [u32; 2]) -> Result<Targets> {
+    /// helpers), depth, ID, HDR and motion at the `render` size; TAA histories and
+    /// output at `display`.
+    fn targets(gpu: &mut VulkanDevice, render: [u32; 2], display: [u32; 2]) -> Result<Targets> {
         let mut allocated = Vec::new();
         let result = (|| {
             let mut graph = Graph::default();
@@ -492,6 +542,11 @@ impl Renderer {
                     } else {
                         vk::ImageUsageFlags::COLOR_ATTACHMENT
                     };
+                let size = if (HISTORY0..=OUTPUT).contains(&target) {
+                    display
+                } else {
+                    render
+                };
                 let (_, image) = graph.transient(
                     gpu,
                     TransientImage {
@@ -511,8 +566,8 @@ impl Renderer {
                 gpu.storage_image(images[OUTPUT])?.index,
             ];
             let tiles = gpu.create_buffer(
-                u64::from(size[0].div_ceil(16))
-                    * u64::from(size[1].div_ceil(16))
+                u64::from(render[0].div_ceil(16))
+                    * u64::from(render[1].div_ceil(16))
                     * (crate::scene::TILE_LIGHTS as u64 + 1)
                     * 4,
                 vk::BufferUsageFlags::STORAGE_BUFFER,
@@ -520,10 +575,12 @@ impl Renderer {
             )?;
             allocated.push(Resource::Buffer(tiles));
             let tile_index = gpu.storage_buffer(tiles)?.index;
-            let bytes = u64::from(size[0]) * u64::from(size[1]) * 4;
-            let read_color = gpu.create_buffer(bytes, vk::BufferUsageFlags::TRANSFER_DST, true)?;
+            let bytes = |[w, h]: [u32; 2]| u64::from(w) * u64::from(h) * 4;
+            let read_color =
+                gpu.create_buffer(bytes(display), vk::BufferUsageFlags::TRANSFER_DST, true)?;
             allocated.push(Resource::Buffer(read_color));
-            let read_ids = gpu.create_buffer(bytes, vk::BufferUsageFlags::TRANSFER_DST, true)?;
+            let read_ids =
+                gpu.create_buffer(bytes(render), vk::BufferUsageFlags::TRANSFER_DST, true)?;
             allocated.push(Resource::Buffer(read_ids));
             Ok(Targets {
                 images,

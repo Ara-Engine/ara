@@ -368,12 +368,12 @@ impl Presenter {
             if self
                 .composite
                 .as_ref()
-                .is_none_or(|c| c.size != renderer.size())
+                .is_none_or(|c| c.size != renderer.render_size())
             {
                 if let Some(old) = self.composite.take() {
                     old.retire(renderer.gpu_mut())?;
                 }
-                let size = renderer.size();
+                let size = renderer.render_size();
                 self.composite = Some(composite::Composite::new(renderer.gpu_mut(), size)?);
             }
             let composite = self.composite.as_mut().context("compositor initialized")?;

@@ -10,7 +10,8 @@ Owns the M1 baseline renderer and agent visual feedback. Gameplay state stays in
 - `Graph`: declared accesses, stable topological ordering, barriers, explicit queue release/acquire pairs, timeline dependencies, transient images.
   Compilation indexes resource uses once; declaration-order versions and queue handoffs stay deterministic.
 - `Renderer::new`, `render`, `render_view` (live debug view mode), `resize`, `capture`: cooked Vulkan rendering; read-only
-  `gpu()` access for diagnostics/native presentation. Resize resets history.
+  `gpu()` access for diagnostics/native presentation. Resize resets history. `resize_upscaled(render, display)` is TAAU:
+  scene passes, feature color/depth and IDs at `render_size()`; history, output, captures and picks at `size()`.
 - `Scene`, `Mesh`, `Material`, `Light`, `CameraSpec`: extracted world data and camera pose/bounds requests. Materials use bindless texture indices.
 - `instanced::Scene`: native model-space content contract for shared geometry,
   current/previous instance transforms, deforming revisions, 64-byte UV0/UV1
@@ -93,7 +94,8 @@ The renderer rejects mixed source cohorts. Byte-address frame/material/light
 records and 48-byte vertex records must match Slang's column-major ABI.
 
 Shaders: `raster.slangh` is the shared ABI (bindings, Frame, Surface; Frame.look.x
-is the look record, look.w the native motion texture). `look*.slang(h)` belong to
+is the look record, look.w the native motion texture, sizes/upscale the TAAU sizes,
+jitter offset and mip footprint; resolve and post use a display-extent record). `look*.slang(h)` belong to
 the look; never use 16-bit intrinsics (f16tof32) there: the device enables no
 Int16/Float16 capability, so pack halves with bit math.
 

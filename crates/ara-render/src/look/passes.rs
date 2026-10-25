@@ -37,6 +37,17 @@ pub(crate) enum LookPass {
     SsrTrace,
 }
 
+/// The frame records look passes run with: scene passes at the render size; the
+/// post chain (exposure, bloom, grading) at the display size, after the temporal
+/// resolve (`Renderer::resize_upscaled`).
+#[derive(Clone, Copy)]
+pub(crate) struct Frames {
+    /// Frame record (bindless index) and extent of the scene passes.
+    pub render: (u32, [u32; 2]),
+    /// Frame record and extent of the post chain.
+    pub display: (u32, [u32; 2]),
+}
+
 impl LookGpu {
     /// Declares the sky and fog passes. LUTs are rebuilt when the aerosols change,
     /// the sky IBL when the sun or sky changes, the sky view and froxels per frame.
@@ -390,17 +401,20 @@ impl LookGpu {
 
     /// Records one look dispatch. `input` is the sampled index of the scene HDR
     /// (post passes; the history for the reflection pyramid), `exposed` whether it is
-    /// the pre-exposed TAA history rather than linear HDR; `size` is the render extent.
+    /// the pre-exposed TAA history rather than linear HDR.
     pub(crate) fn record(
         &self,
         recorder: &mut Recorder,
         pass: LookPass,
-        frame_index: u32,
+        frames: Frames,
         input: u32,
         exposed: bool,
-        size: [u32; 2],
     ) {
         let p = &self.pipelines;
+        let (frame_index, size) = match pass {
+            LookPass::Exposure | LookPass::Bloom(_) | LookPass::Post => frames.display,
+            _ => frames.render,
+        };
         if let LookPass::GiClear | LookPass::GiScatter(_) = pass {
             self.record_scatter(recorder, pass);
             return;
