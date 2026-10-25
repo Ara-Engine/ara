@@ -16,7 +16,7 @@ use std::{
 mod encoder;
 mod limit;
 mod process;
-use limit::Admission;
+use limit::{Admission, Work};
 use process::Running;
 
 const MAX_FRAME: u64 = 512 * 1024 * 1024;
@@ -419,10 +419,11 @@ impl ProcessWorker {
         let mut job = ImportJob {
             child: None,
             pending: Some(Pending {
-                admission: Admission::new(!matches!(
-                    &request,
-                    Request::Import(_) | Request::ImportEncoded { .. }
-                )),
+                admission: Admission::new(match &request {
+                    Request::Import(_) => Work::Cpu,
+                    Request::ImportEncoded { .. } => Work::Encoded,
+                    _ => Work::Metadata,
+                }),
                 _queue: crate::trace::Scope::new(
                     "worker.queue",
                     match &request {
