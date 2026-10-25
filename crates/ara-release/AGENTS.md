@@ -71,3 +71,12 @@ Smoke seeds an older same-version Hub before engine setup, then launches both
 portable shortcut aliases with windowless `--build-info` and checks the embedded commit.
 Tiny SFX regression: set ARA_TEST_BIN_DIR to the built Hub/updater/setup binaries;
 run `cargo test -p ara-release installed_packages_replace_a_stale_hub -- --ignored`.
+
+`--features rehearsal` adds `rehearse --artifacts DIR --older-setup EXE --directory target/DIR`.
+Package both kinds with that feature and an external throwaway signing key's public
+key embedded at build time. It enables Hub's matching windowless rehearsal host and
+the loopback-only `ARA_RELEASE_TEST_API` transport. Rehearsal markers block real publish.
+The mock serves exact dry-run signed bytes and GitHub URLs, streaming large files.
+It exercises the real Hub model, external updater/startup health, managed engine
+install RPC, sample open and installed export's eight-tick ARA_RESULT. Every child
+uses isolated config/local/roaming/crash roots, and cleanup stops owned processes.

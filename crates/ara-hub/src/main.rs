@@ -20,6 +20,10 @@ fn options() -> Result<Option<Options>, String> {
     };
     while let Some(arg) = args.next() {
         match arg.as_str() {
+            #[cfg(feature = "rehearsal")]
+            "--rehearse-update" => {
+                options.rehearse_update = Some(PathBuf::from(value(&mut args, &arg)?))
+            }
             "--build-info" => {
                 let path = value(&mut args, &arg)?;
                 ara_update::write_json(std::path::Path::new(&path), &serde_json::json!({"version":env!("CARGO_PKG_VERSION"),"build":ara_hub::build_identity()})).map_err(|e|e.to_string())?;
@@ -82,7 +86,9 @@ fn main() -> std::process::ExitCode {
             return std::process::ExitCode::FAILURE;
         }
     };
-    let interactive = options.capture.is_none() && options.service_check.is_none();
+    let interactive = options.capture.is_none()
+        && options.service_check.is_none()
+        && !(cfg!(feature = "rehearsal") && std::env::var_os("ARA_RELEASE_TEST_API").is_some());
     let _crashes = ara_crash::desktop::start("ara-hub", interactive)
         .map_err(|error| eprintln!("ARA-EXP-CRASH-004: {error:#}"))
         .ok();

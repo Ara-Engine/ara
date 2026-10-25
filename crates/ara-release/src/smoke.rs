@@ -1,6 +1,8 @@
 //! The shipped binaries are the test subjects; no development executable is used.
 mod build;
 mod hub_upgrade;
+#[cfg(feature = "rehearsal")]
+pub(crate) mod rehearsal;
 use crate::support::{self, run};
 use anyhow::{Context, Result, ensure};
 use ara_proto::Endpoint;

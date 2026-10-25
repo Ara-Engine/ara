@@ -75,6 +75,14 @@ pub(super) fn launch(
         use std::os::windows::process::CommandExt;
         command.creation_flags(0x0800_0000);
     }
-    command.spawn().context("start external Hub updater")?;
+    let child = command.spawn().context("start external Hub updater")?;
+    #[cfg(feature = "rehearsal")]
+    if std::env::var_os("ARA_RELEASE_TEST_API").is_some() {
+        ara_update::write_json(
+            &config.join("rehearsal-updater.json"),
+            &serde_json::json!({"pid":child.id()}),
+        )?;
+    }
+    let _ = child;
     Ok(())
 }
