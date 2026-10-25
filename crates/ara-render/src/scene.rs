@@ -72,9 +72,17 @@ pub struct Light {
     pub color_lumens: [f32; 4],
     /// Spot forward direction xyz and cosine of outer cone half-angle.
     pub direction_outer: [f32; 4],
-    /// Type (0 point, 1 spot), inner cone cosine; remaining values reserved.
+    /// Type (0 point, 1 spot), inner cone cosine, source radius in metres (the
+    /// near field softens inside it; zero for an ideal point), and w: one keeps
+    /// the light out of fog in-scattering (emitter lights), zero includes it.
     pub parameters: [f32; 4],
 }
+
+/// Local lights a scene may hold (analytic lights plus emissive surfaces as
+/// lights); each 16x16 screen tile shades at most [`TILE_LIGHTS`] of them.
+pub const MAX_LOCAL_LIGHTS: usize = 256;
+/// Local lights one 16x16 screen tile shades (tiled culling keeps the first).
+pub const TILE_LIGHTS: usize = 128;
 /// CPU pixels uploaded at scene creation.
 pub struct Texture {
     /// Pixel width and height.

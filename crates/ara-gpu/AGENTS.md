@@ -10,6 +10,8 @@ Owns the native GPU boundary. Vulkan uses ash revision
   `new` retains the optional RT tier for explicit fidelity/reference consumers.
 
 - `Device`: portable descriptors, queues, cooked pipelines, recording and retirement.
+- `Command::CopyBufferRange` copies aligned ranges with checked capacities/overflow;
+  it preserves unrelated destination bytes and is rejected inside rendering.
 - `VulkanDevice`: Vulkan backend; `context()` is read-only native integration access.
 - `upload_range(buffer, byte_offset, bytes)` writes only changed coherent rows,
   with the same bounds and in-flight-use checks as `upload`.
@@ -68,6 +70,8 @@ and handle generations independent; images and shared surfaces do not use this p
 
 Recording validates generations, queue classes, rendering scopes, attachment
 formats, copy capacities and vertex/index usage before touching native commands.
+`ClearDepth` clears one rectangle of the scope's depth attachment (an atlas tile)
+and must lie within the scope's extent.
 Native presentation and raw ash integration remain unsafe, with documented
 lifetime/layout requirements. Never reset a pending native command buffer.
 

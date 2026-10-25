@@ -75,7 +75,7 @@ impl Renderer {
                 self.targets.sampled[ALBEDO],
                 self.targets.sampled[NORMAL],
                 self.targets.sampled[MATERIAL],
-                self.targets.sampled[WORLD],
+                self.targets.sampled[EMISSIVE],
             ],
             extra: [
                 self.targets.sampled[DEPTH],

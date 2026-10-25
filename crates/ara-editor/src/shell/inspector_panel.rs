@@ -106,7 +106,8 @@ impl Shell {
                 (_, 1) => "1 override".to_owned(),
                 (_, n) => format!("{n} overrides"),
             };
-            out.push_str(&format!("<panel id='prefab-bar' class='prefab-bar'>{}<text id='prefab-file' class='fg' text='{}' /><text id='prefab-overrides' class='caption' text='{}' /><panel id='prefab-fill' class='fill' />",icons::icon_in("prefab-bar","package","accent"),escape(&file),escape(&detail)));
+            // The name and count clip in narrow docks; the actions get their own row.
+            out.push_str(&format!("<panel id='prefab-bar' class='prefab-bar'><panel id='prefab-head' class='row' style='gap:6px;min-width:0px;overflow:hidden'>{}<text id='prefab-file' class='fg' style='white-space:nowrap;overflow:hidden;min-width:0px;flex-shrink:1' text='{}' /><text id='prefab-overrides' class='caption' style='white-space:nowrap;flex-shrink:0' text='{}' /></panel><panel id='prefab-actions' class='row' style='gap:4px;justify-content:end'>",icons::icon_in("prefab-bar","package","accent"),escape(&file),escape(&detail)));
             for (id, command, label, show) in [
                 ("prefab-open", "prefab.open", "Open", true),
                 (
@@ -127,7 +128,7 @@ impl Shell {
                     out.push_str(&format!("<button id='{id}' class='notice-action' label='{label}' description='{label}' action='Dispatch'><text id='{id}-label' text='{label}' /></button>"));
                 }
             }
-            out.push_str("</panel>");
+            out.push_str("</panel></panel>");
         }
         out.push_str("<panel id='inspector-filter-row' class='row'>");
         self.search(out, "inspector", editor);
@@ -396,7 +397,7 @@ impl Shell {
                     ara_ui::source::stable_id(&format!("pick-{id}")),
                     Binding::PickField(field.path.clone()),
                 );
-                out.push_str(&format!("<button id='asset-field-{id}' style='flex-grow:1;flex-basis:0px;justify-content:start;background:var(--background);border-color:var(--input)' label='{}' description='{} · drop an asset here, or pick one' action='Dispatch'>{}<text id='asset-name-{id}' class='{}' text='{}' /></button>",escape(&format!("{kind:?} asset")),escape(reference),icons::icon(&format!("asset-field-{id}"),"package"),if reference.is_empty(){"muted"}else{"fg"},escape(name)));
+                out.push_str(&format!("<button id='asset-field-{id}' style='flex-grow:1;flex-basis:0px;min-width:0px;overflow:hidden;justify-content:start;background:var(--background);border-color:var(--input)' label='{}' description='{} · drop an asset here, or pick one' action='Dispatch'>{}<text id='asset-name-{id}' class='{}' style='white-space:nowrap;overflow:hidden;min-width:0px;flex-shrink:1' text='{}' /></button>",escape(&format!("{kind:?} asset")),escape(reference),icons::icon(&format!("asset-field-{id}"),"package"),if reference.is_empty(){"muted"}else{"fg"},escape(name)));
                 out.push_str(&format!("<button id='pick-{id}' class='ghost icon-button' label='Pick asset' description='Pick in Assets' action='Dispatch'>{}</button>",icons::icon(&format!("pick-{id}"),"crosshair")));
                 if !reference.is_empty() {
                     let calls = crate::inspector::edit_commands(

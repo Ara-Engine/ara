@@ -107,7 +107,7 @@ impl Shell {
             self.bind_command("game-frame", "game.capture", Target::None);
             out.push_str(&format!("<button id='game-frame' class='game-frame' style='width:{w:.0}px;height:{h:.0}px' label='Game view' description='Click to play: keyboard and mouse go to the game until Esc' action='Dispatch'><image id='game-image' src='game-view' style='width:100%;height:100%' /></button>"));
             if self.game_stats {
-                out.push_str(&format!("<panel id='game-stats-overlay' class='game-stats'><text id='game-stats-text' class='mono' text='{} fps · {} × {}' /></panel>",self.game_fps,self.game_size[0],self.game_size[1]));
+                out.push_str(&format!("<panel id='game-stats-overlay' class='game-stats'><text id='game-stats-text' class='mono' text='{}' /></panel>",game_stats_text(self.game_fps,self.game_size)));
             }
             if self.game_captured {
                 out.push_str("<panel id='game-capture' class='game-hint'><text id='game-capture-text' text='Playing · Esc releases the keyboard and mouse' /></panel>");
@@ -235,7 +235,7 @@ impl Shell {
             ("Starting Play…", start.label())
         };
         let seconds = format!("{:.1} s", start.tenths as f64 / 10.);
-        out.push_str(&format!("<panel id='game-starting' class='empty'>{}<text id='game-starting-title' class='empty-title' text='{title}' /><text id='game-starting-phase' class='empty-hint' text='{}' />",icons::icon_in("game-starting","gamepad-2","icon-lg"),escape(&detail)));
+        out.push_str(&format!("<panel id='game-starting' class='empty'>{}<text id='game-starting-title' class='empty-title' text='{title}' /><text id='game-starting-phase' class='empty-hint' style='white-space:nowrap' text='{}' />",icons::icon_in("game-starting","gamepad-2","icon-lg"),escape(&detail)));
         // A phase with a total: a bar and its count on one line.
         if start.total > 0 && !start.stopping {
             let percent = start.completed as f64 * 100. / start.total as f64;
@@ -251,4 +251,14 @@ impl Shell {
         }
         out.push_str("</panel>");
     }
+}
+
+/// The Game view's stats line: frame rate (a dash until it is measured) and size.
+pub(crate) fn game_stats_text(fps: u32, size: [u32; 2]) -> String {
+    let rate = if fps == 0 {
+        "—".to_owned()
+    } else {
+        fps.to_string()
+    };
+    format!("{rate} fps · {} × {}", size[0], size[1])
 }

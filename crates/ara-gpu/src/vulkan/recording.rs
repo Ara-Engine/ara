@@ -276,6 +276,7 @@ impl VulkanDevice {
         let mut bound = None;
         let mut color_formats = Vec::new();
         let mut depth_format = None;
+        let mut extent = [0u32; 2];
         for c in &list.commands {
             match c {
                 Command::Barrier(_) if rendering => {
@@ -331,7 +332,29 @@ impl VulkanDevice {
                         .as_ref()
                         .map(|a| self.images.get(a.image).map(|i| i.raw.format))
                         .transpose()?;
+                    extent = *size;
                     rendering = true;
+                }
+                Command::ClearDepth {
+                    origin,
+                    size,
+                    depth,
+                } => {
+                    let inside = (0..2).all(|i| {
+                        origin[i]
+                            .checked_add(size[i])
+                            .is_some_and(|end| end <= extent[i])
+                    });
+                    if !rendering
+                        || depth_format.is_none()
+                        || size.contains(&0)
+                        || !inside
+                        || !depth.is_finite()
+                    {
+                        return Err(GpuError::Contract(
+                            "Depth clear outside the rendering scope's depth attachment".into(),
+                        ));
+                    }
                 }
                 Command::EndRendering => {
                     if !rendering {
@@ -463,6 +486,35 @@ impl VulkanDevice {
                         || source.handle == dest.handle
                     {
                         return Err(GpuError::Contract("Invalid buffer copy".into()));
+                    }
+                }
+                Command::CopyBufferRange {
+                    source,
+                    source_offset,
+                    destination,
+                    destination_offset,
+                    size,
+                } => {
+                    let source = self.buffers.get(*source)?.raw;
+                    let destination = self.buffers.get(*destination)?.raw;
+                    if rendering
+                        || *size == 0
+                        || size % 4 != 0
+                        || source_offset % 4 != 0
+                        || destination_offset % 4 != 0
+                        || source_offset
+                            .checked_add(*size)
+                            .is_none_or(|end| end > source.size)
+                        || destination_offset
+                            .checked_add(*size)
+                            .is_none_or(|end| end > destination.size)
+                        || !source.usage.contains(vk::BufferUsageFlags::TRANSFER_SRC)
+                        || !destination
+                            .usage
+                            .contains(vk::BufferUsageFlags::TRANSFER_DST)
+                        || source.handle == destination.handle
+                    {
+                        return Err(GpuError::Contract("Invalid buffer copy range".into()));
                     }
                 }
                 Command::CopyImage {

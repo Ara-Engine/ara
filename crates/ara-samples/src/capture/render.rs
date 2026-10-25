@@ -599,6 +599,14 @@ fn baseline(
             presenter.set_look_override(Some(*options.environment));
             frame.environment.exposure = exposure;
             let scored = scored?;
+            if std::env::var_os("ARA_CAPTURE_SCORED").is_some() {
+                // Opt-in: the frame FLIP scores, at the reference's exposure.
+                scored.image.save(
+                    options
+                        .scratch
+                        .join(format!("{}-{name}-{}-scored.png", options.name, shot.name)),
+                )?;
+            }
             let heatmap = options
                 .scratch
                 .join(format!("{}-{name}-{}-flip.png", options.name, shot.name));

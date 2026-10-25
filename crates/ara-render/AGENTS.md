@@ -1,5 +1,9 @@
 # ara-render
 
+Native publications validate once per immutable upload borrow and copy unchanged
+key/revision geometry directly from the previous GPU pool. Candidate buffers stay
+independent until publication, so rejected content retains the previous frame.
+
 Owns the M1 baseline renderer and agent visual feedback. Gameplay state stays in
 ECS; `Scene` is an immutable render extraction snapshot, not authoritative state.
 
@@ -15,8 +19,7 @@ ECS; `Scene` is an immutable render extraction snapshot, not authoritative state
   current/previous instance transforms, deforming revisions, 64-byte UV0/UV1
   vertices and 320-byte materials with six independent map transforms, AO,
   transmission and authored terrain layer IDs. Texture IDs address the native
-  residency table; u32::MAX means neutral texels. This input is separate from
-  the legacy `Scene` ABI.
+  residency table; u32::MAX means neutral texels (separate from the legacy `Scene` ABI).
   Validate only at content publication; do not hash/traverse static vertices
   when moving instances. Culling bounds handle mirrored/nonuniform transforms.
 - `Renderer::new_native` consumes this scene and an owned `instanced::Textures`
@@ -33,6 +36,9 @@ ECS; `Scene` is an immutable render extraction snapshot, not authoritative state
   idle frames retain visible lists and settle motion history once. `native_frame_work`
   reports traversals/writes. `native_caster_changes` exposes old-union-new bounds;
   `cull_native_shadow(matrix)` caches opaque/masked camera-LOD casters for pass 6.
+  Local lights reserve `reserve_native_shadow_passes(count)` before graph imports;
+  `cull_native_shadow_pass(slot, matrix)` returns an independent cached pass index.
+  Record it with its own Frame matrix in shadows[0] and root cascade word 4 = 0.
 - `instanced::GeometryGpu` uploads static local vertices/LOD indices once. Changed
   deforming revisions use `prepare_pose` then `commit_pose`/`cancel_pose`; retire
   the old dependent TLAS before committing. Three skin slots retain presented and
@@ -65,9 +71,9 @@ ECS; `Scene` is an immutable render extraction snapshot, not authoritative state
   cached D32 map per cascade, redrawn only when its matrix or the casters in its
   light volume change, outer cascades snapped coarsely so they survive motion),
   a cached far map past them (`look::far`), half-res GTAO, half-res SSR (cone
-  footprint into a colour pyramid of last frame), GI relight budget, bloom. Look
-  images are allocated lazily (the bindless storage heap is shared). Probe GI is
-  gathered at half resolution for G-buffer pixels.
+  footprint into a colour pyramid of last frame), GI relight budget, bloom,
+  emitter light budget. Look images are allocated lazily (the bindless storage
+  heap is shared). Probe GI is gathered at half resolution for G-buffer pixels.
 - `set_deferred_post` + `finish(color, sampled, state)`: temporally resolve and grade
   an externally composited HDR frame (landscape, particles) with the same look post.
   TAA reprojects with native motion (Frame.look.w) when present.
@@ -94,7 +100,14 @@ linear multiplier. See README.md for the exact tone mapper and GPU measurements.
 The TAA history alone is RGBA16F and pre-exposed (`look.slangh` exposureState):
 history readers decode with the state's previous multiplier; look passes learn
 whether their input is history or linear HDR from root word 7.
-Local light lists are tiled 16x16, with a checked scene capacity of 64 lights.
+The G-buffer is compact: RGBA8 sRGB albedo + AO, RG16 octahedral normal, RGBA8
+roughness/metal, B10G11R11 emissive, R32 ID and RG16F motion; world positions are
+rebuilt from depth. Shaders read and write it only through raster.slangh's
+`gbuffer*` helpers, so the formats change there and in `Renderer::targets` together.
+Local light lists are tiled 16x16: `scene::MAX_LOCAL_LIGHTS` (256) per scene, the
+first `TILE_LIGHTS` (128) per tile. Spot lumens are point-equivalent (the cone
+masks), as in the path tracer; `Light::parameters.z` softens the near field and
+`parameters.w` = 1 keeps a light out of fog (unshadowed emitter lights).
 
 Capture determinism resets history, fixes host tick/seed, disables jitter/history
 blending, locks exposure and renders the explicit settle count. No wall clock or
@@ -119,8 +132,7 @@ process and restores the environment. SDL is built statically by `ara-sdl3-src`;
 there is no SDL setup script, native directory or runtime DLL requirement.
 
 Per-crate gates: `cargo check -p ara-render`, `cargo test -p ara-render`,
-`cargo clippy -p ara-render --all-targets -- -D warnings`,
-`cargo fmt -p ara-render -- --check`.
+`cargo clippy -p ara-render --all-targets -- -D warnings`, `cargo fmt -p ara-render -- --check`.
 GPU goldens require this device/driver baseline with tolerance 1-SSIM <= 0.005.
 They also check repeated deterministic captures, all 14 visible entities/picking,
 and odd-resolution bounds framing. Update only deliberately with process-local

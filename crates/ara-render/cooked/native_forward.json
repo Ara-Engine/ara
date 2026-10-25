@@ -1,22 +1,22 @@
 {
   "binding_layout_hash": "35cd2a62b1ba741ce6823b3c8753d7b5aa97b54c5f0a837b56e542518013fd7e",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "7474f9297e1fa2f870868cdf9221158ffd46d1f232340bad598215865deb8ac8",
+  "key": "c6500b2d1b049070f195ac85c8958435d959f7d0fe9186ca78c7ec6e2a85fc6e",
   "stages": [
     {
-      "dxil": "7474f9297e1fa2f870868cdf9221158ffd46d1f232340bad598215865deb8ac8/nativeForwardFragment.dxil",
-      "dxil_hash": "6cfe1d91e42abad8a5e35eb57b28733778083e8da1b63d312d20c8bd7cd1d0df",
+      "dxil": "c6500b2d1b049070f195ac85c8958435d959f7d0fe9186ca78c7ec6e2a85fc6e/nativeForwardFragment.dxil",
+      "dxil_hash": "b66c4518dd1ffaa9ee88eb85eeb5d183108eb95f54fcaa5977438d745ef190bd",
       "source_entry": "nativeForwardFragment",
-      "spirv": "7474f9297e1fa2f870868cdf9221158ffd46d1f232340bad598215865deb8ac8/nativeForwardFragment.spv",
+      "spirv": "c6500b2d1b049070f195ac85c8958435d959f7d0fe9186ca78c7ec6e2a85fc6e/nativeForwardFragment.spv",
       "spirv_entry": "main",
-      "spirv_hash": "8f04eb7ec0d2617eb3fc7eee72edeb952e4d84ffbff87151fea14bd1034f5e12",
+      "spirv_hash": "4dae5c835583459f4a912143193ed05e2d01e7025977628675eace2ab6ec0464",
       "stage": "fragment"
     },
     {
-      "dxil": "7474f9297e1fa2f870868cdf9221158ffd46d1f232340bad598215865deb8ac8/nativeGeometryVertex.dxil",
+      "dxil": "c6500b2d1b049070f195ac85c8958435d959f7d0fe9186ca78c7ec6e2a85fc6e/nativeGeometryVertex.dxil",
       "dxil_hash": "2aa683842aa85a3c215419ff5f39d806804721a726e6fb8f6b97b558ef89d67a",
       "source_entry": "nativeGeometryVertex",
-      "spirv": "7474f9297e1fa2f870868cdf9221158ffd46d1f232340bad598215865deb8ac8/nativeGeometryVertex.spv",
+      "spirv": "c6500b2d1b049070f195ac85c8958435d959f7d0fe9186ca78c7ec6e2a85fc6e/nativeGeometryVertex.spv",
       "spirv_entry": "main",
       "spirv_hash": "5950004334f3ad6486d6a474c186b97e0111ef8e9186464c5699cb3669e3f176",
       "stage": "vertex"
@@ -27,10 +27,10 @@
     "color_formats": [
       109,
       100,
-      109,
-      109,
-      109,
-      109,
+      43,
+      77,
+      37,
+      122,
       83
     ],
     "depth_format": 126,

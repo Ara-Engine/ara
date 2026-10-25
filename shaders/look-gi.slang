@@ -7,11 +7,10 @@ float3 localIrradiance(Frame f,float3 p,float3 n){
     float3 sum=0;
     for(uint i=0;i<f.extent.z;i++){
         Light light=buffers[NonUniformResourceIndex(f.lighting.w)].Load<Light>(i*64);
-        float3 delta=light.positionRange.xyz-p;float d2=max(dot(delta,delta),0.01),d=sqrt(d2);if(d>light.positionRange.w)continue;
-        float3 toLight=delta/d;float fade=pow(saturate(1-pow(d/light.positionRange.w,4)),2);float spot=1;
+        float3 delta=light.positionRange.xyz-p;float d2=max(dot(delta,delta),max(0.01,light.parameters.z*light.parameters.z)),d=sqrt(d2);if(d>light.positionRange.w)continue;
+        float3 toLight=normalize(delta);float fade=pow(saturate(1-pow(d/light.positionRange.w,4)),2);float spot=1;
         if(light.parameters.x>0.5)spot=smoothstep(light.directionOuter.w,light.parameters.y,dot(-toLight,light.directionOuter.xyz));
-        float solidAngle=light.parameters.x>0.5?2*PI*(1-light.directionOuter.w):4*PI;
-        sum+=light.colorLumens.rgb*(light.colorLumens.w/(solidAngle*d2))*fade*spot*saturate(dot(n,toLight));
+        sum+=light.colorLumens.rgb*(light.colorLumens.w/(4*PI*d2))*fade*spot*saturate(dot(n,toLight));
     }return sum;
 }
 groupshared float3 radiance[64];
@@ -63,9 +62,9 @@ void giRelightMain(uint3 group:SV_GroupID,uint lane:SV_GroupIndex){
 [shader("compute")][numthreads(8,8,1)]
 void giGatherMain(uint3 tid:SV_DispatchThreadID){
     Frame f=frame();Look l=look(f);uint2 half=(f.extent.xy+1)/2;if(any(tid.xy>=half))return;
-    int2 p=int2(tid.xy)*2;float4 world=pixel(f.gbuffer.w,p);float4 diffuse=float4(0,0,0,1e9),specular=0;
-    if(world.w>0){
-        float3 n=normalize(pixel(f.gbuffer.y,p).xyz),v=normalize(f.camera.xyz-world.xyz);float coverage=giCoverage(l,world.xyz);
+    int2 p=int2(tid.xy)*2;bool covered;float3 world=gbufferWorld(f,p,covered);float4 diffuse=float4(0,0,0,1e9),specular=0;
+    if(covered){
+        float3 n=normalize(gbufferNormal(f,p)),v=normalize(f.camera.xyz-world.xyz);float coverage=giCoverage(l,world.xyz);
         if(coverage>0){float3 a,b;giLobes(l,l.giImages.y,world.xyz,n,reflect(-v,n),giBias(l,n,v),a,b);diffuse.rgb=a;specular=float4(b,coverage);}
         diffuse.w=length(world.xyz-f.camera.xyz);
     }

@@ -56,6 +56,16 @@ pub enum Command {
         /// Pixel extent.
         size: [u32; 2],
     },
+    /// Clears a rectangle of the rendering scope's depth attachment to `depth`
+    /// (reversed-Z far is zero), leaving the rest: one shadow-atlas tile.
+    ClearDepth {
+        /// Top-left pixel.
+        origin: [u32; 2],
+        /// Pixel extent, within the rendering scope.
+        size: [u32; 2],
+        /// Clear value.
+        depth: f32,
+    },
     /// Indexed mesh draw.
     Draw(Draw),
     /// One GPU-generated non-indexed instanced draw (four u32 argument words).
@@ -97,6 +107,19 @@ pub enum Command {
         source: Buffer,
         /// Transfer destination allocation.
         destination: Buffer,
+        /// Nonzero byte count, divisible by four.
+        size: u64,
+    },
+    /// Copy a checked byte range between distinct buffers, outside rendering.
+    CopyBufferRange {
+        /// Transfer source allocation.
+        source: Buffer,
+        /// Four-byte-aligned offset into the source.
+        source_offset: u64,
+        /// Transfer destination allocation.
+        destination: Buffer,
+        /// Four-byte-aligned offset into the destination.
+        destination_offset: u64,
         /// Nonzero byte count, divisible by four.
         size: u64,
     },

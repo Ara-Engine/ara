@@ -378,6 +378,32 @@ impl Shell {
         }
     }
 }
+impl Shell {
+    /// The folder holding the most model files (a first look at a project's art).
+    pub(crate) fn model_folder(&self) -> Option<String> {
+        let mut counts = std::collections::BTreeMap::new();
+        for asset in self
+            .browser
+            .items
+            .iter()
+            .filter(|a| matches!(a.kind.as_str(), "gltf" | "glb" | "fbx"))
+        {
+            let folder = asset.path.rsplit_once('/').map_or("", |(f, _)| f);
+            *counts.entry(folder.to_owned()).or_insert(0) += 1;
+        }
+        counts.into_iter().max_by_key(|(_, n)| *n).map(|(f, _)| f)
+    }
+    /// A search a user might type for one of the project's models: its first word.
+    pub(crate) fn model_query(&self) -> Option<String> {
+        let model = self
+            .browser
+            .items
+            .iter()
+            .find(|a| matches!(a.kind.as_str(), "gltf" | "glb" | "fbx"))?;
+        let stem = model.name().split(['.', '_', '-']).next()?;
+        Some(stem.to_lowercase())
+    }
+}
 /// One icon per asset concept.
 pub(super) fn asset_icon(asset: &assets::Asset) -> &'static str {
     match asset.kind.as_str() {

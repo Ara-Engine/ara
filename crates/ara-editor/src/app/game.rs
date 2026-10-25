@@ -118,14 +118,23 @@ impl GameView {
                 self.frames.push(now);
                 self.frames
                     .retain(|t| now.duration_since(*t) < Duration::from_secs(1));
-                shell.game_fps = self.frames.len() as u32;
+                // The rate over the frames seen (up to a second); none until a quarter
+                // second has passed, so a fresh start never reads "1 fps".
+                let span = self
+                    .frames
+                    .first()
+                    .map_or(0., |first| now.duration_since(*first).as_secs_f64());
+                shell.game_fps = if span < 0.25 {
+                    0
+                } else {
+                    ((self.frames.len() - 1) as f64 / span).round() as u32
+                };
                 shell.game_live = true;
                 // Stats update in place, without rebuilding the panel every frame.
                 if let Some(i) = shell.ui.find("game-stats-text") {
-                    shell.ui.set_text(
-                        i,
-                        &format!("{} fps · {} × {}", shell.game_fps, size[0], size[1]),
-                    )?;
+                    shell
+                        .ui
+                        .set_text(i, &crate::shell::game_stats_text(shell.game_fps, size))?;
                 }
             } else {
                 surfaces.release(&world, player, frame);

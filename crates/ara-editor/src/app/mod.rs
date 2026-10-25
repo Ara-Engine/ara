@@ -4,6 +4,7 @@ mod controller;
 mod game;
 mod journey;
 mod panels_verify;
+mod qa;
 mod responsiveness;
 mod scene_sync;
 mod setup;
@@ -87,7 +88,6 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
         eprintln!("Verification extent {physical:?}; logical {logical:?}; DPI {dpi}");
     }
     let mut shell = Shell::new(&mut editor, logical)?;
-    shell.host_problems = !options.offscreen();
     shell.offscreen = offscreen;
     let mut view = editor.view()?;
     editor.report_missing_sources(&view);
@@ -174,9 +174,15 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
     } else {
         None
     };
+    let mut first_hour = if options.verify_first_hour {
+        Some(qa::FirstHour::new(&mut editor, &options.output)?)
+    } else {
+        None
+    };
     if panel_verification.is_some()
         || ux_verification.is_some()
         || journey.is_some()
+        || first_hour.is_some()
         || probe.is_some()
     {
         shell.rebuild(&mut editor)?;
@@ -557,6 +563,10 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                 dirty |= changed;
                 scene_dirty |= changed;
             }
+            if let Some(route) = &mut first_hour {
+                let changed = route.step(&mut editor, &mut shell, &mut gpu)?;
+                dirty |= changed;
+            }
             if let Some(suite) = &mut ux_verification {
                 let was_finished = suite.finished();
                 let changed = suite.step(
@@ -908,6 +918,13 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                 };
                 probe.end(&editor, &mut shell, sample);
             }
+            if let Some(route) = &mut first_hour {
+                route.frame(
+                    frame_start.elapsed().as_secs_f64() * 1000.,
+                    tick_ms,
+                    view_ms,
+                );
+            }
             frames += 1;
             if probe.as_ref().is_some_and(responsiveness::Probe::finished) {
                 let device = serde_json::to_value(&renderer.gpu().context().info)?;
@@ -928,6 +945,7 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                     v.finished() && idle_samples.len() >= 1500 && camera_samples.len() >= 240
                 })
                 || journey.as_ref().is_some_and(journey::Journey::finished)
+                || first_hour.as_ref().is_some_and(qa::FirstHour::finished)
             {
                 game.close(&mut editor, &mut gpu)?;
                 break;

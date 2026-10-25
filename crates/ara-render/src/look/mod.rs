@@ -30,6 +30,9 @@ pub struct Quality {
     pub gi_budget: u32,
     /// Run the bloom pyramid when the look asks for bloom.
     pub bloom: bool,
+    /// Local lights emissive surfaces become (patches cluster until they fit),
+    /// within the scene's `MAX_LOCAL_LIGHTS`.
+    pub emitter_lights: u32,
 }
 impl Default for Quality {
     fn default() -> Self {
@@ -39,6 +42,7 @@ impl Default for Quality {
             reflections: None,
             gi_budget: 2048,
             bloom: true,
+            emitter_lights: 8,
         }
     }
 }

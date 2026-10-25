@@ -38,6 +38,9 @@ pub struct Options {
     /// Measure UI cost and click reliability with input injected into the window
     /// loop (`app/responsiveness.rs`); writes `responsiveness.json`.
     pub verify_responsiveness: bool,
+    /// Replay a new user's first hour on a fresh project (`app/qa.rs`); writes
+    /// `first-hour.json` and a capture per step.
+    pub verify_first_hour: bool,
 }
 impl Options {
     /// Bounded and automated runs (a frame limit, captures, verification routes) keep
@@ -50,6 +53,7 @@ impl Options {
             || self.verify_ux
             || self.verify_journey
             || self.verify_responsiveness
+            || self.verify_first_hour
             || self.headless
     }
 
@@ -91,6 +95,7 @@ impl Default for Options {
             scene: None,
             play: false,
             verify_journey: false,
+            verify_first_hour: false,
             verify_responsiveness: false,
         }
     }
