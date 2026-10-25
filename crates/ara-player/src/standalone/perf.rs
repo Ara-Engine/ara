@@ -231,8 +231,11 @@ impl Window {
             *per_frame.entry(pass).or_default() += milliseconds;
         }
         self.gpu.record(presenter.stats(), per_frame.values().sum());
-        self.span
-            .record(presenter.stats().gpu_span_ms, per_frame.values().sum());
+        self.span.record(
+            presenter.stats().gpu_span_ms,
+            presenter.stats().gpu_submission_gap_ms,
+            per_frame.values().sum(),
+        );
         for (pass, milliseconds) in per_frame {
             self.passes
                 .entry(pass.to_owned())

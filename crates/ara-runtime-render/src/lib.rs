@@ -63,6 +63,9 @@ pub struct PresentStats {
     /// Whole presenter device span, from its first submission to completed output
     /// publication. Includes inter-submission gaps; None means no comparable clock.
     pub gpu_span_ms: Option<f64>,
+    /// Gaps between the frame's submission intervals, merging overlapping queues.
+    /// This excludes waits inside a submission; unavailable clocks stay None.
+    pub gpu_submission_gap_ms: Option<f64>,
     /// Native timestamp components and residency counters, on every raster tier
     /// and experimental RT. The legacy diagnostic fallback has incomplete coverage.
     pub gpu: Option<GpuFrameCosts>,
