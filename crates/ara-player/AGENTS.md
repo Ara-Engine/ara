@@ -36,8 +36,8 @@ presenter before hello and reuse its device at embed; surface-less services allo
 
 ## Modules
 
-- `packed.rs` and `standalone.rs`: immutable pack AssetSource and the exported entry;
-  `ara.player.runtime/1` launches the authored world, never the conformance fixture.
+- `packed.rs` and `standalone.rs`: the authored exported world and immutable pack source;
+  ara-pack's bounded `native-decode` is linked into this player and its runtime templates.
 - `main.rs`: pool lifecycle, the loop (link polling, host-time ticking with bounded
   catch-up, deferred patch acks, 250 ms `play.status` heartbeats, presentation),
   method dispatch.
