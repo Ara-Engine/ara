@@ -41,7 +41,7 @@ impl Shell {
             .unwrap_or_default();
         // The row model (hundreds of rows) is rebuilt only when what it shows changed.
         let key = HierarchyKey {
-            scene: self.resolved_key(),
+            scene: self.hierarchy_structure(editor),
             selection: editor.state.selection.clone(),
             collapsed: editor.state.collapsed.clone(),
             expanded: editor.state.expanded.clone(),
@@ -171,6 +171,36 @@ impl Shell {
         out.push_str(&format!("<panel id='hierarchy-footer' class='footer'><text id='hierarchy-count' text='{} entities{}' /></panel>",resolved.len(),if editor.state.selection.is_empty(){String::new()}else{format!(" · {} selected",editor.state.selection.len())}));
         Ok(())
     }
+    /// The open scene's structure as the Hierarchy shows it: the document, the
+    /// document count and the revision of the last change to what rows show (names,
+    /// parents, order, prefab links, which components an entity has). A `Set` inside
+    /// a component that already had a value (`Transform.position`, `MeshRenderer.color`)
+    /// keeps it, so typing and dragging do not rebuild hundreds of rows.
+    fn hierarchy_structure(&mut self, editor: &Editor) -> (String, usize, u64) {
+        let store = editor.host.store();
+        let revision = store.revision();
+        let (checked, mut structure) = self.hierarchy_revisions;
+        if revision != checked {
+            let since = store.since(checked);
+            let inside = |op: &ara_doc::Op| {
+                matches!(op, ara_doc::Op::Set { path, prev: Some(_), .. }
+                    if path.segments().len() > 1
+                        && path.head().starts_with(|c: char| c.is_ascii_uppercase()))
+            };
+            // Every transaction since the last check was seen, and none changed rows.
+            let unchanged = since.len() as u64 == revision - checked
+                && since.iter().all(|t| t.ops.iter().all(inside));
+            if !unchanged {
+                structure = revision;
+            }
+            self.hierarchy_revisions = (revision, structure);
+        }
+        (
+            editor.state.doc.clone(),
+            store.workspace().docs().count(),
+            structure,
+        )
+    }
     /// Bind the hierarchy rows on screen: select the entity, or open Agents for a
     /// deletion ghost. Only visible rows can be clicked, so rebuilds and scrolls bind
     /// just these (binding every entity cost ~0.3 ms per rebuild on Outpost).
@@ -249,7 +279,8 @@ pub const LARGE_GROUP: usize = 32;
 /// only when this changes.
 #[derive(PartialEq)]
 pub(super) struct HierarchyKey {
-    scene: Option<(String, u64, usize)>,
+    /// The scene's structure (`hierarchy_structure`), not every revision.
+    scene: (String, usize, u64),
     selection: Vec<String>,
     collapsed: std::collections::BTreeSet<String>,
     expanded: std::collections::BTreeSet<String>,

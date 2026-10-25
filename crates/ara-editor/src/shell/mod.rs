@@ -102,6 +102,12 @@ pub struct Shell {
     hierarchy_tints: BTreeMap<u64, &'static str>,
     /// What the Hierarchy rows were last built from.
     hierarchy_key: Option<hierarchy::HierarchyKey>,
+    /// The store revision `hierarchy_structure` last checked, and the revision of the
+    /// last change the Hierarchy shows.
+    hierarchy_revisions: (u64, u64),
+    /// Rebuilds are held (`coalesce_rebuilds`), and whether one was asked for meanwhile.
+    hold_rebuilds: bool,
+    held_rebuild: bool,
     /// Entities in the open scene (the Hierarchy may show fewer rows: collapsed groups).
     entity_count: usize,
     hierarchy_ghosts: std::collections::BTreeSet<u64>,
@@ -397,6 +403,9 @@ impl Shell {
             hierarchy_entities: BTreeMap::new(),
             hierarchy_tints: BTreeMap::new(),
             hierarchy_key: None,
+            hierarchy_revisions: (0, 0),
+            hold_rebuilds: false,
+            held_rebuild: false,
             entity_count: 0,
             hierarchy_ghosts: std::collections::BTreeSet::new(),
             expanded_turns: std::collections::BTreeSet::new(),
@@ -557,7 +566,12 @@ impl Shell {
         self.current.as_deref()
     }
     /// Reconcile a document/navigation notification. Unchanged idle frames never rebuild panels.
+    /// Inside [`Self::coalesce_rebuilds`] it only notes that a rebuild is due.
     pub fn rebuild(&mut self, editor: &mut Editor) -> ara_ui::Result<()> {
+        if self.hold_rebuilds {
+            self.held_rebuild = true;
+            return Ok(());
+        }
         let started = std::time::Instant::now();
         let returning = self.current.clone();
         self.leave();
@@ -593,6 +607,18 @@ impl Shell {
         self.resolved_cache = Some((key, resolved.clone()));
         Ok(resolved)
     }
+    /// The open scene's view at the current revision, built on [`Self::resolved`] so
+    /// a commit resolves the scene once for the panels and the Scene view.
+    pub(crate) fn document_view(
+        &mut self,
+        editor: &Editor,
+    ) -> ara_ui::Result<crate::world::DocumentView> {
+        let resolved = self.resolved(editor)?;
+        Ok(crate::world::DocumentView::with_entities(
+            editor.host.store(),
+            resolved,
+        ))
+    }
     /// The (document, store revision, document count) `resolved` last resolved at.
     pub(crate) fn resolved_key(&self) -> Option<(String, u64, usize)> {
         self.resolved_cache.as_ref().map(|(key, _)| key.clone())
@@ -604,6 +630,22 @@ impl Shell {
     /// The UI work done since the last call: rebuilds and every runtime frame's counters.
     pub fn take_stats(&mut self) -> UiStats {
         std::mem::take(&mut self.stats)
+    }
+    /// Run `work` with rebuilds held, then rebuild once if any step asked for one:
+    /// Enter dispatches a field's pending action and then commits it, and each of
+    /// those rebuilds on its own.
+    pub(crate) fn coalesce_rebuilds<T>(
+        &mut self,
+        editor: &mut Editor,
+        work: impl FnOnce(&mut Self, &mut Editor) -> ara_ui::Result<T>,
+    ) -> ara_ui::Result<T> {
+        let held = std::mem::replace(&mut self.hold_rebuilds, true);
+        let result = work(self, editor);
+        self.hold_rebuilds = held;
+        if !held && std::mem::take(&mut self.held_rebuild) {
+            self.rebuild(editor)?;
+        }
+        result
     }
     /// Rebuild unless the last rebuild already reflects the editor's panels and store
     /// revisions (an action that rebuilt in dispatch changed them); true if it rebuilt.

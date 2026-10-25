@@ -303,7 +303,13 @@ impl Editor {
             self.extraction_revision += 1;
             changed = true;
         }
-        while let Ok(state) = self.updates.try_recv() {
+        while let Ok(mut state) = self.updates.try_recv() {
+            // GPU detection belongs to this window, not to navigation history: keep
+            // it and re-derive `quality` from the incoming settings before comparing.
+            // Otherwise every update (each camera step of an orbit, each commit) looked
+            // like a panel change and rebuilt the whole shell.
+            state.detected_quality = self.state.detected_quality;
+            state.apply_settings();
             // The theme is not here: it only tints deletion ghosts (none since D24),
             // and re-extracting a large scene for it took seconds.
             if self.state.doc != state.doc || self.state.hidden != state.hidden {
@@ -315,12 +321,7 @@ impl Editor {
             if self.state.scene_changed(&state) {
                 self.scene_revision += 1;
             }
-            // GPU detection belongs to this window, not to navigation history: keep
-            // it and re-derive `quality` from the incoming settings.
-            let detected = self.state.detected_quality;
             self.state = state;
-            self.state.detected_quality = detected;
-            self.state.apply_settings();
             self.view_revision += 1;
             changed = true;
         }
