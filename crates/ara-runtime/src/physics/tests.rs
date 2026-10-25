@@ -290,11 +290,44 @@ fn typed_model_collider_command_is_undoable_and_plays_without_a_mesh_renderer() 
         schema.clone(),
         store.workspace().clone(),
         AssetId::parse("sc_test").unwrap(),
-        Box::new(source),
+        Box::new(MemoryAssets::default()),
         crate::RuntimeConfig::default(),
         vec![],
     )
     .unwrap();
+    assert!(runtime.asset_diagnostics().any(|diagnostic| {
+        diagnostic.code == crate::ASSET_PLACEHOLDER
+            && diagnostic.message.contains("e_model")
+            && diagnostic.message.contains("as_kit")
+            && diagnostic.message.contains("box bounds")
+    }));
+    let cooked = {
+        let world = runtime.play.session_mut().world_mut();
+        *world.query::<&CookedCollider>().single(world).unwrap()
+    };
+    assert!((hit(runtime.world(), [0., 4., 0.]).unwrap().point[1] - 0.5).abs() < 0.03);
+    runtime.step(2, &[]).unwrap();
+    {
+        let world = runtime.play.session_mut().world_mut();
+        assert_eq!(
+            *world.query::<&CookedCollider>().single(world).unwrap(),
+            cooked
+        );
+    }
+    let loaded = runtime.reload_assets(Box::new(source)).unwrap();
+    assert!(
+        loaded
+            .iter()
+            .any(|(id, result)| id == "as_kit" && matches!(result, Ok(true)))
+    );
+    runtime.step(1, &[]).unwrap();
+    {
+        let world = runtime.play.session_mut().world_mut();
+        assert_ne!(
+            *world.query::<&CookedCollider>().single(world).unwrap(),
+            cooked
+        );
+    }
     assert!((hit(runtime.world(), [1., 4., -1.]).unwrap().point[1] - 2.).abs() < 0.03);
     assert!(
         runtime

@@ -104,9 +104,10 @@ without joining it; omitted/false keeps the synchronous world-ready response.
 
 - Host calls are serialized on the daemon thread; long steps block other calls.
   Players heartbeat between 30-tick chunks so the watchdog never kills a busy step.
-- Cold Play uses placeholders until first persisted generations arrive, even with
+- Background Play uses placeholders until first persisted generations arrive, even with
   `hotReload:false`; subsequent reimports obey `hotReload`. Progressive previews
   remain disabled: players only load final cooks already persisted on disk.
+  Synchronous starts wait for required import pins before returning world-ready.
 - `host`/`dedicated` worlds are replicated (`ara-runtime-net`): the authority starts
   first, each client then gets its join from the authority (`play.join`) and connects
   through its own proxy (`conditions[i]` simulates the link). `play.capture`,

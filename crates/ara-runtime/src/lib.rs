@@ -368,6 +368,20 @@ impl Runtime {
                 ));
             }
         }
+        let mut query = world.query::<(&ara_sim::Identity, &ara_physics::Collider)>();
+        for (identity, collider) in query.iter(world) {
+            if matches!(
+                collider.kind,
+                ara_physics::ColliderKind::ModelConvex | ara_physics::ColliderKind::ModelMesh
+            ) && let Some(reference) = &collider.asset
+                && library.models.get(asset_id(reference)?).is_none()
+            {
+                asset_errors.push(format!(
+                    "{ASSET_PLACEHOLDER}: {}: model collider {} is unavailable; using Collider.halfExtents box bounds until its generation arrives",
+                    identity.0, reference.0
+                ));
+            }
+        }
         asset_errors.extend(library.models.validate_renderers(&baseline));
         for material in material::references(&baseline)? {
             if let Err(error) = library
