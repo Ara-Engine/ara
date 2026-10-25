@@ -662,7 +662,9 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                 last_physical = physical;
                 last_dpi = dpi;
                 gpu.set_dpi(dpi)?;
-                shell.ui.size = physical.map(|v| v as f32 / dpi);
+                // `resize` marks the layout dirty: a rebuild with unchanged markup
+                // alone would keep the old size's layout until some node changed.
+                shell.ui.resize(physical.map(|v| v as f32 / dpi))?;
                 shell.rebuild(&mut editor)?;
                 dirty = true;
                 scene_dirty = true;
@@ -1267,7 +1269,7 @@ fn route_event(
                 float.present.destroy(renderer.gpu().context());
                 float.present = Present::new(renderer.gpu().context(), &float.window)?;
             }
-            shell.resize_surface(&id, size.map(|v| v as f32 / float_dpi));
+            shell.resize_surface(&id, size.map(|v| v as f32 / float_dpi))?;
             shell.rebuild(editor)?;
             Ok((true, false, false))
         }

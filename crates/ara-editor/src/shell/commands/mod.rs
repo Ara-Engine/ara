@@ -71,6 +71,8 @@ pub(crate) struct Ctx<'a> {
     pub assets_show_all: bool,
     /// Game view: stats overlay on, aspect preset, a frame is showing.
     pub game: (bool, &'static str, bool),
+    /// Play was started and has no live world yet: Stop cancels the start.
+    pub starting: bool,
     /// Build menu state.
     pub build: BuildState,
 }
@@ -223,6 +225,8 @@ impl Shell {
             logs: self.log_view,
             assets_show_all: self.assets_show_all,
             game: (self.game_stats, self.game_aspect, self.game_live),
+            starting: editor.state.playing.is_none()
+                && (self.game_start.is_some() || editor.play_world.is_some()),
             build: BuildState {
                 running: self.build.is_some() || self.run.is_some(),
                 built: self.last_build.is_some(),

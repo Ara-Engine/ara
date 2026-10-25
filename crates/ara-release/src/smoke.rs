@@ -91,8 +91,11 @@ impl Drop for Environment {
         }
     }
 }
-pub fn smoke(root: &Path, version: &str) -> Result<()> {
-    let dist = support::dist(root);
+pub fn smoke(dist: &Path, version: &str) -> Result<()> {
+    let absolute = std::path::absolute(dist).context("release artifacts directory")?;
+    // canonicalize introduces verbatim prefixes that Windows PowerShell 5.1
+    // cannot use. Also accept an explicitly supplied verbatim drive/UNC path.
+    let dist = dunce::simplified(&absolute);
     let directory = dist.join(format!(
         "smoke-{}-{}",
         std::process::id(),
@@ -128,7 +131,7 @@ pub fn smoke(root: &Path, version: &str) -> Result<()> {
     let result = (|| -> Result<()> {
         step(
             "standalone Hub setup, stale service replacement and engine templates",
-            standalone_hub(&env, &dist, version),
+            standalone_hub(&env, dist, version),
         )?;
         step(
             "ara --version",

@@ -100,7 +100,7 @@ impl Floats {
             self.next_key += 1;
             let physical = window.size()?;
             let scale = window.display_scale().max(0.25) * ui_scale(editor);
-            shell.resize_surface(&spec.id, physical.map(|v| v as f32 / scale));
+            shell.resize_surface(&spec.id, physical.map(|v| v as f32 / scale))?;
             self.windows.push(Float {
                 id: spec.id.clone(),
                 sdl: window.id(),

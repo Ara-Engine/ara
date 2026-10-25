@@ -21,6 +21,10 @@ struct MenubarState {
     /// Unsaved changes (the breadcrumb's dot).
     dirty: bool,
     playing: Option<bool>,
+    /// Play was started and is not live yet (Stop cancels it).
+    starting: bool,
+    /// Play starts paused (`play.startPaused`).
+    start_paused: bool,
     /// Pause, Step and Stop availability.
     enabled: [bool; 3],
     mode_label: String,
@@ -63,6 +67,7 @@ impl Shell {
         let ctx = self.ctx(editor, &Target::None);
         let enabled = ["play.pause", "play.step", "play.stop"]
             .map(|command| commands::get(command).is_some_and(|c| c.avail(&ctx).ready()));
+        let starting = ctx.starting;
         let mode = editor
             .state
             .settings
@@ -105,6 +110,13 @@ impl Shell {
             scene,
             dirty,
             playing: editor.state.playing,
+            starting,
+            start_paused: editor
+                .state
+                .settings
+                .get("play.startPaused")
+                .and_then(Value::as_bool)
+                .unwrap_or(false),
             enabled,
             mode_label,
             keymap: self.keymap_revision,
@@ -128,7 +140,8 @@ impl Shell {
             }
             out.push_str("</button>");
         }
-        let scene_name = s.scene.rsplit('/').next().unwrap_or(&s.scene);
+        // The scene's name as people read it; the tooltip has its project path.
+        let scene_name = names::stem(names::file_name(&s.scene));
         out.push_str(&format!("</panel><panel id='crumbs' class='crumbs'><text id='crumb-project' class='crumb-strong' text='{}' />{}<text id='crumb-scene' class='crumb' text='{}' description='{}' />",escape(&s.project),icons::icon("crumb-sep","chevron-right"),escape(scene_name),escape(&s.scene)));
         if s.dirty {
             out.push_str("<panel id='crumb-dirty' class='dirty-dot' description='Unsaved changes; Ctrl+S saves now' />");
@@ -143,19 +156,32 @@ impl Shell {
                 ""
             }
         ));
-        let resume = s.playing == Some(false);
-        self.bind_command("play", "play.start", Target::None);
-        out.push_str(&format!("<button id='play' class='ghost{}' style='height:22px;padding-left:6px;padding-right:8px' label='{}' description='{} · F5' action='Dispatch'>{}<text id='play-label' text='{}' /></button>",if s.playing==Some(true){" selected"}else{""},if resume{"Resume"}else{"Play"},if resume{"Resume"}else{"Play"},icons::icon_in("play","play","tint-play"),if s.playing==Some(true){"Playing"}else if resume{"Resume"}else{"Play"}));
-        for ((id, command, icon, label), enabled) in [
-            ("pause", "play.pause", "pause", "Pause · F6"),
-            ("step", "play.step", "step-forward", "Step one tick · F7"),
-            ("stop", "play.stop", "square", "Stop · Shift+F5"),
-        ]
-        .into_iter()
-        .zip(s.enabled)
-        {
-            self.bind_command(id, command, Target::None);
-            out.push_str(&format!("<button id='{id}' class='ghost icon-button' label='{label}' description='{label}' action='Dispatch'{}>{}</button>",if enabled{""}else{" disabled='true'"},icons::icon(id,icon)));
+        // Idle: Play, and a toggle to start paused. Starting or playing: Play becomes
+        // Stop (it also cancels a start), then Pause or Resume, and Step.
+        let [pause_ready, step_ready, stop_ready] = s.enabled;
+        if s.playing.is_none() && !s.starting {
+            self.bind_command("play", "play.start", Target::None);
+            out.push_str(&format!("<button id='play' class='ghost' style='height:22px;padding-left:6px;padding-right:8px' label='Play' description='{} · F5' action='Dispatch'>{}<text id='play-label' text='Play' /></button>",if s.start_paused{"Play, paused at tick 0"}else{"Play"},icons::icon_in("play","play","tint-play")));
+            self.bind_command("pause", "play.start_paused", Target::None);
+            out.push_str(&format!("<button id='pause' class='ghost icon-button{}' label='Start paused' description='{}' action='Dispatch'>{}</button>",if s.start_paused{" selected"}else{""},if s.start_paused{"Play starts paused at tick 0 · click to start running"}else{"Start Play paused at tick 0"},icons::icon("pause","pause")));
+        } else {
+            self.bind_command("stop", "play.stop", Target::None);
+            let what = if s.starting {
+                "Cancel the starting Play"
+            } else {
+                "Stop"
+            };
+            out.push_str(&format!("<button id='stop' class='ghost selected' style='height:22px;padding-left:6px;padding-right:8px' label='Stop' description='{what} · Shift+F5' action='Dispatch'{}>{}<text id='stop-label' text='Stop' /></button>",if stop_ready{""}else{" disabled='true'"},icons::icon_in("stop","square","tint-play")));
+            let paused = s.playing == Some(false);
+            let (command, icon, label, ready) = if paused {
+                ("play.start", "play", "Resume · F5", true)
+            } else {
+                ("play.pause", "pause", "Pause · F6", pause_ready)
+            };
+            self.bind_command("pause", command, Target::None);
+            out.push_str(&format!("<button id='pause' class='ghost icon-button' label='{label}' description='{label}' action='Dispatch'{}>{}</button>",if ready{""}else{" disabled='true'"},icons::icon("pause",icon)));
+            self.bind_command("step", "play.step", Target::None);
+            out.push_str(&format!("<button id='step' class='ghost icon-button' label='Step one tick · F7' description='Step one tick · F7' action='Dispatch'{}>{}</button>",if step_ready{""}else{" disabled='true'"},icons::icon("step","step-forward")));
         }
         let mode_label = &s.mode_label;
         self.bindings.insert(

@@ -94,7 +94,14 @@ impl Shell {
                 out.push_str(&format!("<button id='{id}' class='ghost' label='Add {}' description='Add {what}' action='Dispatch'>{}<text id='{id}-label' text='{label}' /></button>",label.to_lowercase(),icons::icon(id,"plus")));
             }
             out.push_str("<panel id='animation-tools-sep' class='toolbar-sep' />");
-            self.tool_icon(out, "graph-frame", "graph.frame", "focus", editor, false);
+            self.tool_icon(
+                out,
+                "animation-frame",
+                "graph.frame",
+                "focus",
+                editor,
+                false,
+            );
         }
         out.push_str("<panel id='animation-toolbar-fill' class='fill' /></panel>");
         let Some(doc) = resource else {
@@ -129,30 +136,20 @@ impl Shell {
             .and_then(|d| ara_graph::Graph::from_document(d).ok())
             .map(|g| g.editor)
             .unwrap_or_default();
-        let changed = self.canvas.as_ref().is_none_or(|c| {
-            c.graph().header.payload["blends"] != editor.state.animation_blends
-                || c.graph().editor != layout
+        let revision = editor.host.store().revision();
+        let current = self.graphs.get("animation").is_some_and(|g| {
+            g.doc == doc
+                && g.revision == revision
+                && g.canvas.graph().header.payload["blends"] == editor.state.animation_blends
+                && g.canvas.graph().editor == layout
         });
-        if self.canvas_doc.as_deref() != Some(&doc)
-            || self.canvas_revision != editor.host.store().revision()
-            || changed
-        {
+        if !current {
             let graph = crate::authoring::animation::projection(
                 document,
                 layout,
                 editor.state.animation_blends,
             )?;
-            if let Some(canvas) = self
-                .canvas
-                .as_mut()
-                .filter(|_| self.canvas_doc.as_deref() == Some(&doc))
-            {
-                canvas.refresh(graph, &mut self.text);
-            } else {
-                self.canvas = Some(crate::graph::Canvas::new(graph, &mut self.text));
-            }
-            self.canvas_doc = Some(doc.clone());
-            self.canvas_revision = editor.host.store().revision();
+            self.set_graph("animation", &doc, graph, revision);
         }
         self.apply_canvas_view(editor);
         // A transition picked in the sidebar draws as selected on the canvas.
@@ -167,7 +164,7 @@ impl Shell {
             .as_ref()
             .filter(|_| !editor.state.animation_blends)
             .and_then(|status| crate::authoring::animation::live(&controller, status));
-        if let Some(canvas) = &mut self.canvas {
+        if let Some(canvas) = self.graphs.get_mut("animation").map(|g| &mut g.canvas) {
             canvas.highlight = picked
                 .map(crate::authoring::animation::transition_edge)
                 .into_iter()
@@ -181,7 +178,7 @@ impl Shell {
         self.animation_parameters(&doc, &controller, out);
         self.animation_transitions(&controller, picked, out);
         out.push_str("</panel><panel id='animation-side-edge' class='tool-edge' />");
-        out.push_str("<panel id='animation-main' class='tool-main'><panel id='graph-canvas' style='flex-grow:1;flex-basis:0px;background:var(--background);overflow:hidden' label='Animation controller canvas' /></panel></panel>");
+        out.push_str("<panel id='animation-main' class='tool-main'><panel id='animation-canvas' style='flex-grow:1;flex-basis:0px;background:var(--background);overflow:hidden' label='Animation controller canvas' /></panel></panel>");
         self.animation_status(&controller, out);
         Ok(())
     }
@@ -201,8 +198,12 @@ impl Shell {
         let Some(doc) = doc else {
             let was = self.animation_live.status.is_some();
             self.animation_live = AnimationLive::default();
-            if let Some(canvas) = self.canvas.as_mut().filter(|c| c.live.is_some()) {
-                canvas.live = None;
+            if let Some(shown) = self
+                .graphs
+                .get_mut("animation")
+                .filter(|g| g.canvas.live.is_some())
+            {
+                shown.canvas.live = None;
             }
             return was.then_some(LiveChange::Page);
         };
@@ -254,12 +255,8 @@ impl Shell {
             .as_ref()
             .filter(|_| !editor.state.animation_blends)
             .and_then(|status| crate::authoring::animation::live(&controller, status));
-        if let Some(canvas) = self
-            .canvas
-            .as_mut()
-            .filter(|_| self.canvas_doc.as_deref() == Some(doc.as_str()))
-        {
-            canvas.live = live;
+        if let Some(shown) = self.graphs.get_mut("animation").filter(|g| g.doc == doc) {
+            shown.canvas.live = live;
         }
         Some(if page {
             LiveChange::Page
@@ -504,9 +501,10 @@ impl Shell {
         from: ara_graph::Endpoint,
         to: ara_graph::Endpoint,
     ) -> ara_ui::Result<()> {
-        let (Some(doc), Some(canvas)) = (&self.canvas_doc, &self.canvas) else {
+        let Some(shown) = self.graphs.get("animation") else {
             return Ok(());
         };
+        let (doc, canvas) = (&shown.doc, &shown.canvas);
         let (record, mut controller) = crate::authoring::animation::controller(
             editor
                 .host
@@ -599,13 +597,11 @@ impl Shell {
                     .enumerate()
                     .find(|(_, t)| t.id == id)
             });
-        let node = self.canvas.as_ref().and_then(|c| {
-            editor
-                .state
-                .canvas_selection
+        let node = self.graphs.get("animation").and_then(|g| {
+            self.graph_selection(editor, "animation")
                 .iter()
                 .next()
-                .and_then(|id| c.graph().nodes.get(id))
+                .and_then(|id| g.canvas.graph().nodes.get(id))
                 .cloned()
         });
         if let Some((priority, t)) = transition {

@@ -32,7 +32,10 @@ Public API:
 - `docking::{DockLayout,DockNode,DockDrop,Floating}` moves tabs, creates splits, tears panels
   off into floating windows (`float`, `close`, `set_rect`), persists and resets layouts.
   Panel/area IDs are unique across every window; emptied areas collapse and emptied
-  windows close. Files without floating windows keep the bare `DockNode` format.
+  windows close. `set_collapsed` shows an area as just its tab strip (`collapsed_by_default`
+  for a default's). Files without floats or collapsed areas keep the bare `DockNode` format.
+- Change `Ui::size` only through `Ui::resize`: it marks the layout dirty (a direct write
+  keeps the old size's layout until some node changes).
 - `binding::{BindingKey<T>,ReadBinding<T>,Bindings<T>}` initializes subscriptions and pushes changed fields.
 - `Ui::drain_actions` yields named host actions; the host dispatches these at its simulation boundary.
 - `accessibility::accessibility` produces an actual AccessKit tree; `Ui::inspect` produces agent JSON.

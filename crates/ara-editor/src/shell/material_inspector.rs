@@ -36,7 +36,9 @@ impl Shell {
                 None
             }
         };
-        if editor.state.canvas_selection.is_empty() {
+        // The material page's own selection, also while another graph page is active.
+        let selection = self.graph_selection(editor, "material").clone();
+        if selection.is_empty() {
             self.empty(
                 out,
                 "material-node-empty",
@@ -52,7 +54,7 @@ impl Shell {
             .map(|i| self.ui.nodes[i].rect.w)
             .unwrap_or(300.);
         let label = self.label_px(width);
-        for (n, id) in editor.state.canvas_selection.iter().enumerate() {
+        for (n, id) in selection.iter().enumerate() {
             let Some(node) = graph.nodes.get(id) else {
                 continue;
             };

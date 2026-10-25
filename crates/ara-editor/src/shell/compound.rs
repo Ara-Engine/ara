@@ -747,9 +747,8 @@ impl Shell {
                     .split('#')
                     .next()
                     .unwrap_or("");
-                let name = source
-                    .rsplit('/')
-                    .next()
+                // Without its extension, like Assets; the tooltip has the reference.
+                let name = Some(names::stem(names::file_name(source)))
                     .filter(|s| !s.is_empty())
                     .unwrap_or("None");
                 let button = format!("asset-field-{rid}");

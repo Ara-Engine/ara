@@ -346,6 +346,12 @@ fn panels_show_real_empty_states() {
         ("material", "material-empty"),
         ("animation", "animation-empty"),
     ] {
+        // Tool pages and the Profiler open floating: dock them where the main shell shows them.
+        if ara_editor::state::float_size(panel).is_some() {
+            editor
+                .action("editor.layout.move", json!({"panel":panel,"slot":"view"}))
+                .unwrap();
+        }
         editor
             .action("editor.focus", json!({"panel":panel}))
             .unwrap();
@@ -1247,7 +1253,7 @@ fn every_dock_splitter_can_be_grabbed_and_dragged() {
         .filter(|n| n.element.id.starts_with("splitter-") && n.visible)
         .map(|n| n.element.id.clone())
         .collect();
-    assert!(splitters.len() >= 3, "{splitters:?}");
+    assert!(splitters.len() >= 2, "{splitters:?}");
     for id in splitters {
         let i = shell.ui.find(&id).unwrap();
         let r = shell.ui.nodes[i].rect;
@@ -1346,4 +1352,324 @@ fn a_lone_panel_drags_by_its_header_into_another_area() {
         target.0,
         "{panel} joined the other area"
     );
+}
+
+fn panels(node: &ara_ui::docking::DockNode) -> Vec<(String, Vec<String>)> {
+    match node {
+        ara_ui::docking::DockNode::Area { id, tabs, .. } => vec![(id.clone(), tabs.clone())],
+        ara_ui::docking::DockNode::Split { first, second, .. } => {
+            let mut out = panels(first);
+            out.extend(panels(second));
+            out
+        }
+    }
+}
+
+#[test]
+fn the_default_layout_puts_the_views_left_tools_right_and_a_collapsed_bar_below() {
+    let project = Project::new();
+    let mut editor = Editor::open(&project.0).unwrap();
+    let areas = panels(&editor.state.layout);
+    let s = |v: &[&str]| v.iter().map(|t| t.to_string()).collect::<Vec<_>>();
+    assert_eq!(
+        areas,
+        [
+            ("view".into(), s(&["scene", "game"])),
+            ("outline".into(), s(&["hierarchy"])),
+            ("right".into(), s(&["inspector"])),
+            (
+                "bottom".into(),
+                s(&["assets", "console", "problems", "agents"])
+            ),
+        ]
+    );
+    assert!(editor.state.collapsed_areas.contains("bottom"));
+    // The collapsed bar shows its tabs, no body; a tab opens the area on that panel.
+    let mut shell = Shell::new(&mut editor, [1440., 900.]).unwrap();
+    shell.rebuild(&mut editor).unwrap();
+    assert!(shell.ui.find("tab-console").is_some());
+    assert!(shell.ui.find("body-assets").is_none());
+    let mut clip = MemoryClipboard::default();
+    shell.click("tab-console", &mut clip).unwrap();
+    shell.dispatch(&mut editor).unwrap();
+    shell.rebuild(&mut editor).unwrap();
+    assert!(!editor.state.collapsed_areas.contains("bottom"));
+    assert!(shell.ui.find("body-console").is_some());
+    // The chevron folds it again.
+    shell.click("fold-bottom", &mut clip).unwrap();
+    shell.dispatch(&mut editor).unwrap();
+    assert!(editor.state.collapsed_areas.contains("bottom"));
+}
+
+#[test]
+fn the_title_bar_names_the_scene_without_its_extension() {
+    let project = Project::new();
+    let mut editor = Editor::open(&project.0).unwrap();
+    let mut shell = Shell::new(&mut editor, [1440., 900.]).unwrap();
+    shell.rebuild(&mut editor).unwrap();
+    let crumb = &shell.ui.nodes[shell.ui.find("crumb-scene").unwrap()];
+    assert_eq!(crumb.text.as_ref().map(|t| t.value.as_str()), Some("main"));
+    assert_eq!(
+        crumb.element.attrs.get("description").map(String::as_str),
+        Some("levels/main.scene")
+    );
+}
+
+/// Parts are parsed one by one, so the markup parser cannot see an ID that two
+/// panels both declare. Every panel open in one window at once, each in an area of
+/// its own (two graph pages side by side included), declares each ID once.
+#[test]
+fn element_ids_stay_unique_with_every_panel_open_in_one_window() {
+    let project = Project::new();
+    let mut editor = Editor::open(&project.0).unwrap();
+    for (domain, path) in [
+        ("material", "paint.graph"),
+        ("vfx", "spark.graph"),
+        ("animation", "motion.animation"),
+    ] {
+        let doc = editor
+            .action(
+                "editor.resource.create",
+                json!({"domain": domain, "path": path}),
+            )
+            .unwrap()["doc"]
+            .as_str()
+            .unwrap()
+            .to_owned();
+        editor
+            .action("editor.workspace", json!({"resource": doc}))
+            .unwrap();
+    }
+    // Split areas breadth first, so no area ends up much smaller than the rest.
+    let mut areas = std::collections::VecDeque::from(["view".to_owned()]);
+    for (n, panel) in [
+        "game",
+        "hierarchy",
+        "inspector",
+        "assets",
+        "console",
+        "problems",
+        "agents",
+        "material",
+        "vfx",
+        "animation",
+        "profiler",
+        "settings",
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        editor
+            .action("editor.layout.show", json!({"panel": panel}))
+            .unwrap();
+        let area = areas.pop_front().unwrap();
+        let own = format!("own-{panel}");
+        editor
+            .action(
+                "editor.layout",
+                json!({"panel": panel, "area": area, "newArea": own, "vertical": n % 2 == 1}),
+            )
+            .unwrap();
+        areas.extend([area, own]);
+    }
+    assert!(editor.state.floating.is_empty());
+    let mut shell = Shell::new(&mut editor, [3840., 2160.]).unwrap();
+    shell.rebuild(&mut editor).unwrap();
+    let mut seen = std::collections::BTreeSet::new();
+    let repeated: std::collections::BTreeSet<_> = shell
+        .ui
+        .nodes
+        .iter()
+        .map(|n| n.element.id.as_str())
+        .filter(|id| !seen.insert(*id))
+        .collect();
+    assert!(repeated.is_empty(), "IDs declared twice: {repeated:?}");
+    for canvas in ["material-canvas", "animation-canvas"] {
+        assert!(shell.ui.find(canvas).is_some(), "{canvas} is not on screen");
+    }
+}
+
+/// Material and Animation side by side: each keeps its own canvas and view; a press
+/// on one makes it the page the navigation state, graph commands and keys follow.
+#[test]
+fn two_graph_pages_keep_their_own_view_and_a_press_picks_the_active_one() {
+    use ara_platform::Event;
+    let project = Project::new();
+    let mut editor = Editor::open(&project.0).unwrap();
+    for (domain, path) in [
+        ("material", "paint.graph"),
+        ("animation", "motion.animation"),
+    ] {
+        let doc = editor
+            .action(
+                "editor.resource.create",
+                json!({"domain": domain, "path": path}),
+            )
+            .unwrap()["doc"]
+            .as_str()
+            .unwrap()
+            .to_owned();
+        editor
+            .action("editor.workspace", json!({"resource": doc}))
+            .unwrap();
+    }
+    editor
+        .action(
+            "editor.layout.move",
+            json!({"panel": "material", "slot": "view"}),
+        )
+        .unwrap();
+    editor
+        .action(
+            "editor.layout",
+            json!({"panel": "animation", "area": "view", "newArea": "beside"}),
+        )
+        .unwrap();
+    let mut shell = Shell::new(&mut editor, [2560., 1440.]).unwrap();
+    shell.rebuild(&mut editor).unwrap();
+    let centre = |shell: &Shell, id: &str| {
+        let r = shell.ui.nodes[shell.ui.find(id).unwrap()].rect;
+        [r.x + r.w * 0.5, r.y + r.h * 0.5]
+    };
+    let press = |shell: &mut Shell, editor: &mut Editor, at: [f32; 2]| {
+        shell.pointer = at;
+        for pressed in [true, false] {
+            shell
+                .graph_event(editor, &Event::MouseButton { button: 1, pressed })
+                .unwrap();
+        }
+        shell.rebuild(editor).unwrap();
+    };
+    // Animation was docked last, so it has focus: the wheel zooms its canvas.
+    assert_eq!(editor.state.focus, "animation");
+    shell.pointer = centre(&shell, "animation-canvas");
+    shell
+        .graph_event(&mut editor, &Event::Wheel([0., 3.]))
+        .unwrap();
+    let zoomed = editor.state.canvas;
+    shell.rebuild(&mut editor).unwrap();
+    // A press on the Material canvas makes it active, with its own view.
+    let at = centre(&shell, "material-canvas");
+    press(&mut shell, &mut editor, at);
+    assert_eq!(editor.state.focus, "material");
+    assert_ne!(editor.state.canvas, zoomed);
+    // Back on Animation, its zoom is where it was left.
+    let at = centre(&shell, "animation-canvas");
+    press(&mut shell, &mut editor, at);
+    assert_eq!(editor.state.focus, "animation");
+    assert_eq!(editor.state.canvas, zoomed);
+}
+
+#[test]
+fn tool_pages_open_floating_and_stay_where_they_are_docked() {
+    let project = Project::new();
+    let mut editor = Editor::open(&project.0).unwrap();
+    for panel in ["material", "vfx", "animation", "profiler"] {
+        assert!(
+            panels(&editor.state.layout)
+                .iter()
+                .all(|(_, tabs)| !tabs.iter().any(|t| t == panel))
+        );
+        editor
+            .action("editor.layout.show", json!({"panel": panel}))
+            .unwrap();
+        assert!(
+            editor.state.floating.iter().any(|f| panels(&f.root)
+                .iter()
+                .any(|(_, tabs)| tabs.iter().any(|t| t == panel))),
+            "{panel} opens in a floating window"
+        );
+    }
+    // Docked, the Material page stays docked when shown again and after a reopen.
+    editor
+        .action(
+            "editor.layout.move",
+            json!({"panel":"material","slot":"view"}),
+        )
+        .unwrap();
+    editor
+        .action("editor.layout.show", json!({"panel": "material"}))
+        .unwrap();
+    let docked = |editor: &Editor| {
+        panels(&editor.state.layout)
+            .iter()
+            .any(|(id, tabs)| id == "view" && tabs.iter().any(|t| t == "material"))
+    };
+    assert!(docked(&editor));
+    drop(editor);
+    let editor = Editor::open(&project.0).unwrap();
+    assert!(docked(&editor));
+}
+
+#[test]
+fn only_an_untouched_old_default_layout_moves_to_the_new_default() {
+    use ara_ui::docking::{Axis, DockNode};
+    let area = |id: &str, tabs: &[&str]| DockNode::Area {
+        id: id.into(),
+        tabs: tabs.iter().map(|t| t.to_string()).collect(),
+        active: 0,
+    };
+    let split = |axis, ratio, first, second| DockNode::Split {
+        axis,
+        ratio,
+        first: Box::new(first),
+        second: Box::new(second),
+    };
+    // The old default, resized (ratios differ): still the old default.
+    let old = split(
+        Axis::Horizontal,
+        0.22,
+        split(
+            Axis::Vertical,
+            0.6,
+            area("left", &["hierarchy"]),
+            area("bottom", &["assets", "console", "problems", "agents"]),
+        ),
+        split(
+            Axis::Horizontal,
+            0.7,
+            area(
+                "view",
+                &["scene", "game", "material", "vfx", "animation", "profiler"],
+            ),
+            area("right", &["inspector"]),
+        ),
+    );
+    // A rearranged layout: the user's.
+    let custom = split(
+        Axis::Horizontal,
+        0.5,
+        area(
+            "view",
+            &["scene", "game", "material", "vfx", "animation", "profiler"],
+        ),
+        area(
+            "right",
+            &[
+                "inspector",
+                "hierarchy",
+                "assets",
+                "console",
+                "problems",
+                "agents",
+            ],
+        ),
+    );
+    for (layout, migrates) in [(old, true), (custom.clone(), false)] {
+        let project = Project::new();
+        std::fs::create_dir_all(project.0.join(".ara")).unwrap();
+        std::fs::write(
+            project.0.join(".ara/editor-layout.json"),
+            ara_json::to_canonical_string(&serde_json::to_value(&layout).unwrap()),
+        )
+        .unwrap();
+        let editor = Editor::open(&project.0).unwrap();
+        if migrates {
+            assert_eq!(editor.state.layout, ara_editor::state::default_layout());
+            assert!(editor.state.collapsed_areas.contains("bottom"));
+        } else {
+            assert_eq!(editor.state.layout, custom);
+            assert!(editor.state.collapsed_areas.is_empty());
+        }
+    }
 }

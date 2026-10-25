@@ -1020,14 +1020,14 @@ fn build() -> Vec<Spec> {
             "Stop",
             "square",
             "Shift+F5",
-            "Stop every player process.",
+            "Stop every player process, or cancel a Play that is still starting.",
             |_, e, _| {
                 play(e, "play.stop", json!({}))?;
                 view(e, json!({"play": "stopped"}))
             },
         )
         .when(|c| {
-            if c.state.playing.is_some() {
+            if c.state.playing.is_some() || c.starting {
                 Avail::Ready
             } else {
                 Avail::Blocked("Nothing is playing".into())

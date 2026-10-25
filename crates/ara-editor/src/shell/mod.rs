@@ -236,10 +236,11 @@ pub struct Shell {
     )>,
     tooltip_text: Option<String>,
     field_request: Option<String>,
-    canvas: Option<crate::graph::Canvas>,
+    /// Each graph page's canvas (`graph_panel::GRAPH_PAGES`).
+    graphs: BTreeMap<&'static str, graph_panel::GraphCanvas>,
+    /// The graph page the navigation state, graph commands and keys act on.
+    graph_page: &'static str,
     canvas_display: ara_ui::paint::DisplayList,
-    canvas_doc: Option<String>,
-    canvas_revision: u64,
     canvas_navigation: u64,
     canvas_dragging: bool,
     resource_text: Option<(String, String)>,
@@ -477,9 +478,8 @@ impl Shell {
             tooltip_text: None,
             field_request: None,
             canvas_display: Default::default(),
-            canvas: None,
-            canvas_doc: None,
-            canvas_revision: 0,
+            graphs: BTreeMap::new(),
+            graph_page: graph_panel::GRAPH_PAGES[0],
             canvas_navigation: 0,
             canvas_dragging: false,
             resource_text: None,
@@ -623,6 +623,7 @@ impl Shell {
         self.fields.clear();
         self.browser.poll();
         self.vfx_visible = false;
+        self.follow_focus(editor)?;
         self.rebuild_main(editor, true)?;
         // Floating surfaces follow the layout: drop closed ones, build open ones.
         let floating = editor.state.floating.clone();
@@ -866,6 +867,7 @@ impl Shell {
         self.dock(
             &window.root,
             &format!("f{}", window.id),
+            false,
             editor,
             &mut markup,
         )?;
@@ -875,6 +877,9 @@ impl Shell {
         markup.push_str("</ui>");
         self.mount(editor, &markup)?;
         self.stats.work += self.ui.frame(&mut self.text)?;
+        if self.frame_new_graphs(editor)? {
+            self.stats.work += self.ui.frame(&mut self.text)?;
+        }
         self.after_mount(editor)
     }
     fn rebuild_main(
@@ -882,7 +887,6 @@ impl Shell {
         editor: &mut Editor,
         allow_asset_reflow: bool,
     ) -> ara_ui::Result<()> {
-        let previous_canvas = self.canvas_doc.as_deref().map(ara_ui::source::stable_id);
         self.parts.clear();
         self.hidden_bodies.clear();
         let mut markup = String::from("<ui id='editor'>");
@@ -904,9 +908,9 @@ impl Shell {
                     tabs: vec![panel],
                     active: 0,
                 };
-                self.dock(&area, "max", editor, &mut markup)?;
+                self.dock(&area, "max", false, editor, &mut markup)?;
             }
-            _ => self.dock(&layout, "root", editor, &mut markup)?,
+            _ => self.dock(&layout, "root", true, editor, &mut markup)?,
         }
         markup.push_str("</panel>");
         if editor.state.canvas_add
@@ -981,10 +985,7 @@ impl Shell {
             self.ui.nodes[cube].dirty.paint = true;
         }
         self.stats.work += self.ui.frame(&mut self.text)?;
-        if previous_canvas != self.canvas_doc.as_deref().map(ara_ui::source::stable_id)
-            && editor.state.canvas == crate::graph::Camera::default()
-        {
-            self.edit_graph_layout(editor, "open")?;
+        if self.frame_new_graphs(editor)? {
             self.stats.work += self.ui.frame(&mut self.text)?;
         }
         if allow_asset_reflow
@@ -1080,20 +1081,21 @@ impl Shell {
         let mut start = self.ui.display.commands.len();
         self.paint_swatches();
         self.paint_polish();
-        // The canvas splices in under its own panel, inside the dock tree: indices
-        // after that point (`start`, and the popup start measured before painting)
-        // move by what it inserted.
-        let (canvas_at, inserted) = self.paint_graph();
-        if canvas_at <= start {
-            start += inserted;
-        }
+        // Canvases splice in under their own panels, inside the dock tree: indices
+        // after those points (`start`, and the popup start measured before painting)
+        // move by what went in.
+        let splices = self.paint_graphs();
+        let shift = |index: usize| {
+            splices
+                .iter()
+                .fold(index, |i, &(at, n)| if at <= i { i + n } else { i })
+        };
+        start = shift(start);
         self.paint_drop_preview();
         if let Some(mut at) = self.popup_start()
             && at < start
         {
-            if canvas_at <= at {
-                at += inserted;
-            }
+            at = shift(at);
             let decorations: Vec<_> = self.ui.display.commands.drain(start..).collect();
             self.ui.display.commands.splice(at..at, decorations);
         }
@@ -1145,8 +1147,15 @@ impl Shell {
             return Ok(());
         };
         if let Some(scroll) = self.ui.find("inspector-scroll") {
+            // Rects are on screen (already scrolled); `scroll_to` takes the absolute
+            // offset, so the row's distance from the top adds to the current one.
             let delta = self.ui.nodes[row].rect.y - self.ui.nodes[scroll].rect.y;
-            self.ui.scroll_to(scroll, [0., delta])?;
+            let key = ara_ui::source::stable_id(&self.ui.nodes[scroll].element.id);
+            let current = match self.ui.widgets.get(&key) {
+                Some(ara_ui::widgets::Widget::Scroll(offset)) => offset[1],
+                _ => 0.,
+            };
+            self.ui.scroll_to(scroll, [0., current + delta])?;
             self.stats.work += self.ui.frame(&mut self.text)?;
         }
         if let Some(field) = self
@@ -1350,7 +1359,7 @@ impl Shell {
     }
     /// Compact agent layout report; glyph shaping internals stay out of capture jobs.
     pub fn layout_report(&self) -> Value {
-        json!({"size":self.ui.size,"focus":self.input.focused(),"graph":self.ui.find("graph-canvas").and_then(|i|self.canvas.as_ref().map(|c|c.report(self.ui.nodes[i].rect))),"nodes":self.ui.paint_order.iter().map(|i|{let n=&self.ui.nodes[*i];json!({"id":n.element.id,"stableId":ara_ui::source::stable_id(&n.element.id),"tag":n.element.tag,"box":n.rect,"clip":n.clip,"text":n.text.as_ref().map(|t|t.value.as_str()),"disabled":n.state.disabled})}).collect::<Vec<_>>()})
+        json!({"size":self.ui.size,"focus":self.input.focused(),"graph":self.ui.find(&graph_panel::canvas_id(self.graph_page)).and_then(|i|self.active_graph().map(|g|g.canvas.report(self.ui.nodes[i].rect))),"nodes":self.ui.paint_order.iter().map(|i|{let n=&self.ui.nodes[*i];json!({"id":n.element.id,"stableId":ara_ui::source::stable_id(&n.element.id),"tag":n.element.tag,"box":n.rect,"clip":n.clip,"text":n.text.as_ref().map(|t|t.value.as_str()),"disabled":n.state.disabled})}).collect::<Vec<_>>()})
     }
     /// Visible asset payload centre for scripted drags through the production drop route.
     pub fn asset_point(&self, path: &str) -> Option<[f32; 2]> {
@@ -1536,13 +1545,15 @@ fn project_name(editor: &Editor) -> String {
         .unwrap_or_else(|| "Project".into())
 }
 impl Shell {
-    /// Set a floating surface's logical size after its OS window opened or resized.
-    pub fn resize_surface(&mut self, id: &str, size: [f32; 2]) {
+    /// Set a floating surface's logical size after its OS window opened or resized
+    /// (`Ui::resize`: the next frame lays the surface out at that size).
+    pub fn resize_surface(&mut self, id: &str, size: [f32; 2]) -> ara_ui::Result<()> {
         if let Some(surface) = self.floats.iter_mut().find(|s| s.id == id) {
-            surface.ui.size = size;
+            surface.ui.resize(size)?;
         } else if self.current.as_deref() == Some(id) {
-            self.ui.size = size;
+            self.ui.resize(size)?;
         }
+        Ok(())
     }
     /// A floating surface's display list and size, for its window's renderer.
     pub fn surface(&self, id: &str) -> Option<&Surface> {

@@ -9,6 +9,7 @@ packaging appends the portable ZIP to `target/release/ara-setup.exe`.
 `cargo run -p ara-release -- package --version 0.0.1-alpha`
 `cargo run -p ara-release -- notes --version 0.0.1-alpha`
 `cargo run -p ara-release -- smoke`
+`smoke --artifacts <existing release-dist>` tests packages without rebuilding them.
 
 Always CARGO_BUILD_JOBS=4. Package is an explicit opt-in release build; no dev
 server or full workspace build. Outputs, logs, smoke projects and symbols belong
@@ -31,6 +32,8 @@ unchecked version string. Repackaging uses a fresh stage and refuses to replace
 an existing distribution. Remove only packager-owned target outputs explicitly
 when re-running after a code change. Installer/uninstaller refuse unrelated or
 existing directories, preserve user projects, and use Hub RPC for registration.
+Ship `paths.ps1` with both packages and any engine-installed Hub: their scripts
+normalize verbatim drive/UNC prefixes before Windows PowerShell 5.1 provider calls.
 
 Notices use cargo metadata (including transitive packages) and actual license
 files, plus checked-in vendor and shader-tool notices. Microsoft .NET is a
@@ -52,6 +55,7 @@ naming `document -> missing path` (`ara-release references <dir>` runs it alone)
 Smoke opens every installed template in the installed editor (`--frames 20`).
 It also creates Starter, queues `build.current` in an offscreen installed editor,
 checks the resolved PDB hash, and requires verified `ARA_RESULT` after 8 game ticks.
+That flow uses a human session to gracefully stop its owned editor authority.
 
 Gates: cargo check -p ara-release; cargo test -p ara-release;
 cargo clippy -p ara-release --all-targets -- -D warnings; cargo fmt --all.
