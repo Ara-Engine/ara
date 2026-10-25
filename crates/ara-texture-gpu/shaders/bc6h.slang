@@ -144,3 +144,5 @@ void encodeBc6h(uint3 group : SV_GroupID, uint lane : SV_GroupIndex) {
     }
     if (lane==0) buffers[NonUniformResourceIndex(root.output)].Store4(group.x*16,bc6Words[0]);
 }
+
+#include "bc6h_split.slangh"

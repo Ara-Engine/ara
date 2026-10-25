@@ -202,3 +202,91 @@ fn seeded_hdr_corpus_hq_contains_balanced_candidates() {
         assert!(hq <= balanced, "{hq} > {balanced}");
     }
 }
+
+// Mirrors the specialized shader's normalized 32-bit division. The unchanged
+// reference retains native 64-bit division as its independent arithmetic oracle.
+fn split_divide(numerator: u64, denominator: u64) -> u32 {
+    let shift = (63 - denominator.leading_zeros()).saturating_sub(15);
+    let mut quotient = ((numerator >> shift) as u32) / ((denominator >> shift) as u32);
+    if u64::from(quotient) * denominator > numerator {
+        quotient -= 1;
+    }
+    quotient
+}
+
+#[test]
+fn specialized_division_is_exact_for_every_quotient_and_wide_denominator_edges() {
+    // Quotients are <=31743 for clamped fitting and <=1024 for PCA direction
+    // normalization. After truncating the denominator to 16 significant bits,
+    // its normalized value exceeds q+1, so at most one correction is needed.
+    for denominator in [
+        1,
+        3,
+        31,
+        32767,
+        32768,
+        65535,
+        65536,
+        65537,
+        (1 << 30) - 1,
+        1 << 30,
+        (1 << 32) + 1,
+        (1 << 46) - 1,
+    ] {
+        for quotient in 0..=31743u64 {
+            for remainder in [0, denominator / 2, denominator - 1] {
+                let numerator = quotient * denominator + remainder;
+                assert_eq!(
+                    u64::from(split_divide(numerator, denominator)),
+                    numerator / denominator
+                );
+            }
+        }
+    }
+    let mut state = 0xa3d75b21;
+    for _ in 0..100_000 {
+        let denominator = u64::from(random(&mut state) % (1 << 30)) + 1;
+        let numerator = i64::from(random(&mut state)) * i64::from(random(&mut state) % 65536)
+            - i64::from(random(&mut state));
+        let actual = if numerator <= 0 {
+            0
+        } else {
+            let rounded = numerator as u64 + denominator / 2;
+            if rounded >= 31743 * denominator {
+                31743
+            } else {
+                split_divide(rounded, denominator)
+            }
+        };
+        assert_eq!(
+            i64::from(actual),
+            round_div(numerator, denominator as i64).clamp(0, 31743)
+        );
+        let scale = (u64::from(random(&mut state)) << 14) + 1;
+        let value = u64::from(random(&mut state)) % scale;
+        assert_eq!(
+            u64::from(split_divide(value * 1024, scale)),
+            value * 1024 / scale
+        );
+    }
+}
+
+#[test]
+fn specialized_quantizer_preserves_every_finite_unsigned_half_and_tie() {
+    for bits in [6, 7, 8, 9, 10, 11, 12, 16] {
+        for half in 0..=0x7bffu32 {
+            let target = (half * 64 + 15) / 31;
+            let maximum = (1u32 << bits) - 1;
+            let center = (((target << bits) + 32768) >> 16).min(maximum);
+            let mut best = (u32::MAX, 0);
+            for trial in 0..5 {
+                let q = (center as i32 + trial - 2).clamp(0, maximum as i32) as u32;
+                let error = ((unquantize(q, bits) * 31) >> 6).abs_diff(half);
+                if (error, q) < best {
+                    best = (error, q);
+                }
+            }
+            assert_eq!(best.1, quantize(half, bits));
+        }
+    }
+}
