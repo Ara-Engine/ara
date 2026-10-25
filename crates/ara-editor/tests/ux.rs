@@ -1142,3 +1142,35 @@ fn rebuild_cost_by_stage() {
         shell.rebuild_if_stale(editor).unwrap();
     });
 }
+
+#[test]
+fn axis_widget_caps_are_lettered_and_readable() {
+    let project = Project::new();
+    let mut editor = Editor::open(&project.0).unwrap();
+    let shell = Shell::new(&mut editor, [1440., 900.]).unwrap();
+    for (cap, letter) in [("view-x", "X"), ("view-y", "Y"), ("view-z", "Z")] {
+        let label = shell.ui.find(&format!("{cap}-label")).unwrap();
+        let node = &shell.ui.nodes[label];
+        assert_eq!(
+            node.element.attrs.get("text").map(String::as_str),
+            Some(letter)
+        );
+        let disc = shell.ui.nodes[shell.ui.find(cap).unwrap()]
+            .computed
+            .background;
+        assert_ne!(
+            node.computed.color, disc,
+            "{cap}: the letter must read on its disc"
+        );
+    }
+    let negative = shell.ui.find("view-x-negative-label").unwrap();
+    assert_eq!(
+        shell.ui.nodes[negative]
+            .element
+            .attrs
+            .get("text")
+            .map(String::as_str),
+        Some(""),
+        "negative caps are unlettered rings"
+    );
+}

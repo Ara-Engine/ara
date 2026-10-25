@@ -95,6 +95,8 @@ button:disabled { color:var(--muted-foreground); background:transparent; }
 .segment { height:24px; flex-direction:row; align-items:center; gap:1px; padding:1px; background:var(--background); border-width:1px; border-color:var(--separator-strong); border-radius:var(--radius-sm); }
 .segment-button { height:20px; padding-left:6px; padding-right:6px; border-width:0px; background:transparent; border-radius:4px; }
 .segment-button:hover { background:var(--raised); }
+.tool-button { width:24px; padding:0px; }
+.snap-value { height:22px; gap:4px; padding-left:4px; padding-right:2px; }
 .split-main { border-radius:0px; border-width:0px; background:transparent; height:22px; padding-left:6px; padding-right:4px; }
 .split-more { border-width:0px; background:transparent; width:16px; height:22px; padding:0px; }
 .split { height:24px; flex-direction:row; align-items:center; padding:0px; gap:0px; background:var(--background); border-width:1px; border-color:var(--separator-strong); border-radius:var(--radius-sm); }
@@ -183,17 +185,13 @@ scroll { overflow:hidden; flex-basis:0px; min-height:0px; min-width:0px; }
 .check { width:16px; height:16px; flex-shrink:0; padding:0px; border-width:1px; border-color:var(--input); border-radius:4px; background:var(--background); }
 .check-on { background:var(--primary); border-color:var(--primary); }
 
-.view-axis { padding:2px; background:var(--card); border-color:var(--input); }
-#view-x { color:var(--destructive-foreground); }
-#view-y { color:var(--success-foreground); }
-#view-z { color:var(--info-foreground); }
 .view-sphere { padding:0px; border-radius:6px; background:transparent; border-color:var(--muted-foreground); border-width:1px; }
 .view-sphere:hover { background:var(--raised); border-color:var(--foreground); }
-.view-cap { padding:0px; border-radius:7px; border-width:0px; font-size:9px; color:var(--background); }
+.view-cap { padding:0px; border-radius:8px; border-width:0px; font-size:11px; color:var(--background); }
 .cap-x { background:var(--destructive-foreground); }
 .cap-y { background:var(--success-foreground); }
 .cap-z { background:var(--info-foreground); }
-.cap-negative { background:transparent; border-width:1px; }
+.cap-negative { background:transparent; border-width:1px; border-radius:5px; }
 .cap-neg-x { border-color:var(--destructive-foreground); }
 .cap-neg-y { border-color:var(--success-foreground); }
 .cap-neg-z { border-color:var(--info-foreground); }

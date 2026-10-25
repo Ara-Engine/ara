@@ -332,7 +332,8 @@ impl Shell {
         let summary = commands::get(command).map(|c| c.summary).unwrap_or("");
         out.push_str(&format!("<button id='{id}' class='{class}' label='{}' description='{}' action='Dispatch'>{}<text id='{id}-label' text='{}' /></button>",escape(text),escape(summary),icons::icon(id,icon),escape(text)));
     }
-    /// A dropdown button that opens a registry-built menu.
+    /// A dropdown button that opens a registry-built menu. An empty `text` makes an
+    /// icon-only button labelled by its description.
     pub(super) fn tool_menu(
         &mut self,
         out: &mut String,
@@ -346,7 +347,12 @@ impl Shell {
             ara_ui::source::stable_id(id),
             Binding::ContextMenu(context, Target::None),
         );
-        out.push_str(&format!("<button id='{id}' class='ghost' style='padding-left:6px;padding-right:4px' label='{}' description='{}' action='Dispatch'>{}<text id='{id}-label' text='{}' />{}</button>",escape(text),escape(description),icons::icon(id,icon),escape(text),icons::icon_in(&format!("{id}-more"),"chevron-down","icon-sm")));
+        let words = if text.is_empty() {
+            String::new()
+        } else {
+            format!("<text id='{id}-label' text='{}' />", escape(text))
+        };
+        out.push_str(&format!("<button id='{id}' class='ghost' style='padding-left:6px;padding-right:4px' label='{}' description='{}' action='Dispatch'>{}{words}{}</button>",escape(if text.is_empty(){description}else{text}),escape(description),icons::icon(id,icon),icons::icon_in(&format!("{id}-more"),"chevron-down","icon-sm")));
     }
     pub(super) fn scene_panel(&mut self, editor: &Editor, out: &mut String) {
         if !editor.state.hide_overlays {
@@ -390,62 +396,83 @@ impl Shell {
                     .first()
                     .map(|c| c.text())
                     .unwrap_or_default();
-                out.push_str(&format!("<button id='{id}' class='segment-button{}' label='{label}' description='{label} · {keys}' action='Dispatch'>{}{}</button>",if on{" selected"}else{""},if on{icons::icon_in(id,icon,"on-selection")}else{icons::icon(id,icon)},if on{format!("<text id='{id}-label' text='{label}' />")}else{String::new()}));
+                out.push_str(&format!("<button id='{id}' class='segment-button tool-button{}' label='{label}' description='{label} · {keys}' action='Dispatch'>{}</button>",if on{" selected"}else{""},if on{icons::icon_in(id,icon,"on-selection")}else{icons::icon(id,icon)}));
             }
             out.push_str("</panel>");
-            self.tool_text(
-                out,
-                "tool-space",
-                "view.space",
-                "globe",
-                if editor.state.local { "Local" } else { "World" },
-                "ghost",
-            );
-            self.tool_text(
-                out,
-                "tool-pivot",
-                "view.pivot",
-                "crosshair",
-                if editor.state.centre {
-                    "Centre"
-                } else {
-                    "Pivot"
-                },
-                "ghost",
-            );
+            // Space and pivot: the icon is the state; the tooltip says what a click does.
+            let local = editor.state.local;
+            let centre = editor.state.centre;
+            for (id, command, icon, state, other) in [
+                (
+                    "tool-space",
+                    "view.space",
+                    if local { "box" } else { "globe" },
+                    if local { "Local axes" } else { "World axes" },
+                    if local { "world axes" } else { "local axes" },
+                ),
+                (
+                    "tool-pivot",
+                    "view.pivot",
+                    if centre { "circle-dot" } else { "crosshair" },
+                    if centre {
+                        "Around the selection centre"
+                    } else {
+                        "Around each pivot"
+                    },
+                    if centre {
+                        "each pivot"
+                    } else {
+                        "the selection centre"
+                    },
+                ),
+            ] {
+                self.bind_command(id, command, Target::None);
+                out.push_str(&format!("<button id='{id}' class='ghost icon-button' label='{state}' description='{state} · click for {other}' action='Dispatch'>{}</button>",icons::icon(id,icon)));
+            }
             out.push_str("<panel id='snap-sep' class='toolbar-sep' />");
+            // Snapping: one magnet, then the three increments as value menus (muted off).
             let snap = editor.state.snapping;
-            for (id, value_command, icon, value) in [
+            self.bind_command("snap-toggle", "snap.toggle", Target::None);
+            out.push_str(&format!("<button id='snap-toggle' class='{} icon-button' label='Snapping' description='Snapping is {} · click to turn it {}' action='Dispatch'>{}</button>",if snap{"selected"}else{"ghost"},if snap{"on"}else{"off"},if snap{"off"}else{"on"},if snap{icons::icon_in("snap-toggle","magnet","on-selection")}else{icons::icon("snap-toggle","magnet")}));
+            for (id, command, icon, what, value) in [
                 (
                     "snap-move",
                     "snap.grid",
                     "grid-2x2",
+                    "Move increment",
                     format!("{} m", editor.state.move_snap),
                 ),
                 (
                     "snap-rotate",
                     "snap.rotation",
                     "rotate-3d",
+                    "Rotate increment",
                     format!("{}°", editor.state.rotate_snap),
                 ),
                 (
                     "snap-scale",
                     "snap.scale",
                     "scaling",
+                    "Scale increment",
                     format!("{}", editor.state.scale_snap),
                 ),
             ] {
-                self.bind_command(&format!("{id}-toggle"), "snap.toggle", Target::None);
-                self.bind_command(&format!("{id}-value"), value_command, Target::None);
-                out.push_str(&format!("<panel id='{id}' class='split{}'><button id='{id}-toggle' class='split-main' label='Snap {}' description='Snapping {} · click to toggle' action='Dispatch'>{}<text id='{id}-text' class='value' text='{}' /></button><button id='{id}-value' class='split-more' label='Snap increment' description='Choose the increment' action='Dispatch'>{}</button></panel>",if snap{" split-on"}else{""},escape(&value),if snap{"on"}else{"off"},if snap{icons::icon_in(&format!("{id}-toggle"),icon,"accent")}else{icons::icon(&format!("{id}-toggle"),icon)},escape(&value),icons::icon_in(&format!("{id}-value"),"chevron-down","icon-sm")));
+                self.bind_command(id, command, Target::None);
+                let tone = if snap { "fg" } else { "muted" };
+                out.push_str(&format!("<button id='{id}' class='ghost snap-value' label='{what}' description='{what}: {} · click to choose' action='Dispatch'>{}<text id='{id}-text' class='{tone}' text='{}' />{}</button>",escape(&value),icons::icon_in(id,icon,tone),escape(&value),icons::icon_in(&format!("{id}-more"),"chevron-down","icon-sm")));
             }
             out.push_str("<panel id='scene-fill' class='fill' />");
+            // Below 820 px the camera and view menus drop their words (last layout).
+            let narrow = self
+                .ui
+                .find("scene-tools")
+                .is_some_and(|i| self.ui.nodes[i].rect.w < 820.);
             self.tool_menu(
                 out,
                 "view-camera",
                 Context::Camera,
                 "video",
-                "Perspective",
+                if narrow { "" } else { "Perspective" },
                 "Camera views and speed",
             );
             // Typed in place; Enter or leaving the field applies it via `editor.camera`.
@@ -461,6 +488,7 @@ impl Shell {
                 "entityIds" => "Entity IDs".into(),
                 "shadowCascades" => "Cascades".into(),
                 // Lit shows the preset the view renders with (`Lit · Auto` until detected).
+                _ if narrow => "Lit".into(),
                 _ => format!(
                     "Lit · {}",
                     state
@@ -481,8 +509,8 @@ impl Shell {
                 "view-show",
                 Context::Show,
                 "eye",
-                "Show",
-                "Grid, outlines, gizmos and overlays",
+                "",
+                "Show: grid, outlines, gizmos and overlays",
             );
             self.tool_icon(out, "frame", "view.frame", "focus", editor, false);
             out.push_str("</panel>");
