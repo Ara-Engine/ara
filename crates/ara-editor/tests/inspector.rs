@@ -580,3 +580,43 @@ fn long_asset_names_clip_and_keep_the_field_buttons_in_view() {
         );
     }
 }
+
+/// A model replaces the procedural shape (`showIf` hints): picking one hides Shape and
+/// Size and shows Node and Primitive; clearing it brings the shape back. A hidden
+/// field keeps its value and stays settable through commands.
+#[test]
+fn a_model_hides_the_shape_fields_and_clearing_it_brings_them_back() {
+    let project = Project::new();
+    let (mut editor, mut shell) = project.open();
+    let shown = |shell: &Shell, field: &str| {
+        shell
+            .ui
+            .find(&format!("field-MeshRenderer-{field}"))
+            .is_some()
+    };
+    let rows = |shell: &Shell| ["shape", "size", "node", "primitive"].map(|f| shown(shell, f));
+    assert_eq!(rows(&shell), [true, true, false, false]);
+    let mut clip = MemoryClipboard::default();
+    shell.click("pick-MeshRenderer-model", &mut clip).unwrap();
+    shell.dispatch(&mut editor).unwrap();
+    let card = card(&shell, "crate");
+    shell.click(&card, &mut clip).unwrap();
+    shell.dispatch(&mut editor).unwrap();
+    shell.rebuild(&mut editor).unwrap();
+    assert_eq!(rows(&shell), [false, false, true, true]);
+    editor
+        .apply(
+            vec![json!({"cmd":"property.set","args":{"entity":"e_crate001","path":"MeshRenderer.size","value":[2,2,2]}})],
+            "Size while hidden",
+            None,
+        )
+        .unwrap();
+    press(&mut shell, &mut editor, "clear-MeshRenderer-model");
+    shell.rebuild(&mut editor).unwrap();
+    assert_eq!(model(&editor), Value::Null);
+    assert_eq!(rows(&shell), [true, true, false, false]);
+    assert_eq!(
+        authored(&editor, "e_crate001", "MeshRenderer", "size"),
+        json!([2, 2, 2])
+    );
+}

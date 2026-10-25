@@ -426,3 +426,117 @@ fn record_prefixes_are_unique_per_document_kind_only() {
         db.verify()
     );
 }
+
+/// How a test lamp emits light.
+#[derive(Schema)]
+#[allow(dead_code)]
+pub enum LampKind {
+    /// Every direction.
+    Point,
+    /// A cone.
+    Spot,
+}
+
+/// A lamp whose fields depend on its siblings.
+#[derive(Schema)]
+#[ara(component)]
+#[allow(dead_code)]
+pub struct Lamp {
+    /// Emission shape.
+    pub kind: LampKind,
+    /// Cone half-angle.
+    #[ara(editor(show_if(field = "kind", one_of = ["spot"])))]
+    pub angle: f32,
+    /// Lamp model; the bulb is drawn when absent.
+    pub model: Option<AssetRef>,
+    /// Bulb radius, drawn when `model` is empty.
+    #[ara(editor(show_if(field = "model", empty)))]
+    pub bulb: f32,
+    /// Model node.
+    #[ara(editor(show_if(field = "model", set)))]
+    pub node: Option<String>,
+}
+
+#[test]
+fn show_if_hints_reflect_and_judge_effective_values() {
+    let mut db = SchemaDb::new();
+    db.register::<Lamp>();
+    assert!(db.verify().is_empty(), "{:#?}", db.verify());
+    let reflection = db.reflection();
+    let fields = &reflection["types"]["Lamp"]["fields"];
+    assert_eq!(
+        fields["angle"]["editor"]["showIf"],
+        json!({"field": "kind", "when": {"oneOf": ["spot"]}})
+    );
+    assert_eq!(
+        fields["node"]["editor"]["showIf"],
+        json!({"field": "model", "when": "set"})
+    );
+    assert!(
+        fields["kind"]
+            .get("editor")
+            .is_none_or(|e| e.get("showIf").is_none())
+    );
+
+    let ara_schema::Shape::Struct { fields, .. } = &get(&db, "Lamp").shape else {
+        panic!("struct");
+    };
+    let hints = |name: &str| {
+        &fields
+            .iter()
+            .find(|f| f.name == name)
+            .expect("field")
+            .editor
+    };
+    // Siblings are judged on effective values: an absent model is its default, null.
+    fn lamp(kind: &'static str, model: Value) -> impl FnOnce(&str) -> Value {
+        move |field| if field == "kind" { json!(kind) } else { model }
+    }
+    assert!(hints("angle").shows(lamp("spot", Value::Null)));
+    assert!(!hints("angle").shows(lamp("point", Value::Null)));
+    assert!(hints("bulb").shows(lamp("point", Value::Null)));
+    assert!(hints("bulb").shows(lamp("point", json!(""))));
+    assert!(!hints("bulb").shows(lamp("point", json!("@models/lamp.glb#as_lamp0001"))));
+    assert!(hints("node").shows(lamp("point", json!("@models/lamp.glb#as_lamp0001"))));
+    assert!(!hints("node").shows(lamp("point", Value::Null)));
+}
+
+#[test]
+fn show_if_must_name_a_sibling_its_condition_can_judge() {
+    let mut db = SchemaDb::new();
+    let field =
+        |ty: &str, show: Value| json!({"type": ty, "doc": "A field.", "editor": {"showIf": show}});
+    let problems = db.add_json_types(&json!({
+        "$schema": "ara://schema/types/1",
+        "types": {
+            "Tier": { "kind": "enum", "doc": "A tier.", "variants": {
+                "low": { "doc": "Low." }, "high": { "doc": "High." } } },
+            "Gadget": {
+                "kind": "component",
+                "doc": "A gadget.",
+                "fields": {
+                    "tier": { "type": "Tier", "doc": "Its tier." },
+                    "count": { "type": "u32", "doc": "A count." },
+                    "missing": field("f32", json!({"field": "nothing", "when": "set"})),
+                    "numeric": field("f32", json!({"field": "count", "when": "empty"})),
+                    "variant": field("f32", json!({"field": "tier", "when": {"oneOf": ["mid"]}})),
+                    "notEnum": field("f32", json!({"field": "count", "when": {"oneOf": ["low"]}})),
+                    "chained": field("f32", json!({"field": "variant", "when": {"oneOf": ["low"]}}))
+                }
+            }
+        }
+    }));
+    assert!(problems.is_empty(), "{problems:#?}");
+    let messages: Vec<String> = db.verify().into_iter().map(|d| d.message).collect();
+    assert_eq!(
+        messages,
+        [
+            "`Gadget`: field `missing`: `showIf` names no other field `nothing`",
+            "`Gadget`: field `numeric`: `showIf` field `count` (u32) is never empty",
+            "`Gadget`: field `variant`: `showIf` field `tier` has no variant `mid`",
+            "`Gadget`: field `notEnum`: `showIf` `oneOf` needs an enum field; `count` is u32",
+            "`Gadget`: field `chained`: `showIf` field `variant` is itself conditional",
+            "`Gadget`: field `chained`: `showIf` `oneOf` needs an enum field; `variant` is f32",
+        ]
+    );
+}

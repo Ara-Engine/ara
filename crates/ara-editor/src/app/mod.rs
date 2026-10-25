@@ -608,7 +608,8 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                 scene_dirty |= changed;
             }
             if let Some(route) = &mut first_hour {
-                let changed = route.step(&mut editor, &mut shell, &mut gpu)?;
+                let busy = scene_view.needs_frame(editor.state.quality);
+                let changed = route.step(&mut editor, &mut shell, &mut gpu, busy)?;
                 dirty |= changed;
             }
             if let Some(suite) = &mut ux_verification {

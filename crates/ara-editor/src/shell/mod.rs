@@ -133,6 +133,9 @@ pub struct Shell {
     pub(crate) game_start: Option<game_panel::StartProgress>,
     /// `game_fault` is a start that failed, not a fault while running.
     pub(crate) game_start_failed: bool,
+    /// The shown Play world's last `play.status` said `running`. Live reads of the
+    /// world (`play.read`) wait for it: a starting or stopping world has none yet.
+    pub(crate) game_running: bool,
     /// The Material tool shows its DSL source instead of the node graph.
     pub(crate) material_source_view: bool,
     /// In-node material previews (requests and the show/hide toggle).
@@ -432,6 +435,7 @@ impl Shell {
             game_fault: None,
             game_start: None,
             game_start_failed: false,
+            game_running: false,
             material_source_view: false,
             node_previews: Default::default(),
             animation_live: Default::default(),
@@ -1582,7 +1586,9 @@ impl Shell {
         }
     }
 }
-fn project_name(editor: &Editor) -> String {
+/// The project's name as people read it: `name` in `ara.project.json`, else its
+/// folder's name. The title bar and the loading window show it.
+pub(crate) fn project_name(editor: &Editor) -> String {
     editor
         .state
         .settings
@@ -1590,6 +1596,10 @@ fn project_name(editor: &Editor) -> String {
         .and_then(Value::as_str)
         .filter(|s| !s.is_empty())
         .map(str::to_owned)
+        .or_else(|| {
+            let folder = editor.host.root().file_name()?;
+            Some(folder.to_string_lossy().into_owned())
+        })
         .unwrap_or_else(|| "Project".into())
 }
 impl Shell {

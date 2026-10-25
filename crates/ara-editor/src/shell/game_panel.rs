@@ -251,6 +251,7 @@ impl Shell {
             .filter(|_| matches!(state, "starting" | "stopping"))
             .map(StartProgress::from_status);
         self.game_start_failed = state == "failed";
+        self.game_running = state == "running";
         self.game_fault = shown.and_then(|w| {
             if self.game_start_failed {
                 return Some(

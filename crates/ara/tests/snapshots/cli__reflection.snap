@@ -2059,36 +2059,105 @@ expression: out
           "doc": "Box half extents; scale must be baked before physics extraction.",
           "default": [0.5, 0.5, 0.5],
           "unit": "m",
-          "range": [0.0001, null]
+          "range": [0.0001, null],
+          "editor": {
+            "showIf": {
+              "field": "kind",
+              "when": {
+                "oneOf": [
+                  "box",
+                  "modelConvex",
+                  "modelMesh"
+                ]
+              }
+            }
+          }
         },
         "radius": {
           "type": "f32",
           "doc": "Sphere, capsule or cylinder radius.",
           "default": 0.5,
           "unit": "m",
-          "range": [0.0001, null]
+          "range": [0.0001, null],
+          "editor": {
+            "showIf": {
+              "field": "kind",
+              "when": {
+                "oneOf": [
+                  "sphere",
+                  "capsule",
+                  "cylinder"
+                ]
+              }
+            }
+          }
         },
         "halfHeight": {
           "type": "f32",
           "doc": "Cylinder half height, excluding the capsule hemispheres.",
           "default": 0.5,
           "unit": "m",
-          "range": [0, null]
+          "range": [0, null],
+          "editor": {
+            "showIf": {
+              "field": "kind",
+              "when": {
+                "oneOf": [
+                  "capsule",
+                  "cylinder"
+                ]
+              }
+            }
+          }
         },
         "asset": {
           "type": "option<asset>",
           "doc": "Cooked collision asset (`@path#id`); resolve into `CookedCollider` before ticking.",
-          "default": null
+          "default": null,
+          "editor": {
+            "showIf": {
+              "field": "kind",
+              "when": {
+                "oneOf": [
+                  "cooked",
+                  "modelConvex",
+                  "modelMesh"
+                ]
+              }
+            }
+          }
         },
         "node": {
           "type": "option<string>",
           "doc": "Source model node name/index for model-derived geometry; absent uses its default scene.",
-          "default": null
+          "default": null,
+          "editor": {
+            "showIf": {
+              "field": "kind",
+              "when": {
+                "oneOf": [
+                  "modelConvex",
+                  "modelMesh"
+                ]
+              }
+            }
+          }
         },
         "primitive": {
           "type": "option<u32>",
           "doc": "Subtree-local primitive for model-derived geometry; absent uses the complete subtree.",
-          "default": null
+          "default": null,
+          "editor": {
+            "showIf": {
+              "field": "kind",
+              "when": {
+                "oneOf": [
+                  "modelConvex",
+                  "modelMesh"
+                ]
+              }
+            }
+          }
         },
         "layer": {
           "type": "u32",
@@ -3817,21 +3886,52 @@ expression: out
           "doc": "Influence radius of point and spot lights.",
           "default": 10,
           "unit": "m",
-          "range": [0.01, null]
+          "range": [0.01, null],
+          "editor": {
+            "showIf": {
+              "field": "kind",
+              "when": {
+                "oneOf": [
+                  "point",
+                  "spot"
+                ]
+              }
+            }
+          }
         },
         "innerAngle": {
           "type": "f32",
           "doc": "Spot inner cone half-angle.",
           "default": 20,
           "unit": "deg",
-          "range": [0, 89]
+          "range": [0, 89],
+          "editor": {
+            "showIf": {
+              "field": "kind",
+              "when": {
+                "oneOf": [
+                  "spot"
+                ]
+              }
+            }
+          }
         },
         "outerAngle": {
           "type": "f32",
           "doc": "Spot outer cone half-angle.",
           "default": 30,
           "unit": "deg",
-          "range": [0.1, 89]
+          "range": [0.1, 89],
+          "editor": {
+            "showIf": {
+              "field": "kind",
+              "when": {
+                "oneOf": [
+                  "spot"
+                ]
+              }
+            }
+          }
         }
       }
     },
@@ -4263,14 +4363,26 @@ expression: out
             "sphere",
             "capsule",
             "plane"
-          ]
+          ],
+          "editor": {
+            "showIf": {
+              "field": "model",
+              "when": "empty"
+            }
+          }
         },
         "size": {
           "type": "vec3",
           "doc": "Shape size: box extents, sphere/capsule diameter in x and capsule height in y, plane extents in x and z.",
           "default": [1, 1, 1],
           "unit": "m",
-          "range": [0.0001, null]
+          "range": [0.0001, null],
+          "editor": {
+            "showIf": {
+              "field": "model",
+              "when": "empty"
+            }
+          }
         },
         "model": {
           "type": "option<asset>",
@@ -4283,12 +4395,24 @@ expression: out
         "node": {
           "type": "option<string>",
           "doc": "Source node name or numeric glTF index. `name:3` selects a numeric name. The drawable subtree retains source rotation/scale and restores its pivot to the entity origin. Absent selects the complete default scene.",
-          "default": null
+          "default": null,
+          "editor": {
+            "showIf": {
+              "field": "model",
+              "when": "set"
+            }
+          }
         },
         "primitive": {
           "type": "option<u32>",
           "doc": "Zero-based primitive within the selected subtree (or whole model).",
-          "default": null
+          "default": null,
+          "editor": {
+            "showIf": {
+              "field": "model",
+              "when": "set"
+            }
+          }
         },
         "materialOverrides": {
           "type": "list<PrimitiveMaterialOverride>",
