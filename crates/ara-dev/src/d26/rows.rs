@@ -40,8 +40,12 @@ pub(super) const DEFINITIONS: &[(&str, &str)] = &[
         "gpu_other.total_ms from `ara-dev perf`: the sum of the presenter's GPU timestamps per frame. Async-compute passes overlapping graphics stretch their timestamps, so the sum can overstate the frame.",
     ),
     (
+        "CPU work",
+        "The player's cpu.work_ms: each frame's wall time minus its explicit driver host waits, before quantiles. It gates D26 only when work_coverage covers every measured frame. Hitches are cpu.hitches_over_16ms, which excludes only the process's first presented frame.",
+    ),
+    (
         "Wall bound",
-        "No CPU-work metric exists yet: cpu.frame_ms (player) and the editor's frame minus its UI fence wait still include GPU, present and other waits. Such a value passes at or under its limit and measures nothing above it.",
+        "Where no complete CPU-work metric exists (older players, the editor), cpu.frame_ms and the editor's frame minus its UI fence wait still include GPU, present and other waits. Such a value passes at or under its limit and measures nothing above it.",
     ),
     (
         "Cold / warm",
@@ -353,47 +357,98 @@ fn flip(results: &Results, scene: &str, preset: Preset, subject: &str) -> [Row; 
     })
 }
 
+/// `Ok` when the window's `cpu.work_ms` covers every measured frame (a complete D26
+/// CPU verdict); otherwise why it does not.
+fn work_coverage(window: &Window) -> Result<(), String> {
+    let frames = window.player["frames"].as_f64();
+    let coverage = &window.player["cpu"]["work_coverage"];
+    match (
+        coverage["measured"].as_f64(),
+        coverage["unavailable"].as_f64(),
+    ) {
+        (Some(measured), Some(unavailable)) if Some(measured) == frames && unavailable == 0. => {
+            Ok(())
+        }
+        (Some(measured), Some(unavailable)) => Err(format!(
+            "cpu.work_ms covers {measured} of {} frames ({unavailable} unavailable)",
+            frames.unwrap_or(0.)
+        )),
+        _ => Err("this player reports no cpu.work_ms".into()),
+    }
+}
+
+/// A hitch row: the player's hitch count when it reports one, else its longest frame.
+fn hitch(results: &Results, window: Option<&Measured<Window>>, subject: &str, label: &str) -> Row {
+    let (count, source) = window_metric(results, window, &["cpu", "hitches_over_16ms"]);
+    let (longest, _) = window_metric(results, window, &["cpu", "frame_ms", "max"]);
+    match count {
+        Ok(count) => {
+            let (eligible, _) = window_metric(results, window, &["cpu", "hitch_samples"]);
+            Row::new("CPU frame", subject, format!("Hitches over 16 ms, {label}"))
+                .unit("frames")
+                .gate("D26", 0.)
+                .note(format!(
+                    "of {} frames; longest {} ms",
+                    eligible.map_or("?".into(), |n| format!("{n:.0}")),
+                    longest.map_or("?".into(), |m| format!("{m:.1}"))
+                ))
+                .source(source)
+                .value(Ok(count))
+        }
+        Err(_) => {
+            let (value, source) = window_metric(results, window, &["cpu", "frame_ms", "max"]);
+            Row::new("CPU frame", subject, format!("Longest frame, {label}"))
+                .gate("D26", D26_HITCH)
+                .source(source)
+                .value(value)
+        }
+    }
+}
+
 fn cpu(results: &Results, rows: &mut Vec<Row>) {
     for scene in &SCENES {
         let subject = format!("{} · High (Play)", scene.name);
         let steady = results.steady.get(&(scene.name, "high"));
+        let coverage = match steady {
+            Some(Ok(window)) => work_coverage(window),
+            _ => Err(String::new()),
+        };
         for stat in ["p50", "p95"] {
-            let (value, source) = window_metric(results, steady, &["cpu", "frame_ms", stat]);
-            rows.push(
-                Row::new(
-                    "CPU frame",
-                    &subject,
-                    format!("CPU frame {stat} (wall bound)"),
-                )
-                .bound()
-                .gate("D26", D26_CPU)
-                .source(source)
-                .value(value),
-            );
+            let row = match &coverage {
+                Ok(()) => {
+                    let (value, source) = window_metric(results, steady, &["cpu", "work_ms", stat]);
+                    Row::new("CPU frame", &subject, format!("CPU work {stat}"))
+                        .gate("D26", D26_CPU)
+                        .source(source)
+                        .value(value)
+                }
+                Err(reason) => {
+                    let (value, source) =
+                        window_metric(results, steady, &["cpu", "frame_ms", stat]);
+                    let mut row = Row::new(
+                        "CPU frame",
+                        &subject,
+                        format!("CPU frame {stat} (wall bound)"),
+                    )
+                    .bound()
+                    .gate("D26", D26_CPU)
+                    .source(source);
+                    if !reason.is_empty() {
+                        row = row.note(reason);
+                    }
+                    row.value(value)
+                }
+            };
+            rows.push(row);
         }
-        let (value, source) = window_metric(
+        let cold = hitch(
             results,
             results.cold.get(scene.name),
-            &["cpu", "frame_ms", "max"],
+            &subject,
+            "after the first frame (cold pipeline cache)",
         );
-        rows.push(
-            Row::new(
-                "CPU frame",
-                &subject,
-                "Longest frame after the first (cold pipeline cache)",
-            )
-            .gate("D26", D26_HITCH)
-            .note("frames 2 onward of a fresh launch: pipeline compiles must not hitch")
-            .source(source)
-            .value(value),
-        );
-        let (value, source) = window_metric(results, steady, &["cpu", "frame_ms", "max"]);
-        rows.push(
-            Row::new("CPU frame", &subject, "Longest frame, steady window")
-                .gate("D26", D26_HITCH)
-                .source(source)
-                .value(value),
-        );
+        rows.push(cold.note("a fresh launch: pipeline compiles must not hitch"));
+        rows.push(hitch(results, steady, &subject, "steady window"));
     }
     let orbit = editor_frames(results, false, |name| name == "scene-orbit");
     let subject = "Editor · Outpost Scene orbit (after imports)";
@@ -754,6 +809,39 @@ mod tests {
         );
         let summary = Summary::of(&rows);
         assert_eq!(Summary::word(&summary.gates["D26"]), "FAIL");
+    }
+
+    #[test]
+    fn cpu_work_gates_only_with_full_coverage_and_hitches_count() {
+        let window = |measured: u32, unavailable: u32| {
+            Ok(Window {
+                report: PathBuf::from("r.json"),
+                player: json!({"frames": 600, "cpu": {
+                    "work_ms": {"p50": 3.0, "p95": 4.5},
+                    "frame_ms": {"p50": 9.0, "p95": 10.0, "max": 40.0},
+                    "work_coverage": {"measured": measured, "unavailable": unavailable},
+                    "hitches_over_16ms": 2, "hitch_samples": 599,
+                }}),
+            })
+        };
+        let mut results = Results::default();
+        results.steady.insert(("Outpost", "high"), window(600, 0));
+        results.steady.insert(("Hangar", "high"), window(590, 10));
+        let rows = rows(&results);
+        let find = |subject: &str, metric: &str| {
+            rows.iter()
+                .find(|r| r.subject == subject && r.metric == metric)
+                .expect("row")
+        };
+        let outpost = "Outpost · High (Play)";
+        assert_eq!(find(outpost, "CPU work p50").status, Status::Pass);
+        assert_eq!(find(outpost, "CPU work p95").status, Status::Fail);
+        let hitches = find(outpost, "Hitches over 16 ms, steady window");
+        assert_eq!((hitches.value, hitches.status), (Some(2.), Status::Fail));
+        // Partial coverage keeps the wall bound, which cannot fail.
+        let hangar = find("Hangar · High (Play)", "CPU frame p95 (wall bound)");
+        assert_eq!(hangar.status, Status::NotMeasured);
+        assert!(hangar.note.contains("590 of 600"));
     }
 
     #[test]

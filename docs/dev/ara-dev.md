@@ -321,8 +321,10 @@ feature resolution, freezes Outpost, Hangar and Showcase packs once per sample t
   `--settle-imports after` (interactions during imports), then again on that copy with
   `--settle-imports before` (warm startup, Scene orbit, Play, interactions after imports).
 
-A row without a measurement reads "not measured", never "pass". Wall-clock CPU values only
-bound CPU work, so they pass at or under the limit and are unmeasured above it. `--skip
+A row without a measurement reads "not measured", never "pass". Player CPU rows gate on
+`cpu.work_ms` when its `work_coverage` covers every measured frame, and hitch rows on
+`cpu.hitches_over_16ms`. Otherwise wall-clock CPU values only bound CPU work, so they pass
+at or under the limit and are unmeasured above it. `--skip
 player|flip|editor` leaves a section out; `--no-build` reuses the last d26 build;
 `--profile release` confirms on D26's named profile. The report's footer defines each metric.
 
