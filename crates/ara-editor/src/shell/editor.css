@@ -52,7 +52,8 @@ text { flex-shrink:0; white-space:nowrap; color:inherit; }
 .split-more:hover { background:var(--raised); }
 .statusbar { height:24px; flex-shrink:0; flex-direction:row; align-items:center; gap:4px; padding-left:8px; padding-right:4px; background:var(--chrome); font-size:11px; }
 .status-dot { width:6px; height:6px; border-radius:3px; background:var(--success-foreground); }
-.play-line { height:2px; flex-shrink:0; background:var(--success-foreground); }
+/* Over the menubar's lower edge, out of the layout: Play starting never moves the UI. */
+.play-line { position:absolute; left:0px; right:0px; top:34px; height:2px; background:var(--success-foreground); }
 
 .dock-root { flex-grow:1; flex-basis:0px; min-height:0px; padding-left:4px; padding-right:4px; padding-bottom:4px; }
 .dock { flex-grow:1; flex-basis:0px; min-width:0px; min-height:0px; background:var(--card); border-radius:var(--radius-md); overflow:hidden; }
