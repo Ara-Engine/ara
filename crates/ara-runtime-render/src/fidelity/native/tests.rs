@@ -16,6 +16,7 @@ mod geometry;
 mod publication;
 mod sync;
 mod terrain;
+mod terrain_resolution;
 
 fn draw(entity: u64) -> Draw {
     Draw {
