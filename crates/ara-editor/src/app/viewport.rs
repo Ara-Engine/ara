@@ -34,10 +34,14 @@ pub(super) struct SceneView {
     /// One CPU-only replacement at a time; newer imports coalesce until it finishes.
     content_job: Option<content::Job>,
     content_epoch: u64,
+    /// Input actually reflected by the retained native frame. SceneSync can
+    /// invalidate after this view already adopted the same publication.
+    raster_input: Option<content::Key>,
 }
 impl SceneView {
-    /// Re-extract native input at the next render boundary, retaining GPU content
-    /// until the replacement or in-place update succeeds.
+    /// Recheck native input at the next render boundary. Notifications for an
+    /// already adopted publication coalesce; changed input retains last-good GPU
+    /// content until its replacement or in-place update succeeds.
     pub(super) fn invalidate(&mut self) {
         self.revision = None;
         self.failed = None;
@@ -121,12 +125,19 @@ impl SceneView {
         }
         self.raster_snapshot_dirty = true;
         self.patched_pose = pose_key(editor.gesture.as_ref());
-        self.revision = Some((
+        let revision = (
             store.revision(),
             editor.extraction_revision,
             editor.review_revision,
             publication,
-        ));
+        );
+        self.revision = Some(revision);
+        self.raster_input = Some(content::Key {
+            revision,
+            epoch: self.content_epoch,
+            pose: self.patched_pose,
+            scene: content::scene_key(editor),
+        });
         self.remaining = self.remaining.max(8);
         Ok(true)
     }
@@ -197,6 +208,7 @@ impl SceneView {
             if let Err(error) = self.render_raster(renderer, editor, view, settle) {
                 eprintln!("Scene raster keeps its last good presentation: {error}");
                 self.remaining = 0;
+                self.raster_input = None;
                 self.failed = Some((
                     editor.host.store().revision(),
                     editor.extraction_revision,
@@ -219,6 +231,7 @@ impl SceneView {
             raster.destroy(renderer)?;
             renderer.clear_native()?;
             self.raster_frame = None;
+            self.raster_input = None;
             self.invalidate();
         }
         renderer.render_view(&editor.state.camera.spec(), 0.0015, mode)?;
@@ -307,10 +320,20 @@ impl SceneView {
             // allocating a failed generation on every UI frame.
             return Ok(());
         }
+        if self.revision != Some(revision)
+            && self.raster_frame.is_some()
+            && self.raster_input.is_some_and(|shown| shown.same_input(key))
+        {
+            // A settled ModelCache/extraction notification may arrive after this
+            // view's own publication. Acknowledge it without another snapshot.
+            self.revision = Some(revision);
+            self.patched_pose = key.pose;
+        }
         let changed = self.revision != Some(revision)
             || (editor.gesture.is_some() && self.patched_pose != pose_key(editor.gesture.as_ref()))
             || self.raster_frame.is_none();
         if changed && self.content_job.is_none() {
+            content::queue_reason(self.revision, key);
             self.content_job = Some(content::Job::start(
                 key,
                 content,
@@ -352,9 +375,14 @@ impl SceneView {
                     revision.2,
                     content.snapshot_revision(),
                 ));
+                self.raster_input = self
+                    .revision
+                    .map(|revision| content::Key { revision, ..key });
+                self.patched_pose = key.pose;
                 self.failed = None;
                 self.remaining = 64;
-            } else {
+            } else if !self.raster_input.is_some_and(|shown| shown.same_input(key)) {
+                content::queue_reason(self.revision, key);
                 self.content_job = Some(content::Job::start(
                     key,
                     content,
@@ -771,6 +799,30 @@ mod tests {
             assert!(renderer.presentation_ready());
             submit_ui(&scene, &renderer, &mut ui)?;
             if !ray_tracing {
+                let allocation = scene
+                    .raster_frame
+                    .as_ref()
+                    .expect("native frame")
+                    .draws
+                    .as_ptr();
+                editor.extraction_revision += 1;
+                scene.invalidate();
+                scene
+                    .render(&mut renderer, &editor, &view, 1)
+                    .map_err(|error| anyhow::anyhow!("{error}"))?;
+                assert!(
+                    scene.content_job.is_none(),
+                    "already shown publication must not queue extraction"
+                );
+                assert_eq!(
+                    scene
+                        .raster_frame
+                        .as_ref()
+                        .expect("retained frame")
+                        .draws
+                        .as_ptr(),
+                    allocation
+                );
                 // Hold a real CPU candidate unfinished across all typed material,
                 // light, rename and drag patches. Live calls must neither join it
                 // nor replace it; explicit capture later drains the superseded job.
@@ -786,6 +838,12 @@ mod tests {
                     &editor,
                     &view,
                 )?;
+                let patched_allocation = scene
+                    .raster_frame
+                    .as_ref()
+                    .expect("shown frame")
+                    .draws
+                    .as_ptr();
                 let (release, wait) = std::sync::mpsc::channel();
                 scene.content_job = Some(content::Job {
                     key,
@@ -811,6 +869,16 @@ mod tests {
                     .render_capture(&mut renderer, &editor, &view, 2)
                     .map_err(|error| anyhow::anyhow!("{error}"))?;
                 assert!(scene.content_job.is_none());
+                assert_eq!(
+                    scene
+                        .raster_frame
+                        .as_ref()
+                        .expect("shown patched frame")
+                        .draws
+                        .as_ptr(),
+                    patched_allocation,
+                    "stale worker must not rebuild already-patched input"
+                );
             }
             assert_eq!(scene.content.as_ref().expect("Scene content").revision(), 0);
             // The empty publication lands later. Neither no snapshot nor an

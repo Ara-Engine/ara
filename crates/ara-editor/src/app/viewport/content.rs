@@ -11,6 +11,11 @@ pub(super) struct Key {
 }
 
 impl Key {
+    /// An extraction notification alone does not change content already shown.
+    pub fn same_input(self, current: Self) -> bool {
+        self.matches(current) && self.revision.3 == current.revision.3
+    }
+
     pub fn matches(self, current: Self) -> bool {
         self.revision.0 == current.revision.0
             && self.revision.2 == current.revision.2
@@ -26,6 +31,29 @@ pub(super) fn scene_key(editor: &crate::Editor) -> u64 {
     editor.state.doc.hash(&mut hash);
     editor.state.hidden.hash(&mut hash);
     hash.finish()
+}
+
+pub(super) fn queue_reason(previous: Option<(u64, u64, u64, u64)>, current: Key) {
+    match previous {
+        None => {
+            ara_gpu::cpu_scope!("SceneContent.request.invalidated");
+        }
+        Some(old) if old.0 != current.revision.0 => {
+            ara_gpu::cpu_scope!("SceneContent.request.document");
+        }
+        Some(old) if old.1 != current.revision.1 => {
+            ara_gpu::cpu_scope!("SceneContent.request.extraction");
+        }
+        Some(old) if old.2 != current.revision.2 => {
+            ara_gpu::cpu_scope!("SceneContent.request.review");
+        }
+        Some(old) if old.3 != current.revision.3 => {
+            ara_gpu::cpu_scope!("SceneContent.request.publication");
+        }
+        _ => {
+            ara_gpu::cpu_scope!("SceneContent.request.pose");
+        }
+    }
 }
 
 pub(super) struct Job {
@@ -69,6 +97,14 @@ mod tests {
         // Editor::sync advances extraction_revision on every model publication.
         assert!(key.matches(Key {
             revision: (1, 200, 3, 400),
+            ..key
+        }));
+        assert!(key.same_input(Key {
+            revision: (1, 200, 3, 4),
+            ..key
+        }));
+        assert!(!key.same_input(Key {
+            revision: (1, 2, 3, 5),
             ..key
         }));
         assert!(!key.matches(Key {
