@@ -33,10 +33,10 @@ Surface surface(Varying v) {
     if((m.flags.y&(1u<<26))!=0)emission=materialLinear(emission);
     s.emissive=emission*m.emissiveRoughness.rgb;return s;
 }
-struct GBuffer {float4 albedo:SV_Target0;float4 normal:SV_Target1;float4 material:SV_Target2;float4 world:SV_Target3;float id:SV_Target4;};
+struct GBuffer {float4 albedo:SV_Target0;float4 normal:SV_Target1;float4 material:SV_Target2;float4 emissive:SV_Target3;float id:SV_Target4;};
 [shader("fragment")]
 GBuffer geometryFragment(Varying v) {
-    Surface s=surface(v);GBuffer g;g.albedo=float4(s.albedo,s.ao);g.normal=float4(s.normal,s.roughness);g.material=float4(s.emissive,s.metal);g.world=float4(v.world,1);g.id=float(root.entity);return g;
+    Surface s=surface(v);GBuffer g;g.albedo=float4(s.albedo,s.ao);g.normal=gbufferEncodeNormal(s.normal,1);g.material=gbufferEncodeMaterial(s.roughness,s.metal,1);g.emissive=gbufferEncodeEmissive(s.emissive,1);g.id=float(root.entity);return g;
 }
 [shader("fragment")]
 void shadowFragment(Varying v) {Surface s=surface(v);}
@@ -45,14 +45,14 @@ struct FullscreenVarying {float4 clip:SV_Position;};
 FullscreenVarying fullscreenVertex(uint id:SV_VertexID){FullscreenVarying o;float2 uv=float2((id<<1)&2,id&2);o.clip=float4(uv*2-1,0,1);return o;}
 [shader("fragment")]
 float4 lightingFragment(FullscreenVarying v):SV_Target0 {
-    Frame f=frame();Look l=look(f);int2 p=int2(v.clip.xy);float2 uv=(float2(p)+0.5)/float2(f.extent.xy);float4 world=pixel(f.gbuffer.w,p);
-    if(world.w==0)return float4(background(f,l,viewRay(f,float2(p)+0.5),uv),1);
-    Surface s;float4 a=pixel(f.gbuffer.x,p);float4 n=pixel(f.gbuffer.y,p);float4 m=pixel(f.gbuffer.z,p);s.albedo=a.rgb;s.alpha=1;s.transmission=0;s.ao=min(a.a,screenOcclusion(f,l,p,length(world.xyz-f.camera.xyz)));s.normal=n.xyz;s.roughness=n.w;s.metal=m.w;s.emissive=m.xyz;
-    return float4(applyFog(f,l,shade(f,l,s,world.xyz,p,true),world.xyz,uv),1);
+    Frame f=frame();Look l=look(f);int2 p=int2(v.clip.xy);float2 uv=(float2(p)+0.5)/float2(f.extent.xy);bool covered;float3 world=gbufferWorld(f,p,covered);
+    if(!covered)return float4(background(f,l,viewRay(f,float2(p)+0.5),uv),1);
+    Surface s;float4 a=gbufferAlbedo(f,p);float2 m=gbufferMaterial(f,p);s.albedo=a.rgb;s.alpha=1;s.transmission=0;s.ao=min(a.a,screenOcclusion(f,l,p,length(world-f.camera.xyz)));s.normal=gbufferNormal(f,p);s.roughness=m.x;s.metal=m.y;s.emissive=gbufferEmissive(f,p);
+    return float4(applyFog(f,l,shade(f,l,s,world,p,true),world,uv),1);
 }
-struct ForwardOut {float4 color:SV_Target0;float id:SV_Target1;float4 albedo:SV_Target2;float4 normal:SV_Target3;float4 material:SV_Target4;float4 world:SV_Target5;};
+struct ForwardOut {float4 color:SV_Target0;float id:SV_Target1;float4 albedo:SV_Target2;float4 normal:SV_Target3;float4 material:SV_Target4;float4 emissive:SV_Target5;};
 [shader("fragment")]
-ForwardOut forwardFragment(Varying v){Frame f=frame();Surface s=surface(v);ForwardOut o;Look l=look(f);o.color=forwardColour(f,l,s,v.world,int2(v.clip.xy));o.id=float(root.entity);o.albedo=float4(s.albedo,s.alpha);o.normal=float4(s.normal,s.roughness);o.material=float4(s.emissive,s.metal);o.world=float4(v.world,1);return o;}
+ForwardOut forwardFragment(Varying v){Frame f=frame();Surface s=surface(v);ForwardOut o;Look l=look(f);o.color=forwardColour(f,l,s,v.world,int2(v.clip.xy));o.id=float(root.entity);o.albedo=float4(s.albedo,s.alpha);o.normal=gbufferEncodeNormal(s.normal,s.alpha);o.material=gbufferEncodeMaterial(s.roughness,s.metal,s.alpha);o.emissive=gbufferEncodeEmissive(s.emissive,s.alpha);return o;}
 float radicalInverse(uint bits){bits=(bits<<16)|(bits>>16);bits=((bits&0x55555555)<<1)|((bits&0xAAAAAAAA)>>1);bits=((bits&0x33333333)<<2)|((bits&0xCCCCCCCC)>>2);bits=((bits&0x0F0F0F0F)<<4)|((bits&0xF0F0F0F0)>>4);bits=((bits&0x00FF00FF)<<8)|((bits&0xFF00FF00)>>8);return float(bits)*2.3283064365386963e-10;}
 float3 basisSample(float3 n,float3 local){float3 t=normalize(cross(abs(n.y)<0.99?float3(0,1,0):float3(1,0,0),n));return t*local.x+cross(n,t)*local.y+n*local.z;}
 [shader("compute")]
@@ -69,12 +69,12 @@ void prefilterMain(uint3 t:SV_DispatchThreadID){if(t.x>=256||t.y>=640)return;Fra
 }
 [shader("compute")]
 [numthreads(64,1,1)]
-void tileMain(uint3 t:SV_DispatchThreadID){Frame f=frame();uint tilesX=(f.extent.x+15)/16;uint tilesY=(f.extent.y+15)/16;if(t.x>=tilesX*tilesY)return;uint offset=t.x*65;uint count=0;float2 tileMin=float2(t.x%tilesX,t.x/tilesX)*16;float2 tileMax=tileMin+16;
+void tileMain(uint3 t:SV_DispatchThreadID){Frame f=frame();uint tilesX=(f.extent.x+15)/16;uint tilesY=(f.extent.y+15)/16;if(t.x>=tilesX*tilesY)return;uint offset=t.x*TILE_STRIDE;uint count=0;float2 tileMin=float2(t.x%tilesX,t.x/tilesX)*16;float2 tileMax=tileMin+16;
     for(uint i=0;i<f.extent.z;i++){
         Light l=buffers[NonUniformResourceIndex(f.lighting.w)].Load<Light>(i*64);float4 clip=mul(f.vp,float4(l.positionRange.xyz,1));float range=l.positionRange.w;
         bool include=clip.w<=range;
         if(!include){float2 centre=float2(clip.x/clip.w*0.5+0.5,0.5-clip.y/clip.w*0.5)*float2(f.extent.xy);float radius=range*max(abs(f.vp[0][0]),abs(f.vp[1][1]))*max(f.extent.x,f.extent.y)/max(clip.w-range,0.1);include=all(centre+radius>=tileMin)&&all(centre-radius<=tileMax);}
-        if(include){buffers[NonUniformResourceIndex(f.lighting.z)].Store((offset+1+count)*4,i);count++;}
+        if(include && count<TILE_LIGHTS){buffers[NonUniformResourceIndex(f.lighting.z)].Store((offset+1+count)*4,i);count++;}
     }
     buffers[NonUniformResourceIndex(f.lighting.z)].Store(offset*4,count);
 }
@@ -109,9 +109,9 @@ void taaMain(uint3 t:SV_DispatchThreadID){
         if(f.look.w!=0xffffffffu){
             uv=(float2(p)+0.5)/float2(f.extent.xy)-pixel(f.look.w,p).xy;valid=all(uv>0)&&all(uv<1);
         }else{
-            float4 world=pixel(f.gbuffer.w,p);float4 previous=mul(f.previousVp,float4(world.xyz,1));uv=float2(previous.x/previous.w*0.5+0.5,0.5-previous.y/previous.w*0.5);
+            bool covered;float3 world=gbufferWorld(f,p,covered);float4 previous=mul(f.previousVp,float4(world,1));uv=float2(previous.x/previous.w*0.5+0.5,0.5-previous.y/previous.w*0.5);
             float4 history=historyTex(f.post.y,uv);
-            valid=world.w>0 && previous.w>0 && all(uv>0)&&all(uv<1)&&abs(history.w-previous.z/previous.w)<0.002;
+            valid=covered && previous.w>0 && all(uv>0)&&all(uv<1)&&abs(history.w-previous.z/previous.w)<0.002;
         }
         if(valid){
             float3 mean=0,square=0;
@@ -131,12 +131,12 @@ float3 displayCurve(Frame f,float3 x){uint curve=uint(f.forward.w);return curve=
 [shader("compute")]
 [numthreads(8,8,1)]
 void tonemapMain(uint3 t:SV_DispatchThreadID){Frame f=frame();if(any(t.xy>=f.extent.xy))return;int2 p=int2(t.xy);float3 color=pixel(root.materials,p).rgb;
-    if(f.temporal.z==1)color=pixel(f.gbuffer.x,p).rgb;
-    else if(f.temporal.z==2)color=pixel(f.gbuffer.y,p).xyz*0.5+0.5;
+    if(f.temporal.z==1)color=gbufferAlbedo(f,p).rgb;
+    else if(f.temporal.z==2)color=gbufferDepth(f,p)>0?gbufferNormal(f,p)*0.5+0.5:0.5;
     else if(f.temporal.z==3)color=float3(pow(pixel(f.extra.x,p).x,0.25));
-    else if(f.temporal.z==4){float4 n=pixel(f.gbuffer.y,p);float4 m=pixel(f.gbuffer.z,p);color=float3(n.w,m.w,0);}
+    else if(f.temporal.z==4)color=float3(gbufferMaterial(f,p),0);
     else if(f.temporal.z==5){uint id=uint(pixel(f.extra.y,p).x);color=id==0?float3(0):frac(float3(id)*float3(0.6180339,0.381966,0.7548776));}
-    else if(f.temporal.z==6){float4 w=pixel(f.gbuffer.w,p);uint c=cascadeIndex(f,w.xyz);color=w.w==0?float3(0):(c==0?float3(0.85,0.2,0.1):c==1?float3(0.2,0.8,0.25):c==2?float3(0.2,0.35,0.9):float3(0.8,0.3,0.8))*visibility(f,look(f),w.xyz,pixel(f.gbuffer.y,p).xyz);}
+    else if(f.temporal.z==6){bool covered;float3 w=gbufferWorld(f,p,covered);uint c=cascadeIndex(f,w);color=!covered?float3(0):(c==0?float3(0.85,0.2,0.1):c==1?float3(0.2,0.8,0.25):c==2?float3(0.2,0.35,0.9):float3(0.8,0.3,0.8))*visibility(f,look(f),w,gbufferNormal(f,p));}
     if(f.temporal.z==0)color=displayCurve(f,max(color,0)*f.sunColorExposure.w);
     images[NonUniformResourceIndex(f.post.w)][p]=float4(srgb(saturate(color)),1);
 }

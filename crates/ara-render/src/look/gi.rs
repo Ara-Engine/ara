@@ -81,7 +81,7 @@ pub const PROBE_RECORD: usize = 16 + (SURFACE_TEXELS + STATIC_VECTORS) * 16;
 /// Probe surfaces packed for the renderer: the lattice and one record per probe
 /// to write. It is plain data, so build it off the render thread; applying it is
 /// one upload and a compute scatter (`Renderer::update_probe_surfaces`), and a
-/// large update can be applied a slice at a time ([`ProbeUpdate::split_front`]).
+/// large update can be applied a slice at a time ([`ProbeUpdate::split_off`]).
 #[derive(Debug, Clone, PartialEq)]
 pub struct ProbeUpdate {
     /// First probe centre in world metres.
@@ -141,13 +141,13 @@ impl ProbeUpdate {
         self.counts.iter().map(|&n| n as usize).product()
     }
 
-    /// Splits off the first `count` records (all, if fewer) as their own update.
-    pub fn split_front(&mut self, count: usize) -> Self {
-        let rest = self
-            .records
-            .split_off((count * PROBE_RECORD).min(self.records.len()));
+    /// Splits off `count` records (all, if fewer) as their own update, from the
+    /// end: only those records are copied, whatever this update's size. Each
+    /// probe appears once per update, so its slices apply in any order.
+    pub fn split_off(&mut self, count: usize) -> Self {
+        let keep = self.records.len().saturating_sub(count * PROBE_RECORD);
         Self {
-            records: std::mem::replace(&mut self.records, rest),
+            records: self.records.split_off(keep),
             ..*self
         }
     }
@@ -236,5 +236,30 @@ impl GiGpu {
     pub(crate) fn advance(&mut self, budget: u32) {
         self.slot = 1 - self.slot;
         self.cursor = (self.cursor + budget.min(self.probes)) % self.probes;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn slices_of_an_update_cover_every_record_once() {
+        let mut update = ProbeUpdate {
+            origin: [0.; 3],
+            spacing: [1.; 3],
+            counts: [2, 2, 2],
+            records: (0..8u8)
+                .flat_map(|i| std::iter::repeat_n(i, PROBE_RECORD))
+                .collect(),
+        };
+        let mut seen = Vec::new();
+        while !update.is_empty() {
+            let slice = update.split_off(3);
+            assert!(slice.len() <= 3 && slice.counts == update.counts);
+            seen.extend(slice.records.chunks(PROBE_RECORD).map(|r| r[0]));
+        }
+        seen.sort_unstable();
+        assert_eq!(seen, (0..8).collect::<Vec<u8>>());
     }
 }

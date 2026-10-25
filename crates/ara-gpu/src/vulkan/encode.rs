@@ -182,6 +182,37 @@ impl VulkanDevice {
                     viewport(device, cmd, [0; 2], *size);
                 }
                 Command::Viewport { origin, size } => viewport(device, cmd, *origin, *size),
+                Command::ClearDepth {
+                    origin,
+                    size,
+                    depth,
+                } => device.cmd_clear_attachments(
+                    cmd,
+                    &[vk::ClearAttachment {
+                        aspect_mask: vk::ImageAspectFlags::DEPTH,
+                        color_attachment: 0,
+                        clear_value: vk::ClearValue {
+                            depth_stencil: vk::ClearDepthStencilValue {
+                                depth: *depth,
+                                stencil: 0,
+                            },
+                        },
+                    }],
+                    &[vk::ClearRect {
+                        rect: vk::Rect2D {
+                            offset: vk::Offset2D {
+                                x: origin[0] as i32,
+                                y: origin[1] as i32,
+                            },
+                            extent: vk::Extent2D {
+                                width: size[0],
+                                height: size[1],
+                            },
+                        },
+                        base_array_layer: 0,
+                        layer_count: 1,
+                    }],
+                ),
                 Command::Draw(d) => {
                     device.cmd_bind_vertex_buffers(
                         cmd,
@@ -242,6 +273,23 @@ impl VulkanDevice {
                         self.buffers.get(*source)?.raw.handle,
                         self.buffers.get(*destination)?.raw.handle,
                         &[vk::BufferCopy::default().size(*size)],
+                    );
+                }
+                Command::CopyBufferRange {
+                    source,
+                    source_offset,
+                    destination,
+                    destination_offset,
+                    size,
+                } => {
+                    device.cmd_copy_buffer(
+                        cmd,
+                        self.buffers.get(*source)?.raw.handle,
+                        self.buffers.get(*destination)?.raw.handle,
+                        &[vk::BufferCopy::default()
+                            .src_offset(*source_offset)
+                            .dst_offset(*destination_offset)
+                            .size(*size)],
                     );
                 }
                 Command::CopyImage {

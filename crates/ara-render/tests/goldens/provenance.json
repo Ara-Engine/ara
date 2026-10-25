@@ -6,6 +6,8 @@
     "compute_queue_flags": "COMPUTE | TRANSFER | SPARSE_BINDING",
     "descriptor_heap_available": true,
     "device_id": 10115,
+    "device_local_mib": 11997,
+    "discrete": true,
     "driver_version": 2588114944,
     "external_memory": true,
     "geometry_shader": true,
@@ -206,63 +208,63 @@
   "shaders": {
     "binding_layout_hash": "35cd2a62b1ba741ce6823b3c8753d7b5aa97b54c5f0a837b56e542518013fd7e",
     "compiler": "2026.17-25-gc7954ebd1",
-    "content_key": "a475e9f6b497c1f76edfa49227fae7a5eef8fddf727e1a28dd327a0d30bc8238"
+    "content_key": "be775fc658dc5902e42eb60180b791cba653db55a4d67a2b6d27d3757f697850"
   },
   "timings": [
     {
-      "milliseconds": 0.015488,
+      "milliseconds": 0.015872,
       "pass": "ShadowAtlas.Cascades",
       "queue": "Graphics"
     },
     {
-      "milliseconds": 0.023296,
+      "milliseconds": 0.0256,
       "pass": "GBuffer",
       "queue": "Graphics"
     },
     {
-      "milliseconds": 0.006176,
+      "milliseconds": 0.006592,
       "pass": "TiledLightCull",
       "queue": "Compute"
     },
     {
-      "milliseconds": 0.045088,
+      "milliseconds": 0.045312,
       "pass": "DeferredLighting",
       "queue": "Graphics"
     },
     {
-      "milliseconds": 0.015872,
+      "milliseconds": 0.012288,
       "pass": "ForwardTransparency",
       "queue": "Graphics"
     },
     {
-      "milliseconds": 0.008288,
+      "milliseconds": 0.006144,
       "pass": "TemporalResolve",
       "queue": "Graphics"
     },
     {
-      "milliseconds": 0.006304,
+      "milliseconds": 0.002048,
       "pass": "Exposure.Histogram",
       "queue": "Graphics"
     },
     {
-      "milliseconds": 0.015936,
+      "milliseconds": 0.007168,
       "pass": "Post.Grade.ToneMap",
       "queue": "Graphics"
     },
     {
-      "milliseconds": 0.068128,
-      "pass": "CaptureReadback",
-      "queue": "Graphics"
-    },
-    {
-      "milliseconds": 0.002656,
-      "pass": "HostReadback",
+      "milliseconds": 0.00512,
+      "pass": "PresentationReady",
       "queue": "Graphics"
     },
     {
       "milliseconds": 0.000064,
       "pass": "TileOwnershipReturn",
       "queue": "Compute"
+    },
+    {
+      "milliseconds": 0.074912,
+      "pass": "CaptureReadback",
+      "queue": "Graphics"
     }
   ]
 }

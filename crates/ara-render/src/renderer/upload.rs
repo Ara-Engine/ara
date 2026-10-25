@@ -7,7 +7,7 @@ use bytemuck::Zeroable;
 use sha2::{Digest, Sha256};
 
 /// Capacity of the host-visible light lists, matching the tiled culling limit.
-pub(super) const MAX_LIGHTS: usize = 64;
+pub(super) const MAX_LIGHTS: usize = crate::scene::MAX_LOCAL_LIGHTS;
 
 /// Everything uploaded from one extraction snapshot. Replacing a scene builds a new
 /// `Content` and retires the old one; the device, pipelines and targets survive.
@@ -179,11 +179,11 @@ impl Renderer {
         Ok(())
     }
 
-    /// Replace the local light list (at most 64 lights) for the next frame.
+    /// Replace the local light list (at most `MAX_LOCAL_LIGHTS`) for the next frame.
     pub fn set_lights(&mut self, lights: &[Light]) -> Result<()> {
         ensure!(
             lights.len() <= MAX_LIGHTS,
-            "Tiled baseline supports at most 64 local lights"
+            "Too many local lights for the tiled light list"
         );
         ensure!(
             bytemuck::cast_slice::<Light, f32>(lights)
@@ -284,7 +284,7 @@ pub(super) fn upload_geometry(
     ensure!(!materials.is_empty(), "Scene has no materials");
     ensure!(
         lights.len() <= MAX_LIGHTS,
-        "Tiled baseline supports at most 64 local lights"
+        "Too many local lights for the tiled light list"
     );
     ensure!(meshes.len() < 16_777_216, "Float entity channel exhausted");
     ensure!(

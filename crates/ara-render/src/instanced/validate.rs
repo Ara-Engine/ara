@@ -2,10 +2,26 @@ use super::*;
 use anyhow::{Result, ensure};
 use std::collections::BTreeSet;
 
+/// A checked immutable borrow, shared by the publication and GPU upload layers.
+#[derive(Clone, Copy)]
+pub(crate) struct ValidatedScene<'a>(&'a Scene);
+
+impl<'a> ValidatedScene<'a> {
+    pub(crate) fn scene(self) -> &'a Scene {
+        self.0
+    }
+}
+
 impl Scene {
+    pub(crate) fn validated(&self) -> Result<ValidatedScene<'_>> {
+        self.validate()?;
+        Ok(ValidatedScene(self))
+    }
+
     /// Validates newly published content. This walks source attributes/topology;
     /// moving instances must not repeat content validation or source hashing.
     pub fn validate(&self) -> Result<()> {
+        ara_gpu::cpu_scope!("NativeScene.validate_content");
         ensure!(
             self.instances.len() <= 0x1000000,
             "native instances exceed the 24-bit ray-query ABI"
