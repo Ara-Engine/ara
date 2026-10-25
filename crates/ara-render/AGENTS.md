@@ -19,8 +19,7 @@ ECS; `Scene` is an immutable render extraction snapshot, not authoritative state
   current/previous instance transforms, deforming revisions, 64-byte UV0/UV1
   vertices and 320-byte materials with six independent map transforms, AO,
   transmission and authored terrain layer IDs. Texture IDs address the native
-  residency table; u32::MAX means neutral texels. This input is separate from
-  the legacy `Scene` ABI.
+  residency table; u32::MAX means neutral texels (separate from the legacy `Scene` ABI).
   Validate only at content publication; do not hash/traverse static vertices
   when moving instances. Culling bounds handle mirrored/nonuniform transforms.
 - `Renderer::new_native` consumes this scene and an owned `instanced::Textures`
@@ -74,8 +73,7 @@ ECS; `Scene` is an immutable render extraction snapshot, not authoritative state
   a cached far map past them (`look::far`), half-res GTAO, half-res SSR (cone
   footprint into a colour pyramid of last frame), GI relight budget, bloom,
   emitter light budget. Look images are allocated lazily (the bindless storage
-  heap is shared). Probe GI is
-  gathered at half resolution for G-buffer pixels.
+  heap is shared). Probe GI is gathered at half resolution for G-buffer pixels.
 - `set_deferred_post` + `finish(color, sampled, state)`: temporally resolve and grade
   an externally composited HDR frame (landscape, particles) with the same look post.
   TAA reprojects with native motion (Frame.look.w) when present.
@@ -134,8 +132,7 @@ process and restores the environment. SDL is built statically by `ara-sdl3-src`;
 there is no SDL setup script, native directory or runtime DLL requirement.
 
 Per-crate gates: `cargo check -p ara-render`, `cargo test -p ara-render`,
-`cargo clippy -p ara-render --all-targets -- -D warnings`,
-`cargo fmt -p ara-render -- --check`.
+`cargo clippy -p ara-render --all-targets -- -D warnings`, `cargo fmt -p ara-render -- --check`.
 GPU goldens require this device/driver baseline with tolerance 1-SSIM <= 0.005.
 They also check repeated deterministic captures, all 14 visible entities/picking,
 and odd-resolution bounds framing. Update only deliberately with process-local
