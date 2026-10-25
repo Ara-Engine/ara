@@ -16,11 +16,13 @@ pub const STATIC_VECTORS: usize = 66;
 /// Irradiance kept from the previous frame; relighting is noise-free, so this
 /// only smooths changes (camera-dependent shadowing at cache hits).
 pub(crate) const HYSTERESIS: f32 = 0.6;
-/// Frames after a capture reset that relight every probe as reset frames (no
-/// hysteresis, exposure snaps to its meter): each adds one full bounce, so a
-/// capture's GI and exposure converge within its settle frames whatever the
-/// preset's per-frame budget.
+/// Frames that relight every probe without hysteresis, each adding one full
+/// bounce: after a capture reset (whose exposure re-meters as well, so captures
+/// converge within their settle frames whatever the preset's budget) and once a
+/// new volume's records have all landed.
 pub(crate) const CONVERGE_FRAMES: u32 = 8;
+/// Frames over which a newly converged volume fades into shading.
+const FADE_FRAMES: f32 = 30.;
 
 /// What each probe of a lattice sees, from a one-time acquisition.
 #[derive(Debug, Clone, PartialEq)]
@@ -86,7 +88,9 @@ pub const PROBE_RECORD: usize = 16 + (SURFACE_TEXELS + STATIC_VECTORS) * 16;
 /// Probe surfaces packed for the renderer: the lattice and one record per probe
 /// to write. It is plain data, so build it off the render thread; applying it is
 /// one upload and a compute scatter (`Renderer::update_probe_surfaces`), and a
-/// large update can be applied a slice at a time ([`ProbeUpdate::split_off`]).
+/// large update can be applied a range of records at a time
+/// (`Renderer::update_probe_records`); each probe appears once per update, so
+/// its ranges apply in any order.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ProbeUpdate {
     /// First probe centre in world metres.
@@ -146,17 +150,6 @@ impl ProbeUpdate {
         self.counts.iter().map(|&n| n as usize).product()
     }
 
-    /// Splits off `count` records (all, if fewer) as their own update, from the
-    /// end: only those records are copied, whatever this update's size. Each
-    /// probe appears once per update, so its slices apply in any order.
-    pub fn split_off(&mut self, count: usize) -> Self {
-        let keep = self.records.len().saturating_sub(count * PROBE_RECORD);
-        Self {
-            records: self.records.split_off(keep),
-            ..*self
-        }
-    }
-
     /// Checks the lattice and the record framing before upload.
     pub fn validate(&self) -> Result<()> {
         ensure!(
@@ -190,6 +183,18 @@ pub(crate) fn atlas_width(probes: usize) -> u32 {
     (probes as f64).sqrt().ceil() as u32
 }
 
+/// Probes per scatter dispatch (one workgroup each).
+pub(crate) const DISPATCH_PROBES: u32 = 65_535;
+
+/// Host staging holding probe records until a frame scatters them
+/// (`LookGpu::probe_writes`, then back to `LookGpu::probe_staging`).
+pub(crate) struct ProbeStaging {
+    pub buffer: Buffer,
+    pub capacity: usize,
+    /// Storage index of `buffer`.
+    pub index: u32,
+}
+
 /// Uploaded probe volume. Irradiance atlases ping-pong: frames read `1 - slot`
 /// and write `slot`.
 pub(crate) struct GiGpu {
@@ -214,13 +219,32 @@ pub(crate) struct GiGpu {
     /// Storage index of `moments` (in-place edits, `giScatterMain`).
     pub moments_storage: u32,
     pub access: [Access; 2],
+    /// Not yet cleared: the next frame imports it undefined and runs `GI.Clear`.
+    pub fresh: bool,
     pub slot: usize,
     pub cursor: u32,
-    /// Remaining [`CONVERGE_FRAMES`] (set by a capture reset).
+    /// Remaining [`CONVERGE_FRAMES`].
     pub converge: u32,
+    /// Records written since the volume was created; a new lattice stays out of
+    /// shading until every probe's has landed and the volume has converged.
+    pub received: usize,
+    /// Shading weight: 0 while a new volume fills and converges (the ambient
+    /// stays as it was), then rising to 1 over [`FADE_FRAMES`].
+    pub weight: f32,
 }
 
 impl GiGpu {
+    /// Counts `records` written; once every probe of a new volume has landed it
+    /// starts converging (still out of shading).
+    pub(crate) fn received(&mut self, records: usize) {
+        if self.weight > 0. || self.converge > 0 {
+            return;
+        }
+        self.received += records;
+        if self.received >= self.probes as usize {
+            self.converge = CONVERGE_FRAMES;
+        }
+    }
     /// Probes relit this frame: `budget`, or all of them while converging.
     fn window(&self, budget: u32) -> u32 {
         if self.converge > 0 {
@@ -235,11 +259,17 @@ impl GiGpu {
         let [sx, sy, sz] = self.spacing;
         let [cx, cy, cz] = self.counts;
         let (read, write) = (1 - self.slot, self.slot);
-        frame.gi_origin = [ox, oy, oz, HYSTERESIS];
+        let hysteresis = if self.converge > 0 { 0. } else { HYSTERESIS };
+        frame.gi_origin = [ox, oy, oz, hysteresis];
         frame.gi_spacing = [sx, sy, sz, self.bias];
         frame.gi_counts = [cx, cy, cz, self.probes];
         frame.gi_buffers = [self.indices[0], self.indices[1], 0, 0];
-        frame.gi_update = [self.cursor, self.window(budget), self.atlas, 0];
+        frame.gi_update = [
+            self.cursor,
+            self.window(budget),
+            self.atlas,
+            self.weight.to_bits(),
+        ];
         frame.gi_images = [
             self.irradiance_sampled[read],
             self.irradiance_sampled[write],
@@ -251,31 +281,15 @@ impl GiGpu {
     pub(crate) fn advance(&mut self, budget: u32) {
         self.slot = 1 - self.slot;
         self.cursor = (self.cursor + self.window(budget)) % self.probes;
-        self.converge = self.converge.saturating_sub(1);
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn slices_of_an_update_cover_every_record_once() {
-        let mut update = ProbeUpdate {
-            origin: [0.; 3],
-            spacing: [1.; 3],
-            counts: [2, 2, 2],
-            records: (0..8u8)
-                .flat_map(|i| std::iter::repeat_n(i, PROBE_RECORD))
-                .collect(),
-        };
-        let mut seen = Vec::new();
-        while !update.is_empty() {
-            let slice = update.split_off(3);
-            assert!(slice.len() <= 3 && slice.counts == update.counts);
-            seen.extend(slice.records.chunks(PROBE_RECORD).map(|r| r[0]));
+        if self.converge > 0 {
+            self.converge -= 1;
+        } else if self.received >= self.probes as usize {
+            self.weight = (self.weight + 1. / FADE_FRAMES).min(1.);
         }
-        seen.sort_unstable();
-        assert_eq!(seen, (0..8).collect::<Vec<u8>>());
+    }
+    /// Shows the volume at once (capture resets converge it within their frames).
+    pub(crate) fn show(&mut self) {
+        self.received = self.probes as usize;
+        self.weight = 1.;
     }
 }

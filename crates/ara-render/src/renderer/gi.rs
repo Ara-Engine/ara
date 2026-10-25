@@ -1,19 +1,22 @@
-//! Writes acquired probe surfaces (`look::gi`) into the renderer: packed probe
-//! records are uploaded and scattered by a compute pass (`giScatterMain`) into the
-//! surface cache, meta and bordered moment tiles. A new lattice first gets an
-//! empty volume, cleared on the GPU (every probe inactive and dark).
+//! Writes acquired probe surfaces (`look::gi`) into the renderer without waiting
+//! on the GPU: packed probe records are uploaded to host staging here, and the
+//! next frame scatters them (`GI.Scatter`, `giScatterMain`) into the surface
+//! cache, meta and bordered moment tiles ahead of its relight. A new lattice first
+//! gets an empty volume, which that frame clears (`GI.Clear`: every probe
+//! inactive and dark).
 use super::*;
-use crate::look::gi::{GiGpu, ProbeSurfaces, ProbeUpdate, SURFACE_TEXELS, atlas_width};
-use anyhow::Context;
-use ara_gpu::{RootConstants, vulkan::Command};
+use crate::look::gi::{
+    GiGpu, PROBE_RECORD, ProbeStaging, ProbeSurfaces, ProbeUpdate, SURFACE_TEXELS, atlas_width,
+};
+use std::ops::Range;
 
-/// Probes per scatter dispatch (one workgroup each).
-const DISPATCH_PROBES: usize = 65_535;
+/// Staging buffers kept for reuse once their frame has scattered them.
+const STAGING_KEPT: usize = 2;
 
 impl Renderer {
     /// Replaces the probe volume used for global illumination; `None` returns to
-    /// sky-only ambient light. Irradiance starts dark and converges over the next
-    /// frames (one more bounce per relight).
+    /// sky-only ambient light. The new volume relights out of sight for
+    /// `CONVERGE_FRAMES`, then fades into shading.
     pub fn set_probe_surfaces(&mut self, surfaces: Option<&ProbeSurfaces>) -> Result<()> {
         self.drop_probe_volume()?;
         match surfaces {
@@ -22,13 +25,30 @@ impl Renderer {
         }
     }
 
-    /// Writes `update`'s probe records into the volume in place: one upload of just
-    /// those records and a compute scatter. Relighting blends them in from the
-    /// irradiance already converged, so stale light fades rather than flashing to
-    /// sky-only; probes not written yet stay as they were. A different lattice
-    /// first replaces the volume with an empty one.
+    /// Writes all of `update`'s records ([`Self::update_probe_records`]).
     pub fn update_probe_surfaces(&mut self, update: &ProbeUpdate) -> Result<()> {
+        self.update_probe_records(update, 0..update.len())
+    }
+
+    /// Writes `records` (a range of `update`'s records) into the volume: they are
+    /// uploaded now and scattered by the next frame before it relights, so nothing
+    /// waits on the GPU. Relighting blends them in from the irradiance already
+    /// converged, so stale light fades rather than flashing to sky-only; probes
+    /// not written yet stay as they were. A different lattice first replaces the
+    /// volume with an empty one, kept out of shading (the ambient stays sky-only)
+    /// until all its records land and it converges. Live hosts apply a large
+    /// update a frame's chunk at a time.
+    pub fn update_probe_records(
+        &mut self,
+        update: &ProbeUpdate,
+        records: Range<usize>,
+    ) -> Result<()> {
         update.validate()?;
+        ensure!(
+            records.start <= records.end && records.end <= update.len(),
+            "probe records {records:?} outside the update's {}",
+            update.len()
+        );
         let same = self.look.gi.as_ref().is_some_and(|gi| {
             gi.origin == update.origin && gi.spacing == update.spacing && gi.counts == update.counts
         });
@@ -36,43 +56,68 @@ impl Renderer {
             self.drop_probe_volume()?;
             let volume = self.empty_volume(update)?;
             self.look.gi = Some(volume);
-            // Every probe is inactive and dark until its record arrives.
-            self.scatter(None, update.probes(), Access::Undefined)?;
         }
-        if update.is_empty() {
+        if records.is_empty() {
             return Ok(());
         }
-        // One host staging buffer, grown as needed and reused: each scatter
-        // completes before the next upload.
-        let needed = update.records.len();
-        if self
-            .look
-            .probe_staging
-            .is_none_or(|(_, capacity, _)| capacity < needed)
-        {
-            if let Some((old, _, _)) = self.look.probe_staging.take() {
-                self.gpu.retire(Resource::Buffer(old))?;
-                self.gpu.collect()?;
-            }
-            let capacity = needed.next_power_of_two();
-            let buffer = self.gpu.create_buffer(
-                capacity as u64,
-                vk::BufferUsageFlags::STORAGE_BUFFER,
-                true,
-            )?;
-            let index = self.gpu.storage_buffer(buffer)?.index;
-            self.look.probe_staging = Some((buffer, capacity, index));
+        let bytes = &update.records[records.start * PROBE_RECORD..records.end * PROBE_RECORD];
+        let staging = self.probe_staging(bytes.len())?;
+        if let Err(error) = self.gpu.upload(staging.buffer, bytes) {
+            self.look.probe_staging.push(staging);
+            return Err(error.into());
         }
-        let (staging, _, index) = self.look.probe_staging.context("probe staging")?;
-        self.gpu.upload(staging, &update.records)?;
-        self.scatter(Some(index), update.len(), Access::ShaderRead)?;
+        self.look.probe_writes.push((staging, records.len() as u32));
         if let Some(gi) = self.look.gi.as_mut() {
             gi.bias = update.bias();
+            gi.received(records.len());
+        }
+        Ok(())
+    }
+
+    /// A staging buffer of at least `bytes`: the smallest that fits from the pool,
+    /// else a new one.
+    fn probe_staging(&mut self, bytes: usize) -> Result<ProbeStaging> {
+        let pool = &mut self.look.probe_staging;
+        if let Some(i) = (0..pool.len())
+            .filter(|&i| pool[i].capacity >= bytes)
+            .min_by_key(|&i| pool[i].capacity)
+        {
+            return Ok(pool.swap_remove(i));
+        }
+        let capacity = bytes.next_power_of_two();
+        let buffer =
+            self.gpu
+                .create_buffer(capacity as u64, vk::BufferUsageFlags::STORAGE_BUFFER, true)?;
+        let index = self.gpu.storage_buffer(buffer)?.index;
+        Ok(ProbeStaging {
+            buffer,
+            capacity,
+            index,
+        })
+    }
+
+    /// After a frame scattered the queued writes: their staging returns to the
+    /// pool (the largest [`STAGING_KEPT`] stay) and a new volume counts as cleared.
+    pub(super) fn probe_writes_scattered(&mut self) -> Result<()> {
+        if let Some(gi) = &mut self.look.gi {
+            gi.fresh = false;
+        }
+        let written = std::mem::take(&mut self.look.probe_writes);
+        let pool = &mut self.look.probe_staging;
+        pool.extend(written.into_iter().map(|(staging, _)| staging));
+        pool.sort_unstable_by_key(|s| std::cmp::Reverse(s.capacity));
+        for extra in pool.split_off(pool.len().min(STAGING_KEPT)) {
+            self.gpu.retire(Resource::Buffer(extra.buffer))?;
         }
         Ok(())
     }
 
     fn drop_probe_volume(&mut self) -> Result<()> {
+        // Writes queued for the old volume are dropped with it.
+        let pending = std::mem::take(&mut self.look.probe_writes);
+        self.look
+            .probe_staging
+            .extend(pending.into_iter().map(|(staging, _)| staging));
         if let Some(old) = self.look.gi.take() {
             self.gpu.retire(Resource::Buffer(old.cache))?;
             self.gpu.retire(Resource::Buffer(old.meta))?;
@@ -85,8 +130,8 @@ impl Renderer {
     }
 
     /// A volume for `update`'s lattice: storage for the surface cache, meta,
-    /// bordered moment tiles and both irradiance atlases (uninitialized: clear it
-    /// with `scatter(None, ..)`).
+    /// bordered moment tiles and both irradiance atlases, uninitialized until the
+    /// next frame clears it (`fresh`).
     fn empty_volume(&mut self, update: &ProbeUpdate) -> Result<GiGpu> {
         let probes = update.probes();
         let atlas = atlas_width(probes);
@@ -139,60 +184,14 @@ impl Renderer {
             meta,
             moments,
             irradiance,
-            access: [Access::ShaderRead; 2],
+            access: [Access::Undefined; 2],
+            fresh: true,
             slot: 0,
             cursor: 0,
             converge: 0,
+            received: 0,
+            weight: 0.,
         };
         Ok(volume)
-    }
-
-    /// Runs `giScatterMain` over `count` probes of the current volume: records from
-    /// the `staging` buffer, or (without one) clearing every probe. `before` is the
-    /// volume's prior access (Undefined for a new volume).
-    fn scatter(&mut self, staging: Option<u32>, count: usize, before: Access) -> Result<()> {
-        let gi = self.look.gi.as_ref().context("probe volume")?;
-        let clear = staging.is_none();
-        let mut targets = vec![
-            Resource::Buffer(gi.cache),
-            Resource::Buffer(gi.meta),
-            Resource::Image(gi.moments),
-        ];
-        if clear {
-            targets.extend(gi.irradiance.map(Resource::Image));
-        }
-        let barrier = |resource, before, after| ara_gpu::Barrier {
-            resource,
-            before,
-            after,
-            handoff: None,
-        };
-        let mut words = [
-            0,
-            staging.unwrap_or(0),
-            gi.indices[0],
-            gi.indices[1],
-            gi.moments_storage,
-            gi.atlas | (u32::from(clear) << 31),
-            gi.irradiance_storage[0],
-            gi.irradiance_storage[1],
-        ];
-        let mut recorder = self.gpu.begin(Queue::Graphics);
-        recorder.barriers(targets.iter().map(|&r| barrier(r, before, Access::Storage)));
-        recorder.push(Command::Pipeline(self.look.pipelines.gi_scatter));
-        for first in (0..count).step_by(DISPATCH_PROBES) {
-            words[0] = first as u32;
-            recorder.push(Command::Constants(RootConstants { words }));
-            let groups = (count - first).min(DISPATCH_PROBES) as u32;
-            recorder.push(Command::Dispatch([groups, 1, 1]));
-        }
-        recorder.barriers(
-            targets
-                .iter()
-                .map(|&r| barrier(r, Access::Storage, Access::ShaderRead)),
-        );
-        let point = self.gpu.submit(recorder.finish(), &[])?;
-        self.gpu.resolve(point)?;
-        Ok(())
     }
 }
