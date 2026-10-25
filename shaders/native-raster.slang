@@ -55,11 +55,16 @@ struct ShadowVarying {float4 clip:SV_Position;float2 uv:TEXCOORD0;float2 uv1:TEX
 ShadowVarying nativeShadowVertex(uint vertex:SV_VertexID,uint instance:SV_InstanceID){Varying v=nativeVertex(vertex,instance,true);ShadowVarying s;s.clip=v.clip;s.uv=v.uv;s.uv1=v.uv1;s.material=v.material;return s;}
 NativeMaterial material(uint id){return buffers[NonUniformResourceIndex(root.materials)].Load<NativeMaterial>(id*320);}
 float2 coordinates(NativeUv transform,Varying v){float2 p=(transform.set==0?v.uv:v.uv1)*transform.scale;float s,c;sincos(transform.rotation,s,c);return transform.offset+float2(c*p.x-s*p.y,s*p.x+c*p.y);}
+// Texture footprint scale of the pass (Frame.upscale.z, root word 4): surface()
+// sets it, so upscaled G-buffer and forward fragments choose the display
+// resolution's mips (a negative mip bias the temporal resolve reconstructs);
+// shadow passes keep 1.
+static float footprint=1;
 float4 sampleMap(NativeMaterial m,uint slot,Varying v){
     uint id=slot<4?m.pbr.textures[min(slot,3)]:(slot==4?m.slots.x:m.slots.y);
     if(id==0xffffffff)return float4(slot==1?float3(0,0,1):float3(1),1);
     float2 uv=coordinates(m.uv[slot],v);
-    float lod=ntDesiredLod(root.sample,id,ddx(uv),ddy(uv));
+    float lod=ntDesiredLod(root.sample,id,ddx(uv)*footprint,ddy(uv)*footprint);
     if(slot==1)return float4(ntNormal(root.sample,id,uv,lod,m.pbr.surface.y),1);
     bool decode=slot==0?(m.pbr.flags.y&(1u<<25))!=0:slot==3 && (m.pbr.flags.y&(1u<<26))!=0;
     return ntSampleColorLevel(root.sample,id,uv,lod,decode);
@@ -121,7 +126,7 @@ Surface terrainSurface(NativeMaterial m,Varying v){
     return s;
 }
 Surface surface(Varying v){
-    NativeMaterial m=material(v.material);
+    footprint=root.cascade==0?1:asfloat(root.cascade);NativeMaterial m=material(v.material);
     // Guessed loading bounds must not cover the view or form stair-like bands
     // across pending foliage. Keep only short one-pixel corner brackets; tiny
     // distant bounds disappear. Failed/missing bounds remain opaque magenta.

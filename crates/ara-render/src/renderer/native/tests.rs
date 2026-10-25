@@ -196,6 +196,13 @@ fn native_raster_keeps_instances_local_and_tracks_moving_and_skinned_poses_witho
     assert_eq!(renderer.entity_at([70, 54])?, Some(1));
     assert_eq!(renderer.entity_at([122, 54])?, Some(2));
     renderer.render_view(&request.camera, 1., ViewMode::Albedo)?;
+    assert!(
+        renderer
+            .timings()
+            .iter()
+            .all(|pass| pass.queue == ara_gpu::Queue::Graphics),
+        "the raster view must not split its tiny light cull onto another queue"
+    );
     let idle = renderer.native_frame_work().unwrap();
     assert_eq!(
         (

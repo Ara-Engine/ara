@@ -12,7 +12,8 @@ pub(super) struct Live {
     shown: Option<Output>,
     spare: Option<Output>,
     pending: Option<Pending>,
-    pub resize: Option<[u32; 2]>,
+    /// A resize requested while a frame was pending: (render, display) sizes.
+    pub resize: Option<([u32; 2], [u32; 2])>,
 }
 struct Pending {
     completion: Completion,
@@ -170,8 +171,8 @@ impl Renderer {
             }
         }
         let resize = live.resize.take();
-        if let Some(size) = resize {
-            self.resize(size)?;
+        if let Some((render, display)) = resize {
+            self.resize_upscaled(render, display)?;
         }
         Ok(true)
     }

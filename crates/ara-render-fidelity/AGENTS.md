@@ -36,7 +36,7 @@ No authoritative gameplay or authoring state lives here.
 - `presets`: `QualityPreset` (Low/Medium/High/Epic), `QualityChoice` (`--quality`),
   `Capabilities::of`, `Plan::resolve(choice, caps, display, RenderOptions)` →
   `RenderPath::Raster(RasterPlan)` (D27 default: every preset, every GPU;
-  `raster_quality()` budgets) or, with `RenderOptions::ray_tracing` on an RT device,
+  `raster_quality()` budgets; `raster_scale()` render size, upscaled by TAAU) or, with `RenderOptions::ray_tracing` on an RT device,
   `Fidelity(FidelityPlan)` for Medium and above. `FidelityPlan::settings` at
   creation, `configure` after new/resize/content swap. D26 RT tiers: Medium 0.4,
   High 0.5, Epic 2/3 transport scale.

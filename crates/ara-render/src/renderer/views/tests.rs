@@ -113,6 +113,7 @@ fn secondary_view_preserves_primary_pixels_history_motion_and_shared_gi() -> Res
         &ViewRequest {
             camera: &secondary_camera,
             size: [80, 56],
+            render_size: [80, 56],
             quality,
             exposure: 1.,
         },
@@ -156,6 +157,7 @@ fn secondary_view_preserves_primary_pixels_history_motion_and_shared_gi() -> Res
         &ViewRequest {
             camera: &secondary_camera,
             size: [64, 48],
+            render_size: [48, 36],
             quality: crate::look::Quality {
                 shadows: crate::look::Shadows {
                     resolution: 512,
@@ -209,6 +211,7 @@ fn secondary_view_preserves_primary_pixels_history_motion_and_shared_gi() -> Res
                 &ViewRequest {
                     camera: &secondary_camera,
                     size: [0, 56],
+                    render_size: [0, 56],
                     quality,
                     exposure: 1.
                 }
@@ -239,6 +242,7 @@ fn secondary_view_preserves_primary_pixels_history_motion_and_shared_gi() -> Res
         &ViewRequest {
             camera: &secondary_camera,
             size: [80, 56],
+            render_size: [80, 56],
             quality,
             exposure: 1.,
         },
@@ -306,6 +310,7 @@ fn secondary_view_alone_drives_shared_probe_delivery_without_drawing_the_primary
             &ViewRequest {
                 camera: &camera,
                 size: [80, 56],
+                render_size: [80, 56],
                 quality,
                 exposure: 1.,
             },

@@ -10,6 +10,37 @@ struct Gate {
     semaphore: vk::Semaphore,
     opened: bool,
 }
+
+#[test]
+fn current_queue_scope_preserves_phase_timings_and_waits_only_at_its_tail() -> anyhow::Result<()> {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../target/ara-gpu/deferred-frame");
+    let mut gpu = VulkanDevice::new_raster(&[], root)?;
+    gpu.begin_deferred_completion_on_current_queue()?;
+    let mut points = Vec::new();
+    for phase in ["view", "feature", "post"] {
+        let mut commands = gpu.begin(Queue::Graphics);
+        commands.push(Command::BeginPass(phase.into()));
+        commands.push(Command::EndPass);
+        let point = gpu.submit(commands.finish(), &[])?;
+        assert!(gpu.resolve(point)?.is_empty());
+        points.push(point);
+        assert_eq!(gpu.deferred_submission_count(), points.len());
+    }
+    let mut completion = gpu.end_deferred_completion()?;
+    let before = gpu.context().host_wait_stats();
+    let mut phases = Vec::new();
+    gpu.wait_completion_with(&mut completion, |point, passes| {
+        assert_eq!(point, points[phases.len()]);
+        assert_eq!(passes.len(), 1);
+        phases.push(passes.into_iter().next().expect("one phase").pass);
+    })?;
+    assert_eq!(phases, ["view", "feature", "post"]);
+    assert_eq!(gpu.context().host_wait_stats().calls - before.calls, 1);
+    assert!(completion.is_resolved());
+    gpu.assert_clean()?;
+    Ok(())
+}
 impl Gate {
     fn open(&mut self) -> anyhow::Result<()> {
         if !self.opened {

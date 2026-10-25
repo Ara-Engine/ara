@@ -73,6 +73,7 @@ impl SceneView {
         let request = ara_render::ViewRequest {
             camera: request.camera,
             size: request.size,
+            render_size: plan.render_size,
             quality: plan.quality,
             exposure,
         };

@@ -1,5 +1,9 @@
 # ara-runtime-render
 
+Raster presentation queues view, particles and post inside one completion scope,
+then waits before publication. Submission checkpoints separate view/feature pass
+timings; deferring helpers must never report their GPU work as zero.
+
 Presents `ara_runtime::extract::RenderFrame`s through native raster on every GPU
 and preset (D27), with experimental fidelity as an explicit opt-in. Owns the
 device and per-view upload state; no simulation, window or process code.

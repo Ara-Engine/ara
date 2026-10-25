@@ -4,7 +4,7 @@ use crate::{
     graph::{Graph, PassId},
     look::{
         frame::{FrameInputs, LookFrame},
-        passes::LookPass,
+        passes::{Frames, LookPass},
     },
 };
 use ara_gpu::{
@@ -55,12 +55,10 @@ impl Renderer {
         } else {
             HISTORY0
         };
-        let frame = self.frame_data(&camera, exposure, deterministic, mode, output_history);
+        let mut frame = self.frame_data(&camera, exposure, deterministic, mode, output_history);
         if let Some(native) = &mut self.native {
             native.prepare(&mut self.gpu, &frame, &camera, &self.look.quality)?;
         }
-        self.gpu
-            .upload_queued(self.frame, bytemuck::bytes_of(&frame))?;
         // The far map redraws only when its view, content or casters inside it
         // changed; its draws read the far matrix as cascade 0 of their own frame
         // record, and native casters come from a culled pass of their own.
@@ -88,11 +86,21 @@ impl Renderer {
             local.cache.observe(all, bounds);
         }
         (self.look.far, self.look.cascades, self.look.local) = (far, cascades, local);
-        let cascade_draw: Vec<usize> = self.look.cascades.as_ref().map_or_else(Vec::new, |c| {
-            (0..c.images.len())
-                .filter(|&i| c.needs_draw(i, frame.shadows[i]))
-                .collect()
-        });
+        // Cascades that wait for their redraw keep their drawn matrices in the
+        // frame record, so the record is uploaded after this plan.
+        let cascade_draw = match &mut self.look.cascades {
+            Some(cascades) => cascades.plan(
+                &mut frame.shadows,
+                &frame::cascade_slices(&camera, frame.splits),
+            ),
+            None => Vec::new(),
+        };
+        self.gpu
+            .upload_queued(self.frame, bytemuck::bytes_of(&frame))?;
+        let mut display_frame = frame;
+        display_frame.extent[..2].copy_from_slice(&self.size);
+        self.gpu
+            .upload_queued(self.display_frame, bytemuck::bytes_of(&display_frame))?;
         let far_draw = match &self.look.far {
             Some(far) => {
                 let (matrix, view) = crate::look::far::FarMap::fit(
@@ -143,18 +151,21 @@ impl Renderer {
             self.look.local = Some(local);
             result?;
         }
-        let mut compute_frame = frame;
-        compute_frame.lighting[3] = self.content.compute_light_index;
-        self.gpu
-            .upload_queued(self.compute_frame, bytemuck::bytes_of(&compute_frame))?;
         self.look.ensure(&mut self.gpu)?;
         let (sampled, storage) = self.look.indices();
+        // Exposure snaps to its meter on a reset unless a host seeded it, and
+        // while new probe GI converges or fades in (no adaptation swing as the
+        // scene brightens under it).
+        let reset = self.targets.history.is_none() || self.look.settle > 0;
+        let seeded = std::mem::take(&mut self.look.seeded);
+        let arriving = self.look.gi.as_ref().is_some_and(|gi| gi.arriving());
         let look_frame = LookFrame::new(
             &self.look.effective(),
             &FrameInputs {
                 sun_lux: self.content.sun_lux,
                 exposure,
-                reset: self.targets.history.is_none() || self.look.settle > 0,
+                reset,
+                snap: (reset && !seeded) || arriving,
                 frame_number: self.frame_number,
                 sampled,
                 storage,
@@ -218,7 +229,7 @@ impl Renderer {
             Resource::Buffer(self.targets.tiles),
             State {
                 access: Access::Storage,
-                queue: Queue::Compute,
+                queue: Queue::Graphics,
             },
         );
         let look = self.look.import(&mut graph);
@@ -251,14 +262,20 @@ impl Renderer {
                 graphics.push((id, Access::ShaderRead));
             });
         }
-        let frame_id = graph.import(
-            Resource::Buffer(self.frame),
-            State {
-                access: Access::HostWrite,
-                queue: Queue::Graphics,
-            },
-        );
-        graphics.push((frame_id, Access::ShaderRead));
+        let mut frame_input = None;
+        for buffer in [self.frame, self.display_frame] {
+            let id = graph.import(
+                Resource::Buffer(buffer),
+                State {
+                    access: Access::HostWrite,
+                    queue: Queue::Graphics,
+                },
+            );
+            if buffer == self.frame {
+                frame_input = Some(id);
+            }
+            graphics.push((id, Access::ShaderRead));
+        }
         // Host-written storage: dynamic vertices and the light list.
         let host_write = State {
             access: Access::HostWrite,
@@ -367,7 +384,10 @@ impl Renderer {
         for (id, pass) in self.look.gather_passes(&mut graph, &look, &gather_reads) {
             declare(id, Recipe::Look(pass));
         }
-        let culling = graph.pass("TiledLightCull", Queue::Compute, [(tile, Access::Storage)]);
+        // This tiny dispatch feeds lighting in the same frame. Keeping it on
+        // graphics batches the entire view instead of leaving CPU-recording gaps
+        // between graphics/compute submissions and a final ownership handoff.
+        let culling = graph.pass("TiledLightCull", Queue::Graphics, [(tile, Access::Storage)]);
         declare(culling, Recipe::Tile);
         let reflected = self.look.quality.reflections.is_some() && self.targets.history.is_some();
         let look_reads = self.look.lighting_reads(&look, reflected);
@@ -494,30 +514,23 @@ impl Renderer {
         }
         let ownership = graph.pass(
             "TileOwnershipReturn",
-            Queue::Compute,
+            Queue::Graphics,
             [(tile, Access::Storage)],
         );
         declare(ownership, Recipe::Empty);
         for pass in shaded {
             graph.accesses(pass, graphics.iter().copied())?;
         }
-        let compute_lights = graph.import(
-            Resource::Buffer(self.content.compute_lights),
-            State {
-                access: Access::HostWrite,
-                queue: Queue::Compute,
-            },
-        );
-        let mut compute = vec![(compute_lights, Access::ShaderRead)];
-        let compute_frame = graph.import(
-            Resource::Buffer(self.compute_frame),
-            State {
-                access: Access::HostWrite,
-                queue: Queue::Compute,
-            },
-        );
-        compute.push((compute_frame, Access::ShaderRead));
-        graph.accesses(culling, compute)?;
+        graph.accesses(
+            culling,
+            [
+                (lights, Access::ShaderRead),
+                (
+                    frame_input.expect("graphics frame imported"),
+                    Access::ShaderRead,
+                ),
+            ],
+        )?;
         let compiled = graph.compile()?;
         let mut points = Vec::new();
         let root = RootConstants {
@@ -532,6 +545,10 @@ impl Renderer {
                 0,
             ],
         };
+        // Native G-buffer and forward fragments read the texture footprint scale
+        // from root word 4 (raster.slangh Root).
+        let mut footprint = root;
+        footprint.words[4] = frame.upscale[2].to_bits();
         for batch in submission::batches(&compiled.passes) {
             let mut recorder = self.gpu.begin(batch[0].queue);
             for pass in batch {
@@ -670,10 +687,10 @@ impl Renderer {
                                 image: self.targets.images[DEPTH],
                                 clear: Some([0.; 4]),
                             }),
-                            size: self.size,
+                            size: self.render,
                         });
                         if let Some(native) = &self.native {
-                            native.record(&mut recorder, root, 4);
+                            native.record(&mut recorder, footprint, 4);
                         }
                         for (index, mesh) in self
                             .content
@@ -692,11 +709,10 @@ impl Renderer {
                     }
                     Recipe::Tile => {
                         recorder.push(Command::Pipeline(self.pipelines.tile));
-                        let mut constants = root;
-                        constants.words[0] = self.compute_frame_index;
-                        recorder.push(Command::Constants(constants));
+                        recorder.push(Command::Constants(root));
                         recorder.push(Command::Dispatch([
-                            (self.size[0].div_ceil(16) * self.size[1].div_ceil(16)).div_ceil(64),
+                            (self.render[0].div_ceil(16) * self.render[1].div_ceil(16))
+                                .div_ceil(64),
                             1,
                             1,
                         ]));
@@ -710,7 +726,7 @@ impl Renderer {
                                 clear: Some([0.; 4]),
                             }],
                             depth: None,
-                            size: self.size,
+                            size: self.render,
                         });
                         recorder.push(Command::Fullscreen);
                         recorder.push(Command::EndRendering);
@@ -754,10 +770,10 @@ impl Renderer {
                                 image: self.targets.images[DEPTH],
                                 clear: None,
                             }),
-                            size: self.size,
+                            size: self.render,
                         });
                         if let Some(native) = &self.native {
-                            native.record(&mut recorder, root, 5);
+                            native.record(&mut recorder, footprint, 5);
                         }
                         let mut transparent = self
                             .content
@@ -788,6 +804,7 @@ impl Renderer {
                             self.pipelines.tonemap
                         }));
                         let mut constants = root;
+                        constants.words[0] = self.display_frame_index;
                         constants.words[1] = if taa {
                             self.targets.sampled[HDR]
                         } else {
@@ -803,7 +820,7 @@ impl Renderer {
                     Recipe::Look(look_pass) => self.look.record(
                         &mut recorder,
                         look_pass,
-                        self.frame_index,
+                        self.frames(),
                         // The reflection pyramid reads last frame's history; post passes
                         // read this frame's.
                         match look_pass {
@@ -813,7 +830,6 @@ impl Renderer {
                             _ => self.targets.sampled[output_history],
                         },
                         true,
-                        self.size,
                     ),
                     Recipe::Empty => {}
                 }
@@ -858,7 +874,7 @@ impl Renderer {
             self.look.deferred_history = None;
             self.targets.history = Some(output_history);
         }
-        self.previous_vp = frame.vp;
+        self.previous_vp = camera.projection * camera.view;
         self.frame_number = self.frame_number.wrapping_add(1);
         self.gpu.assert_clean()?;
         if let Some(native) = &mut self.native {
@@ -881,9 +897,13 @@ impl Renderer {
     /// `color` is linear HDR at the render size, owned by Graphics in `state`, and
     /// stays readable. After a deferred-post `render` it resolves into that frame's
     /// history slot (antialiasing particles and landscape with the scene); otherwise
-    /// it grades `color` directly. Reuses the frame's constants; returns the SDR
-    /// output in CopySource.
+    /// it grades `color` directly, which needs a native (not upscaled) frame.
+    /// Reuses the frame's constants; returns the SDR output in CopySource.
     pub fn finish(&mut self, color: Image, sampled: u32, state: State) -> Result<Image> {
+        ensure!(
+            self.look.deferred_history.is_some() || self.render == self.size,
+            "An upscaled frame is graded only through its temporal resolve"
+        );
         self.look.ensure(&mut self.gpu)?;
         let mut graph = Graph::default();
         let input = graph.import(Resource::Image(color), state);
@@ -914,7 +934,7 @@ impl Renderer {
         });
         let look = self.look.import(&mut graph);
         let frame = graph.import(
-            Resource::Buffer(self.frame),
+            Resource::Buffer(self.display_frame),
             State {
                 access: Access::HostWrite,
                 queue: Queue::Graphics,
@@ -963,15 +983,14 @@ impl Renderer {
                     self.look.record(
                         &mut recorder,
                         *look_pass,
-                        self.frame_index,
+                        self.frames(),
                         post_sampled,
                         resolved.is_some(),
-                        self.size,
                     );
                 } else if resolved.is_some_and(|(id, _, _)| id == pass.id) {
                     recorder.push(Command::Pipeline(self.pipelines.taa));
                     recorder.push(Command::Constants(RootConstants {
-                        words: [self.frame_index, sampled, 0, 0, 0, 0, 0, 0],
+                        words: [self.display_frame_index, sampled, 0, 0, 0, 0, 0, 0],
                     }));
                     recorder.push(Command::Dispatch([
                         self.size[0].div_ceil(8),
@@ -1001,6 +1020,16 @@ impl Renderer {
         self.gpu.assert_clean()?;
         self.publish_sync_scene()?;
         Ok(self.targets.images[OUTPUT])
+    }
+}
+
+impl Renderer {
+    /// The frame records look passes record with (`look::passes::Frames`).
+    fn frames(&self) -> Frames {
+        Frames {
+            render: (self.frame_index, self.render),
+            display: (self.display_frame_index, self.size),
+        }
     }
 }
 

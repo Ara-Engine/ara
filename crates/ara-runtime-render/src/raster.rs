@@ -11,6 +11,7 @@ use ara_render::scene::CameraSpec;
 use ara_render_fidelity::{environment::FrameEnvironment, presets::RasterPlan};
 use ara_runtime::extract::RenderFrame;
 use std::path::PathBuf;
+mod batch;
 mod fade;
 mod prepared;
 pub use prepared::RasterContent;
@@ -344,9 +345,7 @@ impl RasterView {
                     self.search_emission_edits()?;
                 }
             }
-            if renderer.size() != plan.render_size {
-                renderer.resize(plan.render_size)?;
-            }
+            renderer.resize_upscaled(plan.render_size, plan.display_size)?;
             if *renderer.quality() != plan.quality {
                 ara_gpu::cpu_scope!("RasterView.apply_quality");
                 renderer.set_quality(plan.quality)?;
@@ -447,6 +446,17 @@ impl RasterView {
         camera: &CameraSpec,
         mode: ViewMode,
     ) -> Result<GpuFrameCosts> {
+        self.render_recorded(renderer, frame, camera, mode, &mut [0; 2])
+    }
+
+    fn render_recorded(
+        &mut self,
+        renderer: &mut Renderer,
+        frame: &RenderFrame,
+        camera: &CameraSpec,
+        mode: ViewMode,
+        boundaries: &mut [usize; 2],
+    ) -> Result<GpuFrameCosts> {
         ara_gpu::cpu_scope!("RasterView.render");
         ensure!(
             renderer.is_native(),
@@ -464,6 +474,8 @@ impl RasterView {
             look.manual_exposure(frame.environment.exposure),
             mode,
         )?;
+        boundaries[0] = renderer.gpu().deferred_submission_count();
+        boundaries[1] = boundaries[0];
         if lit {
             let (image, sampled_index, state) = renderer.feature_color();
             let color = ara_vfx_gpu::SceneColor {
@@ -480,6 +492,7 @@ impl RasterView {
             let color = self
                 .effects
                 .present(renderer, frame, camera, color, depth)?;
+            boundaries[1] = renderer.gpu().deferred_submission_count();
             if !frame.effects.is_empty() {
                 renderer.finish(color.image, color.sampled_index, color.state)?;
             }
