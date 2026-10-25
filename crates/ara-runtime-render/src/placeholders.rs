@@ -2,12 +2,13 @@
 use ara_runtime::extract::{Geometry, RenderFrame};
 use std::collections::{BTreeMap, BTreeSet};
 
-/// Quiet loading bounds, distinct from the magenta missing/broken placeholder.
+/// Quiet loading corner marks, distinct from the solid magenta missing/broken
+/// placeholder. Native raster leaves guessed bounds' face interiors open.
 pub const PENDING_MODEL_COLOR: [f32; 4] = [0.65, 0.65, 0.65, 0.18];
 
 /// Tracks visible pending models across publications. This is derived presentation
 /// state; it never schedules imports or changes an authored component.
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct ModelPlaceholders {
     pending: BTreeMap<String, String>,
     arrivals: BTreeSet<String>,

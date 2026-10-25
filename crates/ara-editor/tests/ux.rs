@@ -1142,3 +1142,74 @@ fn rebuild_cost_by_stage() {
         shell.rebuild_if_stale(editor).unwrap();
     });
 }
+
+#[test]
+fn axis_widget_caps_are_lettered_and_readable() {
+    let project = Project::new();
+    let mut editor = Editor::open(&project.0).unwrap();
+    let shell = Shell::new(&mut editor, [1440., 900.]).unwrap();
+    for (cap, letter) in [("view-x", "X"), ("view-y", "Y"), ("view-z", "Z")] {
+        let label = shell.ui.find(&format!("{cap}-label")).unwrap();
+        let node = &shell.ui.nodes[label];
+        assert_eq!(
+            node.element.attrs.get("text").map(String::as_str),
+            Some(letter)
+        );
+        let disc = shell.ui.nodes[shell.ui.find(cap).unwrap()]
+            .computed
+            .background;
+        assert_ne!(
+            node.computed.color, disc,
+            "{cap}: the letter must read on its disc"
+        );
+    }
+    let negative = shell.ui.find("view-x-negative-label").unwrap();
+    assert_eq!(
+        shell.ui.nodes[negative]
+            .element
+            .attrs
+            .get("text")
+            .map(String::as_str),
+        Some(""),
+        "negative caps are unlettered rings"
+    );
+}
+
+#[test]
+fn this_computers_gpu_messages_stay_out_of_the_project_counts() {
+    let project = Project::new();
+    let mut editor = Editor::open(&project.0).unwrap();
+    editor
+        .action(
+            "diag.report",
+            json!({"engine": true, "diagnostics": [
+                {"code":"ARA_GPU_ENVIRONMENT","severity":"error","message":"loader_get_json: Failed to open JSON file C:/ProgramData/overlay.json"}
+            ]}),
+        )
+        .unwrap();
+    editor
+        .action("editor.layout.show", json!({"panel":"console"}))
+        .unwrap();
+    let mut shell = Shell::new(&mut editor, [1440., 900.]).unwrap();
+    let text = |shell: &Shell, id: &str| {
+        shell.ui.nodes[shell.ui.find(id).unwrap()]
+            .text
+            .as_ref()
+            .map(|t| t.value.clone())
+            .unwrap_or_default()
+    };
+    let loader = |shell: &Shell| {
+        shell.ui.nodes.iter().any(|n| {
+            n.text
+                .as_ref()
+                .is_some_and(|t| t.value.starts_with("loader_get_json"))
+        })
+    };
+    assert_eq!(text(&shell, "console-errors-n"), "0", "not a project error");
+    assert_eq!(text(&shell, "console-machine-count"), "1");
+    assert!(!loader(&shell), "This computer starts collapsed");
+    shell
+        .run_command(&mut editor, "console.machine", &Default::default())
+        .unwrap();
+    assert!(loader(&shell), "and opens on demand");
+}

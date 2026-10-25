@@ -23,7 +23,7 @@ mod transport;
 mod view_camera;
 pub mod world;
 
-pub use app::{Options, run};
+pub use app::{LAUNCHED, Options, Settle, run};
 pub use editor::{Editor, EditorError};
 
 pub(crate) fn invalid(message: impl Into<String>) -> ara_diag::Diagnostic {

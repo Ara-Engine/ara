@@ -24,6 +24,27 @@ fn box_draw(id: u64, size: [f32; 3], position: [f32; 3], emission: [f32; 3]) -> 
     }
 }
 
+fn terrain_content(color: [f32; 4]) -> Content {
+    Content {
+        terrain_materials: std::collections::BTreeMap::from([(
+            "@ground.graph#gr_ground".into(),
+            std::sync::Arc::new(ara_runtime::material::MaterialAsset {
+                asset: "gr_ground".into(),
+                digest: ara_asset::Digest::of(bytemuck::cast_slice(&color)),
+                material: ara_runtime::model::ModelMaterial {
+                    base_color: color,
+                    ..Default::default()
+                },
+                textures: Vec::new(),
+                texture_generations: Vec::new(),
+                base_color_decode_srgb: false,
+                emissive_decode_srgb: false,
+            }),
+        )]),
+        ..Default::default()
+    }
+}
+
 #[test]
 fn first_capture_uploads_finished_emitter_search_without_another_prepare() -> Result<()> {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -90,6 +111,95 @@ fn first_capture_uploads_finished_emitter_search_without_another_prepare() -> Re
     first.write(&root.join("first.png"))?;
     after_prepare.write(&root.join("after-prepare.png"))?;
     assert_eq!(first.image, after_prepare.image);
+    raster.destroy(&mut renderer)?;
+    renderer.gpu().assert_clean()?;
+    Ok(())
+}
+
+#[test]
+fn cpu_prepared_worker_content_publishes_and_rejection_keeps_last_good() -> Result<()> {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../target/runtime-render/prepared-content")
+        .join(std::process::id().to_string());
+    let coord = ara_terrain::TileCoord { x: 0, z: 0 };
+    let terrain = std::sync::Arc::new(ara_runtime::terrain::TerrainData {
+        header: ara_terrain::Header {
+            origin: [0.; 2],
+            spacing: 1.,
+            cells: 16,
+            min: coord,
+            max: ara_terrain::TileCoord { x: 1, z: 1 },
+            materials: vec![ara_schema::AssetRef("@ground.graph#gr_ground".into())],
+        },
+        tiles: std::collections::BTreeMap::from([(
+            coord,
+            ara_terrain::Tile::flat(16).expect("fixed tile size"),
+        )]),
+        foliage: Vec::new(),
+        foliage_rules: Vec::new(),
+    });
+    let snapshot = || {
+        let mut frame = RenderFrame::default();
+        frame.terrain = Some(ara_runtime::extract::TerrainView {
+            data: std::sync::Arc::clone(&terrain),
+            tiles: vec![coord],
+        });
+        frame
+    };
+    let frame = snapshot();
+    let worker = std::thread::spawn(move || RasterContent::new(frame, terrain_content([0.7; 4])));
+    let candidate = worker.join().expect("CPU content worker")?;
+    let mut renderer = Renderer::new_native(
+        &candidate.prepared.scene,
+        Box::new(candidate.prepared.textures.fork_sources(texture_config())?),
+        [160, 90],
+        &[],
+        root.join("gpu"),
+    )?;
+    let mut raster = RasterView::new(root.join("probes"));
+    raster.set_probe_gi(false);
+    let plan = ara_render_fidelity::presets::RasterPlan {
+        render_size: [160, 90],
+        display_size: [160, 90],
+        quality: *renderer.quality(),
+    };
+    let frame = raster.publish_content(&mut renderer, candidate, plan)?;
+    let request = CaptureRequest {
+        camera: CameraSpec::LookAt {
+            position: glam30::Vec3::new(8., 7., 22.),
+            target: glam30::Vec3::new(8., 0., 8.),
+            vertical_fov: 50f32.to_radians(),
+        },
+        size: [160, 90],
+        mode: ViewMode::Lit,
+        deterministic: true,
+        exposure: 1.,
+        settle_frames: 2,
+        tick: 0,
+        seed: 0,
+        marks: None,
+    };
+    let pending = raster.capture(&mut renderer, &frame, &request)?;
+    // A terrain map/material publication changes no field of RenderFrame. The
+    // explicit CPU candidate must still replace the old neutral fallback.
+    let ready = RasterContent::new(snapshot(), terrain_content([0.1, 0.5, 0.15, 1.]))?;
+    let frame = raster.publish_content(&mut renderer, ready, plan)?;
+    let first = raster.capture(&mut renderer, &frame, &request)?;
+    assert_ne!(
+        pending.image, first.image,
+        "terrain-only publication must replace its fallback"
+    );
+    pending.write(&root.join("pending-terrain.png"))?;
+    let usage = renderer.gpu().descriptor_usage();
+    for _ in 0..4 {
+        let mut invalid = RenderFrame::default();
+        invalid.draws = vec![box_draw(2, [f32::NAN, 1., 1.], [0.; 3], [0.; 3])];
+        assert!(RasterContent::new(invalid, Content::default()).is_err());
+        assert_eq!(renderer.gpu().descriptor_usage(), usage);
+    }
+    let retained = raster.capture(&mut renderer, &frame, &request)?;
+    assert_eq!(first.image, retained.image);
+    first.write(&root.join("published.png"))?;
     raster.destroy(&mut renderer)?;
     renderer.gpu().assert_clean()?;
     Ok(())

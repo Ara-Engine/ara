@@ -122,6 +122,14 @@ Surface terrainSurface(NativeMaterial m,Varying v){
 }
 Surface surface(Varying v){
     NativeMaterial m=material(v.material);
+    // Guessed loading bounds must not cover the view or form stair-like bands
+    // across pending foliage. Keep only short one-pixel corner brackets; tiny
+    // distant bounds disappear. Failed/missing bounds remain opaque magenta.
+    if((m.pbr.flags.y&(1u<<27))!=0 && m.pbr.flags.x==2){
+        float2 step=max(fwidth(v.uv),float2(1e-6));
+        float2 edge=min(v.uv,1-v.uv)/step;
+        if(min(edge.x,edge.y)>1 || max(edge.x,edge.y)>8 || max(step.x,step.y)>0.125)discard;
+    }
     Surface s=m.slots.z>0?terrainSurface(m,v):surfaceMaterial(m,v);
     if(m.pbr.flags.x==1 && s.alpha<m.pbr.surface.w)discard;
     float3 du=ddx(s.normal),dv=ddy(s.normal);float kernel=min(2*0.15915494*(dot(du,du)+dot(dv,dv)),0.18);

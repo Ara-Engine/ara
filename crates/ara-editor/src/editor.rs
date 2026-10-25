@@ -554,10 +554,15 @@ impl Editor {
     }
     /// Log an editor failure of `kind` (see `editor.report`) about an optional subject.
     pub(crate) fn report(&mut self, kind: &str, message: &str, subject: Option<&str>) {
-        let _ = self.action(
-            "editor.report",
-            json!({"message": message, "kind": kind, "subject": subject}),
-        );
+        // The editor's own problems come from the engine, not the person at the
+        // keyboard: report them as the engine (`origin: engine` on the bus).
+        let diagnostic = crate::actions::report_diagnostic(kind, message.into(), subject);
+        if let Ok(value) = serde_json::to_value(&diagnostic) {
+            let _ = self.action(
+                "diag.report",
+                json!({"engine": true, "diagnostics": [value]}),
+            );
+        }
     }
     /// Fields agents changed within the activity glow, with their previous values.
     pub fn agent_fields(&self) -> BTreeMap<(String, String), Value> {

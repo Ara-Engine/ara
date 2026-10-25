@@ -14,13 +14,19 @@ single-material SourceMesh snapshots. glTF/FBX also emit one ARAG v1 Custom
 artifact per static material primitive automatically; MeshSettings.virtualGeometry
 opts out. Scene mesh entries link virtualGeometry artifact/cacheVersion/diagnostics.
 Skin and morph deformation retain the classic path with a manifest note.
-glTF generation 5 retains per-slot KHR_texture_transform (including UV selection),
+glTF generation 6 retains per-slot KHR_texture_transform (including UV selection),
 emissive strength and transmission; transmission/AO cook as linear data. Missing
 tangents use the normal slot's selected/transformed UVs; supplied tangents survive.
 MeshSettings.opacityMaps maps a glTF image URI (or #index) to a companion URI.
 Its red channel multiplies existing color alpha, resized with triangle filtering;
 opaque materials become masked, while authored blend/mask modes remain. Discovery
-includes these inputs. FBX rejects this glTF-only setting (shared settings ABI v5).
+includes these inputs. FBX rejects this glTF-only setting (shared settings ABI v6).
+Static classic LOD chains default to eight levels, targeting 2% of LOD0 or 200
+triangles. Attribute-aware meshoptimizer preserves UV seams and open borders;
+alpha foliage also retains at least 90% area per connected card. Irreducible
+cards keep their last good level. Skin/morph chains retain the four-level/1% cap.
+Retain usable legacy LODs: replacing geometric errors with combined attribute
+errors can make runtime selection choose finer foliage despite deeper chains.
 ARAG Custom artifacts are
 validated by ara-geo; its reflected settings are VirtualGeometrySettings.
 

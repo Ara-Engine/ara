@@ -56,7 +56,7 @@ impl Renderer {
         };
         let frame = self.frame_data(&camera, exposure, deterministic, mode, output_history);
         if let Some(native) = &mut self.native {
-            native.prepare(&mut self.gpu, &frame, &camera)?;
+            native.prepare(&mut self.gpu, &frame, &camera, &self.look.quality)?;
         }
         self.gpu.upload(self.frame, bytemuck::bytes_of(&frame))?;
         // The far map redraws only when its view, content or casters inside it
@@ -127,7 +127,11 @@ impl Renderer {
                     capture || deterministic,
                 );
                 for &(face, matrix) in &plan.draws {
-                    let pass = self.cull_native_shadow_pass(face, matrix)?;
+                    let pass = self.cull_native_shadow_pass_with_resolution(
+                        face,
+                        matrix,
+                        local.settings.resolution,
+                    )?;
                     local_draws.push((face, pass, matrix));
                 }
                 self.gpu.upload(local.table, &plan.table)?;

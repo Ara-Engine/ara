@@ -4357,14 +4357,14 @@ expression: out
       "fields": {
         "lodCount": {
           "type": "u32",
-          "doc": "Maximum number of LODs, including the original (1–8).",
-          "default": 4,
+          "doc": "Maximum LODs including the original (1–8). Skin/morph meshes retain at most four.",
+          "default": 8,
           "range": [1, 8]
         },
         "lodError": {
           "type": "f32",
-          "doc": "Relative simplification error ceiling.",
-          "default": 0.01,
+          "doc": "Relative simplification error ceiling; skin/morph meshes clamp this to 1%.",
+          "default": 0.1,
           "range": [0, null]
         },
         "virtualGeometry": {

@@ -52,7 +52,7 @@ pub(super) fn sidebar(p: &mut Page, hub: &Hub) {
             );
         }
         p.leaf("fill");
-        if hub.view != View::Agents {
+        if !update_card(p, hub) && hub.view != View::Agents && agents == 0 {
             p.panel("side-card", |p| {
                 p.panel("row", |p| {
                     p.icon("plug", "accent");
@@ -167,12 +167,79 @@ fn subtitle(hub: &Hub) -> String {
     }
 }
 
+/// The Hub update in the sidebar on every page but Settings (which shows it in full):
+/// version, progress and the one action that moves it on. True when shown.
+fn update_card(p: &mut Page, hub: &Hub) -> bool {
+    let Some(release) = &hub.releases.hub else {
+        return false;
+    };
+    let key = format!("update-{}", release.version);
+    if hub.view == View::Settings || !hub.banner_visible(&key) {
+        return false;
+    }
+    p.panel("side-card side-update", |p| {
+        p.panel("row", |p| {
+            p.icon("download", "accent");
+            p.text("side-title fill", &format!("Ara Hub {}", release.version));
+            dismiss_banner(p, "dismiss-update", key);
+        });
+        p.text("side-copy", &update_copy(hub, &release.version));
+        update_action(p, hub, &release.version, "compact");
+    });
+    true
+}
+
+/// What an available Hub update is doing, in one line.
+fn update_copy(hub: &Hub, version: &str) -> String {
+    if let Some(job) = hub.releases.running("hub", version) {
+        let progress = job
+            .progress
+            .as_ref()
+            .map_or(0, |p| p.received.saturating_mul(100) / p.total.max(1));
+        format!("Downloading verified update · {progress}%")
+    } else if hub.releases.prepared().is_some() {
+        "Ready. Open projects and the Hub service keep running.".into()
+    } else {
+        "Available to download.".into()
+    }
+}
+
+/// The one action that moves a Hub update on: download, cancel or restart.
+fn update_action(p: &mut Page, hub: &Hub, version: &str, size: &str) {
+    if hub.releases.prepared().is_some() {
+        p.action(
+            "restart-update",
+            &format!("primary {size}"),
+            "refresh-cw",
+            "Restart to update",
+            Some(Intent::RestartUpdate),
+        );
+    } else if let Some(job) = hub.releases.running("hub", version) {
+        p.action(
+            "cancel-hub-update",
+            size,
+            "x",
+            "Cancel",
+            Some(Intent::CancelDownload(job.id.clone())),
+        );
+    } else {
+        p.action(
+            "download-update",
+            size,
+            "download",
+            "Download update",
+            Some(Intent::PrepareUpdate),
+        );
+    }
+}
+
+/// The Hub update in full, on Settings (elsewhere it is the sidebar card).
 pub(super) fn update(p: &mut Page, hub: &Hub) {
     let Some(release) = &hub.releases.hub else {
         return;
     };
     let key = format!("update-{}", release.version);
-    if !hub.banner_visible(&key) {
+    if hub.view != View::Settings || !hub.banner_visible(&key) {
         return;
     }
     p.panel("banner banner-info", |p| {
@@ -182,47 +249,9 @@ pub(super) fn update(p: &mut Page, hub: &Hub) {
                 "toast-title",
                 &format!("Ara Hub {} is available", release.version),
             );
-            if let Some(job) = hub.releases.running("hub", &release.version) {
-                let progress = job
-                    .progress
-                    .as_ref()
-                    .map_or(0, |p| p.received.saturating_mul(100) / p.total.max(1));
-                p.text(
-                    "small muted",
-                    &format!("Downloading verified update · {progress}%"),
-                );
-            } else {
-                p.text(
-                    "small muted",
-                    "Your open projects and Hub service keep running during restart.",
-                );
-            }
+            p.text("small muted", &update_copy(hub, &release.version));
         });
-        if hub.releases.prepared().is_some() {
-            p.action(
-                "restart-update",
-                "primary compact",
-                "refresh-cw",
-                "Restart to update",
-                Some(Intent::RestartUpdate),
-            );
-        } else if let Some(job) = hub.releases.running("hub", &release.version) {
-            p.action(
-                "cancel-hub-update",
-                "compact",
-                "x",
-                "Cancel",
-                Some(Intent::CancelDownload(job.id.clone())),
-            );
-        } else {
-            p.action(
-                "download-update",
-                "compact",
-                "download",
-                "Download update",
-                Some(Intent::PrepareUpdate),
-            );
-        }
+        update_action(p, hub, &release.version, "compact");
         dismiss_banner(p, "dismiss-update", key);
     });
 }

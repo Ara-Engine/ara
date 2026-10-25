@@ -4,6 +4,7 @@
 use anyhow::{Result, bail, ensure};
 use ara_gpu::{Access, Barrier, Handoff, Queue, Resource, vk, vulkan::VulkanDevice};
 use std::collections::BTreeSet;
+mod usage;
 
 /// Resource identity inside one graph.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -133,34 +134,16 @@ impl Graph {
     }
     /// Order passes, reject missing producers/cycles, and emit exact ownership pairs.
     pub fn compile(&self) -> Result<CompiledGraph> {
+        ara_gpu::cpu_scope!("Graph.compile");
         let count = self.passes.len();
         let mut dependencies = self
             .passes
             .iter()
             .map(|p| p.after.clone())
             .collect::<Vec<_>>();
-        for pass in &self.passes {
-            let mut seen = BTreeSet::new();
-            for &(id, _) in &pass.uses {
-                ensure!(id.0 < self.resources.len(), "Unknown graph resource");
-                ensure!(
-                    seen.insert(id),
-                    "Declare one combined access per pass/resource"
-                );
-            }
-        }
+        let usage = usage::Index::new(self)?;
         for (r, resource) in self.resources.iter().enumerate() {
-            let uses = self
-                .passes
-                .iter()
-                .enumerate()
-                .filter_map(|(p, pass)| {
-                    pass.uses
-                        .iter()
-                        .find(|(id, _)| id.0 == r)
-                        .map(|(_, access)| (p, *access))
-                })
-                .collect::<Vec<_>>();
+            let uses = usage.get(r);
             let writers = uses
                 .iter()
                 .filter(|(_, a)| a.writes())
@@ -344,5 +327,100 @@ mod tests {
         let c = g.compile().unwrap();
         assert_eq!(c.passes[2].before.len(), 1);
         assert_eq!(c.passes[2].before[0].before, Access::Storage);
+    }
+
+    #[test]
+    fn rejects_duplicate_and_unknown_resource_accesses() {
+        let mut graph = Graph::default();
+        let id = graph.import(
+            buffer(),
+            State {
+                access: Access::ShaderRead,
+                queue: Queue::Graphics,
+            },
+        );
+        graph.pass(
+            "duplicate",
+            Queue::Graphics,
+            [(id, Access::ShaderRead), (id, Access::Storage)],
+        );
+        assert!(
+            graph
+                .compile()
+                .err()
+                .unwrap()
+                .to_string()
+                .contains("combined access")
+        );
+        let mut graph = Graph::default();
+        graph.pass(
+            "unknown",
+            Queue::Graphics,
+            [(ResourceId(usize::MAX), Access::ShaderRead)],
+        );
+        assert!(
+            graph
+                .compile()
+                .err()
+                .unwrap()
+                .to_string()
+                .contains("Unknown graph resource")
+        );
+        assert!(Graph::default().compile().unwrap().passes.is_empty());
+    }
+
+    #[test]
+    fn sparse_bindless_reads_preserve_versions_and_queue_handoffs() {
+        let mut graph = Graph::default();
+        let ids: Vec<_> = (0..512)
+            .map(|_| {
+                graph.import(
+                    buffer(),
+                    State {
+                        access: Access::ShaderRead,
+                        queue: Queue::Graphics,
+                    },
+                )
+            })
+            .collect();
+        let scratch = graph.import(
+            buffer(),
+            State {
+                access: Access::Undefined,
+                queue: Queue::Compute,
+            },
+        );
+        let early = graph.pass(
+            "early",
+            Queue::Graphics,
+            [
+                (ids[511], Access::ShaderRead),
+                (scratch, Access::ShaderRead),
+                (ids[0], Access::ShaderRead),
+            ],
+        );
+        let producer = graph.pass("producer", Queue::Compute, [(scratch, Access::Storage)]);
+        let late = graph.pass(
+            "late",
+            Queue::Graphics,
+            [(ids[4], Access::ShaderRead), (scratch, Access::ShaderRead)],
+        );
+        let rewrite = graph.pass("rewrite", Queue::Compute, [(scratch, Access::Storage)]);
+        let last = graph.pass("last", Queue::Compute, [(scratch, Access::ShaderRead)]);
+        let compiled = graph.compile().unwrap();
+        assert_eq!(
+            compiled.passes.iter().map(|p| p.id).collect::<Vec<_>>(),
+            [producer, early, late, rewrite, last]
+        );
+        assert_eq!(compiled.passes[1].waits, [0]);
+        assert_eq!(compiled.passes[3].waits, [1, 2]);
+        assert!(compiled.passes[0].after[0].handoff.unwrap().release);
+        assert!(!compiled.passes[1].before[0].handoff.unwrap().release);
+        assert!(compiled.passes[2].after[0].handoff.unwrap().release);
+        assert!(!compiled.passes[3].before[0].handoff.unwrap().release);
+        assert_eq!(compiled.final_states[scratch.0].access, Access::ShaderRead);
+        assert_eq!(compiled.final_states[scratch.0].queue, Queue::Compute);
+        assert_eq!(compiled.final_states[ids[7].0].access, Access::ShaderRead);
+        assert_eq!(compiled.final_states[ids[7].0].queue, Queue::Graphics);
     }
 }

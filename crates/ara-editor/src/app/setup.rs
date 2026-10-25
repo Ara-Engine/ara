@@ -38,6 +38,21 @@ pub struct Options {
     /// Measure UI cost and click reliability with input injected into the window
     /// loop (`app/responsiveness.rs`); writes `responsiveness.json`.
     pub verify_responsiveness: bool,
+    /// Replay a new user's first hour on a fresh project (`app/qa.rs`); writes
+    /// `first-hour.json` and a capture per step.
+    pub verify_first_hour: bool,
+    /// With `verify_responsiveness`: wait for imports to finish and the Scene to show
+    /// them, before or after the interactions (`ara-dev d26` measures both).
+    pub settle: Option<Settle>,
+}
+
+/// When a responsiveness run waits for imports (`--settle-imports before|after`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Settle {
+    /// Interactions run on a settled project (the warm, after-imports run).
+    Before,
+    /// Interactions run while imports may still be going; then wait for them (cold).
+    After,
 }
 impl Options {
     /// Bounded and automated runs (a frame limit, captures, verification routes) keep
@@ -50,6 +65,7 @@ impl Options {
             || self.verify_ux
             || self.verify_journey
             || self.verify_responsiveness
+            || self.verify_first_hour
             || self.headless
     }
 
@@ -91,7 +107,9 @@ impl Default for Options {
             scene: None,
             play: false,
             verify_journey: false,
+            verify_first_hour: false,
             verify_responsiveness: false,
+            settle: None,
         }
     }
 }

@@ -262,9 +262,26 @@ impl Renderer {
     }
 
     /// Prepare opaque (including alpha-masked) casters against an arbitrary light
-    /// matrix, using the main camera's selected LODs. Call after native preparation
+    /// matrix, using its shadow texel density. Call after native preparation
     /// and before declaring the shadow pass resources; record it as native pass 6.
     pub fn cull_native_shadow(&mut self, matrix: Mat4) -> Result<()> {
+        let shadows = self.look.quality.shadows;
+        let resolution = shadows.far.map_or(shadows.resolution, |far| far.resolution);
+        self.cull_native_shadow_with_resolution(matrix, resolution)
+    }
+
+    /// Cull far casters with the actual square shadow viewport resolution.
+    /// Bound radii below two texels (or the preset minimum) are omitted.
+    pub fn cull_native_shadow_with_resolution(
+        &mut self,
+        matrix: Mat4,
+        resolution: u32,
+    ) -> Result<()> {
+        ensure!(
+            matrix.is_finite() && resolution > 0,
+            "Invalid native shadow view"
+        );
+        let view = culling::View::shadow(matrix, resolution, self.look.quality.min_pixels);
         let native = self
             .native
             .as_mut()
@@ -275,7 +292,7 @@ impl Renderer {
             &native.groups,
             &native.bounds,
             6,
-            matrix,
+            view,
             &mut native.changes.work,
         )
     }
@@ -292,14 +309,40 @@ impl Renderer {
         native.reserve_shadow_passes(&mut self.gpu, count)
     }
 
-    /// Cull opaque/masked casters for one reserved local-light face using camera
-    /// LODs. Call after native preparation and before graph resource declarations.
-    /// The returned native pass index is recorded with the shadow pipeline; bind
-    /// a Frame with this matrix in shadows[0] and root word 4 set to zero. Lists
+    /// Cull opaque/masked casters for one reserved local-light face using the
+    /// local-light texel budget. Use `cull_native_shadow_pass_with_resolution` when
+    /// the local-light tile has a different resolution. Call after native
+    /// preparation and before graph resource declarations.
+    /// The renderer records the returned pass with its main Frame, cascade word
+    /// 4+slot and the look's local-matrix table. External passes may instead bind
+    /// their own Frame with this matrix in shadows[0] and cascade zero. Lists
     /// remain independent of each other and of far-shadow pass 6.
     /// Arbitrary perspective and orthographic matrices test all six clip planes.
     /// Unculled slots keep their lists without traversal or visible-buffer writes.
     pub fn cull_native_shadow_pass(&mut self, slot: usize, matrix: Mat4) -> Result<usize> {
+        let resolution = self
+            .look
+            .quality
+            .local_shadows
+            .map_or(self.look.quality.shadows.resolution, |local| {
+                local.resolution
+            });
+        self.cull_native_shadow_pass_with_resolution(slot, matrix, resolution)
+    }
+
+    /// Cull a reserved local face with its actual square tile resolution. Matrix,
+    /// resolution and preset changes invalidate only the affected cached list.
+    pub fn cull_native_shadow_pass_with_resolution(
+        &mut self,
+        slot: usize,
+        matrix: Mat4,
+        resolution: u32,
+    ) -> Result<usize> {
+        ensure!(
+            matrix.is_finite() && resolution > 0,
+            "Invalid native shadow view"
+        );
+        let view = culling::View::shadow(matrix, resolution, self.look.quality.min_pixels);
         let native = self
             .native
             .as_mut()
@@ -318,7 +361,7 @@ impl Renderer {
             &native.groups,
             &native.bounds,
             pass,
-            matrix,
+            view,
             &mut native.changes.work,
         )?;
         Ok(pass)
@@ -495,7 +538,7 @@ impl Native {
             };
         let rows = scene.instances.iter().map(|i| row(i, i.world)).collect();
         let groups = Groups::new(scene, &pool)?;
-        let mut culling = Culling::new(&groups, scene.instances.len());
+        let mut culling = Culling::new(&groups, scene);
         culling.reserve(&groups, passes);
         let result = Self {
             material_index,

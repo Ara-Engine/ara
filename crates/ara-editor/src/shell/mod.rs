@@ -58,6 +58,8 @@ use ara_ui::{
 };
 use ara_ui_text::TextSystem;
 pub(crate) use dialog::Dialog;
+pub(crate) use game_panel::game_stats_text;
+pub use hierarchy::LARGE_GROUP;
 pub(crate) use ops::{WindowRequest, open_docs, open_external, open_terminal};
 use panels::{button, escape};
 use serde_json::{Value, json};
@@ -99,6 +101,8 @@ pub struct Shell {
     hierarchy_tints: BTreeMap<u64, &'static str>,
     /// What the Hierarchy rows were last built from.
     hierarchy_key: Option<hierarchy::HierarchyKey>,
+    /// Entities in the open scene (the Hierarchy may show fewer rows: collapsed groups).
+    entity_count: usize,
     hierarchy_ghosts: std::collections::BTreeSet<u64>,
     /// Game view: players of the shown world, the selected one, whether a frame is
     /// showing, frames per second, the surface size, the wanted size (physical px),
@@ -127,10 +131,6 @@ pub struct Shell {
     /// Colour swatches outside the Inspector (material parameters): node id and
     /// colour, painted after layout like the Inspector's.
     value_swatches: Vec<(String, ara_ui::style::Color)>,
-    /// Whether the Problems chip counts this machine's Vulkan loader and overlay-layer
-    /// diagnostics (`ARA_GPU_ENVIRONMENT`); bounded runs turn it off so captures are
-    /// the same on every machine.
-    pub host_problems: bool,
     /// Colour swatches of compound Inspector elements: control ID and linear value.
     nested_swatches: Vec<(String, Value)>,
     /// Create > C# Behaviour opens the IDE (verification routes turn it off).
@@ -152,6 +152,8 @@ pub struct Shell {
     pub(crate) log_view: LogView,
     /// Console row whose details are expanded (bus sequence number).
     pub(crate) console_open: Option<u64>,
+    /// Whether Console and Problems show this computer's GPU environment messages.
+    pub(crate) machine_open: bool,
     /// Profiler scope outlined in the timeline (picked in the Scopes table).
     pub(crate) profile_scope: Option<String>,
     /// Problems whose "Why" explanation is expanded.
@@ -379,6 +381,7 @@ impl Shell {
             hierarchy_entities: BTreeMap::new(),
             hierarchy_tints: BTreeMap::new(),
             hierarchy_key: None,
+            entity_count: 0,
             hierarchy_ghosts: std::collections::BTreeSet::new(),
             expanded_turns: std::collections::BTreeSet::new(),
             pending_reports: Vec::new(),
@@ -407,8 +410,8 @@ impl Shell {
             animation_live: Default::default(),
             value_swatches: Vec::new(),
             nested_swatches: Vec::new(),
-            host_problems: true,
             console_open: None,
+            machine_open: false,
             profile_scope: None,
             explained_problems: std::collections::BTreeSet::new(),
             hierarchy_view: None,
@@ -493,7 +496,7 @@ impl Shell {
             recent_commands: Vec::new(),
             recording: None,
             key_search: false,
-            label_width: 0.4,
+            label_width: 0.45,
             keymap: commands::keymap(&editor.state),
             keymap_revision: 0,
             keymap_settings: keymap_settings(&editor.state),
@@ -914,14 +917,15 @@ impl Shell {
         }
         if let (Some(cube), Some(rect)) = (self.ui.find("view-cube"), self.viewport()) {
             let r = self.ui.nodes[cube].rect;
-            self.ui.nodes[cube].paint_offset = [rect.x + rect.w - 68. - r.x, rect.y + 12. - r.y];
+            self.ui.nodes[cube].paint_offset =
+                [rect.x + rect.w - axis::SIZE - 12. - r.x, rect.y + 12. - r.y];
             self.ui.nodes[cube].dirty.paint = true;
         }
         self.stats.work += self.ui.frame(&mut self.text)?;
         if previous_canvas != self.canvas_doc.as_deref().map(ara_ui::source::stable_id)
             && editor.state.canvas == crate::graph::Camera::default()
         {
-            self.edit_graph_layout(editor, "frame")?;
+            self.edit_graph_layout(editor, "open")?;
             self.stats.work += self.ui.frame(&mut self.text)?;
         }
         if allow_asset_reflow
@@ -1169,16 +1173,23 @@ impl Shell {
     pub(crate) fn poll_assets(&mut self) -> bool {
         let browser_changed = self.browser.poll();
         if browser_changed {
+            // Any project file changed (every autosave does): every tile asks again,
+            // since a thumbnail depends on its source's dependencies too. Unchanged ones
+            // come straight back from the content cache; until then each tile keeps its
+            // image instead of flashing back to its icon.
             self.thumbnails.invalidate_all();
-            self.thumbnail_slots
-                .retain(|key, _| key.starts_with("live:"));
         }
         let mut changed = browser_changed || std::mem::take(&mut self.asset_grid_dirty);
-        changed |= self.imports.poll();
-        let completed = self.thumbnails.poll().collect::<Vec<_>>();
+        // An import published (or failed): tiles that were waiting on one ask again now,
+        // not on a timer.
+        if self.imports.poll() {
+            changed = true;
+            self.thumbnails.retry_pending();
+        }
+        let completed = self.thumbnails.poll();
         for result in completed {
             match result {
-                Ok(thumb) => {
+                crate::asset_tools::thumbnails::Done::Image(thumb) => {
                     self.thumbnail_errors.remove(&thumb.key);
                     let slot = if let Some(slot) = self.thumbnail_slots.get(&thumb.key) {
                         *slot
@@ -1209,9 +1220,17 @@ impl Shell {
                     ));
                     changed = true;
                 }
-                Err((key, error)) => {
-                    self.pending_reports.push(("thumbnail", error.clone()));
-                    self.thumbnail_errors.insert(key, error);
+                // Waiting on its import: the tile shows the import's pending state.
+                crate::asset_tools::thumbnails::Done::Pending(_) => {}
+                crate::asset_tools::thumbnails::Done::Failed(key, path, error) => {
+                    // A node preview that cannot render: its node keeps a compact body.
+                    if key.starts_with(crate::asset_tools::thumbnails::NODE) {
+                        self.node_previews.failed.insert(key);
+                    } else {
+                        self.pending_reports
+                            .push(("thumbnail", format!("{path}: no preview ({error})")));
+                        self.thumbnail_errors.insert(key, error);
+                    }
                     changed = true;
                 }
             }

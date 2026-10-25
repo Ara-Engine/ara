@@ -1,26 +1,22 @@
 # ara-render
 
-Native publications validate once per immutable upload borrow and copy unchanged
-key/revision geometry directly from the previous GPU pool. Candidate buffers stay
-independent until publication, so rejected content retains the previous frame.
+Native publications validate once per immutable upload borrow and copy unchanged key/revision geometry from the previous GPU pool.
+Candidate buffers stay independent until publication, so rejected content retains the previous frame.
 
-Owns the M1 baseline renderer and agent visual feedback. Gameplay state stays in
-ECS; `Scene` is an immutable render extraction snapshot, not authoritative state.
+Owns the M1 baseline renderer and agent visual feedback. Gameplay state stays in ECS; `Scene` is a render snapshot, not authoritative state.
 
 ## Public API
 
-- `Graph`: declared resource accesses, stable topological ordering, barriers,
-  explicit queue release/acquire pairs, timeline dependencies, transient images.
+- `Graph`: declared accesses, stable topological ordering, barriers, explicit queue release/acquire pairs, timeline dependencies, transient images.
+  Compilation indexes resource uses once; declaration-order versions and queue handoffs stay deterministic.
 - `Renderer::new`, `render`, `render_view` (live debug view mode), `resize`, `capture`: cooked Vulkan rendering; read-only
   `gpu()` access for diagnostics/native presentation. Resize resets history.
-- `Scene`, `Mesh`, `Material`, `Light`, `CameraSpec`: extracted world data and
-  camera pose/bounds requests. Materials use bindless texture indices.
+- `Scene`, `Mesh`, `Material`, `Light`, `CameraSpec`: extracted world data and camera pose/bounds requests. Materials use bindless texture indices.
 - `instanced::Scene`: native model-space content contract for shared geometry,
   current/previous instance transforms, deforming revisions, 64-byte UV0/UV1
   vertices and 320-byte materials with six independent map transforms, AO,
   transmission and authored terrain layer IDs. Texture IDs address the native
-  residency table; u32::MAX means neutral texels. This input is separate from
-  the legacy `Scene` ABI.
+  residency table; u32::MAX means neutral texels (separate from the legacy `Scene` ABI).
   Validate only at content publication; do not hash/traverse static vertices
   when moving instances. Culling bounds handle mirrored/nonuniform transforms.
 - `Renderer::new_native` consumes this scene and an owned `instanced::Textures`
@@ -34,11 +30,15 @@ ECS; `Scene` is an immutable render extraction snapshot, not authoritative state
   image ownership at publication; rejected content keeps its previous environment.
 - `update_native_changed(scene, instanced::Changes)` consumes exact instance,
   material and skin indices. Coherent writes/culling touch dirty groups only;
-  idle frames retain visible lists and settle motion history once. `native_frame_work`
+  idle frames retain visible lists and settle motion once; LOD bounds cache per pose. `native_frame_work`
   reports traversals/writes. `native_caster_changes` exposes old-union-new bounds;
-  `cull_native_shadow(matrix)` caches opaque/masked camera-LOD casters for pass 6.
+  `cull_native_shadow(matrix)` caches opaque/masked casters for pass 6 using the
+  light's texel density. Camera lists consume `Quality::lod_pixels/min_pixels`;
+  shadows independently choose LODs within one texel and omit bound radii below
+  max(2, min_pixels) texels. Explicit `*_with_resolution` shadow methods take the
+  actual far-map/local-face viewport size (a cache key); camera LOD never dirties these shadow lists.
   Local shadows reserve `reserve_native_shadow_passes(count)` before graph imports;
-  `cull_native_shadow_pass(slot, matrix)` returns an independent cached pass index,
+  `cull_native_shadow_pass_with_resolution(slot, matrix, resolution)` returns a cached pass index,
   recorded as cascade 4+slot (its matrix comes from `look::local`'s table).
 - `instanced::GeometryGpu` uploads static local vertices/LOD indices once. Changed
   deforming revisions use `prepare_pose` then `commit_pose`/`cancel_pose`; retire
@@ -125,14 +125,12 @@ startup staging transfers run on the eventual owning queue.
 
 ## Verification
 
-Set `CARGO_BUILD_JOBS=2`. On Windows run `./run.ps1 -Mode Check`.
-It scopes Vulkan validation layers and an empty implicit-layer directory to its
-process and restores the environment. SDL is built statically by `ara-sdl3-src`;
-there is no SDL setup script, native directory or runtime DLL requirement.
+Set `CARGO_BUILD_JOBS=2`. On Windows run `./run.ps1 -Mode Check`: it scopes Vulkan validation layers
+and an empty implicit-layer directory to its process and restores the environment. SDL is built statically
+by `ara-sdl3-src`; there is no SDL setup script, native directory or runtime DLL requirement.
 
 Per-crate gates: `cargo check -p ara-render`, `cargo test -p ara-render`,
-`cargo clippy -p ara-render --all-targets -- -D warnings`,
-`cargo fmt -p ara-render -- --check`.
+`cargo clippy -p ara-render --all-targets -- -D warnings`, `cargo fmt -p ara-render -- --check`.
 GPU goldens require this device/driver baseline with tolerance 1-SSIM <= 0.005.
 They also check repeated deterministic captures, all 14 visible entities/picking,
 and odd-resolution bounds framing. Update only deliberately with process-local
@@ -144,7 +142,5 @@ environment variable before the command). Normal checks never update goldens.
 windowed example exercises resize. `--frames=N` bounds its lifetime; Esc closes.
 `cargo run -p ara-render --example timings` records 120 warm pass samples.
 
-The glTF importer is example-only; production asset import belongs to the asset
-pipeline. Example media are CC0; source/licence notices are next to the assets.
-M3 owns material AST/fidelity, animation velocities, streaming/aliasing and richer
-lighting. Metal's native implementation is the cfg-gated ara-gpu backend stub.
+The glTF importer is example-only; production import belongs to the asset pipeline. Example media are CC0; source/licence notices accompany assets.
+M3 owns material AST/fidelity, animation velocities, streaming/aliasing and richer lighting. Metal's native implementation is the cfg-gated ara-gpu stub.

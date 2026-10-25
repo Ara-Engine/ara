@@ -106,6 +106,17 @@ fn centre(renderer: &mut Renderer) -> Result<f32> {
         seed: 0,
         marks: None,
     })?;
+    let name = if renderer.quality().local_shadows.is_some() {
+        "shadowed"
+    } else {
+        "unshadowed"
+    };
+    capture.write(
+        &std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../target/ara-render/local-shadows")
+            .join(std::process::id().to_string())
+            .join(format!("{name}.png")),
+    )?;
     let p = capture.image.get_pixel(32, 32).0;
     Ok(0.2126 * f32::from(p[0]) + 0.7152 * f32::from(p[1]) + 0.0722 * f32::from(p[2]))
 }
@@ -131,6 +142,7 @@ fn an_occluder_shadows_the_ground_under_a_local_light() -> Result<()> {
         ..unshadowed
     })?;
     let shadowed = centre(&mut renderer)?;
+    eprintln!("local-shadow centre luminance: {lit} -> {shadowed}");
     ensure!(lit > 40., "the ground is lit without shadows: {lit}");
     ensure!(
         shadowed < lit * 0.5,

@@ -36,6 +36,7 @@ ara-doc = { path = "../ara-doc" }
 ara-gpu = { path = "../ara-gpu" }
 ara-export = { path = "../ara-export" }
 blake3 = { workspace = true, features = ["std", "pure"] }
+sha2 = { workspace = true }
 dunce = "1.0.5"
 ara-editor-gpu = { path = "../ara-editor-gpu" }
 ara-host = { path = "../ara-host" }

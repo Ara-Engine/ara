@@ -170,6 +170,10 @@ impl Quality {
                         && far.distance > s.distance
                 })
                 && self.gi_budget > 0
+                && self.lod_pixels.is_finite()
+                && self.lod_pixels > 0.
+                && self.min_pixels.is_finite()
+                && self.min_pixels >= 0.
                 && self.local_shadows.is_none_or(|l| {
                     (1..=16).contains(&l.lights) // local::MAX_FACES
                         && l.resolution.is_power_of_two()

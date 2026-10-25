@@ -1,4 +1,4 @@
-//! A gate deadline includes Cargo lock waits and owns the spawned process tree.
+//! Deadline-aware commands own their spawned process tree.
 
 use std::process::{Child, Command, ExitStatus};
 use std::time::{Duration, Instant};
@@ -46,9 +46,25 @@ pub(crate) fn run(command: &mut Command, deadline: Option<Instant>) -> Result<Ou
 pub(crate) fn run_observed(
     command: &mut Command,
     deadline: Option<Instant>,
+    observe: impl FnMut() -> Result<()>,
+) -> Result<Outcome> {
+    run_monitored(command, || Ok(deadline), observe)
+}
+
+/// A caller can pause its execution budget while a reported resource wait is active.
+pub(crate) fn run_with_deadline(
+    command: &mut Command,
+    deadline: impl FnMut() -> Result<Option<Instant>>,
+) -> Result<Outcome> {
+    run_monitored(command, deadline, || Ok(()))
+}
+
+fn run_monitored(
+    command: &mut Command,
+    mut deadline: impl FnMut() -> Result<Option<Instant>>,
     mut observe: impl FnMut() -> Result<()>,
 ) -> Result<Outcome> {
-    if deadline.is_some_and(|limit| Instant::now() >= limit) {
+    if deadline()?.is_some_and(|limit| Instant::now() >= limit) {
         return Ok(Outcome::TimedOut);
     }
     #[cfg(unix)]
@@ -71,6 +87,7 @@ pub(crate) fn run_observed(
         .assign(&tree.child)?;
     loop {
         observe()?;
+        let deadline = deadline()?;
         if let Some(status) = tree.child.try_wait()? {
             return Ok(Outcome::Exited(status));
         }

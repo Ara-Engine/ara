@@ -12,6 +12,8 @@ use ara_render_fidelity::{environment::FrameEnvironment, presets::RasterPlan};
 use ara_runtime::extract::RenderFrame;
 use std::path::PathBuf;
 mod fade;
+mod prepared;
+pub use prepared::RasterContent;
 #[cfg(test)]
 mod tests;
 
@@ -22,6 +24,11 @@ pub struct RasterUpdate {
     pub rebuilt: bool,
     /// Root transforms and skin geometries updated in place.
     pub updated: usize,
+}
+
+struct Preparation {
+    snapshot_changed: bool,
+    replacement: Option<(Prepared, u64)>,
 }
 
 /// Derived native content and VFX on a caller-owned renderer/device. It never
@@ -196,7 +203,47 @@ impl RasterView {
         look: FrameEnvironment,
         resolve: impl FnOnce() -> Result<Content>,
     ) -> Result<RasterUpdate> {
-        self.prepare_inner(renderer, frame, plan, look, resolve, true)
+        self.prepare_inner(
+            renderer,
+            frame,
+            plan,
+            look,
+            resolve,
+            Preparation {
+                snapshot_changed: true,
+                replacement: None,
+            },
+        )
+    }
+
+    /// Publish a CPU-prepared content snapshot at the device's frame boundary.
+    /// Call `RasterContent::new` on a worker; only GPU adoption runs here. Failure
+    /// retains the renderer's last completed content and presentation.
+    pub fn publish_content(
+        &mut self,
+        renderer: &mut Renderer,
+        candidate: RasterContent,
+        plan: RasterPlan,
+    ) -> Result<RenderFrame> {
+        let RasterContent {
+            frame,
+            content,
+            prepared,
+            key,
+        } = candidate;
+        let look = FrameEnvironment::resolve(&frame.look, frame.environment.exposure);
+        self.prepare_inner(
+            renderer,
+            &frame,
+            plan,
+            look,
+            || Ok(content),
+            Preparation {
+                snapshot_changed: true,
+                replacement: Some((prepared, key)),
+            },
+        )?;
+        Ok(frame)
     }
 
     /// Render an unchanged retained extraction without revisiting its draws.
@@ -210,7 +257,17 @@ impl RasterView {
         look: FrameEnvironment,
         resolve: impl FnOnce() -> Result<Content>,
     ) -> Result<RasterUpdate> {
-        self.prepare_inner(renderer, frame, plan, look, resolve, false)
+        self.prepare_inner(
+            renderer,
+            frame,
+            plan,
+            look,
+            resolve,
+            Preparation {
+                snapshot_changed: false,
+                replacement: None,
+            },
+        )
     }
 
     fn prepare_inner(
@@ -220,11 +277,17 @@ impl RasterView {
         plan: RasterPlan,
         look: FrameEnvironment,
         resolve: impl FnOnce() -> Result<Content>,
-        snapshot_changed: bool,
+        preparation: Preparation,
     ) -> Result<RasterUpdate> {
         ara_gpu::cpu_scope!("RasterView.prepare");
+        let Preparation {
+            snapshot_changed,
+            replacement,
+        } = preparation;
         let result = (|| {
-            let change = if snapshot_changed || self.prepared.is_none() {
+            let change = if replacement.is_some() {
+                FrameChange::Rebuild
+            } else if snapshot_changed || self.prepared.is_none() {
                 self.prepared
                     .as_mut()
                     .map(|p| p.update_frame(frame))
@@ -244,11 +307,14 @@ impl RasterView {
                     bake_content = Some(content.clone());
                 }
                 let config = texture_config();
-                let mut prepared = native::prepare(frame, content, config)?;
+                let (mut prepared, key) = match replacement {
+                    Some((prepared, key)) => (prepared, Some(key)),
+                    None => (native::prepare(frame, content, config)?, None),
+                };
                 prepared.enable_motion();
                 let textures = prepared.textures.fork_sources(config)?;
                 renderer.replace_native_scene(&prepared.scene, Box::new(textures))?;
-                self.key = content_key(&prepared);
+                self.key = key.unwrap_or_else(|| content_key(&prepared));
                 let arrivals = self
                     .prepared
                     .as_ref()

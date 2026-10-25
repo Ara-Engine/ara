@@ -13,6 +13,10 @@ Owns the native GPU boundary. Vulkan uses ash revision
 - `Command::CopyBufferRange` copies aligned ranges with checked capacities/overflow;
   it preserves unrelated destination bytes and is rejected inside rendering.
 - `VulkanDevice`: Vulkan backend; `context()` is read-only native integration access.
+- `Context::host_wait_stats` snapshots cumulative host time in explicit driver waits.
+  Native integration uses `measure_host_wait` for leaf waits only; never nest it.
+- Completed timestamp pools are reused (32 pools, at most 1024 queries each).
+  In-flight pools stay exclusive; oversized/burst overflow pools are freed on resolve.
 - `upload_range(buffer, byte_offset, bytes)` writes only changed coherent rows,
   with the same bounds and in-flight-use checks as `upload`.
 - `VulkanDevice::create_mip_image`: native sampled mip chains, including BC4/5/7.
@@ -79,6 +83,9 @@ Debug creation requires Khronos validation and synchronization validation.
 `assert_clean` rejects warnings and errors; `diagnostics` returns stable codes,
 layer identifiers, severity and message. The diagnostic callback mutex protects
 messages only, never frame resources or gameplay state.
+Loader/overlay GENERAL notices are informational and emitted once per exact
+message/process, with a stable bus key across child processes. Mixed GENERAL plus
+VALIDATION/PERFORMANCE messages retain their original severity and counters.
 
 Shared surfaces: `VK_KHR_external_memory_win32` is enabled whenever offered (the
 editor's device must import without knowing about Play). Opaque NT handles,

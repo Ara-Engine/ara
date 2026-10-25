@@ -79,7 +79,9 @@ fn why_explains_and_its_fix_runs_through_ara_do() {
         text.contains("visibility") && text.contains("frame"),
         "{text}"
     );
+    // Session approvals are debug events, not log lines (the journal keeps them):
+    // `--all` includes info, and still lists none.
     let (code, text) = ara(root, &["logs", "--all", "--code", "ARA1812"]);
     assert_eq!(code, 0);
-    assert!(text.contains("info[ARA1812]"), "{text}");
+    assert!(!text.contains("ARA1812"), "{text}");
 }

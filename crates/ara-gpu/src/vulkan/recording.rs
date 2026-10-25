@@ -6,6 +6,7 @@ pub(super) struct Pending {
     pub point: TimelinePoint,
     pub cmd: vk::CommandBuffer,
     pub query: vk::QueryPool,
+    pub query_capacity: u32,
     pub labels: Vec<String>,
 }
 
@@ -97,29 +98,46 @@ impl VulkanDevice {
                 }
             })
             .collect::<Vec<_>>();
-        // SAFETY: Query pool is owned by pending submission until its timeline completes.
-        let query = unsafe {
-            self.context.device.create_query_pool(
-                &vk::QueryPoolCreateInfo::default()
-                    .query_type(vk::QueryType::TIMESTAMP)
-                    .query_count((labels.len().max(1) * 2) as u32),
-                None,
-            )
-        }
-        .map_err(anyhow::Error::from)?;
+        let required = labels
+            .len()
+            .max(1)
+            .checked_mul(2)
+            .and_then(|n| u32::try_from(n).ok())
+            .ok_or_else(|| {
+                GpuError::Contract("Timestamp query count exceeds Vulkan limits".into())
+            })?;
+        let (query, query_capacity) = match self.query_cache.take(required) {
+            Some(pool) => (pool.handle, pool.capacity),
+            None => {
+                crate::cpu_scope!("GPU.create_queries");
+                let capacity = required.checked_next_power_of_two().unwrap_or(required);
+                // SAFETY: Pending submission owns this pool until its timeline completes.
+                let query = unsafe {
+                    self.context.device.create_query_pool(
+                        &vk::QueryPoolCreateInfo::default()
+                            .query_type(vk::QueryType::TIMESTAMP)
+                            .query_count(capacity),
+                        None,
+                    )
+                }
+                .map_err(anyhow::Error::from)?;
+                #[cfg(test)]
+                {
+                    self.query_pool_creations += 1;
+                }
+                (query, capacity)
+            }
+        };
         guard.push(super::guard::Object::Query(query));
         // SAFETY: The newly allocated command buffer has never been submitted.
         unsafe {
             self.context.begin(cmd)?;
         }
-        // SAFETY: Fresh query pool and command buffer, no previous GPU references.
+        // SAFETY: A reused pool was resolved after completion; this buffer is fresh.
         unsafe {
-            self.context.device.cmd_reset_query_pool(
-                cmd,
-                query,
-                0,
-                (labels.len().max(1) * 2) as u32,
-            );
+            self.context
+                .device
+                .cmd_reset_query_pool(cmd, query, 0, required);
         }
         let mut timestamp = 0;
         {
@@ -148,27 +166,36 @@ impl VulkanDevice {
             .value(point.value)
             .stage_mask(vk::PipelineStageFlags2::ALL_COMMANDS)];
         let commands = [vk::CommandBufferSubmitInfo::default().command_buffer(cmd)];
-        // SAFETY: All handles and queue usage were checked before encoding. Waits name prior submissions.
-        unsafe {
-            self.context
-                .device
-                .end_command_buffer(cmd)
-                .map_err(anyhow::Error::from)?;
-            self.context
-                .device
-                .queue_submit2(
-                    if queue == Queue::Compute {
-                        self.context.compute
-                    } else {
-                        self.context.graphics
-                    },
-                    &[vk::SubmitInfo2::default()
-                        .wait_semaphore_infos(&waits)
-                        .signal_semaphore_infos(&signals)
-                        .command_buffer_infos(&commands)],
-                    vk::Fence::null(),
-                )
-                .map_err(anyhow::Error::from)?;
+        {
+            crate::cpu_scope!("GPU.end_commands");
+            // SAFETY: Encoding completed on this recording command buffer.
+            unsafe {
+                self.context
+                    .device
+                    .end_command_buffer(cmd)
+                    .map_err(anyhow::Error::from)?;
+            }
+        }
+        {
+            crate::cpu_scope!("GPU.queue_submit");
+            // SAFETY: Handles and queue usage were checked; waits name prior submissions.
+            unsafe {
+                self.context
+                    .device
+                    .queue_submit2(
+                        if queue == Queue::Compute {
+                            self.context.compute
+                        } else {
+                            self.context.graphics
+                        },
+                        &[vk::SubmitInfo2::default()
+                            .wait_semaphore_infos(&waits)
+                            .signal_semaphore_infos(&signals)
+                            .command_buffer_infos(&commands)],
+                        vk::Fence::null(),
+                    )
+                    .map_err(anyhow::Error::from)?;
+            }
         }
         guard.disarm();
         self.submitted[queue.index()] = point.value;
@@ -194,11 +221,12 @@ impl VulkanDevice {
             point,
             cmd,
             query,
+            query_capacity,
             labels,
         });
         Ok(point)
     }
-    /// Wait, read timestamps and release native recording storage for a submission.
+    /// Wait, read timestamps, recycle its query pool and release recording storage.
     pub fn resolve(&mut self, point: TimelinePoint) -> Result<Vec<PassTiming>> {
         crate::cpu_scope!("GPU.resolve");
         self.wait(point)?;
@@ -219,21 +247,35 @@ impl VulkanDevice {
         ));
         cleanup.push(super::guard::Object::Query(pending.query));
         let mut stamps = vec![0u64; pending.labels.len() * 2];
-        // SAFETY: Timeline completion proves query availability and command buffer idleness.
-        unsafe {
-            if !stamps.is_empty() {
-                self.context
-                    .device
-                    .get_query_pool_results(
-                        pending.query,
-                        0,
-                        &mut stamps,
-                        vk::QueryResultFlags::TYPE_64 | vk::QueryResultFlags::WAIT,
-                    )
-                    .map_err(anyhow::Error::from)?;
+        {
+            crate::cpu_scope!("GPU.read_queries");
+            // SAFETY: Timeline completion proves query availability and buffer idleness.
+            unsafe {
+                if !stamps.is_empty() {
+                    self.context
+                        .device
+                        .get_query_pool_results(
+                            pending.query,
+                            0,
+                            &mut stamps,
+                            vk::QueryResultFlags::TYPE_64 | vk::QueryResultFlags::WAIT,
+                        )
+                        .map_err(anyhow::Error::from)?;
+                }
             }
         }
-        drop(cleanup);
+        if let Some(handle) = cleanup.take_query(pending.query)
+            && let Some(release) = self.query_cache.recycle(super::queries::Pool {
+                handle,
+                capacity: pending.query_capacity,
+            })
+        {
+            cleanup.push(super::guard::Object::Query(release.handle));
+        }
+        {
+            crate::cpu_scope!("GPU.free_recording");
+            drop(cleanup);
+        }
         let valid = self.context.info.timestamp_valid_bits[point.queue.index()];
         let mask = if valid == 64 {
             u64::MAX

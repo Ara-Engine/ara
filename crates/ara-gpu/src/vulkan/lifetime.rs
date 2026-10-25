@@ -64,16 +64,19 @@ impl Device for VulkanDevice {
                 "Cannot wait on an unsubmitted timeline point".into(),
             ));
         }
-        // SAFETY: Point was signalled on this device; no object is destroyed during wait.
-        unsafe {
-            self.context.device.wait_semaphores(
-                &vk::SemaphoreWaitInfo::default()
-                    .semaphores(&[self.timelines[point.queue.index()]])
-                    .values(&[point.value]),
-                u64::MAX,
-            )
-        }
-        .map_err(anyhow::Error::from)?;
+        self.context
+            .measure_host_wait(|| {
+                // SAFETY: Point was signalled here; no object is destroyed during wait.
+                unsafe {
+                    self.context.device.wait_semaphores(
+                        &vk::SemaphoreWaitInfo::default()
+                            .semaphores(&[self.timelines[point.queue.index()]])
+                            .values(&[point.value]),
+                        u64::MAX,
+                    )
+                }
+            })
+            .map_err(anyhow::Error::from)?;
         Ok(())
     }
     fn retire(&mut self, resource: Resource) -> Result<()> {
@@ -156,6 +159,9 @@ impl Drop for VulkanDevice {
             }
             for pending in &self.pending {
                 self.context.device.destroy_query_pool(pending.query, None);
+            }
+            for pool in self.query_cache.drain() {
+                self.context.device.destroy_query_pool(pool.handle, None);
             }
             self.heap.destroy(&self.context);
             for semaphore in self.timelines {

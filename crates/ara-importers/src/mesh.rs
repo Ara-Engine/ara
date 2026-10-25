@@ -1,8 +1,9 @@
 use crate::invalid;
 use ara_asset::{Error, Result};
-use ara_asset_format::{Builder, Kind, Lod, Mesh, Meshlet, QuantizedVertex, SkinExtra};
+use ara_asset_format::{Builder, Kind, Mesh, Meshlet, QuantizedVertex, SkinExtra};
 use bytemuck::{Pod, Zeroable};
 use serde::{Deserialize, Serialize};
+mod lods;
 
 /// Decoded source vertex. Position is first for meshoptimizer's strided adapter.
 #[derive(Debug, Clone, Copy, Default, Pod, Zeroable)]
@@ -36,11 +37,11 @@ pub struct Vertex {
 #[ara(module = "asset")]
 #[serde(rename_all = "camelCase", default, deny_unknown_fields)]
 pub struct MeshSettings {
-    /// Maximum number of LODs, including the original (1–8).
-    #[ara(default = 4, range(min = 1, max = 8))]
+    /// Maximum LODs including the original (1–8). Skin/morph meshes retain at most four.
+    #[ara(default = 8, range(min = 1, max = 8))]
     pub lod_count: u32,
-    /// Relative simplification error ceiling.
-    #[ara(default = 0.01, range(min = 0))]
+    /// Relative simplification error ceiling; skin/morph meshes clamp this to 1%.
+    #[ara(default = 0.1, range(min = 0))]
     pub lod_error: f32,
     /// Cook a versioned virtual-geometry DAG for each static material primitive.
     /// Skinned and morph-deformed meshes retain the classic path.
@@ -54,8 +55,8 @@ pub struct MeshSettings {
 impl Default for MeshSettings {
     fn default() -> Self {
         Self {
-            lod_count: 4,
-            lod_error: 0.01,
+            lod_count: 8,
+            lod_error: 0.1,
             virtual_geometry: true,
             opacity_maps: std::collections::BTreeMap::new(),
         }
@@ -103,7 +104,10 @@ pub fn cook_mesh(
     settings: impl std::borrow::Borrow<MeshSettings>,
 ) -> Result<Vec<u8>> {
     let settings = settings.borrow();
-    cook_mesh_with_tangent_uv(vertices, indices, settings, |v| v.uv0)
+    let deformed = vertices
+        .iter()
+        .any(|v| v.weights.iter().chain(&v.weights1).any(|w| *w > 0.0));
+    cook_mesh_with_tangent_uv(vertices, indices, settings, deformed, true, |v| v.uv0)
 }
 
 /// Generates missing tangents from the normal texture's selected/transformed UVs,
@@ -112,6 +116,8 @@ pub(crate) fn cook_mesh_with_tangent_uv(
     vertices: &[Vertex],
     indices: &[u32],
     settings: &MeshSettings,
+    deformed: bool,
+    preserve_card_area: bool,
     tangent_uv: impl Fn(&Vertex) -> [f32; 2],
 ) -> Result<Vec<u8>> {
     if !cfg!(target_endian = "little") {
@@ -256,40 +262,14 @@ pub(crate) fn cook_mesh_with_tangent_uv(
             }
         })
         .collect();
-    let mut lods = vec![Lod {
-        first_index: 0,
-        index_count: indices.len() as u32,
-        error: 0.0,
-        reserved: 0,
-    }];
-    let mut last_count = indices.len();
-    let original = indices.clone();
-    for level in 1..settings.lod_count {
-        let mut error = 0.0;
-        let target = (original.len() >> level) / 3 * 3;
-        if target < 3 {
-            break;
-        }
-        let simplified = meshopt::simplify(
-            &original,
-            &adapter,
-            target,
-            settings.lod_error,
-            meshopt::SimplifyOptions::LockBorder,
-            Some(&mut error),
-        );
-        if simplified.len() >= last_count || simplified.is_empty() {
-            break;
-        }
-        last_count = simplified.len();
-        lods.push(Lod {
-            first_index: indices.len() as u32,
-            index_count: simplified.len() as u32,
-            error,
-            reserved: 0,
-        });
-        indices.extend(meshopt::optimize_vertex_cache(&simplified, vertices.len()));
-    }
+    let lods = lods::append(
+        &vertices,
+        &adapter,
+        &mut indices,
+        settings,
+        deformed,
+        preserve_card_area,
+    );
     let mut b = Builder::new(Kind::Mesh);
     b.section(*b"BNDS", 24, bytemuck::cast_slice(&bounds).to_vec())
         .section(*b"VERT", 52, bytemuck::cast_slice(&quantized).to_vec())

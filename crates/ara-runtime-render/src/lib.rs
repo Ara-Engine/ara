@@ -24,7 +24,7 @@ mod presentation;
 pub use placeholders::{ModelPlaceholders, PENDING_MODEL_COLOR};
 pub use presentation::{PresentationImage, QualityChoice, QualityPreset, RenderOptions};
 mod raster;
-pub use raster::{RasterUpdate, RasterView};
+pub use raster::{RasterContent, RasterUpdate, RasterView};
 mod readback;
 pub mod terrain_mesh;
 pub mod two_d;
@@ -226,6 +226,15 @@ impl Presenter {
     /// Cost of the last `present`/`prepare`.
     pub fn stats(&self) -> PresentStats {
         self.stats
+    }
+
+    /// Cumulative host time in this device's explicit GPU/presentation waits.
+    /// Snapshot around a whole windowed frame, including swapchain presentation.
+    /// No counter exists until the renderer's device has been created.
+    pub fn host_wait_stats(&self) -> Option<ara_gpu::vulkan::HostWaitStats> {
+        self.renderer
+            .as_ref()
+            .map(|r| r.gpu().context().host_wait_stats())
     }
 
     /// Resizes the output (history resets).

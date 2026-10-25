@@ -1,12 +1,17 @@
-//! The one orientation aid (Appendix C): a 56 px transparent widget, top-right
-//! with a 12 px inset. Positive axes are 14 px filled, lettered caps with stems;
-//! negative axes are 10 px hollow rings. Caps are real accessible buttons.
+//! The one orientation aid (docs/design/editor-scene-view.md): a 60 px transparent
+//! widget, top-right with a 12 px inset. Positive axes are 16 px filled caps lettered
+//! X, Y and Z, with stems; negative axes are 10 px hollow rings with no letter. Caps
+//! are real accessible buttons ("+X view", "Look along +X").
 use super::*;
 use ara_ui::{paint::Draw, source::stable_id, style::Color};
 use glam::Vec3;
 
-const SIZE: f32 = 56.;
-const RADIUS: f32 = 20.;
+/// Widget size; it sits 12 px inside the viewport's top-right corner.
+pub(super) const SIZE: f32 = 60.;
+const RADIUS: f32 = 21.;
+/// Cap diameters: positive (lettered) and negative (hollow) axes.
+const POSITIVE: f32 = 16.;
+const NEGATIVE: f32 = 10.;
 impl Shell {
     pub(super) fn axis_markup(&mut self, editor: &Editor, out: &mut String) {
         out.push_str(&format!("<panel id='view-cube' style='position:absolute;right:12px;top:12px;width:{SIZE}px;height:{SIZE}px'>"));
@@ -28,14 +33,15 @@ impl Shell {
                 _ => "view.camera.back",
             };
             self.bind_command(&id, command, commands::Target::None);
-            let label = ["X", "Y", "Z"][*axis];
-            let size = if *sign { 14. } else { 10. };
+            let letter = ["X", "Y", "Z"][*axis];
+            let name = format!("{}{letter}", if *sign { "+" } else { "−" });
+            let size = if *sign { POSITIVE } else { NEGATIVE };
             let class = if *sign {
                 format!("view-cap cap-{}", ["x", "y", "z"][*axis])
             } else {
                 format!("view-cap cap-negative cap-neg-{}", ["x", "y", "z"][*axis])
             };
-            out.push_str(&format!("<button id='{id}' class='{class}' style='position:absolute;left:{}px;top:{}px;width:{size}px;height:{size}px' label='{}{label} view' description='Look along {}{label}' action='Dispatch'><text id='{id}-label' text='{}' /></button>",p[0]-size*0.5,p[1]-size*0.5,if *sign {label} else {""},if *sign {"+"} else {"−"},if *sign {"−"} else {"+"}));
+            out.push_str(&format!("<button id='{id}' class='{class}' style='position:absolute;left:{}px;top:{}px;width:{size}px;height:{size}px' label='{name} view' description='Look along {name}' action='Dispatch'><text id='{id}-label' text='{}' /></button>",p[0]-size*0.5,p[1]-size*0.5,if *sign {letter} else {""}));
         }
         out.push_str("</panel>");
     }
@@ -52,7 +58,7 @@ impl Shell {
         let origin = self.ui.nodes[root].rect;
         for (axis, sign, _, p) in caps(&camera) {
             if let Some(i) = self.ui.find(&cap_id(axis, sign)) {
-                let size = if sign { 14. } else { 10. };
+                let size = if sign { POSITIVE } else { NEGATIVE };
                 let rect = self.ui.nodes[i].rect;
                 self.ui.nodes[i].paint_offset = [
                     self.ui.nodes[i].paint_offset[0] + origin.x + p[0] - size * 0.5 - rect.x,

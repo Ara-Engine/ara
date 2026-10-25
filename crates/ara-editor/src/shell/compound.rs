@@ -394,7 +394,7 @@ impl Shell {
         match ty {
             ValueType::Option(inner) if value.is_null() => {
                 out.push_str(&format!(
-                    "<text id='count-{rid}' class='caption fill' text='None' />"
+                    "<text id='count-{rid}' class='caption fill' style='padding-left:6px' text='None' />"
                 ));
                 action(self, out, "add", "plus", element_default(db, inner));
             }
@@ -406,7 +406,7 @@ impl Shell {
                 let items = value.as_array().cloned().unwrap_or_default();
                 let n = items.len();
                 out.push_str(&format!(
-                    "<text id='count-{rid}' class='caption fill' text='{n} item{}' />",
+                    "<text id='count-{rid}' class='caption fill' style='padding-left:6px' text='{n} item{}' />",
                     if n == 1 { "" } else { "s" }
                 ));
                 // An item that cannot exist without an asset (a material override's
@@ -443,7 +443,7 @@ impl Shell {
                 let mut map = value.as_object().cloned().unwrap_or_default();
                 let n = map.len();
                 out.push_str(&format!(
-                    "<text id='count-{rid}' class='caption fill' text='{n} entr{}' />",
+                    "<text id='count-{rid}' class='caption fill' style='padding-left:6px' text='{n} entr{}' />",
                     if n == 1 { "y" } else { "ies" }
                 ));
                 let name = if pointer.is_empty() {
@@ -774,7 +774,7 @@ impl Shell {
                         icons::icon(&button, "package")
                     }
                 };
-                out.push_str(&format!("<button id='{button}' style='flex-grow:1;flex-basis:0px;justify-content:start;background:var(--background);border-color:var(--input)' label='{} asset' description='{} · drop an asset here, or pick one' action='Dispatch'>{preview}<text id='asset-name-{rid}' class='{}' text='{}' /></button>",escape(kind.as_deref().unwrap_or("Any")),escape(reference),if reference.is_empty(){"muted"}else{"fg"},escape(name)));
+                out.push_str(&format!("<button id='{button}' style='flex-grow:1;flex-basis:0px;min-width:0px;overflow:hidden;justify-content:start;background:var(--background);border-color:var(--input)' label='{} asset' description='{} · drop an asset here, or pick one' action='Dispatch'>{preview}<text id='asset-name-{rid}' class='{}' style='white-space:nowrap;overflow:hidden;min-width:0px;flex-shrink:1' text='{}' /></button>",escape(kind.as_deref().unwrap_or("Any")),escape(reference),if reference.is_empty(){"muted"}else{"fg"},escape(name)));
                 if !reference.is_empty() {
                     let clear = format!("clear-{rid}");
                     self.bindings.insert(

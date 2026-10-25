@@ -74,5 +74,9 @@ fn project_cards_show_state_badges_and_lifecycle_actions() {
         "close an open project"
     );
     assert!(ui.find("open-project-3").is_some(), "open a closed project");
-    assert!(ui.find("headless-project-3").is_some(), "open headless");
+    // One action per card; headless is in the card's ⋯ menu.
+    assert!(ui.find("headless-project-3").is_none(), "no second button");
+    hub.menu = Some("project-3".into());
+    let ui = render(&hub, [1440., 900.], false);
+    assert!(ui.find("menu-headless").is_some(), "open headless");
 }

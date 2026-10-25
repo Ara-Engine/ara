@@ -311,6 +311,62 @@ fn gizmos_use_visible_local_world_axes_and_rotation_rings() {
 }
 
 #[test]
+fn every_gizmo_handle_is_grabbable_where_it_is_drawn() {
+    use ara_editor::{shell::overlay, state::Tool};
+    use glam::Vec2;
+    let project = Project::new();
+    let mut editor = project.open();
+    editor
+        .action("editor.select", json!({"entities":["e_crate001"]}))
+        .unwrap();
+    let view = editor.view().unwrap();
+    let rect = ara_ui::paint::Box2 {
+        x: 0.,
+        y: 0.,
+        w: 800.,
+        h: 600.,
+    };
+    let mut state = editor.state.clone();
+    state.tool = Tool::Translate;
+    let handles = overlay::handles(&view, &state, rect).unwrap();
+    let o = Vec2::from(handles.origin);
+    assert_eq!(
+        overlay::hit(&handles, o.into()),
+        Some(overlay::Handle::Centre)
+    );
+    let mut planes = 0;
+    for axis in 0..3 {
+        let end = Vec2::from(handles.ends[axis]);
+        if o.distance(end) >= 30. {
+            // Along the shaft and at the cone, 7 px off the line: a 16 px target.
+            for t in [0.6, 0.95] {
+                let off = (end - o).perp().normalize() * 7.;
+                let p = o + (end - o) * t + off;
+                assert_eq!(
+                    overlay::hit(&handles, p.into()),
+                    Some(overlay::Handle::Axis(axis)),
+                    "axis {axis} at {t}"
+                );
+            }
+        }
+        // A plane square grabs anywhere inside what is drawn.
+        if let Some(quad) = handles.plane_quad(axis) {
+            planes += 1;
+            let centre = quad.iter().map(|c| Vec2::from(*c)).sum::<Vec2>() / 4.;
+            assert_eq!(
+                overlay::hit(&handles, centre.into()),
+                Some(overlay::Handle::Plane(axis)),
+                "plane {axis}"
+            );
+        }
+    }
+    assert!(
+        planes >= 2,
+        "the default view shows at least two plane squares"
+    );
+}
+
+#[test]
 fn layout_persistence_units_and_multi_edit_are_validated() {
     let project = Project::new();
     let mut editor = project.open();
@@ -1272,4 +1328,56 @@ fn one_entity_world_transform_matches_the_whole_scene() {
         );
     }
     assert_eq!(all.len(), 4);
+}
+
+/// A large group (a terrain's 144 chunks) starts collapsed so the scene's content
+/// stays in view; expanding it is remembered, and the status bar counts entities.
+#[test]
+fn large_hierarchy_groups_start_collapsed() {
+    let project = Project::new();
+    let mut records = serde_json::Map::new();
+    records.insert("e_terrain".into(), json!({"name":"Terrain","Transform":{}}));
+    for n in 0..40 {
+        records.insert(
+            format!("e_chunk{n:03}"),
+            json!({"name":"Terrain chunk","parent":"e_terrain"}),
+        );
+    }
+    records.insert(
+        "e_crate001".into(),
+        json!({"name":"Salvage crate","Transform":{},"MeshRenderer":{}}),
+    );
+    write(
+        &project.0.join("levels/main.scene"),
+        json!({"$schema":"ara://schema/scene/1","id":"sc_test0001","records": records}),
+    );
+    let mut editor = project.open();
+    let mut shell = Shell::new(&mut editor, [1440., 900.]).unwrap();
+    assert_eq!(
+        shell.hierarchy_rows(),
+        2,
+        "Terrain (collapsed) and the crate"
+    );
+    let docs = shell.ui.find("status-docs").unwrap();
+    assert_eq!(
+        shell.ui.nodes[docs].text.as_ref().unwrap().value,
+        "42 entities"
+    );
+    // Expanding shows the chunks and stays expanded; collapsing again hides them.
+    editor
+        .action(
+            "editor.collapse",
+            json!({"entity":"e_terrain","enabled":false}),
+        )
+        .unwrap();
+    shell.rebuild(&mut editor).unwrap();
+    assert_eq!(shell.hierarchy_rows(), 42);
+    editor
+        .action(
+            "editor.collapse",
+            json!({"entity":"e_terrain","enabled":true}),
+        )
+        .unwrap();
+    shell.rebuild(&mut editor).unwrap();
+    assert_eq!(shell.hierarchy_rows(), 2);
 }

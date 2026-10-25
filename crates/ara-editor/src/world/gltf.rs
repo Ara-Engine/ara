@@ -7,6 +7,8 @@ use std::collections::BTreeMap;
 use std::path::Path;
 mod patch;
 mod pending;
+mod prepare;
+pub(crate) use prepare::PreparedScene;
 
 /// Project-owned decoded generations. Publication changes invalidate by digest;
 /// document transforms and repeated prefab instances do not read model payloads.
@@ -71,13 +73,12 @@ impl ModelCache {
 }
 
 /// One-shot thumbnail worker entry: the published generation of a source model,
-/// with its materials and textures. Scene extraction uses its persistent cache; an
-/// isolated preview resolves its sidecar once and waits (bounded, off the UI thread)
-/// for an in-flight import to publish.
+/// with its materials and textures, or `None` while its import has not published (a
+/// pending import is not an error; the caller asks again when import progress moves).
+/// Scene extraction uses its persistent cache instead.
 pub(crate) fn published(
     path: &Path,
-    wait: std::time::Duration,
-) -> anyhow::Result<std::sync::Arc<ara_runtime::model::Model>> {
+) -> anyhow::Result<Option<std::sync::Arc<ara_runtime::model::Model>>> {
     let root = path
         .ancestors()
         .find(|root| root.join("ara.project.json").is_file())
@@ -89,23 +90,12 @@ pub(crate) fn published(
         .as_str()
         .context("model sidecar has no asset ID")?;
     let mut cache = ModelCache::new(root)?;
-    let deadline = std::time::Instant::now() + wait;
-    loop {
-        cache.revision();
-        let source = cache
-            .snapshot
-            .as_deref()
-            .map(|snapshot| snapshot as &dyn AssetSource);
-        if let Some(model) = cache.decoded.get(source, asset)? {
-            return Ok(model.clone());
-        }
-        anyhow::ensure!(
-            std::time::Instant::now() < deadline,
-            "{} has not been imported yet",
-            path.display()
-        );
-        std::thread::sleep(std::time::Duration::from_millis(100));
-    }
+    cache.revision();
+    let source = cache
+        .snapshot
+        .as_deref()
+        .map(|snapshot| snapshot as &dyn AssetSource);
+    Ok(cache.decoded.get(source, asset)?.cloned())
 }
 
 #[derive(Default)]
@@ -213,7 +203,7 @@ fn mesh(
 
 /// Source generations and evaluated terrain retained across editor content revisions.
 pub(crate) struct FidelityContent {
-    reader: ara_play_host::PublishedAssets,
+    reader: std::sync::Arc<ara_play_host::PublishedAssets>,
     snapshot: Option<std::sync::Arc<ara_play_host::PublishedSnapshot>>,
     library: ara_runtime::animation::Library,
     materials: Option<(u64, u64)>,
@@ -226,8 +216,9 @@ pub(crate) struct FidelityContent {
 impl FidelityContent {
     pub(crate) fn new(root: &Path) -> anyhow::Result<Self> {
         Ok(Self {
-            reader: ara_play_host::PublishedAssets::for_project(root)
-                .map_err(anyhow::Error::msg)?,
+            reader: std::sync::Arc::new(
+                ara_play_host::PublishedAssets::for_project(root).map_err(anyhow::Error::msg)?,
+            ),
             snapshot: None,
             library: Default::default(),
             materials: None,
@@ -246,6 +237,16 @@ impl FidelityContent {
         workspace: &ara_doc::Workspace,
         schema: &ara_schema::SchemaDb,
         preview: Option<&super::gesture::Gesture>,
+        hidden: &std::collections::BTreeSet<String>,
+    ) -> anyhow::Result<ara_runtime::extract::RenderFrame> {
+        self.frame_with_poses(view, workspace, schema, preview.map(|p| &p.current), hidden)
+    }
+    fn frame_with_poses(
+        &mut self,
+        view: &super::DocumentView,
+        workspace: &ara_doc::Workspace,
+        schema: &ara_schema::SchemaDb,
+        poses: Option<&BTreeMap<String, glam::Mat4>>,
         hidden: &std::collections::BTreeSet<String>,
     ) -> anyhow::Result<ara_runtime::extract::RenderFrame> {
         use super::EditWorldView;
@@ -310,10 +311,7 @@ impl FidelityContent {
             }
             self.materials = Some(materials);
         }
-        let mut transforms = super::world_transforms(view.entities());
-        if let Some(preview) = preview {
-            preview.preview_world(view.entities(), &mut transforms);
-        }
+        let transforms = super::transforms_with(view.entities(), poses);
         for (address, row) in view.entities() {
             if row.record.contains_key("Terrain") {
                 address.hash(&mut terrain_hash);
@@ -374,16 +372,39 @@ impl FidelityContent {
         schema: &ara_schema::SchemaDb,
     ) -> anyhow::Result<ara_runtime_render::fidelity::native::Content> {
         let empty = ara_runtime::assets::MemoryAssets::default();
-        ara_runtime_render::fidelity::native::Content::resolve_available_with_pending(
-            frame,
-            workspace,
-            schema,
-            &self.library,
-            self.snapshot
-                .as_deref()
-                .map_or(&empty as &dyn AssetSource, |snapshot| snapshot),
-            &|asset| self.model_is_pending(asset),
-        )
+        let mut content =
+            ara_runtime_render::fidelity::native::Content::resolve_available_with_pending(
+                frame,
+                workspace,
+                schema,
+                &self.library,
+                self.snapshot
+                    .as_deref()
+                    .map_or(&empty as &dyn AssetSource, |snapshot| snapshot),
+                &|asset| self.model_is_pending(asset),
+            )?;
+        // Extraction intentionally lowers an unavailable model to a shape. Keep
+        // its source identity, just as Play does, so native fill can distinguish
+        // loading bounds from an authored translucent box of the same colour.
+        for draw in &frame.draws {
+            if !matches!(draw.geometry, ara_runtime::extract::Geometry::Shape { .. }) {
+                continue;
+            }
+            let Some(reference) = self
+                .mesh_records
+                .get(&draw.address)
+                .and_then(|record| record.get("model"))
+                .filter(|value| !value.is_null())
+            else {
+                continue;
+            };
+            let reference: ara_schema::AssetRef = serde_json::from_value(reference.to_owned())?;
+            content.unpublished_models.insert(
+                draw.address.to_owned(),
+                ara_runtime::assets::asset_id(&reference)?.to_owned(),
+            );
+        }
+        Ok(content)
     }
 }
 

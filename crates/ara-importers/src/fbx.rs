@@ -1,4 +1,4 @@
-use crate::{MeshSettings, TextureSettings, TextureUsage, Vertex, cook_mesh, invalid, json_bytes};
+use crate::{MeshSettings, TextureSettings, TextureUsage, Vertex, invalid, json_bytes};
 use ara_asset::{
     Artifact, ArtifactKind, ImportContext, ImportInput, ImportOutput, Importer, Result,
 };
@@ -33,7 +33,7 @@ impl Importer for FbxImporter {
         "ara.fbx"
     }
     fn version(&self) -> &str {
-        "5-ufbx0115-meshopt070-ispc050-tiled-f32text-arag1-opacity-settings"
+        "6-ufbx0115-meshopt070-ispc050-tiled-f32text-arag1-opacity-settings-deep-lods-prefix"
     }
     fn register_settings(&self, db: &mut ara_schema::SchemaDb) {
         db.register::<MeshSettings>();
@@ -175,7 +175,14 @@ impl Importer for FbxImporter {
                 let artifact = Artifact {
                     name: name.clone(),
                     kind: ArtifactKind::Mesh,
-                    bytes: cook_mesh(&vertices, &indices, &settings)?,
+                    bytes: crate::mesh::cook_mesh_with_tangent_uv(
+                        &vertices,
+                        &indices,
+                        &settings,
+                        deformed,
+                        true,
+                        |v| v.uv0,
+                    )?,
                 };
                 Ok((artifact, virtual_artifact, virtual_metadata))
             })

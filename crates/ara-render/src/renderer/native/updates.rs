@@ -192,7 +192,7 @@ impl Native {
         let next = instance.bounds(&scene.geometry[instance.geometry]);
         self.changes.caster(i, self.bounds[i], next);
         self.bounds[i] = next;
-        self.culling.instance(&self.groups, i);
+        self.culling.instance(&self.groups, i, instance.world, next);
     }
 
     pub(in crate::renderer) fn prepare(
@@ -200,6 +200,7 @@ impl Native {
         gpu: &mut VulkanDevice,
         frame: &frame::Frame,
         camera: &crate::scene::Camera,
+        quality: &crate::look::Quality,
     ) -> Result<()> {
         ara_gpu::cpu_scope!("RasterNative.prepare");
         self.changes.work = FrameWork {
@@ -245,7 +246,8 @@ impl Native {
             self.changes.work.instance_rows += last - first;
             start = end;
         }
-        self.changes.caster_all = self.changes.all;
+        let budgets_changed = self.culling.configure(quality);
+        self.changes.caster_all = self.changes.all || budgets_changed;
         self.changes.caster_bounds.clear();
         for &i in &self.changes.casters.list {
             self.changes.caster_bounds.push(self.changes.unions[i]);
@@ -254,11 +256,10 @@ impl Native {
             gpu,
             self.visible,
             &self.groups,
-            &self.rows,
             &self.bounds,
             frame,
             camera,
-            &mut self.changes.caster_bounds,
+            quality.shadows.resolution,
             &mut self.changes.work,
         )?;
         Ok(())

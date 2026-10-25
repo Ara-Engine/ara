@@ -4,6 +4,7 @@ mod controller;
 mod game;
 mod journey;
 mod panels_verify;
+mod qa;
 mod responsiveness;
 mod scene_sync;
 mod setup;
@@ -31,13 +32,16 @@ use ara_ui_render::{
 };
 use glam::Vec3;
 use serde_json::{Value, json};
-pub use setup::Options;
+pub use setup::{Options, Settle};
 use std::{
     path::PathBuf,
     time::{Duration, Instant},
 };
 /// How long after the last input progressive Scene frames resume.
 const INTERACTION_PAUSE: Duration = Duration::from_millis(250);
+/// When the process started: `main` sets it first. Startup timings
+/// (`--verify-responsiveness`) count from it.
+pub static LAUNCHED: std::sync::OnceLock<Instant> = std::sync::OnceLock::new();
 /// Open the SDL3 editor, host the project authority and serve authenticated EP/MCP.
 pub fn run(options: Options) -> ara_ui::Result<()> {
     if options.headless {
@@ -87,7 +91,6 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
         eprintln!("Verification extent {physical:?}; logical {logical:?}; DPI {dpi}");
     }
     let mut shell = Shell::new(&mut editor, logical)?;
-    shell.host_problems = !options.offscreen();
     shell.offscreen = offscreen;
     let mut view = editor.view()?;
     editor.report_missing_sources(&view);
@@ -161,7 +164,7 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
     };
     let mut probe = options
         .verify_responsiveness
-        .then(|| responsiveness::Probe::new(&options.output));
+        .then(|| responsiveness::Probe::new(&options.output, options.settle));
     if probe.is_some() {
         // Measure what a release build does: memoized panels are not double-checked.
         shell.memo_check = false;
@@ -174,9 +177,15 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
     } else {
         None
     };
+    let mut first_hour = if options.verify_first_hour {
+        Some(qa::FirstHour::new(&mut editor, &options.output)?)
+    } else {
+        None
+    };
     if panel_verification.is_some()
         || ux_verification.is_some()
         || journey.is_some()
+        || first_hour.is_some()
         || probe.is_some()
     {
         shell.rebuild(&mut editor)?;
@@ -557,6 +566,10 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                 dirty |= changed;
                 scene_dirty |= changed;
             }
+            if let Some(route) = &mut first_hour {
+                let changed = route.step(&mut editor, &mut shell, &mut gpu)?;
+                dirty |= changed;
+            }
             if let Some(suite) = &mut ux_verification {
                 let was_finished = suite.finished();
                 let changed = suite.step(
@@ -677,45 +690,49 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                         editor.report_failure(&*error);
                     }
                     scene_view.attach(&mut gpu, &renderer, editor.state.quality)?;
-                    let mut changed = editor.agent_tints();
-                    for id in view.ghosts().keys() {
-                        changed.insert(crate::world::render_id(id), "destructive-foreground");
+                    if renderer.presentation_ready() {
+                        let mut changed = editor.agent_tints();
+                        for id in view.ghosts().keys() {
+                            changed.insert(crate::world::render_id(id), "destructive-foreground");
+                        }
+                        let mut overlays = overlay::build(
+                            &view,
+                            &editor.state,
+                            rect,
+                            &renderer,
+                            &changed,
+                            controller.gizmo_state(),
+                        )?;
+                        if rect.contains(shell.pointer[0], shell.pointer[1])
+                            && !editor.state.palette
+                            && shell.menu.is_none()
+                            && shell
+                                .ui
+                                .hit_test(shell.pointer[0], shell.pointer[1])
+                                .is_none()
+                        {
+                            let c = shell
+                                .ui
+                                .sheet
+                                .color_token("--muted-foreground")
+                                .ok_or("hover token")?;
+                            overlays.push(crate::gpu::Overlay::Hover {
+                                uv: [
+                                    (shell.pointer[0] - rect.x) / rect.w,
+                                    (shell.pointer[1] - rect.y) / rect.h,
+                                ],
+                                color: [
+                                    f32::from(c.0) / 255.,
+                                    f32::from(c.1) / 255.,
+                                    f32::from(c.2) / 255.,
+                                    0.65,
+                                ],
+                            });
+                        }
+                        gpu.overlays(rect, overlay::ENTITY_IMAGE, overlays);
+                    } else {
+                        gpu.overlays(Default::default(), overlay::ENTITY_IMAGE, Vec::new());
                     }
-                    let mut overlays = overlay::build(
-                        &view,
-                        &editor.state,
-                        rect,
-                        &renderer,
-                        &changed,
-                        controller.gizmo_state(),
-                    )?;
-                    if rect.contains(shell.pointer[0], shell.pointer[1])
-                        && !editor.state.palette
-                        && shell.menu.is_none()
-                        && shell
-                            .ui
-                            .hit_test(shell.pointer[0], shell.pointer[1])
-                            .is_none()
-                    {
-                        let c = shell
-                            .ui
-                            .sheet
-                            .color_token("--muted-foreground")
-                            .ok_or("hover token")?;
-                        overlays.push(crate::gpu::Overlay::Hover {
-                            uv: [
-                                (shell.pointer[0] - rect.x) / rect.w,
-                                (shell.pointer[1] - rect.y) / rect.h,
-                            ],
-                            color: [
-                                f32::from(c.0) / 255.,
-                                f32::from(c.1) / 255.,
-                                f32::from(c.2) / 255.,
-                                0.65,
-                            ],
-                        });
-                    }
-                    gpu.overlays(rect, overlay::ENTITY_IMAGE, overlays);
                 } else {
                     gpu.overlays(Default::default(), overlay::ENTITY_IMAGE, Vec::new());
                 }
@@ -904,9 +921,17 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                     present_ms,
                     presented,
                     game_frame,
+                    presentation_ready: renderer.presentation_ready(),
                     ..Default::default()
                 };
                 probe.end(&editor, &mut shell, sample);
+            }
+            if let Some(route) = &mut first_hour {
+                route.frame(
+                    frame_start.elapsed().as_secs_f64() * 1000.,
+                    tick_ms,
+                    view_ms,
+                );
             }
             frames += 1;
             if probe.as_ref().is_some_and(responsiveness::Probe::finished) {
@@ -928,6 +953,7 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                     v.finished() && idle_samples.len() >= 1500 && camera_samples.len() >= 240
                 })
                 || journey.as_ref().is_some_and(journey::Journey::finished)
+                || first_hour.as_ref().is_some_and(qa::FirstHour::finished)
             {
                 game.close(&mut editor, &mut gpu)?;
                 break;
@@ -1017,7 +1043,7 @@ fn headless(options: Options) -> ara_ui::Result<()> {
     )?;
     detect_quality(&mut editor, &renderer);
     let mut scene_view = viewport::SceneView::default();
-    scene_view.render(&mut renderer, &editor, &view, 64)?;
+    scene_view.render_capture(&mut renderer, &editor, &view, 64)?;
     scene_view
         .capture(
             &mut renderer,

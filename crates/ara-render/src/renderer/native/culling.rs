@@ -3,31 +3,38 @@ use super::*;
 use crate::instanced::FrameWork;
 use batches::{Batch, Group};
 use updates::Indices;
+mod projection;
 
 /// Cascades, opaque/forward camera lists and the existing far-shadow list.
 pub(super) const BASE_PASSES: usize = 7;
 
 #[derive(Clone, Copy, PartialEq)]
-struct LodView {
-    position: Vec3,
-    projection_y: f32,
-    height: u32,
+pub(super) struct View {
+    matrix: Mat4,
+    size: [u32; 2],
+    error: f32,
+    minimum: f32,
+    row_lengths: Vec3,
+    axes: [Vec4; 3],
 }
 
 pub(super) struct Culling {
     pub draws: Vec<Vec<Batch>>,
     pub(super) visible: Vec<[u32; 2]>,
-    selected: Vec<usize>,
+    selected: Vec<Option<usize>>,
+    projections: Vec<projection::LodBounds>,
     dirty: Vec<Indices>,
-    matrices: Vec<Option<Mat4>>,
-    lod_view: Option<LodView>,
+    views: Vec<Option<View>>,
+    lod_view: Option<View>,
+    pixels: [f32; 2],
     lod_dirty: Indices,
     transparent_dirty: bool,
     transparent: Vec<(f32, usize, usize)>,
     scratch: Vec<Vec<[u32; 2]>>,
 }
 impl Culling {
-    pub fn new(groups: &Groups, instances: usize) -> Self {
+    pub fn new(groups: &Groups, scene: &NativeScene) -> Self {
+        let instances = scene.instances.len();
         Self {
             draws: (0..BASE_PASSES)
                 .map(|p| {
@@ -39,12 +46,18 @@ impl Culling {
                 })
                 .collect(),
             visible: vec![[0; 2]; instances * BASE_PASSES],
-            selected: vec![0; instances],
+            selected: vec![Some(0); instances],
+            projections: scene
+                .instances
+                .iter()
+                .map(|i| projection::LodBounds::new(i.world, i.bounds(&scene.geometry[i.geometry])))
+                .collect(),
             dirty: (0..BASE_PASSES)
                 .map(|_| Indices::new(groups.groups.len()))
                 .collect(),
-            matrices: vec![None; BASE_PASSES],
+            views: vec![None; BASE_PASSES],
             lod_view: None,
+            pixels: [1., 1.5],
             lod_dirty: Indices::new(instances),
             transparent_dirty: true,
             transparent: Vec::with_capacity(instances),
@@ -65,14 +78,21 @@ impl Culling {
             .resize_with(passes, || vec![Batch::default(); groups.batches]);
         self.dirty
             .resize_with(passes, || Indices::new(groups.groups.len()));
-        self.matrices.resize(passes, None);
+        self.views.resize(passes, None);
+    }
+    pub fn configure(&mut self, quality: &crate::look::Quality) -> bool {
+        let pixels = [quality.lod_pixels, quality.min_pixels];
+        let changed = self.pixels != pixels;
+        self.pixels = pixels;
+        changed
     }
     fn group(&mut self, index: usize) {
         for dirty in &mut self.dirty {
             dirty.insert(index);
         }
     }
-    pub fn instance(&mut self, groups: &Groups, index: usize) {
+    pub fn instance(&mut self, groups: &Groups, index: usize, world: Mat4, bounds: [Vec3; 2]) {
+        self.projections[index] = projection::LodBounds::new(world, bounds);
         self.lod_dirty.insert(index);
         self.group(groups.instance_group[index]);
         if groups.groups[groups.instance_group[index]].transparent {
@@ -101,36 +121,35 @@ impl Culling {
         gpu: &VulkanDevice,
         buffer: Buffer,
         groups: &Groups,
-        rows: &[InstanceRow],
         bounds: &[[Vec3; 2]],
         frame: &frame::Frame,
         camera: &crate::scene::Camera,
-        casters: &mut Vec<[Vec3; 2]>,
+        shadow_resolution: u32,
         work: &mut FrameWork,
     ) -> Result<()> {
         ara_gpu::cpu_scope!("RasterNative.cull_lod");
-        let view = LodView {
-            position: camera.position,
-            projection_y: camera.projection.y_axis.y.abs(),
-            height: frame.extent[1],
-        };
+        let view = View::new(
+            camera.projection * camera.view,
+            [frame.extent[0], frame.extent[1]],
+            self.pixels[0],
+            self.pixels[1],
+        );
         if self.lod_view != Some(view) {
-            for i in 0..rows.len() {
-                self.lod(groups, rows, bounds, i, view, casters, work);
+            for i in 0..self.projections.len() {
+                self.lod(groups, i, &view, work);
             }
             self.lod_view = Some(view);
         } else {
             for n in 0..self.lod_dirty.list.len() {
                 let i = self.lod_dirty.list[n];
-                self.lod(groups, rows, bounds, i, view, casters, work);
+                self.lod(groups, i, &view, work);
             }
         }
         self.lod_dirty.clear();
-        let vp = camera.projection * camera.view;
         let result = (|| {
             for pass in 0..5 {
                 if pass < 4 && pass >= frame.look[2] as usize {
-                    if self.matrices[pass].take().is_some() {
+                    if self.views[pass].take().is_some() {
                         for batch in &mut self.draws[pass] {
                             batch.count = 0;
                         }
@@ -143,45 +162,40 @@ impl Culling {
                     groups,
                     bounds,
                     pass,
-                    if pass < 4 { frame.shadows[pass] } else { vp },
+                    if pass < 4 {
+                        View::shadow(frame.shadows[pass], shadow_resolution, self.pixels[1])
+                    } else {
+                        view
+                    },
                     work,
                 )?;
             }
-            if self.transparent_dirty || self.matrices[5] != Some(vp) {
+            if self.transparent_dirty || self.views[5] != Some(view) {
                 self.transparency(gpu, buffer, groups, bounds, camera, work)?;
-                self.matrices[5] = Some(vp);
+                self.views[5] = Some(view);
                 self.transparent_dirty = false;
             }
             self.dirty[5].clear();
             Ok(())
         })();
         if result.is_err() {
-            self.matrices.fill(None);
+            self.views.fill(None);
         }
         result
     }
 
-    #[allow(clippy::too_many_arguments)]
-    fn lod(
-        &mut self,
-        groups: &Groups,
-        rows: &[InstanceRow],
-        bounds: &[[Vec3; 2]],
-        i: usize,
-        view: LodView,
-        casters: &mut Vec<[Vec3; 2]>,
-        work: &mut FrameWork,
-    ) {
+    fn lod(&mut self, groups: &Groups, i: usize, view: &View, work: &mut FrameWork) {
         work.lod_tests += 1;
         let group = groups.instance_group[i];
-        let next = select_lod(&groups.groups[group], &rows[i], bounds[i], view);
+        let next = view.lod(&groups.groups[group], self.projections[i]);
         if next != self.selected[i] {
             self.selected[i] = next;
-            self.group(group);
+            // Shadow views choose LOD from their own texel density. A camera
+            // LOD switch changes only the camera lists, never shadow casters.
+            self.dirty[4].insert(group);
             if groups.groups[group].transparent {
                 self.transparent_dirty = true;
             }
-            casters.push(bounds[i]);
         }
     }
 
@@ -193,11 +207,11 @@ impl Culling {
         groups: &Groups,
         bounds: &[[Vec3; 2]],
         pass: usize,
-        matrix: Mat4,
+        view: View,
         work: &mut FrameWork,
     ) -> Result<()> {
-        let planes = planes(matrix);
-        let all = self.matrices[pass] != Some(matrix);
+        let planes = planes(view.matrix);
+        let all = self.views[pass] != Some(view);
         let count = if all {
             groups.groups.len()
         } else {
@@ -216,8 +230,14 @@ impl Culling {
             for &i in &group.instances {
                 work.cull_tests += 1;
                 if visible(&planes, bounds[i]) {
-                    let lod = self.selected[i];
-                    self.scratch[lod].push([i as u32, group.first + lod as u32]);
+                    let lod = if pass == 4 {
+                        self.selected[i]
+                    } else {
+                        view.lod(group, self.projections[i])
+                    };
+                    if let Some(lod) = lod {
+                        self.scratch[lod].push([i as u32, group.first + lod as u32]);
+                    }
                 }
             }
             let first = pass * self.selected.len() + group.offset;
@@ -240,7 +260,7 @@ impl Culling {
                 work.visible_rows += cursor - first;
             }
         }
-        self.matrices[pass] = Some(matrix);
+        self.views[pass] = Some(view);
         self.dirty[pass].clear();
         Ok(())
     }
@@ -263,7 +283,7 @@ impl Culling {
             }
             for &i in &group.instances {
                 work.cull_tests += 1;
-                if visible(&planes, bounds[i]) {
+                if self.selected[i].is_some() && visible(&planes, bounds[i]) {
                     let distance =
                         ((bounds[i][0] + bounds[i][1]) * 0.5).distance_squared(camera.position);
                     self.transparent.push((distance, i, g));
@@ -274,7 +294,7 @@ impl Culling {
             .sort_unstable_by(|a, b| b.0.total_cmp(&a.0).then(a.1.cmp(&b.1)));
         let first = 5 * self.selected.len();
         for (n, &(_, i, g)) in self.transparent.iter().enumerate() {
-            let lod = self.selected[i];
+            let lod = self.selected[i].expect("visible transparent instance has a selected LOD");
             self.draws[5].push(Batch {
                 first: (first + n) as u32,
                 count: 1,
@@ -293,25 +313,6 @@ impl Culling {
         }
         Ok(())
     }
-}
-
-fn select_lod(group: &Group, row: &InstanceRow, bounds: [Vec3; 2], view: LodView) -> usize {
-    let scale = row
-        .world
-        .x_axis
-        .length()
-        .max(row.world.y_axis.length())
-        .max(row.world.z_axis.length());
-    let radius = (bounds[1] - bounds[0]).length() * 0.5;
-    let distance = (((bounds[0] + bounds[1]) * 0.5).distance(view.position) - radius).max(0.1);
-    let pixels = view.projection_y * view.height as f32 * 0.5 / distance;
-    group
-        .errors
-        .iter()
-        .enumerate()
-        .rev()
-        .find_map(|(lod, error)| (*error * scale * pixels <= 1.).then_some(lod))
-        .unwrap_or(0)
 }
 
 fn planes(matrix: Mat4) -> [Vec4; 6] {
