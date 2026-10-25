@@ -1,6 +1,6 @@
 //! Projects: search/sort/layout toolbar, cards or rows, and the overflow menu.
 use super::{Ctx, Page, columns, tracks};
-use crate::model::{Hub, Intent, Layout, Project, Sort, State, View, text};
+use crate::model::{Hub, Intent, Layout, Project, Sort, State, text};
 
 /// Sidebar 236 + edge 1 + content padding 2×40.
 const CHROME: f32 = 317.;
@@ -84,27 +84,15 @@ pub(super) fn body(p: &mut Page, hub: &Hub, ctx: &Ctx) {
 
 /// First run: the call to action, then the templates themselves.
 fn empty(p: &mut Page, hub: &Hub, ctx: &Ctx) {
-    p.panel("empty", |p| {
+    // The header already offers New project and Add existing; the first run gets one
+    // welcoming line and the templates, not a second pair of buttons in a large box.
+    p.panel("welcome", |p| {
         p.panel("empty-icon", |p| p.icon("folder-plus", "icon-lg accent"));
-        p.text("empty-title", "No projects yet");
-        p.text(
-            "empty-copy",
-            "Create one from a template or a sample, or add a project folder you already have. You can also drop a project folder onto this window.",
-        );
-        p.panel("row", |p| {
-            p.action(
-                "empty-new",
-                "primary",
-                "plus",
-                "New project",
-                Some(Intent::Navigate(View::Create)),
-            );
-            p.action(
-                "empty-add",
-                "",
-                "folder-open",
-                "Add existing",
-                Some(Intent::AddExisting),
+        p.panel("col fill", |p| {
+            p.text("empty-title", "No projects yet");
+            p.text(
+                "empty-copy",
+                "Start from a template below, add a project folder you already have, or drop one onto this window.",
             );
         });
     });
@@ -199,15 +187,6 @@ fn actions(p: &mut Page, hub: &Hub, project: &Project, compact: bool) {
             "Close",
             enabled(Intent::Close(id.clone())),
         ),
-    }
-    if !compact && hub.state(id) == State::Closed && !missing {
-        p.action(
-            &format!("headless-{id}"),
-            "",
-            "server",
-            "Headless",
-            enabled(Intent::OpenHeadless(id.clone())),
-        );
     }
     if hub.state(id) == State::Headless && !compact {
         p.action(
