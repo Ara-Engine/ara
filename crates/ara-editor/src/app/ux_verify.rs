@@ -174,7 +174,7 @@ impl UxVerification {
             "floatingWindows": editor.state.floating.len(),
             // Profiler frame bars are data rows (they select a frame), not toolbar buttons.
             "uncommandedToolbarButtons": shell
-                .uncommanded_buttons(&["tool-", "snap-", "view-", "play", "pause", "step", "stop", "search-box", "chip-", "status-", "graph-", "profile-", "asset-import", "panel-menu-", "menu-title-", "m0-", "m1-", "m2-"])
+                .uncommanded_buttons(&["tool-", "snap-", "view-", "play", "pause", "step", "stop", "search-box", "chip-", "status-", "graph-", "profile-", "import-source", "panel-menu-", "menu-title-", "m0-", "m1-", "m2-"])
                 .into_iter()
                 .filter(|id| !id.starts_with("profile-frame-"))
                 .collect::<Vec<_>>(),
