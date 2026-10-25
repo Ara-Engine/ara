@@ -60,3 +60,9 @@ custom importers and remote caches keep their existing default behavior. FileCac
 uses a disposable `intermediates/` namespace without fsync; final publication still
 validates and durably publishes immutable objects/actions. Quiescent GC evicts memo
 entries. Memo availability and thread scheduling never change final action keys.
+
+ImportServices supplies an optional BlockEncoder. Resolve its immutable backend
+before action lookup; encoded actions and texture memo keys include it. Capability
+negotiation calls prepare once. EncoderUnavailable retries retained inputs with
+the CPU key and disables that backend for the session. CPU contract fixtures use
+ProcessWorker::with_texture_encoder(false); legacy CPU request bytes stay unchanged.

@@ -8,6 +8,7 @@ pub(super) const SCRATCH_BYTES: usize = 1552;
 #[derive(Clone, Copy)]
 pub(super) enum Pipelines<'a> {
     Single(Pipeline),
+    Bc6h(crate::bc6_split::Bc6Pipelines<'a>),
     Bc7 {
         modes: &'a [Pipeline; 8],
         select: Pipeline,
@@ -16,7 +17,14 @@ pub(super) enum Pipelines<'a> {
 }
 impl Pipelines<'_> {
     pub(super) fn split(&self) -> bool {
-        matches!(self, Self::Bc7 { .. })
+        !matches!(self, Self::Single(_))
+    }
+    pub(super) fn scratch_bytes(&self) -> usize {
+        match self {
+            Self::Single(_) => 0,
+            Self::Bc6h(_) => crate::bc6_split::SCRATCH_BYTES,
+            Self::Bc7 { .. } => SCRATCH_BYTES,
+        }
     }
     pub(super) fn record(
         &self,
@@ -32,6 +40,9 @@ impl Pipelines<'_> {
         };
         match *self {
             Self::Single(pipeline) => stage(commands, pipeline, root, count),
+            Self::Bc6h(pipelines) => {
+                pipelines.record(commands, root, scratch.expect("BC6H scratch was allocated"))
+            }
             Self::Bc7 {
                 modes,
                 select,

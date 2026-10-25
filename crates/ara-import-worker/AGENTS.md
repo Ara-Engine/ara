@@ -2,9 +2,15 @@
 
 Disposable worker executable. Registers ara-importers (glTF, FBX, textures,
 audio: audio.bin + audio.json), ara-import2d (ara.atlas2d, ara.tilemap2d), then
-calls serve_worker. Audio settings and versions share the host's importer registry.
+calls ara-texture-gpu::serve_worker. Audio settings and versions share the host's importer registry.
 Custom worker executables can register animation/plugin importers too.
 Stdout is reserved for the framed binary-safe worker protocol; log to stderr.
+The optional headless BC service negotiates before cache lookup. Normal maps keep
+qualified CPU ISPC; texture-free imports skip device creation. Negotiation warms
+common GPU kernels once, and driver caches belong to the explicit engine profile.
+CPU process/persistence fixtures disable the service on their ProcessWorker handle.
+The ignored tests/gpu.rs probe verifies real negotiation, frames and encoded bytes;
+run it through ara-dev gpu with private config/crash paths after frontend changes.
 
 Run cargo test -p ara-import-worker (process integration tests), cargo check,
 cargo clippy -p ara-import-worker --all-targets. Set CARGO_BUILD_JOBS=2.

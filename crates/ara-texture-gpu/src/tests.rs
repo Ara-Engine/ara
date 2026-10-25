@@ -46,6 +46,18 @@ fn opening_manifests_and_rejecting_empty_or_invalid_inputs_does_not_initialize_v
             )
             .is_err()
     );
+    for invalid in [0x7c00, 0x8000] {
+        assert!(
+            encoder
+                .encode(
+                    TextureFormat::Bc6h,
+                    CookPreset::Balanced,
+                    &[invalid; 32],
+                    &cancellation
+                )
+                .is_err()
+        );
+    }
     assert!(
         !cache.exists(),
         "no driver cache or device side effects before actual work"

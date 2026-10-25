@@ -34,6 +34,10 @@ Run cargo check/test/clippy -p ara-importers (clippy --all-targets).
 Set CARGO_BUILD_JOBS=2 on this shared PC. Release benchmarks are explicit cargo run --release examples; see MEASUREMENTS.md.
 
 Importer implementations consume ImportInput and explicitly supplied memo services.
+ImportServices also supplies an optional integer block encoder. Keep device setup
+and filesystem access in the worker service. GPU/CPU identities never alias; normal
+maps retain ISPC BC5 after measured GPU angular outliers. Packing, preset and mip
+order must stay deterministic; raw HDR inputs use finite positive half codes.
 No other filesystem, clocks,
 unseeded RNG or environment reads. Dependency discovery is also pure and runs in
 the worker: even discovering FBX dependencies must never run in the editor.

@@ -40,7 +40,11 @@ pub(super) fn encode(
                     let y = ((index / blocks_wide) * 4 + pixel / 4).min(*height as usize - 1);
                     let p = pixels[y * *width as usize + x];
                     if format == TextureFormat::Bc6h {
-                        let bits = p.map(|v| half::f16::from_f32(v.clamp(0.0, 65504.0)).to_bits());
+                        // UF16 has no signed zero: canonicalize -0 before packing.
+                        let bits = p.map(|v| {
+                            half::f16::from_f32(if v <= 0.0 { 0.0 } else { v.min(65504.0) })
+                                .to_bits()
+                        });
                         block[pixel * 2] = u32::from(bits[0]) | (u32::from(bits[1]) << 16);
                         block[pixel * 2 + 1] = u32::from(bits[2]);
                     } else {

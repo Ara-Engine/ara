@@ -1,6 +1,7 @@
 //! Integer BC4/5/6H/7 encoding on a headless Vulkan device. Importers receive an
 //! explicit encoding service; device creation and filesystem access stay here.
 
+mod bc6_split;
 mod dispatch;
 mod encoder;
 mod split;

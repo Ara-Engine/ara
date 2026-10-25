@@ -1,6 +1,6 @@
 //! Each worker holds a single device; its pipelines reference immutable cook keys.
 use crate::dispatch::{Encoding, MAX_BLOCKS, Transfers, unavailable};
-use crate::split::{Pipelines, SCRATCH_BYTES};
+use crate::split::Pipelines;
 use ara_asset::{BlockEncoder, Cancellation, CookPreset, Digest, Error, Result};
 use ara_asset_format::TextureFormat;
 use ara_gpu::{Pipeline, cooked::CookedPipeline, vulkan::VulkanDevice};
@@ -60,6 +60,26 @@ impl Encoder {
             "bc7_mode4_dot",
             "bc7_mode6_dot",
             "bc7_mode7_dot",
+            "bc6h_rank",
+            "bc6h_mode0",
+            "bc6h_mode1",
+            "bc6h_mode2",
+            "bc6h_mode3",
+            "bc6h_mode4",
+            "bc6h_mode5",
+            "bc6h_mode6",
+            "bc6h_mode7",
+            "bc6h_mode8",
+            "bc6h_mode9",
+            "bc6h_mode10",
+            "bc6h_mode11",
+            "bc6h_mode12",
+            "bc6h_mode13",
+            "bc6h_balanced0",
+            "bc6h_balanced1",
+            "bc6h_balanced5",
+            "bc6h_balanced9",
+            "bc6h_reduce",
         ] {
             let bytes = std::fs::read(cooked.join(format!("{name}.json"))).map_err(unavailable)?;
             let mut manifest: CookedPipeline =
@@ -166,6 +186,15 @@ impl BlockEncoder for Encoder {
         if !blocks.len().is_multiple_of(words) {
             return Err(Error::Invalid("truncated block-major texture input".into()));
         }
+        if index == 2
+            && blocks.as_chunks::<2>().0.iter().any(|&[rg, b]| {
+                (rg & 0xffff) > 0x7bff || (rg >> 16) > 0x7bff || (b & 0xffff) > 0x7bff
+            })
+        {
+            return Err(Error::Invalid(
+                "BC6H input must contain finite nonnegative half codes".into(),
+            ));
+        }
         cancellation.check()?;
         if blocks.is_empty() {
             return Ok(Vec::new());
@@ -204,6 +233,8 @@ impl BlockEncoder for Encoder {
         let gpu = gpu.as_mut().expect("encoding initialized the device");
         let start = std::time::Instant::now();
         let mut modes;
+        let mut hdr_modes;
+        let mut hdr_balanced;
         let pipelines = if index == 3 && preset > 0 {
             let selected = if *dot {
                 [14, 5, 6, 7, 15, 9, 16, 17]
@@ -219,6 +250,30 @@ impl BlockEncoder for Encoder {
                 select: pipeline(gpu, &mut kernels[12])?,
                 reduce: pipeline(gpu, &mut kernels[13])?,
             }
+        } else if index == 2 {
+            hdr_modes = [pipeline(gpu, &mut kernels[29])?; 14];
+            let range = match preset {
+                0 => 10..11,
+                1 => 10..14,
+                _ => 0..14,
+            };
+            for mode in range {
+                hdr_modes[mode] = pipeline(gpu, &mut kernels[19 + mode])?;
+            }
+            let balanced = if preset == 1 {
+                hdr_balanced = [pipeline(gpu, &mut kernels[33])?; 4];
+                for mode in 1..4 {
+                    hdr_balanced[mode] = pipeline(gpu, &mut kernels[33 + mode])?;
+                }
+                Some((&hdr_balanced, pipeline(gpu, &mut kernels[18])?))
+            } else {
+                None
+            };
+            Pipelines::Bc6h(crate::bc6_split::Bc6Pipelines {
+                modes: &hdr_modes,
+                balanced,
+                reduce: pipeline(gpu, &mut kernels[37])?,
+            })
         } else {
             Pipelines::Single(pipeline(gpu, &mut kernels[index])?)
         };
@@ -227,11 +282,7 @@ impl BlockEncoder for Encoder {
         let max_count = (blocks.len() / words).min(MAX_BLOCKS);
         let input_capacity = max_count * words * 4;
         let output_capacity = max_count * format.block_bytes();
-        let scratch_capacity = if pipelines.split() {
-            max_count * SCRATCH_BYTES
-        } else {
-            0
-        };
+        let scratch_capacity = max_count * pipelines.scratch_bytes();
         let start = std::time::Instant::now();
         if transfers
             .as_ref()
