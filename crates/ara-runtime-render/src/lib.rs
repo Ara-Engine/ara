@@ -214,6 +214,12 @@ impl Presenter {
         self.renderer.as_ref()
     }
 
+    /// The renderer, mutably: development tools read live frames through
+    /// `Renderer::capture_completed` without a capture reset.
+    pub fn renderer_mut(&mut self) -> Option<&mut Renderer> {
+        self.renderer.as_mut()
+    }
+
     /// Final GPU-composited window image, in CopySource state.
     pub fn output(&self) -> Option<ara_gpu::Image> {
         self.published
