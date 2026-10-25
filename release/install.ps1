@@ -1,24 +1,25 @@
 [CmdletBinding()]
 param([string]$Destination, [switch]$Silent, [switch]$RegisterOnly, [switch]$NoSystemIntegration)
 $ErrorActionPreference = 'Stop'
-$source = [IO.Path]::GetFullPath($PSScriptRoot)
+. ([IO.Path]::Combine($PSScriptRoot, 'paths.ps1'))
+$source = ConvertTo-AraPath $PSScriptRoot
 $engine = Get-Content -LiteralPath (Join-Path $source 'engine.json') -Encoding UTF8 -Raw | ConvertFrom-Json
 if ($engine.format -ne 'ara.engine/1' -or $engine.version -notmatch '^[0-9A-Za-z.-]+$') { throw 'Invalid Ara engine manifest' }
 if (-not $RegisterOnly) {
-    if (-not $Destination) { $Destination = Join-Path $env:LOCALAPPDATA ('Programs\Ara\' + $engine.version) }
-    $Destination = [IO.Path]::GetFullPath($Destination)
+    if (-not $Destination) { $Destination = Join-Path (ConvertTo-AraPath $env:LOCALAPPDATA) ('Programs\Ara\' + $engine.version) }
+    $Destination = ConvertTo-AraPath $Destination
     if (Test-Path -LiteralPath $Destination) { throw "Destination already exists: $Destination" }
-    $parent = Split-Path -Parent $Destination
-    New-Item -ItemType Directory -Path $parent -Force | Out-Null
+    $parent = [IO.Path]::GetDirectoryName($Destination)
+    [IO.Directory]::CreateDirectory($parent) | Out-Null
     $stage = Join-Path $parent ('.ara-install-' + [guid]::NewGuid().ToString('N'))
     try {
-        New-Item -ItemType Directory -Path $stage | Out-Null
-        Get-ChildItem -LiteralPath $source -Force | Copy-Item -Destination $stage -Recurse
+        [IO.Directory]::CreateDirectory($stage) | Out-Null
+        Get-ChildItem -LiteralPath $source -Force | ForEach-Object { Copy-Item -LiteralPath $_.FullName -Destination $stage -Recurse }
         Move-Item -LiteralPath $stage -Destination $Destination
     } catch {
         if (Test-Path -LiteralPath $stage) {
-            $resolved = [IO.Path]::GetFullPath($stage)
-            if ((Split-Path -Parent $resolved) -ne $parent -or (Split-Path -Leaf $resolved) -notlike '.ara-install-*') { throw 'Unsafe staging cleanup' }
+            $resolved = ConvertTo-AraPath $stage
+            if ([IO.Path]::GetDirectoryName($resolved) -ne $parent -or [IO.Path]::GetFileName($resolved) -notlike '.ara-install-*') { throw 'Unsafe staging cleanup' }
             Remove-Item -LiteralPath $resolved -Recurse -Force
         }
         throw
@@ -36,11 +37,11 @@ foreach ($dll in @('msvcp140.dll','vcruntime140.dll','vcruntime140_1.dll')) {
 if ($LASTEXITCODE -ne 0) { throw 'Hub engine registration failed; installation retained for retry' }
 & $ara doctor
 if ($LASTEXITCODE -ne 0) { Write-Warning 'Prerequisites missing. Run ara doctor and install the x64 .NET 10 SDK: https://dotnet.microsoft.com/en-us/download/dotnet/10.0' }
-$shortcutDirectory = Join-Path ([Environment]::GetFolderPath('Programs')) ('Ara\' + $engine.version)
+$shortcutDirectory = Join-Path (ConvertTo-AraPath ([Environment]::GetFolderPath('Programs'))) ('Ara\' + $engine.version)
 $receipt = [ordered]@{ format='ara.install/1'; version=$engine.version; root=$source; integration=(-not $NoSystemIntegration); shortcuts=$shortcutDirectory }
 $receipt | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $source 'install-receipt.json') -Encoding UTF8
 if (-not $NoSystemIntegration) {
-    New-Item -ItemType Directory -Path $shortcutDirectory -Force | Out-Null
+    [IO.Directory]::CreateDirectory($shortcutDirectory) | Out-Null
     $shell = New-Object -ComObject WScript.Shell
     foreach ($app in @('Hub','Editor')) {
         $link = $shell.CreateShortcut((Join-Path $shortcutDirectory ("Ara $app.lnk")))
@@ -49,7 +50,7 @@ if (-not $NoSystemIntegration) {
             # The native Hub is a GUI app: start it directly, without a console window.
             $link.TargetPath = $nativeHub
         } else {
-            $link.TargetPath = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
+            $link.TargetPath = Join-Path (ConvertTo-AraPath $env:SystemRoot) 'System32\WindowsPowerShell\v1.0\powershell.exe'
             $link.Arguments = '-NoProfile -ExecutionPolicy Bypass -File "' + (Join-Path $source ('launch-' + $app.ToLowerInvariant() + '.ps1')) + '"'
         }
         $link.WorkingDirectory = $source
@@ -61,7 +62,7 @@ if (-not $NoSystemIntegration) {
     $key = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\Ara-' + $engine.version
     New-Item -Path $key -Force | Out-Null
     $properties = @{ DisplayName=('Ara ' + $engine.version); DisplayVersion=$engine.version; Publisher='Ara'; InstallLocation=$source; DisplayIcon=(Join-Path $source 'assets\brand\ara.ico'); UninstallString=('"' + (Join-Path $source 'uninstall.cmd') + '"'); NoModify=1; NoRepair=1 }
-    foreach ($entry in $properties.GetEnumerator()) { Set-ItemProperty -Path $key -Name $entry.Key -Value $entry.Value }
+    foreach ($entry in $properties.GetEnumerator()) { Set-ItemProperty -LiteralPath $key -Name $entry.Key -Value $entry.Value }
 }
 $uninstall = '@echo off' + "`r`n" + 'powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0uninstall.ps1" %*' + "`r`n"
 [IO.File]::WriteAllText((Join-Path $source 'uninstall.cmd'), $uninstall, [Text.Encoding]::ASCII)

@@ -12,6 +12,7 @@ ara-update = { path = "../ara-update" }
 ara-proto.workspace = true
 ara-rpc.workspace = true
 getrandom = "0.3"
+dunce = "1.0"
 hex = "0.4"
 anyhow.workspace = true
 ara-export-installer = { path = "../ara-export-installer" }

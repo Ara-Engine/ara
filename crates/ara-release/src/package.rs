@@ -118,6 +118,7 @@ pub fn package(root: &Path, version: &str) -> Result<()> {
     copy_tree(&root.join("assets/brand"), &stage.join("assets/brand"))?;
     for file in [
         "install.ps1",
+        "paths.ps1",
         "uninstall.ps1",
         "launch-hub.ps1",
         "launch-editor.ps1",
