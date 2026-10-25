@@ -629,17 +629,16 @@ fn shade(prepared: &native::Prepared, surface: bool) -> Vec<crate::gi_cpu::Shadi
         scene::{BASE_COLOR_DECODE_SRGB, EMISSIVE_DECODE_SRGB},
     };
     use glam30::Vec3;
-    use std::cell::{Cell, RefCell};
-    let missing = Cell::new(0usize);
-    let means = RefCell::new(HashMap::new());
+    let mut missing = 0usize;
+    let mut means = HashMap::new();
     // `decode`: the material decodes this raw map's sRGB itself (graph views).
-    let mean = |id: u32, decode: bool| {
+    let mut mean = |id: u32, decode: bool| {
         if id == NO_TEXTURE {
             return [1.; 4];
         }
-        *means.borrow_mut().entry((id, decode)).or_insert_with(|| {
+        *means.entry((id, decode)).or_insert_with(|| {
             prepared.textures.mean_texel(id, decode).unwrap_or_else(|| {
-                missing.set(missing.get() + 1);
+                missing += 1;
                 [1.; 4]
             })
         })
@@ -649,14 +648,14 @@ fn shade(prepared: &native::Prepared, surface: bool) -> Vec<crate::gi_cpu::Shadi
     // over the base colour's texels at up to CUTOUT_SIDE a side, where thin
     // features (fence wire) still hold their coverage.
     const CUTOUT_SIDE: u32 = 256;
-    let cutouts = RefCell::new(HashMap::new());
-    let cutout = |m: &ara_render::instanced::Material| {
+    let mut cutouts = HashMap::new();
+    let mut cutout = |m: &ara_render::instanced::Material| {
         let (mode, alpha, cutoff) = (m.pbr.flags[0], m.pbr.base_color[3], m.pbr.surface[3]);
         if mode == 0 {
             return 0.;
         }
         let key = (m.pbr.textures[0], mode, alpha.to_bits(), cutoff.to_bits());
-        *cutouts.borrow_mut().entry(key).or_insert_with(|| {
+        *cutouts.entry(key).or_insert_with(|| {
             let alphas: Vec<f32> = match m.pbr.textures[0] {
                 NO_TEXTURE => vec![alpha],
                 id => prepared
@@ -700,10 +699,9 @@ fn shade(prepared: &native::Prepared, surface: bool) -> Vec<crate::gi_cpu::Shadi
             }
         })
         .collect();
-    if missing.get() > 0 {
+    if missing > 0 {
         eprintln!(
-            "ara-runtime-render: CPU probe bake: {} maps have no CPU mean (taken as white)",
-            missing.get()
+            "ara-runtime-render: CPU probe bake: {missing} maps have no CPU mean (taken as white)"
         );
     }
     materials
@@ -867,10 +865,44 @@ mod tests {
         native::prepare(&frame, Content::default(), config())
     }
 
+    /// A constant BC4 map (red `value`/255) registered in `prepared`'s residency.
+    fn constant_map(prepared: &mut native::Prepared, value: u8) -> Result<u32> {
+        use ara_asset_format::{TextureFormat, write_ktx2};
+        let mut level = vec![0u8; 4 * 8];
+        for block in level.as_chunks_mut::<8>().0 {
+            block[..2].fill(value);
+        }
+        let ktx2 = write_ktx2(8, 8, TextureFormat::Bc4, &[level])?;
+        let source = ara_texture_stream::NativeSource::from_cooked(ktx2.into())?;
+        Ok(prepared
+            .textures
+            .register([value; 32], std::sync::Arc::new(source))?
+            .index())
+    }
+
     #[test]
     fn emission_is_shadings_emission_without_its_surface() -> Result<()> {
+        use ara_render::{instanced::NO_TEXTURE, scene::EMISSIVE_DECODE_SRGB};
         let mut prepared = yard(0.)?;
-        prepared.scene.materials[0].pbr.emissive_roughness[..3].copy_from_slice(&[3., 2., 1.]);
+        // One emissive map read raw, then by a material that decodes its sRGB
+        // itself (a graph view), and a terrain splat layering those two.
+        let map = constant_map(&mut prepared, 200)?;
+        let base = prepared.scene.materials[0];
+        let emitting = |decode: bool| {
+            let mut m = base;
+            m.pbr.textures[3] = map;
+            m.pbr.emissive_roughness[..3].copy_from_slice(&[4., 2., 1.]);
+            m.pbr.flags[1] = if decode { EMISSIVE_DECODE_SRGB } else { 0 };
+            m
+        };
+        let first = prepared.scene.materials.len();
+        let mut terrain = base;
+        terrain.extras.terrain_layers = 2;
+        terrain.extras.layer_materials = [first as u32, first as u32 + 1, NO_TEXTURE, NO_TEXTURE];
+        prepared
+            .scene
+            .materials
+            .extend([emitting(false), emitting(true), terrain]);
         let (full, emitted) = (shading(&prepared), emission(&prepared));
         assert_eq!(full.len(), emitted.len());
         for (f, e) in full.iter().zip(&emitted) {
@@ -878,7 +910,11 @@ mod tests {
             assert_eq!((e.albedo, e.cutout), (glam30::Vec3::ZERO, 0.));
         }
         assert!(full.iter().any(|f| f.albedo != glam30::Vec3::ZERO));
-        assert!(emitted.iter().any(|e| e.emissive != glam30::Vec3::ZERO));
+        let [raw, decoded, splat] = [first, first + 1, first + 2].map(|i| emitted[i].emissive.x);
+        let linear = ((200. / 255. + 0.055) / 1.055f32).powf(2.4);
+        assert!((raw - 4. * 200. / 255.).abs() < 1e-3, "{raw}");
+        assert!((decoded - 4. * linear).abs() < 1e-3, "{decoded}");
+        assert!((splat - (raw + decoded) / 2.).abs() < 1e-4, "{splat}");
         Ok(())
     }
 
