@@ -25,6 +25,8 @@ Static classic LOD chains default to eight levels, targeting 2% of LOD0 or 200
 triangles. Attribute-aware meshoptimizer preserves UV seams and open borders;
 alpha foliage also retains at least 90% area per connected card. Irreducible
 cards keep their last good level. Skin/morph chains retain the four-level/1% cap.
+Retain usable legacy LODs: replacing geometric errors with combined attribute
+errors can make runtime selection choose finer foliage despite deeper chains.
 ARAG Custom artifacts are
 validated by ara-geo; its reflected settings are VirtualGeometrySettings.
 

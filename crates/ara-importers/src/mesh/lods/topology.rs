@@ -2,12 +2,14 @@
 use super::Vertex;
 use meshopt::SimplifyVertex;
 use std::collections::BTreeMap;
+mod cards;
 
 pub(super) struct Topology {
     pub(super) locks: Vec<SimplifyVertex>,
     points: Vec<usize>,
     membership: Vec<Vec<usize>>,
     areas: Vec<f64>,
+    watched: Vec<bool>,
 }
 
 fn area(vertices: &[Vertex], triangle: &[u32; 3]) -> f64 {
@@ -76,6 +78,7 @@ impl Topology {
             })
             .collect();
         let mut areas = vec![0.0; components.len()];
+        let watched = cards::classify(vertices, triangles, &ids, components.len());
         let mut membership = vec![Vec::new(); positions.len()];
         for (number, triangle) in triangles.iter().enumerate() {
             let component = ids[number];
@@ -115,12 +118,13 @@ impl Topology {
             points,
             membership,
             areas,
+            watched,
         }
     }
 
     pub(super) fn preserves_area(&self, vertices: &[Vertex], indices: &[u32]) -> bool {
-        // Guard every connected component: coincident front/back faces close
-        // cards topologically, and an arbitrary rotation defeats AABB thinness.
+        // Each thin card has its own budget, including rotated cards with
+        // coincident backfaces. Three-dimensional masked stems are not cards.
         let mut areas = vec![0.0; self.areas.len()];
         for triangle in indices.as_chunks::<3>().0 {
             let points = triangle.map(|i| self.points[i as usize]);
@@ -135,7 +139,7 @@ impl Topology {
         self.areas
             .iter()
             .enumerate()
-            .all(|(i, original)| areas[i] + original * 1e-9 >= original * 0.9)
+            .all(|(i, original)| !self.watched[i] || areas[i] + original * 1e-9 >= original * 0.9)
     }
 }
 
@@ -197,5 +201,27 @@ mod tests {
                 .iter()
                 .all(|f| !f.contains(SimplifyVertex::Lock))
         );
+    }
+
+    #[test]
+    fn long_open_tubes_are_not_classified_as_leaf_cards() {
+        let mut vertices = Vec::new();
+        for height in [0.0, 10.0] {
+            for i in 0..16 {
+                let angle = i as f32 * std::f32::consts::TAU / 16.0;
+                vertices.push(Vertex {
+                    position: [angle.cos() * 0.02, height, angle.sin() * 0.02],
+                    ..Vertex::default()
+                });
+            }
+        }
+        let indices: Vec<_> = (0..16)
+            .flat_map(|a| {
+                let b = (a + 1) % 16;
+                [a, b, a + 16, b, b + 16, a + 16]
+            })
+            .collect();
+        let topology = Topology::new(&vertices, &indices);
+        assert_eq!(topology.watched, [false]);
     }
 }

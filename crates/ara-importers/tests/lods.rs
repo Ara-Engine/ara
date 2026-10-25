@@ -72,6 +72,10 @@ fn static_chains_reach_the_coarse_goal_with_useful_monotone_levels() {
     let levels = rows(&bytes);
     assert!(levels.len() > 4, "{levels:?}");
     assert!(
+        levels.iter().take(4).all(|l| l.2 <= 0.01),
+        "retain the usable geometric-error prefix: {levels:?}"
+    );
+    assert!(
         levels.last().unwrap().1 / 3 <= (indices.len() / 3).div_ceil(50).max(200),
         "{levels:?}"
     );

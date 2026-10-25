@@ -4,6 +4,13 @@ use ara_asset_format::Lod;
 use meshopt::{SimplifyOptions, VertexDataAdapter};
 mod topology;
 
+fn useful(indices: &[u32], error: f32, previous_count: usize) -> bool {
+    !indices.is_empty()
+        && indices.len() * 4 <= previous_count * 3
+        && error.is_finite()
+        && error >= 0.0
+}
+
 pub(super) fn append(
     vertices: &[Vertex],
     adapter: &VertexDataAdapter<'_>,
@@ -59,8 +66,27 @@ pub(super) fn append(
             break;
         }
         let mut error = 0.0;
-        let simplified = match &topology {
-            Some(topology) => meshopt::simplify_with_attributes_and_locks(
+        // Retain the previous geometric-error prefix when it is safe. Replacing
+        // it with combined attribute errors can make runtime selection choose
+        // finer foliage LODs even when the new chain has more levels.
+        let mut simplified = if deformed || step < 4 {
+            meshopt::simplify(
+                &original,
+                adapter,
+                target,
+                limit.min(0.01),
+                SimplifyOptions::LockBorder,
+                Some(&mut error),
+            )
+        } else {
+            Vec::new()
+        };
+        if let Some(topology) = &topology
+            && (!useful(&simplified, error, previous_count)
+                || (preserve_card_area && !topology.preserves_area(vertices, &simplified)))
+        {
+            error = 0.0;
+            simplified = meshopt::simplify_with_attributes_and_locks(
                 &original,
                 adapter,
                 &attributes,
@@ -73,23 +99,11 @@ pub(super) fn append(
                     | SimplifyOptions::Permissive
                     | SimplifyOptions::RegularizeLight,
                 Some(&mut error),
-            ),
-            None => meshopt::simplify(
-                &original,
-                adapter,
-                target,
-                limit,
-                SimplifyOptions::LockBorder,
-                Some(&mut error),
-            ),
-        };
+            );
+        }
         // Trying a stronger target can bypass a stalled intermediate target.
         // Never publish duplicate/negligible levels or an empty primitive.
-        if simplified.is_empty()
-            || simplified.len() * 4 > previous_count * 3
-            || !error.is_finite()
-            || error < 0.0
-        {
+        if !useful(&simplified, error, previous_count) {
             continue;
         }
         if preserve_card_area

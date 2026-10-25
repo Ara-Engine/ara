@@ -33,7 +33,7 @@ impl Importer for FbxImporter {
         "ara.fbx"
     }
     fn version(&self) -> &str {
-        "6-ufbx0115-meshopt070-ispc050-tiled-f32text-arag1-opacity-settings-deep-lods-card-area"
+        "6-ufbx0115-meshopt070-ispc050-tiled-f32text-arag1-opacity-settings-deep-lods-prefix"
     }
     fn register_settings(&self, db: &mut ara_schema::SchemaDb) {
         db.register::<MeshSettings>();
