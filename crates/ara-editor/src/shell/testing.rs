@@ -188,6 +188,12 @@ impl Shell {
         }
         false
     }
+    /// Shows a gameplay-camera preview image of `size` (physical px) as if the window
+    /// had just rendered one (`app/game_preview.rs`), then rebuilds.
+    pub fn show_game_preview_for_test(&mut self, editor: &mut Editor, size: [u32; 2]) {
+        self.game_preview = Some(size);
+        let _ = self.rebuild(editor);
+    }
     /// Shows a `play.status` world row as if the window had just read it (a start's
     /// progress at a chosen moment), then rebuilds.
     pub fn show_play_row_for_test(&mut self, editor: &mut Editor, row: Value) {

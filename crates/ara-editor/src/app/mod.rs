@@ -3,6 +3,7 @@ mod capture;
 mod controller;
 mod drags;
 mod game;
+mod game_preview;
 mod journey;
 mod panels_verify;
 mod qa;
@@ -136,14 +137,20 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
     let mut floats = windows::Floats::default();
     floats.hidden = offscreen;
     let mut game = game::GameView::default();
+    let mut game_preview = game_preview::Preview::default();
     gpu.set_dpi(dpi)?;
     let mut ui_renderer = UiRenderer::default();
     crate::shell::icons::install(&mut ui_renderer, dpi)?;
     // Icons are white masks tinted by CSS: only a DPI change (or a verification
     // capture at another scale, `None`) re-rasterizes them; themes never do.
     let mut icon_dpi = Some(dpi);
-    // Placeholders for the GPU-fed images: the Scene view and the Game view.
-    for id in [overlay::viewport_image(), game::texture()] {
+    // Placeholders for the GPU-fed images: the Scene view, the Game view and its
+    // camera preview outside Play.
+    for id in [
+        overlay::viewport_image(),
+        game::texture(),
+        game_preview::texture(),
+    ] {
         ui_renderer.image(
             id,
             Image {
@@ -693,6 +700,7 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                 dirty = true;
                 scene_dirty = true;
             }
+            dirty |= game_preview.wants_frame(&editor, &mut shell);
             if dirty {
                 let _render_scope = profile_frame.map(|_| ara_profile::scope("editor.render"));
                 profile_gpu = shell.viewport().is_some() && scene_dirty;
@@ -754,6 +762,18 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                     }
                 } else {
                     gpu.overlays(Default::default(), overlay::ENTITY_IMAGE, Vec::new());
+                }
+                // Outside Play the Game view shows the gameplay camera; its image is
+                // attached (and the panel rebuilt when it appears) before the UI draws.
+                if game_preview.update(
+                    &mut renderer,
+                    &mut scene_view,
+                    &mut editor,
+                    &view,
+                    &mut shell,
+                    &mut gpu,
+                )? {
+                    shell.rebuild(&mut editor)?;
                 }
                 scene_ms = scene_at.elapsed().as_secs_f64() * 1000.;
                 if icon_dpi != Some(dpi) {

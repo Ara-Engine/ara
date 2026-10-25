@@ -124,16 +124,16 @@ bus; editor failures use ARA4500-4504 (`codes.rs`, catalog `editor.md`) and
 never an override). C#: `shell/scripts.rs` scaffolds a hot module + IDE .csproj.
 Game view (D19): `app/game.rs` imports the play host's shared surfaces
 (`PlayService::surfaces`, taken in `Editor::open`) and shows texture `game-view`;
-`game_input` forwards keys/mouse to the selected client while captured (Esc
-releases). Play starts in the background (`background:true`); `Shell::read_play_status`
-shows the start's phase/progress, a failed start, or a fault. Embeds unless `play.inGameView` is off.
+`game_input` forwards keys/mouse to the selected client while captured (Esc releases).
+Play starts in the background; `Shell::read_play_status` shows its phase, a failed start
+or a fault. Embeds unless `play.inGameView` is off. Outside Play `app/game_preview.rs`
+renders `Shell::gameplay_camera` (`SceneView::preview_game`) as `game-preview`.
 Build (`shell/build.rs`): `build.current` exports the main scene with the first
 `presets/*.export.json` (else `build.profile.create` writes the portable, unpinned
 Windows runtime profile) into `builds/<profile>-<time>/build` on a thread, pinning
 this engine's runtime template (player + PDB, cooked shaders) under `.ara/export/`;
-C# modules ship NativeAOT. `build.run` launches it (offscreen: headless, `run.png`).
-Bounded runs are offscreen (`Options::offscreen`: hidden windows, UI readback);
-never add a capture route that shows a window. `--verify-journey` (`app/journey.rs`)
+C# modules ship NativeAOT. `build.run` launches it (offscreen: headless, `run.png`). Bounded
+runs are offscreen (hidden windows, UI readback); no capture route shows a window. `--verify-journey` (`app/journey.rs`)
 writes `journey.json` after every step; `--verify-first-hour` (`app/qa.rs`) replays a new
 user's first hour on a fresh (Hub-created) project into `first-hour.json`. `--verify-responsiveness` (`app/responsiveness.rs`) injects SDL-level clicks/moves into the
 real loop and writes per-frame costs, UI work, click results, Play click-to-first-Game-
