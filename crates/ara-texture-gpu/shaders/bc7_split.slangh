@@ -1,0 +1,313 @@
+// Additive split protocol v1; encodeBc7 keeps its original ABI and default path.
+// input/output/blockCount/preset retain their original meaning (presets 1 and 2).
+// a: scratch storage-buffer heap index; b: aligned scratch base byte offset;
+// c: 0=coarse, 1=refine for mode entries; d: must equal 1 (protocol version).
+// Each block owns 1552 bytes: 285 coarse u32 scores at +0, 17 finalist u32 IDs
+// at +1140, 17 {u32 error; uint4 BC7} records (20 bytes each) at +1208; 4 pad.
+// b must be a multiple of 4. All offset products/base/end must fit u32 and the
+// allocated scratch buffer; the host also checks every dispatch against device limits.
+// Dispatch all eight mode entries with c=0, selectBc7Finalists, all eight with
+// c=1, then reduceBc7Finalists. Insert storage read/write barriers between passes.
+// Coarse mode groups: ceil(blockCount*modeCandidateCount/64). Refine mode groups:
+// ceil(blockCount*(preset==1 ? 9 : 17)/64). Select/reduce: blockCount groups.
+// Mode candidate counts [0..7]: HQ [16,64,64,64,8,4,1,64], Balanced
+// [8,16,16,16,8,4,1,16]. Fast stays on encodeBc7. No wave operations are used.
+static const uint BC7_SPLIT_STRIDE = 1552;
+// The default encoder does not read a..d or depend on this scratch protocol.
+uint splitBase(uint block) { return root.b+block*BC7_SPLIT_STRIDE; }
+uint splitSubset<let subsets:uint>(uint partition,uint texel) {
+    if (subsets == 2) return (PARTITION2[partition] >> (texel*2)) & 3;
+    if (subsets == 3) return (PARTITION3[partition] >> (texel*2)) & 3;
+    return 0;
+}
+uint splitAnchor<let subsets:uint>(uint partition,uint s) {
+    if (s == 0) return 0;
+    if (subsets == 2) return ANCHOR2[partition];
+    return s == 1 ? ANCHOR31[partition] : ANCHOR32[partition];
+}
+
+// Compile-time fitter copies preserve the fallback arithmetic and tie order.
+void splitSeed<let first:uint, let channels:uint>(int4 pixels[16], uint mask, bool bbox, out int4 loEndpoint, out int4 hiEndpoint, out bool uniform) {
+    int4 lo = int4(255), hi = int4(0), sum = int4(0);
+    int count = int(countbits(mask));
+    int4 active = activeChannels(first,channels);
+    for (uint i = 0; i < 16; ++i) if ((mask & (1u << i)) != 0) {
+        lo = min(lo,pixels[i]); hi = max(hi,pixels[i]); sum += pixels[i];
+    }
+    uniform = all((hi-lo)*active == 0);
+    if (bbox || uniform) { loEndpoint = lo; hiEndpoint = hi; return; }
+    uint major = first;
+    [unroll] for (uint c = 0; c < 4; ++c) if (active[c] != 0 && hi[c]-lo[c] > hi[major]-lo[major]) major = c;
+    int4 axis = int4(0); axis[major] = 64;
+    int4 cov0 = int4(0), cov1 = int4(0), cov2 = int4(0), cov3 = int4(0);
+    int4 mean = int4((uint4(sum)*MEAN_RECIP[count]) >> 16);
+    for (uint i = 0; i < 16; ++i) if ((mask & (1u << i)) != 0) {
+        int4 d = (pixels[i]-mean)*active;
+        cov0 += d.x*d; cov1 += d.y*d; cov2 += d.z*d; cov3 += d.w*d;
+    }
+    // |axis| <=127 and |cov| <=260116: four-term dots fit int32.
+    // A power-of-two scale preserves direction without integer division.
+    for (uint iteration = 0; iteration < 4; ++iteration) {
+        int4 next = int4(dot4(cov0,axis),dot4(cov1,axis),dot4(cov2,axis),dot4(cov3,axis));
+        int4 magnitude = abs(next);
+        int scale = max(max(magnitude.x,magnitude.y),max(magnitude.z,magnitude.w));
+        if (scale != 0) {
+            uint shift = uint(max(firstbithigh(uint(scale))-6,0));
+            int4 normalized = int4(uint4(magnitude) >> shift);
+            axis = select(next < 0,-normalized,normalized);
+        }
+    }
+    loEndpoint = int4(0); hiEndpoint = int4(0);
+    int minimum = 0x7fffffff, maximum = -2147483647-1;
+    for (uint i = 0; i < 16; ++i) if ((mask & (1u << i)) != 0) {
+        int projection = dot4(pixels[i],axis);
+        if (projection < minimum) { minimum = projection; loEndpoint = pixels[i]; }
+        if (projection > maximum) { maximum = projection; hiEndpoint = pixels[i]; }
+    }
+}
+
+void splitAssign<let first:uint, let channels:uint, let indexBits:uint>(int4 pixels[16], uint mask, bool uniform, inout Fit f) {
+    int4 palette[16];
+    int4 active = activeChannels(first,channels);
+    for (uint j = 0; j < (1u << indexBits); ++j) {
+        int w = WEIGHTS[(indexBits-2)*16+j];
+        palette[j] = ((64-w)*f.ep0+w*f.ep1+32)>>6;
+    }
+    if (uniform) {
+        // All fitted channels match: evaluate their common selector once, then
+        // scale the error. Later p-bit re-quantization rounds still run.
+        int4 pixel = pixels[firstbitlow(mask)];
+        uint error = 0xffffffff, index = 0;
+        for (uint j = 0; j < (1u << indexBits); ++j) {
+            int4 d = (pixel-palette[j])*active;
+            uint e = uint(dot4(d,d));
+            if (e < error) { error = e; index = j; }
+        }
+        f.error = error*countbits(mask);
+        f.indices = uint2(index*0x11111111u);
+        return;
+    }
+    f.error = 0;
+    for (uint i = 0; i < 16; ++i) if ((mask & (1u << i)) != 0) {
+        uint error = 0xffffffff, index = 0;
+        for (uint j = 0; j < (1u << indexBits); ++j) {
+            int4 d = (pixels[i]-palette[j])*active;
+            uint e = uint(dot4(d,d));
+            if (e < error) { error = e; index = j; }
+        }
+        setIndex(f,i,index); f.error += error;
+    }
+}
+
+void splitRefit<let first:uint, let channels:uint, let indexBits:uint>(int4 pixels[16], uint mask, Fit f, out int4 loEndpoint, out int4 hiEndpoint) {
+    // Sum of weights <=1024, square sums <=65536, RHS <=261120.
+    // aa*bb <= (65536/2)^2, hence det also fits signed 32 bits.
+    int aa = 0, ab = 0, bb = 0;
+    int4 ax = int4(0), bx = int4(0);
+    for (uint i = 0; i < 16; ++i) if ((mask & (1u << i)) != 0) {
+        int b = WEIGHTS[(indexBits-2)*16+getIndex(f,i)], a = 64-b;
+        aa += a*a; ab += a*b; bb += b*b;
+        ax += a*pixels[i]; bx += b*pixels[i];
+    }
+    int det = aa*bb-ab*ab;
+    loEndpoint = f.ep0; hiEndpoint = f.ep1;
+    if (det > 0) {
+        loEndpoint = divideEndpoint(64*(Wide4(ax)*bb-Wide4(bx)*ab)+det/2,det);
+        hiEndpoint = divideEndpoint(64*(Wide4(bx)*aa-Wide4(ax)*ab)+det/2,det);
+    }
+}
+
+Fit splitFit<let first:uint, let channels:uint, let bits:uint, let indexBits:uint, let pbits:uint>(int4 pixels[16], uint mask, uint preset) {
+    uint rounds = preset == 3 ? 2 : (preset >= 2 ? 4 : 3), seeds = preset == 0 || preset == 3 ? 1 : 2;
+    int4 active = activeChannels(first,channels);
+    Fit best = emptyFit();
+    for (uint s = 0; s < seeds; ++s) {
+        int4 loEndpoint, hiEndpoint;
+        bool uniform;
+        splitSeed<first,channels>(pixels,mask,s != 0,loEndpoint,hiEndpoint,uniform);
+        for (uint iteration = 0; iteration < rounds; ++iteration) {
+            Fit current = emptyFit();
+            for (uint pattern = 0; pattern < (1u << pbits); ++pattern) {
+                Fit trial = emptyFit();
+                trial.p0 = pbits == 1 ? pattern : pattern & 1;
+                trial.p1 = pbits == 1 ? pattern : (pattern >> 1) & 1;
+                [unroll] for (uint c = 0; c < 4; ++c) if (active[c] != 0) {
+                    quantizeEndpoint(loEndpoint[c],bits,pbits != 0,trial.p0,trial.q0[c],trial.ep0[c]);
+                    quantizeEndpoint(hiEndpoint[c],bits,pbits != 0,trial.p1,trial.q1[c],trial.ep1[c]);
+                }
+                splitAssign<first,channels,indexBits>(pixels,mask,uniform,trial);
+                if (trial.error < current.error) current = trial;
+                if (current.error == 0) return current;
+            }
+            if (current.error < best.error) best = current;
+            int4 nextLo, nextHi;
+            splitRefit<first,channels,indexBits>(pixels,mask,current,nextLo,nextHi);
+            bool converged = all((nextLo-loEndpoint)*active == 0) && all((nextHi-hiEndpoint)*active == 0);
+            loEndpoint = nextLo; hiEndpoint = nextHi;
+            if (converged) break;
+        }
+        // The box seed repeats the same active endpoints. Preserve all p-bit
+        // refinement rounds: re-quantization can improve a singular fit.
+        if (uniform) return best;
+    }
+    return best;
+}
+
+uint splitEncode<let mode:uint, let subsets:uint, let partitionBits:uint, let colorBits:uint, let alphaBits:uint, let indexBits:uint, let pbits:uint, let selection:uint, let scoreOnly:bool>(uint block, uint partition, uint rotation, uint preset, out uint4 words) {
+    static const bool dual = mode == 4 || mode == 5;
+    static const uint colorIndex = indexBits+selection;
+    static const uint alphaIndex = mode == 4 ? 3-selection : 2;
+    int4 pixels[16];
+    for (uint i = 0; i < 16; ++i) {
+        uint packed = buffers[NonUniformResourceIndex(root.input)].Load(block*64+i*4);
+        pixels[i] = int4(packed & 255,(packed >> 8) & 255,(packed >> 16) & 255,packed >> 24);
+        if (rotation != 0) { int swap = pixels[i].w; pixels[i].w = pixels[i][rotation-1]; pixels[i][rotation-1] = swap; }
+    }
+    Fit fits[subsets];
+    Fit scalar = emptyFit();
+    uint error = 0;
+    for (uint s = 0; s < subsets; ++s) {
+        uint mask = 0;
+        for (uint i = 0; i < 16; ++i) if (splitSubset<subsets>(partition,i) == s) mask |= 1u << i;
+        Fit fitted = splitFit<0,(mode == 6 || mode == 7) ? 4 : 3,colorBits,indexBits+selection,pbits>(pixels,mask,preset);
+        error += fitted.error;
+        if (!scoreOnly) {
+            if ((getIndex(fitted,splitAnchor<subsets>(partition,s)) & (1u << (colorIndex-1))) != 0) {
+                uint4 qSwap = fitted.q0; fitted.q0 = fitted.q1; fitted.q1 = qSwap;
+                uint swap = fitted.p0; fitted.p0 = fitted.p1; fitted.p1 = swap;
+                fitted.indices ^= uint2(0x11111111u*((1u << colorIndex)-1));
+            }
+            fits[s] = fitted;
+        }
+    }
+    if (dual) {
+        scalar = splitFit<3,1,alphaBits,mode == 4 ? 3-selection : 2,0>(pixels,65535,preset);
+        error += scalar.error;
+        if (!scoreOnly) {
+            if ((getIndex(scalar,0) & (1u << (alphaIndex-1))) != 0) {
+                uint4 qSwap = scalar.q0; scalar.q0 = scalar.q1; scalar.q1 = qSwap;
+                scalar.indices ^= uint2(0x11111111u*((1u << alphaIndex)-1));
+            }
+            fits[0].q0.w = scalar.q0.w; fits[0].q1.w = scalar.q1.w;
+        }
+    } else if (alphaBits == 0) {
+        for (uint i = 0; i < 16; ++i) { int d = 255-pixels[i].w; error += uint(d*d); }
+    }
+    words = uint4(0);
+    if (scoreOnly) return error;
+    uint cursor = 0;
+    putBits(words, cursor, 1u << mode, mode+1);
+    putBits(words, cursor, partition, partitionBits);
+    if (dual) putBits(words, cursor, rotation, 2);
+    if (mode == 4) putBits(words, cursor, selection, 1);
+    for (uint c = 0; c < 4; ++c) {
+        uint precision = c == 3 ? alphaBits : colorBits;
+        if (precision != 0) {
+            for (uint s = 0; s < subsets; ++s) for (uint e = 0; e < 2; ++e) putBits(words, cursor, (e == 0 ? fits[s].q0[c] : fits[s].q1[c]), precision);
+        }
+    }
+    for (uint s = 0; s < subsets; ++s) {
+        if (pbits != 0) { putBits(words, cursor, fits[s].p0, 1); if (pbits == 2) putBits(words, cursor, fits[s].p1, 1); }
+    }
+    for (uint stream = 0; stream < (dual ? 2u : 1u); ++stream) {
+        bool useScalar = dual && stream == 1-selection;
+        uint precision = useScalar ? alphaIndex : colorIndex;
+        for (uint i = 0; i < 16; ++i) {
+            uint s = splitSubset<subsets>(partition,i);
+            uint index = useScalar ? getIndex(scalar,i) : getIndex(fits[s],i);
+            putBits(words, cursor, index, precision - (i == splitAnchor<subsets>(partition,s) ? 1u : 0u));
+        }
+    }
+    return error;
+}
+
+void splitMode<let mode:uint, let subsets:uint, let partitionBits:uint, let colorBits:uint, let alphaBits:uint, let indexBits:uint, let pbits:uint>(uint linear) {
+    if (root.d != 1 || root.preset == 0 || root.c > 1) return;
+    uint preset = min(root.preset,2u);
+    uint count = mode == 6 ? 1 : (mode == 4 ? 8 : (mode == 5 ? 4 : (mode == 0 ? (preset == 1 ? 8 : 16) : (preset == 1 ? 16 : 64))));
+    uint base = mode == 6 ? 0 : (mode == 4 ? 1 : (mode == 5 ? 9 : (mode == 0 ? 13 : ((preset == 1 ? 21 : 29)+(mode == 7 ? 3 : mode-1)*(preset == 1 ? 16 : 64)))));
+    uint jobs = root.c == 0 ? count : (preset == 1 ? 9 : 17);
+    uint block = linear/jobs, slot = linear%jobs;
+    if (block >= root.blockCount) return;
+    uint record = splitBase(block);
+    uint id = root.c == 0 ? base+slot : buffers[NonUniformResourceIndex(root.a)].Load(record+1140+slot*4);
+    if (id < base || id >= base+count) return;
+    uint candidate = id-base;
+    uint partition = mode == 4 || mode == 5 || mode == 6 ? 0 : candidate;
+    uint rotation = mode == 4 ? candidate/2 : (mode == 5 ? candidate : 0);
+    uint selection = mode == 4 ? candidate & 1 : 0;
+    uint4 words;
+    uint error;
+    if (root.c == 0) {
+        if (mode == 4 && selection != 0) error = splitEncode<mode,subsets,partitionBits,colorBits,alphaBits,indexBits,pbits,1,true>(block,partition,rotation,3,words);
+        else error = splitEncode<mode,subsets,partitionBits,colorBits,alphaBits,indexBits,pbits,0,true>(block,partition,rotation,3,words);
+        buffers[NonUniformResourceIndex(root.a)].Store(record+id*4,error);
+    } else {
+        if (mode == 4 && selection != 0) error = splitEncode<mode,subsets,partitionBits,colorBits,alphaBits,indexBits,pbits,1,false>(block,partition,rotation,preset,words);
+        else error = splitEncode<mode,subsets,partitionBits,colorBits,alphaBits,indexBits,pbits,0,false>(block,partition,rotation,preset,words);
+        buffers[NonUniformResourceIndex(root.a)].Store(record+1208+slot*20,error);
+        buffers[NonUniformResourceIndex(root.a)].Store4(record+1212+slot*20,words);
+    }
+}
+
+[shader("compute")][numthreads(64,1,1)]
+void encodeBc7Mode0(uint3 id : SV_DispatchThreadID) { splitMode<0,3,4,4,0,3,2>(id.x); }
+[shader("compute")][numthreads(64,1,1)]
+void encodeBc7Mode1(uint3 id : SV_DispatchThreadID) { splitMode<1,2,6,6,0,3,1>(id.x); }
+[shader("compute")][numthreads(64,1,1)]
+void encodeBc7Mode2(uint3 id : SV_DispatchThreadID) { splitMode<2,3,6,5,0,2,0>(id.x); }
+[shader("compute")][numthreads(64,1,1)]
+void encodeBc7Mode3(uint3 id : SV_DispatchThreadID) { splitMode<3,2,6,7,0,2,2>(id.x); }
+[shader("compute")][numthreads(64,1,1)]
+void encodeBc7Mode4(uint3 id : SV_DispatchThreadID) { splitMode<4,1,0,5,6,2,0>(id.x); }
+[shader("compute")][numthreads(64,1,1)]
+void encodeBc7Mode5(uint3 id : SV_DispatchThreadID) { splitMode<5,1,0,7,8,2,0>(id.x); }
+[shader("compute")][numthreads(64,1,1)]
+void encodeBc7Mode6(uint3 id : SV_DispatchThreadID) { splitMode<6,1,0,7,7,4,2>(id.x); }
+[shader("compute")][numthreads(64,1,1)]
+void encodeBc7Mode7(uint3 id : SV_DispatchThreadID) { splitMode<7,2,6,5,5,2,2>(id.x); }
+
+[shader("compute")][numthreads(64,1,1)]
+void selectBc7Finalists(uint3 group : SV_GroupID,uint lane : SV_GroupIndex) {
+    if (root.d != 1 || root.preset == 0 || group.x >= root.blockCount) return;
+    uint preset = min(root.preset,2u), count = preset == 1 ? 85 : 285;
+    uint record = splitBase(group.x);
+    for (uint id = lane; id < count; id += 64) coarseErrors[id] = buffers[NonUniformResourceIndex(root.a)].Load(record+id*4);
+    GroupMemoryBarrierWithGroupSync();
+    for (uint id = lane; id < count; id += 64) {
+        uint rank = 0, balancedRank = preset == 2 && balancedCandidate(id) ? 0 : 8;
+        for (uint other = 0; other < count; ++other) {
+            if (coarseErrors[other] < coarseErrors[id] || (coarseErrors[other] == coarseErrors[id] && other < id)) {
+                rank += 1;
+                if (preset == 2 && balancedCandidate(other)) balancedRank += 1;
+            }
+            if (rank >= 8 && balancedRank >= 8) break;
+        }
+        if (rank < 8) buffers[NonUniformResourceIndex(root.a)].Store(record+1140+rank*4,id);
+        if (preset == 2 && balancedRank < 8) buffers[NonUniformResourceIndex(root.a)].Store(record+1140+(8+balancedRank)*4,id);
+    }
+    if (lane == 0) buffers[NonUniformResourceIndex(root.a)].Store(record+1140+(preset == 1 ? 8 : 16)*4,0);
+}
+[shader("compute")][numthreads(64,1,1)]
+void reduceBc7Finalists(uint3 group : SV_GroupID,uint lane : SV_GroupIndex) {
+    if (root.d != 1 || root.preset == 0 || group.x >= root.blockCount) return;
+    uint count = min(root.preset,2u) == 1 ? 9 : 17;
+    uint record = splitBase(group.x);
+    errors[lane] = 0xffffffff; candidates[lane] = 0xffffffff; blocks[lane] = uint4(0);
+    if (lane < count) {
+        candidates[lane] = buffers[NonUniformResourceIndex(root.a)].Load(record+1140+lane*4);
+        errors[lane] = buffers[NonUniformResourceIndex(root.a)].Load(record+1208+lane*20);
+        blocks[lane] = buffers[NonUniformResourceIndex(root.a)].Load4(record+1212+lane*20);
+    }
+    GroupMemoryBarrierWithGroupSync();
+    for (uint stride = 32; stride > 0; stride >>= 1) {
+        if (lane < stride) {
+            uint other = lane+stride;
+            if (errors[other] < errors[lane] || (errors[other] == errors[lane] && candidates[other] < candidates[lane])) {
+                errors[lane] = errors[other]; candidates[lane] = candidates[other]; blocks[lane] = blocks[other];
+            }
+        }
+        GroupMemoryBarrierWithGroupSync();
+    }
+    if (lane == 0) buffers[NonUniformResourceIndex(root.output)].Store4(group.x*16,blocks[0]);
+}

@@ -367,3 +367,5 @@ void encodeBc7(uint3 group : SV_GroupID, uint lane : SV_GroupIndex) {
     }
     if (lane == 0) buffers[NonUniformResourceIndex(root.output)].Store4(group.x*16,blocks[0]);
 }
+
+#include "bc7_split.slangh"
