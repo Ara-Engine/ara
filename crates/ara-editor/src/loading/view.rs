@@ -92,14 +92,26 @@ impl Status {
     }
 }
 
+/// Text widths in logical pixels at a font size: the window's text system (tests use a
+/// fixed advance). Long names and paths are fitted with it, so a line never grows past
+/// the card and never pushes the timer or a count out.
+pub(crate) trait Measure {
+    fn width(&mut self, text: &str, size: f32) -> f32;
+}
+
 /// Logical window width and the height without failures.
 pub(crate) const WIDTH: f32 = 520.;
 pub(crate) const BASE_HEIGHT: f32 = 268.;
 /// Failed imports listed by name; more are counted.
 const MAX_FAILURES: usize = 4;
 
-/// The window's markup for `status`.
-pub(crate) fn markup(status: &Status) -> String {
+/// The card's content width: the window less the root's 24 px sides.
+const CONTENT: f32 = WIDTH - 48.;
+/// A failure row's text width: less its padding, border, icon and gap.
+const FAILURE_TEXT: f32 = CONTENT - 22. - 16. - 10.;
+
+/// The window's markup for `status`, its long lines fitted with `measure`.
+pub(crate) fn markup(status: &Status, measure: &mut dyn Measure) -> String {
     let stage = status.stage();
     let mut out = String::from("<ui id='loading'><panel id='loading-root' class='root'>");
     // The Hub's brand row: wordmark and a version tag.
@@ -109,7 +121,8 @@ pub(crate) fn markup(status: &Status) -> String {
         escape(env!("CARGO_PKG_VERSION"))
     ));
     out.push_str(&format!(
-        "<panel id='loading-project' class='project'><text id='loading-name' class='name' text='{}' /><text id='loading-folder' class='caption' text='{}' description='{}' /></panel>",
+        "<panel id='loading-project' class='project'><text id='loading-name' class='name' text='{}' description='{}' /><text id='loading-folder' class='caption' text='{}' description='{}' /></panel>",
+        escape(&fit_end(measure, &status.project, 20., CONTENT)),
         escape(&status.project),
         escape(&middle(&status.folder, 64)),
         escape(&status.folder)
@@ -161,6 +174,9 @@ pub(crate) fn markup(status: &Status) -> String {
         ),
     };
     let review = stage == Stage::Review;
+    // The count and the timer keep their place: the title and the detail fit the rest.
+    let room = CONTENT - 12. - measure.width(&count, 12.);
+    let title = fit_end(measure, &title, 14., room);
     out.push_str(&format!(
         "<panel id='loading-stage' class='stage'><panel id='loading-stage-row' class='line'><text id='loading-title' class='title' text='{}' /><panel id='loading-stage-gap' class='fill' /><text id='loading-count' class='{}' text='{}' /></panel>",
         escape(&title),
@@ -180,10 +196,17 @@ pub(crate) fn markup(status: &Status) -> String {
             (fraction * 100.).clamp(0., 100.)
         ));
     }
+    let clock = clock(status.elapsed);
+    // JetBrains Mono advances 0.6 em: the 12 px timer is exactly this wide.
+    let room = CONTENT - 12. - clock.chars().count() as f32 * 7.2;
+    let shown = match (stage, &status.latest) {
+        (Stage::Importing, Some(path)) => fit_path(measure, "Imported ", path, 12., room),
+        _ => fit_end(measure, &detail, 12., room),
+    };
     out.push_str(&format!(
-        "<panel id='loading-detail-row' class='line'><text id='loading-detail' class='caption detail' text='{}' /><text id='loading-elapsed' class='caption elapsed' text='{}' /></panel></panel>",
+        "<panel id='loading-detail-row' class='line'><text id='loading-detail' class='caption detail' text='{}' description='{}' /><text id='loading-elapsed' class='caption elapsed' text='{clock}' /></panel></panel>",
+        escape(&shown),
         escape(&detail),
-        clock(status.elapsed)
     ));
     if let Some(imports) = status.imports.as_ref().filter(|i| !i.failed.is_empty()) {
         out.push_str("<panel id='loading-failures' class='failures'>");
@@ -191,9 +214,9 @@ pub(crate) fn markup(status: &Status) -> String {
             let first = error.lines().next().unwrap_or_default();
             out.push_str(&format!(
                 "<panel id='loading-failure-{n}' class='failure' description='{}'><image id='loading-failure-{n}-icon' class='icon warning' src='icon-triangle-alert' tint='true' /><panel id='loading-failure-{n}-text' class='failure-text'><text id='loading-failure-{n}-path' class='fg' text='{}' /><text id='loading-failure-{n}-error' class='caption' text='{}' /></panel></panel>",
-                escape(error),
-                escape(path),
-                escape(first)
+                escape(&format!("{path}\n{error}")),
+                escape(&fit_path(measure, "", path, 13., FAILURE_TEXT)),
+                escape(&fit_end(measure, first, 12., FAILURE_TEXT))
             ));
         }
         if imports.failed.len() > MAX_FAILURES {
@@ -229,6 +252,63 @@ pub(crate) fn markup(status: &Status) -> String {
     }
     out.push_str("</panel></panel></ui>");
     out
+}
+
+/// `text` on one line of `room` pixels at `size`: whole, or cut with "…".
+fn fit_end(measure: &mut dyn Measure, text: &str, size: f32, room: f32) -> String {
+    if measure.width(text, size) <= room {
+        return text.to_owned();
+    }
+    let chars: Vec<char> = text.chars().collect();
+    (0..chars.len())
+        .rev()
+        .map(|n| format!("{}…", chars[..n].iter().collect::<String>().trim_end()))
+        .find(|line| measure.width(line, size) <= room)
+        .unwrap_or_else(|| "…".to_owned())
+}
+
+/// `prefix` and a project `path` on one line of `room` pixels at `size`: whole, or the
+/// path's first folders and its file name around "…" (`assets/props/…/rock_large.glb`),
+/// dropping folders from the middle; a file name too long on its own keeps its start
+/// and its extension around "…".
+pub(crate) fn fit_path(
+    measure: &mut dyn Measure,
+    prefix: &str,
+    path: &str,
+    size: f32,
+    room: f32,
+) -> String {
+    let whole = format!("{prefix}{path}");
+    if measure.width(&whole, size) <= room {
+        return whole;
+    }
+    let parts: Vec<&str> = path.split('/').collect();
+    let file = parts.last().copied().unwrap_or(path);
+    let lead = if parts.len() > 1 { "…/" } else { "" };
+    let shorter = (1..parts.len().saturating_sub(1))
+        .rev()
+        .map(|keep| format!("{prefix}{}/…/{file}", parts[..keep].join("/")))
+        .chain(std::iter::once(format!("{prefix}{lead}{file}")));
+    for line in shorter {
+        if measure.width(&line, size) <= room {
+            return line;
+        }
+    }
+    let (stem, extension) = match file.rfind('.') {
+        Some(dot) if dot > 0 => file.split_at(dot),
+        _ => (file, ""),
+    };
+    let stem: Vec<char> = stem.chars().collect();
+    (0..stem.len())
+        .rev()
+        .map(|n| {
+            format!(
+                "{prefix}{lead}{}…{extension}",
+                stem[..n].iter().collect::<String>()
+            )
+        })
+        .find(|line| measure.width(line, size) <= room)
+        .unwrap_or_else(|| format!("{prefix}…"))
 }
 
 /// `m:ss` (or `h:mm:ss`).
@@ -279,6 +359,81 @@ fn middle(text: &str, max: usize) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Every character advances 0.6 em, like a monospaced font.
+    struct Mono;
+    impl Measure for Mono {
+        fn width(&mut self, text: &str, size: f32) -> f32 {
+            text.chars().count() as f32 * size * 0.6
+        }
+    }
+    fn markup(status: &Status) -> String {
+        super::markup(status, &mut Mono)
+    }
+
+    #[test]
+    fn long_paths_keep_their_start_and_file_name() {
+        let path = "assets/props/industrial/scrapyard/rock_formations/rock_large.glb";
+        let room = |chars: usize| chars as f32 * 12. * 0.6;
+        assert_eq!(
+            fit_path(&mut Mono, "", "assets/a.glb", 12., room(40)),
+            "assets/a.glb"
+        );
+        let fitted = fit_path(&mut Mono, "Imported ", path, 12., room(48));
+        assert_eq!(fitted, "Imported assets/props/…/rock_large.glb");
+        assert_eq!(
+            fit_path(&mut Mono, "", path, 12., room(18)),
+            "…/rock_large.glb"
+        );
+        let name = fit_path(
+            &mut Mono,
+            "",
+            "a/an_extremely_long_file_name.glb",
+            12.,
+            room(16),
+        );
+        assert!(
+            name.starts_with("…/an_") && name.ends_with("….glb"),
+            "{name}"
+        );
+        assert!(name.chars().count() <= 16);
+        assert_eq!(
+            fit_end(&mut Mono, "Opening a long project", 12., room(12)),
+            "Opening a l…"
+        );
+    }
+
+    #[test]
+    fn a_long_path_never_pushes_the_timer_out() {
+        let path = format!(
+            "assets/{}/rock_large_moss_covered_04_8k.glb",
+            "deep_folder/".repeat(12)
+        );
+        let s = Status {
+            latest: Some(path.clone()),
+            elapsed: 3725,
+            ..status(Some(Imports {
+                done: 36,
+                total: 115,
+                pending: 79,
+                failed: Vec::new(),
+            }))
+        };
+        let markup = markup(&s);
+        let shown = markup
+            .split("id='loading-detail' class='caption detail' text='")
+            .nth(1)
+            .and_then(|rest| rest.split('\'').next())
+            .expect("detail line");
+        assert!(shown.ends_with("/rock_large_moss_covered_04_8k.glb") && shown.contains('…'));
+        let room = CONTENT - 12. - "1:02:05".len() as f32 * 7.2;
+        assert!(Mono.width(shown, 12.) <= room, "{shown}");
+        assert!(
+            markup.contains(&format!("description='Imported {path}'")),
+            "full path tooltip"
+        );
+        assert!(markup.contains("text='1:02:05'"));
+    }
 
     fn status(imports: Option<Imports>) -> Status {
         Status {

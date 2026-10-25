@@ -392,7 +392,7 @@ impl Splash {
             self.light = status.light;
             self.markup.clear();
         }
-        let markup = view::markup(status);
+        let markup = view::markup(status, &mut Widths(&mut self.text));
         let changed = markup != self.markup;
         if changed {
             self.ui
@@ -454,6 +454,16 @@ impl Drop for Splash {
                 present.destroy(&self.gpu);
             }
         }
+    }
+}
+
+/// [`view::Measure`] over the window's text system (its shaping cache keeps the
+/// per-frame refits cheap).
+struct Widths<'a>(&'a mut TextSystem);
+impl view::Measure for Widths<'_> {
+    fn width(&mut self, text: &str, size: f32) -> f32 {
+        let mut line = ara_ui_text::Text::new(text.to_owned());
+        self.0.measure(&mut line, None, size).width
     }
 }
 
