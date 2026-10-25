@@ -137,6 +137,7 @@ impl Renderer {
         if let Some(gi) = &self.look.gi {
             gi.write(&mut look_frame, self.look.quality.gi_budget);
             look_frame.gi_gather = self.look.gather_indices();
+            look_frame.terrain[0] = self.look.quality.terrain_detail;
         }
         if let Some(r) = self.look.quality.reflections
             && self.targets.history.is_some()

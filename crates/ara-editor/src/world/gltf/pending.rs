@@ -3,7 +3,7 @@ use super::*;
 use ara_play_host::ImportProgress;
 use std::{collections::BTreeSet, sync::Arc};
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub(super) struct Progress {
     pub revision: u64,
     pub value: Option<Arc<ImportProgress>>,

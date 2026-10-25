@@ -7,6 +7,7 @@ use ara_render_fidelity::{
 };
 use ara_runtime_render::fidelity::native::{self, FrameChange, NativeConfig, Prepared};
 use ara_runtime_render::{PresentationImage, fidelity::vfx::Effects};
+mod content;
 #[derive(Default)]
 pub(super) struct SceneView {
     raster: Option<ara_runtime_render::RasterView>,
@@ -30,10 +31,17 @@ pub(super) struct SceneView {
     preview_view: Option<crate::world::DocumentView>,
     /// Pose already incorporated by the native patch path (no repeated extraction).
     patched_pose: Option<u64>,
+    /// One CPU-only replacement at a time; newer imports coalesce until it finishes.
+    content_job: Option<content::Job>,
+    content_epoch: u64,
+    /// Input actually reflected by the retained native frame. SceneSync can
+    /// invalidate after this view already adopted the same publication.
+    raster_input: Option<content::Key>,
 }
 impl SceneView {
-    /// Re-extract native input at the next render boundary, retaining GPU content
-    /// until the replacement or in-place update succeeds.
+    /// Recheck native input at the next render boundary. Notifications for an
+    /// already adopted publication coalesce; changed input retains last-good GPU
+    /// content until its replacement or in-place update succeeds.
     pub(super) fn invalidate(&mut self) {
         self.revision = None;
         self.failed = None;
@@ -42,6 +50,7 @@ impl SceneView {
     }
     /// Project typed Inspector drafts without authoring documents or baking meshes.
     pub(super) fn set_preview_view(&mut self, view: Option<crate::world::DocumentView>) {
+        self.content_epoch = self.content_epoch.wrapping_add(1);
         self.preview_view = view;
         self.invalidate();
     }
@@ -59,16 +68,16 @@ impl SceneView {
         if !renderer.is_native() || self.failed.is_some() {
             return Ok(false);
         }
-        let (Some(frame), Some(raster), Some(content), Some(revision)) = (
-            &mut self.raster_frame,
-            &mut self.raster,
-            &mut self.content,
-            self.revision,
-        ) else {
+        let (Some(frame), Some(raster), Some(content)) =
+            (&mut self.raster_frame, &mut self.raster, &mut self.content)
+        else {
             return Ok(false);
         };
-        let publication = content.revision();
-        if publication != revision.3 {
+        let publication = content.snapshot_revision();
+        if self
+            .revision
+            .is_some_and(|revision| publication != revision.3)
+        {
             return Ok(false);
         }
         let store = editor.host.store();
@@ -111,14 +120,24 @@ impl SceneView {
             renderer.reset_temporal_history();
         }
         self.preview_view = preview;
+        if !patch.is_empty() {
+            self.content_epoch = self.content_epoch.wrapping_add(1);
+        }
         self.raster_snapshot_dirty = true;
         self.patched_pose = pose_key(editor.gesture.as_ref());
-        self.revision = Some((
+        let revision = (
             store.revision(),
             editor.extraction_revision,
             editor.review_revision,
             publication,
-        ));
+        );
+        self.revision = Some(revision);
+        self.raster_input = Some(content::Key {
+            revision,
+            epoch: self.content_epoch,
+            pose: self.patched_pose,
+            scene: content::scene_key(editor),
+        });
         self.remaining = self.remaining.max(8);
         Ok(true)
     }
@@ -138,6 +157,9 @@ impl SceneView {
         settle: u32,
     ) -> ara_ui::Result<()> {
         self.render(renderer, editor, view, 1)?;
+        if self.content_job.is_some() {
+            self.render_raster_inner(renderer, editor, view, 1, true)?;
+        }
         if self.failed.is_some() {
             return Err("Scene capture could not prepare the requested content generation".into());
         }
@@ -149,7 +171,7 @@ impl SceneView {
                 .as_mut()
                 .ok_or("raster Scene view")?
                 .reset_capture(renderer)?;
-            return self.render_raster(renderer, editor, view, settle);
+            return self.render_raster_inner(renderer, editor, view, settle, true);
         }
         self.fidelity
             .as_mut()
@@ -186,6 +208,7 @@ impl SceneView {
             if let Err(error) = self.render_raster(renderer, editor, view, settle) {
                 eprintln!("Scene raster keeps its last good presentation: {error}");
                 self.remaining = 0;
+                self.raster_input = None;
                 self.failed = Some((
                     editor.host.store().revision(),
                     editor.extraction_revision,
@@ -200,6 +223,7 @@ impl SceneView {
             }
             return Ok(());
         }
+        self.content_job = None;
         if self.preview_view.is_some() {
             self.set_preview_view(None);
         }
@@ -207,6 +231,7 @@ impl SceneView {
             raster.destroy(renderer)?;
             renderer.clear_native()?;
             self.raster_frame = None;
+            self.raster_input = None;
             self.invalidate();
         }
         renderer.render_view(&editor.state.camera.spec(), 0.0015, mode)?;
@@ -234,6 +259,16 @@ impl SceneView {
         editor: &Editor,
         view: &crate::world::DocumentView,
         settle: u32,
+    ) -> ara_ui::Result<()> {
+        self.render_raster_inner(renderer, editor, view, settle, false)
+    }
+    fn render_raster_inner(
+        &mut self,
+        renderer: &mut Renderer,
+        editor: &Editor,
+        view: &crate::world::DocumentView,
+        settle: u32,
+        wait_for_content: bool,
     ) -> ara_ui::Result<()> {
         ara_gpu::cpu_scope!("SceneView.render_raster");
         let store = editor.host.store();
@@ -274,40 +309,92 @@ impl SceneView {
             editor.review_revision,
             content.revision(),
         );
+        let key = content::Key {
+            revision,
+            epoch: self.content_epoch,
+            pose: pose_key(editor.gesture.as_ref()),
+            scene: content::scene_key(editor),
+        };
         if self.failed == Some(revision) {
             // Retry only when content/publication/preview changes, rather than
             // allocating a failed generation on every UI frame.
             return Ok(());
         }
         if self.revision != Some(revision)
-            || (editor.gesture.is_some() && self.patched_pose != pose_key(editor.gesture.as_ref()))
-            || self.raster_frame.is_none()
+            && self.raster_frame.is_some()
+            && self.raster_input.is_some_and(|shown| shown.same_input(key))
         {
-            self.failed = Some(revision);
-            let frame = content.frame(
-                self.preview_view.as_ref().unwrap_or(view),
-                store.workspace(),
-                store.schema(),
-                editor.gesture.as_ref(),
-                &editor.state.hidden,
-            )?;
-            let look = FrameEnvironment::resolve(&frame.look, frame.environment.exposure);
-            let raster = self.raster.get_or_insert_with(|| {
-                ara_runtime_render::RasterView::new(editor.host.root().join(".ara/gpu"))
-            });
-            raster.prepare(renderer, &frame, plan, look, || {
-                content.content(&frame, store.workspace(), store.schema())
-            })?;
-            let arrivals = content.take_arrivals();
-            if !arrivals.is_empty() {
-                raster.fade_models(&arrivals)?;
-            }
-            self.raster_frame = Some(frame);
-            self.raster_snapshot_dirty = false;
+            // A settled ModelCache/extraction notification may arrive after this
+            // view's own publication. Acknowledge it without another snapshot.
             self.revision = Some(revision);
-            self.failed = None;
-            self.remaining = 64;
-        } else {
+            self.patched_pose = key.pose;
+        }
+        let changed = self.revision != Some(revision)
+            || (editor.gesture.is_some() && self.patched_pose != pose_key(editor.gesture.as_ref()))
+            || self.raster_frame.is_none();
+        if changed && self.content_job.is_none() {
+            content::queue_reason(self.revision, key);
+            self.content_job = Some(content::Job::start(
+                key,
+                content,
+                editor,
+                self.preview_view.as_ref().unwrap_or(view),
+            )?);
+        }
+        if self
+            .content_job
+            .as_ref()
+            .is_some_and(|job| wait_for_content || job.thread.is_finished())
+        {
+            let job = self.content_job.take().ok_or("Scene content job")?;
+            // Document edits and drafts supersede an old snapshot. Publication
+            // arrivals alone do not: show the ready partial scene, then request
+            // the latest one, so a continuous import stream cannot starve display.
+            let current = job.key.matches(key);
+            let result = job
+                .thread
+                .join()
+                .map_err(|_| "Scene content worker panicked")?;
+            if current {
+                self.failed = Some(revision);
+                let prepared = result?;
+                let raster = self.raster.get_or_insert_with(|| {
+                    ara_runtime_render::RasterView::new(editor.host.root().join(".ara/gpu"))
+                });
+                let frame = raster.publish_content(renderer, prepared.raster, plan)?;
+                *content = prepared.content;
+                let arrivals = content.take_arrivals();
+                if !arrivals.is_empty() {
+                    raster.fade_models(&arrivals)?;
+                }
+                self.raster_frame = Some(frame);
+                self.raster_snapshot_dirty = false;
+                self.revision = Some((
+                    revision.0,
+                    revision.1,
+                    revision.2,
+                    content.snapshot_revision(),
+                ));
+                self.raster_input = self
+                    .revision
+                    .map(|revision| content::Key { revision, ..key });
+                self.patched_pose = key.pose;
+                self.failed = None;
+                self.remaining = 64;
+            } else if !self.raster_input.is_some_and(|shown| shown.same_input(key)) {
+                content::queue_reason(self.revision, key);
+                self.content_job = Some(content::Job::start(
+                    key,
+                    content,
+                    editor,
+                    self.preview_view.as_ref().unwrap_or(view),
+                )?);
+            }
+        }
+        if self.raster_frame.is_none() {
+            return Ok(());
+        }
+        {
             let frame = self.raster_frame.as_mut().ok_or("raster frame")?;
             if let Some(changed) =
                 content.style_pending(frame, self.preview_view.as_ref().unwrap_or(view))
@@ -513,18 +600,19 @@ impl SceneView {
         Ok(())
     }
     pub fn needs_frame(&self, quality: bool) -> bool {
-        (quality || self.raster.is_some())
-            && self.active
-            && self.lit
-            && ((self.fidelity.is_some() || self.raster.is_some()) && self.remaining > 0
-                || self
-                    .raster
-                    .as_ref()
-                    .is_some_and(ara_runtime_render::RasterView::needs_frame)
-                || self.content.as_ref().is_some_and(|content| {
-                    content.revision() != self.revision.map_or(0, |revision| revision.3)
-                        || content.progress_pending()
-                }))
+        self.content_job.is_some()
+            || (quality || self.raster.is_some())
+                && self.active
+                && self.lit
+                && ((self.fidelity.is_some() || self.raster.is_some()) && self.remaining > 0
+                    || self
+                        .raster
+                        .as_ref()
+                        .is_some_and(ara_runtime_render::RasterView::needs_frame)
+                    || self.content.as_ref().is_some_and(|content| {
+                        content.revision() != self.revision.map_or(0, |revision| revision.3)
+                            || content.progress_pending()
+                    }))
     }
     pub fn attach(
         &self,
@@ -701,11 +789,96 @@ mod tests {
             scene
                 .render(&mut renderer, &editor, &view, 2)
                 .map_err(|error| anyhow::anyhow!("{error}"))?;
+            if !ray_tracing {
+                submit_ui(&scene, &renderer, &mut ui)?;
+                scene
+                    .render_capture(&mut renderer, &editor, &view, 2)
+                    .map_err(|error| anyhow::anyhow!("{error}"))?;
+            }
             assert!(scene.active);
             assert!(renderer.presentation_ready());
             submit_ui(&scene, &renderer, &mut ui)?;
             if !ray_tracing {
+                let allocation = scene
+                    .raster_frame
+                    .as_ref()
+                    .expect("native frame")
+                    .draws
+                    .as_ptr();
+                editor.extraction_revision += 1;
+                scene.invalidate();
+                scene
+                    .render(&mut renderer, &editor, &view, 1)
+                    .map_err(|error| anyhow::anyhow!("{error}"))?;
+                assert!(
+                    scene.content_job.is_none(),
+                    "already shown publication must not queue extraction"
+                );
+                assert_eq!(
+                    scene
+                        .raster_frame
+                        .as_ref()
+                        .expect("retained frame")
+                        .draws
+                        .as_ptr(),
+                    allocation
+                );
+                // Hold a real CPU candidate unfinished across all typed material,
+                // light, rename and drag patches. Live calls must neither join it
+                // nor replace it; explicit capture later drains the superseded job.
+                let key = content::Key {
+                    revision: scene.revision.expect("prepared Scene revision"),
+                    epoch: scene.content_epoch,
+                    pose: None,
+                    scene: content::scene_key(&editor),
+                };
+                let job = content::Job::start(
+                    key,
+                    scene.content.as_ref().expect("Scene cache"),
+                    &editor,
+                    &view,
+                )?;
+                let patched_allocation = scene
+                    .raster_frame
+                    .as_ref()
+                    .expect("shown frame")
+                    .draws
+                    .as_ptr();
+                let (release, wait) = std::sync::mpsc::channel();
+                scene.content_job = Some(content::Job {
+                    key,
+                    thread: std::thread::spawn(move || {
+                        wait.recv()?;
+                        job.thread
+                            .join()
+                            .map_err(|_| anyhow::anyhow!("test content worker"))?
+                    }),
+                });
+                scene.invalidate();
                 super::patch_tests::exercise(&mut scene, &mut renderer, &mut editor, &view, &root)?;
+                assert!(
+                    !scene
+                        .content_job
+                        .as_ref()
+                        .expect("same pending job")
+                        .thread
+                        .is_finished()
+                );
+                release.send(())?;
+                scene
+                    .render_capture(&mut renderer, &editor, &view, 2)
+                    .map_err(|error| anyhow::anyhow!("{error}"))?;
+                assert!(scene.content_job.is_none());
+                assert_eq!(
+                    scene
+                        .raster_frame
+                        .as_ref()
+                        .expect("shown patched frame")
+                        .draws
+                        .as_ptr(),
+                    patched_allocation,
+                    "stale worker must not rebuild already-patched input"
+                );
             }
             assert_eq!(scene.content.as_ref().expect("Scene content").revision(), 0);
             // The empty publication lands later. Neither no snapshot nor an
@@ -713,7 +886,7 @@ mod tests {
             let _assets = ara_play_host::assets::Assets::new(&root, &root.join("unused-worker"))
                 .map_err(anyhow::Error::msg)?;
             scene
-                .render(&mut renderer, &editor, &view, 1)
+                .render_capture(&mut renderer, &editor, &view, 1)
                 .map_err(|error| anyhow::anyhow!("{error}"))?;
             assert!(scene.content.as_ref().expect("Scene content").revision() > 0);
             if ray_tracing {
@@ -830,7 +1003,7 @@ mod tests {
                     &mut editor.models,
                 )?)?;
                 scene
-                    .render(&mut renderer, &editor, &reopened, 1)
+                    .render_capture(&mut renderer, &editor, &reopened, 1)
                     .map_err(|error| anyhow::anyhow!("{error}"))?;
                 assert!(scene.active);
                 assert!(

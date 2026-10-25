@@ -690,45 +690,49 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                         editor.report_failure(&*error);
                     }
                     scene_view.attach(&mut gpu, &renderer, editor.state.quality)?;
-                    let mut changed = editor.agent_tints();
-                    for id in view.ghosts().keys() {
-                        changed.insert(crate::world::render_id(id), "destructive-foreground");
+                    if renderer.presentation_ready() {
+                        let mut changed = editor.agent_tints();
+                        for id in view.ghosts().keys() {
+                            changed.insert(crate::world::render_id(id), "destructive-foreground");
+                        }
+                        let mut overlays = overlay::build(
+                            &view,
+                            &editor.state,
+                            rect,
+                            &renderer,
+                            &changed,
+                            controller.gizmo_state(),
+                        )?;
+                        if rect.contains(shell.pointer[0], shell.pointer[1])
+                            && !editor.state.palette
+                            && shell.menu.is_none()
+                            && shell
+                                .ui
+                                .hit_test(shell.pointer[0], shell.pointer[1])
+                                .is_none()
+                        {
+                            let c = shell
+                                .ui
+                                .sheet
+                                .color_token("--muted-foreground")
+                                .ok_or("hover token")?;
+                            overlays.push(crate::gpu::Overlay::Hover {
+                                uv: [
+                                    (shell.pointer[0] - rect.x) / rect.w,
+                                    (shell.pointer[1] - rect.y) / rect.h,
+                                ],
+                                color: [
+                                    f32::from(c.0) / 255.,
+                                    f32::from(c.1) / 255.,
+                                    f32::from(c.2) / 255.,
+                                    0.65,
+                                ],
+                            });
+                        }
+                        gpu.overlays(rect, overlay::ENTITY_IMAGE, overlays);
+                    } else {
+                        gpu.overlays(Default::default(), overlay::ENTITY_IMAGE, Vec::new());
                     }
-                    let mut overlays = overlay::build(
-                        &view,
-                        &editor.state,
-                        rect,
-                        &renderer,
-                        &changed,
-                        controller.gizmo_state(),
-                    )?;
-                    if rect.contains(shell.pointer[0], shell.pointer[1])
-                        && !editor.state.palette
-                        && shell.menu.is_none()
-                        && shell
-                            .ui
-                            .hit_test(shell.pointer[0], shell.pointer[1])
-                            .is_none()
-                    {
-                        let c = shell
-                            .ui
-                            .sheet
-                            .color_token("--muted-foreground")
-                            .ok_or("hover token")?;
-                        overlays.push(crate::gpu::Overlay::Hover {
-                            uv: [
-                                (shell.pointer[0] - rect.x) / rect.w,
-                                (shell.pointer[1] - rect.y) / rect.h,
-                            ],
-                            color: [
-                                f32::from(c.0) / 255.,
-                                f32::from(c.1) / 255.,
-                                f32::from(c.2) / 255.,
-                                0.65,
-                            ],
-                        });
-                    }
-                    gpu.overlays(rect, overlay::ENTITY_IMAGE, overlays);
                 } else {
                     gpu.overlays(Default::default(), overlay::ENTITY_IMAGE, Vec::new());
                 }
@@ -1039,7 +1043,7 @@ fn headless(options: Options) -> ara_ui::Result<()> {
     )?;
     detect_quality(&mut editor, &renderer);
     let mut scene_view = viewport::SceneView::default();
-    scene_view.render(&mut renderer, &editor, &view, 64)?;
+    scene_view.render_capture(&mut renderer, &editor, &view, 64)?;
     scene_view
         .capture(
             &mut renderer,

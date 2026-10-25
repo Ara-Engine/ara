@@ -16,12 +16,16 @@ device and per-view upload state; no simulation, window or process code.
   Presenter. `prepare` adopts published native generations, `render` draws native
   terrain/foliage and particles through the shared look. `capture` settles residency,
   probe acquisition and temporal history. It never discovers, cooks or imports.
+- `RasterContent::new(frame, content)` prepares immutable CPU geometry/materials
+  and the content key on a worker. `RasterView::publish_content` adopts it on the
+  device thread, preserving last-good content if GPU publication fails.
 - `RasterView::prepare_unchanged` is for a retained immutable extraction (editor
   accumulation/camera frames); it polls GI without revisiting root draws. Edits use
   `prepare` and its exact dirty rows. Any failed preparation discards that candidate
   CPU snapshot so retry cannot forget an accepted pose; GPU last-good stays live.
 - `ModelPlaceholders` styles unpublished models from read-only import status:
-  pending bounds are translucent grey; failed/missing stay magenta. Raster arrivals
+  pending bounds are short grey corner marks (no filled faces or distant clutter);
+  failed/missing stay solid magenta. Raster arrivals
   fade over 12 presented frames using material rows only; captures finish the fade.
 - Probe GI is enabled by default, acquired asynchronously and disk-cached; live
   frames poll without waiting. `wait_probe_gi` is an explicit capture boundary.

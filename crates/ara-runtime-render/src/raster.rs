@@ -12,6 +12,8 @@ use ara_render_fidelity::{environment::FrameEnvironment, presets::RasterPlan};
 use ara_runtime::extract::RenderFrame;
 use std::path::PathBuf;
 mod fade;
+mod prepared;
+pub use prepared::RasterContent;
 #[cfg(test)]
 mod tests;
 
@@ -22,6 +24,11 @@ pub struct RasterUpdate {
     pub rebuilt: bool,
     /// Root transforms and skin geometries updated in place.
     pub updated: usize,
+}
+
+struct Preparation {
+    snapshot_changed: bool,
+    replacement: Option<(Prepared, u64)>,
 }
 
 /// Derived native content and VFX on a caller-owned renderer/device. It never
@@ -37,8 +44,8 @@ pub struct RasterView {
     /// Emissive surfaces of the current generation and their lights, uploaded
     /// after the scene's own lights.
     emitters: Option<crate::emitters::Emitters>,
-    /// The emitter search for the current generation, running off this thread.
-    emitter_job: Option<std::thread::JoinHandle<crate::emitters::Emitters>>,
+    /// The emitter search for the current content, running off this thread.
+    emitter_search: crate::emitters::Search,
     emitter_lights: Vec<ara_render::scene::Light>,
     cache: PathBuf,
     key: u64,
@@ -60,7 +67,7 @@ impl RasterView {
             mobility: Default::default(),
             gi_updates: Default::default(),
             emitters: None,
-            emitter_job: None,
+            emitter_search: Default::default(),
             emitter_lights: Vec::new(),
             cache,
             key: crate::FNV,
@@ -84,21 +91,43 @@ impl RasterView {
     /// Keep progressive editor views polling until acquired probe surfaces arrive
     /// and moved instances settle back into them.
     pub fn needs_frame(&self) -> bool {
-        self.emitter_job.is_some()
+        self.emitter_search.is_busy()
             || self.fades.is_active()
             || self.gi.as_ref().is_some_and(|gi| {
                 gi.is_pending() || self.mobility.settling() || !self.gi_updates.is_empty()
             })
     }
 
-    /// Installs the finished (or, blocking, the running) emitter search.
-    fn adopt_emitters(&mut self) {
-        if let Some(job) = self.emitter_job.take() {
-            match job.join() {
-                Ok(emitters) => self.emitters = (!emitters.is_empty()).then_some(emitters),
-                Err(_) => eprintln!("ara-runtime-render: the emitter search panicked"),
-            }
+    /// Installs a finished emitter search (waiting for the running one when
+    /// `wait`); a queued rerun starts from the current content.
+    fn adopt_emitters(&mut self, wait: bool) -> Result<()> {
+        let Some(prepared) = &self.prepared else {
+            return Ok(());
+        };
+        if let Some(emitters) = self.emitter_search.poll(wait, || emitter_job(prepared))? {
+            self.emitters = (!emitters.is_empty()).then_some(emitters);
         }
+        Ok(())
+    }
+
+    /// Re-runs the emitter search when an edit changed emission (a lamp's
+    /// strength, colour or emissive switch); the old lights stay until it lands.
+    fn search_emission_edits(&mut self) -> Result<()> {
+        let Some(prepared) = &self.prepared else {
+            return Ok(());
+        };
+        let changed = &prepared.changes().materials;
+        if !changed.is_empty()
+            && crate::emitters::emission_edited(
+                self.emitters.as_ref(),
+                &prepared.scene,
+                |texture| prepared.textures.mean_texel(texture),
+                changed,
+            )
+        {
+            self.emitter_search.request(|| emitter_job(prepared))?;
+        }
+        Ok(())
     }
 
     /// Fade newly arrived model asset IDs over twelve presented frames, including
@@ -173,7 +202,47 @@ impl RasterView {
         look: FrameEnvironment,
         resolve: impl FnOnce() -> Result<Content>,
     ) -> Result<RasterUpdate> {
-        self.prepare_inner(renderer, frame, plan, look, resolve, true)
+        self.prepare_inner(
+            renderer,
+            frame,
+            plan,
+            look,
+            resolve,
+            Preparation {
+                snapshot_changed: true,
+                replacement: None,
+            },
+        )
+    }
+
+    /// Publish a CPU-prepared content snapshot at the device's frame boundary.
+    /// Call `RasterContent::new` on a worker; only GPU adoption runs here. Failure
+    /// retains the renderer's last completed content and presentation.
+    pub fn publish_content(
+        &mut self,
+        renderer: &mut Renderer,
+        candidate: RasterContent,
+        plan: RasterPlan,
+    ) -> Result<RenderFrame> {
+        let RasterContent {
+            frame,
+            content,
+            prepared,
+            key,
+        } = candidate;
+        let look = FrameEnvironment::resolve(&frame.look, frame.environment.exposure);
+        self.prepare_inner(
+            renderer,
+            &frame,
+            plan,
+            look,
+            || Ok(content),
+            Preparation {
+                snapshot_changed: true,
+                replacement: Some((prepared, key)),
+            },
+        )?;
+        Ok(frame)
     }
 
     /// Render an unchanged retained extraction without revisiting its draws.
@@ -187,7 +256,17 @@ impl RasterView {
         look: FrameEnvironment,
         resolve: impl FnOnce() -> Result<Content>,
     ) -> Result<RasterUpdate> {
-        self.prepare_inner(renderer, frame, plan, look, resolve, false)
+        self.prepare_inner(
+            renderer,
+            frame,
+            plan,
+            look,
+            resolve,
+            Preparation {
+                snapshot_changed: false,
+                replacement: None,
+            },
+        )
     }
 
     fn prepare_inner(
@@ -197,11 +276,17 @@ impl RasterView {
         plan: RasterPlan,
         look: FrameEnvironment,
         resolve: impl FnOnce() -> Result<Content>,
-        snapshot_changed: bool,
+        preparation: Preparation,
     ) -> Result<RasterUpdate> {
         ara_gpu::cpu_scope!("RasterView.prepare");
+        let Preparation {
+            snapshot_changed,
+            replacement,
+        } = preparation;
         let result = (|| {
-            let change = if snapshot_changed || self.prepared.is_none() {
+            let change = if replacement.is_some() {
+                FrameChange::Rebuild
+            } else if snapshot_changed || self.prepared.is_none() {
                 self.prepared
                     .as_mut()
                     .map(|p| p.update_frame(frame))
@@ -221,11 +306,14 @@ impl RasterView {
                     bake_content = Some(content.clone());
                 }
                 let config = texture_config();
-                let mut prepared = native::prepare(frame, content, config)?;
+                let (mut prepared, key) = match replacement {
+                    Some((prepared, key)) => (prepared, Some(key)),
+                    None => (native::prepare(frame, content, config)?, None),
+                };
                 prepared.enable_motion();
                 let textures = prepared.textures.fork_sources(config)?;
                 renderer.replace_native_scene(&prepared.scene, Box::new(textures))?;
-                self.key = content_key(&prepared);
+                self.key = key.unwrap_or_else(|| content_key(&prepared));
                 let arrivals = self
                     .prepared
                     .as_ref()
@@ -244,27 +332,16 @@ impl RasterView {
                 self.fades.rebind(&prepared, &arrivals);
                 // Emitter lights arrive from a worker; until then emitters light
                 // nothing (their emission is out of the probes too).
-                let job = crate::emitters::Job::new(
-                    &prepared.scene,
-                    &crate::gi::shading(&prepared),
-                    |texture, side| prepared.textures.texels(texture, side),
-                );
                 self.emitters = None;
-                self.emitter_job = if job.is_empty() {
-                    None
-                } else {
-                    Some(
-                        std::thread::Builder::new()
-                            .name("ara-emitters".into())
-                            .spawn(move || job.run())
-                            .context("emitter search thread")?,
-                    )
-                };
+                self.emitter_search.restart(emitter_job(&prepared))?;
                 self.prepared = Some(prepared);
                 self.pending_gi = true;
                 update.rebuilt = true;
             } else if let FrameChange::Ready { poses, skins } = change {
                 update.updated = poses + skins;
+                if snapshot_changed {
+                    self.search_emission_edits()?;
+                }
             }
             if renderer.size() != plan.render_size {
                 renderer.resize(plan.render_size)?;
@@ -276,13 +353,7 @@ impl RasterView {
             if *renderer.look() != raster_look {
                 renderer.set_look(raster_look)?;
             }
-            if self
-                .emitter_job
-                .as_ref()
-                .is_some_and(|job| job.is_finished())
-            {
-                self.adopt_emitters();
-            }
+            self.adopt_emitters(false)?;
             let prepared = self.prepared.as_mut().context("native raster content")?;
             if snapshot_changed {
                 self.fades.refresh(&mut prepared.scene);
@@ -431,7 +502,9 @@ impl RasterView {
 
     /// Wait only at an explicit capture/measurement boundary, never in live rendering.
     pub fn wait_probe_gi(&mut self, renderer: &mut Renderer) -> Result<()> {
-        self.adopt_emitters();
+        while self.emitter_search.is_busy() {
+            self.adopt_emitters(true)?;
+        }
         // A headless capture renders directly after this boundary, without a
         // further prepare. Publish newly adopted lights before its first frame.
         if let Some(prepared) = &mut self.prepared {
@@ -511,6 +584,15 @@ impl RasterView {
 /// Probe records applied per presented frame (8 MB): a full 32k-probe volume
 /// lands over eight frames instead of stalling one.
 const PROBES_PER_FRAME: usize = 4096;
+
+/// An emitter search of `prepared`'s current content.
+fn emitter_job(prepared: &Prepared) -> crate::emitters::Job {
+    crate::emitters::Job::new(
+        &prepared.scene,
+        &crate::gi::shading(prepared),
+        |texture, side| prepared.textures.texels(texture, side),
+    )
+}
 
 /// Runs a native `upload` of `scene` with the emitter `lights` after its own, so
 /// every upload (prepare, arrival fades, placeholder styling) keeps them; the

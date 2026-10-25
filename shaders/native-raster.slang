@@ -75,17 +75,56 @@ Surface surfaceMaterial(NativeMaterial m,Varying v){
     s.emissive=max(0,m.pbr.emissiveRoughness.rgb*sampleMap(m,3,v).rgb);
     s.ao=lerp(1,sampleMap(m,4,v).r,m.factors.x);s.transmission=saturate(m.factors.y*sampleMap(m,5,v).r);return s;
 }
-Surface surface(Varying v){
-    NativeMaterial m=material(v.material);Surface s=surfaceMaterial(m,v);
-    if(m.slots.z>0){
-        float4 weights=v.weights;for(uint i=m.slots.z;i<4;i++)weights[i]=0;
-        float sum=dot(weights,float4(1));weights=sum>1e-8?weights/sum:float4(1,0,0,0);s=(Surface)0;
-        for(uint i=0;i<m.slots.z;i++){
-            Surface a=surfaceMaterial(material(m.layers[i]),v);float w=weights[i];
-            s.albedo+=a.albedo*w;s.normal+=a.normal*w;s.roughness+=a.roughness*w;s.metal+=a.metal*w;s.emissive+=a.emissive*w;s.alpha+=a.alpha*w;s.ao+=a.ao*w;s.transmission+=a.transmission*w;
-        }
-        s.normal=normalize(s.normal);
+// A terrain splat: its layers blend colour, metal/roughness and tangent-space
+// normals in one tangent frame (the splat's), transformed once. Beyond the look's
+// terrain detail distance (blended over a quarter more, decided per quad so
+// derivatives stay valid) layers keep colour maps and material factors only.
+Surface terrainSurface(NativeMaterial m,Varying v){
+    float4 weights=v.weights;for(uint i=m.slots.z;i<4;i++)weights[i]=0;
+    float sum=dot(weights,float4(1));weights=sum>1e-8?weights/sum:float4(1,0,0,0);
+    // The layers share the splat geometry; the frame follows the first layer's
+    // normal-map coordinates (layers differ in tiling scale only).
+    NativeMaterial first=material(m.layers[0]);
+    float3 normal=safeNormalize(v.normal,float3(0,1,0)),t=v.tangent.xyz-normal*dot(v.tangent.xyz,normal);float handedness=v.tangent.w;
+    if(first.slots.w!=0){
+        float2 uv=coordinates(first.uv[1],v),a=ddx(uv),b=ddy(uv);float determinant=a.x*b.y-a.y*b.x;
+        if(abs(determinant)>1e-10){float3 e1=ddx(v.world),e2=ddy(v.world);t=(e1*b.y-e2*a.y)/determinant;t-=normal*dot(t,normal);float3 bitangent=(e2*a.x-e1*b.x)/determinant;handedness=dot(cross(normal,t),bitangent)<0?-1:1;}
     }
+    t=safeNormalize(t,normalize(cross(normal,abs(normal.y)<0.99?float3(0,1,0):float3(1,0,0))));
+    Frame f=frame();float range=look(f).terrain.x;
+    float detail=range>0?1-saturate((length(v.world-f.camera.xyz)-range)/(0.25*range)):0;
+    float quad=max(max(detail,QuadReadAcrossX(detail)),max(QuadReadAcrossY(detail),QuadReadAcrossDiagonal(detail)));
+    Surface s=(Surface)0;float3 tangentNormal=0;
+    for(uint i=0;i<m.slots.z;i++){
+        NativeMaterial layer=material(m.layers[i]);float w=weights[i];
+        float4 base=sampleMap(layer,0,v)*layer.pbr.color;
+        // Far away, the metal/roughness map's coarsest mip (its mean) scales the
+        // factors: glTF factors are often one, with the map holding the values.
+        float4 mr=ntSampleLevel(root.sample,layer.pbr.textures[2],float2(0.5,0.5),64.);float3 n=float3(0,0,1);
+        if(quad>0){
+            mr=lerp(mr,sampleMap(layer,2,v),detail);
+            n=lerp(float3(0,0,1),sampleMap(layer,1,v).xyz,detail);
+        }
+        float roughness=layer.pbr.emissiveRoughness.w*mr.g,metal=layer.pbr.surface.x*mr.b;
+        s.albedo+=max(0,base.rgb)*w;s.alpha+=base.a*w;tangentNormal+=n*w;
+        s.roughness+=clamp(roughness,0.045,1)*w;s.metal+=saturate(metal)*w;
+        s.emissive+=max(0,layer.pbr.emissiveRoughness.rgb*sampleMap(layer,3,v).rgb)*w;
+        s.ao+=lerp(1,sampleMap(layer,4,v).r,layer.factors.x)*w;
+    }
+    s.normal=safeNormalize(t*tangentNormal.x+cross(normal,t)*handedness*tangentNormal.y+normal*tangentNormal.z,normal);
+    return s;
+}
+Surface surface(Varying v){
+    NativeMaterial m=material(v.material);
+    // Guessed loading bounds must not cover the view or form stair-like bands
+    // across pending foliage. Keep only short one-pixel corner brackets; tiny
+    // distant bounds disappear. Failed/missing bounds remain opaque magenta.
+    if((m.pbr.flags.y&(1u<<27))!=0 && m.pbr.flags.x==2){
+        float2 step=max(fwidth(v.uv),float2(1e-6));
+        float2 edge=min(v.uv,1-v.uv)/step;
+        if(min(edge.x,edge.y)>1 || max(edge.x,edge.y)>8 || max(step.x,step.y)>0.125)discard;
+    }
+    Surface s=m.slots.z>0?terrainSurface(m,v):surfaceMaterial(m,v);
     if(m.pbr.flags.x==1 && s.alpha<m.pbr.surface.w)discard;
     float3 du=ddx(s.normal),dv=ddy(s.normal);float kernel=min(2*0.15915494*(dot(du,du)+dot(dv,dv)),0.18);
     s.roughness=sqrt(sqrt(saturate(pow(s.roughness,4)+kernel)));return s;
