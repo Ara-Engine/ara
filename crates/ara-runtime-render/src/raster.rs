@@ -12,6 +12,8 @@ use ara_render_fidelity::{environment::FrameEnvironment, presets::RasterPlan};
 use ara_runtime::extract::RenderFrame;
 use std::path::PathBuf;
 mod fade;
+#[cfg(test)]
+mod tests;
 
 /// Content-boundary result; ordinary movement keeps native allocations resident.
 #[derive(Debug, Default, Clone, Copy)]
@@ -430,6 +432,21 @@ impl RasterView {
     /// Wait only at an explicit capture/measurement boundary, never in live rendering.
     pub fn wait_probe_gi(&mut self, renderer: &mut Renderer) -> Result<()> {
         self.adopt_emitters();
+        // A headless capture renders directly after this boundary, without a
+        // further prepare. Publish newly adopted lights before its first frame.
+        if let Some(prepared) = &mut self.prepared {
+            if let Some(emitters) = &mut self.emitters {
+                let budget = (renderer.quality().emitter_lights as usize).min(
+                    ara_render::scene::MAX_LOCAL_LIGHTS.saturating_sub(prepared.scene.lights.len()),
+                );
+                if let Some(lights) = emitters.update(&prepared.scene, budget) {
+                    self.emitter_lights = lights;
+                }
+            }
+            with_emitter_lights(&mut prepared.scene, &self.emitter_lights, |scene| {
+                renderer.update_native_changed(scene, &ara_render::instanced::Changes::default())
+            })?;
+        }
         if let Some(gi) = &mut self.gi {
             while let Some(update) = gi.poll(true) {
                 queue_probe_gi(&mut self.gi_updates, update);

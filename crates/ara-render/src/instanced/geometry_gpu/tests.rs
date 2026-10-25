@@ -8,6 +8,7 @@ use ara_gpu::{
     vk,
 };
 use glam::Vec3;
+mod reuse;
 
 fn fixture() -> Scene {
     let geometry = [0.0, 2.0]

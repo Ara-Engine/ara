@@ -13,6 +13,7 @@ pub use changes::{CasterChanges, Changes, FrameWork};
 pub use geometry_gpu::{GeometryGpu, GeometryUpload, LodRange, PreparedPose};
 pub use material::{Material, MaterialExtras, TextureSlot, TextureTransform};
 pub use textures::{TextureBinding, TextureStats, Textures};
+pub(crate) use validate::ValidatedScene;
 
 /// Absent native texture or unused material index. Sampling supplies neutral
 /// white/flat-normal texels without allocating default images in the heap.

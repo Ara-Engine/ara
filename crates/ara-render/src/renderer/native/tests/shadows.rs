@@ -311,6 +311,12 @@ fn local_shadow_slots_keep_faces_independent_cache_casters_and_record_depth() ->
         selected(&renderer, passes[0]).is_empty(),
         "masked-to-blended edits invalidate the cached caster list"
     );
+    renderer.replace_native_scene(&scene, Box::new(EmptyTextures))?;
+    assert_eq!(renderer.native.as_ref().unwrap().culling.draws.len(), 9);
+    assert_eq!(renderer.cull_native_shadow_pass(1, matrices[1])?, passes[1]);
+    assert_eq!(selected(&renderer, passes[1]), [3]);
+    assert_eq!(renderer.cull_native_shadow_pass(0, matrices[0])?, passes[0]);
+    assert!(selected(&renderer, passes[0]).is_empty());
     renderer.gpu.assert_clean()?;
     println!(
         "100 two-face culls: shared far list {far_us:.2} us, independent cached slots {cached_us:.2} us; depth counts {counts:?}; {}",

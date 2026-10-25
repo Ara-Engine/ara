@@ -607,7 +607,7 @@
     },
     "entryPoints": [
         {
-            "name": "geometryFragment",
+            "name": "nativeForwardFragment",
             "stage": "fragment",
             "scope": {
                 "kind": "none",
@@ -615,7 +615,7 @@
                     {
                         "name": "v",
                         "stage": "fragment",
-                        "binding": {"kind": "varyingInput", "index": 0, "count": 4},
+                        "binding": {"kind": "varyingInput", "index": 0, "count": 10},
                         "type": {
                             "kind": "struct",
                             "name": "Varying",
@@ -671,10 +671,10 @@
                                     "semanticIndex": 1
                                 },
                                 {
-                                    "name": "uv",
+                                    "name": "tangent",
                                     "type": {
                                         "kind": "vector",
-                                        "elementCount": 2,
+                                        "elementCount": 4,
                                         "elementType": {
                                             "kind": "scalar",
                                             "scalarType": "float32"
@@ -689,10 +689,10 @@
                                     "semanticIndex": 2
                                 },
                                 {
-                                    "name": "tangent",
+                                    "name": "uv",
                                     "type": {
                                         "kind": "vector",
-                                        "elementCount": 4,
+                                        "elementCount": 2,
                                         "elementType": {
                                             "kind": "scalar",
                                             "scalarType": "float32"
@@ -705,10 +705,110 @@
                                     "binding": {"kind": "varyingInput", "index": 3},
                                     "semanticName": "TEXCOORD",
                                     "semanticIndex": 3
+                                },
+                                {
+                                    "name": "uv1",
+                                    "type": {
+                                        "kind": "vector",
+                                        "elementCount": 2,
+                                        "elementType": {
+                                            "kind": "scalar",
+                                            "scalarType": "float32"
+                                        },
+                                        "sizes": [
+                                            {"kind": "varyingInput", "value": 1}
+                                        ]
+                                    },
+                                    "stage": "fragment",
+                                    "binding": {"kind": "varyingInput", "index": 4},
+                                    "semanticName": "TEXCOORD",
+                                    "semanticIndex": 4
+                                },
+                                {
+                                    "name": "weights",
+                                    "type": {
+                                        "kind": "vector",
+                                        "elementCount": 4,
+                                        "elementType": {
+                                            "kind": "scalar",
+                                            "scalarType": "float32"
+                                        },
+                                        "sizes": [
+                                            {"kind": "varyingInput", "value": 1}
+                                        ]
+                                    },
+                                    "stage": "fragment",
+                                    "binding": {"kind": "varyingInput", "index": 5},
+                                    "semanticName": "TEXCOORD",
+                                    "semanticIndex": 5
+                                },
+                                {
+                                    "name": "currentClip",
+                                    "type": {
+                                        "kind": "vector",
+                                        "elementCount": 4,
+                                        "elementType": {
+                                            "kind": "scalar",
+                                            "scalarType": "float32"
+                                        },
+                                        "sizes": [
+                                            {"kind": "varyingInput", "value": 1}
+                                        ]
+                                    },
+                                    "stage": "fragment",
+                                    "binding": {"kind": "varyingInput", "index": 6},
+                                    "semanticName": "TEXCOORD",
+                                    "semanticIndex": 6
+                                },
+                                {
+                                    "name": "previousClip",
+                                    "type": {
+                                        "kind": "vector",
+                                        "elementCount": 4,
+                                        "elementType": {
+                                            "kind": "scalar",
+                                            "scalarType": "float32"
+                                        },
+                                        "sizes": [
+                                            {"kind": "varyingInput", "value": 1}
+                                        ]
+                                    },
+                                    "stage": "fragment",
+                                    "binding": {"kind": "varyingInput", "index": 7},
+                                    "semanticName": "TEXCOORD",
+                                    "semanticIndex": 7
+                                },
+                                {
+                                    "name": "material",
+                                    "type": {
+                                        "kind": "scalar",
+                                        "scalarType": "uint32",
+                                        "sizes": [
+                                            {"kind": "varyingInput", "value": 1}
+                                        ]
+                                    },
+                                    "stage": "fragment",
+                                    "binding": {"kind": "varyingInput", "index": 8},
+                                    "semanticName": "TEXCOORD",
+                                    "semanticIndex": 8
+                                },
+                                {
+                                    "name": "id",
+                                    "type": {
+                                        "kind": "scalar",
+                                        "scalarType": "uint32",
+                                        "sizes": [
+                                            {"kind": "varyingInput", "value": 1}
+                                        ]
+                                    },
+                                    "stage": "fragment",
+                                    "binding": {"kind": "varyingInput", "index": 9},
+                                    "semanticName": "TEXCOORD",
+                                    "semanticIndex": 9
                                 }
                             ],
                             "sizes": [
-                                {"kind": "varyingInput", "value": 4}
+                                {"kind": "varyingInput", "value": 10}
                             ]
                         }
                     }
@@ -718,7 +818,7 @@
                 {
                     "name": "v",
                     "stage": "fragment",
-                    "binding": {"kind": "varyingInput", "index": 0, "count": 4},
+                    "binding": {"kind": "varyingInput", "index": 0, "count": 10},
                     "type": {
                         "kind": "struct",
                         "name": "Varying",
@@ -774,10 +874,10 @@
                                 "semanticIndex": 1
                             },
                             {
-                                "name": "uv",
+                                "name": "tangent",
                                 "type": {
                                     "kind": "vector",
-                                    "elementCount": 2,
+                                    "elementCount": 4,
                                     "elementType": {
                                         "kind": "scalar",
                                         "scalarType": "float32"
@@ -792,10 +892,10 @@
                                 "semanticIndex": 2
                             },
                             {
-                                "name": "tangent",
+                                "name": "uv",
                                 "type": {
                                     "kind": "vector",
-                                    "elementCount": 4,
+                                    "elementCount": 2,
                                     "elementType": {
                                         "kind": "scalar",
                                         "scalarType": "float32"
@@ -808,23 +908,123 @@
                                 "binding": {"kind": "varyingInput", "index": 3},
                                 "semanticName": "TEXCOORD",
                                 "semanticIndex": 3
+                            },
+                            {
+                                "name": "uv1",
+                                "type": {
+                                    "kind": "vector",
+                                    "elementCount": 2,
+                                    "elementType": {
+                                        "kind": "scalar",
+                                        "scalarType": "float32"
+                                    },
+                                    "sizes": [
+                                        {"kind": "varyingInput", "value": 1}
+                                    ]
+                                },
+                                "stage": "fragment",
+                                "binding": {"kind": "varyingInput", "index": 4},
+                                "semanticName": "TEXCOORD",
+                                "semanticIndex": 4
+                            },
+                            {
+                                "name": "weights",
+                                "type": {
+                                    "kind": "vector",
+                                    "elementCount": 4,
+                                    "elementType": {
+                                        "kind": "scalar",
+                                        "scalarType": "float32"
+                                    },
+                                    "sizes": [
+                                        {"kind": "varyingInput", "value": 1}
+                                    ]
+                                },
+                                "stage": "fragment",
+                                "binding": {"kind": "varyingInput", "index": 5},
+                                "semanticName": "TEXCOORD",
+                                "semanticIndex": 5
+                            },
+                            {
+                                "name": "currentClip",
+                                "type": {
+                                    "kind": "vector",
+                                    "elementCount": 4,
+                                    "elementType": {
+                                        "kind": "scalar",
+                                        "scalarType": "float32"
+                                    },
+                                    "sizes": [
+                                        {"kind": "varyingInput", "value": 1}
+                                    ]
+                                },
+                                "stage": "fragment",
+                                "binding": {"kind": "varyingInput", "index": 6},
+                                "semanticName": "TEXCOORD",
+                                "semanticIndex": 6
+                            },
+                            {
+                                "name": "previousClip",
+                                "type": {
+                                    "kind": "vector",
+                                    "elementCount": 4,
+                                    "elementType": {
+                                        "kind": "scalar",
+                                        "scalarType": "float32"
+                                    },
+                                    "sizes": [
+                                        {"kind": "varyingInput", "value": 1}
+                                    ]
+                                },
+                                "stage": "fragment",
+                                "binding": {"kind": "varyingInput", "index": 7},
+                                "semanticName": "TEXCOORD",
+                                "semanticIndex": 7
+                            },
+                            {
+                                "name": "material",
+                                "type": {
+                                    "kind": "scalar",
+                                    "scalarType": "uint32",
+                                    "sizes": [
+                                        {"kind": "varyingInput", "value": 1}
+                                    ]
+                                },
+                                "stage": "fragment",
+                                "binding": {"kind": "varyingInput", "index": 8},
+                                "semanticName": "TEXCOORD",
+                                "semanticIndex": 8
+                            },
+                            {
+                                "name": "id",
+                                "type": {
+                                    "kind": "scalar",
+                                    "scalarType": "uint32",
+                                    "sizes": [
+                                        {"kind": "varyingInput", "value": 1}
+                                    ]
+                                },
+                                "stage": "fragment",
+                                "binding": {"kind": "varyingInput", "index": 9},
+                                "semanticName": "TEXCOORD",
+                                "semanticIndex": 9
                             }
                         ],
                         "sizes": [
-                            {"kind": "varyingInput", "value": 4}
+                            {"kind": "varyingInput", "value": 10}
                         ]
                     }
                 }
             ],
             "result": {
                 "stage": "fragment",
-                "binding": {"kind": "varyingOutput", "index": 0, "count": 5},
+                "binding": {"kind": "varyingOutput", "index": 0, "count": 7},
                 "type": {
                     "kind": "struct",
-                    "name": "GBuffer",
+                    "name": "Forward",
                     "fields": [
                         {
-                            "name": "albedo",
+                            "name": "color",
                             "type": {
                                 "kind": "vector",
                                 "elementCount": 4,
@@ -841,14 +1041,10 @@
                             "semanticName": "SV_TARGET"
                         },
                         {
-                            "name": "normal",
+                            "name": "id",
                             "type": {
-                                "kind": "vector",
-                                "elementCount": 4,
-                                "elementType": {
-                                    "kind": "scalar",
-                                    "scalarType": "float32"
-                                },
+                                "kind": "scalar",
+                                "scalarType": "float32",
                                 "sizes": [
                                     {"kind": "varyingOutput", "value": 1}
                                 ]
@@ -859,7 +1055,7 @@
                             "semanticIndex": 1
                         },
                         {
-                            "name": "material",
+                            "name": "albedo",
                             "type": {
                                 "kind": "vector",
                                 "elementCount": 4,
@@ -877,7 +1073,7 @@
                             "semanticIndex": 2
                         },
                         {
-                            "name": "world",
+                            "name": "normal",
                             "type": {
                                 "kind": "vector",
                                 "elementCount": 4,
@@ -895,10 +1091,14 @@
                             "semanticIndex": 3
                         },
                         {
-                            "name": "id",
+                            "name": "material",
                             "type": {
-                                "kind": "scalar",
-                                "scalarType": "float32",
+                                "kind": "vector",
+                                "elementCount": 4,
+                                "elementType": {
+                                    "kind": "scalar",
+                                    "scalarType": "float32"
+                                },
                                 "sizes": [
                                     {"kind": "varyingOutput", "value": 1}
                                 ]
@@ -907,10 +1107,46 @@
                             "binding": {"kind": "varyingOutput", "index": 4},
                             "semanticName": "SV_TARGET",
                             "semanticIndex": 4
+                        },
+                        {
+                            "name": "emissive",
+                            "type": {
+                                "kind": "vector",
+                                "elementCount": 4,
+                                "elementType": {
+                                    "kind": "scalar",
+                                    "scalarType": "float32"
+                                },
+                                "sizes": [
+                                    {"kind": "varyingOutput", "value": 1}
+                                ]
+                            },
+                            "stage": "fragment",
+                            "binding": {"kind": "varyingOutput", "index": 5},
+                            "semanticName": "SV_TARGET",
+                            "semanticIndex": 5
+                        },
+                        {
+                            "name": "velocity",
+                            "type": {
+                                "kind": "vector",
+                                "elementCount": 4,
+                                "elementType": {
+                                    "kind": "scalar",
+                                    "scalarType": "float32"
+                                },
+                                "sizes": [
+                                    {"kind": "varyingOutput", "value": 1}
+                                ]
+                            },
+                            "stage": "fragment",
+                            "binding": {"kind": "varyingOutput", "index": 6},
+                            "semanticName": "SV_TARGET",
+                            "semanticIndex": 6
                         }
                     ],
                     "sizes": [
-                        {"kind": "varyingOutput", "value": 5}
+                        {"kind": "varyingOutput", "value": 7}
                     ]
                 }
             },

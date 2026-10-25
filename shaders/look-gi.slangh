@@ -5,8 +5,6 @@
 // bounces) into a 6x6 octahedral irradiance atlas, sampled DDGI-style with
 // Chebyshev visibility and hardware bilinear filtering.
 // Include after look.slangh. No rays are traced at runtime.
-float2 octEncode(float3 n){n/=abs(n.x)+abs(n.y)+abs(n.z);float2 p=n.xy;if(n.z<0)p=(1-abs(p.yx))*float2(p.x>=0?1:-1,p.y>=0?1:-1);return p*0.5+0.5;}
-float3 octDecode(float2 p){p=p*2-1;float3 n=float3(p,1-abs(p.x)-abs(p.y));float t=saturate(-n.z);n.xy+=float2(n.x>=0?-t:t,n.y>=0?-t:t);return normalize(n);}
 // Fold bilinear taps across octahedral edges, including the shared corner.
 uint octIndex(int2 p,int size){
     if(p.x<0){p.x=-p.x-1;p.y=size-1-p.y;}else if(p.x>=size){p.x=2*size-1-p.x;p.y=size-1-p.y;}
