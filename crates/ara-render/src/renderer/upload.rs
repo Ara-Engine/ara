@@ -202,12 +202,18 @@ impl Renderer {
     }
 
     /// Replace the directional light: direction toward the light and linear RGB lux.
+    /// A direction within [`SUN_HOLD`] of the current one keeps it, so float noise
+    /// never re-fits the shadow maps or rebuilds the sky light.
     pub fn set_sun(&mut self, direction: Vec3, lux: Vec3) -> Result<()> {
         ensure!(
             direction.is_finite() && direction.length_squared() > 0.001 && lux.is_finite(),
             "Invalid directional light"
         );
-        self.content.sun_direction = direction.normalize();
+        let direction = held_sun(self.content.sun_direction, direction.normalize());
+        if direction == self.content.sun_direction && lux == self.content.sun_lux {
+            return Ok(());
+        }
+        self.content.sun_direction = direction;
         self.content.sun_lux = lux;
         self.content.revision += 1;
         Ok(())
@@ -687,4 +693,35 @@ fn upload_content_inner(
         revision: 0,
         entity_names: geometry.entity_names,
     })
+}
+
+/// Sun direction changes below this angle (radians) keep the current direction:
+/// far above float noise, far below anything visible (a 10 m caster's shadow at a
+/// 4 degree sun moves 2 cm), and real motion, an editor drag included, passes.
+pub(crate) const SUN_HOLD: f32 = 1e-5;
+
+/// `next` unless it is within [`SUN_HOLD`] of `current` (both unit). The angle
+/// comes from the cross product: in f32 a dot product cannot resolve it.
+pub(crate) fn held_sun(current: Vec3, next: Vec3) -> Vec3 {
+    if current.dot(next) > 0. && current.cross(next).length() < SUN_HOLD {
+        current
+    } else {
+        next
+    }
+}
+
+#[cfg(test)]
+mod sun_tests {
+    use super::*;
+
+    #[test]
+    fn noise_keeps_the_sun_and_motion_moves_it() {
+        let sun = Vec3::new(-0.930_286_3, 0.069_805_41, 0.360_131_3).normalize();
+        // One-ulp jitter in every component, as interpolation noise produced.
+        let noisy = Vec3::new(-0.930_286_35, 0.069_805_41, 0.360_131_23).normalize();
+        assert_eq!(held_sun(sun, noisy), sun);
+        let moved = (glam::Quat::from_rotation_y(1e-4) * sun).normalize();
+        assert_eq!(held_sun(sun, moved), moved);
+        assert_eq!(held_sun(sun, -sun), -sun, "opposite directions are a move");
+    }
 }
