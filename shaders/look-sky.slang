@@ -105,7 +105,8 @@ void fogMain(uint3 tid:SV_DispatchThreadID){
             float spot=light.parameters.x<0.5?1:smoothstep(light.directionOuter.w,max(light.directionOuter.w+1e-4,light.parameters.y),dot(-toLight,light.directionOuter.xyz));
             float fade=pow(saturate(1-pow(distance/light.positionRange.w,4)),2);
             float r2=max(0.01,light.parameters.z*light.parameters.z);
-            source+=density*albedo*light.colorLumens.rgb*light.colorLumens.w/(4*PI*max(distance*distance,r2))*fade*spot*phaseM(dot(d,toLight),g);
+            float shadow=(l.flags.y&LOOK_LOCAL_INDIRECT)!=0?localShadow(l,i,at,0,light.positionRange.xyz):1;
+            source+=density*albedo*light.colorLumens.rgb*light.colorLumens.w/(4*PI*max(distance*distance,r2))*fade*spot*shadow*phaseM(dot(d,toLight),g);
         }
         float3 segment=exp(-e*ds);integral+=trans*source*(1-segment)/max(e,float3(1e-9));trans*=segment;
         store(l.storage0.w,uint2(z*128+tid.x,tid.y),integral);

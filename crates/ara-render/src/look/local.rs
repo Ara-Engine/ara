@@ -380,6 +380,7 @@ mod tests {
             lights,
             resolution: 256,
             redraws,
+            in_gi_and_fog: false,
         }
     }
 

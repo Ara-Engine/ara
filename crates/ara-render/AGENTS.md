@@ -74,7 +74,7 @@ Owns the M1 baseline renderer and agent visual feedback. Gameplay state stays in
   distance; stable light space, practical splits, gather PCF, cascade blend; one
   cached D32 map per cascade, redrawn only when its matrix or casters in its light volume change, outer cascades
   snapped coarsely and redrawn at most one per frame, `Cascades::plan`), a cached far map (`look::far`),
-  local-light shadows (`look::local`), half-res GTAO and SSR (cone footprint into
+  local-light shadows (`look::local`; `in_gi_and_fog` also shadows GI relight and fog), half-res GTAO and SSR (cone footprint into
   last frame's colour pyramid), GI relight, bloom, emitter lights, LOD/cull pixels,
   terrain detail. Look images are allocated lazily (the bindless heap is shared);
   probe GI is gathered at half resolution for G-buffer pixels.

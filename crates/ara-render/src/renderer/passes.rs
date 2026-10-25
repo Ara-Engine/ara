@@ -205,6 +205,9 @@ impl Renderer {
                 local.size[0],
                 local.size[1],
             ];
+            if local.settings.in_gi_and_fog {
+                look_frame.flags[1] |= crate::look::frame::LOCAL_INDIRECT;
+            }
         }
         if let Some(r) = self.look.quality.reflections
             && self.targets.history.is_some()
@@ -365,9 +368,11 @@ impl Renderer {
         for (id, pass) in self.look.ssr_passes(&mut graph, &look, history, &ssr_reads) {
             declare(id, Recipe::Look(pass));
         }
+        // Fog and GI relight shadow local lights too (look::local).
         let mut sky_shared = graphics.clone();
         sky_shared.extend(cascade_reads.iter().copied());
         sky_shared.extend(far_read);
+        sky_shared.extend(local_read);
         let sun = {
             let d = self.content.sun_direction;
             let l = self.content.sun_lux;
