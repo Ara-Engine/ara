@@ -14,6 +14,8 @@ use std::{
     path::Path,
     time::{Duration, Instant},
 };
+mod loading;
+pub(crate) use loading::Loading;
 
 /// SDL scancode of Escape: closes a windowed player.
 const ESCAPE: i32 = 41;
@@ -99,28 +101,12 @@ impl Windowed {
         offscreen: bool,
     ) -> Result<(Self, Presenter)> {
         ara_gpu::cpu_scope!("Player.device_and_warm_pipelines");
-        let title = format!("Ara | {name}");
-        let window = if offscreen {
-            Window::hidden(&title, size)?
-        } else {
-            Window::new(&title, size)?
-        };
-        let mut presenter = Presenter::new(window.size()?, window.extensions()?, cache);
+        let (window, extensions, size) = Self::open_unprepared(name, size, offscreen)?;
+        let mut presenter = Presenter::new(size, extensions, cache);
         presenter.set_quality(quality);
         presenter.set_render_options(options);
         presenter.prepare(&warm_frame())?;
-        Ok((
-            Self {
-                window,
-                present: None,
-                present2d: None,
-                input: Mapper::default(),
-                frames: 0,
-                frame_times: Vec::new(),
-                window_start: Instant::now(),
-            },
-            presenter,
-        ))
+        Ok((window, presenter))
     }
 
     /// Drains window events into `player`'s action injections for the next tick.
