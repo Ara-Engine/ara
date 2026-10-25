@@ -288,7 +288,8 @@ impl Journey {
                     self.placed = Some(created);
                     editor.action("editor.search", json!({"panel": "assets", "query": ""}))?;
                     self.note =
-                        "opened Assets, searched for rock.glb, dragged it into the Scene view".into();
+                        "opened Assets, searched for rock.glb, dragged it into the Scene view"
+                            .into();
                 }
                 Ok(self.age > 30)
             }
