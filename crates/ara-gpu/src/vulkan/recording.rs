@@ -70,6 +70,33 @@ impl VulkanDevice {
     pub fn submit(&mut self, list: CommandList, waits: &[TimelinePoint]) -> Result<TimelinePoint> {
         self.poll_shader_reload();
         crate::cpu_scope!("GPU.submit");
+        // A synchronous helper's resolve used to finish its writes before the
+        // next helper could submit. Preserve that boundary with GPU waits when
+        // resolution is deferred, including across independently compiled graphs.
+        let mut merged = [TimelinePoint {
+            queue: Queue::Graphics,
+            value: 0,
+        }; 2];
+        let mut count = 0;
+        if self.deferred.is_some() {
+            let mut dependencies = self.deferred_waits;
+            for &point in waits {
+                dependencies[point.queue.index()] =
+                    dependencies[point.queue.index()].max(point.value);
+            }
+            for queue in [Queue::Graphics, Queue::Compute] {
+                let value = dependencies[queue.index()];
+                if value > 0 {
+                    merged[count] = TimelinePoint { queue, value };
+                    count += 1;
+                }
+            }
+        }
+        let waits = if self.deferred.is_some() {
+            &merged[..count]
+        } else {
+            waits
+        };
         for wait in waits {
             if wait.value > self.submitted[wait.queue.index()] {
                 return Err(GpuError::Contract("Wait targets unsubmitted work".into()));
@@ -186,7 +213,11 @@ impl VulkanDevice {
                         if queue == Queue::Compute {
                             self.context.compute
                         } else {
-                            self.context.graphics
+                            if self.scene_queue {
+                                self.context.scene_graphics
+                            } else {
+                                self.context.graphics
+                            }
                         },
                         &[vk::SubmitInfo2::default()
                             .wait_semaphore_infos(&waits)
@@ -224,12 +255,36 @@ impl VulkanDevice {
             query_capacity,
             labels,
         });
+        if let Some(points) = &mut self.deferred {
+            points.push(point);
+        }
+        for command in &list.commands {
+            if let Command::Barrier(Barrier {
+                resource: Resource::Buffer(buffer),
+                handoff,
+                ..
+            }) = command
+            {
+                self.buffers.get_mut(*buffer)?.owner = handoff.map_or(queue, |h| h.to);
+            }
+        }
         Ok(point)
     }
     /// Wait, read timestamps, recycle its query pool and release recording storage.
     pub fn resolve(&mut self, point: TimelinePoint) -> Result<Vec<PassTiming>> {
         crate::cpu_scope!("GPU.resolve");
+        if self.deferred.is_some() {
+            if !self.pending.iter().any(|pending| pending.point == point) {
+                return Err(GpuError::Contract("Unknown deferred submission".into()));
+            }
+            self.deferred_waits[point.queue.index()] =
+                self.deferred_waits[point.queue.index()].max(point.value);
+            return Ok(Vec::new());
+        }
         self.wait(point)?;
+        self.resolve_completed(point)
+    }
+    pub(super) fn resolve_completed(&mut self, point: TimelinePoint) -> Result<Vec<PassTiming>> {
         let index = self
             .pending
             .iter()
@@ -557,6 +612,27 @@ impl VulkanDevice {
                         || source.handle == destination.handle
                     {
                         return Err(GpuError::Contract("Invalid buffer copy range".into()));
+                    }
+                }
+                Command::UpdateBuffer {
+                    destination,
+                    offset,
+                    bytes,
+                } => {
+                    let destination = self.buffers.get(*destination)?.raw;
+                    if rendering
+                        || bytes.is_empty()
+                        || bytes.len() > 65536
+                        || bytes.len() % 4 != 0
+                        || offset % 4 != 0
+                        || offset
+                            .checked_add(bytes.len() as u64)
+                            .is_none_or(|end| end > destination.size)
+                        || !destination
+                            .usage
+                            .contains(vk::BufferUsageFlags::TRANSFER_DST)
+                    {
+                        return Err(GpuError::Contract("Invalid buffer update".into()));
                     }
                 }
                 Command::CopyImage {

@@ -48,6 +48,17 @@ pub(super) fn tile_for(p: &mut Page, ctx: &Ctx, template: &Template, thumb: f32,
             p.panel_styled("thumb", &format!("height:{thumb}px"), |p| {
                 if template.id == "blank" && template.thumbnail.is_none() {
                     p.panel("tile tile-1", |p| p.icon("file-plus", "icon-xl inherit"));
+                } else if template.id == "starter"
+                    && template
+                        .thumbnail
+                        .as_deref()
+                        .and_then(|path| (ctx.thumbnail)(path))
+                        .is_none()
+                {
+                    if let Some(path) = &template.thumbnail {
+                        p.wanted.push(path.clone());
+                    }
+                    p.image("template-starter", "thumb-image");
                 } else {
                     p.thumbnail(
                         ctx,
@@ -68,8 +79,7 @@ pub(super) fn tile_for(p: &mut Page, ctx: &Ctx, template: &Template, thumb: f32,
             });
             p.panel("template-body", |p| {
                 p.panel("row", |p| {
-                    let chars = ((thumb * 16. / 9. - 50.) / 7.5) as usize;
-                    p.text("template-name fill", &text::clip(&template.name, chars));
+                    p.text("template-name fill", &template.name);
                     if on {
                         p.icon("circle-check", "accent");
                     }

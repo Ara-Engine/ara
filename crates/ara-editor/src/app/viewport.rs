@@ -14,6 +14,7 @@ pub(super) use preview::{GamePreview, PreviewCamera};
 #[derive(Clone, Copy)]
 enum RasterWork {
     Live(u32),
+    Submitted(u32),
     Capture(u32),
     Prepare,
 }
@@ -22,6 +23,8 @@ pub(super) struct SceneView {
     raster: Option<ara_runtime_render::RasterView>,
     raster_frame: Option<ara_runtime::extract::RenderFrame>,
     raster_snapshot_dirty: bool,
+    /// One submitted Scene frame; UI draws its previous completed color/ID pair.
+    frame_pending: bool,
     fidelity: Option<FidelityView>,
     content: Option<crate::world::gltf::FidelityContent>,
     prepared: Option<Prepared>,
@@ -165,7 +168,14 @@ impl SceneView {
         view: &crate::world::DocumentView,
         settle: u32,
     ) -> ara_ui::Result<()> {
-        self.render(renderer, editor, view, 1)?;
+        renderer.wait_scene_frame()?;
+        self.frame_pending = false;
+        if super::scene_sync::native(editor, renderer) {
+            self.lit = matches!(view_mode(&editor.state.view_mode), ViewMode::Lit);
+            self.render_raster_inner(renderer, editor, view, RasterWork::Capture(1))?;
+        } else {
+            self.render(renderer, editor, view, 1)?;
+        }
         if self.content_job.is_some() {
             self.render_raster_inner(renderer, editor, view, RasterWork::Capture(1))?;
         }
@@ -217,6 +227,7 @@ impl SceneView {
             if let Err(error) = self.render_raster(renderer, editor, view, settle) {
                 eprintln!("Scene raster keeps its last good presentation: {error}");
                 self.remaining = 0;
+                self.frame_pending = renderer.scene_frame_pending();
                 self.raster_input = None;
                 self.failed = Some((
                     editor.host.store().revision(),
@@ -228,10 +239,19 @@ impl SceneView {
                 ));
                 // Scene content can fail before its first publication. Keep the
                 // editor alive and leave unwritten working targets unattached.
-                self.active = self.published.is_some();
+                self.active = if renderer.scene_frame_async() {
+                    renderer.presentation_ready()
+                } else {
+                    self.published.is_some()
+                };
             }
             return Ok(());
         }
+        if !renderer.poll_scene_frame()? {
+            self.frame_pending = true;
+            return Ok(());
+        }
+        self.frame_pending = false;
         self.content_job = None;
         if self.preview_view.is_some() {
             self.set_preview_view(None);
@@ -280,8 +300,20 @@ impl SceneView {
     ) -> ara_ui::Result<()> {
         ara_gpu::cpu_scope!("SceneView.render_raster");
         let wait_for_content = matches!(work, RasterWork::Capture(_));
+        if wait_for_content {
+            renderer.wait_scene_frame()?;
+        } else if !renderer.poll_scene_frame()? {
+            self.frame_pending = true;
+            return Ok(());
+        }
+        self.frame_pending = false;
+        if renderer.scene_frame_async() {
+            self.active = renderer.presentation_ready();
+        }
         let settle = match work {
-            RasterWork::Live(settle) | RasterWork::Capture(settle) => settle,
+            RasterWork::Live(settle)
+            | RasterWork::Submitted(settle)
+            | RasterWork::Capture(settle) => settle,
             RasterWork::Prepare => 0,
         };
         let store = editor.host.store();
@@ -353,6 +385,25 @@ impl SceneView {
                 editor,
                 self.preview_view.as_ref().unwrap_or(view),
             )?);
+        }
+        if matches!(work, RasterWork::Live(_)) {
+            let ready = self.raster_frame.is_some()
+                || self
+                    .content_job
+                    .as_ref()
+                    .is_some_and(|job| job.thread.is_finished() && job.key.matches(key));
+            if !ready {
+                return Ok(());
+            }
+            // CPU snapshotting is outside the scope. All GPU adoption, probe
+            // delivery, feature composition and post share its completion token.
+            let result = renderer.submit_scene_frame(|renderer| {
+                self.render_raster_inner(renderer, editor, view, RasterWork::Submitted(settle))
+                    .map_err(|error| anyhow::anyhow!("{error}"))
+            });
+            self.frame_pending = renderer.scene_frame_pending();
+            self.active = renderer.presentation_ready();
+            return result.map(|_| ()).map_err(Into::into);
         }
         if self
             .content_job
@@ -452,6 +503,9 @@ impl SceneView {
             {
                 self.remaining = self.remaining.max(1);
             }
+        }
+        if matches!(work, RasterWork::Submitted(_)) {
+            return Ok(());
         }
         let output = renderer.output();
         let size = renderer.size();
@@ -616,7 +670,8 @@ impl SceneView {
         Ok(())
     }
     pub fn needs_frame(&self, quality: bool) -> bool {
-        self.content_job.is_some()
+        self.frame_pending
+            || self.content_job.is_some()
             || (quality || self.raster.is_some())
                 && self.active
                 && self.lit
@@ -645,6 +700,7 @@ impl SceneView {
         if (quality || self.raster.is_some())
             && (self.lit || self.raster.is_some())
             && self.active
+            && !(self.raster.is_some() && renderer.scene_frame_async())
             && let Some(image) = &self.published
         {
             // SAFETY: This view and renderer share the live device; all submissions complete and restore CopySource.
@@ -665,12 +721,13 @@ impl SceneView {
         renderer: &mut Renderer,
         request: &CaptureRequest,
     ) -> anyhow::Result<ara_render::capture::Capture> {
+        renderer.wait_scene_frame()?;
         let mut capture = if renderer.is_native() {
             renderer.capture_completed(request)?
         } else {
             renderer.capture(request)?
         };
-        if self.active && matches!(request.mode, ViewMode::Lit) {
+        if self.active && matches!(request.mode, ViewMode::Lit) && !renderer.scene_frame_async() {
             self.published
                 .as_ref()
                 .ok_or_else(|| anyhow::anyhow!("Scene has no completed fidelity frame"))?
@@ -679,6 +736,7 @@ impl SceneView {
         Ok(capture)
     }
     pub fn destroy(self, renderer: &mut Renderer) -> ara_ui::Result<()> {
+        renderer.wait_scene_frame()?;
         if let Some(raster) = self.raster {
             raster.destroy(renderer)?;
         }
@@ -960,14 +1018,19 @@ mod tests {
                 "capture must reset history on the live view without another descriptor set (RT={ray_tracing}, maximum channel difference {difference})"
             );
             renderer.resize([240, 136])?;
-            assert!(!renderer.presentation_ready());
+            assert_eq!(renderer.presentation_ready(), renderer.scene_frame_async());
             // Retain the published Scene color while dropping stale working IDs.
             submit_ui(&scene, &renderer, &mut ui)?;
             scene
                 .render(&mut renderer, &editor, &view, 2)
                 .map_err(|error| anyhow::anyhow!("{error}"))?;
+            renderer.wait_scene_frame()?;
             assert_eq!(
-                scene.published.as_ref().expect("completed image").size(),
+                if ray_tracing {
+                    scene.published.as_ref().expect("completed image").size()
+                } else {
+                    renderer.output_size()
+                },
                 [240, 136]
             );
             // Interactive resizes retain the published frame while releasing the
@@ -978,8 +1041,13 @@ mod tests {
                 scene
                     .render(&mut renderer, &editor, &view, 1)
                     .map_err(|error| anyhow::anyhow!("{error}"))?;
+                renderer.wait_scene_frame()?;
                 assert_eq!(
-                    scene.published.as_ref().expect("resized frame").size(),
+                    if ray_tracing {
+                        scene.published.as_ref().expect("resized frame").size()
+                    } else {
+                        renderer.output_size()
+                    },
                     size
                 );
                 if ray_tracing {

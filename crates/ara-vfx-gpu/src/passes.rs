@@ -132,7 +132,7 @@ impl GpuSystem {
                 visible,
             ];
         }
-        gpu.upload(self.frame, bytemuck::bytes_of(&frame))?;
+        gpu.upload_queued(self.frame, bytemuck::bytes_of(&frame))?;
         self.resources[4].state.access = Access::HostWrite;
         self.last_frame = frame;
         self.async_compute = view.async_compute;

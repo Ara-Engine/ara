@@ -121,6 +121,10 @@ impl Renderer {
         if *current != name {
             *current = name;
             self.content.revision += 1;
+            self.entity_epoch = self.entity_epoch.wrapping_add(1);
+            if let Some(live) = &mut self.live {
+                live.rename(entity, current);
+            }
         }
         Ok(())
     }
@@ -132,6 +136,9 @@ impl Renderer {
             pixel[0] < self.size[0] && pixel[1] < self.size[1],
             "Pick is outside the viewport"
         );
+        if self.live.is_some() {
+            return self.pick_completed_scene(pixel);
+        }
         if self.targets.states[ID].access == Access::Undefined {
             return Ok(None);
         }

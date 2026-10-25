@@ -36,7 +36,8 @@ Events copy positions before slot reuse, route on GPU, spawn on the next tick.
 Draw/dispatch arguments are GPU-generated; GPU events are cosmetic only.
 Depth/age sorts use deterministic bitonic passes with slot-ID ties.
 All heap-reachable resources must appear in graph accesses. Frame resources are
-owned; no mutexes, interior mutability or per-frame resource clones.
+owned; no mutexes, interior mutability or per-frame resource clones. Frame constants
+use `upload_queued` so an enclosing deferred Scene scope orders writes on the GPU.
 Async compute is opt-in and must be measured on the target workload.
 Shader/pipeline replacement happens at frame boundaries after worker completion.
 

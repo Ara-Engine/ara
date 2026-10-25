@@ -59,7 +59,8 @@ impl Renderer {
         if let Some(native) = &mut self.native {
             native.prepare(&mut self.gpu, &frame, &camera, &self.look.quality)?;
         }
-        self.gpu.upload(self.frame, bytemuck::bytes_of(&frame))?;
+        self.gpu
+            .upload_queued(self.frame, bytemuck::bytes_of(&frame))?;
         // The far map redraws only when its view, content or casters inside it
         // changed; its draws read the far matrix as cascade 0 of their own frame
         // record, and native casters come from a culled pass of their own.
@@ -106,7 +107,8 @@ impl Renderer {
         if let (Some((matrix, _)), Some(far)) = (far_draw, &self.look.far) {
             let mut far_frame = frame;
             far_frame.shadows[0] = matrix;
-            self.gpu.upload(far.frame, bytemuck::bytes_of(&far_frame))?;
+            self.gpu
+                .upload_queued(far.frame, bytemuck::bytes_of(&far_frame))?;
             if self.native.is_some() {
                 self.cull_native_shadow(matrix)?;
             }
@@ -135,7 +137,7 @@ impl Renderer {
                     )?;
                     local_draws.push((face, pass, matrix));
                 }
-                self.gpu.upload(local.table, &plan.table)?;
+                self.gpu.upload_queued(local.table, &plan.table)?;
                 Ok(())
             })();
             self.look.local = Some(local);
@@ -144,7 +146,7 @@ impl Renderer {
         let mut compute_frame = frame;
         compute_frame.lighting[3] = self.content.compute_light_index;
         self.gpu
-            .upload(self.compute_frame, bytemuck::bytes_of(&compute_frame))?;
+            .upload_queued(self.compute_frame, bytemuck::bytes_of(&compute_frame))?;
         self.look.ensure(&mut self.gpu)?;
         let (sampled, storage) = self.look.indices();
         let look_frame = LookFrame::new(
@@ -202,7 +204,7 @@ impl Renderer {
             look_frame.ao_images = self.look.ao_indices();
         }
         self.gpu
-            .upload(self.look.frame, bytemuck::bytes_of(&look_frame))?;
+            .upload_queued(self.look.frame, bytemuck::bytes_of(&look_frame))?;
         let mut graph = Graph::default();
         let mut recipes = Vec::new();
         let ids = self
@@ -862,6 +864,9 @@ impl Renderer {
         if let Some(native) = &mut self.native {
             native.presented(&camera, !self.secondary_active);
         }
+        if !deferred {
+            self.publish_sync_scene()?;
+        }
         Ok(())
     }
 }
@@ -994,6 +999,7 @@ impl Renderer {
         }
         self.look.finish(&look, &compiled.final_states);
         self.gpu.assert_clean()?;
+        self.publish_sync_scene()?;
         Ok(self.targets.images[OUTPUT])
     }
 }

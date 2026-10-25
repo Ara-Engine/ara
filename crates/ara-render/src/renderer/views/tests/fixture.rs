@@ -1,6 +1,6 @@
 use super::*;
 
-pub(super) fn scene() -> instanced::Scene {
+pub(in crate::renderer) fn scene() -> instanced::Scene {
     instanced::Scene {
         geometry: vec![instanced::Geometry {
             key: [91; 32],

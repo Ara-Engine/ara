@@ -72,6 +72,54 @@ impl Drop for TestHub {
 }
 
 #[test]
+fn create_makes_parents_and_reports_the_original_service_diagnostic() {
+    let hub = TestHub::new("create-parents");
+    let path = hub.directory.join("missing/nested/Project");
+    hub.cli(&[
+        "hub",
+        "create",
+        path.to_str().expect("path"),
+        "--name",
+        "Nested",
+    ]);
+    assert!(path.join("ara.project.json").is_file());
+    for json in [false, true] {
+        let mut command = Command::new(env!("CARGO_BIN_EXE_ara"));
+        command.env("ARA_CONFIG_DIR", hub.config());
+        if json {
+            command.arg("--json");
+        }
+        let output = command
+            .args([
+                "hub",
+                "create",
+                path.to_str().expect("path"),
+                "--name",
+                "Another",
+            ])
+            .output()
+            .expect("ara");
+        assert!(!output.status.success());
+        let text = format!(
+            "{}{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert!(!text.contains("ARA1003"), "original service error: {text}");
+        assert!(
+            text.contains("ARA1602"),
+            "catalogued invalid params: {text}"
+        );
+        if json {
+            let result: Value = serde_json::from_slice(&output.stdout).expect("JSON diagnostic");
+            assert_eq!(result["diagnostics"][0]["location"]["path"], "path");
+        } else {
+            assert_eq!(text.matches("error[").count(), 1, "{text}");
+        }
+    }
+}
+
+#[test]
 fn service_build_handshake_replaces_idle_builds_and_preserves_open_projects() {
     let hub = TestHub::new("service-build");
     let executable = PathBuf::from(env!("CARGO_BIN_EXE_ara"));

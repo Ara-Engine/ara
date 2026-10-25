@@ -186,7 +186,7 @@ field:focus { border-color:var(--ring); }
 .template-on { border-color:var(--primary); background:var(--accent-surface); }
 .template-on:hover { border-color:var(--primary); }
 .template-body { padding:10px; padding-top:10px; gap:3px; }
-.template-name { font-size:14px; color:var(--foreground); }
+.template-name { font-size:14px; color:var(--foreground); white-space:normal; }
 .template-copy { font-size:12px; color:var(--muted-foreground); white-space:normal; flex-shrink:1; }
 .settings { width:380px; flex-shrink:0; gap:18px; padding:22px; background:var(--card); border-width:1px; border-color:var(--border); border-radius:var(--radius-base); }
 .form-row { gap:7px; flex-shrink:0; }
