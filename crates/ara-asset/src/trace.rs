@@ -29,7 +29,9 @@ pub(crate) fn enabled() -> bool {
     sink().is_some()
 }
 
-pub(crate) fn event(stage: &str, subject: &str, data: serde_json::Value) {
+/// Records an optional offline import event and process CPU counter. Disabled
+/// unless ARA_IMPORT_TRACE_DIR is set; never participates in cache identity.
+pub fn event(stage: &str, subject: &str, data: serde_json::Value) {
     let Some(sink) = sink() else { return };
     let value = json!({"stage":stage,"subject":subject,"pid":std::process::id(),
         "thread":format!("{:?}",std::thread::current().id()),

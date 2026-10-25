@@ -4,7 +4,7 @@
   "records": {
     "i_settings": {
       "importer": "ara.texture",
-      "version": "3-image025-ispc050-tiled-f32text",
+      "version": "4-image025-ispc050-texture-presets-tiled-f32text",
       "settings": {
         "usage": "normal"
       }

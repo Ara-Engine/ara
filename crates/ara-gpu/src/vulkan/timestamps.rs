@@ -112,16 +112,19 @@ fn relative_tick(tick: u64, origin: u64, bits: u32) -> i64 {
 
 #[derive(Default)]
 pub(super) struct Window {
+    active: bool,
     after: [u64; 2],
     queues: u8,
     span: Option<TimestampSpan>,
+    occupied: Vec<TimestampSpan>,
 }
 impl Window {
     pub fn reset(&mut self, submitted: [u64; 2]) {
-        *self = Self {
-            after: submitted,
-            ..Default::default()
-        };
+        self.active = true;
+        self.after = submitted;
+        self.queues = 0;
+        self.span = None;
+        self.occupied.clear();
     }
     pub fn observe(&mut self, point: TimelinePoint, interval: TimestampSpan) {
         if !self.includes(point) {
@@ -135,9 +138,29 @@ impl Window {
                 end_ms: old.end_ms.max(interval.end_ms),
             },
         });
+        // Keep the union ordered as asynchronous queues resolve. Storage is
+        // reused at reset; this scales with submissions, never scene instances.
+        let mut interval = interval;
+        let first = self
+            .occupied
+            .partition_point(|old| old.end_ms < interval.start_ms);
+        let mut end = first;
+        while let Some(old) = self.occupied.get(end)
+            && old.start_ms <= interval.end_ms
+        {
+            interval.start_ms = interval.start_ms.min(old.start_ms);
+            interval.end_ms = interval.end_ms.max(old.end_ms);
+            end += 1;
+        }
+        if first == end {
+            self.occupied.insert(first, interval);
+        } else {
+            self.occupied[first] = interval;
+            drop(self.occupied.drain(first + 1..end));
+        }
     }
     pub fn includes(&self, point: TimelinePoint) -> bool {
-        point.value > self.after[point.queue.index()]
+        self.active && point.value > self.after[point.queue.index()]
     }
     pub fn span(&self, shared_clock: bool) -> Option<TimestampSpan> {
         if self.queues.count_ones() > 1 && !shared_clock {
@@ -145,6 +168,15 @@ impl Window {
         } else {
             self.span
         }
+    }
+    pub fn gaps(&self, shared_clock: bool) -> Option<f64> {
+        self.span(shared_clock)?;
+        Some(
+            self.occupied
+                .windows(2)
+                .map(|pair| pair[1].start_ms - pair[0].end_ms)
+                .sum(),
+        )
     }
 }
 
@@ -165,6 +197,12 @@ impl VulkanDevice {
             return None;
         }
         self.timing_window.span(self.clock.shared())
+    }
+    /// Time not covered by any of this frame's submission intervals. Overlapping
+    /// queues count once; waits inside a submission remain part of that interval.
+    pub fn timing_window_gaps(&self) -> Option<f64> {
+        self.timing_window()?;
+        self.timing_window.gaps(self.clock.shared())
     }
 }
 
@@ -203,9 +241,51 @@ mod tests {
             );
         }
         assert_eq!(window.span(true).map(TimestampSpan::milliseconds), Some(6.));
+        assert_eq!(window.gaps(true), Some(2.));
         assert_eq!(window.span(false), None);
         window.reset([5, 1]);
         assert_eq!(window.span(true), None);
+    }
+    #[test]
+    fn submission_union_is_order_independent_and_storage_is_inactive_until_reset() {
+        let mut window = Window::default();
+        let point = TimelinePoint {
+            queue: Queue::Graphics,
+            value: 1,
+        };
+        window.observe(
+            point,
+            TimestampSpan {
+                start_ms: 1.,
+                end_ms: 99.,
+            },
+        );
+        assert!(window.occupied.is_empty());
+        assert!(window.span(true).is_none());
+        window.reset([0; 2]);
+        for (value, start_ms, end_ms) in [(1, 3., 5.), (2, 1., 4.), (3, 6., 8.), (4, 4.5, 6.5)] {
+            window.observe(
+                TimelinePoint { value, ..point },
+                TimestampSpan { start_ms, end_ms },
+            );
+        }
+        assert_eq!(window.gaps(true), Some(0.));
+        assert_eq!(
+            window.span(true),
+            Some(TimestampSpan {
+                start_ms: 1.,
+                end_ms: 8.
+            })
+        );
+        window.reset([4, 0]);
+        window.observe(
+            TimelinePoint { value: 5, ..point },
+            TimestampSpan {
+                start_ms: 10.,
+                end_ms: 12.,
+            },
+        );
+        assert_eq!(window.gaps(false), Some(0.));
     }
     #[test]
     fn narrow_timestamp_wrap_preserves_duration_and_common_epoch() {

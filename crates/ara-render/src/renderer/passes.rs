@@ -151,10 +151,6 @@ impl Renderer {
             self.look.local = Some(local);
             result?;
         }
-        let mut compute_frame = frame;
-        compute_frame.lighting[3] = self.content.compute_light_index;
-        self.gpu
-            .upload_queued(self.compute_frame, bytemuck::bytes_of(&compute_frame))?;
         self.look.ensure(&mut self.gpu)?;
         let (sampled, storage) = self.look.indices();
         // Exposure snaps to its meter on a reset unless a host seeded it, and
@@ -236,7 +232,7 @@ impl Renderer {
             Resource::Buffer(self.targets.tiles),
             State {
                 access: Access::Storage,
-                queue: Queue::Compute,
+                queue: Queue::Graphics,
             },
         );
         let look = self.look.import(&mut graph);
@@ -269,6 +265,7 @@ impl Renderer {
                 graphics.push((id, Access::ShaderRead));
             });
         }
+        let mut frame_input = None;
         for buffer in [self.frame, self.display_frame] {
             let id = graph.import(
                 Resource::Buffer(buffer),
@@ -277,6 +274,9 @@ impl Renderer {
                     queue: Queue::Graphics,
                 },
             );
+            if buffer == self.frame {
+                frame_input = Some(id);
+            }
             graphics.push((id, Access::ShaderRead));
         }
         // Host-written storage: dynamic vertices and the light list.
@@ -389,7 +389,10 @@ impl Renderer {
         for (id, pass) in self.look.gather_passes(&mut graph, &look, &gather_reads) {
             declare(id, Recipe::Look(pass));
         }
-        let culling = graph.pass("TiledLightCull", Queue::Compute, [(tile, Access::Storage)]);
+        // This tiny dispatch feeds lighting in the same frame. Keeping it on
+        // graphics batches the entire view instead of leaving CPU-recording gaps
+        // between graphics/compute submissions and a final ownership handoff.
+        let culling = graph.pass("TiledLightCull", Queue::Graphics, [(tile, Access::Storage)]);
         declare(culling, Recipe::Tile);
         let reflected = self.look.quality.reflections.is_some() && self.targets.history.is_some();
         let look_reads = self.look.lighting_reads(&look, reflected);
@@ -516,30 +519,23 @@ impl Renderer {
         }
         let ownership = graph.pass(
             "TileOwnershipReturn",
-            Queue::Compute,
+            Queue::Graphics,
             [(tile, Access::Storage)],
         );
         declare(ownership, Recipe::Empty);
         for pass in shaded {
             graph.accesses(pass, graphics.iter().copied())?;
         }
-        let compute_lights = graph.import(
-            Resource::Buffer(self.content.compute_lights),
-            State {
-                access: Access::HostWrite,
-                queue: Queue::Compute,
-            },
-        );
-        let mut compute = vec![(compute_lights, Access::ShaderRead)];
-        let compute_frame = graph.import(
-            Resource::Buffer(self.compute_frame),
-            State {
-                access: Access::HostWrite,
-                queue: Queue::Compute,
-            },
-        );
-        compute.push((compute_frame, Access::ShaderRead));
-        graph.accesses(culling, compute)?;
+        graph.accesses(
+            culling,
+            [
+                (lights, Access::ShaderRead),
+                (
+                    frame_input.expect("graphics frame imported"),
+                    Access::ShaderRead,
+                ),
+            ],
+        )?;
         let compiled = graph.compile()?;
         let mut points = Vec::new();
         let root = RootConstants {
@@ -718,9 +714,7 @@ impl Renderer {
                     }
                     Recipe::Tile => {
                         recorder.push(Command::Pipeline(self.pipelines.tile));
-                        let mut constants = root;
-                        constants.words[0] = self.compute_frame_index;
-                        recorder.push(Command::Constants(constants));
+                        recorder.push(Command::Constants(root));
                         recorder.push(Command::Dispatch([
                             (self.render[0].div_ceil(16) * self.render[1].div_ceil(16))
                                 .div_ceil(64),

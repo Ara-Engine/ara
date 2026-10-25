@@ -19,6 +19,39 @@ impl GpuSystem {
         cooked: &Path,
         size: [u32; 2],
     ) -> Result<Self> {
+        let mut resources = Vec::new();
+        let mut pipelines = Vec::new();
+        let result = Self::allocate(gpu, effect, cooked, size, &mut resources, &mut pipelines);
+        match result {
+            Ok(mut system) => {
+                if let Err(error) = system.reset(gpu) {
+                    system.retire(gpu)?;
+                    return Err(error);
+                }
+                Ok(system)
+            }
+            Err(error) => {
+                for tracked in resources.into_iter().rev() {
+                    gpu.retire(tracked.resource)?;
+                }
+                for pipeline in pipelines {
+                    gpu.retire_pipeline(pipeline)?;
+                }
+                gpu.collect()?;
+                Err(error)
+            }
+        }
+    }
+
+    /// Transactional construction: the caller retires every allocation on error.
+    fn allocate(
+        gpu: &mut VulkanDevice,
+        effect: &Effect,
+        cooked: &Path,
+        size: [u32; 2],
+        resources: &mut Vec<Tracked>,
+        created_pipelines: &mut Vec<Pipeline>,
+    ) -> Result<Self> {
         ensure!(!size.contains(&0), "zero VFX capture extent");
         let hash = effect
             .content_hash()
@@ -41,7 +74,9 @@ impl GpuSystem {
             } else {
                 cohort = Some(p.key.clone());
             }
-            Ok(gpu.create_pipeline(&p, cooked)?)
+            let pipeline = gpu.create_pipeline(&p, cooked)?;
+            created_pipelines.push(pipeline);
+            Ok(pipeline)
         };
         let compute = COMPUTE_ENTRIES
             .iter()
@@ -61,7 +96,6 @@ impl GpuSystem {
             binding_layout_hash: p.binding_layout_hash,
         };
         let layout = Layout::new(&effect)?;
-        let mut resources = Vec::new();
         let mut buffer = |gpu: &mut VulkanDevice,
                           size: u64,
                           host: bool,
@@ -143,7 +177,6 @@ impl GpuSystem {
         });
         let material_buffer =
             gpu.create_buffer(16 * 64 * 16, vk::BufferUsageFlags::STORAGE_BUFFER, true)?;
-        gpu.upload(material_buffer, &vec![0u8; 16 * 64 * 16])?;
         resources.push(Tracked {
             resource: Resource::Buffer(material_buffer),
             state: State {
@@ -151,6 +184,7 @@ impl GpuSystem {
                 queue: Queue::Graphics,
             },
         });
+        gpu.upload(material_buffer, &vec![0u8; 16 * 64 * 16])?;
         let material_index = gpu.storage_buffer(material_buffer)?.index;
         let indices = [
             gpu.storage_buffer(particles)?.index,
@@ -161,9 +195,12 @@ impl GpuSystem {
         let config_index = gpu.storage_buffer(config)?.index;
         let depth_index = gpu.sampled_image(depth, false)?.index;
         let hdr_index = gpu.sampled_image(hdr, false)?.index;
+        // Initialize host rows before atlas upload submits work. A deferred Scene
+        // cannot overwrite buffers conservatively retained by that submission.
+        gpu.upload(config, bytemuck::cast_slice(&layout.configs))?;
+        resources[3].state.access = Access::HostWrite;
         let atlas_bytes = std::fs::read(cooked.join("../atlas.rgba"))?;
         let atlas = crate::atlas::upload(gpu, &atlas_bytes)?;
-        let atlas_index = gpu.sampled_image(atlas, false)?.index;
         resources.push(Tracked {
             resource: Resource::Image(atlas),
             state: State {
@@ -171,12 +208,11 @@ impl GpuSystem {
                 queue: Queue::Graphics,
             },
         });
-        gpu.upload(config, bytemuck::cast_slice(&layout.configs))?;
-        resources[3].state.access = Access::HostWrite;
-        let mut result = Self {
+        let atlas_index = gpu.sampled_image(atlas, false)?.index;
+        Ok(Self {
             effect,
             layout,
-            resources,
+            resources: std::mem::take(resources),
             particles,
             lists,
             control,
@@ -208,9 +244,7 @@ impl GpuSystem {
             visible: 0,
             async_compute: false,
             last_frame: Frame::zeroed(),
-        };
-        result.reset(gpu)?;
-        Ok(result)
+        })
     }
     /// Reset deterministic replay state without changing compiled programs.
     pub fn reset(&mut self, gpu: &mut VulkanDevice) -> Result<()> {
@@ -248,31 +282,34 @@ impl GpuSystem {
         };
         let staging =
             gpu.create_buffer(bytes.len() as u64, vk::BufferUsageFlags::TRANSFER_SRC, true)?;
-        gpu.upload(staging, bytes)?;
-        let state = self.resources[index].state;
-        let mut r = gpu.begin(state.queue);
-        r.push(Command::Barrier(Barrier {
-            resource: Resource::Buffer(staging),
-            before: Access::HostWrite,
-            after: Access::CopySource,
-            handoff: None,
-        }));
-        r.push(Command::Barrier(Barrier {
-            resource: Resource::Buffer(destination),
-            before: state.access,
-            after: Access::CopyDestination,
-            handoff: None,
-        }));
-        r.push(Command::CopyBuffer {
-            source: staging,
-            destination,
-            size: bytes.len() as u64,
-        });
-        let point = gpu.submit(r.finish(), &[])?;
-        gpu.resolve(point)?;
+        let result = (|| {
+            gpu.upload(staging, bytes)?;
+            let state = self.resources[index].state;
+            let mut r = gpu.begin(state.queue);
+            r.push(Command::Barrier(Barrier {
+                resource: Resource::Buffer(staging),
+                before: Access::HostWrite,
+                after: Access::CopySource,
+                handoff: None,
+            }));
+            r.push(Command::Barrier(Barrier {
+                resource: Resource::Buffer(destination),
+                before: state.access,
+                after: Access::CopyDestination,
+                handoff: None,
+            }));
+            r.push(Command::CopyBuffer {
+                source: staging,
+                destination,
+                size: bytes.len() as u64,
+            });
+            let point = gpu.submit(r.finish(), &[])?;
+            gpu.resolve(point)?;
+            self.resources[index].state.access = Access::CopyDestination;
+            Ok(())
+        })();
         gpu.retire(Resource::Buffer(staging))?;
         gpu.collect()?;
-        self.resources[index].state.access = Access::CopyDestination;
-        Ok(())
+        result
     }
 }

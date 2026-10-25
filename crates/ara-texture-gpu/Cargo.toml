@@ -10,12 +10,18 @@ publish.workspace = true
 ara-asset = { path = "../ara-asset" }
 ara-asset-format = { path = "../ara-asset-format" }
 ara-gpu = { path = "../ara-gpu" }
+ara-json = { path = "../ara-json" }
 bytemuck.workspace = true
+getrandom = "0.4"
+serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
+tempfile.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { workspace = true, features = ["Win32_Foundation", "Win32_System_Threading"] }
 
 [dev-dependencies]
 bcdec_rs = "0.2.1"
-tempfile.workspace = true
 
 [lints]
 workspace = true

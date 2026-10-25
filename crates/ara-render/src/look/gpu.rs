@@ -346,8 +346,8 @@ impl LookGpu {
     }
 
     /// Zeroes the exposure state so a capture converges exactly as from a fresh
-    /// view (history then pre-exposes by the frame's exposure argument). Call
-    /// only between completed frames.
+    /// view (history then pre-exposes by the frame's exposure argument). An
+    /// enclosing deferred Scene scope orders this reset behind earlier work.
     pub(crate) fn reset_exposure(&mut self, gpu: &mut VulkanDevice) -> Result<()> {
         gpu.upload_queued(self.state, &[0; STATE_BYTES])?;
         self.state_access = Access::HostWrite;

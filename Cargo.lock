@@ -1980,10 +1980,14 @@ dependencies = [
  "ara-asset",
  "ara-asset-format",
  "ara-gpu",
+ "ara-json",
  "bcdec_rs",
  "bytemuck",
+ "getrandom 0.4.3",
+ "serde",
  "serde_json",
  "tempfile",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

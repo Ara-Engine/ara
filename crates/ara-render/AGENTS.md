@@ -123,9 +123,9 @@ indices to entities. Marks boxes cover visible pixels, including transparency.
 Graph v0 allocates owned transient storage without aliasing. Imported resources
 must declare their actual previous state; cross-queue imports need a release pass.
 Static bindless reachability is conservatively declared for every graphics pass;
-frame uploads use HostWrite imports. Frame end returns light tiles to compute ownership. Readbacks stay coherent and
-are read only after timeline completion. V0 serializes frames for inspection. Static scene storage is device-local;
-startup staging transfers run on the eventual owning queue.
+frame uploads use HostWrite imports. Raster culling and post share one graphics submission;
+tiles stay on graphics between frames. Preparation can use compute. Readbacks are coherent
+and read after completion. Static storage is device-local; startup staging uses its owning queue.
 
 ## Verification
 
