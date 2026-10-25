@@ -551,37 +551,49 @@ fn editor_value(results: &Results, cold: bool, path: &[&str]) -> (Measured<f64>,
     }
 }
 
+/// Player startup timestamps, ms from the player's `main()`: `first_frame_ms` is
+/// the first presented image (the loading view while the runtime prepares, 5d7414b5),
+/// `full_scene_frame_ms` the first game frame presented after it. Players from
+/// before the loading view record no `full_scene_frame_ms`, and their first frame
+/// is the scene itself.
 fn startup(results: &Results, rows: &mut Vec<Row>) {
+    const FIRST: [&str; 2] = ["startup", "first_frame_ms"];
+    const FULL: [&str; 2] = ["startup", "full_scene_frame_ms"];
     for scene in &SCENES {
         let subject = format!("Player · {}", scene.name);
-        let (value, source) = window_metric(
-            results,
-            results.cold.get(scene.name),
-            &["startup", "first_frame_ms"],
-        );
-        rows.push(
-            Row::new("Startup", &subject, "First presented frame, cold")
-                .gate("D26", D26_FIRST_FRAME)
-                .note("from the player's main(); it presents the scene itself, with no separate loading view")
-                .source(source)
-                .value(value),
-        );
-        let (value, source) = window_metric(
-            results,
-            results.steady.get(&(scene.name, "high")),
-            &["startup", "first_frame_ms"],
-        );
-        rows.push(
-            Row::new("Startup", &subject, "First presented frame, warm")
-                .gate("D26", D26_FIRST_FRAME)
-                .source(source)
-                .value(value),
-        );
-        rows.push(
-            Row::new("Startup", &subject, "Full first scene frame, warm")
-                .gate("D26", D26_FULL_SCENE)
-                .value(Err("the player has no content-readiness signal yet (texture refinement, probe GI); its first frame is not full-scene-ready".into())),
-        );
+        let cold = results.cold.get(scene.name);
+        let warm = results.steady.get(&(scene.name, "high"));
+        for (window, metric, path, gate) in [
+            (
+                cold,
+                "First presented frame (loading view), cold",
+                FIRST,
+                Some(D26_FIRST_FRAME),
+            ),
+            (
+                warm,
+                "First presented frame (loading view), warm",
+                FIRST,
+                Some(D26_FIRST_FRAME),
+            ),
+            (
+                warm,
+                "Full first scene frame, warm",
+                FULL,
+                Some(D26_FULL_SCENE),
+            ),
+            (cold, "Full first scene frame, cold", FULL, None),
+        ] {
+            let (value, source) = window_metric(results, window, &path);
+            let mut row = Row::new("Startup", &subject, metric).source(source);
+            if let Some(limit) = gate {
+                row = row.gate("D26", limit);
+            }
+            if path == FULL {
+                row = row.note("the first game frame after the loading view; texture refinement and probe GI may still converge");
+            }
+            rows.push(row.value(value));
+        }
     }
     let subject = "Editor · Outpost";
     for (cold, metric, path, gate) in [
@@ -842,6 +854,45 @@ mod tests {
         let hangar = find("Hangar · High (Play)", "CPU frame p95 (wall bound)");
         assert_eq!(hangar.status, Status::NotMeasured);
         assert!(hangar.note.contains("590 of 600"));
+    }
+
+    #[test]
+    fn player_startup_rows_read_the_loading_and_full_scene_frames() {
+        let window = |startup: Value| {
+            Ok(Window {
+                report: PathBuf::from("r.json"),
+                player: json!({ "startup": startup }),
+            })
+        };
+        let mut results = Results::default();
+        results.cold.insert(
+            "Outpost",
+            window(json!({"loading_frame_ms": 1300, "first_frame_ms": 1300, "full_scene_frame_ms": 6600})),
+        );
+        results.steady.insert(
+            ("Outpost", "high"),
+            window(json!({"loading_frame_ms": 1200, "first_frame_ms": 1200, "full_scene_frame_ms": 3500})),
+        );
+        // A player from before the loading view: no full-scene timestamp.
+        results
+            .steady
+            .insert(("Hangar", "high"), window(json!({"first_frame_ms": 2500})));
+        let rows = rows(&results);
+        let find = |subject: &str, metric: &str| {
+            rows.iter()
+                .find(|r| r.subject == subject && r.metric == metric)
+                .expect("row")
+        };
+        let outpost = "Player · Outpost";
+        let first = find(outpost, "First presented frame (loading view), cold");
+        assert_eq!((first.value, first.status), (Some(1300.), Status::Pass));
+        let full = find(outpost, "Full first scene frame, warm");
+        assert_eq!((full.value, full.status), (Some(3500.), Status::Fail));
+        let cold = find(outpost, "Full first scene frame, cold");
+        assert_eq!((cold.value, cold.status), (Some(6600.), Status::Reported));
+        let older = find("Player · Hangar", "Full first scene frame, warm");
+        assert_eq!(older.status, Status::NotMeasured);
+        assert!(older.note.contains("full_scene_frame_ms"));
     }
 
     #[test]
