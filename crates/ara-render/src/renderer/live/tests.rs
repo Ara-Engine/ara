@@ -28,6 +28,7 @@ struct Gate {
     opened: bool,
 }
 
+mod resize;
 mod secondary;
 
 impl Gate {
