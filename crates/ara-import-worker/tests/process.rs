@@ -12,7 +12,7 @@ use std::{
 };
 
 fn worker() -> ProcessWorker {
-    ProcessWorker::new(env!("CARGO_BIN_EXE_ara-import-worker"))
+    ProcessWorker::new(env!("CARGO_BIN_EXE_ara-import-worker")).with_texture_encoder(false)
 }
 fn png(red: u8) -> Vec<u8> {
     let pixels = [red, 64, 128, 255].repeat(64);

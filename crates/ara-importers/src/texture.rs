@@ -225,7 +225,13 @@ fn cook_texture_serviced(
     let _timer = ctx
         .metrics
         .map(|m| m.start(ara_asset::ImportStage::Compression));
-    let result = encode_texture(prepared, preset, ctx.cancellation, services.encoder)?;
+    let result = encode_texture(
+        prepared,
+        preset,
+        ctx.cancellation,
+        services.encoder,
+        ctx.metrics,
+    )?;
     if let Some(metrics) = ctx.metrics {
         metrics.texture_task(false);
     }
@@ -443,6 +449,7 @@ fn cook_texture_batch_inner(
                 settings.preset.unwrap_or(preset),
                 cancellation,
                 encoder_for(settings, encoder),
+                ctx.metrics,
             )
         })
         .collect()
@@ -590,6 +597,7 @@ fn encode_texture(
     preset: CookPreset,
     cancellation: &ara_asset::Cancellation,
     encoder: Option<&dyn ara_asset::BlockEncoder>,
+    metrics: Option<&ara_asset::ImportMetrics>,
 ) -> Result<Vec<u8>> {
     let MippedTexture {
         width,
@@ -608,7 +616,8 @@ fn encode_texture(
                 | TextureFormat::Bc7Srgb
         )
     {
-        let levels = gpu_input::encode(&mips, usage, format, preset, cancellation, encoder)?;
+        let levels =
+            gpu_input::encode(&mips, usage, format, preset, cancellation, encoder, metrics)?;
         return Ok(write_ktx2(width, height, format, &levels)?);
     }
     let levels: Result<Vec<_>> = mips

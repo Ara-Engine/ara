@@ -396,7 +396,7 @@ impl Gpu {
                         .then_some(id_properties.device_luid),
                 },
             };
-            println!(
+            eprintln!(
                 "{}; graphics family {graphics_family}; compute-only family {compute_family}",
                 info.name
             );

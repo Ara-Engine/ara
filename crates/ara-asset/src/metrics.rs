@@ -25,11 +25,13 @@ pub enum ImportStage {
     Lods,
     /// Companion opacity-map decode and combination.
     Opacity,
+    /// CPU quantization and block packing for the optional GPU encoder.
+    GpuPacking,
 }
 /// Thread-safe, per-job timers. No global counters and no effect on output bytes.
 #[derive(Debug, Default)]
 pub struct ImportMetrics {
-    nanos: [AtomicU64; 8],
+    nanos: [AtomicU64; 9],
     texture_tasks: [AtomicU64; 2],
 }
 /// Summed elapsed stage intervals in milliseconds. Overlapping plugin spans may exceed wall time.
@@ -56,6 +58,8 @@ pub struct StageTimes {
     pub lods_ms: f64,
     /// Companion opacity preparation.
     pub opacity_ms: f64,
+    /// CPU packing for GPU compression, included in compression time.
+    pub gpu_packing_ms: f64,
 }
 /// Records one scoped interval even if the stage fails.
 pub struct StageTimer<'a> {
@@ -93,6 +97,7 @@ impl ImportMetrics {
             parse_ms: n[5],
             lods_ms: n[6],
             opacity_ms: n[7],
+            gpu_packing_ms: n[8],
         }
     }
 }

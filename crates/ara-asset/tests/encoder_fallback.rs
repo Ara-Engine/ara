@@ -103,6 +103,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let gpu_key = input.key_with_backend(Some("fixture-gpu-v1"))?;
     assert_ne!(cpu_key, gpu_key);
     assert_eq!(worker.texture_encoder(&input), Some("fixture-gpu-v1"));
+    let cpu_only = worker.clone().with_texture_encoder(false);
+    assert_eq!(cpu_only.texture_encoder(&input), None);
+    assert_eq!(worker.texture_encoder(&input), Some("fixture-gpu-v1"));
+    assert_eq!(
+        cpu_only.encode_with_fallback(Arc::clone(&input), &cancel, |_| {})?,
+        (cpu_key, output(input.source.clone()))
+    );
     let (key, encoded) = worker.encode_with_fallback(Arc::clone(&input), &cancel, |_| {})?;
     assert_eq!(key, gpu_key);
     assert_eq!(encoded, output(vec![0x47; 8]));

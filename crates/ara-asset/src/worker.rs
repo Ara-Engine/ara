@@ -140,7 +140,17 @@ fn serve(registry: &ImporterRegistry, factory: Option<EncoderFactory>) -> Result
         Request::ImportEncoded { input, backend } => (input, Some(backend)),
         Request::Encoder => {
             let root = std::env::var_os("ARA_IMPORT_MEMO_DIR").map(PathBuf::from);
-            let encoder = factory.and_then(|make| make(root.as_deref()).ok());
+            let encoder = factory.and_then(|make| match make(root.as_deref()) {
+                Ok(encoder) => Some(encoder),
+                Err(error) => {
+                    crate::trace::event(
+                        "texture.backend_unavailable",
+                        "encoder",
+                        serde_json::json!({"reason":error.to_string()}),
+                    );
+                    None
+                }
+            });
             let identity = encoder.as_ref().map(|encoder| encoder.backend().to_owned());
             drop(encoder);
             return write_frame(&mut std::io::stdout().lock(), &Message::Encoder(identity));
@@ -267,6 +277,7 @@ pub enum JobEvent {
 #[derive(Debug, Clone)]
 pub struct ProcessWorker {
     encoder: std::sync::Arc<encoder::State>,
+    texture_encoder_enabled: bool,
     memo: Option<PathBuf>,
     executable: PathBuf,
     arguments: Vec<std::ffi::OsString>,
@@ -277,11 +288,18 @@ impl ProcessWorker {
     pub fn new(executable: impl Into<PathBuf>) -> Self {
         Self {
             encoder: std::sync::Arc::default(),
+            texture_encoder_enabled: true,
             memo: None,
             executable: executable.into(),
             arguments: Vec::new(),
             timeout: Duration::from_secs(600),
         }
+    }
+    /// Selects optional texture encoding for this handle. Disable for CPU-only
+    /// contract tests or controlled ISPC measurements; ordinary imports default on.
+    pub fn with_texture_encoder(mut self, enabled: bool) -> Self {
+        self.texture_encoder_enabled = enabled;
+        self
     }
     /// Adds worker-specific configuration arguments (also useful for plugin hosts).
     pub fn with_arguments(

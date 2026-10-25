@@ -16,6 +16,9 @@ impl ProcessWorker {
     /// Resolves an optional texture encoder on a background/CLI thread. Old or
     /// CPU-only workers retain the original CPU action keys without an error.
     pub fn texture_encoder(&self, input: &ImportInput) -> Option<&str> {
+        if !self.texture_encoder_enabled {
+            return None;
+        }
         if input.importer == "ara.texture"
             && input
                 .settings
@@ -34,7 +37,17 @@ impl ProcessWorker {
         }
         self.encoder
             .identity
-            .get_or_init(|| self.query_encoder().ok().flatten())
+            .get_or_init(|| match self.query_encoder() {
+                Ok(identity) => identity,
+                Err(error) => {
+                    crate::trace::event(
+                        "texture.backend_unavailable",
+                        "encoder",
+                        serde_json::json!({"reason":error.to_string()}),
+                    );
+                    None
+                }
+            })
             .as_deref()
     }
 

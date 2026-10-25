@@ -11,7 +11,9 @@ pub(super) fn encode(
     preset: CookPreset,
     cancellation: &Cancellation,
     encoder: &dyn BlockEncoder,
+    metrics: Option<&ara_asset::ImportMetrics>,
 ) -> Result<Vec<Vec<u8>>> {
+    let packing = metrics.map(|metrics| metrics.start(ara_asset::ImportStage::GpuPacking));
     let words_per_block = if format == TextureFormat::Bc6h {
         32
     } else {
@@ -60,6 +62,7 @@ pub(super) fn encode(
             })?;
     }
     // One call for the entire mip chain; no separate device setup/fence per mip.
+    drop(packing);
     let encoded = encoder.encode(format, preset, &words, cancellation)?;
     let expected = counts.iter().sum::<usize>() * format.block_bytes();
     if encoded.len() != expected {
