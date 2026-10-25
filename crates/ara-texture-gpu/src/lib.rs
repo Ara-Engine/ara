@@ -4,12 +4,16 @@
 mod bc6_split;
 mod dispatch;
 mod encoder;
+mod service;
 mod split;
 pub use encoder::Encoder;
 
 /// Worker frontend with automatic headless GPU capability discovery and CPU fallback.
 /// CPU requests never create a device; the host selects the backend before caching.
 pub fn serve_worker(registry: &ara_asset::ImporterRegistry) -> ara_asset::Result<()> {
+    if std::env::args_os().any(|arg| arg == service::ARGUMENT) {
+        return service::run();
+    }
     ara_asset::serve_worker_with_encoder(registry, create_worker_encoder)
 }
 fn create_worker_encoder(
@@ -35,7 +39,13 @@ fn create_worker_encoder(
             )
         })?
         .join("gpu-codec-pipelines");
-    Ok(Box::new(Encoder::new(&cooked, &cache)?))
+    if std::env::var("ARA_TEXTURE_ENCODER_DEVICE")
+        .is_ok_and(|value| value.eq_ignore_ascii_case("local"))
+    {
+        Ok(Box::new(Encoder::new(&cooked, &cache)?))
+    } else {
+        service::open(&cooked, &cache)
+    }
 }
 
 #[cfg(test)]

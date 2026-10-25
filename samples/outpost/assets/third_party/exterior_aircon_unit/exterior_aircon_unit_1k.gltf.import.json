@@ -4,7 +4,7 @@
   "records": {
     "i_settings": {
       "importer": "ara.gltf",
-      "version": "6-gltf14-meshopt070-ispc050-tiled-f32text-arag1-khr-opacity-deep-lods-prefix",
+      "version": "7-gltf14-meshopt070-ispc050-texture-presets-tiled-f32text-arag1-khr-opacity-deep-lods-prefix",
       "settings": {
         "opacityMaps": {
           "#1": "textures/exterior_aircon_unit_01_opacity_1k.png"

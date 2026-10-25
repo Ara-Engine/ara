@@ -15,7 +15,7 @@ mod trace;
 mod worker;
 
 pub use cache::{CacheBackend, CachedImport, FileCache, GcStats};
-pub use encoder::{BlockEncoder, ImportServices};
+pub use encoder::{BlockEncoder, EncoderEndpoint, ImportServices};
 pub use graph::DependencyGraph;
 pub use hot_reload::{ApplyPolicy, AssetChanged, AssetSlot, FileWatcher, HotReload, ReloadEvent};
 pub use importer::{
@@ -27,6 +27,7 @@ pub use preset::{CookPreset, DEFAULT_THREAD_BUDGET};
 pub use project_settings::{PROJECT_IMPORT_SETTINGS_FILE, ProjectImportSettings};
 pub use sidecar::{ImportSettings, Sidecar, SidecarCommand, VersionCheck, register_schema};
 pub use source::{AssetPipeline, SourceAsset, snapshot};
+pub use trace::event as record_import_trace;
 pub use worker::{
     EncoderFactory, ImportJob, JobEvent, ProcessWorker, serve_worker, serve_worker_with_encoder,
 };

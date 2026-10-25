@@ -55,8 +55,54 @@ fn gpu_worker_negotiates_and_encodes_without_contaminating_protocol_stdout()
         "a usable device must negotiate through framed stdout"
     );
     let key = input.key_with_backend(Some(encoder.backend()))?;
-    let actual = worker.encode_with_fallback(input, &cancellation, |_| {})?;
-    assert_eq!(actual.0, key, "no silent CPU fallback");
-    assert_eq!(actual.1, expected);
+    for _ in 0..3 {
+        let actual = worker.encode_with_fallback(Arc::clone(&input), &cancellation, |_| {})?;
+        assert_eq!(actual.0, key, "no silent CPU fallback");
+        assert_eq!(actual.1, expected);
+    }
+    // These are separate disposable imports. Their service identity and device
+    // creation counter prove actual headless-device reuse, not just equal bytes.
+    if let Some(trace) = std::env::var_os("ARA_IMPORT_TRACE_DIR") {
+        let mut services = std::collections::BTreeSet::new();
+        let mut native = std::collections::BTreeSet::new();
+        let mut initialized = 0.0_f64;
+        for file in std::fs::read_dir(trace)? {
+            for block in std::fs::read_to_string(file?.path())?.split("\n\n") {
+                let Ok(event) = serde_json::from_str::<serde_json::Value>(block) else {
+                    continue;
+                };
+                if event["stage"] == "texture.gpu" {
+                    services
+                        .insert(event["data"]["service.pid"].as_f64().expect("service PID") as u64);
+                    native.insert(event["pid"].as_u64().expect("native worker PID"));
+                    initialized = initialized.max(
+                        event["data"]["service.devices_created"]
+                            .as_f64()
+                            .expect("device count"),
+                    );
+                }
+            }
+        }
+        assert_eq!(services.len(), 1, "one service survives separate workers");
+        assert_eq!(native.len(), 3, "three actual disposable imports");
+        assert!(
+            (1.0..=2.0).contains(&initialized),
+            "bounded reusable devices"
+        );
+        drop(worker);
+        let service_pid = *services.first().expect("one service");
+        let trace = std::path::PathBuf::from(
+            std::env::var_os("ARA_IMPORT_TRACE_DIR").expect("trace selected above"),
+        );
+        let path = trace.join(format!("trace-{service_pid}.jsonl"));
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+        while !std::fs::read_to_string(&path)?.contains("texture.service.exit") {
+            assert!(
+                std::time::Instant::now() < deadline,
+                "GPU service survived its host lease"
+            );
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+    }
     Ok(())
 }

@@ -1,6 +1,8 @@
 //! Explicit encoding services keep device choice out of pure importer inputs.
 use crate::{CacheBackend, Cancellation, CookPreset, Digest, ImportInput, Result};
 use ara_asset_format::TextureFormat;
+mod service;
+pub use service::EncoderEndpoint;
 
 /// Worker-installed block encoder. Its immutable identity includes the algorithm
 /// and cooked shader revision, so different implementations cannot alias caches.
@@ -15,6 +17,11 @@ pub trait BlockEncoder: Send + Sync {
     /// Cumulative offline telemetry; excluded from cache identity and artifacts.
     fn metrics(&self) -> std::collections::BTreeMap<String, f64> {
         Default::default()
+    }
+    /// Optional out-of-process device service. The host holds a lifetime lease;
+    /// ordinary local encoders return None and keep the existing worker protocol.
+    fn service_endpoint(&self) -> Option<EncoderEndpoint> {
+        None
     }
     /// Encodes block-major texels: 16 RGBA8 words, or 32 RGB-half words for BC6H,
     /// per block. Output blocks retain input order, independently of scheduling.
