@@ -36,6 +36,11 @@ impl Project {
         for (file, id, importer) in [
             ("crate.gltf", "as_crate0001", "ara.gltf"),
             ("rock.png", "as_rock00001", "ara.image"),
+            (
+                "exterior_aircon_unit_rusted_with_a_long_name_1k.gltf",
+                "as_aircon001",
+                "ara.gltf",
+            ),
         ] {
             std::fs::write(root.join("models").join(file), "{}").unwrap();
             write(
@@ -495,4 +500,28 @@ fn maps_and_optional_structs_edit_per_entry() {
     assert_eq!(custom(&editor)["absorption"][1], json!(0.4));
     press(&mut shell, &mut editor, "remove-AcousticSurface-custom");
     assert_eq!(custom(&editor), Value::Null);
+}
+
+#[test]
+fn long_asset_names_clip_and_keep_the_field_buttons_in_view() {
+    let project = Project::new();
+    let (mut editor, mut shell) = project.open();
+    editor
+        .apply(
+            vec![json!({"cmd":"property.set","args":{"entity":"e_crate001","path":"MeshRenderer.model",
+                "value":"@models/exterior_aircon_unit_rusted_with_a_long_name_1k.gltf#as_aircon001"}})],
+            "Long model",
+            None,
+        )
+        .unwrap();
+    shell.rebuild(&mut editor).unwrap();
+    let rect = |id: &str| shell.ui.nodes[shell.ui.find(id).unwrap()].rect;
+    let panel = rect("inspector-scroll");
+    for id in ["pick-MeshRenderer-model", "clear-MeshRenderer-model"] {
+        let r = rect(id);
+        assert!(
+            r.x + r.w <= panel.x + panel.w + 0.5,
+            "{id} overflows: {r:?} vs {panel:?}"
+        );
+    }
 }

@@ -459,9 +459,10 @@ impl Shell {
                         } else {
                             format!("<panel id='{id}-check' class='menu-check' />")
                         };
-                        out.push_str(&format!("<button id='{id}' class='menu-item{}' label='{}' description='{}' action='Dispatch'{}>{icon}<text id='{id}-label' class='menu-label' text='{}' />",if active==Some(i){" menu-active"}else{""},escape(&title),escape(&reason),if avail.ready(){""}else{" disabled='true'"},escape(&title)));
+                        out.push_str(&format!("<button id='{id}' class='menu-item{}' label='{}' description='{}' action='Dispatch'{}>{icon}<text id='{id}-label' class='menu-label' {}text='{}' />",if active==Some(i){" menu-active"}else{""},escape(&title),escape(&reason),if avail.ready(){""}else{" disabled='true'"},if path.is_empty(){""}else{"style='flex-grow:0;flex-basis:auto' "},escape(&title)));
                         if !path.is_empty() {
-                            out.push_str(&format!("<text id='{id}-path' class='caption' text='{}' />",escape(path)));
+                            // The name keeps its width; a long folder clips first.
+                            out.push_str(&format!("<text id='{id}-path' class='caption' style='white-space:nowrap;overflow:hidden;min-width:0px;flex-shrink:1;flex-basis:0px;flex-grow:1;text-align:right' text='{}' />",escape(path)));
                         }
                         if let Some(chord) = keymap.chords(command).first() {
                             out.push_str(&format!("<panel id='{id}-keys' class='keys'>"));

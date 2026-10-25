@@ -91,16 +91,11 @@ impl Shell {
                 .and_then(|logs| logs["total"].as_u64())
                 .unwrap_or(0)
         };
-        // Bounded runs leave out this machine's Vulkan loader and overlay layers.
+        // This machine's Vulkan loader and overlay layers (OBS, Overwolf hooks) are not the
+        // project's problems: Problems and Console list them, the chip does not count them.
         let host: &[&str] = &["ARA_GPU_ENVIRONMENT"];
-        let mut count = |severity: &str| {
-            let all = total(severity, None);
-            if self.host_problems {
-                all
-            } else {
-                all.saturating_sub(total(severity, Some(host)))
-            }
-        };
+        let mut count =
+            |severity: &str| total(severity, None).saturating_sub(total(severity, Some(host)));
         let errors = count("error");
         let warnings = count("warning").saturating_sub(errors);
         MenubarState {
@@ -224,7 +219,8 @@ impl Shell {
         let stopping = self
             .game_start
             .as_ref()
-            .filter(|_| editor.state.playing.is_some())
+            // Once the game shows, it is playing whatever the last status read said.
+            .filter(|_| editor.state.playing.is_some() && !self.game_live)
             .map(|start| start.stopping);
         if let Some(stopping) = stopping {
             self.bind_command("status-play", "window.game", Target::None);

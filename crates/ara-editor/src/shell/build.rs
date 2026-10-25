@@ -361,7 +361,13 @@ impl Shell {
             match result {
                 Ok(capture) => {
                     self.last_run = Some(PathBuf::from(&capture));
-                    self.status_note = Some(format!("The build ran one frame: {capture}"));
+                    let shown = dunce::simplified(std::path::Path::new(&capture))
+                        .strip_prefix(dunce::simplified(editor.host.root()))
+                        .map_or_else(
+                            |_| capture.clone(),
+                            |p| p.to_string_lossy().replace('\\', "/"),
+                        );
+                    self.status_note = Some(format!("The build ran one frame: {shown}"));
                     log(
                         editor,
                         ara_diag::Diagnostic::info(
