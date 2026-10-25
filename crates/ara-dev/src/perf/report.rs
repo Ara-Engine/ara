@@ -232,6 +232,15 @@ impl Destination<'_> {
             if let Some(coverage) = report.player.get("gpu_coverage") {
                 println!("GPU coverage: {coverage}");
             }
+            println!(
+                "Whole-frame GPU span (ms): {}",
+                report.player["gpu_span_ms"]
+            );
+            println!("GPU span coverage: {}", report.player["gpu_span_coverage"]);
+            println!(
+                "Exclusive view-pass sum (ms): {}",
+                report.player["gpu_pass_sum_ms"]
+            );
             println!("Startup (ms): {}", report.player["startup"]);
             if let Some(error) = report.player["shaders"]["last_error"].as_str() {
                 eprintln!("Shader reload retained last good pipelines: {error}");

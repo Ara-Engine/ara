@@ -127,8 +127,8 @@ impl VulkanDevice {
             .collect::<Vec<_>>();
         let required = labels
             .len()
-            .max(1)
             .checked_mul(2)
+            .and_then(|n| n.checked_add(2))
             .and_then(|n| u32::try_from(n).ok())
             .ok_or_else(|| {
                 GpuError::Contract("Timestamp query count exceeds Vulkan limits".into())
@@ -166,12 +166,34 @@ impl VulkanDevice {
                 .device
                 .cmd_reset_query_pool(cmd, query, 0, required);
         }
-        let mut timestamp = 0;
+        // The outer pair covers every command, including leading barriers and
+        // lists without graph labels. Per-pass begins below exclude those barriers.
+        // SAFETY: The fresh/reset pool reserves query zero and the final query
+        // for this submission. TOP_OF_PIPE starts its whole-device-work span.
+        unsafe {
+            self.context.device.cmd_write_timestamp2(
+                cmd,
+                vk::PipelineStageFlags2::TOP_OF_PIPE,
+                query,
+                0,
+            );
+        }
+        let mut timestamp = 1;
         {
             crate::cpu_scope!("GPU.record_commands");
-            for command in &list.commands {
+            for command in super::timestamps::commands(&list.commands) {
                 self.encode(cmd, queue, query, &mut timestamp, command)?;
             }
+        }
+        // SAFETY: Query `required-1` is reserved for the submission's completed
+        // tail and is written only after all its commands have been encoded.
+        unsafe {
+            self.context.device.cmd_write_timestamp2(
+                cmd,
+                vk::PipelineStageFlags2::ALL_COMMANDS,
+                query,
+                required - 1,
+            );
         }
         let point = TimelinePoint {
             queue,
@@ -301,7 +323,7 @@ impl VulkanDevice {
             pending.cmd,
         ));
         cleanup.push(super::guard::Object::Query(pending.query));
-        let mut stamps = vec![0u64; pending.labels.len() * 2];
+        let mut stamps = vec![0u64; pending.labels.len() * 2 + 2];
         {
             crate::cpu_scope!("GPU.read_queries");
             // SAFETY: Timeline completion proves query availability and buffer idleness.
@@ -332,21 +354,25 @@ impl VulkanDevice {
             drop(cleanup);
         }
         let valid = self.context.info.timestamp_valid_bits[point.queue.index()];
-        let mask = if valid == 64 {
-            u64::MAX
-        } else {
-            (1u64 << valid) - 1
-        };
+        let reference = self.clock.reference(point.queue, valid, stamps[0])?;
+        let period = self.context.info.timestamp_period_ns;
+        self.timing_window.observe(
+            point,
+            reference.interval(stamps[0], stamps[stamps.len() - 1], period),
+        );
         Ok(pending
             .labels
             .into_iter()
             .enumerate()
-            .map(|(i, pass)| PassTiming {
-                pass,
-                queue: point.queue,
-                milliseconds: (stamps[i * 2 + 1].wrapping_sub(stamps[i * 2]) & mask) as f64
-                    * f64::from(self.context.info.timestamp_period_ns)
-                    / 1_000_000.,
+            .map(|(i, pass)| {
+                let interval = reference.interval(stamps[i * 2 + 1], stamps[i * 2 + 2], period);
+                PassTiming {
+                    pass,
+                    queue: point.queue,
+                    milliseconds: interval.milliseconds(),
+                    start_ms: interval.start_ms,
+                    end_ms: interval.end_ms,
+                }
             })
             .collect())
     }

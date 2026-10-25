@@ -84,3 +84,106 @@ fn timestamp_cache_is_bounded_and_adopts_larger_pools_without_caching_huge_ones(
     gpu.assert_clean()?;
     Ok(())
 }
+
+#[test]
+fn pass_begins_exclude_previous_tail_and_frame_span_covers_both_queues() -> Result<()> {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../target/ara-gpu/exclusive-timestamps");
+    let mut gpu = VulkanDevice::new_raster(&[], root)?;
+    let bytes = 16 * 1024 * 1024;
+    let usage = vk::BufferUsageFlags::TRANSFER_SRC | vk::BufferUsageFlags::TRANSFER_DST;
+    let source = gpu.create_buffer(bytes, usage, true)?;
+    let destination = gpu.create_buffer(bytes, usage, false)?;
+    gpu.upload(source, &vec![7; bytes as usize])?;
+    gpu.reset_timing_window();
+    let mut commands = gpu.begin(Queue::Graphics);
+    commands.push(Command::BeginPass("copy".into()));
+    commands.barriers([
+        Barrier {
+            resource: Resource::Buffer(source),
+            before: Access::HostWrite,
+            after: Access::CopySource,
+            handoff: None,
+        },
+        Barrier {
+            resource: Resource::Buffer(destination),
+            before: Access::Undefined,
+            after: Access::CopyDestination,
+            handoff: None,
+        },
+    ]);
+    commands.push(Command::CopyBuffer {
+        source,
+        destination,
+        size: bytes,
+    });
+    commands.push(Command::EndPass);
+    commands.push(Command::BeginPass("empty-after-copy".into()));
+    commands.barriers([Barrier {
+        resource: Resource::Buffer(destination),
+        before: Access::CopyDestination,
+        after: Access::CopySource,
+        handoff: None,
+    }]);
+    commands.push(Command::EndPass);
+    let point = gpu.submit(commands.finish(), &[])?;
+    assert!(
+        gpu.timing_window().is_none(),
+        "pending queries are not complete coverage"
+    );
+    let graphics = gpu.resolve(point)?;
+    assert_eq!(graphics.len(), 2);
+    assert!(
+        graphics[1].start_ms >= graphics[0].end_ms,
+        "the next begin must follow the previous completed tail"
+    );
+    for pass in &graphics {
+        assert!(pass.end_ms >= pass.start_ms);
+        assert!((pass.end_ms - pass.start_ms - pass.milliseconds).abs() < 1e-8);
+    }
+    let first_span = gpu.timing_window().expect("one queue is comparable");
+    assert!(
+        first_span.start_ms <= graphics[0].start_ms && first_span.end_ms >= graphics[1].end_ms,
+        "{first_span:?} must contain {graphics:?}"
+    );
+    let mut compute = gpu.begin(Queue::Compute);
+    compute.push(Command::BeginPass("compute-after-graphics".into()));
+    compute.push(Command::EndPass);
+    let compute = gpu.submit(compute.finish(), &[point])?;
+    assert!(
+        gpu.timing_window().is_none(),
+        "one resolved queue is only partial coverage"
+    );
+    let compute = gpu.resolve(compute)?;
+    if gpu.context().info.timestamp_clock.is_some() {
+        assert!(
+            compute[0].start_ms >= graphics[1].end_ms,
+            "calibrated queues share the device epoch"
+        );
+        let span = gpu.timing_window().expect("calibrated multi-queue span");
+        assert!(span.start_ms <= first_span.start_ms && span.end_ms >= compute[0].end_ms);
+        eprintln!(
+            "GPU clock {:?}: graphics {:?}, compute {:?}, span {:?}",
+            gpu.context().info.timestamp_clock,
+            graphics,
+            compute,
+            span
+        );
+    } else {
+        assert!(
+            gpu.timing_window().is_none(),
+            "unrelated queue clocks must never be combined"
+        );
+    }
+    gpu.reset_timing_window();
+    assert!(gpu.timing_window().is_none());
+    let commands = gpu.begin(Queue::Graphics); // Even an unlabelled list is measured.
+    let point = gpu.submit(commands.finish(), &[])?;
+    assert!(gpu.resolve(point)?.is_empty());
+    assert!(gpu.timing_window().is_some());
+    gpu.retire(Resource::Buffer(source))?;
+    gpu.retire(Resource::Buffer(destination))?;
+    gpu.collect()?;
+    gpu.assert_clean()?;
+    Ok(())
+}
