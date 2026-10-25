@@ -1,6 +1,7 @@
 //! SDL event loop and same-device native UI/scene composition.
 mod capture;
 mod controller;
+mod drags;
 mod game;
 mod journey;
 mod panels_verify;
@@ -154,6 +155,8 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
     } else {
         None
     };
+    // The UX route's drags run after its captures and camera timings.
+    let mut drag_check: Option<drags::DragCheck> = None;
     let mut ux_verification = if options.verify_ux {
         Some(ux_verify::UxVerification::new(
             &mut editor,
@@ -251,6 +254,17 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                 let at = Instant::now();
                 probe.inject(&mut editor, &mut shell, scale, &mut events)?;
                 inject_ms = at.elapsed().as_secs_f64() * 1000.;
+            }
+            if let Some(check) = &mut drag_check {
+                let scale = crate::native::points_to_logical(window.raw(), main_dpi);
+                check.inject(
+                    &mut editor,
+                    &mut shell,
+                    &window,
+                    &floats,
+                    scale,
+                    &mut events,
+                )?;
             }
             let interaction_start = (!events.is_empty()).then(Instant::now);
             if events.iter().any(|(_, event)| {
@@ -926,6 +940,13 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                 };
                 probe.end(&editor, &mut shell, sample);
             }
+            if let Some(check) = &mut drag_check {
+                check.end(&editor, &mut shell)?;
+            } else if ux_verification.as_ref().is_some_and(|v| v.finished())
+                && camera_samples.len() >= 240
+            {
+                drag_check = Some(drags::DragCheck::new(&options.output, &shell));
+            }
             if let Some(route) = &mut first_hour {
                 route.frame(
                     frame_start.elapsed().as_secs_f64() * 1000.,
@@ -950,7 +971,10 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                     .as_ref()
                     .is_some_and(|v| v.finished() && idle_samples.len() >= 1500)
                 || ux_verification.as_ref().is_some_and(|v| {
-                    v.finished() && idle_samples.len() >= 1500 && camera_samples.len() >= 240
+                    v.finished()
+                        && idle_samples.len() >= 1500
+                        && camera_samples.len() >= 240
+                        && drag_check.as_ref().is_some_and(drags::DragCheck::finished)
                 })
                 || journey.as_ref().is_some_and(journey::Journey::finished)
                 || first_hour.as_ref().is_some_and(qa::FirstHour::finished)
@@ -970,6 +994,13 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
         }
         if ux_verification.as_ref().is_some_and(|v| !v.finished()) {
             return Err("UX verification did not finish".into());
+        }
+        if let Some(check) = &drag_check {
+            check.write()?;
+            let failed = check.failures();
+            if !failed.is_empty() {
+                return Err(format!("drags changed nothing: {}", failed.join(", ")).into());
+            }
         }
         if journey.as_ref().is_some_and(|v| !v.finished()) {
             return Err("the journey route did not finish".into());
@@ -1148,8 +1179,9 @@ fn route_event(
     if shell.dragged_tab().is_some() {
         match &event {
             Event::MouseMotion { .. } => {
-                let global = Window::global_mouse();
-                track_tab_drag(global, dpi, window, floats, shell)?;
+                let global = desktop_pointer(shell);
+                let ui_scale = windows::ui_scale(editor);
+                track_tab_drag(global, dpi, ui_scale, window, floats, shell)?;
                 for f in &mut floats.windows {
                     f.dirty = true;
                 }
@@ -1165,7 +1197,7 @@ fn route_event(
                 button: 1,
                 pressed: false,
             } => {
-                let global = Window::global_mouse();
+                let global = desktop_pointer(shell);
                 let rect = [(global[0] - 60.) as i32, (global[1] - 14.) as i32, 420, 560];
                 shell.leave();
                 let dropped = shell.finish_tab_drag(editor, Some(rect));
@@ -1234,17 +1266,25 @@ fn route_event(
         }
     }
 }
-/// Point the tab-drag preview at the window under a desktop point.
+/// The desktop pointer tab drags follow: the OS one, or a verification route's.
+fn desktop_pointer(shell: &Shell) -> [f32; 2] {
+    shell.desktop_pointer.unwrap_or_else(Window::global_mouse)
+}
+/// Point the tab-drag preview at the window under a desktop point. A floating
+/// window maps it with the same DPI × UI scale its own input uses.
 fn track_tab_drag(
     global: [f32; 2],
     dpi: f32,
+    ui_scale: f32,
     window: &Window,
     floats: &windows::Floats,
     shell: &mut Shell,
 ) -> ara_ui::Result<()> {
     if let Some(float) = floats.at(global) {
-        let scale =
-            crate::native::points_to_logical(float.window.raw(), float.window.display_scale());
+        let scale = crate::native::points_to_logical(
+            float.window.raw(),
+            float.window.display_scale() * ui_scale,
+        );
         let local = [
             (global[0] - float.rect[0] as f32) * scale,
             (global[1] - float.rect[1] as f32) * scale,

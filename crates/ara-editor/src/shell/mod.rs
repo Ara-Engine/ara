@@ -25,7 +25,7 @@ pub(crate) mod scripts;
 mod scrub;
 mod settings_panel;
 mod testing;
-use drag::Drag;
+pub(crate) use drag::Drag;
 pub use testing::MenuRow;
 mod agents_panel;
 mod animation_panel;
@@ -281,6 +281,9 @@ pub struct Shell {
     keymap_settings: (Option<Value>, Option<Value>),
     /// Live tab drag target, painted as a lit region with an action label.
     pub(crate) drop_preview: Option<drag::DropPreview>,
+    /// The desktop pointer (points) cross-window tab drags follow; `None` reads the
+    /// OS. Verification routes set it to drive those drags with synthetic events.
+    pub(crate) desktop_pointer: Option<[f32; 2]>,
 
     /// Main window's desktop rectangle (x, y, width, height), kept by the window owner.
     pub main_rect: [i32; 4],
@@ -501,6 +504,7 @@ impl Shell {
             keymap_revision: 0,
             keymap_settings: keymap_settings(&editor.state),
             drop_preview: None,
+            desktop_pointer: None,
             main_rect: [0, 0, size[0] as i32, size[1] as i32],
         };
         shell.rebuild(editor)?;

@@ -376,3 +376,41 @@ fn unfocused_inputs_show_their_text_from_the_start() -> Result<()> {
     assert!(origin[0] >= rect.x, "{origin:?} {rect:?}");
     Ok(())
 }
+
+#[test]
+fn accessibility_lists_a_repeated_element_id_once() -> Result<()> {
+    let mut text = TextSystem::bundled()?;
+    // Two separately parsed parts both declare `dup` (a markup slip the parser cannot
+    // see across parts): the accessibility tree keeps the first.
+    let skeleton = "<ui id='r'><panel id='p1' /><panel id='p2' /></ui>";
+    let mut ui = Ui::editor(skeleton, EDITOR_CSS, [400.0, 300.0])?;
+    ui.reconcile_parts(
+        skeleton,
+        &[
+            (
+                "p1",
+                "<panel id='p1'><button id='dup' text='One' /></panel>",
+            ),
+            (
+                "p2",
+                "<panel id='p2'><button id='dup' text='Two' /><button id='ok' text='Ok' /></panel>",
+            ),
+        ],
+    )?;
+    ui.frame(&mut text)?;
+    let a11y = ara_ui::accessibility::accessibility(&ui, None);
+    let mut ids = std::collections::BTreeSet::new();
+    for (id, _) in &a11y.nodes {
+        assert!(ids.insert(*id), "node {id:?} listed twice");
+    }
+    let mut children = std::collections::BTreeSet::new();
+    for (_, node) in &a11y.nodes {
+        for child in node.children() {
+            assert!(children.insert(*child), "child {child:?} listed twice");
+            assert!(ids.contains(child), "child {child:?} has no node");
+        }
+    }
+    assert!(ids.contains(&accesskit::NodeId(stable_id("dup"))));
+    assert!(ids.contains(&accesskit::NodeId(stable_id("ok"))));
+    Ok(())
+}
