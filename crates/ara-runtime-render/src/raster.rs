@@ -348,10 +348,12 @@ impl RasterView {
                 renderer.resize(plan.render_size)?;
             }
             if *renderer.quality() != plan.quality {
+                ara_gpu::cpu_scope!("RasterView.apply_quality");
                 renderer.set_quality(plan.quality)?;
             }
             let raster_look = look.raster();
             if *renderer.look() != raster_look {
+                ara_gpu::cpu_scope!("RasterView.apply_look");
                 renderer.set_look(raster_look)?;
             }
             self.adopt_emitters(false)?;
@@ -399,6 +401,7 @@ impl RasterView {
             if plan.quality.gi_budget > 0
                 && let Some(gi) = &mut self.gi
             {
+                ara_gpu::cpu_scope!("RasterView.probe_control");
                 // Moved instances leave the probe surfaces until they rest again; the
                 // stale surfaces stay in use until the re-traced ones land.
                 let scene = &self
@@ -588,6 +591,7 @@ const PROBES_PER_FRAME: usize = 4096;
 
 /// An emitter search of `prepared`'s current content.
 fn emitter_job(prepared: &Prepared) -> crate::emitters::Job {
+    ara_gpu::cpu_scope!("RasterView.capture_emitters");
     crate::emitters::Job::new(
         &prepared.scene,
         &crate::gi::emission(prepared),

@@ -242,8 +242,6 @@ fn hub_command(current: &Path, plan: &Plan) -> Command {
         .env("ARA_CONFIG_DIR", &plan.config)
         .arg("--config-dir")
         .arg(&plan.config)
-        .arg("--ara")
-        .arg(&plan.ara)
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null());
@@ -253,4 +251,26 @@ fn hub_command(current: &Path, plan: &Plan) -> Command {
         command.creation_flags(0x0800_0000);
     }
     command
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn updated_hub_selects_its_new_bootstrap_instead_of_the_previous_service() {
+        let plan = Plan {
+            current: "Hub".into(),
+            archive: "download.zip".into(),
+            manifest: String::new(),
+            signature: String::new(),
+            config: "target/update-config".into(),
+            ara: "Services/old/ara.exe".into(),
+        };
+        let command = hub_command(&plan.current, &plan);
+        assert!(
+            !command
+                .get_args()
+                .any(|arg| arg == "--ara" || arg == plan.ara.as_os_str())
+        );
+    }
 }

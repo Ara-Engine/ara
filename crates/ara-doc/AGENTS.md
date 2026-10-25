@@ -46,11 +46,12 @@ vocabulary. Depends on ara-schema, ara-json, ara-diag. No ECS, no IO.
   references; `AssetIndex::closest`: the
   nearest assets of a kind to a broken reference; ARA1302 carries a `set` fix per tied
   candidate; `@path#record` into a kind with addressable records is kept as written,
-  the record's existence is the consumer's check); `prefab::{resolve, DocLookup,
-  ResolvedEntity}`; `validate::{check_record, check_structure, check_entity_refs,
+  the record's existence is the consumer's check); `prefab::{resolve, check_instance,
+  DocLookup, ResolvedEntity}`; `validate::{check_record, check_structure, check_entity_refs,
   record_type}` (dangling `entity` fields are warnings, `ARA1212`).
 - `Workspace`: loaded documents + index; `find(id|path|@ref)`, `resolve`, `check`,
-  `remove` (a deleted file). `AssetIndex::remove`.
+  `check_local` (what given records report on their own; local edits, see
+  `Edit::is_local`, change nothing else), `remove` (a deleted file). `AssetIndex::remove`.
 - `Workspace::insert_with_asset_path(save_path, doc, source_path)`: load a sidecar
   whose asset references name source media; `path_of` remains the save path.
   Existing `insert(path, doc)` uses `path` for both purposes.

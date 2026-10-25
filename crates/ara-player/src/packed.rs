@@ -51,16 +51,25 @@ impl PackedAssets {
     }
 
     fn generation(&self, asset: &str) -> Result<Option<(Digest, CachedImport)>> {
+        ara_gpu::cpu_scope!("PackedAssets.generation");
         let Some(&digest) = self.pins.get(asset) else {
             return Ok(None);
         };
-        let bytes = self
-            .pack
-            .view()
-            .read(&Self::path(digest), 1024 * 1024 * 1024, self.key.as_ref())
-            .with_context(|| format!("cooked asset {asset}"))?;
-        let output: ImportOutput = ciborium::de::from_reader(bytes.as_slice())?;
-        output.validate()?;
+        let bytes = {
+            ara_gpu::cpu_scope!("PackedAssets.read");
+            self.pack
+                .view()
+                .read(&Self::path(digest), 1024 * 1024 * 1024, self.key.as_ref())
+                .with_context(|| format!("cooked asset {asset}"))?
+        };
+        let output: ImportOutput = {
+            ara_gpu::cpu_scope!("PackedAssets.decode");
+            ciborium::de::from_reader(bytes.as_slice())?
+        };
+        {
+            ara_gpu::cpu_scope!("PackedAssets.validate");
+            output.validate()?;
+        }
         Ok(Some((
             digest,
             CachedImport {

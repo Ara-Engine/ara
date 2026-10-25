@@ -580,3 +580,72 @@ fn asset_params_may_skip_the_at_and_instances_answer_to_their_root_id() {
         .expect("instance");
     assert_eq!(record["prefab"], "@prefabs/crate.prefab#pf_crate001");
 }
+
+#[test]
+fn reads_in_one_batch_see_every_earlier_call() {
+    let (mut store, reg) = setup();
+    // Each call resolves names against the document as the calls before it left it:
+    // a created entity, a rename, and the entities of a new prefab instance.
+    let made = reg
+        .apply(
+            &mut store,
+            &Batch::new(
+                "sc_level001",
+                [
+                    ("entity.create", json!({ "id": "$a", "name": "Alpha" })),
+                    (
+                        "property.set",
+                        json!({ "entity": "name:Alpha", "path": "name", "value": "Beta" }),
+                    ),
+                    (
+                        "property.set",
+                        json!({ "entity": "name:Beta", "path": "name", "value": "Delta" }),
+                    ),
+                    (
+                        "prefab.instantiate",
+                        json!({ "id": "$box", "prefab": "@prefabs/crate.prefab", "name": "Box" }),
+                    ),
+                    (
+                        "property.set",
+                        json!({ "entity": "name:Box/Lid", "path": "name", "value": "Top" }),
+                    ),
+                    (
+                        "property.set",
+                        json!({ "entity": "name:Box/Top", "path": "MeshRenderer.tint", "value": [1, 0, 0, 1] }),
+                    ),
+                ],
+            ),
+            &Session::human(),
+        )
+        .expect("batch");
+    let a = &made.symbols["$a"];
+    let lid = format!("{}/e_lid1", made.symbols["$box"]);
+    assert_eq!(made.outputs[2]["entity"], json!(a));
+    assert_eq!(made.outputs[5]["entity"], json!(lid));
+    let undo = store.revision();
+
+    // A batch whose last call fails commits nothing, edits before it included.
+    let before = scene(&store);
+    let err = reg
+        .apply(
+            &mut store,
+            &Batch::new(
+                "sc_level001",
+                [
+                    (
+                        "property.set",
+                        json!({ "entity": "name:Delta", "path": "name", "value": "Gamma" }),
+                    ),
+                    (
+                        "property.set",
+                        json!({ "entity": "name:Gamma", "path": "Transform.positon", "value": [0, 0, 0] }),
+                    ),
+                ],
+            ),
+            &Session::human(),
+        )
+        .expect_err("bad path");
+    assert_eq!(err[0].location.command, Some(1));
+    assert_eq!(scene(&store), before);
+    assert_eq!(store.revision(), undo);
+}

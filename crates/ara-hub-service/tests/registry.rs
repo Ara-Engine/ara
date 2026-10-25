@@ -37,6 +37,73 @@ fn config(directory: &Path) -> HubConfig {
 }
 
 #[test]
+fn bootstrap_service_uses_registered_engine_templates_and_their_pins() {
+    let root = scratch("bootstrap-templates")
+        .canonicalize()
+        .expect("scratch");
+    let config_dir = root.join("config");
+    let service = root.join("service");
+    fs::create_dir_all(&service).expect("service");
+    fs::write(service.join("ara.exe"), "bootstrap").expect("exe");
+    fs::write(service.join("service.json"), "{}").expect("marker");
+    let mut hub =
+        Hub::open(HubConfig::for_directory(service.join("ara.exe"), config_dir).expect("config"))
+            .expect("Hub");
+    for version in ["0.0.9", "0.0.10"] {
+        let install = root.join(version);
+        fs::create_dir_all(install.join("templates/starter")).expect("templates");
+        fs::write(install.join("ara.exe"), version).expect("exe");
+        fs::write(
+            install.join("templates/starter/ara.project.json"),
+            r#"{"name":"Starter"}"#,
+        )
+        .expect("project");
+        fs::write(install.join("templates/starter/source.txt"), version).expect("source");
+        hub.call("hub.engine.register", json!({"engine":{"version":version,"executable":install.join("ara.exe"),"editor":null}})).expect("register");
+    }
+    let templates = hub.call("hub.templates", json!({})).expect("templates");
+    let starter = templates["templates"]
+        .as_array()
+        .expect("list")
+        .iter()
+        .find(|t| t["id"] == "starter")
+        .expect("installed Starter, despite no service templates");
+    assert_eq!(starter["engineVersion"], "0.0.10");
+    for (name, version) in [("newest", None), ("older", Some("0.0.9"))] {
+        let mut params = json!({"name":name,"template":"starter","path":root.join(name)});
+        if let Some(version) = version {
+            params["engineVersion"] = json!(version);
+        }
+        let created = hub.call("hub.create", params).expect("create");
+        let expected = version.unwrap_or("0.0.10");
+        assert_eq!(created["engineVersion"], expected);
+        assert_eq!(
+            fs::read_to_string(root.join(name).join("source.txt")).expect("source"),
+            expected
+        );
+    }
+    // The lock beside the selected engine's templates must still be checked.
+    fs::write(
+        root.join("0.0.10/templates/assets.lock.json"),
+        r#"{"assets":[{"id":"art","projects":["starter"],"files":[{"path":"missing.glb"}]}]}"#,
+    )
+    .expect("lock");
+    let error = hub
+        .call(
+            "hub.create",
+            json!({"name":"incomplete","template":"starter","path":root.join("incomplete")}),
+        )
+        .expect_err("missing locked art");
+    assert!(
+        error
+            .diagnostics()
+            .iter()
+            .any(|d| d.code == ara_diag::codes::TEMPLATE_INCOMPLETE)
+    );
+    assert!(!root.join("incomplete").exists());
+}
+
+#[test]
 fn engine_installations_register_durably_and_remove_only_the_matching_build() {
     let root = scratch("installed-engines");
     let mut hub = Hub::open(config(&root)).expect("Hub");

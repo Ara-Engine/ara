@@ -28,6 +28,9 @@ pub struct Template {
     /// sample art. `hub.create` rejects the template while this is set.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub setup: Option<TemplateSetup>,
+    /// Installed engine supplying this tile; new projects default to this pin.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub engine_version: Option<String>,
 }
 
 /// A missing prerequisite of a template and the command that restores it.
@@ -168,6 +171,7 @@ fn describe(
         name,
         thumbnail,
         description: text("description"),
+        engine_version: None,
     })
 }
 

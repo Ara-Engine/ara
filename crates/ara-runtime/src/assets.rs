@@ -7,6 +7,7 @@ use std::{
     collections::{BTreeMap, BTreeSet},
     sync::Arc,
 };
+mod preload;
 
 /// Read access to published cooked generations. The edit-world owner pins which
 /// generation is live; players never run importers.
@@ -18,6 +19,7 @@ pub trait AssetSource: Send + Sync {
     }
 
     /// The live generation of an imported asset (`as_…` sidecar ID), if published.
+    /// Startup may read independent generations concurrently through this immutable source.
     fn load(&self, asset: &str) -> Result<Option<(Digest, CachedImport)>>;
 }
 

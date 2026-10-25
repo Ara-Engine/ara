@@ -1,5 +1,5 @@
+use std::borrow::Cow;
 use std::path::Path;
-use std::{borrow::Cow, io::Read};
 
 use chacha20poly1305::{
     KeyInit, XChaCha20Poly1305,
@@ -190,10 +190,7 @@ impl<'a> Pack<'a> {
         } else {
             stored
         };
-        let decoder = ruzstd::decoding::StreamingDecoder::new(compressed)
-            .map_err(|e| invalid(e.to_string()))?;
-        let mut raw = Vec::new();
-        decoder.take(c.raw + 1).read_to_end(&mut raw)?;
+        let raw = crate::decode::chunk(compressed, c.raw)?;
         if raw.len() as u64 != c.raw || blake3::hash(&raw).to_hex().as_str() != id {
             return Err(invalid("raw chunk hash/length mismatch"));
         }

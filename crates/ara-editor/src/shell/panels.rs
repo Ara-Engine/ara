@@ -111,7 +111,9 @@ impl Shell {
                 let row = *axis == Axis::Horizontal;
                 out.push_str(&format!("<panel id='split-{path}' style='flex-grow:1; flex-basis:0px; flex-direction:{}; gap:0px'><panel id='dock-first-{path}' style='flex-grow:{}; flex-basis:0px; min-width:0px; min-height:0px'>",if row{"row"}else{"column"},ratio));
                 self.dock(first, &format!("{path}-a"), editor, out)?;
-                out.push_str(&format!("</panel><splitter id='splitter-{path}' class='splitter' style='width:{}px; height:{}px' action='ResizeDock' /><panel id='dock-second-{path}' style='flex-grow:{}; flex-basis:0px; min-width:0px; min-height:0px'>",if row{4}else{0},if row{0}else{4},1.-ratio));
+                // Only the main-axis size is set: the cross axis stretches, so the
+                // splitter spans its split (an explicit 0 there left nothing to grab).
+                out.push_str(&format!("</panel><splitter id='splitter-{path}' class='splitter' style='{}:4px; flex-shrink:0' action='ResizeDock' /><panel id='dock-second-{path}' style='flex-grow:{}; flex-basis:0px; min-width:0px; min-height:0px'>",if row{"width"}else{"height"},1.-ratio));
                 self.dock(second, &format!("{path}-b"), editor, out)?;
                 out.push_str("</panel></panel>");
             }

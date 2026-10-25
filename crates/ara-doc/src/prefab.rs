@@ -83,6 +83,36 @@ pub fn resolve(
     resolved
 }
 
+/// Reports the problems of one instance record of `doc` (missing or cyclic prefab,
+/// bad overrides or removals) exactly as [`resolve`] reports them for it. A plain or
+/// missing record reports nothing.
+pub fn check_instance(
+    doc: &Document,
+    id: &RecordId,
+    db: &SchemaDb,
+    lookup: &dyn DocLookup,
+    base: &Location,
+    out: &mut Vec<Diagnostic>,
+) {
+    let Some(rec) = doc.record(id.as_str()) else {
+        return;
+    };
+    let Some(reference) = prefab_of(rec) else {
+        return;
+    };
+    let mut stack = vec![doc.id.clone()];
+    let mut ctx = Ctx {
+        db,
+        lookup,
+        stack: &mut stack,
+    };
+    let rbase = Location {
+        record: Some(id.to_string()),
+        ..base.clone()
+    };
+    ctx.instance(id, rec, reference, &rbase, Some(out));
+}
+
 struct Ctx<'a, 's> {
     db: &'a SchemaDb,
     lookup: &'a dyn DocLookup,

@@ -9,6 +9,7 @@ use std::{
     path::{Path, PathBuf},
     process::Command,
 };
+mod symbols_payload;
 
 const BINARIES: &[(&str, &str)] = &[
     ("ara", "ara"),
@@ -89,10 +90,7 @@ pub fn package(root: &Path, version: &str) -> Result<()> {
             pdb.is_file(),
             "release PDB missing for {binary}; symbols must match this build"
         );
-        copy(
-            &pdb,
-            &symbols.join(pdb.file_name().context("PDB filename")?),
-        )?;
+        symbols_payload::stage(binary, &pdb, &stage, &symbols)?;
         copy(
             &source,
             &symbols.join(format!("{}.exe", binary.replace('-', "_"))),
@@ -138,7 +136,10 @@ pub fn package(root: &Path, version: &str) -> Result<()> {
             &stage.join("hub-launcher.json"),
             &json!({"format":"ara.hub/1","version":version}),
         )?;
-        support::json(&stage.join("hub-service.json"), &json!({"version":version}))?;
+        support::json(
+            &stage.join("hub-service.json"),
+            &json!({"version":version,"build":ara_update::sha256_file(&stage.join("ara.exe"))?}),
+        )?;
         fs::write(
             stage.join("standalone-hub-install.ps1"),
             include_str!("../hub-install.ps1"),

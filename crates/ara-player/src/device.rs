@@ -54,6 +54,18 @@ pub fn warm_frame() -> RenderFrame {
 }
 
 impl Windowed {
+    /// Updates startup status without changing the presentation surface or inputs.
+    pub(crate) fn title(&self, text: &str) -> Result<()> {
+        self.window.set_title(&format!("Ara | {text}"))
+    }
+
+    /// Loading presentations are not game-frame timing samples.
+    pub(crate) fn begin_game(&mut self) {
+        self.frames = 0;
+        self.frame_times.clear();
+        self.window_start = Instant::now();
+    }
+
     /// Opens the window and warms the GPU device and pipelines with a one-box frame,
     /// so a pooled player pays none of that after Play.
     pub fn open(

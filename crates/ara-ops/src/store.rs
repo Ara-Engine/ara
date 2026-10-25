@@ -218,6 +218,7 @@ impl Store {
             reverts: None,
             ops: Vec::new(),
             baselines: BTreeMap::new(),
+            scope: Scope::Local(None),
         }
     }
 
@@ -620,17 +621,47 @@ impl Touch {
 
 /// An open transaction. Edits apply immediately; dropping it without committing
 /// rolls everything back.
+///
+/// Only errors the transaction introduces fail it. While every edit is
+/// [local](Edit::is_local) to records of one document (an Inspector field edit),
+/// those records are all it can change, so it validates just them
+/// ([`Workspace::check_local`]) instead of whole documents.
 #[derive(Debug)]
 pub struct Staged<'s> {
     store: Option<&'s mut Store>,
     meta: TxnMeta,
     reverts: Option<TxnId>,
     ops: Vec<Op>,
-    /// Errors each touched document had before the transaction; only new ones fail it.
+    /// Errors each touched document had before the transaction, for whole-document
+    /// validation.
     baselines: BTreeMap<AssetId, BTreeSet<String>>,
+    scope: Scope,
     /// The ID generator at `begin`, restored on rollback so a dry run previews exactly
     /// the IDs a real run mints.
     ids_before: IdGen,
+}
+
+/// How a transaction validates.
+#[derive(Debug)]
+enum Scope {
+    /// Every edit so far is local to one document (`None` before the first edit).
+    Local(Option<Local>),
+    /// Whole touched documents, against `baselines`.
+    Whole,
+}
+
+/// The records local edits touched in one document, each with the errors it had
+/// before the transaction.
+#[derive(Debug)]
+struct Local {
+    doc: AssetId,
+    records: BTreeMap<RecordId, BTreeSet<String>>,
+}
+
+impl Local {
+    fn ids(&self) -> BTreeSet<RecordId> {
+        self.records.keys().cloned().collect()
+    }
 }
 
 impl<'s> Staged<'s> {
@@ -660,24 +691,69 @@ impl<'s> Staged<'s> {
     /// Applies one edit now. On error nothing changes and the transaction stays open.
     pub fn apply(&mut self, edit: Edit) -> Result<&Op, Diagnostic> {
         let doc_id = edit.doc().clone();
-        if !self.baselines.contains_key(&doc_id) {
-            let store = self.store();
-            if store.ws.doc(doc_id.as_str()).is_none()
-                && !matches!(edit, Edit::Document { kind: Some(_), .. })
+        let touched = self.baselines.contains_key(&doc_id)
+            || matches!(&self.scope, Scope::Local(Some(local)) if local.doc == doc_id);
+        if !touched
+            && self.store().ws.doc(doc_id.as_str()).is_none()
+            && !matches!(edit, Edit::Document { kind: Some(_), .. })
+        {
+            return Err(Diagnostic::error(
+                codes::DOC_NOT_FOUND,
+                format!("no document `{doc_id}` is loaded"),
+            ));
+        }
+        match (&mut self.scope, &edit) {
+            (Scope::Local(local), Edit::Set { id, .. })
+                if edit.is_local() && local.as_ref().is_none_or(|l| l.doc == doc_id) =>
             {
-                return Err(Diagnostic::error(
-                    codes::DOC_NOT_FOUND,
-                    format!("no document `{doc_id}` is loaded"),
-                ));
+                let local = local.get_or_insert_with(|| Local {
+                    doc: doc_id.clone(),
+                    records: BTreeMap::new(),
+                });
+                if !local.records.contains_key(id) {
+                    let store = self
+                        .store
+                        .as_deref()
+                        .expect("a staged transaction holds its store until commit or rollback");
+                    let ids = BTreeSet::from([id.clone()]);
+                    let before = store.ws.check_local(&doc_id, &ids, &store.db);
+                    local.records.insert(id.clone(), error_keys(&before));
+                }
             }
-            let baseline = error_keys(&store.ws.check(&doc_id, None, &store.db));
-            self.baselines.insert(doc_id.clone(), baseline);
+            _ => {
+                self.validate_whole();
+                if !self.baselines.contains_key(&doc_id) {
+                    let store = self.store();
+                    let baseline = error_keys(&store.ws.check(&doc_id, None, &store.db));
+                    self.baselines.insert(doc_id.clone(), baseline);
+                }
+            }
         }
         let store = self.store_mut();
         let op = store.ws.apply(edit, &store.db)?;
         let index = self.ops.len();
         self.ops.push(op);
         Ok(&self.ops[index])
+    }
+
+    /// Switches to whole-document validation. The document local edits touched gets
+    /// the baseline it had before the transaction: its errors now, with its touched
+    /// records' own errors put back to what they were before their first edit (local
+    /// edits change nothing else).
+    fn validate_whole(&mut self) {
+        let Scope::Local(local) = std::mem::replace(&mut self.scope, Scope::Whole) else {
+            return;
+        };
+        let Some(local) = local else {
+            return;
+        };
+        let store = self.store();
+        let ids = local.ids();
+        let now = error_keys(&store.ws.check(&local.doc, None, &store.db));
+        let edited = error_keys(&store.ws.check_local(&local.doc, &ids, &store.db));
+        let mut baseline: BTreeSet<String> = now.difference(&edited).cloned().collect();
+        baseline.extend(local.records.into_values().flatten());
+        self.baselines.insert(local.doc, baseline);
     }
 
     /// The errors committing now would report (stale base, undo conflicts, new
@@ -698,6 +774,15 @@ impl<'s> Staged<'s> {
         }
         if let Some(guard) = &store.guard {
             errors.extend(guard.check(&self.meta, store.origin(), &self.ops));
+        }
+        if let Scope::Local(Some(local)) = &self.scope {
+            let before: BTreeSet<&String> = local.records.values().flatten().collect();
+            let after = store.ws.check_local(&local.doc, &local.ids(), &store.db);
+            errors.extend(
+                after
+                    .into_iter()
+                    .filter(|d| d.is_error() && !before.contains(&key_of(d))),
+            );
         }
         for (doc, before) in &self.baselines {
             let after = store.ws.check(doc, None, &store.db);

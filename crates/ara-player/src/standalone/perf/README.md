@@ -13,8 +13,8 @@
   are null without valid coverage (including the separate 2D presenter). Device
   counter resets or wait totals greater than frame wall time remain unavailable.
 - `frame_samples_ms`: raw wall times for the measured window, in frame order.
-- `hitches_over_16ms`: count of wall times strictly greater than 16 ms. Warmup
-  frames are outside the window; only the process's first presented frame is
+- `hitches_over_16ms`: count of wall times strictly greater than 16 ms. All
+  loading/warmup frames are outside the window; only the first game frame is
   excluded if it was measured. A new keep-alive window does not exclude its own
   first frame. `hitch_samples` gives the eligible measured frame count.
 
@@ -22,3 +22,11 @@ The cumulative counter is exposed by `Presenter::host_wait_stats()` and
 `VulkanDevice::context().host_wait_stats()`. Capture it before and after the whole
 frame, including window presentation. Other uninstrumented host waits remain in
 work time; missing coverage must not be reported as zero work.
+
+Windowed startup presents an animated loading view while the shipping runtime
+prepares on a worker. `startup.first_frame_ms` is the first presented image,
+`loading_frame_ms` identifies that loading presentation, and `full_scene_frame_ms`
+identifies the first successful game presentation. All are cumulative launch
+timestamps; device/world preparation overlaps. Headless captures stay synchronous.
+`ARA_LOADING_CAPTURE=<target/path.png>` explicitly captures the loading view for
+visual verification; leave it unset for timing runs.

@@ -16,9 +16,8 @@ renderer-neutral presentation extraction. No GPU, window or process code (see
   The engine world includes brains/perception (`Brain`, `Perceiver`, `Stimulus`) and
   the behaviour commands (`behavior.*`).
 - `Runtime::new(schema, workspace, scene, assets, RuntimeConfig, plugins)`: projects the
-  scene, preloads model generations reachable through its prefabs, streamed cells
-  and foliage rules, builds physics/nav/animation at
-  tick 0 and returns **paused**. `step`, `step_until`, `advance(elapsed)` (bounded
+  scene, preloads its prefab/cell/foliage models with at most four workers, builds
+  physics/nav/animation at tick 0 and returns **paused**. `step`, `step_until`, `advance(elapsed)` (bounded
   catch-up), `pause/resume/set_timescale`, `inject`, `patch_edits` (live edits →
   baseline-checked ops at the next tick), `changes()` (keep-changes diff),
   `extract(&mut RenderFrame)`, `reload_assets`, `fault()`, `navigation_errors()`.
@@ -50,8 +49,7 @@ renderer-neutral presentation extraction. No GPU, window or process code (see
   Optional `AssetSource::digest` reads immutable metadata without payload I/O;
   `Models::load` reuses an unchanged decoded generation. New prefab references
   prepare their reachable models at the live-edit control boundary before adoption.
-- Missing/broken model generations produce `asset_errors()` (`ARA7310`) and magenta
-  shape placeholders. Failed IDs remain eligible for a later hot-reload recovery.
+- Missing/broken models produce `asset_errors()` (`ARA7310`) and magenta placeholders; failed IDs remain reloadable.
   Model colliders use authored box bounds until a model arrives, with an entity
   diagnostic; the first generation replaces that cooked placeholder at a tick boundary.
 - `model::Model` decodes a glTF import generation (FORMAT.md v1); `skin::Skin` turns

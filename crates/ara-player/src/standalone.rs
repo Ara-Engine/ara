@@ -8,6 +8,7 @@ use serde::Deserialize;
 use serde_json::json;
 use std::{path::PathBuf, sync::Arc, time::Instant};
 mod perf;
+mod startup;
 
 #[derive(clap::Args)]
 pub(super) struct Options {
@@ -105,25 +106,50 @@ pub(super) fn run(args: Args, began: Instant) -> Result<()> {
     let render_options = ara_runtime_render::RenderOptions {
         ray_tracing: args.ray_tracing.unwrap_or(scene.rendering.ray_tracing),
     };
-    let (mut world, build_ms) = World::build_packed(&scene, source, !args.standalone.headless)?;
+    let scene = Arc::new(scene);
+    let (mut world, build_ms, mut window, mut presenter) = if args.standalone.headless {
+        let (world, build_ms) = World::build_packed(&scene, source, false)?;
+        (
+            world,
+            build_ms,
+            None,
+            Presenter::new(size, Vec::new(), &args.gpu_cache),
+        )
+    } else {
+        let Some(loaded) = startup::load(
+            Arc::clone(&scene),
+            source,
+            startup::Settings {
+                name: &args.name,
+                size,
+                cache: &args.gpu_cache,
+                quality,
+                options: render_options,
+                hidden: perf.offscreen(),
+            },
+            began,
+            &mut phases,
+        )?
+        else {
+            println!("ARA_RESULT {}", json!({"cancelled":true,"startup":phases}));
+            return Ok(());
+        };
+        (
+            loaded.world,
+            loaded.build_ms,
+            Some(loaded.window),
+            loaded.presenter,
+        )
+    };
     let started = world.start(args.standalone.headless, build_ms)?;
     phases.insert("world_ready_ms", began.elapsed().as_millis());
     let mut frame = RenderFrame::default();
     let mut presenter2d = Presenter2d::new(&args.gpu_cache);
-    let (mut window, mut presenter) = if args.standalone.headless {
-        (None, Presenter::new(size, Vec::new(), &args.gpu_cache))
-    } else {
-        let open = if perf.offscreen() {
-            device::Windowed::open_offscreen
-        } else {
-            device::Windowed::open
-        };
-        let (window, presenter) = open(&args.name, size, &args.gpu_cache, quality, render_options)?;
-        (Some(window), presenter)
-    };
     presenter.set_quality(quality);
     presenter.set_render_options(render_options);
-    phases.insert("device_ready_ms", began.elapsed().as_millis());
+    phases
+        .entry("device_ready_ms")
+        .or_insert_with(|| began.elapsed().as_millis());
     let mut frame_count = 0_u32;
     let mut frame_sum_ms = 0_f64;
     let mut frame_max_ms = 0_f64;
@@ -141,6 +167,7 @@ pub(super) fn run(args: Args, began: Instant) -> Result<()> {
             "perf frame windows require the 3D presenter; a 2D pack cannot supply these GPU pass timings"
         );
         if is_2d {
+            window.shutdown(&presenter)?;
             presenter2d.set_atlases(ara_runtime_render::two_d::atlases(
                 simulation,
                 source.as_ref(),
@@ -209,7 +236,9 @@ pub(super) fn run(args: Args, began: Instant) -> Result<()> {
                 audio.pump(device, super::AUDIO_WATERMARK)?;
             }
             if frames == 0 {
-                phases.insert("first_frame_ms", began.elapsed().as_millis());
+                phases
+                    .entry("first_frame_ms")
+                    .or_insert_with(|| began.elapsed().as_millis());
             } else {
                 let elapsed = frame_start.elapsed().as_secs_f64() * 1000.;
                 frame_count += 1;
@@ -225,6 +254,11 @@ pub(super) fn run(args: Args, began: Instant) -> Result<()> {
                 frame_phase_ms[3] += frame_start.elapsed().as_secs_f64() * 1000.
                     - presentation_done.duration_since(frame_start).as_secs_f64() * 1000.;
                 frame_gpu_ms += presenter.stats().gpu_ms;
+            }
+            if is_2d || presenter.presentation_error().is_none() {
+                phases
+                    .entry("full_scene_frame_ms")
+                    .or_insert_with(|| began.elapsed().as_millis());
             }
             frames += 1;
             #[cfg(feature = "tracy")]

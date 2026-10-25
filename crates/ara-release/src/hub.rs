@@ -55,7 +55,7 @@ pub fn package(root: &Path, version: &str) -> Result<()> {
     )?;
     support::json(
         &stage.join("bootstrap/service.json"),
-        &serde_json::json!({"version":version}),
+        &serde_json::json!({"version":version,"build":ara_update::sha256_file(&stage.join("bootstrap/ara.exe"))?}),
     )?;
     for entry in fs::read_dir(root.join("target/release"))? {
         let file = entry?.path();

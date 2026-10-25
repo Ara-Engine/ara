@@ -191,8 +191,10 @@ impl Shell {
             out.push_str("</panel>");
         } else if ara_importers::commands::importer_for_source(path).is_ok() {
             out.push_str("<panel id='import-new' style='flex-shrink:0;gap:8px;padding:8px;padding-left:12px'><text id='import-new-help' class='muted' text='Create settings and cook this source in an isolated worker.' style='white-space:normal' />");
+            // Not `asset-import`: element ids (and their binding hashes) stay unique
+            // across the separately reconciled parts.
             out.push_str(&self.bind_button(
-                "asset-import",
+                "import-source",
                 "Import source",
                 Binding::Protocol("editor.asset.import", json!({"path":path})),
                 "primary",

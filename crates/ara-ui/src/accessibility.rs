@@ -28,9 +28,26 @@ pub fn role_for_tag(tag: &str) -> accesskit::Role {
 pub fn accessibility(ui: &crate::Ui, focus: Option<u64>) -> accesskit::TreeUpdate {
     use crate::source::stable_id;
     use accesskit::{Action, Node, NodeId, Rect};
+    use std::collections::HashSet;
+    // Node IDs are hashes of element IDs. Markup that repeats an element ID would
+    // list one node twice, and accessibility clients reject the whole tree (a Windows
+    // UI Automation client panics in `accesskit_consumer`). Walk from the root and
+    // keep each ID's first occurrence; a repeat is dropped with its subtree.
+    let painted: HashSet<usize> = ui.paint_order.iter().copied().collect();
+    let mut kept: HashSet<usize> = HashSet::new();
+    let mut seen: HashSet<u64> = HashSet::new();
+    let mut stack = vec![0];
+    while let Some(index) = stack.pop() {
+        if !painted.contains(&index) || !seen.insert(stable_id(&ui.nodes[index].element.id)) {
+            continue;
+        }
+        kept.insert(index);
+        stack.extend(ui.nodes[index].element.children.iter().rev());
+    }
     let nodes = ui
         .paint_order
         .iter()
+        .filter(|index| kept.contains(index))
         .map(|index| {
             let n = &ui.nodes[*index];
             let role = role_for_tag(&n.element.tag);
@@ -39,7 +56,7 @@ pub fn accessibility(ui: &crate::Ui, focus: Option<u64>) -> accesskit::TreeUpdat
                 n.element
                     .children
                     .iter()
-                    .filter(|i| ui.paint_order.contains(i))
+                    .filter(|i| kept.contains(i))
                     .map(|i| NodeId(stable_id(&ui.nodes[*i].element.id)))
                     .collect::<Vec<_>>(),
             );
@@ -123,7 +140,7 @@ pub fn accessibility(ui: &crate::Ui, focus: Option<u64>) -> accesskit::TreeUpdat
         tree_id: accesskit::TreeId::ROOT,
         focus: NodeId(
             focus
-                .filter(|id| ui.by_id(*id).is_some_and(|i| ui.paint_order.contains(&i)))
+                .filter(|id| ui.by_id(*id).is_some_and(|i| kept.contains(&i)))
                 .unwrap_or_else(|| stable_id(&ui.nodes[0].element.id)),
         ),
     }

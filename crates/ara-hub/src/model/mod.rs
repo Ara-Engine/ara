@@ -653,6 +653,14 @@ impl Hub {
                 }
             },
             Intent::Template(id) => {
+                if let Some(version) = self
+                    .templates
+                    .iter()
+                    .find(|t| t.id == id)
+                    .and_then(|t| t.engine_version.clone())
+                {
+                    self.create.engine = Some(version);
+                }
                 self.create.template = Some(id);
                 self.view = View::Create;
                 self.create_changed();
@@ -784,6 +792,14 @@ impl Hub {
                 self.stale.clear();
                 self.refresh(List::ALL);
             }
+            Event::ServiceUpdatePending => {
+                let id = self.notice("Restart the Hub service".into(), None);
+                if let Some(notice) = self.notices.iter_mut().find(|notice| notice.id == id) {
+                    notice.detail = Some(
+                        "Close open projects, then restart Ara Hub to finish updating.".into(),
+                    );
+                }
+            }
             Event::Offline { message, log } => {
                 if self.link
                     != (Link::Offline {
@@ -800,7 +816,7 @@ impl Hub {
             Event::Changed { kind, .. } => match kind.as_str() {
                 "releases" => self.refresh_releases(),
                 "progress" => self.release_call("hub.downloads", serde_json::json!({})),
-                "engine" => self.refresh([List::Engines]),
+                "engine" => self.refresh([List::Engines, List::Templates]),
                 "activity" => self.refresh([List::Status, List::Activity]),
                 _ => self.refresh([List::Projects, List::Status, List::Activity]),
             },
