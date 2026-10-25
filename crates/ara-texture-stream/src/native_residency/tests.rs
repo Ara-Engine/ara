@@ -367,4 +367,12 @@ fn mean_texel_decodes_the_coarsest_whole_block_level() {
     let mean = set.mean_texel(id.index()).unwrap();
     assert!((mean[0] - 200. / 255.).abs() < 1e-3, "{mean:?}");
     assert!(set.mean_texel(id.index() + 1).is_none());
+    let (size, texels) = set.texels(id.index(), 8).unwrap();
+    assert_eq!(size, [8, 8], "the finest level within the side limit");
+    assert_eq!(texels.len(), 64);
+    assert_eq!(
+        set.texels(id.index(), 1).unwrap().0,
+        [4, 4],
+        "else the coarsest"
+    );
 }
