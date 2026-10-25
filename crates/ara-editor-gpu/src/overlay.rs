@@ -74,6 +74,27 @@ impl NativeUi {
                         0,
                     )
                 }
+                Overlay::Quad { corners, color } => {
+                    let min = corners
+                        .iter()
+                        .fold([f32::MAX; 2], |m, c| [m[0].min(c[0]), m[1].min(c[1])]);
+                    let max = corners
+                        .iter()
+                        .fold([f32::MIN; 2], |m, c| [m[0].max(c[0]), m[1].max(c[1])]);
+                    // One pixel of room on every side for the antialiased edge.
+                    let (x, y) = (min[0] - 1., min[1] - 1.);
+                    let local = corners.map(|c| [c[0] - x, c[1] - y]);
+                    (
+                        Instance {
+                            rect: [x, y, max[0] - min[0] + 2., max[1] - min[1] + 2.],
+                            uv: [local[0][0], local[0][1], local[1][0], local[1][1]],
+                            color: *color,
+                            params: [local[2][0], local[2][1], local[3][0], local[3][1]],
+                        },
+                        8,
+                        0,
+                    )
+                }
                 Overlay::Hover { uv, color } => (
                     Instance {
                         rect: [rect.x, rect.y, rect.w, rect.h],

@@ -66,6 +66,13 @@ float4 fragmentMain(Varying input):SV_Target {
         static const int2 offsets[4]={int2(-1,0),int2(1,0),int2(0,-1),int2(0,1)};
         for(uint n=0;n<4;n++){int2 other=clamp(pixel+offsets[n]*max(1,int(round(1.25*pc.dpi))),int2(0,0),int2(width-1,height-1));uint neighbor=uint(textures[NonUniformResourceIndex(pc.textureIndex)].Load(int3(other,0)).r);edge=edge||((centre==wanted)!=(neighbor==wanted));}
         color.a*=edge&&wanted>0?1:0;
+    }else if(pc.mode==8){
+        // Convex quad: signed distance to the nearest edge, oriented by the winding.
+        float2 corners[4]={i.uv.xy,i.uv.zw,i.parameters.xy,i.parameters.zw};float area=0;
+        for(uint n=0;n<4;n++){float2 a=corners[n],b=corners[(n+1)%4];area+=a.x*b.y-b.x*a.y;}
+        float side=area<0?-1:1;float inside=1e9;
+        for(uint n=0;n<4;n++){float2 a=corners[n];float2 e=corners[(n+1)%4]-a;float l=length(e);if(l<0.0001)continue;inside=min(inside,side*(e.x*(input.local.y-a.y)-e.y*(input.local.x-a.x))/l);}
+        color.a*=saturate(inside*pc.dpi+0.5);
     }else if(pc.mode==6){
         float2 a=i.uv.xy,b=i.uv.zw;float2 d=b-a;float t=saturate(dot(input.local-a,d)/max(dot(d,d),0.0001));float distance=length(input.local-a-t*d);
         color.a*=saturate((i.parameters.x-distance)*pc.dpi+0.5);

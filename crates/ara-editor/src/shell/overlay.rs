@@ -91,12 +91,31 @@ impl Handles {
             project(&self.camera, self.rect, point(b))?,
         ])
     }
-    /// Screen corner of a plane square (normal `axis`), 30% along the other two arms.
-    pub fn plane_corner(&self, axis: usize) -> [f32; 2] {
+    /// World point on the rotation ring around `axis` at `angle` radians.
+    fn ring_point(&self, axis: usize, angle: f32) -> Vec3 {
+        let u = self.axes[(axis + 1) % 3];
+        let v = self.axes[axis].cross(u);
+        self.pivot + (u * angle.cos() + v * angle.sin()) * self.length
+    }
+    /// The plane handle with normal `axis`: the square between 20 % and 40 % along the
+    /// other two arms, in their world plane, projected (a parallelogram on screen).
+    /// `None` while either arm is foreshortened, when the square would be a sliver.
+    pub fn plane_quad(&self, axis: usize) -> Option<[[f32; 2]; 4]> {
         let (a, b) = ((axis + 1) % 3, (axis + 2) % 3);
         let o = Vec2::from(self.origin);
-        let p = o + (Vec2::from(self.ends[a]) - o) * 0.3 + (Vec2::from(self.ends[b]) - o) * 0.3;
-        p.into()
+        if (Vec2::from(self.ends[a]) - o).length() < 20.
+            || (Vec2::from(self.ends[b]) - o).length() < 20.
+        {
+            return None;
+        }
+        let (u, v) = (self.axes[a] * self.length, self.axes[b] * self.length);
+        let corner = |s: f32, t: f32| project(&self.camera, self.rect, self.pivot + u * s + v * t);
+        Some([
+            corner(0.2, 0.2)?,
+            corner(0.4, 0.2)?,
+            corner(0.4, 0.4)?,
+            corner(0.2, 0.4)?,
+        ])
     }
     /// Unit screen direction of an axis, or zero when it points at the camera.
     fn screen_dir(&self, axis: usize) -> Vec2 {
@@ -197,7 +216,10 @@ pub fn hit(handles: &Handles, pointer: [f32; 2]) -> Option<Handle> {
     }
     if handles.tool == Tool::Translate {
         for axis in 0..3 {
-            if p.distance(Vec2::from(handles.plane_corner(axis))) < HIT {
+            if handles
+                .plane_quad(axis)
+                .is_some_and(|quad| inside(&quad, p, 2.))
+            {
                 return Some(Handle::Plane(axis));
             }
         }
@@ -216,6 +238,31 @@ pub fn hit(handles: &Handles, pointer: [f32; 2]) -> Option<Handle> {
         })
         .min_by(|a, b| a.1.total_cmp(&b.1))
         .map(|(handle, _)| handle)
+}
+/// Whether `p` lies inside the convex quad, or within `margin` pixels of it.
+fn inside(quad: &[[f32; 2]; 4], p: Vec2, margin: f32) -> bool {
+    let corners = quad.map(Vec2::from);
+    let area: f32 = (0..4)
+        .map(|n| corners[n].perp_dot(corners[(n + 1) % 4]))
+        .sum();
+    (0..4).all(|n| {
+        let (a, b) = (corners[n], corners[(n + 1) % 4]);
+        let edge = b - a;
+        edge.length() < 0.001 || area.signum() * edge.perp_dot(p - a) / edge.length() > -margin
+    })
+}
+/// The corners of a screen square of half-size `half` around `centre`.
+fn square(centre: Vec2, half: f32) -> [[f32; 2]; 4] {
+    [(-1., -1.), (1., -1.), (1., 1.), (-1., 1.)]
+        .map(|(x, y)| (centre + Vec2::new(x, y) * half).into())
+}
+/// `corners` pushed `by` pixels away from their centroid: the dark halo under a fill.
+fn grow(corners: [[f32; 2]; 4], by: f32) -> [[f32; 2]; 4] {
+    let centre = corners.iter().map(|c| Vec2::from(*c)).sum::<Vec2>() / 4.;
+    corners.map(|c| {
+        let c = Vec2::from(c);
+        (c + (c - centre).normalize_or_zero() * by).into()
+    })
 }
 /// Gizmo interaction state for drawing: hovered and dragged handles.
 #[derive(Clone, Copy, Debug, Default)]
@@ -332,12 +379,24 @@ pub fn build(
                 color: c,
             });
         };
-    // A thin constraint line through the pivot along the dragged axis.
-    if let Some(Handle::Axis(axis)) = gizmo.active
-        && state.tool != Tool::Rotate
-    {
+    // Opaque fills (cones, cubes) sit on a 1 px dark halo, like the strokes.
+    let solid = |overlays: &mut Vec<Overlay>, corners: [[f32; 2]; 4], c: [f32; 4]| {
+        overlays.push(Overlay::Quad {
+            corners: grow(corners, 1.),
+            color: [halo[0], halo[1], halo[2], halo[3] * c[3]],
+        });
+        overlays.push(Overlay::Quad { corners, color: c });
+    };
+    let lit = |handle: Handle| gizmo.hover == Some(handle) || gizmo.active == Some(handle);
+    let o = Vec2::from(handles.origin);
+    // While dragging, a thin constraint line through the pivot along each moving axis.
+    let constrained = match gizmo.active {
+        Some(Handle::Axis(axis)) if state.tool != Tool::Rotate => [Some(axis), None],
+        Some(Handle::Plane(axis)) => [Some((axis + 1) % 3), Some((axis + 2) % 3)],
+        _ => [None, None],
+    };
+    for axis in constrained.into_iter().flatten() {
         let d = handles.screen_dir(axis) * 2000.;
-        let o = Vec2::from(handles.origin);
         let mut line = tints[axis];
         line[3] = 0.5;
         overlays.push(Overlay::Line {
@@ -348,74 +407,97 @@ pub fn build(
         });
     }
     if state.tool == Tool::Rotate {
+        // The half of each ring facing away from the camera draws at 25 %, so the three
+        // rings read as a sphere rather than a tangle.
+        let toward = (handles.pivot - handles.camera.position()).normalize_or_zero();
         for (axis, tint) in tints.iter().enumerate() {
             let c = faded(*tint, Handle::Axis(axis));
-            let width = if gizmo.hover == Some(Handle::Axis(axis)) {
-                1.5
-            } else {
-                1.
-            };
+            let width = if lit(Handle::Axis(axis)) { 1.25 } else { 0.75 };
             for n in 0..48 {
-                if let Some([from, to]) = handles.ring_segment(axis, n) {
-                    stroke(&mut overlays, from, to, width, c);
+                let Some([from, to]) = handles.ring_segment(axis, n) else {
+                    continue;
+                };
+                let middle = (n as f32 + 0.5) / 48. * std::f32::consts::TAU;
+                let behind = (handles.ring_point(axis, middle) - handles.pivot).dot(toward) > 0.;
+                let mut c = c;
+                if behind && !lit(Handle::Axis(axis)) {
+                    c[3] *= 0.25;
                 }
+                stroke(&mut overlays, from, to, width, c);
             }
         }
         return Ok(overlays);
     }
+    if state.tool == Tool::Translate {
+        // Plane squares first, under the arms: 20 % fill (45 % lit), a 1 px edge.
+        for (axis, tint) in tints.iter().enumerate() {
+            let handle = Handle::Plane(axis);
+            let Some(quad) = handles.plane_quad(axis) else {
+                continue;
+            };
+            let c = faded(*tint, handle);
+            let mut fill = c;
+            fill[3] *= if lit(handle) { 0.45 } else { 0.2 };
+            overlays.push(Overlay::Quad {
+                corners: quad,
+                color: fill,
+            });
+            for n in 0..4 {
+                stroke(&mut overlays, quad[n], quad[(n + 1) % 4], 0.5, c);
+            }
+        }
+    }
     for (axis, tint) in tints.iter().enumerate() {
         let handle = Handle::Axis(axis);
         let c = faded(*tint, handle);
-        let width = if gizmo.hover == Some(handle) { 1.5 } else { 1. };
-        let end = handles.ends[axis];
-        let o = Vec2::from(handles.origin);
+        let width = if lit(handle) { 1.5 } else { 1. };
+        let end = Vec2::from(handles.ends[axis]);
         let dir = handles.screen_dir(axis);
-        if dir == Vec2::ZERO || o.distance(Vec2::from(end)) < 8. {
+        if dir == Vec2::ZERO || o.distance(end) < 8. {
             continue; // Axes nearly parallel to the view fade out entirely.
         }
-        let shaft_end: [f32; 2] = (Vec2::from(end) - dir * 10.).into();
-        stroke(&mut overlays, handles.origin, shaft_end, width, c);
         if state.tool == Tool::Scale {
-            // 8 px end cube.
-            stroke(&mut overlays, end, end, 4., c);
-        } else {
-            // 12 px arrowhead: a tapered pair of thick strokes.
-            let tip: [f32; 2] = (Vec2::from(end) + dir * 2.).into();
-            stroke(&mut overlays, shaft_end, tip, 3.5, c);
+            // An 8 px cube (10 px lit) at the arm's end.
             stroke(
                 &mut overlays,
-                (Vec2::from(shaft_end) - dir * 2.).into(),
-                shaft_end,
-                4.5,
+                handles.origin,
+                (end - dir * 4.).into(),
+                width,
+                c,
+            );
+            solid(
+                &mut overlays,
+                square(end, if lit(handle) { 5. } else { 4. }),
+                c,
+            );
+        } else {
+            // A 12 px solid cone.
+            let base = end - dir * 12.;
+            let side = Vec2::new(-dir.y, dir.x) * if lit(handle) { 5.5 } else { 4.5 };
+            stroke(&mut overlays, handles.origin, base.into(), width, c);
+            solid(
+                &mut overlays,
+                [
+                    end.into(),
+                    (base + side).into(),
+                    (base - side).into(),
+                    end.into(),
+                ],
                 c,
             );
         }
     }
-    if state.tool == Tool::Translate {
-        // Plane handles: small solid chips 30% along both arms, tinted by their normal.
-        for (axis, tint) in tints.iter().enumerate() {
-            let handle = Handle::Plane(axis);
-            let (a, b) = ((axis + 1) % 3, (axis + 2) % 3);
-            let o = Vec2::from(handles.origin);
-            if (Vec2::from(handles.ends[a]) - o).length() < 20.
-                || (Vec2::from(handles.ends[b]) - o).length() < 20.
-            {
-                continue;
-            }
-            let corner = handles.plane_corner(axis);
-            let mut c = faded(*tint, handle);
-            if gizmo.hover != Some(handle) && gizmo.active != Some(handle) {
-                c[3] *= 0.7;
-            }
-            stroke(&mut overlays, corner, corner, 4., c);
-        }
-    }
-    // 10 px screen-space centre handle.
-    let centre = if gizmo.hover == Some(Handle::Centre) || gizmo.active == Some(Handle::Centre) {
+    let centre = if lit(Handle::Centre) {
         hover
     } else {
         color("foreground", 0.75)?
     };
-    stroke(&mut overlays, handles.origin, handles.origin, 5., centre);
+    if state.tool == Tool::Scale {
+        // A 10 px square for uniform scale.
+        solid(&mut overlays, square(o, 5.), centre);
+    } else {
+        // A 10 px screen-space disc for free movement in the view plane.
+        stroke(&mut overlays, handles.origin, handles.origin, 5., centre);
+    }
     Ok(overlays)
 }
