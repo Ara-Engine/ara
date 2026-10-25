@@ -160,6 +160,9 @@ impl Drop for VulkanDevice {
             for pending in &self.pending {
                 self.context.device.destroy_query_pool(pending.query, None);
             }
+            for pool in self.query_cache.drain() {
+                self.context.device.destroy_query_pool(pool.handle, None);
+            }
             self.heap.destroy(&self.context);
             for semaphore in self.timelines {
                 self.context.device.destroy_semaphore(semaphore, None);

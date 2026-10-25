@@ -239,6 +239,7 @@ impl Gpu {
     }
     /// Allocate one primary command buffer for the selected queue family.
     pub fn commands(&self, compute: bool) -> Result<vk::CommandBuffer> {
+        crate::cpu_scope!("GPU.allocate_commands");
         // SAFETY: Pools belong to their respective queue families and outlive commands.
         unsafe {
             Ok(self.device.allocate_command_buffers(

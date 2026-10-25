@@ -21,7 +21,7 @@ Minimal SDL3 native window/input and Vulkan presentation. Uses `sdl3-sys` 0.7.2
   `set_icon(rgba, [w, h])`. Regenerate the PNG with `cargo run -p ara-brand -- export`.
 - `Present`: unsafe native integration over an existing GPU context. Retain both
   native owners, present only completed CopySource images, and destroy after idle.
-  Leaf acquire/present/queue-idle waits contribute to `Gpu::host_wait_stats`.
+  Leaf acquire/present/queue-idle waits contribute to `Context::host_wait_stats`.
 
 Per-image render semaphores are reused after reacquisition. Construction cleans
 partially created surface/swapchain/semaphores; destruction is idempotent.

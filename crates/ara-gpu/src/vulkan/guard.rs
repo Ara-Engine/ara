@@ -67,6 +67,15 @@ impl<'a> Objects<'a> {
     pub fn push(&mut self, object: Object) {
         self.objects.push(object);
     }
+    /// Transfers one query pool to completed-object storage without destroying it.
+    pub fn take_query(&mut self, pool: vk::QueryPool) -> Option<vk::QueryPool> {
+        let index = self
+            .objects
+            .iter()
+            .position(|object| matches!(object, Object::Query(handle) if *handle == pool))?;
+        self.objects.swap_remove(index);
+        Some(pool)
+    }
     pub fn disarm(mut self) {
         self.objects.clear();
     }

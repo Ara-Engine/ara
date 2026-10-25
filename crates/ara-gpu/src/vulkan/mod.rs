@@ -10,6 +10,9 @@ mod heap;
 mod image_copy;
 mod lifetime;
 mod pipeline;
+mod queries;
+#[cfg(test)]
+mod query_tests;
 mod recording;
 mod reload;
 pub use reload::ShaderStatus;
@@ -62,6 +65,9 @@ pub struct VulkanDevice {
     cache: vk::PipelineCache,
     cache_path: PathBuf,
     pending: Vec<recording::Pending>,
+    query_cache: queries::Cache,
+    #[cfg(test)]
+    query_pool_creations: usize,
     shader_worker: Option<reload::Worker>,
 }
 
@@ -165,6 +171,9 @@ impl VulkanDevice {
             cache,
             cache_path,
             pending: Vec::new(),
+            query_cache: queries::Cache::default(),
+            #[cfg(test)]
+            query_pool_creations: 0,
             shader_worker,
         })
     }
