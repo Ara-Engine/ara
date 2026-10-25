@@ -17,7 +17,7 @@ impl Importer for GltfImporter {
         "ara.gltf"
     }
     fn version(&self) -> &str {
-        "5-gltf14-meshopt070-ispc050-tiled-f32text-arag1-khr-opacity"
+        "6-gltf14-meshopt070-ispc050-tiled-f32text-arag1-khr-opacity-deep-lods-card-area"
     }
     fn register_settings(&self, db: &mut ara_schema::SchemaDb) {
         db.register::<MeshSettings>();
@@ -174,14 +174,18 @@ impl Importer for GltfImporter {
                     }
                 }
                 let name = format!("meshes/{}-{}.mesh", mesh_index, primitive.index());
-                let normal_uv = tangents::NormalUv::for_material(&primitive.material())?;
-                let artifact = Artifact {
-                    name: name.clone(), kind: ArtifactKind::Mesh,
-                    bytes: crate::mesh::cook_mesh_with_tangent_uv(&vertices, &indices, &mesh_settings, |v| normal_uv.apply(v))?,
-                };
                 let deformed = skinned.contains(&mesh_index)
                     || primitive.get(&gltf::Semantic::Joints(0)).is_some()
                     || primitive.morph_targets().next().is_some();
+                let normal_uv = tangents::NormalUv::for_material(&primitive.material())?;
+                let material = primitive.material();
+                let preserve_card_area = material.alpha_mode() != gltf::material::AlphaMode::Opaque
+                    || material.pbr_metallic_roughness().base_color_texture()
+                        .is_some_and(|texture| opacity_maps.contains_key(&texture.texture().source().index()));
+                let artifact = Artifact {
+                    name: name.clone(), kind: ArtifactKind::Mesh,
+                    bytes: crate::mesh::cook_mesh_with_tangent_uv(&vertices, &indices, &mesh_settings, deformed, preserve_card_area, |v| normal_uv.apply(v))?,
+                };
                 let (virtual_artifact, virtual_metadata) = crate::virtual_geometry::cook(
                     &name, &vertices, &indices, &mesh_settings, deformed,
                     material_counts[&mesh_index])?;
