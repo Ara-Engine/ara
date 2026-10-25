@@ -1213,3 +1213,119 @@ fn this_computers_gpu_messages_stay_out_of_the_project_counts() {
         .unwrap();
     assert!(loader(&shell), "and opens on demand");
 }
+
+#[test]
+fn every_dock_splitter_can_be_grabbed_and_dragged() {
+    use ara_ui::input::InputEvent;
+    let project = Project::new();
+    let mut editor = Editor::open(&project.0).unwrap();
+    let mut shell = Shell::new(&mut editor, [1440., 900.]).unwrap();
+    shell.rebuild(&mut editor).unwrap();
+    let mut clipboard = MemoryClipboard::default();
+    let splitters: Vec<String> = shell
+        .ui
+        .nodes
+        .iter()
+        .filter(|n| n.element.id.starts_with("splitter-") && n.visible)
+        .map(|n| n.element.id.clone())
+        .collect();
+    assert!(splitters.len() >= 3, "{splitters:?}");
+    for id in splitters {
+        let i = shell.ui.find(&id).unwrap();
+        let r = shell.ui.nodes[i].rect;
+        // A splitter spans its whole split: there is something to grab.
+        assert!(r.w >= 4. && r.h >= 4., "{id}: {r:?}");
+        let centre = [r.x + r.w / 2., r.y + r.h / 2.];
+        assert_eq!(shell.ui.hit_test(centre[0], centre[1]), Some(i), "{id}");
+        let across = r.w < r.h;
+        let path = id.trim_start_matches("splitter-").to_owned();
+        let first = |shell: &Shell| {
+            let n = &shell.ui.nodes[shell.ui.find(&format!("dock-first-{path}")).unwrap()];
+            if across { n.rect.w } else { n.rect.h }
+        };
+        let before = first(&shell);
+        let to = if across {
+            [centre[0] + 40., centre[1]]
+        } else {
+            [centre[0], centre[1] + 40.]
+        };
+        for event in [
+            InputEvent::PointerMove(centre),
+            InputEvent::PointerDown(centre),
+            InputEvent::PointerMove(to),
+            InputEvent::PointerUp(to),
+        ] {
+            shell.event(event, &mut clipboard).unwrap();
+        }
+        shell.dispatch(&mut editor).unwrap();
+        shell.rebuild(&mut editor).unwrap();
+        let after = first(&shell);
+        assert!(
+            (after - before - 40.).abs() < 6.,
+            "{id}: first pane {before} -> {after}"
+        );
+    }
+}
+
+#[test]
+fn a_lone_panel_drags_by_its_header_into_another_area() {
+    let project = Project::new();
+    let mut editor = Editor::open(&project.0).unwrap();
+    let mut shell = Shell::new(&mut editor, [1440., 900.]).unwrap();
+    shell.rebuild(&mut editor).unwrap();
+    // A single-panel area shows a plain header, not tabs.
+    let (header, panel) = shell
+        .ui
+        .nodes
+        .iter()
+        .find(|n| {
+            n.visible
+                && n.element
+                    .attrs
+                    .get("class")
+                    .is_some_and(|c| c == "panel-header")
+        })
+        .and_then(|n| {
+            let panel = n.element.id.strip_prefix("header-")?.to_owned();
+            Some((n.rect, panel))
+        })
+        .expect("the default layout has a single-panel area");
+    let area_of = |editor: &Editor, panel: &str| {
+        fn find(node: &ara_ui::docking::DockNode, panel: &str) -> Option<String> {
+            match node {
+                ara_ui::docking::DockNode::Area { id, tabs, .. } => {
+                    tabs.iter().any(|t| t == panel).then(|| id.clone())
+                }
+                ara_ui::docking::DockNode::Split { first, second, .. } => {
+                    find(first, panel).or_else(|| find(second, panel))
+                }
+            }
+        }
+        find(&editor.state.layout, panel).unwrap()
+    };
+    let from = area_of(&editor, &panel);
+    let target = shell
+        .ui
+        .nodes
+        .iter()
+        .find(|n| {
+            n.visible && n.element.id.starts_with("area-") && n.element.id != format!("area-{from}")
+        })
+        .map(|n| (n.element.id.trim_start_matches("area-").to_owned(), n.rect))
+        .unwrap();
+    shell.pointer = [header.x + header.w * 0.4, header.y + header.h * 0.5];
+    shell.begin_drag();
+    assert_eq!(
+        shell.dragged_tab(),
+        Some(panel.as_str()),
+        "{panel}'s header starts a drag"
+    );
+    shell.pointer = [target.1.x + target.1.w * 0.5, target.1.y + target.1.h * 0.5];
+    shell.drag_over();
+    assert!(shell.finish_tab_drag(&mut editor, None).unwrap());
+    assert_eq!(
+        area_of(&editor, &panel),
+        target.0,
+        "{panel} joined the other area"
+    );
+}

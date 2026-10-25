@@ -85,14 +85,37 @@ impl Shell {
     }
     /// Capture an entity, asset or dock tab as a typed drag payload.
     pub fn begin_drag(&mut self) {
-        let Some(index) = self.ui.hit_test(self.pointer[0], self.pointer[1]) else {
+        // A single-panel area's header (`header-{panel}`) is a plain panel, which hit
+        // testing skips (it finds focusable nodes): find it under the pointer directly,
+        // so a lone panel drags by its header like a tab (a click without movement
+        // still reaches the header's buttons).
+        let [x, y] = self.pointer;
+        if let Some(panel) = self
+            .ui
+            .nodes
+            .iter()
+            .rev()
+            .find(|n| {
+                n.visible
+                    && n.element
+                        .attrs
+                        .get("class")
+                        .is_some_and(|c| c == "panel-header")
+                    && n.rect.contains(x, y)
+            })
+            .and_then(|n| n.element.id.strip_prefix("header-"))
+        {
+            self.drag = Some(Drag::Tab {
+                panel: panel.into(),
+                start: self.pointer,
+            });
+            return;
+        }
+        let Some(index) = self.ui.hit_test(x, y) else {
             return;
         };
         let id = &self.ui.nodes[index].element.id;
-        if let Some(panel) = id
-            .strip_prefix("tab-")
-            .or_else(|| id.strip_prefix("header-"))
-        {
+        if let Some(panel) = id.strip_prefix("tab-") {
             self.drag = Some(Drag::Tab {
                 panel: panel.into(),
                 start: self.pointer,
@@ -312,7 +335,7 @@ impl Shell {
         Some((target, rect, label))
     }
     /// Update the live preview for a tab drag at the current surface's pointer.
-    pub(crate) fn drag_over(&mut self) -> bool {
+    pub fn drag_over(&mut self) -> bool {
         let Some(Drag::Tab { panel, start }) = &self.drag else {
             return false;
         };

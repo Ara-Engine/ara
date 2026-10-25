@@ -104,9 +104,9 @@ draws after it. Icon tint classes must stay after `.icon` in editor.css.
 Density: compact by default (`editor-comfortable.css` adds the other density),
 22 px tree rows, 24 px property rows. CSS colors come from theme tokens; labels use
 `color:inherit` and icons `tint` so state colors reach them.
-`verify-ux.ps1` runs `--verify-ux`: menus, context menus, palette, settings,
-float, tool tabs and empty states in both themes, plus `ux-report.json`
-(viewport share, uncommanded buttons) and `commands.json`.
+`verify-ux.ps1` runs `--verify-ux`: menus, context menus, palette, settings, float, tool tabs and empty states in both themes,
+plus `ux-report.json` (viewport share, uncommanded buttons), `commands.json` and `drags.json` (`app/drags.rs`: SDL drags of
+every splitter, tab tear-off/dock-into/reattach at UI scale 1 and 1.25 via `Shell::desktop_pointer`; no effect fails the route).
 
 D24: agent changes apply immediately. No apply-policy setting, approval tickets
 or pending agent queue. Agents is an activity feed with Undo turn (review.revert).
