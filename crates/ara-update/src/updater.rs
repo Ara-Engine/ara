@@ -129,6 +129,7 @@ fn apply_inner(plan: &Plan, keys: &[String]) -> Result<(), Error> {
         || plan.current.join("engine.json").exists()
         || !plan.current.join("hub.json").is_file()
         || plan.ara.starts_with(&plan.current)
+        || plan.config.starts_with(&plan.current)
     {
         return Err(Error::new(
             MANIFEST,

@@ -13,6 +13,14 @@ pub(crate) fn run(artifacts: &Path, older_setup: &Path, directory: &Path) -> Res
         "rehearsal profile must be a fresh child of this checkout's target"
     );
     ensure!(!directory.exists(), "rehearsal needs a fresh directory");
+    ensure!(
+        directory
+            .parent()
+            .context("profile parent")?
+            .canonicalize()?
+            .starts_with(&target),
+        "rehearsal parent resolves outside target; create its parent there first"
+    );
     fs::create_dir_all(&directory)?;
     ensure!(
         directory.canonicalize()?.starts_with(&target),
@@ -61,8 +69,10 @@ pub(crate) fn run(artifacts: &Path, older_setup: &Path, directory: &Path) -> Res
         &mut || {
             support::run(
                 env.command(hub.join("ara-hub.exe"))
+                    .current_dir(&hub)
                     .args(["--rehearse-update"])
                     .arg(env.directory.join("update-discovery.json"))
+                    .env("ARA_RELEASE_REPO", "Snowy7/ara")
                     .env("ARA_RELEASE_TEST_API", &server.api),
                 &env.directory.join("old-hub-update.log"),
             )?;

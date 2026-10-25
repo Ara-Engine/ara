@@ -45,6 +45,10 @@ pub(super) fn launch(
         directory.join("hub.json").is_file() && !directory.join("engine.json").exists(),
         "Install the standalone Ara Hub to enable self-updates; engine-bundled Hubs are updated with their engine"
     );
+    ensure!(
+        !config.starts_with(&directory),
+        "Hub update state must be outside its installation directory"
+    );
     fs::create_dir_all(config.join("updater"))?;
     let runner = config
         .join("updater")
@@ -64,6 +68,8 @@ pub(super) fn launch(
     ara_update::write_json(&request, &plan)?;
     let mut command = Command::new(runner);
     command
+        // Shortcut launches inherit the install cwd; retaining it blocks Windows rename.
+        .current_dir(config)
         .env("ARA_CONFIG_DIR", config)
         .arg(&request)
         .arg(std::process::id().to_string())

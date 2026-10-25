@@ -178,7 +178,7 @@ pub fn generate(root: &Path, stage: &Path, dist: &Path) -> Result<()> {
             String::from_utf8_lossy(&fs::read(&file)?).into_owned(),
         );
     }
-    nuget(root, stage, &mut sections)?;
+    managed_notices(root, stage, &mut sections)?;
     let mut text = String::from(
         "ARA THIRD-PARTY NOTICES\n\nGenerated from cargo metadata --locked, every crate's license files, vendored libraries, NuGet packages and shader tool notices.\nThis inventory includes build/dev/target-specific dependencies for completeness; listing does not imply every package is linked.\nAra's own code is all rights reserved. Third-party licenses remain in force.\n\n",
     );
@@ -193,11 +193,25 @@ pub fn generate(root: &Path, stage: &Path, dist: &Path) -> Result<()> {
     Ok(())
 }
 
-fn nuget(root: &Path, stage: &Path, sections: &mut BTreeMap<String, String>) -> Result<()> {
+fn managed_notices(
+    root: &Path,
+    stage: &Path,
+    sections: &mut BTreeMap<String, String>,
+) -> Result<()> {
+    // Hub ships no managed assemblies and needs no prior engine NuGet restore.
+    if !stage.join("dotnet").is_dir() {
+        return Ok(());
+    }
     for project in ["Ara.CompileServer", "Ara.RunWorker", "Ara.Host"] {
-        let assets: Value = serde_json::from_slice(&fs::read(root.join(format!(
+        let path = root.join(format!(
             "dotnet/artifacts/obj/{project}/project.assets.json"
-        )))?)?;
+        ));
+        let assets: Value = serde_json::from_slice(&fs::read(&path).with_context(|| {
+            format!(
+                "restore/publish managed payload before inventorying NuGet notices: {}",
+                path.display()
+            )
+        })?)?;
         for (id, library) in assets["libraries"]
             .as_object()
             .context("NuGet libraries missing")?
@@ -231,4 +245,25 @@ fn nuget(root: &Path, stage: &Path, sections: &mut BTreeMap<String, String>) -> 
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn standalone_notices_need_no_restore_but_managed_payload_still_requires_licenses() {
+        let target =
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/release-notice-tests");
+        fs::create_dir_all(&target).expect("target");
+        let root = tempfile::tempdir_in(target).expect("isolated checkout");
+        let stage = root.path().join("stage");
+        fs::create_dir(&stage).expect("stage");
+        let mut sections = BTreeMap::new();
+        managed_notices(root.path(), &stage, &mut sections)
+            .expect("Hub without restored artifacts");
+        fs::create_dir(stage.join("dotnet")).expect("managed payload");
+        let error = managed_notices(root.path(), &stage, &mut sections)
+            .expect_err("managed licenses cannot be silently omitted");
+        assert!(format!("{error:#}").contains("restore/publish managed payload"));
+    }
 }

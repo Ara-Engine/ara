@@ -21,21 +21,25 @@ pub fn package(root: &Path, version: &str) -> Result<()> {
     let output = dist.join(&name);
     ensure!(!output.exists(), "{} already exists", output.display());
     let mut build = Command::new("cargo");
-    build.current_dir(root).env("CARGO_BUILD_JOBS", "2").args([
-        "build",
-        "--release",
-        "-p",
-        "ara-hub",
-        "--bins",
-        "-p",
-        "ara",
-        "--bin",
-        "ara",
-        "-p",
-        "ara-setup",
-        "--bin",
-        "ara-setup",
-    ]);
+    build
+        .current_dir(root)
+        .env("CARGO_BUILD_JOBS", "2")
+        .env("CARGO_PROFILE_RELEASE_DEBUG", "line-tables-only")
+        .args([
+            "build",
+            "--release",
+            "-p",
+            "ara-hub",
+            "--bins",
+            "-p",
+            "ara",
+            "--bin",
+            "ara",
+            "-p",
+            "ara-setup",
+            "--bin",
+            "ara-setup",
+        ]);
     if cfg!(feature = "rehearsal") {
         build.args(["--features", "ara-hub/rehearsal"]);
     }
