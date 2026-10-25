@@ -17,6 +17,34 @@ fn setup() -> (App, Hub) {
     (app, hub)
 }
 
+#[test]
+fn busy_service_update_notice_is_nonfatal_and_dismissible() {
+    let (mut app, mut hub) = setup();
+    hub.event(Event::ServiceUpdatePending);
+    let notice = hub.notices.last().expect("restart notice");
+    assert!(!notice.is_error());
+    assert_eq!(notice.title, "Restart the Hub service");
+    assert!(
+        notice
+            .detail
+            .as_ref()
+            .is_some_and(|detail| detail.contains("finish updating"))
+    );
+    let id = notice.id;
+    app.rebuild(&mut hub, capture::NOW).expect("notice view");
+    let at = center(&app, &format!("dismiss-{id}"));
+    assert!(
+        at[0] < app.size[0] && at[1] < app.size[1],
+        "dismiss stays inside the window: {at:?}"
+    );
+    app.pointer(InputEvent::PointerDown(at)).expect("down");
+    app.pointer(InputEvent::PointerUp(at)).expect("up");
+    for action in app.actions() {
+        hub.intent(action);
+    }
+    assert!(!hub.notices.iter().any(|notice| notice.id == id));
+}
+
 fn center(app: &App, id: &str) -> [f32; 2] {
     let r = app.ui.nodes[app.ui.find(id).expect(id)].rect;
     [r.x + r.w / 2., r.y + r.h / 2.]

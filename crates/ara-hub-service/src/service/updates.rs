@@ -57,6 +57,9 @@ pub(super) struct Updates {
     rx: Receiver<Message>,
 }
 impl Updates {
+    pub(super) fn busy(&self) -> bool {
+        self.jobs.values().any(|job| job.state == "running")
+    }
     pub(super) fn new(config: UpdateConfig, directory: &Path) -> Self {
         let (tx, rx) = mpsc::channel();
         Self {

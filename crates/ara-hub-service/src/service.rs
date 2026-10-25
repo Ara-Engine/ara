@@ -4,6 +4,7 @@ mod create;
 mod lifecycle;
 mod observed;
 mod process;
+mod templates;
 mod transport;
 mod updates;
 use crate::{
@@ -24,7 +25,7 @@ use std::{
     process::{Child, Command, Stdio},
     time::{Duration, Instant},
 };
-pub use transport::{connect_or_start, serve};
+pub use transport::{ConnectedService, connect_checked, connect_or_start, serve};
 pub use updates::UpdateConfig;
 
 /// Hub construction dependencies. Templates are replaceable without changing the wire API.
@@ -80,6 +81,7 @@ pub struct Hub {
     events: Vec<(ConnId, String)>,
     revision: u64,
     stop: bool,
+    build: String,
     last_status: Value,
     last_activity_check: Instant,
     _lock: File,
@@ -98,6 +100,7 @@ struct Params {
     thumbnail: Option<Option<PathBuf>>,
     engine_version: Option<String>,
     dry_run: Option<bool>,
+    only_if_idle: Option<bool>,
 }
 
 fn thumbnail<'de, D: serde::Deserializer<'de>>(
@@ -131,7 +134,7 @@ impl Hub {
         fs::create_dir_all(&config.directory).map_err(io_error)?;
         config.directory = fs::canonicalize(&config.directory).map_err(io_error)?;
         updates.engines = std::path::absolute(&updates.engines).map_err(io_error)?;
-        let lock = File::create(config.directory.join("hub.lock")).map_err(io_error)?;
+        let lock = transport::lock_file(&config.directory.join("hub.lock"))?;
         lock.try_lock().map_err(|e| {
             io_error(format!(
                 "Ara Hub is already running or its lock is unavailable: {e}"
@@ -170,6 +173,7 @@ impl Hub {
             events: Vec::new(),
             revision: 0,
             stop: false,
+            build: transport::current_build()?,
             last_status: Value::Null,
             last_activity_check: Instant::now(),
             _lock: lock,
@@ -243,7 +247,9 @@ impl Hub {
                 Ok(json!({"projects":self.registry.projects,"revision":self.revision}))
             }
             "hub.resolve" => Ok(json!(self.project(p.project)?)),
-            "hub.templates" => Ok(json!({"templates":self.config.templates.list()?})),
+            "hub.templates" => Ok(
+                json!({"templates":self.template_catalog(None)?.into_iter().map(|choice| choice.tile).collect::<Vec<_>>()}),
+            ),
             "hub.engines" => {
                 let engines = self
                     .registry
@@ -375,9 +381,15 @@ impl Hub {
                     return Ok(json!({"valid":true,"path":path}));
                 }
                 fs::create_dir(&path).map_err(io_error)?;
-                self.config.templates.instantiate(&template.id, &path)?;
+                if let Some(directory) = template.directory {
+                    DirectoryTemplates(directory).instantiate(&template.tile.id, &path)?;
+                } else {
+                    self.config
+                        .templates
+                        .instantiate(&template.tile.id, &path)?;
+                }
                 // Keep the template's preview as the new project's (`thumbnail.png`).
-                if let Some(preview) = template.thumbnail
+                if let Some(preview) = template.tile.thumbnail
                     && !path.join("thumbnail.png").exists()
                 {
                     fs::copy(preview, path.join("thumbnail.png")).map_err(io_error)?;
@@ -423,7 +435,7 @@ impl Hub {
                         self.discover_process(&project)?;
                     }
                     Ok(
-                        json!({"projects":self.registry.projects.iter().map(|p|self.status_of(p)).collect::<Vec<_>>(),"revision":self.revision}),
+                        json!({"projects":self.registry.projects.iter().map(|p|self.status_of(p)).collect::<Vec<_>>(),"revision":self.revision,"build":self.build}),
                     )
                 }
             },
@@ -475,6 +487,20 @@ impl Hub {
                 Ok(json!({"ok":true}))
             }
             "hub.shutdown" => {
+                if p.only_if_idle == Some(true) {
+                    for project in self.registry.projects.clone() {
+                        self.discover_process(&project)?;
+                    }
+                    if self
+                        .registry
+                        .projects
+                        .iter()
+                        .any(|project| self.status_of(project)["state"] == "open")
+                        || self.updates.busy()
+                    {
+                        return Ok(json!({"stopping":false,"reason":"busy"}));
+                    }
+                }
                 self.stop = true;
                 Ok(json!({"stopping":true}))
             }

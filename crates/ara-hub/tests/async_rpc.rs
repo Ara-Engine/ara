@@ -16,6 +16,8 @@ use std::{
 };
 
 struct SlowService {
+    build: String,
+    announced: bool,
     entered: mpsc::Sender<()>,
     release: mpsc::Receiver<()>,
 }
@@ -25,6 +27,12 @@ impl Handler for SlowService {
             return None;
         };
         if method == "hub.status" {
+            if !self.announced {
+                self.announced = true;
+                return Some(
+                    jsonrpc::reply(id, Ok(json!({"build":self.build,"projects":[]}))).to_string(),
+                );
+            }
             self.entered.send(()).expect("test waiting");
             self.release
                 .recv_timeout(Duration::from_secs(10))
@@ -56,6 +64,8 @@ fn a_slow_rpc_does_not_block_ui_input() {
     let (release, held) = mpsc::channel();
     // The atomic flag provides a clean shutdown for this in-process test server.
     let server = SlowService {
+        build: ara_update::sha256_file(&std::env::current_exe().expect("exe")).expect("build"),
+        announced: false,
         entered,
         release: held,
     };

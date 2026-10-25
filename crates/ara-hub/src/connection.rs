@@ -21,6 +21,8 @@ use std::{
 pub enum Event {
     /// Connected and subscribed: every view must refresh (no replay is promised).
     Connected,
+    /// An older service is retained because it is supervising open projects.
+    ServiceUpdatePending,
     /// The service is unreachable; the worker keeps retrying. `log` is `hub-start.log`.
     Offline {
         /// Why, for people.
@@ -152,9 +154,9 @@ fn worker(
     let mut backoff = Duration::from_millis(250);
     while !stop.load(Ordering::Relaxed) {
         let connected = if executable.is_file() {
-            ara_hub_service::connect_or_start(directory, executable).and_then(|mut client| {
-                client.call("hub.subscribe", json!({}))?;
-                Ok(client)
+            ara_hub_service::connect_checked(directory, executable).and_then(|mut service| {
+                service.client.call("hub.subscribe", json!({}))?;
+                Ok(service)
             })
         } else {
             Err(ara_diag::Diagnostic::error(
@@ -166,8 +168,8 @@ fn worker(
             )
             .into())
         };
-        let mut client = match connected {
-            Ok(client) => client,
+        let service = match connected {
+            Ok(service) => service,
             Err(error) => {
                 let message = error
                     .diagnostics()
@@ -194,6 +196,10 @@ fn worker(
         if outbox.send(Event::Connected).is_none() {
             return;
         }
+        if service.update_pending && outbox.send(Event::ServiceUpdatePending).is_none() {
+            return;
+        }
+        let mut client = service.client;
         let mut beat = Instant::now();
         loop {
             if stop.load(Ordering::Relaxed) {

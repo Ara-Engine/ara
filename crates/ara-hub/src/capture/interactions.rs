@@ -1,5 +1,6 @@
 //! Actual input injection and GPU readback, without a native window or service.
 use super::*;
+use anyhow::Context as _;
 use ara_ui::input::InputEvent;
 
 fn click(app: &mut crate::native::App, hub: &mut Hub, id: &str) -> anyhow::Result<()> {
@@ -130,5 +131,16 @@ pub(super) fn run(
         "idle UI must not redraw"
     );
     save(host, app, folder, &format!("{theme}-notifications-after"))?;
+    hub.event(Event::ServiceUpdatePending);
+    settle(host, app, &mut hub)?;
+    save(
+        host,
+        app,
+        folder,
+        &format!("{theme}-service-update-pending"),
+    )?;
+    let id = hub.notices.last().context("service restart notice")?.id;
+    click(app, &mut hub, &format!("dismiss-{id}"))?;
+    anyhow::ensure!(hub.notices.is_empty(), "service restart notice dismisses");
     Ok(())
 }

@@ -1,14 +1,14 @@
 # ara-hub-service
 
-User-level Ara Hub backend (D25). No UI and no gameplay state. The native Hub
-uses the same authenticated JSON-RPC API as global MCP. One service per config
-directory, enforced by an OS file lock; projects run in separate processes.
+User-level Ara Hub backend (D25), shared by the native Hub and global MCP.
+One service per config directory, enforced by an OS lock; projects run separately.
 
 ## Public API
 
 - `Hub::open(HubConfig)`; `Hub::call_for(conn, method, params)` / `Endpoint`.
 - `serve(config, port)` runs authenticated localhost WebSocket RPC.
-- `connect_or_start(directory, ara_executable)` auto-starts `ara hub serve`.
+- `connect_or_start(directory, ara_executable)` auto-starts `ara hub serve`;
+  `connect_checked` also reports `update_pending` for a busy older service.
 - `config_dir()`: `ARA_CONFIG_DIR`, else `%APPDATA%/Ara` on Windows,
   `~/Library/Application Support/Ara` on macOS, `$XDG_CONFIG_HOME/ara` or
   `~/.config/ara` elsewhere.
@@ -25,6 +25,9 @@ directory, enforced by an OS file lock; projects run in separate processes.
 - When the engine runs from `<checkout>/target/<profile>/`, `Hub::open` layers the
   checkout's `samples/` after the configured templates (installed builds ship them
   in `<install>/templates`).
+- Templates resolve from registered engines in descending semantic version order,
+  then configured/service templates and checkout samples. Each tile's `engineVersion`
+  identifies its source; create defaults to that pin and uses that source's asset lock.
 - `Registry`, `ProjectEntry`, `EngineBuild` are durable data, never live handles.
 
 ## Wire contract for the Hub UI
@@ -39,11 +42,11 @@ params/results use camelCase. No engine session is needed for `hub.*`.
 | `hub.register` | `{path,name?,engineVersion?}` | Project card; register an existing absolute directory without copying it |
 | `hub.update` | `{project,name?,thumbnail?,engineVersion?} (thumbnail:null clears)` | Updated card; rename, preview image, version picker; close before changing engine pin |
 | `hub.remove` | `{project}` | `{removed:id}`; unregister only, preserving files |
-| `hub.templates` | `{}` | `{templates:[{id,name,thumbnail,description?,setup?}]}`; template tiles in Create |
+| `hub.templates` | `{}` | `{templates:[{id,name,thumbnail,description?,setup?,engineVersion?}]}`; source engine pins for Create |
 | `hub.create` | `{template,name,path,engineVersion?,dryRun?}` | New registered project card; path must be absolute and not exist. Every problem is one diagnostic whose `location.path` is the field (`name`, `path`, `template`, `engineVersion`); `dryRun` returns `{valid,path}` without creating |
 | `hub.open` | `{project,headless?}` | Status; false/default opens native editor, true starts headless |
 | `hub.close` | `{project}` | Closed status after graceful flush/shutdown |
-| `hub.status` | `{project?}` | One status or `{projects:[status],revision}` |
+| `hub.status` | `{project?}` | One status or `{projects:[status],revision,build}`; build is the service executable's SHA-256 |
 | `hub.engines` | `{}` | `{engines:[{version,executable,editor,managed}]}`; installed builds for each project's pin picker; managed builds support Uninstall |
 | `hub.engine.register` | `{engine:{version,executable,editor}}` | Persist an installed version; executable paths must exist and be absolute |
 | `hub.engine.remove` | `{engine:{version,executable,editor}}` | Remove only that exact build; reject while pinned projects are open |
@@ -83,11 +86,8 @@ Offline/rate-limited feeds carry a clear status; signatures are reverified on ca
 reads. Install roots: LOCALAPPDATA/Ara/Engines/version. Cancelled/tampered extraction
 never registers. Imported project pins may name a missing semantic version.
 
-Render: project cards (name, thumbnail fallback, recent time, path, pinned engine,
-open/headless/editor badge), Create (template/name/destination/version), Open and
-Open Headless, Close, Rename, Remove from list, installed engines, agent/editor
-activity. Errors are standard RpcError diagnostics: show message and runnable
-fixes. The native UI is `crates/ara-hub`.
+Render projects, Create, lifecycle, installed engines and activity. Errors are
+standard RpcError diagnostics: show messages and fixes. UI: `crates/ara-hub`.
 
 `hub.resolve {project}` returns a card. `hub.catalog {project?}` returns the running project catalog or the core method
 catalog without opening any project. `hub.call {project,method,params}` opens a
@@ -95,6 +95,9 @@ registered project headless on demand and forwards to its authority. Each Hub
 socket/project pair has a distinct downstream socket and session attribution.
 MCP responses include `notices` from participant-specific conflict events;
 normal replica op streams are filtered so idle agents do not accumulate them.
+`hub.shutdown {onlyIfIdle?:true}` returns `{stopping:false,reason:"busy"}` if projects
+or downloads are running. Build-mismatched clients use this before replacement;
+legacy services without a build field are checked for open projects first.
 `hub.shutdown {}` stops only the user service; open project processes survive and
 are rediscovered after restart. Hub exit never implicitly closes user projects.
 

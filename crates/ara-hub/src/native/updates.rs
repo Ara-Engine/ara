@@ -7,37 +7,28 @@ use std::{
     process::{Command, Stdio},
 };
 
-pub(super) fn service(directory: &Path) -> Result<PathBuf> {
-    if !directory.join("hub.json").is_file() {
+pub(super) fn service(directory: &Path, override_path: Option<&Path>) -> Result<PathBuf> {
+    let standalone = directory.join("hub.json").is_file();
+    // Older updaters forwarded --ara pointing to the previous bootstrap. Such a
+    // managed copy must not pin the freshly installed Hub to an obsolete build.
+    if let Some(path) = override_path.filter(|path| {
+        !standalone
+            || !path
+                .parent()
+                .is_some_and(|p| p.join("service.json").is_file())
+    }) {
+        return Ok(std::path::absolute(path)?);
+    }
+    if !standalone {
         return Ok(directory.join(format!("ara{}", std::env::consts::EXE_SUFFIX)));
     }
     let base = PathBuf::from(std::env::var_os("LOCALAPPDATA").context("LOCALAPPDATA is missing")?)
         .join("Ara/Services");
-    fs::create_dir_all(&base)?;
-    let target = base.join(env!("CARGO_PKG_VERSION"));
-    if !target.exists() {
-        let staged = base.join(format!(".service-{}", std::process::id()));
-        fs::create_dir(&staged)?;
-        for entry in fs::read_dir(directory.join("bootstrap"))? {
-            let entry = entry?;
-            ensure!(
-                entry.file_type()?.is_file(),
-                "service bootstrap must contain only files"
-            );
-            fs::copy(entry.path(), staged.join(entry.file_name()))?;
-        }
-        ara_update::write_json(
-            &staged.join("service.json"),
-            &serde_json::json!({"version":env!("CARGO_PKG_VERSION")}),
-        )?;
-        fs::rename(staged, &target)?;
-    }
-    let executable = target.join("ara.exe");
-    ensure!(
-        executable.is_file(),
-        "Hub bootstrap service is missing; reinstall Ara Hub"
-    );
-    Ok(executable)
+    Ok(ara_update::bootstrap::prepare(
+        directory,
+        &base,
+        env!("CARGO_PKG_VERSION"),
+    )?)
 }
 pub(super) fn launch(
     config: &Path,

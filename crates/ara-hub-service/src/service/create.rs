@@ -1,6 +1,5 @@
 //! `hub.create` validation, shared by creation and its `dryRun`.
 use super::*;
-use crate::Template;
 use ara_diag::{Diagnostic, codes};
 
 impl Hub {
@@ -10,7 +9,7 @@ impl Hub {
     pub(super) fn check_create(
         &self,
         p: &Params,
-    ) -> Result<(Template, String, PathBuf, String), RpcError> {
+    ) -> Result<(templates::Choice, String, PathBuf, String), RpcError> {
         let field = |path: &str, message: String| {
             Diagnostic::error(codes::INVALID_PARAMS, message).path(path)
         };
@@ -39,9 +38,19 @@ impl Hub {
             )),
             Some(_) => {}
         }
+        let id = p.template.clone().unwrap_or_default();
+        let template = self
+            .template_catalog(p.engine_version.as_deref())?
+            .into_iter()
+            .find(|t| t.tile.id == id);
         let version = p
             .engine_version
             .clone()
+            .or_else(|| {
+                template
+                    .as_ref()
+                    .and_then(|choice| choice.tile.engine_version.clone())
+            })
             .unwrap_or_else(|| self.config.engine.version.clone());
         if self.registry.engine(&version).is_err() {
             problems.push(field(
@@ -49,17 +58,10 @@ impl Hub {
                 format!("Engine `{version}` is not installed"),
             ));
         }
-        let id = p.template.clone().unwrap_or_default();
-        let template = self
-            .config
-            .templates
-            .list()?
-            .into_iter()
-            .find(|t| t.id == id);
         match &template {
             None => problems.push(field("template", format!("No template `{id}`"))),
             Some(found) => {
-                if let Some(error) = found.incomplete() {
+                if let Some(error) = found.tile.incomplete() {
                     problems.extend(error.diagnostics());
                 }
             }

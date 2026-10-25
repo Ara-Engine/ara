@@ -63,6 +63,8 @@ impl Status {
 #[derive(Clone, Debug, Default, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase", default)]
 pub struct Template {
+    /// Engine supplying the template, used as the new project's default pin.
+    pub engine_version: Option<String>,
     /// Source-local ID passed to `hub.create`.
     pub id: String,
     /// Title.
