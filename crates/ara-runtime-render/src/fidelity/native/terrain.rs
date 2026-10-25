@@ -92,7 +92,8 @@ impl Builder {
                 revision: 0,
             });
             self.scene.instances.push(Instance {
-                entity: u64::from_le_bytes(key[..8].try_into()?),
+                // The tile's identity, not its geometry: editors map it to the chunk.
+                entity: ara_runtime::terrain::tile_render_id(coord.x, coord.z),
                 name: format!("Terrain {},{}", coord.x, coord.z),
                 geometry,
                 material,
