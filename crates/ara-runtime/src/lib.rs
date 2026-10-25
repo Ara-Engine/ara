@@ -360,14 +360,14 @@ impl Runtime {
                 models.insert(asset_id(asset)?.to_owned());
             }
         }
-        let mut asset_errors = Vec::new();
-        for model in &models {
-            if let Err(error) = library.models.load(assets.as_ref(), model) {
-                asset_errors.push(format!(
-                    "ARA7310: {error}; showing placeholder geometry; re-import the asset"
-                ));
-            }
-        }
+        let (prepared, errors) = assets::Models::preload(assets.as_ref(), &models)?;
+        library.models = prepared;
+        let mut asset_errors: Vec<_> = errors
+            .into_iter()
+            .map(|error| {
+                format!("ARA7310: {error}; showing placeholder geometry; re-import the asset")
+            })
+            .collect();
         let mut query = world.query::<(&ara_sim::Identity, &ara_physics::Collider)>();
         for (identity, collider) in query.iter(world) {
             if matches!(
