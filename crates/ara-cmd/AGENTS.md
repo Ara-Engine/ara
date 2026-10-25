@@ -57,8 +57,12 @@ drops overrides aimed at it.
 - Symbols: a create call with `"id": "$name"` mints an ID and binds it; later calls
   can use `$name` anywhere a string is expected, also as an address head
   (`$crate/e_lid1`). `symbols` in the result maps them.
+- `ReadCtx::resolved()` is an `Rc<Resolved>` shared by every read in a batch until
+  the next edit (keyed by the staged op count); resolving a large scene clones every
+  entity, so commands should read it rather than re-resolve.
 - Name selectors in entity params (`name:Crate`, `name:Floor/Crate`, prefab
-  contents included) resolve against the staged document before validation. One
+  contents included) resolve against the staged document before validation; calls
+  without names or bare names skip resolution entirely. One
   match → its address; several → ARA1609 with a fix per match; none → ARA1204
   with a did-you-mean. A bare name is ARA1102 with a `set` fix per matching ID.
 - ARA1204 for an ID another loaded document has carries a fix setting `doc`.

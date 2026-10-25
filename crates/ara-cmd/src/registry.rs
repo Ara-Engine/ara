@@ -2,6 +2,7 @@
 //! execution.
 
 use std::collections::BTreeMap;
+use std::rc::Rc;
 
 use ara_diag::{Diagnostic, codes, did_you_mean};
 use ara_doc::{AssetId, Op};
@@ -11,7 +12,8 @@ use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
-use crate::ctx::{EditCtx, JobCtx, ReadCtx};
+use crate::ctx::{EditCtx, JobCtx, ReadCtx, Resolutions};
+use crate::select::Selector;
 
 /// What a registry entry is.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -357,6 +359,7 @@ impl Registry {
         };
         let mut symbols = BTreeMap::new();
         let mut outputs = Vec::new();
+        let resolutions = Resolutions::default();
         let mut staged = store.begin(meta);
         for (i, call) in batch.calls.iter().enumerate() {
             let at = |d: Diagnostic| d.command(i);
@@ -378,9 +381,20 @@ impl Registry {
             }
             let mut params = call.params.clone();
             substitute(&mut params, &symbols);
-            let entities = ReadCtx::new(staged.store(), &doc, &symbols)
+            let read = ReadCtx::new(staged.store(), &doc, &symbols)
                 .map_err(|d| one(at(d)))?
-                .resolved();
+                .shared(&resolutions, staged.ops().len());
+            // Only names (`name:Crate`, or a bare name to diagnose) need the resolved
+            // entities; IDs, addresses and symbols pass through as they are.
+            let named =
+                crate::select::references(staged.store().schema(), &entry.info.params, &params)
+                    .iter()
+                    .any(|s| matches!(Selector::parse(s), Selector::Names(_) | Selector::Bare(_)));
+            let entities = if named {
+                read.resolved()
+            } else {
+                Rc::default()
+            };
             crate::select::resolve(
                 staged.store().schema(),
                 &entry.info.params,
@@ -404,18 +418,19 @@ impl Registry {
                         doc: doc.clone(),
                         symbols: &mut symbols,
                         templates: &self.document_templates,
+                        resolutions: &resolutions,
                     },
                     params,
                 ),
-                Exec::Read(f) => {
-                    ReadCtx::new(staged.store(), &doc, &symbols).and_then(|ctx| f(&ctx, params))
-                }
+                Exec::Read(f) => ReadCtx::new(staged.store(), &doc, &symbols)
+                    .and_then(|ctx| f(&ctx.shared(&resolutions, staged.ops().len()), params)),
                 Exec::Job(f) => {
                     let edit = EditCtx {
                         staged: &mut staged,
                         doc: doc.clone(),
                         symbols: &mut symbols,
                         templates: &self.document_templates,
+                        resolutions: &resolutions,
                     };
                     f(&mut JobCtx { edit, progress }, params)
                 }

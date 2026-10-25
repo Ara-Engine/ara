@@ -1,10 +1,12 @@
 //! What commands see: [`ReadCtx`] for reads, [`EditCtx`] for writes (every write
 //! becomes an op in the batch's transaction), [`JobCtx`] for jobs.
 
+use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet};
+use std::rc::Rc;
 
 use ara_diag::{Diagnostic, FixAction, codes};
-use ara_doc::prefab::{ResolvedEntity, resolve};
+use ara_doc::prefab::{Resolved, ResolvedEntity, resolve};
 use ara_doc::{
     AssetId, Document, Edit, OrderKey, Record, RecordId, Workspace, field, key_between, order_key,
     prefab_of,
@@ -62,12 +64,34 @@ impl Target {
     }
 }
 
+/// A batch's prefab resolution of its document, shared by every read until the
+/// next edit: resolving a large scene clones every entity, and one command may ask
+/// several times (its target, its components, name selectors).
+#[derive(Default)]
+pub(crate) struct Resolutions(RefCell<Option<(usize, Rc<Resolved>)>>);
+
+impl Resolutions {
+    /// The resolution at `version` (the batch's applied op count), computed once.
+    fn get(&self, version: usize, resolve: impl FnOnce() -> Resolved) -> Rc<Resolved> {
+        if let Some((at, resolved)) = &*self.0.borrow()
+            && *at == version
+        {
+            return Rc::clone(resolved);
+        }
+        let resolved = Rc::new(resolve());
+        *self.0.borrow_mut() = Some((version, Rc::clone(&resolved)));
+        resolved
+    }
+}
+
 /// Read access to the store and the batch's document.
 #[derive(Clone, Copy)]
 pub struct ReadCtx<'a> {
     store: &'a Store,
     doc: &'a Document,
     symbols: &'a BTreeMap<String, String>,
+    /// The batch's shared resolution and its current version, when there is one.
+    resolutions: Option<(&'a Resolutions, usize)>,
 }
 
 impl<'a> ReadCtx<'a> {
@@ -86,7 +110,14 @@ impl<'a> ReadCtx<'a> {
             store,
             doc,
             symbols,
+            resolutions: None,
         })
+    }
+
+    /// Reads through the batch's shared resolution at `version` (its op count).
+    pub(crate) fn shared(mut self, resolutions: &'a Resolutions, version: usize) -> Self {
+        self.resolutions = Some((resolutions, version));
+        self
     }
 
     /// The Schema DB.
@@ -194,21 +225,28 @@ impl<'a> ReadCtx<'a> {
         d
     }
 
-    /// The document with prefab instances expanded (see [`ara_doc::prefab`]).
-    pub fn resolved(&self) -> BTreeMap<String, ResolvedEntity> {
-        let mut ignored = Vec::new();
-        resolve(
-            self.doc,
-            self.schema(),
-            self.workspace(),
-            &Default::default(),
-            &mut ignored,
-        )
+    /// The document with prefab instances expanded (see [`ara_doc::prefab`]). Inside a
+    /// batch it is computed once per document state and shared.
+    pub fn resolved(&self) -> Rc<Resolved> {
+        let resolve = || {
+            let mut ignored = Vec::new();
+            resolve(
+                self.doc,
+                self.schema(),
+                self.workspace(),
+                &Default::default(),
+                &mut ignored,
+            )
+        };
+        match self.resolutions {
+            Some((resolutions, version)) => resolutions.get(version, resolve),
+            None => Rc::new(resolve()),
+        }
     }
 
     /// One entity after prefab resolution.
     pub fn entity(&self, target: &Target) -> Option<ResolvedEntity> {
-        self.resolved().remove(&target.address())
+        self.resolved().get(&target.address()).cloned()
     }
 
     /// True if the entity has the component (inline, from its prefab, or overridden).
@@ -276,6 +314,7 @@ pub struct EditCtx<'a, 's> {
     pub(crate) doc: AssetId,
     pub(crate) symbols: &'a mut BTreeMap<String, String>,
     pub(crate) templates: &'a BTreeMap<&'static str, crate::registry::DocumentTemplate>,
+    pub(crate) resolutions: &'a Resolutions,
 }
 
 impl EditCtx<'_, '_> {
@@ -340,6 +379,7 @@ impl EditCtx<'_, '_> {
     pub fn read(&self) -> ReadCtx<'_> {
         ReadCtx::new(self.staged.store(), &self.doc, self.symbols)
             .expect("the batch's document stays loaded for the whole batch")
+            .shared(self.resolutions, self.staged.ops().len())
     }
 
     /// The ID for a new record: a symbol (`$crate`, minted and bound for later calls),

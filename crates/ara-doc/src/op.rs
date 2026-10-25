@@ -298,6 +298,21 @@ impl Edit {
             | Edit::Move { doc, .. } => doc,
         }
     }
+
+    /// True for a `Set` of a record's own data: its name, a component, or prefab
+    /// overrides. Such an edit can only change the errors located at that record
+    /// ([`Workspace::check_local`](crate::Workspace::check_local)). Everything else
+    /// (records added, removed or moved, `parent`, `order`, `prefab`, `removed`, a
+    /// whole record, documents) can change what other records resolve to.
+    pub fn is_local(&self) -> bool {
+        match self {
+            Edit::Set { path, .. } => !matches!(
+                path.head(),
+                "" | field::PARENT | field::ORDER | field::PREFAB | field::REMOVED
+            ),
+            _ => false,
+        }
+    }
 }
 
 fn not_found(id: &RecordId) -> Diagnostic {
