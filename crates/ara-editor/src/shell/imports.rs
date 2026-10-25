@@ -110,6 +110,11 @@ fn used_assets(workspace: &ara_doc::Workspace, doc: &str) -> BTreeSet<String> {
 }
 
 impl Shell {
+    /// Import progress as `(pending, failed, total)` once the pipeline reports.
+    pub(crate) fn import_counts(&self) -> Option<(usize, usize, usize)> {
+        let p = self.imports.progress.as_deref()?;
+        Some((p.pending.len(), p.failed.len(), p.total))
+    }
     /// The status bar's import chip: "Importing 37 / 120" with a bar while sources are
     /// pending, else how many failed; nothing once every import is done.
     pub(super) fn import_chip(&mut self, out: &mut String) {

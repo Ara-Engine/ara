@@ -58,6 +58,7 @@ use ara_ui::{
 };
 use ara_ui_text::TextSystem;
 pub(crate) use dialog::Dialog;
+pub(crate) use game_panel::game_stats_text;
 pub(crate) use ops::{WindowRequest, open_docs, open_external, open_terminal};
 use panels::{button, escape};
 use serde_json::{Value, json};
@@ -127,10 +128,6 @@ pub struct Shell {
     /// Colour swatches outside the Inspector (material parameters): node id and
     /// colour, painted after layout like the Inspector's.
     value_swatches: Vec<(String, ara_ui::style::Color)>,
-    /// Whether the Problems chip counts this machine's Vulkan loader and overlay-layer
-    /// diagnostics (`ARA_GPU_ENVIRONMENT`); bounded runs turn it off so captures are
-    /// the same on every machine.
-    pub host_problems: bool,
     /// Colour swatches of compound Inspector elements: control ID and linear value.
     nested_swatches: Vec<(String, Value)>,
     /// Create > C# Behaviour opens the IDE (verification routes turn it off).
@@ -407,7 +404,6 @@ impl Shell {
             animation_live: Default::default(),
             value_swatches: Vec::new(),
             nested_swatches: Vec::new(),
-            host_problems: true,
             console_open: None,
             profile_scope: None,
             explained_problems: std::collections::BTreeSet::new(),
@@ -493,7 +489,7 @@ impl Shell {
             recent_commands: Vec::new(),
             recording: None,
             key_search: false,
-            label_width: 0.4,
+            label_width: 0.45,
             keymap: commands::keymap(&editor.state),
             keymap_revision: 0,
             keymap_settings: keymap_settings(&editor.state),
