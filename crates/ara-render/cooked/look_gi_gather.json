@@ -1,15 +1,15 @@
 {
   "binding_layout_hash": "35cd2a62b1ba741ce6823b3c8753d7b5aa97b54c5f0a837b56e542518013fd7e",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "f7137ec96d6bb056ed327e3f1b42dee62a5d2d3e565b2cb5c3ad870ed66230e5",
+  "key": "be775fc658dc5902e42eb60180b791cba653db55a4d67a2b6d27d3757f697850",
   "stages": [
     {
-      "dxil": "f7137ec96d6bb056ed327e3f1b42dee62a5d2d3e565b2cb5c3ad870ed66230e5/giGatherMain.dxil",
-      "dxil_hash": "258237d92cd482ccc578063b9a6965fca77a00cc57a58c657a79837dfd8bbc69",
+      "dxil": "be775fc658dc5902e42eb60180b791cba653db55a4d67a2b6d27d3757f697850/giGatherMain.dxil",
+      "dxil_hash": "a9af5cf55ef55f213e797e99c15eb60de08061707e80de6e0eba83c2bacd4baa",
       "source_entry": "giGatherMain",
-      "spirv": "f7137ec96d6bb056ed327e3f1b42dee62a5d2d3e565b2cb5c3ad870ed66230e5/giGatherMain.spv",
+      "spirv": "be775fc658dc5902e42eb60180b791cba653db55a4d67a2b6d27d3757f697850/giGatherMain.spv",
       "spirv_entry": "main",
-      "spirv_hash": "1d5e4c10cb328c400faaf25465144fc077d2a10efc6e79aeff5739b9b97d4fac",
+      "spirv_hash": "6d3729dad7f1dce5ec0360dc7273052bca56e36adfc876d799b71e0ab7a569ab",
       "stage": "compute"
     }
   ],

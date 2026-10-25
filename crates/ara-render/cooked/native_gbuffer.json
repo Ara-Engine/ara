@@ -1,22 +1,22 @@
 {
   "binding_layout_hash": "35cd2a62b1ba741ce6823b3c8753d7b5aa97b54c5f0a837b56e542518013fd7e",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "f7137ec96d6bb056ed327e3f1b42dee62a5d2d3e565b2cb5c3ad870ed66230e5",
+  "key": "be775fc658dc5902e42eb60180b791cba653db55a4d67a2b6d27d3757f697850",
   "stages": [
     {
-      "dxil": "f7137ec96d6bb056ed327e3f1b42dee62a5d2d3e565b2cb5c3ad870ed66230e5/nativeGeometryFragment.dxil",
+      "dxil": "be775fc658dc5902e42eb60180b791cba653db55a4d67a2b6d27d3757f697850/nativeGeometryFragment.dxil",
       "dxil_hash": "ec9b7763af30540fae8269e89e3c15b9fa66262c590fa12f68989dbaa7cc7ff6",
       "source_entry": "nativeGeometryFragment",
-      "spirv": "f7137ec96d6bb056ed327e3f1b42dee62a5d2d3e565b2cb5c3ad870ed66230e5/nativeGeometryFragment.spv",
+      "spirv": "be775fc658dc5902e42eb60180b791cba653db55a4d67a2b6d27d3757f697850/nativeGeometryFragment.spv",
       "spirv_entry": "main",
       "spirv_hash": "24326e9d0895fb9b95a656b314471d1477ffb39b1b6bfa07b62d0f0440220106",
       "stage": "fragment"
     },
     {
-      "dxil": "f7137ec96d6bb056ed327e3f1b42dee62a5d2d3e565b2cb5c3ad870ed66230e5/nativeGeometryVertex.dxil",
+      "dxil": "be775fc658dc5902e42eb60180b791cba653db55a4d67a2b6d27d3757f697850/nativeGeometryVertex.dxil",
       "dxil_hash": "2aa683842aa85a3c215419ff5f39d806804721a726e6fb8f6b97b558ef89d67a",
       "source_entry": "nativeGeometryVertex",
-      "spirv": "f7137ec96d6bb056ed327e3f1b42dee62a5d2d3e565b2cb5c3ad870ed66230e5/nativeGeometryVertex.spv",
+      "spirv": "be775fc658dc5902e42eb60180b791cba653db55a4d67a2b6d27d3757f697850/nativeGeometryVertex.spv",
       "spirv_entry": "main",
       "spirv_hash": "5950004334f3ad6486d6a474c186b97e0111ef8e9186464c5699cb3669e3f176",
       "stage": "vertex"

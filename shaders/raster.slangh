@@ -47,5 +47,27 @@ float4 tex(uint index,float2 uv) {return textures[NonUniformResourceIndex(index)
 float4 envTex(uint index,float2 uv) {return textures[NonUniformResourceIndex(index)].SampleLevel(samplers[1],uv,0);}
 float4 historyTex(uint index,float2 uv) {return textures[NonUniformResourceIndex(index)].SampleLevel(samplers[2],uv,0);}
 float4 pixel(uint index,int2 p) {return textures[NonUniformResourceIndex(index)].Load(int3(p,0));}
+// World position at a (sub)pixel `position` and reversed-Z `depth`, through the
+// jittered inverse view-projection the G-buffer was drawn with.
+float3 worldAtDepth(Frame f,float2 position,float depth){
+    float2 uv=position/float2(f.extent.xy);float4 h=mul(f.inverseVp,float4(uv.x*2-1,1-uv.y*2,depth,1));return h.xyz/h.w;
+}
+// G-buffer decoding: every consumer reads surfaces through these, so the target
+// formats (Renderer targets, the fill and forward outputs) change in one place.
+// Base colour (rgb) and material ambient occlusion (a).
+float4 gbufferAlbedo(Frame f,int2 p){return pixel(f.gbuffer.x,p);}
+// World normal (unit where a surface was drawn).
+float3 gbufferNormal(Frame f,int2 p){return pixel(f.gbuffer.y,p).xyz;}
+// Perceptual roughness (x) and metalness (y).
+float2 gbufferMaterial(Frame f,int2 p){return float2(pixel(f.gbuffer.y,p).w,pixel(f.gbuffer.z,p).w);}
+// Emitted radiance.
+float3 gbufferEmissive(Frame f,int2 p){return pixel(f.gbuffer.z,p).xyz;}
+// Reversed-Z depth: zero where no opaque surface was drawn.
+float gbufferDepth(Frame f,int2 p){return pixel(f.extra.x,p).x;}
+// World position of pixel `p`'s opaque surface, rebuilt from depth; `covered` is
+// false where none was drawn.
+float3 gbufferWorld(Frame f,int2 p,out bool covered){
+    float depth=gbufferDepth(f,p);covered=depth>0;return worldAtDepth(f,float2(p)+0.5,depth);
+}
 float2 environmentUv(float3 d) {return float2(atan2(d.z,d.x)/(2*PI)+0.5,acos(clamp(d.y,-1.,1.))/PI);}
 float3 environmentDirection(float2 uv) {float phi=(uv.x-0.5)*2*PI;float theta=uv.y*PI;return float3(cos(phi)*sin(theta),cos(theta),sin(phi)*sin(theta));}
