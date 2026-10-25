@@ -25,7 +25,7 @@ pub(crate) const SSR_TRACE: usize = 13;
 const IMAGES: usize = 14;
 /// The exposure state (four floats), then the metering histogram's 256 counts
 /// (look-post.slang exposureMain).
-const STATE_BYTES: usize = 16 + 256 * 4;
+pub(crate) const STATE_BYTES: usize = 16 + 256 * 4;
 
 /// Fixed LUT extents; the half-resolution effects and reflection pyramid follow
 /// the render size, the bloom atlases the display size.

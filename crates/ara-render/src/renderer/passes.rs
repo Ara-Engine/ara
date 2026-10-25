@@ -44,6 +44,7 @@ impl Renderer {
         capture: bool,
     ) -> Result<()> {
         ara_gpu::cpu_scope!("Raster.render_frame");
+        self.collect_view_resources()?;
         ensure!(
             exposure.is_finite() && exposure > 0.,
             "Exposure must be a finite positive multiplier"
@@ -870,7 +871,7 @@ impl Renderer {
         self.frame_number = self.frame_number.wrapping_add(1);
         self.gpu.assert_clean()?;
         if let Some(native) = &mut self.native {
-            native.presented(&camera);
+            native.presented(&camera, !self.secondary_active);
         }
         Ok(())
     }

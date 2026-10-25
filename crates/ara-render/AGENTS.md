@@ -12,6 +12,9 @@ Owns the M1 baseline renderer and agent visual feedback. Gameplay state stays in
 - `Renderer::new`, `render`, `render_view` (live debug view mode), `resize`, `capture`: cooked Vulkan rendering; read-only
   `gpu()` access for diagnostics/native presentation. Resize resets history. `resize_upscaled(render, display)` is TAAU:
   scene passes, feature color/depth and IDs at `render_size()`; history, output, captures and picks at `size()`.
+- `create_view` / `render_secondary(ViewId, ViewRequest)`: lazy owned cameras on the shared device/content, with
+  independent color, IDs, motion, exposure and TAA(U) (`ViewRequest::render_size`). No primary render or readback;
+  GI/residency continue even if only this view draws. Drop queues retirement; `release_view` releases now.
 - `Scene`, `Mesh`, `Material`, `Light`, `CameraSpec`: extracted world data and camera pose/bounds requests. Materials use bindless texture indices.
 - `instanced::Scene`: native model-space content contract for shared geometry,
   current/previous instance transforms, deforming revisions, 64-byte UV0/UV1
@@ -62,13 +65,10 @@ Owns the M1 baseline renderer and agent visual feedback. Gameplay state stays in
   `SceneLook` with `FrameEnvironment::raster` (ara-render-fidelity). The sky IBL,
   far map and cascades rebuild on any sun change past `SUN_HOLD` (noise only): once
   something animates the sun, add a threshold with an old/new crossfade.
-- `look::gi::ProbeSurfaces` (`Renderer::set_probe_surfaces`): probe GI. A one-time
-  acquisition records 8x8 oct surface caches; `GI.Relight` relights a budget per
-  frame (sun via CSM, local lights, sky, emissive, last frame's probes) into 6x6
-  irradiance, DDGI-style, without rays or noise. Capture resets relight all for
-  `gi::CONVERGE_FRAMES` (exposure re-meters); a new lattice does so out of shading
-  once its records land, then fades in. Same-lattice updates keep the irradiance.
-  `update_probe_records` uploads a range; the next frame scatters it (`GI.Scatter`).
+- `look::gi::ProbeSurfaces` (`Renderer::set_probe_surfaces`): probe GI. One-time 8x8 oct surface caches;
+  `GI.Relight` relights a budget per frame (sun via CSM, local lights, sky, emissive, last frame's probes) into 6x6
+  irradiance, DDGI-style, without rays or noise. Capture resets relight all for `gi::CONVERGE_FRAMES` (exposure
+  re-meters); a new lattice converges out of shading, then fades in. `update_probe_records` uploads; `GI.Scatter` applies.
 - `look::Quality` (`Renderer::set_quality`): per-preset budgets from
   `ara_render_fidelity::presets::RasterPlan`: shadow cascades (count, texels,
   distance; stable light space, practical splits, gather PCF, cascade blend; one

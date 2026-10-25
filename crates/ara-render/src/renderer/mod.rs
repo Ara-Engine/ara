@@ -10,6 +10,7 @@ mod readback;
 mod submission;
 mod transfer;
 mod upload;
+mod views;
 use crate::{
     capture::{Capture, CaptureRequest},
     graph::{Graph, State, TransientImage},
@@ -22,6 +23,7 @@ use ara_gpu::{
 };
 use glam::{Mat4, Vec3};
 use std::path::{Path, PathBuf};
+pub use views::{ViewId, ViewOutput, ViewRequest};
 
 const ALBEDO: usize = 0;
 const NORMAL: usize = 1;
@@ -102,6 +104,8 @@ pub struct Renderer {
     /// Sky, fog, exposure, bloom and display grading after the G-buffer.
     look: crate::look::gpu::LookGpu,
     native: Option<native::Native>,
+    views: views::Views,
+    secondary_active: bool,
 }
 
 impl Renderer {
