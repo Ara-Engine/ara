@@ -811,6 +811,7 @@ impl Shell {
         self.dock(
             &window.root,
             &format!("f{}", window.id),
+            false,
             editor,
             &mut markup,
         )?;
@@ -849,9 +850,9 @@ impl Shell {
                     tabs: vec![panel],
                     active: 0,
                 };
-                self.dock(&area, "max", editor, &mut markup)?;
+                self.dock(&area, "max", false, editor, &mut markup)?;
             }
-            _ => self.dock(&layout, "root", editor, &mut markup)?,
+            _ => self.dock(&layout, "root", true, editor, &mut markup)?,
         }
         markup.push_str("</panel>");
         if editor.state.canvas_add
@@ -1481,13 +1482,15 @@ fn project_name(editor: &Editor) -> String {
         .unwrap_or_else(|| "Project".into())
 }
 impl Shell {
-    /// Set a floating surface's logical size after its OS window opened or resized.
-    pub fn resize_surface(&mut self, id: &str, size: [f32; 2]) {
+    /// Set a floating surface's logical size after its OS window opened or resized
+    /// (`Ui::resize`: the next frame lays the surface out at that size).
+    pub fn resize_surface(&mut self, id: &str, size: [f32; 2]) -> ara_ui::Result<()> {
         if let Some(surface) = self.floats.iter_mut().find(|s| s.id == id) {
-            surface.ui.size = size;
+            surface.ui.resize(size)?;
         } else if self.current.as_deref() == Some(id) {
-            self.ui.size = size;
+            self.ui.resize(size)?;
         }
+        Ok(())
     }
     /// A floating surface's display list and size, for its window's renderer.
     pub fn surface(&self, id: &str) -> Option<&Surface> {

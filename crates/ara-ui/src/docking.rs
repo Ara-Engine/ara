@@ -44,12 +44,16 @@ pub struct Floating {
     /// The window's dock tree.
     pub root: DockNode,
 }
-/// Persisted form: the main tree plus floating windows. A bare `DockNode` is
-/// still accepted (and written when nothing floats) for older layout files.
+/// Persisted form: the main tree, floating windows and collapsed areas. A bare
+/// `DockNode` is still accepted (and written when nothing floats or collapses) for
+/// older layout files.
 #[derive(Serialize, Deserialize)]
 struct Saved {
     main: DockNode,
     floating: Vec<Floating>,
+    /// Areas shown as just their tab strip.
+    #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
+    collapsed: BTreeSet<String>,
 }
 /// Drop target resolved from the dock overlay's pointer hit.
 #[derive(Clone, Debug)]
@@ -79,6 +83,9 @@ pub struct DockLayout {
     root: DockNode,
     default: DockNode,
     floating: Vec<Floating>,
+    /// Areas shown as just their tab strip (see [`set_collapsed`](Self::set_collapsed)).
+    collapsed: BTreeSet<String>,
+    default_collapsed: BTreeSet<String>,
 }
 impl DockLayout {
     /// Validate initial IDs/tabs/ratios before accepting a layout.
@@ -92,7 +99,55 @@ impl DockLayout {
             default: root.clone(),
             root,
             floating,
+            collapsed: BTreeSet::new(),
+            default_collapsed: BTreeSet::new(),
         })
+    }
+    /// The same layout with `areas` collapsed now and after [`reset`](Self::reset)
+    /// (a registered default's collapsed areas).
+    pub fn collapsed_by_default(mut self, areas: &[&str]) -> Self {
+        self.default_collapsed = areas.iter().map(|a| (*a).to_owned()).collect();
+        self.collapsed = self.default_collapsed.clone();
+        self
+    }
+    /// The same layout with exactly `areas` collapsed (restored editor state).
+    pub fn with_collapsed(mut self, areas: BTreeSet<String>) -> Self {
+        self.collapsed = areas;
+        self
+    }
+    /// Collapsed areas that exist in some window.
+    pub fn collapsed(&self) -> BTreeSet<String> {
+        let ids = area_ids(&self.root, &self.floating);
+        self.collapsed.intersection(&ids).cloned().collect()
+    }
+    /// Show an area as just its tab strip (`true`), or in full again.
+    pub fn set_collapsed(&mut self, area: &str, collapsed: bool) -> Result<()> {
+        if !area_ids(&self.root, &self.floating).contains(area) {
+            return Err("ARA4042: dock area not found".into());
+        }
+        if collapsed {
+            self.collapsed.insert(area.to_owned());
+        } else {
+            self.collapsed.remove(area);
+        }
+        Ok(())
+    }
+    /// Expand the area holding `panel`, if it is collapsed.
+    pub fn expand_panel(&mut self, panel: &str) {
+        fn find<'a>(n: &'a DockNode, panel: &str) -> Option<&'a str> {
+            match n {
+                DockNode::Area { id, tabs, .. } => tabs.iter().any(|t| t == panel).then_some(id),
+                DockNode::Split { first, second, .. } => {
+                    find(first, panel).or_else(|| find(second, panel))
+                }
+            }
+        }
+        let area = find(&self.root, panel)
+            .or_else(|| self.floating.iter().find_map(|f| find(&f.root, panel)))
+            .map(str::to_owned);
+        if let Some(area) = area {
+            self.collapsed.remove(&area);
+        }
     }
     /// Current serializable layout.
     pub fn root(&self) -> &DockNode {
@@ -182,31 +237,36 @@ impl DockLayout {
     pub fn reset(&mut self) {
         self.root = self.default.clone();
         self.floating.clear();
+        self.collapsed = self.default_collapsed.clone();
     }
     /// Stable JSON serialization; field order follows the typed enum schema.
     pub fn serialize(&self) -> Result<String> {
-        let value = if self.floating.is_empty() {
+        let collapsed = self.collapsed();
+        let value = if self.floating.is_empty() && collapsed.is_empty() {
             ara_json::to_value(&&self.root)?
         } else {
             ara_json::to_value(&Saved {
                 main: self.root.clone(),
                 floating: self.floating.clone(),
+                collapsed,
             })?
         };
         Ok(ara_json::to_canonical_string(&value))
     }
-    /// Atomically load a saved layout, retaining the original reset baseline.
+    /// Atomically load a saved layout, retaining the original reset baseline. A
+    /// file from before collapsible areas collapses none.
     pub fn restore(&mut self, json: &str) -> Result<()> {
         let value: serde_json::Value = serde_json::from_value(ara_json::parse(json)?)?;
-        let (root, floating) = if value.get("main").is_some() {
+        let (root, floating, collapsed) = if value.get("main").is_some() {
             let saved: Saved = serde_json::from_value(value)?;
-            (saved.main, saved.floating)
+            (saved.main, saved.floating, saved.collapsed)
         } else {
-            (serde_json::from_value(value)?, Vec::new())
+            (serde_json::from_value(value)?, Vec::new(), BTreeSet::new())
         };
         validate_all(&root, &floating)?;
         self.root = root;
         self.floating = floating;
+        self.collapsed = collapsed;
         Ok(())
     }
     /// Select a panel by stable identity.
@@ -325,6 +385,26 @@ impl DockLayout {
         visit(&self.root, &mut out, "root");
         out
     }
+}
+/// Every area ID in the main tree and the floating windows.
+fn area_ids(root: &DockNode, floating: &[Floating]) -> BTreeSet<String> {
+    fn visit(n: &DockNode, out: &mut BTreeSet<String>) {
+        match n {
+            DockNode::Area { id, .. } => {
+                out.insert(id.clone());
+            }
+            DockNode::Split { first, second, .. } => {
+                visit(first, out);
+                visit(second, out);
+            }
+        }
+    }
+    let mut out = BTreeSet::new();
+    visit(root, &mut out);
+    for f in floating {
+        visit(&f.root, &mut out);
+    }
+    out
 }
 /// Remove a panel from whichever tree holds it.
 fn remove_everywhere(root: &mut DockNode, floating: &mut [Floating], panel: &str) -> bool {

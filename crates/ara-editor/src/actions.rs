@@ -94,6 +94,11 @@ impl Service for EditorService {
                 "editor.layout.reset",
                 "Restore the project's default docking layout.",
             ),
+            Method::new::<EditorLayoutCollapse>(
+                db,
+                "editor.layout.collapse",
+                "Show a dock area as just its tab strip, or in full again.",
+            ),
             Method::new::<EditorSelect>(
                 db,
                 "editor.select",
@@ -286,6 +291,7 @@ impl EditorService {
                 logs: crate::shell::LogView::default(),
                 assets_show_all: false,
                 game: (true, "free", false),
+                starting: false,
                 // The window's build job is not visible here; the project's state is.
                 build: crate::shell::commands::BuildState {
                     running: false,
@@ -442,7 +448,7 @@ impl EditorService {
                     };
                     if matches!(panel, "material" | "vfx" | "animation") {
                         let mut dock = state.dock().map_err(ui_error)?;
-                        crate::state::show_panel(&mut dock, panel).map_err(ui_error)?;
+                        crate::state::show_panel(&mut dock, panel, None).map_err(ui_error)?;
                         state.set_dock(&dock);
                         state.focus = panel.into();
                     }
@@ -551,7 +557,9 @@ impl EditorService {
             }
             "editor.layout.apply" => {
                 let p: EditorLayoutName = parse(params)?;
-                let dock = if let Some(root) = crate::state::preset_layout(&p.name) {
+                let dock = if p.name == "default" {
+                    crate::state::default_dock().map_err(ui_error)?
+                } else if let Some(root) = crate::state::preset_layout(&p.name) {
                     DockLayout::new(root).map_err(ui_error)?
                 } else {
                     let path = cx
@@ -582,14 +590,8 @@ impl EditorService {
                 let mut dock = state.dock().map_err(ui_error)?;
                 match method {
                     "editor.layout.show" => {
-                        if p.panel == "settings" && !dock.contains("settings") {
-                            dock_float(
-                                &mut dock,
-                                &p.panel,
-                                p.rect.map(rect).unwrap_or([160, 120, 960, 640]),
-                            )?;
-                        }
-                        crate::state::show_panel(&mut dock, &p.panel).map_err(ui_error)?;
+                        crate::state::show_panel(&mut dock, &p.panel, p.rect.map(rect))
+                            .map_err(ui_error)?;
                         state.focus = p.panel.clone();
                     }
                     "editor.layout.close" => {
@@ -699,7 +701,7 @@ impl EditorService {
             "editor.focus" => {
                 let p: EditorFocus = parse(params)?;
                 let mut dock = state.dock().map_err(ui_error)?;
-                crate::state::show_panel(&mut dock, &p.panel).map_err(ui_error)?;
+                crate::state::show_panel(&mut dock, &p.panel, None).map_err(ui_error)?;
                 state.set_dock(&dock);
                 state.focus = p.panel;
                 state.focus_field = p.field;
@@ -782,8 +784,14 @@ impl EditorService {
                 sync_settings(&mut state, &self.settings);
             }
             "editor.layout.reset" => {
-                state.set_dock(&DockLayout::new(default_layout()).map_err(ui_error)?);
+                state.set_dock(&crate::state::default_dock().map_err(ui_error)?);
                 state.maximized = None;
+            }
+            "editor.layout.collapse" => {
+                let p: EditorLayoutCollapse = parse(params)?;
+                let mut dock = state.dock().map_err(ui_error)?;
+                dock.set_collapsed(&p.area, p.collapsed).map_err(ui_error)?;
+                state.set_dock(&dock);
             }
             "editor.layout" => {
                 let p: EditorLayout = parse(params)?;

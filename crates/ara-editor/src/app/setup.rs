@@ -72,7 +72,8 @@ impl Options {
     /// Bounded runs never touch the owner's profile and start from fresh preferences
     /// (captures must not depend on an earlier run): preferences (`ARA_CONFIG_DIR`)
     /// and crash reports (`ARA_CRASH_DIR`) go to `<output>/.ara-profile`, and the
-    /// players and import workers they start inherit both.
+    /// players and import workers they start inherit both. Windowed Play starts its
+    /// player hidden (`ARA_PLAY_OFFSCREEN`): a bounded run never shows a window.
     ///
     /// # Safety
     /// Mutates the process environment: call it before any thread exists.
@@ -87,6 +88,8 @@ impl Options {
             // SAFETY: the caller guarantees the process is still single-threaded.
             unsafe { std::env::set_var(name, profile.join(dir)) };
         }
+        // SAFETY: as above.
+        unsafe { std::env::set_var("ARA_PLAY_OFFSCREEN", "1") };
     }
 }
 impl Default for Options {

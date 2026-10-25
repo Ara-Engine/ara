@@ -691,8 +691,12 @@ fn import_settings_are_typed_attributed_and_undoable() {
 fn material_canvas_create_connect_and_keyboard_undo() {
     let project = Project::new();
     let mut editor = project.open();
+    // Tool pages open floating; docked into the view, the main shell shows it.
     editor
-        .action("editor.focus", json!({"panel":"material"}))
+        .action(
+            "editor.layout.move",
+            json!({"panel":"material","slot":"view"}),
+        )
         .unwrap();
     let mut shell = Shell::new(&mut editor, [1440., 900.]).unwrap();
     let mut clipboard = MemoryClipboard::default();
@@ -873,6 +877,12 @@ fn material_values_and_animation_layout_share_undo_and_survive_reopen() {
     editor
         .action("editor.canvas", json!({"selection":[node]}))
         .unwrap();
+    editor
+        .action(
+            "editor.layout.move",
+            json!({"panel":"material","slot":"view"}),
+        )
+        .unwrap();
     let mut invalid_shell = Shell::new(&mut editor, [1440., 900.]).unwrap();
     editor.apply_to(&material,vec![json!({"cmd":"graph.param.set","args":{"node":node,"name":"value","value":"invalid numeric default"}})],"Verify node diagnostics").unwrap();
     invalid_shell.rebuild(&mut editor).unwrap();
@@ -911,6 +921,12 @@ fn material_values_and_animation_layout_share_undo_and_survive_reopen() {
         .to_owned();
     editor
         .action("editor.workspace", json!({"resource":animation}))
+        .unwrap();
+    editor
+        .action(
+            "editor.layout.move",
+            json!({"panel":"animation","slot":"view"}),
+        )
         .unwrap();
     let mut shell = Shell::new(&mut editor, [1440., 900.]).unwrap();
     let mut clipboard = MemoryClipboard::default();

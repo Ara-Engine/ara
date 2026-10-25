@@ -145,6 +145,8 @@ pub struct EditorState {
     pub focus_field: Option<String>,
     /// Current dock tree, persisted per project.
     pub layout: DockNode,
+    /// Dock areas shown as just their tab strip (the default collapses `bottom`).
+    pub collapsed_areas: BTreeSet<String>,
     /// Use Ara Light instead of the default Ara Dark.
     pub light: bool,
     /// Disable decorative transitions while preserving all interaction feedback.
@@ -263,6 +265,7 @@ impl Default for EditorState {
             focus: "scene".into(),
             focus_field: None,
             layout: default_layout(),
+            collapsed_areas: DEFAULT_COLLAPSED.iter().map(|a| (*a).to_owned()).collect(),
             light: false,
             reduce_motion: false,
             render_quality: None,
@@ -343,6 +346,7 @@ impl EditorState {
             || self.focus != other.focus
             || self.focus_field != other.focus_field
             || self.layout != other.layout
+            || self.collapsed_areas != other.collapsed_areas
             || self.light != other.light
             || self.reduce_motion != other.reduce_motion
             || self.quality != other.quality
@@ -447,13 +451,17 @@ impl EditorState {
     }
     /// The validated dock model for the main tree and floating windows.
     pub fn dock(&self) -> ara_ui::Result<DockLayout> {
-        DockLayout::with_floating(self.layout.clone(), self.floating.clone())
+        Ok(
+            DockLayout::with_floating(self.layout.clone(), self.floating.clone())?
+                .with_collapsed(self.collapsed_areas.clone()),
+        )
     }
     /// Store a dock model back into navigation state. Focus returns to the Scene
     /// when the focused panel is no longer open.
     pub fn set_dock(&mut self, dock: &DockLayout) {
         self.layout = dock.root().clone();
         self.floating = dock.floating().to_vec();
+        self.collapsed_areas = dock.collapsed();
         if !dock.contains(&self.focus) {
             self.focus = "scene".into();
         }
@@ -466,17 +474,45 @@ pub fn panel_visible(state: &EditorState, panel: &str) -> bool {
 /// The area a panel returns to when shown from the Window menu.
 fn home(panel: &str) -> &'static str {
     match panel {
-        "hierarchy" => "left",
+        "hierarchy" => "outline",
         "inspector" => "right",
         "assets" | "console" | "problems" | "agents" => "bottom",
         _ => "view",
     }
 }
-/// Show a panel: activate it where it is, or open it in its home slot.
-pub fn show_panel(dock: &mut DockLayout, panel: &str) -> ara_ui::Result<()> {
-    if !dock.contains(panel) {
-        move_panel(dock, panel, home(panel))?;
+/// Panels that open in a floating window of this size when they are not in the
+/// layout: tool pages, the Profiler and Settings. Docking one keeps it docked.
+pub fn float_size(panel: &str) -> Option<[i32; 2]> {
+    match panel {
+        "settings" => Some([960, 640]),
+        "material" | "vfx" | "animation" => Some([1200, 760]),
+        "profiler" => Some([980, 620]),
+        _ => None,
     }
+}
+/// Show a panel: activate it where it is (expanding a collapsed area), or open it:
+/// in a floating window for [`float_size`] panels (at `rect`, desktop pixels; the
+/// caller centres it on the editor), else in its home area.
+pub fn show_panel(
+    dock: &mut DockLayout,
+    panel: &str,
+    rect: Option<[i32; 4]>,
+) -> ara_ui::Result<()> {
+    if !dock.contains(panel) {
+        match float_size(panel) {
+            Some([w, h]) => {
+                let id = (1..)
+                    .map(|n| format!("window-{n}"))
+                    .find(|id| dock.floating().iter().all(|f| &f.id != id))
+                    .unwrap_or_default();
+                // A closed panel floats from nowhere: open it, then tear it off.
+                move_panel(dock, panel, "view")?;
+                dock.float(panel, &id, rect.unwrap_or([160, 120, w, h]))?;
+            }
+            None => move_panel(dock, panel, home(panel))?,
+        }
+    }
+    dock.expand_panel(panel);
     dock.activate(panel)
 }
 /// Dock a panel into a slot (`left`, `right`, `bottom`, `view`), creating the
@@ -493,6 +529,24 @@ pub fn move_panel(dock: &mut DockLayout, panel: &str, slot: &str) -> ara_ui::Res
             DockNode::Area { id, .. } => id.clone(),
             DockNode::Split { first, .. } => first_area(first),
         }
+    }
+    // The Hierarchy's area sits above the Inspector's: split that area again.
+    if slot == "outline" && !has_area(dock.root(), slot) {
+        if !has_area(dock.root(), "right") {
+            return move_panel(dock, panel, "right");
+        }
+        if !dock.contains(panel) {
+            add_tab(dock, "right", panel)?;
+        }
+        return dock.drop_tab(
+            panel,
+            DockDrop::Split {
+                area: "right".into(),
+                new_area: "outline".into(),
+                axis: Axis::Vertical,
+                before: true,
+            },
+        );
     }
     let target = if has_area(dock.root(), slot) {
         slot.to_owned()
@@ -586,27 +640,92 @@ fn split(axis: Axis, ratio: f32, first: DockNode, second: DockNode) -> DockNode 
         second: Box::new(second),
     }
 }
-/// Built-in layouts (Window › Layouts). The viewport keeps the full window height
-/// in every preset; Assets and Console share the left column under Hierarchy.
+/// Areas the default layout shows collapsed (just their tab strip).
+pub const DEFAULT_COLLAPSED: &[&str] = &["bottom"];
+/// The default layout with its collapsed areas (new projects, Reset Layout).
+pub fn default_dock() -> ara_ui::Result<DockLayout> {
+    Ok(DockLayout::new(default_layout())?.collapsed_by_default(DEFAULT_COLLAPSED))
+}
+/// The default arrangement before the collapsed bottom bar (2026-10-25): a project
+/// still on it is moved to the new default when it opens.
+fn old_default_layout() -> DockNode {
+    use Axis::{Horizontal as H, Vertical as V};
+    split(
+        H,
+        0.17,
+        split(
+            V,
+            0.5,
+            area("left", &["hierarchy"]),
+            area("bottom", &["assets", "console", "problems", "agents"]),
+        ),
+        split(
+            H,
+            0.76,
+            area(
+                "view",
+                &["scene", "game", "material", "vfx", "animation", "profiler"],
+            ),
+            area("right", &["inspector"]),
+        ),
+    )
+}
+/// The same tree shape, axes, areas and tabs; split ratios and active tabs differ
+/// freely (resizing or switching tabs is not rearranging).
+fn same_arrangement(a: &DockNode, b: &DockNode) -> bool {
+    match (a, b) {
+        (
+            DockNode::Area { id, tabs, .. },
+            DockNode::Area {
+                id: other,
+                tabs: other_tabs,
+                ..
+            },
+        ) => id == other && tabs == other_tabs,
+        (
+            DockNode::Split {
+                axis,
+                first,
+                second,
+                ..
+            },
+            DockNode::Split {
+                axis: other_axis,
+                first: other_first,
+                second: other_second,
+                ..
+            },
+        ) => {
+            axis == other_axis
+                && same_arrangement(first, other_first)
+                && same_arrangement(second, other_second)
+        }
+        _ => false,
+    }
+}
+/// Built-in layouts (Window › Layouts). The default gives the Scene and Game the
+/// left and centre at full height, Hierarchy over Inspector on the right, and a
+/// collapsed bottom bar (Assets, Console, Problems, Agents); tool pages and the
+/// Profiler open as floating windows ([`float_size`]).
 pub fn preset_layout(name: &str) -> Option<DockNode> {
     use Axis::{Horizontal as H, Vertical as V};
     const DOCUMENTS: &[&str] = &["scene", "game", "material", "vfx", "animation", "profiler"];
     Some(match name {
         "default" => split(
-            H,
-            0.17,
-            split(
-                V,
-                0.5,
-                area("left", &["hierarchy"]),
-                area("bottom", &["assets", "console", "problems", "agents"]),
-            ),
+            V,
+            0.7,
             split(
                 H,
-                0.76,
-                area("view", DOCUMENTS),
-                area("right", &["inspector"]),
+                0.78,
+                area("view", &["scene", "game"]),
+                split(
+                    V,
+                    0.42,
+                    area("outline", &["hierarchy"]),
+                    area("right", &["inspector"]),
+                ),
             ),
+            area("bottom", &["assets", "console", "problems", "agents"]),
         ),
         "levelDesign" => split(
             H,
@@ -711,12 +830,19 @@ impl Navigation {
     pub fn new(root: &Path, mut state: EditorState) -> anyhow::Result<Self> {
         let path = root.join(".ara/editor-layout.json");
         if path.exists() {
-            let mut layout =
-                DockLayout::new(default_layout()).map_err(|e| anyhow::anyhow!(e.to_string()))?;
+            let fresh = || default_dock().map_err(|e| anyhow::anyhow!(e.to_string()));
+            let mut layout = fresh()?;
             // A layout from an older editor that fails validation falls back to the default.
             let text = std::fs::read_to_string(&path)
                 .map_err(|e| anyhow::anyhow!("{}: {e}", path.display()))?;
             if layout.restore(&text).is_ok() {
+                // Still the old default (only resized or tab-switched): move it to the
+                // new one. Any other arrangement is the user's and stays.
+                if layout.floating().is_empty()
+                    && same_arrangement(layout.root(), &old_default_layout())
+                {
+                    layout = fresh()?;
+                }
                 state.set_dock(&layout);
             }
         }
@@ -749,8 +875,9 @@ impl Navigation {
         why: &str,
         root: &Path,
     ) -> Result<Value, Vec<ara_diag::Diagnostic>> {
-        let layout_changed =
-            candidate.layout != self.state.layout || candidate.floating != self.state.floating;
+        let layout_changed = candidate.layout != self.state.layout
+            || candidate.floating != self.state.floating
+            || candidate.collapsed_areas != self.state.collapsed_areas;
         let value =
             serde_json::to_value(&candidate).map_err(|e| vec![crate::invalid(e.to_string())])?;
         let mut meta = TxnMeta::by(author);

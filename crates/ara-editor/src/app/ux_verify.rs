@@ -110,28 +110,35 @@ impl UxVerification {
         }
         // Floating windows and thumbnails need a few frames to open and settle.
         let wait = match setup {
-            Setup::Float(_) | Setup::Settings(_) => 24,
             Setup::Tab("material" | "vfx" | "assets") => 90,
+            // Tool pages and the Profiler open in their own (new) OS window.
+            Setup::Float(_) | Setup::Settings(_) => 24,
+            Setup::Tab(panel) if crate::state::float_size(panel).is_some() => 24,
             _ => 8,
         };
         if self.age < wait {
             return Ok(false);
         }
-        let float = match setup {
-            Setup::Float(panel) | Setup::Settings(panel) => {
-                let panel = if panel.is_empty() || panel == "Keyboard shortcuts" {
-                    "settings"
-                } else {
-                    panel
-                };
+        let float =
+            match setup {
+                Setup::Float(panel) | Setup::Settings(panel) => {
+                    Some(if panel.is_empty() || panel == "Keyboard shortcuts" {
+                        "settings"
+                    } else {
+                        panel
+                    })
+                }
+                // Tool pages and the Profiler open floating: capture their window too.
+                Setup::Tab(panel) if crate::state::float_size(panel).is_some() => Some(panel),
+                _ => None,
+            }
+            .and_then(|panel| {
                 floats.windows.iter().find(|f| {
                     editor.state.floating.iter().any(|w| {
                         w.id == f.id && super::panels_of(&w.root).iter().any(|p| p == panel)
                     })
                 })
-            }
-            _ => None,
-        };
+            });
         let capture = super::verify::Verification::new(&self.output);
         let viewport = shell
             .viewport()
