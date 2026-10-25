@@ -61,9 +61,12 @@ for stage, CPU, queue, IPC, cache and final boundary-publication measurements.
 ARA_IMPORT_TRACE_CACHE_DETAIL=1 additionally separates cache read/create/write/persist.
 Importer/ImporterRegistry::import_with_memo optionally share pure texture tasks;
 custom importers and remote caches keep their existing default behavior. FileCache
-uses a disposable `intermediates/` namespace without fsync; final publication still
-validates and durably publishes immutable objects/actions. Quiescent GC evicts memo
-entries. Memo availability and thread scheduling never change final action keys.
+uses a disposable `intermediates/` namespace. Both caches publish objects atomically
+before action records, without per-file fsync. Every hit verifies all object hashes,
+lengths and payloads; torn/missing data is a miss that re-imports. Writers repair bad
+entries atomically; readers never unlink a concurrent repair. Different verified
+results for one key remain errors. Quiescent GC evicts memo entries. Cache recovery,
+memo availability and thread scheduling never change final action keys.
 
 ImportServices supplies an optional BlockEncoder. Resolve its immutable backend
 before action lookup; encoded actions and texture memo keys include it. Capability
