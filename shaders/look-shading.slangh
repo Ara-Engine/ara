@@ -40,6 +40,36 @@ float farVisibility(Look l,float3 world,float3 normal){
     }
     return sum;
 }
+// Local-shadow table layout (ara_render look::local::{FACES, RECORDS}).
+static const uint LOCAL_FACES=2048,LOCAL_RECORDS=8192;
+// Visibility of `world` from shadowed local light `index` (look::local): the
+// light's face (a cube's by the major axis from the light), its atlas tile, a
+// normal offset of one and a half face texels and a 3x3 tent filter in the tile.
+float localShadow(Look l,uint index,float3 world,float3 normal,float3 light){
+    if(l.localShadows.y==0)return 1;
+    uint2 entry=buffers[NonUniformResourceIndex(l.localShadows.x)].Load2(index*8);if(entry.y==0)return 1;
+    float3 d=world-light,a=abs(d);
+    uint face=entry.y==1?0:(a.x>=a.y&&a.x>=a.z?(d.x>0?0:1):a.y>=a.z?(d.y>0?2:3):(d.z>0?4:5));
+    uint at=LOCAL_RECORDS+(entry.x+face)*80;
+    float4x4 m=buffers[NonUniformResourceIndex(l.localShadows.x)].Load<float4x4>(at);
+    float4 tile=asfloat(buffers[NonUniformResourceIndex(l.localShadows.x)].Load4(at+64));
+    float2 atlas=float2(l.localShadows.zw);float res=tile.z*atlas.x;
+    // A face's view depth is the major axis of the light-to-point vector (a
+    // spot's is close to its length): texel size without a second transform.
+    float texel=2*max(entry.y==1?length(d):max(a.x,max(a.y,a.z)),0.01)/(length(m[0].xyz)*res);
+    float4 h=mul(m,float4(world+normal*texel*1.5,1));if(h.w<=0)return 1;
+    float3 q=h.xyz/h.w;float2 uv=float2(q.x*0.5+0.5,0.5-q.y*0.5);
+    if(any(uv<0)||any(uv>1)||q.z<=0||q.z>1)return 1;
+    float depth=q.z*1.002;
+    float2 lo=tile.xy*atlas,position=lo+uv*res-0.5,base=floor(position),t=position-base;
+    float4 wx=float4(1-t.x,1,1,t.x)/3,wy=float4(1-t.y,1,1,t.y)/3;float sum=0;
+    for(uint j=0;j<2;j++)for(uint i=0;i<2;i++){
+        float2 g=clamp(base+float2(2*i,2*j),lo+1,lo+res-1)/atlas;
+        float4 lit=step(textures[NonUniformResourceIndex(l.localShadows.y)].GatherRed(samplers[2],g),depth);
+        sum+=wx[2*i]*wy[2*j]*lit.w+wx[2*i+1]*wy[2*j]*lit.z+wx[2*i]*wy[2*j+1]*lit.x+wx[2*i+1]*wy[2*j+1]*lit.y;
+    }
+    return sum;
+}
 // Sun visibility at `world`: blends into the next cascade over the last tenth of
 // each and fades out over the last tenth of the shadow distance.
 float visibility(Frame f,Look l,float3 world,float3 normal) {
@@ -155,6 +185,7 @@ float3 shade(Frame f,Look l,Surface s,float3 world,int2 p,bool gathered) {
         // concentrate), as in the path tracer; inside a source's radius the near
         // field softens instead of peaking.
         float3 illuminance=light.colorLumens.rgb*(light.colorLumens.w/(4*PI*d2))*fade*spot;
+        if(any(illuminance>0))illuminance*=localShadow(l,index,world,s.normal,light.positionRange.xyz);
         result+=brdf(s,v,toLight)*illuminance;
     }
     return result;

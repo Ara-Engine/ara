@@ -107,7 +107,9 @@ roughness/metal, B10G11R11 emissive, R32 ID and RG16F motion; world positions ar
 rebuilt from depth. Shaders read and write it only through raster.slangh's
 `gbuffer*` helpers, so the formats change there and in `Renderer::targets` together.
 Local light lists are tiled 16x16: `scene::MAX_LOCAL_LIGHTS` (256) per scene, the
-first `TILE_LIGHTS` (128) per tile. Spot lumens are point-equivalent (the cone
+first `TILE_LIGHTS` (128) per tile. `look::local` shadows the brightest few in
+view (cube or spot faces in one D32 atlas, cached, native passes 7+tile drawn as
+cascade 4+tile from its table); `Quality::local_shadows` budgets them. Spot lumens are point-equivalent (the cone
 masks), as in the path tracer; `Light::parameters.z` softens the near field and
 `parameters.w` = 1 keeps a light out of fog (unshadowed emitter lights).
 

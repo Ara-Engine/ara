@@ -20,6 +20,12 @@ struct Varying {
     nointerpolation uint material:TEXCOORD8;
     nointerpolation uint id:TEXCOORD9;
 };
+// Shadow draws' light matrix: cascades 0-3 from the frame record, 4+ the
+// local-shadow tiles' matrices in the look's table (look::local::FACES).
+float4x4 shadowMatrix(Frame f,uint cascade){
+    if(cascade<4)return f.shadows[cascade];
+    return buffers[NonUniformResourceIndex(look(f).localShadows.x)].Load<float4x4>(LOCAL_FACES+(cascade-4)*64);
+}
 Varying nativeVertex(uint vertex,uint instance,bool shadow) {
     uint2 draw=buffers[NonUniformResourceIndex(root.flags)].Load2((root.entity+instance)*8);
     Instance i=buffers[NonUniformResourceIndex(root.material)].Load<Instance>(128+draw.x*192);
@@ -30,7 +36,7 @@ Varying nativeVertex(uint vertex,uint instance,bool shadow) {
     NativeVertex p=i.meta.y!=0?buffers[NonUniformResourceIndex(previous.x)].Load<NativeVertex>(previous.y+index*64):v;
     Frame f=frame();Varying o;
     float4 world=mul(i.world,float4(v.position,1));
-    o.world=world.xyz;o.clip=mul(shadow?f.shadows[root.cascade]:f.vp,world);
+    o.world=world.xyz;o.clip=mul(shadow?shadowMatrix(f,root.cascade):f.vp,world);
     o.normal=normalize(float3(dot(i.nx.xyz,v.normal),dot(i.ny.xyz,v.normal),dot(i.nz.xyz,v.normal)));
     float3 tangent=mul(i.world,float4(v.tangent.xyz,0)).xyz;
     tangent-=o.normal*dot(tangent,o.normal);
