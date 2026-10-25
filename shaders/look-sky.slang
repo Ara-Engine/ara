@@ -72,7 +72,8 @@ float3 environmentAmbient(Frame f){
     }return sum/14;
 }
 // One thread integrates a frustum column front to back over logarithmic slices.
-// Sunlight is shadowed by the cascades; quadrature is deterministic (no noise).
+// Sunlight is shadowed by the cascades and far map (each segment the lit share of
+// four points); quadrature is deterministic (no noise).
 // Height fog uses its own base altitude, tint and anisotropy; clear-air Rayleigh
 // and Mie scattering join it under the physical sky.
 [shader("compute")][numthreads(8,8,1)]
@@ -84,11 +85,15 @@ void fogMain(uint3 tid:SV_DispatchThreadID){
     uint lights=f.extent.z;float cosine=dot(d,sun);
     for(uint z=0;z<32;z++){
         float end=2*(exp2(log2(1+FOG_RANGE/2)*float(z+1)/32)-1),ds=end-previous;
-        float3 at=f.camera.xyz+d*(previous+ds*0.5);previous=end;
+        float3 at=f.camera.xyz+d*(previous+ds*0.5);float start=previous;previous=end;
         float height=max(at.y-l.atmosphere.x,0);float density=fog?l.atmosphere.y*exp(-max(at.y-l.look.z,0)/l.atmosphere.z):0;
         float3 sr=0;float sm=0;float3 e=density;
         if(physical)e+=extinction(height,l.look.w,sr,sm);
-        float3 sunlight=sunAt(f,l,at)*visibility(f,l,at,float3(0,0,0));
+        // The share of the segment the sun reaches, from four stratified points:
+        // shafts then move smoothly with the camera instead of a whole slice
+        // (90-140 m at mountain range) flipping lit or dark at once.
+        float lit=0;for(uint i=0;i<4;i++)lit+=fogVisibility(f,l,f.camera.xyz+d*(start+ds*(float(i)+0.5)/4));
+        float3 sunlight=sunAt(f,l,at)*lit*0.25;
         float3 source=sunlight*(sr*phaseR(cosine)+sm*phaseM(cosine,0.8)+density*albedo*phaseM(cosine,g));
         if(physical)source+=(sr+sm+density*albedo)*multiScattering(l,height,sun.y)*l.sunLux.rgb;
         else source+=density*albedo*ambient;

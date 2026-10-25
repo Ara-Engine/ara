@@ -100,8 +100,8 @@ lumens, environments in cd/m2, exposure a linear multiplier (README.md: tone map
 GPU numbers). Only the TAA history is RGBA16F and pre-exposed (`look.slangh`
 exposureState); look passes learn from root word 7 whether input is history.
 The G-buffer is compact: RGBA8 sRGB albedo + AO, RG16 octahedral normal, RGBA8
-roughness/metal, B10G11R11 emissive, R32 ID and RG16F motion; world positions are
-rebuilt from depth. Shaders read and write it only through raster.slangh's
+roughness/metal/AO occluder (zero for cutouts), B10G11R11 emissive, R32 ID and
+RG16F motion; positions are rebuilt from depth. Shaders read and write it only through raster.slangh's
 `gbuffer*` helpers, so the formats change there and in `Renderer::targets` together.
 Local light lists are tiled 16x16 (`scene::MAX_LOCAL_LIGHTS` 256 per scene, the
 first `TILE_LIGHTS` 128 per tile); `look::local` shadows the brightest few in view

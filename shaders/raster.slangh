@@ -65,11 +65,15 @@ float4 gbufferAlbedo(Frame f,int2 p){return pixel(f.gbuffer.x,p);}
 float3 gbufferNormal(Frame f,int2 p){return octDecode(pixel(f.gbuffer.y,p).xy);}
 // Perceptual roughness (x) and metalness (y).
 float2 gbufferMaterial(Frame f,int2 p){return pixel(f.gbuffer.z,p).xy;}
+// How much the surface occludes screen-space ambient occlusion: alpha-tested
+// cutouts (chain-link, leaves) are mostly holes the depth buffer cannot show, so
+// they receive it but cast none; solid surfaces cast it fully.
+float gbufferOccluder(Frame f,int2 p){return pixel(f.gbuffer.z,p).z;}
 // Emitted radiance.
 float3 gbufferEmissive(Frame f,int2 p){return pixel(f.gbuffer.w,p).rgb;}
 // Fill-side encodings; `alpha` is the forward pass's blend weight (one for opaque).
 float4 gbufferEncodeNormal(float3 n,float alpha){return float4(octEncode(n),0,alpha);}
-float4 gbufferEncodeMaterial(float roughness,float metal,float alpha){return float4(roughness,metal,0,alpha);}
+float4 gbufferEncodeMaterial(float roughness,float metal,float occluder,float alpha){return float4(roughness,metal,occluder,alpha);}
 float4 gbufferEncodeEmissive(float3 emissive,float alpha){return float4(min(emissive,65000),alpha);}
 // Reversed-Z depth: zero where no opaque surface was drawn.
 float gbufferDepth(Frame f,int2 p){return pixel(f.extra.x,p).x;}
