@@ -1,13 +1,13 @@
 //! A set of loaded documents plus the project's asset index.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use ara_diag::{Diagnostic, Location, codes};
 use ara_schema::SchemaDb;
 use ara_schema::grammar::parse_ref;
 
 use crate::document::Document;
-use crate::prefab::{DocLookup, Resolved, resolve};
+use crate::prefab::{DocLookup, Resolved, check_instance, resolve};
 use crate::refs::AssetIndex;
 use crate::validate::{check_entity_refs, check_record, check_structure};
 use crate::{AssetId, Edit, Op, RecordId};
@@ -249,6 +249,37 @@ impl Workspace {
         check_structure(doc, kind, &base, &mut out);
         check_entity_refs(db, doc, &base, &mut out);
         resolve(doc, db, self, &base, &mut out);
+        out
+    }
+
+    /// What `records` of a document report on their own, in document order: each
+    /// record against the schema, then each prefab instance's prefab and overrides.
+    /// A [local edit](Edit::is_local) changes only these, so a transaction of local
+    /// edits to one document validates just its records; [`check`](Self::check)
+    /// reports the same problems for them, plus structure, references and resolution.
+    pub fn check_local(
+        &self,
+        id: &AssetId,
+        records: &BTreeSet<RecordId>,
+        db: &SchemaDb,
+    ) -> Vec<Diagnostic> {
+        let mut out = Vec::new();
+        let Some(doc) = self.doc(id.as_str()) else {
+            return out;
+        };
+        let Some(kind) = db.kind(&doc.kind) else {
+            return out;
+        };
+        let base = self.location(id);
+        // Records are keyed in ID order, so walking the sorted set keeps document order.
+        for rid in records {
+            if let Some(rec) = doc.record(rid.as_str()) {
+                check_record(db, kind, rid, rec, &base, &mut out);
+            }
+        }
+        for rid in records {
+            check_instance(doc, rid, db, self, &base, &mut out);
+        }
         out
     }
 }

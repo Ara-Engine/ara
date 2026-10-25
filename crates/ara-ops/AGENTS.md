@@ -40,6 +40,12 @@ and the op stream for the Engine Protocol. Depends on ara-doc, ara-schema, ara-d
 - **Commit** validates every touched document fully (records, parents, loops,
   prefab instances) and fails only on errors the transaction introduced; errors the
   document already had don't block edits. On failure every op is rolled back.
+  While every edit is local (`Edit::is_local`: a `Set` of one document's names,
+  components or overrides, as Inspector edits are), only the touched records are
+  checked (`Workspace::check_local`), before their first edit and at commit. Any
+  other edit switches to whole documents, with the baseline rebuilt exactly
+  (`Staged::validate_whole`). `scoped_validation_matches_whole_document_checks`
+  pins that both agree.
 - **Base revision**: with `base: Some(r)` and later transactions touching
   overlapping paths (prefix-related field paths, or the whole record for
   create/delete), the commit fails with `ARA1501`. Disjoint paths merge fine.
@@ -54,9 +60,9 @@ and the op stream for the Engine Protocol. Depends on ara-doc, ara-schema, ara-d
 
 ## Gotchas
 
-- Commit-time validation is a full check of each touched document (O(document)),
-  twice per transaction (baseline + after). Fine for authoring sizes; make it
-  incremental before huge levels.
+- Structural transactions (create, delete, move, `parent`/`order`/`prefab`/`removed`,
+  several documents) still check each touched document fully (O(document)), twice
+  (baseline + after). Local edits cost O(touched records).
 - History is unbounded in memory. The on-disk journal, review state
   (applied/accepted/reverted) and checkpoints live in `ara-host`, which drives
   `restore` on startup.
