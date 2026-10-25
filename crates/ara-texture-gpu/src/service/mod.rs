@@ -1,4 +1,5 @@
 //! Cross-import device reuse; bulk clients and host lifetime leases are separate.
+mod binary;
 mod client;
 mod server;
 #[cfg(test)]
@@ -22,8 +23,9 @@ pub(crate) fn open(cooked: &Path, cache: &Path) -> Result<Box<dyn BlockEncoder>>
     // Identity comes from the same immutable manifests as local encoding. This
     // reads files only; the disposable worker never creates a Vulkan device.
     let identity = crate::Encoder::new(cooked, cache)?.backend().to_owned();
+    let binary = binary::Binary::load(cache)?;
     std::fs::create_dir_all(cache)?;
-    let key = Digest::of(identity.as_bytes());
+    let key = Digest::of(format!("{identity}:{}", binary.digest).as_bytes());
     let path = cache.join(format!("service-{key}.json"));
     let lock = OpenOptions::new()
         .create(true)
@@ -39,7 +41,7 @@ pub(crate) fn open(cooked: &Path, cache: &Path) -> Result<Box<dyn BlockEncoder>>
     {
         return Ok(Box::new(remote));
     }
-    let descriptor = spawn(cooked, cache)?;
+    let descriptor = spawn(cooked, cache, &binary)?;
     if descriptor.identity != identity {
         return Err(Error::EncoderUnavailable(
             "spawned codec revision changed".into(),
@@ -53,8 +55,8 @@ pub(crate) fn open(cooked: &Path, cache: &Path) -> Result<Box<dyn BlockEncoder>>
     Ok(Box::new(client::Remote::connect(descriptor)?))
 }
 
-fn spawn(cooked: &Path, cache: &Path) -> Result<wire::Descriptor> {
-    let mut command = Command::new(std::env::current_exe()?);
+fn spawn(cooked: &Path, cache: &Path, binary: &binary::Binary) -> Result<wire::Descriptor> {
+    let mut command = Command::new(binary.publish()?);
     command
         .arg(ARGUMENT)
         .arg(cooked)
@@ -124,7 +126,7 @@ pub(crate) fn run() -> Result<()> {
     ara_asset::record_import_trace(
         "texture.service.start",
         "gpu-codec",
-        serde_json::json!({"slots":encoders.len()}),
+        serde_json::json!({"slots":encoders.len(),"executable":std::env::current_exe()?}),
     );
     wire::write_json(&mut std::io::stdout().lock(), &descriptor)?;
     let pool = Arc::new(server::Pool::new(encoders));

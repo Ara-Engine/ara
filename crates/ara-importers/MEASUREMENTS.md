@@ -385,3 +385,23 @@ reflection snapshot pass. The snapshot updates exactly three preset doc strings,
 then passes with updates disabled. Formatting and strict all-target Clippy cover
 the touched packages; no full workspace integration gate was run. Five core tests
 are declared ignored in the normal run; the two GPU probes above ran explicitly.
+
+## Device reuse and sample versions: 2026-10-26
+
+The same-binary local/pooled follow-up measures Showcase at 13.260 -> 11.441 s
+mean, and Outpost at 33.018 -> 26.425 s in the first clean pair, with a second
+pooled Outpost run of 24.615 s. Two control I/O stalls remain explicitly marked
+in the full A/F/L/P/P/L/F/A matrix; they are not credited as improvements.
+These are fresh daemon assets-ready timings, not interactive installed editor
+startup. Showcase still misses 10 s. Full stage sums, lifecycle tests and canonical
+per-asset evidence are in
+[`ara-texture-gpu/MEASUREMENTS.md`](../ara-texture-gpu/MEASUREMENTS.md#leased-device-reuse-2026-10-26).
+
+Dedicated sidecar commit `21de76f5` refreshes 111 Outpost and 33 Showcase version
+strings, with no settings or other data changes. Expected versions come from the
+installed registry; `cargo test -p ara-importers --test sample_versions` detects
+future skew without writing tracked files. `ARA_UPDATE_DEMO=1` explicitly updates
+them through typed sidecar edits and the canonical writer. The test fails before
+regeneration, then passes with updates disabled. Current sidecars reduce source
+snapshot work (132/452 to 66/230 per sample); no isolated metadata wall-speedup
+claim follows from the failed exploratory comparison.
