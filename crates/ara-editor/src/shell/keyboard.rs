@@ -201,8 +201,11 @@ impl Shell {
             return Ok(true);
         }
         if scancode == 40 {
-            self.dispatch(editor)?;
-            let committed = self.commit_fields(editor)?;
+            // The field's pending action and its commit rebuild once, not twice.
+            let committed = self.coalesce_rebuilds(editor, |shell, editor| {
+                shell.dispatch(editor)?;
+                shell.commit_fields(editor)
+            })?;
             if !committed {
                 self.event(InputEvent::Activate, clipboard)?;
             }
