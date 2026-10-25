@@ -45,6 +45,9 @@ the worker: even discovering FBX dependencies must never run in the editor.
 Changing algorithms, dependencies or output policy requires an importer version
 bump. Intel ISPC is pinned and precompiled. CookPreset explicitly selects quality; HQ
 is selectable; Balanced is the import default. Keep output byte-identical across Rayon thread budgets.
+`cargo test -p ara-importers --test sample_versions` checks both tracked sample projects
+against registry versions. Set ARA_UPDATE_DEMO=1 explicitly to regenerate sidecars
+through typed version edits; run again without it and review version-only diffs.
 ASTC belongs behind a mobile importer plugin; never emit BCn for mobile silently.
 FORMAT.md in ara-asset-format and INTEGRATION.md here define runtime adoption.
 

@@ -682,14 +682,7 @@ impl SceneView {
                 && self.active
                 && self.lit
                 && ((self.fidelity.is_some() || self.raster.is_some()) && self.remaining > 0
-                    || self
-                        .raster
-                        .as_ref()
-                        .is_some_and(ara_runtime_render::RasterView::needs_frame)
-                    || self.content.as_ref().is_some_and(|content| {
-                        content.revision() != self.revision.map_or(0, |revision| revision.3)
-                            || content.progress_pending()
-                    }))
+                    || self.preview_needs_frame())
     }
     pub fn attach(
         &self,
@@ -980,9 +973,55 @@ mod tests {
                     )
                     .map_err(|error| anyhow::anyhow!("{error}"))?;
                 assert!(
-                    output.is_some(),
+                    output.is_none(),
+                    "the first preview does not wait for its GPU frame"
+                );
+                assert!(preview.pending(&renderer));
+                renderer.wait_scene_frame()?;
+                assert!(
+                    preview
+                        .poll(&mut renderer)
+                        .map_err(|error| anyhow::anyhow!("{error}"))?
+                        .is_some(),
                     "explicit preview retries the failed generation"
                 );
+                let shown_frame = scene
+                    .raster_frame
+                    .as_ref()
+                    .expect("shown frame")
+                    .draws
+                    .as_ptr();
+                let shown_revision = scene.revision;
+                for _ in 0..16 {
+                    scene
+                        .preview_game(
+                            &mut renderer,
+                            &editor,
+                            &view,
+                            &mut preview,
+                            PreviewCamera {
+                                camera: &camera,
+                                size: [96, 54],
+                                quality: None,
+                            },
+                        )
+                        .map_err(|error| anyhow::anyhow!("{error}"))?;
+                    renderer.wait_scene_frame()?;
+                    assert!(
+                        scene.content_job.is_none(),
+                        "unchanged preview must reuse published content"
+                    );
+                    assert_eq!(scene.revision, shown_revision);
+                    assert_eq!(
+                        scene
+                            .raster_frame
+                            .as_ref()
+                            .expect("shown frame")
+                            .draws
+                            .as_ptr(),
+                        shown_frame
+                    );
+                }
                 assert!(scene.failed.is_none());
                 preview
                     .release(&mut renderer)

@@ -46,6 +46,96 @@ fn terrain_content(color: [f32; 4]) -> Content {
 }
 
 #[test]
+fn unchanged_secondary_prepare_keeps_generation_and_starts_no_background_jobs() -> Result<()> {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../target/runtime-render/secondary-identity");
+    let mut frame = RenderFrame::default();
+    frame.draws = vec![box_draw(1, [2.; 3], [0.; 3], [8.; 3])];
+    let candidate = RasterContent::new(frame, Content::default())?;
+    let mut renderer = Renderer::new_native(
+        &candidate.prepared.scene,
+        Box::new(candidate.prepared.textures.fork_sources(texture_config())?),
+        [96, 64],
+        &[],
+        root.join("gpu"),
+    )?;
+    let plan = RasterPlan {
+        render_size: [96, 64],
+        display_size: [96, 64],
+        quality: ara_render::look::Quality {
+            gi_budget: 1024,
+            ..Default::default()
+        },
+    };
+    let mut raster = RasterView::new(root.join("probes"));
+    let frame = raster.publish_content(&mut renderer, candidate, plan)?;
+    raster.wait_probe_gi(&mut renderer)?;
+    let serial = raster.gi.as_ref().expect("GI enabled").request_serial();
+    let searches = raster.emitter_search.searches_started();
+    assert!(
+        serial > 0 && searches > 0,
+        "fixture must finish a real GI and emitter job"
+    );
+    let allocation = raster
+        .prepared
+        .as_ref()
+        .expect("prepared")
+        .scene
+        .geometry
+        .as_ptr();
+    let key = raster.key;
+    let look = FrameEnvironment::resolve(&frame.look, frame.environment.exposure);
+    let camera = CameraSpec::LookAt {
+        position: glam30::Vec3::new(0., 1., 4.),
+        target: glam30::Vec3::ZERO,
+        vertical_fov: 55f32.to_radians(),
+    };
+    let request = ara_render::ViewRequest {
+        camera: &camera,
+        size: [64, 40],
+        render_size: [64, 40],
+        quality: plan.quality,
+        exposure: 1.,
+    };
+    let mut view = renderer.create_view()?;
+    for _ in 0..16 {
+        renderer.submit_secondary(&mut view, &request, |renderer, _| {
+            let update = raster.prepare_unchanged(renderer, &frame, plan, look, || {
+                panic!("unchanged preview must not resolve content")
+            })?;
+            assert!(!update.rebuilt);
+            Ok(true)
+        })?;
+        renderer.wait_scene_frame()?;
+        assert_eq!(raster.key, key);
+        assert_eq!(
+            raster
+                .prepared
+                .as_ref()
+                .expect("prepared")
+                .scene
+                .geometry
+                .as_ptr(),
+            allocation
+        );
+        assert_eq!(
+            raster.gi.as_ref().expect("GI enabled").request_serial(),
+            serial,
+            "secondary camera is not a new GI generation"
+        );
+        assert_eq!(
+            raster.emitter_search.searches_started(),
+            searches,
+            "secondary camera must not search emitters again"
+        );
+    }
+    renderer.release_view(view)?;
+    raster.destroy(&mut renderer)?;
+    renderer.gpu().assert_clean()?;
+    Ok(())
+}
+
+#[test]
 fn first_capture_uploads_finished_emitter_search_without_another_prepare() -> Result<()> {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../target/runtime-render/emitter-capture")

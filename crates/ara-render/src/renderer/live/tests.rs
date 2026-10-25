@@ -27,6 +27,9 @@ struct Gate {
     semaphore: vk::Semaphore,
     opened: bool,
 }
+
+mod secondary;
+
 impl Gate {
     fn new(gpu: &VulkanDevice, queue: Queue) -> Result<Self> {
         // SAFETY: New test-owned semaphore. Only this thread submits or signals it.

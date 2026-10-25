@@ -84,3 +84,5 @@ captures leave tracked sample evidence unchanged.
 `ARA_AUDIT_GEOMETRY=1` also audits fetched source-model bounds in the Outpost layout test;
 resolved world positions, ground-relative shots and bounds go under `target/ara-samples/`.
 `cargo clippy -p ara-samples --all-targets -- -D warnings`.
+`cargo test -p ara-importers --test sample_versions` catches sidecar version drift;
+ARA_UPDATE_DEMO=1 opts into regeneration from the installed importer registry.

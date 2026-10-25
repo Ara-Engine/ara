@@ -106,3 +106,11 @@ artifact checks. Raw traces, commands, source-ID maps and cache manifests remain
 in the worktree's ignored `target/ara-dev/import-speed/v6-*` directories. The
 frozen control and treatment are retained for the next device-reuse experiment;
 completed project copies can be deleted after archiving their metadata.
+
+The subsequent device-reuse matrix retains both frozen admission arms and
+isolates local/pooled routing on one current binary. Its clean Outpost pair is
+33.018 -> 26.425 s, with a 24.615 s pooled repeat; Showcase means are 13.260 ->
+11.441 s. Repeated original/fair walls are close in this later matrix, so the
+earlier admission percentages above are observations, not a universal speedup.
+See [`ara-texture-gpu/MEASUREMENTS.md`](../ara-texture-gpu/MEASUREMENTS.md#leased-device-reuse-2026-10-26)
+for all raw arm times, I/O outliers, remaining stages and lifecycle verification.

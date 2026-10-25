@@ -12,9 +12,9 @@ Owns the M1 baseline renderer and agent visual feedback. Gameplay state stays in
 - `Renderer::new`, `render`, `render_view` (live debug view mode), `resize`, `capture`: cooked Vulkan rendering; read-only
   `gpu()` access for diagnostics/native presentation. Resize resets history. `resize_upscaled(render, display)` is TAAU:
   scene passes, feature color/depth and IDs at `render_size()`; history, output, captures and picks at `size()`.
-- `create_view` / `render_secondary(ViewId, ViewRequest)`: lazy owned cameras on the shared device/content, with
-  independent color, IDs, motion, exposure and TAA(U) (`ViewRequest::render_size`). No primary render or readback;
-  GI/residency continue even if only this view draws. Drop queues retirement; `release_view` releases now.
+- `create_view` / `submit_secondary`: lazy Game cameras with retained completed color/IDs, independent motion,
+  exposure and TAA(U). Shared Prepare uploads and draws defer together; `poll_scene_frame` drains either camera.
+  No primary render/readback. `render_secondary` waits for captures; Drop/release retire after pending use.
 - `Scene`, `Mesh`, `Material`, `Light`, `CameraSpec`: extracted world data and camera pose/bounds requests. Materials use bindless texture indices.
 - `instanced::Scene`: native model-space content contract for shared geometry,
   current/previous instance transforms, deforming revisions, 64-byte UV0/UV1

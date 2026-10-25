@@ -17,12 +17,13 @@ pub(super) struct Pool {
     idle: Mutex<Vec<usize>>,
     available: Condvar,
     leases: AtomicUsize,
-    ever_leased: AtomicBool,
+    used: AtomicBool,
     connections: AtomicUsize,
     clients: AtomicUsize,
     initialized: AtomicUsize,
     stop: AtomicBool,
     cancel: Cancellation,
+    io_timeout: Duration,
 }
 impl Pool {
     pub(super) fn initialized(&self) -> usize {
@@ -34,13 +35,19 @@ impl Pool {
             encoders,
             available: Condvar::new(),
             leases: AtomicUsize::new(0),
-            ever_leased: AtomicBool::new(false),
+            used: AtomicBool::new(false),
             connections: AtomicUsize::new(0),
             clients: AtomicUsize::new(0),
             initialized: AtomicUsize::new(0),
             stop: AtomicBool::new(false),
             cancel: Cancellation::default(),
+            io_timeout: Duration::from_secs(30),
         }
+    }
+    #[cfg(test)]
+    pub(super) fn with_io_timeout(mut self, timeout: Duration) -> Self {
+        self.io_timeout = timeout;
+        self
     }
     fn acquire(&self) -> Result<Slot<'_>> {
         let mut idle = self
@@ -110,7 +117,7 @@ pub(super) fn serve(
                 idle_since = None;
             } else {
                 let since = idle_since.get_or_insert_with(Instant::now);
-                let expired = if pool.ever_leased.load(Ordering::Acquire) {
+                let expired = if pool.used.load(Ordering::Acquire) {
                     since.elapsed() > grace
                 } else {
                     started.elapsed() > Duration::from_secs(30)
@@ -151,8 +158,8 @@ fn handle(mut stream: TcpStream, descriptor: &Descriptor, pool: &Pool) -> Result
     // accept is polled; each bounded client handler uses blocking framed I/O.
     stream.set_nonblocking(false)?;
     stream.set_nodelay(true)?;
-    stream.set_read_timeout(Some(Duration::from_secs(30)))?;
-    stream.set_write_timeout(Some(Duration::from_secs(30)))?;
+    stream.set_read_timeout(Some(pool.io_timeout))?;
+    stream.set_write_timeout(Some(pool.io_timeout))?;
     let mut hello = [0u8; 41];
     stream.read_exact(&mut hello)?;
     if &hello[..8] != b"ARAENC01" || hello[8..40] != descriptor.endpoint.token || hello[40] > 1 {
@@ -163,9 +170,9 @@ fn handle(mut stream: TcpStream, descriptor: &Descriptor, pool: &Pool) -> Result
         stream.write_all(&[1])?;
         return Ok(());
     }
+    pool.used.store(true, Ordering::Release);
     if hello[40] == 0 {
         pool.leases.fetch_add(1, Ordering::AcqRel);
-        pool.ever_leased.store(true, Ordering::Release);
         let _lease = Lease(pool);
         stream.write_all(&[0])?;
         stream.set_read_timeout(None)?;
@@ -177,6 +184,9 @@ fn handle(mut stream: TcpStream, descriptor: &Descriptor, pool: &Pool) -> Result
     stream.write_all(&[0])?;
     wire::write_json(&mut stream, &descriptor.identity)?;
     loop {
+        // A worker can spend a long time in CPU preparation or filesystem I/O
+        // between encodes. Its host owns the import deadline and cancellation.
+        stream.set_read_timeout(None)?;
         let mut op = [0];
         match stream.read_exact(&mut op) {
             Ok(()) => {}
@@ -186,6 +196,7 @@ fn handle(mut stream: TcpStream, descriptor: &Descriptor, pool: &Pool) -> Result
         if pool.stop.load(Ordering::Acquire) {
             return Ok(());
         }
+        stream.set_read_timeout(Some(pool.io_timeout))?;
         let input = match op[0] {
             0 => None,
             1 => {

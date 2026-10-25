@@ -718,7 +718,7 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                 dirty = true;
                 scene_dirty = true;
             }
-            dirty |= game_preview.wants_frame(&editor, &mut shell);
+            dirty |= game_preview.wants_frame(&editor, &mut shell, &renderer, &scene_view);
             // Typing and committing present the UI first: the Scene follows on the next
             // frame without such input, so a keystroke or Enter never waits for a Scene
             // render. Gestures and camera moves render at once.

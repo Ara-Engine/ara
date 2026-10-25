@@ -180,14 +180,22 @@ impl FileCache {
     }
 }
 fn install(path: &Path, bytes: &[u8], durable: bool) -> Result<()> {
-    let _trace =
-        crate::trace::Scope::new("cache.install", &path.display().to_string()).bytes(bytes.len());
+    let label = path.display().to_string();
+    let _trace = crate::trace::Scope::new("cache.install", &label).bytes(bytes.len());
+    static DETAIL: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    let detail = crate::trace::enabled()
+        && *DETAIL.get_or_init(|| std::env::var_os("ARA_IMPORT_TRACE_CACHE_DETAIL").is_some());
+    let part = |stage| detail.then(|| crate::trace::Scope::new(stage, &label));
     let parent = path
         .parent()
         .ok_or_else(|| Error::Invalid("cache path without parent".into()))?;
     // Repeated textures share objects. Avoid temporary writes and fsyncs while
     // retaining the immutable-entry conflict check.
-    match fs::read(path) {
+    let existing = {
+        let _part = part("cache.install.read");
+        fs::read(path)
+    };
+    match existing {
         Ok(existing) if existing == bytes => return Ok(()),
         Ok(_) => {
             return Err(Error::Invalid(
@@ -197,13 +205,23 @@ fn install(path: &Path, bytes: &[u8], durable: bool) -> Result<()> {
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
         Err(e) => return Err(e.into()),
     }
-    let mut temp = tempfile::NamedTempFile::new_in(parent)?;
-    temp.write_all(bytes)?;
+    let mut temp = {
+        let _part = part("cache.install.create");
+        tempfile::NamedTempFile::new_in(parent)?
+    };
+    {
+        let _part = part("cache.install.write");
+        temp.write_all(bytes)?;
+    }
     if durable {
         let _sync = crate::trace::Scope::new("cache.sync", &path.display().to_string());
         temp.as_file().sync_all()?;
     }
-    match temp.persist_noclobber(path) {
+    let persisted = {
+        let _part = part("cache.install.persist");
+        temp.persist_noclobber(path)
+    };
+    match persisted {
         Ok(_) => Ok(()),
         Err(e) if e.error.kind() == std::io::ErrorKind::AlreadyExists => {
             if fs::read(path)? == bytes {
