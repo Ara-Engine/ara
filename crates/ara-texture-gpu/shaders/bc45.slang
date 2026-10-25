@@ -5,6 +5,8 @@
 // HQ retains Balanced, searches all 32 seeds/order with 6 fits, then two 7x7
 // refinements. This is a fitted multi-start search, not exhaustive 256x256 search.
 // Rational interpolation is exact in byte*35 units; all arithmetic is 32-bit.
+// BC4 stops stationary fits: remaining iterations repeat identical candidates.
+// BC5 keeps fixed loops; early-exit prototypes did not show a consistent speedup.
 
 struct Root { uint input; uint output; uint blockCount; uint preset; uint a; uint b; uint c; uint d; };
 #ifdef VULKAN
@@ -139,7 +141,7 @@ uint2 seed(uint channel, uint seedIndex, bool six) {
     return ordered(int(low) + x * step, int(high) + y * step, six);
 }
 
-Candidate search(uint channel, uint index, uint count, uint iterations, bool six) {
+Candidate search(uint channel, uint index, uint count, uint iterations, bool six, bool stopStationary) {
     Candidate best = emptyCandidate();
     if (index >= count) return best;
     uint2 endpoints = seed(channel, index, six);
@@ -147,6 +149,8 @@ Candidate search(uint channel, uint index, uint count, uint iterations, bool six
         uint2 next;
         Candidate trial = fitted(channel, endpoints, next);
         if (better(trial, best)) best = trial;
+        // A fixed point cannot produce any new endpoint or selector candidates.
+        if (stopStationary && all(next == endpoints)) break;
         endpoints = next;
     }
     Candidate trial = score(channel, endpoints);
@@ -182,15 +186,15 @@ Candidate neighborhood(uint channel, Candidate center, int radius, uint local, b
     return best;
 }
 
-uint2 encodeChannel(uint channel, uint lane) {
+uint2 encodeChannel(uint channel, uint lane, bool stopStationary) {
     bool six = lane >= 32;
     uint local = lane & 31;
     bool balanced = root.preset >= 1;
-    Candidate best = search(channel, local, balanced ? 8 : 2, balanced ? 3 : 1, six);
+    Candidate best = search(channel, local, balanced ? 8 : 2, balanced ? 3 : 1, six, stopStationary);
     best = reduce(best, lane);
     if (balanced) best = reduce(neighborhood(channel, best, 1, local, six), lane);
     if (root.preset >= 2) {
-        Candidate thorough = search(channel, local, 32, 6, six);
+        Candidate thorough = search(channel, local, 32, 6, six, stopStationary);
         if (better(thorough, best)) best = thorough;
         best = reduce(best, lane);
         for (uint iteration = 0; iteration < 2; ++iteration)
@@ -230,7 +234,7 @@ void loadBlock(uint block, uint lane) {
 void encodeBc4(uint3 group : SV_GroupID, uint lane : SV_GroupIndex) {
     if (group.x >= root.blockCount) return;
     loadBlock(group.x, lane);
-    uint2 red = encodeChannel(0, lane);
+    uint2 red = encodeChannel(0, lane, true);
     if (lane == 0) buffers[NonUniformResourceIndex(root.output)].Store2(group.x * 8, red);
 }
 
@@ -238,7 +242,7 @@ void encodeBc4(uint3 group : SV_GroupID, uint lane : SV_GroupIndex) {
 void encodeBc5(uint3 group : SV_GroupID, uint lane : SV_GroupIndex) {
     if (group.x >= root.blockCount) return;
     loadBlock(group.x, lane);
-    uint2 red = encodeChannel(0, lane);
-    uint2 green = encodeChannel(1, lane);
+    uint2 red = encodeChannel(0, lane, false);
+    uint2 green = encodeChannel(1, lane, false);
     if (lane == 0) buffers[NonUniformResourceIndex(root.output)].Store4(group.x * 16, uint4(red, green));
 }
