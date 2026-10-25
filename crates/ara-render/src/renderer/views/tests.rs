@@ -113,6 +113,7 @@ fn secondary_view_preserves_primary_pixels_history_motion_and_shared_gi() -> Res
         &ViewRequest {
             camera: &secondary_camera,
             size: [80, 56],
+            render_size: [80, 56],
             quality,
             exposure: 1.,
         },
@@ -151,11 +152,55 @@ fn secondary_view_preserves_primary_pixels_history_motion_and_shared_gi() -> Res
             .any(|pixel| u16::from(pixel[0]) > u16::from(pixel[2]) + 10),
         "secondary draws native material"
     );
+    for _ in 0..3 {
+        renderer.submit_secondary(
+            &mut view,
+            &ViewRequest {
+                camera: &secondary_camera,
+                size: [80, 56],
+                render_size: [80, 56],
+                quality,
+                exposure: 1.,
+            },
+            |_, _| Ok(true),
+        )?;
+        renderer.wait_scene_frame()?;
+        assert!(renderer.view_output(&view)?.is_some());
+    }
+    let completed = renderer
+        .view_output(&view)?
+        .context("completed async camera")?;
+    let async_pixels = pixels(
+        &mut renderer.gpu,
+        completed.image,
+        State {
+            access: Access::CopySource,
+            queue: Queue::Graphics,
+        },
+        completed.size,
+        4,
+    )?;
+    image::save_buffer(
+        root.join("secondary-async.png"),
+        &async_pixels,
+        80,
+        56,
+        image::ColorType::Rgba8,
+    )?;
+    assert!(
+        async_pixels
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .any(|p| u16::from(p[0]) > u16::from(p[2]) + 10),
+        "retained async output must contain the native material"
+    );
     let resized = renderer.render_secondary(
         &mut view,
         &ViewRequest {
             camera: &secondary_camera,
             size: [64, 48],
+            render_size: [48, 36],
             quality: crate::look::Quality {
                 shadows: crate::look::Shadows {
                     resolution: 512,
@@ -209,6 +254,7 @@ fn secondary_view_preserves_primary_pixels_history_motion_and_shared_gi() -> Res
                 &ViewRequest {
                     camera: &secondary_camera,
                     size: [0, 56],
+                    render_size: [0, 56],
                     quality,
                     exposure: 1.
                 }
@@ -239,6 +285,7 @@ fn secondary_view_preserves_primary_pixels_history_motion_and_shared_gi() -> Res
         &ViewRequest {
             camera: &secondary_camera,
             size: [80, 56],
+            render_size: [80, 56],
             quality,
             exposure: 1.,
         },
@@ -306,6 +353,7 @@ fn secondary_view_alone_drives_shared_probe_delivery_without_drawing_the_primary
             &ViewRequest {
                 camera: &camera,
                 size: [80, 56],
+                render_size: [80, 56],
                 quality,
                 exposure: 1.,
             },

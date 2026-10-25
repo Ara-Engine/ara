@@ -7,12 +7,14 @@ use glam::Vec3;
 pub(crate) const PHYSICAL_SKY: u32 = 1;
 /// Shader flag: height fog is enabled.
 pub(crate) const FOG: u32 = 2;
-/// Shader flag: exposure snaps to its target (history reset).
+/// Shader flag: history restarts; probe GI relights without hysteresis.
 pub(crate) const RESET: u32 = 4;
 /// Shader flag: screen-space ambient occlusion is available.
 pub(crate) const AMBIENT_OCCLUSION: u32 = 8;
 /// Shader flag: screen-space reflections are available.
 pub(crate) const REFLECTIONS: u32 = 16;
+/// Shader flag: automatic exposure takes its meter this frame instead of adapting.
+pub(crate) const SNAP: u32 = 32;
 /// Exposure adaptation step; the renderer has no wall clock.
 const FRAME_SECONDS: f32 = 1. / 60.;
 
@@ -62,9 +64,12 @@ pub(crate) struct FrameInputs {
     pub sun_lux: Vec3,
     /// Manual linear exposure multiplier; used unless the look meters automatically.
     pub exposure: f32,
-    /// Snap exposure and drop GI hysteresis (first frame, history reset or a
-    /// capture's settle frames, `LookGpu::settle`).
+    /// Drop GI hysteresis (first frame, history reset or a capture's settle
+    /// frames, `LookGpu::settle`).
     pub reset: bool,
+    /// Automatic exposure takes its meter instead of adapting (a reset without an
+    /// exposure seed, or new probe GI arriving).
+    pub snap: bool,
     pub frame_number: u32,
     pub sampled: [[u32; 4]; 2],
     pub storage: [[u32; 4]; 2],
@@ -81,7 +86,8 @@ impl LookFrame {
         let metering = look.auto_exposure.unwrap_or_default();
         let flags = if look.sky.is_some() { PHYSICAL_SKY } else { 0 }
             | if fog.is_some() { FOG } else { 0 }
-            | if inputs.reset { RESET } else { 0 };
+            | if inputs.reset { RESET } else { 0 }
+            | if inputs.snap { SNAP } else { 0 };
         Self {
             sun_lux: inputs.sun_lux.extend(sky.sun_radius).to_array(),
             atmosphere: [

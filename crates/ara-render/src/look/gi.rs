@@ -288,6 +288,12 @@ impl GiGpu {
         }
     }
     /// Shows the volume at once (capture resets converge it within their frames).
+    /// A new volume is still converging or fading into shading: the scene's
+    /// brightness is changing under exposure (which then tracks its meter).
+    pub(crate) fn arriving(&self) -> bool {
+        self.converge > 0 || self.weight < 1.
+    }
+
     pub(crate) fn show(&mut self) {
         self.received = self.probes as usize;
         self.weight = 1.;

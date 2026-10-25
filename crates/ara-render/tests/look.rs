@@ -1,7 +1,7 @@
 #![allow(clippy::unwrap_used)]
 #[path = "../examples/common/mod.rs"]
 mod common;
-use anyhow::{Result, ensure};
+use anyhow::{Context, Result, ensure};
 use ara_render::{
     Renderer,
     capture::{CaptureRequest, compare},
@@ -77,6 +77,34 @@ fn every_raster_look_feature_renders_validation_clean() -> Result<()> {
         "the look made no visible difference"
     );
     renderer.gpu().assert_clean()?;
+    Ok(())
+}
+
+/// A seeded exposure carries into a history reset: automatic exposure adapts from
+/// the seed at the look's rate instead of snapping to its first meter, and
+/// `exposure` reads the applied value back.
+#[test]
+fn a_seeded_exposure_adapts_from_the_seed() -> Result<()> {
+    let cache = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../target/ara-render/exposure-seed")
+        .join(std::process::id().to_string());
+    let mut renderer = Renderer::new(common::scene()?, [160, 90], &[], cache)?;
+    renderer.set_look(Look {
+        auto_exposure: Some(AutoExposure::default()),
+        ..Look::default()
+    })?;
+    let request = common::request([160, 90]);
+    assert_eq!(renderer.exposure()?, None);
+    renderer.render(&request.camera, request.exposure)?;
+    let metered = renderer.exposure()?.context("the first frame meters")?;
+    renderer.reset_temporal_history();
+    renderer.seed_exposure(metered * 8.)?;
+    renderer.render(&request.camera, request.exposure)?;
+    let adapted = renderer.exposure()?.context("the seeded frame meters")?;
+    ensure!(
+        adapted > metered * 4. && adapted < metered * 8.,
+        "a seeded reset adapts from its seed: {adapted} (meter {metered})"
+    );
     Ok(())
 }
 

@@ -16,10 +16,11 @@ use ara_render::look::{AmbientOcclusion, FarShadows, LocalShadows, Quality, Refl
 /// High GPU <= 6 ms, Medium <= 3.5, Epic <= 10).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum QualityPreset {
-    /// Raster: two shadow cascades, probe GI, no bloom (the cheapest look).
+    /// Raster: 0.45 render scale, two 512 shadow cascades, probe GI, coarser LODs,
+    /// no bloom (the cheapest look).
     Low,
-    /// Raster: three cascades and bloom. Ray traced: ReSTIR at 0.4 scale, rough
-    /// reflections from the probe field above roughness 0.35.
+    /// Raster: 0.55 render scale, three cascades and bloom. Ray traced: ReSTIR at
+    /// 0.4 scale, rough reflections from the probe field above roughness 0.35.
     Medium,
     /// Raster: four 2048 cascades to 150 m. Ray traced: ReSTIR at half scale,
     /// paths ending in the probe field after one traced event.
@@ -229,7 +230,8 @@ impl FidelityPlan {
 /// resolutions. Apply with `Renderer::set_quality`.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct RasterPlan {
-    /// Render resolution (equal to the display until temporal upscaling lands).
+    /// Render resolution of the scene passes: the display scaled by
+    /// [`QualityPreset::raster_scale`], temporally upscaled to the display.
     pub render_size: [u32; 2],
     /// Display resolution.
     pub display_size: [u32; 2],
@@ -255,6 +257,20 @@ pub enum RenderPath {
 }
 
 impl QualityPreset {
+    /// Raster render scale per display axis: the scene renders at this fraction of
+    /// the display and the temporal resolve reconstructs the display resolution
+    /// (TAAU, `Renderer::resize_upscaled`). Chosen with the budgets below for the
+    /// D26 frame targets at 1440p (Low 2, Medium 3.5, High 6, Epic 10 ms, p50 and
+    /// p95 on Outpost, Hangar and Showcase).
+    pub fn raster_scale(self) -> f32 {
+        match self {
+            Self::Low => 0.45,
+            Self::Medium => 0.55,
+            Self::High => 2. / 3.,
+            Self::Epic => 0.77,
+        }
+    }
+
     /// Raster budgets for this preset (D27 record targets at 2560x1440 on an RTX
     /// 4070 SUPER: Low 1.0 ms, Medium 1.75, High 3.0, Epic 5.0).
     pub fn raster_quality(self) -> Quality {
@@ -284,15 +300,17 @@ impl QualityPreset {
             })
         };
         match self {
+            // LOD error and the cull size are in render pixels (about two
+            // display pixels each at Low's scale).
             Self::Low => Quality {
-                shadows: shadows(2, 1024, 60., (1024, 600.)),
+                shadows: shadows(2, 512, 60., (1024, 600.)),
                 ambient_occlusion: None,
                 reflections: None,
-                gi_budget: 1024,
+                gi_budget: 256,
                 bloom: false,
                 emitter_lights: 4,
-                lod_pixels: 4.,
-                min_pixels: 3.,
+                lod_pixels: 6.,
+                min_pixels: 6.,
                 terrain_detail: 0.,
                 local_shadows: None,
             },
@@ -300,11 +318,11 @@ impl QualityPreset {
                 shadows: shadows(3, 1024, 100., (1024, 1000.)),
                 ambient_occlusion: ao(2, 4),
                 reflections: ssr(0.4, 20., 16),
-                gi_budget: 2048,
+                gi_budget: 1024,
                 bloom: true,
                 emitter_lights: 6,
-                lod_pixels: 2.,
-                min_pixels: 2.,
+                lod_pixels: 3.,
+                min_pixels: 3.,
                 terrain_detail: 40.,
                 local_shadows: Some(LocalShadows {
                     lights: 2,
@@ -380,12 +398,12 @@ impl Plan {
             QualityChoice::Preset(p) => p,
         };
         let preset = requested;
+        let scaled = |scale: f32| display_size.map(|v| ((v as f32 * scale).round() as u32).max(1));
         let raster = RenderPath::Raster(RasterPlan {
-            render_size: display_size,
+            render_size: scaled(preset.raster_scale()),
             display_size,
             quality: preset.raster_quality(),
         });
-        let scaled = |scale: f32| display_size.map(|v| ((v as f32 * scale).round() as u32).max(1));
         let path = match preset {
             _ if !traced => raster,
             QualityPreset::Low => raster,
@@ -493,7 +511,10 @@ mod tests {
                 let choice = QualityChoice::Preset(preset);
                 let plan = Plan::resolve(choice, &caps, display, RenderOptions::default()).unwrap();
                 assert_eq!(plan.preset, preset);
-                assert!(matches!(plan.path, RenderPath::Raster(r) if r.render_size == display));
+                let scale = preset.raster_scale();
+                let render = display.map(|v| (v as f32 * scale).round() as u32);
+                assert!(matches!(plan.path,
+                    RenderPath::Raster(r) if r.render_size == render && r.display_size == display));
             }
         }
         // Non-RT devices keep the requested preset on raster even when opting in.

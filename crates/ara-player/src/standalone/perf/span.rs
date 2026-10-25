@@ -7,15 +7,22 @@ pub(super) struct Samples {
     spans: Vec<f64>,
     raw: Vec<Option<f64>>,
     pass_sums: Vec<f64>,
+    gaps: Vec<f64>,
+    raw_gaps: Vec<Option<f64>>,
 }
 impl Samples {
-    pub fn record(&mut self, span: Option<f64>, pass_sum: f64) {
+    pub fn record(&mut self, span: Option<f64>, gap: Option<f64>, pass_sum: f64) {
         let span = span.filter(|v| v.is_finite() && *v >= 0.);
         if let Some(value) = span {
             self.spans.push(value);
         }
         self.raw.push(span);
         self.pass_sums.push(pass_sum);
+        let gap = gap.filter(|v| span.is_some() && v.is_finite() && *v >= 0.);
+        if let Some(value) = gap {
+            self.gaps.push(value);
+        }
+        self.raw_gaps.push(gap);
     }
     pub fn report(&self) -> BTreeMap<String, Value> {
         BTreeMap::from([
@@ -26,6 +33,12 @@ impl Samples {
             ),
             ("gpu_span_samples_ms".into(), json!(self.raw)),
             ("gpu_pass_sum_ms".into(), quantiles(&self.pass_sums)),
+            ("gpu_submission_gap_ms".into(), quantiles(&self.gaps)),
+            ("gpu_submission_gap_samples_ms".into(), json!(self.raw_gaps)),
+            (
+                "gpu_submission_gap_coverage".into(),
+                json!({"measured":self.gaps.len(),"unavailable":self.raw_gaps.len()-self.gaps.len()}),
+            ),
             (
                 "gpu_span_definition".into(),
                 json!(
@@ -42,19 +55,21 @@ mod tests {
     #[test]
     fn spans_are_per_frame_and_are_not_inferred_from_pass_sums() {
         let mut samples = Samples::default();
-        samples.record(Some(4.), 7.); // overlapping passes
-        samples.record(Some(10.), 2.); // idle gaps between submissions
+        samples.record(Some(4.), Some(0.5), 7.); // overlapping passes
+        samples.record(Some(10.), Some(5.), 2.); // idle gaps between submissions
         let report = samples.report();
         assert_eq!(report["gpu_span_ms"]["p50"], 4.);
         assert_eq!(report["gpu_span_ms"]["max"], 10.);
         assert_eq!(report["gpu_pass_sum_ms"]["p50"], 2.);
         assert_eq!(report["gpu_span_samples_ms"], json!([4., 10.]));
+        assert_eq!(report["gpu_submission_gap_samples_ms"], json!([0.5, 5.]));
+        assert_eq!(report["gpu_submission_gap_ms"]["p50"], 0.5);
     }
     #[test]
     fn missing_clock_or_failed_frame_does_not_report_a_zero_span() {
         let mut samples = Samples::default();
         for value in [None, Some(f64::NAN), Some(-1.)] {
-            samples.record(value, 1.);
+            samples.record(value, Some(0.), 1.);
         }
         let report = samples.report();
         assert!(report["gpu_span_ms"].is_null());
@@ -63,5 +78,6 @@ mod tests {
             json!({"measured":0,"unavailable":3})
         );
         assert_eq!(report["gpu_span_samples_ms"], json!([null, null, null]));
+        assert!(report["gpu_submission_gap_ms"].is_null());
     }
 }

@@ -329,7 +329,8 @@ impl Presenter {
                     .renderer
                     .as_mut()
                     .context("raster presentation device")?;
-                let costs = raster.render(renderer, frame, &camera(frame)?, ViewMode::Lit)?;
+                let costs =
+                    raster.render_batched(renderer, frame, &camera(frame)?, ViewMode::Lit)?;
                 self.stats.gpu_ms = costs.accounted_ms();
                 self.stats.gpu = Some(costs);
                 renderer.output()
@@ -343,6 +344,10 @@ impl Presenter {
                 .as_ref()
                 .and_then(|renderer| renderer.gpu().timing_window())
                 .map(ara_gpu::vulkan::TimestampSpan::milliseconds);
+            self.stats.gpu_submission_gap_ms = self
+                .renderer
+                .as_ref()
+                .and_then(|renderer| renderer.gpu().timing_window_gaps());
             self.stats.render = started.elapsed();
             self.published_quality = self.plan.map(|plan| plan.preset);
             Ok(())
@@ -354,6 +359,7 @@ impl Presenter {
             }
             Err(error) => {
                 self.stats.gpu_span_ms = None;
+                self.stats.gpu_submission_gap_ms = None;
                 if self.failure.is_none() {
                     eprintln!(
                         "ARA_GPU_BACKEND: presentation retains last completed frame: {error:#}"

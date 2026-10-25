@@ -10,11 +10,11 @@ Owns the M1 baseline renderer and agent visual feedback. Gameplay state stays in
 - `Graph`: declared accesses, stable topological ordering, barriers, explicit queue release/acquire pairs, timeline dependencies, transient images.
   Compilation indexes resource uses once; declaration-order versions and queue handoffs stay deterministic.
 - `Renderer::new`, `render`, `render_view` (live debug view mode), `resize`, `capture`: cooked Vulkan rendering; read-only
-  `gpu()` access for diagnostics/native presentation. Resize resets history.
-- `create_view` / `render_secondary(ViewId, ViewRequest)`: lazy owned cameras on
-  the shared device/content, with independent color, IDs, motion, exposure and TAA.
-  No primary render or readback; GI/residency continue even if only this view draws.
-  Drop queues retirement; `release_view` releases now. Keep the handle while sampling.
+  `gpu()` access for diagnostics/native presentation. Resize resets history. `resize_upscaled(render, display)` is TAAU:
+  scene passes, feature color/depth and IDs at `render_size()`; history, output, captures and picks at `size()`.
+- `create_view` / `submit_secondary`: lazy Game cameras with retained completed color/IDs, independent motion,
+  exposure and TAA(U). Shared Prepare uploads and draws defer together; `poll_scene_frame` drains either camera.
+  No primary render/readback. `render_secondary` waits for captures; Drop/release retire after pending use.
 - `Scene`, `Mesh`, `Material`, `Light`, `CameraSpec`: extracted world data and camera pose/bounds requests. Materials use bindless texture indices.
 - `instanced::Scene`: native model-space content contract for shared geometry,
   current/previous instance transforms, deforming revisions, 64-byte UV0/UV1
@@ -59,22 +59,21 @@ Owns the M1 baseline renderer and agent visual feedback. Gameplay state stays in
 - `submit_scene_frame` / `poll_scene_frame` keep one Scene frame in flight and two retained color/ID pairs; `output_size()` may lag a resize. UI reads only the completed pair.
   `entity_at` copies one texel on the UI queue; picks/outlines follow the displayed frame, while authored gizmo poses can lead by one Scene frame. `wait_scene_frame` is for capture/shutdown.
   Same-queue passes share a submission; cross-queue edges and deferred helper boundaries retain GPU waits/timestamps. Synchronous `render`/`render_view` remain available.
-- `look::Look` (`Renderer::set_look`): D27 raster look after the G-buffer:
-  physical sky LUTs and their IBL, CSM-shadowed froxel fog, histogram or manual
-  exposure, bloom, grading and the display curve. Defaults reproduce M1. Hosts map
-  `SceneLook` with `FrameEnvironment::raster` (ara-render-fidelity).
-- `look::gi::ProbeSurfaces` (`Renderer::set_probe_surfaces`): probe GI. A one-time
-  acquisition records 8x8 oct surface caches; `GI.Relight` relights a budget per
-  frame (sun via CSM, local lights, sky, emissive, last frame's probes) into 6x6
-  irradiance, DDGI-style, without rays or noise. Capture resets relight all for
-  `gi::CONVERGE_FRAMES` (exposure re-meters); a new lattice does so out of shading
-  once its records land, then fades in. Same-lattice updates keep the irradiance.
-  `update_probe_records` uploads a range; the next frame scatters it (`GI.Scatter`).
+- `look::Look` (`Renderer::set_look`): D27 raster look after the G-buffer: physical sky LUTs and their IBL,
+  CSM-shadowed froxel fog, histogram or manual exposure (snaps to its meter on a reset and while new GI arrives;
+  `exposure`/`seed_exposure` carry a converged exposure across views), bloom, grading and the display curve.
+  Hosts map `SceneLook` with `FrameEnvironment::raster` (ara-render-fidelity). The sky IBL,
+  far map and cascades rebuild on any sun change past `SUN_HOLD` (noise only): once
+  something animates the sun, add a threshold with an old/new crossfade.
+- `look::gi::ProbeSurfaces` (`Renderer::set_probe_surfaces`): probe GI. One-time 8x8 oct surface caches;
+  `GI.Relight` relights a budget per frame (sun via CSM, local lights, sky, emissive, last frame's probes) into 6x6
+  irradiance, DDGI-style, without rays or noise. Capture resets relight all for `gi::CONVERGE_FRAMES` (exposure
+  re-meters); a new lattice converges out of shading, then fades in. `update_probe_records` uploads; `GI.Scatter` applies.
 - `look::Quality` (`Renderer::set_quality`): per-preset budgets from
   `ara_render_fidelity::presets::RasterPlan`: shadow cascades (count, texels,
   distance; stable light space, practical splits, gather PCF, cascade blend; one
-  cached D32 map per cascade, redrawn only when its matrix or casters in its light
-  volume change, outer cascades snapped coarsely), a cached far map (`look::far`),
+  cached D32 map per cascade, redrawn only when its matrix or casters in its light volume change, outer cascades
+  snapped coarsely and redrawn at most one per frame, `Cascades::plan`), a cached far map (`look::far`),
   local-light shadows (`look::local`), half-res GTAO and SSR (cone footprint into
   last frame's colour pyramid), GI relight, bloom, emitter lights, LOD/cull pixels,
   terrain detail. Look images are allocated lazily (the bindless heap is shared);
@@ -95,7 +94,8 @@ The renderer rejects mixed source cohorts. Byte-address frame/material/light
 records and 48-byte vertex records must match Slang's column-major ABI.
 
 Shaders: `raster.slangh` is the shared ABI (bindings, Frame, Surface; Frame.look.x
-is the look record, look.w the native motion texture). `look*.slang(h)` belong to
+is the look record, look.w the native motion texture, sizes/upscale the TAAU sizes,
+jitter offset and mip footprint; resolve and post use a display-extent record). `look*.slang(h)` belong to
 the look; never use 16-bit intrinsics (f16tof32) there: the device enables no
 Int16/Float16 capability, so pack halves with bit math.
 
@@ -123,9 +123,9 @@ indices to entities. Marks boxes cover visible pixels, including transparency.
 Graph v0 allocates owned transient storage without aliasing. Imported resources
 must declare their actual previous state; cross-queue imports need a release pass.
 Static bindless reachability is conservatively declared for every graphics pass;
-frame uploads use HostWrite imports. Frame end returns light tiles to compute ownership. Readbacks stay coherent and
-are read only after timeline completion. V0 serializes frames for inspection. Static scene storage is device-local;
-startup staging transfers run on the eventual owning queue.
+frame uploads use HostWrite imports. Raster culling and post share one graphics submission;
+tiles stay on graphics between frames. Preparation can use compute. Readbacks are coherent
+and read after completion. Static storage is device-local; startup staging uses its owning queue.
 
 ## Verification
 

@@ -1,5 +1,9 @@
 # ara-runtime-render
 
+Raster presentation queues view, particles and post inside one completion scope,
+then waits before publication. Submission checkpoints separate view/feature pass
+timings; deferring helpers must never report their GPU work as zero.
+
 Presents `ara_runtime::extract::RenderFrame`s through native raster on every GPU
 and preset (D27), with experimental fidelity as an explicit opt-in. Owns the
 device and per-view upload state; no simulation, window or process code.
@@ -19,6 +23,8 @@ device and per-view upload state; no simulation, window or process code.
   `render_secondary` draws an owned renderer camera over that content and shares
   model-arrival fades. Release follow-up: compose VFX in secondary Game previews
   too, with per-camera particle targets; particles currently use primary `render`.
+  Async hosts run `prepare_secondary_frame` inside `Renderer::submit_secondary`'s
+  preparation callback, then `secondary_frame_submitted` only on an accepted frame.
 - `RasterContent::new(frame, content)` prepares immutable CPU geometry/materials
   and the content key on a worker. `RasterView::publish_content` adopts it on the
   device thread, preserving last-good content if GPU publication fails.

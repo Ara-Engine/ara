@@ -64,6 +64,12 @@ impl Renderer {
             true,
         )?;
         let frame_index = gpu.storage_buffer(frame)?.index;
+        let display_frame = gpu.create_buffer(
+            std::mem::size_of::<frame::Frame>() as u64,
+            vk::BufferUsageFlags::STORAGE_BUFFER,
+            true,
+        )?;
+        let display_frame_index = gpu.storage_buffer(display_frame)?.index;
         let compute_frame = gpu.create_buffer(
             std::mem::size_of::<frame::Frame>() as u64,
             vk::BufferUsageFlags::STORAGE_BUFFER,
@@ -80,11 +86,14 @@ impl Renderer {
         Ok(Self {
             gpu,
             size,
+            render: size,
             targets,
             pipelines,
             content,
             frame,
             frame_index,
+            display_frame,
+            display_frame_index,
             compute_frame,
             compute_frame_index,
             previous_vp: Mat4::IDENTITY,

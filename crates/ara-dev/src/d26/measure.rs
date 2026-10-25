@@ -151,7 +151,7 @@ impl Context<'_> {
     }
 
     /// The scene's frozen pack, exported once per sample tree.
-    fn pack(&self, scene: &Scene) -> Measured<PathBuf> {
+    pub(super) fn pack(&self, scene: &Scene) -> Measured<PathBuf> {
         (|| -> Result<PathBuf> {
             perf::freeze::preflight(self.root, scene.project)?;
             let folder = Path::new("samples").join(scene.project);
@@ -171,27 +171,23 @@ impl Context<'_> {
             if self.options.refreeze && frozen.exists() {
                 fs::remove_dir_all(&frozen)?;
             }
-            let mut project = self.root.join(&folder);
-            let project_file: Value =
-                serde_json::from_slice(&fs::read(project.join("ara.project.json"))?)?;
-            let staging = packs.join(format!("{}-source", scene.name.to_lowercase()));
-            if project_file["main"] != scene.main && !frozen.join("ara-launch.json").is_file() {
-                // Another scene of the project: export a copy whose main scene it is.
-                let _ = fs::remove_dir_all(&staging);
-                super::copy_project(&project, &staging)?;
-                let mut file = project_file.clone();
-                file["main"] = Value::from(scene.main);
-                fs::write(
-                    staging.join("ara.project.json"),
-                    serde_json::to_vec_pretty(&file)?,
-                )?;
-                project = staging.clone();
+            if frozen.join("ara-launch.json").is_file() {
+                return Ok(frozen);
             }
+            // Export a staging copy whose main scene is the pack's, never the tracked
+            // sample: importing rewrites its `.import.json` files and fills its cache.
+            let staging = packs.join(format!("{}-source", scene.name.to_lowercase()));
+            let _ = fs::remove_dir_all(&staging);
+            super::copy_project(&self.root.join(&folder), &staging)?;
+            let manifest = staging.join("ara.project.json");
+            let mut file: Value = serde_json::from_slice(&fs::read(&manifest)?)?;
+            file["main"] = Value::from(scene.main);
+            fs::write(&manifest, serde_json::to_vec_pretty(&file)?)?;
             let packed = perf::freeze::pack(
                 self.root,
                 &self.root.join("target/ara-dev/perf"),
                 &frozen,
-                &project,
+                &staging,
                 self.binaries,
             );
             let _ = fs::remove_dir_all(&staging);

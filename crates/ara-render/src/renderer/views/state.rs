@@ -1,12 +1,15 @@
 //! Camera-local resources; pipeline handles and uploaded scene content are shared.
 use super::*;
-use crate::look::gpu::{LookGpu, Pipelines as LookPipelines};
+use crate::look::gpu::{LookGpu, Pipelines as LookPipelines, STATE_BYTES};
 
 pub(super) struct ViewState {
     size: [u32; 2],
+    render: [u32; 2],
     targets: Targets,
     frame: Buffer,
     frame_index: u32,
+    display_frame: Buffer,
+    display_frame_index: u32,
     compute_frame: Buffer,
     compute_frame_index: u32,
     previous_vp: Mat4,
@@ -19,10 +22,15 @@ pub(super) struct ViewState {
 
 impl ViewState {
     pub fn new(renderer: &mut Renderer, size: [u32; 2]) -> Result<Self> {
-        let mut targets = Some(Renderer::targets(&mut renderer.gpu, size)?);
+        let mut targets = Some(Renderer::targets(&mut renderer.gpu, size, size)?);
         let mut allocated = Vec::new();
         let result = (|| {
             let (frame, frame_index) = buffer(
+                &mut renderer.gpu,
+                std::mem::size_of::<frame::Frame>(),
+                &mut allocated,
+            )?;
+            let (display_frame, display_frame_index) = buffer(
                 &mut renderer.gpu,
                 std::mem::size_of::<frame::Frame>(),
                 &mut allocated,
@@ -35,9 +43,12 @@ impl ViewState {
             let look = fork_look(&mut renderer.gpu, &renderer.look, size, &mut allocated)?;
             Ok(Self {
                 size,
+                render: size,
                 targets: targets.take().context("secondary targets allocated")?,
                 frame,
                 frame_index,
+                display_frame,
+                display_frame_index,
                 compute_frame,
                 compute_frame_index,
                 previous_vp: Mat4::IDENTITY,
@@ -97,9 +108,15 @@ impl ViewState {
 
     pub fn swap(&mut self, renderer: &mut Renderer) {
         std::mem::swap(&mut self.size, &mut renderer.size);
+        std::mem::swap(&mut self.render, &mut renderer.render);
         std::mem::swap(&mut self.targets, &mut renderer.targets);
         std::mem::swap(&mut self.frame, &mut renderer.frame);
         std::mem::swap(&mut self.frame_index, &mut renderer.frame_index);
+        std::mem::swap(&mut self.display_frame, &mut renderer.display_frame);
+        std::mem::swap(
+            &mut self.display_frame_index,
+            &mut renderer.display_frame_index,
+        );
         std::mem::swap(&mut self.compute_frame, &mut renderer.compute_frame);
         std::mem::swap(
             &mut self.compute_frame_index,
@@ -118,6 +135,7 @@ impl ViewState {
         retire_targets(gpu, self.targets)?;
         for buffer in [
             self.frame,
+            self.display_frame,
             self.compute_frame,
             self.look.frame,
             self.look.state,
@@ -175,8 +193,8 @@ fn fork_look(
         std::mem::size_of::<crate::look::frame::LookFrame>(),
         allocated,
     )?;
-    let (state, state_index) = buffer(gpu, 16, allocated)?;
-    gpu.upload(state, &[0; 16])?;
+    let (state, state_index) = buffer(gpu, STATE_BYTES, allocated)?;
+    gpu.upload(state, &[0; STATE_BYTES])?;
     let p = &source.pipelines;
     Ok(LookGpu {
         look: source.look,
@@ -211,11 +229,13 @@ fn fork_look(
             access: Access::Undefined,
             queue: Queue::Graphics,
         }),
-        size,
+        render: size,
+        display: size,
         sky: None,
         deferred: false,
         deferred_history: None,
         settle: 0,
+        seeded: false,
         gi: None,
         far: None,
         cascades: None,

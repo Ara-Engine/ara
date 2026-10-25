@@ -2,6 +2,7 @@
 use super::*;
 use anyhow::Context;
 use std::sync::{Arc, Weak, mpsc};
+mod asynchronous;
 mod state;
 #[cfg(test)]
 pub(super) mod tests;
@@ -13,19 +14,44 @@ use state::ViewState;
 /// performs that work immediately. It owns no scene, device or pipeline copies.
 pub struct ViewId {
     owner: Weak<Owner>,
+    id: u64,
     state: Option<ViewState>,
 }
 
 /// One on-demand raster camera frame; no background or periodic rendering occurs.
+#[derive(Clone, Copy)]
 pub struct ViewRequest<'a> {
     /// Camera independent of the Scene viewport's camera and previous projection.
     pub camera: &'a CameraSpec,
     /// Physical pixels of this view, independent of the primary output extent.
     pub size: [u32; 2],
+    /// Render size of its scene passes, at most `size` per axis: smaller sizes
+    /// are temporally upscaled (`Renderer::resize_upscaled`; a `RasterPlan`'s
+    /// `render_size`); `size` renders natively.
+    pub render_size: [u32; 2],
     /// Raster feature budgets for this view. Probe GI uses the shared volume.
     pub quality: crate::look::Quality,
     /// Positive authored exposure multiplier; auto exposure keeps per-view state.
     pub exposure: f32,
+}
+impl ViewRequest<'_> {
+    fn validate(&self) -> Result<()> {
+        ensure!(
+            !self.size.contains(&0) && !self.render_size.contains(&0),
+            "Secondary extent is zero"
+        );
+        ensure!(
+            self.render_size.iter().zip(self.size).all(|(&r, d)| r <= d),
+            "Secondary render exceeds display"
+        );
+        self.camera.resolve(self.size)?;
+        self.quality.validate()?;
+        ensure!(
+            self.exposure.is_finite() && self.exposure > 0.,
+            "Invalid view exposure"
+        );
+        Ok(())
+    }
 }
 
 /// Completed same-device output, in Graphics/CopySource like `Renderer::output`.
@@ -42,11 +68,16 @@ pub struct ViewOutput {
 }
 
 struct Owner {
-    retired: mpsc::Sender<ViewState>,
+    retired: mpsc::Sender<(u64, Option<ViewState>)>,
 }
 pub(super) struct Views {
     owner: Arc<Owner>,
-    retired: mpsc::Receiver<ViewState>,
+    retired: mpsc::Receiver<(u64, Option<ViewState>)>,
+    next: u64,
+    outputs: std::collections::BTreeMap<u64, asynchronous::Retained>,
+    pending: Option<u64>,
+    requested: Option<u64>,
+    preparing: Option<ara_gpu::vulkan::Completion>,
 }
 impl Default for Views {
     fn default() -> Self {
@@ -54,14 +85,41 @@ impl Default for Views {
         Self {
             owner: Arc::new(Owner { retired }),
             retired: receiver,
+            next: 0,
+            outputs: Default::default(),
+            pending: None,
+            requested: None,
+            preparing: None,
         }
     }
 }
 impl Views {
     pub(super) fn collect(&mut self, gpu: &mut VulkanDevice) -> Result<()> {
         let mut retired = false;
-        while let Ok(state) = self.retired.try_recv() {
-            state.destroy(gpu)?;
+        while let Ok((id, state)) = self.retired.try_recv() {
+            if let Some(state) = state {
+                state.destroy(gpu)?;
+            }
+            if self.requested == Some(id) {
+                self.requested = None;
+            }
+            if let Some(output) = self.outputs.get_mut(&id) {
+                output.retired = true;
+            }
+            retired = true;
+        }
+        let removable: Vec<_> = self
+            .outputs
+            .iter()
+            .filter(|(_, output)| output.retired && !output.live.pending())
+            .map(|(&id, _)| id)
+            .collect();
+        for id in removable {
+            self.outputs
+                .remove(&id)
+                .expect("retired view exists")
+                .live
+                .destroy(gpu)?;
             retired = true;
         }
         if retired {
@@ -75,10 +133,10 @@ impl Views {
 }
 impl Drop for ViewId {
     fn drop(&mut self) {
-        if let (Some(owner), Some(state)) = (self.owner.upgrade(), self.state.take()) {
+        if let Some(owner) = self.owner.upgrade() {
             // The renderer/device may already be gone; its device-owned arena
             // then freed these resources. Otherwise only the owner retires them.
-            let _ = owner.retired.send(state);
+            let _ = owner.retired.send((self.id, self.state.take()));
         }
     }
 }
@@ -88,8 +146,12 @@ impl Renderer {
     /// allocates its extent; hidden tabs cost no rendering or target allocations.
     pub fn create_view(&mut self) -> Result<ViewId> {
         self.collect_view_resources()?;
+        let id = self.views.next;
+        self.views.next = id.checked_add(1).context("secondary view IDs exhausted")?;
+        self.views.outputs.insert(id, Default::default());
         Ok(ViewId {
             owner: Arc::downgrade(&self.views.owner),
+            id,
             state: None,
         })
     }
@@ -99,13 +161,11 @@ impl Renderer {
         self.views.collect(&mut self.gpu)
     }
 
-    /// Immediately release an owned secondary view; dropping its handle also
-    /// works and defers retirement until the next renderer call.
-    pub fn release_view(&mut self, mut view: ViewId) -> Result<()> {
+    /// Release an owned secondary view without a host wait. In-flight resources
+    /// retire after completion; dropping the handle schedules the same cleanup.
+    pub fn release_view(&mut self, view: ViewId) -> Result<()> {
         ensure!(self.views.owns(&view), "View belongs to another renderer");
-        if let Some(state) = view.state.take() {
-            state.destroy(&mut self.gpu)?;
-        }
+        drop(view);
         self.collect_view_resources()
     }
 
@@ -118,15 +178,42 @@ impl Renderer {
         request: &ViewRequest<'_>,
     ) -> Result<ViewOutput> {
         ara_gpu::cpu_scope!("Raster.secondary_view");
+        self.wait_scene_frame()?;
+        self.with_secondary(view, request, |renderer| {
+            renderer.draw_secondary(request)?;
+            Ok(ViewOutput {
+                image: renderer.output(),
+                view: renderer.gpu.image_view(renderer.output())?,
+                entities: renderer.entity_channel(),
+                size: renderer.size,
+            })
+        })
+    }
+
+    fn draw_secondary(&mut self, request: &ViewRequest<'_>) -> Result<()> {
+        self.render_frame(
+            request.camera,
+            request.exposure,
+            false,
+            crate::capture::ViewMode::Lit,
+            false,
+        )?;
+        ensure!(
+            self.presentation_ready(),
+            "Secondary presentation is incomplete"
+        );
+        Ok(())
+    }
+
+    fn with_secondary<T>(
+        &mut self,
+        view: &mut ViewId,
+        request: &ViewRequest<'_>,
+        draw: impl FnOnce(&mut Self) -> Result<T>,
+    ) -> Result<T> {
         ensure!(self.views.owns(view), "View belongs to another renderer");
         ensure!(!self.secondary_active, "Nested secondary rendering");
-        ensure!(!request.size.contains(&0), "Secondary extent is zero");
-        request.camera.resolve(request.size)?;
-        request.quality.validate()?;
-        ensure!(
-            request.exposure.is_finite() && request.exposure > 0.,
-            "Invalid view exposure"
-        );
+        request.validate()?;
         self.collect_view_resources()?;
         if view.state.is_none() {
             view.state = Some(ViewState::new(self, request.size)?);
@@ -143,27 +230,11 @@ impl Renderer {
         self.look.probe_writes = std::mem::take(&mut writes);
         self.secondary_active = true;
         let result = (|| {
-            self.resize(request.size)?;
+            self.resize_upscaled(request.render_size, request.size)?;
             if self.look.quality != request.quality {
                 self.set_quality(request.quality)?;
             }
-            self.render_frame(
-                request.camera,
-                request.exposure,
-                false,
-                crate::capture::ViewMode::Lit,
-                false,
-            )?;
-            ensure!(
-                self.presentation_ready(),
-                "Secondary presentation is incomplete"
-            );
-            Ok(ViewOutput {
-                image: self.output(),
-                view: self.gpu.image_view(self.output())?,
-                entities: self.entity_channel(),
-                size: self.size,
-            })
+            draw(self)
         })();
         self.secondary_active = false;
         gi = self.look.gi.take();

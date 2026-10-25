@@ -535,7 +535,9 @@ fn baseline(
     plan: &RasterPlan,
     truths: &[Truth],
 ) -> Result<Value> {
-    let size = plan.render_size;
+    // The presenter, its captures and timings are at the display size; the scene
+    // renders at the plan's render size (temporal upscaling).
+    let size = plan.display_size;
     let name = preset.name();
     let created = std::time::Instant::now();
     let mut presenter = Presenter::new(size, Vec::new(), options.pipeline_cache);
@@ -675,7 +677,7 @@ fn baseline(
         }
     }
     Ok(
-        json!({"preset":name,"renderer":"raster shipping presenter", "renderSize":size,"displaySize":plan.display_size,
+        json!({"preset":name,"renderer":"raster shipping presenter", "renderSize":plan.render_size,"displaySize":size,
         "viewCreateMs":create_ms,"timing":timing,"timingScope":"base raster passes; terrain/VFX/composite timestamps pending",
         "reference":scores}),
     )

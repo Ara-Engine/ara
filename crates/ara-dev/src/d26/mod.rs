@@ -65,6 +65,10 @@ pub(crate) struct Options {
     /// Export the frozen packs again even when cached for this sample tree.
     #[arg(long)]
     refreeze: bool,
+    /// Build and freeze every scene's pack, then stop without measuring: it can run
+    /// outside a quiet window, and the measured run follows with `--no-build`.
+    #[arg(long)]
+    prepare: bool,
     /// Keep the editor's scratch project copy (deleted by default).
     #[arg(long)]
     keep_project: bool,
@@ -106,6 +110,9 @@ pub(crate) fn run(root: &Path, options: Options) -> Result<bool> {
             (Binaries::new(), 0.)
         }
     };
+    if options.prepare {
+        return prepare(root, &output, &binaries, &options, &results);
+    }
     let run = Run {
         created_at: stamp(now),
         source_head: crate::git::text(root, ["rev-parse", "HEAD"])?,
@@ -141,6 +148,42 @@ pub(crate) fn run(root: &Path, options: Options) -> Result<bool> {
     println!("{verdict}");
     println!("Report: {}", output.join("report.html").display());
     Ok(true)
+}
+
+/// `--prepare`: freeze each scene's pack with the fresh build and report where the
+/// packs are; false when the build or any freeze failed.
+fn prepare(
+    root: &Path,
+    output: &Path,
+    binaries: &Binaries,
+    options: &Options,
+    results: &measure::Results,
+) -> Result<bool> {
+    if let Some(reason) = results.skipped.get(&Section::Player) {
+        eprintln!("D26 prepare: {reason}");
+        return Ok(false);
+    }
+    let context = measure::Context {
+        root,
+        output,
+        binaries,
+        options,
+    };
+    let mut ready = true;
+    for scene in &measure::SCENES {
+        match context.pack(scene) {
+            Ok(pack) => println!("{}: {}", scene.name, pack.display()),
+            Err(reason) => {
+                println!("{}: freeze failed: {reason}", scene.name);
+                ready = false;
+            }
+        }
+    }
+    println!(
+        "Measure with `ara-dev d26 --no-build --profile {}`",
+        options.profile
+    );
+    Ok(ready)
 }
 
 /// Build every root in one feature resolution (the player is the editor's companion
