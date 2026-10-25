@@ -9,8 +9,19 @@ pub struct Completion {
     device: vk::Device,
     resolved: bool,
 }
+impl Completion {
+    /// Whether its submissions and query storage have been consumed. On a later
+    /// diagnostic error, owners may still retire this completed frame's resources.
+    pub fn is_resolved(&self) -> bool {
+        self.resolved
+    }
+}
 
 impl VulkanDevice {
+    /// Whether the current owner is recording an asynchronous frame scope.
+    pub fn deferring_completion(&self) -> bool {
+        self.deferred.is_some()
+    }
     /// Write frame constants without waiting for an earlier submission in this
     /// scope. In-flight writes become GPU-ordered updates; idle storage is mapped.
     pub fn upload_queued(&mut self, buffer: Buffer, bytes: &[u8]) -> Result<()> {
@@ -19,12 +30,16 @@ impl VulkanDevice {
 
     /// Range form of `upload_queued`. GPU-ordered ranges are four-byte aligned.
     pub fn upload_queued_range(&mut self, buffer: Buffer, offset: u64, bytes: &[u8]) -> Result<()> {
+        if self.deferred.is_none() {
+            return self.upload_range(buffer, offset, bytes);
+        }
         let b = self.buffers.get(buffer)?;
         let completed = self.completed()?;
-        if self.deferred.is_some() && (0..2).any(|q| completed[q] < b.last[q]) {
+        if (0..2).any(|q| completed[q] < b.last[q]) {
             self.upload_ordered(buffer, offset, bytes)
         } else {
-            self.upload_range(buffer, offset, bytes)
+            self.context.upload_range(b.raw, offset, bytes)?;
+            Ok(())
         }
     }
 
@@ -42,6 +57,7 @@ impl VulkanDevice {
             ));
         }
         self.scene_queue = true;
+        self.deferred_waits = self.submitted;
         self.deferred = Some(Vec::new());
         Ok(())
     }
@@ -84,7 +100,7 @@ impl VulkanDevice {
         }
         self.completion_pending = false;
         frame.resolved = true;
-        self.publish_to_ui()?;
+        self.publish_completed_to_ui()?;
         self.collect()?;
         self.assert_clean()?;
         Ok(Some(timings))
@@ -103,7 +119,13 @@ impl VulkanDevice {
 
     /// Establish device memory visibility on the native UI/present queue after
     /// completion. The wait is GPU-side and covers only already-completed work.
-    fn publish_to_ui(&self) -> Result<()> {
+    pub fn publish_completed_to_ui(&self) -> Result<()> {
+        let completed = self.completed()?;
+        if (0..2).any(|queue| completed[queue] < self.submitted[queue]) {
+            return Err(GpuError::Contract(
+                "Cannot publish an unfinished frame to the UI".into(),
+            ));
+        }
         if !self.scene_queue || self.context.scene_graphics == self.context.graphics {
             return Ok(());
         }

@@ -50,6 +50,7 @@ pub(super) enum Object {
     Layout(vk::PipelineLayout),
     Cache(vk::PipelineCache),
     Semaphore(vk::Semaphore),
+    Fence(vk::Fence),
     Query(vk::QueryPool),
     Commands(vk::CommandPool, vk::CommandBuffer),
 }
@@ -82,7 +83,8 @@ impl<'a> Objects<'a> {
 }
 impl Drop for Objects<'_> {
     fn drop(&mut self) {
-        // SAFETY: Unsubmitted construction/recording objects have no GPU references.
+        // SAFETY: Construction objects were never submitted; resolved query,
+        // command and readback objects have completed all GPU references.
         unsafe {
             for object in self.objects.drain(..).rev() {
                 match object {
@@ -92,6 +94,7 @@ impl Drop for Objects<'_> {
                     Object::Layout(h) => self.device.destroy_pipeline_layout(h, None),
                     Object::Cache(h) => self.device.destroy_pipeline_cache(h, None),
                     Object::Semaphore(h) => self.device.destroy_semaphore(h, None),
+                    Object::Fence(h) => self.device.destroy_fence(h, None),
                     Object::Query(h) => self.device.destroy_query_pool(h, None),
                     Object::Commands(pool, h) => self.device.free_command_buffers(pool, &[h]),
                 }

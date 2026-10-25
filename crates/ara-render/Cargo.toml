@@ -25,4 +25,5 @@ image = { workspace = true, features = ["png", "hdr", "jpeg"] }
 sha2 = { workspace = true }
 
 [dev-dependencies]
+ash.workspace = true
 gltf = { workspace = true, default-features = true }

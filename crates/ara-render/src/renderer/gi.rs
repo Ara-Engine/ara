@@ -62,7 +62,7 @@ impl Renderer {
         }
         let bytes = &update.records[records.start * PROBE_RECORD..records.end * PROBE_RECORD];
         let staging = self.probe_staging(bytes.len())?;
-        if let Err(error) = self.gpu.upload(staging.buffer, bytes) {
+        if let Err(error) = self.gpu.upload_queued(staging.buffer, bytes) {
             self.look.probe_staging.push(staging);
             return Err(error.into());
         }

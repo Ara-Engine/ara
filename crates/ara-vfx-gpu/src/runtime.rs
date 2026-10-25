@@ -360,7 +360,7 @@ impl GpuSystem {
             );
             rows[i * 64..i * 64 + p.rows.len()].copy_from_slice(&p.rows);
         }
-        gpu.upload(self.material_buffer, bytemuck::cast_slice(&rows))?;
+        gpu.upload_queued(self.material_buffer, bytemuck::cast_slice(&rows))?;
         self.resources[12].state.access = Access::HostWrite;
         self.material_textures = textures.to_vec();
         Ok(())
