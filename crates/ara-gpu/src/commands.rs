@@ -123,6 +123,16 @@ pub enum Command {
         /// Nonzero byte count, divisible by four.
         size: u64,
     },
+    /// An ordered update of at most 64 KiB of four-byte-aligned constants.
+    /// Full buffer dependencies surround the update; it is valid outside rendering.
+    UpdateBuffer {
+        /// Transfer destination, retained until completion.
+        destination: Buffer,
+        /// Four-byte-aligned byte offset.
+        offset: u64,
+        /// Nonempty, four-byte-aligned data copied during command recording.
+        bytes: Vec<u8>,
+    },
     /// Copy mip zero between distinct, equally sized and formatted color images.
     CopyImage {
         /// Completed transfer source.
