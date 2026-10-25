@@ -152,6 +152,8 @@ pub struct Shell {
     pub(crate) log_view: LogView,
     /// Console row whose details are expanded (bus sequence number).
     pub(crate) console_open: Option<u64>,
+    /// Whether Console and Problems show this computer's GPU environment messages.
+    pub(crate) machine_open: bool,
     /// Profiler scope outlined in the timeline (picked in the Scopes table).
     pub(crate) profile_scope: Option<String>,
     /// Problems whose "Why" explanation is expanded.
@@ -409,6 +411,7 @@ impl Shell {
             nested_swatches: Vec::new(),
             host_problems: true,
             console_open: None,
+            machine_open: false,
             profile_scope: None,
             explained_problems: std::collections::BTreeSet::new(),
             hierarchy_view: None,

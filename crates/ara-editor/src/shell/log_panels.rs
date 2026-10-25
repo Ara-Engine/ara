@@ -9,6 +9,10 @@
 //! Rows are two lines at every width (as in Unity's console): the message, then its
 //! time, origin and source (Problems: code and source). Both panels live in narrow
 //! docks by default, so nothing may sit over the message text.
+//!
+//! This computer's GPU loader and overlay messages (`ARA_GPU_ENVIRONMENT`: other apps'
+//! Vulkan layers, missing loader manifests) are not the project's problems. Both panels
+//! keep them out of their counts and lists, in one collapsed "This computer" group.
 use super::commands::Target;
 use super::*;
 use std::collections::BTreeMap;
@@ -75,6 +79,12 @@ fn entries(editor: &mut Editor, since: u64, severity: &str) -> Vec<Entry> {
             })
         })
         .collect()
+}
+
+/// Whether a record is about this computer (its GPU loader and overlay layers), not
+/// the project.
+fn machine(d: &ara_diag::Diagnostic) -> bool {
+    d.code == ara_diag::codes::GPU_ENVIRONMENT
 }
 
 fn severity_icon(severity: ara_diag::Severity) -> (&'static str, &'static str) {
@@ -191,7 +201,9 @@ fn local_offset_minutes() -> i64 {
 impl Shell {
     pub(super) fn console_panel(&mut self, editor: &mut Editor, out: &mut String) {
         let view = self.log_view;
-        let all = entries(editor, view.since, "info");
+        let (machine, all): (Vec<Entry>, Vec<Entry>) = entries(editor, view.since, "info")
+            .into_iter()
+            .partition(|e| machine(&e.diagnostic));
         let count = |s: ara_diag::Severity| {
             all.iter()
                 .filter(|e| e.diagnostic.severity == s)
@@ -273,7 +285,7 @@ impl Shell {
             rows.retain(|e| seen.insert(e.diagnostic.code.to_string()));
             rows.reverse();
         }
-        if rows.is_empty() {
+        if rows.is_empty() && machine.is_empty() {
             self.empty(
                 out,
                 "console-empty",
@@ -289,12 +301,15 @@ impl Shell {
             return;
         }
         out.push_str("<scroll id='console-scroll' class='body log-list'>");
+        if !machine.is_empty() {
+            self.machine_group(out, "console", &machine);
+            if self.machine_open {
+                for e in &machine {
+                    self.console_row(editor, out, e, e.count);
+                }
+            }
+        }
         for e in rows.iter().rev().take(300).rev() {
-            let id = format!("log-{}", e.seq);
-            let (icon, tint) = severity_icon(e.diagnostic.severity);
-            let open = self.console_open == Some(e.seq);
-            let select = format!("{id}-row");
-            self.bind_command(&select, "console.select", Target::Text(e.seq.to_string()));
             let count = if view.collapse {
                 totals
                     .get(&e.diagnostic.code.to_string())
@@ -303,6 +318,29 @@ impl Shell {
             } else {
                 e.count
             };
+            self.console_row(editor, out, e, count);
+        }
+        out.push_str("</scroll>");
+    }
+
+    /// The collapsed "This computer" group header: how many messages came from this
+    /// PC's graphics drivers and overlay layers; it opens and closes in both panels.
+    fn machine_group(&mut self, out: &mut String, panel: &str, records: &[Entry]) {
+        let id = format!("{panel}-machine");
+        let total: u64 = records.iter().map(|e| e.count).sum();
+        self.bind_command(&id, "console.machine", Target::None);
+        out.push_str(&format!("<button id='{id}' class='machine-group' label='This computer' description='Messages from this computer&apos;s graphics drivers and overlay layers, not the project' action='Dispatch'>{}{}<text id='{id}-title' class='fg' text='This computer' /><text id='{id}-count' class='caption' text='{total}' /><text id='{id}-what' class='caption machine-what' text='graphics drivers and overlays, not the project' /></button>",icons::icon_in(&format!("{id}-chevron"),if self.machine_open{"chevron-down"}else{"chevron-right"},"icon-sm"),icons::icon(&id,"monitor")));
+    }
+
+    /// One Console row: the message (and its repeat count), then time, origin and
+    /// source; a selected row expands its details under it.
+    fn console_row(&mut self, editor: &Editor, out: &mut String, e: &Entry, count: u64) {
+        {
+            let id = format!("log-{}", e.seq);
+            let (icon, tint) = severity_icon(e.diagnostic.severity);
+            let open = self.console_open == Some(e.seq);
+            let select = format!("{id}-row");
+            self.bind_command(&select, "console.select", Target::Text(e.seq.to_string()));
             out.push_str(&format!("<panel id='{id}' class='log-row{}'><button id='{select}' class='log-main' label='{}' description='Show details' action='Dispatch'>{}<text id='{id}-text' class='log-text' text='{}' />{}</button><panel id='{id}-meta' class='log-meta'><text id='{id}-time' class='log-time' text='{}' />",
                 if open { " log-open" } else { "" },
                 escape(&e.diagnostic.message),
@@ -335,7 +373,6 @@ impl Shell {
                 self.log_details(out, &id, &e.diagnostic);
             }
         }
-        out.push_str("</scroll>");
     }
 
     /// The expanded part of a Console row or a Problems "Why": code, full message,
@@ -387,7 +424,9 @@ impl Shell {
 
     pub(super) fn problems_panel(&mut self, editor: &mut Editor, out: &mut String) {
         let view = self.log_view;
-        let all = entries(editor, 0, "warning");
+        let (machine, all): (Vec<Entry>, Vec<Entry>) = entries(editor, 0, "warning")
+            .into_iter()
+            .partition(|e| machine(&e.diagnostic));
         let errors = all
             .iter()
             .filter(|e| e.diagnostic.severity == ara_diag::Severity::Error)
@@ -456,11 +495,19 @@ impl Shell {
                 .unwrap_or_else(|| "Project".into());
             groups.entry(group).or_default().push(e);
         }
-        if groups.is_empty() {
+        if groups.is_empty() && machine.is_empty() {
             self.empty(out, "problems-empty", "circle-check", if all.is_empty() { "No problems" } else { "No matching problems" }, "Errors and warnings from documents, imports, scripts and Play are listed here by file, with fixes.", &[]);
             return;
         }
         out.push_str("<scroll id='problems-scroll' class='body log-list'>");
+        if !machine.is_empty() {
+            self.machine_group(out, "problems", &machine);
+            if self.machine_open {
+                for e in &machine {
+                    self.console_row(editor, out, e, e.count);
+                }
+            }
+        }
         for (n, (group, rows)) in groups.iter().enumerate() {
             let gid = format!("problem-group-{n}");
             out.push_str(&format!("<panel id='{gid}' class='problem-group'>{}<text id='{gid}-path' class='fg' text='{}' /><text id='{gid}-count' class='caption' text='{}' /></panel>",icons::icon(&gid,if group=="Project"{"folder"}else{"file"}),escape(group),rows.len()));

@@ -323,6 +323,9 @@ scroll { overflow:hidden; flex-basis:0px; min-height:0px; min-width:0px; }
 .count-toggle { height:22px; padding-left:6px; padding-right:8px; gap:4px; border-width:0px; border-radius:var(--radius-sm); font-size:12px; }
 .segment-on { background:var(--raised); color:var(--foreground); }
 .log-list { gap:0px; }
+.machine-group { height:28px; flex-shrink:0; justify-content:start; gap:6px; padding-left:8px; padding-right:8px; border-width:0px; border-radius:0px; background:var(--panel-header); overflow:hidden; }
+.machine-group:hover { background:var(--raised); }
+.machine-what { flex-shrink:1; min-width:0px; overflow:hidden; }
 .log-row { flex-shrink:0; gap:0px; padding-bottom:4px; overflow:hidden; }
 .log-row:hover { background:var(--hover-surface); }
 .log-open { background:var(--raised); }
