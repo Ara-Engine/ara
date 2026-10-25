@@ -91,6 +91,9 @@ overwrites. A second graphics-family queue isolates Scene work from the native U
 queue where available; completion publishes a GPU memory dependency to that UI queue.
 Capture/shutdown may use `wait_completion`. `tests/deferred.rs` blocks Scene work
 behind a host gate and checks UI progress, polling and byte-exact ordered updates.
+Synchronous presenters use `begin_deferred_completion_on_current_queue` to queue
+helpers before waiting. `wait_completion_with` resolves their original pass groups
+after waiting on each queue's tail, preserving feature timing attribution.
 
 Debug creation requires Khronos validation and synchronization validation.
 `assert_clean` rejects warnings and errors; `diagnostics` returns stable codes,

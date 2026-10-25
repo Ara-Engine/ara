@@ -282,6 +282,12 @@ impl Renderer {
     pub fn timings(&self) -> &[PassTiming] {
         &self.last_timings
     }
+
+    /// Install the view's completed pass timings after a presenter-owned deferred
+    /// scope. Feature passes are accounted by their owner, not added to this view.
+    pub fn set_completed_timings(&mut self, timings: Vec<PassTiming>) {
+        self.last_timings = timings;
+    }
     /// Reallocate per-view graph resources at `size`, rendering natively, and
     /// reset temporal history.
     pub fn resize(&mut self, size: [u32; 2]) -> Result<()> {

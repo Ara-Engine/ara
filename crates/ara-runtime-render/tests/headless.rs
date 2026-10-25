@@ -186,6 +186,24 @@ fn demo_renders_moves_skins_and_relights_headless() {
             "native GPU components must account for the same frame: {stats:?}"
         );
     }
+    // Fail the feature after the view has submitted GPU work. The batching
+    // boundary must drain it, retain publication and allow a corrected retry.
+    let last_good = presenter.output();
+    let descriptors = presenter.renderer().unwrap().gpu().descriptor_usage();
+    let scale = frame.effects[0].scale;
+    frame.effects[0].scale = 0.;
+    for _ in 0..8 {
+        presenter.present(&frame).unwrap();
+        assert!(presenter.presentation_error().is_some());
+        assert_eq!(presenter.output(), last_good);
+        assert_eq!(
+            presenter.renderer().unwrap().gpu().descriptor_usage(),
+            descriptors
+        );
+    }
+    frame.effects[0].scale = scale;
+    presenter.present(&frame).unwrap();
+    assert!(presenter.presentation_error().is_none());
     let moved = presenter
         .capture(&frame, [480, 270], ViewMode::Lit, Some(40), 1)
         .unwrap();

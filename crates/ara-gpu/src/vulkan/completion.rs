@@ -47,6 +47,23 @@ impl VulkanDevice {
     /// still happen on the owner thread; there is no render thread or shared lock.
     /// Only one scope may be active, and its previous frame must have completed.
     pub fn begin_deferred_completion(&mut self) -> Result<()> {
+        self.begin_completion(true)
+    }
+
+    /// Batch a synchronous presenter's helpers on their existing queue. End the
+    /// scope and wait once before publishing; Scene/UI owners use the isolated
+    /// `begin_deferred_completion` queue instead.
+    pub fn begin_deferred_completion_on_current_queue(&mut self) -> Result<()> {
+        self.begin_completion(false)
+    }
+
+    /// Number of submissions in the active scope, for partitioning completed
+    /// view/feature timings without changing their labels. Zero outside a scope.
+    pub fn deferred_submission_count(&self) -> usize {
+        self.deferred.as_ref().map_or(0, Vec::len)
+    }
+
+    fn begin_completion(&mut self, isolate_scene: bool) -> Result<()> {
         if self.deferred.is_some() || self.completion_pending {
             return Err(GpuError::Contract("Nested deferred completion".into()));
         }
@@ -56,7 +73,7 @@ impl VulkanDevice {
                 "Previous frame is still in flight".into(),
             ));
         }
-        self.scene_queue = true;
+        self.scene_queue |= isolate_scene;
         self.deferred_waits = self.submitted;
         self.deferred = Some(Vec::new());
         Ok(())
@@ -95,26 +112,59 @@ impl VulkanDevice {
             return Ok(None);
         }
         let mut timings = Vec::new();
+        self.consume_completion(frame, |_, passes| timings.extend(passes))?;
+        Ok(Some(timings))
+    }
+
+    fn consume_completion(
+        &mut self,
+        frame: &mut Completion,
+        mut consume: impl FnMut(TimelinePoint, Vec<PassTiming>),
+    ) -> Result<()> {
         for point in frame.points.drain(..) {
-            timings.extend(self.resolve_completed(point)?);
+            consume(point, self.resolve_completed(point)?);
         }
         self.completion_pending = false;
         frame.resolved = true;
         self.publish_completed_to_ui()?;
         self.collect()?;
         self.assert_clean()?;
-        Ok(Some(timings))
+        Ok(())
     }
 
     /// Explicit blocking boundary for capture, shutdown and resource reuse.
     /// Interactive hosts use `poll_completion` and keep the previous image.
     pub fn wait_completion(&mut self, frame: &mut Completion) -> Result<Vec<PassTiming>> {
+        let mut timings = Vec::new();
+        self.wait_completion_with(frame, |_, passes| timings.extend(passes))?;
+        Ok(timings)
+    }
+
+    /// Wait once at a frame boundary and deliver each submission's original pass
+    /// timings in submission order. Owners can account view/feature ranges without
+    /// copying labels or treating deferred helpers as zero-cost work.
+    pub fn wait_completion_with(
+        &mut self,
+        frame: &mut Completion,
+        consume: impl FnMut(TimelinePoint, Vec<PassTiming>),
+    ) -> Result<()> {
         self.check_completion(frame)?;
-        for &point in &frame.points {
-            self.wait(point)?;
+        if self.deferred.is_some() {
+            return Err(GpuError::Contract(
+                "Cannot wait an active frame scope".into(),
+            ));
         }
-        self.poll_completion(frame)?
-            .ok_or_else(|| GpuError::Contract("Waited frame did not complete".into()))
+        let mut last = [0; 2];
+        for point in &frame.points {
+            last[point.queue.index()] = last[point.queue.index()].max(point.value);
+        }
+        for queue in [Queue::Graphics, Queue::Compute] {
+            let value = last[queue.index()];
+            if value > 0 {
+                self.wait(TimelinePoint { queue, value })?;
+            }
+        }
+        self.consume_completion(frame, consume)
     }
 
     /// Establish device memory visibility on the native UI/present queue after

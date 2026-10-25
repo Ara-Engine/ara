@@ -329,7 +329,8 @@ impl Presenter {
                     .renderer
                     .as_mut()
                     .context("raster presentation device")?;
-                let costs = raster.render(renderer, frame, &camera(frame)?, ViewMode::Lit)?;
+                let costs =
+                    raster.render_batched(renderer, frame, &camera(frame)?, ViewMode::Lit)?;
                 self.stats.gpu_ms = costs.accounted_ms();
                 self.stats.gpu = Some(costs);
                 renderer.output()
