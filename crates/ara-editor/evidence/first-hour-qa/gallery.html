@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Ara first-hour QA fixes: before and after</title>
+<style>
+*{box-sizing:border-box}body{margin:0;padding:16px;background:#0a0a0a;color:#f5f5f5;font:13px system-ui,sans-serif}
+main{display:grid;gap:16px}nav{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+button{font:inherit;color:inherit;background:#111;border:1px solid #2e2e2e;border-radius:6px;padding:6px 10px;cursor:pointer}
+button[aria-pressed=true]{border-color:#346bf1;background:#16233f}
+button:focus-visible{outline:2px solid #346bf1;outline-offset:2px}
+.shots{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+figure{margin:0;padding:12px;border:1px solid #2e2e2e;border-radius:10px;background:#111;min-width:0}
+figure img{width:100%;height:auto;display:block;border-radius:4px}figcaption{margin-bottom:8px;color:#818181}
+.sep{width:1px;height:20px;background:#2e2e2e}
+@media(max-width:900px){.shots{grid-template-columns:1fr}}
+</style>
+<main>
+<nav aria-label="Page"><span id="pages"></span><span class="sep"></span><span id="themes"></span></nav>
+<section class="shots">
+<figure><figcaption>Before · main (first-hour QA, 3aea98ca)</figcaption><img id="before" alt="Before"></figure>
+<figure><figcaption>After · this branch</figcaption><img id="after" alt="After"></figure>
+</section>
+<p style="color:#818181">1440×900 at 1×, Ara Dark, captured offscreen by <code>--verify-first-hour</code> on a fresh Hub-created Outpost. See README.md.</p>
+</main>
+<script>
+// [key, label]; images are <side>/1440/<key>-<theme>.webp
+const pages=[["assets-importing", "Assets > assets/kit while importing"], ["imports-done", "Imports done"], ["material-page", "Material page"], ["problems", "Problems"], ["console", "Console"]];
+const themes=["dark"];let page=pages[0][0],theme="dark";
+function group(id,items,set){const el=document.getElementById(id);el.replaceChildren(...items.map(([key,label])=>{const b=document.createElement("button");b.textContent=label;b.onclick=()=>{set(key);render()};b.dataset.key=key;return b}));return el}
+const p=group("pages",pages,k=>page=k),t=group("themes",themes.map(x=>[x,x[0].toUpperCase()+x.slice(1)]),k=>theme=k);
+function render(){for(const b of p.children)b.setAttribute("aria-pressed",b.dataset.key===page);for(const b of t.children)b.setAttribute("aria-pressed",b.dataset.key===theme);
+for(const side of["before","after"])document.getElementById(side).src=`${side}/1440/${page}-${theme}.webp`}
+render();
+</script>
+</html>
