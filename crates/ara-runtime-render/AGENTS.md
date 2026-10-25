@@ -52,7 +52,8 @@ device and per-view upload state; no simulation, window or process code.
   `set_look_override` (look development/scoring), `set_probe_gi(true)` +
   `probe_gi_pending()` / `wait_probe_gi()`: probe GI acquired per content key on a
   worker (one job at a time, newest request queued, full bakes disk-cached under the
-  pipeline cache). The CPU bakes (`gi_cpu.rs`: per-geometry SAH BVHs under an
+  pipeline cache; delivered records apply 4096 per frame, scattered in-frame).
+  The CPU bakes on half the cores (`gi_cpu.rs`: per-geometry SAH BVHs under an
   instance top level, map means via `NativeResidency::mean_texel` with the
   material's sRGB-decode bit for raw graph maps, terrain hits splat-weighted);
   `ARA_PROBE_GI_RT=1` opts into a temporary ray-tracing `VulkanDevice` + fidelity

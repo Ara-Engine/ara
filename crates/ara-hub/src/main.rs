@@ -20,6 +20,9 @@ fn options() -> Result<Option<Options>, String> {
     };
     while let Some(arg) = args.next() {
         match arg.as_str() {
+            "--service-check" => {
+                options.service_check = Some(PathBuf::from(value(&mut args, &arg)?))
+            }
             "--update-health" => {
                 options.update_health = Some(PathBuf::from(value(&mut args, &arg)?))
             }
@@ -74,10 +77,10 @@ fn main() -> std::process::ExitCode {
             return std::process::ExitCode::FAILURE;
         }
     };
-    let _crashes = ara_crash::desktop::start("ara-hub", options.capture.is_none())
+    let interactive = options.capture.is_none() && options.service_check.is_none();
+    let _crashes = ara_crash::desktop::start("ara-hub", interactive)
         .map_err(|error| eprintln!("ARA-EXP-CRASH-004: {error:#}"))
         .ok();
-    let interactive = options.capture.is_none();
     match native::run(options) {
         Ok(()) => std::process::ExitCode::SUCCESS,
         Err(error) => {

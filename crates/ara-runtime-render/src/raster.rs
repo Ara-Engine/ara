@@ -40,7 +40,8 @@ pub struct RasterView {
     /// Static/dynamic split of the instances for probe GI.
     mobility: crate::gi::Mobility,
     /// Delivered probe updates not applied yet (large ones go a slice per frame).
-    gi_updates: std::collections::VecDeque<ProbeUpdate>,
+    /// Delivered probe updates and how many of each one's records are applied.
+    gi_updates: std::collections::VecDeque<(ProbeUpdate, usize)>,
     /// Emissive surfaces of the current generation and their lights, uploaded
     /// after the scene's own lights.
     emitters: Option<crate::emitters::Emitters>,
@@ -611,18 +612,22 @@ fn with_emitter_lights<T>(
 
 /// Queues a delivered update; one that rewrites every probe supersedes the
 /// updates still waiting.
-fn queue_probe_gi(updates: &mut std::collections::VecDeque<ProbeUpdate>, update: ProbeUpdate) {
+fn queue_probe_gi(
+    updates: &mut std::collections::VecDeque<(ProbeUpdate, usize)>,
+    update: ProbeUpdate,
+) {
     if update.len() == update.probes() {
         updates.clear();
     }
-    updates.push_back(update);
+    updates.push_back((update, 0));
 }
 
 /// Applies up to `budget` queued probe records on the render thread, in order,
-/// and reports what that cost.
+/// uploading ranges straight from the delivered updates, and reports what that
+/// cost (the next frame scatters them).
 fn apply_probe_gi(
     renderer: &mut Renderer,
-    updates: &mut std::collections::VecDeque<ProbeUpdate>,
+    updates: &mut std::collections::VecDeque<(ProbeUpdate, usize)>,
     budget: usize,
 ) -> Result<()> {
     if updates.is_empty() {
@@ -631,19 +636,22 @@ fn apply_probe_gi(
     let started = std::time::Instant::now();
     let mut applied = 0;
     while applied < budget
-        && let Some(mut update) = updates.pop_front()
+        && let Some((update, next)) = updates.front_mut()
     {
-        if update.len() > budget - applied {
-            let slice = update.split_off(budget - applied);
-            updates.push_front(update);
-            update = slice;
+        let end = *next + (update.len() - *next).min(budget - applied);
+        renderer.update_probe_records(update, *next..end)?;
+        applied += end - *next;
+        *next = end;
+        if *next == update.len() {
+            updates.pop_front();
         }
-        renderer.update_probe_surfaces(&update)?;
-        applied += update.len();
     }
     eprintln!(
         "ara-runtime-render: applied {applied} probe GI records ({} queued) in {:.2} ms",
-        updates.iter().map(ProbeUpdate::len).sum::<usize>(),
+        updates
+            .iter()
+            .map(|(u, next)| u.len() - next)
+            .sum::<usize>(),
         started.elapsed().as_secs_f64() * 1e3
     );
     Ok(())

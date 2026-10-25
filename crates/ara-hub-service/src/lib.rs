@@ -6,7 +6,9 @@ mod templates;
 
 pub use isolation::validate_development_config;
 pub use registry::{EngineBuild, ProjectEntry, Registry};
-pub use service::{Hub, HubConfig, UpdateConfig, connect_or_start, serve};
+pub use service::{
+    ConnectedService, Hub, HubConfig, UpdateConfig, connect_checked, connect_or_start, serve,
+};
 pub use templates::{DirectoryTemplates, Template, TemplateSource};
 
 use ara_diag::{Diagnostic, codes};

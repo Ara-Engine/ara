@@ -85,11 +85,17 @@ impl CreateForm {
             .as_ref()
             .is_none_or(|v| !engines.iter().any(|e| &e.version == v))
         {
-            self.engine = engines
+            self.engine = templates
                 .iter()
-                .find(|e| e.version == ara_hub_service::ALPHA_VERSION)
-                .or(engines.first())
-                .map(|e| e.version.clone());
+                .find(|t| Some(&t.id) == self.template.as_ref())
+                .and_then(|t| t.engine_version.clone())
+                .or_else(|| {
+                    engines
+                        .iter()
+                        .find(|e| e.version == ara_hub_service::ALPHA_VERSION)
+                        .or(engines.first())
+                        .map(|e| e.version.clone())
+                });
         }
         self.revision += 1;
     }

@@ -1,4 +1,5 @@
 //! Signed releases shared by the Hub, its service and release tooling.
+pub mod bootstrap;
 mod download;
 mod feed;
 mod manifest;

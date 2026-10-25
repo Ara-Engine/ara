@@ -19,17 +19,21 @@ if (-not $RegisterOnly) {
 if (-not $NoSystemIntegration) {
     if ($hub.version -notmatch '^[0-9A-Za-z.-]+$') { throw 'Invalid Ara Hub service version' }
     $serviceBase = Join-Path $env:LOCALAPPDATA 'Ara\Services'
-    $service = Join-Path $serviceBase $hub.version
+    $build = (Get-FileHash -LiteralPath (Join-Path $source 'bootstrap\ara.exe') -Algorithm SHA256).Hash.ToLowerInvariant()
+    $service = Join-Path (Join-Path $serviceBase $hub.version) $build
     if (-not (Test-Path -LiteralPath $service)) {
-        New-Item -ItemType Directory -Path $serviceBase -Force | Out-Null
-        $serviceStage = Join-Path $serviceBase ('.service-' + [guid]::NewGuid().ToString('N'))
+        $serviceParent = Split-Path -Parent $service
+        New-Item -ItemType Directory -Path $serviceParent -Force | Out-Null
+        $serviceStage = Join-Path $serviceParent ('.service-' + [guid]::NewGuid().ToString('N'))
         New-Item -ItemType Directory -Path $serviceStage | Out-Null
         Get-ChildItem -LiteralPath (Join-Path $source 'bootstrap') -File | Copy-Item -Destination $serviceStage
         if (-not (Test-Path -LiteralPath (Join-Path $serviceStage 'service.json'))) { throw 'Bootstrap service marker is missing' }
         Move-Item -LiteralPath $serviceStage -Destination $service
     }
     if (-not (Test-Path -LiteralPath (Join-Path $service 'service.json'))) { throw 'Existing service directory is unrelated' }
-    $entries = @(([Environment]::GetEnvironmentVariable('Path','User') -split ';') | Where-Object { $_ })
+    $entries = @(([Environment]::GetEnvironmentVariable('Path','User') -split ';') | Where-Object {
+        $_ -and -not $_.StartsWith($serviceBase + '\', [StringComparison]::OrdinalIgnoreCase)
+    })
     if ($entries -notcontains $service) { [Environment]::SetEnvironmentVariable('Path', (($entries + $service) -join ';'), 'User') }
     $shortcuts = Join-Path ([Environment]::GetFolderPath('Programs')) 'Ara'
     New-Item -ItemType Directory -Path $shortcuts -Force | Out-Null

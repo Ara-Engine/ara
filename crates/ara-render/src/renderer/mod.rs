@@ -379,14 +379,16 @@ impl Renderer {
         self.frame_number = 0;
     }
     /// Reset capture convergence, including the exposure state (it scales the
-    /// pre-exposed history), relit GI bounce history (the next frames relight
-    /// every probe, `look::gi::CONVERGE_FRAMES`) and the local-shadow
-    /// selection. The baked surfaces and
+    /// pre-exposed history) and relit GI bounce history: for the next
+    /// `look::gi::CONVERGE_FRAMES` every probe relights and exposure re-meters,
+    /// with the volume shown at once. Also the local-shadow selection. The baked
+    /// surfaces and
     /// their residency remain intact; live camera changes use the cheaper
     /// temporal-only reset instead.
     pub fn reset_capture_history(&mut self) -> Result<()> {
         self.reset_temporal_history();
         self.look.reset_exposure(&self.gpu)?;
+        self.look.settle = crate::look::gi::CONVERGE_FRAMES;
         // Local shadows start over: which lights a capture shadows must not
         // depend on the lights live frames held.
         if let Some(local) = &mut self.look.local {
@@ -423,6 +425,7 @@ impl Renderer {
         gi.slot = 0;
         gi.cursor = 0;
         gi.converge = crate::look::gi::CONVERGE_FRAMES;
+        gi.show();
         Ok(())
     }
     /// Read the completed live frame once, including its IDs and native metadata.

@@ -1,5 +1,6 @@
 //! Look passes in the renderer's frame graph: the sky and fog before lighting,
 //! exposure, bloom and display grading after temporal resolve.
+use super::gi::DISPATCH_PROBES;
 use super::gpu::{
     AO_DENOISED, AO_TRACE, BLOOM_DOWN, BLOOM_UP, FROXELS, GI_DIFFUSE, GI_SPECULAR, LookGpu,
     LookIds, MULTISCATTER, SKY_IRRADIANCE, SKY_PREFILTER, SKY_VIEW, SSR_PYRAMID, SSR_TRACE, SkyKey,
@@ -24,6 +25,10 @@ pub(crate) enum LookPass {
     Bloom(u32),
     Post,
     GiRelight,
+    /// Clears a fresh probe volume (`GiGpu::fresh`).
+    GiClear,
+    /// Scatters staged probe write `n` (`LookGpu::probe_writes`).
+    GiScatter(u32),
     AoTrace,
     AoDenoise,
     GiGather,
@@ -128,6 +133,32 @@ impl LookGpu {
             );
         }
         if let Some(gi) = ids.gi {
+            // New probe records land before the relight reads them.
+            if self.gi.as_ref().is_some_and(|g| g.fresh) {
+                let id = graph.pass(
+                    "GI.Clear",
+                    Queue::Graphics,
+                    gi.map(|r| (r, Access::Storage))
+                        .into_iter()
+                        .chain(shared.iter().copied()),
+                );
+                passes.push((id, LookPass::GiClear));
+            }
+            for (n, &staging) in ids.probe_writes.iter().enumerate() {
+                let id = graph.pass(
+                    "GI.Scatter",
+                    Queue::Graphics,
+                    [
+                        (gi[0], Access::Storage),
+                        (gi[1], Access::Storage),
+                        (gi[2], Access::Storage),
+                        (staging, Access::ShaderRead),
+                    ]
+                    .into_iter()
+                    .chain(shared.iter().copied()),
+                );
+                passes.push((id, LookPass::GiScatter(n as u32)));
+            }
             let id = graph.pass(
                 "GI.Relight",
                 Queue::Graphics,
@@ -370,6 +401,10 @@ impl LookGpu {
         size: [u32; 2],
     ) {
         let p = &self.pipelines;
+        if let LookPass::GiClear | LookPass::GiScatter(_) = pass {
+            self.record_scatter(recorder, pass);
+            return;
+        }
         let groups = |[w, h]: [u32; 2]| [w.div_ceil(8), h.div_ceil(8), 1];
         let (pipeline, argument, dispatch) = match pass {
             LookPass::Transmittance => (p.transmittance, 0, groups([256, 64])),
@@ -399,11 +434,47 @@ impl LookGpu {
                 0,
                 [self.gi.as_ref().map_or(0, |gi| gi.probes), 1, 1],
             ),
+            LookPass::GiClear | LookPass::GiScatter(_) => return,
         };
         recorder.push(Command::Pipeline(pipeline));
         recorder.push(Command::Constants(RootConstants {
             words: [frame_index, input, argument, 0, 0, 0, 0, u32::from(exposed)],
         }));
         recorder.push(Command::Dispatch(dispatch));
+    }
+
+    /// Records `giScatterMain`: a fresh volume's clear (every probe inactive and
+    /// dark) or staged probe write `n`, at most [`DISPATCH_PROBES`] per dispatch.
+    fn record_scatter(&self, recorder: &mut Recorder, pass: LookPass) {
+        let Some(gi) = &self.gi else {
+            return;
+        };
+        let (staging, count, clear) = match pass {
+            LookPass::GiScatter(n) => match self.probe_writes.get(n as usize) {
+                Some((staging, count)) => (staging.index, *count, false),
+                None => return,
+            },
+            _ => (0, gi.probes, true),
+        };
+        let mut words = [
+            0,
+            staging,
+            gi.indices[0],
+            gi.indices[1],
+            gi.moments_storage,
+            gi.atlas | (u32::from(clear) << 31),
+            gi.irradiance_storage[0],
+            gi.irradiance_storage[1],
+        ];
+        recorder.push(Command::Pipeline(self.pipelines.gi_scatter));
+        for first in (0..count).step_by(DISPATCH_PROBES as usize) {
+            words[0] = first;
+            recorder.push(Command::Constants(RootConstants { words }));
+            recorder.push(Command::Dispatch([
+                (count - first).min(DISPATCH_PROBES),
+                1,
+                1,
+            ]));
+        }
     }
 }

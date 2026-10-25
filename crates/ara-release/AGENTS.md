@@ -18,7 +18,7 @@ under target/. The harness fails without it. Smoke children override it with
 their own scratch profile; failure cleanup also stops that profile's Hub.
 
 `package --kind hub|engine` builds independent distributions. Hub installs into
-LOCALAPPDATA/Programs/Ara Hub; its bootstrap service runs from Ara/Services/version.
+LOCALAPPDATA/Programs/Ara Hub; its bootstrap service runs from Ara/Services/version/build.
 `keygen --output <outside-repo-path>` prints only the public key; embed it in
 ara-update/public-keys.txt before packaging. `sign` and `publish` read --key or
 ARA_RELEASE_SIGNING_KEY (a path). Never store private keys/tokens in source.
@@ -54,3 +54,6 @@ Gates: cargo check -p ara-release; cargo test -p ara-release;
 cargo clippy -p ara-release --all-targets -- -D warnings; cargo fmt --all.
 Smoke must clear VULKAN_SDK and use installed resources. Keep exact command logs
 and failures; never turn a failed smoke step into a pass.
+Smoke also installs the standalone Hub setup, seeds a distinct same-version service,
+runs its windowless --service-check, lists engine templates and creates Starter.
+Its LOCALAPPDATA/APPDATA and ARA_CONFIG_DIR all stay inside the smoke directory.

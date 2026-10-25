@@ -87,6 +87,8 @@ pub(crate) struct LookGpu {
     pub deferred: bool,
     /// The renderer history slot a deferred frame left for `finish` to resolve into.
     pub deferred_history: Option<usize>,
+    /// Remaining frames whose exposure snaps to its meter (capture resets).
+    pub settle: u32,
     /// Probe-volume GI, when the scene has acquired probe surfaces.
     pub gi: Option<GiGpu>,
     /// Distant shadows past the cascades (`Shadows::far`).
@@ -95,8 +97,10 @@ pub(crate) struct LookGpu {
     pub cascades: Option<super::cascades::Cascades>,
     /// Cached local-light shadows (`Quality::local_shadows`).
     pub local: Option<super::local::LocalMap>,
-    /// Reused host staging for probe records: buffer, capacity, storage index.
-    pub probe_staging: Option<(Buffer, usize, u32)>,
+    /// Idle host staging for probe records, reused.
+    pub probe_staging: Vec<super::gi::ProbeStaging>,
+    /// Probe records uploaded for the next frame's `GI.Scatter`: staging, count.
+    pub probe_writes: Vec<(super::gi::ProbeStaging, u32)>,
 }
 
 /// Graph identities of the look's persistent resources for one frame.
@@ -110,6 +114,8 @@ pub(crate) struct LookIds {
     pub far: Option<ResourceId>,
     /// The cascade maps, in cascade order.
     pub cascades: Vec<ResourceId>,
+    /// Staging of the probe writes this frame scatters (`LookGpu::probe_writes`).
+    pub probe_writes: Vec<ResourceId>,
     /// The local-shadow atlas.
     pub local: Option<ResourceId>,
 }
@@ -186,11 +192,13 @@ impl LookGpu {
             sky: None,
             deferred: false,
             deferred_history: None,
+            settle: 0,
             gi: None,
             far: None,
             cascades: None,
             local: None,
-            probe_staging: None,
+            probe_staging: Vec::new(),
+            probe_writes: Vec::new(),
         })
     }
 
@@ -358,9 +366,23 @@ impl LookGpu {
                 .local
                 .as_ref()
                 .map(|local| graph.import(Resource::Image(local.atlas), local.state)),
+            probe_writes: self
+                .probe_writes
+                .iter()
+                .map(|(staging, _)| {
+                    graph.import(
+                        Resource::Buffer(staging.buffer),
+                        State {
+                            access: Access::HostWrite,
+                            queue: Queue::Graphics,
+                        },
+                    )
+                })
+                .collect(),
             gi: self.gi.as_ref().map(|gi| {
+                // A fresh volume's contents are undefined until `GI.Clear`.
                 let state = |access| State {
-                    access,
+                    access: if gi.fresh { Access::Undefined } else { access },
                     queue: Queue::Graphics,
                 };
                 let (read, write) = (1 - gi.slot, gi.slot);

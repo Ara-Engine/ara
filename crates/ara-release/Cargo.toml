@@ -9,6 +9,8 @@ default-run = "ara-release"
 
 [dependencies]
 ara-update = { path = "../ara-update" }
+ara-proto.workspace = true
+ara-rpc.workspace = true
 getrandom = "0.3"
 hex = "0.4"
 anyhow.workspace = true

@@ -29,6 +29,13 @@ const TOP_LEAF: usize = 2;
 const BINS: usize = 16;
 const EMPTY: (Vec3, Vec3) = (Vec3::splat(f32::INFINITY), Vec3::splat(f32::NEG_INFINITY));
 
+/// Threads a bake, re-trace or mesh build fans out to: half the logical cores, so
+/// the render thread and the driver keep theirs (an all-core bake starved
+/// presentation into 100+ ms frames on Outpost while it ran).
+fn worker_threads() -> usize {
+    std::thread::available_parallelism().map_or(2, |n| (n.get() / 2).max(1))
+}
+
 /// Diffuse albedo (metal removed), emissive radiance and the share of rays an
 /// alpha-tested or blended surface lets through.
 #[derive(Clone, Copy, Default, PartialEq)]
@@ -531,7 +538,7 @@ impl Tracer {
             }
             meshes.push(reused);
         }
-        let threads = std::thread::available_parallelism().map_or(4, |n| n.get());
+        let threads = worker_threads();
         let chunk = missing.len().div_ceil(threads).max(1);
         std::thread::scope(|scope| {
             let jobs: Vec<_> = missing
@@ -778,7 +785,7 @@ pub(crate) fn bake(tracer: &Tracer) -> Result<ProbeSurfaces> {
     let probes = volume.len();
     let mut texels = vec![[0u32; 4]; probes * SURFACE_TEXELS];
     let mut statics = vec![[0f32; 4]; probes * STATIC_VECTORS];
-    let threads = std::thread::available_parallelism().map_or(4, |n| n.get());
+    let threads = worker_threads();
     let chunk = probes.div_ceil(threads).max(1);
     std::thread::scope(|scope| {
         for ((texels, statics), first) in texels
@@ -827,7 +834,7 @@ pub(crate) fn rebake(
         probes.iter().all(|&id| id < volume.len()),
         "probe outside the lattice"
     );
-    let threads = std::thread::available_parallelism().map_or(4, |n| n.get());
+    let threads = worker_threads();
     let chunk = probes.len().div_ceil(threads).max(1);
     let traced = std::thread::scope(|scope| {
         let jobs: Vec<_> = probes

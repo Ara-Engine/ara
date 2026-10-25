@@ -20,7 +20,7 @@ struct Look {
     float4 giSpacing;  // xyz probe separation, w surface bias (m)
     uint4 giCounts;    // xyz lattice, w probe count (0: no probe GI)
     uint4 giBuffers;   // x surface caches, y probe relocation/state (buffers)
-    uint4 giUpdate;    // x first relit probe, y relit probes this frame, z atlas probes per row
+    uint4 giUpdate;    // x first relit probe, y relit probes this frame, z atlas probes per row, w shading weight (f32 bits)
     uint4 giImages;    // irradiance read (sampled), write (sampled), write (storage), moments (sampled)
     float4 ao;         // x radius (m), y slices, z steps per side
     uint4 aoImages;    // trace, denoised (sampled), trace, denoised (storage); half resolution

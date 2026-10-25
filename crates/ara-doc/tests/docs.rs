@@ -207,3 +207,105 @@ fn dangling_entity_references_warn_with_a_fix() {
     );
     assert!(!d.is_error(), "dangling references don't block edits");
 }
+
+#[test]
+fn local_edits_are_sets_of_a_records_own_data() {
+    use ara_doc::{Edit, RecordId};
+    let doc = AssetId::parse("sc_local001").expect("id");
+    let id = RecordId::parse("e_a").expect("record");
+    let set = |path: &str| Edit::Set {
+        doc: doc.clone(),
+        id: id.clone(),
+        path: path.parse().expect("path"),
+        value: Some(json!(1)),
+    };
+    for path in ["name", "Transform", "Transform.position", "overrides"] {
+        assert!(set(path).is_local(), "{path}");
+    }
+    for path in ["parent", "order", "prefab", "removed"] {
+        assert!(!set(path).is_local(), "{path}");
+    }
+    let structural = [
+        Edit::Create {
+            doc: doc.clone(),
+            id: id.clone(),
+            record: Map::new(),
+        },
+        Edit::Delete {
+            doc: doc.clone(),
+            id: id.clone(),
+        },
+        Edit::Move {
+            doc: doc.clone(),
+            id: id.clone(),
+            parent: None,
+            order: None,
+        },
+        Edit::Document {
+            doc: doc.clone(),
+            path: "levels/local.scene".into(),
+            kind: Some("scene".into()),
+        },
+    ];
+    assert!(structural.iter().all(|e| !e.is_local()));
+}
+
+#[test]
+fn local_checks_report_what_the_whole_check_reports_for_those_records() {
+    use std::collections::BTreeSet;
+    let db = common::db();
+    let mut ws = common::workspace(&db);
+    // A bad instance, a plain record carrying instance-only fields, a valid record,
+    // and a structural problem on a record the local check leaves out.
+    let scene = r#"{
+      "$schema": "ara://schema/scene/1",
+      "id": "sc_local001",
+      "records": {
+        "e_i1": { "prefab": "@prefabs/crate.prefab#pf_crate001", "overrides": { "Transform.positon": [1, 2, 3] }, "removed": ["e_ghost"] },
+        "e_p1": { "name": "Plain", "overrides": {} },
+        "e_ok": { "name": "Fine", "Transform": {} },
+        "e_or": { "parent": "e_gone" }
+      }
+    }"#;
+    let doc = read(scene, "local.scene", &db, Some(ws.index()))
+        .doc
+        .expect("document");
+    let id = doc.id.clone();
+    ws.insert("local.scene", doc);
+    let records: BTreeSet<_> = ["e_i1", "e_p1", "e_ok"]
+        .into_iter()
+        .map(|r| ara_doc::RecordId::parse(r).expect("record"))
+        .collect();
+    let key = |d: &ara_diag::Diagnostic| {
+        (
+            d.code.to_string(),
+            d.location.record.clone().unwrap_or_default(),
+            d.location.path.clone().unwrap_or_default(),
+        )
+    };
+    let local: Vec<_> = ws.check_local(&id, &records, &db).iter().map(key).collect();
+    let whole: Vec<_> = ws
+        .check(&id, None, &db)
+        .iter()
+        .map(key)
+        .filter(|(_, record, _)| records.iter().any(|r| r.as_str() == record))
+        .collect();
+    assert_eq!(local, whole);
+    assert_eq!(
+        local
+            .iter()
+            .map(|(code, record, _)| (code.as_str(), record.as_str()))
+            .collect::<Vec<_>>(),
+        [
+            ("ARA1406", "e_p1"),
+            ("ARA1405", "e_i1"),
+            ("ARA1111", "e_i1")
+        ]
+    );
+    // The missing parent is structural: only the whole check reports it.
+    assert!(
+        ws.check(&id, None, &db)
+            .iter()
+            .any(|d| d.code == codes::MISSING_PARENT)
+    );
+}

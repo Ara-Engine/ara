@@ -606,3 +606,186 @@ fn rebased_undo_skips_what_others_changed_since() {
         .expect_err("conflict");
     assert_eq!(err[0].code, codes::UNDO_CONFLICT);
 }
+
+/// A scene with a pre-existing error (instance-only `overrides` on a plain record):
+/// transactions are judged only on the errors they add.
+const FLAWED: &str = r#"{
+  "$schema": "ara://schema/scene/1",
+  "id": "sc_test0001",
+  "records": {
+    "e_a": { "name": "A", "order": "a0", "Transform": {} },
+    "e_b": { "name": "B", "parent": "e_a", "order": "a0" },
+    "e_c": { "name": "C", "order": "a1", "overrides": {} }
+  }
+}"#;
+
+fn flawed() -> Store {
+    let mut db = SchemaDb::new();
+    ara_doc::register(&mut db);
+    ara_components::register(&mut db);
+    let doc = read(FLAWED, "test.scene", &db, None)
+        .doc
+        .expect("fixture reads");
+    let mut ws = Workspace::new(AssetIndex::new());
+    ws.insert("test.scene", doc);
+    Store::with_ids(db, ws, IdGen::seeded(1))
+}
+
+fn key(d: &ara_diag::Diagnostic) -> String {
+    format!("{}|{}|{}", d.code, d.location, d.message)
+}
+
+/// What committing `edits` must report, from whole-document checks before and
+/// after: `Err` with the first edit that fails to apply, else the new errors.
+fn reference(s: &Store, edits: &[Edit]) -> Result<std::collections::BTreeSet<String>, String> {
+    let errors = |ws: &Workspace| -> std::collections::BTreeSet<String> {
+        ws.check(&doc_id(), None, s.schema())
+            .iter()
+            .filter(|d| d.is_error())
+            .map(key)
+            .collect()
+    };
+    let mut ws = s.workspace().clone();
+    let before = errors(&ws);
+    for edit in edits {
+        ws.apply(edit.clone(), s.schema())
+            .map_err(|d| d.code.to_string())?;
+    }
+    Ok(errors(&ws).difference(&before).cloned().collect())
+}
+
+#[test]
+fn local_edits_validate_their_records_and_keep_earlier_errors_through_structural_ones() {
+    let mut s = flawed();
+    // Editing a record with a pre-existing error commits; the error is not new.
+    s.transact(
+        TxnMeta::by(Author::Human),
+        [set("e_c", "name", json!("C2"))],
+    )
+    .expect("pre-existing error does not block");
+    // A local edit that adds an error is rejected, alone or followed by a valid move.
+    let add_error = set("e_a", "overrides", json!({}));
+    let move_b = Edit::Move {
+        doc: doc_id(),
+        id: rid("e_b"),
+        parent: None,
+        order: None,
+    };
+    for edits in [vec![add_error.clone()], vec![add_error, move_b.clone()]] {
+        let before = text(&s);
+        let err = s
+            .transact(TxnMeta::by(Author::Human), edits.clone())
+            .expect_err("new error");
+        assert_eq!(
+            err.iter().map(|d| d.code).collect::<Vec<_>>(),
+            [codes::NOT_AN_INSTANCE],
+            "{edits:?}"
+        );
+        assert_eq!(text(&s), before);
+    }
+    // A local edit on the flawed record followed by a structural edit still commits.
+    s.transact(
+        TxnMeta::by(Author::Human),
+        [set("e_c", "name", json!("C3")), move_b],
+    )
+    .expect("pre-existing error survives the switch to whole-document checks");
+    assert_eq!(get(&s, "e_c", "name"), json!("C3"));
+}
+
+#[derive(Debug, Clone)]
+enum Step {
+    Name(Index, u8),
+    Overrides(Index),
+    ClearOverrides(Index),
+    Create(Index),
+    DeleteLeaf(Index),
+    Reparent(Index, Option<Index>),
+}
+
+fn step() -> impl Strategy<Value = Step> {
+    prop_oneof![
+        (any::<Index>(), any::<u8>()).prop_map(|(i, n)| Step::Name(i, n)),
+        any::<Index>().prop_map(Step::Overrides),
+        any::<Index>().prop_map(Step::ClearOverrides),
+        any::<Index>().prop_map(Step::Create),
+        any::<Index>().prop_map(Step::DeleteLeaf),
+        (any::<Index>(), prop::option::of(any::<Index>())).prop_map(|(i, p)| Step::Reparent(i, p)),
+    ]
+}
+
+fn step_edit(doc: &Document, step: &Step, n: &mut u32) -> Edit {
+    let ids: Vec<RecordId> = doc.records().keys().cloned().collect();
+    if ids.is_empty() {
+        *n += 1;
+        return Edit::Create {
+            doc: doc_id(),
+            id: rid(&format!("e_n{n}")),
+            record: serde_json::Map::new(),
+        };
+    }
+    let pick = |i: &Index| ids[i.index(ids.len())].clone();
+    match step {
+        Step::Name(i, v) => set(pick(i).as_str(), "name", json!(format!("n{v}"))),
+        Step::Overrides(i) => set(pick(i).as_str(), "overrides", json!({})),
+        Step::ClearOverrides(i) => Edit::Set {
+            doc: doc_id(),
+            id: pick(i),
+            path: "overrides".parse().expect("path"),
+            value: None,
+        },
+        Step::Create(parent) => {
+            *n += 1;
+            let mut record = serde_json::Map::new();
+            record.insert("parent".into(), json!(pick(parent).as_str()));
+            Edit::Create {
+                doc: doc_id(),
+                id: rid(&format!("e_n{n}")),
+                record,
+            }
+        }
+        Step::DeleteLeaf(i) => Edit::Delete {
+            doc: doc_id(),
+            id: pick(i),
+        },
+        Step::Reparent(i, p) => Edit::Move {
+            doc: doc_id(),
+            id: pick(i),
+            parent: p.as_ref().map(|p| pick(p).to_string()),
+            order: None,
+        },
+    }
+}
+
+proptest! {
+    #![proptest_config(ProptestConfig {
+        cases: 96,
+        failure_persistence: None,
+        ..ProptestConfig::default()
+    })]
+
+    /// Transactions of any mix of local and structural edits commit or fail exactly
+    /// as whole-document checks before and after them say, with the same errors.
+    #[test]
+    fn scoped_validation_matches_whole_document_checks(
+        txns in prop::collection::vec(prop::collection::vec(step(), 1..5), 1..12)
+    ) {
+        let mut s = flawed();
+        let mut n = 0;
+        for steps in &txns {
+            let doc = s.workspace().doc("sc_test0001").expect("doc").clone();
+            let edits: Vec<Edit> = steps.iter().map(|st| step_edit(&doc, st, &mut n)).collect();
+            let want = reference(&s, &edits);
+            let before = text(&s);
+            match (s.transact(TxnMeta::by(Author::Human), edits.clone()), want) {
+                (Ok(_), Ok(new)) => prop_assert!(new.is_empty(), "{edits:?} committed despite {new:?}"),
+                (Err(got), Ok(new)) => {
+                    let got: std::collections::BTreeSet<String> = got.iter().map(key).collect();
+                    prop_assert_eq!(got, new, "{:?}", edits);
+                    prop_assert_eq!(text(&s), before);
+                }
+                (Err(got), Err(code)) => prop_assert_eq!(got[0].code.to_string(), code),
+                (Ok(_), Err(code)) => prop_assert!(false, "{edits:?} committed although an edit fails with {code}"),
+            }
+        }
+    }
+}

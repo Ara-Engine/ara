@@ -151,8 +151,7 @@ impl Renderer {
             &FrameInputs {
                 sun_lux: self.content.sun_lux,
                 exposure,
-                reset: self.targets.history.is_none()
-                    || self.look.gi.as_ref().is_some_and(|gi| gi.converge > 0),
+                reset: self.targets.history.is_none() || self.look.settle > 0,
                 frame_number: self.frame_number,
                 sampled,
                 storage,
@@ -847,6 +846,8 @@ impl Renderer {
         if let Some(gi) = &mut self.look.gi {
             gi.advance(self.look.quality.gi_budget);
         }
+        self.probe_writes_scattered()?;
+        self.look.settle = self.look.settle.saturating_sub(1);
         // A deferred frame keeps the previous history for `finish` to resolve against.
         if deferred {
             self.look.deferred_history = Some(output_history);
