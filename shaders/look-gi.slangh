@@ -13,7 +13,9 @@ uint octIndex(int2 p,int size){
 }
 // IEEE half to float from bits; no 16-bit shader capabilities are required.
 float halfToFloat(uint h){uint e=(h>>10)&31,m=h&1023;float v=e==0?float(m)*exp2(-24.):exp2(float(e)-15.)*(1+float(m)/1024.);return (h&0x8000)!=0?-v:v;}
-bool giEnabled(Look l){return l.giCounts.w>0;}
+// A volume shades once converged, fading in by its weight (look/gi.rs GiGpu::weight).
+float giWeight(Look l){return asfloat(l.giUpdate.w);}
+bool giEnabled(Look l){return l.giCounts.w>0 && giWeight(l)>0;}
 float3 giProbePosition(Look l,uint id){uint x=id%l.giCounts.x,y=(id/l.giCounts.x)%l.giCounts.y,z=id/(l.giCounts.x*l.giCounts.y);return l.giOrigin.xyz+float3(x,y,z)*l.giSpacing.xyz;}
 // Relocation offset (xyz) and active flag (w).
 float4 giMeta(Look l,uint probe){return buffers[NonUniformResourceIndex(l.giBuffers.y)].Load<float4>(probe*16);}

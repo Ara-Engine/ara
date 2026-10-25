@@ -87,6 +87,8 @@ pub(crate) struct LookGpu {
     pub deferred: bool,
     /// The renderer history slot a deferred frame left for `finish` to resolve into.
     pub deferred_history: Option<usize>,
+    /// Remaining frames whose exposure snaps to its meter (capture resets).
+    pub settle: u32,
     /// Probe-volume GI, when the scene has acquired probe surfaces.
     pub gi: Option<GiGpu>,
     /// Distant shadows past the cascades (`Shadows::far`).
@@ -186,6 +188,7 @@ impl LookGpu {
             sky: None,
             deferred: false,
             deferred_history: None,
+            settle: 0,
             gi: None,
             far: None,
             cascades: None,

@@ -60,12 +60,11 @@ ECS; `Scene` is an immutable render extraction snapshot, not authoritative state
   exposure, bloom, grading and the display curve. Defaults reproduce M1. Hosts map
   `SceneLook` with `FrameEnvironment::raster` (ara-render-fidelity).
 - `look::gi::ProbeSurfaces` (`Renderer::set_probe_surfaces`): probe GI. A one-time
-  acquisition (`FidelityView::bake_probe_surfaces` on RT devices) records 8x8 oct
-  surface caches; `GI.Relight` relights a budget per frame (sun via CSM, local
-  lights, sky, emissive, last frame's probes) into 6x6 irradiance, DDGI-style.
-  Capture resets relight all for `gi::CONVERGE_FRAMES` reset frames (exposure
-  re-meters), so captures converge at any budget. No runtime rays or noise.
-  `update_probe_surfaces` adopts re-traced same-lattice surfaces keeping irradiance.
+  acquisition records 8x8 oct surface caches; `GI.Relight` relights a budget per
+  frame (sun via CSM, local lights, sky, emissive, last frame's probes) into 6x6
+  irradiance, DDGI-style, without rays or noise. Capture resets relight all for
+  `gi::CONVERGE_FRAMES` (exposure re-meters); a new lattice does so out of shading
+  once its records land, then fades in. Same-lattice updates keep the irradiance.
 - `look::Quality` (`Renderer::set_quality`): per-preset budgets from
   `ara_render_fidelity::presets::RasterPlan`: shadow cascades (count, texels,
   distance; stable light space, practical splits, gather PCF, cascade blend; one

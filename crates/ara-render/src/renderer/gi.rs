@@ -12,8 +12,8 @@ const DISPATCH_PROBES: usize = 65_535;
 
 impl Renderer {
     /// Replaces the probe volume used for global illumination; `None` returns to
-    /// sky-only ambient light. Irradiance starts dark and converges over the next
-    /// frames (one more bounce per relight).
+    /// sky-only ambient light. The new volume relights out of sight for
+    /// `CONVERGE_FRAMES`, then fades into shading.
     pub fn set_probe_surfaces(&mut self, surfaces: Option<&ProbeSurfaces>) -> Result<()> {
         self.drop_probe_volume()?;
         match surfaces {
@@ -26,7 +26,8 @@ impl Renderer {
     /// those records and a compute scatter. Relighting blends them in from the
     /// irradiance already converged, so stale light fades rather than flashing to
     /// sky-only; probes not written yet stay as they were. A different lattice
-    /// first replaces the volume with an empty one.
+    /// first replaces the volume with an empty one, kept out of shading (the
+    /// ambient stays sky-only) until all its records land and it converges.
     pub fn update_probe_surfaces(&mut self, update: &ProbeUpdate) -> Result<()> {
         update.validate()?;
         let same = self.look.gi.as_ref().is_some_and(|gi| {
@@ -68,6 +69,7 @@ impl Renderer {
         self.scatter(Some(index), update.len(), Access::ShaderRead)?;
         if let Some(gi) = self.look.gi.as_mut() {
             gi.bias = update.bias();
+            gi.received(update.len());
         }
         Ok(())
     }
@@ -143,6 +145,8 @@ impl Renderer {
             slot: 0,
             cursor: 0,
             converge: 0,
+            received: 0,
+            weight: 0.,
         };
         Ok(volume)
     }

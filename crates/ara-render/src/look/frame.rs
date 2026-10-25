@@ -63,7 +63,7 @@ pub(crate) struct FrameInputs {
     /// Manual linear exposure multiplier; used unless the look meters automatically.
     pub exposure: f32,
     /// Snap exposure and drop GI hysteresis (first frame, history reset or a
-    /// capture's `gi::CONVERGE_FRAMES`).
+    /// capture's settle frames, `LookGpu::settle`).
     pub reset: bool,
     pub frame_number: u32,
     pub sampled: [[u32; 4]; 2],

@@ -16,11 +16,13 @@ pub const STATIC_VECTORS: usize = 66;
 /// Irradiance kept from the previous frame; relighting is noise-free, so this
 /// only smooths changes (camera-dependent shadowing at cache hits).
 pub(crate) const HYSTERESIS: f32 = 0.6;
-/// Frames after a capture reset that relight every probe as reset frames (no
-/// hysteresis, exposure snaps to its meter): each adds one full bounce, so a
-/// capture's GI and exposure converge within its settle frames whatever the
-/// preset's per-frame budget.
+/// Frames that relight every probe without hysteresis, each adding one full
+/// bounce: after a capture reset (whose exposure re-meters as well, so captures
+/// converge within their settle frames whatever the preset's budget) and once a
+/// new volume's records have all landed.
 pub(crate) const CONVERGE_FRAMES: u32 = 8;
+/// Frames over which a newly converged volume fades into shading.
+const FADE_FRAMES: f32 = 30.;
 
 /// What each probe of a lattice sees, from a one-time acquisition.
 #[derive(Debug, Clone, PartialEq)]
@@ -216,11 +218,28 @@ pub(crate) struct GiGpu {
     pub access: [Access; 2],
     pub slot: usize,
     pub cursor: u32,
-    /// Remaining [`CONVERGE_FRAMES`] (set by a capture reset).
+    /// Remaining [`CONVERGE_FRAMES`].
     pub converge: u32,
+    /// Records written since the volume was created; a new lattice stays out of
+    /// shading until every probe's has landed and the volume has converged.
+    pub received: usize,
+    /// Shading weight: 0 while a new volume fills and converges (the ambient
+    /// stays as it was), then rising to 1 over [`FADE_FRAMES`].
+    pub weight: f32,
 }
 
 impl GiGpu {
+    /// Counts `records` written; once every probe of a new volume has landed it
+    /// starts converging (still out of shading).
+    pub(crate) fn received(&mut self, records: usize) {
+        if self.weight > 0. || self.converge > 0 {
+            return;
+        }
+        self.received += records;
+        if self.received >= self.probes as usize {
+            self.converge = CONVERGE_FRAMES;
+        }
+    }
     /// Probes relit this frame: `budget`, or all of them while converging.
     fn window(&self, budget: u32) -> u32 {
         if self.converge > 0 {
@@ -235,11 +254,17 @@ impl GiGpu {
         let [sx, sy, sz] = self.spacing;
         let [cx, cy, cz] = self.counts;
         let (read, write) = (1 - self.slot, self.slot);
-        frame.gi_origin = [ox, oy, oz, HYSTERESIS];
+        let hysteresis = if self.converge > 0 { 0. } else { HYSTERESIS };
+        frame.gi_origin = [ox, oy, oz, hysteresis];
         frame.gi_spacing = [sx, sy, sz, self.bias];
         frame.gi_counts = [cx, cy, cz, self.probes];
         frame.gi_buffers = [self.indices[0], self.indices[1], 0, 0];
-        frame.gi_update = [self.cursor, self.window(budget), self.atlas, 0];
+        frame.gi_update = [
+            self.cursor,
+            self.window(budget),
+            self.atlas,
+            self.weight.to_bits(),
+        ];
         frame.gi_images = [
             self.irradiance_sampled[read],
             self.irradiance_sampled[write],
@@ -251,7 +276,16 @@ impl GiGpu {
     pub(crate) fn advance(&mut self, budget: u32) {
         self.slot = 1 - self.slot;
         self.cursor = (self.cursor + self.window(budget)) % self.probes;
-        self.converge = self.converge.saturating_sub(1);
+        if self.converge > 0 {
+            self.converge -= 1;
+        } else if self.received >= self.probes as usize {
+            self.weight = (self.weight + 1. / FADE_FRAMES).min(1.);
+        }
+    }
+    /// Shows the volume at once (capture resets converge it within their frames).
+    pub(crate) fn show(&mut self) {
+        self.received = self.probes as usize;
+        self.weight = 1.;
     }
 }
 
