@@ -60,6 +60,18 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
         "Ara editor authority listening on 127.0.0.1:{}",
         server.port
     );
+    // Interactive opens wait in the loading window until the imports settle; bounded
+    // runs open at once, except `--verify-loading`, which only captures that window.
+    let mut splash = None;
+    if options.verify_loading || !options.offscreen() {
+        let capture = options
+            .verify_loading
+            .then(|| (options.output.as_path(), options.dpi.unwrap_or(1.)));
+        match crate::loading::run(&mut editor, &mut server, capture)? {
+            crate::loading::Outcome::Open(shown) => splash = shown,
+            crate::loading::Outcome::Quit => return Ok(()),
+        }
+    }
     let title = format!(
         "Ara | {}",
         editor
@@ -72,7 +84,8 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
     // Bounded runs (captures, verification routes) never put a window on the desktop:
     // they render offscreen and read the UI target back.
     let offscreen = options.offscreen();
-    let window = if offscreen {
+    // Behind a loading window, the main window appears with its first frame.
+    let window = if offscreen || splash.is_some() {
         Window::hidden(&title, options.size)?
     } else {
         Window::new(&title, options.size)?
@@ -763,6 +776,9 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                 }
                 present_ms = present_at.elapsed().as_secs_f64() * 1000.;
                 presented = true;
+                if let Some(splash) = splash.take() {
+                    splash.hand_over(&window);
+                }
                 let graph_present = graph_start.map(|start| start.elapsed().as_secs_f64() * 1000.);
                 if work.paint_nodes > 0 || work.layout_passes > 0 || shell.version != last_ui {
                     if focused_float.is_none() {
