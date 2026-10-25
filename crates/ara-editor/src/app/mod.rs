@@ -426,20 +426,10 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
             let tick_ms = tick_at.elapsed().as_secs_f64() * 1000.;
             // The Game view: its size (physical pixels) is where embedded Play starts and
             // what it resizes to; new frames redraw the UI.
-            if let Some(i) = shell.ui.find("game-surface") {
-                let r = shell.ui.nodes[i].rect;
+            if let Some(frame) = shell.game_frame() {
                 let scale =
                     options.dpi.unwrap_or_else(|| native.dpi()) * windows::ui_scale(&editor);
-                let frame = shell
-                    .ui
-                    .find("game-frame")
-                    .map(|f| shell.ui.nodes[f].rect)
-                    .filter(|f| f.w > 1. && f.h > 1.)
-                    .unwrap_or(r);
-                let size = [
-                    (frame.w * scale).round() as u32,
-                    (frame.h * scale).round() as u32,
-                ];
+                let size = frame.map(|v| (v * scale).round() as u32);
                 if size[0] >= 64 && size[1] >= 64 {
                     shell.game_target = size;
                     editor.game_size = size;

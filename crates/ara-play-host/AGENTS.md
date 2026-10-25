@@ -40,8 +40,11 @@ when it becomes the daemon) and by the editor (`Editor::open`). Depends on ara-h
   Readers cannot initialize/cook/import; only completed owner boundaries publish.
   `progress_revision`/`progress` is the same pattern for `ImportProgress` (done/total,
   pending and failed IDs): published at pipeline start and when a source changes state.
+  One `Publisher` per process owns a project's feed (the first; export packaging's own
+  `Assets` stays silent until it is dropped); snapshot revisions only grow per feed.
   `cargo test -p ara-play-host --test published` holds a real import pending while
-  checking completed generations, retained-snapshot immutability and progress.
+  checking completed generations, retained-snapshot immutability, progress and that
+  export packaging leaves the feed alone.
 - `codes`: ARA7300 play, 7301 player fault, 7302 unknown world, 7303 assets (real
   import failures only), 7304 test failed, 7305 bad request, 7306 info: a sidecar
   recorded an older importer; it was upgraded (typed `SidecarCommand::Version`

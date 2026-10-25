@@ -23,6 +23,9 @@ pub(crate) struct Status {
     pub skip: bool,
     /// Every import settled and the editor is opening.
     pub opening: bool,
+    /// Where Preparing's indeterminate bar is, 0..1 (it sweeps while the pipeline
+    /// has not reported); 0 in other stages, so their markup only changes with them.
+    pub sweep: f32,
     /// Ara Light.
     pub light: bool,
 }
@@ -39,6 +42,9 @@ pub(crate) struct Imports {
     /// Failed sources: project path and the import's error, sorted by path.
     pub failed: Vec<(String, String)>,
 }
+
+/// Width of Preparing's sweeping segment, in percent of the bar.
+const SWEEP: f32 = 30.;
 
 /// The stage a status is in; it decides the title, the bar and the footer.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -116,7 +122,7 @@ pub(crate) fn markup(status: &Status) -> String {
             "Assets import in the editor".to_owned(),
         ),
         (Stage::Preparing, _) | (_, None) => (
-            "Preparing assets".to_owned(),
+            "Preparing imports…".to_owned(),
             String::new(),
             0.,
             "Checking which sources need importing".to_owned(),
@@ -161,11 +167,19 @@ pub(crate) fn markup(status: &Status) -> String {
         if review { "count-warning" } else { "count" },
         escape(&count)
     ));
-    out.push_str(&format!(
-        "<panel id='loading-bar' class='bar'><panel id='loading-bar-fill' class='{}' style='width:{:.1}%' /></panel>",
-        if review { "bar-fill bar-warning" } else { "bar-fill" },
-        (fraction * 100.).clamp(0., 100.)
-    ));
+    if stage == Stage::Preparing {
+        // No counts yet: a segment sweeps back and forth instead of an empty bar.
+        let at = (1. - (2. * status.sweep.clamp(0., 1.) - 1.).abs()) * (100. - SWEEP);
+        out.push_str(&format!(
+            "<panel id='loading-bar' class='bar' style='flex-direction:row'><panel id='loading-bar-gap' style='width:{at:.1}%;flex-shrink:0' /><panel id='loading-bar-fill' class='bar-fill' style='width:{SWEEP}%;flex-shrink:0' /></panel>"
+        ));
+    } else {
+        out.push_str(&format!(
+            "<panel id='loading-bar' class='bar'><panel id='loading-bar-fill' class='{}' style='width:{:.1}%' /></panel>",
+            if review { "bar-fill bar-warning" } else { "bar-fill" },
+            (fraction * 100.).clamp(0., 100.)
+        ));
+    }
     out.push_str(&format!(
         "<panel id='loading-detail-row' class='line'><text id='loading-detail' class='caption detail' text='{}' /><text id='loading-elapsed' class='caption elapsed' text='{}' /></panel></panel>",
         escape(&detail),
@@ -311,6 +325,21 @@ mod tests {
         }));
         assert_eq!(done.stage(), Stage::Opening);
         assert_eq!(done.button(), None);
+    }
+
+    #[test]
+    fn preparing_sweeps_a_segment_instead_of_showing_an_empty_bar() {
+        let at = |sweep: f32| {
+            let markup = markup(&Status {
+                sweep,
+                ..status(None)
+            });
+            assert!(markup.contains("text='Preparing imports…'"));
+            assert!(markup.contains("id='loading-bar-fill' class='bar-fill' style='width:30%"));
+            markup
+        };
+        assert_ne!(at(0.1), at(0.4), "the segment moves");
+        assert!(at(0.5).contains("id='loading-bar-gap' style='width:70.0%"));
     }
 
     #[test]
