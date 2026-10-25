@@ -1,4 +1,5 @@
 //! The shipped binaries are the test subjects; no development executable is used.
+mod build;
 use crate::support::{self, run};
 use anyhow::{Context, Result, ensure};
 use ara_proto::Endpoint;
@@ -45,6 +46,11 @@ impl Environment {
     }
     fn command(&self, executable: impl AsRef<std::ffi::OsStr>) -> Command {
         let mut command = Command::new(executable);
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::CommandExt;
+            command.creation_flags(0x0800_0000);
+        }
         let paths = std::env::split_paths(&std::env::var_os("PATH").unwrap_or_default())
             .filter(|p| {
                 !p.to_string_lossy()
@@ -166,6 +172,21 @@ pub fn smoke(root: &Path, version: &str) -> Result<()> {
             })(),
         )?;
         let project = env.directory.join("starter project");
+        let export_project = env.directory.join("Starter export");
+        step(
+            "create installed Starter for export",
+            run(
+                env.command(env.installed.join("ara.exe"))
+                    .args(["hub", "create"])
+                    .arg(&export_project)
+                    .args(["--name", "Starter export smoke", "--template", "starter"]),
+                &env.directory.join("export-create.log"),
+            ),
+        )?;
+        step(
+            "installed Build Current Profile and exported game ARA_RESULT",
+            build::run(&env, &export_project),
+        )?;
         step(
             "ara init",
             run(
@@ -352,7 +373,7 @@ pub fn smoke(root: &Path, version: &str) -> Result<()> {
     fs::write(
         dist.join("SMOKE_RESULTS.txt"),
         format!(
-            "Ara {version}: PASS\nEvidence: {}\nSilent engine and standalone Hub SFX installs; same-version stale service replacement; standalone Hub lists outpost/showcase/starter from the installed engine and creates Starter; version; doctor without VULKAN_SDK; init; headless scene capture; native editor screenshot; every installed template opens in the editor (20 offscreen frames); global MCP project list; installed player 120 ticks; engine registration; uninstall.\nShell integration was disabled and every child used isolated config, local and roaming profile directories.\n",
+            "Ara {version}: PASS\nEvidence: {}\nSilent engine and standalone Hub SFX installs; same-version stale service replacement; standalone Hub lists outpost/showcase/starter from the installed engine and creates Starter; installed editor builds Starter with build.current, resolves the shipped player's PDB hash, and the exported game reports verified ARA_RESULT after 8 headless ticks; version; doctor without VULKAN_SDK; init; headless scene capture; native editor screenshot; every installed template opens in the editor (20 offscreen frames); global MCP project list; installed player 120 ticks; engine registration; uninstall.\nShell integration was disabled and every child used isolated config, local and roaming profile directories.\n",
             env.directory.display()
         ),
     )?;
@@ -401,7 +422,7 @@ fn standalone_hub(env: &Environment, dist: &Path, version: &str) -> Result<()> {
             )?;
         }
     }
-    let mut stale = OwnedService(
+    let mut stale = OwnedProcess(
         env.command(&stale_exe)
             .args(["hub", "serve"])
             .stdin(Stdio::null())
@@ -480,9 +501,22 @@ fn standalone_hub(env: &Environment, dist: &Path, version: &str) -> Result<()> {
     Ok(())
 }
 
-struct OwnedService(Child);
-impl Drop for OwnedService {
+struct OwnedProcess(Child);
+impl Drop for OwnedProcess {
     fn drop(&mut self) {
+        #[cfg(windows)]
+        if self.0.try_wait().is_ok_and(|status| status.is_none()) {
+            use std::os::windows::process::CommandExt;
+            // A failed export can still own a dotnet compiler/import worker.
+            // Kill only this smoke-owned process tree before reaping its root.
+            let _ = Command::new("taskkill.exe")
+                .args(["/PID", &self.0.id().to_string(), "/T", "/F"])
+                .creation_flags(0x0800_0000)
+                .stdin(Stdio::null())
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .status();
+        }
         let _ = self.0.kill();
         let _ = self.0.wait();
     }

@@ -35,8 +35,9 @@ existing directories, preserve user projects, and use Hub RPC for registration.
 Notices use cargo metadata (including transitive packages) and actual license
 files, plus checked-in vendor and shader-tool notices. Microsoft .NET is a
 prerequisite; only open-source Roslyn/NuGet dependencies are redistributed.
-PDBs stay in a separate symbols ZIP with binary hashes; never inside the portable
-archive. The symbols command converts these PDBs through ara-crash when needed.
+Only `ara_player.pdb` also ships beside `ara-player.exe`: Windows runtime exports
+pin that file and archive it privately. Other PDBs stay in the separate symbols ZIP
+with binary hashes. The symbols command converts them through ara-crash when needed.
 
 `ara-hub.exe` and its updater ship when `crates/ara-hub` exists; the engine installer
 registers its build, installs/reuses the standalone Hub and points its Hub shortcut
@@ -49,6 +50,8 @@ Then `references::check` gates every template: each `@path#id`, glTF URI, sideca
 source, look `scene` and project `main` must resolve inside it, or packaging fails
 naming `document -> missing path` (`ara-release references <dir>` runs it alone).
 Smoke opens every installed template in the installed editor (`--frames 20`).
+It also creates Starter, queues `build.current` in an offscreen installed editor,
+checks the resolved PDB hash, and requires verified `ARA_RESULT` after 8 game ticks.
 
 Gates: cargo check -p ara-release; cargo test -p ara-release;
 cargo clippy -p ara-release --all-targets -- -D warnings; cargo fmt --all.
