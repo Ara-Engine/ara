@@ -1499,6 +1499,12 @@ fn the_title_bar_names_the_scene_without_its_extension() {
     let mut editor = Editor::open(&project.0).unwrap();
     let mut shell = Shell::new(&mut editor, [1440., 900.]).unwrap();
     shell.rebuild(&mut editor).unwrap();
+    // The project by its manifest name, not its folder (the loading window too).
+    let name = &shell.ui.nodes[shell.ui.find("crumb-project").unwrap()];
+    assert_eq!(
+        name.text.as_ref().map(|t| t.value.as_str()),
+        Some("UX test")
+    );
     let crumb = &shell.ui.nodes[shell.ui.find("crumb-scene").unwrap()];
     assert_eq!(crumb.text.as_ref().map(|t| t.value.as_str()), Some("main"));
     assert_eq!(

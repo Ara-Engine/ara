@@ -517,7 +517,18 @@ impl Journey {
                     return Ok(false);
                 }
                 let docked = shell.game_host().is_some_and(|(host, _)| host.is_none());
-                Ok(docked && editor.state.playing.is_none() && !shell.game_live && settled)
+                if !(docked && editor.state.playing.is_none() && !shell.game_live && settled) {
+                    return Ok(false);
+                }
+                // Every Play → Stop → Play so far: nothing read a world that wasn't running.
+                let unknown = super::qa::unknown_world_errors(editor)?;
+                if unknown > 0 {
+                    return Err(format!(
+                        "{unknown} ARA7302 errors: the editor asked a Play world that was not running"
+                    )
+                    .into());
+                }
+                Ok(true)
             }
             "play-start" => {
                 if first {
