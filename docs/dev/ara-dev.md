@@ -129,7 +129,9 @@ budget for contended fixture builds. The overall gate deadline still caps every 
 `ARA_TEST_TIMEOUT_SECONDS` remains an explicit override. Timeout kills the process tree
 and fails the gate. Separate suite logs and
 `test-execution.json` record results/times. Doctests and diagnostic coverage remain checked
-through Cargo, each with a 180-second phase deadline as well as the overall gate deadline.
+through Cargo using the overall gate deadline, without an independent phase cap.
+`--timeout 0` leaves those Cargo phases unlimited. Reported Cargo package-cache
+lock waits pause the execution budget until Cargo emits progress again.
 No nextest installation is required; the built-in scheduler is used when that optional
 developer tool is absent. This is an admission estimate, not an OS memory sandbox.
 
@@ -368,9 +370,12 @@ across failing targets so one run reports all failing suites. Diagnostic coverag
 is reused when already passed in the selected test set. `--plan` prints the exact
 selection and reasons without building; JSON plans say `planned`, never `passed`.
 
-An affected gate has a total 2400-second deadline, including metadata and Cargo
-cache waits. Timeout returns failure with the command log and terminates its
-process tree (a kill-on-close Windows job). It cannot waive an unfinished test.
+An affected gate has a 2400-second execution budget, including metadata.
+Reported Cargo package-cache lock waits are excluded and carried forward to later
+phases; command details record excluded waits, while reported seconds remain wall time.
+Build-directory/shared-lane waits still count. Timeout returns failure with the
+command log and terminates its process tree (a kill-on-close Windows job).
+It cannot waive an unfinished test.
 `--timeout <seconds>` overrides the budget; `--timeout 0` disables it. `--full`
 selects workspace clippy/tests and has no default deadline for nightly use. The
 deadline starts inside ara-dev; the Windows helper isolates the bootstrap build.

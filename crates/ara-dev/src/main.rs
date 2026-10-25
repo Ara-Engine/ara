@@ -3,6 +3,7 @@
 
 mod binaries;
 mod build_paths;
+mod cargo_wait;
 mod check;
 mod compile_cache;
 mod editor;
@@ -59,7 +60,7 @@ enum Command {
         /// Show affected packages without running build/test gates.
         #[arg(long, conflicts_with = "full")]
         plan: bool,
-        /// Total seconds including cache waits (default 2400; --full unlimited; 0 unlimited).
+        /// Seconds excluding Cargo package-cache waits (default 2400; --full/0 unlimited).
         #[arg(long)]
         timeout: Option<u64>,
         /// Bypass RUSTC_WRAPPER when a shared compiler cache is contended.
