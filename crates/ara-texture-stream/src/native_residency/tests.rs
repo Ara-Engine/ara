@@ -364,14 +364,18 @@ fn mean_texel_decodes_the_coarsest_whole_block_level() {
     let mut set = bank(1 << 20, 1 << 20);
     // BC4 blocks whose endpoints are both 200 decode to a constant red of 200/255.
     let id = set.register([7; 32], source([16, 16], 3, 200)).unwrap();
-    let mean = set.mean_texel(id.index()).unwrap();
+    let mean = set.mean_texel(id.index(), false).unwrap();
     assert!((mean[0] - 200. / 255.).abs() < 1e-3, "{mean:?}");
-    assert!(set.mean_texel(id.index() + 1).is_none());
-    let (size, texels) = set.texels(id.index(), 8).unwrap();
+    // A material that decodes sRGB itself gets the linear value.
+    let decoded = set.mean_texel(id.index(), true).unwrap();
+    let linear = ((200. / 255. + 0.055) / 1.055f32).powf(2.4);
+    assert!((decoded[0] - linear).abs() < 1e-3, "{decoded:?}");
+    assert!(set.mean_texel(id.index() + 1, false).is_none());
+    let (size, texels) = set.texels(id.index(), 8, false).unwrap();
     assert_eq!(size, [8, 8], "the finest level within the side limit");
     assert_eq!(texels.len(), 64);
     assert_eq!(
-        set.texels(id.index(), 1).unwrap().0,
+        set.texels(id.index(), 1, false).unwrap().0,
         [4, 4],
         "else the coarsest"
     );

@@ -220,11 +220,19 @@ impl NativeResidency {
 
     /// Linear RGBA texels (row-major) of a registered map, decoded on the CPU from
     /// its finest level of at least one whole block with both sides at most
-    /// `max_side`, else its coarsest such level (sRGB maps are linearised per
-    /// texel). For one-time consumers on worker threads, such as probe GI bakes and
-    /// emitter lights; residency uploads never decode. `None` for unknown IDs or
+    /// `max_side`, else its coarsest such level. Colour is linearised per texel
+    /// for cooked sRGB views and wherever `decode` is set: a raw view whose
+    /// material decodes sRGB in the shader (`BASE_COLOR_DECODE_SRGB` /
+    /// `EMISSIVE_DECODE_SRGB`), so pass that material's bit for the slot. For
+    /// one-time consumers on worker threads, such as probe GI bakes and emitter
+    /// lights; residency uploads never decode. `None` for unknown IDs or
     /// undecodable levels.
-    pub fn texels(&self, id: u32, max_side: u32) -> Option<([u32; 2], Vec<[f32; 4]>)> {
+    pub fn texels(
+        &self,
+        id: u32,
+        max_side: u32,
+        decode: bool,
+    ) -> Option<([u32; 2], Vec<[f32; 4]>)> {
         let entry = self.entries.get(id as usize)?;
         let source = &entry.source;
         let size = |level: u32| source.mip(level).map(|m| m.size);
@@ -259,7 +267,7 @@ impl NativeResidency {
                 // Decoded texels are 0xAARRGGBB.
                 let rgba = [(p >> 16) & 255, (p >> 8) & 255, p & 255, p >> 24];
                 let mut texel = rgba.map(|v| v as f32 / 255.);
-                if entry.srgb {
+                if entry.srgb || decode {
                     for v in &mut texel[..3] {
                         *v = linear(*v);
                     }
@@ -271,9 +279,9 @@ impl NativeResidency {
     }
 
     /// Mean linear RGBA of a registered map over its coarsest level of at least
-    /// one whole block ([`Self::texels`]).
-    pub fn mean_texel(&self, id: u32) -> Option<[f32; 4]> {
-        let (_, texels) = self.texels(id, 4)?;
+    /// one whole block ([`Self::texels`], `decode` likewise).
+    pub fn mean_texel(&self, id: u32, decode: bool) -> Option<[f32; 4]> {
+        let (_, texels) = self.texels(id, 4, decode)?;
         let mut sum = [0f64; 4];
         for texel in &texels {
             for (sum, v) in sum.iter_mut().zip(texel) {
