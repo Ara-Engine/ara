@@ -471,7 +471,13 @@ fn run(cli: Cli) -> Result<bool, Diagnostic> {
             Some(root) => commands::mcp(&project::root(Some(root), &[])?).map_err(io),
             None => commands::hub::global_mcp().map_err(io),
         },
-        Command::Hub { command } => commands::hub::hub(command).map_err(io),
+        Command::Hub { command } => match commands::hub::hub(command) {
+            Ok(result) => Ok(result),
+            Err(error) => {
+                engine::print_diags(&error.diagnostics(), json);
+                Ok(false)
+            }
+        },
         other => {
             let root = project::root(root_flag, &[])?;
             match protocol_call(other) {

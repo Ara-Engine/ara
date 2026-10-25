@@ -43,7 +43,7 @@ params/results use camelCase. No engine session is needed for `hub.*`.
 | `hub.update` | `{project,name?,thumbnail?,engineVersion?} (thumbnail:null clears)` | Updated card; rename, preview image, version picker; close before changing engine pin |
 | `hub.remove` | `{project}` | `{removed:id}`; unregister only, preserving files |
 | `hub.templates` | `{}` | `{templates:[{id,name,thumbnail,description?,setup?,engineVersion?}]}`; source engine pins for Create |
-| `hub.create` | `{template,name,path,engineVersion?,dryRun?}` | New registered project card; path must be absolute and not exist. Every problem is one diagnostic whose `location.path` is the field (`name`, `path`, `template`, `engineVersion`); `dryRun` returns `{valid,path}` without creating |
+| `hub.create` | `{template,name,path,engineVersion?,dryRun?}` | New registered project card; path must be absolute and not exist; missing parents are created. Every problem is one diagnostic whose `location.path` is the field (`name`, `path`, `template`, `engineVersion`); `dryRun` returns `{valid,path}` without creating |
 | `hub.open` | `{project,headless?}` | Status; false/default opens native editor, true starts headless |
 | `hub.close` | `{project}` | Closed status after graceful flush/shutdown |
 | `hub.status` | `{project?}` | One status or `{projects:[status],revision,build}`; build is the service executable's SHA-256 |

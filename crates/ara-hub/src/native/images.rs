@@ -105,6 +105,18 @@ fn rasterize(svg: &str, size: [u32; 2]) -> anyhow::Result<Image> {
 /// Rasterize icons and the wordmark for this device scale. Themes never re-rasterize:
 /// icons are white and tinted per element; each theme has its own wordmark.
 pub fn install(renderer: &mut Renderer, dpi: f32) -> anyhow::Result<()> {
+    let starter =
+        image::load_from_memory(include_bytes!("../../../../release/starter.png"))?.into_rgba8();
+    renderer
+        .image(
+            texture("template-starter"),
+            Image {
+                width: starter.width(),
+                height: starter.height(),
+                rgba: starter.into_raw(),
+            },
+        )
+        .map_err(|e| anyhow::anyhow!("{e}"))?;
     let size = (16. * dpi.max(2.)).ceil() as u32;
     for (name, svg) in ICONS {
         let image = rasterize(&svg.replace("currentColor", "#ffffff"), [size, size])?;
