@@ -3,6 +3,7 @@
 // HQ: all 285 mode/partition/rotation/index-selection combinations. Balanced: 85.
 // Fixed-order reductions compare (RGBA squared error, candidate ID).
 #include "bc7_tables.slangh"
+#include "bc7_quant.slangh"
 
 struct Root { uint input; uint output; uint blockCount; uint preset; uint a; uint b; uint c; uint d; };
 #ifdef VULKAN
@@ -64,25 +65,22 @@ int expandEndpoint(uint q, uint bits) {
     return int(v | (v >> bits));
 }
 void quantizeEndpoint(int value, uint bits, bool hasP, uint p, out uint qBest, out int decodedBest) {
+    if (bits == 8) { qBest = uint(value); decodedBest = value; return; }
+    uint table = hasP ? (bits-4)*2+p : 8+bits-5;
+    uint packed = BC7_QUANT[table*64+(uint(value) >> 2)];
+    qBest = (packed >> ((uint(value) & 3)*8)) & 255;
     uint hb = hasP ? 1 : 0;
-    uint precision = bits+hb;
-    uint raw = ((uint(value)*((1u << precision)-1)+127)/255) >> hb;
-    int error = 0x7fffffff;
-    qBest = 0; decodedBest = 0;
-    for (uint q = raw > 0 ? raw-1 : 0; q <= min(raw+1,(1u << bits)-1); ++q) {
-        int decoded = expandEndpoint((q << hb) | p,precision);
-        int d = value-decoded;
-        if (d*d < error) { error = d*d; qBest = q; decodedBest = decoded; }
-    }
+    decodedBest = expandEndpoint((qBest << hb) | p,bits+hb);
 }
-void seedEndpoints(int4 pixels[16], uint mask, uint first, uint channels, bool bbox, out int4 loEndpoint, out int4 hiEndpoint) {
+void seedEndpoints(int4 pixels[16], uint mask, uint first, uint channels, bool bbox, out int4 loEndpoint, out int4 hiEndpoint, out bool uniform) {
     int4 lo = int4(255), hi = int4(0), sum = int4(0);
     int count = int(countbits(mask));
     int4 active = activeChannels(first,channels);
     for (uint i = 0; i < 16; ++i) if ((mask & (1u << i)) != 0) {
         lo = min(lo,pixels[i]); hi = max(hi,pixels[i]); sum += pixels[i];
     }
-    if (bbox) { loEndpoint = lo; hiEndpoint = hi; return; }
+    uniform = all((hi-lo)*active == 0);
+    if (bbox || uniform) { loEndpoint = lo; hiEndpoint = hi; return; }
     uint major = first;
     [unroll] for (uint c = 0; c < 4; ++c) if (active[c] != 0 && hi[c]-lo[c] > hi[major]-lo[major]) major = c;
     int4 axis = int4(0); axis[major] = 64;
@@ -112,12 +110,26 @@ void seedEndpoints(int4 pixels[16], uint mask, uint first, uint channels, bool b
         if (projection > maximum) { maximum = projection; hiEndpoint = pixels[i]; }
     }
 }
-void assignIndices(int4 pixels[16], uint mask, uint first, uint channels, uint indexBits, inout Fit f) {
+void assignIndices(int4 pixels[16], uint mask, uint first, uint channels, uint indexBits, bool uniform, inout Fit f) {
     int4 palette[16];
     int4 active = activeChannels(first,channels);
     for (uint j = 0; j < (1u << indexBits); ++j) {
         int w = WEIGHTS[(indexBits-2)*16+j];
         palette[j] = ((64-w)*f.ep0+w*f.ep1+32)>>6;
+    }
+    if (uniform) {
+        // All fitted channels match: evaluate their common selector once, then
+        // scale the error. Later p-bit re-quantization rounds still run.
+        int4 pixel = pixels[firstbitlow(mask)];
+        uint error = 0xffffffff, index = 0;
+        for (uint j = 0; j < (1u << indexBits); ++j) {
+            int4 d = (pixel-palette[j])*active;
+            uint e = uint(dot4(d,d));
+            if (e < error) { error = e; index = j; }
+        }
+        f.error = error*countbits(mask);
+        f.indices = uint2(index*0x11111111u);
+        return;
     }
     f.error = 0;
     for (uint i = 0; i < 16; ++i) if ((mask & (1u << i)) != 0) {
@@ -165,7 +177,8 @@ Fit fitSubset(int4 pixels[16], uint mask, uint first, uint channels, uint bits, 
     Fit best = emptyFit();
     for (uint s = 0; s < seeds; ++s) {
         int4 loEndpoint, hiEndpoint;
-        seedEndpoints(pixels,mask,first,channels,s != 0,loEndpoint,hiEndpoint);
+        bool uniform;
+        seedEndpoints(pixels,mask,first,channels,s != 0,loEndpoint,hiEndpoint,uniform);
         for (uint iteration = 0; iteration < rounds; ++iteration) {
             Fit current = emptyFit();
             for (uint pattern = 0; pattern < (1u << pbits); ++pattern) {
@@ -176,7 +189,7 @@ Fit fitSubset(int4 pixels[16], uint mask, uint first, uint channels, uint bits, 
                     quantizeEndpoint(loEndpoint[c],bits,pbits != 0,trial.p0,trial.q0[c],trial.ep0[c]);
                     quantizeEndpoint(hiEndpoint[c],bits,pbits != 0,trial.p1,trial.q1[c],trial.ep1[c]);
                 }
-                assignIndices(pixels,mask,first,channels,indexBits,trial);
+                assignIndices(pixels,mask,first,channels,indexBits,uniform,trial);
                 if (trial.error < current.error) current = trial;
                 if (current.error == 0) return current;
             }
@@ -187,6 +200,9 @@ Fit fitSubset(int4 pixels[16], uint mask, uint first, uint channels, uint bits, 
             loEndpoint = nextLo; hiEndpoint = nextHi;
             if (converged) break;
         }
+        // The box seed repeats the same active endpoints. Preserve all p-bit
+        // refinement rounds: re-quantization can improve a singular fit.
+        if (uniform) return best;
     }
     return best;
 }

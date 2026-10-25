@@ -127,3 +127,44 @@ fn exact_opaque_extremes_and_binary_alpha_survive() {
         }
     }
 }
+
+#[test]
+fn singular_fits_preserve_later_pbit_requantization() {
+    // Frozen from 2bea58c1. Stopping a constant plane after its first p-bit
+    // search chooses mode 6 here; later re-quantization makes mode 7 better.
+    assert_eq!(
+        encode_block(&[0xf4d8257f; 16], 1),
+        [0xf07c0080, 0xd6c85215, 0x3def7b5b, 0xaaaaaaac]
+    );
+}
+
+#[test]
+fn shader_quantization_table_matches_exhaustive_endpoint_search() {
+    let words: Vec<u32> = include_str!("../shaders/bc7_quant.slangh")
+        .split(|c: char| c.is_ascii_whitespace() || matches!(c, ',' | '{' | '}' | ';'))
+        .filter_map(|word| word.strip_prefix("0x"))
+        .map(|hex| {
+            u32::from_str_radix(hex, 16).expect("quantization table has valid hexadecimal words")
+        })
+        .collect();
+    assert_eq!(words.len(), 704);
+    for table in 0..11 {
+        let has_p = table < 8;
+        let bits = if has_p { 4 + table / 2 } else { table - 3 } as u32;
+        let p = if has_p { table as u32 & 1 } else { 0 };
+        let precision = bits + u32::from(has_p);
+        for value in 0..256 {
+            let expected = (0..1 << bits)
+                .min_by_key(|&q| {
+                    let v = ((q << u32::from(has_p)) | p) << (8 - precision);
+                    let decoded = (v | (v >> precision)) as i32;
+                    let d = value as i32 - decoded;
+                    (d * d, q)
+                })
+                .expect("each BC7 endpoint precision has representable values");
+            let actual = (words[table * 64 + value / 4] >> ((value & 3) * 8)) & 255;
+            assert_eq!(actual, expected, "table {table}, input {value}");
+            assert_eq!(quantize(value as i32, bits, has_p, p).0, expected);
+        }
+    }
+}

@@ -10,6 +10,8 @@
 //! No color-space transform is performed: the caller supplies canonical texels.
 //! The shader's bounded reciprocal and subtractive division are exact equivalents
 //! of the ordinary integer divisions used here.
+//! Uniform planes reuse one selector evaluation and the first seed's fit, while
+//! preserving every p-bit re-quantization round and the original endpoint ties.
 
 #[derive(Clone, Copy)]
 struct Mode {
@@ -143,7 +145,7 @@ fn seed(
     first: usize,
     channels: usize,
     bbox: bool,
-) -> [[i32; 4]; 2] {
+) -> ([[i32; 4]; 2], bool) {
     let mut lo = [255; 4];
     let mut hi = [0; 4];
     let mut sum = [0; 4];
@@ -157,8 +159,9 @@ fn seed(
             }
         }
     }
-    if bbox {
-        return [lo, hi];
+    let uniform = (first..first + channels).all(|c| lo[c] == hi[c]);
+    if bbox || uniform {
+        return ([lo, hi], uniform);
     }
     let mut axis = [0_i32; 4];
     let mut major = first;
@@ -216,7 +219,7 @@ fn seed(
             }
         }
     }
-    endpoints
+    (endpoints, false)
 }
 
 fn assign(
@@ -225,6 +228,7 @@ fn assign(
     first: usize,
     channels: usize,
     index_bits: u32,
+    uniform: bool,
     fit: &mut Fit,
 ) {
     let weights = &WEIGHTS[(index_bits - 2) as usize];
@@ -234,6 +238,26 @@ fn assign(
         for (c, value) in palette[j].iter_mut().enumerate().skip(first).take(channels) {
             *value = ((64 - w) * fit.ep[0][c] + w * fit.ep[1][c] + 32) >> 6;
         }
+    }
+    if uniform {
+        // Inactive channels may vary; only the channels fitted by this plane matter.
+        let pixel = pixels[mask.trailing_zeros() as usize];
+        let mut error = u32::MAX;
+        let mut index = 0;
+        for (j, color) in palette.iter().enumerate().take(1 << index_bits) {
+            let mut e = 0;
+            for c in first..first + channels {
+                let d = pixel[c] - color[c];
+                e += (d * d) as u32;
+            }
+            if e < error {
+                error = e;
+                index = j as u32;
+            }
+        }
+        fit.error = error * mask.count_ones();
+        fit.indices = [index; 16];
+        return;
     }
     fit.error = 0;
     for (i, pixel) in pixels.iter().enumerate() {
@@ -315,7 +339,7 @@ fn fit_subset(
     let seeds = if preset == 0 || preset == 3 { 1 } else { 2 };
     let mut best = Fit::empty();
     for s in 0..seeds {
-        let mut endpoints = seed(pixels, mask, first, channels, s != 0);
+        let (mut endpoints, uniform) = seed(pixels, mask, first, channels, s != 0);
         for _ in 0..rounds {
             let mut iteration = Fit::empty();
             for pattern in 0..1 << pbits {
@@ -331,7 +355,9 @@ fn fit_subset(
                             quantize(value, bits, pbits != 0, trial.p[e]);
                     }
                 }
-                assign(pixels, mask, first, channels, index_bits, &mut trial);
+                assign(
+                    pixels, mask, first, channels, index_bits, uniform, &mut trial,
+                );
                 if trial.error < iteration.error {
                     iteration = trial;
                 }
@@ -349,6 +375,11 @@ fn fit_subset(
             if converged {
                 break;
             }
+        }
+        // Re-quantization can improve p-bit choices even when the determinant
+        // is zero. Only the second seed is redundant for a uniform plane.
+        if uniform {
+            return best;
         }
     }
     best
