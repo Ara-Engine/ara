@@ -188,7 +188,15 @@ impl Shell {
                             h: 16.,
                         },
                         assets_panel::asset_icon(a),
-                        muted,
+                        if n.element
+                            .attrs
+                            .get("class")
+                            .is_some_and(|c| c.contains("row-selected"))
+                        {
+                            on_selection
+                        } else {
+                            color(&format!("--{}", names::kind_color(a)))
+                        },
                     );
                     // Importing and failed assets: a status icon at the row's end.
                     if let Some(import) = self.imports.of(a) {

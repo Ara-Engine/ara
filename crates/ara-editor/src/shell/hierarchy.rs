@@ -142,17 +142,16 @@ impl Shell {
                 }
             }
         }
-        let scene = editor
+        // The scene by name ("main", not "main.scene"); its path is the tooltip.
+        let path = editor
             .host
             .store()
             .workspace()
             .path_of(&editor.state.doc)
             .unwrap_or("Scene")
-            .rsplit('/')
-            .next()
-            .unwrap_or("Scene")
             .to_owned();
-        out.push_str(&format!("<panel id='hierarchy-scene' class='row' style='height:22px;min-height:22px;padding-left:8px;gap:6px;flex-shrink:0'>{}<text id='hierarchy-scene-name' class='fg' text='{}' /></panel>",icons::icon_in("hierarchy-scene","clapperboard","icon-sm"),escape(&scene)));
+        let scene = names::stem(names::file_name(&path));
+        out.push_str(&format!("<panel id='hierarchy-scene' class='row' style='height:22px;min-height:22px;padding-left:8px;gap:6px;flex-shrink:0' description='{}'>{}<text id='hierarchy-scene-name' class='fg' text='{}' /></panel>",escape(&path),icons::icon_in("hierarchy-scene","clapperboard","icon-sm"),escape(scene)));
         if resolved.is_empty() {
             self.empty(out, "hierarchy-empty", "list-tree", "This scene is empty", "Create an entity, or drag a model in from Assets. Shift+A searches every Create command.", &[("hierarchy-empty-create", "Create entity", "create.empty"), ("hierarchy-empty-cube", "Cube", "create.cube")]);
         } else if self.hierarchy.items.is_empty() {
