@@ -1,0 +1,459 @@
+// Additive BC6H split protocol 1. encodeBc6h keeps its original ABI/arithmetic.
+// root.a = scratch storage-buffer heap index; root.b = scratch base byte offset
+// (multiple of 8); root.c = reserved zero; root.d = 1. Other root fields unchanged.
+// Each block owns 344 bytes: 14 records {u64 error; uint4 words} at +24*mode,
+// one u32 Balanced partition-selection mask at +336, and four padding bytes.
+// All offset/base/end products must fit u32 and the allocated storage buffer.
+// HQ dispatches all 14 mode entries; Balanced first dispatches rankBc6hPartitions,
+// then modes [0,1,5,9,10,11,12,13]. Fast may dispatch mode 10 only. Mode numbers
+// in entry names are zero-based, unlike the BC6H spec. Modes 0..9 and ranking:
+// blockCount groups. Modes 10..13 and reduceBc6hModes: ceil(blockCount/64) groups.
+// Insert explicit storage read/write barriers after ranking, each mode dispatch,
+// and reduction. Inactive candidate slots are ignored, never read by reduction.
+// HQ retains both seeds/five evaluations, all 32 partitions and every legal mode.
+// Balanced retains its exact eight ranked partitions/one seed/three evaluations.
+// Single-subset mode groups batch 64 independent blocks in SoA shared memory.
+// The four encodeBc6hBalancedMode{0,1,5,9} entries are equivalent alternatives
+// for Balanced: ceil(blockCount/8) groups batch eight blocks/eight selected
+// partitions each. Use these instead of the corresponding ordinary mode entries
+// for Balanced; their 8-way lane reductions preserve the same total order.
+static const uint BC6_SPLIT_STRIDE=344;
+groupshared uint bc6BatchHalf[16][3][64];
+groupshared uint bc6BatchLight[16][3][64];
+groupshared uint bc6BatchShift[64];
+groupshared uint bc6PartHalf[16][3][8];
+groupshared uint bc6PartLight[16][3][8];
+groupshared uint bc6PartShift[8];
+groupshared uint bc6SplitMask[32];
+struct Bc6SplitIndices { uint2 bits; };
+void bc6SplitPut(inout uint4 words,uint offset,uint value,uint count) {
+    uint word=offset>>5,shift=offset&31;
+    words[word]|=value<<shift;
+    // A valid 128-bit block never crosses word 3. Clamp the unused index too,
+    // so DXIL validation can see it is bounded after full loop unrolling.
+    if (shift+count>32 && word<3) words[min(word+1,3u)]|=value>>(32-shift);
+}
+uint bc6SplitBase(uint block) { return root.b+block*BC6_SPLIT_STRIDE; }
+uint bc6SHalf<let batch:uint>(uint slot,uint i,uint c) {
+    if (batch==1) return bc6BatchHalf[i][c][slot];
+    if (batch==2) return bc6PartHalf[i][c][slot];
+    return bc6Half[i][c];
+}
+uint bc6SLight<let batch:uint>(uint slot,uint i,uint c) {
+    if (batch==1) return bc6BatchLight[i][c][slot];
+    if (batch==2) return bc6PartLight[i][c][slot];
+    return bc6Light[i][c];
+}
+uint bc6SShift<let batch:uint>(uint slot) {
+    if (batch==1) return bc6BatchShift[slot];
+    if (batch==2) return bc6PartShift[slot];
+    return bc6Shift;
+}
+uint bc6SplitIndex(Bc6SplitIndices indices,uint i) {
+    return ((i<8 ? indices.bits.x : indices.bits.y)>>((i&7)*4))&15;
+}
+void bc6SplitSetIndex(inout Bc6SplitIndices indices,uint i,uint index) {
+    uint shift=(i&7)*4,mask=15u<<shift;
+    if (i<8) indices.bits.x=(indices.bits.x&~mask)|(index<<shift);
+    else indices.bits.y=(indices.bits.y&~mask)|(index<<shift);
+}
+
+// Exact floor(n/d) when the result is <=31743 (PCA uses <=1024).
+// Normalize d to [32768,65535] by truncating low bits. The 32-bit quotient
+// estimate is never below floor(n/d) and at most one above it: q+1 <=31744
+// is smaller than the normalized denominator. One wide product corrects it.
+// If no shift is needed, division is already exact. Shifted n fits uint32.
+uint bc6SplitDivide(uint64_t n,uint64_t d) {
+    uint high=uint(d>>32);
+    int top=high!=0 ? 32+firstbithigh(high) : firstbithigh(uint(d));
+    uint shift=uint(max(top-15,0));
+    uint q=uint(n>>shift)/uint(d>>shift);
+    if (uint64_t(q)*d>n) --q;
+    return q;
+}
+uint bc6SplitFitDivide(int64_t n,int64_t d) {
+    if (n<=0) return 0;
+    uint64_t rounded=uint64_t(n)+uint64_t(d)/2;
+    if (rounded>=uint64_t(31743)*uint64_t(d)) return 31743;
+    return bc6SplitDivide(rounded,uint64_t(d));
+}
+int64_t bc6SplitNormalize(int64_t n,int64_t d) {
+    uint q=bc6SplitDivide(uint64_t(abs(n))*1024,uint64_t(d));
+    return n<0 ? -int64_t(q) : int64_t(q);
+}
+
+// The reference's largest target is 65534, so even the 16-bit shifted target
+// plus 32768 fits uint32. Fixed five trials repeat boundary q values harmlessly;
+// ascending q and strict error comparisons preserve the lowest-q tie exactly.
+uint bc6SplitQuantize(uint half,uint bits) {
+    uint target=(half*64+15)/31,maximum=(1u<<bits)-1;
+    uint center=min(((target<<bits)+32768)>>16,maximum);
+    uint bestError=~0u,best=0;
+    [unroll] for (uint trial=0;trial<5;++trial) {
+        uint q=uint(clamp(int(center)+int(trial)-2,0,int(maximum)));
+        uint decoded=bc6Unquantize(q,bits)*31>>6;
+        uint error=uint(abs(int(decoded)-int(half)));
+        if (error<bestError) { bestError=error; best=q; }
+    }
+    return best;
+}
+uint64_t bc6SplitDistance<let batch:uint>(uint slot,uint pixel,uint3 half,uint3 light) {
+    uint64_t error=0;
+    [unroll] for (uint c=0;c<3;++c) {
+        uint a=uint(abs(int(bc6SHalf<batch>(slot,pixel,c))-int(half[c])));
+        uint64_t b=uint64_t(abs(int(bc6SLight<batch>(slot,pixel,c))-int(light[c])));
+        // Half-code differences are <=31743, so their squares fit uint32.
+        // Keep the reference's wide linear square even for extrapolated palettes.
+        error+=uint64_t(a*a)*4+b*b;
+    }
+    return error;
+}
+
+Bc6Endpoints bc6SplitSeed<let two:bool,let batch:uint>(uint slot,uint partition,uint kind) {
+    Bc6Endpoints endpoints=(Bc6Endpoints)0;
+    [unroll] for (uint s=0;s<(two ? 2u : 1u);++s) {
+        uint3 lo=uint3(31743), hi=uint3(0), mean=uint3(0); uint n=0;
+        for (uint i=0;i<16;++i) {
+            if (two && bc6Subset(partition,i)!=s) continue;
+            ++n;
+            [unroll] for (uint c=0;c<3;++c) { lo[c]=min(lo[c],bc6SHalf<batch>(slot,i,c)); hi[c]=max(hi[c],bc6SHalf<batch>(slot,i,c)); mean[c]+=bc6SHalf<batch>(slot,i,c); }
+        }
+        mean/=n;
+        uint dominant=0;
+        [unroll] for (uint c=1;c<3;++c) if (hi[c]-lo[c]>hi[dominant]-lo[dominant]) dominant=c;
+        int64_t covariance[3][3];
+        [unroll] for (uint c=0;c<3;++c) [unroll] for (uint d=0;d<3;++d) covariance[c][d]=0;
+        for (uint i=0;i<16;++i) {
+            if (two && bc6Subset(partition,i)!=s) continue;
+            [unroll] for (uint c=0;c<3;++c) [unroll] for (uint d=0;d<3;++d) {
+                covariance[c][d]+=(int64_t(bc6SHalf<batch>(slot,i,c))-int64_t(mean[c]))*(int64_t(bc6SHalf<batch>(slot,i,d))-int64_t(mean[d]));
+            }
+        }
+        if (kind==0) {
+            [unroll] for (uint c=0;c<3;++c) {
+                bool reverse=covariance[dominant][c]<0;
+                endpoints.v[s*6+c]=reverse ? hi[c] : lo[c];
+                endpoints.v[s*6+3+c]=reverse ? lo[c] : hi[c];
+            }
+        } else {
+            int64_t direction[3]={0,0,0}; direction[dominant]=1024;
+            for (uint iteration=0;iteration<3;++iteration) {
+                int64_t next[3]={0,0,0};
+                [unroll] for (uint c=0;c<3;++c) [unroll] for (uint d=0;d<3;++d) next[c]+=covariance[c][d]*direction[d];
+                int64_t scale=0;
+                [unroll] for (uint c=0;c<3;++c) scale=max(scale,abs(next[c]));
+                if (scale!=0) [unroll] for (uint c=0;c<3;++c) direction[c]=bc6SplitNormalize(next[c],scale);
+            }
+            int64_t low=int64_t(0x7fffffffffffffffull), high=-int64_t(0x7fffffffffffffffull);
+            uint lowI=0, highI=0;
+            for (uint i=0;i<16;++i) {
+                if (two && bc6Subset(partition,i)!=s) continue;
+                int64_t projection=0;
+                [unroll] for (uint c=0;c<3;++c) projection+=(int64_t(bc6SHalf<batch>(slot,i,c))-int64_t(mean[c]))*direction[c];
+                if (projection<low) { low=projection; lowI=i; }
+                if (projection>high) { high=projection; highI=i; }
+            }
+            [unroll] for (uint c=0;c<3;++c) { endpoints.v[s*6+c]=bc6SHalf<batch>(slot,lowI,c); endpoints.v[s*6+3+c]=bc6SHalf<batch>(slot,highI,c); }
+        }
+    }
+    return endpoints;
+}
+
+void bc6SplitOrient<let two:bool,let batch:uint>(uint slot,inout Bc6Endpoints endpoints,uint partition) {
+    [unroll] for (uint s=0;s<(two ? 2u : 1u);++s) {
+        uint anchor=s==0 ? 0 : BC6_ANCHORS[partition];
+        uint3 a,b,al,bl;
+        [unroll] for (uint c=0;c<3;++c) {
+            a[c]=endpoints.v[s*6+c]; b[c]=endpoints.v[s*6+3+c];
+            al[c]=bc6Linear(a[c],bc6SShift<batch>(slot)); bl[c]=bc6Linear(b[c],bc6SShift<batch>(slot));
+        }
+        if (bc6SplitDistance<batch>(slot,anchor,b,bl)<bc6SplitDistance<batch>(slot,anchor,a,al)) [unroll] for (uint c=0;c<3;++c) {
+            uint temporary=endpoints.v[s*6+c]; endpoints.v[s*6+c]=endpoints.v[s*6+3+c]; endpoints.v[s*6+3+c]=temporary;
+        }
+    }
+}
+
+Bc6Endpoints bc6SplitQuantized<let mode:uint>(Bc6Endpoints endpoints) {
+    uint bits=BC6_PRECISION[mode], mask=(1u<<bits)-1, count=mode<10 ? 12 : 6;
+    Bc6Endpoints q=(Bc6Endpoints)0;
+    [unroll] for (uint c=0;c<count;++c) q.v[c]=bc6SplitQuantize(endpoints.v[c],bits);
+    if (mode!=9 && mode!=10) [unroll] for (uint e=1;e<count/3;++e) [unroll] for (uint c=0;c<3;++c) {
+        uint deltaBits=BC6_DELTA[mode][c]; int limit=1<<(deltaBits-1);
+        uint wrapped=(q.v[e*3+c]-q.v[c]+(1u<<(bits-1)))&mask;
+        int delta=clamp(int(wrapped)-(1<<(bits-1)),-limit,limit-1);
+        q.v[e*3+c]=uint(int(q.v[c])+delta)&mask;
+    }
+    return q;
+}
+
+void bc6SplitRefine<let mode:uint,let batch:uint>(uint slot,inout Bc6Endpoints endpoints,Bc6SplitIndices indices,uint partition) {
+    [unroll] for (uint s=0;s<(mode<10 ? 2u : 1u);++s) {
+        int64_t aa=0,ab=0,bb=0,ax[3]={0,0,0},bx[3]={0,0,0};
+        for (uint i=0;i<16;++i) {
+            if (mode<10 && bc6Subset(partition,i)!=s) continue;
+            int64_t b=int64_t(bc6Weight(mode,bc6SplitIndex(indices,i))), a=64-b;
+            aa+=a*a; ab+=a*b; bb+=b*b;
+            [unroll] for (uint c=0;c<3;++c) { ax[c]+=a*int64_t(bc6SHalf<batch>(slot,i,c))*64; bx[c]+=b*int64_t(bc6SHalf<batch>(slot,i,c))*64; }
+        }
+        int64_t determinant=aa*bb-ab*ab;
+        if (determinant!=0) [unroll] for (uint c=0;c<3;++c) {
+            endpoints.v[s*6+c]=bc6SplitFitDivide(ax[c]*bb-bx[c]*ab,determinant);
+            endpoints.v[s*6+3+c]=bc6SplitFitDivide(bx[c]*aa-ax[c]*ab,determinant);
+        }
+    }
+}
+
+uint64_t bc6SplitAssign<let mode:uint,let batch:uint>(uint slot,Bc6Endpoints q,uint partition,out Bc6SplitIndices indices) {
+    indices=(Bc6SplitIndices)0;
+    uint count=mode<10 ? 8 : 16;
+    Bc6Endpoints decoded;
+    [unroll] for (uint c=0;c<12;++c) decoded.v[c]=bc6Unquantize(q.v[c],BC6_PRECISION[mode]);
+    uint64_t error=0;
+    [unroll] for (uint s=0;s<(mode<10 ? 2u : 1u);++s) {
+        uint3 palette[16],light[16];
+        [unroll] for (uint j=0;j<count;++j) [unroll] for (uint c=0;c<3;++c) {
+            uint w=bc6Weight(mode,j);
+            palette[j][c]=(((64-w)*decoded.v[s*6+c]+w*decoded.v[s*6+3+c]+32)>>6)*31>>6;
+            light[j][c]=bc6Linear(palette[j][c],bc6SShift<batch>(slot));
+        }
+        for (uint i=0;i<16;++i) {
+            if (mode<10 && bc6Subset(partition,i)!=s) continue;
+            bool anchor=i==0 || (mode<10 && i==BC6_ANCHORS[partition]);
+            uint64_t bestError=~uint64_t(0); uint best=0;
+            [unroll] for (uint j=0;j<count;++j) {
+                if (anchor && j>=count/2) continue;
+                uint64_t current=bc6SplitDistance<batch>(slot,i,palette[j],light[j]);
+                if (current<bestError) { bestError=current; best=j; }
+            }
+            error+=bestError; bc6SplitSetIndex(indices,i,best);
+        }
+    }
+    return error;
+}
+
+uint4 bc6SplitPack<let mode:uint>(Bc6Endpoints q,Bc6SplitIndices indices,uint partition) {
+    Bc6Endpoints raw=q;
+    if (mode!=9 && mode!=10) [unroll] for (uint e=1;e<(mode<10 ? 4u : 2u);++e) [unroll] for (uint c=0;c<3;++c) {
+        raw.v[e*3+c]=(q.v[e*3+c]-q.v[c])&((1u<<BC6_DELTA[mode][c])-1);
+    }
+    uint4 words=uint4(BC6_PREFIXES[mode],0,0,0);
+    uint start=mode<2 ? 2 : 5, count=mode<2 ? 75 : mode<10 ? 72 : 60;
+    [unroll] for (uint i=0;i<count;++i) {
+        uint source=BC6_LAYOUT[mode][i];
+        bc6SplitPut(words,start+i,(raw.v[source>>4]>>(source&15))&1,1);
+    }
+    uint offset=65;
+    if (mode<10) { bc6SplitPut(words,77,partition,5); offset=82; }
+    [unroll] for (uint i=0;i<16;++i) {
+        bool anchor=i==0 || (mode<10 && i==BC6_ANCHORS[partition]);
+        uint bits=(mode<10 ? 3 : 4)-(anchor ? 1 : 0);
+        bc6SplitPut(words,offset,bc6SplitIndex(indices,i),bits); offset+=bits;
+    }
+    return words;
+}
+
+Bc6Candidate bc6SplitSearch<let mode:uint,let batch:uint>(uint slot,Bc6Endpoints endpoints,uint partition,uint rounds) {
+    Bc6Candidate best=bc6Worst();
+    for (uint round=0;round<rounds;++round) {
+        bc6SplitOrient<mode<10,batch>(slot,endpoints,partition);
+        Bc6Endpoints q=bc6SplitQuantized<mode>(endpoints);
+        Bc6SplitIndices indices;
+        uint64_t error=bc6SplitAssign<mode,batch>(slot,q,partition,indices);
+        if (error<=best.error) {
+            Bc6Candidate candidate; candidate.error=error; candidate.words=bc6SplitPack<mode>(q,indices,partition);
+            bc6Keep(best,candidate);
+        }
+        if (round+1<rounds) bc6SplitRefine<mode,batch>(slot,endpoints,indices,partition);
+    }
+    return best;
+}
+
+
+void bc6SplitLoad(uint block,uint lane) {
+    if (lane<16) {
+        uint rg=buffers[NonUniformResourceIndex(root.input)].Load(block*128+lane*8);
+        uint b=buffers[NonUniformResourceIndex(root.input)].Load(block*128+lane*8+4);
+        bc6Half[lane][0]=rg&65535; bc6Half[lane][1]=rg>>16; bc6Half[lane][2]=b&65535;
+    }
+    GroupMemoryBarrierWithGroupSync();
+    if (lane==0) {
+        uint maximum=0;
+        for (uint i=0;i<16;++i) [unroll] for (uint c=0;c<3;++c) maximum=max(maximum,bc6Half[i][c]);
+        uint exponent=maximum>>10;bc6Shift=exponent>5 ? exponent-5 : 0;
+    }
+    GroupMemoryBarrierWithGroupSync();
+    if (lane<16) [unroll] for (uint c=0;c<3;++c) bc6Light[lane][c]=bc6Linear(bc6Half[lane][c],bc6Shift);
+    GroupMemoryBarrierWithGroupSync();
+}
+void bc6SplitStore(uint block,uint mode,Bc6Candidate candidate) {
+    uint offset=bc6SplitBase(block)+mode*24;
+    buffers[NonUniformResourceIndex(root.a)].Store2(offset,uint2(uint(candidate.error),uint(candidate.error>>32)));
+    buffers[NonUniformResourceIndex(root.a)].Store4(offset+8,candidate.words);
+}
+Bc6Candidate bc6SplitReduce(Bc6Candidate candidate,uint lane) {
+    bc6Errors[lane]=candidate.error;bc6Words[lane]=candidate.words;
+    GroupMemoryBarrierWithGroupSync();
+    for (uint stride=32;stride>0;stride>>=1) {
+        if (lane<stride) {
+            Bc6Candidate a,b;
+            a.error=bc6Errors[lane];a.words=bc6Words[lane];
+            b.error=bc6Errors[lane+stride];b.words=bc6Words[lane+stride];
+            if (bc6Less(b,a)) {bc6Errors[lane]=b.error;bc6Words[lane]=b.words;}
+        }
+        GroupMemoryBarrierWithGroupSync();
+    }
+    candidate.error=bc6Errors[0];candidate.words=bc6Words[0];return candidate;
+}
+[shader("compute")][numthreads(32,1,1)]
+void rankBc6hPartitions(uint3 group:SV_GroupID,uint lane:SV_GroupIndex) {
+    if (group.x>=root.blockCount || root.d!=1 || root.preset!=1) return;
+    bc6SplitLoad(group.x,lane);
+    Bc6Endpoints endpoints=bc6SplitSeed<true,0>(0,lane,0);
+    bc6SplitOrient<true,0>(0,endpoints,lane);
+    Bc6Endpoints q=bc6SplitQuantized<9>(endpoints);
+    Bc6SplitIndices indices;
+    bc6Rank[lane]=bc6SplitAssign<9,0>(0,q,lane,indices);
+    GroupMemoryBarrierWithGroupSync();
+    uint rank=0;
+    for (uint p=0;p<32;++p) if (bc6Rank[p]<bc6Rank[lane] || (bc6Rank[p]==bc6Rank[lane] && p<lane)) ++rank;
+    bc6SplitMask[lane]=rank<8 ? 1u<<lane : 0;
+    GroupMemoryBarrierWithGroupSync();
+    for (uint stride=16;stride>0;stride>>=1) {
+        if (lane<stride) bc6SplitMask[lane]|=bc6SplitMask[lane+stride];
+        GroupMemoryBarrierWithGroupSync();
+    }
+    if (lane==0) buffers[NonUniformResourceIndex(root.a)].Store(bc6SplitBase(group.x)+336,bc6SplitMask[0]);
+}
+void bc6SplitMode<let mode:uint>(uint block,uint lane) {
+    if (block>=root.blockCount || root.d!=1) return;
+    bc6SplitLoad(block,lane);
+    uint partition=lane&31,kind=lane>>5;
+    Bc6Candidate best=bc6Worst();
+    bool selected=root.preset>=2;
+    if (root.preset==1 && kind==0 && (mode==0 || mode==1 || mode==5 || mode==9)) {
+        uint mask=buffers[NonUniformResourceIndex(root.a)].Load(bc6SplitBase(block)+336);
+        selected=((mask>>partition)&1)!=0;
+    }
+    if (selected) {
+        Bc6Endpoints endpoints=bc6SplitSeed<true,0>(0,partition,kind);
+        best=bc6SplitSearch<mode,0>(0,endpoints,partition,root.preset==1 ? 3 : 5);
+    }
+    best=bc6SplitReduce(best,lane);
+    if (lane==0) bc6SplitStore(block,mode,best);
+}
+void bc6SplitSingle<let mode:uint>(uint block,uint lane) {
+    if (block>=root.blockCount || root.d!=1) return;
+    uint maximum=0;
+    for (uint i=0;i<16;++i) {
+        uint rg=buffers[NonUniformResourceIndex(root.input)].Load(block*128+i*8);
+        uint b=buffers[NonUniformResourceIndex(root.input)].Load(block*128+i*8+4);
+        bc6BatchHalf[i][0][lane]=rg&65535;bc6BatchHalf[i][1][lane]=rg>>16;bc6BatchHalf[i][2][lane]=b&65535;
+        maximum=max(maximum,max(max(rg&65535,rg>>16),b&65535));
+    }
+    uint exponent=maximum>>10,shift=exponent>5 ? exponent-5 : 0;bc6BatchShift[lane]=shift;
+    // Each lane reads only its own SoA column; no cross-lane dependency/barrier.
+    for (uint i=0;i<16;++i) [unroll] for (uint c=0;c<3;++c) bc6BatchLight[i][c][lane]=bc6Linear(bc6BatchHalf[i][c][lane],shift);
+    Bc6Candidate best=bc6Worst();
+    if (root.preset!=0 || mode==10) for (uint kind=0;kind<(root.preset>=2 ? 2u : 1u);++kind) {
+        Bc6Endpoints endpoints=bc6SplitSeed<false,1>(lane,0,kind);
+        bc6Keep(best,bc6SplitSearch<mode,1>(lane,endpoints,0,root.preset==0 ? 1 : root.preset==1 ? 3 : 5));
+    }
+    bc6SplitStore(block,mode,best);
+}
+[shader("compute")][numthreads(64,1,1)]
+void reduceBc6hModes(uint3 id:SV_DispatchThreadID) {
+    if (id.x>=root.blockCount || root.d!=1) return;
+    Bc6Candidate best=bc6Worst();
+    [unroll] for (uint mode=0;mode<14;++mode) {
+        if (root.preset==0 && mode!=10) continue;
+        if (root.preset==1 && mode<10 && mode!=0 && mode!=1 && mode!=5 && mode!=9) continue;
+        uint offset=bc6SplitBase(id.x)+mode*24;
+        uint2 error=buffers[NonUniformResourceIndex(root.a)].Load2(offset);
+        Bc6Candidate candidate;candidate.error=uint64_t(error.x)|(uint64_t(error.y)<<32);
+        candidate.words=buffers[NonUniformResourceIndex(root.a)].Load4(offset+8);
+        bc6Keep(best,candidate);
+    }
+    buffers[NonUniformResourceIndex(root.output)].Store4(id.x*16,best.words);
+}
+
+// Eight independent 8-lane reductions avoid wasting 56 lanes on each Balanced
+// block. Inactive blocks in a tail group still participate in every barrier.
+void bc6SplitBalanced<let mode:uint>(uint group,uint lane) {
+    if (group*8>=root.blockCount || root.d!=1 || root.preset!=1) return;
+    uint slot=lane>>3,partLane=lane&7,block=group*8+slot;
+    bool valid=block<root.blockCount;
+    if (valid) for (uint j=0;j<2;++j) {
+        uint i=partLane*2+j;
+        uint rg=buffers[NonUniformResourceIndex(root.input)].Load(block*128+i*8);
+        uint b=buffers[NonUniformResourceIndex(root.input)].Load(block*128+i*8+4);
+        bc6PartHalf[i][0][slot]=rg&65535;bc6PartHalf[i][1][slot]=rg>>16;bc6PartHalf[i][2][slot]=b&65535;
+    }
+    GroupMemoryBarrierWithGroupSync();
+    if (valid && partLane==0) {
+        uint maximum=0;
+        for (uint i=0;i<16;++i) [unroll] for (uint c=0;c<3;++c) maximum=max(maximum,bc6PartHalf[i][c][slot]);
+        uint exponent=maximum>>10;bc6PartShift[slot]=exponent>5 ? exponent-5 : 0;
+    }
+    GroupMemoryBarrierWithGroupSync();
+    if (valid) for (uint j=0;j<2;++j) {
+        uint i=partLane*2+j;
+        [unroll] for (uint c=0;c<3;++c) bc6PartLight[i][c][slot]=bc6Linear(bc6PartHalf[i][c][slot],bc6PartShift[slot]);
+    }
+    GroupMemoryBarrierWithGroupSync();
+    Bc6Candidate best=bc6Worst();
+    if (valid) {
+        uint mask=buffers[NonUniformResourceIndex(root.a)].Load(bc6SplitBase(block)+336);
+        for (uint i=0;i<partLane;++i) mask&=mask-1;
+        uint partition=firstbitlow(mask);
+        Bc6Endpoints endpoints=bc6SplitSeed<true,2>(slot,partition,0);
+        best=bc6SplitSearch<mode,2>(slot,endpoints,partition,3);
+    }
+    bc6Errors[lane]=best.error;bc6Words[lane]=best.words;
+    GroupMemoryBarrierWithGroupSync();
+    for (uint stride=4;stride>0;stride>>=1) {
+        if (partLane<stride) {
+            Bc6Candidate a,b;
+            a.error=bc6Errors[lane];a.words=bc6Words[lane];
+            b.error=bc6Errors[lane+stride];b.words=bc6Words[lane+stride];
+            if (bc6Less(b,a)) {bc6Errors[lane]=b.error;bc6Words[lane]=b.words;}
+        }
+        GroupMemoryBarrierWithGroupSync();
+    }
+    if (valid && partLane==0) {best.error=bc6Errors[lane];best.words=bc6Words[lane];bc6SplitStore(block,mode,best);}
+}
+[shader("compute")][numthreads(64,1,1)]
+void encodeBc6hMode0(uint3 group:SV_GroupID,uint lane:SV_GroupIndex) { bc6SplitMode<0>(group.x,lane); }
+[shader("compute")][numthreads(64,1,1)]
+void encodeBc6hMode1(uint3 group:SV_GroupID,uint lane:SV_GroupIndex) { bc6SplitMode<1>(group.x,lane); }
+[shader("compute")][numthreads(64,1,1)]
+void encodeBc6hMode2(uint3 group:SV_GroupID,uint lane:SV_GroupIndex) { bc6SplitMode<2>(group.x,lane); }
+[shader("compute")][numthreads(64,1,1)]
+void encodeBc6hMode3(uint3 group:SV_GroupID,uint lane:SV_GroupIndex) { bc6SplitMode<3>(group.x,lane); }
+[shader("compute")][numthreads(64,1,1)]
+void encodeBc6hMode4(uint3 group:SV_GroupID,uint lane:SV_GroupIndex) { bc6SplitMode<4>(group.x,lane); }
+[shader("compute")][numthreads(64,1,1)]
+void encodeBc6hMode5(uint3 group:SV_GroupID,uint lane:SV_GroupIndex) { bc6SplitMode<5>(group.x,lane); }
+[shader("compute")][numthreads(64,1,1)]
+void encodeBc6hMode6(uint3 group:SV_GroupID,uint lane:SV_GroupIndex) { bc6SplitMode<6>(group.x,lane); }
+[shader("compute")][numthreads(64,1,1)]
+void encodeBc6hMode7(uint3 group:SV_GroupID,uint lane:SV_GroupIndex) { bc6SplitMode<7>(group.x,lane); }
+[shader("compute")][numthreads(64,1,1)]
+void encodeBc6hMode8(uint3 group:SV_GroupID,uint lane:SV_GroupIndex) { bc6SplitMode<8>(group.x,lane); }
+[shader("compute")][numthreads(64,1,1)]
+void encodeBc6hMode9(uint3 group:SV_GroupID,uint lane:SV_GroupIndex) { bc6SplitMode<9>(group.x,lane); }
+[shader("compute")][numthreads(64,1,1)]
+void encodeBc6hMode10(uint3 id:SV_DispatchThreadID,uint lane:SV_GroupIndex) { bc6SplitSingle<10>(id.x,lane); }
+[shader("compute")][numthreads(64,1,1)]
+void encodeBc6hMode11(uint3 id:SV_DispatchThreadID,uint lane:SV_GroupIndex) { bc6SplitSingle<11>(id.x,lane); }
+[shader("compute")][numthreads(64,1,1)]
+void encodeBc6hMode12(uint3 id:SV_DispatchThreadID,uint lane:SV_GroupIndex) { bc6SplitSingle<12>(id.x,lane); }
+[shader("compute")][numthreads(64,1,1)]
+void encodeBc6hMode13(uint3 id:SV_DispatchThreadID,uint lane:SV_GroupIndex) { bc6SplitSingle<13>(id.x,lane); }
+[shader("compute")][numthreads(64,1,1)]
+void encodeBc6hBalancedMode0(uint3 group:SV_GroupID,uint lane:SV_GroupIndex) { bc6SplitBalanced<0>(group.x,lane); }
+[shader("compute")][numthreads(64,1,1)]
+void encodeBc6hBalancedMode1(uint3 group:SV_GroupID,uint lane:SV_GroupIndex) { bc6SplitBalanced<1>(group.x,lane); }
+[shader("compute")][numthreads(64,1,1)]
+void encodeBc6hBalancedMode5(uint3 group:SV_GroupID,uint lane:SV_GroupIndex) { bc6SplitBalanced<5>(group.x,lane); }
+[shader("compute")][numthreads(64,1,1)]
+void encodeBc6hBalancedMode9(uint3 group:SV_GroupID,uint lane:SV_GroupIndex) { bc6SplitBalanced<9>(group.x,lane); }
