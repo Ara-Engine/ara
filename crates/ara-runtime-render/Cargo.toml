@@ -39,6 +39,7 @@ glam30.workspace = true
 [dev-dependencies]
 ara-importers = { path = "../ara-importers" }
 ara-input = { path = "../ara-input" }
+ara-material = { path = "../ara-material" }
 serde_json = { workspace = true, features = ["preserve_order", "float_roundtrip"] }
 
 [lints]

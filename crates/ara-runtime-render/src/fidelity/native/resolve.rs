@@ -80,7 +80,15 @@ impl Content {
                     Arc::new(MaterialAsset {
                         asset: id.to_owned(),
                         digest: ara_asset::Digest::of(id.as_bytes()),
-                        material: Default::default(),
+                        // glTF defaults are white metal. Unresolved terrain must
+                        // stay near sand/rock luminance until its maps publish.
+                        material: ara_runtime::model::ModelMaterial {
+                            base_color: [0.2, 0.2, 0.2, 1.0],
+                            roughness: 1.0,
+                            metallic: 0.0,
+                            occlusion_strength: 1.0,
+                            ..Default::default()
+                        },
                         textures: Vec::new(),
                         texture_generations: Vec::new(),
                         base_color_decode_srgb: false,
