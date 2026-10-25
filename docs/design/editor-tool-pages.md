@@ -1,4 +1,4 @@
-# Editor tool pages: thumbnails, Material, VFX, Animation, Profiler
+# Editor tool pages: thumbnails, Material, VFX, Animation, Profiler, Console, Problems, Settings, Agents
 
 Owner feedback (preview 4): the Animation, Material and VFX pages "look ugly and nothing like the polished pages in other engines", and model previews in Assets are "unreadable". This doc is the design each page is built to. It follows D18 (tokens only), the UX v2 density scale (`D:\AraRefs\editor-ui\ANALYSIS.md`, Appendix B) and the container rule: cards only for things you can select or drag; groups are a header plus rows.
 
@@ -8,6 +8,8 @@ Owner feedback (preview 4): the Animation, Material and VFX pages "look ugly and
 - VFX: `unreal/niagara-1`, `unreal/niagara-2`, `unity/vfx-graph-1`, `unity/vfx-graph-3`.
 - Animation: `unity/animator-1`, `unity/blend-tree-1`, `unreal5/anim-state-machine-1`, `unreal5/anim-state-machine-3`.
 - Profiler: `unreal/insights-1`, `unreal/stats-1`, `unity/profiler-1`, `unity/profiler-2`, `godot/profiler-1`.
+- Console and Problems: `unity/console-1`, `unreal/output-log-1`, `unreal5/output-log-1`, `godot/output-1`.
+- Settings: `vscode/settings-1`, `vscode/settings-2`, `jetbrains/settings-1`, `unity/preferences-1`, `unreal/project-settings-1`, `godot/editor-settings-2`.
 
 **Shared rules for every tool page**
 - **Regions:** a 28 px toolbar, a left sidebar (the document's own data), the main surface (canvas, stack or preview), and a 24 px status strip. The global Inspector stays the property sidebar for the selected item, so no page grows a second details panel.
@@ -167,6 +169,59 @@ ui.build                            1  0.94 ms  0.61 ms  ██░░░░░  
 
 ---
 
+## 7. Console and Problems
+
+**Benchmarks:** Unity's Console: Clear, Collapse and Error Pause, severity toggles with counts, one message per row with a details pane. UE's Output Log: search, verbosity and category filters, monospace rows coloured by severity, a command line. Godot's Output: severity chips with counts beside the log. VS Code's Problems: problems grouped by file with a count, each row the message with its code and position after it.
+
+**Where Ara beats them:** Console and Problems read one diagnostics bus (the same `ara logs` and agents read), every row links to its source (an entity, a document or a file and line), and Problems explains a problem from the catalog ("Why") and applies its fixes in place.
+
+**Today** (default layout: both live in the 240 px dock under the Hierarchy): rows lay out for a wide panel, so at that width time, message and source link overlap, and Problems' Go and Why buttons sit on top of the message.
+
+**Regions** (Console; Problems is the same frame)
+```
+[🗑][≡] | [✕ 1][⚠ 2][ⓘ 3] [⌕ Filter messages         ]
+ ✕  Import of `models/Crate.fbx` failed: FBX 6.1 bin…   ×3
+    02:48:22 · import · models/Crate.fbx
+ ⚠  `Spinner.Tick` allocates a `List<int>` every tick
+    02:48:22 · scripts/Outpost/Spinner.cs:42
+```
+- **Rows are two lines at every width** (as in Unity's Console): the message (12 px) with its repeat count, then a caption line with the time (mono), the origin when it is not the engine (an agent's name as a chip) and the source link. Every part clips inside its own box, so nothing can overlap however narrow the dock.
+- **Console:** Clear and Collapse as icon buttons, then the three severity toggles with counts, then search. A selected row expands its details (code, catalog title and explanation, causes, subjects, fixes as buttons) under it.
+- **Problems:** groups by file or document (24 px header: file icon, path, count), rows in the same two-line form with the code and the source on the second line. Go to source and Why are 22 px icon buttons at the row's right edge; fixes are small buttons on their own line under the row, never over the text. Why expands the catalog explanation as in Console.
+- **Empty states:** "Console is empty" or "No problems" with what will appear there.
+
+---
+
+## 8. Settings
+
+**Benchmarks:** VS Code's Settings editor: search with a found count, User and Workspace scopes, categories with match counts, each setting as a bold title, a description and a control, a modified bar and a per-setting gear. JetBrains: a narrowing tree and breadcrumbs. Unity and UE: a category list and a property grid, with UE naming the file that stores the values.
+
+**Where Ara beats them:** one surface for Preferences and Project (scope segment), every change an undoable `editor.settings.set`, a banner naming the file that stores the values, and keyboard shortcuts searchable by pressing keys, with presets.
+
+**Today:** close to the bar. Each row spends a third line on its key, the reset arrow sits at the far right edge away from the control it resets, and the shortcut list repeats its menu name on every row.
+
+**Design**
+- **Rows:** label left (200 px column), the control after it, and the reset arrow directly after the control when the value differs from its default (with the 2 px modified bar at the row's left). Under it one caption line: the description, then the key in mono after a dot ("Ara Dark or Ara Light semantic tokens. · appearance.theme").
+- **Keyboard shortcuts:** grouped under menu headers (File, Edit, …) instead of a path per row; a row keeps a sub-path when the command sits deeper ("Build & Export"). Keycaps on the right, the pencil (rebind) after them, reset when overridden; conflicts as a `warning` "Also …" before the keys.
+
+---
+
+## 9. Agents
+
+**Benchmarks:** none of the engines has one. The nearest are GitHub's pull request timeline and Cursor's agent panel: who acted, what they said they were doing, and a reviewable diff per step.
+
+**Where Ara beats them:** agents edit with the same typed commands as people, so every turn is a transaction with its reason, an exact diff and Undo turn; connected agents show their presence with View and Follow (D24).
+
+**Today:** in the 240 px dock the reason is cut after a few words, the time can read as a raw revision ("r22"), and the counts are symbols ("~1 +1").
+
+**Design**
+- **Toolbar:** one presence pill per connected agent (live dot, name, View, Follow).
+- **Turn row:** avatar initial, then the reason wrapped to up to two lines, then a caption line: agent · time ago · what changed in words ("1 edit", "1 new", "2 removed"). Undo turn is a 22 px icon at the right edge; an undone turn is muted with "Undone".
+- **Expanded turn:** its ops as mono rows (entity · field, old → new), coloured by kind (new `success`, removed `destructive`, edit `warning`).
+- **Time:** turns are timed when the editor first sees them; a turn applied before the panel's next frame still reads "just now", never a revision.
+
+---
+
 ## Next in build order
 
 - Material: node search at the pointer and pin-drag search filtered by type, sticky-note colours, Stats with instruction counts per platform.
@@ -174,6 +229,8 @@ ui.build                            1  0.94 ms  0.61 ms  ██░░░░░  
 - Animation: an Any State node, condition editing in the Inspector, a draggable live parameter dot on the blend plot (and the live value on it during Play).
 - Thumbnails: a per-asset turntable on hover in the grid.
 - Profiler: zoom and pan in the timeline (W/S, A/D, double-click a span), callers and callees for a scope, the viewport Stats overlay, budgets in Project Settings.
+- Console: the `>` command line (Ara commands with autocomplete and their one-line docs), a source filter (Editor, Play, Importers, C#, Agents).
+- Settings: a per-setting ⋯ menu (Copy key, Show in file, "Why this value?" with the value's provenance).
 
 ## Verification
 

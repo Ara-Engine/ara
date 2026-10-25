@@ -717,6 +717,8 @@ impl Verification {
                 json!({"session":session,"doc":doc,"why":why,"commands":[command]}),
             )?;
         }
+        // A frame boundary, as in the window loop: the agent turns get their time.
+        editor.tick();
         for (panel, name) in [
             ("console", "console"),
             ("problems", "problems"),
