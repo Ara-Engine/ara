@@ -222,6 +222,7 @@ impl VulkanDevice {
             raw,
             last: [0; 2],
             heap: None,
+            owner: Queue::Graphics,
         })
     }
 

@@ -2340,13 +2340,13 @@ expression: out
       "module": "asset",
       "variants": {
         "balanced": {
-          "doc": "ISPC BC7/BC6H basic, the default for interactive project imports."
+          "doc": "Balanced compression search, the default for interactive project imports."
         },
         "highQuality": {
-          "doc": "ISPC BC7 slow and BC6H very slow, for background recooks and shipping."
+          "doc": "Deeper compression search for higher-quality assets and background recooks."
         },
         "fast": {
-          "doc": "ISPC BC7 ultrafast and BC6H fast, for the first interactive generation."
+          "doc": "Reduced compression search for the first interactive generation."
         }
       }
     },
