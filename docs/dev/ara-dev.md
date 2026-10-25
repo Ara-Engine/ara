@@ -337,7 +337,10 @@ A row without a measurement reads "not measured", never "pass". Player CPU rows 
 `cpu.hitches_over_16ms`. Otherwise wall-clock CPU values only bound CPU work, so they pass
 at or under the limit and are unmeasured above it. `--skip
 player|flip|editor` leaves a section out; `--no-build` reuses the last d26 build;
-`--profile release` confirms on D26's named profile. The report's footer defines each metric.
+`--profile release` confirms on D26's named profile. `--prepare` builds and freezes the
+packs (`--refreeze` exports them again) without measuring anything, so it can run outside a
+quiet window; the measured run then follows with `--no-build`. The report's footer defines
+each metric.
 
 ### Measured iteration loop
 
