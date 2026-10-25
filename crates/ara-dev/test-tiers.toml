@@ -79,3 +79,11 @@ group = "cargo"
 memory_mib = 1024
 # Builds multiple isolated Cargo fixtures; allow shared-machine contention.
 timeout_seconds = 600
+
+[[slow]]
+package = "ara-material"
+target = "library"
+group = "process"
+memory_mib = 1024
+# Compiles every starter node for both targets through slangc: ~165 s under load.
+timeout_seconds = 300
