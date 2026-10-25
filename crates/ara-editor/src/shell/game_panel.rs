@@ -2,6 +2,8 @@
 //! through a shared GPU surface (`app/game.rs`), letterboxed to the aspect preset.
 //! Click the view to give it the keyboard and mouse; Esc (or clicking outside)
 //! gives them back. Host + clients and Dedicated + clients show a client selector.
+//! Outside Play it previews the scene through its gameplay camera, the view Play
+//! starts with (`app/game_preview.rs`), or says the scene has none.
 use super::commands::{Target, menus::Context};
 use super::*;
 
@@ -84,26 +86,7 @@ impl Shell {
             }
         } else if self.game_live {
             // Letterbox inside the surface using last frame's layout.
-            let area = self
-                .ui
-                .find("game-surface")
-                .map(|i| self.ui.nodes[i].rect)
-                .filter(|r| r.w > 1. && r.h > 1.);
-            let ratio = ASPECTS
-                .iter()
-                .find(|a| a.0 == self.game_aspect)
-                .map_or(0., |a| a.2);
-            let (w, h) = match area {
-                Some(r) if ratio > 0. => {
-                    if r.w / r.h > ratio {
-                        (r.h * ratio, r.h)
-                    } else {
-                        (r.w, r.w / ratio)
-                    }
-                }
-                Some(r) => (r.w, r.h),
-                None => (640., 360.),
-            };
+            let [w, h] = self.game_frame().unwrap_or([640., 360.]);
             self.bind_command("game-frame", "game.capture", Target::None);
             out.push_str(&format!("<button id='game-frame' class='game-frame' style='width:{w:.0}px;height:{h:.0}px' label='Game view' description='Click to play: keyboard and mouse go to the game until Esc' action='Dispatch'><image id='game-image' src='game-view' style='width:100%;height:100%' /></button>"));
             if self.game_stats {
@@ -116,6 +99,22 @@ impl Shell {
             }
         } else if playing {
             self.starting_markup(out);
+        } else if self.gameplay_camera(editor).is_none() {
+            self.empty(
+                out,
+                "game-empty",
+                "camera",
+                "No gameplay camera",
+                "Play shows the scene through its Camera with the lowest Priority. Add one, or press Play (F5) to run the scene without one.",
+                &[
+                    ("game-camera", "Add camera", "create.camera"),
+                    ("game-play", "Play", "play.start"),
+                ],
+            );
+        } else if self.game_preview.is_some() {
+            let [w, h] = self.game_frame().unwrap_or([640., 360.]);
+            out.push_str(&format!("<panel id='game-frame' class='game-frame' style='width:{w:.0}px;height:{h:.0}px' label='Gameplay camera' description='The scene through its gameplay camera, as Play starts'><image id='game-image' src='game-preview' style='width:100%;height:100%' /></panel>"));
+            out.push_str("<panel id='game-capture' class='game-hint'><text id='game-capture-text' text='Gameplay camera · Play (F5) runs the scene here' /></panel>");
         } else {
             let in_view = editor
                 .state
@@ -137,6 +136,46 @@ impl Shell {
             );
         }
         out.push_str("</panel>");
+    }
+}
+
+impl Shell {
+    /// The Game frame's size (logical px): the surface as last laid out, letterboxed
+    /// to the aspect preset; `None` before it is laid out. Play's surface and the
+    /// camera preview render at it.
+    pub(crate) fn game_frame(&self) -> Option<[f32; 2]> {
+        let r = self
+            .ui
+            .find("game-surface")
+            .map(|i| self.ui.nodes[i].rect)
+            .filter(|r| r.w > 1. && r.h > 1.)?;
+        let ratio = ASPECTS
+            .iter()
+            .find(|a| a.0 == self.game_aspect)
+            .map_or(0., |a| a.2);
+        Some(if ratio <= 0. {
+            [r.w, r.h]
+        } else if r.w / r.h > ratio {
+            [r.h * ratio, r.h]
+        } else {
+            [r.w, r.w / ratio]
+        })
+    }
+    /// The scene's gameplay camera as Play starts with it (`view_camera::gameplay`:
+    /// the lowest `Camera.priority`, a follow rig behind its target), resolved once
+    /// per scene revision.
+    pub(crate) fn gameplay_camera(&mut self, editor: &Editor) -> Option<crate::state::Camera> {
+        let resolved = self.resolved(editor).ok()?;
+        let key = self.resolved_key()?;
+        if let Some((cached, camera)) = &self.game_camera
+            && *cached == key
+        {
+            return *camera;
+        }
+        let transforms = crate::world::world_transforms(&resolved);
+        let camera = crate::view_camera::gameplay(&resolved, &transforms);
+        self.game_camera = Some((key, camera));
+        camera
     }
 }
 

@@ -810,6 +810,14 @@ fn game_view_waits_for_play_and_play_starts_embedded_in_it() {
     // Before Play: an empty state with Play; input capture explains what to do first.
     assert!(shell.ui.find("game-empty").is_some());
     assert!(shell.ui.find("game-play").is_some());
+    // A scene without a Camera says so and offers one; once it has one, the view
+    // waits for the camera's first preview frame (`app/game_preview.rs`).
+    let mut clip = MemoryClipboard::default();
+    shell.click("game-camera", &mut clip).unwrap();
+    shell.dispatch(&mut editor).unwrap();
+    shell.rebuild(&mut editor).unwrap();
+    assert!(shell.ui.find("game-camera").is_none());
+    assert!(shell.ui.find("game-play").is_some());
     assert!(
         shell
             .run_command(&mut editor, "game.capture", &Default::default())
