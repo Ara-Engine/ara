@@ -9,9 +9,15 @@ Fast/Balanced/HQ shader preset IDs are 0/1/2, independent of CookPreset order.
 `Encoder` implements ara-asset's BlockEncoder. Services are negotiated before cache
 lookup; a failed GPU encode retries with a CPU key. ARA_TEXTURE_ENCODER=cpu disables
 the optional device for controlled CPU measurements and CPU-only tests.
-Negotiation warms common BC7 kernels once. Asset workers create Vulkan only on
-first encode; texture-free models and memo hits stay device-free. Driver pipeline
-caches live under the explicit engine profile, with a project-cache fallback.
+Negotiation warms common BC7 kernels in a leased helper. Two lazy headless devices
+reuse pipelines/transfers across disposable imports; workers send bounded raw blocks.
+Host/job leases and active clients bound helper lifetime, including host crashes.
+ARA_TEXTURE_ENCODER_DEVICE=local selects the former per-job device for controls;
+both routes have the same immutable backend identity and must produce equal bytes.
+Driver caches/endpoints live under the explicit engine profile, with a project-cache
+fallback. Traces include helper start/initialization/exit and separate process CPU.
+Helpers run content-addressed executable/library copies so live devices never lock
+Cargo outputs. ARA_IMPORT_RUNTIME_DIR overrides their writable profile-cache root.
 Normal-map imports retain qualified ISPC BC5 because GPU angular outliers regress;
 the raw GPU BC5 API remains available for experiments/reference validation.
 Balanced/HQ BC7 use eight mode pipelines, selection and reduction. Accelerated

@@ -58,6 +58,7 @@ Export via exact ProcessWorker preset, or disable HotReload.progressive explicit
 ImportContext.metrics is optional offline profiling; never encode timing values.
 `ARA_IMPORT_TRACE_DIR` enables canonical JSON event streams (blank-line separated)
 for stage, CPU, queue, IPC, cache and final boundary-publication measurements.
+ARA_IMPORT_TRACE_CACHE_DETAIL=1 additionally separates cache read/create/write/persist.
 Importer/ImporterRegistry::import_with_memo optionally share pure texture tasks;
 custom importers and remote caches keep their existing default behavior. FileCache
 uses a disposable `intermediates/` namespace without fsync; final publication still
@@ -69,3 +70,6 @@ before action lookup; encoded actions and texture memo keys include it. Capabili
 negotiation calls prepare once. EncoderUnavailable retries retained inputs with
 the CPU key and disables that backend for the session. CPU contract fixtures use
 ProcessWorker::with_texture_encoder(false); legacy CPU request bytes stay unchanged.
+Optional EncoderEndpoint leases keep an out-of-process device pool alive across
+jobs; ImportJob retains the lease even if its ProcessWorker handle is dropped.
+record_import_trace records helper CPU/stages through the same opt-in trace sink.

@@ -1982,6 +1982,7 @@ dependencies = [
  "ara-gpu",
  "ara-json",
  "bcdec_rs",
+ "blake3",
  "bytemuck",
  "getrandom 0.4.3",
  "serde",
