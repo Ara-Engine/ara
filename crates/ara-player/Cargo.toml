@@ -39,12 +39,12 @@ ciborium.workspace = true
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true, features = ["preserve_order", "float_roundtrip"] }
 glam34 = { workspace = true }
+image = { workspace = true, features = ["png"] }
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { workspace = true, features = ["Win32_Foundation", "Win32_System_Diagnostics_Debug", "Win32_System_Kernel"] }
 
 [dev-dependencies]
-image = { workspace = true, features = ["png"] }
 ara-host.workspace = true
 ara-import2d = { path = "../ara-import2d" }
 ara-importers = { path = "../ara-importers" }

@@ -1,0 +1,248 @@
+//! A bounded transfer-only loading view. It never opens cooked shaders, creates
+//! a pipeline, or waits for the game presenter's device to finish warming.
+use super::*;
+use ara_gpu::vulkan::VulkanDevice;
+use ara_gpu::{Access, Barrier, Buffer, Device, Image, Queue, Resource, commands::Command, vk};
+
+const SIZE: [u32; 2] = [320, 180];
+#[cfg(test)]
+mod tests;
+
+/// One 225 KiB image and staging buffer on a temporary raster-only device. The
+/// game presenter compiles on its own worker/device; this owner only transfers
+/// a progress bar and presents it. Drop releases its swapchain before the GPU.
+pub(crate) struct Loading {
+    gpu: VulkanDevice,
+    image: Image,
+    staging: Buffer,
+    pixels: Vec<u8>,
+    initialized: bool,
+    frames: usize,
+    present: Option<Present>,
+}
+
+impl Loading {
+    pub(crate) fn new(extensions: &[std::ffi::CString], cache: &Path) -> Result<Self> {
+        ara_gpu::cpu_scope!("Player.loading_device");
+        let mut gpu = VulkanDevice::new_raster(extensions, cache.join("loading"))?;
+        let bytes = u64::from(SIZE[0]) * u64::from(SIZE[1]) * 4;
+        let image = gpu.create_image(
+            SIZE[0],
+            SIZE[1],
+            vk::Format::R8G8B8A8_UNORM,
+            vk::ImageUsageFlags::TRANSFER_SRC
+                | vk::ImageUsageFlags::TRANSFER_DST
+                | vk::ImageUsageFlags::SAMPLED,
+        )?;
+        let staging = gpu.create_buffer(bytes, vk::BufferUsageFlags::TRANSFER_SRC, true)?;
+        Ok(Self {
+            gpu,
+            image,
+            staging,
+            pixels: vec![0; bytes as usize],
+            initialized: false,
+            frames: 0,
+            present: None,
+        })
+    }
+
+    fn draw(&mut self, progress: f32) -> Result<()> {
+        ara_gpu::cpu_scope!("Player.loading_frame");
+        for pixel in self.pixels.as_chunks_mut::<4>().0 {
+            *pixel = [7, 11, 18, 255];
+        }
+        let end = 104 + (112. * progress.clamp(0., 1.)) as usize;
+        let pulse = end + (self.frames / 3) % (216 - end).max(1);
+        for y in 89..92 {
+            for x in 104..216 {
+                let pixel = (y * SIZE[0] as usize + x) * 4;
+                self.pixels[pixel..pixel + 4].copy_from_slice(if x < end {
+                    &[43, 123, 230, 255]
+                } else if (pulse..pulse + 4).contains(&x) {
+                    &[74, 151, 240, 255]
+                } else {
+                    &[22, 32, 47, 255]
+                });
+            }
+        }
+        self.gpu.upload(self.staging, &self.pixels)?;
+        let mut commands = self.gpu.begin(Queue::Graphics);
+        commands.barriers([
+            barrier(
+                Resource::Buffer(self.staging),
+                Access::HostWrite,
+                Access::CopySource,
+            ),
+            barrier(
+                Resource::Image(self.image),
+                if self.initialized {
+                    Access::CopySource
+                } else {
+                    Access::Undefined
+                },
+                Access::CopyDestination,
+            ),
+        ]);
+        commands.push(Command::UploadImage {
+            source: self.staging,
+            destination: self.image,
+        });
+        commands.barriers([
+            barrier(
+                Resource::Image(self.image),
+                Access::CopyDestination,
+                Access::CopySource,
+            ),
+            barrier(
+                Resource::Buffer(self.staging),
+                Access::CopySource,
+                Access::HostWrite,
+            ),
+        ]);
+        let point = self.gpu.submit(commands.finish(), &[])?;
+        self.gpu.resolve(point)?;
+        self.initialized = true;
+        self.frames = self.frames.wrapping_add(1);
+        self.gpu.assert_clean()?;
+        Ok(())
+    }
+
+    /// Explicit evidence only: read the uploaded loading image, never game targets.
+    pub(crate) fn capture(&mut self, path: &Path, display: [u32; 2]) -> Result<()> {
+        let pixels = self.read_pixels()?;
+        let image =
+            image::RgbaImage::from_raw(SIZE[0], SIZE[1], pixels).context("loading image extent")?;
+        image::imageops::resize(
+            &image,
+            display[0],
+            display[1],
+            image::imageops::FilterType::Nearest,
+        )
+        .save(path)?;
+        Ok(())
+    }
+
+    fn read_pixels(&mut self) -> Result<Vec<u8>> {
+        let buffer = self.gpu.create_buffer(
+            self.pixels.len() as u64,
+            vk::BufferUsageFlags::TRANSFER_DST,
+            true,
+        )?;
+        let result = (|| {
+            let mut commands = self.gpu.begin(Queue::Graphics);
+            commands.barriers([barrier(
+                Resource::Buffer(buffer),
+                Access::Undefined,
+                Access::CopyDestination,
+            )]);
+            commands.push(Command::ReadImage {
+                source: self.image,
+                destination: buffer,
+            });
+            commands.barriers([barrier(
+                Resource::Buffer(buffer),
+                Access::CopyDestination,
+                Access::HostRead,
+            )]);
+            let point = self.gpu.submit(commands.finish(), &[])?;
+            self.gpu.resolve(point)?;
+            let pixels = self.gpu.read(buffer)?;
+            self.gpu.assert_clean()?;
+            Ok(pixels)
+        })();
+        self.gpu.retire(Resource::Buffer(buffer))?;
+        self.gpu.collect()?;
+        result
+    }
+}
+
+impl Windowed {
+    /// Create only SDL ownership; shader compilation belongs to a separate worker.
+    pub(crate) fn open_unprepared(
+        name: &str,
+        size: [u32; 2],
+        hidden: bool,
+    ) -> Result<(Self, Vec<std::ffi::CString>, [u32; 2])> {
+        let title = format!("Ara | {name}");
+        let window = if hidden {
+            Window::hidden(&title, size)?
+        } else {
+            Window::new(&title, size)?
+        };
+        let size = window.size()?;
+        let extensions = window.extensions()?;
+        Ok((
+            Self {
+                window,
+                present: None,
+                present2d: None,
+                input: Mapper::default(),
+                frames: 0,
+                frame_times: Vec::new(),
+                window_start: Instant::now(),
+            },
+            extensions,
+            size,
+        ))
+    }
+
+    pub(crate) fn present_loading(&mut self, loading: &mut Loading, progress: f32) -> Result<bool> {
+        if self.window.size()?.contains(&0) {
+            return Ok(false);
+        }
+        loading.draw(progress)?;
+        if loading.present.is_none() {
+            // SAFETY: This window outlives loading, whose Drop destroys its own
+            // swapchain before releasing the temporary device.
+            loading.present = Some(unsafe { Present::new(loading.gpu.context(), &self.window)? });
+        }
+        let image = loading.gpu.native_image(loading.image)?;
+        // SAFETY: draw completed this CopySource image on this temporary device;
+        // neither the image nor its window is used by the game-presenter worker.
+        let result = unsafe {
+            loading
+                .present
+                .as_mut()
+                .context("loading swapchain")?
+                .display(loading.gpu.context(), image, SIZE)
+        };
+        if result
+            .as_ref()
+            .err()
+            .and_then(|e| e.downcast_ref::<vk::Result>())
+            == Some(&vk::Result::ERROR_OUT_OF_DATE_KHR)
+        {
+            loading.clear_present();
+            Ok(false)
+        } else {
+            result.map(|()| true)
+        }
+    }
+}
+
+impl Loading {
+    fn clear_present(&mut self) {
+        if let Some(mut present) = self.present.take() {
+            // SAFETY: Presentation is serialized by this owner. Device idle
+            // precedes swapchain/surface destruction, including resize/failure.
+            unsafe {
+                let _ = self.gpu.context().device.device_wait_idle();
+                present.destroy(self.gpu.context());
+            }
+        }
+    }
+}
+impl Drop for Loading {
+    fn drop(&mut self) {
+        self.clear_present();
+    }
+}
+
+fn barrier(resource: Resource, before: Access, after: Access) -> Barrier {
+    Barrier {
+        resource,
+        before,
+        after,
+        handoff: None,
+    }
+}
