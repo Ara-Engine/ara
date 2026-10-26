@@ -49,7 +49,6 @@ pub(super) fn bytes(
     path: &Path,
     bytes: &[u8],
     valid: impl Fn(&[u8]) -> Result<bool>,
-    writes: &super::admission::Volume,
 ) -> Result<()> {
     let label = path.display().to_string();
     let _trace = crate::trace::Scope::new("cache.install", &label).bytes(bytes.len());
@@ -87,12 +86,7 @@ pub(super) fn bytes(
                 }
             }
         };
-        let result = (|| {
-            let permit = writes.acquire()?;
-            let result = publish(path, bytes, replace);
-            permit.finish(bytes.len())?;
-            result
-        })();
+        let result = publish(path, bytes, replace);
         drop(repair);
         match result {
             Ok(()) => return Ok(()),

@@ -6,7 +6,6 @@ use std::{
     io::Write,
     path::{Path, PathBuf},
 };
-mod admission;
 mod install;
 #[cfg(test)]
 mod tests;
@@ -37,7 +36,6 @@ pub trait CacheBackend: Send + Sync {
 pub struct FileCache {
     root: PathBuf,
     intermediate: bool,
-    writes: admission::Volume,
 }
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -104,7 +102,7 @@ impl FileCache {
         // Filesystems without hard links retain the portable atomic writer.
         // A different payload under its byte digest is damaged, not a different
         // valid cook. Repair it atomically; never overwrite a file in place.
-        install::bytes(&path, bytes, |_| Ok(false), &self.writes)
+        install::bytes(&path, bytes, |_| Ok(false))
     }
     /// Opens `<project>/.ara/cache`; never writes source assets or sidecars.
     pub fn new(project: impl AsRef<Path>) -> Result<Self> {
@@ -125,7 +123,6 @@ impl FileCache {
             Err(e) => return Err(e.into()),
         }
         Ok(Self {
-            writes: admission::Volume::new(&root)?,
             root,
             intermediate: false,
         })
@@ -257,16 +254,11 @@ impl CacheBackend for FileCache {
             ara_json::to_canonical_string(&ara_json::sort_keys(&serde_json::to_value(&entry)?));
         // Objects finish publication first. An existing action is immutable only
         // while all its referenced bytes still verify; otherwise it is repaired.
-        install::bytes(
-            &self.action(key),
-            text.as_bytes(),
-            |existing| {
-                let Some(entry) = Self::parse_entry(existing) else {
-                    return Ok(false);
-                };
-                Ok(self.verified_output(entry)?.is_some())
-            },
-            &self.writes,
-        )
+        install::bytes(&self.action(key), text.as_bytes(), |existing| {
+            let Some(entry) = Self::parse_entry(existing) else {
+                return Ok(false);
+            };
+            Ok(self.verified_output(entry)?.is_some())
+        })
     }
 }
