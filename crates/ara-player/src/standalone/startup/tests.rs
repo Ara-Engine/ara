@@ -1,6 +1,39 @@
 use super::*;
 
 #[test]
+#[ignore = "hidden SDL Vulkan diagnostic; run explicitly on the GPU host"]
+fn no_present_renders_loading_and_game_without_a_swapchain() -> Result<()> {
+    let root =
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/renderer-unification/no-present");
+    let (mut window, extensions, size) = device::Windowed::open_unprepared_with_mode(
+        "No present test",
+        [160, 90],
+        true,
+        ara_platform::GameWindowMode::Borderless,
+    )?;
+    window.disable_presentation();
+    let (mut loading, gpu, _) = device::Loading::for_game(&extensions, &root, false)?;
+    assert!(window.present_loading(&mut loading, 0.5)?);
+    assert!(loading.swapchain().is_none());
+    let mut presenter = Presenter::with_device(size, root.join("game"), gpu);
+    presenter.set_probe_gi(false);
+    presenter.prepare(&device::warm_frame())?;
+    window.finish_loading(loading);
+    window.present(&mut presenter, &device::warm_frame(), || {
+        Ok(ara_runtime_render::fidelity::native::Content::default())
+    })?;
+    assert!(presenter.output().is_some());
+    assert!(window.swapchain().is_none());
+    window.shutdown(&presenter)?;
+    presenter
+        .renderer()
+        .context("renderer")?
+        .gpu()
+        .assert_clean()?;
+    Ok(())
+}
+
+#[test]
 #[ignore = "hidden SDL presentation probe; run explicitly on the GPU host"]
 fn loading_can_present_while_presenter_warmup_is_blocked_and_then_hands_off_its_gpu() -> Result<()>
 {

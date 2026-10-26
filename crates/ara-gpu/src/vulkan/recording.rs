@@ -67,6 +67,8 @@ pub(super) fn access(
 impl VulkanDevice {
     /// Submit one list with timeline dependencies. Returns a monotonic signal point.
     /// Bindless reachability is conservative: all published resources are retained.
+    /// Within a deferred frame this records a logical point; end the scope before
+    /// host waits. Consecutive same-queue lists share a native submission.
     pub fn submit(&mut self, list: CommandList, waits: &[TimelinePoint]) -> Result<TimelinePoint> {
         self.poll_shader_reload();
         crate::cpu_scope!("GPU.submit");
@@ -104,6 +106,7 @@ impl VulkanDevice {
         }
         self.validate_commands(&list)?;
         let queue = list.queue;
+        self.prepare_submission(queue)?;
         let cmd = self.context.commands(queue == Queue::Compute)?;
         let mut guard = super::guard::Objects::new(&self.context.device);
         guard.push(super::guard::Object::Commands(
@@ -166,6 +169,24 @@ impl VulkanDevice {
                 .device
                 .cmd_reset_query_pool(cmd, query, 0, required);
         }
+        if self.deferred.is_some() && !self.batch.entries.is_empty() {
+            // The old helper boundary waited on its predecessor at ALL_COMMANDS.
+            // Preserve that memory dependency when both share one native submit.
+            // SAFETY: Fresh command buffer outside rendering; this queue owns it.
+            unsafe {
+                let memory = [vk::MemoryBarrier2::default()
+                    .src_stage_mask(vk::PipelineStageFlags2::ALL_COMMANDS)
+                    .src_access_mask(vk::AccessFlags2::MEMORY_WRITE)
+                    .dst_stage_mask(vk::PipelineStageFlags2::ALL_COMMANDS)
+                    .dst_access_mask(
+                        vk::AccessFlags2::MEMORY_READ | vk::AccessFlags2::MEMORY_WRITE,
+                    )];
+                self.context.device.cmd_pipeline_barrier2(
+                    cmd,
+                    &vk::DependencyInfo::default().memory_barriers(&memory),
+                );
+            }
+        }
         // The outer pair covers every command, including leading barriers and
         // lists without graph labels. Per-pass begins below exclude those barriers.
         // SAFETY: The fresh/reset pool reserves query zero and the final query
@@ -201,20 +222,10 @@ impl VulkanDevice {
                 .checked_add(1)
                 .ok_or_else(|| GpuError::Contract("Queue timeline exhausted".into()))?,
         };
-        let waits = waits
-            .iter()
-            .map(|p| {
-                vk::SemaphoreSubmitInfo::default()
-                    .semaphore(self.timelines[p.queue.index()])
-                    .value(p.value)
-                    .stage_mask(vk::PipelineStageFlags2::ALL_COMMANDS)
-            })
-            .collect::<Vec<_>>();
-        let signals = [vk::SemaphoreSubmitInfo::default()
-            .semaphore(self.timelines[queue.index()])
-            .value(point.value)
-            .stage_mask(vk::PipelineStageFlags2::ALL_COMMANDS)];
-        let commands = [vk::CommandBufferSubmitInfo::default().command_buffer(cmd)];
+        let mut dependencies = [0; 2];
+        for wait in waits {
+            dependencies[wait.queue.index()] = dependencies[wait.queue.index()].max(wait.value);
+        }
         {
             crate::cpu_scope!("GPU.end_commands");
             // SAFETY: Encoding completed on this recording command buffer.
@@ -225,22 +236,36 @@ impl VulkanDevice {
                     .map_err(anyhow::Error::from)?;
             }
         }
-        {
+        if self.deferred.is_some() {
+            self.batch.entries.push(super::submission::Entry {
+                point,
+                cmd,
+                waits: dependencies,
+            });
+        } else {
+            let waits: Vec<_> = dependencies
+                .into_iter()
+                .enumerate()
+                .filter(|(_, value)| *value > 0)
+                .map(|(q, value)| {
+                    vk::SemaphoreSubmitInfo::default()
+                        .semaphore(self.timelines[q])
+                        .value(value)
+                        .stage_mask(vk::PipelineStageFlags2::ALL_COMMANDS)
+                })
+                .collect();
+            let signals = [vk::SemaphoreSubmitInfo::default()
+                .semaphore(self.timelines[queue.index()])
+                .value(point.value)
+                .stage_mask(vk::PipelineStageFlags2::ALL_COMMANDS)];
+            let commands = [vk::CommandBufferSubmitInfo::default().command_buffer(cmd)];
             crate::cpu_scope!("GPU.queue_submit");
             // SAFETY: Handles and queue usage were checked; waits name prior submissions.
             unsafe {
                 self.context
                     .device
                     .queue_submit2(
-                        if queue == Queue::Compute {
-                            self.context.compute
-                        } else {
-                            if self.scene_queue {
-                                self.context.scene_graphics
-                            } else {
-                                self.context.graphics
-                            }
-                        },
+                        self.native_queue(queue),
                         &[vk::SubmitInfo2::default()
                             .wait_semaphore_infos(&waits)
                             .signal_semaphore_infos(&signals)
@@ -249,6 +274,9 @@ impl VulkanDevice {
                     )
                     .map_err(anyhow::Error::from)?;
             }
+            self.flushed[queue.index()] = point.value;
+            self.submission_stats.queue_submissions += 1;
+            self.submission_stats.command_lists += 1;
         }
         guard.disarm();
         self.submitted[queue.index()] = point.value;

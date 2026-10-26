@@ -121,6 +121,17 @@ impl Gpu {
                 && has_extension(ash::khr::ray_query::NAME)
                 && has_extension(ash::khr::deferred_host_operations::NAME);
             let mut device_extensions = Vec::new();
+            let global_priority_extension = if window_extensions.is_empty() {
+                None
+            } else if has_extension(ash::khr::global_priority::NAME) {
+                device_extensions.push(ash::khr::global_priority::NAME.as_ptr());
+                Some("VK_KHR_global_priority")
+            } else if has_extension(ash::ext::global_priority::NAME) {
+                device_extensions.push(ash::ext::global_priority::NAME.as_ptr());
+                Some("VK_EXT_global_priority")
+            } else {
+                None
+            };
             let timestamp_clock = if has_extension(ash::khr::calibrated_timestamps::NAME) {
                 device_extensions.push(ash::khr::calibrated_timestamps::NAME.as_ptr());
                 Some("VK_KHR_calibrated_timestamps")
@@ -220,14 +231,6 @@ impl Gpu {
             );
             let priorities = [1.0, 0.5];
             let graphics_count = families[graphics_family as usize].queue_count.min(2) as usize;
-            let queues = [
-                vk::DeviceQueueCreateInfo::default()
-                    .queue_family_index(graphics_family)
-                    .queue_priorities(&priorities[..graphics_count]),
-                vk::DeviceQueueCreateInfo::default()
-                    .queue_family_index(compute_family)
-                    .queue_priorities(&priorities[..1]),
-            ];
             let mut v11 =
                 vk::PhysicalDeviceVulkan11Features::default().shader_draw_parameters(true);
             let mut v12 = vk::PhysicalDeviceVulkan12Features::default()
@@ -269,7 +272,6 @@ impl Gpu {
                 .shader_storage_image_extended_formats(true)
                 .independent_blend(true);
             let mut device_info = vk::DeviceCreateInfo::default()
-                .queue_create_infos(&queues)
                 .enabled_extension_names(&device_extensions)
                 .enabled_features(&core)
                 .push(&mut v11)
@@ -284,7 +286,24 @@ impl Gpu {
             if mesh_shading {
                 device_info = device_info.push(&mut mesh_features);
             }
-            let device = instance.create_device(physical, &device_info, None)?;
+            let (device, high_priority) =
+                super::priority::create(global_priority_extension.is_some(), |high| {
+                    let mut priority = vk::DeviceQueueGlobalPriorityCreateInfo::default()
+                        .global_priority(vk::QueueGlobalPriority::HIGH);
+                    let mut graphics = vk::DeviceQueueCreateInfo::default()
+                        .queue_family_index(graphics_family)
+                        .queue_priorities(&priorities[..graphics_count]);
+                    if high {
+                        graphics = graphics.push(&mut priority);
+                    }
+                    let queues = [
+                        graphics,
+                        vk::DeviceQueueCreateInfo::default()
+                            .queue_family_index(compute_family)
+                            .queue_priorities(&priorities[..1]),
+                    ];
+                    instance.create_device(physical, &device_info.queue_create_infos(&queues), None)
+                })?;
             guard.device = Some(device.clone());
             let graphics = device.get_device_queue(graphics_family, 0);
             let scene_graphics =
@@ -324,6 +343,8 @@ impl Gpu {
             let sampled_image_capacity = capacities.sampled_images;
             let storage_buffer_capacity = capacities.storage_buffers;
             let info = DeviceInfo {
+                graphics_global_priority: if high_priority { "high" } else { "medium" },
+                global_priority_extension,
                 name: CStr::from_ptr(properties.device_name.as_ptr())
                     .to_string_lossy()
                     .into_owned(),
@@ -390,8 +411,8 @@ impl Gpu {
                 },
             };
             eprintln!(
-                "{}; graphics family {graphics_family}; compute-only family {compute_family}",
-                info.name
+                "{}; graphics family {graphics_family}; compute-only family {compute_family}; graphics priority {}",
+                info.name, info.graphics_global_priority
             );
             guard.disarm();
             let mesh = ash::ext::mesh_shader::Device::load(&instance, &device);
