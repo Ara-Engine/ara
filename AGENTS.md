@@ -59,9 +59,9 @@ reports/         HTML reports published to Snist
 - `cargo check -p <crate>`: the fast loop. Check only the crates you touched.
 - `cargo clippy -p <crate> --all-targets`: no new warnings.
 - `cargo test -p <crate>`: tests for the crates you touched.
-- `cargo fmt --all`
+- `cargo run -p ara-dev -- fmt` (workspace formatting in Windows-safe batches); add `--check` to verify only.
 - Performance inner loop: `cargo run -p ara-dev -- perf` plus touched-crate checks/tests. Shader/live controls: `docs/dev/ara-dev.md`.
-- **Agent checkpoints are focused:** `cargo fmt`, `cargo clippy -p <changed crates> --all-targets -D warnings`, `cargo test -p <changed crates>`, plus the specific GPU/player/editor suites your change touches. Commit and hand over the SHA when these pass; set `CARGO_BUILD_JOBS=2` on this shared PC.
+- **Agent checkpoints are focused:** `cargo run -p ara-dev -- fmt`, `cargo clippy -p <changed crates> --all-targets -D warnings`, `cargo test -p <changed crates>`, plus the specific GPU/player/editor suites your change touches. Commit and hand over the SHA when these pass; set `CARGO_BUILD_JOBS=2` on this shared PC.
 - **The integration gate** (`cargo run -p ara-dev -- check`, with `--base <ref>`, `--json`, explicit `--known-failures <file>`) runs once per merge batch on main, by the integrator. Agents don't run it at checkpoints; breaks it finds go back to the owning agent.
 - Fast Windows entry: `.\crates\ara-dev\run.ps1 cargo -- <focused cargo args>`; opt into shared intermediates with `ARA_SHARED_BUILD_DIR` (see `docs/dev/ara-dev.md`). `check --plan --json` previews compile/test sets; `--no-compiler-cache` bypasses the optional wrapper.
 - Build/run editors through `ara-dev cargo -- build/run -p ara-editor`: it builds the matching player with the same roots/profile/target/features, verifies `--ray-tracing`, and refuses stale companions before launch.

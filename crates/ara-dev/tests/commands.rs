@@ -13,6 +13,47 @@ static SERIAL: Mutex<()> = Mutex::new(());
 static NEXT: AtomicUsize = AtomicUsize::new(0);
 
 #[test]
+fn formatter_checks_and_repairs_every_batch_without_running_build_gates() {
+    let _serial = SERIAL.lock().unwrap_or_else(|p| p.into_inner());
+    let root = fixture();
+    fs::write(
+        root.join("Cargo.toml"),
+        "[workspace]\nresolver = \"3\"\nmembers = [\"core\", \"tool\", \"diag\", \"extra\", \"last\"]\n",
+    )
+    .unwrap();
+    for name in ["extra", "last"] {
+        fs::create_dir_all(root.join(name).join("src")).unwrap();
+        fs::write(
+            root.join(name).join("Cargo.toml"),
+            format!("[package]\nname = \"zz-{name}\"\nversion = \"0.1.0\"\nedition = \"2024\"\n"),
+        )
+        .unwrap();
+        fs::write(
+            root.join(name).join("src/lib.rs"),
+            "pub fn value() -> u32 {\n    1\n}\n",
+        )
+        .unwrap();
+    }
+    ok(&root, "cargo", &["generate-lockfile", "--offline"]);
+    let source = root.join("last/src/lib.rs");
+    // Unresolved code makes an accidental build fail; rustfmt only needs valid syntax.
+    let unformatted = "pub fn value(){not_defined();}\n";
+    fs::write(&source, unformatted).unwrap();
+    let binary = env!("CARGO_BIN_EXE_ara-dev");
+    let output = command(&root, binary, &["fmt", "--check"]);
+    assert!(!output.status.success());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("fmt-2: cargo fmt"));
+    assert_eq!(fs::read_to_string(&source).unwrap(), unformatted);
+    let output = ok(&root, binary, &["fmt"]);
+    assert!(String::from_utf8_lossy(&output.stderr).contains("5 packages in 2 batches"));
+    assert_eq!(
+        fs::read_to_string(&source).unwrap(),
+        "pub fn value() {\n    not_defined();\n}\n"
+    );
+    ok(&root, binary, &["fmt", "--check"]);
+}
+
+#[test]
 fn editor_builds_matching_companion_and_refuses_stale_or_failed_pairs() {
     let _serial = SERIAL.lock().unwrap_or_else(|p| p.into_inner());
     let root = fixture();

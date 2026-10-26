@@ -14,6 +14,12 @@ to this worktree's target, overriding global Cargo configuration. The script
 restores the caller's environment afterwards. The ordinary `cargo run`
 entry remains supported.
 
+Workspace formatting: `cargo run -p ara-dev -- fmt` writes changes;
+`cargo run -p ara-dev -- fmt --check` verifies without writing. On Windows,
+`.\crates\ara-dev\run.ps1 fmt --check` is the bootstrap entry. Both use the gate's
+four-package batches, keeping rustfmt below Windows' command-line limit.
+Each batch has a log under `target/ara-dev/run-*`; failures return a nonzero exit.
+
 `check --no-compiler-cache` (also supported by `merge`) clears `RUSTC_WRAPPER`
 for child Cargo commands, preserving clippy's workspace wrapper. This uses
 [Cargo's documented empty-wrapper override](https://doc.rust-lang.org/cargo/reference/environment-variables.html).

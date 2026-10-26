@@ -2,6 +2,8 @@
 
 Local developer binary. No engine dependencies; uses git and cargo as subprocesses.
 
+- `fmt` / `fmt --check`: workspace formatting in the gate's four-package batches;
+  plain fmt writes; check leaves sources unchanged and fails on a formatting difference.
 - `check`: integrator's batch gate: source owners/direct consumers get tests;
   all transitive consumers get clippy. Markdown never cascades; catalog edits run coverage.
   `--plan` previews selection; default deadline 40 minutes excludes package-cache waits.
@@ -34,7 +36,7 @@ Local developer binary. No engine dependencies; uses git and cargo as subprocess
   CPU/hitches use whole-run samples; arrival peaks/time-to-ready have no budget gate.
 
 Agent checkpoints: `cargo test -p ara-dev`, `cargo clippy -p ara-dev --all-targets -- -D warnings`
-and `cargo fmt --all -- --check`. Set CARGO_BUILD_JOBS=2 on the shared PC.
+and `cargo run -p ara-dev -- fmt --check`. Set CARGO_BUILD_JOBS=2 on the shared PC.
 Integration fixtures and logs belong under `target/`, never in tracked paths.
 Gate JSON mode writes one report to stdout; command output goes to log files.
 `perf --keep-alive --json` streams one NDJSON report per completed window.
