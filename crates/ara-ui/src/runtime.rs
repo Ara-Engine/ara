@@ -206,6 +206,20 @@ impl Ui {
         }
         Ok(())
     }
+    /// Replace a node's inline style (its `style` attribute) in place: it restyles,
+    /// and lays out again only if its box changed. Forget the part it belongs to
+    /// ([`Self::forget_part`]) so the next reconcile does not keep it as stale.
+    pub fn set_style(&mut self, index: usize, style: &str) -> Result<()> {
+        let node = self
+            .nodes
+            .get_mut(index)
+            .ok_or("ARA4040: invalid node handle")?;
+        if node.element.attrs.get("style").map(String::as_str) != Some(style) {
+            node.element.attrs.insert("style".into(), style.into());
+            node.dirty.style = true;
+        }
+        Ok(())
+    }
     /// Update selector states; unchanged states produce no work.
     pub fn set_state(&mut self, index: usize, state: State) {
         if self.nodes[index].state != state {
