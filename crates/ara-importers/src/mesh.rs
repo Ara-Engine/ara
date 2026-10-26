@@ -276,6 +276,7 @@ pub(crate) fn cook_mesh_with_tangent_uv(
         settings,
         deformed,
         preserve_card_area,
+        metrics,
     );
     drop(lod_timer);
     let mut b = Builder::new(Kind::Mesh);

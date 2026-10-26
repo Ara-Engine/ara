@@ -27,6 +27,9 @@ alpha foliage also retains at least 90% area per connected card. Irreducible
 cards keep their last good level. Skin/morph chains retain the four-level/1% cap.
 Retain usable legacy LODs: replacing geometric errors with combined attribute
 errors can make runtime selection choose finer foliage despite deeper chains.
+LOD0-based solves run in bounded pairs; accept/fallback in original level order.
+glTF classic and virtual geometry share the same bounded worker pool. Keep their
+bytes and error precedence stable; scheduling changes need no version bump.
 ARAG Custom artifacts are
 validated by ara-geo; its reflected settings are VirtualGeometrySettings.
 
@@ -53,6 +56,9 @@ FORMAT.md in ara-asset-format and INTEGRATION.md here define runtime adoption.
 
 Downloaded third-party fixtures live in .fixtures (gitignored). Tests should not
 download from the network. See MEASUREMENTS.md for reproducible real-scene checks.
+`geometry_replay PROJECT [threads]` is an explicit diagnostic example: real inputs,
+verified cached textures, no device/encoding/stores, exact production-output checks.
+It requires a completed default-Balanced glTF project; it is not cold import latency.
 
 Project quality is a typed ara.imports document (import.project.configure). Sources
 inherit it unless preset is explicit; TextureSettings.preset and MeshSettings.texturePresets

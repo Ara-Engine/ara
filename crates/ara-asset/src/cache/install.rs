@@ -140,14 +140,18 @@ fn publish(path: &Path, bytes: &[u8], replace: bool) -> std::io::Result<()> {
         #[cfg(not(test))]
         temp.write_all(bytes)?;
     }
-    {
+    let published = {
         let _part = detail_scope("cache.install.persist", &label);
         let result = if replace {
             temp.persist(path)
         } else {
             temp.persist_noclobber(path)
         };
-        result.map_err(|e| e.error)?;
+        result.map_err(|e| e.error)?
+    };
+    {
+        let _part = detail_scope("cache.install.close", &label);
+        drop(published);
     }
     #[cfg(test)]
     super::tests::fail_publish(true)?;
