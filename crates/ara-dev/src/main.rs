@@ -10,6 +10,7 @@ mod d26;
 mod editor;
 mod git;
 mod gpu;
+mod history;
 mod hygiene;
 mod known;
 mod manifest;
@@ -38,6 +39,10 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
+    /// Rehearse attribution-only history cleanup in a newly created, isolated mirror.
+    HistoryRewrite(history::Options),
+    /// Find a unique rewritten fork by full cleaned message and unchanged metadata/tree.
+    HistoryMatch(history::MatchOptions),
     /// Focused Cargo command using optional shared intermediates and bounded concurrency.
     Cargo {
         #[arg(last = true, required = true, num_args = 1..)]
@@ -111,6 +116,12 @@ enum Command {
 
 fn run() -> Result<bool> {
     let cli = Cli::parse();
+    if let Command::HistoryRewrite(options) = cli.command {
+        return history::run(options);
+    }
+    if let Command::HistoryMatch(options) = cli.command {
+        return history::match_base(options);
+    }
     if let Command::Disk { warn_gib } = cli.command {
         let mut healthy = platform::disk(warn_gib)?;
         if let Ok(root) = git::text(std::path::Path::new("."), ["rev-parse", "--show-toplevel"])
@@ -179,7 +190,12 @@ fn run() -> Result<bool> {
         Command::CleanWorktrees {
             yes, hours, base, ..
         } => worktrees::run(&root, yes, hours, &base),
-        Command::Disk { .. } | Command::Gpu { .. } => unreachable!("handled above"),
+        Command::Disk { .. }
+        | Command::Gpu { .. }
+        | Command::HistoryRewrite(_)
+        | Command::HistoryMatch(_) => {
+            unreachable!("handled above")
+        }
     }
 }
 

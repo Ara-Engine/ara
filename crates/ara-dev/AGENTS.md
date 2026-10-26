@@ -22,6 +22,9 @@ Local developer binary. No engine dependencies; uses git and cargo as subprocess
   stale files, clean checkout, no symlinks/reparse points and no active Cargo lock.
 - `disk`: all mounted drive free-space report.
   Also flags configured Cargo outputs inside another checkout's target.
+- `history-rewrite`: rehearse message cleanup in a fresh independent bare mirror;
+  verify trees, metadata and ordered parents. Never rewrite a live checkout or push.
+  `history-match` finds unique full-message/tree/metadata forks; see `docs/releases.md`.
 - `perf`: optimized incremental build, once-frozen Outpost pack, GPU-locked frame
   windows, JSON/deltas, warm-player file controls and local stdio MCP bridge.
 - `d26`: the release scoreboard (`src/d26/`). It reuses `perf` windows on Outpost, Hangar and
