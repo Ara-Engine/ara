@@ -22,9 +22,8 @@ One service per config directory, enforced by an OS lock; projects run separatel
   (the samples lock) sets `setup {message,command}` for missing third-party pins
   or generated kit sources/local glTF companions. `hub.create` fails with ARA1913
   before writing; `cargo run -p ara-samples -- kits <sample>` restores kits.
-- When the engine runs from `<checkout>/target/<profile>/`, `Hub::open` layers the
-  checkout's `samples/` after the configured templates (installed builds ship them
-  in `<install>/templates`).
+- Run from `<checkout>/target/<profile>/`, `Hub::open` layers the checkout's `samples/`
+  after the configured templates (installed builds ship `<install>/templates`).
 - Templates resolve from registered engines in descending semantic version order,
   then configured/service templates and checkout samples. Each tile's `engineVersion`
   identifies its source; create defaults to that pin and uses that source's asset lock.
