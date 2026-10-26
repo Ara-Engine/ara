@@ -620,10 +620,105 @@ LOD tests compare complete static and deformed outputs at caps 1/4/8 across priv
 pools of one/four threads; existing seam, area, depth and sample-version tests pass.
 The main-sync shader cohort is re-cooked with all artifacts reused unchanged.
 
-The controlled fresh-project paired wall matrix is deliberately pending the
-owner's separate quiet slot. Neither the diagnostic reduction nor the retained
-55-second storage outlier is a claim of Showcase below 10 s or Outpost below 20 s.
+The controlled fresh-project wall matrix follows below. Neither the diagnostic
+reduction nor the retained 55-second storage outlier establishes Showcase below
+10 s or Outpost below 20 s.
 Canonical evidence is in `measurements/parallel-geometry-2026-10-26.json`; raw
 traces, per-model outputs, frozen worker hashes and logs remain under
 `target/ara-dev/import-speed/` (`cold-mesh-profile-a0-outpost/`, `geometry-*`,
 `cache-close-a0/`, `mesh-final-*`, `mesh-gpu-protocol/`).
+
+### Fresh-project ABBA and regression attribution
+
+Eight cases run through the real Hub/daemon pipeline under the GPU lock, with
+fresh project/import/profile/driver caches and the same frozen CLI/player/profile.
+A is the matched `63e07a1d` control worker; B is `939cb781`. Other agents are held;
+the installed preview may remain open and idle. OS/vendor caches are retained.
+
+| Run | Showcase open to ready (s) | Outpost open to ready (s) | Showcase including create (s) | Outpost including create (s) |
+|---|---:|---:|---:|---:|
+| A1 | 12.324 | 28.403 | 14.165 | 38.353 |
+| B1 | 13.401 | 34.035 | 15.732 | 42.799 |
+| B2 | 10.775 | 46.872 | 12.371 | 51.052 |
+| A2 | 11.275 | 28.732 | 12.582 | 35.956 |
+
+Retain all cases: mean Outpost regresses 28.567 to 40.454 s; Showcase is 11.800
+to 12.088 s. The runner exhausts PATH length before A2 by repeatedly appending
+native paths. Only its environment-path deduplication is corrected, then A2 resumes
+under the lock; no completed case is discarded or repeated. All 592 action keys
+and 7,160 artifact references match v4. Physical verification reads 5,344,011,560
+logical referenced bytes, with zero CPU fallbacks. The owner subsequently deletes
+the eight scratch projects after reparse checks; raw traces, catalogs and IDs stay
+under this worktree's `target/ara-dev/import-speed/parallel-lod-*` on C:.
+
+| Outpost interval/counter | A1 | B1 | B2 | A2 |
+|---|---:|---:|---:|---:|
+| Native worker CPU (s) | 64.391 | 64.719 | 64.781 | 63.250 |
+| Mesh elapsed sum (s) | 15.609 | 10.379 | 10.118 | 14.938 |
+| Classic LOD elapsed sum (s) | 9.764 | 7.971 | 7.805 | 9.176 |
+| Cache-store elapsed sum (s) | 72.745 | 104.949 | 258.034 | 61.063 |
+| Cache-write elapsed sum (s) | 33.850 | 28.383 | 99.510 | 10.822 |
+| Cache-write thread CPU (s) | 0.250 | 0.250 | 0.250 | 0.203 |
+| Longest cache install (s) | 4.541 | 6.401 | 8.623 | 2.463 |
+| Installs over one second | 8 | 7 | 22 | 4 |
+| Largest worker peak RSS (MiB) | 444.0 | 443.6 | 444.9 | 430.2 |
+
+Every worker uses four pool threads; the experiment adds tasks, not another pool.
+The observed cost is off-CPU filesystem waits: B1 includes 6.2–6.4 s link/read/write
+stalls, while B2 has several worker/daemon writes ending almost together after
+about 8.5 s. B2's last asset starts 41.725 s after open; its import takes 4.548 s,
+with only 0.469 s of process CPU. Both controls retain smaller I/O stalls too.
+There are 667 store and 2,477 install spans in each Outpost case, so this is not
+an increase in published content. Substage intervals overlap and nest; do not sum
+them into a critical path. Thread CPU counters are coarse, and individual process
+RSS peaks are not a simultaneous system-memory measurement.
+
+These traces locate the added wait but do not prove why the filesystem stalls.
+Changed arrival/order and storage pressure remain hypotheses; there is no recorded
+system fault/queue telemetry or Defender attribution. The shipping default is
+restored by `40cc47a7`; re-enabling requires an end-to-end ABBA win. Canonical
+evidence: `measurements/parallel-geometry-abba-2026-10-26.json`.
+
+## Byte-exact Color8 preparation: 2026-10-26
+
+The existing decode timer includes entropy decoding, serial RGBA32F expansion and
+sRGB transfer. PNG/JPEG/HDR/EXR are supported; there is no DDS/KTX source-import
+path to bypass for these samples. The measured change fuses eight-bit color
+expansion and transfer into one parallel destination. A 256-value table is built
+through image's conversion for the actual L8/LA8/RGB8/RGBA8 layout and the unchanged
+sRGB function. A direct u8/255 table initially fails one grayscale float bit;
+that failed probe log is retained. Small images below 256 pixels, other sample
+types, normals, masks, linear data and HDR use the qualified original path.
+There are no new dependencies, formats, versions, cache inputs or codec changes.
+
+The standalone probe compiles the production helper source, including cancellation
+and destination allocation. It runs A/B/B/A per semantic image over 147 albedo
+paths (229,403,604 base pixels), with two Rayon threads under the GPU lock and
+batch-32 gate load. This corpus includes repeated content, not 147 unique models.
+Every decoded base float bit matches; no encoding, device creation or cache store
+runs. The table below averages each variant's two preparation passes per image,
+then sums images; it is not a fresh-project import wall measurement.
+
+| Corpus phase total (s) | Own code opt1 | Own code opt3 |
+|---|---:|---:|
+| Reference entropy decode | 1.380 | 1.480 |
+| Reference RGBA32F conversion | 0.680 | 0.689 |
+| Reference transfer and validation | 3.563 | 3.391 |
+| Reference preparation, complete | 4.248 | 4.084 |
+| Production lookup preparation | 1.806 | 1.389 |
+| Preparation speed ratio | 2.35x | 2.94x |
+| Original mip generation, one pass | 1.417 | 1.292 |
+
+The earlier lighter prototype records 3.35x/3.60x; it omits the production
+cancellation/validation and buffer policy and is not the shipping-path result.
+Neither phase result establishes the cold targets. No mip or compression algorithm
+changes. Focused tests check all code values/four layouts/odd tails at one and four
+threads, literal complete KTX2 mip bytes against the pre-table path, cancellation,
+all preset/thread contracts and sample versions. Formatting, strict all-target
+Clippy and all 38 importer tests pass, with none ignored. The main-sync shader
+re-cook reuses every artifact unchanged.
+
+Canonical evidence: `measurements/texture-color-lookup-2026-10-26.json`.
+Raw probe inputs, source/library hashes, both failed/successful logs and all timing
+rows stay under `target/ara-dev/import-speed/texture-prepare/`. Fresh-project
+before/after remains a separate measurement; parallel geometry stays disabled.

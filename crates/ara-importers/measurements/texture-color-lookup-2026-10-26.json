@@ -1,0 +1,217 @@
+{
+  "correctness": {
+    "allCodeLayouts": [
+      "L8",
+      "LA8",
+      "RGB8",
+      "RGBA8"
+    ],
+    "fullColorKtx2Reference": "Exact mip-chain bytes compared against pre-table preparation",
+    "literalFloatComparisons": 882,
+    "normalsHdrData": "Original path retained; no codec/format/key/version changes",
+    "oddTailWidths": [1, 2, 3, 5, 17, 255, 256, 257],
+    "phaseCases": 147,
+    "pixels": 229403604,
+    "productionUnitThreadBudgets": [1, 4],
+    "sampleVersions": "pass; no regeneration",
+    "timingRows": 1176
+  },
+  "date": "2026-10-26",
+  "definition": "Production helper compiled into a standalone probe; 147 albedo semantic paths, 229403604 base pixels; includes repeated contents; no compression/device/cache stores; not cold import walls",
+  "freshProjectMeasurement": "Pending separate controlled pairing; no claim of Showcase below 10 s or Outpost below 20 s",
+  "implementation": {
+    "destination": "Indexed parallel writes, cancellation checks per pixel; no fallible Vec collection",
+    "globalState": "None; no random state, clocks, IO or device creation in preprocessing",
+    "smallImageFallbackPixels": 256,
+    "table": "Existing image layout conversion, then unchanged sRGB formula for each of 256 values; separate alpha values"
+  },
+  "initialFailure": "Naive division table failed an L8 float bit at code 3; derive per-layout values through actual library conversion. Failed logs preserved.",
+  "profiles": {
+    "Count": 2,
+    "value": [
+      {
+        "baselineDecodeMs": 1380.0929500000002,
+        "baselineFloatMs": 680.2161500000003,
+        "baselinePrepareMs": 4247.805499999997,
+        "baselineTransferMs": 3562.916600000001,
+        "load": {
+          "availableMemoryKiB": 7732408,
+          "context": "batch-32 integration gate active; two-thread isolated conversion probe, no encoding/GPU/cache stores",
+          "cpuPercent": 23,
+          "utc": "2026-10-26T04:16:30.6412436Z"
+        },
+        "lookupDecodeMs": 1438.61915,
+        "lookupPrepareMs": 1806.079700000001,
+        "optLevel": 1,
+        "pixels": 229403604,
+        "prepareRatio": 2.351947978818429,
+        "provenance": {
+          "binary": "D:/AraBuild/ara-dev-infra-target/import-speed/texture-prepare/probe-opt1.exe",
+          "binarySha256": "B0A987218649066DE22C865C96EC0512F1CCAC68FBA2D54BEF9DAA79221367FB",
+          "libraries": {
+            "ara_asset": {
+              "library": "D:/AraBuild/ara-dev-infra-target\\debug\\deps\\libara_asset-0737127ede985966.rlib",
+              "packageId": "path+file:///C:/Users/snowy/.t3/worktrees/snengine/t3-602598ba/crates/ara-asset#0.0.1-alpha",
+              "sha256": "66A37111B5FA173539C90263BD299DA5DFCF3847D34558BFA73AA15A4952968A"
+            },
+            "ara_json": {
+              "library": "D:/AraBuild/ara-dev-infra-target\\debug\\deps\\libara_json-7d0b425ef1634864.rlib",
+              "packageId": "path+file:///C:/Users/snowy/.t3/worktrees/snengine/t3-602598ba/crates/ara-json#0.0.1-alpha",
+              "sha256": "32B7D27772C6D250995D43CBC5C92C3F33B105276D19CB25D0243945F38CBC7B"
+            },
+            "bytemuck": {
+              "library": "D:/AraBuild/ara-dev-infra-target\\debug\\deps\\libbytemuck-520c0e7f777e878e.rlib",
+              "packageId": "registry+https://github.com/rust-lang/crates.io-index#bytemuck@1.25.2",
+              "sha256": "9D657839E381AE8BC9B0DBBBA8A3836B63A5A804BCD679AE69E341C8CDDCEA1D"
+            },
+            "image": {
+              "library": "D:/AraBuild/ara-dev-infra-target\\debug\\deps\\libimage-50ce71bdc569b65d.rlib",
+              "packageId": "registry+https://github.com/rust-lang/crates.io-index#image@0.25.10",
+              "sha256": "5BA3F21CB0BB84DE0D2B9FBDD02423DF75B74B7E1387E98E1A8D2808624DA692"
+            },
+            "rayon": {
+              "library": "D:/AraBuild/ara-dev-infra-target\\debug\\deps\\librayon-7b4b29b8ce490d0f.rlib",
+              "packageId": "registry+https://github.com/rust-lang/crates.io-index#rayon@1.11.0",
+              "sha256": "DBD881EA7802B4389617D55311763DD094EEA5C56D5808489B9F6106572DD1E4"
+            },
+            "serde_json": {
+              "library": "D:/AraBuild/ara-dev-infra-target\\debug\\deps\\libserde_json-d61cefe8d725cff7.rlib",
+              "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde_json@1.0.154",
+              "sha256": "06F7EE7A1D9B7DBEC2CD6636C61E05ABD4E7D2327AA68BB9AAF43D72269E2965"
+            }
+          },
+          "optLevel": 1,
+          "sourceHead": "17ddf8642b462d3c19065029899d9fbcc77195b2",
+          "sourceMeshSha256": "7D99C15B6F172DB69859B5EFC51D730B6BE0D4B6B5BC264BBE2F3687A17FB7AE",
+          "sourcePixelsSha256": "D374F6AE6EF17B446B582B4DA608E8C62303F4BAE2CBDC1162FA1964557C4AF9",
+          "sourceTextureSha256": "A45E57882EB66DA60F0257F77F2A6F1378DA7F7BEA939AC797C6010FD1F5CB3F"
+        },
+        "referenceMipsMs": 1416.6919999999998,
+        "rows": 588,
+        "textures": 147
+      },
+      {
+        "baselineDecodeMs": 1479.7565499999996,
+        "baselineFloatMs": 688.7943499999999,
+        "baselinePrepareMs": 4083.8800499999993,
+        "baselineTransferMs": 3391.486649999998,
+        "load": {
+          "availableMemoryKiB": 8051708,
+          "context": "batch-32 integration gate active; two-thread isolated conversion probe, no encoding/GPU/cache stores",
+          "cpuPercent": 14,
+          "utc": "2026-10-26T04:16:52.1129196Z"
+        },
+        "lookupDecodeMs": 1485.8186499999997,
+        "lookupPrepareMs": 1388.7632500000002,
+        "optLevel": 3,
+        "pixels": 229403604,
+        "prepareRatio": 2.9406596480717635,
+        "provenance": {
+          "binary": "D:/AraBuild/ara-dev-infra-target/import-speed/texture-prepare/probe-opt3.exe",
+          "binarySha256": "03718E800A0D7D82752396C8B61237593E72C5DA44C25EA16326BC7AA348F1D1",
+          "libraries": {
+            "ara_asset": {
+              "library": "D:/AraBuild/ara-dev-infra-target\\debug\\deps\\libara_asset-0737127ede985966.rlib",
+              "packageId": "path+file:///C:/Users/snowy/.t3/worktrees/snengine/t3-602598ba/crates/ara-asset#0.0.1-alpha",
+              "sha256": "66A37111B5FA173539C90263BD299DA5DFCF3847D34558BFA73AA15A4952968A"
+            },
+            "ara_json": {
+              "library": "D:/AraBuild/ara-dev-infra-target\\debug\\deps\\libara_json-7d0b425ef1634864.rlib",
+              "packageId": "path+file:///C:/Users/snowy/.t3/worktrees/snengine/t3-602598ba/crates/ara-json#0.0.1-alpha",
+              "sha256": "32B7D27772C6D250995D43CBC5C92C3F33B105276D19CB25D0243945F38CBC7B"
+            },
+            "bytemuck": {
+              "library": "D:/AraBuild/ara-dev-infra-target\\debug\\deps\\libbytemuck-520c0e7f777e878e.rlib",
+              "packageId": "registry+https://github.com/rust-lang/crates.io-index#bytemuck@1.25.2",
+              "sha256": "9D657839E381AE8BC9B0DBBBA8A3836B63A5A804BCD679AE69E341C8CDDCEA1D"
+            },
+            "image": {
+              "library": "D:/AraBuild/ara-dev-infra-target\\debug\\deps\\libimage-50ce71bdc569b65d.rlib",
+              "packageId": "registry+https://github.com/rust-lang/crates.io-index#image@0.25.10",
+              "sha256": "5BA3F21CB0BB84DE0D2B9FBDD02423DF75B74B7E1387E98E1A8D2808624DA692"
+            },
+            "rayon": {
+              "library": "D:/AraBuild/ara-dev-infra-target\\debug\\deps\\librayon-7b4b29b8ce490d0f.rlib",
+              "packageId": "registry+https://github.com/rust-lang/crates.io-index#rayon@1.11.0",
+              "sha256": "DBD881EA7802B4389617D55311763DD094EEA5C56D5808489B9F6106572DD1E4"
+            },
+            "serde_json": {
+              "library": "D:/AraBuild/ara-dev-infra-target\\debug\\deps\\libserde_json-d61cefe8d725cff7.rlib",
+              "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde_json@1.0.154",
+              "sha256": "06F7EE7A1D9B7DBEC2CD6636C61E05ABD4E7D2327AA68BB9AAF43D72269E2965"
+            }
+          },
+          "optLevel": 3,
+          "sourceHead": "17ddf8642b462d3c19065029899d9fbcc77195b2",
+          "sourceMeshSha256": "7D99C15B6F172DB69859B5EFC51D730B6BE0D4B6B5BC264BBE2F3687A17FB7AE",
+          "sourcePixelsSha256": "D374F6AE6EF17B446B582B4DA608E8C62303F4BAE2CBDC1162FA1964557C4AF9",
+          "sourceTextureSha256": "A45E57882EB66DA60F0257F77F2A6F1378DA7F7BEA939AC797C6010FD1F5CB3F"
+        },
+        "referenceMipsMs": 1291.8358,
+        "rows": 588,
+        "textures": 147
+      }
+    ]
+  },
+  "protocol": "A/B/B/A per image, two Rayon threads, GPU lock, opt1 and opt3; actual cancellation/validation and indexed destination policy included",
+  "prototype": {
+    "Count": 2,
+    "value": [
+      {
+        "baselineDecodeMs": 1478.5493999999999,
+        "baselineFloatMs": 707.7497500000003,
+        "baselinePrepareMs": 3364.910850000001,
+        "baselineTransferMs": 2652.1893999999993,
+        "load": {
+          "availableMemoryKiB": 7552152,
+          "context": "batch-32 integration gate active; two-thread isolated conversion probe, no encoding/GPU/cache stores",
+          "cpuPercent": 33,
+          "utc": "2026-10-26T04:04:42.3830034Z"
+        },
+        "lookupDecodeMs": 1500.2802499999993,
+        "lookupPrepareMs": 1005.4005500000003,
+        "optLevel": 1,
+        "pixels": 229403604,
+        "prepareRatio": 3.346836094330762,
+        "referenceMipsMs": 1508.4326,
+        "rows": 588,
+        "textures": 147
+      },
+      {
+        "baselineDecodeMs": 1514.5182499999999,
+        "baselineFloatMs": 701.68005,
+        "baselinePrepareMs": 3478.1729499999997,
+        "baselineTransferMs": 2772.9284999999973,
+        "load": {
+          "availableMemoryKiB": 7650044,
+          "context": "batch-32 integration gate active; two-thread isolated conversion probe, no encoding/GPU/cache stores",
+          "cpuPercent": 28,
+          "utc": "2026-10-26T04:05:01.0893027Z"
+        },
+        "lookupDecodeMs": 1505.7423000000003,
+        "lookupPrepareMs": 967.3606500000001,
+        "optLevel": 3,
+        "pixels": 229403604,
+        "prepareRatio": 3.595528668651138,
+        "referenceMipsMs": 1495.3376,
+        "rows": 588,
+        "textures": 147
+      }
+    ]
+  },
+  "prototypeCaveat": "Earlier 3.35x/3.60x prototype omits production cancellation/validation and destination policy; production ratios supersede it",
+  "rawEvidence": "target/ara-dev/import-speed/texture-prepare",
+  "sourceBase": "17ddf8642b462d3c19065029899d9fbcc77195b2",
+  "sourceHashes": {
+    "crates/ara-importers/src/texture.rs": "A45E57882EB66DA60F0257F77F2A6F1378DA7F7BEA939AC797C6010FD1F5CB3F",
+    "crates/ara-importers/src/texture/pixels.rs": "D374F6AE6EF17B446B582B4DA608E8C62303F4BAE2CBDC1162FA1964557C4AF9",
+    "crates/ara-importers/src/texture/pixels/tests.rs": "58BC159909C502C99F98E7B3E397E62B4EA8623CB7B24140AE2B307F927EBAA7"
+  },
+  "validation": {
+    "declaredIgnores": 0,
+    "fmt": "pass",
+    "ordinaryTests": 38,
+    "shaderRecook": "0 cooked; all artifacts reused unchanged",
+    "strictClippy": "ara-importers --all-targets -D warnings"
+  }
+}
