@@ -56,6 +56,8 @@ mod tests {
     #[test]
     fn rejects_corrupt_and_foreign_headers() {
         let info = DeviceInfo {
+            graphics_global_priority: "medium",
+            global_priority_extension: None,
             mesh_shading: false,
             mesh_dispatch: [0; 4],
             task_dispatch: [0; 4],

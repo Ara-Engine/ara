@@ -2,6 +2,20 @@ use super::*;
 use clap::Parser;
 
 #[test]
+fn diagnostic_reports_cannot_claim_presented_frames() -> Result<()> {
+    let args = crate::Args::try_parse_from(["ara-player", "--perf-output", "x", "--no-present"])?;
+    let mut window = Window::new(args.standalone.perf, false, Instant::now());
+    window.configure_presentation(true, false);
+    let settings = window.presentation_settings();
+    assert_eq!(settings["present_calls"], false);
+    assert_eq!(settings["visible"], false);
+    assert_eq!(settings["diagnostic"], true);
+    assert!(settings["present_mode"].is_null());
+    assert_eq!(settings["window_mode"], "windowed");
+    Ok(())
+}
+
+#[test]
 fn keepalive_and_new_requests_retain_cpu_hitches_until_stop_without_changing_gpu_samples()
 -> Result<()> {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
