@@ -1,0 +1,513 @@
+{
+  "activeSamples": 26,
+  "assets": 115,
+  "binaryHashes": {
+    "cli": "119327897F0F36FCE048960563B8130172D04DB89B1B918F277B99A527604BFE",
+    "player": "946B7D03E2BDA216AD4282FDD9D1934FE40F501E6D760BEFF135AF24F0759D29",
+    "worker": "AACE3CAE8A93EB84AF1251FB239F22BAC698FABC353D0F2DC4DCF71EC2A5F234"
+  },
+  "caveats": [
+    "One quiet sequential run, no A/B or cache-policy change",
+    "Previous 8.6 s freeze not reproduced",
+    "Other logged writers threshold is 64 KiB/s; read-only other processes are not comprehensively captured",
+    "Process IO is logical and sampled, not physical disk bytes or complete short-worker accounting",
+    "No RAM-pressure signal here does not exclude buffered cache-manager writeback",
+    "No inference about device SLC/firmware or filter causality"
+  ],
+  "counterSamples": 62,
+  "createToReadyMs": 32172.943600000002,
+  "definition": "Single unchanged sequential-control import; not an A/B matrix",
+  "fallbacks": 0,
+  "groups": {
+    "all": {
+      "availableGiB": {
+        "max": 7.378459930419922,
+        "mean": 6.434256627009465,
+        "min": 5.840919494628906
+      },
+      "commitPercent": {
+        "max": 57.134801958747495,
+        "mean": 55.60959315225511,
+        "min": 52.812959917324235
+      },
+      "dAvgQueue": {
+        "max": 10.321060289181831,
+        "mean": 4.553060522480357,
+        "min": 0.39259052665564576
+      },
+      "dReadMiBs": {
+        "max": 63.97013167841056,
+        "mean": 15.74961866544995,
+        "min": 0
+      },
+      "dWriteLatencyMs": {
+        "max": 340.3785266666667,
+        "mean": 59.708918986930485,
+        "min": 1.1087395048994326
+      },
+      "dWriteMiBs": {
+        "max": 126.32717355202254,
+        "mean": 36.514852297228224,
+        "min": 4.477191252414485
+      },
+      "modifiedMiB": {
+        "max": 416.97265625,
+        "mean": 239.13311298076923,
+        "min": 125.04296875
+      },
+      "otherLoggedLogicalWriteMiBs": {
+        "max": 16.564509243011475,
+        "mean": 3.311198187901423,
+        "min": 0.8959853887557983
+      },
+      "ownLogicalWriteMiBs": {
+        "max": 41.63683319091797,
+        "mean": 15.99451540539371,
+        "min": 0
+      },
+      "pageWritesPerSec": {
+        "max": 0,
+        "mean": 0,
+        "min": 0
+      },
+      "pagesOutputPerSec": {
+        "max": 0,
+        "mean": 0,
+        "min": 0
+      },
+      "samples": 26,
+      "standbyGiB": {
+        "max": 6.725940704345703,
+        "mean": 6.243396172156701,
+        "min": 5.826751708984375
+      }
+    },
+    "outsideSlowWrite": {
+      "availableGiB": {
+        "max": 7.378459930419922,
+        "mean": 6.442958641052246,
+        "min": 5.840919494628906
+      },
+      "commitPercent": {
+        "max": 57.134801958747495,
+        "mean": 55.481800813075516,
+        "min": 52.812959917324235
+      },
+      "dAvgQueue": {
+        "max": 10.321060289181831,
+        "mean": 4.221844580658042,
+        "min": 0.39259052665564576
+      },
+      "dReadMiBs": {
+        "max": 54.541940995173185,
+        "mean": 17.144141707273818,
+        "min": 0
+      },
+      "dWriteLatencyMs": {
+        "max": 340.3785266666667,
+        "mean": 70.10710263918097,
+        "min": 1.1087395048994326
+      },
+      "dWriteMiBs": {
+        "max": 100.0089759066461,
+        "mean": 29.302302303029137,
+        "min": 4.477191252414485
+      },
+      "modifiedMiB": {
+        "max": 416.97265625,
+        "mean": 252.015625,
+        "min": 180.22265625
+      },
+      "otherLoggedLogicalWriteMiBs": {
+        "max": 10.9711936712265,
+        "mean": 3.043659793901443,
+        "min": 0.8959853887557983
+      },
+      "ownLogicalWriteMiBs": {
+        "max": 41.63683319091797,
+        "mean": 18.340574063093136,
+        "min": 0.0009012129783630372
+      },
+      "pageWritesPerSec": {
+        "max": 0,
+        "mean": 0,
+        "min": 0
+      },
+      "pagesOutputPerSec": {
+        "max": 0,
+        "mean": 0,
+        "min": 0
+      },
+      "samples": 20,
+      "standbyGiB": {
+        "max": 6.725940704345703,
+        "mean": 6.227546691894531,
+        "min": 5.826751708984375
+      }
+    },
+    "overlappingSlowWrite": {
+      "availableGiB": {
+        "max": 6.544811248779297,
+        "mean": 6.405249913533528,
+        "min": 6.179290771484375
+      },
+      "commitPercent": {
+        "max": 56.95782402421671,
+        "mean": 56.03556761618713,
+        "min": 55.34803973416733
+      },
+      "dAvgQueue": {
+        "max": 8.314723045997487,
+        "mean": 5.657113661888076,
+        "min": 1.41101396872492
+      },
+      "dReadMiBs": {
+        "max": 63.97013167841056,
+        "mean": 11.101208526037043,
+        "min": 0
+      },
+      "dWriteLatencyMs": {
+        "max": 73.81102272727271,
+        "mean": 25.048306812762174,
+        "min": 1.4535184684684683
+      },
+      "dWriteMiBs": {
+        "max": 126.32717355202254,
+        "mean": 60.55668561122517,
+        "min": 13.100978808095721
+      },
+      "modifiedMiB": {
+        "max": 253.9765625,
+        "mean": 196.19140625,
+        "min": 125.04296875
+      },
+      "otherLoggedLogicalWriteMiBs": {
+        "max": 16.564509243011475,
+        "mean": 4.202992834568024,
+        "min": 1.324748929977417
+      },
+      "ownLogicalWriteMiBs": {
+        "max": 27.40200138092041,
+        "mean": 8.174319879728953,
+        "min": 0
+      },
+      "pageWritesPerSec": {
+        "max": 0,
+        "mean": 0,
+        "min": 0
+      },
+      "pagesOutputPerSec": {
+        "max": 0,
+        "mean": 0,
+        "min": 0
+      },
+      "samples": 6,
+      "standbyGiB": {
+        "max": 6.498043060302734,
+        "mean": 6.296227773030599,
+        "min": 6.168056488037109
+      }
+    }
+  },
+  "hardware": [
+    {
+      "BusType": "SATA",
+      "FriendlyName": "Lexar SSD NS100 2TB",
+      "HealthStatus": "Healthy",
+      "Number": 0,
+      "Size": 2048408248320
+    },
+    {
+      "BusType": "NVMe",
+      "FriendlyName": "T-FORCE TM8FPL1000G",
+      "HealthStatus": "Healthy",
+      "Number": 1,
+      "Size": 1000204886016
+    }
+  ],
+  "initialDynamicCounterSelftest": "Initial fixed process wildcard missed new pulse; refreshed Process category observes new PIDs",
+  "interpretation": "Modified-page-writer/RAM-pressure hypothesis unsupported in this run. Nonzero device queueing during slow calls; largest average-latency spike occurs outside them. No cache policy changed.",
+  "invalidCounterSamples": 0,
+  "maxGapMs": 1851,
+  "maxProcessOffsetMs": 55.5624,
+  "metadata": {
+    "counterPaths": [
+      "\\Memory\\Available Bytes",
+      "\\Memory\\Committed Bytes",
+      "\\Memory\\Commit Limit",
+      "\\Memory\\Free & Zero Page List Bytes",
+      "\\Memory\\Modified Page List Bytes",
+      "\\Memory\\Standby Cache Reserve Bytes",
+      "\\Memory\\Standby Cache Normal Priority Bytes",
+      "\\Memory\\Standby Cache Core Bytes",
+      "\\Memory\\Pages Output/sec",
+      "\\Memory\\Page Writes/sec",
+      "\\PhysicalDisk(*)\\Current Disk Queue Length",
+      "\\PhysicalDisk(*)\\Avg. Disk sec/Write",
+      "\\PhysicalDisk(*)\\Avg. Disk Queue Length",
+      "\\PhysicalDisk(*)\\Avg. Disk Write Queue Length",
+      "\\PhysicalDisk(*)\\Disk Write Bytes/sec",
+      "\\PhysicalDisk(*)\\Disk Read Bytes/sec",
+      "\\Processor(_Total)\\% Processor Time"
+    ],
+    "diskMapping": "PhysicalDisk(0 D: E:) and PhysicalDisk(1 C:), observed before collection",
+    "interpretation": "Process IO is logical and includes all files; System writeback can count the same data again. Missing/invalid counters remain missing, never zero.",
+    "maxSamples": 180,
+    "ownedBinaryRoot": "D:\\AraBuild\\ara-dev-infra-target\\",
+    "pageSizeBytes": 4096,
+    "pagefiles": [
+      {
+        "AllocatedBaseSize": 48019,
+        "CurrentUsage": 3578,
+        "Name": "C:\\pagefile.sys",
+        "PeakUsage": 13730
+      }
+    ],
+    "processCollection": "ReadCategory on every tick; fixed Get-Counter wildcard expansion missed a newly started pulse process in selftest",
+    "processCounterWarmupMs": 4698.0818,
+    "sampleIntervalSeconds": 1,
+    "samplerPid": 80152,
+    "schema": "ara-memory-pressure-v1"
+  },
+  "openToReadyMs": 28510.750200000002,
+  "ownedPidsSeen": [2892, 4376, 5048, 10172, 10280, 10344, 11412, 11492, 15676, 18468, 18940, 19704, 21940, 22556, 22716, 24028, 24896, 26492, 27792, 30236, 30912, 32968, 33492, 33936, 35904, 38376, 38572, 38892, 40740, 41812, 48104, 48544, 49552, 50652, 53208, 53656, 54280, 54552, 55400, 55952, 60148, 62876, 67052, 68488, 69948, 71940, 71968, 72408, 75628, 76420, 76712, 76724, 76764, 77048, 77776, 78764, 79644, 81960, 82384, 83376, 83468, 85120, 89876, 90064, 93808, 94960],
+  "physicalVerification": "D:/AraBuild/ara-dev-infra-target/import-speed/projects/pressure-diag-01-outpost/.ara/cache: 115 actions, 1459 artifacts, 909360516 bytes verified",
+  "projectLifecycle": "Owner deleted the project after extracted evidence and reparse checks",
+  "run": "pressure-diag-01-outpost",
+  "sampledSeconds": 64.633,
+  "samplerCpuDeltaMs": 2515.625,
+  "samplerSourceSha256": "7FEBF1DE7BB6768CA8E6B1A251EC44AD8F81E082FCE44583ECF9C4EA9EF8E932",
+  "sourceHead": "68d494da7385cdf0879b965c797c7c420df6b0bd",
+  "stalledPids": [5048, 24896, 30912, 49552, 68488, 69948, 71968, 76724, 85120],
+  "stalledPidsSeenAsOwned": [5048, 24896, 30912, 49552, 68488, 69948, 71968, 76724, 85120],
+  "traceStageElapsedSums": {
+    "action.hash": {
+      "count": 345,
+      "maxMs": 35.8035,
+      "sumMs": 2069.9184999999993
+    },
+    "asset.published": {
+      "count": 115,
+      "maxMs": null,
+      "sumMs": 0
+    },
+    "cache.install": {
+      "count": 2477,
+      "maxMs": 2429.3763999999996,
+      "sumMs": 36600.0571
+    },
+    "cache.install.create": {
+      "count": 2129,
+      "maxMs": 155.796,
+      "sumMs": 970.3932000000005
+    },
+    "cache.install.persist": {
+      "count": 2129,
+      "maxMs": 483.162,
+      "sumMs": 5244.343199999996
+    },
+    "cache.install.read": {
+      "count": 2477,
+      "maxMs": 1342.0362,
+      "sumMs": 6920.889500000006
+    },
+    "cache.install.write": {
+      "count": 2129,
+      "maxMs": 2409.6533999999997,
+      "sumMs": 23247.156599999966
+    },
+    "cache.load": {
+      "count": 1030,
+      "maxMs": 445.8393,
+      "sumMs": 1337.9570999999983
+    },
+    "cache.object.link": {
+      "count": 1099,
+      "maxMs": 564.8152,
+      "sumMs": 2311.701100000003
+    },
+    "cache.object.memo_read": {
+      "count": 1399,
+      "maxMs": 44.94540000000001,
+      "sumMs": 426.9906000000009
+    },
+    "cache.reuse_object": {
+      "count": 1099,
+      "maxMs": null,
+      "sumMs": 0
+    },
+    "cache.store": {
+      "count": 667,
+      "maxMs": 2962.2099999999996,
+      "sumMs": 40687.831100000054
+    },
+    "hash.blake3": {
+      "count": 8139,
+      "maxMs": 4.895499999999999,
+      "sumMs": 1178.2097000000003
+    },
+    "ipc.decode": {
+      "count": 1091,
+      "maxMs": 7.296600000000001,
+      "sumMs": 226.45019999999948
+    },
+    "ipc.encode": {
+      "count": 1107,
+      "maxMs": 12.1222,
+      "sumMs": 465.74380000000104
+    },
+    "ipc.read": {
+      "count": 1107,
+      "maxMs": 5752.4008,
+      "sumMs": 94375.89099999999
+    },
+    "ipc.write": {
+      "count": 1107,
+      "maxMs": 341.1805,
+      "sumMs": 4260.744300000015
+    },
+    "sidecar.read": {
+      "count": 230,
+      "maxMs": 0.0493,
+      "sumMs": 4.5982999999999965
+    },
+    "source.snapshot": {
+      "count": 230,
+      "maxMs": 1724.9352,
+      "sumMs": 176955.92350000003
+    },
+    "texture.backend_prepare": {
+      "count": 1,
+      "maxMs": 762.0878,
+      "sumMs": 762.0878
+    },
+    "texture.gpu": {
+      "count": 108,
+      "maxMs": null,
+      "sumMs": 0
+    },
+    "texture.identity_lookup": {
+      "count": 1,
+      "maxMs": 232.5454,
+      "sumMs": 232.5454
+    },
+    "texture.service.exit": {
+      "count": 1,
+      "maxMs": null,
+      "sumMs": 0
+    },
+    "texture.service.initialize": {
+      "count": 2,
+      "maxMs": 312.94300000000004,
+      "sumMs": 412.45000000000005
+    },
+    "texture.service.start": {
+      "count": 1,
+      "maxMs": null,
+      "sumMs": 0
+    },
+    "worker.discovery_batch": {
+      "count": 8,
+      "maxMs": null,
+      "sumMs": 0
+    },
+    "worker.import": {
+      "count": 115,
+      "maxMs": 5752.6504,
+      "sumMs": 87841.8567
+    },
+    "worker.queue": {
+      "count": 140,
+      "maxMs": 23705.9019,
+      "sumMs": 1280496.2099000001
+    },
+    "worker.spawn": {
+      "count": 140,
+      "maxMs": null,
+      "sumMs": 0
+    },
+    "worker.stages": {
+      "count": 115,
+      "maxMs": null,
+      "sumMs": 0
+    }
+  },
+  "verification": {
+    "comparedAssets": 115,
+    "differentFromV4": [],
+    "differentKeys": 0,
+    "references": 1459
+  },
+  "writeStallsOverOneSecond": [
+    {
+      "elapsedMs": 2296.9078,
+      "endUnixUs": 1792990299473098,
+      "pid": 24896,
+      "startUnixUs": 1792990297176190.2,
+      "subject": "\\\\?\\D:\\AraBuild\\ara-dev-infra-target\\import-speed\\projects\\pressure-diag-01-outpost\\.ara\\cache\\objects\\14749c71b3886fcf72b7c69810fb8e8384039148570c71033d3579512d0bc324"
+    },
+    {
+      "elapsedMs": 2226.6232,
+      "endUnixUs": 1792990299473197,
+      "pid": 24896,
+      "startUnixUs": 1792990297246573.8,
+      "subject": "\\\\?\\D:\\AraBuild\\ara-dev-infra-target\\import-speed\\projects\\pressure-diag-01-outpost\\.ara\\cache\\objects\\7ee3c20eb1c25270ef469b4ce7ecdb31a8f01a75a2ff04f86940750d041b6fb3"
+    },
+    {
+      "elapsedMs": 2408.3564,
+      "endUnixUs": 1792990299473974,
+      "pid": 30912,
+      "startUnixUs": 1792990297065617.5,
+      "subject": "\\\\?\\D:\\AraBuild\\ara-dev-infra-target\\import-speed\\projects\\pressure-diag-01-outpost\\.ara\\cache\\intermediates\\objects\\9ba6ec53e5f1cdf5d6d829d11ad7cbd25e7d9204b9a8ff2bc4ffd880ab67e27c"
+    },
+    {
+      "elapsedMs": 2101.0702,
+      "endUnixUs": 1792990309579829,
+      "pid": 49552,
+      "startUnixUs": 1792990307478758.8,
+      "subject": "\\\\?\\D:\\AraBuild\\ara-dev-infra-target\\import-speed\\projects\\pressure-diag-01-outpost\\.ara\\cache\\intermediates\\objects\\db041c61287519f5e7b898ca4ad535ab60723d269c109a9ba62b15b7a9d29177"
+    },
+    {
+      "elapsedMs": 2013.3603,
+      "endUnixUs": 1792990309580357,
+      "pid": 5048,
+      "startUnixUs": 1792990307566996.8,
+      "subject": "\\\\?\\D:\\AraBuild\\ara-dev-infra-target\\import-speed\\projects\\pressure-diag-01-outpost\\.ara\\cache\\intermediates\\objects\\e19dcc3deb779f8f99f6a62209d7146cea1258b4def7f836ecb29eb45632f743"
+    },
+    {
+      "elapsedMs": 2407.1434,
+      "endUnixUs": 1792990299473630,
+      "pid": 68488,
+      "startUnixUs": 1792990297066486.5,
+      "subject": "\\\\?\\D:\\AraBuild\\ara-dev-infra-target\\import-speed\\projects\\pressure-diag-01-outpost\\.ara\\cache\\intermediates\\objects\\d8ee1d8f19afb34f7a591ef4d47c97e49ff090d2cc37b89d6fbae20a097fcfba"
+    },
+    {
+      "elapsedMs": 2409.6533999999997,
+      "endUnixUs": 1792990299474997,
+      "pid": 69948,
+      "startUnixUs": 1792990297065343.5,
+      "subject": "\\\\?\\D:\\AraBuild\\ara-dev-infra-target\\import-speed\\projects\\pressure-diag-01-outpost\\.ara\\cache\\intermediates\\objects\\b2f94b61533ec7a7f2bc99114a9b9d2b66257998deea469e833c7a3a9a217a79"
+    },
+    {
+      "elapsedMs": 2038.4137999999998,
+      "endUnixUs": 1792990309579859,
+      "pid": 71968,
+      "startUnixUs": 1792990307541445.2,
+      "subject": "\\\\?\\D:\\AraBuild\\ara-dev-infra-target\\import-speed\\projects\\pressure-diag-01-outpost\\.ara\\cache\\intermediates\\objects\\b58f80445a32e6407f464219e14e73c3ee4bf78a2dc2f1c8ca2f6fe76bce2e56"
+    },
+    {
+      "elapsedMs": 1972.8052,
+      "endUnixUs": 1792990309580347,
+      "pid": 76724,
+      "startUnixUs": 1792990307607541.8,
+      "subject": "\\\\?\\D:\\AraBuild\\ara-dev-infra-target\\import-speed\\projects\\pressure-diag-01-outpost\\.ara\\cache\\intermediates\\objects\\c1dd4c67c6071c4a1f661f4443771d068f09b6a5389c7bb7e49399818e495250"
+    },
+    {
+      "elapsedMs": 2085.307,
+      "endUnixUs": 1792990299475311,
+      "pid": 85120,
+      "startUnixUs": 1792990297390004,
+      "subject": "\\\\?\\D:\\AraBuild\\ara-dev-infra-target\\import-speed\\projects\\pressure-diag-01-outpost\\.ara\\cache\\intermediates\\objects\\e5e36d2e58b15d141028b479633e217930cba982ea521bae5bb4eb30a3549d31"
+    }
+  ]
+}
