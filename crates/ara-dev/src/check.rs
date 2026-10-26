@@ -100,6 +100,25 @@ impl Logs {
         Ok(fs::read(output)?)
     }
 
+    fn metadata(&mut self, root: &Path) -> Result<Metadata> {
+        serde_json::from_slice(
+            &self.capture(
+                root,
+                "metadata",
+                &[
+                    "metadata",
+                    "--format-version",
+                    "1",
+                    "--no-deps",
+                    "--locked",
+                    "--offline",
+                ]
+                .map(String::from),
+            )?,
+        )
+        .context("read workspace metadata")
+    }
+
     fn execute(
         &mut self,
         root: &Path,
@@ -199,6 +218,7 @@ impl Logs {
         root: &Path,
         metadata: &Metadata,
         selected: &std::collections::BTreeSet<String>,
+        check: bool,
     ) -> Result<bool> {
         let start = Instant::now();
         let first = self.rows.len();
@@ -212,7 +232,9 @@ impl Logs {
             for package in packages {
                 args.extend(["-p".into(), package.name.clone()]);
             }
-            args.extend(["--".into(), "--check".into()]);
+            if check {
+                args.extend(["--".into(), "--check".into()]);
+            }
             if !self.command(root, &format!("fmt-{}", index + 1), &args)? {
                 break;
             }
@@ -242,6 +264,20 @@ impl Logs {
         });
         Ok(passed)
     }
+}
+
+/// Run the gate's formatter alone; plain `fmt` writes and `--check` only verifies.
+pub(crate) fn format(root: &Path, check: bool) -> Result<bool> {
+    let mut logs = Logs::new(root, false)?;
+    let metadata = logs.metadata(root)?;
+    let packages = metadata.packages.iter().map(|p| p.name.clone()).collect();
+    let passed = logs.formatting(root, &metadata, &packages, check)?;
+    eprintln!(
+        "Formatting {}: {}",
+        if passed { "passed" } else { "failed" },
+        logs.rows.last().context("formatting result")?.detail
+    );
+    Ok(passed)
 }
 
 pub(crate) fn selection(
@@ -302,21 +338,7 @@ pub(crate) fn run(root: &Path, options: Options<'_>) -> Result<bool> {
                 .context("timeout is too large")
         })
         .transpose()?;
-    let metadata: Metadata = serde_json::from_slice(
-        &logs.capture(
-            root,
-            "metadata",
-            &[
-                "metadata",
-                "--format-version",
-                "1",
-                "--no-deps",
-                "--locked",
-                "--offline",
-            ]
-            .map(String::from),
-        )?,
-    )?;
+    let metadata = logs.metadata(root)?;
     eprintln!("Cargo target: {}", metadata.target_directory.display());
     let mut scope = selection::compute(root, &base, &changed, &metadata)?;
     if full {
@@ -384,7 +406,7 @@ pub(crate) fn run(root: &Path, options: Options<'_>) -> Result<bool> {
             .iter()
             .filter_map(|p| metadata.owner(root, p).map(|p| p.name.clone())),
     );
-    let fmt = logs.formatting(root, &metadata, &format_packages)?;
+    let fmt = logs.formatting(root, &metadata, &format_packages, true)?;
     let ready = fmt && logs.rows.iter().all(|row| row.passed);
     let codes = changed.iter().any(|p| {
         p.starts_with("dotnet") && p.extension().is_some_and(|e| e == "cs")
