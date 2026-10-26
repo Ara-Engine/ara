@@ -9,8 +9,8 @@
 //!   Play and input latency, on a cold project copy and then warm.
 //!
 //! Every GPU step runs under the `ara-dev gpu` lock. A row with no measurement reads
-//! "not measured", never "pass"; a step that fails leaves its rows not measured with
-//! the error as the note, and the report is rewritten after every section.
+//! "not measured", never "pass". Readiness timeouts explicitly fail GPU rows;
+//! other missing measurements retain their reason. The report updates per section.
 mod html;
 mod measure;
 mod rows;
@@ -46,9 +46,12 @@ pub(crate) struct Options {
     /// Frames per measured window.
     #[arg(long, default_value_t = 600, value_parser = clap::value_parser!(u32).range(1..))]
     frames: u32,
-    /// Frames skipped before a steady window (the cold window skips only the first).
+    /// Frames skipped after renderer readiness (the cold run also retains all CPU frames).
     #[arg(long, default_value_t = 60)]
     warmup: u32,
+    /// Fail a GPU row if settled raster content/residency/GI does not arrive in time.
+    #[arg(long, default_value_t = 120, value_parser = clap::value_parser!(u64).range(1..=3600))]
+    ready_timeout: u64,
     /// Reuse the previous d26 build of this profile.
     #[arg(long)]
     no_build: bool,
@@ -85,6 +88,7 @@ struct Run {
     resolution: &'static str,
     frames: u32,
     warmup: u32,
+    ready_timeout: u64,
     reference_spp: u32,
     build_seconds: f64,
 }
@@ -121,6 +125,7 @@ pub(crate) fn run(root: &Path, options: Options) -> Result<bool> {
         resolution: "2560x1440",
         frames: options.frames,
         warmup: options.warmup,
+        ready_timeout: options.ready_timeout,
         reference_spp: options.reference,
         build_seconds,
     };

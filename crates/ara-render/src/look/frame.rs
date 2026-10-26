@@ -15,6 +15,8 @@ pub(crate) const AMBIENT_OCCLUSION: u32 = 8;
 pub(crate) const REFLECTIONS: u32 = 16;
 /// Shader flag: automatic exposure takes its meter this frame instead of adapting.
 pub(crate) const SNAP: u32 = 32;
+/// Shader flag: probe GI relight and the fog sample local-light shadows.
+pub(crate) const LOCAL_INDIRECT: u32 = 64;
 /// Exposure adaptation step; the renderer has no wall clock.
 const FRAME_SECONDS: f32 = 1. / 60.;
 

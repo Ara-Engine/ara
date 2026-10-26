@@ -222,7 +222,9 @@ impl NativeResidency {
             )?,
         };
         allocated.push(Resource::Buffer(buffer));
-        gpu.upload(buffer, bytemuck::cast_slice(&self.rows))?;
+        // A prefetched table may have been conservatively retained by an earlier
+        // geometry/last-good submission. Fill it through the ordered scope then.
+        gpu.upload_queued(buffer, bytemuck::cast_slice(&self.rows))?;
         let binding = NativeBinding {
             buffer_index: gpu.storage_buffer(buffer)?.index,
             textures: u32::try_from(self.rows.len())?,

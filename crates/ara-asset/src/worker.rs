@@ -13,6 +13,7 @@ use std::{
     time::{Duration, Instant},
 };
 
+mod discovery;
 mod encoder;
 mod limit;
 mod process;
@@ -58,8 +59,14 @@ enum Message {
     Complete(ImportOutput),
     Dependencies(Vec<String>),
     Versions(BTreeMap<String, String>),
+    Metadata {
+        versions: BTreeMap<String, String>,
+        encoder: Option<String>,
+    },
+    DiscoveryBatch(Vec<std::result::Result<Vec<String>, String>>),
     Failed(String),
     Encoder(Option<String>),
+    EncoderHint(Option<String>),
     EncoderService {
         identity: String,
         endpoint: crate::EncoderEndpoint,
@@ -75,6 +82,7 @@ enum Request {
         backend: String,
     },
     Encoder,
+    EncoderHint,
     Discover {
         importer: String,
         version: String,
@@ -84,6 +92,8 @@ enum Request {
         settings: serde_json::Value,
     },
     Versions,
+    Metadata,
+    DiscoverBatch(Vec<discovery::Input>),
 }
 fn write_frame(writer: &mut impl Write, value: &impl Serialize) -> Result<()> {
     let encode = crate::trace::Scope::new("ipc.encode", "frame");
@@ -115,18 +125,47 @@ fn read_frame<T: serde::de::DeserializeOwned>(reader: &mut impl Read) -> Result<
 /// Runs exactly one import in a disposable process. Plugins register in this worker.
 /// Panics/native crashes terminate this process; no importer code runs in the host.
 pub fn serve_worker(registry: &ImporterRegistry) -> Result<()> {
-    serve(registry, None)
+    serve(registry, None, None)
 }
 /// Constructs an optional encoder in the disposable worker, never in the host.
 pub type EncoderFactory = fn(Option<&Path>) -> Result<Box<dyn crate::BlockEncoder>>;
+/// Reads a validated capability memo without constructing a GPU device/service.
+pub type EncoderHintFactory = fn(Option<&Path>) -> Result<Option<String>>;
 /// Worker frontend with optional GPU encoding; ordinary requests remain CPU-only.
 pub fn serve_worker_with_encoder(
     registry: &ImporterRegistry,
     factory: EncoderFactory,
 ) -> Result<()> {
-    serve(registry, Some(factory))
+    serve(registry, Some(factory), None)
 }
-fn serve(registry: &ImporterRegistry, factory: Option<EncoderFactory>) -> Result<()> {
+/// Worker frontend with device-free capability hints and lazy miss negotiation.
+pub fn serve_worker_with_encoder_hint(
+    registry: &ImporterRegistry,
+    factory: EncoderFactory,
+    hint: EncoderHintFactory,
+) -> Result<()> {
+    serve(registry, Some(factory), Some(hint))
+}
+fn encoder_hint(hint: Option<EncoderHintFactory>) -> Option<String> {
+    let root = std::env::var_os("ARA_IMPORT_MEMO_DIR").map(PathBuf::from);
+    let _trace = crate::trace::Scope::new("texture.identity_lookup", "encoder");
+    hint.and_then(|lookup| match lookup(root.as_deref()) {
+        Ok(identity) => identity,
+        Err(error) => {
+            crate::trace::event(
+                "texture.identity_miss",
+                "encoder",
+                serde_json::json!({"reason":error.to_string()}),
+            );
+            None
+        }
+    })
+}
+fn serve(
+    registry: &ImporterRegistry,
+    factory: Option<EncoderFactory>,
+    hint: Option<EncoderHintFactory>,
+) -> Result<()> {
     #[cfg(windows)]
     {
         use windows_sys::Win32::System::Diagnostics::Debug::{
@@ -142,6 +181,13 @@ fn serve(registry: &ImporterRegistry, factory: Option<EncoderFactory>) -> Result
     let (input, backend) = match request {
         Request::Import(input) => (input, None),
         Request::ImportEncoded { input, backend } => (input, Some(backend)),
+        Request::EncoderHint => {
+            let identity = encoder_hint(hint);
+            return write_frame(
+                &mut std::io::stdout().lock(),
+                &Message::EncoderHint(identity),
+            );
+        }
         Request::Encoder => {
             let root = std::env::var_os("ARA_IMPORT_MEMO_DIR").map(PathBuf::from);
             let _prepare = crate::trace::Scope::new("texture.backend_prepare", "encoder");
@@ -181,6 +227,25 @@ fn serve(registry: &ImporterRegistry, factory: Option<EncoderFactory>) -> Result
             return write_frame(
                 &mut std::io::stdout().lock(),
                 &Message::Versions(registry.versions()),
+            );
+        }
+        Request::Metadata => {
+            return write_frame(
+                &mut std::io::stdout().lock(),
+                &Message::Metadata {
+                    versions: registry.versions(),
+                    encoder: encoder_hint(hint),
+                },
+            );
+        }
+        Request::DiscoverBatch(requests) => {
+            let results: Vec<_> = requests
+                .iter()
+                .map(|input| discovery::execute(registry, input).map_err(|error| error.to_string()))
+                .collect();
+            return write_frame(
+                &mut std::io::stdout().lock(),
+                &Message::DiscoveryBatch(results),
             );
         }
         Request::Discover {
@@ -299,6 +364,7 @@ pub enum JobEvent {
 /// Explicit worker executable and deadline, shared by CLI and editor.
 #[derive(Debug, Clone)]
 pub struct ProcessWorker {
+    discovery: std::sync::Arc<discovery::State>,
     encoder: std::sync::Arc<encoder::State>,
     texture_encoder_enabled: bool,
     memo: Option<PathBuf>,
@@ -310,6 +376,7 @@ impl ProcessWorker {
     /// Chooses the binary; production default deadline is ten minutes.
     pub fn new(executable: impl Into<PathBuf>) -> Self {
         Self {
+            discovery: std::sync::Arc::default(),
             encoder: std::sync::Arc::default(),
             texture_encoder_enabled: true,
             memo: None,
@@ -330,6 +397,8 @@ impl ProcessWorker {
         args: impl IntoIterator<Item = impl Into<std::ffi::OsString>>,
     ) -> Self {
         self.arguments = args.into_iter().map(Into::into).collect();
+        self.discovery = std::sync::Arc::default();
+        self.encoder = std::sync::Arc::default();
         self
     }
     /// Sets the native-code job deadline (cancellation can stop it earlier).
@@ -373,22 +442,15 @@ impl ProcessWorker {
         settings: serde_json::Value,
         cancellation: &Cancellation,
     ) -> Result<Vec<String>> {
-        let mut job = self.start_request(Request::Discover {
-            importer: importer.into(),
-            version: version.into(),
-            source,
-            settings,
-        })?;
-        loop {
-            cancellation.check()?;
-            match job.poll()? {
-                Some(JobEvent::Dependencies(deps)) => return Ok(deps),
-                Some(JobEvent::Complete(_)) => {
-                    return Err(Error::Worker("unexpected cook result".into()));
-                }
-                _ => thread::sleep(Duration::from_millis(2)),
-            }
-        }
+        self.dependencies(
+            discovery::Input {
+                importer: importer.into(),
+                version: version.into(),
+                source,
+                settings,
+            },
+            cancellation,
+        )
     }
     /// The installed version of every importer in this worker executable (`id` →
     /// version). Blocks for one short worker launch; call off the frame thread.
@@ -404,13 +466,40 @@ impl ProcessWorker {
             }
         }
     }
+    /// Combines versions with a device-free encoder hint for a project open.
+    /// Shares the hint with clones; old workers fall back to `versions` unchanged.
+    /// Like `versions`, call from a background/CLI thread, never an editor frame.
+    pub fn versions_with_encoder_hint(&self) -> Result<BTreeMap<String, String>> {
+        if !self.texture_encoder_enabled {
+            return self.versions();
+        }
+        let combined = (|| {
+            let mut job = self.start_request(Request::Metadata)?;
+            job.timeout = self.timeout.min(Duration::from_secs(30));
+            loop {
+                match job.message()? {
+                    Some(Message::Metadata { versions, encoder }) => {
+                        self.accept_encoder_hint(encoder);
+                        return Ok(versions);
+                    }
+                    Some(_) => return Err(Error::Worker("unexpected worker metadata".into())),
+                    None => thread::sleep(Duration::from_millis(2)),
+                }
+            }
+        })();
+        combined.or_else(|_| self.versions())
+    }
     fn start_request(&self, request: Request) -> Result<ImportJob> {
         let mut command = Command::new(&self.executable);
         // Never inherit a different project's memo from the parent's environment.
         command.env_remove("ARA_IMPORT_MEMO_DIR");
         if matches!(
             &request,
-            Request::Import(_) | Request::ImportEncoded { .. } | Request::Encoder
+            Request::Import(_)
+                | Request::ImportEncoded { .. }
+                | Request::Encoder
+                | Request::EncoderHint
+                | Request::Metadata
         ) && let Some(root) = &self.memo
         {
             command.env("ARA_IMPORT_MEMO_DIR", root);
@@ -447,8 +536,11 @@ impl ProcessWorker {
                         Request::Import(input) => &input.source_path,
                         Request::ImportEncoded { input, .. } => &input.source_path,
                         Request::Encoder => "encoder",
+                        Request::EncoderHint => "encoder-hint",
                         Request::Discover { importer, .. } => importer,
                         Request::Versions => "versions",
+                        Request::Metadata => "metadata",
+                        Request::DiscoverBatch(_) => "discovery-batch",
                     },
                 ),
                 command,
@@ -466,8 +558,14 @@ impl ProcessWorker {
 }
 
 impl ProcessWorker {
-    pub(crate) fn with_memo(mut self, root: Option<&Path>) -> Self {
-        self.memo = root.map(Path::to_path_buf);
+    /// Shares disposable dependency/texture metadata through an explicit cache.
+    /// Cache availability never changes action keys or dependency results.
+    pub fn with_memo(mut self, root: Option<&Path>) -> Self {
+        let root = root.map(Path::to_path_buf);
+        if self.memo != root {
+            self.discovery = std::sync::Arc::default();
+        }
+        self.memo = root;
         self
     }
 }
@@ -583,10 +681,15 @@ impl ImportJob {
             Some(Message::Dependencies(deps)) => Ok(Some(JobEvent::Dependencies(deps))),
             Some(Message::Failed(error)) => Err(Error::Worker(error)),
             Some(Message::EncoderFailed(error)) => Err(Error::EncoderUnavailable(error)),
-            Some(Message::Encoder(_) | Message::EncoderService { .. }) => {
-                Err(Error::Worker("unexpected encoder identity".into()))
+            Some(
+                Message::Encoder(_) | Message::EncoderHint(_) | Message::EncoderService { .. },
+            ) => Err(Error::Worker("unexpected encoder identity".into())),
+            Some(Message::Versions(_) | Message::Metadata { .. }) => {
+                Err(Error::Worker("unexpected importer metadata".into()))
             }
-            Some(Message::Versions(_)) => Err(Error::Worker("unexpected importer versions".into())),
+            Some(Message::DiscoveryBatch(_)) => {
+                Err(Error::Worker("unexpected dependency batch".into()))
+            }
             None => Ok(None),
         }
     }

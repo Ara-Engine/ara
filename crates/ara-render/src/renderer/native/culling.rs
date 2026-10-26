@@ -3,6 +3,7 @@ use super::*;
 use crate::instanced::FrameWork;
 use batches::{Batch, Group};
 use updates::Indices;
+mod patches;
 mod projection;
 
 /// Cascades, opaque/forward camera lists and the existing far-shadow list.
@@ -31,6 +32,11 @@ pub(super) struct Culling {
     transparent_dirty: bool,
     transparent: Vec<(f32, usize, usize)>,
     scratch: Vec<Vec<[u32; 2]>>,
+    /// Per shadow pass, its culled instances by clip cell (`patches::Grid`).
+    grids: Vec<patches::Grid>,
+    /// Patch scratch: candidate instances, then (batch slot, instance) entries.
+    candidates: Vec<u32>,
+    entries: Vec<(usize, usize)>,
 }
 impl Culling {
     pub fn new(groups: &Groups, scene: &NativeScene) -> Self {
@@ -72,6 +78,9 @@ impl Culling {
                 .map(|_| Indices::new(groups.groups.len()))
                 .collect(),
             views: vec![None; BASE_PASSES],
+            grids: vec![patches::Grid::default(); BASE_PASSES],
+            candidates: Vec::new(),
+            entries: Vec::new(),
             lod_view: None,
             pixels: [1., 1.5],
             lod_dirty: Indices::new(instances),
@@ -111,6 +120,7 @@ impl Culling {
         self.dirty
             .resize_with(passes, || Indices::new(groups.groups.len()));
         self.views.resize(passes, None);
+        self.grids.resize_with(passes, Default::default);
     }
     pub fn configure(&mut self, quality: &crate::look::Quality) -> bool {
         let pixels = [quality.lod_pixels, quality.min_pixels];
@@ -244,6 +254,11 @@ impl Culling {
     ) -> Result<()> {
         let planes = planes(view.matrix);
         let all = self.views[pass] != Some(view);
+        // Cascade and local-face lists index their instances for patches.
+        let indexed = !(4..BASE_PASSES).contains(&pass);
+        if all && indexed {
+            self.grids[pass].clear();
+        }
         let count = if all {
             groups.groups.len()
         } else {
@@ -269,6 +284,9 @@ impl Culling {
                     };
                     if let Some(lod) = lod {
                         self.scratch[lod].push([i as u32, group.first + lod as u32]);
+                        if indexed {
+                            self.grids[pass].insert(view.matrix, i as u32, bounds[i], !all);
+                        }
                     }
                 }
             }

@@ -4,6 +4,7 @@
 mod bc6_split;
 mod dispatch;
 mod encoder;
+mod hint;
 mod service;
 mod split;
 pub use encoder::Encoder;
@@ -14,7 +15,7 @@ pub fn serve_worker(registry: &ara_asset::ImporterRegistry) -> ara_asset::Result
     if std::env::args_os().any(|arg| arg == service::ARGUMENT) {
         return service::run();
     }
-    ara_asset::serve_worker_with_encoder(registry, create_worker_encoder)
+    ara_asset::serve_worker_with_encoder_hint(registry, create_worker_encoder, hint::lookup)
 }
 fn create_worker_encoder(
     memo: Option<&std::path::Path>,
@@ -24,6 +25,19 @@ fn create_worker_encoder(
             "CPU encoding explicitly selected".into(),
         ));
     }
+    let (cooked, cache) = locations(memo)?;
+    let encoder: Box<dyn ara_asset::BlockEncoder> = if std::env::var("ARA_TEXTURE_ENCODER_DEVICE")
+        .is_ok_and(|value| value.eq_ignore_ascii_case("local"))
+    {
+        Box::new(Encoder::new(&cooked, &cache)?)
+    } else {
+        service::open(&cooked, &cache)?
+    };
+    Ok(Box::new(hint::Remembered::new(encoder, memo)))
+}
+fn locations(
+    memo: Option<&std::path::Path>,
+) -> ara_asset::Result<(std::path::PathBuf, std::path::PathBuf)> {
     let cooked = ara_gpu::cooked::resource_dir(
         "ara-texture-gpu",
         std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("cooked"),
@@ -39,13 +53,7 @@ fn create_worker_encoder(
             )
         })?
         .join("gpu-codec-pipelines");
-    if std::env::var("ARA_TEXTURE_ENCODER_DEVICE")
-        .is_ok_and(|value| value.eq_ignore_ascii_case("local"))
-    {
-        Ok(Box::new(Encoder::new(&cooked, &cache)?))
-    } else {
-        service::open(&cooked, &cache)
-    }
+    Ok((cooked, cache))
 }
 
 #[cfg(test)]

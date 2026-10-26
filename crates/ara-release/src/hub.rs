@@ -20,27 +20,30 @@ pub fn package(root: &Path, version: &str) -> Result<()> {
     let name = format!("ara-hub-{version}-windows-x64");
     let output = dist.join(&name);
     ensure!(!output.exists(), "{} already exists", output.display());
-    run(
-        Command::new("cargo")
-            .current_dir(root)
-            .env("CARGO_BUILD_JOBS", "2")
-            .args([
-                "build",
-                "--release",
-                "-p",
-                "ara-hub",
-                "--bins",
-                "-p",
-                "ara",
-                "--bin",
-                "ara",
-                "-p",
-                "ara-setup",
-                "--bin",
-                "ara-setup",
-            ]),
-        &dist.join("logs/hub-release-build.log"),
-    )?;
+    let mut build = Command::new("cargo");
+    build
+        .current_dir(root)
+        .env("CARGO_BUILD_JOBS", "2")
+        .env("CARGO_PROFILE_RELEASE_DEBUG", "line-tables-only")
+        .args([
+            "build",
+            "--release",
+            "-p",
+            "ara-hub",
+            "--bins",
+            "-p",
+            "ara",
+            "--bin",
+            "ara",
+            "-p",
+            "ara-setup",
+            "--bin",
+            "ara-setup",
+        ]);
+    if cfg!(feature = "rehearsal") {
+        build.args(["--features", "ara-hub/rehearsal"]);
+    }
+    run(&mut build, &dist.join("logs/hub-release-build.log"))?;
     let stage = dist.join(format!(".stage-{name}-{}", std::process::id()));
     fs::create_dir(&stage)?;
     for binary in ["ara-hub", "ara-hub-updater"] {
@@ -119,7 +122,7 @@ pub(crate) fn marker(root: &Path, version: &str) -> Result<serde_json::Value> {
         "commit source changes before packaging a build-identified Hub"
     );
     Ok(
-        serde_json::json!({"format":"ara.hub/1","version":version,"build":{
+        serde_json::json!({"format":"ara.hub/1","version":version,"rehearsal":cfg!(feature="rehearsal"),"build":{
             "commit":git(&["rev-parse","HEAD"])?,"generation":git(&["rev-list","--count","HEAD"])?.parse::<u64>()?
         }}),
     )

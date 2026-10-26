@@ -35,7 +35,11 @@ below normal. Dependency discovery does not wait behind an entire encoder queue.
 HotReload only publishes from apply_boundary; never install results from poll.
 Cancellation/supersession invalidate epochs. Keep current assets alive on errors.
 Settings-selected source files use Importer::dependencies_with_settings and
-ProcessWorker::discover_with_settings. snapshot includes their exact bytes, so
+ProcessWorker::discover_with_settings. Concurrent cold discovery shares supervised
+one-shot batches; verified discovery memos avoid children on warm opens. Importer
+version, source bytes, settings and worker arguments invalidate this pure metadata.
+Old workers fall back to individual requests. `worker_metadata` covers both paths.
+snapshot includes dependency bytes, so
 companion edits participate in action identity and filesystem invalidation.
 
 Sidecars are import documents with one i_settings record. Commands return kernel
@@ -70,7 +74,11 @@ memo availability and thread scheduling never change final action keys.
 
 ImportServices supplies an optional BlockEncoder. Resolve its immutable backend
 before action lookup; encoded actions and texture memo keys include it. Capability
-negotiation calls prepare once. EncoderUnavailable retries retained inputs with
+metadata hints defer prepare until a cache miss. Hints never alter backend action
+identity; miss preparation must confirm the exact hinted identity before cooking.
+`versions_with_encoder_hint` shares this device-free lookup with the version query;
+project owners must reuse that ProcessWorker for their AssetPipeline.
+EncoderUnavailable retries retained inputs with
 the CPU key and disables that backend for the session. CPU contract fixtures use
 ProcessWorker::with_texture_encoder(false); legacy CPU request bytes stay unchanged.
 Optional EncoderEndpoint leases keep an out-of-process device pool alive across

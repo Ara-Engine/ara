@@ -444,6 +444,7 @@ impl Renderer {
                 &mut self.gpu,
                 shadows.cascades,
                 shadows.resolution,
+                std::mem::size_of::<frame::Frame>() as u64,
             )?);
         }
         Ok(())

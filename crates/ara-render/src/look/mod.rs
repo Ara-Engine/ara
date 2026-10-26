@@ -74,6 +74,9 @@ pub struct LocalShadows {
     /// Faces redrawn per frame at most (moved lights, changed casters, new
     /// lights); a light shades unshadowed until all its faces are drawn.
     pub redraws: u32,
+    /// Probe GI relight and the froxel fog sample these shadows too, so shadowed
+    /// local lights stop leaking through walls into bounce light and fog.
+    pub in_gi_and_fog: bool,
 }
 
 /// Ground-truth-based ambient occlusion (horizon search per screen slice).

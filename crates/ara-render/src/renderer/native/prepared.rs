@@ -7,6 +7,7 @@ use crate::instanced::{CheckedScene, GeometryPreparation, GeometrySeed, geometry
 pub struct NativeSeed {
     previous: Option<GeometrySeed>,
     limit: u64,
+    shadow_slots: usize,
 }
 
 /// Immutable CPU-prepared native content. Construct on the content worker, poll
@@ -16,6 +17,7 @@ pub struct NativeContent {
     scene: CheckedScene,
     textures: Box<dyn Textures>,
     geometry: GeometryPreparation,
+    shadow_slots: usize,
 }
 
 impl NativeContent {
@@ -33,16 +35,28 @@ impl NativeContent {
             seed.as_ref().map_or(u64::from(u32::MAX), |seed| seed.limit),
             seed.as_ref().and_then(|seed| seed.previous.as_ref()),
         )?;
+        let shadow_slots = seed.as_ref().map_or(0, |seed| seed.shadow_slots);
         Ok(Self {
             scene,
             textures,
             geometry,
+            shadow_slots,
         })
     }
 
     /// The immutable snapshot that will be published with the packed geometry.
     pub fn scene(&self) -> &NativeScene {
         self.scene.validated().scene()
+    }
+
+    /// Reserve all face/cascade patch rows for the publication's quality. This
+    /// changes CPU metadata only; publication keeps the larger source capacity.
+    pub fn reserve_shadow_quality(&mut self, quality: &crate::look::Quality) -> Result<()> {
+        quality.validate()?;
+        self.shadow_slots = self
+            .shadow_slots
+            .max(Renderer::shadow_slots_for_quality(quality));
+        Ok(())
     }
 
     /// Poll allocation/staging only, with both jobs bounded by the device worker.
@@ -70,9 +84,25 @@ impl NativeContent {
 impl Renderer {
     /// Capture small immutable packing metadata for the next content worker.
     pub fn native_seed(&self) -> NativeSeed {
+        self.native_seed_inner(self.shadow_slots())
+    }
+
+    /// Capture reuse and shadow-row capacity for a requested quality before
+    /// starting its content worker, without changing the currently shown view.
+    pub fn native_seed_for_quality(&self, quality: &crate::look::Quality) -> Result<NativeSeed> {
+        quality.validate()?;
+        Ok(self.native_seed_inner(Self::shadow_slots_for_quality(quality)))
+    }
+
+    fn native_seed_inner(&self, shadow_slots: usize) -> NativeSeed {
         NativeSeed {
             previous: self.native.as_ref().map(|n| n.pool.preparation_seed()),
             limit: geometry_storage_limit(&self.gpu),
+            shadow_slots: shadow_slots.max(
+                self.native
+                    .as_ref()
+                    .map_or(0, |n| n.capacity.saturating_sub(culling::BASE_PASSES)),
+            ),
         }
     }
 
@@ -91,6 +121,7 @@ impl Renderer {
             scene,
             textures,
             geometry,
+            shadow_slots,
         } = content;
         let pool = match geometry.publish(&mut self.gpu) {
             Ok(pool) => pool,
@@ -99,7 +130,12 @@ impl Renderer {
                 return Err(error);
             }
         };
-        self.publish_native_pool(scene.validated(), textures, Some(pool))?;
+        self.publish_native_pool(
+            scene.validated(),
+            textures,
+            Some(pool),
+            shadow_slots.max(self.shadow_slots()),
+        )?;
         Ok(scene.into_scene())
     }
 }

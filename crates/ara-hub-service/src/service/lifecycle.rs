@@ -51,6 +51,7 @@ impl Hub {
             command.arg(&project.path);
         }
         let mut child = command
+            .current_dir(&project.path)
             .stdin(Stdio::null())
             .stdout(Stdio::null())
             .stderr(File::create(log_dir.join("hub-process.log")).map_err(io_error)?)

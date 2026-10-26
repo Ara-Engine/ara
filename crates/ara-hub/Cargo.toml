@@ -7,6 +7,10 @@ rust-version.workspace = true
 publish.workspace = true
 default-run = "ara-hub"
 
+[features]
+# Windowless release-day rehearsal only; not enabled in shipping builds.
+rehearsal = ["ara-update/test-support"]
+
 [lints]
 workspace = true
 

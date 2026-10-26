@@ -28,6 +28,9 @@ pub struct FeedConfig {
     pub(crate) api: Option<String>,
     #[serde(skip)]
     keys: Option<Vec<String>>,
+    #[serde(skip)]
+    #[cfg(any(test, feature = "test-support"))]
+    mirror: bool,
 }
 impl Default for FeedConfig {
     fn default() -> Self {
@@ -36,6 +39,8 @@ impl Default for FeedConfig {
             channel: Channel::Stable,
             api: None,
             keys: None,
+            #[cfg(any(test, feature = "test-support"))]
+            mirror: false,
         }
     }
 }
@@ -49,6 +54,13 @@ impl FeedConfig {
         };
         if let Ok(repo) = std::env::var("ARA_RELEASE_REPO") {
             config.repo = repo;
+        }
+        // This override does not exist in shipping builds. Signed metadata keeps
+        // its GitHub URLs; every request is still confined to one loopback origin.
+        #[cfg(feature = "test-support")]
+        if let Ok(api) = std::env::var("ARA_RELEASE_TEST_API") {
+            config.api = Some(api);
+            config.mirror = true;
         }
         config.validate()?;
         Ok(config)
@@ -190,6 +202,22 @@ impl Feed {
                 && url.scheme() == "http"
             {
                 return Ok(url);
+            }
+            if self.config.mirror
+                && base.host_str() == Some("127.0.0.1")
+                && base.scheme() == "http"
+                && url.scheme() == "https"
+                && url.host_str() == Some("github.com")
+                && url.port_or_known_default() == Some(443)
+                && url.username().is_empty()
+                && url.password().is_none()
+                && url
+                    .path()
+                    .starts_with(&format!("/{}/releases/download/", self.config.repo))
+            {
+                return base
+                    .join(url.path())
+                    .map_err(|_| Error::new(URL, "invalid mock asset path"));
             }
             return Err(Error::new(
                 URL,
@@ -567,4 +595,34 @@ fn bounded(response: Response, max: u64) -> Result<Vec<u8>, Error> {
         ));
     }
     Ok(bytes)
+}
+
+#[cfg(test)]
+mod rehearsal_tests {
+    use super::*;
+    #[test]
+    fn mirror_preserves_signed_github_urls_but_cannot_leave_loopback() {
+        let root = crate::testing::scratch("release-mirror");
+        let mut config = FeedConfig::for_test("http://127.0.0.1:12345".into(), vec![]);
+        let asset = "https://github.com/Snowy7/ara/releases/download/hub-v0.0.1-alpha/release.json";
+        let feed = Feed::new(config.clone(), &root).expect("feed");
+        assert!(
+            feed.url(asset).is_err(),
+            "ordinary test transports do not rewrite URLs"
+        );
+        config.mirror = true;
+        let feed = Feed::new(config, &root).expect("mirror");
+        assert_eq!(
+            feed.url(asset).expect("mapped URL").as_str(),
+            "http://127.0.0.1:12345/Snowy7/ara/releases/download/hub-v0.0.1-alpha/release.json"
+        );
+        for url in [
+            "https://example.com/secret",
+            "https://github.com/Other/repo/releases/download/x/file",
+            "https://user:secret@github.com/Snowy7/ara/releases/download/x/file",
+            "http://127.0.0.1:12346/file",
+        ] {
+            assert!(feed.url(url).is_err(), "escaped mirror: {url}");
+        }
+    }
 }

@@ -67,6 +67,9 @@ pub fn package(root: &Path, version: &str) -> Result<()> {
     if hub {
         build.args(["-p", "ara-hub", "--bin", "ara-hub"]);
         build.args(["--bin", "ara-hub-updater"]);
+        if cfg!(feature = "rehearsal") {
+            build.args(["--features", "ara-hub/rehearsal"]);
+        }
     }
     run(&mut build, &dist.join("logs/release-build.log"))?;
     let stage = dist.join(format!(".stage-{name}-{}", std::process::id()));
@@ -154,7 +157,7 @@ pub fn package(root: &Path, version: &str) -> Result<()> {
     notices::generate(root, &stage, &dist)?;
     support::json(
         &stage.join("engine.json"),
-        &json!({"format":"ara.engine/1","version":version,"platform":"windows-x64","hub":{"binary":"ara-hub.exe","available":hub},"sourceCommit":git(root, &["rev-parse","HEAD"])? .trim(),"crashes":"%LOCALAPPDATA%/Ara/crashes"}),
+        &json!({"format":"ara.engine/1","version":version,"rehearsal":cfg!(feature="rehearsal"),"platform":"windows-x64","hub":{"binary":"ara-hub.exe","available":hub},"sourceCommit":git(root, &["rev-parse","HEAD"])? .trim(),"crashes":"%LOCALAPPDATA%/Ara/crashes"}),
     )?;
     support::json(
         &symbols.join("builds.json"),

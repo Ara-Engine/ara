@@ -1,5 +1,23 @@
 # Frame-window CPU metrics
 
+`--perf-wait-ready` waits for `Presenter::readiness()` after presentation, requiring
+native raster and GI enabled. Complete content/residency, GI delivery/convergence
+and fades must settle before the configured warmup starts. The readiness frame
+itself is excluded: ready at 430 plus 60 warmup frames samples from 491.
+`--perf-ready-timeout-ms` defaults to 120000; expiry writes an atomic failed
+`player.json` and exits unsuccessfully with the last readiness status. No renderer
+wait or filesystem probe is added to the getter. Packed asset sources are immutable;
+this is not a readiness contract for an external live import queue.
+
+`run.cpu` has the same metrics described below for **all game frames in the
+measurement request**, including readiness, arrival and warmup. D26 gates those
+whole-run CPU/hitch values. `cpu` keeps the GPU window's CPU samples for analysis.
+`arrival` reports excluded-frame peaks, per-pass quantiles and GPU coverage without
+a budget gate. The ready snapshot is latched for the immutable pack; normal
+in-flight rendering continues warmup. Later presentation errors fail the window.
+Loading-view latency stays in `startup`. New keep-alive requests reset
+the measurement clock; the first request uses the process launch clock.
+
 `--perf-output` adds these fields under `player.json`'s `cpu` object:
 
 - `work_ms`: quantiles of each frame's wall time minus **measured host waits**.

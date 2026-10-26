@@ -13,12 +13,15 @@ pub(in crate::renderer) struct NativeView {
     presented: Vec<Mat4>,
     previous_vp: Option<Mat4>,
     culling: Culling,
+    /// Passes `visible` holds rows for (`Native::capacity`).
+    capacity: usize,
     changes: updates::Updates,
 }
 
 impl Native {
-    /// Allocate camera-local rows and visible ranges, sharing every static GPU
-    /// allocation, material, texture and pipeline with the primary camera.
+    /// Allocate camera-local rows and visible ranges (sized like the primary's,
+    /// shadow slots included), sharing every static GPU allocation, material,
+    /// texture and pipeline with the primary camera.
     pub(in crate::renderer) fn new_view(&self, gpu: &mut VulkanDevice) -> Result<NativeView> {
         let mut allocated = Vec::new();
         let result = (|| {
@@ -29,7 +32,7 @@ impl Native {
             )?;
             let visible = host_buffer(
                 gpu,
-                (self.rows.len() * culling::BASE_PASSES * 8).max(16),
+                (self.rows.len() * self.capacity * 8).max(16),
                 &mut allocated,
             )?;
             Ok(NativeView {
@@ -44,6 +47,7 @@ impl Native {
                 presented: self.rows.iter().map(|row| row.world).collect(),
                 previous_vp: None,
                 culling: self.culling.fork(&self.groups),
+                capacity: self.capacity,
                 changes: updates::Updates::new(self.rows.len()),
             })
         })();
@@ -66,6 +70,7 @@ impl Native {
         std::mem::swap(&mut self.presented, &mut view.presented);
         std::mem::swap(&mut self.previous_vp, &mut view.previous_vp);
         std::mem::swap(&mut self.culling, &mut view.culling);
+        std::mem::swap(&mut self.capacity, &mut view.capacity);
         std::mem::swap(&mut self.changes, &mut view.changes);
     }
 }

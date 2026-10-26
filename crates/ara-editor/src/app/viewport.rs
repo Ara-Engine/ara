@@ -401,6 +401,7 @@ impl SceneView {
                 editor,
                 self.preview_view.as_ref().unwrap_or(view),
                 renderer,
+                plan.quality,
             )?);
         }
         if matches!(work, RasterWork::Live(_)) {
@@ -919,6 +920,7 @@ mod tests {
                     &editor,
                     &view,
                     &renderer,
+                    *renderer.quality(),
                 )?;
                 let patched_allocation = scene
                     .raster_frame

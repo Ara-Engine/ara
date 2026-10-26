@@ -129,6 +129,7 @@ impl Job {
         editor: &crate::Editor,
         view: &crate::world::DocumentView,
         renderer: &ara_render::Renderer,
+        quality: ara_render::look::Quality,
     ) -> anyhow::Result<Self> {
         let store = editor.host.store();
         Ok(Self {
@@ -139,7 +140,7 @@ impl Job {
                 store.schema(),
                 editor.gesture.as_ref(),
                 &editor.state.hidden,
-                renderer.native_seed(),
+                renderer.native_seed_for_quality(&quality)?,
             )?,
         })
     }

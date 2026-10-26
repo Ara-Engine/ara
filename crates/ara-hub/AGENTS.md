@@ -22,6 +22,9 @@ contract is `crates/ara-hub-service/AGENTS.md`.
   `ara` beside `ara-hub` (`--ara` overrides), `hub.subscribe` before `Connected`
   (the model then refreshes every list), `hub.changed` → `Event::Changed`, a 2 s
   `hub.subscribe` heartbeat, reconnect with backoff, `Offline` names `hub-start.log`.
+  Native startup uses `start_preparing_with_wake` before device creation: bootstrap
+  hashing/copying and the handshake overlap GPU initialization. `Prepared` supplies
+  the verified CLI for native integrations; preparation failures are non-fatal/retried.
 - `view/`: markup per page from the model (`page`), `hub.css` (theme tokens only,
   D18), and `Page::bindings` mapping each control's stable ID to its `Intent`.
 - `native/`: window/GPU host and loop (`mod.rs`), retained `App` (`app.rs`: rebuild,
@@ -35,11 +38,19 @@ contract is `crates/ara-hub-service/AGENTS.md`.
 
 ## Behavior worth knowing
 
+The opt-in `rehearsal` feature adds `--rehearse-update REPORT`; with the test-only
+loopback feed it drives the actual update model and external updater without a
+window. Updated Hub health renders offscreen and waits for the updater's ack.
+This feature stays off in shipping builds; see ara-release's rehearsal command.
+
 - Equal markup replies do no UI work. Changed markup uses `Ui::reconcile` on the
   same tree, retaining shaped text, layouts, widget state and input identity.
   Scroll offsets clamp after layout; explicit focus requests and hover update then.
 - Theme changes call `switch_theme` once to swap palette tokens. Initial inherited
   colors resolve in the runtime; `Ui::editor` is used only for window creation.
+- Built-in icons, wordmarks and Starter art decode/upload on first visible use,
+  then stay resident across pages/themes. DPI changes invalidate that image set.
+  MCP snippet helper processes start only on opening Agents, after bootstrap is ready.
 - `App::frame` consumes a retained presentation request: rebuilding must present
   even if its layout work was already consumed. Pointer activations apply before
   the next queued event. Worker results wake SDL; idle waits follow clock/toast deadlines.
@@ -95,6 +106,12 @@ user profile, even via --config-dir. Never register worktree builds there.
   `VK_IMPLICIT_LAYER_PATH=<empty dir> VK_LAYER_PATH=$VULKAN_SDK/Bin`, then
   `target/debug/ara-hub --capture target/hub-captures --size 1440x900 --dpi 1`
   and `--size 2560x1440 --dpi 2`. Look at every PNG.
+- Installed startup: `measure-startup.ps1 -Setup <Hub setup> -Directory <fresh target/dir>`
+  through `ara-dev gpu`. Five fresh-profile/no-service launches paired with same-profile,
+  running-service launches; OS caches are not flushed. `--startup-probe DIR` draws the
+  live model offscreen, injects input while connecting and saves both milestone frames.
+  Timings start immediately before Process.Start and exclude PNG encoding. Optional
+  ARA_HUB_STARTUP_TRACE appends spans from GUI/service; probes never check the network.
 - Verification uses offscreen captures only. Stop/join the connection worker
   before shutting down a test service; await removal of its discovery file.
   Never leave a service/updater you started running after a check.

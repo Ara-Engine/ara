@@ -11,6 +11,7 @@ ara-asset = { path = "../ara-asset" }
 ara-asset-format = { path = "../ara-asset-format" }
 ara-gpu = { path = "../ara-gpu" }
 ara-json = { path = "../ara-json" }
+ash.workspace = true
 bytemuck.workspace = true
 blake3.workspace = true
 getrandom = "0.4"

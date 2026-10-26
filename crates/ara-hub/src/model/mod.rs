@@ -784,6 +784,7 @@ impl Hub {
     /// Apply one connection event.
     pub fn event(&mut self, event: Event) {
         match event {
+            Event::Prepared { .. } => {}
             Event::Connected => {
                 self.dismissed_banners.remove("offline");
                 self.link = Link::Online;

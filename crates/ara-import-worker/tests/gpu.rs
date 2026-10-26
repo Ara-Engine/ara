@@ -47,12 +47,15 @@ fn gpu_worker_negotiates_and_encodes_without_contaminating_protocol_stdout()
         &worker_binary,
         std::fs::metadata(&configured)?.permissions(),
     )?;
-    let worker = ProcessWorker::new(&worker_binary);
+    let worker = ProcessWorker::new(&worker_binary).with_memo(Some(cache.path()));
     assert_eq!(
         worker.texture_encoder(&input),
         Some(encoder.backend()),
         "a usable device must negotiate through framed stdout"
     );
+    // Keep the negotiated lease/capability memo, but force each disposable job
+    // to encode rather than hit the pure texture memo. This probe counts devices.
+    let worker = worker.with_memo(None);
     for preset in [
         CookPreset::Fast,
         CookPreset::Balanced,
@@ -156,6 +159,22 @@ fn gpu_worker_negotiates_and_encodes_without_contaminating_protocol_stdout()
             );
             std::thread::sleep(std::time::Duration::from_millis(10));
         }
+        let warm = ProcessWorker::new(&worker_binary).with_memo(Some(cache.path()));
+        assert_eq!(warm.texture_encoder(&input), Some(encoder.backend()));
+        let mut starts = 0;
+        let mut hits = 0;
+        for file in std::fs::read_dir(&trace)? {
+            let text = std::fs::read_to_string(file?.path())?;
+            starts += text.matches("\"stage\": \"texture.service.start\"").count();
+            hits += text
+                .matches("\"stage\": \"texture.identity_cache_hit\"")
+                .count();
+        }
+        assert_eq!(starts, 1, "warm identity lookup recreated a device service");
+        assert_eq!(
+            hits, 1,
+            "warm identity was not recovered from its verified memo"
+        );
     }
     Ok(())
 }

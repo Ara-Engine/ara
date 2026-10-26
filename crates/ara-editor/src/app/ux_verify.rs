@@ -201,10 +201,23 @@ impl UxVerification {
         shell: &mut Shell,
         setup: Setup,
     ) -> ara_ui::Result<()> {
-        let crate_entity = crate::world::resolve(editor.host.store(), &editor.state.doc)
-            .map_err(|d| format!("{d:?}"))?
-            .iter()
-            .find(|(_, e)| e.record.get("name").and_then(Value::as_str) == Some("Salvage crate"))
+        // The fixture's crate, else (any other project) the first mesh, else the first
+        // entity with a Transform: the Inspector steps need one selected.
+        let entities = crate::world::resolve(editor.host.store(), &editor.state.doc)
+            .map_err(|d| format!("{d:?}"))?;
+        let named = |name: &str| {
+            entities
+                .iter()
+                .find(|(_, e)| e.record.get("name").and_then(Value::as_str) == Some(name))
+        };
+        let with = |components: &[&str]| {
+            entities
+                .iter()
+                .find(|(_, e)| components.iter().all(|c| e.record.contains_key(*c)))
+        };
+        let crate_entity = named("Salvage crate")
+            .or_else(|| with(&["Transform", "MeshRenderer"]))
+            .or_else(|| with(&["Transform"]))
             .map(|(id, _)| id.clone());
         let select = crate_entity.clone().map(|e| vec![e]).unwrap_or_default();
         editor.action("editor.select", json!({"entities": select}))?;

@@ -20,6 +20,16 @@ struct Cli {
 }
 #[derive(Subcommand)]
 enum Command {
+    /// Exercise signed dry-run releases through a loopback feed and installed binaries.
+    #[cfg(feature = "rehearsal")]
+    Rehearse {
+        #[arg(long)]
+        artifacts: PathBuf,
+        #[arg(long)]
+        older_setup: PathBuf,
+        #[arg(long)]
+        directory: PathBuf,
+    },
     /// Build release binaries, portable ZIP, self-extracting installer and symbols.
     Package {
         #[arg(long)]
@@ -83,6 +93,12 @@ fn main() -> Result<()> {
         .context("release crate must live under crates/")?
         .to_path_buf();
     match Cli::parse().command {
+        #[cfg(feature = "rehearsal")]
+        Command::Rehearse {
+            artifacts,
+            older_setup,
+            directory,
+        } => smoke::rehearsal::run(&artifacts, &older_setup, &directory),
         Command::Package { version, kind } => {
             valid_version(&version)?;
             match kind {

@@ -226,7 +226,9 @@ impl GeometryGpu {
             allocated,
             &mut prepared,
         )?;
-        gpu.upload(table, row_bytes)?;
+        // Prefetched storage can have an earlier submission's conservative
+        // retention stamp even before binding; never overwrite it in flight.
+        gpu.upload_queued(table, row_bytes)?;
         result.table = Some((table, gpu.storage_buffer(table)?.index));
         let mut commands = gpu.begin(Queue::Graphics);
         commands.push(Command::BeginPass("Scene.Geometry.Upload".into()));

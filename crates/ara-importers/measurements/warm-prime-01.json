@@ -1,0 +1,133 @@
+{
+  "cliSha256": "4886D38A1B1C6BEA5292820DBAC3A4531AD01726A21D960B1335C2D4145D2A8F",
+  "counts": {
+    "action.hash": 115,
+    "asset.published": 115,
+    "cache.install": 232,
+    "cache.load": 231,
+    "cache.store": 116,
+    "hash.blake3": 2377,
+    "ipc.decode": 20,
+    "ipc.encode": 20,
+    "ipc.read": 20,
+    "ipc.write": 20,
+    "sidecar.read": 230,
+    "source.snapshot": 230,
+    "texture.backend_prepare": 1,
+    "texture.identity_lookup": 1,
+    "texture.service.exit": 1,
+    "texture.service.initialize": 1,
+    "texture.service.start": 1,
+    "worker.discovery_batch": 7,
+    "worker.queue": 10,
+    "worker.spawn": 10
+  },
+  "cpuBefore": "33",
+  "deviceServices": 1,
+  "differentKeys": 0,
+  "discoveryBatches": 7,
+  "discoveryHits": 0,
+  "encoderPrepares": 1,
+  "finalCacheLoads": 115,
+  "identityHits": 0,
+  "imports": 0,
+  "label": "warm-prime-01",
+  "openToAllPublishedMs": 10247.698,
+  "publications": 115,
+  "snapshotStartToSettledMs": 7064.492,
+  "stages": [
+    {
+      "count": 115,
+      "maxMs": 18.752000000000002,
+      "name": "action.hash",
+      "summedMs": 700.1093999999998
+    },
+    {
+      "count": 232,
+      "maxMs": 475.1081,
+      "name": "cache.install",
+      "summedMs": 25755.6282
+    },
+    {
+      "count": 231,
+      "maxMs": 3259.4759999999997,
+      "name": "cache.load",
+      "summedMs": 184141.2512
+    },
+    {
+      "count": 116,
+      "maxMs": 495.8819,
+      "name": "cache.store",
+      "summedMs": 31350.997900000006
+    },
+    {
+      "count": 2377,
+      "maxMs": 4.0587,
+      "name": "hash.blake3",
+      "summedMs": 462.27709999999996
+    },
+    {
+      "count": 20,
+      "maxMs": 1.8876,
+      "name": "ipc.decode",
+      "summedMs": 8.5953
+    },
+    {
+      "count": 20,
+      "maxMs": 5.0870999999999995,
+      "name": "ipc.encode",
+      "summedMs": 22.137299999999996
+    },
+    {
+      "count": 20,
+      "maxMs": 1483.0765000000001,
+      "name": "ipc.read",
+      "summedMs": 2384.0742000000005
+    },
+    {
+      "count": 20,
+      "maxMs": 350.11789999999996,
+      "name": "ipc.write",
+      "summedMs": 494.0257
+    },
+    {
+      "count": 230,
+      "maxMs": 0.25470000000000004,
+      "name": "sidecar.read",
+      "summedMs": 5.499100000000005
+    },
+    {
+      "count": 230,
+      "maxMs": 3106.0256,
+      "name": "source.snapshot",
+      "summedMs": 282322.7876
+    },
+    {
+      "count": 1,
+      "maxMs": 1461.3926999999999,
+      "name": "texture.backend_prepare",
+      "summedMs": 1461.3926999999999
+    },
+    {
+      "count": 1,
+      "maxMs": 296.6608,
+      "name": "texture.identity_lookup",
+      "summedMs": 296.6608
+    },
+    {
+      "count": 1,
+      "maxMs": 268.9717,
+      "name": "texture.service.initialize",
+      "summedMs": 268.9717
+    },
+    {
+      "count": 10,
+      "maxMs": 1468.1782,
+      "name": "worker.queue",
+      "summedMs": 2304.634
+    }
+  ],
+  "versionsStartToSettledMs": 7530.12025,
+  "workerSha256": "9A412A5352A665F5BA0C6B86EEF8E98E1B5B1A0DB6CDFC1F0828017D04311D4D",
+  "workers": 10
+}

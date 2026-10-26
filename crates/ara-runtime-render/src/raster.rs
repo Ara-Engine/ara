@@ -233,6 +233,10 @@ impl RasterView {
         mut candidate: RasterContent,
         plan: RasterPlan,
     ) -> Result<RenderFrame> {
+        if let Err(error) = candidate.native.reserve_shadow_quality(&plan.quality) {
+            candidate.destroy(renderer)?;
+            return Err(error);
+        }
         loop {
             match candidate.preallocate(renderer) {
                 Ok(true) => break,
