@@ -19,8 +19,9 @@ pub(in crate::renderer) struct NativeView {
 }
 
 impl Native {
-    /// Allocate camera-local rows and visible ranges, sharing every static GPU
-    /// allocation, material, texture and pipeline with the primary camera.
+    /// Allocate camera-local rows and visible ranges (sized like the primary's,
+    /// shadow slots included), sharing every static GPU allocation, material,
+    /// texture and pipeline with the primary camera.
     pub(in crate::renderer) fn new_view(&self, gpu: &mut VulkanDevice) -> Result<NativeView> {
         let mut allocated = Vec::new();
         let result = (|| {
@@ -31,7 +32,7 @@ impl Native {
             )?;
             let visible = host_buffer(
                 gpu,
-                (self.rows.len() * culling::BASE_PASSES * 8).max(16),
+                (self.rows.len() * self.capacity * 8).max(16),
                 &mut allocated,
             )?;
             Ok(NativeView {
@@ -46,7 +47,7 @@ impl Native {
                 presented: self.rows.iter().map(|row| row.world).collect(),
                 previous_vp: None,
                 culling: self.culling.fork(&self.groups),
-                capacity: culling::BASE_PASSES,
+                capacity: self.capacity,
                 changes: updates::Updates::new(self.rows.len()),
             })
         })();
