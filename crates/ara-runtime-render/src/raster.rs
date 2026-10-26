@@ -30,7 +30,7 @@ pub struct RasterUpdate {
 
 struct Preparation {
     snapshot_changed: bool,
-    replacement: Option<(Prepared, u64, ara_texture_stream::NativeResidency)>,
+    replacement: Option<(Prepared, u64, ara_render::NativeContent)>,
 }
 
 /// Derived native content and VFX on a caller-owned renderer/device. It never
@@ -225,20 +225,38 @@ impl RasterView {
     }
 
     /// Publish a CPU-prepared content snapshot at the device's frame boundary.
-    /// Call `RasterContent::new` on a worker; only GPU adoption runs here. Failure
-    /// retains the renderer's last completed content and presentation.
+    /// Build on a worker and preallocate before an asynchronous upload scope.
+    /// Synchronous callers drain preparation here. Failure retains last-good.
     pub fn publish_content(
         &mut self,
         renderer: &mut Renderer,
-        candidate: RasterContent,
+        mut candidate: RasterContent,
         plan: RasterPlan,
     ) -> Result<RenderFrame> {
+        loop {
+            match candidate.preallocate(renderer) {
+                Ok(true) => break,
+                Ok(false) if !renderer.gpu().deferring_completion() => {
+                    // Synchronous callers explicitly publish a complete generation.
+                    std::thread::sleep(std::time::Duration::from_millis(1));
+                }
+                result => {
+                    candidate.destroy(renderer)?;
+                    return match result {
+                        Err(error) => Err(error),
+                        _ => anyhow::bail!(
+                            "preallocate native content before an asynchronous upload scope"
+                        ),
+                    };
+                }
+            }
+        }
         let RasterContent {
             frame,
             content,
             prepared,
             key,
-            textures,
+            native,
         } = candidate;
         let look = FrameEnvironment::resolve(&frame.look, frame.environment.exposure);
         self.prepare_inner(
@@ -249,7 +267,7 @@ impl RasterView {
             || Ok(content),
             Preparation {
                 snapshot_changed: true,
-                replacement: Some((prepared, key, textures)),
+                replacement: Some((prepared, key, native)),
             },
         )?;
         Ok(frame)
@@ -316,16 +334,20 @@ impl RasterView {
                     bake_content = Some(content.clone());
                 }
                 let config = texture_config();
-                let (mut prepared, key, textures) = match replacement {
-                    Some((prepared, key, textures)) => (prepared, Some(key), textures),
+                let (mut prepared, key) = match replacement {
+                    Some((mut prepared, key, native)) => {
+                        prepared.scene = renderer.publish_native_content(native)?;
+                        (prepared, Some(key))
+                    }
                     None => {
-                        let prepared = native::prepare(frame, content, config)?;
+                        let mut prepared = native::prepare(frame, content, config)?;
+                        prepared.enable_motion();
                         let textures = prepared.textures.fork_sources(config)?;
-                        (prepared, None, textures)
+                        renderer.replace_native_scene(&prepared.scene, Box::new(textures))?;
+                        (prepared, None)
                     }
                 };
                 prepared.enable_motion();
-                renderer.replace_native_scene(&prepared.scene, Box::new(textures))?;
                 self.key = key.unwrap_or_else(|| content_key(&prepared));
                 let arrivals = self
                     .prepared

@@ -137,6 +137,7 @@ fn native_raster_keeps_instances_local_and_tracks_moving_and_skinned_poses_witho
                 Box::new(EmptyTextures),
                 &renderer.artifacts,
                 None,
+                None,
             )
             .is_err()
         );

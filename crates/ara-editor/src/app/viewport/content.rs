@@ -128,6 +128,7 @@ impl Job {
         content: &crate::world::gltf::FidelityContent,
         editor: &crate::Editor,
         view: &crate::world::DocumentView,
+        renderer: &ara_render::Renderer,
     ) -> anyhow::Result<Self> {
         let store = editor.host.store();
         Ok(Self {
@@ -138,6 +139,7 @@ impl Job {
                 store.schema(),
                 editor.gesture.as_ref(),
                 &editor.state.hidden,
+                renderer.native_seed(),
             )?,
         })
     }

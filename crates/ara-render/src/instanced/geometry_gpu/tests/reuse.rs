@@ -1,6 +1,10 @@
 use super::*;
 
-fn verify_static(gpu: &mut VulkanDevice, pool: &GeometryGpu, scene: &Scene) -> Result<()> {
+pub(super) fn verify_static(
+    gpu: &mut VulkanDevice,
+    pool: &GeometryGpu,
+    scene: &Scene,
+) -> Result<()> {
     let size = scene
         .geometry
         .iter()

@@ -10,9 +10,12 @@ mod tests;
 mod textures;
 mod validate;
 pub use changes::{CasterChanges, Changes, FrameWork};
+pub(crate) use geometry_gpu::preparation::storage_limit as geometry_storage_limit;
+pub(crate) use geometry_gpu::preparation::{GeometryPreparation, GeometrySeed};
 pub use geometry_gpu::{GeometryGpu, GeometryUpload, LodRange, PreparedPose};
 pub use material::{Material, MaterialExtras, TextureSlot, TextureTransform};
 pub use textures::{TextureBinding, TextureStats, Textures};
+pub(crate) use validate::CheckedScene;
 pub(crate) use validate::ValidatedScene;
 
 /// Absent native texture or unused material index. Sampling supplies neutral

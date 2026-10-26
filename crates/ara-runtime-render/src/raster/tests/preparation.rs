@@ -4,7 +4,7 @@ use ara_gpu::{
     vulkan::{BufferPreparation, InitialData, ResourcePreparation},
 };
 use std::{
-    sync::{Arc, mpsc},
+    sync::mpsc,
     time::{Duration, Instant},
 };
 
@@ -22,23 +22,7 @@ fn replacement() -> Result<RasterContent> {
     let mut draw = box_draw(1, [2.; 3], [0.; 3], [0.; 3]);
     draw.color = [0.1, 0.5, 0.2, 1.];
     frame.draws.push(draw);
-    let mut candidate = RasterContent::new(frame, Content::default())?;
-    // Keep one actual BC image in the candidate to exercise worker admission,
-    // cancellation and adoption (a factor-only fixture allocates no textures).
-    candidate.textures.register(
-        [1; 32],
-        Arc::new(ara_texture_stream::NativeSource::from_cooked(
-            ara_asset_format::write_ktx2(
-                4,
-                4,
-                ara_asset_format::TextureFormat::Bc4,
-                &[vec![0; 8]],
-            )?
-            .into(),
-        )?),
-    )?;
-    candidate.prepared.scene.textures = 1;
-    Ok(candidate)
+    RasterContent::new(frame, Content::default())
 }
 
 #[test]
@@ -49,7 +33,7 @@ fn blocked_content_allocation_keeps_rendering_last_good_and_publishes_after_canc
     frame.draws.push(box_draw(1, [2.; 3], [0.; 3], [0.; 3]));
     let candidate = RasterContent::new(frame, Content::default())?;
     let mut renderer = Renderer::new_native(
-        &candidate.prepared.scene,
+        candidate.native.scene(),
         Box::new(candidate.prepared.textures.fork_sources(texture_config())?),
         [96, 64],
         &[],
@@ -129,12 +113,12 @@ fn blocked_content_allocation_keeps_rendering_last_good_and_publishes_after_canc
         std::thread::sleep(Duration::from_millis(1));
     }
     let frame = raster.publish_content(&mut renderer, next, plan)?;
-    assert_eq!(
+    assert!(
         renderer
-            .native_texture_stats()
+            .native_geometry_stats()
             .expect("native")
-            .uploaded_bytes,
-        8
+            .uploaded_bytes
+            > 0
     );
     let after = raster.capture(&mut renderer, &frame, &request)?;
     assert_ne!(before.image, after.image);

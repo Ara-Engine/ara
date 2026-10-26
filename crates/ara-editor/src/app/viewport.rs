@@ -400,6 +400,7 @@ impl SceneView {
                 content,
                 editor,
                 self.preview_view.as_ref().unwrap_or(view),
+                renderer,
             )?);
         }
         if matches!(work, RasterWork::Live(_)) {
@@ -917,6 +918,7 @@ mod tests {
                     scene.content.as_ref().expect("Scene cache"),
                     &editor,
                     &view,
+                    &renderer,
                 )?;
                 let patched_allocation = scene
                     .raster_frame

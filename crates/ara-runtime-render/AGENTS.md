@@ -25,8 +25,8 @@ device and per-view upload state; no simulation, window or process code.
   too, with per-camera particle targets; particles currently use primary `render`.
   Async hosts run `prepare_secondary_frame` inside `Renderer::submit_secondary`'s
   preparation callback, then `secondary_frame_submitted` only on an accepted frame.
-- `RasterContent::new` prepares CPU geometry/materials on a worker; `preallocate`
-  polls native allocation/staging. Publish when ready or `destroy` to cancel.
+- `RasterContent::new_reusing` prepares geometry/materials with `Renderer::native_seed`;
+  `preallocate` polls geometry/map allocations. Publish when ready or `destroy` to cancel.
   `RasterView::publish_content` keeps last-good content if GPU publication fails.
 - `RasterView::prepare_unchanged` is for a retained immutable extraction (editor
   accumulation/camera frames); it polls GI without revisiting root draws. Edits use

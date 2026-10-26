@@ -1,7 +1,7 @@
 # ara-render
 
-Native publications validate once per immutable upload borrow and copy unchanged key/revision geometry from the previous GPU pool.
-Candidate buffers stay independent until publication, so rejected content retains the previous frame.
+NativeContent owns validation/packing on the worker; native_seed retains small GPU reuse metadata.
+Poll preallocate, then publish_native_content in the ordered scope, or destroy rejected candidates. The scene stays immutable until returned.
 
 Owns the M1 baseline renderer and agent visual feedback. Gameplay state stays in ECS; `Scene` is a render snapshot, not authoritative state.
 
