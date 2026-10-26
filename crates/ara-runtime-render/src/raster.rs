@@ -31,6 +31,7 @@ pub struct RasterUpdate {
 struct Preparation {
     snapshot_changed: bool,
     replacement: Option<(Prepared, u64, ara_render::NativeContent)>,
+    scene_changed: bool,
 }
 
 /// Derived native content and VFX on a caller-owned renderer/device. It never
@@ -237,6 +238,7 @@ impl RasterView {
             Preparation {
                 snapshot_changed: true,
                 replacement: None,
+                scene_changed: false,
             },
         )
     }
@@ -247,8 +249,30 @@ impl RasterView {
     pub fn publish_content(
         &mut self,
         renderer: &mut Renderer,
+        candidate: RasterContent,
+        plan: RasterPlan,
+    ) -> Result<RenderFrame> {
+        self.publish_content_inner(renderer, candidate, plan, false)
+    }
+
+    /// Publish a different scene, resetting its GI, particles and exposure only
+    /// after native publication succeeds. Asset arrivals within a scene instead
+    /// use `publish_content`, preserving their live simulation and lighting.
+    pub fn publish_scene(
+        &mut self,
+        renderer: &mut Renderer,
+        candidate: RasterContent,
+        plan: RasterPlan,
+    ) -> Result<RenderFrame> {
+        self.publish_content_inner(renderer, candidate, plan, true)
+    }
+
+    fn publish_content_inner(
+        &mut self,
+        renderer: &mut Renderer,
         mut candidate: RasterContent,
         plan: RasterPlan,
+        scene_changed: bool,
     ) -> Result<RenderFrame> {
         if let Err(error) = candidate.native.reserve_shadow_quality(&plan.quality) {
             candidate.destroy(renderer)?;
@@ -289,6 +313,7 @@ impl RasterView {
             Preparation {
                 snapshot_changed: true,
                 replacement: Some((prepared, key, native)),
+                scene_changed,
             },
         )?;
         Ok(frame)
@@ -314,6 +339,7 @@ impl RasterView {
             Preparation {
                 snapshot_changed: false,
                 replacement: None,
+                scene_changed: false,
             },
         )
     }
@@ -331,6 +357,7 @@ impl RasterView {
         let Preparation {
             snapshot_changed,
             replacement,
+            scene_changed,
         } = preparation;
         let result = (|| {
             let change = if replacement.is_some() {
@@ -368,12 +395,30 @@ impl RasterView {
                         (prepared, None)
                     }
                 };
+                if scene_changed {
+                    // Cross-scene identities may alias (e_player, e_dust, etc.).
+                    // None of their temporal state or late probe deliveries belong
+                    // to the successfully published replacement.
+                    std::mem::take(&mut self.effects).destroy(renderer)?;
+                    self.mobility = Default::default();
+                    self.gi_updates.clear();
+                    if let Some(gi) = &mut self.gi {
+                        gi.reset_scene();
+                    }
+                    renderer.set_probe_surfaces(None)?;
+                    // With the old volume gone this queues only exposure/history
+                    // resets; it neither drains nor clears the previous GI pool.
+                    renderer.reset_capture_history()?;
+                    self.fades = Default::default();
+                    self.emitter_lights.clear();
+                }
                 prepared.enable_motion();
                 self.key = key.unwrap_or_else(|| content_key(&prepared));
                 let arrivals = self
                     .prepared
                     .as_ref()
                     .into_iter()
+                    .filter(|_| !scene_changed)
                     .flat_map(|old| old.unpublished_materials.keys())
                     .filter(|asset| {
                         prepared

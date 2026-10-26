@@ -130,7 +130,9 @@ impl SceneView {
             let Some(frame) = &self.raster_frame else {
                 return Ok(false);
             };
-            if !renderer.is_native() {
+            if !renderer.is_native()
+                || self.raster_scene.as_deref() != Some(editor.state.doc.as_str())
+            {
                 return Ok(false);
             }
             if self

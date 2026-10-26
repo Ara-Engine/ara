@@ -53,6 +53,8 @@ pub struct Preview {
     settle_until: Option<Instant>,
     /// The completed image `texture()` points at.
     attached: Option<ara_gpu::Image>,
+    /// The camera's temporal/exposure state belongs to this scene even while hidden.
+    scene: Option<String>,
 }
 
 impl Preview {
@@ -127,6 +129,14 @@ impl Preview {
             }
             return self.release(renderer, shell, gpu);
         };
+        let mut changed = false;
+        if self.scene.as_deref() != Some(editor.state.doc.as_str()) {
+            // Detach before retiring the secondary targets; a different scene
+            // must meter from fresh exposure rather than the previous interior/sky.
+            changed = self.release(renderer, shell, gpu)?;
+            self.camera.release(renderer)?;
+            self.scene = Some(editor.state.doc.clone());
+        }
         let key = self.key(editor, camera, size);
         let now = Instant::now();
         if self.shown.as_ref() != Some(&key) {
@@ -160,13 +170,13 @@ impl Preview {
                 if !self.camera.pending(renderer) {
                     self.settle_until = Some(now + SETTLE);
                 }
-                return Ok(false);
+                return Ok(changed);
             }
             Err(error) => {
                 // Reported once per change; the last image (if any) stays.
                 self.settle_until = None;
                 editor.report_failure(&*error);
-                return Ok(false);
+                return Ok(changed);
             }
         };
         if self.attached == Some(output.image) {
@@ -185,7 +195,7 @@ impl Preview {
         self.attached = Some(output.image);
         let appeared = shell.game_preview.is_none();
         shell.game_preview = Some(output.size);
-        Ok(appeared)
+        Ok(appeared || changed)
     }
 
     /// Detach and free the preview at shutdown, before the Scene view is destroyed.
