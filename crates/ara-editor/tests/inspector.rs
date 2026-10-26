@@ -173,6 +173,176 @@ fn press(shell: &mut Shell, editor: &mut Editor, id: &str) {
     shell.dispatch(editor).unwrap();
 }
 
+#[test]
+fn scalar_scrubs_clamp_preview_and_commit_once_while_units_stay_typed() {
+    let project = Project::new();
+    let (mut editor, mut shell) = project.open();
+    let before = editor.host.store().history().len();
+    shell.pointer = centre(&shell, "field-MeshRenderer-metallic");
+    assert!(shell.begin_scrub(&mut editor).unwrap());
+    for dx in [10., 20., 1000.] {
+        shell.pointer[0] += dx;
+        shell.move_scrub().unwrap();
+        assert_eq!(editor.host.store().history().len(), before);
+    }
+    shell.finish_scrub(&mut editor, false).unwrap();
+    assert_eq!(
+        authored(&editor, "e_crate001", "MeshRenderer", "metallic"),
+        json!(1)
+    );
+    assert_eq!(editor.host.store().history().len(), before + 1);
+    editor.action("history.undo", json!({})).unwrap();
+    shell.rebuild(&mut editor).unwrap();
+    type_into(
+        &mut shell,
+        &mut editor,
+        "edit-Transform-position-0",
+        "150cm",
+    );
+    assert_eq!(
+        authored(&editor, "e_crate001", "Transform", "position")[0],
+        json!(1.5)
+    );
+    let before = editor.host.store().history().len();
+    shell.pointer = centre(&shell, "field-MeshRenderer-metallic");
+    assert!(shell.begin_scrub(&mut editor).unwrap());
+    shell.pointer[0] += 50.;
+    shell.move_scrub().unwrap();
+    shell.finish_scrub(&mut editor, true).unwrap();
+    assert_eq!(editor.host.store().history().len(), before);
+}
+
+#[test]
+fn multi_edit_only_marks_the_vector_channels_that_differ() {
+    let project = Project::new();
+    let (mut editor, mut shell) = project.open();
+    editor.apply(vec![json!({"cmd":"property.set","args":{"entity":"e_camera01","path":"Transform.position","value":[3,0.6,0]}})], "Prepare selection", None).unwrap();
+    editor
+        .action(
+            "editor.select",
+            json!({"entities":["e_crate001","e_camera01"]}),
+        )
+        .unwrap();
+    shell.rebuild(&mut editor).unwrap();
+    for (axis, expected) in [(0, "—"), (1, "0.6"), (2, "0")] {
+        let i = shell
+            .ui
+            .find(&format!("edit-Transform-position-{axis}"))
+            .unwrap();
+        assert_eq!(shell.ui.nodes[i].text.as_ref().unwrap().value, expected);
+    }
+    shell.pointer = centre(&shell, "scrub-Transform-position-0");
+    shell.begin_scrub(&mut editor).unwrap();
+    shell.pointer[0] += 25.;
+    shell.move_scrub().unwrap();
+    shell.finish_scrub(&mut editor, false).unwrap();
+    assert_eq!(
+        authored(&editor, "e_crate001", "Transform", "position")[0],
+        json!(0.25)
+    );
+    assert_eq!(
+        authored(&editor, "e_camera01", "Transform", "position")[0],
+        json!(3.25)
+    );
+}
+
+#[test]
+fn component_values_reset_copy_paste_and_presentation_order_are_independent() {
+    use ara_editor::shell::commands::Target;
+    let project = Project::new();
+    let (mut editor, mut shell) = project.open();
+    let target = Target::Component("Transform".into());
+    shell
+        .run_command(&mut editor, "component.copy", &target)
+        .unwrap();
+    assert!(
+        shell
+            .run_command(
+                &mut editor,
+                "component.paste",
+                &Target::Component("MeshRenderer".into())
+            )
+            .is_err()
+    );
+    let before = editor.host.store().history().len();
+    shell
+        .run_command(&mut editor, "component.reset", &target)
+        .unwrap();
+    assert_eq!(editor.host.store().history().len(), before + 1);
+    assert!(authored(&editor, "e_crate001", "Transform", "position").is_null());
+    assert_eq!(
+        shell.fields["Transform.position"].provenance,
+        ara_editor::inspector::Provenance::Default
+    );
+    assert!(
+        shell.fields["Transform.position"]
+            .value
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|value| value.as_f64() == Some(0.))
+    );
+    shell
+        .run_command(&mut editor, "component.paste", &target)
+        .unwrap();
+    assert_eq!(
+        authored(&editor, "e_crate001", "Transform", "position"),
+        json!([0, 0.6, 0])
+    );
+    let before = editor.host.store().history().len();
+    shell
+        .run_command(&mut editor, "component.move_down", &target)
+        .unwrap();
+    assert_eq!(editor.host.store().history().len(), before);
+    let transform = shell.ui.nodes[shell.ui.find("component-Transform").unwrap()].rect;
+    let mesh = shell.ui.nodes[shell.ui.find("component-MeshRenderer").unwrap()].rect;
+    assert!(mesh.y < transform.y);
+    press(&mut shell, &mut editor, "collapse-component-MeshRenderer");
+    assert!(shell.ui.find("edit-MeshRenderer-metallic").is_none());
+    // Search reveals matching fields even inside remembered collapsed sections.
+    editor
+        .action(
+            "editor.search",
+            json!({"panel":"inspector","query":"metallic"}),
+        )
+        .unwrap();
+    shell.rebuild(&mut editor).unwrap();
+    assert!(shell.ui.find("edit-MeshRenderer-metallic").is_some());
+    editor
+        .action("editor.search", json!({"panel":"inspector","query":""}))
+        .unwrap();
+    drop(shell);
+    let mut shell = Shell::new(&mut editor, [1440., 2100.]).unwrap();
+    assert!(shell.ui.find("edit-MeshRenderer-metallic").is_none());
+    press(&mut shell, &mut editor, "collapse-component-MeshRenderer");
+    assert!(shell.ui.find("edit-MeshRenderer-metallic").is_some());
+}
+
+#[test]
+fn header_enable_is_a_reflected_field_edit_and_optional_assets_use_override_rows() {
+    let project = Project::new();
+    let (mut editor, mut shell) = project.open();
+    editor
+        .apply(
+            vec![json!({"cmd":"component.add","args":{"entity":"e_crate001","component":"Brain"}})],
+            "Add brain",
+            None,
+        )
+        .unwrap();
+    shell.rebuild(&mut editor).unwrap();
+    assert!(shell.ui.find("component-enabled-Transform").is_none());
+    assert!(shell.ui.find("component-enabled-Brain").is_some());
+    assert!(shell.ui.find("edit-Brain-enabled").is_none());
+    let before = editor.host.store().history().len();
+    press(&mut shell, &mut editor, "component-enabled-Brain");
+    assert_eq!(
+        authored(&editor, "e_crate001", "Brain", "enabled"),
+        json!(false)
+    );
+    assert_eq!(editor.host.store().history().len(), before + 1);
+    assert!(shell.ui.find("override-Brain-behavior").is_some());
+}
+
 /// Until the asset pipeline first reports, a project with imports says they are being
 /// prepared rather than showing nothing (the loading window shows the same stage).
 #[test]
@@ -544,6 +714,18 @@ fn maps_and_optional_structs_edit_per_entry() {
         "nest-edit-AcousticSurface-custom-scattering",
         "0.25",
     );
+    assert_eq!(custom(&editor)["scattering"], json!(0.25));
+    let before = editor.host.store().history().len();
+    shell.pointer = centre(&shell, "scrub-nest-AcousticSurface-custom-scattering");
+    assert!(shell.begin_scrub(&mut editor).unwrap());
+    shell.pointer[0] += 25.;
+    shell.move_scrub().unwrap();
+    assert_eq!(editor.host.store().history().len(), before);
+    shell.finish_scrub(&mut editor, false).unwrap();
+    assert_eq!(editor.host.store().history().len(), before + 1);
+    assert!(custom(&editor)["scattering"].as_f64().unwrap() > 0.25);
+    editor.action("history.undo", json!({})).unwrap();
+    shell.rebuild(&mut editor).unwrap();
     assert_eq!(custom(&editor)["scattering"], json!(0.25));
     // Each absorption band is its own number box.
     type_into(

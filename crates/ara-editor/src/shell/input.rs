@@ -126,10 +126,8 @@ impl Shell {
                         editor.action("editor.workspace", json!({"plane":plane}))?;
                         rebuild = true;
                     }
-                    Binding::ComponentCollapse(name) => {
-                        if !self.collapsed_components.remove(name) {
-                            self.collapsed_components.insert(name.clone());
-                        }
+                    Binding::ComponentCollapse(name) | Binding::NestedCollapse(name) => {
+                        self.inspector_sections.toggle(name);
                         rebuild = true;
                     }
                     Binding::Command(id, target) => {
@@ -307,6 +305,7 @@ impl Shell {
                         }
                     }
                     Binding::Scrub(_, _) => {}
+                    Binding::NestedScrub { .. } => {}
                     Binding::ColorPicker(path) => {
                         self.color_picker = if self.color_picker.as_ref() == Some(path) {
                             None
@@ -388,11 +387,7 @@ impl Shell {
 
                         if let Some(path) = self.pick_field.take() {
                             editor.apply(
-                                crate::inspector::edit_commands(
-                                    &editor.state.selection,
-                                    &path,
-                                    &json!(entity),
-                                ),
+                                self.field_commands(&editor.state.selection, &path, json!(entity))?,
                                 "Pick entity reference",
                                 None,
                             )?;
@@ -401,15 +396,28 @@ impl Shell {
                         }
                         rebuild = true;
                     }
-                    Binding::Nested(target, leaf, nullable) => {
+                    Binding::Nested(target, leaf, nullable, unit) => {
+                        let path = target
+                            .split_once('#')
+                            .map_or(target.as_str(), |(path, _)| path);
+                        if self.fields.get(path).is_some_and(|field| field.read_only) {
+                            continue;
+                        }
+                        for entity in &editor.state.selection.clone() {
+                            editor.field_gesture(entity, path, true)?;
+                        }
                         let text = action
                             .value
                             .as_str()
                             .map(str::to_owned)
                             .unwrap_or_else(|| action.value.to_string());
-                        self.drafts.insert(leaf.draft(target, *nullable), text);
+                        self.drafts
+                            .insert(leaf.draft(target, *nullable, unit.as_deref()), text);
                     }
                     Binding::Field(path, axis) => {
+                        if self.fields.get(path).is_some_and(|field| field.read_only) {
+                            continue;
+                        }
                         if !action.value.is_boolean() {
                             let gesture_path = axis.map_or_else(
                                 || path.clone(),
@@ -718,6 +726,9 @@ impl Shell {
             return Ok(false);
         }
         for (key, text) in &self.drafts {
+            if key.starts_with("@scrub|") {
+                continue;
+            }
             if key == "@name" {
                 commands.extend(crate::inspector::edit_commands(
                     &editor.state.selection,
@@ -727,6 +738,30 @@ impl Shell {
                 continue;
             }
             let edit = self.draft_edit(key, text)?;
+            if edit.axis.is_none()
+                && matches!(
+                    edit.field.widget,
+                    crate::inspector::Widget::Vector { color: true, .. }
+                )
+            {
+                let rgba = matches!(
+                    edit.field.widget,
+                    crate::inspector::Widget::Vector { rgba: true, .. }
+                );
+                for axis in 0..3 {
+                    let name = if rgba {
+                        ["r", "g", "b"][axis]
+                    } else {
+                        ["x", "y", "z"][axis]
+                    };
+                    commands.extend(crate::inspector::edit_commands(
+                        &editor.state.selection,
+                        &format!("{}.{}", edit.field.path, name),
+                        &edit.value[axis],
+                    ));
+                }
+                continue;
+            }
             commands.extend(crate::inspector::edit_commands(
                 &editor.state.selection,
                 &edit.path(),
@@ -806,6 +841,30 @@ impl Shell {
     ) -> Option<BTreeMap<String, ara_doc::Record>> {
         use crate::world::EditWorldView;
         let mut records = BTreeMap::new();
+        if let Some(scrub) = &self.scrub
+            && let Some(field) = self.fields.get(&scrub.path)
+        {
+            for (entity, value) in scrub.values() {
+                let value = if let Some(pointer) = &scrub.pointer {
+                    let Some(whole) = compound::preview_value(&field.value, pointer, value) else {
+                        continue;
+                    };
+                    whole
+                } else {
+                    value
+                };
+                let edit = DraftEdit {
+                    field,
+                    axis: scrub.axis,
+                    value,
+                };
+                if let Some(base) = view.entities().get(entity)
+                    && let Some(record) = edit.applied(base.record.clone())
+                {
+                    records.insert(entity.to_owned(), record);
+                }
+            }
+        }
         for (key, text) in &self.drafts {
             if key.starts_with('@') {
                 continue;
@@ -866,13 +925,35 @@ impl DraftEdit<'_> {
         }
         let object = at.as_object_mut()?;
         match self.axis {
+            None if matches!(
+                self.field.widget,
+                crate::inspector::Widget::Vector {
+                    color: true,
+                    count: 4,
+                    ..
+                }
+            ) =>
+            {
+                let mut value = self.value.clone();
+                value[3] = object
+                    .get(&field)
+                    .and_then(|value| value.get(3))
+                    .cloned()
+                    .or_else(|| self.field.fallback.get(3).cloned())
+                    .unwrap_or(json!(1.));
+                object.insert(field, value);
+            }
             None => {
                 object.insert(field, self.value.clone());
             }
             Some(axis) => {
-                let vector = object
-                    .entry(field)
-                    .or_insert_with(|| self.field.value.clone());
+                let vector = object.entry(field).or_insert_with(|| {
+                    if self.field.value.is_array() {
+                        self.field.value.clone()
+                    } else {
+                        self.field.fallback.clone()
+                    }
+                });
                 *vector.as_array_mut()?.get_mut(axis)? = self.value.clone();
             }
         }

@@ -36,7 +36,11 @@ mod graph_input;
 mod graph_panel;
 mod hierarchy;
 mod import_panel;
+#[cfg(test)]
+mod inspector_capture;
+mod inspector_fields;
 mod inspector_panel;
+mod inspector_sections;
 mod log_panels;
 mod material_panel;
 mod memo;
@@ -234,7 +238,8 @@ pub struct Shell {
     color_picker: Option<String>,
     modal_open: bool,
     canvas_modal_open: bool,
-    collapsed_components: std::collections::BTreeSet<String>,
+    inspector_sections: inspector_sections::Sections,
+    component_clipboard: Option<(String, Value)>,
     hierarchy_style: BTreeMap<u64, polish::RowStyle>,
     selected_rows: std::collections::BTreeSet<u64>,
     pub(crate) version: u64,
@@ -357,11 +362,20 @@ pub(crate) enum Binding {
     AssetPicker(String, Option<String>),
     /// A typed text box inside a compound field: its `path#pointer` target, how its
     /// text parses, and whether empty text clears it.
-    Nested(String, compound::Leaf, bool),
+    Nested(String, compound::Leaf, bool, Option<String>),
     RenameValue,
     ColorPicker(String),
     ComponentCollapse(String),
-    Scrub(String, usize),
+    NestedCollapse(String),
+    Scrub(String, Option<usize>),
+    /// Numeric gesture inside a compound field; target is `path#pointer`.
+    NestedScrub {
+        target: String,
+        widget: String,
+        step: f64,
+        min: Option<f64>,
+        max: Option<f64>,
+    },
     Diagnostic(ara_diag::Diagnostic),
     MenuBar(usize),
     MenuSub(usize, usize),
@@ -490,7 +504,8 @@ impl Shell {
             color_picker: None,
             modal_open: false,
             canvas_modal_open: false,
-            collapsed_components: Default::default(),
+            inspector_sections: inspector_sections::Sections::open(editor.host.root()),
+            component_clipboard: None,
             hierarchy_style: BTreeMap::new(),
             selected_rows: Default::default(),
             version: 0,
@@ -532,7 +547,7 @@ impl Shell {
             recent_commands: Vec::new(),
             recording: None,
             key_search: false,
-            label_width: 0.45,
+            label_width: 0.38,
             keymap: commands::keymap(&editor.state),
             keymap_revision: 0,
             keymap_settings: keymap_settings(&editor.state),
@@ -713,6 +728,7 @@ impl Shell {
     }
     fn stylesheet(editor: &Editor) -> String {
         let mut css = include_str!("editor.css").to_owned();
+        css.push_str(include_str!("inspector.css"));
         if editor.state.comfortable() {
             css.push_str(include_str!("editor-comfortable.css"));
         }

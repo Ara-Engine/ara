@@ -473,11 +473,11 @@ impl Controller {
                                     if let Some(path) = shell.pick_field.take() {
                                         if let Some(entity) = entity {
                                             editor.apply(
-                                                crate::inspector::edit_commands(
+                                                shell.field_commands(
                                                     &editor.state.selection,
                                                     &path,
-                                                    &json!(entity),
-                                                ),
+                                                    json!(entity),
+                                                )?,
                                                 "Pick entity reference",
                                                 None,
                                             )?;

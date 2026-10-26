@@ -86,6 +86,8 @@ pub struct Field {
     pub value: Value,
     /// Whether selected entities have differing effective values.
     pub mixed: bool,
+    /// Common vector channels; null marks only the channels that differ in a multi-edit.
+    pub channels: Vec<Value>,
     /// Origin of the displayed value.
     pub provenance: Provenance,
     /// Optional previous agent value, for was â†’ now.
@@ -96,6 +98,10 @@ pub struct Field {
     pub widget: Widget,
     /// Schema marks this property read-only.
     pub read_only: bool,
+    /// Optional leaves use an override checkbox: null means not set.
+    pub optional: bool,
+    /// Value to start an optional override with, before the user edits it.
+    pub fallback: Value,
 }
 /// Whether the Inspector shows field `desc` of a struct value (`value`, whose type has
 /// `fields`): not `hidden`, and its `showIf` sibling matches. Siblings absent from the
@@ -176,6 +182,22 @@ pub fn fields(
                 .collect();
             let value = values.first().cloned().unwrap_or(Value::Null);
             let mixed = values.iter().any(|v| *v != value);
+            let channel_type = match &desc.ty {
+                ValueType::Option(inner) => inner.as_ref(),
+                ty => ty,
+            };
+            let channels = channel_type.vector_len().map_or_else(Vec::new, |count| {
+                (0..count)
+                    .map(|axis| {
+                        let channel = value.get(axis).cloned().unwrap_or(Value::Null);
+                        if values.iter().all(|v| v.get(axis) == value.get(axis)) {
+                            channel
+                        } else {
+                            Value::Null
+                        }
+                    })
+                    .collect()
+            });
             let mut provenance = Provenance::Default;
             let mut was = None;
             for (id, entity) in &selected {
@@ -248,15 +270,55 @@ pub fn fields(
                 doc: desc.doc.clone(),
                 value: if mixed { Value::Null } else { value },
                 mixed,
+                channels,
                 provenance,
                 was,
                 unit: desc.unit.map(|u| u.symbol().to_owned()),
                 widget: widget(db, desc),
                 read_only: desc.editor.read_only,
+                optional: matches!(desc.ty, ValueType::Option(_)),
+                fallback: if matches!(desc.ty, ValueType::Option(_)) {
+                    override_default(db, desc)
+                } else {
+                    db.field_default(desc)
+                },
             });
         }
     }
     result
+}
+/// The starting value of an optional override. Examples describe the engine's
+/// effective default while its authoring default remains null (not overridden).
+pub(crate) fn override_default(db: &SchemaDb, desc: &FieldDesc) -> Value {
+    let ty = match &desc.ty {
+        ValueType::Option(inner) => inner.as_ref(),
+        ty => ty,
+    };
+    let mut value = desc
+        .examples
+        .first()
+        .filter(|value| !value.is_null())
+        .cloned()
+        .or_else(|| desc.default.clone().filter(|value| !value.is_null()))
+        .unwrap_or_else(|| db.zero(ty));
+    if let Some(range) = desc.range {
+        let clamp = |value: &mut Value| {
+            if let Some(number) = value.as_f64() {
+                let number = number
+                    .max(range.min.unwrap_or(f64::NEG_INFINITY))
+                    .min(range.max.unwrap_or(f64::INFINITY));
+                if let Ok(number) = serde_json::from_str(&number.to_string()) {
+                    *value = number;
+                }
+            }
+        };
+        if let Some(channels) = value.as_array_mut() {
+            channels.iter_mut().for_each(clamp);
+        } else {
+            clamp(&mut value);
+        }
+    }
+    value
 }
 /// Map reflected field metadata to the shared native control model.
 pub fn widget(db: &SchemaDb, desc: &FieldDesc) -> Widget {
@@ -275,7 +337,25 @@ pub fn widget(db: &SchemaDb, desc: &FieldDesc) -> Widget {
             max,
             // A closed range reads best as a slider (roughness, metallic).
             slider: desc.editor.slider || (min.is_some() && max.is_some()),
-            step: desc.editor.step.unwrap_or(0.1),
+            step: desc.editor.step.unwrap_or(
+                if matches!(
+                    ty,
+                    ValueType::I32
+                        | ValueType::U8
+                        | ValueType::U16
+                        | ValueType::U32
+                        | ValueType::I64
+                        | ValueType::U64
+                ) {
+                    1.
+                } else {
+                    match min.zip(max).map(|(min, max)| max - min) {
+                        Some(span) if span <= 1. => 0.001,
+                        Some(span) if span <= 10. => 0.01,
+                        _ => 0.1,
+                    }
+                },
+            ),
         };
     }
     if let Some(count) = ty.vector_len() {
@@ -343,9 +423,39 @@ pub fn parse_number(input: &str, unit: Option<&str>) -> Result<f64, String> {
         (s, u) if s == u => 1.,
         _ => return Err(format!("Unit `{suffix}` is incompatible with `{unit}`")),
     };
-    Ok(number * factor)
+    let value = number * factor;
+    if !value.is_finite() {
+        return Err("Value must be finite".into());
+    }
+    Ok(value)
 }
 /// Build one property.set per selected entity; a caller commits the list atomically.
 pub fn edit_commands(selection: &[String], path: &str, value: &Value) -> Vec<Value> {
     selection.iter().map(|entity|json!({"cmd":"property.set","args":{"entity":entity,"path":path,"value":value}})).collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn optional_override_examples_preserve_the_null_authoring_default() {
+        let db = SchemaDb::new();
+        let mut field = FieldDesc::new(
+            "aperture",
+            ValueType::Option(Box::new(ValueType::F32)),
+            "Lens aperture.",
+        );
+        field.range = Some(ara_schema::Range {
+            min: Some(1.),
+            max: Some(32.),
+        });
+        assert_eq!(override_default(&db, &field).as_f64(), Some(1.));
+        field.examples.push(json!(2.8));
+        assert_eq!(override_default(&db, &field), json!(2.8));
+        assert!(db.field_default(&field).is_null());
+        field.examples.clear();
+        field.default = Some(json!(4));
+        assert_eq!(override_default(&db, &field), json!(4));
+    }
 }
