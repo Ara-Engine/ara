@@ -206,6 +206,10 @@ pub struct EditorState {
     pub asset_path: Option<String>,
     /// Folder shown by the asset browser, relative to the project root.
     pub asset_folder: String,
+    /// Folder sidebar width in logical pixels, saved per project.
+    pub asset_sidebar_width: f32,
+    /// Explicitly expanded asset folders; all other folders start closed.
+    pub asset_expanded_folders: BTreeSet<String>,
     /// Show thumbnail cards instead of compact asset rows.
     pub asset_grid: bool,
     /// Active material, effect or animation document identity.
@@ -291,6 +295,8 @@ impl Default for EditorState {
             recent_scenes: Vec::new(),
             asset_path: None,
             asset_folder: String::new(),
+            asset_sidebar_width: 168.,
+            asset_expanded_folders: BTreeSet::new(),
             asset_grid: true,
             resource: None,
             canvas: Default::default(),
@@ -335,6 +341,8 @@ impl EditorState {
         self.doc != other.doc
             || self.asset_path != other.asset_path
             || self.asset_folder != other.asset_folder
+            || self.asset_sidebar_width != other.asset_sidebar_width
+            || self.asset_expanded_folders != other.asset_expanded_folders
             || self.asset_grid != other.asset_grid
             || self.resource != other.resource
             || self.canvas_add != other.canvas_add
@@ -842,6 +850,19 @@ impl Navigation {
             // A layout from an older editor that fails validation falls back to the default.
             let text = std::fs::read_to_string(&path)
                 .map_err(|e| anyhow::anyhow!("{}: {e}", path.display()))?;
+            if let Ok(saved) = ara_json::parse(&text) {
+                if let Some(width) = saved["assets"]["sidebarWidth"]
+                    .as_f64()
+                    .filter(|w| w.is_finite())
+                {
+                    state.asset_sidebar_width = (width as f32).clamp(96., 480.);
+                }
+                if let Ok(folders) =
+                    serde_json::from_value(saved["assets"]["expandedFolders"].clone())
+                {
+                    state.asset_expanded_folders = folders;
+                }
+            }
             if layout.restore(&text).is_ok() {
                 // Still the old default (only resized or tab-switched): move it to the
                 // new one. Any other arrangement is the user's and stays.
@@ -886,6 +907,8 @@ impl Navigation {
         why: &str,
     ) -> Result<Value, Vec<ara_diag::Diagnostic>> {
         let layout_changed = candidate.layout != self.state.layout
+            || candidate.asset_sidebar_width != self.state.asset_sidebar_width
+            || candidate.asset_expanded_folders != self.state.asset_expanded_folders
             || candidate.floating != self.state.floating
             || candidate.collapsed_areas != self.state.collapsed_areas;
         let value =
@@ -918,10 +941,16 @@ impl Navigation {
 
 /// The main dock tree and floating windows, as the canonical writer stores them.
 fn layout_text(state: &EditorState) -> anyhow::Result<String> {
-    state
+    let text = state
         .dock()
         .and_then(|d| d.serialize())
-        .map_err(|e| anyhow::anyhow!(e.to_string()))
+        .map_err(|e| anyhow::anyhow!(e.to_string()))?;
+    let mut value = ara_json::parse(&text).map_err(|d| anyhow::anyhow!("{d:?}"))?;
+    if value.get("main").is_none() {
+        value = json!({"main":value,"floating":[]});
+    }
+    value["assets"] = json!({"sidebarWidth":state.asset_sidebar_width,"expandedFolders":state.asset_expanded_folders});
+    Ok(ara_json::to_canonical_string(&value))
 }
 /// Save a named layout (Window › Layouts › Save Layout As…).
 pub(crate) fn write_layout(path: &Path, state: &EditorState) -> anyhow::Result<()> {

@@ -459,7 +459,7 @@ fn build() -> Vec<Spec> {
     let mut c = Vec::with_capacity(240);
     // File
     c.extend([
-        cmd("file.new_scene", "New Scene…", "file", "Ctrl+N", "Create an empty scene under levels/ and open it.", |s, e, _| s.new_scene(e)),
+        cmd("file.new_scene", "New Scene…", "file", "Ctrl+N", "Create an empty scene under levels/ and open it.", |s, e, t| {s.select_asset_folder(e,t)?;s.new_scene(e)}),
         later("file.new_project", "New Project…", "folder", "", "Create projects with `ara init <dir>`; the in-editor project wizard comes with the launcher."),
         cmd("file.open", "Open Scene…", "clapperboard", "Ctrl+O", "Pick a scene to open (recent first), or type to find any scene or asset.", |s, e, _| s.open_palette(e, "#")),
         later("file.open_project", "Open Project…", "folder", "", "One editor process owns one project; start `ara-editor <project>` for another."),
@@ -905,12 +905,14 @@ fn build() -> Vec<Spec> {
     ]);
     // Assets
     c.extend([
-        cmd("assets.create.folder", "Folder", "folder", "", "Create a folder in the current asset folder.", |s, e, _| s.new_folder(e)),
-        cmd("assets.create.scene", "Scene", "box", "", "Create an empty scene.", |s, e, _| s.new_scene(e)),
-        cmd("assets.create.material", "Material", "circle", "", "Create a material graph and open it.", |s, e, _| s.create_resource(e, "material")),
-        cmd("assets.create.vfx", "VFX System", "sparkles", "", "Create a VFX graph and open it.", |s, e, _| s.create_resource(e, "vfx")),
-        cmd("assets.create.animation", "Animation Controller", "activity", "", "Create an animation controller and open it.", |s, e, _| s.create_resource(e, "animation")),
-        cmd("assets.create.script", "C# Behaviour", "file-code", "", "Create a behaviour script in the project's C# module and open it in your IDE; Play compiles it and saving hot-reloads it.", |s, e, _| s.create_behaviour(e)),
+        cmd("assets.create.folder", "Folder", "folder", "", "Create a folder in the current asset folder.", |s, e, t| {s.select_asset_folder(e,t)?;s.new_folder(e)}),
+        cmd("assets.create.scene", "Scene", "box", "", "Create an empty scene.", |s, e, t| {s.select_asset_folder(e,t)?;s.new_scene(e)}),
+        cmd("assets.create.material", "Material", "circle", "", "Create a material graph and open it.", |s, e, t| {s.select_asset_folder(e,t)?;s.create_resource(e, "material")}),
+        cmd("assets.create.vfx", "VFX System", "sparkles", "", "Create a VFX graph and open it.", |s, e, t| {s.select_asset_folder(e,t)?;s.create_resource(e, "vfx")}),
+        cmd("assets.create.animation", "Animation Controller", "activity", "", "Create an animation controller and open it.", |s, e, t| {s.select_asset_folder(e,t)?;s.create_resource(e, "animation")}),
+        cmd("assets.create.script", "C# Script", "file-code", "", "Create a Behaviour script in this folder; name it, compile it, then attach it.", |s, e, t| s.create_script(e,t,"behaviour",Vec::new())),
+        cmd("assets.create.system", "C# System", "file-code", "", "Create a batched ECS query system from Ara's System template.", |s,e,t|s.create_script(e,t,"system",Vec::new())),
+        cmd("assets.open_ide", "Open in IDE", "file-code", "", "Open the selected C# source in the configured IDE.", |s,e,t|{let path=s.asset_target(e,t).ok_or("Select a C# script")?;s.open_script_ide(e,&path)}).when(|c|match c.target {Target::Asset(p) if p.ends_with(".cs")=>Avail::Ready,_=>Avail::Blocked("Select a C# script".into())}),
         cmd("assets.create.prefab", "Prefab from Selection", "package", "", "Turn the selected entity and its children into a prefab under prefabs/.", |s, e, t| s.prefab_from_selection(e, t)).when(prefab_source),
         cmd("assets.reimport", "Reimport", "refresh-cw", "", "Run the importer again for the selected asset.", |s, e, t| {
             let path = s.asset_target(e, t).ok_or("select an asset")?;
@@ -1172,9 +1174,10 @@ fn build() -> Vec<Spec> {
         later("tools.physics_debugger", "Physics Debugger", "", "", "Needs an ara-physics debug-draw feed into the editor."),
         later("tools.terrain", "Terrain Tools", "", "", "Terrain sculpting and painting tools are not built yet."),
         later("tools.ui_designer", "UI Designer", "", "", "The UI designer over ara-ui-document ops is not built yet."),
-        cmd("tools.cs.solution", "Open Scripts in IDE", "file-code", "", "Open the project's C# module in VS Code (or the OS default editor).", |_, e, _| {
-            let dir = crate::shell::scripts::modules(e.host.root()).into_iter().next().ok_or("This project has no C# module yet; use Assets > Create > C# Behaviour")?;
-            crate::shell::scripts::open_in_ide(&dir, &dir)
+        cmd("tools.cs.solution", "Open Scripts in IDE", "file-code", "", "Open the project's C# module in VS Code (or the OS default editor).", |s, e, _| {
+            let dir = crate::shell::scripts::modules(e.host.root()).into_iter().next().ok_or("This project has no C# module yet; use Assets > Create > C# Script")?;
+            let path=dir.strip_prefix(e.host.root()).unwrap_or(&dir).to_string_lossy().replace('\\',"/");
+            s.open_script_ide(e,&path)
         }).when(|_| Avail::Ready),
         later("tools.cs.reload", "Reload Scripts", "refresh-cw", "Ctrl+R", "C# reloads automatically when sources change; a manual trigger is not exposed yet."),
         cmd("window.agents", "Agents Panel", "bot", "Alt+6", "Agent activity and undo per turn.", |_, e, _| act(e, "editor.layout.show", json!({"panel": "agents"}))).when(|c| panel_open(c, "agents")),
@@ -1973,6 +1976,10 @@ fn build() -> Vec<Spec> {
             apply(e, commands, &format!("Remove {name}"))
         }),
         later("component.copy", "Copy Component", "copy", "", "Component clipboard arrives with Inspector v2."),
+        cmd("component.new_script", "New Script…", "file-code", "", "Create a Behaviour, choose its name, then compile and attach it to the selected entities.", |s, e, t| {
+            let entities = t.entities(&e.state);
+            s.create_script(e,t,"behaviour",entities)
+        }).when(has_entity),
         cmd("component.add", "Add Component…", "plus", "", "Search components to add.", |s, e, _| {
             s.palette_command = Some("@components".into());
             act(e, "editor.palette", json!({"open": true}))

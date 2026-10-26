@@ -115,6 +115,15 @@ pub const QUALITY_OVERRIDES: &[(&str, &str)] = &[
 /// Every setting, grouped by category in display order.
 pub const DEFS: &[Def] = &[
     def(
+        "scripts.ide",
+        User,
+        "Scripts",
+        "Script editor",
+        "Executable path for Open in IDE. Empty tries VS Code, then the system handler; system always uses the file association.",
+        Kind::Text,
+        Lit::S(""),
+    ),
+    def(
         "appearance.theme",
         User,
         "Appearance",

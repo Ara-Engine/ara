@@ -692,6 +692,9 @@ impl Shell {
             let id = n.element.id.as_str();
             if let Some(binding) = self.bindings.get(&ara_ui::source::stable_id(id)) {
                 match binding {
+                    Binding::AssetFolder(path, _) => {
+                        return Some((Context::Folder, Target::Folder(path.clone())));
+                    }
                     Binding::Select(entity) => {
                         return Some((Context::Entity, Target::Entity(entity.clone())));
                     }

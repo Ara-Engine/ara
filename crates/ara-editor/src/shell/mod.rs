@@ -33,6 +33,7 @@ pub use testing::MenuRow;
 mod agents_panel;
 mod animation_panel;
 mod assets_panel;
+mod assets_tree;
 mod game_panel;
 mod graph_annotations;
 mod graph_input;
@@ -231,6 +232,9 @@ pub struct Shell {
     palette_active: usize,
     pub(crate) pick_field: Option<String>,
     pub(crate) rename: bool,
+    asset_folder_click: Option<(String, std::time::Instant)>,
+    asset_rename: Option<scripts::Rename>,
+    script_job: Option<(String, std::time::Instant)>,
     pub(crate) drag: Option<Drag>,
     scrub: Option<scrub::Scrub>,
     motion: motion::Motion,
@@ -345,6 +349,8 @@ pub(crate) enum Binding {
     PaletteRun,
     Select(String),
     Asset(assets::Asset),
+    AssetFolder(String, bool),
+    AssetRenameValue,
     ResourceContent(String, Vec<Value>, String),
     ImportField(String, String),
     ImportChoice(String, String, Value),
@@ -488,6 +494,9 @@ impl Shell {
             palette_active: 0,
             pick_field: None,
             rename: false,
+            asset_folder_click: None,
+            asset_rename: None,
+            script_job: None,
             drag: None,
             scrub: None,
             motion: Default::default(),
@@ -661,7 +670,8 @@ impl Shell {
     /// Rebuild unless the last rebuild already reflects the editor's panels and store
     /// revisions (an action that rebuilt in dispatch changed them); true if it rebuilt.
     pub fn rebuild_if_stale(&mut self, editor: &mut Editor) -> ara_ui::Result<bool> {
-        if self.built == (editor.panels_revision, editor.host.store().revision()) {
+        let compiled = self.poll_script_job(editor)?;
+        if !compiled && self.built == (editor.panels_revision, editor.host.store().revision()) {
             return Ok(false);
         }
         self.rebuild(editor)?;
@@ -935,6 +945,7 @@ impl Shell {
         )?;
         markup.push_str("</panel>");
         self.overlays(editor, &mut markup)?;
+        self.asset_rename_markup(&mut markup);
         markup.push_str(POPUP_TAIL);
         markup.push_str("</ui>");
         self.mount(editor, &markup)?;
@@ -1008,6 +1019,7 @@ impl Shell {
             );
             markup.push_str(&format!("<field id='entity-rename-value' style='position:absolute;left:0px;top:0px;width:180px;height:22px' text='{}' label='Entity name' action='Dispatch' />",escape(name)));
         }
+        self.asset_rename_markup(&mut markup);
         markup.push_str(POPUP_TAIL);
         markup.push_str("</ui>");
         self.mount(editor, &markup)?;
@@ -1174,6 +1186,13 @@ impl Shell {
     }
     /// Run after every mount: decorations, a pending Inspector field reveal, motion.
     fn after_mount(&mut self, editor: &Editor) -> ara_ui::Result<()> {
+        self.position_asset_rename()?;
+        if let Some(grid) = self.shown_node("asset-grid") {
+            let width = self.ui.nodes[grid].rect.w;
+            self.ui
+                .set_virtual_extent(grid, [width, self.asset_grid_extent])?;
+            self.ui.scroll_to(grid, [0., self.asset_offset])?;
+        }
         self.paint_decorations();
         if self.field_request != editor.state.focus_field
             && self.shown_node("inspector-scroll").is_some()
@@ -1301,6 +1320,7 @@ impl Shell {
         self.pending_clipboard.take()
     }
     pub(crate) fn poll_assets(&mut self) -> bool {
+        self.sync_asset_grid_scroll();
         let browser_changed = self.browser.poll();
         if browser_changed {
             // Any project file changed (every autosave does): every tile asks again,

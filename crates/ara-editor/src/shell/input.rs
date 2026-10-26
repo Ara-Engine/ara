@@ -52,6 +52,16 @@ impl Shell {
         let mut rebuild = false;
         let result = (|| -> ara_ui::Result<()> {
             for action in actions {
+                if action.name == "ResizeAssets" {
+                    if let Some(ratio) = action.value.as_f64()
+                        && let Some(i) = self.ui.find("assets-content")
+                    {
+                        let width = self.ui.nodes[i].rect.w * ratio as f32;
+                        editor.action("editor.workspace", json!({"sidebarWidth":width}))?;
+                        rebuild = true;
+                    }
+                    continue;
+                }
                 if action.name == "ResizeDock" {
                     if let Some(index) = self.ui.by_id(action.node) {
                         let id = &self.ui.nodes[index].element.id;
@@ -75,6 +85,15 @@ impl Shell {
                     continue;
                 };
                 match binding {
+                    Binding::AssetRenameValue => {
+                        if let Some(rename) = &mut self.asset_rename {
+                            rename.name = action.value.as_str().unwrap_or("").into();
+                        }
+                    }
+                    Binding::AssetFolder(path, arrow) => {
+                        self.asset_folder_action(editor, path, *arrow)?;
+                        rebuild = true;
+                    }
                     Binding::GraphLabel(doc, key) => {
                         self.drafts.insert(
                             format!("@graph-label|{doc}|{key}"),
@@ -585,6 +604,10 @@ impl Shell {
     }
     /// Commit pending inspector text and slider values as one transaction.
     pub fn commit_fields(&mut self, editor: &mut Editor) -> ara_ui::Result<bool> {
+        if self.commit_asset_rename(editor)? {
+            self.rebuild(editor)?;
+            return Ok(true);
+        }
         if self.commit_graph_labels(editor)? && self.drafts.is_empty() {
             self.rebuild(editor)?;
             return Ok(true);

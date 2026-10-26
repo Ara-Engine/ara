@@ -29,7 +29,21 @@ impl Shell {
         }
         Ok(false)
     }
+    /// The asset grid's card window follows its scroll view's offset (its cards are
+    /// pooled by the Assets panel, which rebuilds them when the offset moves).
+    pub(super) fn sync_asset_grid_scroll(&mut self) {
+        if let Some(grid) = self.shown_node("asset-grid")
+            && let Some([_, offset]) = self.ui.scroll_position(grid)
+            && (offset - self.asset_offset).abs() > 0.01
+        {
+            self.asset_offset = offset;
+            self.asset_grid_dirty = true;
+        }
+    }
+    /// Bring the bounded row pools (Hierarchy, asset list and grid) to their scroll
+    /// views' offsets.
     pub(super) fn sync_scroll_views(&mut self) -> ara_ui::Result<()> {
+        self.sync_asset_grid_scroll();
         if self.hierarchy_surface == self.current
             && let Some(i) = self.shown_node("hierarchy-rows")
             && let Some(p) = self.ui.scroll_position(i)

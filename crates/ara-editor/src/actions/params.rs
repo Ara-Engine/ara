@@ -39,6 +39,12 @@ pub(super) struct EditorWorkspace {
     pub asset: Option<String>,
     /// Folder to browse.
     pub folder: Option<String>,
+    /// Folder sidebar width in logical pixels (96–480).
+    pub sidebar_width: Option<f32>,
+    /// Toggle the expansion of one project-relative folder.
+    pub toggle_folder: Option<String>,
+    /// Explicitly expand or collapse `toggleFolder`; absent toggles it.
+    pub expand_folder: Option<bool>,
     /// Thumbnail grid or compact list.
     pub grid: Option<bool>,
     /// Resource graph or controller to open.

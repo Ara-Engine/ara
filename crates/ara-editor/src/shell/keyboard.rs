@@ -153,6 +153,10 @@ impl Shell {
             return Ok(true);
         }
         if scancode == 41 {
+            if let Some(rename) = &mut self.asset_rename {
+                rename.name = names::stem(names::file_name(&rename.path)).into();
+                self.commit_asset_rename(editor)?;
+            }
             self.finish_scrub(editor, true)?;
             editor.finish_gesture(true)?;
             let had_drag = self.drag.take().is_some();
@@ -201,6 +205,9 @@ impl Shell {
             return Ok(true);
         }
         if scancode == 40 {
+            if self.asset_folder_key(editor, scancode)? {
+                return Ok(true);
+            }
             // The field's pending action and its commit rebuild once, not twice.
             let committed = self.coalesce_rebuilds(editor, |shell, editor| {
                 shell.dispatch(editor)?;
@@ -249,6 +256,9 @@ impl Shell {
             if !ctrl && !alt && !function {
                 return Ok(false);
             }
+        }
+        if self.asset_folder_key(editor, scancode)? {
+            return Ok(true);
         }
         if (scancode == 67 && shift) || scancode == 101 {
             // Shift+F10 or the Menu key: context menu for the focused control.
