@@ -18,6 +18,12 @@ use std::{
 struct TestHub {
     directory: PathBuf,
 }
+
+fn cli_executable() -> PathBuf {
+    let path = fs::canonicalize(env!("CARGO_BIN_EXE_ara")).expect("CLI executable");
+    ara_hub_service::normalized_path(&path).to_owned()
+}
+
 impl TestHub {
     fn new(name: &str) -> Self {
         let unique = SystemTime::now()
@@ -126,10 +132,7 @@ fn installation_registration_does_not_start_a_service_and_reuses_one_when_runnin
     assert!(ara_rpc::DaemonInfo::read(&hub.config().join("hub")).is_none());
     let registry = ara_hub_service::Registry::load(&hub.config()).expect("registry");
     assert_eq!(registry.engines.len(), 1);
-    assert_eq!(
-        registry.engines[0].executable,
-        PathBuf::from(env!("CARGO_BIN_EXE_ara"))
-    );
+    assert_eq!(registry.engines[0].executable, cli_executable());
     hub.cli(&["hub", "unregister-engine", "--no-start"]);
     assert!(
         ara_hub_service::Registry::load(&hub.config())
@@ -160,8 +163,10 @@ fn installation_registration_does_not_start_a_service_and_reuses_one_when_runnin
         "unregistering another build must not replace/remove this one"
     );
     assert_eq!(
-        fs::canonicalize(&registry.engines[0].executable).expect("registered alternate"),
-        fs::canonicalize(&alternate).expect("alternate executable")
+        registry.engines[0].executable,
+        ara_hub_service::normalized_path(
+            &fs::canonicalize(&alternate).expect("alternate executable")
+        )
     );
     assert!(ara_rpc::DaemonInfo::read(&hub.config().join("hub")).is_none());
     hub.cli(&["hub", "register-engine", "--no-start"]);
@@ -626,7 +631,7 @@ fn registry_metadata_subscriptions_templates_and_global_install_configs() {
     let config = hub.cli(&["hub", "install-mcp", "--client", "claude"]);
     assert_eq!(
         config["mcpServers"]["ara"]["command"],
-        env!("CARGO_BIN_EXE_ara")
+        json!(cli_executable())
     );
     assert_eq!(config["mcpServers"]["ara"]["args"], json!(["mcp"]));
     let codex = Command::new(env!("CARGO_BIN_EXE_ara"))
@@ -635,6 +640,6 @@ fn registry_metadata_subscriptions_templates_and_global_install_configs() {
         .output()
         .expect("config");
     assert!(String::from_utf8_lossy(&codex.stdout).contains("[mcp_servers.ara]"));
-    let quoted = serde_json::to_string(env!("CARGO_BIN_EXE_ara")).expect("quoted path");
+    let quoted = serde_json::to_string(&cli_executable()).expect("quoted path");
     assert!(String::from_utf8_lossy(&codex.stdout).contains(&format!("command = {quoted}")));
 }

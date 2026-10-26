@@ -19,7 +19,14 @@ mod tests {
 
     #[test]
     fn engine_zip_ships_only_the_player_pdb_with_the_original_pin_hash() {
-        let root = ara_update::testing::scratch("release-player-symbols");
+        let scratch = ara_update::testing::scratch("release-player-symbols");
+        // PID reuse can leave the previous invocation's engine directory here.
+        fs::create_dir_all(scratch.join("engine")).expect("previous-run output");
+        let fixture = tempfile::Builder::new()
+            .prefix("payload-")
+            .tempdir_in(scratch)
+            .expect("fresh symbols fixture");
+        let root = fixture.path();
         let engine = root.join("engine");
         let symbols = root.join("symbols");
         fs::create_dir(&engine).expect("engine");
