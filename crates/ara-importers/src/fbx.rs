@@ -202,9 +202,12 @@ impl Importer for FbxImporter {
                 .into_par_iter()
                 .map(|(name, vertices, indices, deformed, materials)| {
                     cancellation.check()?;
+                    let virtual_timer =
+                        metrics.map(|m| m.start(ara_asset::ImportStage::VirtualGeometry));
                     let (virtual_artifact, virtual_metadata) = crate::virtual_geometry::cook(
                         &name, &vertices, &indices, &settings, deformed, materials,
                     )?;
+                    drop(virtual_timer);
                     let artifact = Artifact {
                         name: name.clone(),
                         kind: ArtifactKind::Mesh,

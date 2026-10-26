@@ -103,6 +103,39 @@ fn static_chains_reach_the_coarse_goal_with_useful_monotone_levels() {
 }
 
 #[test]
+fn independent_lod_solves_keep_exact_bytes_across_worker_budgets() {
+    let serial = rayon::ThreadPoolBuilder::new()
+        .num_threads(1)
+        .build()
+        .unwrap();
+    let parallel = rayon::ThreadPoolBuilder::new()
+        .num_threads(4)
+        .build()
+        .unwrap();
+    let (mut vertices, indices) = sphere();
+    for deformed in [false, true] {
+        if deformed {
+            for vertex in &mut vertices {
+                vertex.weights[0] = 1.0;
+            }
+        }
+        for lod_count in [1, 4, 8] {
+            let settings = MeshSettings {
+                lod_count,
+                ..MeshSettings::default()
+            };
+            let expected = serial
+                .install(|| cook_mesh(&vertices, &indices, &settings))
+                .unwrap();
+            let actual = parallel
+                .install(|| cook_mesh(&vertices, &indices, &settings))
+                .unwrap();
+            assert_eq!(actual, expected, "deformed={deformed}, LOD cap={lod_count}");
+        }
+    }
+}
+
+#[test]
 fn unindexed_static_geometry_gets_a_chain_instead_of_a_single_locked_lod() {
     let n = 17u32;
     let mut vertices = Vec::new();

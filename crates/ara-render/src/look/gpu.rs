@@ -62,6 +62,8 @@ pub(crate) struct Pipelines {
     pub gi_gather: Pipeline,
     pub ssr_pyramid: Pipeline,
     pub ssr_trace: Pipeline,
+    pub horizon_sun: Pipeline,
+    pub horizon_sky: Pipeline,
 }
 
 /// What the sky LUTs (`aerosols`) and the sky IBL (sun and sky) were computed for.
@@ -108,6 +110,8 @@ pub(crate) struct LookGpu {
     pub cascades: Option<super::cascades::Cascades>,
     /// Cached local-light shadows (`Quality::local_shadows`).
     pub local: Option<super::local::LocalMap>,
+    /// Heightfield horizon shadows and sky visibility (`Quality::horizon`).
+    pub horizon: Option<super::horizon::Horizon>,
     /// Idle host staging for probe records, reused.
     pub probe_staging: Vec<super::gi::ProbeStaging>,
     /// Probe records uploaded for the next frame's `GI.Scatter`: staging, count.
@@ -129,6 +133,8 @@ pub(crate) struct LookIds {
     pub probe_writes: Vec<ResourceId>,
     /// The local-shadow atlas.
     pub local: Option<ResourceId>,
+    /// The horizon's capture, sun and sky visibility (`look::horizon`).
+    pub horizon: Option<[ResourceId; 3]>,
 }
 
 impl LookIds {
@@ -172,6 +178,8 @@ impl LookGpu {
             gi_gather: load("look_gi_gather")?,
             ssr_pyramid: load("look_ssr_pyramid")?,
             ssr_trace: load("look_ssr_trace")?,
+            horizon_sun: load("look_horizon_sun")?,
+            horizon_sky: load("look_horizon_sky")?,
         };
         let frame = gpu.create_buffer(
             std::mem::size_of::<LookFrame>() as u64,
@@ -214,6 +222,7 @@ impl LookGpu {
             far: None,
             cascades: None,
             local: None,
+            horizon: None,
             probe_staging: Vec::new(),
             probe_writes: Vec::new(),
         })
@@ -404,6 +413,14 @@ impl LookGpu {
                 .local
                 .as_ref()
                 .map(|local| graph.import(Resource::Image(local.atlas), local.state)),
+            horizon: self.horizon.as_ref().map(|h| {
+                let mut import = |image, state| graph.import(Resource::Image(image), state);
+                [
+                    import(h.depth, h.states[0]),
+                    import(h.sun, h.states[1]),
+                    import(h.sky, h.states[2]),
+                ]
+            }),
             probe_writes: self
                 .probe_writes
                 .iter()
@@ -456,6 +473,11 @@ impl LookGpu {
         }
         if let (Some(local), Some(id)) = (&mut self.local, ids.local) {
             local.state = final_states[id.0];
+        }
+        if let (Some(horizon), Some(ids)) = (&mut self.horizon, ids.horizon) {
+            for (state, id) in horizon.states.iter_mut().zip(ids) {
+                *state = final_states[id.0];
+            }
         }
         if let Some(cascades) = &mut self.cascades {
             for (state, id) in cascades.states.iter_mut().zip(&ids.cascades) {

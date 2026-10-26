@@ -4,6 +4,7 @@ mod create;
 #[cfg(test)]
 mod diagnostics_tests;
 mod environment;
+mod presentation;
 mod resources;
 pub use resources::image_barrier;
 pub(crate) use resources::{BufferAllocation, ImageAllocation};
@@ -14,7 +15,7 @@ use serde::Serialize;
 use std::{
     ffi::{CStr, c_void},
     sync::{
-        Mutex,
+        Arc, Mutex,
         atomic::{AtomicUsize, Ordering},
     },
 };
@@ -196,9 +197,30 @@ pub struct DeviceInfo {
     pub identity: crate::shared::DeviceIdentity,
 }
 
-/// Owns the instance, queues, allocations and validation callback lifetime.
+/// Owns queue recording and allocations, retaining a shared native device lifetime.
 pub struct Gpu {
     host_waits: super::waits::Counter,
+    shared: Arc<NativeDevice>,
+    presentation_only: bool,
+    /// Native graphics queue owned by this recording context.
+    pub graphics: vk::Queue,
+    /// Scene queue; may alias graphics on devices with one graphics queue.
+    pub scene_graphics: vk::Queue,
+    /// Native dedicated compute queue (unused by presentation-only contexts).
+    pub compute: vk::Queue,
+    /// Graphics-family recording pool, exclusive to this context.
+    pub graphics_pool: vk::CommandPool,
+    /// Compute-family recording pool, exclusive to this context.
+    pub compute_pool: vk::CommandPool,
+    buffers: Vec<BufferAllocation>,
+    buffer_memory: buffer_memory::BufferMemory,
+    images: Vec<ImageAllocation>,
+    structures: Vec<vk::AccelerationStructureKHR>,
+}
+
+/// Immutable native device lifetime shared by isolated startup recording owners.
+/// Queue submission and allocation ownership remain in each [`Gpu`].
+pub struct NativeDevice {
     /// Loader lifetime; must outlive all native function tables.
     pub _entry: Entry,
     /// Owned Vulkan instance for native integrations.
@@ -207,17 +229,6 @@ pub struct Gpu {
     pub physical: vk::PhysicalDevice,
     /// Owned logical device; unsafe native calls must respect engine ownership.
     pub device: ash::Device,
-    /// Native graphics queue for UI and presentation integrations.
-    pub graphics: vk::Queue,
-    /// A second queue in the same family when available; asynchronous scene work
-    /// uses it so a UI fence never waits behind an unfinished scene submission.
-    pub scene_graphics: vk::Queue,
-    /// Native dedicated compute queue.
-    pub compute: vk::Queue,
-    /// Graphics-family recording pool.
-    pub graphics_pool: vk::CommandPool,
-    /// Compute-family recording pool.
-    pub compute_pool: vk::CommandPool,
     /// Optional RT extension dispatch table; inspect info.ray_tracing before use.
     pub acceleration: ash::khr::acceleration_structure::Device,
     /// Optional mesh-shader dispatch table; gated by info.mesh_shading.
@@ -231,10 +242,13 @@ pub struct Gpu {
     memory: vk::PhysicalDeviceMemoryProperties,
     debug: ash::ext::debug_utils::Instance,
     messenger: vk::DebugUtilsMessengerEXT,
-    buffers: Vec<BufferAllocation>,
-    buffer_memory: buffer_memory::BufferMemory,
-    images: Vec<ImageAllocation>,
-    structures: Vec<vk::AccelerationStructureKHR>,
+}
+
+impl std::ops::Deref for Gpu {
+    type Target = NativeDevice;
+    fn deref(&self) -> &Self::Target {
+        &self.shared
+    }
 }
 
 impl Gpu {
@@ -251,6 +265,10 @@ impl Gpu {
     /// Allocate one primary command buffer for the selected queue family.
     pub fn commands(&self, compute: bool) -> Result<vk::CommandBuffer> {
         crate::cpu_scope!("GPU.allocate_commands");
+        anyhow::ensure!(
+            !compute || !self.presentation_only,
+            "Loading context is graphics-only"
+        );
         // SAFETY: Pools belong to their respective queue families and outlive commands.
         unsafe {
             Ok(self.device.allocate_command_buffers(
@@ -320,7 +338,12 @@ impl Drop for Gpu {
     fn drop(&mut self) {
         // SAFETY: Last owner; wait for all queues before destroying children, then parents.
         unsafe {
-            let _ = self.device.device_wait_idle();
+            // The loading wrapper resolves its own timeline, and raw presentation
+            // completes before teardown. Waiting this shared queue here would
+            // also wait for an unrelated game owner on single-queue adapters.
+            if !self.presentation_only {
+                let _ = self.wait_owned_queues();
+            }
             for structure in &self.structures {
                 self.acceleration
                     .destroy_acceleration_structure(*structure, None);
@@ -335,10 +358,20 @@ impl Drop for Gpu {
                 self.device.free_memory(buffer.memory, None);
             }
             for memory in self.buffer_memory.drain() {
-                self.device.free_memory(memory, None);
+                self.shared.device.free_memory(memory, None);
             }
             self.device.destroy_command_pool(self.compute_pool, None);
             self.device.destroy_command_pool(self.graphics_pool, None);
+        }
+    }
+}
+
+impl Drop for NativeDevice {
+    fn drop(&mut self) {
+        // SAFETY: Every recording/allocation owner and its workers have gone;
+        // their queues completed before their pools and resources were released.
+        unsafe {
+            let _ = self.device.device_wait_idle();
             self.device.destroy_device(None);
             self.debug
                 .destroy_debug_utils_messenger(self.messenger, None);

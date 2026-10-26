@@ -1,0 +1,45 @@
+// Heightfield horizon (look/horizon.rs): a top-down capture of the content's
+// landforms, the sun's visible share from each texel and its sky visibility.
+// Include after look.slangh.
+
+// Heightfield coordinates (0..1) of world `p`.
+float2 horizonUv(Look l,float3 p){return (p.xz-l.horizonRect.xy)/l.horizonRect.zw;}
+// The heightfield's top-surface height at `uv`; -1e30 where nothing was captured.
+float horizonTop(Look l,float2 uv){
+    int res=int(l.horizonImages.w);int2 t=clamp(int2(uv*res),0,res-1);
+    float d=textures[NonUniformResourceIndex(l.horizonImages.x)].Load(int3(t,0)).r;
+    return d>0?l.horizonHeight.x*d+l.horizonHeight.y:-1e30;
+}
+// The sun map texel at `p` (look-horizon.slang): x the sun's visible share, y the top
+// surface height; `p` lies on that surface (not under a roof or canopy the horizon
+// does not describe) when it is at most the tolerance below it. One fetch.
+float2 horizonTexel(Look l,float3 p,out float2 uv){
+    uv=horizonUv(l,p);if(any(uv<0)||any(uv>1))return float2(1,-1e30);
+    return textures[NonUniformResourceIndex(l.horizonImages.y)].SampleLevel(samplers[0],uv,0).xy;
+}
+// The sun's visible share at `p` past distant landforms; 1 off or under the heightfield.
+float horizonSun(Look l,float3 p){
+    if(l.horizonImages.y==0)return 1;
+    float2 uv;float2 t=horizonTexel(l,p,uv);
+    return p.y<t.y-l.horizonHeight.z?1:t.x;
+}
+// Cosine-weighted sky visibility at `p` under distant landforms; 1 off or under the
+// heightfield, or before the sun map exists.
+float horizonSky(Look l,float3 p){
+    if(l.horizonImages.z==0||l.horizonImages.y==0)return 1;
+    float2 uv;float2 t=horizonTexel(l,p,uv);
+    if(p.y<t.y-l.horizonHeight.z)return 1;
+    return textures[NonUniformResourceIndex(l.horizonImages.z)].SampleLevel(samplers[0],uv,0).r;
+}
+// Steepest rise (tangent of elevation) from heightfield texel `uv` (height `h`)
+// towards `dir` (unit, world x/z), marching geometrically from 1.5 capture texels
+// to the heightfield's far side.
+float horizonRise(Look l,float2 uv,float h,float2 dir,float growth){
+    float texel=max(l.horizonRect.z,l.horizonRect.w)/float(l.horizonImages.w);
+    float reach=length(l.horizonRect.zw),rise=-1e30;
+    for(float t=1.5*texel;t<reach;t*=growth){
+        float2 q=uv+dir*t/l.horizonRect.zw;if(any(q<0)||any(q>1))break;
+        rise=max(rise,(horizonTop(l,q)-h-0.1)/t);
+    }
+    return rise;
+}

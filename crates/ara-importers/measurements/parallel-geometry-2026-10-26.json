@@ -1,0 +1,500 @@
+{
+  "cacheCloseDiagnostic": {
+    "actions": 4,
+    "attribution": "Small replay did not reproduce multisecond storage waits; no Defender attribution",
+    "stages": {
+      "cache.install.close": {
+        "count": 29,
+        "maxMs": 0.0601,
+        "sumMs": 0.9565999999999999,
+        "threadCpuMs": 0
+      },
+      "cache.install.persist": {
+        "count": 29,
+        "maxMs": 101.3062,
+        "sumMs": 117.8537,
+        "threadCpuMs": 46.875
+      },
+      "cache.install.write": {
+        "count": 29,
+        "maxMs": 1.1694,
+        "sumMs": 6.5273,
+        "threadCpuMs": 0
+      }
+    },
+    "threads": 4,
+    "wallMs": 116.2444
+  },
+  "coldProfile": {
+    "artifactReferences": 1459,
+    "assets": 115,
+    "binaryHashes": {
+      "cli": "119327897F0F36FCE048960563B8130172D04DB89B1B918F277B99A527604BFE",
+      "player": "946B7D03E2BDA216AD4282FDD9D1934FE40F501E6D760BEFF135AF24F0759D29",
+      "worker": "40A71A7E2DD71C7A33A06F1D108D9AAC7BEB383E6A290C349ACA1E63F55298FC"
+    },
+    "cacheInstallOverFiveSeconds": 51,
+    "classification": "Loaded storage outlier; retained, never used for a speedup ratio",
+    "createToReadyMs": 60438.713500000005,
+    "deviceInitializationSumMs": 1027.9194,
+    "differentActionKeys": 0,
+    "differentArtifacts": 0,
+    "fallbacks": 0,
+    "gpuWorkers": 97,
+    "loadAfter": {
+      "availableMemoryKiB": 4169672,
+      "cpuPercent": 20,
+      "dFreeBytes": 18564161536,
+      "utc": "2026-10-26T02:14:53.7232990Z"
+    },
+    "loadBefore": {
+      "availableMemoryKiB": 4892196,
+      "cpuPercent": 12,
+      "dFreeBytes": 20166242304,
+      "utc": "2026-10-26T02:13:52.8176646Z"
+    },
+    "openToReadyMs": 55555.830200000004,
+    "run": "cold-mesh-profile-a0-outpost",
+    "totalTrackedImportCpuMs": 74484.375,
+    "traceStageElapsedSums": {
+      "action.hash": {
+        "count": 345,
+        "maxMs": 17.595,
+        "sumMs": 892.9388999999996
+      },
+      "asset.published": {
+        "count": 115,
+        "maxMs": null,
+        "sumMs": 0
+      },
+      "cache.install": {
+        "count": 2483,
+        "maxMs": 9993.0419,
+        "sumMs": 630509.3633000001
+      },
+      "cache.install.create": {
+        "count": 2132,
+        "maxMs": 2693.0937999999996,
+        "sumMs": 21611.479400000015
+      },
+      "cache.install.persist": {
+        "count": 2132,
+        "maxMs": 8881.3531,
+        "sumMs": 444689.3591
+      },
+      "cache.install.read": {
+        "count": 2486,
+        "maxMs": 2553.4179999999997,
+        "sumMs": 26717.735200000043
+      },
+      "cache.install.write": {
+        "count": 2132,
+        "maxMs": 9838.7139,
+        "sumMs": 137048.76219999976
+      },
+      "cache.load": {
+        "count": 915,
+        "maxMs": 109.441,
+        "sumMs": 436.6089000000002
+      },
+      "cache.object.link": {
+        "count": 1099,
+        "maxMs": 1078.7688,
+        "sumMs": 5268.9339999999975
+      },
+      "cache.object.memo_read": {
+        "count": 1402,
+        "maxMs": 1068.6732000000002,
+        "sumMs": 3064.482999999993
+      },
+      "cache.reuse_object": {
+        "count": 1099,
+        "maxMs": null,
+        "sumMs": 0
+      },
+      "cache.store": {
+        "count": 670,
+        "maxMs": 10897.1256,
+        "sumMs": 660328.4723999999
+      },
+      "hash.blake3": {
+        "count": 6680,
+        "maxMs": 153.8203,
+        "sumMs": 1590.6257000000162
+      },
+      "ipc.decode": {
+        "count": 1093,
+        "maxMs": 6.0823,
+        "sumMs": 249.6019999999989
+      },
+      "ipc.encode": {
+        "count": 1108,
+        "maxMs": 130.4653,
+        "sumMs": 918.9965999999995
+      },
+      "ipc.read": {
+        "count": 1108,
+        "maxMs": 9986.0278,
+        "sumMs": 190315.6891000001
+      },
+      "ipc.write": {
+        "count": 1106,
+        "maxMs": 1021.0762,
+        "sumMs": 7882.485900000002
+      },
+      "sidecar.read": {
+        "count": 230,
+        "maxMs": 0.0492,
+        "sumMs": 4.468000000000001
+      },
+      "source.snapshot": {
+        "count": 230,
+        "maxMs": 13232.7215,
+        "sumMs": 758754.5344000001
+      },
+      "texture.backend_prepare": {
+        "count": 1,
+        "maxMs": 2065.6312,
+        "sumMs": 2065.6312
+      },
+      "texture.gpu": {
+        "count": 108,
+        "maxMs": null,
+        "sumMs": 0
+      },
+      "texture.identity_lookup": {
+        "count": 1,
+        "maxMs": 235.4738,
+        "sumMs": 235.4738
+      },
+      "texture.service.exit": {
+        "count": 1,
+        "maxMs": null,
+        "sumMs": 0
+      },
+      "texture.service.initialize": {
+        "count": 2,
+        "maxMs": 690.5991,
+        "sumMs": 1027.9194
+      },
+      "texture.service.start": {
+        "count": 1,
+        "maxMs": null,
+        "sumMs": 0
+      },
+      "worker.discovery_batch": {
+        "count": 9,
+        "maxMs": null,
+        "sumMs": 0
+      },
+      "worker.import": {
+        "count": 115,
+        "maxMs": 10063.3565,
+        "sumMs": 176758.04189999992
+      },
+      "worker.queue": {
+        "count": 140,
+        "maxMs": 47890.5147,
+        "sumMs": 2834841.2303000013
+      },
+      "worker.spawn": {
+        "count": 140,
+        "maxMs": null,
+        "sumMs": 0
+      },
+      "worker.stages": {
+        "count": 115,
+        "maxMs": null,
+        "sumMs": 0
+      }
+    },
+    "workerStageElapsedSums": {
+      "compressionMs": 35541.12539999998,
+      "decodeMs": 7059.2294999999995,
+      "lodsMs": 12085.833999999997,
+      "meshMs": 19643.015799999994,
+      "mipsMs": 3035.3469,
+      "parseMs": 25.125399999999992,
+      "validationMs": 201.87969999999993
+    }
+  },
+  "date": "2026-10-26",
+  "definition": "Diagnostic geometry passes with verified cached textures; no encoding/stores/device; not fresh-project end-to-end latency",
+  "freshProjectPairs": "Pending separate owner quiet slot; no cold target or end-to-end speedup claim",
+  "load": "Other agents active; no owned compilation during timers; GPU FIFO lock used",
+  "profile": "dev; own code opt1; dependencies opt3; CARGO_BUILD_JOBS=2",
+  "runs": [
+    {
+      "artifactReferences": 1441,
+      "binarySha256": "303F87F068FB230E4E4006BBDD2C106715DF9CE5B33A374A029A52E5320B6726",
+      "cookMs": 19073.284500000012,
+      "differentActionKeys": 0,
+      "exactProductionOutputComparisons": 101,
+      "models": 101,
+      "rawEvidence": "target/ara-dev/import-speed/geometry-control.json",
+      "slowestModels": [
+        {
+          "cookMs": 1191.3271,
+          "source": "assets/third_party/quiver_tree_01/quiver_tree_01_1k.gltf"
+        },
+        {
+          "cookMs": 1148.7901,
+          "source": "assets/third_party/dead_tree_trunk/dead_tree_trunk_1k.gltf"
+        },
+        {
+          "cookMs": 972.3190000000001,
+          "source": "assets/third_party/namaqualand_boulder_02/namaqualand_boulder_02_1k.gltf"
+        },
+        {
+          "cookMs": 941.8457999999999,
+          "source": "assets/third_party/small_lpg_tank/small_lpg_tank_1k.gltf"
+        },
+        {
+          "cookMs": 749.9431,
+          "source": "assets/third_party/old_military_compressor/old_military_compressor_1k.gltf"
+        }
+      ],
+      "stageElapsedSums": {
+        "compressionMs": 0,
+        "decodeMs": 0,
+        "lodAreaMs": 22.4006,
+        "lodPreparationMs": 1712.1719000000005,
+        "lodSimplificationMs": 7747.4276,
+        "lodsMs": 9768.912200000002,
+        "meshMs": 15847.7843,
+        "mipsMs": 0,
+        "parseMs": 21.890500000000003,
+        "textureCacheHits": 343,
+        "textureCooks": 0,
+        "virtualGeometryMs": 5875.356099999997
+      },
+      "threads": 4,
+      "variant": "control"
+    },
+    {
+      "artifactReferences": 1441,
+      "binarySha256": "CA90859314768079A63F0DB1DD118921342A150B3A22782387A9E8C0B3D20FF0",
+      "cookMs": 12771.2687,
+      "differentActionKeys": 0,
+      "exactProductionOutputComparisons": 101,
+      "models": 101,
+      "rawEvidence": "target/ara-dev/import-speed/geometry-candidate.json",
+      "slowestModels": [
+        {
+          "cookMs": 825.4547,
+          "source": "assets/third_party/quiver_tree_01/quiver_tree_01_1k.gltf"
+        },
+        {
+          "cookMs": 598.0572,
+          "source": "assets/third_party/dead_tree_trunk/dead_tree_trunk_1k.gltf"
+        },
+        {
+          "cookMs": 594.904,
+          "source": "assets/third_party/namaqualand_boulder_02/namaqualand_boulder_02_1k.gltf"
+        },
+        {
+          "cookMs": 578.9609999999999,
+          "source": "assets/third_party/street_lamp_01/street_lamp_01_1k.gltf"
+        },
+        {
+          "cookMs": 565.9865,
+          "source": "assets/third_party/modular_electricity_poles/modular_electricity_poles_1k.gltf"
+        }
+      ],
+      "stageElapsedSums": {
+        "compressionMs": 0,
+        "decodeMs": 0,
+        "lodAreaMs": 18.230099999999997,
+        "lodPreparationMs": 1865.0412999999996,
+        "lodSimplificationMs": 8792.533300000001,
+        "lodsMs": 8830.014400000002,
+        "meshMs": 11406.269099999998,
+        "mipsMs": 0,
+        "parseMs": 18.088999999999988,
+        "textureCacheHits": 343,
+        "textureCooks": 0,
+        "virtualGeometryMs": 6564.412199999999
+      },
+      "threads": 4,
+      "variant": "parallel"
+    },
+    {
+      "artifactReferences": 1441,
+      "binarySha256": "70A61BB9823B0BC0097BA3DF2F33852AA7CF2D4CF01E5134188D61F7CB42630A",
+      "cookMs": 12531.489800000001,
+      "differentActionKeys": 0,
+      "exactProductionOutputComparisons": 101,
+      "models": 101,
+      "rawEvidence": "target/ara-dev/import-speed/geometry-lookup.json",
+      "slowestModels": [
+        {
+          "cookMs": 835.2609,
+          "source": "assets/third_party/quiver_tree_01/quiver_tree_01_1k.gltf"
+        },
+        {
+          "cookMs": 639.6373,
+          "source": "assets/third_party/dead_tree_trunk/dead_tree_trunk_1k.gltf"
+        },
+        {
+          "cookMs": 632.004,
+          "source": "assets/third_party/modular_electricity_poles/modular_electricity_poles_1k.gltf"
+        },
+        {
+          "cookMs": 574.9992000000001,
+          "source": "assets/third_party/namaqualand_boulder_02/namaqualand_boulder_02_1k.gltf"
+        },
+        {
+          "cookMs": 520.4725,
+          "source": "assets/third_party/quiver_tree_02/quiver_tree_02_1k.gltf"
+        }
+      ],
+      "stageElapsedSums": {
+        "compressionMs": 0,
+        "decodeMs": 0,
+        "lodAreaMs": 20.291399999999996,
+        "lodPreparationMs": 1479.9946999999997,
+        "lodSimplificationMs": 8556.575600000004,
+        "lodsMs": 8409.067400000002,
+        "meshMs": 10785.802699999998,
+        "mipsMs": 0,
+        "parseMs": 16.844800000000014,
+        "textureCacheHits": 343,
+        "textureCooks": 0,
+        "virtualGeometryMs": 6504.178799999999
+      },
+      "threads": 4,
+      "variant": "lookup"
+    },
+    {
+      "artifactReferences": 1441,
+      "binarySha256": "630E54E13A96A5DFB5086C3A2FA137F6563B6B5DFD7E49A93582D7972A113E42",
+      "cookMs": 23932.266800000005,
+      "differentActionKeys": 0,
+      "exactProductionOutputComparisons": 101,
+      "models": 101,
+      "rawEvidence": "target/ara-dev/import-speed/geometry-final-1.json",
+      "slowestModels": [
+        {
+          "cookMs": 2107.6351999999997,
+          "source": "assets/third_party/quiver_tree_01/quiver_tree_01_1k.gltf"
+        },
+        {
+          "cookMs": 2008.1663,
+          "source": "assets/third_party/modular_electricity_poles/modular_electricity_poles_1k.gltf"
+        },
+        {
+          "cookMs": 1091.5858,
+          "source": "assets/third_party/quiver_tree_02/quiver_tree_02_1k.gltf"
+        },
+        {
+          "cookMs": 1076.2396999999999,
+          "source": "assets/third_party/overhead_crane/overhead_crane_1k.gltf"
+        },
+        {
+          "cookMs": 930.8285,
+          "source": "assets/third_party/dead_tree_trunk/dead_tree_trunk_1k.gltf"
+        }
+      ],
+      "stageElapsedSums": {
+        "compressionMs": 0,
+        "decodeMs": 0,
+        "lodAreaMs": 31.439700000000002,
+        "lodPreparationMs": 1497.3925,
+        "lodSimplificationMs": 8059.213900000002,
+        "lodsMs": 9876.436099999999,
+        "meshMs": 22474.391199999995,
+        "mipsMs": 0,
+        "parseMs": 17.431899999999995,
+        "textureCacheHits": 343,
+        "textureCooks": 0,
+        "virtualGeometryMs": 6286.797899999999
+      },
+      "threads": 1,
+      "variant": "final-one"
+    },
+    {
+      "artifactReferences": 1441,
+      "binarySha256": "630E54E13A96A5DFB5086C3A2FA137F6563B6B5DFD7E49A93582D7972A113E42",
+      "cookMs": 11038.251199999993,
+      "differentActionKeys": 0,
+      "exactProductionOutputComparisons": 101,
+      "models": 101,
+      "rawEvidence": "target/ara-dev/import-speed/geometry-final-4.json",
+      "slowestModels": [
+        {
+          "cookMs": 697.2688999999999,
+          "source": "assets/third_party/quiver_tree_01/quiver_tree_01_1k.gltf"
+        },
+        {
+          "cookMs": 600.2393999999999,
+          "source": "assets/third_party/modular_electricity_poles/modular_electricity_poles_1k.gltf"
+        },
+        {
+          "cookMs": 594.8896,
+          "source": "assets/third_party/namaqualand_boulder_02/namaqualand_boulder_02_1k.gltf"
+        },
+        {
+          "cookMs": 558.4642,
+          "source": "assets/third_party/namaqualand_boulder_05/namaqualand_boulder_05_1k.gltf"
+        },
+        {
+          "cookMs": 530.1327,
+          "source": "assets/third_party/old_military_compressor/old_military_compressor_1k.gltf"
+        }
+      ],
+      "stageElapsedSums": {
+        "compressionMs": 0,
+        "decodeMs": 0,
+        "lodAreaMs": 17.4641,
+        "lodPreparationMs": 1359.3007,
+        "lodSimplificationMs": 7595.029600000001,
+        "lodsMs": 7593.340200000001,
+        "meshMs": 9909.725200000006,
+        "mipsMs": 0,
+        "parseMs": 14.589500000000001,
+        "textureCacheHits": 343,
+        "textureCooks": 0,
+        "virtualGeometryMs": 5729.907900000001
+      },
+      "threads": 4,
+      "variant": "final-four"
+    }
+  ],
+  "sourceBase": "63e07a1d7e8533b3df0b6d3f15e7c5b1b739a71c",
+  "sourceHashesSha256": {
+    "crates/ara-asset/src/cache/install.rs": "7F62CD45459CFA0F7480207D36CD0CD702187DB5D667A134C8E26B4B9B8A3F12",
+    "crates/ara-asset/src/metrics.rs": "886D65862B4490582CBA681EC2F879C4B0A6B217AB5FBA08B360D0B9118FC046",
+    "crates/ara-importers/examples/geometry_replay.rs": "8DF86CDD82BD8CCE43B8F4A1CD8E376F917634B28D46AE6BA7F31C99276A8EE6",
+    "crates/ara-importers/src/fbx.rs": "653B1B86CD8A5B19B89968D638509DC80CF818D9C3FC80DDCC1796133F20988D",
+    "crates/ara-importers/src/gltf.rs": "F5A0FAAE2E34A9861413A77E8D22F479378BD59656AF1B4C5EDA9EFF848360E9",
+    "crates/ara-importers/src/mesh.rs": "B69A4E8E8D372BE05F6F3A97EB8FE49063517927FFFAAA613898514C10BDA85A",
+    "crates/ara-importers/src/mesh/lods.rs": "983584F2816FD30323AD52A86B5D93528DE40EAC82331D18750131FE5A9DC47C",
+    "crates/ara-importers/src/mesh/lods/topology.rs": "A50E1C4CD5D6883B485321956F0DCEAFABCF3CA5AF03D45013BD9F732EB1448E",
+    "crates/ara-importers/tests/lods.rs": "5055E8B8F0B6468EABBAD148916CFB54E3A329501EAB84B8062602C1119A6407"
+  },
+  "validation": {
+    "customWorkerHarnesses": "worker_limit and worker_fairness passed",
+    "fmt": "pass",
+    "gpuProtocol": "one explicit GPU-locked test passed; six forced actual encodes across three presets; helper lease exit and warm device-free identity lookup",
+    "ordinaryLibtestIgnored": 3,
+    "ordinaryLibtestPassed": 69,
+    "sampleVersions": "pass; no regeneration/version bump",
+    "shaderRecook": "baseline cohort: 0 cooked, unchanged artifacts reused",
+    "sourceByteComparisons": "101 models at one/four threads against production ImportOutput",
+    "strictClippy": "ara-asset ara-importers ara-import-worker --all-targets -D warnings",
+    "workerArtifacts": {
+      "cliSha256": "119327897F0F36FCE048960563B8130172D04DB89B1B918F277B99A527604BFE",
+      "gpuTest": "D:/AraBuild/ara-dev-infra-target\\debug\\deps\\gpu-c1c66621a795055e.exe",
+      "profile": "dev; dependencies opt3; own code opt1; debug GPU validation",
+      "roots": [
+        "ara-asset",
+        "ara-importers",
+        "ara-import-worker"
+      ],
+      "sourceDirty": true,
+      "sourceHead": "63e07a1d7e8533b3df0b6d3f15e7c5b1b739a71c",
+      "worker": "D:/AraBuild/ara-dev-infra-target/import-speed/parallel-lod-bin/ara-import-worker.exe",
+      "workerSha256": "038B917371160C5C253A37B6B71DD5042736178AC294F7BA16B5CBF4A8BF6AD9"
+    }
+  }
+}

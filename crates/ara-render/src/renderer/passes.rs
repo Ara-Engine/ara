@@ -23,6 +23,8 @@ enum Recipe {
     FarShadow,
     /// Local-light shadow faces (`look::local`) that must be redrawn.
     LocalShadow,
+    /// The horizon's heightfield capture (`look::horizon`) from native pass `.0`.
+    HorizonCapture(usize),
     GBuffer,
     Tile,
     Lighting,
@@ -86,6 +88,9 @@ impl Renderer {
             local.cache.observe(all, bounds);
         }
         (self.look.far, self.look.cascades, self.look.local) = (far, cascades, local);
+        if all && let Some(horizon) = &mut self.look.horizon {
+            horizon.invalidate();
+        }
         // Cascades that wait for their redraw keep their drawn matrices in the
         // frame record, so the record is uploaded after this plan.
         let cascade_draw = match &mut self.look.cascades {
@@ -135,7 +140,7 @@ impl Renderer {
         // Content and views are created with rows for them (`shadow_slots`); this
         // grows them only after a quality change, never on an edit's first patch.
         if self.native.is_some() {
-            self.ensure_native_shadow_capacity(patch_slots)?;
+            self.ensure_native_shadow_capacity(self.shadow_slots())?;
         }
         let mut cascade_patches = Vec::with_capacity(cascade_draw.len());
         for draw in &cascade_draw {
@@ -209,6 +214,44 @@ impl Renderer {
             self.look.local = Some(local);
             result?;
         }
+        // Heightfield horizon (look::horizon): the capture once per content, culled
+        // into the last shadow slot; the sun visibility when the sun moves, the sky
+        // visibility once per capture. All of it lands only with a completed frame.
+        let mut horizon_capture = None;
+        let (mut horizon_sun, mut horizon_sky) = (false, false);
+        let held = self.look.horizon.as_ref().map(|h| {
+            let sun = crate::look::horizon::sun_key(self.content.sun_direction);
+            (
+                h.capture,
+                h.resolution,
+                h.frame,
+                h.sun_key != Some(sun),
+                !h.sky_done,
+            )
+        });
+        if let (Some((held, resolution, buffer, sun, sky)), true) = (held, self.native.is_some()) {
+            (horizon_sun, horizon_sky) = (sun, sky);
+            if held.is_none() {
+                (horizon_sun, horizon_sky) = (false, false);
+                if let Some(bounds) = self.native_content_bounds() {
+                    let capture = crate::look::horizon::Capture::new(bounds);
+                    let mut capture_frame = frame;
+                    capture_frame.shadows[0] = capture.matrix;
+                    self.gpu
+                        .upload_queued(buffer, bytemuck::bytes_of(&capture_frame))?;
+                    let slots = self.shadow_slots();
+                    self.reserve_native_shadow_passes(slots)?;
+                    let pass = self.cull_native_landforms(
+                        slots - 1,
+                        capture.matrix,
+                        resolution,
+                        crate::look::horizon::MIN_RADIUS,
+                    )?;
+                    horizon_capture = Some((pass, capture));
+                    (horizon_sun, horizon_sky) = (true, true);
+                }
+            }
+        }
         self.look.ensure(&mut self.gpu)?;
         let (sampled, storage) = self.look.indices();
         // Exposure snaps to its meter on a reset unless a host seeded it, and
@@ -250,6 +293,17 @@ impl Renderer {
             look_frame.gi_gather = self.look.gather_indices();
         }
         look_frame.terrain[0] = self.look.quality.terrain_detail;
+        if let Some(rows) = self
+            .look
+            .horizon
+            .as_ref()
+            .and_then(|h| h.rows(horizon_capture.map(|(_, c)| c), horizon_sun, horizon_sky))
+        {
+            look_frame.horizon_rect = rows.rect;
+            look_frame.horizon_height = rows.height;
+            look_frame.horizon_images = rows.images;
+            look_frame.horizon_storage = rows.storage;
+        }
         if let Some(local) = &self.look.local
             && self.native.is_some()
         {
@@ -366,7 +420,7 @@ impl Renderer {
             declare(shadow, Recipe::Shadow);
             shadow_passes.push(shadow);
         }
-        let cascade_reads: Vec<_> = look
+        let mut cascade_reads: Vec<_> = look
             .cascades
             .iter()
             .map(|&id| (id, Access::ShaderRead))
@@ -377,6 +431,50 @@ impl Renderer {
             shadow_passes.push(pass);
         }
         let far_read = look.far.map(|far| (far, Access::ShaderRead));
+        // The horizon's capture and visibility maps, before any pass that shades
+        // with the sun; they join the sun-map reads once written.
+        if let (Some(ids), Some(horizon)) = (look.horizon, &self.look.horizon) {
+            if let Some((pass, _)) = horizon_capture {
+                let capture = graph.pass(
+                    "Horizon.Capture",
+                    Queue::Graphics,
+                    [(ids[0], Access::Depth)],
+                );
+                declare(capture, Recipe::HorizonCapture(pass));
+                shadow_passes.push(capture);
+            }
+            for (run, name, pass, image) in [
+                (horizon_sun, "Horizon.Sun", LookPass::HorizonSun, ids[1]),
+                (horizon_sky, "Horizon.Sky", LookPass::HorizonSky, ids[2]),
+            ] {
+                if run {
+                    let id = graph.pass(
+                        name,
+                        Queue::Graphics,
+                        [
+                            (ids[0], Access::ShaderRead),
+                            (image, Access::Storage),
+                            (look.frame, Access::ShaderRead),
+                        ]
+                        .into_iter()
+                        .chain(graphics.iter().copied()),
+                    );
+                    declare(id, Recipe::Look(pass));
+                }
+            }
+            for (written, id) in [
+                (
+                    horizon_capture.is_some() || horizon.capture.is_some(),
+                    ids[0],
+                ),
+                (horizon_sun || horizon.sun_key.is_some(), ids[1]),
+                (horizon_sky || horizon.sky_done, ids[2]),
+            ] {
+                if written {
+                    cascade_reads.push((id, Access::ShaderRead));
+                }
+            }
+        }
         if let (Some(local), false) = (look.local, local_draws.is_empty()) {
             let pass = graph.pass(
                 "ShadowAtlas.Local",
@@ -728,6 +826,34 @@ impl Renderer {
                         }
                         recorder.push(Command::EndRendering);
                     }
+                    Recipe::HorizonCapture(pass) => {
+                        let horizon = self
+                            .look
+                            .horizon
+                            .as_ref()
+                            .expect("a horizon capture is declared only with a horizon");
+                        let size = [horizon.resolution; 2];
+                        recorder.push(Command::Pipeline(self.pipelines.shadow));
+                        recorder.push(Command::BeginRendering {
+                            colors: Vec::new(),
+                            depth: Some(Attachment {
+                                image: horizon.depth,
+                                clear: Some([0.; 4]),
+                            }),
+                            size,
+                        });
+                        recorder.push(Command::Viewport {
+                            origin: [0, 0],
+                            size,
+                        });
+                        let mut constants = root;
+                        constants.words[0] = horizon.frame_index;
+                        constants.words[4] = 0;
+                        if let Some(native) = &self.native {
+                            native.record(&mut recorder, constants, pass);
+                        }
+                        recorder.push(Command::EndRendering);
+                    }
                     Recipe::LocalShadow => {
                         let local = self
                             .look
@@ -951,6 +1077,15 @@ impl Renderer {
             for (draw, _) in &local_draws {
                 local.cache.drawn(draw);
             }
+        }
+        if let Some(horizon) = &mut self.look.horizon {
+            if let Some((_, capture)) = horizon_capture {
+                horizon.capture = Some(capture);
+            }
+            if horizon_sun {
+                horizon.sun_key = Some(crate::look::horizon::sun_key(self.content.sun_direction));
+            }
+            horizon.sky_done |= horizon_sky;
         }
         if let Some(cascades) = &mut self.look.cascades {
             for (&draw, patch) in cascade_draw.iter().zip(&cascade_patches) {

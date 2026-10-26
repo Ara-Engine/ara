@@ -313,6 +313,7 @@ impl QualityPreset {
                 min_pixels: 6.,
                 terrain_detail: 0.,
                 local_shadows: None,
+                horizon: Some(1024),
             },
             Self::Medium => Quality {
                 shadows: shadows(3, 1024, 100., (1024, 1000.)),
@@ -330,6 +331,7 @@ impl QualityPreset {
                     redraws: 6,
                     in_gi_and_fog: true,
                 }),
+                horizon: Some(2048),
             },
             Self::High => Quality {
                 shadows: shadows(4, 2048, 150., (2048, 1500.)),
@@ -347,6 +349,7 @@ impl QualityPreset {
                     redraws: 12,
                     in_gi_and_fog: true,
                 }),
+                horizon: Some(2048),
             },
             Self::Epic => Quality {
                 shadows: shadows(4, 2048, 250., (2048, 2000.)),
@@ -364,6 +367,7 @@ impl QualityPreset {
                     redraws: 24,
                     in_gi_and_fog: true,
                 }),
+                horizon: Some(2048),
             },
         }
     }

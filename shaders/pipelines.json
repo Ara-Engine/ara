@@ -185,6 +185,34 @@
       "vertex_stride": 0
     }
   },
+  "look_horizon_sky": {
+    "entries": {
+      "horizonSkyMain": "compute"
+    },
+    "source": "look-horizon.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
+  "look_horizon_sun": {
+    "entries": {
+      "horizonSunMain": "compute"
+    },
+    "source": "look-horizon.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
   "look_multiscatter": {
     "entries": {
       "multiScatterMain": "compute"

@@ -8,9 +8,8 @@ const SIZE: [u32; 2] = [320, 180];
 #[cfg(test)]
 mod tests;
 
-/// One 225 KiB image and staging buffer on a temporary raster-only device. The
-/// game presenter compiles on its own worker/device; this owner only transfers
-/// a progress bar and presents it. Drop releases its swapchain before the GPU.
+/// One 225 KiB image and staging buffer with independent loading queue/pools.
+/// The logical device and swapchain survive the transition to game presentation.
 pub(crate) struct Loading {
     gpu: VulkanDevice,
     image: Image,
@@ -22,9 +21,39 @@ pub(crate) struct Loading {
 }
 
 impl Loading {
+    #[cfg(test)]
+    pub(crate) fn native_device(&self) -> vk::Device {
+        self.gpu.context().device.handle()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn swapchain(&self) -> Option<vk::SwapchainKHR> {
+        self.present.as_ref().map(Present::native_swapchain)
+    }
+    #[cfg(test)]
     pub(crate) fn new(extensions: &[std::ffi::CString], cache: &Path) -> Result<Self> {
         ara_gpu::cpu_scope!("Player.loading_device");
-        let mut gpu = VulkanDevice::new_raster(extensions, cache.join("loading"))?;
+        Self::with_device(VulkanDevice::new_raster(extensions, cache.join("loading"))?)
+    }
+
+    pub(crate) fn for_game(
+        extensions: &[std::ffi::CString],
+        cache: &Path,
+        ray_tracing: bool,
+    ) -> Result<(Self, VulkanDevice, bool)> {
+        let mut game = if ray_tracing {
+            VulkanDevice::new(extensions, cache)?
+        } else {
+            VulkanDevice::new_raster(extensions, cache)?
+        };
+        // SAFETY: No work has been submitted. The caller pauses loading queue
+        // access during worker preparation when the adapter has only one queue.
+        let loading = unsafe { game.split_loading(cache.join("loading"))? };
+        let parallel = loading.context().graphics != game.context().graphics;
+        Ok((Self::with_device(loading)?, game, parallel))
+    }
+
+    fn with_device(mut gpu: VulkanDevice) -> Result<Self> {
         let bytes = u64::from(SIZE[0]) * u64::from(SIZE[1]) * 4;
         let image = gpu.create_image(
             SIZE[0],
@@ -157,6 +186,18 @@ impl Loading {
 }
 
 impl Windowed {
+    pub(crate) fn drawable_size(&self) -> Result<[u32; 2]> {
+        self.window.size()
+    }
+    #[cfg(test)]
+    pub(crate) fn swapchain(&self) -> Option<vk::SwapchainKHR> {
+        self.present.as_ref().map(Present::native_swapchain)
+    }
+    /// Transfer the existing swapchain after worker completion. Both contexts
+    /// refer to the same native device; no surface or swapchain is recreated.
+    pub(crate) fn finish_loading(&mut self, mut loading: Loading) {
+        self.present = loading.present.take();
+    }
     /// Create only SDL ownership; shader compilation belongs to a separate worker.
     pub(crate) fn open_unprepared(
         name: &str,
@@ -192,13 +233,13 @@ impl Windowed {
         }
         loading.draw(progress)?;
         if loading.present.is_none() {
-            // SAFETY: This window outlives loading, whose Drop destroys its own
-            // swapchain before releasing the temporary device.
+            // SAFETY: This window and shared device outlive the swapchain, which
+            // is transferred to the game owner after completed worker preparation.
             loading.present = Some(unsafe { Present::new(loading.gpu.context(), &self.window)? });
         }
         let image = loading.gpu.native_image(loading.image)?;
-        // SAFETY: draw completed this CopySource image on this temporary device;
-        // neither the image nor its window is used by the game-presenter worker.
+        // SAFETY: draw completed this CopySource image. The worker uses a distinct
+        // queue, or the caller serializes both owners on single-queue adapters.
         let result = unsafe {
             loading
                 .present
@@ -223,10 +264,10 @@ impl Windowed {
 impl Loading {
     fn clear_present(&mut self) {
         if let Some(mut present) = self.present.take() {
-            // SAFETY: Presentation is serialized by this owner. Device idle
-            // precedes swapchain/surface destruction, including resize/failure.
+            // SAFETY: Every display completed before returning. The worker uses
+            // neither these semaphores nor this surface; no global queue wait
+            // may block close/resize behind the game's uploads.
             unsafe {
-                let _ = self.gpu.context().device.device_wait_idle();
                 present.destroy(self.gpu.context());
             }
         }

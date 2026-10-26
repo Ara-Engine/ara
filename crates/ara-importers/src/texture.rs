@@ -8,6 +8,7 @@ use ara_asset_format::{TextureFormat, write_ktx2};
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 mod gpu_input;
+mod pixels;
 
 // ISPC BC5 is already very fast and retains the qualified normal-map output.
 // The experimental GPU BC5 encoder has larger angular-error outliers, so normals
@@ -480,8 +481,8 @@ fn decode_texture(
     limits.max_image_height = Some(settings.max_dimension);
     limits.max_alloc = Some(512 * 1024 * 1024);
     reader.limits(limits);
-    let image = reader.decode().map_err(invalid)?.into_rgba32f();
-    let (width, height) = image.dimensions();
+    let image = reader.decode().map_err(invalid)?;
+    let (width, height) = (image.width(), image.height());
     let usage = if hdr && settings.usage == TextureUsage::Color {
         TextureUsage::Hdr
     } else {
@@ -494,33 +495,7 @@ fn decode_texture(
         TextureUsage::Mask => TextureFormat::Bc4,
         TextureUsage::Hdr => TextureFormat::Bc6h,
     };
-    let mut pixels: Vec<[f32; 4]> = bytemuck::allocation::try_cast_vec(image.into_raw())
-        .unwrap_or_else(|(_, data)| data.as_chunks::<4>().0.to_vec());
-    pixels.par_iter_mut().try_for_each(|p| -> Result<()> {
-        cancellation.check()?;
-        if p.iter().any(|x| !x.is_finite()) {
-            return Err(invalid("nonfinite image sample"));
-        }
-        match usage {
-            TextureUsage::Color => {
-                for c in &mut p[..3] {
-                    *c = srgb_to_linear(*c);
-                }
-            }
-            TextureUsage::Normal => {
-                let n = crate::mesh::normalize([
-                    p[0] * 2.0 - 1.0,
-                    (p[1] * 2.0 - 1.0) * if settings.flip_normal_y { -1.0 } else { 1.0 },
-                    p[2] * 2.0 - 1.0,
-                ]);
-                p[..3].copy_from_slice(&n);
-            }
-            TextureUsage::Mask => p[0] = p[settings.mask_channel as usize],
-            TextureUsage::Hdr => {}
-            TextureUsage::Linear => {}
-        }
-        Ok(())
-    })?;
+    let pixels = pixels::prepare(image, usage, settings, cancellation)?;
     if usage == TextureUsage::Hdr {
         let requirement = pixels
             .par_iter()

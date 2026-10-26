@@ -1,7 +1,11 @@
-//! The host's file thread. Every document write and removal, external-edit check
-//! and project scan runs here, off the thread that ticks the host (the editor's UI
-//! thread): on a large project a scan took ~100 ms every two seconds and a canonical
-//! write of a large scene tens of milliseconds.
+//! The host's file thread. Every document write and removal, journal append and
+//! compaction, `.ara/diagnostics.jsonl` write, external-edit check and project scan
+//! runs here, off the thread that ticks the host (the editor's UI thread): on a
+//! large project a scan took ~100 ms every two seconds, a canonical write of a large
+//! scene tens of milliseconds, and during a cold import a single command's journal
+//! append once stalled the editor for four seconds. Requests run in the order the
+//! host sends them, so the journal is written in commit order and a document's file
+//! never gets ahead of the transaction the journal holds for it.
 //!
 //! OS change notifications (`notify`) drive the checks, with a slow full rescan as
 //! the safety net; without notifications it polls at the configured cadence. As the
@@ -9,6 +13,7 @@
 //! as external edits, and saves and removals of one file happen in request order.
 use std::collections::{HashMap, HashSet};
 use std::fs;
+use std::io::Write as _;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
 use std::thread::JoinHandle;
@@ -18,6 +23,8 @@ use ara_diag::{Diagnostic, codes};
 use ara_doc::{AssetId, Document};
 use ara_schema::SchemaDb;
 use notify::Watcher as _;
+
+use crate::journal::{Entry, Journal};
 
 /// How often a full check and rescan runs while OS notifications are active.
 const RESCAN: Duration = Duration::from_secs(30);
@@ -48,8 +55,33 @@ pub(crate) struct Save {
     pub rev: u64,
 }
 
+/// A `.ara/diagnostics.jsonl` write the host prepared (`diag::Persist`): lines to
+/// append, or the whole file. `seqs` are the records it persists, marked changed
+/// again when the write fails.
+#[derive(Debug)]
+pub(crate) struct DiagWrite {
+    pub path: PathBuf,
+    pub text: String,
+    pub append: bool,
+    pub seqs: Vec<u64>,
+}
+
 /// What the host asks of the thread.
 enum Request {
+    /// Append an entry to the journal and flush it to the OS.
+    Append(Entry),
+    /// Compact the journal (`Journal::compact`), then answer `Compacted`.
+    Compact,
+    /// Write `.ara/diagnostics.jsonl`.
+    Diagnostics(DiagWrite),
+    /// Answer `Settled` once everything requested before is done.
+    Settle,
+    /// Block the thread until `release` sends or closes, after telling `entered`.
+    #[cfg(test)]
+    Hold {
+        entered: Sender<()>,
+        release: Receiver<()>,
+    },
     /// Watch a loaded document's file, as it was when read.
     Track { path: String, stamp: Option<Stamp> },
     /// Stop watching a file (its document was unloaded).
@@ -95,6 +127,17 @@ pub(crate) enum Reply {
     },
     /// Everything requested before the matching `sync` is done.
     Done,
+    /// A compaction finished: the journal now holds `entries` entries.
+    Compacted {
+        entries: usize,
+        result: Result<(), Diagnostic>,
+    },
+    /// A journal append failed.
+    JournalFailed(Diagnostic),
+    /// A diagnostics write failed; its records need writing again.
+    DiagnosticsFailed { seqs: Vec<u64>, error: String },
+    /// Everything requested before the matching `settle` is done.
+    Settled,
 }
 
 /// The host's handle on its file thread. Dropping it lets queued saves finish, then
@@ -106,29 +149,36 @@ pub(crate) struct FileThread {
     watcher: Option<notify::RecommendedWatcher>,
     /// Saves and removals sent and not answered yet.
     pending: usize,
+    /// Journal entries, counting appends still queued.
+    journal_len: usize,
+    /// Appends sent since the compaction in progress, if one is.
+    compacting: Option<usize>,
 }
 
 impl std::fmt::Debug for FileThread {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("FileThread")
             .field("pending", &self.pending)
+            .field("journal_len", &self.journal_len)
             .field("notified", &self.watcher.is_some())
             .finish()
     }
 }
 
 impl FileThread {
-    /// Start watching `root`. With `watch_every` zero the thread only looks when
-    /// asked (`sync`); otherwise OS notifications drive it, or, when they are
-    /// unavailable, polling every `watch_every` (watched files) and `scan_every`
-    /// (new files).
+    /// Start watching `root` and writing `journal`. With `watch_every` zero the
+    /// thread only looks when asked (`sync`); otherwise OS notifications drive it,
+    /// or, when they are unavailable, polling every `watch_every` (watched files) and
+    /// `scan_every` (new files).
     pub(crate) fn start(
         root: PathBuf,
         db: SchemaDb,
         type_files: Vec<(PathBuf, Option<SystemTime>)>,
+        journal: Journal,
         watch_every: Duration,
         scan_every: Duration,
     ) -> std::io::Result<Self> {
+        let journal_len = journal.len();
         let (requests, inbox) = mpsc::channel();
         let (outbox, replies) = mpsc::channel();
         let watcher = if watch_every.is_zero() {
@@ -151,6 +201,7 @@ impl FileThread {
             root,
             db,
             types: type_files,
+            journal,
             watched: HashMap::new(),
             unwatched: HashMap::new(),
             replies: outbox,
@@ -164,7 +215,52 @@ impl FileThread {
             thread: Some(thread),
             watcher,
             pending: 0,
+            journal_len,
+            compacting: None,
         })
+    }
+
+    /// Queue a journal entry; a failure comes back as `JournalFailed`.
+    pub(crate) fn append(&mut self, entry: Entry) {
+        self.journal_len += 1;
+        if let Some(since) = &mut self.compacting {
+            *since += 1;
+        }
+        self.send(Request::Append(entry));
+    }
+    /// Queue a journal compaction; `Compacted` answers it.
+    pub(crate) fn compact(&mut self) {
+        self.compacting = Some(0);
+        self.send(Request::Compact);
+    }
+    /// Journal entries, counting queued appends.
+    pub(crate) fn journal_len(&self) -> usize {
+        self.journal_len
+    }
+    /// Whether a compaction is queued or running.
+    pub(crate) fn compacting(&self) -> bool {
+        self.compacting.is_some()
+    }
+    /// Queue a diagnostics file write; a failure comes back as `DiagnosticsFailed`.
+    pub(crate) fn diagnostics(&self, write: DiagWrite) {
+        self.send(Request::Diagnostics(write));
+    }
+    /// Ask for `Settled` once everything queued so far is done.
+    pub(crate) fn settle(&self) {
+        self.send(Request::Settle);
+    }
+    /// Block the thread until the returned sender sends or drops; returns once the
+    /// thread is held (tests: the host must not wait for it).
+    #[cfg(test)]
+    pub(crate) fn hold(&self) -> Sender<()> {
+        let (entered, held) = mpsc::channel();
+        let (release, released) = mpsc::channel();
+        self.send(Request::Hold {
+            entered,
+            release: released,
+        });
+        let _ = held.recv();
+        release
     }
 
     /// Watch a loaded document's file from `stamp` (what it was when read).
@@ -204,8 +300,15 @@ impl FileThread {
         Some(self.count(reply))
     }
     fn count(&mut self, reply: Reply) -> Reply {
-        if matches!(reply, Reply::Saved { .. } | Reply::Removed { .. }) {
-            self.pending = self.pending.saturating_sub(1);
+        match &reply {
+            Reply::Saved { .. } | Reply::Removed { .. } => {
+                self.pending = self.pending.saturating_sub(1);
+            }
+            Reply::Compacted { entries, .. } => {
+                // Appends sent after the compaction land after it.
+                self.journal_len = entries + self.compacting.take().unwrap_or(0);
+            }
+            _ => {}
         }
         reply
     }
@@ -234,6 +337,7 @@ struct Worker {
     db: SchemaDb,
     extensions: HashSet<String>,
     types: Vec<(PathBuf, Option<SystemTime>)>,
+    journal: Journal,
     /// Loaded documents' files (project-relative) and their last seen stamp.
     watched: HashMap<String, Option<Stamp>>,
     /// Document files nothing loads, as last reported.
@@ -275,6 +379,38 @@ impl Worker {
 
     fn handle(&mut self, request: Request) {
         match request {
+            Request::Append(entry) => {
+                if let Err(e) = self.journal.append(&entry) {
+                    self.reply(Reply::JournalFailed(Diagnostic::error(
+                        codes::IO,
+                        format!("cannot append to `.ara/journal`: {e}"),
+                    )));
+                }
+            }
+            Request::Compact => {
+                let result = self.journal.compact().map_err(|e| {
+                    Diagnostic::warning(codes::IO, format!("cannot compact `.ara/journal`: {e}"))
+                });
+                self.reply(Reply::Compacted {
+                    entries: self.journal.len(),
+                    result,
+                });
+            }
+            Request::Diagnostics(write) => {
+                if let Err(e) = write_diagnostics(&write) {
+                    self.reply(Reply::DiagnosticsFailed {
+                        seqs: write.seqs,
+                        error: e.to_string(),
+                    });
+                }
+            }
+            Request::Settle => self.reply(Reply::Settled),
+            #[cfg(test)]
+            Request::Hold { entered, release } => {
+                let _ = entered.send(());
+                // Bounded, so a host that does wait fails its test instead of hanging.
+                let _ = release.recv_timeout(Duration::from_secs(30));
+            }
             Request::Track { path, stamp } => {
                 self.unwatched.remove(&path);
                 self.watched.insert(path, stamp);
@@ -456,10 +592,81 @@ impl Worker {
     }
 }
 
+/// Append the lines, or replace the file through a temporary file and a rename.
+fn write_diagnostics(write: &DiagWrite) -> std::io::Result<()> {
+    if write.append {
+        return fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&write.path)?
+            .write_all(write.text.as_bytes());
+    }
+    let tmp = write.path.with_extension("jsonl.tmp");
+    fs::write(&tmp, &write.text)?;
+    fs::rename(&tmp, &write.path)
+}
+
 /// A relative path with `/` separators (the workspace's path form).
 fn slash(rel: &Path) -> String {
     rel.components()
         .map(|c| c.as_os_str().to_string_lossy())
         .collect::<Vec<_>>()
         .join("/")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn txn(n: u64) -> Entry {
+        Entry::Txn {
+            session: None,
+            txn: serde_json::from_value(serde_json::json!({
+                "id": format!("tx_{n}"), "author": "agent:a", "base": n - 1, "result": n, "ops": []
+            }))
+            .expect("transaction"),
+        }
+    }
+
+    /// Appends queued behind a compaction land after its rewrite, and the host's
+    /// count of entries agrees with the file once `Compacted` arrives.
+    #[test]
+    fn appends_after_a_compaction_follow_it() {
+        let dir = std::env::temp_dir().join(format!("ara-host-journal-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        let (journal, _, _) = Journal::open(&dir).expect("journal");
+        let mut io = FileThread::start(
+            dir.clone(),
+            SchemaDb::new(),
+            Vec::new(),
+            journal,
+            Duration::ZERO,
+            Duration::ZERO,
+        )
+        .expect("file thread");
+        (1..=3).for_each(|n| io.append(txn(n)));
+        io.compact();
+        (4..=5).for_each(|n| io.append(txn(n)));
+        loop {
+            match io.reply() {
+                Some(Reply::Compacted { result, .. }) => break result.expect("compacted"),
+                Some(_) => {}
+                None => panic!("the file thread stopped"),
+            }
+        }
+        let counted = io.journal_len();
+        drop(io);
+        let (_, entries, _) = Journal::open(&dir).expect("journal");
+        assert_eq!(counted, entries.len());
+        assert!(matches!(entries[0], Entry::Base { .. }));
+        let ids: Vec<String> = entries
+            .iter()
+            .filter_map(|e| match e {
+                Entry::Txn { txn, .. } => Some(txn.id.0.clone()),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(ids, ["tx_1", "tx_2", "tx_3", "tx_4", "tx_5"]);
+        let _ = fs::remove_dir_all(&dir);
+    }
 }

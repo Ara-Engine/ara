@@ -17,6 +17,7 @@ pub use ara_editor_gpu as gpu;
 pub mod inspector;
 mod loading;
 mod native;
+mod persist;
 pub mod settings;
 pub mod shell;
 pub mod state;

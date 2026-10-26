@@ -23,6 +23,8 @@ pub struct PresentationReadiness {
     pub model_fades_pending: bool,
     /// An emitter search/rerun has not yet been adopted.
     pub emitter_search_pending: bool,
+    /// Live-effect pipelines still compiling or awaiting adoption.
+    pub pipelines_pending: bool,
     /// Remaining residency promotions, or None before native residency exists.
     pub textures_pending: Option<usize>,
     /// Texture bytes promoted in the last frame; zero denotes a settled frame.
@@ -53,6 +55,7 @@ impl PresentationReadiness {
             && !self.content_rebuilt
             && !self.model_fades_pending
             && !self.emitter_search_pending
+            && !self.pipelines_pending
             && self.textures_pending == Some(0)
             && self.texture_uploaded_bytes == 0
             && !self.gpu_in_flight

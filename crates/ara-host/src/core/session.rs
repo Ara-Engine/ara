@@ -64,7 +64,7 @@ pub(super) fn begin(st: &mut State, p: SessionBeginParams) -> R {
         checkpoints: Vec::new(),
         ended: false,
     };
-    st.journal(&Entry::Session {
+    st.journal(Entry::Session {
         session: session.clone(),
     });
     let names = |s: &[Scope]| s.iter().map(|x| x.as_str()).collect::<Vec<_>>().join(", ");
@@ -274,7 +274,7 @@ pub(crate) fn checkpoint_at(
         label,
         auto,
     };
-    st.journal(&Entry::Checkpoint {
+    st.journal(Entry::Checkpoint {
         session: sid.to_owned(),
         checkpoint: cp.clone(),
     });
@@ -328,7 +328,7 @@ pub(super) fn end(st: &mut State, sid: &str) -> R {
     if let Some(s) = st.sessions.get_mut(sid) {
         s.ended = true;
     }
-    st.journal(&Entry::Ended {
+    st.journal(Entry::Ended {
         session: sid.to_owned(),
     });
     Ok(json!({ "session": sid, "ended": true }))
@@ -507,7 +507,7 @@ fn targets(
 
 fn record_review(st: &mut State, txn: &TxnId, entity: Option<&str>, status: ReviewStatus) {
     st.review.set(txn, entity, status);
-    st.journal(&Entry::Review {
+    st.journal(Entry::Review {
         txn: txn.0.clone(),
         entity: entity.map(str::to_owned),
         status,

@@ -24,6 +24,11 @@ pub struct Present {
 }
 
 impl Present {
+    /// Native identity for integration diagnostics. It remains stable across a
+    /// loading-to-game handoff; only resize/output-mode changes replace it.
+    pub fn native_swapchain(&self) -> vk::SwapchainKHR {
+        self.swapchain
+    }
     /// Create a swapchain matching the current pixel extent.
     /// # Safety
     /// Keep the native device and window alive until idle presentation teardown.

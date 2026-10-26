@@ -220,13 +220,26 @@ impl Importer for GltfImporter {
                 let preserve_card_area = material.alpha_mode() != gltf::material::AlphaMode::Opaque
                     || material.pbr_metallic_roughness().base_color_texture()
                         .is_some_and(|texture| opacity_maps.contains_key(&texture.texture().source().index()));
-                let artifact = Artifact {
-                    name: name.clone(), kind: ArtifactKind::Mesh,
-                    bytes: crate::mesh::cook_mesh_with_tangent_uv(&vertices, &indices, &mesh_settings, deformed, preserve_card_area, metrics, |v| normal_uv.apply(v))?,
+                let cook_classic = || crate::mesh::cook_mesh_with_tangent_uv(
+                        &vertices, &indices, &mesh_settings, deformed,
+                        preserve_card_area, metrics, |v| normal_uv.apply(v));
+                let cook_virtual = || {
+                        let _timer = metrics.map(|m| m.start(ara_asset::ImportStage::VirtualGeometry));
+                        crate::virtual_geometry::cook(
+                            &name, &vertices, &indices, &mesh_settings, deformed,
+                            material_counts[&mesh_index])
                 };
-                let (virtual_artifact, virtual_metadata) = crate::virtual_geometry::cook(
-                    &name, &vertices, &indices, &mesh_settings, deformed,
-                    material_counts[&mesh_index])?;
+                // Primitives already run in parallel. Keep their two cooks serial
+                // unless the nested-scheduling experiment is explicitly enabled.
+                let (bytes, (virtual_artifact, virtual_metadata)) = if crate::mesh::PARALLEL_GEOMETRY {
+                    let (classic, virtual_geometry) = rayon::join(cook_classic, cook_virtual);
+                    (classic?, virtual_geometry?)
+                } else {
+                    (cook_classic()?, cook_virtual()?)
+                };
+                let artifact = Artifact {
+                    name: name.clone(), kind: ArtifactKind::Mesh, bytes,
+                };
                 // Preserve all morph target deltas independently of quantized base geometry.
                 let mut targets = Vec::new();
                 for (positions, normals, tangents) in reader.read_morph_targets() {

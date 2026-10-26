@@ -22,6 +22,7 @@ fn main() -> ara_ui::Result<()> {
             "--verify-ux" => options.verify_ux = true,
             "--verify-journey" => options.verify_journey = true,
             "--verify-first-hour" => options.verify_first_hour = true,
+            "--verify-scene-quality" => options.verify_scene_quality = true,
             "--verify-loading" => options.verify_loading = true,
             "--verify-responsiveness" => options.verify_responsiveness = true,
             "--settle-imports" => {

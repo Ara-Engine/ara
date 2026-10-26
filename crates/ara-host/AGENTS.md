@@ -47,10 +47,9 @@ ara-why, ara-profile, ara-collab.
   within `budget` characters; `group: false` lists entries. Answers are the text
   (`{cursor, total, text}`) unless `limit` asks for `entries` and `summary`: MCP
   clients pass `structuredContent` to the model, so JSON costs tokens. `diag.query`
-  always answers in full and adds time,
-  tick and text filters; `diag.subscribe` streams `diag.event {subscription,
-  record}`; `diag.clear`; `diag.report` lets other processes push diagnostics
-  (`engine: true`, `tick`, per-item `causedBy` index).
+  always answers in full and adds time, tick and text filters; `diag.subscribe` streams
+  `diag.event {subscription, record}`; `diag.clear`; `diag.report` lets other processes
+  push diagnostics (`engine: true`, `tick`, per-item `causedBy` index).
 - Engine reports (bus events, `diag.report`) persist in `.ara/diagnostics.jsonl`
   (appended every 500 ms, rewritten when 4× larger than the store); call errors do
   not. Restored records keep causal links (by dedup key).
@@ -126,20 +125,21 @@ service registers them.
   `review`, `base` lines. On open, each file's revision is its newest flush entry
   with a matching hash; newer transactions are re-applied. Compaction (past 4096
   entries, nothing unsaved or being written) keeps the newest 1024 transactions.
-- File I/O runs on the file thread (`file_io.rs`), never in `tick`: writes after
-  `debounce` (temp + rename; `flush` journaled when it lands, even if unchanged),
-  removals, `notify` events (30 s rescan; polling without them). `watch_every` zero
-  checks synchronously per tick (tests). An external edit three-way merges (base =
-  last synced) as a human `external edit`; invalid files and conflicts mark the doc
-  diverged (no flushes) until `doc.sync {keep: memory|disk}` or a clean edit.
+- File I/O runs on the file thread (`file_io.rs`) in request order, never on the host
+  thread: journal lines and compaction, `diagnostics.jsonl`, writes after `debounce`
+  (temp + rename; `flush` journaled when it lands), removals, `notify` events (30 s
+  rescan); `flush()` waits for it all. `watch_every` zero checks per tick (tests). An
+  external edit three-way merges (base = last synced) as a human `external edit`; invalid
+  files and conflicts mark the doc diverged until `doc.sync {keep: memory|disk}` or a clean edit.
 
 ## Gotchas
 - Host/store IDs use `HostConfig::seed`; reopening with the same test seed re-mints them.
-- `*.types.json` changes are only reported (ARA1912); restart to load them. No fsync
-  per journal line (process crashes only). Sessions survive restarts; subscriptions don't.
+- `*.types.json` changes are only reported (ARA1912); restart to load them. Sessions
+  survive restarts; subscriptions don't. Commands return before their journal line
+  lands (in commit order): a crash loses only queued lines; no fsync per line.
 
 ## Testing
-`cargo test -p ara-host`: query parsing, logs, journal compaction and review roll-up.
+`cargo test -p ara-host`: query parsing, logs, journal compaction, review, a held file thread.
 `tests/host.rs` copies fixtures to scratch: protocol, scopes, dry runs, symbols, review,
 rollback/recovery, external edits/conflicts, the file thread, services/jobs/subscriptions,
 document inference, apply text and agent `why`. `tests/collab.rs`: advisory claims,

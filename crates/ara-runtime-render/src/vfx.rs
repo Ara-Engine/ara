@@ -17,6 +17,7 @@ use std::{collections::BTreeMap, path::PathBuf};
 /// Ticks replayed at most per capture (effects loop well within it).
 const MAX_REPLAY: u64 = 240;
 
+mod preparation;
 #[cfg(test)]
 mod tests;
 
@@ -39,6 +40,7 @@ pub struct Effects {
     systems: BTreeMap<(String, [u32; 2]), GpuSystem>,
     live: BTreeMap<u64, Live>,
     failed: BTreeMap<u64, String>,
+    pending: BTreeMap<u64, preparation::Pending>,
     gpu_ms: f64,
 }
 
@@ -48,12 +50,17 @@ struct Live {
     system: GpuSystem,
     tick: u64,
     rendered: bool,
+    warm_remaining: u32,
 }
 
 impl Effects {
     /// All particle simulation/draw timestamps in the last live composite.
     pub fn gpu_ms(&self) -> f64 {
         self.gpu_ms
+    }
+    /// Live effects whose PSOs are still compiling. No GPU wait is performed.
+    pub fn is_pending(&self) -> bool {
+        !self.pending.is_empty() || self.live.values().any(|live| live.warm_remaining > 0)
     }
     /// Advances persistent per-entity particle systems to this presentation tick,
     /// then redraws them over the current camera/background. No pixel readbacks.
@@ -67,53 +74,13 @@ impl Effects {
     ) -> Result<SceneColor> {
         self.gpu_ms = 0.;
         // Particles draw over the scene's HDR, at the render size.
-        let size = renderer.render_size();
-        let stale: Vec<u64> = self
-            .live
-            .iter()
-            .filter(|(id, live)| {
-                live.size != size
-                    || !frame
-                        .effects
-                        .iter()
-                        .any(|e| e.entity == **id && e.effect == live.name)
-            })
-            .map(|(id, _)| *id)
-            .collect();
-        for id in stale {
-            if let Some(live) = self.live.remove(&id) {
-                live.system.retire(renderer.gpu_mut())?;
-            }
-        }
+        self.prepare_systems(renderer, frame)?;
         for effect in &frame.effects {
             if self.failed.get(&effect.entity) == Some(&effect.effect) {
                 continue;
             }
             if !self.live.contains_key(&effect.entity) {
-                let definition = match library(&effect.effect) {
-                    Ok(definition) => definition,
-                    Err(error) => {
-                        eprintln!("ARA7303: {error:#}");
-                        self.failed.insert(effect.entity, effect.effect.clone());
-                        continue;
-                    }
-                };
-                let system = GpuSystem::new(
-                    renderer.gpu_mut(),
-                    &definition,
-                    &cooked_root().join(&definition.name),
-                    size,
-                )?;
-                self.live.insert(
-                    effect.entity,
-                    Live {
-                        name: effect.effect.clone(),
-                        size,
-                        system,
-                        tick: frame.tick.saturating_sub(1),
-                        rendered: false,
-                    },
-                );
+                continue;
             }
             let live = self
                 .live
@@ -170,10 +137,12 @@ impl Effects {
             };
             // Catch up only completed simulation ticks; redraws between ticks do
             // not age particles. Bound catch-up after a long paused capture.
-            let count = if !live.rendered && renderer.is_native() {
+            let count = if live.warm_remaining > 0 {
                 // Match the RT view's initial library state. Subsequent frames
                 // simulate only elapsed ticks and draw once, including stills.
-                150
+                let count = live.warm_remaining.min(4);
+                live.warm_remaining -= count;
+                count.into()
             } else {
                 frame.tick.saturating_sub(live.tick).min(8)
             };
@@ -228,6 +197,9 @@ impl Effects {
 
     /// Release this view's particle resources before reusing its renderer/device.
     pub fn destroy(self, renderer: &mut Renderer) -> Result<()> {
+        for (_, pending) in self.pending {
+            pending.warmup.cancel(renderer.gpu_mut())?;
+        }
         for (_, live) in self.live {
             live.system.retire(renderer.gpu_mut())?;
         }

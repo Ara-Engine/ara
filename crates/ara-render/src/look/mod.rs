@@ -10,6 +10,7 @@ pub(crate) mod far;
 pub(crate) mod frame;
 pub mod gi;
 pub(crate) mod gpu;
+pub(crate) mod horizon;
 pub(crate) mod local;
 pub(crate) mod passes;
 
@@ -46,6 +47,11 @@ pub struct Quality {
     /// metal/roughness maps; beyond it (blended over a quarter more) they keep
     /// colour maps and the metal/roughness maps' means. Zero: none, anywhere.
     pub terrain_detail: f32,
+    /// Heightfield horizon shadows and sky visibility for distant terrain
+    /// (`look::horizon`): texels per side of the top-down capture over the content
+    /// (a power of two, 256 to 4096). `None` leaves distance to the cascades and
+    /// far map.
+    pub horizon: Option<u32>,
 }
 impl Default for Quality {
     fn default() -> Self {
@@ -60,6 +66,7 @@ impl Default for Quality {
             min_pixels: 1.5,
             terrain_detail: 150.,
             local_shadows: None,
+            horizon: None,
         }
     }
 }
@@ -194,7 +201,10 @@ impl Quality {
                         && a.radius > 0.
                         && (1..=4).contains(&a.slices)
                         && (2..=16).contains(&a.steps)
-                }),
+                })
+                && self
+                    .horizon
+                    .is_none_or(|h| h.is_power_of_two() && (256..=4096).contains(&h)),
             "Invalid raster quality"
         );
         Ok(())

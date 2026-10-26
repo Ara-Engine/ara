@@ -44,6 +44,10 @@ pub struct Options {
     /// Replay a new user's first hour on a fresh project (`app/qa.rs`); writes
     /// `first-hour.json` and a capture per step.
     pub verify_first_hour: bool,
+    /// Capture the Scene view from open to settled and through an orbit, a fly and a
+    /// pan, with per-frame renderer state (`app/scene_quality.rs`); writes
+    /// `scene-quality.json` and the captures.
+    pub verify_scene_quality: bool,
     /// Run the loading window offscreen on the project (`loading`): its real run's
     /// milestones and every state, in both themes, as PNGs in the output folder.
     pub verify_loading: bool,
@@ -72,6 +76,7 @@ impl Options {
             || self.verify_journey
             || self.verify_responsiveness
             || self.verify_first_hour
+            || self.verify_scene_quality
             || self.verify_loading
             || self.headless
     }
@@ -119,6 +124,7 @@ impl Default for Options {
             play: false,
             verify_journey: false,
             verify_first_hour: false,
+            verify_scene_quality: false,
             verify_loading: false,
             verify_responsiveness: false,
             settle: None,

@@ -379,13 +379,14 @@ struct EditorSettings {
 pub struct Settings {
     store: Store,
     doc: AssetId,
-    user_path: Option<PathBuf>,
     project_path: PathBuf,
     /// Non-default user values.
     pub user: Map<String, Value>,
     /// Non-default project values.
     pub project: Map<String, Value>,
     failures: Vec<String>,
+    /// Writes the preferences file off the UI thread; `None` keeps them in memory.
+    user_writer: Option<crate::persist::BackgroundWriter<Value>>,
 }
 const USER: &str = "e_userpref";
 const PROJECT: &str = "e_projpref";
@@ -445,14 +446,20 @@ impl Settings {
         }
         let mut ws = Workspace::default();
         ws.insert(".ara/editor-settings.scene", document);
+        let user_writer = user_path.map(|path| {
+            crate::persist::BackgroundWriter::new("preferences-writer", move |user: Value| {
+                crate::persist::write_text(&path, &ara_json::to_canonical_string(&user))
+                    .map_err(|e| format!("Preferences were not saved to {}: {e}", path.display()))
+            })
+        });
         Ok(Self {
             store: Store::new(db, ws),
             doc,
-            user_path,
             project_path,
             user,
             project,
             failures: Vec::new(),
+            user_writer,
         })
     }
     /// Effective value: stored or default.
@@ -576,20 +583,17 @@ impl Settings {
     }
     /// Write failures since the last call (the editor service logs them).
     pub fn take_failures(&mut self) -> Vec<String> {
-        std::mem::take(&mut self.failures)
-    }
-    fn persist_user(&mut self) {
-        let Some(path) = &self.user_path else {
-            return;
-        };
-        if let Some(parent) = path.parent() {
-            let _ = std::fs::create_dir_all(parent);
+        let mut failures = std::mem::take(&mut self.failures);
+        if let Some(writer) = &self.user_writer {
+            failures.extend(writer.take_failures());
         }
-        if let Err(e) = write_atomic(path, &Value::Object(self.user.clone())) {
-            self.failures.push(format!(
-                "Preferences were not saved to {}: {e}",
-                path.display()
-            ));
+        failures
+    }
+    /// Hand the preferences to their writer thread (`crate::persist`): the file is
+    /// written off the UI thread, newest value first, flushed when the editor closes.
+    fn persist_user(&mut self) {
+        if let Some(writer) = &self.user_writer {
+            writer.save(Value::Object(self.user.clone()));
         }
     }
     fn persist_project(&mut self) {

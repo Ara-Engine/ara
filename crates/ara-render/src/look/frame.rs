@@ -58,6 +58,15 @@ pub(crate) struct LookFrame {
     /// Local-light shadows (`look::local`): x shading table (storage), y atlas
     /// (sampled; zero: none), z/w atlas texels.
     pub local_shadows: [u32; 4],
+    /// Heightfield horizon (`look::horizon`): world x, z origin and x, z size.
+    pub horizon_rect: [f32; 4],
+    /// Height = x * depth + y of the capture; z top-surface tolerance (m).
+    pub horizon_height: [f32; 4],
+    /// x capture (sampled), y sun visibility, z sky visibility (sampled; zero:
+    /// none), w capture texels per side.
+    pub horizon_images: [u32; 4],
+    /// x sun visibility, y sky visibility (storage), z sky texels per side.
+    pub horizon_storage: [u32; 4],
 }
 
 /// Per-frame inputs that are not part of the authored look.
@@ -147,6 +156,10 @@ impl LookFrame {
             cascade_maps: [0; 4],
             terrain: [0.; 4],
             local_shadows: [0; 4],
+            horizon_rect: [0.; 4],
+            horizon_height: [0.; 4],
+            horizon_images: [0; 4],
+            horizon_storage: [0; 4],
         }
     }
 }
