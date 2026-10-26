@@ -29,7 +29,8 @@ Retain usable legacy LODs: replacing geometric errors with combined attribute
 errors can make runtime selection choose finer foliage despite deeper chains.
 LOD0 solves and each primitive's classic/virtual cooks run sequentially by default.
 The single mesh::PARALLEL_GEOMETRY experiment enables bounded pairs/overlap; it
-regressed cold Outpost and needs an end-to-end ABBA win before re-enabling.
+regressed SATA and showed no clear NVMe win after Color8/mips (current ABBA).
+Keep it off; adaptive admission and the proposed per-volume fallback are dropped.
 Keep bytes and error precedence stable; scheduling changes need no version bump.
 ARAG Custom artifacts are
 validated by ara-geo; its reflected settings are VirtualGeometrySettings.

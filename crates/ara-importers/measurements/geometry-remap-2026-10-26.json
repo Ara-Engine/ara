@@ -1,0 +1,3752 @@
+{
+  "candidate": {
+    "binary": "D:/AraBuild/ara-dev-infra-target/import-speed/geo-efficiency/candidate.exe",
+    "binarySha256": "187C9A59316F20E3CFE60E423B9E043EBBAC9500EE450D8F86EDD147C5C4E2FA",
+    "compactSourceSha256": "EDA53FBA9B1B9EAAFE48DE8EE245AB780EBA6D0E8CBE69CA3C211D9884534823",
+    "cookSourceSha256": "7F07029C30725951CF6F550975DDE9D91B38474B9856D2DD14BB9B6540A56B86",
+    "roots": [
+      "ara-importers"
+    ],
+    "sourceDirty": true,
+    "sourceHead": "192b9d72baca04a96232f5c4ca9a4d8c5223bb54",
+    "threads": 1
+  },
+  "caveats": [
+    "Integration gate active; unchanged LOD stage varies~7% between means",
+    "Do not credit whole replay difference to remapping",
+    "Both candidate virtual-stage observations are below both control observations",
+    "No fresh import latency claim; scheduling stays sequential"
+  ],
+  "control": {
+    "binary": "D:/AraBuild/ara-dev-infra-target/import-speed/geo-efficiency/control.exe",
+    "binarySha256": "26ADAAF263E14A29A6AFC186583A3FF917C15E71B9173B4ACBF3C5C2C21A2198",
+    "cookSourceSha256": "3DF2DEFEEAB48920E5AF9490EDBF783403D46BBE9EADE9AD28595B0A5C02AE6B",
+    "roots": [
+      "ara-importers"
+    ],
+    "sourceHead": "192b9d72baca04a96232f5c4ca9a4d8c5223bb54",
+    "threads": 1
+  },
+  "correctness": {
+    "completeOutputsByteEqual": true,
+    "generationWrap": "Explicit stale-tag collision test",
+    "lookup": "Local IDs/source IDs/vertices preserve original first-encounter order; no algorithm or floating reduction change",
+    "modelsPerPass": 101,
+    "passes": 4,
+    "sparseInputs": "Original ordered-map fallback",
+    "textureDecodeEncodeStores": "None",
+    "versionsKeysSidecars": "Unchanged"
+  },
+  "date": "2026-10-26",
+  "definition": "Frozen baseline/candidate single-thread full-geometry replay on101real Outpost models, ABBA underoneGPUlease withgateactive; cached textures reused andcompleteImportOutput bytes verified against production cache everypass; not fresh-project walls",
+  "means": {
+    "candidateLodMs": 7112.9796,
+    "candidateVirtualMs": 3946.50555,
+    "controlLodMs": 7639.8769,
+    "controlVirtualMs": 5793.99955,
+    "virtualRatio": 1.4681341446485487
+  },
+  "rawEvidence": "C:\\Users\\snowy\\.t3\\worktrees\\snengine\\t3-602598ba/target/ara-dev/import-speed/geo-efficiency",
+  "runs": [
+    {
+      "case": "a1",
+      "cookMs": 23519.388600000002,
+      "load": {
+        "availableMemoryKiB": 6406284,
+        "context": "Single-thread phase-only geometry replay ABBA; batch gate active; no encoding or stores; not fresh-project walls",
+        "cpuPercent": 18,
+        "utc": "2026-10-26T06:43:27.3935330Z"
+      },
+      "lodMs": 8180.2559999999985,
+      "models": 101,
+      "modelsVerified": [
+        {
+          "artifacts": 6,
+          "cookMs": 5.6198999999999995,
+          "key": "a6cbd37299fadd2b55cc356bf8367ed9597e23301a457ab682e2eb996a9591a7",
+          "lodMs": 0,
+          "source": "assets/kit/apron.gltf",
+          "textureCooks": 0,
+          "virtualMs": 0.0755
+        },
+        {
+          "artifacts": 3,
+          "cookMs": 6.7780000000000005,
+          "key": "f2a62812538d7a2a20d04a7e0dcffb3baf1b4ac3ba616fbe26d52672e631bafa",
+          "lodMs": 2.5176,
+          "source": "assets/kit/cables.gltf",
+          "textureCooks": 0,
+          "virtualMs": 1.1796
+        },
+        {
+          "artifacts": 13,
+          "cookMs": 15.4056,
+          "key": "f7ae08f32743eb8961d0ab6c3dd377dad507885dae925798b0786044ac012e1e",
+          "lodMs": 0,
+          "source": "assets/kit/container_blue.gltf",
+          "textureCooks": 0,
+          "virtualMs": 0.4734
+        },
+        {
+          "artifacts": 13,
+          "cookMs": 12.975900000000001,
+          "key": "f654dd8d5553865d30b1a5c64863ef29ab14d5d4c81f451fd094426d295f1936",
+          "lodMs": 0,
+          "source": "assets/kit/container_green.gltf",
+          "textureCooks": 0,
+          "virtualMs": 0.4802
+        },
+        {
+          "artifacts": 13,
+          "cookMs": 6.652,
+          "key": "5ea290804a7d6120463ebda3d17291ef412fbeed8db0a5a89603be5b6bd7a4ba",
+          "lodMs": 0,
+          "source": "assets/kit/container_rust.gltf",
+          "textureCooks": 0,
+          "virtualMs": 0.4278
+        },
+        {
+          "artifacts": 5,
+          "cookMs": 46.258399999999995,
+          "key": "78f2d156165c8b77270bf73ba9d3a182ccbedea0cf9299162f2416effa86684e",
+          "lodMs": 13.1232,
+          "source": "assets/kit/embers.gltf",
+          "textureCooks": 0,
+          "virtualMs": 9.1068
+        },
+        {
+          "artifacts": 5,
+          "cookMs": 104.3074,
+          "key": "2c3508ae83b6dc2580b509a521850e5e318f36ee5898f4de0c99537e5b2d38f5",
+          "lodMs": 19.1358,
+          "source": "assets/kit/festoon.gltf",
+          "textureCooks": 0,
+          "virtualMs": 19.2018
+        },
+        {
+          "artifacts": 18,
+          "cookMs": 11.4142,
+          "key": "46ecd0afb3f3eca3b38c55bc1b3f63354e85f29e1221fe18c05a161b28f2d12f",
+          "lodMs": 0,
+          "source": "assets/kit/guard_hut.gltf",
+          "textureCooks": 0,
+          "virtualMs": 0.1834
+        },
+        {
+          "artifacts": 23,
+          "cookMs": 23.9387,
+          "key": "94beee1b529c4ee8916a6f9362b338742d4179469c583d6b48599640b33e82b1",
+          "lodMs": 1.2178,
+          "source": "assets/kit/hangar.gltf",
+          "textureCooks": 0,
+          "virtualMs": 0.9063
+        },
+        {
+          "artifacts": 5,
+          "cookMs": 0.5551,
+          "key": "e18a9ee19ea4da03793f70e617996a0b9b4ece16b9ed26275e9c3d9b8137b756",
+          "lodMs": 0,
+          "source": "assets/kit/light_panel.gltf",
+          "textureCooks": 0,
+          "virtualMs": 0.0361
+        },
+        {
+          "artifacts": 10,
+          "cookMs": 11.434899999999999,
+          "key": "94f471370e9692dc78c38e918ee62b06a7cd35331a4f205255323ad281d27e87",
+          "lodMs": 3.0085,
+          "source": "assets/kit/mast.gltf",
+          "textureCooks": 0,
+          "virtualMs": 1.9301
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 3.3575,
+          "key": "426d0628e765866f99296f2e4bf46662244bc3d55f501e6fe27de37e804eb509",
+          "lodMs": 0,
+          "source": "assets/kit/pad.gltf",
+          "textureCooks": 0,
+          "virtualMs": 0.0228
+        },
+        {
+          "artifacts": 3,
+          "cookMs": 0.4374,
+          "key": "ed68c675777a577c399c29d2c5cc53ce8ca35c3d2274f16a74953198aed23c72",
+          "lodMs": 0,
+          "source": "assets/kit/puddle_a.gltf",
+          "textureCooks": 0,
+          "virtualMs": 0.035
+        },
+        {
+          "artifacts": 3,
+          "cookMs": 0.4265,
+          "key": "59b809d6dbaa2de02fb42cf1a53839725bde57c2792c24b3074a5ed251c4aa25",
+          "lodMs": 0,
+          "source": "assets/kit/puddle_b.gltf",
+          "textureCooks": 0,
+          "virtualMs": 0.0319
+        },
+        {
+          "artifacts": 3,
+          "cookMs": 0.4392,
+          "key": "5658e45091e66e4d2ea1a307ecf76d0bea07ac3068f0c454fdf2d2045fcd78b9",
+          "lodMs": 0,
+          "source": "assets/kit/puddle_c.gltf",
+          "textureCooks": 0,
+          "virtualMs": 0.034
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 25.569399999999998,
+          "key": "67d6ef5868f5f41e2c1eedb0b8ce7381ef357a0d924327c698a870bf0a709148",
+          "lodMs": 4.178,
+          "source": "assets/kit/road.gltf",
+          "textureCooks": 0,
+          "virtualMs": 3.1986
+        },
+        {
+          "artifacts": 5,
+          "cookMs": 0.7459,
+          "key": "cf9c141adb27cb803d9da84dad64cf7ba50cccb75558f139efc5bf4c92cddd4d",
+          "lodMs": 0,
+          "source": "assets/kit/window.gltf",
+          "textureCooks": 0,
+          "virtualMs": 0.1378
+        },
+        {
+          "artifacts": 10,
+          "cookMs": 46.8375,
+          "key": "47c4d9fc786d0774b0dacce52d89da99686ab3de44ebba9b2fa8203534df6ffb",
+          "lodMs": 17.2457,
+          "source": "assets/third_party/adjustable_wrench/adjustable_wrench_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 10.3677
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 24.4816,
+          "key": "c818ecbc3459369591cf4bed807239cdf328615036b35c48cd1ef82e1557e48e",
+          "lodMs": 9.6451,
+          "source": "assets/third_party/barrel_01/Barrel_01_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 5.1381
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 24.6161,
+          "key": "836e5e4e4bc85e91c4257630fef910c0bd69696c87ddd3274aab2a475f9d3121",
+          "lodMs": 9.2927,
+          "source": "assets/third_party/barrel_02/Barrel_02_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 5.6891
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 12.1935,
+          "key": "3844d70faa9a9b25210c1e35b36d220c709bddd5f555aff84c84702fa449dc57",
+          "lodMs": 2.3344,
+          "source": "assets/third_party/barrel_03/barrel_03_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 2.8096
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 81.94279999999999,
+          "key": "f07f33bbb76b0337cc2a788228ccae6254aad3b7d2f97fb03201e3b622f286d2",
+          "lodMs": 34.3494,
+          "source": "assets/third_party/barrel_stove/barrel_stove_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 19.2731
+        },
+        {
+          "artifacts": 9,
+          "cookMs": 12.3051,
+          "key": "b90542a4669e38e56c47bad26dbc5128e8d12a73b9fa67304f8ea9cbb2729367",
+          "lodMs": 1.8412,
+          "source": "assets/third_party/bench_vice_01/bench_vice_01_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 0.0035
+        },
+        {
+          "artifacts": 7,
+          "cookMs": 188.8705,
+          "key": "05db3a2e5b35a240223e78934dc227685c0370bba05c66474195679ecd80b9e6",
+          "lodMs": 73.0314,
+          "source": "assets/third_party/caged_hanging_light/caged_hanging_light_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 47.111
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 115.1464,
+          "key": "efd9b63d1e3855e9c5657107d1b6bcdb5a79c61e4e2154c85f55f3d3a2125c39",
+          "lodMs": 34.5055,
+          "source": "assets/third_party/cardboard_box_01/cardboard_box_01_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 31.802
+        },
+        {
+          "artifacts": 12,
+          "cookMs": 123.2537,
+          "key": "dfa0b3cdfe21c50f4f50d195e22136bf9f390d5e31c0e264f0c544c6ec683b33",
+          "lodMs": 48.643,
+          "source": "assets/third_party/classic_laptop/classic_laptop_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 30.8094
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 447.9744,
+          "key": "979d5853c26b951a02204a2050601cfcff74df3b3bc5b34dd0385077c1f1785b",
+          "lodMs": 138.9818,
+          "source": "assets/third_party/concrete_road_barrier/concrete_road_barrier_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 122.0231
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 190.2448,
+          "key": "9e17b165dfe3c6c2f96651a5a6a3c5ec7dadfc3f867aa5799d982b67aad22d31",
+          "lodMs": 53.1882,
+          "source": "assets/third_party/concrete_road_barrier_02/concrete_road_barrier_02_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 63.2277
+        },
+        {
+          "artifacts": 14,
+          "cookMs": 154.4756,
+          "key": "ea6d6385d0154478490531cb2c3644119c8620f2f14aac6ee4fd286fbc1a0ce8",
+          "lodMs": 64.3587,
+          "source": "assets/third_party/covered_car/covered_car_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 37.9121
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 23.9322,
+          "key": "aae4188bfbf12aa66671808e6bbe91135601b6aa57b93138e98fab40a7a87968",
+          "lodMs": 3.8808,
+          "source": "assets/third_party/crowbar_01/crowbar_01_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 6.7737
+        },
+        {
+          "artifacts": 20,
+          "cookMs": 185.8071,
+          "key": "75509c9cd511c943dc88b5d1ed06100125c55bf5fc257e03155a11a7697da8ea",
+          "lodMs": 50.5946,
+          "source": "assets/third_party/crystalline_iceplant/crystalline_iceplant_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 33.6227
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 134.6304,
+          "key": "e48728fd4f7a68e1e9ad5254dda06d9c1f7a8d620705032777ac5243e8e09ad5",
+          "lodMs": 46.2218,
+          "source": "assets/third_party/dead_quiver_branch_01/dead_quiver_branch_01_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 34.0032
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 180.0399,
+          "key": "e9957dee22071e8edc0b003e637c050e76a8f0c8965dc838ffd550082fd8c767",
+          "lodMs": 55.6834,
+          "source": "assets/third_party/dead_quiver_trunk/dead_quiver_trunk_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 50.2927
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 1080.5016999999998,
+          "key": "cc313783e832f79e892fad96288f0ec78a846894dc74924d8b871caa3765d185",
+          "lodMs": 320.9822,
+          "source": "assets/third_party/dead_tree_trunk/dead_tree_trunk_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 294.569
+        },
+        {
+          "artifacts": 30,
+          "cookMs": 672.0315999999999,
+          "key": "dabf753365ef856ed06b2d816e534caff71849bac549e135f39ab70b28629d3e",
+          "lodMs": 267.4512,
+          "source": "assets/third_party/drill_press_01/drill_press_01_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 194.2665
+        },
+        {
+          "artifacts": 10,
+          "cookMs": 177.8904,
+          "key": "037ba168fe75b17bfefbbef8c149f172728724e576e18326864775e055ed5b91",
+          "lodMs": 67.5065,
+          "source": "assets/third_party/dry_branches_medium_01/dry_branches_medium_01_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 42.0111
+        },
+        {
+          "artifacts": 21,
+          "cookMs": 282.345,
+          "key": "ce006adb11c06c5d24938a3e20948b8bfbe67ed04333f1c4595d8eaabbb005f4",
+          "lodMs": 88.8892,
+          "source": "assets/third_party/exterior_aircon_unit/exterior_aircon_unit_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 51.4101
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 207.3294,
+          "key": "3cf0239f95a1d6ad3d690b084bca9fbd91726ec4ec9d408e272f7691ebacfc13",
+          "lodMs": 111.9655,
+          "source": "assets/third_party/hand_truck/hand_truck_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 46.4301
+        },
+        {
+          "artifacts": 10,
+          "cookMs": 99.9676,
+          "key": "0f88f981e02cf619179ad087ab4b4864c8e5665af6f4d95e6fc835d8a347009c",
+          "lodMs": 37.4287,
+          "source": "assets/third_party/hanging_industrial_lamp/hanging_industrial_lamp_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 23.733
+        },
+        {
+          "artifacts": 27,
+          "cookMs": 287.9414,
+          "key": "61db4d1abf6e3286c7ef068426c111554feb8c9fc4883bf032ea4dc81462ecb6",
+          "lodMs": 113.7537,
+          "source": "assets/third_party/industrial_caged_sconce/industrial_caged_sconce_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 79.2082
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 266.1558,
+          "key": "ace2376530b6ffe480707b3d78526d0bda617e38a5f39eb93e0388dede71d495",
+          "lodMs": 128.0895,
+          "source": "assets/third_party/industrial_storage_cart/industrial_storage_cart_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 65.0735
+        },
+        {
+          "artifacts": 12,
+          "cookMs": 316.5397,
+          "key": "3140706ddc746141777fa351aa0aa0b7a0035a3a5be1906ce6049a94c0e7ea43",
+          "lodMs": 128.193,
+          "source": "assets/third_party/ladder_sectioned_01/ladder_sectioned_01_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 83.5779
+        },
+        {
+          "artifacts": 91,
+          "cookMs": 487.0852,
+          "key": "cf7d666e7e56caf9af71a7056c9787476dcd2e364e53a14af781196c2a2bb673",
+          "lodMs": 12.9697,
+          "source": "assets/third_party/m2m_human/human-base-animations.glb",
+          "textureCooks": 0,
+          "virtualMs": 0.0026
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 212.4143,
+          "key": "85c7f92efcbcc04d3c7240cd35d50e4c6bb29bade8218a16fbfe124cdf19e9e6",
+          "lodMs": 70.8483,
+          "source": "assets/third_party/metal_jerrycan/metal_jerrycan_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 57.3009
+        },
+        {
+          "artifacts": 14,
+          "cookMs": 86.9174,
+          "key": "5b2b4ec13bcafcb4332c4459343269ea556396f2ca6a1950675677e46485ad64",
+          "lodMs": 19.6231,
+          "source": "assets/third_party/metal_jerrycan_green/metal_jerrycan_green_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 27.123
+        },
+        {
+          "artifacts": 22,
+          "cookMs": 66.8018,
+          "key": "bff95482c0f869ea3edc6fe8673bf0152589c4f7aaf5f3eaf468f187f25d7fc4",
+          "lodMs": 18.4296,
+          "source": "assets/third_party/metal_office_desk/metal_office_desk_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 19.8492
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 86.3144,
+          "key": "5a18e0ef23d732292e35d47b8bdbc7571655e60aa53d933a1ad8c9250db10299",
+          "lodMs": 32.3174,
+          "source": "assets/third_party/metal_stool_01/metal_stool_01_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 22.226
+        },
+        {
+          "artifacts": 18,
+          "cookMs": 135.71159999999998,
+          "key": "8cb054166f6d1ee2a368c4ec53a6be0b480181285f9b90a15a13163ac2b33762",
+          "lodMs": 48.685,
+          "source": "assets/third_party/metal_tool_chest/metal_tool_chest_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 37.9487
+        },
+        {
+          "artifacts": 16,
+          "cookMs": 146.2308,
+          "key": "c08e4d1efdd15face6c14cc71017fa93a2965b4ce9b16d85d876834f31718c11",
+          "lodMs": 57.404,
+          "source": "assets/third_party/metal_toolbox/metal_toolbox_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 34.86
+        },
+        {
+          "artifacts": 23,
+          "cookMs": 93.3114,
+          "key": "09f2ef13298b0482d15d25fc85bc79cc82599abaa816863a007d8951b983f0f4",
+          "lodMs": 27.8927,
+          "source": "assets/third_party/metal_trash_can/metal_trash_can_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 26.7454
+        },
+        {
+          "artifacts": 57,
+          "cookMs": 385.8966,
+          "key": "cc88717762227aa2627ba6765d1c3fa24cfe30cd9d3d328f2de5153fa667849c",
+          "lodMs": 144.7015,
+          "source": "assets/third_party/modular_airduct_rectangular_01/modular_airduct_rectangular_01_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 109.2702
+        },
+        {
+          "artifacts": 59,
+          "cookMs": 966.5432000000001,
+          "key": "83bc71ac7dd7d85f0380396a32e21ea57eb0ebb261d139527219b4de5cb48951",
+          "lodMs": 307.1362,
+          "source": "assets/third_party/modular_chainlink_fence/modular_chainlink_fence_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 243.8651
+        },
+        {
+          "artifacts": 213,
+          "cookMs": 2086.6286999999998,
+          "key": "2868fa3fd5fd3bc94cc8963a3250a3db2105ee39453d9abf674a11a30dd7fd81",
+          "lodMs": 824.8654,
+          "source": "assets/third_party/modular_electricity_poles/modular_electricity_poles_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 615.2693
+        },
+        {
+          "artifacts": 23,
+          "cookMs": 139.6975,
+          "key": "fda41dc4a42acf1ddfd414e9688391b8526cb6630d2bdc052db3583d2392ed61",
+          "lodMs": 66.0212,
+          "source": "assets/third_party/modular_industrial_pipes_01/modular_industrial_pipes_01_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 32.7723
+        },
+        {
+          "artifacts": 33,
+          "cookMs": 133.7089,
+          "key": "f5423a717ed812afc813e54f6982652930a2729d4b8efb5cc37a51c4dee77c26",
+          "lodMs": 41.2251,
+          "source": "assets/third_party/mounted_fluorescent_lights/mounted_fluorescent_lights_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 39.1819
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 932.7456,
+          "key": "dc119f962dee2c39582be516b3b2b26b23fdbeed77a3ac8108213a397b60733a",
+          "lodMs": 290.9034,
+          "source": "assets/third_party/namaqualand_boulder_02/namaqualand_boulder_02_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 230.2096
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 521.4379,
+          "key": "ae4abdd69ebb9770163b86731cad3bdfbf97add7ba05a2ccb6820fc3a1b232ea",
+          "lodMs": 150.9298,
+          "source": "assets/third_party/namaqualand_boulder_03/namaqualand_boulder_03_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 135.9783
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 447.9965,
+          "key": "2469ce3f2603db5f07b8c3811a52177165bc1dbfbfa231e3c3eab9531011c371",
+          "lodMs": 142.9963,
+          "source": "assets/third_party/namaqualand_boulder_04/namaqualand_boulder_04_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 116.8246
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 761.8236,
+          "key": "e7bea83cc0df13e8948ea4026df05f414097093086b25ed7ebc0925b1b036964",
+          "lodMs": 249.2056,
+          "source": "assets/third_party/namaqualand_boulder_05/namaqualand_boulder_05_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 217.7626
+        },
+        {
+          "artifacts": 12,
+          "cookMs": 748.5378000000001,
+          "key": "e82aaba0ea07ca5faa8b936c4822b817d85998c53529538689a2c1e7277c35dd",
+          "lodMs": 228.8139,
+          "source": "assets/third_party/namaqualand_rocks_01/namaqualand_rocks_01_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 216.2429
+        },
+        {
+          "artifacts": 8,
+          "cookMs": 246.8179,
+          "key": "33d6fa6dd588966de28cd72488ba36a86f4661fdae539d52dfb3ab8c6ac50aff",
+          "lodMs": 108.0789,
+          "source": "assets/third_party/old_drill_press/old_drill_press_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 64.0419
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 203.75889999999998,
+          "key": "757ef163e122292219235c019e2c4eb4dfd7d781ca4ee91262e502c432bf152f",
+          "lodMs": 76.8834,
+          "source": "assets/third_party/old_gas_mask/old_gas_mask_2k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 49.1876
+        },
+        {
+          "artifacts": 9,
+          "cookMs": 877.9228999999999,
+          "key": "b1ba717f97656a8428d39576f59c258127247109542286ca03e94f00da7c239d",
+          "lodMs": 335.061,
+          "source": "assets/third_party/old_military_compressor/old_military_compressor_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 245.4344
+        },
+        {
+          "artifacts": 14,
+          "cookMs": 103.69059999999999,
+          "key": "fb6f91f35f5f3317693f6687e2512277754c4d29ff5af228a8cbb6ed287c2309",
+          "lodMs": 32.9729,
+          "source": "assets/third_party/old_military_crate/old_military_crate_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 28.4857
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 27.962500000000002,
+          "key": "4ee89ae82aab2b4617f166b6760a5997039e1ff63bbfc12bf8c67233f10a0abc",
+          "lodMs": 6.3973,
+          "source": "assets/third_party/old_tyre/old_tyre_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 7.8282
+        },
+        {
+          "artifacts": 17,
+          "cookMs": 1091.4071999999999,
+          "key": "4212a7a46e3f58eb6c3783f1e266b3130ad42728ac5706d73ed4ba921ab019d0",
+          "lodMs": 471.4036,
+          "source": "assets/third_party/overhead_crane/overhead_crane_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 290.2091
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 109.7993,
+          "key": "82a493604e57973741d827114b72605150b736fa18a101bb3e16b8dfc51cd17c",
+          "lodMs": 34.8365,
+          "source": "assets/third_party/pipe_wrench/pipe_wrench_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 33.3599
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 253.05769999999998,
+          "key": "8a529f04949ef84892e8cb03e006a909212d29dc2dc30650f8573b3e187d36a9",
+          "lodMs": 104.6646,
+          "source": "assets/third_party/plastic_crate_03/plastic_crate_03_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 65.6477
+        },
+        {
+          "artifacts": 15,
+          "cookMs": 333.8998,
+          "key": "499899076785f329a0ececac232574c05eab181d8ca6c7271b0267c6c612af8b",
+          "lodMs": 125.2128,
+          "source": "assets/third_party/portable_generator/portable_generator_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 109.2082
+        },
+        {
+          "artifacts": 9,
+          "cookMs": 202.2123,
+          "key": "f405d5e22a0bb7053a75ec733fb59508470494c457f276559bb7d0f9580e536a",
+          "lodMs": 74.5838,
+          "source": "assets/third_party/portable_searchlight/portable_searchlight_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 54.8266
+        },
+        {
+          "artifacts": 9,
+          "cookMs": 325.20189999999997,
+          "key": "968f5be343f300e4449f9f6fdca042ea7f5b94e17f67576f910ecf7f02a58984",
+          "lodMs": 122.7565,
+          "source": "assets/third_party/portable_welding_cart/portable_welding_cart_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 85.6714
+        },
+        {
+          "artifacts": 8,
+          "cookMs": 256.92019999999997,
+          "key": "df7d0a8c11effbf0b55615ce04d9fcf1d8d537fd38d827fcab7d75aae32574fc",
+          "lodMs": 90.1748,
+          "source": "assets/third_party/power_box_01/power_box_01_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 86.5174
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 64.5724,
+          "key": "41f97f492244a60e8c46dbc65765087805d170b1e3b7dd7266bcd32217845138",
+          "lodMs": 24.3827,
+          "source": "assets/third_party/propane_tank/propane_tank_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 17.5174
+        },
+        {
+          "artifacts": 11,
+          "cookMs": 1581.6824000000001,
+          "key": "c48977cda311a9f0bdad24c7a76c02cd3a0312569874c1feff751d2c86ec3079",
+          "lodMs": 572.8564,
+          "source": "assets/third_party/quiver_tree_01/quiver_tree_01_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 381.2075
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 785.4967,
+          "key": "a1673a31e24f3466545d2bddec6d58d1cd9f53d9878e0f4f7aa93160ca9b5af5",
+          "lodMs": 277.5924,
+          "source": "assets/third_party/quiver_tree_02/quiver_tree_02_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 198.1134
+        },
+        {
+          "artifacts": 21,
+          "cookMs": 60.2871,
+          "key": "396e57531d5dd5494587c3bdf70f54467829558e0607abb7efff9ba1a8ab41c5",
+          "lodMs": 19.915,
+          "source": "assets/third_party/retro_multimeter/retro_multimeter_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 17.1245
+        },
+        {
+          "artifacts": 9,
+          "cookMs": 14.6628,
+          "key": "6c81606b4ff8b9adf2fb406a0be64c094244e5c9484c378c3538475f72494bda",
+          "lodMs": 4.8523,
+          "source": "assets/third_party/rollershutter_door/rollershutter_door_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 2.1379
+        },
+        {
+          "artifacts": 5,
+          "cookMs": 96.86240000000001,
+          "key": "51dcf311052e387b31a436385b1b06fb9a099fe65a170e31fce3fe7b5ded6f40",
+          "lodMs": 9.7764,
+          "source": "assets/third_party/rusted_wheel_rim_01/rusted_wheel_rim_01_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 0.003
+        },
+        {
+          "artifacts": 11,
+          "cookMs": 35.7114,
+          "key": "5238914da157adce6700c6f9032d23344f61335dcf6b183eac8658711e3b6a83",
+          "lodMs": 12.3087,
+          "source": "assets/third_party/security_light/security_light_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 9.3458
+        },
+        {
+          "artifacts": 12,
+          "cookMs": 108.52680000000001,
+          "key": "eca92118f1c5cf48b30876d3510357225cda706db4938ae6ba5016dd349ae4cb",
+          "lodMs": 19.9316,
+          "source": "assets/third_party/shrub_03/shrub_03_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 15.41
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 19.4512,
+          "key": "cace5a51bf9b0fe34fb6d37cd9b34dd5ac51a2e07cc5a01423484f9a5d656a3f",
+          "lodMs": 3.4638,
+          "source": "assets/third_party/sledgehammer_01/sledgehammer_01_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 4.8964
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 160.4467,
+          "key": "222b8444ca350415970b1f3dee67520ffbc9b441971b1214da45e41f1e3ce0d5",
+          "lodMs": 64.2561,
+          "source": "assets/third_party/small_lpg_tank/small_lpg_tank_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 45.4422
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 177.53640000000001,
+          "key": "a02f6ffc2a1232de3442421e2b437e2de7d6b9f213a91e2cbfc482e957f9aa3f",
+          "lodMs": 81.4871,
+          "source": "assets/third_party/small_oil_can_01/small_oil_can_01_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 41.3358
+        },
+        {
+          "artifacts": 8,
+          "cookMs": 54.1379,
+          "key": "a3467e0e707e0f608ec1222546c65fd37c07677bf2e83a83005457bfff6d9213",
+          "lodMs": 11.41,
+          "source": "assets/third_party/spray_paint_bottles_02/spray_paint_bottles_02_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 16.7548
+        },
+        {
+          "artifacts": 17,
+          "cookMs": 68.0414,
+          "key": "49e701995e7c818a62f94766976f69fb05efd86c1050f62f167af448c2598cbe",
+          "lodMs": 16.4262,
+          "source": "assets/third_party/steel_frame_shelves_03/steel_frame_shelves_03_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 21.3204
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 31.200100000000003,
+          "key": "7f8e45e687ceec92546a3d6babc0e69426d8a6d64d7758c2f926f30bddac0dfc",
+          "lodMs": 10.4692,
+          "source": "assets/third_party/stone_fire_pit/stone_fire_pit_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 7.1417
+        },
+        {
+          "artifacts": 11,
+          "cookMs": 272.2391,
+          "key": "c03ce118c705f8e071c275b28755bced106f51dc5ef9057b24fc7d88f1649ccf",
+          "lodMs": 110.6567,
+          "source": "assets/third_party/street_lamp_01/street_lamp_01_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 76.8728
+        },
+        {
+          "artifacts": 11,
+          "cookMs": 195.5847,
+          "key": "61739baf37df7323313130f99774b632a8a477c459c8fa467b5df2f113d33b7b",
+          "lodMs": 78.5034,
+          "source": "assets/third_party/street_lamp_02/street_lamp_02_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 54.8474
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 321.31379999999996,
+          "key": "6539ac0fe1662f2a7c7e3dea00d6a06e6af0ee2d5236975f5b273f5de5c4ba44",
+          "lodMs": 132.666,
+          "source": "assets/third_party/tool_cart/tool_cart_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 102.6051
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 42.1318,
+          "key": "3b1df73293fa6acb1120e7a27a9972e578561c29fa9ab21f34b947457f3c0658",
+          "lodMs": 13.7571,
+          "source": "assets/third_party/trashbag/trashbag_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 10.8921
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 51.1608,
+          "key": "1e2f2c8e1a8361738302e5f9415f1ea79ce7a977f3852aa69df1f1f3144a1928",
+          "lodMs": 19.4602,
+          "source": "assets/third_party/utility_box_01/utility_box_01_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 13.3565
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 73.3574,
+          "key": "92190b76a3383d42c85e9419e08414b65dd22294ea753e7c6ffe5597efeae9f3",
+          "lodMs": 24.7966,
+          "source": "assets/third_party/utility_box_02/utility_box_02_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 22.7713
+        },
+        {
+          "artifacts": 35,
+          "cookMs": 429.14419999999996,
+          "key": "cbc7eb235bf70fe16db01ba9c61fe485a8f160eb26db5931b97aafa084e57c83",
+          "lodMs": 157.7609,
+          "source": "assets/third_party/vintage_radio_transceiver/vintage_radio_transceiver_2k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 122.1515
+        },
+        {
+          "artifacts": 36,
+          "cookMs": 304.82280000000003,
+          "key": "901395f9e8aed40823d01ee08a4c599effe6f5f7e41c7c32181e46e1e322b125",
+          "lodMs": 70.3685,
+          "source": "assets/third_party/wild_rooibos_bush/wild_rooibos_bush_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 50.2467
+        },
+        {
+          "artifacts": 10,
+          "cookMs": 49.7375,
+          "key": "68172f03c6b9baf9326abad3a536c89559e11284912344a79ef90de5a8bb97ca",
+          "lodMs": 14.2469,
+          "source": "assets/third_party/wooden_crate_01/wooden_crate_01_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 15.7118
+        },
+        {
+          "artifacts": 8,
+          "cookMs": 48.5936,
+          "key": "28e9552cbebef11287d6bcb8396af4665e26c158509048afad92051839c390cc",
+          "lodMs": 16.7401,
+          "source": "assets/third_party/wooden_crate_02/wooden_crate_02_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 15.2607
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 28.5535,
+          "key": "0045b9b3467364b1a4541a0677a655115f196071e0fe1741ee27cbd7f0e39a78",
+          "lodMs": 10.0971,
+          "source": "assets/third_party/wooden_hammer_01/wooden_hammer_01_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 6.6688
+        },
+        {
+          "artifacts": 8,
+          "cookMs": 85.9964,
+          "key": "9875654cafdbca62c013ddff44ce21f442ba89f90138131db16edb7af9d0d6f7",
+          "lodMs": 35.686,
+          "source": "assets/third_party/wooden_ladder/wooden_ladder_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 20.5713
+        },
+        {
+          "artifacts": 10,
+          "cookMs": 204.10510000000002,
+          "key": "71f583c0820d4af7a8d0a7ba5fb2ab18b5c3cf88fdded08f3096f5f998dde5bd",
+          "lodMs": 72.9736,
+          "source": "assets/third_party/wooden_military_crate/wooden_military_crate_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 61.9866
+        },
+        {
+          "artifacts": 16,
+          "cookMs": 16.223399999999998,
+          "key": "6509f2a032189e9cf13a95d200aecbe48b9c2012ff894179efbc285c9dac7230",
+          "lodMs": 2.9202,
+          "source": "assets/third_party/woodentable_03/WoodenTable_03_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 4.7929
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 51.584199999999996,
+          "key": "fdf7a2a4f76283d8cf4480e4d6c00ffd9c98b6aeb1d96ffbb6db1e20a222e559",
+          "lodMs": 21.2624,
+          "source": "assets/third_party/worn_metal_rack/worn_metal_rack_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 12.2344
+        }
+      ],
+      "threads": 1,
+      "virtualMs": 6091.170600000001
+    },
+    {
+      "case": "b1",
+      "cookMs": 18132.175799999994,
+      "load": {
+        "availableMemoryKiB": 6797664,
+        "context": "Single-thread phase-only geometry replay ABBA; batch gate active; no encoding or stores; not fresh-project walls",
+        "cpuPercent": 14,
+        "utc": "2026-10-26T06:43:59.4357381Z"
+      },
+      "lodMs": 6702.184400000002,
+      "models": 101,
+      "modelsVerified": [
+        {
+          "artifacts": 6,
+          "cookMs": 3.6534,
+          "key": "a6cbd37299fadd2b55cc356bf8367ed9597e23301a457ab682e2eb996a9591a7",
+          "lodMs": 0,
+          "source": "assets/kit/apron.gltf",
+          "textureCooks": 0,
+          "virtualMs": 0.0583
+        },
+        {
+          "artifacts": 3,
+          "cookMs": 6.0018,
+          "key": "f2a62812538d7a2a20d04a7e0dcffb3baf1b4ac3ba616fbe26d52672e631bafa",
+          "lodMs": 2.4887,
+          "source": "assets/kit/cables.gltf",
+          "textureCooks": 0,
+          "virtualMs": 0.7609
+        },
+        {
+          "artifacts": 13,
+          "cookMs": 11.7918,
+          "key": "f7ae08f32743eb8961d0ab6c3dd377dad507885dae925798b0786044ac012e1e",
+          "lodMs": 0,
+          "source": "assets/kit/container_blue.gltf",
+          "textureCooks": 0,
+          "virtualMs": 0.2576
+        },
+        {
+          "artifacts": 13,
+          "cookMs": 12.3307,
+          "key": "f654dd8d5553865d30b1a5c64863ef29ab14d5d4c81f451fd094426d295f1936",
+          "lodMs": 0,
+          "source": "assets/kit/container_green.gltf",
+          "textureCooks": 0,
+          "virtualMs": 0.3111
+        },
+        {
+          "artifacts": 13,
+          "cookMs": 7.435,
+          "key": "5ea290804a7d6120463ebda3d17291ef412fbeed8db0a5a89603be5b6bd7a4ba",
+          "lodMs": 0,
+          "source": "assets/kit/container_rust.gltf",
+          "textureCooks": 0,
+          "virtualMs": 0.2475
+        },
+        {
+          "artifacts": 5,
+          "cookMs": 46.3245,
+          "key": "78f2d156165c8b77270bf73ba9d3a182ccbedea0cf9299162f2416effa86684e",
+          "lodMs": 13.5117,
+          "source": "assets/kit/embers.gltf",
+          "textureCooks": 0,
+          "virtualMs": 6.9516
+        },
+        {
+          "artifacts": 5,
+          "cookMs": 105.63019999999999,
+          "key": "2c3508ae83b6dc2580b509a521850e5e318f36ee5898f4de0c99537e5b2d38f5",
+          "lodMs": 19.5946,
+          "source": "assets/kit/festoon.gltf",
+          "textureCooks": 0,
+          "virtualMs": 14.261
+        },
+        {
+          "artifacts": 18,
+          "cookMs": 9.4413,
+          "key": "46ecd0afb3f3eca3b38c55bc1b3f63354e85f29e1221fe18c05a161b28f2d12f",
+          "lodMs": 0,
+          "source": "assets/kit/guard_hut.gltf",
+          "textureCooks": 0,
+          "virtualMs": 0.1806
+        },
+        {
+          "artifacts": 23,
+          "cookMs": 20.304,
+          "key": "94beee1b529c4ee8916a6f9362b338742d4179469c583d6b48599640b33e82b1",
+          "lodMs": 1.136,
+          "source": "assets/kit/hangar.gltf",
+          "textureCooks": 0,
+          "virtualMs": 0.6409
+        },
+        {
+          "artifacts": 5,
+          "cookMs": 0.5245,
+          "key": "e18a9ee19ea4da03793f70e617996a0b9b4ece16b9ed26275e9c3d9b8137b756",
+          "lodMs": 0,
+          "source": "assets/kit/light_panel.gltf",
+          "textureCooks": 0,
+          "virtualMs": 0.0327
+        },
+        {
+          "artifacts": 10,
+          "cookMs": 10.5697,
+          "key": "94f471370e9692dc78c38e918ee62b06a7cd35331a4f205255323ad281d27e87",
+          "lodMs": 2.9469,
+          "source": "assets/kit/mast.gltf",
+          "textureCooks": 0,
+          "virtualMs": 1.3298
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 2.8944,
+          "key": "426d0628e765866f99296f2e4bf46662244bc3d55f501e6fe27de37e804eb509",
+          "lodMs": 0,
+          "source": "assets/kit/pad.gltf",
+          "textureCooks": 0,
+          "virtualMs": 0.0241
+        },
+        {
+          "artifacts": 3,
+          "cookMs": 0.5091,
+          "key": "ed68c675777a577c399c29d2c5cc53ce8ca35c3d2274f16a74953198aed23c72",
+          "lodMs": 0,
+          "source": "assets/kit/puddle_a.gltf",
+          "textureCooks": 0,
+          "virtualMs": 0.0344
+        },
+        {
+          "artifacts": 3,
+          "cookMs": 0.4944,
+          "key": "59b809d6dbaa2de02fb42cf1a53839725bde57c2792c24b3074a5ed251c4aa25",
+          "lodMs": 0,
+          "source": "assets/kit/puddle_b.gltf",
+          "textureCooks": 0,
+          "virtualMs": 0.0337
+        },
+        {
+          "artifacts": 3,
+          "cookMs": 0.4167,
+          "key": "5658e45091e66e4d2ea1a307ecf76d0bea07ac3068f0c454fdf2d2045fcd78b9",
+          "lodMs": 0,
+          "source": "assets/kit/puddle_c.gltf",
+          "textureCooks": 0,
+          "virtualMs": 0.0297
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 23.7056,
+          "key": "67d6ef5868f5f41e2c1eedb0b8ce7381ef357a0d924327c698a870bf0a709148",
+          "lodMs": 4.549,
+          "source": "assets/kit/road.gltf",
+          "textureCooks": 0,
+          "virtualMs": 2.1052
+        },
+        {
+          "artifacts": 5,
+          "cookMs": 0.7089000000000001,
+          "key": "cf9c141adb27cb803d9da84dad64cf7ba50cccb75558f139efc5bf4c92cddd4d",
+          "lodMs": 0,
+          "source": "assets/kit/window.gltf",
+          "textureCooks": 0,
+          "virtualMs": 0.0726
+        },
+        {
+          "artifacts": 10,
+          "cookMs": 46.2498,
+          "key": "47c4d9fc786d0774b0dacce52d89da99686ab3de44ebba9b2fa8203534df6ffb",
+          "lodMs": 18.6939,
+          "source": "assets/third_party/adjustable_wrench/adjustable_wrench_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 8.0282
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 22.5781,
+          "key": "c818ecbc3459369591cf4bed807239cdf328615036b35c48cd1ef82e1557e48e",
+          "lodMs": 9.3927,
+          "source": "assets/third_party/barrel_01/Barrel_01_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 3.9326
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 22.2882,
+          "key": "836e5e4e4bc85e91c4257630fef910c0bd69696c87ddd3274aab2a475f9d3121",
+          "lodMs": 8.967,
+          "source": "assets/third_party/barrel_02/Barrel_02_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 4.2209
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 10.039,
+          "key": "3844d70faa9a9b25210c1e35b36d220c709bddd5f555aff84c84702fa449dc57",
+          "lodMs": 2.0875,
+          "source": "assets/third_party/barrel_03/barrel_03_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 1.8769
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 73.1389,
+          "key": "f07f33bbb76b0337cc2a788228ccae6254aad3b7d2f97fb03201e3b622f286d2",
+          "lodMs": 33.7721,
+          "source": "assets/third_party/barrel_stove/barrel_stove_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 13.7872
+        },
+        {
+          "artifacts": 9,
+          "cookMs": 11.109,
+          "key": "b90542a4669e38e56c47bad26dbc5128e8d12a73b9fa67304f8ea9cbb2729367",
+          "lodMs": 1.7504,
+          "source": "assets/third_party/bench_vice_01/bench_vice_01_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 0.0027
+        },
+        {
+          "artifacts": 7,
+          "cookMs": 160.5297,
+          "key": "05db3a2e5b35a240223e78934dc227685c0370bba05c66474195679ecd80b9e6",
+          "lodMs": 65.992,
+          "source": "assets/third_party/caged_hanging_light/caged_hanging_light_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 33.2117
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 103.1495,
+          "key": "efd9b63d1e3855e9c5657107d1b6bcdb5a79c61e4e2154c85f55f3d3a2125c39",
+          "lodMs": 33.6445,
+          "source": "assets/third_party/cardboard_box_01/cardboard_box_01_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 23.5252
+        },
+        {
+          "artifacts": 12,
+          "cookMs": 110.71119999999999,
+          "key": "dfa0b3cdfe21c50f4f50d195e22136bf9f390d5e31c0e264f0c544c6ec683b33",
+          "lodMs": 48.0656,
+          "source": "assets/third_party/classic_laptop/classic_laptop_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 21.8481
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 381.892,
+          "key": "979d5853c26b951a02204a2050601cfcff74df3b3bc5b34dd0385077c1f1785b",
+          "lodMs": 122.412,
+          "source": "assets/third_party/concrete_road_barrier/concrete_road_barrier_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 88.4635
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 152.3147,
+          "key": "9e17b165dfe3c6c2f96651a5a6a3c5ec7dadfc3f867aa5799d982b67aad22d31",
+          "lodMs": 47.8301,
+          "source": "assets/third_party/concrete_road_barrier_02/concrete_road_barrier_02_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 33.9583
+        },
+        {
+          "artifacts": 14,
+          "cookMs": 93.8368,
+          "key": "ea6d6385d0154478490531cb2c3644119c8620f2f14aac6ee4fd286fbc1a0ce8",
+          "lodMs": 39.7797,
+          "source": "assets/third_party/covered_car/covered_car_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 20.7963
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 15.666200000000002,
+          "key": "aae4188bfbf12aa66671808e6bbe91135601b6aa57b93138e98fab40a7a87968",
+          "lodMs": 2.6032,
+          "source": "assets/third_party/crowbar_01/crowbar_01_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 3.5342
+        },
+        {
+          "artifacts": 20,
+          "cookMs": 114.31710000000001,
+          "key": "75509c9cd511c943dc88b5d1ed06100125c55bf5fc257e03155a11a7697da8ea",
+          "lodMs": 31.4679,
+          "source": "assets/third_party/crystalline_iceplant/crystalline_iceplant_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 16.6512
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 98.3352,
+          "key": "e48728fd4f7a68e1e9ad5254dda06d9c1f7a8d620705032777ac5243e8e09ad5",
+          "lodMs": 31.6334,
+          "source": "assets/third_party/dead_quiver_branch_01/dead_quiver_branch_01_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 22.714
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 113.6879,
+          "key": "e9957dee22071e8edc0b003e637c050e76a8f0c8965dc838ffd550082fd8c767",
+          "lodMs": 35.5475,
+          "source": "assets/third_party/dead_quiver_trunk/dead_quiver_trunk_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 25.9245
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 726.2433000000001,
+          "key": "cc313783e832f79e892fad96288f0ec78a846894dc74924d8b871caa3765d185",
+          "lodMs": 246.1419,
+          "source": "assets/third_party/dead_tree_trunk/dead_tree_trunk_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 151.2735
+        },
+        {
+          "artifacts": 30,
+          "cookMs": 433.3354,
+          "key": "dabf753365ef856ed06b2d816e534caff71849bac549e135f39ab70b28629d3e",
+          "lodMs": 185.3531,
+          "source": "assets/third_party/drill_press_01/drill_press_01_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 91.5244
+        },
+        {
+          "artifacts": 10,
+          "cookMs": 121.25370000000001,
+          "key": "037ba168fe75b17bfefbbef8c149f172728724e576e18326864775e055ed5b91",
+          "lodMs": 46.3459,
+          "source": "assets/third_party/dry_branches_medium_01/dry_branches_medium_01_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 24.2081
+        },
+        {
+          "artifacts": 21,
+          "cookMs": 218.1013,
+          "key": "ce006adb11c06c5d24938a3e20948b8bfbe67ed04333f1c4595d8eaabbb005f4",
+          "lodMs": 70.2934,
+          "source": "assets/third_party/exterior_aircon_unit/exterior_aircon_unit_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 28.5029
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 136.74259999999998,
+          "key": "3cf0239f95a1d6ad3d690b084bca9fbd91726ec4ec9d408e272f7691ebacfc13",
+          "lodMs": 75.5817,
+          "source": "assets/third_party/hand_truck/hand_truck_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 20.8693
+        },
+        {
+          "artifacts": 10,
+          "cookMs": 70.2155,
+          "key": "0f88f981e02cf619179ad087ab4b4864c8e5665af6f4d95e6fc835d8a347009c",
+          "lodMs": 29.3541,
+          "source": "assets/third_party/hanging_industrial_lamp/hanging_industrial_lamp_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 13.5387
+        },
+        {
+          "artifacts": 27,
+          "cookMs": 196.86860000000001,
+          "key": "61db4d1abf6e3286c7ef068426c111554feb8c9fc4883bf032ea4dc81462ecb6",
+          "lodMs": 82.1905,
+          "source": "assets/third_party/industrial_caged_sconce/industrial_caged_sconce_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 44.5686
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 169.5159,
+          "key": "ace2376530b6ffe480707b3d78526d0bda617e38a5f39eb93e0388dede71d495",
+          "lodMs": 88.3706,
+          "source": "assets/third_party/industrial_storage_cart/industrial_storage_cart_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 31.462
+        },
+        {
+          "artifacts": 12,
+          "cookMs": 209.96409999999997,
+          "key": "3140706ddc746141777fa351aa0aa0b7a0035a3a5be1906ce6049a94c0e7ea43",
+          "lodMs": 92.2497,
+          "source": "assets/third_party/ladder_sectioned_01/ladder_sectioned_01_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 41.5928
+        },
+        {
+          "artifacts": 91,
+          "cookMs": 353.8746,
+          "key": "cf7d666e7e56caf9af71a7056c9787476dcd2e364e53a14af781196c2a2bb673",
+          "lodMs": 9.7671,
+          "source": "assets/third_party/m2m_human/human-base-animations.glb",
+          "textureCooks": 0,
+          "virtualMs": 0.0042
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 143.62730000000002,
+          "key": "85c7f92efcbcc04d3c7240cd35d50e4c6bb29bade8218a16fbfe124cdf19e9e6",
+          "lodMs": 50.232,
+          "source": "assets/third_party/metal_jerrycan/metal_jerrycan_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 35.3791
+        },
+        {
+          "artifacts": 14,
+          "cookMs": 60.1756,
+          "key": "5b2b4ec13bcafcb4332c4459343269ea556396f2ca6a1950675677e46485ad64",
+          "lodMs": 13.687,
+          "source": "assets/third_party/metal_jerrycan_green/metal_jerrycan_green_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 16.242
+        },
+        {
+          "artifacts": 22,
+          "cookMs": 40.481700000000004,
+          "key": "bff95482c0f869ea3edc6fe8673bf0152589c4f7aaf5f3eaf468f187f25d7fc4",
+          "lodMs": 11.733,
+          "source": "assets/third_party/metal_office_desk/metal_office_desk_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 9.2783
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 54.3157,
+          "key": "5a18e0ef23d732292e35d47b8bdbc7571655e60aa53d933a1ad8c9250db10299",
+          "lodMs": 20.0924,
+          "source": "assets/third_party/metal_stool_01/metal_stool_01_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 11.0676
+        },
+        {
+          "artifacts": 18,
+          "cookMs": 96.066,
+          "key": "8cb054166f6d1ee2a368c4ec53a6be0b480181285f9b90a15a13163ac2b33762",
+          "lodMs": 36.3547,
+          "source": "assets/third_party/metal_tool_chest/metal_tool_chest_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 22.5961
+        },
+        {
+          "artifacts": 16,
+          "cookMs": 102.2804,
+          "key": "c08e4d1efdd15face6c14cc71017fa93a2965b4ce9b16d85d876834f31718c11",
+          "lodMs": 43.8018,
+          "source": "assets/third_party/metal_toolbox/metal_toolbox_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 20.1792
+        },
+        {
+          "artifacts": 23,
+          "cookMs": 89.601,
+          "key": "09f2ef13298b0482d15d25fc85bc79cc82599abaa816863a007d8951b983f0f4",
+          "lodMs": 28.0056,
+          "source": "assets/third_party/metal_trash_can/metal_trash_can_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 17.8963
+        },
+        {
+          "artifacts": 57,
+          "cookMs": 294.6785,
+          "key": "cc88717762227aa2627ba6765d1c3fa24cfe30cd9d3d328f2de5153fa667849c",
+          "lodMs": 118.1318,
+          "source": "assets/third_party/modular_airduct_rectangular_01/modular_airduct_rectangular_01_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 65.0055
+        },
+        {
+          "artifacts": 59,
+          "cookMs": 669.0468000000001,
+          "key": "83bc71ac7dd7d85f0380396a32e21ea57eb0ebb261d139527219b4de5cb48951",
+          "lodMs": 227.4056,
+          "source": "assets/third_party/modular_chainlink_fence/modular_chainlink_fence_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 139.7444
+        },
+        {
+          "artifacts": 213,
+          "cookMs": 1457.4749,
+          "key": "2868fa3fd5fd3bc94cc8963a3250a3db2105ee39453d9abf674a11a30dd7fd81",
+          "lodMs": 624.7689,
+          "source": "assets/third_party/modular_electricity_poles/modular_electricity_poles_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 332.6792
+        },
+        {
+          "artifacts": 23,
+          "cookMs": 108.7663,
+          "key": "fda41dc4a42acf1ddfd414e9688391b8526cb6630d2bdc052db3583d2392ed61",
+          "lodMs": 48.8627,
+          "source": "assets/third_party/modular_industrial_pipes_01/modular_industrial_pipes_01_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 23.8186
+        },
+        {
+          "artifacts": 33,
+          "cookMs": 109.4671,
+          "key": "f5423a717ed812afc813e54f6982652930a2729d4b8efb5cc37a51c4dee77c26",
+          "lodMs": 35.8896,
+          "source": "assets/third_party/mounted_fluorescent_lights/mounted_fluorescent_lights_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 24.9906
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 691.0055000000001,
+          "key": "dc119f962dee2c39582be516b3b2b26b23fdbeed77a3ac8108213a397b60733a",
+          "lodMs": 222.3244,
+          "source": "assets/third_party/namaqualand_boulder_02/namaqualand_boulder_02_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 151.3844
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 445.9147,
+          "key": "ae4abdd69ebb9770163b86731cad3bdfbf97add7ba05a2ccb6820fc3a1b232ea",
+          "lodMs": 152.0607,
+          "source": "assets/third_party/namaqualand_boulder_03/namaqualand_boulder_03_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 98.4659
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 388.9991,
+          "key": "2469ce3f2603db5f07b8c3811a52177165bc1dbfbfa231e3c3eab9531011c371",
+          "lodMs": 128.3626,
+          "source": "assets/third_party/namaqualand_boulder_04/namaqualand_boulder_04_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 82.8928
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 612.2338000000001,
+          "key": "e7bea83cc0df13e8948ea4026df05f414097093086b25ed7ebc0925b1b036964",
+          "lodMs": 194.5384,
+          "source": "assets/third_party/namaqualand_boulder_05/namaqualand_boulder_05_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 133.5491
+        },
+        {
+          "artifacts": 12,
+          "cookMs": 551.4234,
+          "key": "e82aaba0ea07ca5faa8b936c4822b817d85998c53529538689a2c1e7277c35dd",
+          "lodMs": 186.0891,
+          "source": "assets/third_party/namaqualand_rocks_01/namaqualand_rocks_01_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 124.1454
+        },
+        {
+          "artifacts": 8,
+          "cookMs": 229.47560000000001,
+          "key": "33d6fa6dd588966de28cd72488ba36a86f4661fdae539d52dfb3ab8c6ac50aff",
+          "lodMs": 111.7026,
+          "source": "assets/third_party/old_drill_press/old_drill_press_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 45.4588
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 195.63569999999999,
+          "key": "757ef163e122292219235c019e2c4eb4dfd7d781ca4ee91262e502c432bf152f",
+          "lodMs": 77.5903,
+          "source": "assets/third_party/old_gas_mask/old_gas_mask_2k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 39.2452
+        },
+        {
+          "artifacts": 9,
+          "cookMs": 819.5024,
+          "key": "b1ba717f97656a8428d39576f59c258127247109542286ca03e94f00da7c239d",
+          "lodMs": 346.7077,
+          "source": "assets/third_party/old_military_compressor/old_military_compressor_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 178.1637
+        },
+        {
+          "artifacts": 14,
+          "cookMs": 96.3329,
+          "key": "fb6f91f35f5f3317693f6687e2512277754c4d29ff5af228a8cbb6ed287c2309",
+          "lodMs": 32.3879,
+          "source": "assets/third_party/old_military_crate/old_military_crate_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 24.1584
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 22.1295,
+          "key": "4ee89ae82aab2b4617f166b6760a5997039e1ff63bbfc12bf8c67233f10a0abc",
+          "lodMs": 4.7182,
+          "source": "assets/third_party/old_tyre/old_tyre_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 5.3717
+        },
+        {
+          "artifacts": 17,
+          "cookMs": 987.9073000000001,
+          "key": "4212a7a46e3f58eb6c3783f1e266b3130ad42728ac5706d73ed4ba921ab019d0",
+          "lodMs": 462.9236,
+          "source": "assets/third_party/overhead_crane/overhead_crane_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 207.2254
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 101.2192,
+          "key": "82a493604e57973741d827114b72605150b736fa18a101bb3e16b8dfc51cd17c",
+          "lodMs": 34.248,
+          "source": "assets/third_party/pipe_wrench/pipe_wrench_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 24.0199
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 237.4363,
+          "key": "8a529f04949ef84892e8cb03e006a909212d29dc2dc30650f8573b3e187d36a9",
+          "lodMs": 103.3694,
+          "source": "assets/third_party/plastic_crate_03/plastic_crate_03_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 48.4322
+        },
+        {
+          "artifacts": 15,
+          "cookMs": 298.42600000000004,
+          "key": "499899076785f329a0ececac232574c05eab181d8ca6c7271b0267c6c612af8b",
+          "lodMs": 127.3896,
+          "source": "assets/third_party/portable_generator/portable_generator_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 73.7818
+        },
+        {
+          "artifacts": 9,
+          "cookMs": 185.4698,
+          "key": "f405d5e22a0bb7053a75ec733fb59508470494c457f276559bb7d0f9580e536a",
+          "lodMs": 71.4773,
+          "source": "assets/third_party/portable_searchlight/portable_searchlight_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 40.8021
+        },
+        {
+          "artifacts": 9,
+          "cookMs": 294.75800000000004,
+          "key": "968f5be343f300e4449f9f6fdca042ea7f5b94e17f67576f910ecf7f02a58984",
+          "lodMs": 112.9393,
+          "source": "assets/third_party/portable_welding_cart/portable_welding_cart_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 59.5691
+        },
+        {
+          "artifacts": 8,
+          "cookMs": 228.26330000000002,
+          "key": "df7d0a8c11effbf0b55615ce04d9fcf1d8d537fd38d827fcab7d75aae32574fc",
+          "lodMs": 89.9954,
+          "source": "assets/third_party/power_box_01/power_box_01_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 62.0728
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 59.8858,
+          "key": "41f97f492244a60e8c46dbc65765087805d170b1e3b7dd7266bcd32217845138",
+          "lodMs": 24.5723,
+          "source": "assets/third_party/propane_tank/propane_tank_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 12.2317
+        },
+        {
+          "artifacts": 11,
+          "cookMs": 1145.3518000000001,
+          "key": "c48977cda311a9f0bdad24c7a76c02cd3a0312569874c1feff751d2c86ec3079",
+          "lodMs": 442.5051,
+          "source": "assets/third_party/quiver_tree_01/quiver_tree_01_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 229.7471
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 587.6104,
+          "key": "a1673a31e24f3466545d2bddec6d58d1cd9f53d9878e0f4f7aa93160ca9b5af5",
+          "lodMs": 200.6918,
+          "source": "assets/third_party/quiver_tree_02/quiver_tree_02_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 137.2092
+        },
+        {
+          "artifacts": 21,
+          "cookMs": 63.2808,
+          "key": "396e57531d5dd5494587c3bdf70f54467829558e0607abb7efff9ba1a8ab41c5",
+          "lodMs": 21.1794,
+          "source": "assets/third_party/retro_multimeter/retro_multimeter_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 15.8619
+        },
+        {
+          "artifacts": 9,
+          "cookMs": 11.0577,
+          "key": "6c81606b4ff8b9adf2fb406a0be64c094244e5c9484c378c3538475f72494bda",
+          "lodMs": 3.6391,
+          "source": "assets/third_party/rollershutter_door/rollershutter_door_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 1.2606
+        },
+        {
+          "artifacts": 5,
+          "cookMs": 83.3717,
+          "key": "51dcf311052e387b31a436385b1b06fb9a099fe65a170e31fce3fe7b5ded6f40",
+          "lodMs": 8.3531,
+          "source": "assets/third_party/rusted_wheel_rim_01/rusted_wheel_rim_01_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 0.002
+        },
+        {
+          "artifacts": 11,
+          "cookMs": 34.0254,
+          "key": "5238914da157adce6700c6f9032d23344f61335dcf6b183eac8658711e3b6a83",
+          "lodMs": 12.61,
+          "source": "assets/third_party/security_light/security_light_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 6.8259
+        },
+        {
+          "artifacts": 12,
+          "cookMs": 89.494,
+          "key": "eca92118f1c5cf48b30876d3510357225cda706db4938ae6ba5016dd349ae4cb",
+          "lodMs": 22.2136,
+          "source": "assets/third_party/shrub_03/shrub_03_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 10.567
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 19.8441,
+          "key": "cace5a51bf9b0fe34fb6d37cd9b34dd5ac51a2e07cc5a01423484f9a5d656a3f",
+          "lodMs": 4.0092,
+          "source": "assets/third_party/sledgehammer_01/sledgehammer_01_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 5.0187
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 113.5938,
+          "key": "222b8444ca350415970b1f3dee67520ffbc9b441971b1214da45e41f1e3ce0d5",
+          "lodMs": 45.5406,
+          "source": "assets/third_party/small_lpg_tank/small_lpg_tank_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 22.0021
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 133.5414,
+          "key": "a02f6ffc2a1232de3442421e2b437e2de7d6b9f213a91e2cbfc482e957f9aa3f",
+          "lodMs": 55.7827,
+          "source": "assets/third_party/small_oil_can_01/small_oil_can_01_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 29.0946
+        },
+        {
+          "artifacts": 8,
+          "cookMs": 36.210100000000004,
+          "key": "a3467e0e707e0f608ec1222546c65fd37c07677bf2e83a83005457bfff6d9213",
+          "lodMs": 7.6135,
+          "source": "assets/third_party/spray_paint_bottles_02/spray_paint_bottles_02_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 8.5431
+        },
+        {
+          "artifacts": 17,
+          "cookMs": 53.216100000000004,
+          "key": "49e701995e7c818a62f94766976f69fb05efd86c1050f62f167af448c2598cbe",
+          "lodMs": 15.5275,
+          "source": "assets/third_party/steel_frame_shelves_03/steel_frame_shelves_03_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 11.9312
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 28.3022,
+          "key": "7f8e45e687ceec92546a3d6babc0e69426d8a6d64d7758c2f926f30bddac0dfc",
+          "lodMs": 9.9116,
+          "source": "assets/third_party/stone_fire_pit/stone_fire_pit_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 5.4079
+        },
+        {
+          "artifacts": 11,
+          "cookMs": 209.7216,
+          "key": "c03ce118c705f8e071c275b28755bced106f51dc5ef9057b24fc7d88f1649ccf",
+          "lodMs": 80.1434,
+          "source": "assets/third_party/street_lamp_01/street_lamp_01_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 41.3202
+        },
+        {
+          "artifacts": 11,
+          "cookMs": 144.2971,
+          "key": "61739baf37df7323313130f99774b632a8a477c459c8fa467b5df2f113d33b7b",
+          "lodMs": 56.037,
+          "source": "assets/third_party/street_lamp_02/street_lamp_02_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 31.7348
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 238.559,
+          "key": "6539ac0fe1662f2a7c7e3dea00d6a06e6af0ee2d5236975f5b273f5de5c4ba44",
+          "lodMs": 99.0693,
+          "source": "assets/third_party/tool_cart/tool_cart_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 57.357
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 28.8886,
+          "key": "3b1df73293fa6acb1120e7a27a9972e578561c29fa9ab21f34b947457f3c0658",
+          "lodMs": 8.9429,
+          "source": "assets/third_party/trashbag/trashbag_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 6.6021
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 33.659099999999995,
+          "key": "1e2f2c8e1a8361738302e5f9415f1ea79ce7a977f3852aa69df1f1f3144a1928",
+          "lodMs": 12.7861,
+          "source": "assets/third_party/utility_box_01/utility_box_01_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 7.6167
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 43.625299999999996,
+          "key": "92190b76a3383d42c85e9419e08414b65dd22294ea753e7c6ffe5597efeae9f3",
+          "lodMs": 15.4415,
+          "source": "assets/third_party/utility_box_02/utility_box_02_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 10.3391
+        },
+        {
+          "artifacts": 35,
+          "cookMs": 312.053,
+          "key": "cbc7eb235bf70fe16db01ba9c61fe485a8f160eb26db5931b97aafa084e57c83",
+          "lodMs": 124.2904,
+          "source": "assets/third_party/vintage_radio_transceiver/vintage_radio_transceiver_2k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 64.6385
+        },
+        {
+          "artifacts": 36,
+          "cookMs": 210.6207,
+          "key": "901395f9e8aed40823d01ee08a4c599effe6f5f7e41c7c32181e46e1e322b125",
+          "lodMs": 51.5647,
+          "source": "assets/third_party/wild_rooibos_bush/wild_rooibos_bush_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 25.1245
+        },
+        {
+          "artifacts": 10,
+          "cookMs": 48.6013,
+          "key": "68172f03c6b9baf9326abad3a536c89559e11284912344a79ef90de5a8bb97ca",
+          "lodMs": 15.1947,
+          "source": "assets/third_party/wooden_crate_01/wooden_crate_01_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 12.7472
+        },
+        {
+          "artifacts": 8,
+          "cookMs": 37.0411,
+          "key": "28e9552cbebef11287d6bcb8396af4665e26c158509048afad92051839c390cc",
+          "lodMs": 13.45,
+          "source": "assets/third_party/wooden_crate_02/wooden_crate_02_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 7.4376
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 26.28,
+          "key": "0045b9b3467364b1a4541a0677a655115f196071e0fe1741ee27cbd7f0e39a78",
+          "lodMs": 10.13,
+          "source": "assets/third_party/wooden_hammer_01/wooden_hammer_01_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 4.997
+        },
+        {
+          "artifacts": 8,
+          "cookMs": 65.2891,
+          "key": "9875654cafdbca62c013ddff44ce21f442ba89f90138131db16edb7af9d0d6f7",
+          "lodMs": 28.3949,
+          "source": "assets/third_party/wooden_ladder/wooden_ladder_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 11.4117
+        },
+        {
+          "artifacts": 10,
+          "cookMs": 167.07340000000002,
+          "key": "71f583c0820d4af7a8d0a7ba5fb2ab18b5c3cf88fdded08f3096f5f998dde5bd",
+          "lodMs": 66.1018,
+          "source": "assets/third_party/wooden_military_crate/wooden_military_crate_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 37.052
+        },
+        {
+          "artifacts": 16,
+          "cookMs": 16.0719,
+          "key": "6509f2a032189e9cf13a95d200aecbe48b9c2012ff894179efbc285c9dac7230",
+          "lodMs": 3.5959,
+          "source": "assets/third_party/woodentable_03/WoodenTable_03_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 3.9002
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 50.801199999999994,
+          "key": "fdf7a2a4f76283d8cf4480e4d6c00ffd9c98b6aeb1d96ffbb6db1e20a222e559",
+          "lodMs": 21.5883,
+          "source": "assets/third_party/worn_metal_rack/worn_metal_rack_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 8.3547
+        }
+      ],
+      "threads": 1,
+      "virtualMs": 3741.3035999999997
+    },
+    {
+      "case": "b2",
+      "cookMs": 20197.771299999997,
+      "load": {
+        "availableMemoryKiB": 6803380,
+        "context": "Single-thread phase-only geometry replay ABBA; batch gate active; no encoding or stores; not fresh-project walls",
+        "cpuPercent": 17,
+        "utc": "2026-10-26T06:44:18.9449535Z"
+      },
+      "lodMs": 7523.7747999999965,
+      "models": 101,
+      "modelsVerified": [
+        {
+          "artifacts": 6,
+          "cookMs": 3.5133,
+          "key": "a6cbd37299fadd2b55cc356bf8367ed9597e23301a457ab682e2eb996a9591a7",
+          "lodMs": 0,
+          "source": "assets/kit/apron.gltf",
+          "textureCooks": 0,
+          "virtualMs": 0.0433
+        },
+        {
+          "artifacts": 3,
+          "cookMs": 5.7639,
+          "key": "f2a62812538d7a2a20d04a7e0dcffb3baf1b4ac3ba616fbe26d52672e631bafa",
+          "lodMs": 2.4503,
+          "source": "assets/kit/cables.gltf",
+          "textureCooks": 0,
+          "virtualMs": 0.7517
+        },
+        {
+          "artifacts": 13,
+          "cookMs": 12.0722,
+          "key": "f7ae08f32743eb8961d0ab6c3dd377dad507885dae925798b0786044ac012e1e",
+          "lodMs": 0,
+          "source": "assets/kit/container_blue.gltf",
+          "textureCooks": 0,
+          "virtualMs": 0.2503
+        },
+        {
+          "artifacts": 13,
+          "cookMs": 11.842500000000001,
+          "key": "f654dd8d5553865d30b1a5c64863ef29ab14d5d4c81f451fd094426d295f1936",
+          "lodMs": 0,
+          "source": "assets/kit/container_green.gltf",
+          "textureCooks": 0,
+          "virtualMs": 0.2649
+        },
+        {
+          "artifacts": 13,
+          "cookMs": 5.825399999999999,
+          "key": "5ea290804a7d6120463ebda3d17291ef412fbeed8db0a5a89603be5b6bd7a4ba",
+          "lodMs": 0,
+          "source": "assets/kit/container_rust.gltf",
+          "textureCooks": 0,
+          "virtualMs": 0.2418
+        },
+        {
+          "artifacts": 5,
+          "cookMs": 44.084199999999996,
+          "key": "78f2d156165c8b77270bf73ba9d3a182ccbedea0cf9299162f2416effa86684e",
+          "lodMs": 13.4968,
+          "source": "assets/kit/embers.gltf",
+          "textureCooks": 0,
+          "virtualMs": 6.7179
+        },
+        {
+          "artifacts": 5,
+          "cookMs": 100.0654,
+          "key": "2c3508ae83b6dc2580b509a521850e5e318f36ee5898f4de0c99537e5b2d38f5",
+          "lodMs": 19.5279,
+          "source": "assets/kit/festoon.gltf",
+          "textureCooks": 0,
+          "virtualMs": 14.2281
+        },
+        {
+          "artifacts": 18,
+          "cookMs": 9.1238,
+          "key": "46ecd0afb3f3eca3b38c55bc1b3f63354e85f29e1221fe18c05a161b28f2d12f",
+          "lodMs": 0,
+          "source": "assets/kit/guard_hut.gltf",
+          "textureCooks": 0,
+          "virtualMs": 0.1344
+        },
+        {
+          "artifacts": 23,
+          "cookMs": 21.468500000000002,
+          "key": "94beee1b529c4ee8916a6f9362b338742d4179469c583d6b48599640b33e82b1",
+          "lodMs": 1.183,
+          "source": "assets/kit/hangar.gltf",
+          "textureCooks": 0,
+          "virtualMs": 0.634
+        },
+        {
+          "artifacts": 5,
+          "cookMs": 0.5517,
+          "key": "e18a9ee19ea4da03793f70e617996a0b9b4ece16b9ed26275e9c3d9b8137b756",
+          "lodMs": 0,
+          "source": "assets/kit/light_panel.gltf",
+          "textureCooks": 0,
+          "virtualMs": 0.0362
+        },
+        {
+          "artifacts": 10,
+          "cookMs": 10.6433,
+          "key": "94f471370e9692dc78c38e918ee62b06a7cd35331a4f205255323ad281d27e87",
+          "lodMs": 2.9892,
+          "source": "assets/kit/mast.gltf",
+          "textureCooks": 0,
+          "virtualMs": 1.3718
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 2.2039999999999997,
+          "key": "426d0628e765866f99296f2e4bf46662244bc3d55f501e6fe27de37e804eb509",
+          "lodMs": 0,
+          "source": "assets/kit/pad.gltf",
+          "textureCooks": 0,
+          "virtualMs": 0.0175
+        },
+        {
+          "artifacts": 3,
+          "cookMs": 0.4142,
+          "key": "ed68c675777a577c399c29d2c5cc53ce8ca35c3d2274f16a74953198aed23c72",
+          "lodMs": 0,
+          "source": "assets/kit/puddle_a.gltf",
+          "textureCooks": 0,
+          "virtualMs": 0.0277
+        },
+        {
+          "artifacts": 3,
+          "cookMs": 0.395,
+          "key": "59b809d6dbaa2de02fb42cf1a53839725bde57c2792c24b3074a5ed251c4aa25",
+          "lodMs": 0,
+          "source": "assets/kit/puddle_b.gltf",
+          "textureCooks": 0,
+          "virtualMs": 0.0266
+        },
+        {
+          "artifacts": 3,
+          "cookMs": 0.4067,
+          "key": "5658e45091e66e4d2ea1a307ecf76d0bea07ac3068f0c454fdf2d2045fcd78b9",
+          "lodMs": 0,
+          "source": "assets/kit/puddle_c.gltf",
+          "textureCooks": 0,
+          "virtualMs": 0.0264
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 22.052599999999998,
+          "key": "67d6ef5868f5f41e2c1eedb0b8ce7381ef357a0d924327c698a870bf0a709148",
+          "lodMs": 3.9935,
+          "source": "assets/kit/road.gltf",
+          "textureCooks": 0,
+          "virtualMs": 2.1401
+        },
+        {
+          "artifacts": 5,
+          "cookMs": 0.7406,
+          "key": "cf9c141adb27cb803d9da84dad64cf7ba50cccb75558f139efc5bf4c92cddd4d",
+          "lodMs": 0,
+          "source": "assets/kit/window.gltf",
+          "textureCooks": 0,
+          "virtualMs": 0.0766
+        },
+        {
+          "artifacts": 10,
+          "cookMs": 40.116400000000006,
+          "key": "47c4d9fc786d0774b0dacce52d89da99686ab3de44ebba9b2fa8203534df6ffb",
+          "lodMs": 15.7678,
+          "source": "assets/third_party/adjustable_wrench/adjustable_wrench_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 7.7033
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 24.289,
+          "key": "c818ecbc3459369591cf4bed807239cdf328615036b35c48cd1ef82e1557e48e",
+          "lodMs": 9.8913,
+          "source": "assets/third_party/barrel_01/Barrel_01_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 4.2235
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 23.0171,
+          "key": "836e5e4e4bc85e91c4257630fef910c0bd69696c87ddd3274aab2a475f9d3121",
+          "lodMs": 9.2768,
+          "source": "assets/third_party/barrel_02/Barrel_02_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 4.5393
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 10.0495,
+          "key": "3844d70faa9a9b25210c1e35b36d220c709bddd5f555aff84c84702fa449dc57",
+          "lodMs": 2.106,
+          "source": "assets/third_party/barrel_03/barrel_03_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 1.8975
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 75.71849999999999,
+          "key": "f07f33bbb76b0337cc2a788228ccae6254aad3b7d2f97fb03201e3b622f286d2",
+          "lodMs": 32.4755,
+          "source": "assets/third_party/barrel_stove/barrel_stove_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 13.4441
+        },
+        {
+          "artifacts": 9,
+          "cookMs": 11.179400000000001,
+          "key": "b90542a4669e38e56c47bad26dbc5128e8d12a73b9fa67304f8ea9cbb2729367",
+          "lodMs": 1.7922,
+          "source": "assets/third_party/bench_vice_01/bench_vice_01_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 0.0032
+        },
+        {
+          "artifacts": 7,
+          "cookMs": 157.1866,
+          "key": "05db3a2e5b35a240223e78934dc227685c0370bba05c66474195679ecd80b9e6",
+          "lodMs": 64.1946,
+          "source": "assets/third_party/caged_hanging_light/caged_hanging_light_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 33.139
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 105.5871,
+          "key": "efd9b63d1e3855e9c5657107d1b6bcdb5a79c61e4e2154c85f55f3d3a2125c39",
+          "lodMs": 33.2561,
+          "source": "assets/third_party/cardboard_box_01/cardboard_box_01_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 23.9764
+        },
+        {
+          "artifacts": 12,
+          "cookMs": 110.36940000000001,
+          "key": "dfa0b3cdfe21c50f4f50d195e22136bf9f390d5e31c0e264f0c544c6ec683b33",
+          "lodMs": 48.554,
+          "source": "assets/third_party/classic_laptop/classic_laptop_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 21.9231
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 396.7916,
+          "key": "979d5853c26b951a02204a2050601cfcff74df3b3bc5b34dd0385077c1f1785b",
+          "lodMs": 131.7572,
+          "source": "assets/third_party/concrete_road_barrier/concrete_road_barrier_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 87.6289
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 165.9804,
+          "key": "9e17b165dfe3c6c2f96651a5a6a3c5ec7dadfc3f867aa5799d982b67aad22d31",
+          "lodMs": 48.3894,
+          "source": "assets/third_party/concrete_road_barrier_02/concrete_road_barrier_02_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 37.4506
+        },
+        {
+          "artifacts": 14,
+          "cookMs": 93.7205,
+          "key": "ea6d6385d0154478490531cb2c3644119c8620f2f14aac6ee4fd286fbc1a0ce8",
+          "lodMs": 41.5219,
+          "source": "assets/third_party/covered_car/covered_car_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 18.9152
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 14.0119,
+          "key": "aae4188bfbf12aa66671808e6bbe91135601b6aa57b93138e98fab40a7a87968",
+          "lodMs": 2.4038,
+          "source": "assets/third_party/crowbar_01/crowbar_01_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 3.2358
+        },
+        {
+          "artifacts": 20,
+          "cookMs": 124.95,
+          "key": "75509c9cd511c943dc88b5d1ed06100125c55bf5fc257e03155a11a7697da8ea",
+          "lodMs": 33.6589,
+          "source": "assets/third_party/crystalline_iceplant/crystalline_iceplant_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 19.1278
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 100.5938,
+          "key": "e48728fd4f7a68e1e9ad5254dda06d9c1f7a8d620705032777ac5243e8e09ad5",
+          "lodMs": 33.2358,
+          "source": "assets/third_party/dead_quiver_branch_01/dead_quiver_branch_01_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 22.6908
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 117.354,
+          "key": "e9957dee22071e8edc0b003e637c050e76a8f0c8965dc838ffd550082fd8c767",
+          "lodMs": 36.0324,
+          "source": "assets/third_party/dead_quiver_trunk/dead_quiver_trunk_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 24.8553
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 721.1934,
+          "key": "cc313783e832f79e892fad96288f0ec78a846894dc74924d8b871caa3765d185",
+          "lodMs": 235.5059,
+          "source": "assets/third_party/dead_tree_trunk/dead_tree_trunk_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 150.2415
+        },
+        {
+          "artifacts": 30,
+          "cookMs": 510.71639999999996,
+          "key": "dabf753365ef856ed06b2d816e534caff71849bac549e135f39ab70b28629d3e",
+          "lodMs": 218.2781,
+          "source": "assets/third_party/drill_press_01/drill_press_01_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 113.2804
+        },
+        {
+          "artifacts": 10,
+          "cookMs": 161.23930000000001,
+          "key": "037ba168fe75b17bfefbbef8c149f172728724e576e18326864775e055ed5b91",
+          "lodMs": 65.7259,
+          "source": "assets/third_party/dry_branches_medium_01/dry_branches_medium_01_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 31.3814
+        },
+        {
+          "artifacts": 21,
+          "cookMs": 262.6332,
+          "key": "ce006adb11c06c5d24938a3e20948b8bfbe67ed04333f1c4595d8eaabbb005f4",
+          "lodMs": 87.8734,
+          "source": "assets/third_party/exterior_aircon_unit/exterior_aircon_unit_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 37.7816
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 191.34,
+          "key": "3cf0239f95a1d6ad3d690b084bca9fbd91726ec4ec9d408e272f7691ebacfc13",
+          "lodMs": 113.5454,
+          "source": "assets/third_party/hand_truck/hand_truck_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 28.3533
+        },
+        {
+          "artifacts": 10,
+          "cookMs": 96.5052,
+          "key": "0f88f981e02cf619179ad087ab4b4864c8e5665af6f4d95e6fc835d8a347009c",
+          "lodMs": 38.3935,
+          "source": "assets/third_party/hanging_industrial_lamp/hanging_industrial_lamp_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 20.1076
+        },
+        {
+          "artifacts": 27,
+          "cookMs": 262.2614,
+          "key": "61db4d1abf6e3286c7ef068426c111554feb8c9fc4883bf032ea4dc81462ecb6",
+          "lodMs": 114.6895,
+          "source": "assets/third_party/industrial_caged_sconce/industrial_caged_sconce_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 55.4323
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 220.1341,
+          "key": "ace2376530b6ffe480707b3d78526d0bda617e38a5f39eb93e0388dede71d495",
+          "lodMs": 114.935,
+          "source": "assets/third_party/industrial_storage_cart/industrial_storage_cart_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 43.5094
+        },
+        {
+          "artifacts": 12,
+          "cookMs": 285.686,
+          "key": "3140706ddc746141777fa351aa0aa0b7a0035a3a5be1906ce6049a94c0e7ea43",
+          "lodMs": 121.2764,
+          "source": "assets/third_party/ladder_sectioned_01/ladder_sectioned_01_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 56.5811
+        },
+        {
+          "artifacts": 91,
+          "cookMs": 402.284,
+          "key": "cf7d666e7e56caf9af71a7056c9787476dcd2e364e53a14af781196c2a2bb673",
+          "lodMs": 12.0678,
+          "source": "assets/third_party/m2m_human/human-base-animations.glb",
+          "textureCooks": 0,
+          "virtualMs": 0.0038
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 146.33350000000002,
+          "key": "85c7f92efcbcc04d3c7240cd35d50e4c6bb29bade8218a16fbfe124cdf19e9e6",
+          "lodMs": 54.227,
+          "source": "assets/third_party/metal_jerrycan/metal_jerrycan_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 31.0158
+        },
+        {
+          "artifacts": 14,
+          "cookMs": 60.9786,
+          "key": "5b2b4ec13bcafcb4332c4459343269ea556396f2ca6a1950675677e46485ad64",
+          "lodMs": 14.6443,
+          "source": "assets/third_party/metal_jerrycan_green/metal_jerrycan_green_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 15.4744
+        },
+        {
+          "artifacts": 22,
+          "cookMs": 47.0207,
+          "key": "bff95482c0f869ea3edc6fe8673bf0152589c4f7aaf5f3eaf468f187f25d7fc4",
+          "lodMs": 13.4677,
+          "source": "assets/third_party/metal_office_desk/metal_office_desk_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 10.9032
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 64.1103,
+          "key": "5a18e0ef23d732292e35d47b8bdbc7571655e60aa53d933a1ad8c9250db10299",
+          "lodMs": 23.6166,
+          "source": "assets/third_party/metal_stool_01/metal_stool_01_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 13.6981
+        },
+        {
+          "artifacts": 18,
+          "cookMs": 99.4971,
+          "key": "8cb054166f6d1ee2a368c4ec53a6be0b480181285f9b90a15a13163ac2b33762",
+          "lodMs": 35.6745,
+          "source": "assets/third_party/metal_tool_chest/metal_tool_chest_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 22.0138
+        },
+        {
+          "artifacts": 16,
+          "cookMs": 104.30680000000001,
+          "key": "c08e4d1efdd15face6c14cc71017fa93a2965b4ce9b16d85d876834f31718c11",
+          "lodMs": 43.1519,
+          "source": "assets/third_party/metal_toolbox/metal_toolbox_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 20.3415
+        },
+        {
+          "artifacts": 23,
+          "cookMs": 91.2059,
+          "key": "09f2ef13298b0482d15d25fc85bc79cc82599abaa816863a007d8951b983f0f4",
+          "lodMs": 29.6713,
+          "source": "assets/third_party/metal_trash_can/metal_trash_can_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 18.3496
+        },
+        {
+          "artifacts": 57,
+          "cookMs": 293.3189,
+          "key": "cc88717762227aa2627ba6765d1c3fa24cfe30cd9d3d328f2de5153fa667849c",
+          "lodMs": 119.3316,
+          "source": "assets/third_party/modular_airduct_rectangular_01/modular_airduct_rectangular_01_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 64.3467
+        },
+        {
+          "artifacts": 59,
+          "cookMs": 668.0536999999999,
+          "key": "83bc71ac7dd7d85f0380396a32e21ea57eb0ebb261d139527219b4de5cb48951",
+          "lodMs": 220.1821,
+          "source": "assets/third_party/modular_chainlink_fence/modular_chainlink_fence_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 133.5816
+        },
+        {
+          "artifacts": 213,
+          "cookMs": 1450.2741,
+          "key": "2868fa3fd5fd3bc94cc8963a3250a3db2105ee39453d9abf674a11a30dd7fd81",
+          "lodMs": 602.6413,
+          "source": "assets/third_party/modular_electricity_poles/modular_electricity_poles_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 336.9967
+        },
+        {
+          "artifacts": 23,
+          "cookMs": 108.4632,
+          "key": "fda41dc4a42acf1ddfd414e9688391b8526cb6630d2bdc052db3583d2392ed61",
+          "lodMs": 49.2831,
+          "source": "assets/third_party/modular_industrial_pipes_01/modular_industrial_pipes_01_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 22.0923
+        },
+        {
+          "artifacts": 33,
+          "cookMs": 110.2572,
+          "key": "f5423a717ed812afc813e54f6982652930a2729d4b8efb5cc37a51c4dee77c26",
+          "lodMs": 37.73,
+          "source": "assets/third_party/mounted_fluorescent_lights/mounted_fluorescent_lights_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 25.8319
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 905.2991999999999,
+          "key": "dc119f962dee2c39582be516b3b2b26b23fdbeed77a3ac8108213a397b60733a",
+          "lodMs": 306.3691,
+          "source": "assets/third_party/namaqualand_boulder_02/namaqualand_boulder_02_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 206.5533
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 529.4186,
+          "key": "ae4abdd69ebb9770163b86731cad3bdfbf97add7ba05a2ccb6820fc3a1b232ea",
+          "lodMs": 170.9708,
+          "source": "assets/third_party/namaqualand_boulder_03/namaqualand_boulder_03_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 107.8137
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 485.2114,
+          "key": "2469ce3f2603db5f07b8c3811a52177165bc1dbfbfa231e3c3eab9531011c371",
+          "lodMs": 163.102,
+          "source": "assets/third_party/namaqualand_boulder_04/namaqualand_boulder_04_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 119.2294
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 755.9833,
+          "key": "e7bea83cc0df13e8948ea4026df05f414097093086b25ed7ebc0925b1b036964",
+          "lodMs": 269.2553,
+          "source": "assets/third_party/namaqualand_boulder_05/namaqualand_boulder_05_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 152.0592
+        },
+        {
+          "artifacts": 12,
+          "cookMs": 668.7729999999999,
+          "key": "e82aaba0ea07ca5faa8b936c4822b817d85998c53529538689a2c1e7277c35dd",
+          "lodMs": 232.5564,
+          "source": "assets/third_party/namaqualand_rocks_01/namaqualand_rocks_01_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 155.2291
+        },
+        {
+          "artifacts": 8,
+          "cookMs": 194.7831,
+          "key": "33d6fa6dd588966de28cd72488ba36a86f4661fdae539d52dfb3ab8c6ac50aff",
+          "lodMs": 88.3004,
+          "source": "assets/third_party/old_drill_press/old_drill_press_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 45.4506
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 198.27439999999999,
+          "key": "757ef163e122292219235c019e2c4eb4dfd7d781ca4ee91262e502c432bf152f",
+          "lodMs": 80.0548,
+          "source": "assets/third_party/old_gas_mask/old_gas_mask_2k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 33.426
+        },
+        {
+          "artifacts": 9,
+          "cookMs": 742.2375,
+          "key": "b1ba717f97656a8428d39576f59c258127247109542286ca03e94f00da7c239d",
+          "lodMs": 308.3195,
+          "source": "assets/third_party/old_military_compressor/old_military_compressor_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 171.9216
+        },
+        {
+          "artifacts": 14,
+          "cookMs": 89.4036,
+          "key": "fb6f91f35f5f3317693f6687e2512277754c4d29ff5af228a8cbb6ed287c2309",
+          "lodMs": 31.6407,
+          "source": "assets/third_party/old_military_crate/old_military_crate_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 20.7379
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 25.3348,
+          "key": "4ee89ae82aab2b4617f166b6760a5997039e1ff63bbfc12bf8c67233f10a0abc",
+          "lodMs": 6.3937,
+          "source": "assets/third_party/old_tyre/old_tyre_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 5.5452
+        },
+        {
+          "artifacts": 17,
+          "cookMs": 878.1691999999999,
+          "key": "4212a7a46e3f58eb6c3783f1e266b3130ad42728ac5706d73ed4ba921ab019d0",
+          "lodMs": 430.0114,
+          "source": "assets/third_party/overhead_crane/overhead_crane_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 169.7708
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 88.8438,
+          "key": "82a493604e57973741d827114b72605150b736fa18a101bb3e16b8dfc51cd17c",
+          "lodMs": 33.284,
+          "source": "assets/third_party/pipe_wrench/pipe_wrench_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 20.3203
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 212.1517,
+          "key": "8a529f04949ef84892e8cb03e006a909212d29dc2dc30650f8573b3e187d36a9",
+          "lodMs": 91.4841,
+          "source": "assets/third_party/plastic_crate_03/plastic_crate_03_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 35.4003
+        },
+        {
+          "artifacts": 15,
+          "cookMs": 280.0433,
+          "key": "499899076785f329a0ececac232574c05eab181d8ca6c7271b0267c6c612af8b",
+          "lodMs": 116.2982,
+          "source": "assets/third_party/portable_generator/portable_generator_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 69.2533
+        },
+        {
+          "artifacts": 9,
+          "cookMs": 155.5869,
+          "key": "f405d5e22a0bb7053a75ec733fb59508470494c457f276559bb7d0f9580e536a",
+          "lodMs": 55.2255,
+          "source": "assets/third_party/portable_searchlight/portable_searchlight_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 36.9686
+        },
+        {
+          "artifacts": 9,
+          "cookMs": 268.7243,
+          "key": "968f5be343f300e4449f9f6fdca042ea7f5b94e17f67576f910ecf7f02a58984",
+          "lodMs": 100.7759,
+          "source": "assets/third_party/portable_welding_cart/portable_welding_cart_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 40.9684
+        },
+        {
+          "artifacts": 8,
+          "cookMs": 220.8523,
+          "key": "df7d0a8c11effbf0b55615ce04d9fcf1d8d537fd38d827fcab7d75aae32574fc",
+          "lodMs": 86.7503,
+          "source": "assets/third_party/power_box_01/power_box_01_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 60.4266
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 62.4562,
+          "key": "41f97f492244a60e8c46dbc65765087805d170b1e3b7dd7266bcd32217845138",
+          "lodMs": 26.5686,
+          "source": "assets/third_party/propane_tank/propane_tank_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 14.405
+        },
+        {
+          "artifacts": 11,
+          "cookMs": 1391.5187,
+          "key": "c48977cda311a9f0bdad24c7a76c02cd3a0312569874c1feff751d2c86ec3079",
+          "lodMs": 554.0447,
+          "source": "assets/third_party/quiver_tree_01/quiver_tree_01_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 306.2819
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 723.0908000000001,
+          "key": "a1673a31e24f3466545d2bddec6d58d1cd9f53d9878e0f4f7aa93160ca9b5af5",
+          "lodMs": 273.1423,
+          "source": "assets/third_party/quiver_tree_02/quiver_tree_02_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 182.8791
+        },
+        {
+          "artifacts": 21,
+          "cookMs": 80.5141,
+          "key": "396e57531d5dd5494587c3bdf70f54467829558e0607abb7efff9ba1a8ab41c5",
+          "lodMs": 30.4059,
+          "source": "assets/third_party/retro_multimeter/retro_multimeter_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 17.6036
+        },
+        {
+          "artifacts": 9,
+          "cookMs": 15.4108,
+          "key": "6c81606b4ff8b9adf2fb406a0be64c094244e5c9484c378c3538475f72494bda",
+          "lodMs": 5.8704,
+          "source": "assets/third_party/rollershutter_door/rollershutter_door_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 1.8288
+        },
+        {
+          "artifacts": 5,
+          "cookMs": 115.74520000000001,
+          "key": "51dcf311052e387b31a436385b1b06fb9a099fe65a170e31fce3fe7b5ded6f40",
+          "lodMs": 11.9916,
+          "source": "assets/third_party/rusted_wheel_rim_01/rusted_wheel_rim_01_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 0.0049
+        },
+        {
+          "artifacts": 11,
+          "cookMs": 49.993,
+          "key": "5238914da157adce6700c6f9032d23344f61335dcf6b183eac8658711e3b6a83",
+          "lodMs": 18.9416,
+          "source": "assets/third_party/security_light/security_light_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 9.9795
+        },
+        {
+          "artifacts": 12,
+          "cookMs": 125.3553,
+          "key": "eca92118f1c5cf48b30876d3510357225cda706db4938ae6ba5016dd349ae4cb",
+          "lodMs": 30.7187,
+          "source": "assets/third_party/shrub_03/shrub_03_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 13.8868
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 21.9163,
+          "key": "cace5a51bf9b0fe34fb6d37cd9b34dd5ac51a2e07cc5a01423484f9a5d656a3f",
+          "lodMs": 4.3897,
+          "source": "assets/third_party/sledgehammer_01/sledgehammer_01_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 5.1762
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 154.2418,
+          "key": "222b8444ca350415970b1f3dee67520ffbc9b441971b1214da45e41f1e3ce0d5",
+          "lodMs": 62.6612,
+          "source": "assets/third_party/small_lpg_tank/small_lpg_tank_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 31.9686
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 173.1614,
+          "key": "a02f6ffc2a1232de3442421e2b437e2de7d6b9f213a91e2cbfc482e957f9aa3f",
+          "lodMs": 76.9214,
+          "source": "assets/third_party/small_oil_can_01/small_oil_can_01_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 35.5208
+        },
+        {
+          "artifacts": 8,
+          "cookMs": 42.7381,
+          "key": "a3467e0e707e0f608ec1222546c65fd37c07677bf2e83a83005457bfff6d9213",
+          "lodMs": 8.7267,
+          "source": "assets/third_party/spray_paint_bottles_02/spray_paint_bottles_02_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 10.2138
+        },
+        {
+          "artifacts": 17,
+          "cookMs": 74.6121,
+          "key": "49e701995e7c818a62f94766976f69fb05efd86c1050f62f167af448c2598cbe",
+          "lodMs": 23.1498,
+          "source": "assets/third_party/steel_frame_shelves_03/steel_frame_shelves_03_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 17.8358
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 34.880500000000005,
+          "key": "7f8e45e687ceec92546a3d6babc0e69426d8a6d64d7758c2f926f30bddac0dfc",
+          "lodMs": 11.8443,
+          "source": "assets/third_party/stone_fire_pit/stone_fire_pit_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 8.2526
+        },
+        {
+          "artifacts": 11,
+          "cookMs": 294.9198,
+          "key": "c03ce118c705f8e071c275b28755bced106f51dc5ef9057b24fc7d88f1649ccf",
+          "lodMs": 119.3954,
+          "source": "assets/third_party/street_lamp_01/street_lamp_01_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 56.8938
+        },
+        {
+          "artifacts": 11,
+          "cookMs": 191.5018,
+          "key": "61739baf37df7323313130f99774b632a8a477c459c8fa467b5df2f113d33b7b",
+          "lodMs": 76.1816,
+          "source": "assets/third_party/street_lamp_02/street_lamp_02_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 39.2966
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 330.2883,
+          "key": "6539ac0fe1662f2a7c7e3dea00d6a06e6af0ee2d5236975f5b273f5de5c4ba44",
+          "lodMs": 147.7512,
+          "source": "assets/third_party/tool_cart/tool_cart_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 73.1309
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 40.6229,
+          "key": "3b1df73293fa6acb1120e7a27a9972e578561c29fa9ab21f34b947457f3c0658",
+          "lodMs": 13.6376,
+          "source": "assets/third_party/trashbag/trashbag_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 8.219
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 47.5486,
+          "key": "1e2f2c8e1a8361738302e5f9415f1ea79ce7a977f3852aa69df1f1f3144a1928",
+          "lodMs": 18.32,
+          "source": "assets/third_party/utility_box_01/utility_box_01_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 9.8978
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 63.1866,
+          "key": "92190b76a3383d42c85e9419e08414b65dd22294ea753e7c6ffe5597efeae9f3",
+          "lodMs": 23.2961,
+          "source": "assets/third_party/utility_box_02/utility_box_02_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 15.4571
+        },
+        {
+          "artifacts": 35,
+          "cookMs": 428.04720000000003,
+          "key": "cbc7eb235bf70fe16db01ba9c61fe485a8f160eb26db5931b97aafa084e57c83",
+          "lodMs": 172.1429,
+          "source": "assets/third_party/vintage_radio_transceiver/vintage_radio_transceiver_2k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 91.7108
+        },
+        {
+          "artifacts": 36,
+          "cookMs": 311.3174,
+          "key": "901395f9e8aed40823d01ee08a4c599effe6f5f7e41c7c32181e46e1e322b125",
+          "lodMs": 71.5156,
+          "source": "assets/third_party/wild_rooibos_bush/wild_rooibos_bush_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 35.4725
+        },
+        {
+          "artifacts": 10,
+          "cookMs": 60.993,
+          "key": "68172f03c6b9baf9326abad3a536c89559e11284912344a79ef90de5a8bb97ca",
+          "lodMs": 21.0177,
+          "source": "assets/third_party/wooden_crate_01/wooden_crate_01_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 13.257
+        },
+        {
+          "artifacts": 8,
+          "cookMs": 47.986000000000004,
+          "key": "28e9552cbebef11287d6bcb8396af4665e26c158509048afad92051839c390cc",
+          "lodMs": 17.0088,
+          "source": "assets/third_party/wooden_crate_02/wooden_crate_02_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 9.9261
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 39.0987,
+          "key": "0045b9b3467364b1a4541a0677a655115f196071e0fe1741ee27cbd7f0e39a78",
+          "lodMs": 14.5046,
+          "source": "assets/third_party/wooden_hammer_01/wooden_hammer_01_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 9.1385
+        },
+        {
+          "artifacts": 8,
+          "cookMs": 88.86410000000001,
+          "key": "9875654cafdbca62c013ddff44ce21f442ba89f90138131db16edb7af9d0d6f7",
+          "lodMs": 38.7212,
+          "source": "assets/third_party/wooden_ladder/wooden_ladder_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 16.5718
+        },
+        {
+          "artifacts": 10,
+          "cookMs": 221.0213,
+          "key": "71f583c0820d4af7a8d0a7ba5fb2ab18b5c3cf88fdded08f3096f5f998dde5bd",
+          "lodMs": 89.0163,
+          "source": "assets/third_party/wooden_military_crate/wooden_military_crate_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 46.9829
+        },
+        {
+          "artifacts": 16,
+          "cookMs": 19.4359,
+          "key": "6509f2a032189e9cf13a95d200aecbe48b9c2012ff894179efbc285c9dac7230",
+          "lodMs": 4.9331,
+          "source": "assets/third_party/woodentable_03/WoodenTable_03_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 4.2282
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 68.3195,
+          "key": "fdf7a2a4f76283d8cf4480e4d6c00ffd9c98b6aeb1d96ffbb6db1e20a222e559",
+          "lodMs": 32.297,
+          "source": "assets/third_party/worn_metal_rack/worn_metal_rack_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 11.5517
+        }
+      ],
+      "threads": 1,
+      "virtualMs": 4151.707499999999
+    },
+    {
+      "case": "a2",
+      "cookMs": 20604.4359,
+      "load": {
+        "availableMemoryKiB": 6879836,
+        "context": "Single-thread phase-only geometry replay ABBA; batch gate active; no encoding or stores; not fresh-project walls",
+        "cpuPercent": 28,
+        "utc": "2026-10-26T06:44:40.6014134Z"
+      },
+      "lodMs": 7099.497800000002,
+      "models": 101,
+      "modelsVerified": [
+        {
+          "artifacts": 6,
+          "cookMs": 3.5121,
+          "key": "a6cbd37299fadd2b55cc356bf8367ed9597e23301a457ab682e2eb996a9591a7",
+          "lodMs": 0,
+          "source": "assets/kit/apron.gltf",
+          "textureCooks": 0,
+          "virtualMs": 0.0449
+        },
+        {
+          "artifacts": 3,
+          "cookMs": 5.9349,
+          "key": "f2a62812538d7a2a20d04a7e0dcffb3baf1b4ac3ba616fbe26d52672e631bafa",
+          "lodMs": 2.3496,
+          "source": "assets/kit/cables.gltf",
+          "textureCooks": 0,
+          "virtualMs": 1.0259
+        },
+        {
+          "artifacts": 13,
+          "cookMs": 11.9212,
+          "key": "f7ae08f32743eb8961d0ab6c3dd377dad507885dae925798b0786044ac012e1e",
+          "lodMs": 0,
+          "source": "assets/kit/container_blue.gltf",
+          "textureCooks": 0,
+          "virtualMs": 0.3586
+        },
+        {
+          "artifacts": 13,
+          "cookMs": 11.4355,
+          "key": "f654dd8d5553865d30b1a5c64863ef29ab14d5d4c81f451fd094426d295f1936",
+          "lodMs": 0,
+          "source": "assets/kit/container_green.gltf",
+          "textureCooks": 0,
+          "virtualMs": 0.3492
+        },
+        {
+          "artifacts": 13,
+          "cookMs": 6.1495999999999995,
+          "key": "5ea290804a7d6120463ebda3d17291ef412fbeed8db0a5a89603be5b6bd7a4ba",
+          "lodMs": 0,
+          "source": "assets/kit/container_rust.gltf",
+          "textureCooks": 0,
+          "virtualMs": 0.4227
+        },
+        {
+          "artifacts": 5,
+          "cookMs": 46.1125,
+          "key": "78f2d156165c8b77270bf73ba9d3a182ccbedea0cf9299162f2416effa86684e",
+          "lodMs": 13.3041,
+          "source": "assets/kit/embers.gltf",
+          "textureCooks": 0,
+          "virtualMs": 9.0863
+        },
+        {
+          "artifacts": 5,
+          "cookMs": 110.4585,
+          "key": "2c3508ae83b6dc2580b509a521850e5e318f36ee5898f4de0c99537e5b2d38f5",
+          "lodMs": 19.7289,
+          "source": "assets/kit/festoon.gltf",
+          "textureCooks": 0,
+          "virtualMs": 22.3391
+        },
+        {
+          "artifacts": 18,
+          "cookMs": 9.594999999999999,
+          "key": "46ecd0afb3f3eca3b38c55bc1b3f63354e85f29e1221fe18c05a161b28f2d12f",
+          "lodMs": 0,
+          "source": "assets/kit/guard_hut.gltf",
+          "textureCooks": 0,
+          "virtualMs": 0.1714
+        },
+        {
+          "artifacts": 23,
+          "cookMs": 21.483700000000002,
+          "key": "94beee1b529c4ee8916a6f9362b338742d4179469c583d6b48599640b33e82b1",
+          "lodMs": 1.3184,
+          "source": "assets/kit/hangar.gltf",
+          "textureCooks": 0,
+          "virtualMs": 0.8701
+        },
+        {
+          "artifacts": 5,
+          "cookMs": 0.5749000000000001,
+          "key": "e18a9ee19ea4da03793f70e617996a0b9b4ece16b9ed26275e9c3d9b8137b756",
+          "lodMs": 0,
+          "source": "assets/kit/light_panel.gltf",
+          "textureCooks": 0,
+          "virtualMs": 0.0396
+        },
+        {
+          "artifacts": 10,
+          "cookMs": 12.4173,
+          "key": "94f471370e9692dc78c38e918ee62b06a7cd35331a4f205255323ad281d27e87",
+          "lodMs": 3.2194,
+          "source": "assets/kit/mast.gltf",
+          "textureCooks": 0,
+          "virtualMs": 2.0264
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 2.4247,
+          "key": "426d0628e765866f99296f2e4bf46662244bc3d55f501e6fe27de37e804eb509",
+          "lodMs": 0,
+          "source": "assets/kit/pad.gltf",
+          "textureCooks": 0,
+          "virtualMs": 0.021
+        },
+        {
+          "artifacts": 3,
+          "cookMs": 0.4389,
+          "key": "ed68c675777a577c399c29d2c5cc53ce8ca35c3d2274f16a74953198aed23c72",
+          "lodMs": 0,
+          "source": "assets/kit/puddle_a.gltf",
+          "textureCooks": 0,
+          "virtualMs": 0.0342
+        },
+        {
+          "artifacts": 3,
+          "cookMs": 0.4263,
+          "key": "59b809d6dbaa2de02fb42cf1a53839725bde57c2792c24b3074a5ed251c4aa25",
+          "lodMs": 0,
+          "source": "assets/kit/puddle_b.gltf",
+          "textureCooks": 0,
+          "virtualMs": 0.04
+        },
+        {
+          "artifacts": 3,
+          "cookMs": 0.5388,
+          "key": "5658e45091e66e4d2ea1a307ecf76d0bea07ac3068f0c454fdf2d2045fcd78b9",
+          "lodMs": 0,
+          "source": "assets/kit/puddle_c.gltf",
+          "textureCooks": 0,
+          "virtualMs": 0.0403
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 25.0154,
+          "key": "67d6ef5868f5f41e2c1eedb0b8ce7381ef357a0d924327c698a870bf0a709148",
+          "lodMs": 4.283,
+          "source": "assets/kit/road.gltf",
+          "textureCooks": 0,
+          "virtualMs": 3.0594
+        },
+        {
+          "artifacts": 5,
+          "cookMs": 0.6880000000000001,
+          "key": "cf9c141adb27cb803d9da84dad64cf7ba50cccb75558f139efc5bf4c92cddd4d",
+          "lodMs": 0,
+          "source": "assets/kit/window.gltf",
+          "textureCooks": 0,
+          "virtualMs": 0.0962
+        },
+        {
+          "artifacts": 10,
+          "cookMs": 46.2095,
+          "key": "47c4d9fc786d0774b0dacce52d89da99686ab3de44ebba9b2fa8203534df6ffb",
+          "lodMs": 16.8834,
+          "source": "assets/third_party/adjustable_wrench/adjustable_wrench_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 10.9515
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 26.7531,
+          "key": "c818ecbc3459369591cf4bed807239cdf328615036b35c48cd1ef82e1557e48e",
+          "lodMs": 11.7812,
+          "source": "assets/third_party/barrel_01/Barrel_01_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 5.3442
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 24.1462,
+          "key": "836e5e4e4bc85e91c4257630fef910c0bd69696c87ddd3274aab2a475f9d3121",
+          "lodMs": 9.2397,
+          "source": "assets/third_party/barrel_02/Barrel_02_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 5.7262
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 10.686599999999999,
+          "key": "3844d70faa9a9b25210c1e35b36d220c709bddd5f555aff84c84702fa449dc57",
+          "lodMs": 2.2272,
+          "source": "assets/third_party/barrel_03/barrel_03_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 2.5546
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 84.88600000000001,
+          "key": "f07f33bbb76b0337cc2a788228ccae6254aad3b7d2f97fb03201e3b622f286d2",
+          "lodMs": 36.3794,
+          "source": "assets/third_party/barrel_stove/barrel_stove_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 18.4291
+        },
+        {
+          "artifacts": 9,
+          "cookMs": 11.163400000000001,
+          "key": "b90542a4669e38e56c47bad26dbc5128e8d12a73b9fa67304f8ea9cbb2729367",
+          "lodMs": 1.7734,
+          "source": "assets/third_party/bench_vice_01/bench_vice_01_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 0.0033
+        },
+        {
+          "artifacts": 7,
+          "cookMs": 185.1374,
+          "key": "05db3a2e5b35a240223e78934dc227685c0370bba05c66474195679ecd80b9e6",
+          "lodMs": 65.2222,
+          "source": "assets/third_party/caged_hanging_light/caged_hanging_light_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 49.1292
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 110.2161,
+          "key": "efd9b63d1e3855e9c5657107d1b6bcdb5a79c61e4e2154c85f55f3d3a2125c39",
+          "lodMs": 33.5244,
+          "source": "assets/third_party/cardboard_box_01/cardboard_box_01_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 31.5477
+        },
+        {
+          "artifacts": 12,
+          "cookMs": 126.5791,
+          "key": "dfa0b3cdfe21c50f4f50d195e22136bf9f390d5e31c0e264f0c544c6ec683b33",
+          "lodMs": 50.1181,
+          "source": "assets/third_party/classic_laptop/classic_laptop_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 35.1452
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 433.5858,
+          "key": "979d5853c26b951a02204a2050601cfcff74df3b3bc5b34dd0385077c1f1785b",
+          "lodMs": 129.9652,
+          "source": "assets/third_party/concrete_road_barrier/concrete_road_barrier_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 130.0169
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 174.99970000000002,
+          "key": "9e17b165dfe3c6c2f96651a5a6a3c5ec7dadfc3f867aa5799d982b67aad22d31",
+          "lodMs": 50.4505,
+          "source": "assets/third_party/concrete_road_barrier_02/concrete_road_barrier_02_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 49.3163
+        },
+        {
+          "artifacts": 14,
+          "cookMs": 112.386,
+          "key": "ea6d6385d0154478490531cb2c3644119c8620f2f14aac6ee4fd286fbc1a0ce8",
+          "lodMs": 46.6545,
+          "source": "assets/third_party/covered_car/covered_car_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 29.2443
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 14.9753,
+          "key": "aae4188bfbf12aa66671808e6bbe91135601b6aa57b93138e98fab40a7a87968",
+          "lodMs": 2.4497,
+          "source": "assets/third_party/crowbar_01/crowbar_01_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 4.2194
+        },
+        {
+          "artifacts": 20,
+          "cookMs": 132.31689999999998,
+          "key": "75509c9cd511c943dc88b5d1ed06100125c55bf5fc257e03155a11a7697da8ea",
+          "lodMs": 32.5349,
+          "source": "assets/third_party/crystalline_iceplant/crystalline_iceplant_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 22.4218
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 118.412,
+          "key": "e48728fd4f7a68e1e9ad5254dda06d9c1f7a8d620705032777ac5243e8e09ad5",
+          "lodMs": 31.3958,
+          "source": "assets/third_party/dead_quiver_branch_01/dead_quiver_branch_01_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 38.1691
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 120.8043,
+          "key": "e9957dee22071e8edc0b003e637c050e76a8f0c8965dc838ffd550082fd8c767",
+          "lodMs": 35.3619,
+          "source": "assets/third_party/dead_quiver_trunk/dead_quiver_trunk_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 34.5571
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 782.4464,
+          "key": "cc313783e832f79e892fad96288f0ec78a846894dc74924d8b871caa3765d185",
+          "lodMs": 234.3498,
+          "source": "assets/third_party/dead_tree_trunk/dead_tree_trunk_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 215.1029
+        },
+        {
+          "artifacts": 30,
+          "cookMs": 478.82710000000003,
+          "key": "dabf753365ef856ed06b2d816e534caff71849bac549e135f39ab70b28629d3e",
+          "lodMs": 187.5513,
+          "source": "assets/third_party/drill_press_01/drill_press_01_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 145.7404
+        },
+        {
+          "artifacts": 10,
+          "cookMs": 144.77190000000002,
+          "key": "037ba168fe75b17bfefbbef8c149f172728724e576e18326864775e055ed5b91",
+          "lodMs": 53.2543,
+          "source": "assets/third_party/dry_branches_medium_01/dry_branches_medium_01_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 39.7044
+        },
+        {
+          "artifacts": 21,
+          "cookMs": 212.41989999999998,
+          "key": "ce006adb11c06c5d24938a3e20948b8bfbe67ed04333f1c4595d8eaabbb005f4",
+          "lodMs": 65.5317,
+          "source": "assets/third_party/exterior_aircon_unit/exterior_aircon_unit_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 44.7486
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 140.4621,
+          "key": "3cf0239f95a1d6ad3d690b084bca9fbd91726ec4ec9d408e272f7691ebacfc13",
+          "lodMs": 70.7778,
+          "source": "assets/third_party/hand_truck/hand_truck_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 31.1444
+        },
+        {
+          "artifacts": 10,
+          "cookMs": 75.6862,
+          "key": "0f88f981e02cf619179ad087ab4b4864c8e5665af6f4d95e6fc835d8a347009c",
+          "lodMs": 25.6175,
+          "source": "assets/third_party/hanging_industrial_lamp/hanging_industrial_lamp_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 18.5289
+        },
+        {
+          "artifacts": 27,
+          "cookMs": 204.68200000000002,
+          "key": "61db4d1abf6e3286c7ef068426c111554feb8c9fc4883bf032ea4dc81462ecb6",
+          "lodMs": 78.3738,
+          "source": "assets/third_party/industrial_caged_sconce/industrial_caged_sconce_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 56.667
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 190.1922,
+          "key": "ace2376530b6ffe480707b3d78526d0bda617e38a5f39eb93e0388dede71d495",
+          "lodMs": 88.8355,
+          "source": "assets/third_party/industrial_storage_cart/industrial_storage_cart_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 46.0901
+        },
+        {
+          "artifacts": 12,
+          "cookMs": 230.65730000000002,
+          "key": "3140706ddc746141777fa351aa0aa0b7a0035a3a5be1906ce6049a94c0e7ea43",
+          "lodMs": 93.2583,
+          "source": "assets/third_party/ladder_sectioned_01/ladder_sectioned_01_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 61.4557
+        },
+        {
+          "artifacts": 91,
+          "cookMs": 343.31089999999995,
+          "key": "cf7d666e7e56caf9af71a7056c9787476dcd2e364e53a14af781196c2a2bb673",
+          "lodMs": 12.0152,
+          "source": "assets/third_party/m2m_human/human-base-animations.glb",
+          "textureCooks": 0,
+          "virtualMs": 0.0032
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 145.3289,
+          "key": "85c7f92efcbcc04d3c7240cd35d50e4c6bb29bade8218a16fbfe124cdf19e9e6",
+          "lodMs": 45.4111,
+          "source": "assets/third_party/metal_jerrycan/metal_jerrycan_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 43.0696
+        },
+        {
+          "artifacts": 14,
+          "cookMs": 58.0925,
+          "key": "5b2b4ec13bcafcb4332c4459343269ea556396f2ca6a1950675677e46485ad64",
+          "lodMs": 12.4607,
+          "source": "assets/third_party/metal_jerrycan_green/metal_jerrycan_green_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 18.6186
+        },
+        {
+          "artifacts": 22,
+          "cookMs": 48.533,
+          "key": "bff95482c0f869ea3edc6fe8673bf0152589c4f7aaf5f3eaf468f187f25d7fc4",
+          "lodMs": 11.5503,
+          "source": "assets/third_party/metal_office_desk/metal_office_desk_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 13.3993
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 65.63860000000001,
+          "key": "5a18e0ef23d732292e35d47b8bdbc7571655e60aa53d933a1ad8c9250db10299",
+          "lodMs": 26.7626,
+          "source": "assets/third_party/metal_stool_01/metal_stool_01_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 15.5536
+        },
+        {
+          "artifacts": 18,
+          "cookMs": 95.3363,
+          "key": "8cb054166f6d1ee2a368c4ec53a6be0b480181285f9b90a15a13163ac2b33762",
+          "lodMs": 33.7509,
+          "source": "assets/third_party/metal_tool_chest/metal_tool_chest_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 26.3286
+        },
+        {
+          "artifacts": 16,
+          "cookMs": 114.7943,
+          "key": "c08e4d1efdd15face6c14cc71017fa93a2965b4ce9b16d85d876834f31718c11",
+          "lodMs": 47.2749,
+          "source": "assets/third_party/metal_toolbox/metal_toolbox_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 26.9837
+        },
+        {
+          "artifacts": 23,
+          "cookMs": 105.2458,
+          "key": "09f2ef13298b0482d15d25fc85bc79cc82599abaa816863a007d8951b983f0f4",
+          "lodMs": 31.6507,
+          "source": "assets/third_party/metal_trash_can/metal_trash_can_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 28.7191
+        },
+        {
+          "artifacts": 57,
+          "cookMs": 404.6396,
+          "key": "cc88717762227aa2627ba6765d1c3fa24cfe30cd9d3d328f2de5153fa667849c",
+          "lodMs": 153.5338,
+          "source": "assets/third_party/modular_airduct_rectangular_01/modular_airduct_rectangular_01_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 114.3535
+        },
+        {
+          "artifacts": 59,
+          "cookMs": 955.4051999999999,
+          "key": "83bc71ac7dd7d85f0380396a32e21ea57eb0ebb261d139527219b4de5cb48951",
+          "lodMs": 318.4165,
+          "source": "assets/third_party/modular_chainlink_fence/modular_chainlink_fence_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 257.5969
+        },
+        {
+          "artifacts": 213,
+          "cookMs": 2199.6653,
+          "key": "2868fa3fd5fd3bc94cc8963a3250a3db2105ee39453d9abf674a11a30dd7fd81",
+          "lodMs": 845.8704,
+          "source": "assets/third_party/modular_electricity_poles/modular_electricity_poles_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 672.2863
+        },
+        {
+          "artifacts": 23,
+          "cookMs": 162.3069,
+          "key": "fda41dc4a42acf1ddfd414e9688391b8526cb6630d2bdc052db3583d2392ed61",
+          "lodMs": 71.6927,
+          "source": "assets/third_party/modular_industrial_pipes_01/modular_industrial_pipes_01_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 41.5025
+        },
+        {
+          "artifacts": 33,
+          "cookMs": 164.5697,
+          "key": "f5423a717ed812afc813e54f6982652930a2729d4b8efb5cc37a51c4dee77c26",
+          "lodMs": 52.8477,
+          "source": "assets/third_party/mounted_fluorescent_lights/mounted_fluorescent_lights_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 48.2393
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 955.6803,
+          "key": "dc119f962dee2c39582be516b3b2b26b23fdbeed77a3ac8108213a397b60733a",
+          "lodMs": 298.8684,
+          "source": "assets/third_party/namaqualand_boulder_02/namaqualand_boulder_02_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 264.4272
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 462.0417,
+          "key": "ae4abdd69ebb9770163b86731cad3bdfbf97add7ba05a2ccb6820fc3a1b232ea",
+          "lodMs": 132.8237,
+          "source": "assets/third_party/namaqualand_boulder_03/namaqualand_boulder_03_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 130.547
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 432.70140000000004,
+          "key": "2469ce3f2603db5f07b8c3811a52177165bc1dbfbfa231e3c3eab9531011c371",
+          "lodMs": 131.4501,
+          "source": "assets/third_party/namaqualand_boulder_04/namaqualand_boulder_04_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 118.6879
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 680.271,
+          "key": "e7bea83cc0df13e8948ea4026df05f414097093086b25ed7ebc0925b1b036964",
+          "lodMs": 199.1035,
+          "source": "assets/third_party/namaqualand_boulder_05/namaqualand_boulder_05_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 185.1226
+        },
+        {
+          "artifacts": 12,
+          "cookMs": 611.5582,
+          "key": "e82aaba0ea07ca5faa8b936c4822b817d85998c53529538689a2c1e7277c35dd",
+          "lodMs": 186.6377,
+          "source": "assets/third_party/namaqualand_rocks_01/namaqualand_rocks_01_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 179.9233
+        },
+        {
+          "artifacts": 8,
+          "cookMs": 179.0891,
+          "key": "33d6fa6dd588966de28cd72488ba36a86f4661fdae539d52dfb3ab8c6ac50aff",
+          "lodMs": 70.8793,
+          "source": "assets/third_party/old_drill_press/old_drill_press_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 52.6011
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 160.78719999999998,
+          "key": "757ef163e122292219235c019e2c4eb4dfd7d781ca4ee91262e502c432bf152f",
+          "lodMs": 56.0441,
+          "source": "assets/third_party/old_gas_mask/old_gas_mask_2k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 36.9369
+        },
+        {
+          "artifacts": 9,
+          "cookMs": 674.4626999999999,
+          "key": "b1ba717f97656a8428d39576f59c258127247109542286ca03e94f00da7c239d",
+          "lodMs": 266.5091,
+          "source": "assets/third_party/old_military_compressor/old_military_compressor_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 186.6746
+        },
+        {
+          "artifacts": 14,
+          "cookMs": 74.9063,
+          "key": "fb6f91f35f5f3317693f6687e2512277754c4d29ff5af228a8cbb6ed287c2309",
+          "lodMs": 23.072,
+          "source": "assets/third_party/old_military_crate/old_military_crate_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 20.7852
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 19.0323,
+          "key": "4ee89ae82aab2b4617f166b6760a5997039e1ff63bbfc12bf8c67233f10a0abc",
+          "lodMs": 3.9661,
+          "source": "assets/third_party/old_tyre/old_tyre_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 5.267
+        },
+        {
+          "artifacts": 17,
+          "cookMs": 859.6735,
+          "key": "4212a7a46e3f58eb6c3783f1e266b3130ad42728ac5706d73ed4ba921ab019d0",
+          "lodMs": 376.9587,
+          "source": "assets/third_party/overhead_crane/overhead_crane_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 244.4453
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 111.236,
+          "key": "82a493604e57973741d827114b72605150b736fa18a101bb3e16b8dfc51cd17c",
+          "lodMs": 37.1439,
+          "source": "assets/third_party/pipe_wrench/pipe_wrench_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 34.0059
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 236.4626,
+          "key": "8a529f04949ef84892e8cb03e006a909212d29dc2dc30650f8573b3e187d36a9",
+          "lodMs": 85.0285,
+          "source": "assets/third_party/plastic_crate_03/plastic_crate_03_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 70.9834
+        },
+        {
+          "artifacts": 15,
+          "cookMs": 325.657,
+          "key": "499899076785f329a0ececac232574c05eab181d8ca6c7271b0267c6c612af8b",
+          "lodMs": 136.6594,
+          "source": "assets/third_party/portable_generator/portable_generator_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 98.4136
+        },
+        {
+          "artifacts": 9,
+          "cookMs": 134.9983,
+          "key": "f405d5e22a0bb7053a75ec733fb59508470494c457f276559bb7d0f9580e536a",
+          "lodMs": 48.0968,
+          "source": "assets/third_party/portable_searchlight/portable_searchlight_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 38.0465
+        },
+        {
+          "artifacts": 9,
+          "cookMs": 324.5425,
+          "key": "968f5be343f300e4449f9f6fdca042ea7f5b94e17f67576f910ecf7f02a58984",
+          "lodMs": 128.983,
+          "source": "assets/third_party/portable_welding_cart/portable_welding_cart_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 90.4571
+        },
+        {
+          "artifacts": 8,
+          "cookMs": 251.6257,
+          "key": "df7d0a8c11effbf0b55615ce04d9fcf1d8d537fd38d827fcab7d75aae32574fc",
+          "lodMs": 89.7707,
+          "source": "assets/third_party/power_box_01/power_box_01_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 83.6901
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 60.7511,
+          "key": "41f97f492244a60e8c46dbc65765087805d170b1e3b7dd7266bcd32217845138",
+          "lodMs": 24.4063,
+          "source": "assets/third_party/propane_tank/propane_tank_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 17.4083
+        },
+        {
+          "artifacts": 11,
+          "cookMs": 1564.0412999999999,
+          "key": "c48977cda311a9f0bdad24c7a76c02cd3a0312569874c1feff751d2c86ec3079",
+          "lodMs": 593.5789,
+          "source": "assets/third_party/quiver_tree_01/quiver_tree_01_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 378.5009
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 680.6115000000001,
+          "key": "a1673a31e24f3466545d2bddec6d58d1cd9f53d9878e0f4f7aa93160ca9b5af5",
+          "lodMs": 206.4406,
+          "source": "assets/third_party/quiver_tree_02/quiver_tree_02_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 187.6536
+        },
+        {
+          "artifacts": 21,
+          "cookMs": 61.6466,
+          "key": "396e57531d5dd5494587c3bdf70f54467829558e0607abb7efff9ba1a8ab41c5",
+          "lodMs": 20.0782,
+          "source": "assets/third_party/retro_multimeter/retro_multimeter_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 17.4459
+        },
+        {
+          "artifacts": 9,
+          "cookMs": 11.5544,
+          "key": "6c81606b4ff8b9adf2fb406a0be64c094244e5c9484c378c3538475f72494bda",
+          "lodMs": 3.6509,
+          "source": "assets/third_party/rollershutter_door/rollershutter_door_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 1.6494
+        },
+        {
+          "artifacts": 5,
+          "cookMs": 82.7815,
+          "key": "51dcf311052e387b31a436385b1b06fb9a099fe65a170e31fce3fe7b5ded6f40",
+          "lodMs": 8.1211,
+          "source": "assets/third_party/rusted_wheel_rim_01/rusted_wheel_rim_01_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 0.0047
+        },
+        {
+          "artifacts": 11,
+          "cookMs": 36.2199,
+          "key": "5238914da157adce6700c6f9032d23344f61335dcf6b183eac8658711e3b6a83",
+          "lodMs": 12.6166,
+          "source": "assets/third_party/security_light/security_light_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 9.795
+        },
+        {
+          "artifacts": 12,
+          "cookMs": 91.14450000000001,
+          "key": "eca92118f1c5cf48b30876d3510357225cda706db4938ae6ba5016dd349ae4cb",
+          "lodMs": 20.0906,
+          "source": "assets/third_party/shrub_03/shrub_03_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 13.1667
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 17.5594,
+          "key": "cace5a51bf9b0fe34fb6d37cd9b34dd5ac51a2e07cc5a01423484f9a5d656a3f",
+          "lodMs": 2.865,
+          "source": "assets/third_party/sledgehammer_01/sledgehammer_01_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 5.1847
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 121.6519,
+          "key": "222b8444ca350415970b1f3dee67520ffbc9b441971b1214da45e41f1e3ce0d5",
+          "lodMs": 45.9425,
+          "source": "assets/third_party/small_lpg_tank/small_lpg_tank_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 30.8956
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 141.6385,
+          "key": "a02f6ffc2a1232de3442421e2b437e2de7d6b9f213a91e2cbfc482e957f9aa3f",
+          "lodMs": 62.0326,
+          "source": "assets/third_party/small_oil_can_01/small_oil_can_01_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 35.5684
+        },
+        {
+          "artifacts": 8,
+          "cookMs": 37.3618,
+          "key": "a3467e0e707e0f608ec1222546c65fd37c07677bf2e83a83005457bfff6d9213",
+          "lodMs": 7.4152,
+          "source": "assets/third_party/spray_paint_bottles_02/spray_paint_bottles_02_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 11.8983
+        },
+        {
+          "artifacts": 17,
+          "cookMs": 57.306200000000004,
+          "key": "49e701995e7c818a62f94766976f69fb05efd86c1050f62f167af448c2598cbe",
+          "lodMs": 15.8846,
+          "source": "assets/third_party/steel_frame_shelves_03/steel_frame_shelves_03_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 16.63
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 29.673000000000002,
+          "key": "7f8e45e687ceec92546a3d6babc0e69426d8a6d64d7758c2f926f30bddac0dfc",
+          "lodMs": 10.0742,
+          "source": "assets/third_party/stone_fire_pit/stone_fire_pit_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 7.1821
+        },
+        {
+          "artifacts": 11,
+          "cookMs": 242.1659,
+          "key": "c03ce118c705f8e071c275b28755bced106f51dc5ef9057b24fc7d88f1649ccf",
+          "lodMs": 91.638,
+          "source": "assets/third_party/street_lamp_01/street_lamp_01_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 63.7376
+        },
+        {
+          "artifacts": 11,
+          "cookMs": 154.28449999999998,
+          "key": "61739baf37df7323313130f99774b632a8a477c459c8fa467b5df2f113d33b7b",
+          "lodMs": 56.3602,
+          "source": "assets/third_party/street_lamp_02/street_lamp_02_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 38.8265
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 266.4592,
+          "key": "6539ac0fe1662f2a7c7e3dea00d6a06e6af0ee2d5236975f5b273f5de5c4ba44",
+          "lodMs": 108.1471,
+          "source": "assets/third_party/tool_cart/tool_cart_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 78.1311
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 34.3551,
+          "key": "3b1df73293fa6acb1120e7a27a9972e578561c29fa9ab21f34b947457f3c0658",
+          "lodMs": 9.1498,
+          "source": "assets/third_party/trashbag/trashbag_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 11.6634
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 34.679,
+          "key": "1e2f2c8e1a8361738302e5f9415f1ea79ce7a977f3852aa69df1f1f3144a1928",
+          "lodMs": 12.8545,
+          "source": "assets/third_party/utility_box_01/utility_box_01_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 9.502
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 48.838100000000004,
+          "key": "92190b76a3383d42c85e9419e08414b65dd22294ea753e7c6ffe5597efeae9f3",
+          "lodMs": 16.1867,
+          "source": "assets/third_party/utility_box_02/utility_box_02_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 14.7971
+        },
+        {
+          "artifacts": 35,
+          "cookMs": 358.9742,
+          "key": "cbc7eb235bf70fe16db01ba9c61fe485a8f160eb26db5931b97aafa084e57c83",
+          "lodMs": 133.9069,
+          "source": "assets/third_party/vintage_radio_transceiver/vintage_radio_transceiver_2k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 91.0164
+        },
+        {
+          "artifacts": 36,
+          "cookMs": 228.5922,
+          "key": "901395f9e8aed40823d01ee08a4c599effe6f5f7e41c7c32181e46e1e322b125",
+          "lodMs": 48.9884,
+          "source": "assets/third_party/wild_rooibos_bush/wild_rooibos_bush_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 34.9979
+        },
+        {
+          "artifacts": 10,
+          "cookMs": 44.9453,
+          "key": "68172f03c6b9baf9326abad3a536c89559e11284912344a79ef90de5a8bb97ca",
+          "lodMs": 14.5757,
+          "source": "assets/third_party/wooden_crate_01/wooden_crate_01_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 12.2546
+        },
+        {
+          "artifacts": 8,
+          "cookMs": 38.4128,
+          "key": "28e9552cbebef11287d6bcb8396af4665e26c158509048afad92051839c390cc",
+          "lodMs": 11.621,
+          "source": "assets/third_party/wooden_crate_02/wooden_crate_02_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 10.2858
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 28.856099999999998,
+          "key": "0045b9b3467364b1a4541a0677a655115f196071e0fe1741ee27cbd7f0e39a78",
+          "lodMs": 10.1114,
+          "source": "assets/third_party/wooden_hammer_01/wooden_hammer_01_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 7.2202
+        },
+        {
+          "artifacts": 8,
+          "cookMs": 65.9961,
+          "key": "9875654cafdbca62c013ddff44ce21f442ba89f90138131db16edb7af9d0d6f7",
+          "lodMs": 26.0545,
+          "source": "assets/third_party/wooden_ladder/wooden_ladder_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 15.8652
+        },
+        {
+          "artifacts": 10,
+          "cookMs": 175.8044,
+          "key": "71f583c0820d4af7a8d0a7ba5fb2ab18b5c3cf88fdded08f3096f5f998dde5bd",
+          "lodMs": 68.3276,
+          "source": "assets/third_party/wooden_military_crate/wooden_military_crate_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 44.8816
+        },
+        {
+          "artifacts": 16,
+          "cookMs": 13.918899999999999,
+          "key": "6509f2a032189e9cf13a95d200aecbe48b9c2012ff894179efbc285c9dac7230",
+          "lodMs": 3.0237,
+          "source": "assets/third_party/woodentable_03/WoodenTable_03_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 3.7352
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 54.0899,
+          "key": "fdf7a2a4f76283d8cf4480e4d6c00ffd9c98b6aeb1d96ffbb6db1e20a222e559",
+          "lodMs": 22.4076,
+          "source": "assets/third_party/worn_metal_rack/worn_metal_rack_1k.gltf",
+          "textureCooks": 0,
+          "virtualMs": 13.2778
+        }
+      ],
+      "threads": 1,
+      "virtualMs": 5496.8285000000005
+    }
+  ]
+}
