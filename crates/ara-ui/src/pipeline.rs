@@ -173,6 +173,7 @@ impl Ui {
                 }
             }
         }
+        self.clamp_scrolls()?;
         Ok(())
     }
     /// Rebuild the display list, rects and clips; returns the nodes visited.
