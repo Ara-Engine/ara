@@ -173,23 +173,17 @@ impl Shell {
     }
     /// The open scene's structure as the Hierarchy shows it: the document, the
     /// document count and the revision of the last change to what rows show (names,
-    /// parents, order, prefab links, which components an entity has). A `Set` inside
-    /// a component that already had a value (`Transform.position`, `MeshRenderer.color`)
-    /// keeps it, so typing and dragging do not rebuild hundreds of rows.
+    /// parents, order, prefab links, which components an entity has). Ops that
+    /// [`keeps_rows`] keep it, so typing and dragging do not rebuild hundreds of rows.
     fn hierarchy_structure(&mut self, editor: &Editor) -> (String, usize, u64) {
         let store = editor.host.store();
         let revision = store.revision();
         let (checked, mut structure) = self.hierarchy_revisions;
         if revision != checked {
             let since = store.since(checked);
-            let inside = |op: &ara_doc::Op| {
-                matches!(op, ara_doc::Op::Set { path, prev: Some(_), .. }
-                    if path.segments().len() > 1
-                        && path.head().starts_with(|c: char| c.is_ascii_uppercase()))
-            };
             // Every transaction since the last check was seen, and none changed rows.
             let unchanged = since.len() as u64 == revision - checked
-                && since.iter().all(|t| t.ops.iter().all(inside));
+                && since.iter().all(|t| t.ops.iter().all(keeps_rows));
             if !unchanged {
                 structure = revision;
             }
@@ -288,4 +282,79 @@ pub(super) struct HierarchyKey {
     query: String,
     changed: std::collections::BTreeSet<String>,
     tints: BTreeMap<u64, &'static str>,
+}
+
+/// Whether `op` leaves every Hierarchy row as it was: a `Set` inside a component
+/// that already had a value (`Transform.position`, `MeshRenderer.color`), or an
+/// instance override of a field inside a component (`overrides[e_part/Transform.position.x]`,
+/// set or cleared), which can neither add nor remove an entity or a component.
+fn keeps_rows(op: &ara_doc::Op) -> bool {
+    use ara_schema::Segment;
+    let ara_doc::Op::Set { path, prev, .. } = op else {
+        return false;
+    };
+    let component = |s: &str| s.starts_with(|c: char| c.is_ascii_uppercase());
+    match path.segments() {
+        [Segment::Field(head), Segment::Key(key)] if head == "overrides" => {
+            let target = key.rsplit_once('/').map_or(key.as_str(), |(_, t)| t);
+            target.split_once('.').is_some_and(|(c, _)| component(c))
+        }
+        [Segment::Field(head), _, ..] => prev.is_some() && component(head),
+        _ => false,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::keeps_rows;
+    use ara_doc::{AssetId, Op, RecordId};
+    use serde_json::json;
+
+    fn set(path: &str, prev: Option<serde_json::Value>) -> Op {
+        let mut op = json!({"op": "set", "doc": "sc_level001", "id": "e_box1", "path": path,
+            "value": 1});
+        if let Some(prev) = prev {
+            op["prev"] = prev;
+        }
+        serde_json::from_value(op).expect("set op")
+    }
+
+    /// Component fields and field overrides keep the rows; names, parents, whole
+    /// components, removals, records and new component values rebuild them.
+    #[test]
+    fn only_values_inside_components_keep_the_rows() {
+        for (path, prev, keeps) in [
+            ("Transform.position", Some(json!([0, 0, 0])), true),
+            ("MeshRenderer.color", Some(json!("#fff")), true),
+            ("Light.intensity", None, false),
+            ("Light", Some(json!({})), false),
+            ("name", Some(json!("Box")), false),
+            ("parent", Some(json!("e_lamp1")), false),
+            ("overrides[e_part0/Transform.position.x]", None, true),
+            (
+                "overrides[Transform.position]",
+                Some(json!([1, 0, 0])),
+                true,
+            ),
+            (
+                "overrides[e_c002/e_lid1/Light.intensity]",
+                Some(json!(3)),
+                true,
+            ),
+            ("overrides[e_c002/Light]", None, false),
+            ("overrides[e_part0/name]", None, false),
+            ("overrides", Some(json!({})), false),
+            ("removed", None, false),
+        ] {
+            assert_eq!(keeps_rows(&set(path, prev)), keeps, "{path}");
+        }
+        let doc = AssetId::parse("sc_level001").expect("id");
+        let id = RecordId::parse("e_box1").expect("id");
+        let delete = Op::Delete {
+            doc,
+            id,
+            snapshot: Default::default(),
+        };
+        assert!(!keeps_rows(&delete));
+    }
 }

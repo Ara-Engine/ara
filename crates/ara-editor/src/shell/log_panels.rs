@@ -111,19 +111,27 @@ fn project_file(editor: &Editor, file: &str) -> String {
     }
 }
 
+/// The name of the entity at `address` in document `doc`, resolving only the scene
+/// record it belongs to (each Console and Problems row asks; a whole-scene resolve
+/// per row cost ~1.8 ms on Outpost).
+fn entity_name(editor: &Editor, doc: &str, address: &str) -> Option<String> {
+    let store = editor.host.store();
+    let ws = store.workspace();
+    let document = ws.find(doc).and_then(|id| ws.doc(id.as_str()))?;
+    let root = ara_doc::RecordId::parse(address.split('/').next()?).ok()?;
+    let part = ara_doc::prefab::resolve_record(document, &root, store.schema(), ws)?;
+    part.get(address)?
+        .record
+        .get("name")?
+        .as_str()
+        .map(str::to_owned)
+}
+
 /// Where a diagnostic points, as a short label and the command that reveals it.
 fn source(editor: &Editor, d: &ara_diag::Diagnostic) -> Option<(String, Binding)> {
     if let Some(record) = &d.location.record {
         let doc = d.location.doc.as_deref().unwrap_or(&editor.state.doc);
-        let name = crate::world::resolve(editor.host.store(), doc)
-            .ok()
-            .and_then(|r| {
-                r.get(record.as_str())
-                    .and_then(|e| e.record.get("name"))
-                    .and_then(Value::as_str)
-                    .map(str::to_owned)
-            })
-            .unwrap_or_else(|| record.clone());
+        let name = entity_name(editor, doc, record).unwrap_or_else(|| record.clone());
         let label = match &d.location.path {
             Some(path) => format!("{name} · {path}"),
             None => name,

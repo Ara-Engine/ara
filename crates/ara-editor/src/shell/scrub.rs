@@ -34,8 +34,7 @@ impl Shell {
             field.widget,
             crate::inspector::Widget::Vector { rgba: true, .. }
         );
-        let resolved = crate::world::resolve(editor.host.store(), &editor.state.doc)
-            .map_err(|d| format!("{d:?}"))?;
+        let resolved = self.resolved(editor)?;
         let doc = editor
             .host
             .store()
