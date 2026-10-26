@@ -15,9 +15,11 @@ pub enum EditorTheme {
 struct Palette {
     colors: BTreeMap<String, String>,
     radius: BTreeMap<String, f32>,
+    #[serde(default)]
+    metrics: BTreeMap<String, f32>,
 }
 impl EditorTheme {
-    /// Exact canonical JSON installed by the parent task.
+    /// Embedded JSON resource for this built-in theme.
     pub fn json(self) -> &'static str {
         match self {
             Self::Dark => include_str!("../../../assets/themes/ara-dark.json"),
@@ -36,45 +38,61 @@ impl EditorTheme {
             .map_err(Into::into)
     }
     fn parse_tokens(self) -> Result<BTreeMap<String, String>> {
-        let p: Palette = serde_json::from_str(self.json())?;
-        let mut out: BTreeMap<_, _> = p
-            .colors
-            .into_iter()
-            .map(|(k, v)| (format!("--{k}"), v))
-            .collect();
-        out.extend(
-            p.radius
-                .into_iter()
-                .map(|(k, v)| (format!("--radius-{k}"), format!("{v}px"))),
-        );
-        // Older palette files omit two status surfaces. Derive their documented
-        // tint from the same canonical foreground/background tokens.
-        for status in ["success", "info"] {
-            let key = format!("--{status}-surface");
-            if !out.contains_key(&key) {
-                let parse = |name: &str| -> Result<u32> {
-                    Ok(u32::from_str_radix(
-                        out.get(name)
-                            .ok_or("missing status color")?
-                            .trim_start_matches('#'),
-                        16,
-                    )?)
-                };
-                let base = parse("--background")?;
-                let tint = parse(&format!("--{status}-foreground"))?;
-                let channel = |shift: u32| {
-                    (((base >> shift) & 255u32) as f32 * 0.88
-                        + ((tint >> shift) & 255u32) as f32 * 0.12)
-                        .round() as u8
-                };
-                out.insert(
-                    key,
-                    format!("#{:02x}{:02x}{:02x}", channel(16), channel(8), channel(0)),
-                );
-            }
-        }
-        Ok(out)
+        tokens_from_json(self.json())
     }
+}
+/// Parse a theme resource into CSS variables. Metrics and radii are finite,
+/// nonnegative pixel values; colors retain their semantic names.
+pub fn tokens_from_json(json: &str) -> Result<BTreeMap<String, String>> {
+    let p: Palette = serde_json::from_value(ara_json::parse(json)?)?;
+    for (name, color) in &p.colors {
+        crate::style::Color::parse(color).map_err(|e| format!("theme color {name}: {e}"))?;
+    }
+    let mut out: BTreeMap<_, _> = p
+        .colors
+        .into_iter()
+        .map(|(k, v)| (format!("--{k}"), v))
+        .collect();
+    out.extend(
+        p.radius
+            .into_iter()
+            .map(|(k, v)| (format!("radius-{k}"), v))
+            .chain(p.metrics)
+            .map(|(k, v)| {
+                if !v.is_finite() || v < 0. {
+                    return Err(format!("invalid theme metric {k}: {v}").into());
+                }
+                Ok((format!("--{k}"), format!("{v}px")))
+            })
+            .collect::<Result<BTreeMap<_, _>>>()?,
+    );
+    // Older palette files omit two status surfaces. Derive their documented
+    // tint from the same canonical foreground/background tokens.
+    for status in ["success", "info"] {
+        let key = format!("--{status}-surface");
+        if !out.contains_key(&key) {
+            let parse = |name: &str| -> Result<u32> {
+                Ok(u32::from_str_radix(
+                    out.get(name)
+                        .ok_or("missing status color")?
+                        .trim_start_matches('#'),
+                    16,
+                )?)
+            };
+            let base = parse("--background")?;
+            let tint = parse(&format!("--{status}-foreground"))?;
+            let channel = |shift: u32| {
+                (((base >> shift) & 255u32) as f32 * 0.88
+                    + ((tint >> shift) & 255u32) as f32 * 0.12)
+                    .round() as u8
+            };
+            out.insert(
+                key,
+                format!("#{:02x}{:02x}{:02x}", channel(16), channel(8), channel(0)),
+            );
+        }
+    }
+    Ok(out)
 }
 impl Ui {
     /// Parse editor markup with Ara Dark defaults and raw-color diagnostics.
@@ -87,12 +105,19 @@ impl Ui {
     /// Swap the palette tokens and restyle once on the next frame; color-only changes
     /// do not reshape or relayout. The current theme again is a no-op.
     pub fn switch_theme(&mut self, theme: EditorTheme) -> Result<()> {
-        if self.sheet.set_tokens(theme.tokens()?) {
+        self.set_theme_tokens(theme.tokens()?);
+        Ok(())
+    }
+    /// Apply validated resource tokens to the retained tree. Restyling detects
+    /// geometry and font changes and invalidates layout or shaping as needed.
+    pub fn set_theme_tokens(&mut self, tokens: BTreeMap<String, String>) -> bool {
+        let changed = self.sheet.set_tokens(tokens);
+        if changed {
             for n in &mut self.nodes {
                 n.dirty.style = true;
             }
         }
-        Ok(())
+        changed
     }
 }
 /// Validate both inline styles and stylesheet rules against D18.

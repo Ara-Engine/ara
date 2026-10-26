@@ -661,6 +661,9 @@ impl Shell {
             let id = n.element.id.as_str();
             if let Some(binding) = self.bindings.get(&ara_ui::source::stable_id(id)) {
                 match binding {
+                    Binding::ContextMenu(context, target) => {
+                        return Some((*context, target.clone()));
+                    }
                     Binding::Select(entity) => {
                         return Some((Context::Entity, Target::Entity(entity.clone())));
                     }

@@ -637,6 +637,9 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                 last_scene = editor.scene_revision;
                 scene_dirty = true;
             }
+            let (styles_changed, viewport_changed) = shell.reload_styles(&mut editor)?;
+            dirty |= styles_changed;
+            scene_dirty |= viewport_changed;
             if editor.panels_revision != last_panels {
                 last_panels = editor.panels_revision;
                 dirty |= shell.rebuild_if_stale(&mut editor)?;
@@ -837,6 +840,7 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                             controller.gizmo_state(),
                             &mut shell.outlines,
                             editor.host.store().revision(),
+                            &shell.ui.sheet,
                         )?;
                         shell.outlines.upload(&mut ui_renderer, &mut gpu)?;
                         if rect.contains(shell.pointer[0], shell.pointer[1])

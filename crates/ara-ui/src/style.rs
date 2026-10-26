@@ -17,7 +17,7 @@ pub struct Color(
     pub u8,
 );
 impl Color {
-    fn parse(value: &str) -> Result<Self> {
+    pub(crate) fn parse(value: &str) -> Result<Self> {
         if value == "transparent" {
             return Ok(Self(0, 0, 0, 0));
         }
@@ -101,6 +101,13 @@ impl Computed {
         if control {
             layout.padding = Rect::length(10.0);
         }
+        // Placed by `Ui::frame` (`popover`); a block keeps its rows at natural height
+        // when the popover is clamped and scrolls.
+        let popover = tag == "popover";
+        if popover {
+            layout.display = Display::Block;
+            layout.position = Position::Absolute;
+        }
         Self {
             layout,
             background: if control {
@@ -117,7 +124,7 @@ impl Computed {
             font_family: None,
             text_end: false,
             wrap_text: true,
-            clip: false,
+            clip: popover || tag == "scroll",
             translate: [0.0; 2],
         }
     }

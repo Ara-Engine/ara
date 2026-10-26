@@ -112,9 +112,11 @@ pub(super) fn apply(c: &mut Computed, k: &str, v: &str) -> Result<()> {
             c.layout.display = match v {
                 "flex" => Display::Flex,
                 "grid" => Display::Grid,
+                // Children keep their natural heights (popovers that scroll).
+                "block" => Display::Block,
                 // Takes the subtree out of layout, paint and input; it stays mounted.
                 "none" => Display::None,
-                _ => return Err("display must be flex, grid or none".into()),
+                _ => return Err("display must be flex, grid, block or none".into()),
             }
         }
         "flex-direction" => {

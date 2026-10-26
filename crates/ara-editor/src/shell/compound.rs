@@ -4,6 +4,7 @@
 //! (`list<T>` is never addressed by index). An element is addressed `path#pointer`, a
 //! JSON pointer into the field's value: `field.set`, typed drafts (`@nested|…`), the
 //! asset picker and asset drops all take that target.
+mod fields;
 use super::inspector_panel::sentence;
 use super::panels::display;
 use super::*;
@@ -48,11 +49,12 @@ impl Leaf {
         })
     }
     /// The draft key of an edit at `target`; `nullable` makes empty text clear it.
-    pub(super) fn draft(self, target: &str, nullable: bool) -> String {
+    pub(super) fn draft(self, target: &str, nullable: bool, unit: Option<&str>) -> String {
         format!(
-            "@nested|{}{}|{target}",
+            "@nested|{}{}{}|{target}",
             self.code(),
-            if nullable { "?" } else { "" }
+            if nullable { "?" } else { "" },
+            unit.map(|unit| format!("~{unit}")).unwrap_or_default()
         )
     }
 }
@@ -110,7 +112,7 @@ pub(super) fn hex_linear(text: &str) -> Result<[f64; 3], String> {
     Ok([channel(0)?, channel(1)?, channel(2)?])
 }
 /// Linear channels as `#RRGGBB` sRGB.
-fn linear_hex(value: &Value) -> String {
+pub(super) fn linear_hex(value: &Value) -> String {
     let channel = |n: usize| {
         (value[n].as_f64().unwrap_or(1.).clamp(0., 1.).powf(1. / 2.2) * 255.).round() as u8
     };
@@ -118,6 +120,9 @@ fn linear_hex(value: &Value) -> String {
 }
 /// Applies one typed draft at `pointer` inside a field's whole value.
 fn apply_draft(whole: &mut Value, pointer: &str, code: &str, text: &str) -> Result<(), String> {
+    let (code, unit) = code
+        .split_once('~')
+        .map_or((code, None), |(code, unit)| (code, Some(unit)));
     let mut chars = code.chars();
     let leaf = chars
         .next()
@@ -133,7 +138,7 @@ fn apply_draft(whole: &mut Value, pointer: &str, code: &str, text: &str) -> Resu
             .ok()
             .filter(Value::is_number)
             .map_or_else(
-                || crate::inspector::parse_number(text, None).map(|n| json!(n)),
+                || crate::inspector::parse_number(text, unit).map(|n| json!(n)),
                 Ok,
             )?,
         Leaf::Text => json!(text),
@@ -181,6 +186,12 @@ fn set_commands(selection: &[String], field: &Field, pointer: &str, value: Value
         Err(_) => Vec::new(),
     }
 }
+/// Whole compound value with one numeric gesture sample applied locally.
+pub(super) fn preview_value(whole: &Value, pointer: &str, value: Value) -> Option<Value> {
+    let mut whole = whole.clone();
+    set_at(&mut whole, &tokens(pointer), value).ok()?;
+    Some(whole)
+}
 /// A new element of `ty`: a struct with every field at its default, else the zero.
 fn element_default(db: &SchemaDb, ty: &ValueType) -> Value {
     if let ValueType::Named(name) = ty
@@ -216,6 +227,26 @@ fn inner(ty: &ValueType) -> &ValueType {
         _ => ty,
     }
 }
+/// Lists of module-like structs choose their leading enum when adding an item.
+fn leading_enum<'a>(db: &'a SchemaDb, ty: &ValueType) -> Option<(&'a str, Vec<String>)> {
+    let ValueType::Named(name) = inner(ty) else {
+        return None;
+    };
+    let Shape::Struct { fields, .. } = &db.get(name)?.shape else {
+        return None;
+    };
+    let first = fields.first()?;
+    let ValueType::Named(enum_name) = &first.ty else {
+        return None;
+    };
+    let Shape::Enum { variants } = &db.get(enum_name)?.shape else {
+        return None;
+    };
+    Some((
+        &first.name,
+        variants.iter().map(|v| v.name.clone()).collect(),
+    ))
+}
 /// The singular of a collection's name, for new keys and IDs: `parameters` → `parameter`.
 fn singular(name: &str) -> String {
     let word = name.rsplit('/').next().unwrap_or(name);
@@ -245,6 +276,9 @@ fn item_title(db: &SchemaDb, elem: &ValueType, item: &Value, n: usize) -> String
             .cloned()
             .unwrap_or_else(|| db.field_default(first));
         if matches!(value, Value::String(_) | Value::Number(_)) {
+            if leading_enum(db, elem).is_some() {
+                return sentence(value.as_str().unwrap_or("Item"));
+            }
             return format!("{} {}", sentence(&first.name), display(&value));
         }
     }
@@ -280,12 +314,16 @@ impl Shell {
     }
     /// `property.set` commands putting `value` at a field target; a nested target
     /// replaces its field's whole value.
-    pub(super) fn field_commands(
+    pub(crate) fn field_commands(
         &self,
         selection: &[String],
         target: &str,
         value: Value,
     ) -> ara_ui::Result<Vec<Value>> {
+        let path = target.split_once('#').map_or(target, |(path, _)| path);
+        if self.fields.get(path).is_some_and(|field| field.read_only) {
+            return Err("This property is read-only".into());
+        }
         let Some((path, pointer)) = target.split_once('#') else {
             return Ok(crate::inspector::edit_commands(selection, target, &value));
         };
@@ -360,7 +398,16 @@ impl Shell {
             return;
         };
         if !field.mixed {
+            let start = out.len();
             self.items(editor, field, ty, &field.value, "", 1, label, out);
+            if field.read_only {
+                let disabled =
+                    out[start..].replace("action='Dispatch'", "disabled='true' action='Dispatch'");
+                out.truncate(start);
+                out.push_str(
+                    &disabled.replace("disabled='true' disabled='true'", "disabled='true'"),
+                );
+            }
         }
     }
 
@@ -413,6 +460,18 @@ impl Shell {
                 ));
                 // An item that cannot exist without an asset (a material override's
                 // material) is added by picking that asset.
+                if let Some((name, options)) = leading_enum(db, elem) {
+                    let button = format!("add-{rid}");
+                    self.bindings.insert(
+                        ara_ui::source::stable_id(&button),
+                        Binding::EnumMenu(
+                            format!("{}#{pointer}/{n}/{}", field.path, token(name)),
+                            options,
+                        ),
+                    );
+                    out.push_str(&format!("<button id='{button}' class='ghost' label='Add {}' description='Choose the kind of item to add' action='Dispatch'><text id='{button}-label' text='Add' />{}</button>", escape(&sentence(&field.label)), icons::icon_in(&button,"chevron-down","icon-sm")));
+                    return;
+                }
                 if let Some((name, kind)) = required_asset(db, elem) {
                     let button = format!("add-{rid}");
                     self.bindings.insert(
@@ -590,18 +649,88 @@ impl Shell {
         let db = editor.host.store().schema();
         let rid = row_id(field, row.pointer);
         let target = format!("{}#{}", field.path, row.pointer);
+        let compound = crate::inspector::compound(db, inner(row.ty));
+        let optional = matches!(row.ty, ValueType::Option(_))
+            && !compound
+            && *inner(row.ty) != ValueType::Entity;
+        let inactive = optional && row.value.is_null();
+        let collapsed = compound && row.item && self.inspector_sections.collapsed(&target);
+        let numeric = inner(row.ty).is_number()
+            && !inactive
+            && !field.read_only
+            && !row.desc.is_some_and(|desc| desc.editor.read_only);
         let indent = 6. + 12. * depth as f32;
         out.push_str(&format!("<panel id='nest-{rid}' class='prop-row'><panel id='nest-label-{rid}' class='prop-label' style='width:{label}px;padding-left:{indent}px'>"));
+        if optional {
+            let id = format!("override-{rid}");
+            let fallback = row
+                .desc
+                .map(|desc| crate::inspector::override_default(db, desc))
+                .unwrap_or_else(|| db.zero(inner(row.ty)));
+            let binding = if inactive
+                && fallback.is_null()
+                && let ValueType::Asset(kind) = inner(row.ty)
+            {
+                Binding::AssetPicker(target.clone(), kind.clone())
+            } else {
+                Binding::Content(
+                    set_commands(
+                        &editor.state.selection,
+                        field,
+                        row.pointer,
+                        if inactive { fallback } else { Value::Null },
+                    ),
+                    "Toggle property override".into(),
+                )
+            };
+            self.bindings
+                .insert(ara_ui::source::stable_id(&id), binding);
+            out.push_str(&format!("<toggle id='{id}' style='width:16px;height:16px;flex-shrink:0' checked='{}' label='Override {}' description='{}' {} action='Dispatch' />", !inactive, escape(row.pointer.rsplit('/').next().unwrap_or("property")), escape(row.desc.map_or("", |desc| desc.doc.as_str())), if field.read_only || row.desc.is_some_and(|desc|desc.editor.read_only) {"disabled='true'"} else {""}));
+        }
+        if compound && row.item {
+            let id = format!("collapse-nest-{rid}");
+            self.bindings.insert(
+                ara_ui::source::stable_id(&id),
+                Binding::NestedCollapse(target.clone()),
+            );
+            out.push_str(&format!("<button id='{id}' class='ghost icon-button' label='{} item' action='Dispatch'>{}</button>",if collapsed {"Expand"} else {"Collapse"},icons::icon_in(&id,if collapsed {"chevron-right"} else {"chevron-down"},"icon-sm")));
+        }
         match &row.title {
-            Title::Text(text) => out.push_str(&format!(
-                "<text id='nest-title-{rid}' text='{}' />",
-                escape(text)
-            )),
+            Title::Text(text) => {
+                if numeric {
+                    let id = format!("scrub-nest-{rid}");
+                    let (min, max, step) =
+                        match row.desc.map(|desc| crate::inspector::widget(db, desc)) {
+                            Some(crate::inspector::Widget::Number { min, max, step, .. }) => {
+                                (min, max, step)
+                            }
+                            _ => (None, None, 0.1),
+                        };
+                    self.bindings.insert(
+                        ara_ui::source::stable_id(&id),
+                        Binding::NestedScrub {
+                            target: target.clone(),
+                            widget: format!("nest-edit-{rid}"),
+                            step,
+                            min,
+                            max,
+                        },
+                    );
+                    out.push_str(&format!("<button id='{id}' class='nested-scrub-label' cursor='ew-resize' label='Scrub {}' description='{} · Drag to scrub; Shift: fine, Ctrl: coarse; Esc cancels.' action='Dispatch'>",escape(text),escape(row.desc.map_or("",|desc|desc.doc.as_str()))));
+                }
+                out.push_str(&format!(
+                    "<text id='nest-title-{rid}' text='{}' />",
+                    escape(text)
+                ));
+                if numeric {
+                    out.push_str("</button>");
+                }
+            }
             Title::Key(key) => {
                 let id = format!("nest-key-{rid}");
                 self.bindings.insert(
                     ara_ui::source::stable_id(&id),
-                    Binding::Nested(target.clone(), Leaf::Key, false),
+                    Binding::Nested(target.clone(), Leaf::Key, false, None),
                 );
                 out.push_str(&format!("<field id='{id}' style='flex-grow:1;flex-basis:0px' text='{}' label='Key' description='Rename this entry; Enter applies' action='Dispatch' />",escape(key)));
             }
@@ -609,11 +738,20 @@ impl Shell {
         out.push_str(&format!(
             "</panel><panel id='nest-value-{rid}' class='prop-value'>"
         ));
-        let compound = crate::inspector::compound(db, inner(row.ty));
+        let value_start = out.len();
         if compound {
             self.collection_head(editor, field, row.ty, row.value, row.pointer, &rid, out);
         } else {
             self.leaf(editor, field, &row, &rid, out);
+        }
+        if (inactive && !matches!(inner(row.ty), ValueType::Asset(_) | ValueType::Entity))
+            || field.read_only
+            || row.desc.is_some_and(|desc| desc.editor.read_only)
+        {
+            let disabled = out[value_start..]
+                .replace("action='Dispatch'", "disabled='true' action='Dispatch'");
+            out.truncate(value_start);
+            out.push_str(&disabled);
         }
         out.push_str("</panel>");
         // Items keep a fixed action column (Move up, Remove) so their values align;
@@ -632,7 +770,7 @@ impl Shell {
             out.push_str(&format!("<button id='{button}' class='ghost icon-button' label='{label_text}' description='{label_text}' action='Dispatch'>{}</button>",icons::icon_in(&button,icon,"icon-sm")));
         }
         out.push_str("</panel></panel>");
-        if compound {
+        if compound && !collapsed {
             self.items(
                 editor,
                 field,
@@ -643,219 +781,6 @@ impl Shell {
                 label,
                 out,
             );
-        }
-    }
-
-    /// The widget for one scalar, vector, reference or enum element.
-    fn leaf(&mut self, editor: &Editor, field: &Field, row: &Row<'_>, rid: &str, out: &mut String) {
-        let db = editor.host.store().schema();
-        let selection = &editor.state.selection;
-        let (desc, value, pointer) = (row.desc, row.value, row.pointer);
-        let nullable = matches!(row.ty, ValueType::Option(_));
-        let ty = inner(row.ty);
-        let target = &format!("{}#{pointer}", field.path);
-        let set = |to: Value| set_commands(selection, field, pointer, to);
-        let id = format!("nest-edit-{rid}");
-        let text_box = |shell: &mut Self,
-                        out: &mut String,
-                        id: &str,
-                        target: String,
-                        leaf: Leaf,
-                        text: String,
-                        numeric: bool| {
-            shell.bindings.insert(
-                ara_ui::source::stable_id(id),
-                Binding::Nested(target, leaf, nullable),
-            );
-            out.push_str(&format!("<field id='{id}' class='{}' style='flex-grow:1;flex-basis:0px' text='{}' label='{}' description='{}' action='Dispatch' />",if numeric{"number"}else{""},escape(&text),escape(&sentence(pointer.rsplit('/').next().unwrap_or(pointer))),escape(desc.map_or("",|d|d.doc.as_str()))));
-        };
-        if ty.is_number() {
-            let range = desc.and_then(|d| d.range);
-            if let Some((min, max)) = range.and_then(|r| Some((r.min?, r.max?))) {
-                let slider = format!("nest-slider-{rid}");
-                self.bindings.insert(
-                    ara_ui::source::stable_id(&slider),
-                    Binding::Nested(target.to_owned(), Leaf::Number, false),
-                );
-                out.push_str(&format!("<slider id='{slider}' style='flex-grow:1;flex-basis:0px' min='{min}' max='{max}' step='{}' value='{}' action='Dispatch' />",desc.and_then(|d|d.editor.step).unwrap_or(0.01),value.as_f64().unwrap_or(min).clamp(min,max)));
-            }
-            text_box(
-                self,
-                out,
-                &id,
-                target.to_owned(),
-                Leaf::Number,
-                display(value),
-                true,
-            );
-            if let Some(unit) = desc.and_then(|d| d.unit) {
-                out.push_str(&format!(
-                    "<text id='unit-{rid}' class='caption' text='{}' />",
-                    escape(unit.symbol())
-                ));
-            }
-            return;
-        }
-        if let Some(count) = ty.vector_len() {
-            if *ty == ValueType::Color || desc.is_some_and(|d| d.editor.color) {
-                let swatch = format!("nest-swatch-{rid}");
-                out.push_str(&format!("<panel id='{swatch}' class='swatch' />"));
-                self.nested_swatches.push((swatch, value.clone()));
-                text_box(
-                    self,
-                    out,
-                    &id,
-                    target.to_owned(),
-                    Leaf::Hex,
-                    linear_hex(value),
-                    false,
-                );
-                return;
-            }
-            for axis in 0..count {
-                let cell = format!("{id}-{axis}");
-                out.push_str(&format!("<panel id='{cell}-cell' class='vector-cell'><text id='{cell}-axis' class='axis axis-{}' text='{}' />",["x","y","z","w"][axis],["X","Y","Z","W"][axis]));
-                text_box(
-                    self,
-                    out,
-                    &cell,
-                    format!("{target}/{axis}"),
-                    Leaf::Number,
-                    display(&value[axis]),
-                    true,
-                );
-                out.push_str("</panel>");
-            }
-            return;
-        }
-        match ty {
-            ValueType::Bool => {
-                let on = value.as_bool().unwrap_or(false);
-                self.bindings.insert(
-                    ara_ui::source::stable_id(&id),
-                    Binding::Content(
-                        set(json!(!on)),
-                        format!("Set {}", sentence(&field.label).to_lowercase()),
-                    ),
-                );
-                out.push_str(&format!(
-                    "<toggle id='{id}' checked='{on}' label='{}' action='Dispatch' />",
-                    escape(&sentence(pointer.rsplit('/').next().unwrap_or(pointer)))
-                ));
-            }
-            ValueType::Asset(kind) => {
-                let reference = value.as_str().unwrap_or("");
-                let source = reference
-                    .trim_start_matches('@')
-                    .split('#')
-                    .next()
-                    .unwrap_or("");
-                // Without its extension, like Assets; the tooltip has the reference.
-                let name = Some(names::stem(names::file_name(source)))
-                    .filter(|s| !s.is_empty())
-                    .unwrap_or("None");
-                let button = format!("asset-field-{rid}");
-                self.bindings.insert(
-                    ara_ui::source::stable_id(&button),
-                    Binding::AssetPicker(target.to_owned(), kind.clone()),
-                );
-                let preview = match self.thumbnail_slots.get(source) {
-                    Some(slot) => format!(
-                        "<image id='{button}-thumbnail' src='{}' style='width:16px;height:16px' />",
-                        crate::asset_tools::thumbnails::image_name(*slot)
-                    ),
-                    None => {
-                        if !source.is_empty()
-                            && matches!(
-                                source.rsplit('.').next(),
-                                Some("material" | "graph" | "png" | "jpg" | "jpeg")
-                            )
-                        {
-                            self.thumbnails.request(source);
-                        }
-                        icons::icon(&button, "package")
-                    }
-                };
-                out.push_str(&format!("<button id='{button}' style='flex-grow:1;flex-basis:0px;min-width:0px;overflow:hidden;justify-content:start;background:var(--background);border-color:var(--input)' label='{} asset' description='{} · drop an asset here, or pick one' action='Dispatch'>{preview}<text id='asset-name-{rid}' class='{}' style='white-space:nowrap;overflow:hidden;min-width:0px;flex-shrink:1' text='{}' /></button>",escape(kind.as_deref().unwrap_or("Any")),escape(reference),if reference.is_empty(){"muted"}else{"fg"},escape(name)));
-                if !reference.is_empty() {
-                    let clear = format!("clear-{rid}");
-                    self.bindings.insert(
-                        ara_ui::source::stable_id(&clear),
-                        Binding::Content(
-                            set(Value::Null),
-                            format!("Clear {}", sentence(&field.label).to_lowercase()),
-                        ),
-                    );
-                    out.push_str(&format!("<button id='{clear}' class='ghost icon-button' label='Clear' description='Clear the reference' action='Dispatch'>{}</button>",icons::icon_in(&clear,"x","icon-sm")));
-                }
-            }
-            ValueType::Named(name) => {
-                let Some(Shape::Enum { variants }) = db.get(name).map(|t| &t.shape) else {
-                    return;
-                };
-                let options: Vec<String> = variants.iter().map(|v| v.name.clone()).collect();
-                self.bindings.insert(
-                    ara_ui::source::stable_id(&id),
-                    Binding::EnumMenu(target.to_owned(), options),
-                );
-                out.push_str(&format!("<button id='{id}' style='flex-grow:1;flex-basis:0px;justify-content:start' label='{}' action='Dispatch'><text id='{id}-value' class='fill' text='{}' />{}</button>",escape(name),escape(&sentence(value.as_str().unwrap_or(""))),icons::icon_in(&id,"chevron-down","icon-sm")));
-            }
-            ValueType::Json => {
-                let text = if value.is_null() {
-                    String::new()
-                } else {
-                    value.to_string()
-                };
-                text_box(self, out, &id, target.to_owned(), Leaf::Json, text, false);
-            }
-            // Strings and entity addresses.
-            _ => {
-                let nullable = nullable || *ty == ValueType::Entity;
-                self.bindings.insert(
-                    ara_ui::source::stable_id(&id),
-                    Binding::Nested(target.to_owned(), Leaf::Text, nullable),
-                );
-                out.push_str(&format!("<field id='{id}' style='flex-grow:1;flex-basis:0px' text='{}' label='{}' description='{}' action='Dispatch' />",escape(value.as_str().unwrap_or("")),escape(&sentence(pointer.rsplit('/').next().unwrap_or(pointer))),escape(desc.map_or("",|d|d.doc.as_str()))));
-            }
-        }
-    }
-
-    /// Paints the swatches of nested colour elements.
-    pub(super) fn paint_nested_swatches(&mut self) {
-        for (id, value) in &self.nested_swatches {
-            let Some(i) = self.shown_node(id) else {
-                continue;
-            };
-            let r = self.ui.nodes[i].rect;
-            let clip = self.ui.nodes[i].clip.intersection(r);
-            if clip.w <= 0. || clip.h <= 0. {
-                continue;
-            }
-            let channel = |n: usize| value[n].as_f64().unwrap_or(1.).clamp(0., 1.);
-            let display = &mut self.ui.display.commands;
-            display.push(ara_ui::paint::Draw::PushClip { rect: clip });
-            display.push(ara_ui::paint::Draw::RoundedRect {
-                node: ara_ui::source::stable_id(id),
-                rect: Box2 {
-                    x: r.x + 2.,
-                    y: r.y + 2.,
-                    w: (r.w - 4.).max(0.),
-                    h: (r.h - 4.).max(0.),
-                },
-                radius: 3.,
-                color: ara_ui::style::Color(
-                    (channel(0).powf(1. / 2.2) * 255.) as u8,
-                    (channel(1).powf(1. / 2.2) * 255.) as u8,
-                    (channel(2).powf(1. / 2.2) * 255.) as u8,
-                    (value
-                        .get(3)
-                        .and_then(Value::as_f64)
-                        .unwrap_or(1.)
-                        .clamp(0., 1.)
-                        * 255.) as u8,
-                ),
-            });
-            display.push(ara_ui::paint::Draw::PopClip);
         }
     }
 }
@@ -892,13 +817,32 @@ mod tests {
     use super::*;
 
     #[test]
+    fn enum_first_structs_choose_a_variant_when_added_and_name_their_headers() {
+        let mut db = SchemaDb::new();
+        db.register::<ara_runtime::components::Light>();
+        let ty = ValueType::Named("Light".into());
+        let (field, choices) = leading_enum(&db, &ty).unwrap();
+        assert_eq!(field, "kind");
+        assert!(choices.iter().any(|choice| choice == "spot"));
+        assert_eq!(item_title(&db, &ty, &json!({"kind":"spot"}), 0), "Spot");
+        let mut whole = json!([]);
+        set_at(&mut whole, &tokens("/0/kind"), json!("spot")).unwrap();
+        assert_eq!(whole, json!([{"kind":"spot"}]));
+    }
+
+    #[test]
     fn drafts_apply_inside_the_whole_value() {
         let mut whole = json!({"tint": [1, 1, 1, 0.5], "cells": {"a": 1, "b": 2}, "points": []});
         // A colour keeps its alpha; empty text clears a nullable value.
         apply_draft(&mut whole, "/tint", "h", "#FF0000").unwrap();
         assert_eq!(whole["tint"], json!([1.0, 0.0, 0.0, 0.5]));
+        assert!(hex_linear("0é000").is_err());
         apply_draft(&mut whole, "/cells/a", "n?", " ").unwrap();
         assert_eq!(whole["cells"]["a"], Value::Null);
+        apply_draft(&mut whole, "/cells/a", "n?~m", "150cm").unwrap();
+        assert_eq!(whole["cells"]["a"], json!(1.5));
+        assert!(apply_draft(&mut whole, "/cells/a", "n?~m", "90deg").is_err());
+        apply_draft(&mut whole, "/cells/a", "n?", " ").unwrap();
         // Keys rename in place and never overwrite another entry.
         apply_draft(&mut whole, "/cells/b", "k", "c").unwrap();
         assert_eq!(whole["cells"], json!({"a": null, "c": 2}));

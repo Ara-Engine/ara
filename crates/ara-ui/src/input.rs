@@ -4,6 +4,8 @@ use crate::focus::directional_where;
 pub use crate::focus::{directional, focus_graph, next_tab, tab_order};
 use crate::{Result, Ui, runtime::is_focusable, source::stable_id};
 use ara_ui_text::{Clipboard, EditEvent};
+mod scroll;
+use scroll::ScrollDrag;
 /// Gamepad/keyboard spatial direction.
 #[derive(Clone, Copy, Debug)]
 pub enum Direction {
@@ -71,8 +73,13 @@ pub struct InputState {
     /// it after a rebuild or slow frame moved it (press/release match by stable ID).
     capture_rect: Option<crate::paint::Box2>,
     drag: Option<(u64, serde_json::Value)>,
+    scroll_drag: Option<ScrollDrag>,
 }
 impl InputState {
+    /// Whether a scrollbar currently owns pointer capture.
+    pub fn scrolling(&self) -> bool {
+        self.scroll_drag.is_some()
+    }
     /// Stable identity of the focused control.
     pub fn focused(&self) -> Option<u64> {
         self.focus
@@ -105,9 +112,9 @@ impl InputState {
     /// Whether the node can hold focus now: a focusable control, shown (not inside a
     /// hidden subtree such as an inactive tab) and in the active scope.
     fn can_focus(&self, ui: &Ui, index: usize) -> bool {
-        is_focusable(&ui.nodes[index]) && ui.shown(index) && self.in_scope(ui, index)
+        ui.focus_candidate(index) && self.in_scope(ui, index)
     }
-    fn in_scope(&self, ui: &Ui, index: usize) -> bool {
+    pub(crate) fn in_scope(&self, ui: &Ui, index: usize) -> bool {
         self.scopes.last().is_none_or(|scope| {
             let mut i = Some(index);
             while let Some(j) = i {
@@ -134,6 +141,7 @@ impl InputState {
             s.focus = self.focus;
         }
         self.capture = None;
+        self.scroll_drag = None;
         self.scopes.push(Scope {
             root,
             focus: initial,
@@ -172,6 +180,7 @@ impl InputState {
     pub fn pop(&mut self, ui: &mut Ui) -> Option<u64> {
         self.scopes.pop();
         self.capture = None;
+        self.scroll_drag = None;
         let restored = self
             .scopes
             .last()
@@ -187,7 +196,7 @@ impl InputState {
         self.focus_to(ui, restored);
         restored
     }
-    /// Explicitly focus a control in the active scope.
+    /// Explicitly focus a control in the active scope and reveal it in containing scroll views.
     pub fn focus(&mut self, ui: &mut Ui, id: u64) -> Result<()> {
         if ui.by_id(id).is_none_or(|i| !self.can_focus(ui, i)) {
             return Err(
@@ -196,6 +205,9 @@ impl InputState {
             );
         }
         self.focus_to(ui, Some(id));
+        if let Some(i) = ui.by_id(id) {
+            ui.scroll_into_view(i)?;
+        }
         Ok(())
     }
     fn focus_to(&mut self, ui: &mut Ui, id: Option<u64>) {
@@ -229,6 +241,15 @@ impl InputState {
         event: InputEvent,
         clipboard: &mut dyn Clipboard,
     ) -> Result<()> {
+        if let InputEvent::PointerMove(p) | InputEvent::PointerDown(p) | InputEvent::PointerUp(p) =
+            &event
+        {
+            ui.pointer_at(*p);
+        }
+        if self.scroll_event(ui, &event)? {
+            return Ok(());
+        }
+        let previous_focus = self.focus;
         // Focus never stays on a control that went away, was disabled or was hidden.
         if let Some(id) = self.focus
             && ui.by_id(id).is_none_or(|i| !self.can_focus(ui, i))
@@ -236,6 +257,9 @@ impl InputState {
             self.focus_to(ui, None);
         }
         let hit = |this: &Self, ui: &Ui, p: [f32; 2]| {
+            if ui.scrollbar_at(p).is_some() {
+                return None;
+            }
             ui.hit_test(p[0], p[1]).filter(|i| this.in_scope(ui, *i))
         };
         match event {
@@ -389,13 +413,21 @@ impl InputState {
                 while let Some(j) = i {
                     let id = stable_id(&ui.nodes[j].element.id);
                     if let Some(crate::widgets::Widget::Scroll(p)) = ui.widgets.get(&id) {
+                        let before = *p;
                         let target = [p[0] + delta[0], p[1] + delta[1]];
                         ui.scroll_to(j, target)?;
-                        break;
+                        if ui.scroll_position(j) != Some(before) {
+                            break;
+                        }
                     }
                     i = ui.nodes[j].element.parent;
                 }
             }
+        }
+        if previous_focus != self.focus
+            && let Some(i) = self.focus.and_then(|id| ui.by_id(id))
+        {
+            ui.scroll_into_view(i)?;
         }
         Ok(())
     }

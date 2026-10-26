@@ -134,7 +134,7 @@ impl Service for EditorService {
             Method::new::<EditorTool>(
                 db,
                 "editor.tool",
-                "Configure translate/rotate/scale handles and snapping.",
+                "Configure translate/rotate/scale/universal handles and snapping.",
             ),
             Method::new::<EditorEntityView>(
                 db,
@@ -293,6 +293,8 @@ impl EditorService {
                 target: &target,
                 clipboard_entities: false,
                 clipboard_value: false,
+                clipboard_component: false,
+                component_position: None,
                 logs: crate::shell::LogView::default(),
                 assets_show_all: false,
                 game: (true, "free", false),

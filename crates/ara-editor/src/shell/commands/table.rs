@@ -237,6 +237,13 @@ fn with_components(c: &Ctx, names: &[&str]) -> Avail {
         None => scene_doc(c),
     }
 }
+fn component_target(c: &Ctx) -> Avail {
+    if matches!(c.target, Target::Component(_)) && !c.state.selection.is_empty() {
+        Avail::Ready
+    } else {
+        Avail::Blocked("Choose a component in the Inspector".into())
+    }
+}
 
 fn act(e: &mut Editor, method: &str, params: Value) -> R {
     e.action(method, params)?;
@@ -722,6 +729,9 @@ fn build() -> Vec<Spec> {
             let v = e.state.settings.get("viewport.cameraSpeed").and_then(Value::as_f64).unwrap_or(4.);
             set(e, "viewport.cameraSpeed", json!((v * 0.5).max(0.5)))
         }),
+        cmd("view.camera.speed.slow", "Slow · 1 m/s", "", "", "Precise close-up camera movement.", |_, e, _| set(e,"viewport.cameraSpeed",json!(1.))).when(|c| Avail::Checked(c.state.number("viewport.cameraSpeed",4.) == 1.)),
+        cmd("view.camera.speed.normal", "Normal · 4 m/s", "", "", "Default camera movement speed.", |_, e, _| set(e,"viewport.cameraSpeed",json!(4.))).when(|c| Avail::Checked(c.state.number("viewport.cameraSpeed",4.) == 4.)),
+        cmd("view.camera.speed.fast", "Fast · 16 m/s", "", "", "Navigate large scenes quickly.", |_, e, _| set(e,"viewport.cameraSpeed",json!(16.))).when(|c| Avail::Checked(c.state.number("viewport.cameraSpeed",4.) == 16.)),
         later("view.camera.bookmarks", "Bookmarks", "", "", "Camera bookmarks need a per-scene editor sidecar; they are not built yet."),
         later("view.camera.pilot", "Pilot Selected Camera", "camera", "", "Piloting (moving the scene camera with the view) is not built yet; Align View to Selected Camera copies its pose and field of view."),
     ]);
@@ -735,6 +745,15 @@ fn build() -> Vec<Spec> {
             |_, e, _| view(e, json!({"viewMode": "lit"})),
         )
         .when(|c| mode(c, "lit")),
+        cmd(
+            "view.mode.unlit",
+            "Unlit",
+            "sun",
+            "",
+            "Show material base color without lighting.",
+            |_, e, _| view(e, json!({"viewMode":"baseColor"})),
+        )
+        .when(|c| mode(c, "baseColor")),
         cmd(
             "view.mode.base_color",
             "Base Color",
@@ -857,6 +876,10 @@ fn build() -> Vec<Spec> {
             view(e, json!({"gizmos": true}))?;
             act(e, "editor.tool", json!({"tool": "scale"}))
         }).when(|c| Avail::Checked(!c.state.hide_gizmos && c.state.tool == crate::state::Tool::Scale)),
+        cmd("view.tool.universal", "Universal Tool", "transform", "T", "Move, rotate or scale using the combined handles.", |_, e, _| {
+            view(e, json!({"gizmos": true}))?;
+            act(e, "editor.tool", json!({"tool": "universal"}))
+        }).when(|c| Avail::Checked(!c.state.hide_gizmos && c.state.tool == crate::state::Tool::Universal)),
         cmd("view.space", "World / Local Space", "globe", "", "Toggle world or local handle axes.", |_, e, _| {
             act(e, "editor.tool", json!({"tool": e.state.tool, "local": !e.state.local}))
         }).when(|c| Avail::Checked(c.state.local)),
@@ -1958,21 +1981,22 @@ fn build() -> Vec<Spec> {
             s.dialog = Some(super::super::Dialog::provenance(s.fields.get(path).ok_or("field not visible")?));
             Ok(())
         }),
-        cmd("component.reset", "Reset Component", "undo-2", "", "Restore every field of the component to its default.", |_, e, t| {
-            let Target::Component(name) = t else { return Err("choose a component".into()) };
-            let mut commands = Vec::new();
-            for entity in &e.state.selection {
-                commands.push(json!({"cmd": "component.remove", "args": {"entity": entity, "component": name}}));
-                commands.push(json!({"cmd": "component.add", "args": {"entity": entity, "component": name}}));
-            }
-            apply(e, commands, &format!("Reset {name}"))
-        }).when(|c| if matches!(c.target, Target::Component(n) if n == "Transform") { Avail::Blocked("Use Transform › Reset Position, Rotation and Scale".into()) } else { Avail::Ready }),
+        cmd("component.reset", "Reset Component", "undo-2", "", "Restore component fields to schema or prefab defaults in one transaction.", |s, e, t| s.component_values(e, t, true)).when(component_target),
         cmd("component.remove", "Remove Component", "trash", "", "Remove the component from the selection.", |_, e, t| {
             let Target::Component(name) = t else { return Err("choose a component".into()) };
             let commands = e.state.selection.iter().map(|entity| json!({"cmd": "component.remove", "args": {"entity": entity, "component": name}})).collect();
             apply(e, commands, &format!("Remove {name}"))
+        }).when(component_target),
+        cmd("component.copy", "Copy Values", "copy", "", "Copy the primary selection's component values.", |s, e, t| s.copy_component(e, t)).when(component_target),
+        cmd("component.paste", "Paste Values", "clipboard", "", "Paste values into this component on every selected entity.", |s, e, t| s.component_values(e, t, false)).when(|c| {
+            if c.clipboard_component { Avail::Ready } else { Avail::Blocked("Copy values from this component type first".into()) }
         }),
-        later("component.copy", "Copy Component", "copy", "", "Component clipboard arrives with Inspector v2."),
+        cmd("component.move_up", "Move Up", "chevron-up", "", "Move this section up in the Inspector.", |s, e, t| s.move_component(e, t, false)).when(|c| {
+            if c.component_position.is_some_and(|(index, _)| index > 0) { Avail::Ready } else { Avail::Blocked("This is the first component".into()) }
+        }),
+        cmd("component.move_down", "Move Down", "chevron-down", "", "Move this section down in the Inspector.", |s, e, t| s.move_component(e, t, true)).when(|c| {
+            if c.component_position.is_some_and(|(index, count)| index + 1 < count) { Avail::Ready } else { Avail::Blocked("This is the last component".into()) }
+        }),
         cmd("component.add", "Add Component…", "plus", "", "Search components to add.", |s, e, _| {
             s.palette_command = Some("@components".into());
             act(e, "editor.palette", json!({"open": true}))

@@ -485,6 +485,10 @@ pub(crate) enum Context {
     Module,
     /// Viewport toolbar: camera views.
     Camera,
+    /// Viewport camera fly speed presets.
+    CameraSpeed,
+    /// Snap increments when the viewport is too narrow for three value buttons.
+    Snapping,
     /// Viewport toolbar: view modes.
     ViewModes,
     /// Viewport toolbar: show flags.
@@ -622,6 +626,10 @@ pub(crate) fn context(kind: Context) -> &'static [Item] {
             C("component.reset"),
             C("component.remove"),
             C("component.copy"),
+            C("component.paste"),
+            S,
+            C("component.move_up"),
+            C("component.move_down"),
             S,
             C("component.add"),
         ],
@@ -676,6 +684,21 @@ pub(crate) fn context(kind: Context) -> &'static [Item] {
             S,
             C("vfx.module.delete"),
         ],
+        Context::CameraSpeed => &[
+            C("view.camera.speed.slow"),
+            C("view.camera.speed.normal"),
+            C("view.camera.speed.fast"),
+            S,
+            C("view.camera.speed_down"),
+            C("view.camera.speed_up"),
+        ],
+        Context::Snapping => &[
+            C("snap.grid"),
+            C("snap.rotation"),
+            C("snap.scale"),
+            S,
+            C("snap.settings"),
+        ],
         Context::Camera => &[
             C("view.camera.perspective"),
             C("view.camera.fov"),
@@ -697,14 +720,15 @@ pub(crate) fn context(kind: Context) -> &'static [Item] {
         ],
         Context::ViewModes => &[
             C("view.mode.lit"),
-            C("view.mode.base_color"),
+            C("view.mode.unlit"),
+            C("view.mode.wireframe"),
+            S,
             C("view.mode.normals"),
             C("view.mode.depth"),
             C("view.mode.roughness_metal"),
             C("view.mode.entity_ids"),
             C("view.mode.shadow_cascades"),
             S,
-            C("view.mode.wireframe"),
             C("view.mode.overdraw"),
             C("view.mode.gi_debug"),
             S,

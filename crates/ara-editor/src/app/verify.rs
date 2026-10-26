@@ -424,6 +424,7 @@ impl Verification {
                 self.gizmo,
                 &mut shell.outlines,
                 editor.host.store().revision(),
+                &shell.ui.sheet,
             )?;
             shell.outlines.upload(ui_renderer, gpu)?;
             gpu.overlays(rect, overlay::ENTITY_IMAGE, overlays);
