@@ -1,0 +1,419 @@
+{
+  "candidate": {
+    "cliSha256": "1DD5795818A6A1260CA6ED49BD02C21F0CBEF44EF3B785C79036064B55DEA521",
+    "playerSha256": "946B7D03E2BDA216AD4282FDD9D1934FE40F501E6D760BEFF135AF24F0759D29",
+    "profile": "dev; dependencies opt3; own code opt1; debug GPU validation",
+    "roots": [
+      "ara",
+      "ara-asset",
+      "ara-importers",
+      "ara-import-worker"
+    ],
+    "sourceHead": "a594a74cb02cb357b3482691d756906499185d66",
+    "variant": "candidate",
+    "worker": "D:/AraBuild/ara-dev-infra-target/import-speed/adaptive-candidate-bin/ara-import-worker.exe",
+    "workerSha256": "B641E17F4480C026486800CC7DF2AF804F69CD67F269FE251B98F28538A0F8D6"
+  },
+  "caveats": [
+    "All eight runs retained; no discarded outliers",
+    "Fresh content caches, not flushed OS/driver caches",
+    "No new hardware/Defender/SSD-firmware causal claim",
+    "No attribution of the entire historical wall-time change to one optimization"
+  ],
+  "cleanup": "Evidence, catalogs, source IDs and physical verification retained outside each project; exact path and all ancestors/descendants checked before native PowerShell deletion; peak one current project globally",
+  "control": {
+    "cliSha256": "886B108DB9E1CD1F6FA46C728A62FDB7C8EC350AAD62BC0611FC766A89AB8BE8",
+    "playerSha256": "946B7D03E2BDA216AD4282FDD9D1934FE40F501E6D760BEFF135AF24F0759D29",
+    "profile": "dev; dependencies opt3; own code opt1; debug GPU validation",
+    "roots": [
+      "ara",
+      "ara-asset",
+      "ara-importers",
+      "ara-import-worker"
+    ],
+    "sourceHead": "f9fc09c9047066c62e54d771d28396bd3aa70af3",
+    "variant": "control",
+    "worker": "D:/AraBuild/ara-dev-infra-target/import-speed/adaptive-control-bin/ara-import-worker.exe",
+    "workerSha256": "D140A9532BE4A5A5A97D19633B8F67720D5B4DE332F00773186DE11737FAEDA7"
+  },
+  "currentSequentialNvme": {
+    "endpoint": "All 115 assets published through real Hub-created project and daemon import jobs",
+    "meanSeconds": 19.96549345,
+    "previewComparison": "Approximately 6.8x lower import latency; different engine builds/profiles and endpoint, not a paired installed-editor startup or D26 frame claim"
+  },
+  "date": "2026-10-26",
+  "decision": {
+    "candidate": "Rejected on both volumes; a594a74c must not ship",
+    "fallback": "Paused: previous NVMe plain-parallel win predates Color8/mips and cannot establish a win against current sequential baseline",
+    "next": "Quiet-slot NVMe A/B/B/A: current sequential versus plain parallel, no limiter, both current texture preparation",
+    "revert": "bd5b5799 restores the exact f9fc09c9 source tree",
+    "shippingParallelGeometry": false
+  },
+  "definition": "One quiet-window fresh-project Outpost A/B/B/A per volume under one GPU lease; control is current sequential geometry, candidate adaptive write admission plus parallel geometry; both include Color8 and optimized mips",
+  "featureSets": {
+    "artifacts": 562,
+    "featureSetsEqual": true,
+    "focusedGate": "0",
+    "measured": false,
+    "sourcePair": {
+      "branch": "t3/ara-dev-gates-merge-flow",
+      "candidate": "a594a74cb02cb357b3482691d756906499185d66",
+      "control": "f9fc09c9047066c62e54d771d28396bd3aa70af3",
+      "status": "Focused green; both-volume performance proof pending"
+    }
+  },
+  "rawEvidence": "C:\\Users\\snowy\\.t3\\worktrees\\snengine\\t3-602598ba/target/ara-dev/import-speed/adaptive-{c,d}-{a1,b1,b2,a2}-outpost",
+  "reportedBefore": {
+    "approxSeconds": 135,
+    "endpoint": "Editor usable after cold Outpost import",
+    "pairedBenchmark": false,
+    "source": "Owner installed-build QA of preview 13"
+  },
+  "runs": {
+    "Count": 8,
+    "value": [
+      {
+        "assets": 115,
+        "binaryHashes": {
+          "cli": "886B108DB9E1CD1F6FA46C728A62FDB7C8EC350AAD62BC0611FC766A89AB8BE8",
+          "player": "946B7D03E2BDA216AD4282FDD9D1934FE40F501E6D760BEFF135AF24F0759D29",
+          "worker": "D140A9532BE4A5A5A97D19633B8F67720D5B4DE332F00773186DE11737FAEDA7"
+        },
+        "case": "a1",
+        "createMs": 2855.1093,
+        "deletion": {
+          "deleted": true,
+          "deletedUtc": "2026-10-26T06:10:09.9416373Z",
+          "files": 4005,
+          "logicalBytes": 2058444450,
+          "path": "C:\\AraImportBench\\projects\\adaptive-c-a1-outpost",
+          "reparsePoints": [],
+          "verified": true
+        },
+        "fallbacks": 0,
+        "gpuEvents": 97,
+        "importMs": 20099.653000000002,
+        "loadAfter": {
+          "availableMemoryKiB": 6613768,
+          "cpuPercent": 8,
+          "dFreeBytes": 20071424000,
+          "utc": "2026-10-26T06:10:00.7230527Z"
+        },
+        "loadBefore": {
+          "availableMemoryKiB": 8248340,
+          "cpuPercent": 6,
+          "dFreeBytes": 20085510144,
+          "utc": "2026-10-26T06:09:36.8777123Z"
+        },
+        "physicalVerification": "C:/AraImportBench/projects/adaptive-c-a1-outpost/.ara/cache: 115 actions, 1459 artifacts, 909360516 bytes verified",
+        "project": "C:/AraImportBench/projects/adaptive-c-a1-outpost",
+        "totalMs": 23450.805800000002,
+        "variant": "sequential",
+        "volume": "c"
+      },
+      {
+        "assets": 115,
+        "binaryHashes": {
+          "cli": "1DD5795818A6A1260CA6ED49BD02C21F0CBEF44EF3B785C79036064B55DEA521",
+          "player": "946B7D03E2BDA216AD4282FDD9D1934FE40F501E6D760BEFF135AF24F0759D29",
+          "worker": "B641E17F4480C026486800CC7DF2AF804F69CD67F269FE251B98F28538A0F8D6"
+        },
+        "case": "b1",
+        "createMs": 1161.3705,
+        "deletion": {
+          "deleted": true,
+          "deletedUtc": "2026-10-26T06:10:44.5031977Z",
+          "files": 4005,
+          "logicalBytes": 2058444450,
+          "path": "C:\\AraImportBench\\projects\\adaptive-c-b1-outpost",
+          "reparsePoints": [],
+          "verified": true
+        },
+        "fallbacks": 0,
+        "gpuEvents": 96,
+        "importMs": 24084.6499,
+        "loadAfter": {
+          "availableMemoryKiB": 6681632,
+          "cpuPercent": 1,
+          "dFreeBytes": 20057292800,
+          "utc": "2026-10-26T06:10:36.1297259Z"
+        },
+        "loadBefore": {
+          "availableMemoryKiB": 8042168,
+          "cpuPercent": 12,
+          "dFreeBytes": 20071424000,
+          "utc": "2026-10-26T06:10:10.2490032Z"
+        },
+        "physicalVerification": "C:/AraImportBench/projects/adaptive-c-b1-outpost/.ara/cache: 115 actions, 1459 artifacts, 909360516 bytes verified",
+        "project": "C:/AraImportBench/projects/adaptive-c-b1-outpost",
+        "totalMs": 25509.743700000003,
+        "variant": "adaptiveParallel",
+        "volume": "c"
+      },
+      {
+        "assets": 115,
+        "binaryHashes": {
+          "cli": "1DD5795818A6A1260CA6ED49BD02C21F0CBEF44EF3B785C79036064B55DEA521",
+          "player": "946B7D03E2BDA216AD4282FDD9D1934FE40F501E6D760BEFF135AF24F0759D29",
+          "worker": "B641E17F4480C026486800CC7DF2AF804F69CD67F269FE251B98F28538A0F8D6"
+        },
+        "case": "b2",
+        "createMs": 1304.5457000000001,
+        "deletion": {
+          "deleted": true,
+          "deletedUtc": "2026-10-26T06:11:20.3822884Z",
+          "files": 4005,
+          "logicalBytes": 2058444450,
+          "path": "C:\\AraImportBench\\projects\\adaptive-c-b2-outpost",
+          "reparsePoints": [],
+          "verified": true
+        },
+        "fallbacks": 0,
+        "gpuEvents": 97,
+        "importMs": 25261.5612,
+        "loadAfter": {
+          "availableMemoryKiB": 7170956,
+          "cpuPercent": 21,
+          "dFreeBytes": 20057292800,
+          "utc": "2026-10-26T06:11:12.0735704Z"
+        },
+        "loadBefore": {
+          "availableMemoryKiB": 8111332,
+          "cpuPercent": 2,
+          "dFreeBytes": 20057292800,
+          "utc": "2026-10-26T06:10:44.8178637Z"
+        },
+        "physicalVerification": "C:/AraImportBench/projects/adaptive-c-b2-outpost/.ara/cache: 115 actions, 1459 artifacts, 909360516 bytes verified",
+        "project": "C:/AraImportBench/projects/adaptive-c-b2-outpost",
+        "totalMs": 26884.2461,
+        "variant": "adaptiveParallel",
+        "volume": "c"
+      },
+      {
+        "assets": 115,
+        "binaryHashes": {
+          "cli": "886B108DB9E1CD1F6FA46C728A62FDB7C8EC350AAD62BC0611FC766A89AB8BE8",
+          "player": "946B7D03E2BDA216AD4282FDD9D1934FE40F501E6D760BEFF135AF24F0759D29",
+          "worker": "D140A9532BE4A5A5A97D19633B8F67720D5B4DE332F00773186DE11737FAEDA7"
+        },
+        "case": "a2",
+        "createMs": 1204.0181,
+        "deletion": {
+          "deleted": true,
+          "deletedUtc": "2026-10-26T06:11:50.4832069Z",
+          "files": 4005,
+          "logicalBytes": 2058444450,
+          "path": "C:\\AraImportBench\\projects\\adaptive-c-a2-outpost",
+          "reparsePoints": [],
+          "verified": true
+        },
+        "fallbacks": 0,
+        "gpuEvents": 97,
+        "importMs": 19831.3339,
+        "loadAfter": {
+          "availableMemoryKiB": 6891136,
+          "cpuPercent": 3,
+          "dFreeBytes": 20057292800,
+          "utc": "2026-10-26T06:11:42.4417344Z"
+        },
+        "loadBefore": {
+          "availableMemoryKiB": 8318256,
+          "cpuPercent": 7,
+          "dFreeBytes": 20057292800,
+          "utc": "2026-10-26T06:11:20.6976033Z"
+        },
+        "physicalVerification": "C:/AraImportBench/projects/adaptive-c-a2-outpost/.ara/cache: 115 actions, 1459 artifacts, 909360516 bytes verified",
+        "project": "C:/AraImportBench/projects/adaptive-c-a2-outpost",
+        "totalMs": 21375.5066,
+        "variant": "sequential",
+        "volume": "c"
+      },
+      {
+        "assets": 115,
+        "binaryHashes": {
+          "cli": "886B108DB9E1CD1F6FA46C728A62FDB7C8EC350AAD62BC0611FC766A89AB8BE8",
+          "player": "946B7D03E2BDA216AD4282FDD9D1934FE40F501E6D760BEFF135AF24F0759D29",
+          "worker": "D140A9532BE4A5A5A97D19633B8F67720D5B4DE332F00773186DE11737FAEDA7"
+        },
+        "case": "a1",
+        "createMs": 1919.4718,
+        "deletion": {
+          "deleted": true,
+          "deletedUtc": "2026-10-26T06:12:25.4369650Z",
+          "files": 4005,
+          "logicalBytes": 2058444478,
+          "path": "D:\\AraBuild\\ara-dev-infra-target\\import-speed\\projects\\adaptive-d-a1-outpost",
+          "reparsePoints": [],
+          "verified": true
+        },
+        "fallbacks": 0,
+        "gpuEvents": 96,
+        "importMs": 23290.7832,
+        "loadAfter": {
+          "availableMemoryKiB": 6862908,
+          "cpuPercent": 9,
+          "dFreeBytes": 18808045568,
+          "utc": "2026-10-26T06:12:16.4959842Z"
+        },
+        "loadBefore": {
+          "availableMemoryKiB": 8370052,
+          "cpuPercent": 7,
+          "dFreeBytes": 20057292800,
+          "utc": "2026-10-26T06:11:50.8066734Z"
+        },
+        "physicalVerification": "D:/AraBuild/ara-dev-infra-target/import-speed/projects/adaptive-d-a1-outpost/.ara/cache: 115 actions, 1459 artifacts, 909360516 bytes verified",
+        "project": "D:/AraBuild/ara-dev-infra-target/import-speed/projects/adaptive-d-a1-outpost",
+        "totalMs": 25318.2652,
+        "variant": "sequential",
+        "volume": "d"
+      },
+      {
+        "assets": 115,
+        "binaryHashes": {
+          "cli": "1DD5795818A6A1260CA6ED49BD02C21F0CBEF44EF3B785C79036064B55DEA521",
+          "player": "946B7D03E2BDA216AD4282FDD9D1934FE40F501E6D760BEFF135AF24F0759D29",
+          "worker": "B641E17F4480C026486800CC7DF2AF804F69CD67F269FE251B98F28538A0F8D6"
+        },
+        "case": "b1",
+        "createMs": 1015.7939,
+        "deletion": {
+          "deleted": true,
+          "deletedUtc": "2026-10-26T06:13:16.6784177Z",
+          "files": 4005,
+          "logicalBytes": 2058444478,
+          "path": "D:\\AraBuild\\ara-dev-infra-target\\import-speed\\projects\\adaptive-d-b1-outpost",
+          "reparsePoints": [],
+          "verified": true
+        },
+        "fallbacks": 0,
+        "gpuEvents": 97,
+        "importMs": 39144.8357,
+        "loadAfter": {
+          "availableMemoryKiB": 7024528,
+          "cpuPercent": 6,
+          "dFreeBytes": 18814873600,
+          "utc": "2026-10-26T06:13:06.3926418Z"
+        },
+        "loadBefore": {
+          "availableMemoryKiB": 8330368,
+          "cpuPercent": 12,
+          "dFreeBytes": 20054671360,
+          "utc": "2026-10-26T06:12:25.7471444Z"
+        },
+        "physicalVerification": "D:/AraBuild/ara-dev-infra-target/import-speed/projects/adaptive-d-b1-outpost/.ara/cache: 115 actions, 1459 artifacts, 909360516 bytes verified",
+        "project": "D:/AraBuild/ara-dev-infra-target/import-speed/projects/adaptive-d-b1-outpost",
+        "totalMs": 40275.795600000005,
+        "variant": "adaptiveParallel",
+        "volume": "d"
+      },
+      {
+        "assets": 115,
+        "binaryHashes": {
+          "cli": "1DD5795818A6A1260CA6ED49BD02C21F0CBEF44EF3B785C79036064B55DEA521",
+          "player": "946B7D03E2BDA216AD4282FDD9D1934FE40F501E6D760BEFF135AF24F0759D29",
+          "worker": "B641E17F4480C026486800CC7DF2AF804F69CD67F269FE251B98F28538A0F8D6"
+        },
+        "case": "b2",
+        "createMs": 1050.5849,
+        "deletion": {
+          "deleted": true,
+          "deletedUtc": "2026-10-26T06:14:10.6236410Z",
+          "files": 4005,
+          "logicalBytes": 2058444478,
+          "path": "D:\\AraBuild\\ara-dev-infra-target\\import-speed\\projects\\adaptive-d-b2-outpost",
+          "reparsePoints": [],
+          "verified": true
+        },
+        "fallbacks": 0,
+        "gpuEvents": 98,
+        "importMs": 38602.174900000005,
+        "loadAfter": {
+          "availableMemoryKiB": 6919624,
+          "cpuPercent": 0,
+          "dFreeBytes": 18811899904,
+          "utc": "2026-10-26T06:13:57.1278735Z"
+        },
+        "loadBefore": {
+          "availableMemoryKiB": 8374568,
+          "cpuPercent": 9,
+          "dFreeBytes": 20060966912,
+          "utc": "2026-10-26T06:13:16.9943026Z"
+        },
+        "physicalVerification": "D:/AraBuild/ara-dev-infra-target/import-speed/projects/adaptive-d-b2-outpost/.ara/cache: 115 actions, 1459 artifacts, 909360516 bytes verified",
+        "project": "D:/AraBuild/ara-dev-infra-target/import-speed/projects/adaptive-d-b2-outpost",
+        "totalMs": 39768.9649,
+        "variant": "adaptiveParallel",
+        "volume": "d"
+      },
+      {
+        "assets": 115,
+        "binaryHashes": {
+          "cli": "886B108DB9E1CD1F6FA46C728A62FDB7C8EC350AAD62BC0611FC766A89AB8BE8",
+          "player": "946B7D03E2BDA216AD4282FDD9D1934FE40F501E6D760BEFF135AF24F0759D29",
+          "worker": "D140A9532BE4A5A5A97D19633B8F67720D5B4DE332F00773186DE11737FAEDA7"
+        },
+        "case": "a2",
+        "createMs": 1442.9063,
+        "deletion": {
+          "deleted": true,
+          "deletedUtc": "2026-10-26T06:14:51.0491101Z",
+          "files": 4005,
+          "logicalBytes": 2058444478,
+          "path": "D:\\AraBuild\\ara-dev-infra-target\\import-speed\\projects\\adaptive-d-a2-outpost",
+          "reparsePoints": [],
+          "verified": true
+        },
+        "fallbacks": 0,
+        "gpuEvents": 98,
+        "importMs": 23239.2544,
+        "loadAfter": {
+          "availableMemoryKiB": 6692108,
+          "cpuPercent": 17,
+          "dFreeBytes": 18808573952,
+          "utc": "2026-10-26T06:14:36.1039763Z"
+        },
+        "loadBefore": {
+          "availableMemoryKiB": 8386108,
+          "cpuPercent": 3,
+          "dFreeBytes": 20057821184,
+          "utc": "2026-10-26T06:14:10.9389748Z"
+        },
+        "physicalVerification": "D:/AraBuild/ara-dev-infra-target/import-speed/projects/adaptive-d-a2-outpost/.ara/cache: 115 actions, 1459 artifacts, 909360516 bytes verified",
+        "project": "D:/AraBuild/ara-dev-infra-target/import-speed/projects/adaptive-d-a2-outpost",
+        "totalMs": 24799.194,
+        "variant": "sequential",
+        "volume": "d"
+      }
+    ]
+  },
+  "status": "REJECTED",
+  "summaries": [
+    {
+      "adaptiveCreateThroughReadyMeanMs": 26196.9949,
+      "adaptiveMeanMs": 24673.10555,
+      "regressionPercent": 23.57874155121369,
+      "sequentialCreateThroughReadyMeanMs": 22413.156199999998,
+      "sequentialMeanMs": 19965.49345,
+      "volume": "c"
+    },
+    {
+      "adaptiveCreateThroughReadyMeanMs": 40022.38025,
+      "adaptiveMeanMs": 38873.505300000004,
+      "regressionPercent": 67.089937189305,
+      "sequentialCreateThroughReadyMeanMs": 25058.7296,
+      "sequentialMeanMs": 23265.0188,
+      "volume": "d"
+    }
+  ],
+  "verification": {
+    "actionKeys": 920,
+    "allEightProjectsDeleted": true,
+    "artifactReferences": 11672,
+    "differentArtifacts": 0,
+    "differentKeys": 0,
+    "fallbacks": 0,
+    "referencedBytesPhysicallyVerified": 7274884128,
+    "reparsePoints": 0,
+    "sourcesPerRun": 115
+  }
+}
