@@ -57,6 +57,22 @@ fn a_saved_post_process_loads_as_a_global_volume_that_renders_as_before() {
 }
 
 #[test]
+fn a_volume_written_without_a_versions_entry_is_not_migrated_again() {
+    let mut db = SchemaDb::new();
+    crate::register(&mut db);
+    let ty = db.get("PostProcessVolume").expect("registered");
+    let mut value = serde_json::json!({
+        "overrides": [{"module": "vignette", "vignette": 0.3}]
+    });
+    let mut notes = Vec::new();
+    // Stored version 1 (no `versions` table), as hand-written scene JSON reads.
+    assert!(db.normalize_component(ty, 1, &mut value, "PostProcessVolume", &mut notes));
+    let volume: PostProcessVolume = serde_json::from_value(value).expect("volume");
+    assert_eq!(volume.overrides.len(), 1);
+    assert_eq!(volume.overrides[0].vignette, Some(0.3));
+}
+
+#[test]
 fn volumes_blend_in_priority_order_by_their_weight() {
     // Applied 0.25 then 0.75 regardless of list order: the higher priority lands last.
     let look = SceneLook {
