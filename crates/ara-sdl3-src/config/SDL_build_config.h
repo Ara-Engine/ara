@@ -1,5 +1,6 @@
 /* Ara's SDL configuration, based on SDL's zlib-licensed build_config templates.
- * Audio, native video/input, Vulkan surfaces and dialogs; no renderer/GPU/camera.
+ * Audio, native video/input, Vulkan surfaces (Metal views on macOS) and dialogs;
+ * no renderer/GPU/camera.
  * See ../vendor/SDL3-3.4.18/LICENSE.txt. */
 #ifndef ARA_SDL_BUILD_CONFIG_H
 #define ARA_SDL_BUILD_CONFIG_H
@@ -14,7 +15,9 @@
 #include "SDL_android.h"
 #elif defined(SDL_PLATFORM_LINUX)
 #include "SDL_linux.h"
+#elif defined(SDL_PLATFORM_MACOS)
+#include "SDL_macos.h"
 #else
-#error TODO(D15): configure Apple SDL backends
+#error TODO(D15): configure iOS SDL backends (M4 export)
 #endif
 #endif
