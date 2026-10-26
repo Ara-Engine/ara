@@ -341,13 +341,14 @@ manifest; prefer `publish`, which hashes the actual packaged files.
    signing secret is the external seed file named by ARA_RELEASE_SIGNING_KEY.
    Keep it backed up and private. An older Hub must already trust this public key
    to self-update; adding a new key only to the new archive cannot establish trust.
-3. Run both `package` commands and the installed `smoke` above. Preserve logs,
+3. Finalize root `RELEASE_NOTES.md`, including the formal D26 reading; its first
+   line must match `# Ara <version>`. Engine packaging/`notes` copy it verbatim.
+   Run both `package` commands and the installed `smoke` above. Preserve logs,
    `SMOKE_RESULTS.json`, the source SHA and the private symbols archive. Packaging
    writes under target/release-dist and refuses existing output directories; move
    a previous run into a named archive before rebuilding. Do not regenerate notes
    after signing a reviewed release folder.
-4. Review `RELEASE_NOTES.md` (engine: selected locked decisions, 80 first-parent
-   Git subjects, and the current docs/KNOWN_ISSUES.md snapshot) and
+4. Review the packaged `RELEASE_NOTES.md` (an exact copy of the reviewed root file) and
    `HUB_RELEASE_NOTES.md` (Hub's packaged release summary). Both must explain the
    unsigned installer/SmartScreen warning. The local publish folder carries the
    same notes in RELEASE_NOTES.md and inside the signed manifest.

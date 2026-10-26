@@ -1,7 +1,7 @@
 # ara-release
 
 Windows engine distribution tooling, separate from exported games. `ara-release`
-packages release binaries and runtime resources, generates notes, and tests an
+packages release binaries and runtime resources, copies reviewed notes, and tests an
 installed distribution. The setup stub both installers start with is the
 `ara-setup` crate (window, silent CLI, same-version replace; see its AGENTS.md);
 packaging appends the portable ZIP to `target/release/ara-setup.exe`.
@@ -10,6 +10,7 @@ packaging appends the portable ZIP to `target/release/ara-setup.exe`.
 `cargo run -p ara-release -- notes --version 0.0.1-alpha`
 `cargo run -p ara-release -- smoke`
 `smoke --artifacts <existing release-dist>` tests packages without rebuilding them.
+Engine packaging/`notes` copy root RELEASE_NOTES.md verbatim and require its version header.
 
 Always CARGO_BUILD_JOBS=2. Package is an explicit opt-in release build; no dev
 server or full workspace build. Outputs, logs, smoke projects and symbols belong
