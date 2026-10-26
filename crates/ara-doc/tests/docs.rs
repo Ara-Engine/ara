@@ -126,6 +126,55 @@ fn one_record_resolves_as_it_does_within_the_whole_document() {
     assert_eq!(covered, whole.len(), "every entity belongs to one record");
 }
 
+/// Resolving each record alone while reporting, then `check_parents` over the
+/// result, reports exactly what resolving the whole document reports, in order.
+#[test]
+fn records_resolved_alone_report_as_the_whole_document_does() {
+    let db = common::db();
+    let mut ws = common::workspace(&db);
+    let scene = r#"{
+      "$schema": "ara://schema/scene/1",
+      "id": "sc_bad00002",
+      "records": {
+        "e_i1": {
+          "prefab": "@prefabs/crate.prefab#pf_crate001",
+          "overrides": { "e_nope/Transform.position": [1, 2, 3] },
+          "removed": ["e_ghost"]
+        },
+        "e_i2": { "prefab": "@prefabs/stack.prefab#pf_stack001", "removed": ["e_c002/e_lid1"] },
+        "e_k1": { "parent": "e_i2/e_c002/e_lid1", "Transform": {} },
+        "e_k2": { "parent": "e_i1/e_lid1", "Transform": {} }
+      }
+    }"#;
+    let doc = read(scene, "bad2.scene", &db, Some(ws.index()))
+        .doc
+        .expect("document");
+    let id = doc.id.clone();
+    ws.insert("bad2.scene", doc);
+    let mut whole_found = Vec::new();
+    let whole = ws.resolve(&id, &db, &mut whole_found);
+    let doc = ws.doc(id.as_str()).expect("scene");
+    let base = ws.location(&id);
+    let (mut parts, mut found) = (ara_doc::prefab::Resolved::new(), Vec::new());
+    for record in doc.records().keys() {
+        let part = ara_doc::prefab::resolve_record_reporting(
+            doc,
+            record,
+            &db,
+            &ws,
+            &base,
+            Some(&mut found),
+        )
+        .expect("record");
+        parts.extend(part);
+    }
+    ara_doc::prefab::check_parents(doc, &parts, &base, &mut found);
+    assert_eq!(parts, whole);
+    assert_eq!(found, whole_found);
+    let codes: Vec<String> = found.iter().map(|d| d.code.to_string()).collect();
+    assert_eq!(codes, ["ARA1405", "ARA1403", "ARA1205"], "{found:#?}");
+}
+
 #[test]
 fn bad_overrides_and_removals_are_reported() {
     let db = common::db();

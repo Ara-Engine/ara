@@ -17,6 +17,9 @@ use crate::{AssetId, Edit, Op, RecordId};
 pub struct Workspace {
     docs: BTreeMap<AssetId, (String, Document)>,
     index: AssetIndex,
+    /// Bumped whenever a document is loaded, replaced or unloaded (see
+    /// [`Workspace::generation`]).
+    generation: u64,
 }
 
 impl Workspace {
@@ -130,6 +133,7 @@ impl Workspace {
         Workspace {
             docs: BTreeMap::new(),
             index,
+            generation: 0,
         }
     }
 
@@ -151,13 +155,22 @@ impl Workspace {
         let kind = (doc.kind != "import").then(|| doc.kind.clone());
         self.index.insert(doc.id.to_string(), asset_path, kind);
         self.docs.insert(doc.id.clone(), (path, doc));
+        self.generation += 1;
     }
 
     /// Unloads a document and drops it from the index (its file was deleted). Returns
     /// its path and contents.
     pub fn remove(&mut self, id: &str) -> Option<(String, Document)> {
         self.index.remove(id);
+        self.generation += 1;
         self.docs.remove(id)
+    }
+
+    /// Changes whenever a document is loaded, replaced or unloaded, inside a
+    /// transaction or not (record edits do not change it): a cache of anything read
+    /// across documents, such as a prefab resolution, compares it.
+    pub fn generation(&self) -> u64 {
+        self.generation
     }
 
     /// A document by asset ID.

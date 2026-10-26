@@ -60,7 +60,20 @@ pub fn resolve(
         stack: &mut stack,
     };
     let resolved = ctx.doc(doc, base, Some(out));
-    for (addr, e) in &resolved {
+    check_parents(doc, &resolved, base, out);
+    resolved
+}
+
+/// The check [`resolve`] runs across records once every record is resolved: a
+/// record of `doc` whose parent is an address inside an instance that does not
+/// exist. Reports what `resolve` reports, in the same order.
+pub fn check_parents(
+    doc: &Document,
+    resolved: &Resolved,
+    base: &Location,
+    out: &mut Vec<Diagnostic>,
+) {
+    for (addr, e) in resolved {
         // Plain parents are checked with the document's structure; only addresses
         // inside instances need the prefabs.
         if let Some(p) = &e.parent
@@ -80,7 +93,6 @@ pub fn resolve(
             );
         }
     }
-    resolved
 }
 
 /// The entities record `id` of `doc` contributes to [`resolve`], exactly as it has
@@ -93,6 +105,21 @@ pub fn resolve_record(
     db: &SchemaDb,
     lookup: &dyn DocLookup,
 ) -> Option<Resolved> {
+    resolve_record_reporting(doc, id, db, lookup, &Location::default(), None)
+}
+
+/// [`resolve_record`], also reporting the problems [`resolve`] reports while it
+/// resolves this record (an instance's bad overrides or missing prefab), in the same
+/// order. With [`check_parents`] afterwards, resolving every record this way
+/// reports exactly what `resolve` does.
+pub fn resolve_record_reporting(
+    doc: &Document,
+    id: &RecordId,
+    db: &SchemaDb,
+    lookup: &dyn DocLookup,
+    base: &Location,
+    out: Option<&mut Vec<Diagnostic>>,
+) -> Option<Resolved> {
     let rec = doc.record(id.as_str())?;
     let mut stack = vec![doc.id.clone()];
     let mut ctx = Ctx {
@@ -100,7 +127,7 @@ pub fn resolve_record(
         lookup,
         stack: &mut stack,
     };
-    Some(ctx.record(doc, id, rec, &Location::default(), None))
+    Some(ctx.record(doc, id, rec, base, out))
 }
 
 /// Reports the problems of one instance record of `doc` (missing or cyclic prefab,
