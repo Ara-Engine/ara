@@ -12,6 +12,7 @@ using System.IO;
 public static class FixtureAra {
     public static int Main(string[] args) {
         File.AppendAllText(Path.Combine(Environment.GetEnvironmentVariable("ARA_CONFIG_DIR"), "calls.txt"), String.Join(" ", args) + "\n");
+        if (args.Length > 1 && args[1] == "unregister-engine" && Environment.GetEnvironmentVariable("ARA_TEST_REFUSE_UNINSTALL") == "1") return 1;
         return 0;
     }
 }
@@ -34,10 +35,38 @@ if ($receipt.root -ne $destination -or $receipt.integration) { throw 'Receipt di
 # Receipts written by an earlier verbatim-path install must remain uninstallable.
 $receipt.root = $verbatimDestination
 $receipt | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $destination 'install-receipt.json')
-& ($verbatimDestination + '\uninstall.ps1') -Silent
+function Invoke-UninstallCmd {
+    $info=New-Object Diagnostics.ProcessStartInfo
+    $info.FileName=$env:ComSpec
+    $info.Arguments='/d /s /c ""'+(Join-Path $destination 'uninstall.cmd')+'" -Silent"'
+    $info.WorkingDirectory=$Root
+    $info.UseShellExecute=$false
+    $info.CreateNoWindow=$true
+    $info.RedirectStandardOutput=$true
+    $info.RedirectStandardError=$true
+    $process=[Diagnostics.Process]::Start($info)
+    $stdout=$process.StandardOutput.ReadToEndAsync()
+    $stderr=$process.StandardError.ReadToEndAsync()
+    $process.WaitForExit()
+    [IO.File]::WriteAllText((Join-Path $Root 'uninstall-output.log'),$stdout.Result+$stderr.Result)
+    $result=$process.ExitCode
+    $process.Dispose()
+    return $result
+}
+$env:ARA_TEST_REFUSE_UNINSTALL='1'
+if ((Invoke-UninstallCmd) -ne 1) { throw 'A refused uninstall must exit 1' }
+if (-not (Test-Path -LiteralPath (Join-Path $destination 'ara.exe'))) { throw 'Refused uninstall removed the engine' }
+Remove-Item Env:ARA_TEST_REFUSE_UNINSTALL
+$project=Join-Path $Root 'Keep my project'
+[IO.Directory]::CreateDirectory($project) | Out-Null
+Set-Content -LiteralPath (Join-Path $project 'user.txt') -Value 'keep project'
+Set-Content -LiteralPath (Join-Path $env:ARA_CONFIG_DIR 'hub-ui.json') -Value 'keep settings'
+if ((Invoke-UninstallCmd) -ne 0) { throw 'Successful uninstall.cmd must exit 0' }
 if (Test-Path -LiteralPath $destination) { throw 'Uninstall left owned files behind' }
+if ((Get-Content -LiteralPath (Join-Path $project 'user.txt')) -ne 'keep project') { throw 'Uninstall removed user project' }
+if ((Get-Content -LiteralPath (Join-Path $env:ARA_CONFIG_DIR 'hub-ui.json')) -ne 'keep settings') { throw 'Uninstall changed settings' }
 $calls = @(Get-Content -LiteralPath (Join-Path $env:ARA_CONFIG_DIR 'calls.txt'))
-if (($calls -join '|') -ne 'hub register-engine|doctor|hub unregister-engine|hub shutdown') { throw "Unexpected CLI calls: $calls" }
+if (($calls -join '|') -ne 'hub register-engine --no-start|doctor|hub unregister-engine --no-start|hub unregister-engine --no-start') { throw "Unexpected CLI calls: $calls" }
 
 $hubSource = Join-Path $Root 'source [hub]'
 $hubDestination = Join-Path $Root 'installed [hub]'

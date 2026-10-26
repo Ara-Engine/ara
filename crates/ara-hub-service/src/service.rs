@@ -1,6 +1,7 @@
 //! Serialized Hub registry authority.
 mod background;
 mod create;
+mod installation;
 mod lifecycle;
 mod observed;
 mod process;
@@ -13,6 +14,7 @@ use crate::{
 };
 use ara_proto::{ConnId, Endpoint, Incoming, RpcError, jsonrpc};
 use ara_rpc::{Client, DaemonInfo, Handler, ServeOptions};
+pub use installation::{EngineRegistration, update_installed_engine};
 use serde::Deserialize;
 use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
@@ -124,9 +126,21 @@ impl Hub {
     }
 
     /// Construct a Hub with explicit release dependencies (local fake servers in tests).
-    pub fn open_with_updates(
+    pub fn open_with_updates(config: HubConfig, updates: UpdateConfig) -> Result<Self, RpcError> {
+        Self::open_inner(config, updates, true)
+    }
+
+    /// Installer commands explicitly register/remove a build; opening the registry
+    /// must not first replace another installed build with the caller's executable.
+    pub(super) fn open_for_installation(config: HubConfig) -> Result<Self, RpcError> {
+        let updates = UpdateConfig::user(&config.directory)?;
+        Self::open_inner(config, updates, false)
+    }
+
+    fn open_inner(
         mut config: HubConfig,
         mut updates: UpdateConfig,
+        register_current: bool,
     ) -> Result<Self, RpcError> {
         let startup = Instant::now();
         crate::validate_development_config(&config.directory).map_err(io_error)?;
@@ -149,7 +163,7 @@ impl Hub {
             .parent()
             .is_some_and(|p| p.join("service.json").is_file());
         // A standalone Hub's bootstrap CLI is a service, not an installed engine.
-        if !bootstrap {
+        if register_current && !bootstrap {
             if let Some(engine) = registry
                 .engines
                 .iter_mut()
