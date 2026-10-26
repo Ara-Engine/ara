@@ -13,6 +13,8 @@ pub(in crate::renderer) struct NativeView {
     presented: Vec<Mat4>,
     previous_vp: Option<Mat4>,
     culling: Culling,
+    /// Passes `visible` holds rows for (`Native::capacity`).
+    capacity: usize,
     changes: updates::Updates,
 }
 
@@ -44,6 +46,7 @@ impl Native {
                 presented: self.rows.iter().map(|row| row.world).collect(),
                 previous_vp: None,
                 culling: self.culling.fork(&self.groups),
+                capacity: culling::BASE_PASSES,
                 changes: updates::Updates::new(self.rows.len()),
             })
         })();
@@ -66,6 +69,7 @@ impl Native {
         std::mem::swap(&mut self.presented, &mut view.presented);
         std::mem::swap(&mut self.previous_vp, &mut view.previous_vp);
         std::mem::swap(&mut self.culling, &mut view.culling);
+        std::mem::swap(&mut self.capacity, &mut view.capacity);
         std::mem::swap(&mut self.changes, &mut view.changes);
     }
 }
