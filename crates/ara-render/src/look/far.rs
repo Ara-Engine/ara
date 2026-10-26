@@ -164,6 +164,12 @@ impl FarMap {
 
 /// Whether world bounds `lo..hi` reach the light volume of `matrix`.
 pub(crate) fn overlaps(matrix: Mat4, lo: Vec3, hi: Vec3) -> bool {
+    let [min, max] = projected(matrix, lo, hi);
+    min.x <= 1. && max.x >= -1. && min.y <= 1. && max.y >= -1. && min.z <= 1. && max.z >= 0.
+}
+
+/// Clip-space bounds of world bounds `lo..hi` through the orthographic `matrix`.
+pub(crate) fn projected(matrix: Mat4, lo: Vec3, hi: Vec3) -> [Vec3; 2] {
     let (mut min, mut max) = (Vec3::splat(f32::INFINITY), Vec3::splat(f32::NEG_INFINITY));
     for corner in 0..8u32 {
         let pick = |bit: u32, axis: usize| {
@@ -176,7 +182,7 @@ pub(crate) fn overlaps(matrix: Mat4, lo: Vec3, hi: Vec3) -> bool {
         let p = matrix.project_point3(Vec3::new(pick(0, 0), pick(1, 1), pick(2, 2)));
         (min, max) = (min.min(p), max.max(p));
     }
-    min.x <= 1. && max.x >= -1. && min.y <= 1. && max.y >= -1. && min.z <= 1. && max.z >= 0.
+    [min, max]
 }
 
 #[cfg(test)]
