@@ -747,6 +747,9 @@ fn build() -> Vec<Spec> {
             let v = e.state.settings.get("viewport.cameraSpeed").and_then(Value::as_f64).unwrap_or(4.);
             set(e, "viewport.cameraSpeed", json!((v * 0.5).max(0.5)))
         }),
+        cmd("view.camera.speed.slow", "Slow · 1 m/s", "", "", "Precise close-up camera movement.", |_, e, _| set(e,"viewport.cameraSpeed",json!(1.))).when(|c| Avail::Checked(c.state.number("viewport.cameraSpeed",4.) == 1.)),
+        cmd("view.camera.speed.normal", "Normal · 4 m/s", "", "", "Default camera movement speed.", |_, e, _| set(e,"viewport.cameraSpeed",json!(4.))).when(|c| Avail::Checked(c.state.number("viewport.cameraSpeed",4.) == 4.)),
+        cmd("view.camera.speed.fast", "Fast · 16 m/s", "", "", "Navigate large scenes quickly.", |_, e, _| set(e,"viewport.cameraSpeed",json!(16.))).when(|c| Avail::Checked(c.state.number("viewport.cameraSpeed",4.) == 16.)),
         later("view.camera.bookmarks", "Bookmarks", "", "", "Camera bookmarks need a per-scene editor sidecar; they are not built yet."),
         later("view.camera.pilot", "Pilot Selected Camera", "camera", "", "Piloting (moving the scene camera with the view) is not built yet; Align View to Selected Camera copies its pose and field of view."),
     ]);
@@ -760,6 +763,15 @@ fn build() -> Vec<Spec> {
             |_, e, _| view(e, json!({"viewMode": "lit"})),
         )
         .when(|c| mode(c, "lit")),
+        cmd(
+            "view.mode.unlit",
+            "Unlit",
+            "sun",
+            "",
+            "Show material base color without lighting.",
+            |_, e, _| view(e, json!({"viewMode":"baseColor"})),
+        )
+        .when(|c| mode(c, "baseColor")),
         cmd(
             "view.mode.base_color",
             "Base Color",
@@ -882,6 +894,10 @@ fn build() -> Vec<Spec> {
             view(e, json!({"gizmos": true}))?;
             act(e, "editor.tool", json!({"tool": "scale"}))
         }).when(|c| Avail::Checked(!c.state.hide_gizmos && c.state.tool == crate::state::Tool::Scale)),
+        cmd("view.tool.universal", "Universal Tool", "transform", "T", "Move, rotate or scale using the combined handles.", |_, e, _| {
+            view(e, json!({"gizmos": true}))?;
+            act(e, "editor.tool", json!({"tool": "universal"}))
+        }).when(|c| Avail::Checked(!c.state.hide_gizmos && c.state.tool == crate::state::Tool::Universal)),
         cmd("view.space", "World / Local Space", "globe", "", "Toggle world or local handle axes.", |_, e, _| {
             act(e, "editor.tool", json!({"tool": e.state.tool, "local": !e.state.local}))
         }).when(|c| Avail::Checked(c.state.local)),

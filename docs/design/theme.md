@@ -20,3 +20,30 @@ Ara's editor ships two default themes that match **T3 Code's default dark and li
 - **Selection** of rows, menu items and segments uses `selection-surface` with `selection-foreground`; `accent-surface` stays for soft accents such as focus rings and badges.
 - **Hover** is one step lighter than the surface underneath (`hover-surface` on rows and menus, `raised` on controls).
 - **Agent-change overlays** (R03 review UX) use `success` for added, `warning` for modified and `destructive` for deleted, as tinted `*-surface` outlines in the viewport and hierarchy.
+
+## Live editing
+
+Debug editors watch `assets/themes/ara-dark.json`, `ara-light.json`, and the
+stylesheets in `crates/ara-editor/src/shell/` every 250 ms on a worker. Save a
+resource to restyle every open editor surface in place. Colors, radii and the
+`metrics` object are CSS variables: `control-size` becomes `--control-size` in
+pixels. The default Scene controls are 24 px; `viewport-inset`, `space-*`,
+`font-size-*`, `panel-padding`, header and tab sizes control the shared chrome.
+Panel styles remain in their own CSS files.
+
+Invalid JSON, duplicate keys, negative metrics and invalid CSS keep the last good
+snapshot; the editor reports the failure through its existing diagnostic path.
+Fix and save to recover. Text fields keep their caret and draft when restyled.
+Release builds embed the resources and never start the watcher. A debug binary
+can use another source checkout by setting `ARA_EDITOR_STYLE_ROOT` to its root.
+
+After editing JSON, use the canonical writer before committing:
+
+```powershell
+cargo run -p ara-editor --example format-theme -- assets/themes/ara-dark.json assets/themes/ara-light.json
+```
+
+When adding a panel stylesheet, register it in `Shell::stylesheet` with
+`self.styles.css("panel.css", include_str!("panel.css"))`: debug uses the watched
+version and release uses the embedded fallback. Keep inspector selectors in
+`inspector.css` and viewport controls in `viewport.css`.

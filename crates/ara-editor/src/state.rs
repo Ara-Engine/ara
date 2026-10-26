@@ -25,6 +25,8 @@ pub enum Tool {
     Rotate,
     /// Scale along an axis or uniformly.
     Scale,
+    /// Move, rotate or scale with the handle grabbed in the combined gizmo.
+    Universal,
 }
 /// Perspective scene camera; this is editor state, never gameplay state.
 /// Fields missing from older saved state take their defaults.

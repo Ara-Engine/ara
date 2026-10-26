@@ -15,7 +15,12 @@ impl Shell {
                 .map(|p| short_author(&p.author))
                 .unwrap_or_else(|| "agent".into());
             self.bind_command("following-stop", "agents.stop_following", Target::None);
-            out.push_str(&format!("<panel id='following' class='following'>{}<text id='following-text' text='Following {}' /><button id='following-stop' class='notice-action' label='Stop following' description='Return the Scene view to your own camera' action='Dispatch'><text id='following-stop-label' text='Stop' /></button></panel>",icons::icon_in("following","bot","accent"),escape(&name)));
+            let placement = if editor.state.hide_overlays {
+                " following-no-toolbar"
+            } else {
+                ""
+            };
+            out.push_str(&format!("<panel id='following' class='following{placement}'>{}<text id='following-text' text='Following {}' /><button id='following-stop' class='notice-action' label='Stop following' description='Return the Scene view to your own camera' action='Dispatch'><text id='following-stop-label' text='Stop' /></button></panel>",icons::icon_in("following","bot","accent"),escape(&name)));
         }
         let notices = editor.activity.notices();
         if notices.is_empty() {
