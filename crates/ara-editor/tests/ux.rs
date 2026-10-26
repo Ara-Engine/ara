@@ -445,6 +445,44 @@ fn tinted_icons_take_their_state_color() {
         shell.ui.sheet.color_token("--selection-foreground")
     );
 }
+
+#[test]
+fn viewport_toolbar_overlays_the_image_and_first_click_selects_each_tool() {
+    use ara_editor::state::Tool;
+    let project = Project::new();
+    let mut editor = Editor::open(&project.0).unwrap();
+    let mut shell = Shell::new(&mut editor, [1440., 900.]).unwrap();
+    let mut clipboard = MemoryClipboard::default();
+    let viewport = shell.viewport().unwrap();
+    for (id, key, tool) in [
+        ("tool-Translate", "W", Tool::Translate),
+        ("tool-Rotate", "E", Tool::Rotate),
+        ("tool-Scale", "R", Tool::Scale),
+        ("tool-Universal", "T", Tool::Universal),
+    ] {
+        let i = shell.ui.find(id).unwrap();
+        let node = &shell.ui.nodes[i];
+        assert_eq!(node.rect.w, 24.);
+        assert_eq!(node.rect.h, 24.);
+        assert!(node.rect.y >= viewport.y && node.rect.y + node.rect.h <= viewport.y + 40.);
+        assert!(node.element.attrs["description"].contains(key));
+        shell.click(id, &mut clipboard).unwrap();
+        shell.dispatch(&mut editor).unwrap();
+        assert_eq!(editor.state.tool, tool);
+        assert!(!editor.state.hide_gizmos);
+    }
+    shell.click("tool-select", &mut clipboard).unwrap();
+    shell.dispatch(&mut editor).unwrap();
+    assert!(editor.state.hide_gizmos);
+    shell.click("view-speed", &mut clipboard).unwrap();
+    shell.dispatch(&mut editor).unwrap();
+    assert!(
+        shell
+            .open_menu_rows(&editor)
+            .iter()
+            .any(|r| r.0 == "view.camera.speed.normal" && r.2 == Some(true))
+    );
+}
 #[test]
 fn any_scene_opens_with_its_own_camera_and_agents_only_move_their_presence() {
     let project = Project::new();

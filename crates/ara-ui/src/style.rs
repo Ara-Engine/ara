@@ -17,7 +17,7 @@ pub struct Color(
     pub u8,
 );
 impl Color {
-    fn parse(value: &str) -> Result<Self> {
+    pub(crate) fn parse(value: &str) -> Result<Self> {
         if value == "transparent" {
             return Ok(Self(0, 0, 0, 0));
         }

@@ -233,6 +233,10 @@ const ASSETS: &[(&str, &str)] = &[
     ),
     ("move-3d", include_str!("../../assets/icons/move-3d.svg")),
     (
+        "transform",
+        include_str!("../../assets/icons/transform.svg"),
+    ),
+    (
         "package-open",
         include_str!("../../assets/icons/package-open.svg"),
     ),

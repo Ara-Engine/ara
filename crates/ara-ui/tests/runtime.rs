@@ -56,6 +56,46 @@ fn incremental_lanes_and_runtime_theme_switch() -> Result<()> {
     assert!(error.to_string().contains("ARA4018"));
     Ok(())
 }
+
+#[test]
+fn resource_tokens_restyle_geometry_and_text_without_replacing_widgets() -> Result<()> {
+    let mut text = TextSystem::bundled()?;
+    let css = "ui { width:100%;height:100%; } field { width:180px;height:var(--control-size);font-size:var(--font-size-body);background:var(--card); }";
+    let mut ui = Ui::editor(
+        "<ui id='root'><field id='draft' text='Unsaved edit' /></ui>",
+        css,
+        [400., 300.],
+    )?;
+    ui.frame(&mut text)?;
+    let field = ui.find("draft").expect("fixture field");
+    let mut state = ui.nodes[field].state;
+    state.focus = true;
+    ui.set_state(field, state);
+    let mut value: serde_json::Value = serde_json::from_str(EditorTheme::Dark.json())?;
+    value["metrics"]["control-size"] = 32.into();
+    value["metrics"]["font-size-body"] = 15.into();
+    value["colors"]["card"] = "#202020".into();
+    let tokens = ara_ui::theme::tokens_from_json(&ara_json::to_canonical_string(&value))?;
+    assert!(ui.set_theme_tokens(tokens.clone()));
+    let work = ui.frame(&mut text)?;
+    assert_eq!(ui.nodes[field].rect.h, 32.);
+    assert_eq!(ui.nodes[field].computed.font_size, 15.);
+    assert_eq!(
+        ui.nodes[field].computed.background,
+        ara_ui::style::Color(32, 32, 32, 255)
+    );
+    assert_eq!(
+        ui.nodes[field].text.as_ref().expect("text field").value,
+        "Unsaved edit"
+    );
+    assert!(ui.nodes[field].state.focus);
+    assert!(work.layout_passes > 0);
+    assert!(!ui.set_theme_tokens(tokens));
+    assert_eq!(ui.frame(&mut text)?.paint_nodes, 0);
+    value["metrics"]["control-size"] = (-1).into();
+    assert!(ara_ui::theme::tokens_from_json(&value.to_string()).is_err());
+    Ok(())
+}
 #[test]
 fn hundred_thousand_tree_scroll_retains_shaped_survivors() -> Result<()> {
     let items = (0..100_000)

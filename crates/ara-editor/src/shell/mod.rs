@@ -37,10 +37,12 @@ mod graph_panel;
 mod hierarchy;
 mod import_panel;
 mod inspector_panel;
+mod live_styles;
 mod log_panels;
 mod material_panel;
 mod memo;
 mod names;
+mod scene_panel;
 pub(crate) use animation_panel::LiveChange;
 pub(crate) use log_panels::LogView;
 mod material_inspector;
@@ -79,6 +81,7 @@ pub struct Surface {
 }
 /// Native shell and its retained widget state; no authoring document is mirrored here.
 pub struct Shell {
+    styles: live_styles::LiveStyles,
     /// Native runtime tree and renderer-neutral display list of the current surface.
     pub ui: Ui,
     /// Explicit bundled fonts and retained shaping contexts.
@@ -394,6 +397,7 @@ impl Shell {
         let text = text_system()?;
         let ui = Ui::editor("<ui id='editor' />", include_str!("editor.css"), size)?;
         let mut shell = Self {
+            styles: live_styles::LiveStyles::new()?,
             ui,
             text,
             input: InputState::default(),
@@ -711,10 +715,20 @@ impl Shell {
     pub(crate) fn shown_node(&self, id: &str) -> Option<usize> {
         self.ui.find(id).filter(|i| self.ui.shown(*i))
     }
-    fn stylesheet(editor: &Editor) -> String {
-        let mut css = include_str!("editor.css").to_owned();
+    fn stylesheet(&self, editor: &Editor) -> String {
+        let mut css = self
+            .styles
+            .css("editor.css", include_str!("editor.css"))
+            .to_owned();
+        css.push_str(
+            self.styles
+                .css("viewport.css", include_str!("viewport.css")),
+        );
         if editor.state.comfortable() {
-            css.push_str(include_str!("editor-comfortable.css"));
+            css.push_str(self.styles.css(
+                "editor-comfortable.css",
+                include_str!("editor-comfortable.css"),
+            ));
         }
         css
     }
@@ -729,12 +743,9 @@ impl Shell {
         result
     }
     fn mount_markup(&mut self, editor: &mut Editor, markup: &str) -> ara_ui::Result<()> {
-        self.ui.set_stylesheet(&Self::stylesheet(editor))?;
-        self.ui.switch_theme(if editor.state.light {
-            ara_ui::theme::EditorTheme::Light
-        } else {
-            ara_ui::theme::EditorTheme::Dark
-        })?;
+        self.ui
+            .set_theme_tokens(self.styles.tokens(editor.state.light));
+        self.ui.set_stylesheet(&self.stylesheet(editor))?;
         let reconciling = std::time::Instant::now();
         // Area headers and tab bodies are parts: an unchanged one keeps its retained
         // subtree, virtual rows included.

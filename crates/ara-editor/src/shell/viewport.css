@@ -1,0 +1,17 @@
+/* Scene-only controls: two floating groups, always inside the viewport. */
+.scene-surface { flex-grow:1; flex-basis:0px; min-height:0px; overflow:hidden; }
+.viewport-tools { position:absolute; left:var(--viewport-inset); top:var(--viewport-inset); right:var(--viewport-inset); flex-direction:row; align-items:start; gap:var(--space-lg); }
+.viewport-cluster { flex-direction:row; align-items:center; flex-shrink:0; padding:var(--space-xs); gap:var(--space-xs); background:var(--menu-surface); border-width:1px; border-color:var(--separator-strong); border-radius:var(--radius-sm); }
+.viewport-segment { flex-direction:row; align-items:center; gap:1px; }
+.viewport-button { width:var(--control-size); height:var(--control-size); padding:var(--space-xs); border-width:0px; border-radius:var(--radius-xs); background:transparent; color:var(--muted-foreground); }
+.viewport-button:hover { background:var(--hover-surface); color:var(--foreground); }
+.viewport-button-on { background:var(--selection-surface); color:var(--selection-foreground); }
+.viewport-button-on:hover { background:var(--selection-surface); color:var(--selection-foreground); }
+.viewport-dropdown { height:var(--control-size); padding-left:var(--space-sm); padding-right:var(--space-xs); gap:var(--space-xs); border-width:0px; border-radius:var(--radius-xs); background:transparent; font-size:var(--font-size-small); }
+.viewport-dropdown:hover { background:var(--hover-surface); }
+.viewport-divider { width:1px; height:var(--icon-size); flex-shrink:0; background:var(--separator-strong); }
+.viewport-fov { width:44px; height:var(--control-size); font-size:var(--font-size-small); }
+.viewport-icon { width:var(--icon-size); height:var(--icon-size); color:inherit; }
+.view-orientation { position:absolute; right:var(--viewport-widget-inset); top:var(--viewport-widget-top); }
+.following { top:var(--viewport-widget-top); }
+.following-no-toolbar { top:var(--viewport-widget-inset); }
