@@ -175,7 +175,7 @@ manifest; prefer `publish`, which hashes the actual packaged files.
 8. From the Releases page, download the **Hub** setup, accept SmartScreen's unsigned
    warning, and select **Preview** in Hub Settings. A clean profile defaults to
    Stable, which deliberately hides this alpha. Install the engine through Installs,
-   create Starter, open it, Build Current Profile, then run the exported game.
+   create Showcase, open it, Build Current Profile, then run the exported game.
    Test anonymously too: testers need no GitHub token for the public feed. .NET 10
    SDK/runtime, VC++ x64 runtime and a Vulkan-capable driver remain tester prerequisites.
    Confirm both tags, both manifests/signatures and the six complete asset sets
@@ -204,7 +204,7 @@ Only explicit test-support builds map these URLs to that loopback origin. The
 older installed Hub uses its real model to discover/download the update, launches
 the external updater and exits. The new Hub renders offscreen for startup health.
 Then the actual service installs/registers the engine ZIP, creates and opens
-Starter, opens its editor offscreen, builds it and runs the export for eight
+the real-art Showcase sample, opens its editor offscreen, builds it and runs the export for eight
 verified ticks. REHEARSAL_RESULTS.json, mock request logs, the offscreen Hub frame
 and ARA_RESULT remain under that directory; owned processes and the server stop.
 Delete the throwaway private key afterward. Production packages have neither this

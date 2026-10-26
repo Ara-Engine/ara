@@ -226,9 +226,9 @@ pub(crate) fn run(artifacts: &Path, older_setup: &Path, directory: &Path) -> Res
             Ok(())
         },
     )?;
-    let project = env.directory.join("Starter");
+    let project = env.directory.join("Showcase");
     step(
-        "create Starter from the downloaded engine and open through Hub",
+        "create Showcase from the downloaded engine and open through Hub",
         &mut || {
             let templates = client
                 .call("hub.templates", json!({}))
@@ -255,7 +255,7 @@ pub(crate) fn run(artifacts: &Path, older_setup: &Path, directory: &Path) -> Res
                     "{id} preview is outside the downloaded engine"
                 );
             }
-            let created = client.call("hub.create",json!({"name":"Rehearsal Starter","path":project,"template":"starter","engineVersion":version})).map_err(|e|anyhow::anyhow!("{e}"))?;
+            let created = client.call("hub.create",json!({"name":"Rehearsal Showcase","path":project,"template":"showcase","engineVersion":version})).map_err(|e|anyhow::anyhow!("{e}"))?;
             support::json(&env.directory.join("created.json"), &created)?;
             let id = created["id"].as_str().context("created project id")?;
             client
