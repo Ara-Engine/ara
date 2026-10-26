@@ -53,6 +53,31 @@ fn outpost_hangar_round_trip() -> anyhow::Result<()> {
                 );
             }
             cameras.insert(path, editor.state.camera);
+            if name == "02-hangar" {
+                let request = CaptureRequest {
+                    camera: editor.state.camera.spec(),
+                    size: [1280, 720],
+                    mode: ViewMode::Lit,
+                    deterministic: true,
+                    exposure: 0.0015,
+                    settle_frames: 1,
+                    tick: 0,
+                    seed: 0,
+                    marks: None,
+                };
+                let before = renderer.capture_completed(&request)?.image;
+                scene
+                    .render(&mut renderer, &editor, &view, 1)
+                    .map_err(|error| anyhow::anyhow!("{error}"))?;
+                renderer.wait_scene_frame()?;
+                if scene.raster_scene.as_deref() != Some(editor.state.doc.as_str()) {
+                    assert_eq!(
+                        renderer.capture_completed(&request)?.image,
+                        before,
+                        "an in-flight scene switch retains the completed image and its camera"
+                    );
+                }
+            }
             scene
                 .render_capture(&mut renderer, &editor, &view, 64)
                 .map_err(|error| anyhow::anyhow!("{error}"))?;

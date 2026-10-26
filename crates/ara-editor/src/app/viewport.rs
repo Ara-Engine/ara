@@ -522,7 +522,8 @@ impl SceneView {
             )?);
         }
         if matches!(work, RasterWork::Live(_)) {
-            let ready = self.raster_frame.is_some()
+            let ready = self.raster_scene.as_deref() == Some(editor.state.doc.as_str())
+                && self.raster_frame.is_some()
                 && self
                     .raster
                     .as_ref()
@@ -599,7 +600,11 @@ impl SceneView {
             std::thread::sleep(std::time::Duration::from_millis(1));
             return Ok(());
         }
-        if self.raster_frame.is_none() {
+        if self.raster_frame.is_none()
+            || self.raster_scene.as_deref() != Some(editor.state.doc.as_str())
+        {
+            // Keep the completed old image while another scene prepares. Drawing
+            // its geometry through the new scene's camera shows an unrelated world.
             return Ok(());
         }
         if self
