@@ -342,11 +342,36 @@ pub(crate) fn open_terminal(root: &std::path::Path) -> ara_ui::Result<()> {
     }
     Ok(())
 }
-/// Open the engine documentation shipped beside this build, else the project's AGENTS.md.
+/// Open the engine documentation (`docs_path`), else the project's AGENTS.md.
 pub(crate) fn open_docs(editor: &Editor) -> ara_ui::Result<()> {
-    let docs = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs");
+    let exe = std::env::current_exe()?;
+    let docs = docs_path(exe.parent().unwrap_or(&exe));
     if docs.exists() {
         return open_external(&docs);
     }
     open_external(&editor.host.root().join("AGENTS.md"))
+}
+
+/// The documentation for the editor in `exe_dir`: an installed engine (its
+/// `engine.json` beside the executable) has README-FIRST.txt; a checkout build has
+/// the repository's `docs`. An installed editor never opens the source tree it was
+/// built from, even on the machine that built it.
+fn docs_path(exe_dir: &std::path::Path) -> std::path::PathBuf {
+    if exe_dir.join("engine.json").is_file() {
+        return exe_dir.join("README-FIRST.txt");
+    }
+    std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs")
+}
+
+#[cfg(test)]
+mod tests {
+    /// An installed layout resolves to its own README, not the build's checkout.
+    #[test]
+    fn an_installed_editor_opens_its_own_readme() {
+        let dir = std::env::temp_dir().join(format!("ara-docs-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).expect("scratch");
+        std::fs::write(dir.join("engine.json"), "{}").expect("engine.json");
+        assert_eq!(super::docs_path(&dir), dir.join("README-FIRST.txt"));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }

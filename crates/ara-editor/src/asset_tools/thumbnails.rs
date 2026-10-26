@@ -6,9 +6,9 @@
 //!
 //! Asset tiles queue on one worker; the material page's live and in-node previews on
 //! another, so an open material never waits behind a folder of models. A model whose
-//! import has not published yet is [`Done::Pending`], not a failure: nothing waits on
-//! it and nothing is reported; call [`Thumbnails::retry_pending`] when the import
-//! progress moves.
+//! import has not published yet (or whose file is still being copied in) is
+//! [`Done::Pending`], not a failure: nothing waits on it and nothing is reported; call
+//! [`Thumbnails::retry_pending`] when the import progress moves.
 use super::material_preview::Shot;
 use super::studio::{self, MASTER};
 use ara_render::Renderer;
@@ -294,7 +294,13 @@ fn master(
     shot: Shot,
     renderer: &mut Option<Renderer>,
 ) -> anyhow::Result<Option<RgbaImage>> {
-    let source = root.join(path).canonicalize()?;
+    let source = match root.join(path).canonicalize() {
+        Ok(source) => source,
+        // An import still copying its file into the project: pending, like a model
+        // that has not published (it once reported "no preview" for good).
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(error) => return Err(error.into()),
+    };
     anyhow::ensure!(
         source.starts_with(root.canonicalize()?),
         "thumbnail source escapes project"
@@ -544,6 +550,16 @@ mod tests {
             relative(&message, &root),
             "models/box.gltf could not be read"
         );
+        // An import still copying its file in is pending too, not a failure.
+        let copying = master(
+            &root,
+            "models/rock.glb",
+            None,
+            Shot::surface(false),
+            &mut None,
+        )
+        .expect("a file not copied yet is not an error");
+        assert!(copying.is_none());
         let _ = std::fs::remove_dir_all(&root);
     }
 

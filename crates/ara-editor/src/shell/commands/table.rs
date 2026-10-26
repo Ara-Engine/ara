@@ -1853,7 +1853,7 @@ fn build() -> Vec<Spec> {
             "Documentation",
             "book-open",
             "",
-            "Open the engine documentation folder.",
+            "Open the engine documentation (README-FIRST in an installed engine).",
             |_, e, _| super::super::open_docs(e),
         ),
         cmd(
