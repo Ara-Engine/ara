@@ -109,10 +109,10 @@ fn initial_probe_resources_clear_in_slices_and_delivery_allocates_no_descriptors
     renderer.update_probe_records(&update, 4..8)?;
     assert_eq!(renderer.gpu.context().host_wait_stats().calls, waits);
     assert_eq!(renderer.gpu.descriptor_usage(), usage);
-    for frame in 0..32 {
+    for frame in 0..8 {
         renderer.render_view(&camera(), 1., ViewMode::Lit)?;
         let gi = renderer.look.gi.as_ref().context("delivered volume")?;
-        if frame < 31 {
+        if frame < 7 {
             assert!(gi.converge > 0, "live work stays budgeted");
         }
     }
@@ -139,6 +139,49 @@ fn initial_probe_resources_clear_in_slices_and_delivery_allocates_no_descriptors
         0
     );
     renderer.gpu.assert_clean()?;
+    Ok(())
+}
+
+#[test]
+fn initial_bounces_use_a_bounded_window_then_restore_the_preset_budget() -> Result<()> {
+    let mut renderer = renderer("initial-budget")?;
+    let mut quality = *renderer.quality();
+    quality.gi_budget = 256;
+    renderer.set_quality(quality)?;
+    let counts = [32, 16, 16];
+    let probes = 8192;
+    let mut statics = vec![[1., 1., 0., 0.]; probes * crate::look::gi::STATIC_VECTORS];
+    for p in 0..probes {
+        statics[p * crate::look::gi::STATIC_VECTORS + 64] = [0., 0., 0., 1.];
+    }
+    renderer.set_probe_surfaces(Some(&ProbeSurfaces {
+        origin: [-1.; 3],
+        spacing: [2.; 3],
+        counts,
+        texels: vec![[255 << 24, 0, 0, 0]; probes * SURFACE_TEXELS],
+        statics,
+    }))?;
+    for frame in 1..=16 {
+        renderer.render_view(&camera(), 1., ViewMode::Lit)?;
+        let gi = renderer.look.gi.as_ref().context("GI volume")?;
+        assert_eq!(gi.converge, 8 - frame / 2);
+        assert_eq!(gi.converge_progress, (frame % 2) * 4096);
+    }
+    assert!(
+        !renderer.probe_gi_ready(),
+        "readiness still requires the visibility fade"
+    );
+    renderer.render_view(&camera(), 1., ViewMode::Lit)?;
+    assert_eq!(
+        renderer.look.gi.as_ref().context("GI volume")?.cursor,
+        256,
+        "steady relight returns to the preset budget"
+    );
+    for _ in 0..30 {
+        renderer.render_view(&camera(), 1., ViewMode::Lit)?;
+    }
+    assert!(renderer.probe_gi_ready());
+    renderer.gpu().assert_clean()?;
     Ok(())
 }
 

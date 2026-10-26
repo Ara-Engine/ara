@@ -5,6 +5,8 @@ use glam::{Mat4, Vec4};
 
 pub(crate) const CONFIG_STRIDE: usize = 192;
 pub(crate) const CONTROL_STRIDE: usize = 64;
+pub(crate) const SORT_HEADER: u32 = 16;
+pub(crate) const DISPATCH_BYTES: u32 = 12;
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable)]
 pub(crate) struct Config {
@@ -12,7 +14,7 @@ pub(crate) struct Config {
     pub lists: [u32; 4],     // alive, dead, local prefix, group counts (byte offsets)
     pub scratch: [u32; 4],   // group prefix, event records, routed records, padded count
     pub render: [u32; 4],    // geometry, vertex count, domain, sorting
-    pub atlas: [u32; 4],     // grid x/y, event cap, reserved
+    pub atlas: [u32; 4],     // grid x/y, event cap, sort indirect args byte offset
     pub surface: [f32; 4],   // soft distance, fps, width, overdraw budget
     pub bounds_min: [f32; 4],
     pub bounds_max: [f32; 4],
@@ -46,6 +48,7 @@ pub(crate) struct Layout {
     pub configs: Vec<Config>,
     pub total: u32,
     pub list_bytes: u32,
+    pub control_bytes: u32,
 }
 impl Layout {
     pub fn new(effect: &Effect) -> Result<Self> {
@@ -137,6 +140,11 @@ impl Layout {
                     };
                 }
             }
+            // Additive sprites/meshes are order-independent. Ribbons retain
+            // age order because it defines their geometry, not alpha blending.
+            if c.render[0] != 1 && c.appearance[1] == ara_vfx::Blend::Additive as u32 {
+                c.render[3] = 0;
+            }
             configs.push(c);
             total += padded;
             groups += padded / 256;
@@ -166,10 +174,22 @@ impl Layout {
             u64::from(total) * 64 <= 128 * 1024 * 1024,
             "particle storage exceeds native binding range"
         );
+        // Append sort arguments to the existing control allocation: no new
+        // bindless buffer or per-frame allocation, even at maximum capacity.
+        let mut control_bytes = configs.len() as u32 * CONTROL_STRIDE as u32;
+        for c in &mut configs {
+            if c.render[3] != 0 {
+                c.atlas[3] = control_bytes;
+                let levels = c.scratch[3].ilog2();
+                let steps = levels * (levels + 1) / 2;
+                control_bytes += SORT_HEADER + steps * DISPATCH_BYTES;
+            }
+        }
         Ok(Self {
             configs,
             total,
             list_bytes,
+            control_bytes,
         })
     }
 }

@@ -1,13 +1,13 @@
 {
   "binding_layout_hash": "35cd2a62b1ba741ce6823b3c8753d7b5aa97b54c5f0a837b56e542518013fd7e",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "2acbb6246cdef80c52897d8668ec82b93aad9553eb282decbc0cf6074418b025",
+  "key": "786e7b839073d2ea5348d1912944c8fbe70897b60d8fa8f05cadcdbb81abd851",
   "stages": [
     {
-      "dxil": "2acbb6246cdef80c52897d8668ec82b93aad9553eb282decbc0cf6074418b025/spawnMain.dxil",
+      "dxil": "786e7b839073d2ea5348d1912944c8fbe70897b60d8fa8f05cadcdbb81abd851/spawnMain.dxil",
       "dxil_hash": "a3dba60115344d3e8bcac8e4164f50d13bb2050995d7c326f80ceebce7b450dd",
       "source_entry": "spawnMain",
-      "spirv": "2acbb6246cdef80c52897d8668ec82b93aad9553eb282decbc0cf6074418b025/spawnMain.spv",
+      "spirv": "786e7b839073d2ea5348d1912944c8fbe70897b60d8fa8f05cadcdbb81abd851/spawnMain.spv",
       "spirv_entry": "main",
       "spirv_hash": "1625088cc9cd713a9afe1fd8e116000481ece40b542e01ac460205665fa4b08d",
       "stage": "compute"

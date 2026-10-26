@@ -37,7 +37,7 @@ device and per-view upload state; no simulation, window or process code.
   failed/missing stay solid magenta. Raster arrivals
   fade over 12 presented frames using material rows only; captures finish the fade.
 - Probe GI is enabled by default, acquired asynchronously and disk-cached; its early layout lets `preallocate_startup_resources` reserve and prime the volume/staging behind loading.
-  Live frames poll and relight within their preset budget; `wait_probe_gi` drains pending clears at an explicit capture boundary.
+  Live frames poll; initial GI bounces use bounded 4096-probe windows, then relight at the preset budget. Readiness still waits for all bounces/fade. `wait_probe_gi` drains pending clears at an explicit capture boundary.
 - `prepare_with(&frame, resolver)` / `present_with`: native local geometry, compressed
   textures, instance poses and changed skin palettes. The resolver reads published
   terrain/material/prefab assets only on structural changes. Model-only callers can
@@ -53,7 +53,7 @@ device and per-view upload state; no simulation, window or process code.
   path, including landscape/foliage and persistent VFX (`presented: true`).
 - Fidelity composes terrain, foliage and particles before shared HDR post/TAAU;
   native captures read the same view as windows and embedded Game. Raster puts
-  terrain/foliage in the G-buffer, then particles before shared temporal/post.
+  terrain/foliage in the G-buffer; particles blend into scene HDR before shared temporal/post without a copy or tonemap.
 - `stats()`: rebuilt flag, updated poses/skins, CPU prepare/render time and GPU ms.
   `readiness().is_ready()` gates raster content, residency, effect PSOs/warmup and GI convergence/fade, allowing normal motion.
   `host_wait_stats()` exposes cumulative host waits; snapshot around the whole

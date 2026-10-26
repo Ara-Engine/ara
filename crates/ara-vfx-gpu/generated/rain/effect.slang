@@ -320,7 +320,23 @@ void prefixMain(uint3 local:SV_GroupThreadID){
     }
     aliveScan[lane]=selected;GroupMemoryBarrierWithGroupSync();
     for(uint stride=128;stride>0;stride/=2){if(lane<stride)aliveScan[lane]=max(aliveScan[lane],aliveScan[lane+stride]);GroupMemoryBarrierWithGroupSync();}
-    if(lane==0){storeState(e,0,total.x);storeState(e,4,c.partition.y-total.x);storeState(e,8,min(total.y,c.atlas.z));storeState(e,52,state(e,52)+(total.y>c.atlas.z?total.y-c.atlas.z:0));storeState(e,56,aliveScan[0]);storeState(e,60,asuint(totalArea));}
+    if(lane==0){
+        storeState(e,0,total.x);storeState(e,4,c.partition.y-total.x);storeState(e,8,min(total.y,c.atlas.z));storeState(e,52,state(e,52)+(total.y>c.atlas.z?total.y-c.atlas.z:0));storeState(e,56,aliveScan[0]);storeState(e,60,asuint(totalArea));
+        if(c.render.w!=0){
+            // Preserve the selected alive prefix. Only its next power of two is
+            // padded/sorted; all capacity-only stages become zero-work dispatches.
+            uint n=aliveScan[0];uint padded=n<=1?n:1u<<(uint(firstbithigh(n-1u))+1u);
+            uint groups=(padded+255u)/256u;uint args=c.atlas.w;
+            buffers[NonUniformResourceIndex(root.control)].Store<uint4>(args,uint4(groups,1,1,padded));
+            args+=16;
+            for(uint k=2;k<=c.scratch.w;k*=2){
+                for(uint j=k/2;j>0;j/=2){
+                    buffers[NonUniformResourceIndex(root.control)].Store<uint3>(args,uint3(k<=padded?groups:0,1,1));
+                    args+=12;
+                }
+            }
+        }
+    }
 }
 [shader("compute")][numthreads(256,1,1)]
 void scatterMain(uint3 id:SV_DispatchThreadID,uint3 group:SV_GroupID){
@@ -345,10 +361,10 @@ void routeMain(){
 }
 float sortKey(uint slot,Config c){if(slot==0xffffffffu)return -3.402823e38;Particle p=loadParticle(c.partition.x+slot);return c.render.w==1?dot(p.position-frame().camera.xyz,frame().forward.xyz):p.age;}
 [shader("compute")][numthreads(256,1,1)]
-void sortPrepareMain(uint3 id:SV_DispatchThreadID){Config c=config(root.emitter);if(id.x<c.scratch.w&&id.x>=state(root.emitter,56))storeList(c.lists.x+id.x*4,0xffffffffu);}
+void sortPrepareMain(uint3 id:SV_DispatchThreadID){Config c=config(root.emitter);uint n=buffers[NonUniformResourceIndex(root.control)].Load(c.atlas.w+12);if(id.x<n&&id.x>=state(root.emitter,56))storeList(c.lists.x+id.x*4,0xffffffffu);}
 [shader("compute")][numthreads(256,1,1)]
 void sortMain(uint3 id:SV_DispatchThreadID){
-    Config c=config(root.emitter);uint i=id.x;uint j=i^root.sortJ;if(j<=i||j>=c.scratch.w)return;
+    Config c=config(root.emitter);uint n=buffers[NonUniformResourceIndex(root.control)].Load(c.atlas.w+12);uint i=id.x;uint j=i^root.sortJ;if(j<=i||j>=n)return;
     uint a=list(c.lists.x+i*4);uint b=list(c.lists.x+j*4);float ka=sortKey(a,c);float kb=sortKey(b,c);
     bool greater=ka>kb||(ka==kb&&a<b);bool descending=(i&root.sortK)==0;
     if(greater!=descending){storeList(c.lists.x+i*4,b);storeList(c.lists.x+j*4,a);}

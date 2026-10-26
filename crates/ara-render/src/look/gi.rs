@@ -19,9 +19,11 @@ pub const STATIC_VECTORS: usize = 66;
 /// only smooths changes (camera-dependent shadowing at cache hits).
 pub(crate) const HYSTERESIS: f32 = 0.6;
 /// Full-volume bounces without hysteresis after new records or a capture reset.
-/// Live initialization spreads each bounce over its preset budget; a capture
+/// Live initialization spreads each bounce over a bounded initial budget; a capture
 /// relights the full volume per frame and re-meters exposure within its settle.
 pub(crate) const CONVERGE_FRAMES: u32 = 8;
+/// Initial relight work, before readiness; steady frames keep the preset budget.
+const INITIAL_PROBES: u32 = 4096;
 /// Frames over which a newly converged volume fades into shading.
 const FADE_FRAMES: f32 = 30.;
 
@@ -247,10 +249,12 @@ impl GiGpu {
             self.converge_progress = 0;
         }
     }
-    /// Captures retain full-grid bounces; live initialization uses its preset budget.
+    /// Captures retain full-grid bounces; live initialization uses a bounded window.
     fn window(&self, budget: u32) -> u32 {
         if self.converge > 0 && self.capture_convergence {
             self.probes
+        } else if self.converge > 0 && budget > 0 {
+            budget.max(INITIAL_PROBES).min(self.probes)
         } else {
             budget.min(self.probes)
         }
