@@ -93,6 +93,8 @@ fn respond(
     body: &[u8],
     log: &mut fs::File,
 ) -> Result<()> {
+    // Accepted sockets inherit the listener's nonblocking mode on Windows.
+    socket.set_nonblocking(false)?;
     socket.set_read_timeout(Some(Duration::from_secs(5)))?;
     socket.set_write_timeout(Some(Duration::from_secs(30)))?;
     let mut request = BufReader::new(socket.try_clone()?);
@@ -175,4 +177,60 @@ fn respond(
         )?;
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn large_assets_stream_completely_from_an_inherited_nonblocking_socket() {
+        let target =
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/release-mirror-tests");
+        fs::create_dir_all(&target).expect("target");
+        let root = tempfile::tempdir_in(target).expect("isolated mirror");
+        let payload = vec![0x5a; 4 * 1024 * 1024];
+        let asset = root.path().join("asset.zip");
+        fs::write(&asset, &payload).expect("large asset");
+        let listener = TcpListener::bind("127.0.0.1:0").expect("loopback");
+        let address = listener.local_addr().expect("address");
+        let reader = thread::spawn(move || {
+            let mut client = TcpStream::connect(address).expect("connect");
+            client
+                .set_read_timeout(Some(Duration::from_secs(10)))
+                .expect("bounded read");
+            client
+                .write_all(b"GET /asset.zip HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n")
+                .expect("request");
+            let mut response = Vec::new();
+            let mut chunk = [0; 16 * 1024];
+            loop {
+                let size = client.read(&mut chunk).expect("response");
+                if size == 0 {
+                    break;
+                }
+                response.extend_from_slice(&chunk[..size]);
+                thread::sleep(Duration::from_millis(1));
+            }
+            response
+        });
+        let (socket, _) = listener.accept().expect("accept");
+        // Windows inherits this from the nonblocking listener. Set it explicitly
+        // so the regression also exercises the same backpressure on Unix.
+        socket.set_nonblocking(true).expect("inherited mode");
+        let mut log = fs::File::create(root.path().join("requests.log")).expect("log");
+        let result = respond(
+            socket,
+            &BTreeMap::from([("/asset.zip".into(), asset)]),
+            b"[]",
+            &mut log,
+        );
+        let response = reader.join().expect("reader");
+        result.expect("large streaming response must handle backpressure");
+        let start = response
+            .windows(4)
+            .position(|w| w == b"\r\n\r\n")
+            .expect("HTTP headers")
+            + 4;
+        assert_eq!(&response[start..], payload);
+    }
 }
