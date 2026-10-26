@@ -513,3 +513,12 @@ torn metadata repair, zero device preparation on a cache hit, one preparation on
 the first miss and CPU-key retry after an identity mismatch. The production owner
 uses the same worker for metadata, snapshots and cooks; remote/custom workers keep
 the original fallbacks. No importer version bump or sample-sidecar rewrite is needed.
+
+Final validation also runs the ignored unified Compute integer-oracle probe and
+the production GPU-worker protocol probe through the GPU lock. The latter forces
+six real encodes across all presets by disabling intermediate texture memo reuse
+after capability negotiation; otherwise memo hits correctly have no encoder PID.
+After the service exits, a fresh worker recovers the capability hint without a new
+service. Physical verification reads all 115 actions, 1,459 artifact references and
+909,360,516 logical referenced bytes successfully. The fixture's initial memo-hit
+assertion failure remains in the ignored logs; no production codec fix was needed.

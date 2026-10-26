@@ -53,6 +53,9 @@ fn gpu_worker_negotiates_and_encodes_without_contaminating_protocol_stdout()
         Some(encoder.backend()),
         "a usable device must negotiate through framed stdout"
     );
+    // Keep the negotiated lease/capability memo, but force each disposable job
+    // to encode rather than hit the pure texture memo. This probe counts devices.
+    let worker = worker.with_memo(None);
     for preset in [
         CookPreset::Fast,
         CookPreset::Balanced,
