@@ -116,6 +116,13 @@ impl Ui {
         result
     }
 
+    /// Forget the markup recorded for the part hosted at `host`, after its nodes were
+    /// changed in place ([`set_text`](Self::set_text), [`set_style`](Self::set_style)):
+    /// the next reconcile compiles it again rather than keeping it as unchanged.
+    pub fn forget_part(&mut self, host: &str) {
+        self.parts.markup.remove(host);
+    }
+
     /// Where the node at `old` before the last reconcile is now, if it was kept
     /// wholesale (or nothing changed); `VirtualView::remap` follows its rows with it.
     pub fn moved_index(&self, old: usize) -> Option<usize> {

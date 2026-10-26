@@ -1035,9 +1035,12 @@ impl Shell {
         }
         if let (Some(cube), Some(rect)) = (self.ui.find("view-cube"), self.viewport()) {
             let r = self.ui.nodes[cube].rect;
-            self.ui.nodes[cube].paint_offset =
-                [rect.x + rect.w - axis::SIZE - 12. - r.x, rect.y + 12. - r.y];
-            self.ui.nodes[cube].dirty.paint = true;
+            let offset = [rect.x + rect.w - axis::SIZE - 12. - r.x, rect.y + 12. - r.y];
+            // Only a moved cube repaints: marking it every rebuild repainted the whole UI.
+            if self.ui.nodes[cube].paint_offset != offset {
+                self.ui.nodes[cube].paint_offset = offset;
+                self.ui.nodes[cube].dirty.paint = true;
+            }
         }
         self.stats.work += self.ui.frame(&mut self.text)?;
         if self.frame_new_graphs(editor)? {
