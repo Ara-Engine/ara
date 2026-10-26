@@ -58,6 +58,11 @@ pub struct FidelityView {
     pub(crate) last_frame: Option<crate::frame::GpuFrame>,
 }
 impl FidelityView {
+    /// The probe lattice this view lights and bakes (`bake_probe_surfaces`).
+    pub fn probe_volume(&self) -> ProbeVolume {
+        self.volume
+    }
+
     /// Upload immutable extraction, prewarm cooked pipelines and allocate view storage.
     /// Raster/Mobile require a bake with matching scene hash; no RT extensions execute.
     pub fn new(

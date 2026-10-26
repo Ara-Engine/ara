@@ -187,7 +187,7 @@ float3 ibl(Frame f,Look l,Surface s,float3 world,float3 v,int2 p,bool gathered) 
     float coverage=0;float3 diffuseGi=0,specularGi=0;
     [branch]if(giEnabled(l)){
         if(gathered)coverage=gatheredLobes(f,l,p,length(world-f.camera.xyz),diffuseGi,specularGi);
-        else{coverage=giCoverage(l,world);if(coverage>0)giLobes(l,l.giImages.y,world,s.normal,reflected,giBias(l,s.normal,v),diffuseGi,specularGi);}
+        else coverage=giPoolLobes(l,l.giImages.y,world,s.normal,reflected,v,true,diffuseGi,specularGi);
         coverage*=giWeight(l);
     }
     // Where the probe volume does not reach (and across its fade), distant

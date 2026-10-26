@@ -14,7 +14,7 @@
 use anyhow::{Context, Result, ensure};
 use ara_render::{
     instanced::{Geometry, Scene},
-    look::gi::{ProbeLayout, ProbeSurfaces, STATIC_VECTORS, SURFACE_TEXELS},
+    look::gi::{ProbeLattice, ProbeLayout, ProbeSurfaces, STATIC_VECTORS, SURFACE_TEXELS},
 };
 use ara_render_fidelity::probes::ProbeVolume;
 use glam30::{Mat3, Mat4, Vec2, Vec3};
@@ -28,6 +28,9 @@ const LEAF: usize = 4;
 const TOP_LEAF: usize = 2;
 const BINS: usize = 16;
 const EMPTY: (Vec3, Vec3) = (Vec3::splat(f32::INFINITY), Vec3::splat(f32::NEG_INFINITY));
+
+/// Probes a bake worker takes at a time.
+const BATCH: usize = 32;
 
 /// Threads a bake, re-trace or mesh build fans out to: half the logical cores, so
 /// the render thread and the driver keep theirs (an all-core bake starved
@@ -684,6 +687,43 @@ impl Tracer {
         self.top.first().map(|n| (n.min, n.max))
     }
 
+    /// The region of built-up content: traced instances that are neither terrain
+    /// nor landform-sized, measured as instance volume per [`CELL`] ground cell;
+    /// the box of those touching a cell with at least [`DENSITY`] of the densest
+    /// cell's volume, grown by [`MARGIN`]. `None` without such instances.
+    pub(crate) fn built_up(&self) -> Option<(Vec3, Vec3)> {
+        let candidates: Vec<&Placed> = self
+            .order
+            .iter()
+            .map(|&i| &self.placed[i as usize])
+            .filter(|p| {
+                p.layers.is_none() && (p.bounds.1 - p.bounds.0).length() * 0.5 <= LANDFORM_RADIUS
+            })
+            .collect();
+        let cell = |v: f32| (v / CELL).floor() as i32;
+        let cells = |p: &Placed| {
+            let (lo, hi) = p.bounds;
+            let (x, z) = (cell(lo.x)..=cell(hi.x), cell(lo.z)..=cell(hi.z));
+            x.flat_map(move |x| z.clone().map(move |z| (x, z)))
+        };
+        let mut density: HashMap<(i32, i32), f32> = HashMap::new();
+        for p in &candidates {
+            let volume = (p.bounds.1 - p.bounds.0 + Vec3::splat(0.25)).element_product();
+            let share = volume / cells(p).count() as f32;
+            for c in cells(p) {
+                *density.entry(c).or_default() += share;
+            }
+        }
+        let threshold = density.values().copied().fold(0., f32::max) * DENSITY;
+        candidates
+            .iter()
+            .filter(|p| cells(p).any(|c| density.get(&c).is_some_and(|&d| d >= threshold)))
+            .map(|p| p.bounds)
+            .reduce(|(a, b), (c, d)| (a.min(c), b.max(d)))
+            .filter(|_| threshold > 0.)
+            .map(|(lo, hi)| (lo - Vec3::splat(MARGIN), hi + Vec3::splat(MARGIN)))
+    }
+
     /// Closest hit along `origin + t * direction` (unit `direction`), 0.001 < t < `maximum`.
     fn trace(&self, origin: Vec3, direction: Vec3, maximum: f32) -> Option<Hit> {
         let seed = [origin, direction]
@@ -756,12 +796,73 @@ fn lod_level(scene: &Scene) -> usize {
         .unwrap_or(levels.saturating_sub(1))
 }
 
-fn volume_of(surfaces: &ProbeSurfaces) -> ProbeVolume {
+/// Probes of the lattice over every static triangle: alone, or as the coarse
+/// lattice of a pool, unchanged, so a pool only ever adds detail.
+const PROBES: usize = 32_768;
+/// Probes of the fine lattice over built-up content.
+const FINE_PROBES: usize = 16_384;
+/// Instances wider than this bound radius (m) are landforms, not built-up content.
+const LANDFORM_RADIUS: f32 = 32.;
+/// Ground cells (m) in which built-up content is measured.
+const CELL: f32 = 8.;
+/// Cells holding at least this share of the densest cell's instance volume are
+/// built up (scattered foliage and props stay well below it).
+const DENSITY: f32 = 0.1;
+/// Margin (m) around built-up content: the fine lattice fades out beyond it.
+const MARGIN: f32 = 6.;
+/// A fine lattice is kept only when its spacing is at most this share of the
+/// single lattice's.
+const FINER: f32 = 0.5;
+
+/// The lattice rule's identity, part of the probe cache's file names
+/// (`gi.rs`): any change to the constants above misses older bakes.
+pub(crate) fn lattice_rule() -> String {
+    format!(
+        "pool-p{PROBES}-f{FINE_PROBES}-l{LANDFORM_RADIUS}-g{CELL}-d{DENSITY}-m{MARGIN}-r{FINER}"
+    )
+}
+
+fn volume(lattice: &ProbeLattice) -> ProbeVolume {
     ProbeVolume {
-        origin: Vec3::from_array(surfaces.origin),
-        spacing: Vec3::from_array(surfaces.spacing),
-        counts: surfaces.counts,
+        origin: Vec3::from_array(lattice.origin),
+        spacing: Vec3::from_array(lattice.spacing),
+        counts: lattice.counts,
     }
+}
+
+fn lattice(volume: &ProbeVolume) -> ProbeLattice {
+    ProbeLattice {
+        origin: volume.origin.to_array(),
+        spacing: volume.spacing.to_array(),
+        counts: volume.counts,
+    }
+}
+
+/// The lattice holding global probe `id` of `layout`, and the id within it.
+fn locate(layout: &ProbeLayout, id: usize) -> Option<(ProbeVolume, usize)> {
+    layout
+        .lattices()
+        .iter()
+        .zip(layout.bases())
+        .find(|(l, base)| id >= *base && id < base + l.probe_count())
+        .map(|(l, base)| (volume(l), id - base))
+}
+
+/// The probe pool for `tracer`'s static instances, finest first: one lattice
+/// over every static triangle, and, where built-up content sits in a markedly
+/// smaller region, a fine lattice over it in front of that one.
+pub(crate) fn layout(tracer: &Tracer) -> Result<ProbeLayout> {
+    let (lo, hi) = tracer
+        .bounds()
+        .context("the scene has no static triangles to bake")?;
+    let single = ProbeVolume::automatic_within(lo, hi, PROBES)?;
+    if let Some((flo, fhi)) = tracer.built_up() {
+        let fine = ProbeVolume::automatic_within(flo.max(lo), fhi.min(hi), FINE_PROBES)?;
+        if fine.spacing.max_element() <= single.spacing.max_element() * FINER {
+            return ProbeLayout::new(&[lattice(&fine), lattice(&single)]);
+        }
+    }
+    Ok(ProbeLayout::single(lattice(&single)))
 }
 
 /// Lattice position of probe `id` (before relocation).
@@ -775,62 +876,82 @@ fn centre(volume: &ProbeVolume, id: usize) -> Vec3 {
     volume.origin + index * volume.spacing
 }
 
-/// Bakes every probe of an automatic lattice around the tracer's instances.
+/// Bakes every probe of the tracer's automatic pool ([`layout`]).
 #[cfg(test)]
 pub(crate) fn bake(tracer: &Tracer) -> Result<ProbeSurfaces> {
     bake_with_layout(tracer, |_| {})
 }
 
-/// Publish the allocation dimensions before tracing or allocating the payload.
-/// Startup can reserve GPU resources while the expensive acquisition continues.
+/// Publish the final pool's dimensions once, before tracing or allocating the
+/// payload: startup reserves its GPU resources while acquisition continues.
+/// The finest lattice (what the camera sees up close) bakes first.
 pub(crate) fn bake_with_layout(
     tracer: &Tracer,
-    layout: impl FnOnce(ProbeLayout),
+    publish: impl FnOnce(ProbeLayout),
+) -> Result<ProbeSurfaces> {
+    let layout = layout(tracer)?;
+    publish(layout);
+    bake_lattices(tracer, layout, 0..layout.lattices().len())
+}
+
+/// Bakes the lattices `which` of `layout` (the rest stay empty).
+pub(crate) fn bake_lattices(
+    tracer: &Tracer,
+    layout: ProbeLayout,
+    which: std::ops::Range<usize>,
 ) -> Result<ProbeSurfaces> {
     let started = std::time::Instant::now();
-    let (lo, hi) = tracer
-        .bounds()
-        .context("the scene has no static triangles to bake")?;
-    let volume = ProbeVolume::automatic(lo, hi)?;
-    layout(ProbeLayout {
-        origin: volume.origin.to_array(),
-        spacing: volume.spacing.to_array(),
-        counts: volume.counts,
-    });
-    let probes = volume.len();
+    let probes = layout.probe_count();
     let mut texels = vec![[0u32; 4]; probes * SURFACE_TEXELS];
     let mut statics = vec![[0f32; 4]; probes * STATIC_VECTORS];
-    let threads = worker_threads();
-    let chunk = probes.div_ceil(threads).max(1);
-    std::thread::scope(|scope| {
-        for ((texels, statics), first) in texels
-            .chunks_mut(chunk * SURFACE_TEXELS)
-            .zip(statics.chunks_mut(chunk * STATIC_VECTORS))
-            .zip((0..).step_by(chunk))
-        {
-            let volume = &volume;
-            scope.spawn(move || {
-                for local in 0..texels.len() / SURFACE_TEXELS {
-                    probe(
-                        tracer,
-                        volume,
-                        first + local,
-                        &mut texels[local * SURFACE_TEXELS..(local + 1) * SURFACE_TEXELS],
-                        &mut statics[local * STATIC_VECTORS..(local + 1) * STATIC_VECTORS],
-                    );
-                }
-            });
-        }
-    });
+    let bases = layout.bases();
+    for i in which.clone() {
+        let (lattice, base) = (layout.lattices()[i], bases[i]);
+        let volume = volume(&lattice);
+        let count = lattice.probe_count();
+        let texels = &mut texels[base * SURFACE_TEXELS..(base + count) * SURFACE_TEXELS];
+        let statics = &mut statics[base * STATIC_VECTORS..(base + count) * STATIC_VECTORS];
+        // Workers take batches as they free up: buried probes skip their texel
+        // rays, so equal shares of probes are far from equal work.
+        let batches = std::sync::Mutex::new(
+            texels
+                .chunks_mut(BATCH * SURFACE_TEXELS)
+                .zip(statics.chunks_mut(BATCH * STATIC_VECTORS))
+                .zip((0..).step_by(BATCH)),
+        );
+        std::thread::scope(|scope| {
+            for _ in 0..worker_threads() {
+                let (batches, volume) = (&batches, &volume);
+                scope.spawn(move || {
+                    // A poisoned queue means a worker panicked; the scope re-raises it.
+                    while let Some(((texels, statics), first)) =
+                        batches.lock().ok().and_then(|mut b| b.next())
+                    {
+                        for local in 0..texels.len() / SURFACE_TEXELS {
+                            probe(
+                                tracer,
+                                volume,
+                                first + local,
+                                &mut texels[local * SURFACE_TEXELS..(local + 1) * SURFACE_TEXELS],
+                                &mut statics[local * STATIC_VECTORS..(local + 1) * STATIC_VECTORS],
+                            );
+                        }
+                    }
+                });
+            }
+        });
+    }
+    let traced: Vec<_> = layout.lattices()[which].iter().map(|l| l.counts).collect();
     eprintln!(
-        "ara-runtime-render: CPU-baked {probes} GI probes ({:?}) in {:.1} s",
-        volume.counts,
+        "ara-runtime-render: CPU-baked {} GI probes ({traced:?}) in {:.1} s",
+        traced
+            .iter()
+            .map(|c| c.iter().product::<u32>())
+            .sum::<u32>(),
         started.elapsed().as_secs_f64()
     );
     let surfaces = ProbeSurfaces {
-        origin: volume.origin.to_array(),
-        spacing: volume.spacing.to_array(),
-        counts: volume.counts,
+        layout,
         texels,
         statics,
     };
@@ -838,15 +959,15 @@ pub(crate) fn bake_with_layout(
     Ok(surfaces)
 }
 
-/// Re-traces `probes` of `surfaces` against `tracer`, keeping the lattice.
+/// Re-traces `probes` (global ids) of `surfaces` against `tracer`, keeping the pool.
 pub(crate) fn rebake(
     tracer: &Tracer,
     surfaces: &mut ProbeSurfaces,
     probes: &[usize],
 ) -> Result<()> {
-    let volume = volume_of(surfaces);
+    let layout = surfaces.layout;
     ensure!(
-        probes.iter().all(|&id| id < volume.len()),
+        probes.iter().all(|&id| id < layout.probe_count()),
         "probe outside the lattice"
     );
     let threads = worker_threads();
@@ -855,13 +976,15 @@ pub(crate) fn rebake(
         let jobs: Vec<_> = probes
             .chunks(chunk)
             .map(|ids| {
-                let volume = &volume;
+                let layout = &layout;
                 scope.spawn(move || {
                     ids.iter()
                         .map(|&id| {
                             let mut texels = [[0u32; 4]; SURFACE_TEXELS];
                             let mut statics = [[0f32; 4]; STATIC_VECTORS];
-                            probe(tracer, volume, id, &mut texels, &mut statics);
+                            if let Some((volume, local)) = locate(layout, id) {
+                                probe(tracer, &volume, local, &mut texels, &mut statics);
+                            }
                             (id, texels, statics)
                         })
                         .collect::<Vec<_>>()
@@ -882,9 +1005,13 @@ pub(crate) fn rebake(
     Ok(())
 }
 
-/// Whether the lattice of `surfaces` still encloses `bounds` to within a cell.
+/// Whether the pool of `surfaces` (its coarsest lattice) still encloses `bounds`
+/// to within a cell.
 pub(crate) fn covers(surfaces: &ProbeSurfaces, (lo, hi): (Vec3, Vec3)) -> bool {
-    let volume = volume_of(surfaces);
+    let Some(coarsest) = surfaces.layout.lattices().last() else {
+        return false;
+    };
+    let volume = volume(coarsest);
     let last = Vec3::from_array(volume.counts.map(|c| c.saturating_sub(1) as f32));
     let end = volume.origin + last * volume.spacing;
     lo.cmpge(volume.origin - volume.spacing).all() && hi.cmple(end + volume.spacing).all()
@@ -895,21 +1022,25 @@ pub(crate) fn covers(surfaces: &ProbeSurfaces, (lo, hi): (Vec3, Vec3)) -> bool {
 /// diagonals (where the box still covers about 4% of a probe's sphere; beyond,
 /// its share of the irradiance is negligible).
 pub(crate) fn affected(surfaces: &ProbeSurfaces, boxes: &[(Vec3, Vec3)]) -> Vec<usize> {
-    let volume = volume_of(surfaces);
-    let cell = volume.spacing.max_element() * 1.5;
-    let reach: Vec<_> = boxes
-        .iter()
-        .filter(|(lo, hi)| lo.cmple(*hi).all())
-        .map(|&(lo, hi)| (lo, hi, cell.max((hi - lo).length() * 1.25)))
-        .collect();
-    (0..volume.len())
-        .filter(|&id| {
+    let layout = surfaces.layout;
+    let mut ids = Vec::new();
+    for (lattice, base) in layout.lattices().iter().zip(layout.bases()) {
+        let volume = volume(lattice);
+        let cell = volume.spacing.max_element() * 1.5;
+        let reach: Vec<_> = boxes
+            .iter()
+            .filter(|(lo, hi)| lo.cmple(*hi).all())
+            .map(|&(lo, hi)| (lo, hi, cell.max((hi - lo).length() * 1.25)))
+            .collect();
+        ids.extend((0..volume.len()).filter_map(|id| {
             let c = centre(&volume, id);
             reach
                 .iter()
                 .any(|&(lo, hi, r)| (lo - c).max(c - hi).max(Vec3::ZERO).length() < r)
-        })
-        .collect()
+                .then_some(base + id)
+        }));
+    }
+    ids
 }
 
 fn oct_encode(n: Vec3) -> Vec2 {
@@ -1000,6 +1131,14 @@ fn probe(
     let backs = (0..64)
         .filter(|&lane| back(origin, fibonacci(lane)).is_some_and(|(_, b)| b))
         .count();
+    let active = backs <= 16;
+    statics[64] = [offset.x, offset.y, offset.z, if active { 1. } else { 0. }];
+    statics[65] = [backs as f32, 0., 0., 0.];
+    // A buried probe stays dark and is never read (relight skips it, shading
+    // weights it out), so its texel rays are not traced: its texels stay zero.
+    if !active {
+        return;
+    }
     for lane in 0..64 {
         let (mut albedo, mut emissive, mut normal) = (Vec3::ZERO, Vec3::ZERO, Vec3::ZERO);
         let (mut mean, mut moment1, mut moment2, mut geometry) = (0f32, 0f32, 0f32, 0u32);
@@ -1041,13 +1180,6 @@ fn probe(
         ];
         statics[lane] = [moment1 / 16., moment2 / 16., 0., 0.];
     }
-    statics[64] = [
-        offset.x,
-        offset.y,
-        offset.z,
-        if backs > 16 { 0. } else { 1. },
-    ];
-    statics[65] = [backs as f32, 0., 0., 0.];
 }
 
 #[cfg(test)]
@@ -1085,6 +1217,43 @@ mod tests {
             .join()
             .map_err(|_| anyhow::anyhow!("probe bake panicked"))??;
         assert_eq!(surfaces.layout(), layout);
+        Ok(())
+    }
+
+    #[test]
+    fn a_pool_keeps_the_single_lattice_and_adds_a_fine_one_over_built_up_content() -> Result<()> {
+        // A 400 m landform with a 4 m wall at its centre.
+        let ground = [
+            Vec3::new(-200., 0., -200.),
+            Vec3::new(-200., 0., 200.),
+            Vec3::new(200., 0., 200.),
+            Vec3::new(200., 0., -200.),
+        ];
+        let wall = [
+            Vec3::new(-2., 0., 0.),
+            Vec3::new(-2., 4., 0.),
+            Vec3::new(2., 4., 0.),
+            Vec3::new(2., 0., 0.),
+        ];
+        let single = |tracer: &Tracer| -> Result<ProbeLattice> {
+            let (lo, hi) = tracer.bounds().context("static triangles")?;
+            Ok(lattice(&ProbeVolume::automatic_within(lo, hi, PROBES)?))
+        };
+        let shading = [Shading::default(); 2];
+        let open = scene(vec![geometry(1, &[ground], Vec3::Y)]);
+        let tracer = Tracer::new(&open, &shading, &BTreeSet::new());
+        assert_eq!(layout(&tracer)?.lattices(), [single(&tracer)?]);
+        let built = scene(vec![
+            geometry(1, &[ground], Vec3::Y),
+            geometry(2, &[wall], Vec3::new(0., 2., 5.)),
+        ]);
+        let tracer = Tracer::new(&built, &shading, &BTreeSet::new());
+        let pool = layout(&tracer)?;
+        let [fine, coarse] = pool.lattices() else {
+            anyhow::bail!("a fine lattice over the wall: {pool:?}");
+        };
+        assert_eq!(*coarse, single(&tracer)?, "a pool only ever adds detail");
+        assert!(fine.spacing[0] <= coarse.spacing[0] * FINER);
         Ok(())
     }
 

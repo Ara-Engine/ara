@@ -16,9 +16,8 @@ struct Look {
     uint4 storage0;    // as sampled0
     uint4 storage1;    // as sampled1
     uint4 state;       // x exposure state buffer
-    float4 giOrigin;   // xyz first probe centre, w irradiance hysteresis
-    float4 giSpacing;  // xyz probe separation, w surface bias (m)
-    uint4 giCounts;    // xyz lattice, w probe count (0: no probe GI)
+    float4 giParams;   // x irradiance hysteresis
+    uint4 giCounts;    // x lattices in the pool, w probes (0: no probe GI)
     uint4 giBuffers;   // x surface caches, y probe relocation/state (buffers)
     uint4 giUpdate;    // x first relit probe, y relit probes this frame, z atlas probes per row, w shading weight (f32 bits)
     uint4 giImages;    // irradiance read (sampled), write (sampled), write (storage), moments (sampled)
@@ -42,6 +41,9 @@ struct Look {
     float4x4 vsmSpace;     // the sun's light rotation
     float4 vsmDepth;       // depth = x*light z + y; z level bias; w level zero radius (m)
     uint4 vsmMask;         // x projected page visibility (sampled; 0 none), y (storage)
+    float4 giLatticeOrigin[4];  // probe lattices, finest first (look-gi.slangh GiLattice): xyz first probe centre, w edge falloff (cells)
+    float4 giLatticeSpacing[4]; // xyz probe separation, w surface bias (m)
+    uint4 giLatticeCounts[4];   // xyz dimensions, w first global probe id
 };
 static const uint LOOK_PHYSICAL_SKY=1,LOOK_FOG=2,LOOK_RESET=4,LOOK_AMBIENT_OCCLUSION=8,LOOK_REFLECTIONS=16,LOOK_SNAP=32,LOOK_LOCAL_INDIRECT=64;
 Look look(Frame f){return buffers[NonUniformResourceIndex(f.look.x)].Load<Look>(0);}

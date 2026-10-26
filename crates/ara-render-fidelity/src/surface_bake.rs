@@ -90,9 +90,11 @@ impl FidelityView {
                 .collect()
         };
         let surfaces = ProbeSurfaces {
-            origin: self.volume.origin.to_array(),
-            spacing: self.volume.spacing.to_array(),
-            counts: self.volume.counts,
+            layout: ara_render::look::gi::ProbeLayout::single(ara_render::look::gi::ProbeLattice {
+                origin: self.volume.origin.to_array(),
+                spacing: self.volume.spacing.to_array(),
+                counts: self.volume.counts,
+            }),
             texels: words(&texels),
             statics: words(&static_data)
                 .into_iter()

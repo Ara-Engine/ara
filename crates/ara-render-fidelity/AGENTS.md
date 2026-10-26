@@ -18,7 +18,7 @@ No authoritative gameplay or authoring state lives here.
 ## API
 - `FidelityView`: per-view resources; takes a borrowed device at frame boundaries.
 - `Settings`, `FrameInput`, `UpscalerInput`: validated temporal/physical contracts.
-- `ProbeVolume`, `BakedProbes`: automatic DDGI volume and offline fallback data.
+- `ProbeVolume`, `BakedProbes`: automatic DDGI volume (`automatic_within` sizes one to a probe count) and offline fallback data.
 - `scene::GpuScene`: stable instance IDs, masked ray-query material inputs, AS cache.
 - `Reference`: high-sample, undenoised reference transport, shared shader semantics.
 - `FeatureInputs`, `ImageInput`: completed HDR/depth/probes for external features.

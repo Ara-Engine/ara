@@ -9,7 +9,7 @@
 use anyhow::{Result, ensure};
 use ara_gpu::{Access, Buffer, Image};
 mod layout;
-pub use layout::ProbeLayout;
+pub use layout::{MAX_LATTICES, ProbeLattice, ProbeLayout};
 
 /// Cache texels per probe (8x8 octahedral directions).
 pub const SURFACE_TEXELS: usize = 64;
@@ -24,16 +24,17 @@ pub(crate) const HYSTERESIS: f32 = 0.6;
 pub(crate) const CONVERGE_FRAMES: u32 = 8;
 /// Frames over which a newly converged volume fades into shading.
 const FADE_FRAMES: f32 = 30.;
+/// Cells over which a finer lattice fades into the next across its edge: full
+/// weight three cells inside its outermost probes (`look-gi.slangh`).
+const FINE_FALLOFF: f32 = 3.5;
+/// The coarsest lattice fades to the sky over half a cell past its outermost probes.
+const COARSE_FALLOFF: f32 = 0.5;
 
-/// What each probe of a lattice sees, from a one-time acquisition.
+/// What each probe of a pool sees, from a one-time acquisition.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ProbeSurfaces {
-    /// First probe centre in world metres.
-    pub origin: [f32; 3],
-    /// Probe separation per axis, in metres.
-    pub spacing: [f32; 3],
-    /// Lattice dimensions; probe `i` is at x = i % x, then y, then z.
-    pub counts: [u32; 3],
+    /// The pool's lattices, finest first; probes numbered lattice after lattice.
+    pub layout: ProbeLayout,
     /// [`SURFACE_TEXELS`] per probe, octahedral row-major. Packed per texel: x
     /// diffuse albedo RGB8 and sky fraction 8 (low to high bits); y octahedral hit
     /// normal as two UNORM16; z emissive red and green as f16; w emissive blue and
@@ -49,15 +50,11 @@ pub struct ProbeSurfaces {
 impl ProbeSurfaces {
     /// Allocation layout, independent of the acquired texels and static records.
     pub fn layout(&self) -> ProbeLayout {
-        ProbeLayout {
-            origin: self.origin,
-            spacing: self.spacing,
-            counts: self.counts,
-        }
+        self.layout
     }
     /// Probe count.
     pub fn len(&self) -> usize {
-        self.counts.iter().map(|&n| n as usize).product()
+        self.layout.probe_count()
     }
     /// A lattice always holds at least eight probes.
     pub fn is_empty(&self) -> bool {
@@ -91,12 +88,8 @@ pub const PROBE_RECORD: usize = 16 + (SURFACE_TEXELS + STATIC_VECTORS) * 16;
 /// its ranges apply in any order.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ProbeUpdate {
-    /// First probe centre in world metres.
-    pub origin: [f32; 3],
-    /// Probe separation per axis, in metres.
-    pub spacing: [f32; 3],
-    /// Lattice dimensions.
-    pub counts: [u32; 3],
+    /// The pool's lattices, finest first.
+    pub layout: ProbeLayout,
     /// Packed records, [`PROBE_RECORD`] bytes each.
     pub records: Vec<u8>,
 }
@@ -104,11 +97,7 @@ pub struct ProbeUpdate {
 impl ProbeUpdate {
     /// Allocation layout; available before the first records are uploaded.
     pub fn layout(&self) -> ProbeLayout {
-        ProbeLayout {
-            origin: self.origin,
-            spacing: self.spacing,
-            counts: self.counts,
-        }
+        self.layout
     }
     /// Records `probes` of `surfaces` (`None`: every probe).
     pub fn new(surfaces: &ProbeSurfaces, probes: Option<&[u32]>) -> Result<Self> {
@@ -134,9 +123,7 @@ impl ProbeUpdate {
             ));
         }
         Ok(Self {
-            origin: surfaces.origin,
-            spacing: surfaces.spacing,
-            counts: surfaces.counts,
+            layout: surfaces.layout,
             records,
         })
     }
@@ -151,9 +138,9 @@ impl ProbeUpdate {
         self.records.is_empty()
     }
 
-    /// Probes in the lattice.
+    /// Probes in the pool.
     pub fn probes(&self) -> usize {
-        self.counts.iter().map(|&n| n as usize).product()
+        self.layout.probe_count()
     }
 
     /// Checks the lattice and the record framing before upload.
@@ -164,12 +151,6 @@ impl ProbeUpdate {
             "Probe records are not whole"
         );
         Ok(())
-    }
-
-    /// Surface bias used when sampling the volume: a fifth of the smallest spacing,
-    /// at most 15 cm.
-    pub(crate) fn bias(&self) -> f32 {
-        self.layout().bias()
     }
 }
 
@@ -190,14 +171,11 @@ pub(crate) struct ProbeStaging {
     pub index: u32,
 }
 
-/// Uploaded probe volume. Irradiance atlases ping-pong: frames read `1 - slot`
+/// Uploaded probe pool. Irradiance atlases ping-pong: frames read `1 - slot`
 /// and write `slot`.
 pub(crate) struct GiGpu {
-    pub origin: [f32; 3],
-    pub spacing: [f32; 3],
-    pub counts: [u32; 3],
+    pub layout: ProbeLayout,
     pub probes: u32,
-    pub bias: f32,
     /// Probes per atlas row.
     pub atlas: u32,
     pub cache: Buffer,
@@ -260,14 +238,24 @@ impl GiGpu {
         if self.clearing_in_slices() {
             return;
         }
-        let [ox, oy, oz] = self.origin;
-        let [sx, sy, sz] = self.spacing;
-        let [cx, cy, cz] = self.counts;
         let (read, write) = (1 - self.slot, self.slot);
         let hysteresis = if self.converge > 0 { 0. } else { HYSTERESIS };
-        frame.gi_origin = [ox, oy, oz, hysteresis];
-        frame.gi_spacing = [sx, sy, sz, self.bias];
-        frame.gi_counts = [cx, cy, cz, self.probes];
+        frame.gi_params = [hysteresis, 0., 0., 0.];
+        let lattices = self.layout.lattices();
+        frame.gi_counts = [lattices.len() as u32, 0, 0, self.probes];
+        let bases = self.layout.bases();
+        for (i, lattice) in lattices.iter().enumerate() {
+            let falloff = if i + 1 == lattices.len() {
+                COARSE_FALLOFF
+            } else {
+                FINE_FALLOFF
+            };
+            let ([ox, oy, oz], [sx, sy, sz]) = (lattice.origin, lattice.spacing);
+            let [cx, cy, cz] = lattice.counts;
+            frame.gi_lattice_origin[i] = [ox, oy, oz, falloff];
+            frame.gi_lattice_spacing[i] = [sx, sy, sz, lattice.bias()];
+            frame.gi_lattice_counts[i] = [cx, cy, cz, bases[i] as u32];
+        }
         frame.gi_buffers = [self.indices[0], self.indices[1], 0, 0];
         frame.gi_update = [
             self.cursor,

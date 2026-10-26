@@ -51,11 +51,11 @@ fn camera() -> CameraSpec {
 }
 
 fn layout() -> ProbeLayout {
-    ProbeLayout {
+    ProbeLayout::single(crate::look::gi::ProbeLattice {
         origin: [-1.; 3],
         spacing: [2.; 3],
         counts: [2; 3],
-    }
+    })
 }
 
 fn update() -> Result<ProbeUpdate> {
@@ -65,9 +65,7 @@ fn update() -> Result<ProbeUpdate> {
     }
     ProbeUpdate::new(
         &ProbeSurfaces {
-            origin: layout().origin,
-            spacing: layout().spacing,
-            counts: layout().counts,
+            layout: layout(),
             texels: vec![[255 << 24, 0, 0, 0]; 8 * SURFACE_TEXELS],
             statics,
         },
@@ -164,6 +162,80 @@ fn explicit_capture_can_finish_a_partial_probe_clear_before_delivering_records()
             .received,
         8
     );
+    renderer.gpu.assert_clean()?;
+    Ok(())
+}
+
+/// Eight fine probes inside twelve coarse ones (`ProbeLayout`, finest first).
+fn pool() -> Result<ProbeLayout> {
+    ProbeLayout::new(&[
+        crate::look::gi::ProbeLattice {
+            origin: [-1.; 3],
+            spacing: [2.; 3],
+            counts: [2; 3],
+        },
+        crate::look::gi::ProbeLattice {
+            origin: [-4., -4., -4.],
+            spacing: [4.; 3],
+            counts: [3, 2, 2],
+        },
+    ])
+}
+
+#[test]
+fn a_two_lattice_pool_reserves_before_delivery_and_accepts_packets_across_its_boundary()
+-> Result<()> {
+    let mut renderer = renderer("pool")?;
+    let layout = pool()?;
+    assert!(!renderer.preallocate_probe_volume(layout, 6)?);
+    let usage = renderer.gpu.descriptor_usage();
+    // The whole pool clears in bounded slices behind loading; polling the
+    // reservation allocates and waits for nothing more.
+    loop {
+        let waits = renderer.gpu.context().host_wait_stats().calls;
+        let ready = renderer.preallocate_probe_volume(layout, 6)?;
+        assert_eq!(renderer.gpu.context().host_wait_stats().calls, waits);
+        assert_eq!(renderer.gpu.descriptor_usage().storage_buffers, usage.storage_buffers);
+        if ready {
+            break;
+        }
+        renderer.render_view(&camera(), 1., ViewMode::Lit)?;
+    }
+    // Loading renders also allocate the gather targets, before any delivery.
+    let usage_after_clear = renderer.gpu.descriptor_usage();
+    let mut statics = vec![[1., 1., 0., 0.]; 20 * crate::look::gi::STATIC_VECTORS];
+    for p in 0..20 {
+        statics[p * crate::look::gi::STATIC_VECTORS + 64] = [0., 0., 0., 1.];
+    }
+    let update = ProbeUpdate::new(
+        &ProbeSurfaces {
+            layout,
+            texels: vec![[255 << 24, 0, 0, 0]; 20 * SURFACE_TEXELS],
+            statics,
+        },
+        None,
+    )?;
+    // Packets (at most the reserved six records) need not align with the lattices:
+    // the second spans probe 8, where the coarse lattice begins. Delivery
+    // allocates and waits for nothing.
+    for packet in [0..5, 5..11, 11..17, 17..20] {
+        let waits = renderer.gpu.context().host_wait_stats().calls;
+        renderer.update_probe_records(&update, packet)?;
+        assert_eq!(renderer.gpu.context().host_wait_stats().calls, waits);
+        assert_eq!(renderer.gpu.descriptor_usage(), usage_after_clear);
+        assert!(!renderer.probe_gi_ready());
+        renderer.render_view(&camera(), 1., ViewMode::Lit)?;
+    }
+    let gi = renderer.look.gi.as_ref().context("delivered pool")?;
+    assert_eq!((gi.received, gi.layout.lattices().len()), (20, 2));
+    // Ready only once every record landed, the pool converged and faded in.
+    let mut frames = 0;
+    while !renderer.probe_gi_ready() {
+        renderer.render_view(&camera(), 1., ViewMode::Lit)?;
+        frames += 1;
+        ensure!(frames < 256, "the pool never became ready");
+    }
+    assert_eq!(renderer.look.gi.as_ref().context("ready pool")?.converge, 0);
     renderer.gpu.assert_clean()?;
     Ok(())
 }

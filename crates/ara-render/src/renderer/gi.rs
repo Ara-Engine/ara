@@ -39,9 +39,7 @@ impl Renderer {
         );
         if let Some(gi) = &self.look.gi {
             ensure!(
-                gi.origin == layout.origin
-                    && gi.spacing == layout.spacing
-                    && gi.counts == layout.counts,
+                gi.layout == layout,
                 "Initial probe reservation would replace a live lattice"
             );
         } else {
@@ -160,9 +158,11 @@ impl Renderer {
             "probe records {records:?} outside the update's {}",
             update.len()
         );
-        let same = self.look.gi.as_ref().is_some_and(|gi| {
-            gi.origin == update.origin && gi.spacing == update.spacing && gi.counts == update.counts
-        });
+        let same = self
+            .look
+            .gi
+            .as_ref()
+            .is_some_and(|gi| gi.layout == update.layout);
         if !same {
             let volume = self.empty_volume(update.layout())?;
             self.drop_probe_volume()?;
@@ -183,7 +183,6 @@ impl Renderer {
         }
         self.look.probe_writes.push((staging, records.len() as u32));
         if let Some(gi) = self.look.gi.as_mut() {
-            gi.bias = update.bias();
             gi.received(records.len());
         }
         Ok(())
@@ -308,11 +307,8 @@ impl Renderer {
             image(&mut self.gpu, 8, vk::Format::R16G16B16A16_SFLOAT)?,
         ];
         let volume = GiGpu {
-            origin: layout.origin,
-            spacing: layout.spacing,
-            counts: layout.counts,
+            layout,
             probes: probes as u32,
-            bias: layout.bias(),
             atlas,
             indices: [
                 self.gpu.storage_buffer(cache)?.index,
