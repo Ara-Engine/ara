@@ -12,6 +12,8 @@ use std::{
     ffi::{CStr, CString},
     marker::PhantomData,
 };
+mod game;
+pub use game::GameWindowMode;
 
 /// Normalized native events. The simulation host maps input into tick actions.
 #[derive(Debug)]

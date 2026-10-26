@@ -89,6 +89,27 @@ pub(crate) struct LookFrame {
     pub gi_lattice_spacing: [[f32; 4]; super::gi::MAX_LATTICES],
     /// xyz dimensions, w first global probe id.
     pub gi_lattice_counts: [[u32; 4]; super::gi::MAX_LATTICES],
+    /// Display-space lift (rgb).
+    pub lift: [f32; 4],
+    /// Display-space midtone power (rgb).
+    pub gamma: [f32; 4],
+    /// Display-space gain (rgb), w chromatic aberration strength.
+    pub gain: [f32; 4],
+    /// x colour lookup table (sampled; zero: none), y slices, z contribution (f32 bits).
+    pub lut: [u32; 4],
+    /// Depth of field (`DepthOfField::constants`): focus distance, circle-of-confusion
+    /// scale and largest radius (render pixels), near strength; zero focus: off.
+    pub dof: [f32; 4],
+    /// x far strength, y gather samples.
+    pub dof_blur: [f32; 4],
+    /// Prepared and gathered half-resolution images (sampled), then (storage).
+    pub dof_images: [u32; 4],
+    /// x the composite the temporal resolve reads (storage), y (sampled).
+    pub dof_output: [u32; 4],
+    /// x shutter fraction of a frame (zero: off), y samples, z longest blur (display px).
+    pub motion: [f32; 4],
+    /// Velocity tile and neighbourhood maxima (sampled), then (storage).
+    pub motion_images: [u32; 4],
 }
 
 /// Per-frame inputs that are not part of the authored look.
@@ -115,6 +136,7 @@ impl LookFrame {
         let fog = look.fog;
         let g = &look.grading;
         let [r, gr, b] = g.white_balance_gain;
+        let rgb = |[r, g, b]: [f32; 3], w: f32| [r, g, b, w];
         let automatic = look.auto_exposure;
         let metering = look.auto_exposure.unwrap_or_default();
         let flags = if look.sky.is_some() { PHYSICAL_SKY } else { 0 }
@@ -189,6 +211,16 @@ impl LookFrame {
             gi_lattice_origin: [[0., 0., 0., 1.]; super::gi::MAX_LATTICES],
             gi_lattice_spacing: [[1., 1., 1., 0.]; super::gi::MAX_LATTICES],
             gi_lattice_counts: [[2, 2, 2, 0]; super::gi::MAX_LATTICES],
+            lift: rgb(g.lift, 0.),
+            gamma: rgb(g.gamma, 1.),
+            gain: rgb(g.gain, look.lens.chromatic_aberration),
+            lut: [0; 4],
+            dof: [0.; 4],
+            dof_blur: [0.; 4],
+            dof_images: [0; 4],
+            dof_output: [0; 4],
+            motion: [0.; 4],
+            motion_images: [0; 4],
         }
     }
 }

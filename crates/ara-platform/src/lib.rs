@@ -8,4 +8,4 @@ mod window;
 pub use chrome::WindowChrome;
 pub use cursor::SystemCursor;
 pub use present::Present;
-pub use window::{Event, Window};
+pub use window::{Event, GameWindowMode, Window};

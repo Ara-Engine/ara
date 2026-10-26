@@ -33,6 +33,7 @@ fn live_tick_advances_and_draws_in_one_particle_graph() -> Result<()> {
     let mut simulated = 150;
     for elapsed in [0, 1, 3] {
         frame.tick += elapsed;
+        let before = renderer.gpu().submission_stats();
         renderer
             .gpu_mut()
             .begin_deferred_completion_on_current_queue()?;
@@ -40,6 +41,13 @@ fn live_tick_advances_and_draws_in_one_particle_graph() -> Result<()> {
         renderer.render_view(&camera, 1., ViewMode::Lit)?;
         let rendered = present(&mut effects, renderer, &frame, &camera);
         let mut completion = renderer.gpu_mut().end_deferred_completion()?;
+        let after = renderer.gpu().submission_stats();
+        assert_eq!(
+            after.queue_submissions - before.queue_submissions,
+            1,
+            "scene, ordered constants, tick catch-up, particles and post share one native submit"
+        );
+        assert!(after.command_lists - before.command_lists >= 3);
         let passes = renderer.gpu_mut().wait_completion(&mut completion)?;
         rendered?;
         assert_eq!(

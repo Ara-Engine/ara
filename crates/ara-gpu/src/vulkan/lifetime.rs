@@ -64,6 +64,11 @@ impl Device for VulkanDevice {
                 "Cannot wait on an unsubmitted timeline point".into(),
             ));
         }
+        if point.value > self.flushed[point.queue.index()] {
+            return Err(GpuError::Contract(
+                "End the frame scope before waiting on its recorded work".into(),
+            ));
+        }
         self.context
             .measure_host_wait(|| {
                 // SAFETY: Point was signalled here; no object is destroyed during wait.
@@ -172,7 +177,7 @@ impl Drop for VulkanDevice {
                 let _ = self.context.device.wait_semaphores(
                     &vk::SemaphoreWaitInfo::default()
                         .semaphores(&self.timelines)
-                        .values(&self.submitted),
+                        .values(&self.flushed),
                     u64::MAX,
                 );
             } else {

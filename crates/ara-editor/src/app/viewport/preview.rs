@@ -103,8 +103,7 @@ impl SceneView {
             return Err("Game preview needs a raster plan".into());
         };
         let exposure = self.raster_frame.as_ref().map_or(1., |frame| {
-            FrameEnvironment::resolve(&frame.look, frame.environment.exposure)
-                .manual_exposure(frame.environment.exposure)
+            ara_runtime_render::environment(frame).manual_exposure(frame.environment.exposure)
         });
         if preview.view.is_none() {
             preview.view = Some(renderer.create_view()?);
@@ -142,8 +141,8 @@ impl SceneView {
             {
                 return Ok(false);
             }
-            request.exposure = FrameEnvironment::resolve(&frame.look, frame.environment.exposure)
-                .manual_exposure(frame.environment.exposure);
+            request.exposure =
+                ara_runtime_render::environment(frame).manual_exposure(frame.environment.exposure);
             self.raster
                 .as_mut()
                 .ok_or_else(|| anyhow::anyhow!("Game preview content"))?

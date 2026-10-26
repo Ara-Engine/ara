@@ -18,10 +18,7 @@ use ara_render::instanced::Scene;
 use ara_render::look::gi::{
     ProbeLattice, ProbeLayout, ProbeSurfaces, ProbeUpdate, STATIC_VECTORS, SURFACE_TEXELS,
 };
-use ara_render_fidelity::{
-    FidelityView, FrameInput, Mode, PostSettings, Settings, Tier, Upscaler,
-    environment::FrameEnvironment,
-};
+use ara_render_fidelity::{FidelityView, FrameInput, Mode, PostSettings, Settings, Tier, Upscaler};
 use ara_runtime::extract::RenderFrame;
 use glam30::Mat4;
 use std::{
@@ -370,7 +367,7 @@ fn snapshot(frame: &RenderFrame) -> RenderFrame {
     copy.tick = frame.tick;
     copy.camera = frame.camera;
     copy.environment = frame.environment;
-    copy.look = frame.look;
+    copy.look = frame.look.clone();
     copy.sun = frame.sun;
     copy.lights = frame.lights.clone();
     copy.draws = frame.draws.clone();
@@ -863,7 +860,7 @@ fn bake(
     publish: impl FnOnce(ProbeLayout),
 ) -> Result<ProbeSurfaces> {
     let started = std::time::Instant::now();
-    let look = FrameEnvironment::resolve(&frame.look, frame.environment.exposure);
+    let look = crate::environment(frame);
     let mut view = FidelityView::new_native(
         gpu,
         &prepared.scene,

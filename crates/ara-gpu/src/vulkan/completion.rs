@@ -8,6 +8,7 @@ pub struct Completion {
     points: Vec<TimelinePoint>,
     device: vk::Device,
     resolved: bool,
+    failure: Option<String>,
 }
 impl Completion {
     /// Whether its submissions and query storage have been consumed. On a later
@@ -43,9 +44,9 @@ impl VulkanDevice {
         }
     }
 
-    /// Defer timestamp resolution until `poll_completion`. Recording and submit
-    /// still happen on the owner thread; there is no render thread or shared lock.
-    /// Only one scope may be active, and its previous frame must have completed.
+    /// Record an asynchronous frame on its owner thread. Consecutive same-queue
+    /// helpers submit together at the scope's end (or a queue change); poll their
+    /// retained completion before reusing storage. One frame may be active.
     pub fn begin_deferred_completion(&mut self) -> Result<()> {
         self.begin_completion(true)
     }
@@ -57,13 +58,14 @@ impl VulkanDevice {
         self.begin_completion(false)
     }
 
-    /// Number of submissions in the active scope, for partitioning completed
-    /// view/feature timings without changing their labels. Zero outside a scope.
+    /// Number of logical command lists in this scope, for partitioning completed
+    /// view/feature timings. Native submission counts may be smaller.
     pub fn deferred_submission_count(&self) -> usize {
         self.deferred.as_ref().map_or(0, Vec::len)
     }
 
     fn begin_completion(&mut self, isolate_scene: bool) -> Result<()> {
+        self.check_submission()?;
         if self.deferred.is_some() || self.completion_pending {
             return Err(GpuError::Contract("Nested deferred completion".into()));
         }
@@ -82,6 +84,12 @@ impl VulkanDevice {
     /// End a scope even when frame preparation failed. Its submitted commands
     /// still own their resources until the returned completion has been drained.
     pub fn end_deferred_completion(&mut self) -> Result<Completion> {
+        if self.deferred.is_none() {
+            return Err(GpuError::Contract("No deferred completion scope".into()));
+        }
+        // Even a failed flush returns the completion of earlier accepted work.
+        // Its owner drains it and retires the rejected frame before seeing error.
+        let _ = self.flush_batch();
         let points = self
             .deferred
             .take()
@@ -91,6 +99,7 @@ impl VulkanDevice {
             points,
             device: self.context.device.handle(),
             resolved: false,
+            failure: self.submission_error.as_deref().map(str::to_owned),
         })
     }
 
@@ -129,6 +138,9 @@ impl VulkanDevice {
         self.publish_completed_to_ui()?;
         self.collect()?;
         self.assert_clean()?;
+        if let Some(error) = frame.failure.take() {
+            return Err(anyhow::anyhow!("Frame submission failed: {error}").into());
+        }
         Ok(())
     }
 

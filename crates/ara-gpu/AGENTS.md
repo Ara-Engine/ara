@@ -7,8 +7,7 @@ Owns the native GPU boundary. Vulkan uses ash revision
 
 - `VulkanDevice::new_raster` creates a raster-only logical device: no ray-query/AS
   extensions, features or acceleration descriptor capacity, even on an RT GPU.
-  `new` retains the optional RT tier for explicit fidelity/reference consumers.
-
+  `new` retains optional RT. Windowed devices request KHR/EXT HIGH; denial retries MEDIUM.
 - `Device`: portable descriptors, queues, cooked pipelines, recording and retirement.
 - `Command::CopyBufferRange` copies aligned ranges with checked capacities/overflow;
   it preserves unrelated destination bytes and is rejected inside rendering.
@@ -96,9 +95,10 @@ overwrites. A second graphics-family queue isolates Scene work from the native U
 queue where available; completion publishes a GPU memory dependency to that UI queue.
 Capture/shutdown may use `wait_completion`. `tests/deferred.rs` blocks Scene work
 behind a host gate and checks UI progress, polling and byte-exact ordered updates.
-Synchronous presenters use `begin_deferred_completion_on_current_queue` to queue
-helpers before waiting. `wait_completion_with` resolves their original pass groups
-after waiting on each queue's tail, preserving feature timing attribution.
+Synchronous presenters use `begin_deferred_completion_on_current_queue`; consecutive
+helpers share one native submit with ordered memory barriers. End the scope before
+host waits. `wait_completion_with` preserves logical pass groups; `submission_stats`
+counts native batches. Failed native submits drain/retire and poison further admission.
 
 Debug creation requires Khronos validation and synchronization validation.
 `assert_clean` rejects warnings and errors; `diagnostics` returns stable codes,

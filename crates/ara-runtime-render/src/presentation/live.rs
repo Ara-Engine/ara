@@ -7,7 +7,7 @@ impl Live {
         gpu: &mut VulkanDevice,
         frame: &RenderFrame,
     ) -> Result<GpuFrameCosts> {
-        let look = FrameEnvironment::resolve(&frame.look, frame.environment.exposure);
+        let look = crate::environment(frame);
         if self.look != look || self.tick.is_none() {
             self.view.set_environment(&look)?;
             self.look = look;

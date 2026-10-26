@@ -9,6 +9,7 @@ use ara_schema::{Schema, SchemaDb};
 use bevy_ecs::prelude::Component;
 use serde::{Deserialize, Serialize};
 
+pub mod post;
 pub mod render;
 
 /// Position, rotation and scale of an entity relative to its parent.
@@ -52,7 +53,7 @@ pub fn register(db: &mut SchemaDb) {
         .register::<render::RenderSettings>()
         .register::<render::SkyAtmosphere>()
         .register::<render::HeightFog>()
-        .register::<render::PostProcess>();
+        .register::<post::PostProcessVolume>();
 }
 
 #[cfg(test)]
@@ -95,7 +96,7 @@ mod tests {
         check::<render::RenderSettings>(&db, "RenderSettings");
         check::<render::SkyAtmosphere>(&db, "SkyAtmosphere");
         check::<render::HeightFog>(&db, "HeightFog");
-        check::<render::PostProcess>(&db, "PostProcess");
+        check::<post::PostProcessVolume>(&db, "PostProcessVolume");
     }
 
     #[test]

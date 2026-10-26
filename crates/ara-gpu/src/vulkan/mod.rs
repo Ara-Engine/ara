@@ -28,7 +28,9 @@ mod query_tests;
 mod recording;
 mod reload;
 pub use reload::ShaderStatus;
+mod submission;
 mod surface;
+pub use submission::SubmissionStats;
 mod timestamps;
 mod ui_readback;
 mod waits;
@@ -77,6 +79,12 @@ pub struct VulkanDevice {
     heap: Heap,
     timelines: [vk::Semaphore; 2],
     submitted: [u64; 2],
+    flushed: [u64; 2],
+    batch: submission::Batch,
+    submission_stats: SubmissionStats,
+    submission_error: Option<String>,
+    #[cfg(test)]
+    fail_batch: bool,
     retired: Vec<Retired>,
     cache: vk::PipelineCache,
     cache_path: PathBuf,
@@ -194,6 +202,12 @@ impl VulkanDevice {
             heap,
             timelines,
             submitted: [0; 2],
+            flushed: [0; 2],
+            batch: Default::default(),
+            submission_stats: Default::default(),
+            submission_error: None,
+            #[cfg(test)]
+            fail_batch: false,
             retired: Vec::new(),
             cache,
             cache_path,

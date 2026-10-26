@@ -174,7 +174,22 @@ void tonemapMain(uint3 t:SV_DispatchThreadID){Frame f=frame();if(any(t.xy>=f.ext
     else if(f.temporal.z==3)color=float3(pow(pixel(f.extra.x,r).x,0.25));
     else if(f.temporal.z==4)color=float3(gbufferMaterial(g,r),0);
     else if(f.temporal.z==5){uint id=uint(pixel(f.extra.y,r).x);color=id==0?float3(0):frac(float3(id)*float3(0.6180339,0.381966,0.7548776));}
+    else if(f.temporal.z==7)color=gbufferDepth(g,r)>0?float3(0.055):float3(0.025);
     else if(f.temporal.z==6){bool covered;float3 w=gbufferWorld(g,r,covered);uint c=cascadeIndex(f,w);color=!covered?float3(0):(c==0?float3(0.85,0.2,0.1):c==1?float3(0.2,0.8,0.25):c==2?float3(0.2,0.35,0.9):float3(0.8,0.3,0.8))*visibility(f,look(f),w,gbufferNormal(g,r));}
     if(f.temporal.z==0)color=displayCurve(f,max(color,0)*f.sunColorExposure.w);
     images[NonUniformResourceIndex(f.post.w)][p]=float4(srgb(saturate(color)),1);
+}
+// Wireframe view modes: the wire mask (root word 1, render size, nativeWireFragment)
+// over the display output (Frame.post.w, sRGB). Over the lit image (root word 5 set)
+// edges take one colour; over the wireframe view's background each entity has its
+// own, from the ID target (root word 2).
+[shader("compute")]
+[numthreads(8,8,1)]
+void wireCompositeMain(uint3 t:SV_DispatchThreadID){
+    Frame f=frame();if(any(t.xy>=f.extent.xy))return;int2 p=int2(t.xy);float2 uv=(float2(p)+0.5)/float2(f.extent.xy);
+    float wire=historyTex(root.materials,uv).r;if(wire<=0.002)return;
+    uint id=uint(pixel(root.material,int2(uv*float2(f.sizes.xy))).x);
+    float3 colour=root.mode!=0?float3(1,0.62,0.18):id==0?float3(0.75):0.4+0.6*frac(float3(id)*float3(0.6180339,0.381966,0.7548776));
+    float4 under=images[NonUniformResourceIndex(f.post.w)][p];
+    images[NonUniformResourceIndex(f.post.w)][p]=float4(lerp(under.rgb,srgb(colour),saturate(wire)),1);
 }

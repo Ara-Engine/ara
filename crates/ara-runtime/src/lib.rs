@@ -52,6 +52,7 @@ pub mod engine;
 pub mod extract;
 pub mod follow;
 pub mod live;
+pub mod lut;
 pub mod material;
 pub mod math;
 pub mod model;
@@ -208,7 +209,7 @@ fn register_components(registry: &mut SimRegistry) -> std::result::Result<(), Si
     registry.register_component::<Environment>()?;
     registry.register_component::<ara_components::render::SkyAtmosphere>()?;
     registry.register_component::<ara_components::render::HeightFog>()?;
-    registry.register_component::<ara_components::render::PostProcess>()?;
+    registry.register_component::<ara_components::post::PostProcessVolume>()?;
     registry.register_component::<Camera>()?;
     registry.register_component::<FollowCamera>()?;
     registry.register_component::<PlayerControl>()?;
@@ -389,6 +390,13 @@ impl Runtime {
                 .load(&baseline, assets.as_ref(), &material)
             {
                 asset_errors.push(format!("ARA7310: {error}; retaining the source material"));
+            }
+        }
+        for lut in lut::references(world)? {
+            if let Err(error) = library.luts.load(assets.as_ref(), &lut) {
+                asset_errors.push(format!(
+                    "ARA7310: {error}; the volume grades without its lookup table"
+                ));
             }
         }
         library.documents = controller::Documents::load(&baseline)?;
@@ -910,6 +918,20 @@ impl Runtime {
                 .resource_mut::<Library>()
                 .materials
                 .load(&self.baseline, self.assets.as_ref(), &id)
+                .map_err(|error| error.0);
+            results.push((id, result));
+        }
+        let luts: Vec<_> = world
+            .resource::<Library>()
+            .luts
+            .ids()
+            .map(str::to_owned)
+            .collect();
+        for id in luts {
+            let result = world
+                .resource_mut::<Library>()
+                .luts
+                .load(self.assets.as_ref(), &id)
                 .map_err(|error| error.0);
             results.push((id, result));
         }

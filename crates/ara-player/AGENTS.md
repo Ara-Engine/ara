@@ -12,12 +12,13 @@ plays: windowed through SDL3 (`--window`) or headless. It exits on `play.stop`.
 [--quality auto|low|medium|high|epic] [--ray-tracing[=true|false]]`.
 Without `--owner`, loads `ara-launch.json` beside the executable (or `--root DIR`),
 reads the authored PlayScene/cooked generations from game.arapack, and opens a game
-window. `--headless [--capture PNG] [--ticks N]` captures without a window;
+borderless desktop-fullscreen window (`--windowed` restores a resizable window). `--headless [--capture PNG] [--ticks N]` captures without a window;
 `--frames N` bounds a windowed probe. Shipped assets never discover or import source
 files. The same World, input mapper, animation/physics and presenters run both modes.
 `--offscreen --frames N` keeps the continuous render/present path hidden (perf mode,
 `--perf-output`, implies it; reports label `hiddenWindow`, no compositor latency).
 `--headless` is the separate still-capture path. Owner-mode probes honour `--offscreen`;
+`--no-present --perf-output JSON` is a hidden no-WSI diagnostic: rendered milestones and `presentation: noPresent` never claim loading/full-scene presented latency.
 `ARA_PLAY_OFFSCREEN=1` adds it to pooled windowed players (hidden entry-latency runs).
 `--read entity.Component.field` adds a value to `ARA_RESULT.reads` after simulation;
 repeat it to inspect shipped C# or Rust component fields. Shipping hosts resolve their
@@ -25,8 +26,7 @@ NativeAOT metadata against the export folder; development host paths are rejecte
 Only pooled Play requires the owner token. `build.rs` embeds the Ara
 exe icon (`assets/brand/ara.ico`); ara-platform sets the window icon.
 
-Build with `--features tracy` to record literal CPU zones across Play world build,
-extraction, native instance updates, GPU recording/timeline waits, presentation
+Build with `--features tracy` to record literal CPU zones across Play world build, extraction, native instance updates, GPU recording/timeline waits, presentation
 and audio. The optional client starts in the executable; normal builds erase zones.
 `tests/entry_latency.rs` (ignored real-project probe): set `ARA_PLAY_ENTRY_PROJECT`,
 `ARA_BENCH_PLAYER` (optimized player) and `CARGO_BIN_EXE_ara-import-worker`; it reports

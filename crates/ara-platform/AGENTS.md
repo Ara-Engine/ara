@@ -8,6 +8,9 @@ Minimal SDL3 native window/input and Vulkan presentation. Uses `sdl3-sys` 0.7.2
 - `Window`: main-thread-only resizable/high-DPI Vulkan window; owns an SDL video
   subsystem reference. `extensions()` returns owned strings, and `size()` returns
   physical pixels. It is intentionally neither Send nor Sync.
+- `Window::game`: borderless desktop fullscreen by default, or explicit Windowed.
+  Hidden game windows never enter fullscreen. SDL fullscreen synchronization finishes
+  before loading/swapchain sizing; direct scanout remains an OS/overlay decision.
 - `Event`: close, drawable resize, key/repeat, mouse motion/button and wheel input.
   Hosts translate these events into deterministic simulation actions.
 - `Window::set_cursor(SystemCursor)` lazily owns native cursor shapes until video

@@ -77,7 +77,9 @@ renderer-neutral presentation extraction. No GPU, window or process code (see
   when they hold no keys; motion-matching nodes cook their `motionDatabase`),
   `MatchState` (trajectory predictor + feature query, predictor snapshotted).
 - `extract::RenderFrame`: camera, sun, lights, environment, draws (shape or model
-  primitive, interpolated world matrix) and skin-order palettes.
+  primitive, interpolated world matrix), skin-order palettes and the look (`SceneLook`: sky,
+  fog, every post-process volume, and the volumes' LUTs shared from `Library::luts`, which
+  `lut::Luts` decodes at startup and `reload_assets`; editors use `lut::record_references`).
 - `control::default_actions()`: `Move`, `Look` (Axis2), `Jump`, `Sprint` + bindings.
 - `follow::FollowView::new(rig, target, walls)`: a follow rig's aim, view direction
   and boom, which stops 0.25 m before static solid box colliders (`follow::Wall`).

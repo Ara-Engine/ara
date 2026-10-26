@@ -129,7 +129,9 @@ float screenOcclusion(Frame f,Look l,int2 p,float distance){
         int2 o=int2(k&1,k>>1);float2 v=pixel(l.aoImages.y,clamp(b+o,int2(0),half-1)).rg;float dz=abs(v.g-distance);
         float w=(o.x==1?t.x:1-t.x)*(o.y==1?t.y:1-t.y)*exp(-dz/max(distance*0.02,0.05));
         sum+=v.r*w;total+=w;if(dz<best){best=dz;nearest=v.r;}
-    }return total>1e-3?sum/total:nearest;
+    }
+    // Volume intensity (look.ao.w): a power on the visibility, 1 physical.
+    float ao=total>1e-3?sum/total:nearest;return l.ao.w==1?ao:pow(saturate(ao),l.ao.w);
 }
 // Multi-bounce ambient occlusion (Jimenez et al. 2016): light inter-reflected
 // inside the occluded cavity brightens AO on bright albedo.
@@ -166,7 +168,9 @@ float4 screenReflection(Frame f,Look l,int2 p){
         int2 o=int2(k&1,k>>1),q=clamp(b+o,int2(0),half-1);float d=pixel(f.extra.x,q*2).x;float dz=abs(d/max(depth,1e-7)-1);
         float w=(o.x==1?t.x:1-t.x)*(o.y==1?t.y:1-t.y)*exp(-dz*40);float4 r=pixel(l.ssrImages.y,q);
         sum+=r*w;total+=w;if(dz<best){best=dz;nearest=r;}
-    }return total>1e-3?sum/total:nearest;
+    }
+    // Volume intensity (look.ssr.w) scales the hit confidence; probes fill the rest.
+    float4 r=total>1e-3?sum/total:nearest;r.w*=l.ssr.w;return r;
 }
 // Ambient light: the physical sky's IBL under a sky atmosphere, otherwise the
 // environment map's (32x16 irradiance, five-level 256x640 GGX prefilter strip for
