@@ -1,9 +1,11 @@
-//! Look passes in the renderer's frame graph: the sky and fog before lighting,
-//! exposure, bloom and display grading after temporal resolve.
+//! Look passes in the renderer's frame graph: the sky and fog before lighting, depth of
+//! field before the temporal resolve, motion blur tiles, exposure, bloom and display
+//! grading after it.
 use super::gi::DISPATCH_PROBES;
 use super::gpu::{
-    AO_DENOISED, AO_TRACE, BLOOM_DOWN, BLOOM_UP, FROXELS, GI_DIFFUSE, GI_SPECULAR, LookGpu,
-    LookIds, MULTISCATTER, SKY_IRRADIANCE, SKY_PREFILTER, SKY_VIEW, SSR_PYRAMID, SSR_TRACE, SkyKey,
+    AO_DENOISED, AO_TRACE, BLOOM_DOWN, BLOOM_UP, DOF_COMPOSITE, DOF_GATHERED, DOF_PREPARED,
+    FROXELS, GI_DIFFUSE, GI_SPECULAR, LookGpu, LookIds, MOTION_NEIGHBOURS, MOTION_TILES,
+    MULTISCATTER, SKY_IRRADIANCE, SKY_PREFILTER, SKY_VIEW, SSR_PYRAMID, SSR_TRACE, SkyKey,
     TRANSMITTANCE,
 };
 use crate::graph::{Graph, PassId, ResourceId};
@@ -25,6 +27,10 @@ pub(crate) enum LookPass {
     Exposure(u32),
     Bloom(u32),
     Post,
+    /// Depth of field: 0 prepares, 1 gathers (half resolution), 2 composites.
+    Dof(u32),
+    /// Motion blur velocity maxima: 0 per tile, 1 per neighbourhood.
+    Motion(u32),
     GiRelight,
     /// Clears a fresh probe volume (`GiGpu::fresh`).
     GiClear,
@@ -354,14 +360,71 @@ impl LookGpu {
         reads
     }
 
-    /// Declares exposure, bloom and the display pass from `input` (linear HDR)
-    /// into `output` (SDR storage).
+    /// Declares depth of field (`frame_dof`) before the temporal resolve: prepare and
+    /// gather at half the render size, then the composite the resolve reads instead of
+    /// `hdr` (`DOF_COMPOSITE`). `depth` is the frame's depth target.
+    pub(crate) fn dof_passes(
+        &self,
+        graph: &mut Graph,
+        ids: &LookIds,
+        hdr: ResourceId,
+        depth: ResourceId,
+        shared: &[(ResourceId, Access)],
+    ) -> Vec<(PassId, LookPass)> {
+        let read = Access::ShaderRead;
+        let stages = [
+            (
+                "DoF.Prepare",
+                vec![
+                    (hdr, read),
+                    (depth, read),
+                    (ids.image(DOF_PREPARED), Access::Storage),
+                ],
+            ),
+            (
+                "DoF.Gather",
+                vec![
+                    (ids.image(DOF_PREPARED), read),
+                    (ids.image(DOF_GATHERED), Access::Storage),
+                ],
+            ),
+            (
+                "DoF.Composite",
+                vec![
+                    (hdr, read),
+                    (depth, read),
+                    (ids.image(DOF_GATHERED), read),
+                    (ids.image(DOF_COMPOSITE), Access::Storage),
+                ],
+            ),
+        ];
+        stages
+            .into_iter()
+            .enumerate()
+            .map(|(n, (name, uses))| {
+                let id = graph.pass(
+                    name,
+                    Queue::Graphics,
+                    uses.into_iter()
+                        .chain([(ids.frame, read)])
+                        .chain(shared.iter().copied()),
+                );
+                (id, LookPass::Dof(n as u32))
+            })
+            .collect()
+    }
+
+    /// Declares exposure, bloom and the display pass from `input` (the resolved
+    /// history) into `output` (SDR storage). With `motion` (this
+    /// frame's motion vectors and depth; `frame_motion`), the velocity tiles first and
+    /// the post pass's motion variant.
     pub(crate) fn post_passes(
         &self,
         graph: &mut Graph,
         ids: &LookIds,
         input: ResourceId,
         output: ResourceId,
+        motion: Option<[ResourceId; 2]>,
         shared: &[(ResourceId, Access)],
     ) -> Vec<(PassId, LookPass)> {
         let mut passes = Vec::new();
@@ -414,6 +477,23 @@ impl LookGpu {
         if bloom {
             uses.push((ids.image(BLOOM_UP), Access::ShaderRead));
         }
+        if let Some([vectors, depth]) = motion {
+            let read = Access::ShaderRead;
+            let (tiles, neighbours) = (ids.image(MOTION_TILES), ids.image(MOTION_NEIGHBOURS));
+            add(
+                graph,
+                "MotionBlur.Tiles",
+                LookPass::Motion(0),
+                vec![(vectors, read), (tiles, Access::Storage)],
+            );
+            add(
+                graph,
+                "MotionBlur.Neighbours",
+                LookPass::Motion(1),
+                vec![(tiles, read), (neighbours, Access::Storage)],
+            );
+            uses.extend([(neighbours, read), (vectors, read), (depth, read)]);
+        }
         add(graph, "Post.Grade.ToneMap", LookPass::Post, uses);
         passes
     }
@@ -431,7 +511,9 @@ impl LookGpu {
     ) {
         let p = &self.pipelines;
         let (frame_index, size) = match pass {
-            LookPass::Exposure(_) | LookPass::Bloom(_) | LookPass::Post => frames.display,
+            LookPass::Exposure(_) | LookPass::Bloom(_) | LookPass::Post | LookPass::Motion(_) => {
+                frames.display
+            }
             _ => frames.render,
         };
         if let LookPass::GiClear | LookPass::GiScatter(_) = pass {
@@ -453,7 +535,26 @@ impl LookGpu {
                 let level = if n < 5 { n } else { 8 - n } + 2;
                 (p.bloom, n, groups(size.map(|v| (v >> level).max(1))))
             }
-            LookPass::Post => (p.post, 0, groups(size)),
+            LookPass::Post => (
+                if self.frame_motion {
+                    p.post_motion
+                } else {
+                    p.post
+                },
+                0,
+                groups(size),
+            ),
+            // Prepare and gather at half the render size, the composite at full.
+            LookPass::Dof(n) => (
+                p.dof,
+                n,
+                groups(if n == 2 {
+                    size
+                } else {
+                    size.map(|v| v.div_ceil(2))
+                }),
+            ),
+            LookPass::Motion(n) => (p.motion, n, groups(size.map(|v| v.div_ceil(16)))),
             LookPass::AoTrace => (p.ao_trace, 0, groups(size.map(|v| v.div_ceil(2)))),
             LookPass::AoDenoise => (p.ao_denoise, 0, groups(size.map(|v| v.div_ceil(2)))),
             LookPass::GiGather => (p.gi_gather, 0, groups(size.map(|v| v.div_ceil(2)))),

@@ -5,6 +5,7 @@ use crate::{
 };
 mod budgets;
 mod gbuffer;
+mod lens;
 mod prepared;
 mod shadow_patches;
 mod shadows;

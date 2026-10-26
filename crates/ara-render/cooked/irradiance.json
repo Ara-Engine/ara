@@ -1,13 +1,13 @@
 {
   "binding_layout_hash": "f71261afa0d52758f34ca15c916d2da422ee92b118ede6e189c970911a274f1e",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "16ef2d730a3d162562ffdb584dffa2c3c6835437024587a3169264cae208696c",
+  "key": "8fc10efa326106240824de3eded93722b969346679aaa01d1df281cb4972da0d",
   "stages": [
     {
-      "dxil": "16ef2d730a3d162562ffdb584dffa2c3c6835437024587a3169264cae208696c/irradianceMain.dxil",
+      "dxil": "8fc10efa326106240824de3eded93722b969346679aaa01d1df281cb4972da0d/irradianceMain.dxil",
       "dxil_hash": "c31cf91c1ae4e68111e054821d3993c34fbc07b00b237395fbdfab93e5593438",
       "source_entry": "irradianceMain",
-      "spirv": "16ef2d730a3d162562ffdb584dffa2c3c6835437024587a3169264cae208696c/irradianceMain.spv",
+      "spirv": "8fc10efa326106240824de3eded93722b969346679aaa01d1df281cb4972da0d/irradianceMain.spv",
       "spirv_entry": "main",
       "spirv_hash": "90704e95f4fd38ed7dbdef2d9cda9db68271cc92fa06ecefaffc0ae68c3885d9",
       "stage": "compute"

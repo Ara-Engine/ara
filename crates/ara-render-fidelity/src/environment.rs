@@ -36,6 +36,14 @@ pub struct FrameEnvironment {
     pub bloom: f32,
     /// Scene-linear grading.
     pub grading: Grading,
+    /// Display-space lift, gamma and gain after the tone curve (raster renderer).
+    pub display: [[f32; 3]; 3],
+    /// Chromatic aberration, depth of field and motion blur (raster renderer).
+    pub lens: ara_render::look::Lens,
+    /// Screen-space ambient occlusion tuning over the preset's (raster renderer).
+    pub ao: ara_render::look::AoTuning,
+    /// Screen-space reflection tuning over the preset's (raster renderer).
+    pub ssr: ara_render::look::SsrTuning,
 }
 
 impl FrameEnvironment {
@@ -81,6 +89,10 @@ impl FrameEnvironment {
                 tone_mapper: ToneMapper::Filmic,
                 bloom: 0.04,
                 grading: Grading::default(),
+                display: [[0.; 3], [1.; 3], [1.; 3]],
+                lens: Default::default(),
+                ao: Default::default(),
+                ssr: Default::default(),
             };
         };
         let (low, high) = (p.min_ev100.min(p.max_ev100), p.min_ev100.max(p.max_ev100));
@@ -108,6 +120,20 @@ impl FrameEnvironment {
                 saturation: p.saturation.clamp(0., 2.),
                 contrast: p.contrast.clamp(0.5, 2.),
                 vignette: p.vignette.clamp(0., 1.),
+            },
+            display: [
+                p.lift.map(|c| c.clamp(-1., 1.)),
+                p.gamma.map(|c| c.clamp(0.01, 10.)),
+                p.gain.map(|c| c.clamp(0., 10.)),
+            ],
+            lens: lens(&p),
+            ao: ara_render::look::AoTuning {
+                intensity: p.ao_intensity.clamp(0., 4.),
+                radius: over_preset(p.ao_radius),
+            },
+            ssr: ara_render::look::SsrTuning {
+                intensity: p.reflection_intensity.clamp(0., 1.),
+                distance: over_preset(p.reflection_distance),
             },
         }
     }
@@ -176,7 +202,13 @@ impl FrameEnvironment {
                 contrast: self.grading.contrast,
                 saturation: self.grading.saturation,
                 vignette: self.grading.vignette,
+                lift: self.display[0],
+                gamma: self.display[1],
+                gain: self.display[2],
             },
+            lens: self.lens,
+            ao: self.ao,
+            ssr: self.ssr,
             sky: self.atmosphere.filter(|a| a.physical_sky).map(|a| Sky {
                 sea_level: a.sea_level,
                 aerosols: a.aerosols,
@@ -213,6 +245,32 @@ impl FidelityView {
     pub fn set_environment(&mut self, environment: &FrameEnvironment) -> Result<()> {
         self.set_atmosphere(environment.atmosphere)?;
         self.set_post(environment.post(self.settings.post))
+    }
+}
+
+/// A volume blend's lens effects: depth of field where the focus distance is positive,
+/// motion blur for an open shutter (angle over 360°).
+fn lens(p: &ara_components::post::PostValues) -> ara_render::look::Lens {
+    ara_render::look::Lens {
+        chromatic_aberration: p.chromatic_aberration.clamp(0., 1.),
+        depth_of_field: (p.focus_distance > 0. && p.focus_distance.is_finite()).then(|| {
+            ara_render::look::DepthOfField {
+                focus_distance: p.focus_distance,
+                aperture: p.aperture.clamp(0.7, 32.),
+                near: p.near_blur.clamp(0., 1.),
+                far: p.far_blur.clamp(0., 1.),
+            }
+        }),
+        motion_blur: (p.shutter_angle / 360.).clamp(0., 1.),
+    }
+}
+
+/// A volume blend's preset-relative value (finite, non-negative share).
+fn over_preset(v: ara_components::post::PresetBlend) -> ara_render::look::OverPreset {
+    let finite = |x: f32, or: f32| if x.is_finite() { x } else { or };
+    ara_render::look::OverPreset {
+        keep: finite(v.keep, 1.).max(0.),
+        add: finite(v.add, 0.),
     }
 }
 

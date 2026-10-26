@@ -115,6 +115,20 @@
       "vertex_stride": 0
     }
   },
+  "look_dof": {
+    "entries": {
+      "dofMain": "compute"
+    },
+    "source": "look-dof.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
   "look_exposure": {
     "entries": {
       "exposureMain": "compute"
@@ -227,6 +241,20 @@
       "vertex_stride": 0
     }
   },
+  "look_motion": {
+    "entries": {
+      "motionMain": "compute"
+    },
+    "source": "look-motion.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
   "look_multiscatter": {
     "entries": {
       "multiScatterMain": "compute"
@@ -244,6 +272,20 @@
   "look_post": {
     "entries": {
       "postMain": "compute"
+    },
+    "source": "look-post.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
+  "look_post_motion": {
+    "entries": {
+      "postMotionMain": "compute"
     },
     "source": "look-post.slang",
     "state": {

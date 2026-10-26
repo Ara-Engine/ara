@@ -3,6 +3,7 @@
 // root word 7 bit 0 marks it as the pre-exposed TAA history rather than linear HDR.
 #include "raster.slangh"
 #include "look.slangh"
+#include "look-motion.slangh"
 // Divides the input back to linear HDR; `stored` once exposureMain has run this frame.
 float inputScale(Frame f,Look l,bool stored){
     if((root.flags&1)==0)return 1;float4 s=exposureState(l);return exposureScale(f,stored?s.y:s.x);
@@ -108,12 +109,37 @@ float3 grade(Frame f,Look l,float3 c,float2 uv){
     c=max(c*l.grading.rgb,0);if(l.look.x!=1)c=0.18*pow(c/0.18,l.look.x);c=max(lerp(float3(luminance(c)),c,l.grading.w),0);
     float2 d=(uv-0.5)*float2(float(f.extent.x)/f.extent.y,1);float falloff=1/(1+dot(d,d)*l.look.y*2.5);return c*falloff*falloff;
 }
-[shader("compute")][numthreads(8,8,1)]
-void postMain(uint3 tid:SV_DispatchThreadID){
+// Display-space lift/gamma/gain after the tone curve: lift raises the shadows toward
+// its colour (fading out toward white), gain scales, gamma bends the midtones.
+float3 liftGammaGain(Look l,float3 c){
+    c=saturate(l.gain.rgb*(c+l.lift.rgb*(1-c)));return pow(c,1/max(l.gamma.rgb,float3(1e-3)));
+}
+// The scene at `p`, with lateral chromatic aberration (look.gain.w): red and blue
+// sampled radially in and out of the centre, growing with the square of the distance.
+float3 sceneColour(Frame f,Look l,int2 p,float2 uv){
+    float3 c=pixel(root.materials,p).rgb;
+    if(l.gain.w>0){
+        float2 d=uv-0.5,o=d*dot(d,d)*l.gain.w*0.03;
+        c=float3(historyTex(root.materials,uv-o).r,c.g,historyTex(root.materials,uv+o).b);
+    }return c/inputScale(f,l,true);
+}
+// The display transform. MOTION (a compile-time variant, chosen while a volume blurs
+// motion) gathers moving pixels along their blur first; still pixels keep the
+// chromatic aberration path, which the blur would hide on moving ones.
+void post<let MOTION:int>(uint3 tid){
     Frame f=frame();Look l=look(f);if(any(tid.xy>=f.extent.xy))return;int2 p=int2(tid.xy);float2 uv=(float2(p)+0.5)/float2(f.extent.xy);
-    float3 c=pixel(root.materials,p).rgb/inputScale(f,l,true);
+    float3 c;
+    if(MOTION!=0){
+        bool moving;c=motionGather(f,l,root.materials,p,pixel(root.materials,p).rgb,moving);
+        c=moving?c/inputScale(f,l,true):sceneColour(f,l,p,uv);
+    }else c=sceneColour(f,l,p,uv);
     if(l.bloom.x>0)c=lerp(c,bloom(f,l,uv),l.bloom.x);
     c=grade(f,l,max(c*exposureState(l).x,0),uv);
     uint curve=l.flags.x;c=curve==1?neutralCurve(c):curve==2?filmicCurve(c):tonemap(c);
-    images[NonUniformResourceIndex(f.post.w)][p]=float4(srgb(saturate(c)),1);
+    c=liftGammaGain(l,saturate(c));
+    images[NonUniformResourceIndex(f.post.w)][p]=float4(srgb(c),1);
 }
+[shader("compute")][numthreads(8,8,1)]
+void postMain(uint3 tid:SV_DispatchThreadID){post<0>(tid);}
+[shader("compute")][numthreads(8,8,1)]
+void postMotionMain(uint3 tid:SV_DispatchThreadID){post<1>(tid);}

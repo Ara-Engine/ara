@@ -1,6 +1,7 @@
 //! The raster look: authored exposure, display, sky and fog, applied by the passes
 //! after the G-buffer (physical sky LUTs and their image-based lighting, froxel fog,
-//! exposure metering, bloom and display grading).
+//! exposure metering, bloom and display grading), plus the lens effects and
+//! screen-space tuning of post-process volumes (`lens`).
 //!
 //! Hosts map the scene's authored look onto [`Look`] and call
 //! [`crate::Renderer::set_look`] at a frame boundary. The defaults reproduce the
@@ -11,11 +12,15 @@ pub(crate) mod frame;
 pub mod gi;
 pub(crate) mod gpu;
 pub(crate) mod horizon;
+mod lens;
 pub(crate) mod local;
 pub(crate) mod passes;
 pub(crate) mod vsm;
 
 pub use crate::renderer::post::ToneCurve;
+pub use lens::{
+    AoTuning, DepthOfField, DepthOfFieldQuality, Lens, MotionBlurQuality, OverPreset, SsrTuning,
+};
 
 /// Per-preset raster budgets (`Renderer::set_quality`); independent of the
 /// authored look. The default is the M1 configuration.
@@ -59,6 +64,12 @@ pub struct Quality {
     /// pixels need them, sampled before the cascades and far map (which remain the
     /// fallback while pages render). `None` keeps the cascades alone.
     pub virtual_shadows: Option<VirtualShadows>,
+    /// Depth of field where a look asks for it (half-resolution gather before the
+    /// temporal resolve); `None` ignores looks' focus blur.
+    pub depth_of_field: Option<DepthOfFieldQuality>,
+    /// Motion blur where a look asks for it (the post pass's motion variant; needs the
+    /// native renderer's motion vectors); `None` ignores looks' shutter.
+    pub motion_blur: Option<MotionBlurQuality>,
 }
 
 /// Virtual shadow map budgets (`look::vsm`).
@@ -86,6 +97,8 @@ impl Default for Quality {
             local_shadows: None,
             horizon: None,
             virtual_shadows: None,
+            depth_of_field: None,
+            motion_blur: None,
         }
     }
 }
@@ -229,6 +242,12 @@ impl Quality {
                         && (256..=4096).contains(&v.pages)
                         && (1..=256).contains(&v.budget)
                         && (-2.0..=4.0).contains(&v.bias)
+                })
+                && self.depth_of_field.is_none_or(|d| {
+                    (8..=96).contains(&d.samples) && (0.005..=0.05).contains(&d.max_radius)
+                })
+                && self.motion_blur.is_none_or(|m| {
+                    (4..=32).contains(&m.samples) && (4.0..=32.0).contains(&m.max_length)
                 }),
             "Invalid raster quality"
         );
@@ -253,6 +272,12 @@ pub struct Look {
     pub sky: Option<Sky>,
     /// Exponential height fog.
     pub fog: Option<Fog>,
+    /// Chromatic aberration, depth of field and motion blur.
+    pub lens: Lens,
+    /// Screen-space ambient occlusion strength and radius (where the quality runs it).
+    pub ao: AoTuning,
+    /// Screen-space reflection strength and reach (where the quality runs them).
+    pub ssr: SsrTuning,
 }
 impl Default for Look {
     fn default() -> Self {
@@ -263,6 +288,9 @@ impl Default for Look {
             grading: Grading::default(),
             sky: None,
             fog: None,
+            lens: Lens::default(),
+            ao: AoTuning::default(),
+            ssr: SsrTuning::default(),
         }
     }
 }
@@ -296,7 +324,8 @@ impl Default for AutoExposure {
     }
 }
 
-/// Scene-linear white balance, contrast, saturation and vignette.
+/// Scene-linear white balance, contrast, saturation and vignette, then display-space
+/// lift, gamma and gain after the tone curve.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Grading {
     /// Per-channel white-balance gain (neutral is one).
@@ -307,6 +336,12 @@ pub struct Grading {
     pub saturation: f32,
     /// Vignette strength from zero to one.
     pub vignette: f32,
+    /// Display-space colour raising the shadows, fading out toward white (neutral is zero).
+    pub lift: [f32; 3],
+    /// Display-space per-channel midtone power (neutral is one).
+    pub gamma: [f32; 3],
+    /// Display-space per-channel multiplier (neutral is one).
+    pub gain: [f32; 3],
 }
 impl Default for Grading {
     fn default() -> Self {
@@ -315,6 +350,9 @@ impl Default for Grading {
             contrast: 1.,
             saturation: 1.,
             vignette: 0.,
+            lift: [0.; 3],
+            gamma: [1.; 3],
+            gain: [1.; 3],
         }
     }
 }
@@ -385,9 +423,13 @@ impl Look {
                 && g.white_balance_gain.iter().all(|x| *x >= 0.)
                 && (0.25..=4.0).contains(&g.contrast)
                 && (0.0..=4.0).contains(&g.saturation)
-                && (0.0..=1.0).contains(&g.vignette),
+                && (0.0..=1.0).contains(&g.vignette)
+                && finite(&g.lift)
+                && finite(&g.gain)
+                && g.gamma.iter().all(|x| x.is_finite() && *x > 0.),
             "Invalid look grading or bloom"
         );
+        self.lens.validate(&self.ao, &self.ssr)?;
         if let Some(a) = self.auto_exposure {
             anyhow::ensure!(
                 finite(&[a.minimum_ev100, a.maximum_ev100, a.compensation])

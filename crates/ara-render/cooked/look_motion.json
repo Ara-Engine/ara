@@ -1,0 +1,25 @@
+{
+  "binding_layout_hash": "f71261afa0d52758f34ca15c916d2da422ee92b118ede6e189c970911a274f1e",
+  "compiler": "2026.17-25-gc7954ebd1",
+  "key": "8fc10efa326106240824de3eded93722b969346679aaa01d1df281cb4972da0d",
+  "stages": [
+    {
+      "dxil": "8fc10efa326106240824de3eded93722b969346679aaa01d1df281cb4972da0d/motionMain.dxil",
+      "dxil_hash": "b5f69e2e67322aba3e0564d78554754b8704496fd267ce78d237f0e64058f083",
+      "source_entry": "motionMain",
+      "spirv": "8fc10efa326106240824de3eded93722b969346679aaa01d1df281cb4972da0d/motionMain.spv",
+      "spirv_entry": "main",
+      "spirv_hash": "f5986bac9a06989069774b74752318a5bc6d60f0c16c0f39ff905e36eb7ff281",
+      "stage": "compute"
+    }
+  ],
+  "state": {
+    "blend": false,
+    "color_formats": [],
+    "depth_format": null,
+    "depth_test": false,
+    "depth_write": false,
+    "vertex_stride": 0
+  },
+  "version": 1
+}

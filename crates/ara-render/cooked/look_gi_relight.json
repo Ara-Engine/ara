@@ -1,15 +1,15 @@
 {
   "binding_layout_hash": "f71261afa0d52758f34ca15c916d2da422ee92b118ede6e189c970911a274f1e",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "16ef2d730a3d162562ffdb584dffa2c3c6835437024587a3169264cae208696c",
+  "key": "8fc10efa326106240824de3eded93722b969346679aaa01d1df281cb4972da0d",
   "stages": [
     {
-      "dxil": "16ef2d730a3d162562ffdb584dffa2c3c6835437024587a3169264cae208696c/giRelightMain.dxil",
-      "dxil_hash": "0cf60c605ec8806a39150897e78c1e517504a05a28ca2b5bc7fbb5e46fef9d06",
+      "dxil": "8fc10efa326106240824de3eded93722b969346679aaa01d1df281cb4972da0d/giRelightMain.dxil",
+      "dxil_hash": "e16dd709d8d825361d2362ad76cfed887d2fc7dc63730279512f8bcf65b7a271",
       "source_entry": "giRelightMain",
-      "spirv": "16ef2d730a3d162562ffdb584dffa2c3c6835437024587a3169264cae208696c/giRelightMain.spv",
+      "spirv": "8fc10efa326106240824de3eded93722b969346679aaa01d1df281cb4972da0d/giRelightMain.spv",
       "spirv_entry": "main",
-      "spirv_hash": "13618b3990e7326a7fefc76d069663368ebe326a896769c75ce9e0730e719240",
+      "spirv_hash": "e6fdb6a226dceadecf1ef8ad2ed4cbb39fd2efbdb9ec34b71cf7dfec3172a85b",
       "stage": "compute"
     }
   ],

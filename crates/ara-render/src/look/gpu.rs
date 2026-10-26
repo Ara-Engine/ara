@@ -24,7 +24,15 @@ pub(crate) const SSR_PYRAMID: usize = 12;
 pub(crate) const SSR_TRACE: usize = 13;
 /// Projected virtual shadow page visibility (`look::vsm`), R16F at render size.
 pub(crate) const VSM_MASK: usize = 14;
-const IMAGES: usize = 15;
+/// Depth of field (`look::lens`): half-resolution colour and signed radius, the
+/// half-resolution gather, and the render-size composite the temporal resolve reads.
+pub(crate) const DOF_PREPARED: usize = 15;
+pub(crate) const DOF_GATHERED: usize = 16;
+pub(crate) const DOF_COMPOSITE: usize = 17;
+/// Motion blur velocity maxima per 16-pixel display tile and per 3x3 neighbourhood.
+pub(crate) const MOTION_TILES: usize = 18;
+pub(crate) const MOTION_NEIGHBOURS: usize = 19;
+const IMAGES: usize = 20;
 /// The exposure state (four floats), then the metering histogram's 256 counts
 /// (look-post.slang exposureMain).
 pub(crate) const STATE_BYTES: usize = 16 + 256 * 4;
@@ -43,11 +51,14 @@ fn extent(image: usize, render: [u32; 2], display: [u32; 2]) -> [u32; 2] {
             render.map(|v| v.div_ceil(2))
         }
         SSR_PYRAMID => [render[0], (render[1] / 2).max(1)],
-        VSM_MASK => render,
+        VSM_MASK | DOF_COMPOSITE => render,
+        DOF_PREPARED | DOF_GATHERED => render.map(|v| v.div_ceil(2)),
+        MOTION_TILES | MOTION_NEIGHBOURS => display.map(|v| v.div_ceil(16)),
         _ => [display[0], (display[1] / 2).max(1)],
     }
 }
 
+#[derive(Clone, Copy)]
 pub(crate) struct Pipelines {
     pub transmittance: Pipeline,
     pub multiscatter: Pipeline,
@@ -58,6 +69,10 @@ pub(crate) struct Pipelines {
     pub exposure: Pipeline,
     pub bloom: Pipeline,
     pub post: Pipeline,
+    /// The post pass with motion blur (look-post.slang `postMotionMain`).
+    pub post_motion: Pipeline,
+    pub dof: Pipeline,
+    pub motion: Pipeline,
     pub gi_relight: Pipeline,
     pub gi_scatter: Pipeline,
     pub ao_trace: Pipeline,
@@ -101,6 +116,10 @@ pub(crate) struct LookGpu {
     pub sky: Option<SkyKey>,
     /// Lit frames stop before temporal resolve and post (`Renderer::finish`).
     pub deferred: bool,
+    /// This frame blurs focus and motion (`blurs`): the graph and the recorded passes
+    /// agree on it.
+    pub frame_dof: bool,
+    pub frame_motion: bool,
     /// The renderer history slot a deferred frame left for `finish` to resolve into.
     pub deferred_history: Option<usize>,
     /// Remaining frames whose exposure snaps to its meter (capture resets).
@@ -182,6 +201,9 @@ impl LookGpu {
             exposure: load("look_exposure")?,
             bloom: load("look_bloom")?,
             post: load("look_post")?,
+            post_motion: load("look_post_motion")?,
+            dof: load("look_dof")?,
+            motion: load("look_motion")?,
             gi_relight: load("look_gi_relight")?,
             gi_scatter: load("look_gi_scatter")?,
             ao_trace: load("look_ao_trace")?,
@@ -229,6 +251,8 @@ impl LookGpu {
             display: size,
             sky: None,
             deferred: false,
+            frame_dof: false,
+            frame_motion: false,
             deferred_history: None,
             settle: 0,
             seeded: false,
@@ -275,6 +299,11 @@ impl LookGpu {
             SSR_PYRAMID,
             SSR_TRACE,
             VSM_MASK,
+            DOF_PREPARED,
+            DOF_GATHERED,
+            DOF_COMPOSITE,
+            MOTION_TILES,
+            MOTION_NEIGHBOURS,
         ] {
             if let Some(old) = self.images[i].take() {
                 gpu.retire(Resource::Image(old))?;
@@ -286,8 +315,10 @@ impl LookGpu {
     }
 
     /// Allocates the images the current look needs (sky LUTs and IBL under a sky,
-    /// froxels with sky or fog, bloom atlases with bloom). Never frees: looks rarely
-    /// change, and a later frame would only allocate them again.
+    /// froxels with sky or fog, bloom atlases with bloom) and the quality budgets
+    /// (AO, SSR, depth of field, motion blur: a volume enabling those never allocates
+    /// mid-session). Never frees: looks rarely change, and a later frame would only
+    /// allocate them again.
     pub(crate) fn ensure(&mut self, gpu: &mut VulkanDevice) -> Result<()> {
         ara_gpu::cpu_scope!("Look.ensure");
         let look = self.effective();
@@ -308,6 +339,11 @@ impl LookGpu {
             self.quality.reflections.is_some(),
             self.quality.reflections.is_some(),
             self.vsm.is_some(),
+            self.quality.depth_of_field.is_some(),
+            self.quality.depth_of_field.is_some(),
+            self.quality.depth_of_field.is_some(),
+            self.quality.motion_blur.is_some(),
+            self.quality.motion_blur.is_some(),
         ];
         for (i, needed) in needed.into_iter().enumerate() {
             if !needed || self.images[i].is_some() {
@@ -359,6 +395,41 @@ impl LookGpu {
             self.storage[SSR_PYRAMID],
             self.storage[SSR_TRACE],
         ]
+    }
+
+    /// Depth of field rows: prepared and gathered (sampled), then (storage).
+    pub(crate) fn dof_indices(&self) -> [u32; 4] {
+        [
+            self.sampled[DOF_PREPARED],
+            self.sampled[DOF_GATHERED],
+            self.storage[DOF_PREPARED],
+            self.storage[DOF_GATHERED],
+        ]
+    }
+
+    /// Motion blur rows: tile and neighbourhood maxima (sampled), then (storage).
+    pub(crate) fn motion_indices(&self) -> [u32; 4] {
+        [
+            self.sampled[MOTION_TILES],
+            self.sampled[MOTION_NEIGHBOURS],
+            self.storage[MOTION_TILES],
+            self.storage[MOTION_NEIGHBOURS],
+        ]
+    }
+
+    /// Whether this frame blurs focus and motion: the look asks, the quality budgets
+    /// it and its images exist; motion blur also needs the native renderer's motion
+    /// vectors (`motion_vectors`). Sets `frame_dof` and `frame_motion`.
+    pub(crate) fn blurs(&mut self, motion_vectors: bool) -> (bool, bool) {
+        let lens = self.look.lens;
+        self.frame_dof = self.quality.depth_of_field.is_some()
+            && lens.depth_of_field.is_some()
+            && self.images[DOF_COMPOSITE].is_some();
+        self.frame_motion = motion_vectors
+            && self.quality.motion_blur.is_some()
+            && lens.motion_blur > 0.
+            && self.images[MOTION_NEIGHBOURS].is_some();
+        (self.frame_dof, self.frame_motion)
     }
 
     /// Probe gather rows: diffuse and specular (sampled), then (storage).

@@ -4,6 +4,7 @@ use crate::{
     graph::{Graph, PassId},
     look::{
         frame::{FrameInputs, LookFrame},
+        gpu::DOF_COMPOSITE,
         passes::{Frames, LookPass},
     },
 };
@@ -270,6 +271,11 @@ impl Renderer {
             result?;
         }
         self.look.ensure(&mut self.gpu)?;
+        let (dof, motion) = self.look.blurs(self.native.is_some());
+        let lit = matches!(mode, ViewMode::Lit);
+        // Focus blur needs a perspective lens (an orthographic projection has no w).
+        self.look.frame_dof = dof && lit && camera.projection.z_axis.w != 0.;
+        self.look.frame_motion = motion && lit;
         let (sampled, storage) = self.look.indices();
         // Exposure snaps to its meter on a reset unless a host seeded it, and
         // while new probe GI converges or fades in (no adaptation swing as the
@@ -367,13 +373,52 @@ impl Renderer {
             && self.targets.history.is_some()
         {
             look_frame.flags[1] |= crate::look::frame::REFLECTIONS;
-            look_frame.ssr = [r.max_roughness, r.distance, r.steps as f32, 0.];
+            let ssr = self.look.look.ssr;
+            look_frame.ssr = [
+                r.max_roughness,
+                ssr.distance.over(r.distance).max(1.),
+                r.steps as f32,
+                ssr.intensity,
+            ];
             look_frame.ssr_images = self.look.ssr_indices();
         }
         if let Some(ao) = self.look.quality.ambient_occlusion {
             look_frame.flags[1] |= crate::look::frame::AMBIENT_OCCLUSION;
-            look_frame.ao = [ao.radius, ao.slices as f32, ao.steps as f32, 0.];
+            let tuning = self.look.look.ao;
+            look_frame.ao = [
+                tuning.radius.over(ao.radius).max(0.05),
+                ao.slices as f32,
+                ao.steps as f32,
+                tuning.intensity,
+            ];
             look_frame.ao_images = self.look.ao_indices();
+        }
+        let lens = self.look.look.lens;
+        if self.look.frame_dof
+            && let (Some(quality), Some(focus)) =
+                (self.look.quality.depth_of_field, lens.depth_of_field)
+        {
+            let fov = 2. * (1. / camera.projection.y_axis.y).atan();
+            look_frame.dof = focus.constants(fov, self.render[1] as f32, quality);
+            look_frame.dof_blur = [focus.far, quality.samples as f32, 0., 0.];
+            look_frame.dof_images = self.look.dof_indices();
+            look_frame.dof_output = [
+                self.look.storage[DOF_COMPOSITE],
+                self.look.sampled[DOF_COMPOSITE],
+                0,
+                0,
+            ];
+        }
+        if self.look.frame_motion
+            && let Some(quality) = self.look.quality.motion_blur
+        {
+            look_frame.motion = [
+                lens.motion_blur,
+                quality.samples as f32,
+                quality.max_length,
+                0.,
+            ];
+            look_frame.motion_images = self.look.motion_indices();
         }
         self.gpu
             .upload_queued(self.look.frame, bytemuck::bytes_of(&look_frame))?;
@@ -713,6 +758,16 @@ impl Renderer {
             if self.native.is_some() {
                 taa.push((ids[MOTION], Access::ShaderRead));
             }
+            // Depth of field composites into the image the resolve reads instead of HDR.
+            if self.look.frame_dof {
+                for (id, pass) in self
+                    .look
+                    .dof_passes(&mut graph, &look, ids[HDR], ids[DEPTH], &graphics)
+                {
+                    declare(id, Recipe::Look(pass));
+                }
+                taa.push((look.image(DOF_COMPOSITE), Access::ShaderRead));
+            }
             let temporal = graph.pass("TemporalResolve", Queue::Graphics, taa);
             declare(temporal, Recipe::Taa);
             shaded.push(temporal);
@@ -723,6 +778,7 @@ impl Renderer {
                 &look,
                 ids[output_history],
                 ids[OUTPUT],
+                self.look.frame_motion.then(|| [ids[MOTION], ids[DEPTH]]),
                 &graphics,
             ) {
                 declare(id, Recipe::Look(pass));
@@ -1164,7 +1220,9 @@ impl Renderer {
                         }));
                         let mut constants = root;
                         constants.words[0] = self.display_frame_index;
-                        constants.words[1] = if taa {
+                        constants.words[1] = if taa && self.look.frame_dof {
+                            self.look.sampled[DOF_COMPOSITE]
+                        } else if taa {
                             self.targets.sampled[HDR]
                         } else {
                             self.targets.sampled[output_history]
@@ -1186,6 +1244,7 @@ impl Renderer {
                             LookPass::SsrPyramid(_) => {
                                 self.targets.history.map_or(0, |h| self.targets.sampled[h])
                             }
+                            LookPass::Dof(_) => self.targets.sampled[HDR],
                             _ => self.targets.sampled[output_history],
                         },
                         true,
@@ -1302,10 +1361,14 @@ impl Renderer {
             imported.push((target, id));
             id
         };
+        let depth = import(&mut graph, DEPTH);
+        let vectors = self.look.frame_motion.then(|| import(&mut graph, MOTION));
+        // Focus blur runs before a resolve; a frame graded directly keeps it sharp.
+        let dof = self.look.frame_dof && slot.is_some();
         let resolve = slot.map(|slot| {
             let mut uses = vec![
                 (input, Access::ShaderRead),
-                (import(&mut graph, DEPTH), Access::ShaderRead),
+                (depth, Access::ShaderRead),
                 (import(&mut graph, slot), Access::Storage),
             ];
             if let Some(history) = self.targets.history {
@@ -1321,14 +1384,27 @@ impl Renderer {
                 queue: Queue::Graphics,
             },
         );
+        let dof_passes = if dof {
+            self.look.dof_passes(
+                &mut graph,
+                &look,
+                input,
+                depth,
+                &[(frame, Access::ShaderRead)],
+            )
+        } else {
+            Vec::new()
+        };
         let resolved = resolve.map(|(slot, uses)| {
             let id = graph.pass(
                 "TemporalResolve",
                 Queue::Graphics,
-                uses.into_iter().chain([
-                    (frame, Access::ShaderRead),
-                    (look.state, Access::ShaderRead),
-                ]),
+                uses.into_iter()
+                    .chain([
+                        (frame, Access::ShaderRead),
+                        (look.state, Access::ShaderRead),
+                    ])
+                    .chain(dof.then(|| (look.image(DOF_COMPOSITE), Access::ShaderRead))),
             );
             let slot_id = imported
                 .iter()
@@ -1341,13 +1417,15 @@ impl Renderer {
             Some((_, slot, slot_id)) => (slot_id, self.targets.sampled[slot]),
             None => (input, sampled),
         };
-        let passes = self.look.post_passes(
+        let mut passes = self.look.post_passes(
             &mut graph,
             &look,
             post_input,
             output,
+            vectors.map(|vectors| [vectors, depth]),
             &[(frame, Access::ShaderRead)],
         );
+        passes.extend(dof_passes);
         graph.pass(
             "Output.Ready",
             Queue::Graphics,
@@ -1361,17 +1439,27 @@ impl Renderer {
                 recorder.push(Command::BeginPass(pass.name.clone()));
                 recorder.barriers(pass.before.iter().copied());
                 if let Some((_, look_pass)) = passes.iter().find(|(id, _)| *id == pass.id) {
+                    // Depth of field reads the composited scene; the post chain its resolve.
+                    let input = match look_pass {
+                        LookPass::Dof(_) => sampled,
+                        _ => post_sampled,
+                    };
                     self.look.record(
                         &mut recorder,
                         *look_pass,
                         self.frames(),
-                        post_sampled,
+                        input,
                         resolved.is_some(),
                     );
                 } else if resolved.is_some_and(|(id, _, _)| id == pass.id) {
+                    let taa_input = if dof {
+                        self.look.sampled[DOF_COMPOSITE]
+                    } else {
+                        sampled
+                    };
                     recorder.push(Command::Pipeline(self.pipelines.taa));
                     recorder.push(Command::Constants(RootConstants {
-                        words: [self.display_frame_index, sampled, 0, 0, 0, 0, 0, 0],
+                        words: [self.display_frame_index, taa_input, 0, 0, 0, 0, 0, 0],
                     }));
                     recorder.push(Command::Dispatch([
                         self.size[0].div_ceil(8),
