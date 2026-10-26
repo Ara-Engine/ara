@@ -47,6 +47,7 @@ impl HubConfig {
     /// Explicit portable/test profile, validated before any registry access.
     pub fn for_directory(executable: PathBuf, directory: PathBuf) -> io::Result<Self> {
         crate::validate_development_config(&directory)?;
+        let executable = crate::normalized_path(&executable).to_owned();
         let editor = executable.with_file_name(if cfg!(windows) {
             "ara-editor.exe"
         } else {
@@ -143,6 +144,7 @@ impl Hub {
         register_current: bool,
     ) -> Result<Self, RpcError> {
         let startup = Instant::now();
+        config.engine.normalize_paths();
         crate::validate_development_config(&config.directory).map_err(io_error)?;
         crate::isolation::validate_engine(&config.directory, &config.engine.executable)
             .map_err(io_error)?;
@@ -286,7 +288,8 @@ impl Hub {
                 Ok(json!({"engines":engines}))
             }
             "hub.engine.register" => {
-                let engine = required(p.engine, "engine")?;
+                let mut engine = required(p.engine, "engine")?;
+                engine.normalize_paths();
                 if engine.version.is_empty()
                     || !engine.executable.is_absolute()
                     || !engine.executable.is_file()
@@ -318,7 +321,8 @@ impl Hub {
                 Ok(json!(engine))
             }
             "hub.engine.remove" => {
-                let engine = required(p.engine, "engine")?;
+                let mut engine = required(p.engine, "engine")?;
+                engine.normalize_paths();
                 if self.registry.projects.iter().any(|project| {
                     project.engine_version == engine.version
                         && self.status_of(project)["state"] == "open"

@@ -38,6 +38,15 @@ pub struct EngineBuild {
     pub editor: Option<PathBuf>,
 }
 
+impl EngineBuild {
+    pub(crate) fn normalize_paths(&mut self) {
+        self.executable = crate::normalized_path(&self.executable).to_owned();
+        if let Some(editor) = &mut self.editor {
+            *editor = crate::normalized_path(editor).to_owned();
+        }
+    }
+}
+
 /// Serialized user registry, independent of running daemon processes.
 #[derive(Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -55,7 +64,13 @@ impl Registry {
     pub fn load(dir: &Path) -> Result<Self, RpcError> {
         crate::validate_development_config(dir).map_err(io_error)?;
         match fs::read(dir.join("registry.json")) {
-            Ok(bytes) => serde_json::from_slice(&bytes).map_err(io_error),
+            Ok(bytes) => {
+                let mut registry: Self = serde_json::from_slice(&bytes).map_err(io_error)?;
+                for engine in &mut registry.engines {
+                    engine.normalize_paths();
+                }
+                Ok(registry)
+            }
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Self::default()),
             Err(e) => Err(io_error(e)),
         }

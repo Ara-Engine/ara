@@ -93,6 +93,7 @@ pub enum McpClient {
 
 pub fn hub(command: HubCommand) -> Result<bool, RpcError> {
     let executable = std::env::current_exe().map_err(io_error)?;
+    let executable = ara_hub_service::normalized_path(&executable).to_owned();
     if let HubCommand::InstallMcp { client } = command {
         let path = executable
             .to_str()
