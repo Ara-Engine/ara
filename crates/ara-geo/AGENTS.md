@@ -10,6 +10,9 @@ adjacent meshlets, simplifies each group with locked borders, and reclusters.
 Groups are replacement operations, not independent cluster LODs. A group's
 replacement clusters share one error/bounds decision; cumulative errors and
 enclosing group spheres preserve monotonic selection through the DAG.
+Compaction assigns local IDs in first-encounter index order. Reuse a source-sized
+generation-tagged lookup across groups; sparse public inputs keep the ordered-map
+fallback. Never change the vertex/index bytes passed to native algorithms.
 
 All clusters quantize on the same asset-wide grid: shared border positions decode
 identically. Vertices and local triangles are independently meshopt-compressed

@@ -897,3 +897,55 @@ NVMe A/B/B/A must compare current sequential versus **plain parallel, no limiter
 both with Color8/mips. Keep parallel off unless that pairing clearly wins; only
 then reconsider a volume-specific policy. The observed regressions do not, by
 themselves, identify which coordination or storage operation caused them.
+
+## Plain parallel on the current baseline: 2026-10-26 — closed
+
+A new quiet-slot NVMe A/B/B/A compared current sequential geometry with **plain
+parallel, no limiter**, both with Color8/mips. The source experiment is `5428daff`;
+the same frozen CLI/player and all package/feature sets are used for both workers.
+No subsequent single-thread remap experiment enters these frozen binaries.
+
+Assets-ready seconds A1/B1/B2/A2 are **21.5439145 / 19.4925563 / 19.5951161 /
+19.4909498**. Means **20.51743215 -> 19.5438362 s (4.7% lower)**. This is not a
+clear repeatable win: A2 matches B1 within **1.607 ms**, and the control's
+**2.053-second** spread exceeds the **0.974-second** mean difference. There are
+only two observations per variant; no statistical certainty is claimed.
+Create-through-ready means are **24.2239774 / 22.48098105 s**.
+
+All 460 action keys, 5,836 artifact references and 3,637,442,064 physically verified
+referenced bytes match v4, with zero fallbacks. Each of the four projects was
+reparse-checked and deleted after evidence extraction/verification. Results:
+`measurements/plain-geometry-current-nvme-2026-10-26.json`; raw evidence:
+`target/ara-dev/import-speed/plain-current-{a1,b1,b2,a2}-outpost/`.
+
+**Decision: keep parallel geometry off.** `192b9d72` restores the flag to false.
+Drop adaptive admission and the per-volume fallback; the older 23.7% NVMe gain
+predated faster texture preparation. This scheduling investigation is closed.
+
+## Byte-exact single-thread virtual-geometry remapping: 2026-10-26
+
+Every virtual-geometry group previously built an ordered map from source vertex
+ID to compact local ID. Replace that lookup with generation-tagged indexed
+scratch reused within one cook. IDs still follow first encounter in the index
+stream; no map iteration determined their order. Vertex bits, local indices and
+source-ID arrays passed to every native meshopt call are identical. Sparse public
+inputs retain the ordered map instead of allocating an oversized source lookup.
+No extra threads, changed simplifier settings, importer/format revisions or keys.
+
+A frozen baseline/candidate replay ran the 101 real Outpost model inputs with one
+thread and verified complete output bytes against the production cache on **every
+pass**, reusing verified textures without decoding/encoding/storing. One GPU lease
+serialized the A/B/B/A phase probe while the integration gate was active. Summed
+virtual-stage seconds: **6.0911706 / 3.7413036 / 4.1517075 / 5.4968285**.
+Means **5.79399955 -> 3.94650555 s (1.47x, 31.9% lower)**. All observations and
+per-model timings are retained in `measurements/geometry-remap-2026-10-26.json`.
+
+This is a phase result under load, not a quiet fresh-import-wall claim. The
+unchanged LOD-solve stage varies from **8.180 / 6.702 / 7.524 / 7.099 s**, so the
+entire replay-time difference is not attributed to remapping. Both candidate
+virtual timings are below both control timings. Raw source snapshots, hashes,+build logs and results: `target/ara-dev/import-speed/geo-efficiency/`.
+
+Focused tests cover first-encounter IDs, every copied vertex bit including signed
+zero, reuse across groups, generation wrap collisions and sparse allocation.
+Existing deterministic DAG/edge/page tests remain enabled; the declared explicit
+million-triangle benchmark remains opt-in.
