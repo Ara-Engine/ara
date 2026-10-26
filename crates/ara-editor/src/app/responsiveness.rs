@@ -224,6 +224,9 @@ pub(super) struct Probe {
     settle_began: Option<Instant>,
     /// Whether a Settle act gave up at `SETTLE_TIMEOUT`.
     settle_timed_out: bool,
+    /// The entity the edit, typing and drag acts work on, found once: resolving the
+    /// scene to find it is the probe's own work, not part of the frame it measures.
+    mesh: Option<String>,
 }
 
 impl Probe {
@@ -280,6 +283,7 @@ impl Probe {
             startup: Startup::default(),
             settle_began: None,
             settle_timed_out: false,
+            mesh: None,
         }
     }
 
@@ -436,7 +440,7 @@ impl Probe {
                 let typed = text.len() as u32;
                 match self.age {
                     0 => {
-                        let entity = mesh_entity(editor)?;
+                        let entity = self.mesh(editor)?;
                         editor.action("editor.select", json!({"entities": [entity]}))?;
                     }
                     2 => {
@@ -469,7 +473,7 @@ impl Probe {
             }
             Some(Act::Drag) => match self.age {
                 0 => {
-                    let entity = mesh_entity(editor)?;
+                    let entity = self.mesh(editor)?;
                     editor.action("editor.select", json!({"entities": [entity]}))?;
                 }
                 1 => editor.begin_gesture()?,
@@ -491,7 +495,7 @@ impl Probe {
                 _ => {}
             },
             Some(Act::Edit) if self.age == 0 => {
-                let entity = mesh_entity(editor)?;
+                let entity = self.mesh(editor)?;
                 self.injected = Some(Instant::now());
                 let y = if self.index.is_multiple_of(2) {
                     0.25
@@ -696,6 +700,18 @@ impl Probe {
             ara_json::to_canonical_string(&report),
         )?;
         Ok(())
+    }
+}
+
+impl Probe {
+    /// `mesh_entity`, found on first use and kept (the probe's edits keep its ID).
+    fn mesh(&mut self, editor: &Editor) -> ara_ui::Result<String> {
+        if let Some(mesh) = &self.mesh {
+            return Ok(mesh.clone());
+        }
+        let mesh = mesh_entity(editor)?;
+        self.mesh = Some(mesh.clone());
+        Ok(mesh)
     }
 }
 

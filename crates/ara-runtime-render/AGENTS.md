@@ -36,8 +36,8 @@ device and per-view upload state; no simulation, window or process code.
   pending bounds are short grey corner marks (no filled faces or distant clutter);
   failed/missing stay solid magenta. Raster arrivals
   fade over 12 presented frames using material rows only; captures finish the fade.
-- Probe GI is enabled by default, acquired asynchronously and disk-cached; live
-  frames poll without waiting. `wait_probe_gi` is an explicit capture boundary.
+- Probe GI is enabled by default, acquired asynchronously and disk-cached; its early layout lets `preallocate_startup_resources` reserve and prime the volume/staging behind loading.
+  Live frames poll and relight within their preset budget; `wait_probe_gi` drains pending clears at an explicit capture boundary.
 - `prepare_with(&frame, resolver)` / `present_with`: native local geometry, compressed
   textures, instance poses and changed skin palettes. The resolver reads published
   terrain/material/prefab assets only on structural changes. Model-only callers can

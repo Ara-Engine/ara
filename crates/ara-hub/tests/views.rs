@@ -29,6 +29,49 @@ fn render(hub: &Hub, size: [f32; 2], light: bool) -> Ui {
 }
 
 #[test]
+fn agent_setup_copy_commands_use_the_verified_path_with_shell_quoting() {
+    use ara_hub::{connection::Event, model::AgentClient, view::Binding};
+    let mut hub = Hub::new(Prefs::default(), "target/hub-tests".into(), None);
+    let executable =
+        std::path::absolute("target/Ara's installed build/ara.exe").expect("absolute CLI");
+    hub.event(Event::Prepared {
+        executable: executable.clone(),
+    });
+    hub.view = View::Agents;
+    let ctx = Ctx {
+        now_ms: capture::NOW,
+        size: [1440., 900.],
+        thumbnail: &|_| None,
+        anchor: None,
+        docs: &[],
+    };
+    let path = executable.to_string_lossy();
+    let quoted = if cfg!(windows) {
+        format!("'{}'", path.replace('\'', "''"))
+    } else {
+        format!("'{}'", path.replace('\'', "'\\''"))
+    };
+    let page = view::page(&hub, &ctx);
+    let command = page
+        .bindings
+        .get(&ara_ui::source::stable_id("copy-claude-add"))
+        .expect("Claude copy");
+    assert!(
+        matches!(command,Binding::Intent(Intent::Copy(text)) if text==&format!("claude mcp add --scope user ara -- {quoted} mcp"))
+    );
+    hub.prefs.agent = AgentClient::Codex;
+    let page = view::page(&hub, &ctx);
+    let command = page
+        .bindings
+        .get(&ara_ui::source::stable_id("copy-codex-install"))
+        .expect("Codex copy");
+    let prefix = if cfg!(windows) { "& " } else { "" };
+    assert!(
+        matches!(command,Binding::Intent(Intent::Copy(text)) if text==&format!("{prefix}{quoted} hub install-mcp --client codex"))
+    );
+}
+
+#[test]
 fn first_run_has_no_demo_update_or_missing_art_and_template_titles_are_complete() {
     let mut hub = Hub::new(Prefs::default(), "C:/Ara Projects".into(), None);
     capture::seed_first_run(&mut hub);

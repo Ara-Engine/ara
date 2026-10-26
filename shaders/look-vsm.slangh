@@ -1,0 +1,87 @@
+// Virtual shadow maps for the sun (look/vsm.rs): clipmap levels of 16k virtual
+// texels over a radius of 2^level * vsmDepth.w metres, split into 128-texel pages.
+// A toroidal page table (level, page mod 128) holds [slot+1, page>>7 halves]; the
+// slot's page sits in one D32 atlas (vsm.w pages per row, its rows from the page's
+// light +y edge down). Include after look.slangh.
+static const uint VSM_LEVELS=16,VSM_SIDE=128,VSM_PAGE=128;
+// Light-space position of world `p` (the sun's rotation; its view looks along -z).
+float3 vsmLight(Look l,float3 p){return mul(l.vsmSpace,float4(p,1)).xyz;}
+// Page width of `level`, in metres.
+float vsmStep(Look l,uint level){return 2*l.vsmDepth.w*float(1u<<level)/VSM_SIDE;}
+// The level of `world` (light-space `light`): the finest whose texels cover a pixel's
+// footprint there (shifted by the level bias), and coarse enough that its page window
+// (64 pages each way around the camera's page, look/vsm.rs requested_pages) holds it
+// and the neighbours marking adds with pages to spare.
+uint vsmLevel(Frame f,Look l,float3 world,float3 light){
+    float w=max(dot(world-f.camera.xyz,f.forward.xyz),1e-3);
+    float footprint=2*w/(length(f.vp[1].xyz)*float(f.extent.y));
+    float step=vsmStep(l,0),texel=step/VSM_PAGE;
+    float2 reach=abs(light.xy-vsmLight(l,f.camera.xyz).xy);
+    float level=max(log2(max(footprint/texel,1))+l.vsmDepth.z,log2(max(max(reach.x,reach.y)/(60*step),1)));
+    return uint(clamp(ceil(level),0,VSM_LEVELS-1));
+}
+// Page-table index of world page `page` at `level`.
+uint vsmIndex(uint level,int2 page){return (level*VSM_SIDE+uint(page.y&127))*VSM_SIDE+uint(page.x&127);}
+// The atlas slot of world page `page` at `level`; -1 where it is not resident.
+int vsmSlot(Look l,uint level,int2 page){
+    uint2 e=buffers[NonUniformResourceIndex(l.vsm.x)].Load2(vsmIndex(level,page)*8);
+    uint high=(uint(page.x>>7)&0xffffu)|((uint(page.y>>7)&0xffffu)<<16);
+    return e.x!=0&&e.y==high?int(e.x)-1:-1;
+}
+// Depth of page-local texel `t` of world page `page` (in `slot`) at `level`: texels
+// past the page's edge come from the neighbouring page, or clamp into this one where
+// that is not resident.
+float vsmTexel(Look l,uint level,int2 page,int slot,int2 t){
+    int2 over=t>>7;
+    if(any(over!=0)){int n=vsmSlot(l,level,page+int2(over.x,-over.y));if(n>=0){slot=n;t-=over*int(VSM_PAGE);}else t=clamp(t,0,int(VSM_PAGE)-1);}
+    uint s=uint(slot),cols=l.vsm.w;
+    return textures[NonUniformResourceIndex(l.vsm.y)].Load(int3(int2(s%cols,s/cols)*int(VSM_PAGE)+t,0)).r;
+}
+// Lit share of the 2x2 texels around boundary `g` (page-local texels g-1 and g, rows
+// from the page's light +y edge) of world page `page` (in `slot`) at `level`, against
+// `depth`: w top-left, z top-right, x bottom-left, y bottom-right. Inside the page one
+// gather; across its edge four texel loads.
+float4 vsmGather(Look l,uint level,int2 page,int slot,int2 g,float depth){
+    float4 d;
+    if(all(g>=1)&&all(g<=int(VSM_PAGE)-1)){
+        uint s=uint(slot),cols=l.vsm.w;
+        float2 origin=float2(s%cols,s/cols)*VSM_PAGE,atlas=float2(cols,l.vsmRequest.z)*VSM_PAGE;
+        d=textures[NonUniformResourceIndex(l.vsm.y)].GatherRed(samplers[2],(origin+float2(g))/atlas);
+    }else d=float4(vsmTexel(l,level,page,slot,g+int2(-1,0)),vsmTexel(l,level,page,slot,g),vsmTexel(l,level,page,slot,g+int2(0,-1)),vsmTexel(l,level,page,slot,g-1));
+    return step(d,depth);
+}
+// Sun visibility at page-local `local` (0..1, light +y up) of world page `page` (in
+// `slot`) at `level`: the cascades' 3x3 box of bilinear compares (four gathers), or
+// with `coarse` one bilinear compare (GI relight, whose probes average many hits).
+float vsmFilter(Look l,uint level,int2 page,int slot,float2 local,float depth,bool coarse){
+    float2 position=float2(local.x,1-local.y)*VSM_PAGE-0.5,base=floor(position),t=position-base;
+    if(coarse){
+        float4 lit=vsmGather(l,level,page,slot,int2(base)+1,depth);
+        return lerp(lerp(lit.w,lit.z,t.x),lerp(lit.x,lit.y,t.x),t.y);
+    }
+    float4 wx=float4(1-t.x,1,1,t.x)/3,wy=float4(1-t.y,1,1,t.y)/3;float sum=0;
+    for(uint j=0;j<2;j++)for(uint i=0;i<2;i++){
+        float4 lit=vsmGather(l,level,page,slot,int2(base)+int2(2*i,2*j),depth);
+        sum+=wx[2*i]*wy[2*j]*lit.w+wx[2*i+1]*wy[2*j]*lit.z+wx[2*i]*wy[2*j+1]*lit.x+wx[2*i+1]*wy[2*j+1]*lit.y;
+    }
+    return sum;
+}
+// The projected page visibility of render pixel `p` (look-vsm.slang vsmProjectMain);
+// -1 where it has none (no mask this frame, no resident page, or facing away).
+float vsmMask(Look l,int2 p){return l.vsmMask.x==0?-1:textures[NonUniformResourceIndex(l.vsmMask.x)].Load(int3(p,0)).r;}
+// Sun visibility at `world` from the virtual shadow map: its level's page, else one of
+// the next three coarser (marking requests the next one), with a normal offset of one
+// and a half texels and a one-texel depth bias at that level (`coarse`: vsmFilter);
+// -1 where none is resident or the map is off.
+float vsmVisibility(Frame f,Look l,float3 world,float3 normal,bool coarse){
+    if(l.vsm.y==0)return -1;
+    uint first=vsmLevel(f,l,world,vsmLight(l,world));
+    for(uint level=first;level<min(first+4,VSM_LEVELS);level++){
+        float width=vsmStep(l,level),texel=width/VSM_PAGE;
+        float3 p=vsmLight(l,world+normal*texel*1.5);
+        int2 page=int2(floor(p.xy/width));int slot=vsmSlot(l,level,page);
+        if(slot<0)continue;
+        return vsmFilter(l,level,page,slot,p.xy/width-float2(page),l.vsmDepth.x*(p.z+texel)+l.vsmDepth.y,coarse);
+    }
+    return -1;
+}

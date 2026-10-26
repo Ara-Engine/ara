@@ -12,7 +12,7 @@ Owns the M1 baseline renderer and agent visual feedback. Gameplay state stays in
 - `Renderer::new`, `render`, `render_view` (live debug view mode), `resize`, `capture`: cooked Vulkan rendering; read-only
   `gpu()` access for diagnostics/native presentation. Unchanged display resizes retain TAAU targets/history. `resize_upscaled(render, display)` is TAAU:
   scene passes, feature color/depth and IDs at `render_size()`; history, output, captures and picks at `size()`.
-- `create_view` / `submit_secondary`: lazy Game cameras with retained completed color/IDs, independent motion,
+- `prewarm_view_quality` caches one camera on the startup worker; `create_view` claims it. `preallocate_view` reserves exact render/display targets, constants and retained pairs on the allocation worker; `submit_secondary` draws. Independent motion,
   exposure and TAA(U). Shared Prepare uploads and draws defer together; `poll_scene_frame` drains either camera.
   No primary render/readback. `render_secondary` waits for captures; Drop/release retire after pending use.
 - `Scene`, `Mesh`, `Material`, `Light`, `CameraSpec`: extracted world data and camera pose/bounds requests. Materials use bindless texture indices.
@@ -68,7 +68,7 @@ Owns the M1 baseline renderer and agent visual feedback. Gameplay state stays in
 - `look::gi::ProbeSurfaces` (`Renderer::set_probe_surfaces`): probe GI. One-time 8x8 oct surface caches;
   `GI.Relight` relights a budget per frame (sun via CSM, local lights, sky, emissive, last frame's probes) into 6x6
   irradiance, DDGI-style, without rays or noise. Capture resets relight all for `gi::CONVERGE_FRAMES` (exposure
-  re-meters); a new lattice converges out of shading, then fades in. `update_probe_records` uploads; `GI.Scatter` applies.
+  re-meters); live convergence uses the preset budget. `preallocate_probe_volume` reserves/clears from `ProbeLayout` behind loading, including two staging slots; captures drain a partial clear. A new lattice fades in after convergence; `GI.Scatter` applies record uploads.
 - `look::Quality` (`Renderer::set_quality`): per-preset budgets from
   `ara_render_fidelity::presets::RasterPlan`: shadow cascades (count, texels,
   distance; stable light space, practical splits, gather PCF, cascade blend; one
@@ -77,7 +77,9 @@ Owns the M1 baseline renderer and agent visual feedback. Gameplay state stays in
   local-light shadows (`look::local`, patched alike; `in_gi_and_fog` also shadows GI relight and fog), half-res GTAO and SSR (cone footprint into
   last frame's colour pyramid), GI relight, bloom, emitter lights, LOD/cull pixels, terrain detail, and the
   heightfield horizon (`look::horizon`: distant landforms' sun shadow, min'd into `visibility`, and sky visibility
-  outside the probe volume). Look images are allocated lazily; probe GI is gathered at half resolution.
+  outside the probe volume), and sun virtual shadow maps (`look::vsm`, High/Epic: clipmap pages that pixels mark in `VSM.Mark`, read back once their frame
+  completes, cached in world space, drawn under a per-frame budget; `VSM.Project` resolves them into a mask lighting reads, GI relight
+  has its own pipeline, and no other shader inlines page lookups, which would cost every preset registers; moved casters re-dirty pages). Look images are allocated lazily; probe GI is gathered at half resolution.
 - `set_deferred_post` + `finish(color, sampled, state)`: temporally resolve and grade
   an externally composited HDR frame (landscape, particles) with the same look post.
   TAA reprojects with native motion (Frame.look.w) when present.
@@ -133,8 +135,7 @@ Set `CARGO_BUILD_JOBS=2`. On Windows run `./run.ps1 -Mode Check`: it scopes Vulk
 and an empty implicit-layer directory to its process and restores the environment. SDL is built statically
 by `ara-sdl3-src`; there is no SDL setup script, native directory or runtime DLL requirement.
 
-Per-crate gates: `cargo check -p ara-render`, `cargo test -p ara-render`,
-`cargo clippy -p ara-render --all-targets -- -D warnings`, `cargo fmt -p ara-render -- --check`.
+Per-crate gates: `cargo check -p ara-render`, `cargo test -p ara-render`, `cargo clippy -p ara-render --all-targets -- -D warnings`, `cargo fmt -p ara-render -- --check`.
 GPU goldens require this device/driver baseline with tolerance 1-SSIM <= 0.005.
 They also check repeated deterministic captures, all 14 visible entities/picking,
 and odd-resolution bounds framing. Update only deliberately with process-local
@@ -142,8 +143,7 @@ and odd-resolution bounds framing. Update only deliberately with process-local
 environment variable before the command). Normal checks never update goldens.
 
 `run.ps1 -Mode Capture` writes every debug view, marks, JSON and render IDs.
-`run.ps1 -Mode Window` opens the same renderer through SDL; `--resize-test` on the
-windowed example exercises resize. `--frames=N` bounds its lifetime; Esc closes.
+`run.ps1 -Mode Window` opens the same renderer through SDL; `--resize-test` on the windowed example exercises resize. `--frames=N` bounds its lifetime; Esc closes.
 `cargo run -p ara-render --example timings` records 120 warm pass samples.
 
 The glTF importer is example-only; production import belongs to the asset pipeline. Example media are CC0; source/licence notices accompany assets.

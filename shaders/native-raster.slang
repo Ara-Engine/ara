@@ -21,9 +21,12 @@ struct Varying {
     nointerpolation uint id:TEXCOORD9;
 };
 // Shadow draws' light matrix: cascades 0-3 from the frame record, 4+ the
-// local-shadow tiles' matrices in the look's table (look::local::FACES).
+// local-shadow tiles' matrices in the look's table (look::local::FACES), and
+// VSM_PAGE_DRAWS+ this frame's virtual shadow pages (look::vsm PAGE_DRAWS).
+static const uint VSM_PAGE_DRAWS=1024;
 float4x4 shadowMatrix(Frame f,uint cascade){
     if(cascade<4)return f.shadows[cascade];
+    if(cascade>=VSM_PAGE_DRAWS)return buffers[NonUniformResourceIndex(look(f).vsm.z)].Load<float4x4>((cascade-VSM_PAGE_DRAWS)*64);
     return buffers[NonUniformResourceIndex(look(f).localShadows.x)].Load<float4x4>(LOCAL_FACES+(cascade-4)*64);
 }
 Varying nativeVertex(uint vertex,uint instance,bool shadow) {

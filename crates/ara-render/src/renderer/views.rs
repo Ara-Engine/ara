@@ -3,6 +3,7 @@ use super::*;
 use anyhow::Context;
 use std::sync::{Arc, Weak, mpsc};
 mod asynchronous;
+mod preparation;
 mod state;
 #[cfg(test)]
 pub(super) mod tests;
@@ -74,6 +75,7 @@ pub(super) struct Views {
     owner: Arc<Owner>,
     retired: mpsc::Receiver<(u64, Option<ViewState>)>,
     next: u64,
+    warm: Option<ViewState>,
     outputs: std::collections::BTreeMap<u64, asynchronous::Retained>,
     pending: Option<u64>,
     requested: Option<u64>,
@@ -86,6 +88,7 @@ impl Default for Views {
             owner: Arc::new(Owner { retired }),
             retired: receiver,
             next: 0,
+            warm: None,
             outputs: Default::default(),
             pending: None,
             requested: None,
@@ -115,11 +118,11 @@ impl Views {
             .map(|(&id, _)| id)
             .collect();
         for id in removable {
-            self.outputs
-                .remove(&id)
-                .expect("retired view exists")
-                .live
-                .destroy(gpu)?;
+            let mut output = self.outputs.remove(&id).expect("retired view exists");
+            if let Some(pending) = output.preparation.take() {
+                gpu.cancel_prepared_resources(pending.ticket)?;
+            }
+            output.live.destroy(gpu)?;
             retired = true;
         }
         if retired {
@@ -142,8 +145,9 @@ impl Drop for ViewId {
 }
 
 impl Renderer {
-    /// Creates a lazy secondary camera on this device. The first `render_secondary`
-    /// allocates its extent; hidden tabs cost no rendering or target allocations.
+    /// Creates a secondary camera on this device, claiming an optional prewarmed
+    /// quality state. Its extent stays lazy; hidden tabs do not render. Use
+    /// `preallocate_view` to allocate targets without blocking an interactive owner.
     pub fn create_view(&mut self) -> Result<ViewId> {
         self.collect_view_resources()?;
         let id = self.views.next;
@@ -152,7 +156,7 @@ impl Renderer {
         Ok(ViewId {
             owner: Arc::downgrade(&self.views.owner),
             id,
-            state: None,
+            state: self.views.warm.take(),
         })
     }
 
@@ -216,7 +220,7 @@ impl Renderer {
         request.validate()?;
         self.collect_view_resources()?;
         if view.state.is_none() {
-            view.state = Some(ViewState::new(self, request.size)?);
+            view.state = Some(ViewState::new(self, request.render_size, request.size)?);
         }
         let state = view.state.as_mut().context("secondary view initialized")?;
         state.prepare_native(self)?;

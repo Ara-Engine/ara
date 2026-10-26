@@ -101,6 +101,31 @@ fn prefab_instances_resolve_with_overrides_removals_and_nesting() {
     insta::assert_snapshot!(ara_json::to_canonical_string(&Value::Object(view)));
 }
 
+/// Resolving one record gives exactly its part of the whole document's resolution:
+/// plain records, instances with overrides and removals, nested prefabs.
+#[test]
+fn one_record_resolves_as_it_does_within_the_whole_document() {
+    let db = common::db();
+    let ws = common::workspace(&db);
+    let id = AssetId::parse("sc_arena001").expect("id");
+    let mut out = Vec::new();
+    let whole = ws.resolve(&id, &db, &mut out);
+    let doc = ws.doc(id.as_str()).expect("scene");
+    let mut covered = 0;
+    for record in doc.records().keys() {
+        let own = ara_doc::prefab::resolve_record(doc, record, &db, &ws).expect("record");
+        let prefix = format!("{record}/");
+        let part: ara_doc::prefab::Resolved = whole
+            .iter()
+            .filter(|(addr, _)| *addr == record.as_str() || addr.starts_with(&prefix))
+            .map(|(addr, e)| (addr.clone(), e.clone()))
+            .collect();
+        assert_eq!(own, part, "{record}");
+        covered += own.len();
+    }
+    assert_eq!(covered, whole.len(), "every entity belongs to one record");
+}
+
 #[test]
 fn bad_overrides_and_removals_are_reported() {
     let db = common::db();

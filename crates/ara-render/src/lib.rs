@@ -7,4 +7,6 @@ pub mod instanced;
 pub mod look;
 pub mod renderer;
 pub mod scene;
-pub use renderer::{NativeContent, NativeSeed, Renderer, ViewId, ViewOutput, ViewRequest};
+pub use renderer::{
+    NativeContent, NativeSeed, Renderer, ViewId, ViewOutput, ViewRequest, temporal_phases,
+};

@@ -40,6 +40,11 @@ pub(crate) enum LookPass {
     HorizonSun,
     /// The horizon's sky visibility (`look::horizon`).
     HorizonSky,
+    /// Marks the virtual shadow pages this frame's pixels sample (`look::vsm`).
+    VsmMark,
+    /// Resolves the G-buffer's virtual shadow page visibility into the mask lighting
+    /// reads (`look::vsm`).
+    VsmProject,
 }
 
 /// The frame records look passes run with: scene passes at the render size; the
@@ -54,6 +59,10 @@ pub(crate) struct Frames {
 }
 
 impl LookGpu {
+    /// Explicit capture boundaries may drain a loading reservation synchronously.
+    pub(crate) fn record_probe_clear(&self, recorder: &mut Recorder) {
+        self.record_scatter(recorder, LookPass::GiClear);
+    }
     /// Declares the sky and fog passes. LUTs are rebuilt when the aerosols change,
     /// the sky IBL when the sun or sky changes, the sky view and froxels per frame.
     /// `shared` is the frame's conservative bindless reachability.
@@ -174,6 +183,9 @@ impl LookGpu {
                     .chain(shared.iter().copied()),
                 );
                 passes.push((id, LookPass::GiScatter(n as u32)));
+            }
+            if self.gi.as_ref().is_some_and(|g| g.clearing_in_slices()) {
+                return passes;
             }
             let id = graph.pass(
                 "GI.Relight",
@@ -451,8 +463,13 @@ impl LookGpu {
                 groups(size.map(|v| (v >> level).max(1))),
             ),
             LookPass::SsrTrace => (p.ssr_trace, 0, groups(size.map(|v| v.div_ceil(2)))),
+            // With virtual shadow maps, hits compare against their pages first.
             LookPass::GiRelight => (
-                p.gi_relight,
+                if self.vsm.is_some() {
+                    p.gi_relight_vsm
+                } else {
+                    p.gi_relight
+                },
                 0,
                 [self.gi.as_ref().map_or(0, |gi| gi.probes), 1, 1],
             ),
@@ -466,6 +483,8 @@ impl LookGpu {
                 0,
                 groups([self.horizon.as_ref().map_or(0, |h| h.sky_resolution()); 2]),
             ),
+            LookPass::VsmMark => (p.vsm_mark, 0, groups(size.map(|v| v.div_ceil(4)))),
+            LookPass::VsmProject => (p.vsm_project, 0, groups(size)),
             LookPass::GiClear | LookPass::GiScatter(_) => return,
         };
         recorder.push(Command::Pipeline(pipeline));
@@ -481,12 +500,15 @@ impl LookGpu {
         let Some(gi) = &self.gi else {
             return;
         };
-        let (staging, count, clear) = match pass {
+        let (staging, base, count, clear) = match pass {
             LookPass::GiScatter(n) => match self.probe_writes.get(n as usize) {
-                Some((staging, count)) => (staging.index, *count, false),
+                Some((staging, count)) => (staging.index, 0, *count, false),
                 None => return,
             },
-            _ => (0, gi.probes, true),
+            _ => {
+                let (first, count) = gi.clear_window();
+                (0, first, count, true)
+            }
         };
         let mut words = [
             0,
@@ -500,7 +522,7 @@ impl LookGpu {
         ];
         recorder.push(Command::Pipeline(self.pipelines.gi_scatter));
         for first in (0..count).step_by(DISPATCH_PROBES as usize) {
-            words[0] = first;
+            words[0] = base + first;
             recorder.push(Command::Constants(RootConstants { words }));
             recorder.push(Command::Dispatch([
                 (count - first).min(DISPATCH_PROBES),

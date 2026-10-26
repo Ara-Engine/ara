@@ -18,6 +18,12 @@ use std::{
 struct TestHub {
     directory: PathBuf,
 }
+
+fn cli_executable() -> PathBuf {
+    let path = fs::canonicalize(env!("CARGO_BIN_EXE_ara")).expect("CLI executable");
+    ara_hub_service::normalized_path(&path).to_owned()
+}
+
 impl TestHub {
     fn new(name: &str) -> Self {
         let unique = SystemTime::now()
@@ -116,6 +122,120 @@ fn create_makes_parents_and_reports_the_original_service_diagnostic() {
         } else {
             assert_eq!(text.matches("error[").count(), 1, "{text}");
         }
+    }
+}
+
+#[test]
+fn installation_registration_does_not_start_a_service_and_reuses_one_when_running() {
+    let hub = TestHub::new("no-autostart");
+    hub.cli(&["hub", "register-engine", "--no-start"]);
+    assert!(ara_rpc::DaemonInfo::read(&hub.config().join("hub")).is_none());
+    let registry = ara_hub_service::Registry::load(&hub.config()).expect("registry");
+    assert_eq!(registry.engines.len(), 1);
+    assert_eq!(registry.engines[0].executable, cli_executable());
+    hub.cli(&["hub", "unregister-engine", "--no-start"]);
+    assert!(
+        ara_hub_service::Registry::load(&hub.config())
+            .expect("registry")
+            .engines
+            .is_empty()
+    );
+    assert!(ara_rpc::DaemonInfo::read(&hub.config().join("hub")).is_none());
+    let alternate = hub
+        .directory
+        .join(format!("alternate{}", std::env::consts::EXE_SUFFIX));
+    fs::copy(env!("CARGO_BIN_EXE_ara"), &alternate).expect("alternate installed build");
+    let output = Command::new(&alternate)
+        .env("ARA_CONFIG_DIR", hub.config())
+        .args(["hub", "register-engine", "--no-start"])
+        .output()
+        .expect("register alternate");
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    hub.cli(&["hub", "unregister-engine", "--no-start"]);
+    let registry = ara_hub_service::Registry::load(&hub.config()).expect("registry");
+    assert_eq!(
+        registry.engines.len(),
+        1,
+        "unregistering another build must not replace/remove this one"
+    );
+    assert_eq!(
+        registry.engines[0].executable,
+        ara_hub_service::normalized_path(
+            &fs::canonicalize(&alternate).expect("alternate executable")
+        )
+    );
+    assert!(ara_rpc::DaemonInfo::read(&hub.config().join("hub")).is_none());
+    hub.cli(&["hub", "register-engine", "--no-start"]);
+    hub.cli(&["hub", "projects"]);
+    let pid = ara_rpc::DaemonInfo::read(&hub.config().join("hub"))
+        .expect("explicit launch")
+        .pid;
+    hub.cli(&["hub", "register-engine", "--no-start"]);
+    assert_eq!(
+        ara_rpc::DaemonInfo::read(&hub.config().join("hub"))
+            .expect("existing service")
+            .pid,
+        pid
+    );
+    let project = hub.create("Pinned");
+    hub.cli(&[
+        "hub",
+        "open",
+        project["id"].as_str().expect("id"),
+        "--headless",
+    ]);
+    let refused = Command::new(env!("CARGO_BIN_EXE_ara"))
+        .env("ARA_CONFIG_DIR", hub.config())
+        .args(["hub", "unregister-engine", "--no-start"])
+        .output()
+        .expect("unregister open pin");
+    assert!(
+        !refused.status.success(),
+        "open pins must still reject unregister"
+    );
+    assert!(String::from_utf8_lossy(&refused.stderr).contains("close projects"));
+    hub.cli(&["hub", "close", project["id"].as_str().expect("id")]);
+    hub.cli(&["hub", "unregister-engine", "--no-start"]);
+    assert!(
+        hub.cli(&["hub", "engines"])["engines"]
+            .as_array()
+            .expect("engines")
+            .is_empty()
+    );
+}
+
+#[test]
+fn cli_open_accepts_case_insensitive_names_and_reports_ambiguous_variants() {
+    let hub = TestHub::new("case-insensitive-open");
+    let first = hub.create("Starter");
+    let opened = hub.cli(&["hub", "open", "starter", "--headless"]);
+    assert_eq!(opened["project"]["id"], first["id"]);
+    assert_eq!(opened["state"], "open");
+    hub.cli(&["hub", "close", "STARTER"]);
+    let second = hub.cli(&[
+        "hub",
+        "create",
+        hub.directory.join("second").to_str().expect("path"),
+        "--name",
+        "STARTER",
+    ]);
+    let result = Command::new(env!("CARGO_BIN_EXE_ara"))
+        .env("ARA_CONFIG_DIR", hub.config())
+        .args(["hub", "open", "Starter", "--headless"])
+        .output()
+        .expect("ambiguous open");
+    assert!(!result.status.success());
+    let error = String::from_utf8_lossy(&result.stderr);
+    assert!(error.contains("ambiguous"), "{error}");
+    for project in [first, second] {
+        assert!(
+            error.contains(project["id"].as_str().expect("id")),
+            "{error}"
+        );
     }
 }
 
@@ -509,6 +629,10 @@ fn registry_metadata_subscriptions_templates_and_global_install_configs() {
         .expect("remove");
     assert!(hub.directory.join("A/ara.project.json").is_file());
     let config = hub.cli(&["hub", "install-mcp", "--client", "claude"]);
+    assert_eq!(
+        config["mcpServers"]["ara"]["command"],
+        json!(cli_executable())
+    );
     assert_eq!(config["mcpServers"]["ara"]["args"], json!(["mcp"]));
     let codex = Command::new(env!("CARGO_BIN_EXE_ara"))
         .env("ARA_CONFIG_DIR", hub.config())
@@ -516,4 +640,6 @@ fn registry_metadata_subscriptions_templates_and_global_install_configs() {
         .output()
         .expect("config");
     assert!(String::from_utf8_lossy(&codex.stdout).contains("[mcp_servers.ara]"));
+    let quoted = serde_json::to_string(&cli_executable()).expect("quoted path");
+    assert!(String::from_utf8_lossy(&codex.stdout).contains(&format!("command = {quoted}")));
 }

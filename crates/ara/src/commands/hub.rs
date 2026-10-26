@@ -63,9 +63,17 @@ pub enum HubCommand {
     /// Cancel a download returned by hub.engine.install or hub.update.prepare.
     Cancel { job: String },
     /// Register this installed engine with the running user Hub.
-    RegisterEngine,
+    RegisterEngine {
+        /// Register under the registry lock without starting a Hub service.
+        #[arg(long)]
+        no_start: bool,
+    },
     /// Unregister this exact installed build, preserving projects and other versions.
-    UnregisterEngine,
+    UnregisterEngine {
+        /// Use an existing Hub or its registry offline; never autostart.
+        #[arg(long)]
+        no_start: bool,
+    },
     /// Stop the Hub service; project processes remain open.
     Shutdown,
     /// Attached agents and editors per project.
@@ -84,19 +92,27 @@ pub enum McpClient {
 }
 
 pub fn hub(command: HubCommand) -> Result<bool, RpcError> {
+    let executable = std::env::current_exe().map_err(io_error)?;
+    let executable = ara_hub_service::normalized_path(&executable).to_owned();
     if let HubCommand::InstallMcp { client } = command {
+        let path = executable
+            .to_str()
+            .ok_or_else(|| io_error("MCP executable path is not UTF-8"))?;
         match client {
             McpClient::Claude => println!(
                 "{}",
                 ara_json::to_canonical_string(
-                    &json!({"mcpServers":{"ara":{"command":"ara","args":["mcp"]}}})
+                    &json!({"mcpServers":{"ara":{"command":path,"args":["mcp"]}}})
                 )
             ),
-            McpClient::Codex => println!("[mcp_servers.ara]\ncommand = \"ara\"\nargs = [\"mcp\"]"),
+            McpClient::Codex => {
+                // JSON string escaping is also valid for this TOML basic string.
+                let quoted = serde_json::to_string(path).map_err(io_error)?;
+                println!("[mcp_servers.ara]\ncommand = {quoted}\nargs = [\"mcp\"]");
+            }
         }
         return Ok(true);
     }
-    let executable = std::env::current_exe().map_err(io_error)?;
     if let HubCommand::Serve { port, config_dir } = command {
         let directory = match config_dir {
             Some(directory) => directory,
@@ -113,6 +129,21 @@ pub fn hub(command: HubCommand) -> Result<bool, RpcError> {
             let _ = std::fs::write(log, error.to_string());
             return Err(error);
         }
+        return Ok(true);
+    }
+    if matches!(
+        &command,
+        HubCommand::RegisterEngine { no_start: true }
+            | HubCommand::UnregisterEngine { no_start: true }
+    ) {
+        let operation = if matches!(&command, HubCommand::RegisterEngine { .. }) {
+            ara_hub_service::EngineRegistration::Register
+        } else {
+            ara_hub_service::EngineRegistration::Remove
+        };
+        let config = ara_hub_service::HubConfig::user(executable).map_err(io_error)?;
+        let result = ara_hub_service::update_installed_engine(config, operation)?;
+        println!("{}", ara_json::to_canonical_string(&result));
         return Ok(true);
     }
     let directory = ara_hub_service::config_dir().map_err(io_error)?;
@@ -201,10 +232,10 @@ pub fn hub(command: HubCommand) -> Result<bool, RpcError> {
         HubCommand::Engines { .. } => ("hub.engines", json!({})),
         HubCommand::Uninstall { version } => ("hub.engine.uninstall", json!({"version":version})),
         HubCommand::Cancel { job } => ("hub.download.cancel", json!({"job":job})),
-        HubCommand::RegisterEngine | HubCommand::UnregisterEngine => {
+        HubCommand::RegisterEngine { .. } | HubCommand::UnregisterEngine { .. } => {
             let config = ara_hub_service::HubConfig::user(executable).map_err(io_error)?;
             (
-                if matches!(command, HubCommand::RegisterEngine) {
+                if matches!(command, HubCommand::RegisterEngine { .. }) {
                     "hub.engine.register"
                 } else {
                     "hub.engine.remove"

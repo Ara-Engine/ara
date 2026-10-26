@@ -37,7 +37,7 @@ enum Command {
         #[arg(long, value_enum, default_value = "engine")]
         kind: publish::ReleaseKind,
     },
-    /// Generate release notes from decisions, git history and known issues.
+    /// Copy the reviewed RELEASE_NOTES.md into the release artifacts directory.
     Notes {
         #[arg(long)]
         version: String,

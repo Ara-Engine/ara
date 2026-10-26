@@ -123,8 +123,8 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
     });
     // The publication the first extraction sees; SceneSync re-extracts on newer ones.
     let models_at_open = editor.models.revision();
-    let ray_tracing =
-        crate::world::gltf::render_settings(editor.host.store().workspace())?.ray_tracing;
+    let render_settings = crate::world::gltf::render_settings(editor.host.store().workspace())?;
+    let ray_tracing = render_settings.ray_tracing;
     let mut opening = crate::loading::Status {
         project: crate::shell::project_name(&editor),
         folder: editor.host.root().display().to_string(),
@@ -138,6 +138,7 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
         window.extensions()?,
         editor.host.root().join(".ara/gpu"),
         ray_tracing,
+        render_settings.quality.into(),
         |elapsed| {
             server.pump(&mut editor);
             editor.tick();
@@ -526,7 +527,12 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                 if !shell.game_live {
                     shell.game_captured = false;
                 }
-                shell.rebuild(&mut editor)?;
+                // Start progress alone (the phase, bar, count, elapsed time) updates
+                // the starting screen in place; anything else changes the Game view.
+                let progress_only = shell.game_live == was_live && shell.game_fault == was_fault;
+                if !(progress_only && shell.patch_start_progress(was_start.as_ref())?) {
+                    shell.rebuild(&mut editor)?;
+                }
                 dirty = true;
             }
             if shell.run_queued(&mut editor) {

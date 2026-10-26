@@ -39,6 +39,12 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
+    /// Format every workspace package in batches that fit Windows command lines.
+    Fmt {
+        /// Check formatting without changing source files.
+        #[arg(long)]
+        check: bool,
+    },
     /// Rehearse attribution-only history cleanup in a newly created, isolated mirror.
     HistoryRewrite(history::Options),
     /// Find a unique rewritten fork by full cleaned message and unchanged metadata/tree.
@@ -139,6 +145,7 @@ fn run() -> Result<bool> {
         ["rev-parse", "--show-toplevel"],
     )?);
     match cli.command {
+        Command::Fmt { check } => check::format(&root, check),
         Command::Cargo { args } => compile_cache::cargo(&root, &args),
         Command::Perf(options) => perf::run(&root, options),
         Command::D26(options) => d26::run(&root, options),

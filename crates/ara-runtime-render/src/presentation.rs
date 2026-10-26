@@ -40,6 +40,15 @@ mod published;
 mod raster;
 
 impl Presenter {
+    /// Reserve the initial GI volume and staging while a loading view remains
+    /// visible. Call after a completed `present`, on the preparation worker, and
+    /// continue presenting until true. Does not wait for the bulk probe bake.
+    pub fn preallocate_startup_resources(&mut self) -> Result<bool> {
+        match (&mut self.raster, &mut self.renderer) {
+            (Some(raster), Some(renderer)) => raster.preallocate_probe_resources(renderer),
+            _ => Ok(true),
+        }
+    }
     /// Timestamp results from the active view, excluding readback and display transfers.
     pub fn pass_timings(&self) -> &[ara_gpu::vulkan::PassTiming] {
         if let Some(live) = &self.live {

@@ -88,7 +88,7 @@ from a fresh `<output>/.ara-profile`. Never write user state anywhere else.
 Scene quality: `EditorState.render_quality` mirrors `viewport.quality` (None = project);
 `state.quality` derives in `apply_settings` (false only for Low); the window keeps Auto's `detected_quality`. Commands
 `view.quality.{project,auto,low,medium,high,epic}`; agents: `editor.preferences`.
-`SceneView` submits raster frames without GPU waits and retains completed color/IDs; input coalesces while busy. Capture/shutdown drain explicitly (renderer contract: `ara-render/AGENTS.md`).
+`SceneView` retains completed color/IDs without GPU waits; input coalesces while busy. Scene convergence is three jitter cycles of completed frames, then idle; preview work excludes that budget. Startup warms one camera quality; panel targets allocate on the worker. Capture/shutdown drain explicitly (`ara-render/AGENTS.md`).
 Scene camera: `state::Camera` (orbit pose, `fov_y_degrees` 10–120, default 50) feeds
 `spec()`. `editor.camera` reads it (no fields) or sets any subset (`fovYDegrees`;
 `entity` looks through a scene `Camera`). UI: toolbar FOV field, Camera menu presets,

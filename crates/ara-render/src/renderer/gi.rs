@@ -2,18 +2,129 @@
 //! on the GPU: packed probe records are uploaded to host staging here, and the
 //! next frame scatters them (`GI.Scatter`, `giScatterMain`) into the surface
 //! cache, meta and bordered moment tiles ahead of its relight. A new lattice first
-//! gets an empty volume, which that frame clears (`GI.Clear`: every probe
-//! inactive and dark).
+//! gets an empty volume. Startup reserves and clears it in bounded slices behind
+//! loading; live replacement clears it in its first frame (`GI.Clear`).
 use super::*;
 use crate::look::gi::{
-    GiGpu, PROBE_RECORD, ProbeStaging, ProbeSurfaces, ProbeUpdate, SURFACE_TEXELS, atlas_width,
+    GiGpu, PROBE_RECORD, ProbeLayout, ProbeStaging, ProbeSurfaces, ProbeUpdate, SURFACE_TEXELS,
+    atlas_width,
 };
+use anyhow::Context;
+use ara_gpu::commands::Command;
 use std::ops::Range;
 
 /// Staging buffers kept for reuse once their frame has scattered them.
 const STAGING_KEPT: usize = 2;
+#[cfg(test)]
+mod tests;
 
 impl Renderer {
+    /// Reserve the initial lattice and two prefaulted staging buffers before
+    /// surface acquisition finishes. Call on the loading worker at a completed
+    /// boundary, then present until this returns true. Clear work is bounded by
+    /// `records_per_frame`; ordinary first delivery only uploads/scatters records.
+    /// An existing different lattice is retained and rejected here; live content
+    /// replacement continues through `update_probe_records`.
+    pub fn preallocate_probe_volume(
+        &mut self,
+        layout: ProbeLayout,
+        records_per_frame: usize,
+    ) -> Result<bool> {
+        ara_gpu::cpu_scope!("Raster.reserve_probe_volume");
+        layout.validate()?;
+        ensure!(records_per_frame > 0, "Probe preparation budget is zero");
+        ensure!(
+            !self.gpu.deferring_completion(),
+            "Preallocate probes at a completed loading boundary"
+        );
+        if let Some(gi) = &self.look.gi {
+            ensure!(
+                gi.origin == layout.origin
+                    && gi.spacing == layout.spacing
+                    && gi.counts == layout.counts,
+                "Initial probe reservation would replace a live lattice"
+            );
+        } else {
+            let mut volume = self.empty_volume(layout)?;
+            volume.clear_budget = records_per_frame.min(layout.probe_count()) as u32;
+            self.look.gi = Some(volume);
+        }
+        let records = records_per_frame.min(layout.probe_count());
+        let bytes = records
+            .checked_mul(PROBE_RECORD)
+            .context("Probe staging size overflow")?;
+        let have = self
+            .look
+            .probe_staging
+            .iter()
+            .filter(|s| s.capacity >= bytes)
+            .count();
+        if have < STAGING_KEPT {
+            let capacity = bytes
+                .checked_next_power_of_two()
+                .context("Probe staging capacity overflow")?;
+            let zeros = vec![0u8; capacity];
+            for _ in have..STAGING_KEPT {
+                let staging = self.new_probe_staging(bytes)?;
+                if let Err(error) = self.gpu.upload(staging.buffer, &zeros) {
+                    self.gpu.retire(Resource::Buffer(staging.buffer))?;
+                    return Err(error.into());
+                }
+                self.look.probe_staging.push(staging);
+            }
+        }
+        Ok(self
+            .look
+            .gi
+            .as_ref()
+            .is_some_and(|gi| !gi.fresh && gi.relit_once))
+    }
+
+    /// A loading reservation still clearing bounded slices. Its records must
+    /// remain queued until complete, so later clear slices cannot erase them.
+    pub fn probe_preparation_pending(&self) -> bool {
+        self.look.gi.as_ref().is_some_and(|gi| gi.fresh)
+    }
+
+    /// Finish an incomplete loading clear at an explicit capture boundary. Live
+    /// frames never call this: they keep their staged records queued and clear
+    /// in slices. The acquired surface cache is not reset by this operation.
+    pub fn complete_probe_preparation(&mut self) -> Result<()> {
+        if !self.probe_preparation_pending() {
+            return Ok(());
+        }
+        ensure!(
+            !self.gpu.deferring_completion(),
+            "Capture must drain its pending frame before clearing probes"
+        );
+        let gi = self.look.gi.as_mut().context("pending probe volume")?;
+        gi.clear_budget = gi.probes;
+        let resources = [
+            (Resource::Buffer(gi.cache), gi.surface_access[0]),
+            (Resource::Buffer(gi.meta), gi.surface_access[1]),
+            (Resource::Image(gi.moments), gi.surface_access[2]),
+            (Resource::Image(gi.irradiance[0]), gi.access[0]),
+            (Resource::Image(gi.irradiance[1]), gi.access[1]),
+        ];
+        let mut commands = self.gpu.begin(Queue::Graphics);
+        commands.barriers(resources.map(|(resource, before)| ara_gpu::Barrier {
+            resource,
+            before,
+            after: Access::Storage,
+            handoff: None,
+        }));
+        commands.push(Command::BeginPass("GI.Clear".into()));
+        self.look.record_probe_clear(&mut commands);
+        commands.push(Command::EndPass);
+        let point = self.gpu.submit(commands.finish(), &[])?;
+        self.gpu.resolve(point)?;
+        let gi = self.look.gi.as_mut().context("cleared probe volume")?;
+        gi.surface_access = [Access::Storage; 3];
+        gi.access = [Access::Storage; 2];
+        gi.cleared();
+        self.gpu.assert_clean()?;
+        Ok(())
+    }
     /// Replaces the probe volume used for global illumination; `None` returns to
     /// sky-only ambient light. The new volume relights out of sight for
     /// `CONVERGE_FRAMES`, then fades into shading.
@@ -53,13 +164,17 @@ impl Renderer {
             gi.origin == update.origin && gi.spacing == update.spacing && gi.counts == update.counts
         });
         if !same {
-            let volume = self.empty_volume(update)?;
+            let volume = self.empty_volume(update.layout())?;
             self.drop_probe_volume()?;
             self.look.gi = Some(volume);
         }
         if records.is_empty() {
             return Ok(());
         }
+        ensure!(
+            !self.look.gi.as_ref().is_some_and(GiGpu::clearing_in_slices),
+            "Probe reservation must clear before record delivery"
+        );
         let bytes = &update.records[records.start * PROBE_RECORD..records.end * PROBE_RECORD];
         let staging = self.probe_staging(bytes.len())?;
         if let Err(error) = self.gpu.upload_queued(staging.buffer, bytes) {
@@ -84,6 +199,11 @@ impl Renderer {
         {
             return Ok(pool.swap_remove(i));
         }
+        self.new_probe_staging(bytes)
+    }
+
+    fn new_probe_staging(&mut self, bytes: usize) -> Result<ProbeStaging> {
+        ara_gpu::cpu_scope!("Raster.allocate_probe_staging");
         let capacity = bytes.next_power_of_two();
         let buffer =
             self.gpu
@@ -106,7 +226,7 @@ impl Renderer {
     /// pool (the largest [`STAGING_KEPT`] stay) and a new volume counts as cleared.
     pub(super) fn probe_writes_scattered(&mut self) -> Result<()> {
         if let Some(gi) = &mut self.look.gi {
-            gi.fresh = false;
+            gi.cleared();
         }
         let written = std::mem::take(&mut self.look.probe_writes);
         let pool = &mut self.look.probe_staging;
@@ -138,9 +258,11 @@ impl Renderer {
     /// A volume for `update`'s lattice: storage for the surface cache, meta,
     /// bordered moment tiles and both irradiance atlases, uninitialized until the
     /// next frame clears it (`fresh`).
-    fn empty_volume(&mut self, update: &ProbeUpdate) -> Result<GiGpu> {
+    fn empty_volume(&mut self, layout: ProbeLayout) -> Result<GiGpu> {
+        ara_gpu::cpu_scope!("Raster.allocate_probe_volume");
+        layout.validate()?;
         let mut allocated = Vec::new();
-        let result = self.allocate_probe_volume(update, &mut allocated);
+        let result = self.allocate_probe_volume(layout, &mut allocated);
         if result.is_err() {
             for resource in allocated.into_iter().rev() {
                 self.gpu.retire(resource)?;
@@ -152,10 +274,10 @@ impl Renderer {
 
     fn allocate_probe_volume(
         &mut self,
-        update: &ProbeUpdate,
+        layout: ProbeLayout,
         allocated: &mut Vec<Resource>,
     ) -> Result<GiGpu> {
-        let probes = update.probes();
+        let probes = layout.probe_count();
         let atlas = atlas_width(probes);
         let rows = (probes as u32).div_ceil(atlas);
         let storage = vk::BufferUsageFlags::STORAGE_BUFFER;
@@ -186,11 +308,11 @@ impl Renderer {
             image(&mut self.gpu, 8, vk::Format::R16G16B16A16_SFLOAT)?,
         ];
         let volume = GiGpu {
-            origin: update.origin,
-            spacing: update.spacing,
-            counts: update.counts,
+            origin: layout.origin,
+            spacing: layout.spacing,
+            counts: layout.counts,
             probes: probes as u32,
-            bias: update.bias(),
+            bias: layout.bias(),
             atlas,
             indices: [
                 self.gpu.storage_buffer(cache)?.index,
@@ -210,11 +332,17 @@ impl Renderer {
             meta,
             moments,
             irradiance,
+            surface_access: [Access::Undefined; 3],
             access: [Access::Undefined; 2],
             fresh: true,
+            clear_cursor: 0,
+            clear_budget: probes as u32,
             slot: 0,
             cursor: 0,
             converge: 0,
+            converge_progress: 0,
+            capture_convergence: false,
+            relit_once: false,
             received: 0,
             weight: 0.,
         };

@@ -38,6 +38,15 @@ pub struct EngineBuild {
     pub editor: Option<PathBuf>,
 }
 
+impl EngineBuild {
+    pub(crate) fn normalize_paths(&mut self) {
+        self.executable = crate::normalized_path(&self.executable).to_owned();
+        if let Some(editor) = &mut self.editor {
+            *editor = crate::normalized_path(editor).to_owned();
+        }
+    }
+}
+
 /// Serialized user registry, independent of running daemon processes.
 #[derive(Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -55,7 +64,13 @@ impl Registry {
     pub fn load(dir: &Path) -> Result<Self, RpcError> {
         crate::validate_development_config(dir).map_err(io_error)?;
         match fs::read(dir.join("registry.json")) {
-            Ok(bytes) => serde_json::from_slice(&bytes).map_err(io_error),
+            Ok(bytes) => {
+                let mut registry: Self = serde_json::from_slice(&bytes).map_err(io_error)?;
+                for engine in &mut registry.engines {
+                    engine.normalize_paths();
+                }
+                Ok(registry)
+            }
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Self::default()),
             Err(e) => Err(io_error(e)),
         }
@@ -73,19 +88,36 @@ impl Registry {
             &serde_json::to_value(self).map_err(io_error)?,
         )
     }
-    /// Resolve only registered IDs, unique names or canonical paths.
+    /// Resolve exact IDs/paths, or one case-insensitive display name.
     pub fn resolve(&self, project: &str) -> Result<&ProjectEntry, RpcError> {
         let path = fs::canonicalize(project).ok();
-        self.projects
+        if let Some(exact) = self.projects.iter().find(|p| p.id == project).or_else(|| {
+            self.projects
+                .iter()
+                .find(|p| Some(&p.path) == path.as_ref())
+        }) {
+            return Ok(exact);
+        }
+        let folded = project.to_lowercase();
+        let mut names = self
+            .projects
             .iter()
-            .find(|p| p.id == project)
-            .or_else(|| {
-                self.projects
-                    .iter()
-                    .find(|p| Some(&p.path) == path.as_ref())
-            })
-            .or_else(|| self.projects.iter().find(|p| p.name == project))
-            .ok_or_else(|| invalid(format!("project `{project}` is not registered in Ara Hub")))
+            .filter(|p| p.name.to_lowercase() == folded);
+        let first = names
+            .next()
+            .ok_or_else(|| invalid(format!("project `{project}` is not registered in Ara Hub")))?;
+        if let Some(second) = names.next() {
+            let choices = std::iter::once(first)
+                .chain(std::iter::once(second))
+                .chain(names)
+                .map(|p| format!("{} ({})", p.id, p.path.display()))
+                .collect::<Vec<_>>()
+                .join(", ");
+            return Err(invalid(format!(
+                "project name `{project}` is ambiguous; use a project ID or canonical path: {choices}"
+            )));
+        }
+        Ok(first)
     }
     /// Register an existing project and persist its engine pin.
     pub fn add(

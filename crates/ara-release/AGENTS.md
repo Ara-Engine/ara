@@ -1,7 +1,7 @@
 # ara-release
 
 Windows engine distribution tooling, separate from exported games. `ara-release`
-packages release binaries and runtime resources, generates notes, and tests an
+packages release binaries and runtime resources, copies reviewed notes, and tests an
 installed distribution. The setup stub both installers start with is the
 `ara-setup` crate (window, silent CLI, same-version replace; see its AGENTS.md);
 packaging appends the portable ZIP to `target/release/ara-setup.exe`.
@@ -10,6 +10,7 @@ packaging appends the portable ZIP to `target/release/ara-setup.exe`.
 `cargo run -p ara-release -- notes --version 0.0.1-alpha`
 `cargo run -p ara-release -- smoke`
 `smoke --artifacts <existing release-dist>` tests packages without rebuilding them.
+Engine packaging/`notes` copy root RELEASE_NOTES.md verbatim and require its version header.
 
 Always CARGO_BUILD_JOBS=2. Package is an explicit opt-in release build; no dev
 server or full workspace build. Outputs, logs, smoke projects and symbols belong
@@ -46,7 +47,8 @@ with binary hashes. The symbols command converts them through ara-crash when nee
 registers its build, upgrades the standalone Hub by commit/generation and points all
 Hub shortcuts there. `hub-installation.ps1` shares the updater/setup transaction lock,
 rejects running/locked files, and rolls back failed directory swaps. No-system-integration
-suppresses PATH/registry/Start-menu writes; smoke also isolates LOCALAPPDATA so its
+suppresses PATH/registry/Start-menu writes and registers the engine offline without
+starting a Hub service; smoke also isolates LOCALAPPDATA so its
 managed Hub never touches an existing user installation. Smoke
 captures every Hub page from the installed binary. Packaged samples get their
 `thumbnail.png` from `evidence/<main-scene>-player.png` (evidence is excluded).
@@ -59,6 +61,9 @@ Smoke opens every installed template in the installed editor (`--frames 20`).
 It also creates Starter, queues `build.current` in an offscreen installed editor,
 checks the resolved PDB hash, and requires verified `ARA_RESULT` after 8 game ticks.
 That flow uses a human session to gracefully stop its owned editor authority.
+Smoke invokes uninstall.cmd (the Apps entry point), requires exit 0, and checks
+projects, settings, crash reports and user-added install files survive. The script
+regression also requires exit 1 on refusal. Independent Hub services remain running.
 
 Gates: cargo check -p ara-release; cargo test -p ara-release;
 cargo clippy -p ara-release --all-targets -- -D warnings; cargo fmt --all.

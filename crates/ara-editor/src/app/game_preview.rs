@@ -11,8 +11,9 @@
 //! never followed by another, unless the shared content still has work the preview
 //! must show (`SceneView::preview_needs_frame`: publication, late GI, emitter fades).
 //! Until the scene's content is published it asks again every frame, keeping the
-//! empty state. Hiding detaches the image and retains one camera without rendering;
-//! editor shutdown detaches and releases its targets.
+//! empty state. Hiding renders nothing and keeps the last image attached, so showing
+//! the Game view again needs no second rebuild for it; Play takes the view and lets
+//! it go, and editor shutdown detaches and releases its targets.
 use std::time::{Duration, Instant};
 
 use ara_editor_gpu::NativeUi;
@@ -66,9 +67,15 @@ impl Preview {
         Some((shell.gameplay_camera(editor)?, target))
     }
 
+    /// Whether a preview that is not wanted keeps its image: its Game view is only
+    /// hidden (another tab, or not laid out), and nothing else needs the view.
+    fn keeps(editor: &Editor, shell: &Shell) -> bool {
+        editor.state.playing.is_none() && !shell.game_live && shell.game_host().is_none()
+    }
+
     /// Whether this frame has preview work: a change to show, a burst still settling,
     /// shared content work the preview must show, a submitted frame to collect, or an
-    /// image to detach.
+    /// image to detach (not while its view is only hidden).
     pub fn wants_frame(
         &mut self,
         editor: &Editor,
@@ -77,7 +84,7 @@ impl Preview {
         scene: &SceneView,
     ) -> bool {
         match Self::want(editor, shell) {
-            None => self.attached.is_some(),
+            None => self.attached.is_some() && !Self::keeps(editor, shell),
             Some((camera, size)) => {
                 let key = self.key(editor, camera, size);
                 self.shown.as_ref() != Some(&key)
@@ -115,6 +122,9 @@ impl Preview {
         gpu: &mut NativeUi,
     ) -> ara_ui::Result<bool> {
         let Some((camera, size)) = Self::want(editor, shell) else {
+            if Self::keeps(editor, shell) {
+                return Ok(false);
+            }
             return self.release(renderer, shell, gpu);
         };
         let key = self.key(editor, camera, size);
@@ -186,8 +196,9 @@ impl Preview {
         self.camera.release(renderer)
     }
 
-    /// Detach a hidden preview without drawing. Keep its single camera resident so
-    /// tab switches and Stop reuse targets/history; `destroy` releases them.
+    /// Detach the preview without drawing when Play takes the view (or it has no
+    /// camera or room). Keep its single camera resident so Stop reuses its targets and
+    /// history; `destroy` releases them.
     fn release(
         &mut self,
         _renderer: &mut Renderer,

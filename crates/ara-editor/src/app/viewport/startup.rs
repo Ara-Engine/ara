@@ -10,6 +10,7 @@ pub(in crate::app) fn prepare_renderer(
     extensions: Vec<CString>,
     cache: PathBuf,
     ray_tracing: bool,
+    quality: ara_runtime_render::QualityChoice,
     tick: impl FnMut(Duration) -> ara_ui::Result<bool>,
 ) -> ara_ui::Result<Option<Renderer>> {
     let job = std::thread::Builder::new()
@@ -21,7 +22,19 @@ pub(in crate::app) fn prepare_renderer(
             } else {
                 Renderer::new_raster
             };
-            create(scene, size, &extensions, cache)
+            let mut renderer = create(scene, size, &extensions, cache)?;
+            if !ray_tracing {
+                let plan = Plan::resolve(
+                    quality,
+                    &Capabilities::of(renderer.gpu()),
+                    [1, 1],
+                    ara_runtime_render::RenderOptions { ray_tracing: false },
+                )?;
+                if let RenderPath::Raster(plan) = plan.path {
+                    renderer.prewarm_view_quality(plan.quality)?;
+                }
+            }
+            Ok(renderer)
         })?;
     wait_for(job, tick)
 }

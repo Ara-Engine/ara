@@ -74,6 +74,70 @@ fn config(directory: &Path) -> HubConfig {
 }
 
 #[test]
+fn names_ignore_case_but_ambiguous_names_require_an_id_or_path() {
+    let root = scratch("case-fold").canonicalize().expect("root");
+    let mut hub = Hub::open(config(&root.join("config"))).expect("Hub");
+    let first = hub
+        .call(
+            "hub.create",
+            json!({"name":"Starter","template":"blank","path":root.join("first")}),
+        )
+        .expect("first project");
+    assert_eq!(
+        hub.call("hub.resolve", json!({"project":"sTaRtEr"}))
+            .expect("case-insensitive name")["id"],
+        first["id"]
+    );
+    let second = hub
+        .call(
+            "hub.create",
+            json!({"name":"STARTER","template":"blank","path":root.join("second")}),
+        )
+        .expect("case variant");
+    for query in ["starter", "Starter", "STARTER"] {
+        let error = hub
+            .call("hub.resolve", json!({"project":query}))
+            .expect_err("ambiguous name");
+        assert!(error.message.contains("ambiguous"), "{error}");
+        assert!(
+            error
+                .message
+                .contains(first["id"].as_str().expect("first id")),
+            "{error}"
+        );
+        assert!(
+            error
+                .message
+                .contains(second["id"].as_str().expect("second id")),
+            "{error}"
+        );
+    }
+    for project in [first, second] {
+        assert_eq!(
+            hub.call("hub.resolve", json!({"project":project["id"]}))
+                .expect("ID")["id"],
+            project["id"]
+        );
+        assert_eq!(
+            hub.call("hub.resolve", json!({"project":project["path"]}))
+                .expect("path")["id"],
+            project["id"]
+        );
+    }
+    let accented = hub
+        .call(
+            "hub.create",
+            json!({"name":"École","template":"blank","path":root.join("accented")}),
+        )
+        .expect("Unicode name");
+    assert_eq!(
+        hub.call("hub.resolve", json!({"project":"éCOLE"}))
+            .expect("Unicode lower case")["id"],
+        accented["id"]
+    );
+}
+
+#[test]
 fn bootstrap_service_uses_registered_engine_templates_and_their_pins() {
     let root = scratch("bootstrap-templates")
         .canonicalize()
@@ -144,12 +208,22 @@ fn bootstrap_service_uses_registered_engine_templates_and_their_pins() {
 fn engine_installations_register_durably_and_remove_only_the_matching_build() {
     let root = scratch("installed-engines");
     let mut hub = Hub::open(config(&root)).expect("Hub");
-    let installed = engine("0.0.1-alpha");
+    let mut installed = engine("0.0.1-alpha");
+    // Canonical Windows paths deliberately include the verbatim prefix.
+    installed.executable = fs::canonicalize(&installed.executable).expect("executable");
+    installed.editor = Some(installed.executable.clone());
     hub.call("hub.engine.register", json!({"engine":installed}))
         .expect("register installed build");
     hub.call("hub.engine.register", json!({"engine":installed}))
         .expect("idempotent registration");
     let registry = Registry::load(&root).expect("durable");
+    let expected = ara_hub_service::normalized_path(&installed.executable).to_owned();
+    let persisted: Value =
+        serde_json::from_slice(&fs::read(root.join("registry.json")).expect("persisted registry"))
+            .expect("registry JSON");
+    assert_eq!(persisted["engines"][1]["executable"], json!(expected));
+    assert_eq!(persisted["engines"][1]["editor"], json!(expected));
+    assert_eq!(registry.engines[1].executable, expected);
     assert_eq!(
         registry
             .engines
@@ -180,6 +254,20 @@ fn engine_installations_register_durably_and_remove_only_the_matching_build() {
     assert!(
         hub.call("hub.engine.register", json!({"engine":invalid}))
             .is_err()
+    );
+    drop(hub);
+    let mut legacy = Registry::default();
+    legacy.engines.push(installed);
+    fs::write(
+        root.join("registry.json"),
+        ara_json::to_canonical_string(&serde_json::to_value(&legacy).expect("legacy registry")),
+    )
+    .expect("old verbatim registry");
+    let reloaded = Registry::load(&root).expect("load old registry");
+    assert_eq!(reloaded.engines[0].executable, expected);
+    assert_eq!(
+        reloaded.engines[0].editor.as_deref(),
+        Some(expected.as_path())
     );
 }
 

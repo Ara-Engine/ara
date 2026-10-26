@@ -163,13 +163,24 @@ fn seed_with(hub: &mut Hub, with_projects: bool) {
         });
     }
     hub.create.destination = base.into();
+    let cli = if cfg!(windows) {
+        r"C:\Ara Test\ara.exe"
+    } else {
+        "/opt/ara/bin/ara"
+    };
+    hub.cli_executable = Some(cli.into());
     hub.install.insert(
         AgentClient::Claude,
-        "{\n  \"mcpServers\": {\n    \"ara\": {\n      \"args\": [\"mcp\"],\n      \"command\": \"ara\"\n    }\n  }\n}\n".into(),
+        ara_json::to_canonical_string(
+            &json!({"mcpServers":{"ara":{"args":["mcp"],"command":cli}}}),
+        ),
     );
     hub.install.insert(
         AgentClient::Codex,
-        "[mcp_servers.ara]\ncommand = \"ara\"\nargs = [\"mcp\"]\n".into(),
+        format!(
+            "[mcp_servers.ara]\ncommand = {}\nargs = [\"mcp\"]\n",
+            json!(cli)
+        ),
     );
     // Releases and incomplete samples are separate demonstration states, not
     // the default state of a newly installed current build.

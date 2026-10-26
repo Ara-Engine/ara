@@ -37,7 +37,9 @@ fn readiness_waits_for_probe_delivery_and_convergence_but_allows_motion() -> Res
         !presenter.readiness().gi_volume_ready,
         "completed relighting must still finish its arrival fade"
     );
-    for _ in 0..32 {
+    // Live convergence now spreads each bounce over Low's probe budget, then
+    // finishes the same arrival fade. Captures retain their full-grid bounces.
+    for _ in 0..64 {
         presenter.present(&frame)?;
     }
     assert!(

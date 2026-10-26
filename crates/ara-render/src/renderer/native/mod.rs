@@ -20,7 +20,7 @@ mod tests;
 mod updates;
 mod view;
 use batches::Groups;
-use culling::Culling;
+use culling::{Culling, PageView};
 pub(in crate::renderer) use view::NativeView;
 
 /// The cached shadow list a patch redraws part of (`Renderer::cull_native_shadow_patch`).
@@ -522,6 +522,64 @@ impl Renderer {
         Ok(pass)
     }
 
+    /// This frame's virtual shadow pages (look::vsm): plans `vsm` against the native
+    /// casters' changes, culls each page's opaque casters (through a grid in the
+    /// sun's light space) into the map's caster rows until they are full, and
+    /// returns the pages that fit (the rest wait); `Native::record_page` draws them.
+    /// `settle` (deterministic frames) waits for outstanding page requests.
+    pub(crate) fn native_shadow_pages(
+        &mut self,
+        vsm: &mut crate::look::vsm::VirtualShadowMap,
+        settle: bool,
+    ) -> Result<Vec<crate::look::vsm::PageDraw>> {
+        let Some(native) = self.native.as_mut() else {
+            return Ok(Vec::new());
+        };
+        let Some(content) = native
+            .bounds
+            .iter()
+            .copied()
+            .reduce(|[lo, hi], [a, b]| [lo.min(a), hi.max(b)])
+        else {
+            return Ok(Vec::new());
+        };
+        let changes = (native.changes.caster_all, &native.changes.caster_bounds[..]);
+        let mut draws = vsm.plan(
+            &mut self.gpu,
+            self.content.sun_direction,
+            content,
+            changes,
+            settle,
+        )?;
+        let rotation = vsm
+            .space
+            .context("a planned virtual shadow map has a light space")?
+            .rotation;
+        let views: Vec<_> = draws
+            .iter()
+            .map(|draw| {
+                let (lo, hi) = draw.rect();
+                PageView {
+                    matrix: draw.matrix,
+                    lo,
+                    hi,
+                }
+            })
+            .collect();
+        let fit = native.culling.cull_pages(
+            &mut self.gpu,
+            &native.groups,
+            &native.bounds,
+            rotation,
+            &views,
+            (vsm.page_rows, vsm.page_rows_capacity),
+            &mut native.changes.work,
+        )?;
+        let rest = draws.split_off(fit);
+        vsm.drawn(&mut self.gpu, &draws, &rest)?;
+        Ok(draws)
+    }
+
     /// Compressed texture upload costs of the last completed native frame.
     pub fn native_texture_stats(&self) -> Option<TextureStats> {
         self.native.as_ref().map(|native| native.upload)
@@ -795,6 +853,32 @@ impl Native {
             constants.words[5] = self.pool.table_index().unwrap_or(0);
             constants.words[6] = self.textures.binding().map_or(0, |b| b.buffer_index);
             constants.words[7] = self.visible_index;
+            recorder.push(Command::Constants(constants));
+            recorder.push(Command::DrawProcedural {
+                vertices: batch.vertices,
+                instances: batch.count,
+            });
+        }
+    }
+
+    /// Records page `page` of the last `cull_native_shadow_pages` with the shadow
+    /// pipeline, its rows read from storage buffer `rows` (bindless index).
+    pub(super) fn record_page(
+        &self,
+        recorder: &mut Recorder,
+        root: RootConstants,
+        rows: u32,
+        page: usize,
+    ) {
+        recorder.push(Command::Pipeline(self.pipelines[0]));
+        for batch in self.culling.page_batches.get(page).into_iter().flatten() {
+            let mut constants = root;
+            constants.words[1] = self.material_index;
+            constants.words[2] = self.instance_index;
+            constants.words[3] = batch.first;
+            constants.words[5] = self.pool.table_index().unwrap_or(0);
+            constants.words[6] = self.textures.binding().map_or(0, |b| b.buffer_index);
+            constants.words[7] = rows;
             recorder.push(Command::Constants(constants));
             recorder.push(Command::DrawProcedural {
                 vertices: batch.vertices,

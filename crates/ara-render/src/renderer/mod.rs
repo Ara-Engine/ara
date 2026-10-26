@@ -10,12 +10,13 @@ pub mod post;
 mod readback;
 mod readiness;
 mod submission;
+mod targets;
 mod transfer;
 mod upload;
 mod views;
 use crate::{
     capture::{Capture, CaptureRequest},
-    graph::{Graph, State, TransientImage},
+    graph::State,
     scene::{CameraSpec, Scene},
 };
 use anyhow::{Result, ensure};
@@ -23,6 +24,7 @@ use ara_gpu::{
     Access, Buffer, Device, Image, Pipeline, Queue, Resource, vk,
     vulkan::{PassTiming, VulkanDevice},
 };
+pub use frame::temporal_phases;
 use glam::{Mat4, Vec3};
 pub use native::{NativeContent, NativeSeed};
 use std::path::{Path, PathBuf};
@@ -404,6 +406,7 @@ impl Renderer {
     /// Apply per-preset raster budgets (shadow cascades, probe GI, bloom) from the
     /// next frame. A new cascade count or resolution reallocates the cascade maps.
     pub fn set_quality(&mut self, quality: crate::look::Quality) -> Result<()> {
+        ara_gpu::cpu_scope!("Raster.set_quality");
         quality.validate()?;
         let previous = std::mem::replace(&mut self.look.quality, quality);
         if let Err(error) = self.ensure_cascades() {
@@ -430,6 +433,17 @@ impl Renderer {
             }
             if let Some(local) = local {
                 self.look.local = Some(crate::look::local::LocalMap::new(&mut self.gpu, local)?);
+            }
+        }
+        if quality.virtual_shadows != self.look.vsm.as_ref().map(|v| v.settings) {
+            if let Some(old) = self.look.vsm.take() {
+                old.destroy(&mut self.gpu)?;
+            }
+            if let Some(settings) = quality.virtual_shadows {
+                self.look.vsm = Some(crate::look::vsm::VirtualShadowMap::new(
+                    &mut self.gpu,
+                    settings,
+                )?);
             }
         }
         if quality.horizon != self.look.horizon.as_ref().map(|h| h.resolution) {
@@ -527,6 +541,7 @@ impl Renderer {
     /// their residency remain intact; live camera changes use the cheaper
     /// temporal-only reset instead.
     pub fn reset_capture_history(&mut self) -> Result<()> {
+        self.complete_probe_preparation()?;
         self.reset_temporal_history();
         self.look.reset_exposure(&mut self.gpu)?;
         self.look.settle = crate::look::gi::CONVERGE_FRAMES;
@@ -566,6 +581,8 @@ impl Renderer {
         gi.slot = 0;
         gi.cursor = 0;
         gi.converge = crate::look::gi::CONVERGE_FRAMES;
+        gi.converge_progress = 0;
+        gi.capture_convergence = true;
         gi.show();
         Ok(())
     }
@@ -616,105 +633,5 @@ impl Renderer {
             (u64::from(pixel[i]) * u64::from(self.render[i]) / u64::from(self.size[i])) as usize
         });
         y * self.render[0] as usize + x
-    }
-    /// View targets: the compact G-buffer (decoded by raster.slangh's gbuffer*
-    /// helpers), depth, ID, HDR and motion at the `render` size; TAA histories and
-    /// output at `display`.
-    fn targets(gpu: &mut VulkanDevice, render: [u32; 2], display: [u32; 2]) -> Result<Targets> {
-        let mut allocated = Vec::new();
-        let result = (|| {
-            let mut graph = Graph::default();
-            let mut images = Vec::new();
-            let mut sampled = Vec::new();
-            for target in 0..TARGET_COUNT {
-                let format = match target {
-                    // The compact G-buffer (raster.slangh gbuffer* helpers).
-                    ALBEDO => vk::Format::R8G8B8A8_SRGB,
-                    NORMAL => vk::Format::R16G16_UNORM,
-                    MATERIAL => vk::Format::R8G8B8A8_UNORM,
-                    EMISSIVE => vk::Format::B10G11R11_UFLOAT_PACK32,
-                    ID => vk::Format::R32_SFLOAT,
-                    DEPTH => vk::Format::D32_SFLOAT,
-                    OUTPUT => vk::Format::R8G8B8A8_UNORM,
-                    MOTION => vk::Format::R16G16_SFLOAT,
-                    // Pre-exposed (look.slangh exposureState), so half floats suffice.
-                    HISTORY0 | HISTORY1 => vk::Format::R16G16B16A16_SFLOAT,
-                    _ => vk::Format::R32G32B32A32_SFLOAT,
-                };
-                let depth = target == DEPTH;
-                let usage = vk::ImageUsageFlags::SAMPLED
-                    | vk::ImageUsageFlags::TRANSFER_SRC
-                    | if depth {
-                        vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT
-                    } else if (HISTORY0..=OUTPUT).contains(&target) {
-                        vk::ImageUsageFlags::STORAGE
-                    } else {
-                        vk::ImageUsageFlags::COLOR_ATTACHMENT
-                    };
-                let size = if (HISTORY0..=OUTPUT).contains(&target) {
-                    display
-                } else {
-                    render
-                };
-                let (_, image) = graph.transient(
-                    gpu,
-                    TransientImage {
-                        size,
-                        format,
-                        usage,
-                    },
-                    Queue::Graphics,
-                )?;
-                allocated.push(Resource::Image(image));
-                images.push(image);
-                sampled.push(gpu.sampled_image(image, depth)?.index);
-            }
-            let storage = [
-                gpu.storage_image(images[HISTORY0])?.index,
-                gpu.storage_image(images[HISTORY1])?.index,
-                gpu.storage_image(images[OUTPUT])?.index,
-            ];
-            let tiles = gpu.create_buffer(
-                u64::from(render[0].div_ceil(16))
-                    * u64::from(render[1].div_ceil(16))
-                    * (crate::scene::TILE_LIGHTS as u64 + 1)
-                    * 4,
-                vk::BufferUsageFlags::STORAGE_BUFFER,
-                false,
-            )?;
-            allocated.push(Resource::Buffer(tiles));
-            let tile_index = gpu.storage_buffer(tiles)?.index;
-            let bytes = |[w, h]: [u32; 2]| u64::from(w) * u64::from(h) * 4;
-            let read_color =
-                gpu.create_buffer(bytes(display), vk::BufferUsageFlags::TRANSFER_DST, true)?;
-            allocated.push(Resource::Buffer(read_color));
-            let read_ids =
-                gpu.create_buffer(bytes(render), vk::BufferUsageFlags::TRANSFER_DST, true)?;
-            allocated.push(Resource::Buffer(read_ids));
-            Ok(Targets {
-                images,
-                sampled,
-                storage,
-                states: vec![
-                    State {
-                        access: Access::Undefined,
-                        queue: Queue::Graphics
-                    };
-                    TARGET_COUNT
-                ],
-                tiles,
-                tile_index,
-                read_color,
-                read_ids,
-                history: None,
-            })
-        })();
-        if result.is_err() {
-            for resource in allocated.into_iter().rev() {
-                gpu.retire(resource)?;
-            }
-            gpu.collect()?;
-        }
-        result
     }
 }

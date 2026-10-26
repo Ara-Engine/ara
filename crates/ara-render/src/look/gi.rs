@@ -8,6 +8,8 @@
 //! directions, no per-pixel or per-frame random sampling.
 use anyhow::{Result, ensure};
 use ara_gpu::{Access, Buffer, Image};
+mod layout;
+pub use layout::ProbeLayout;
 
 /// Cache texels per probe (8x8 octahedral directions).
 pub const SURFACE_TEXELS: usize = 64;
@@ -16,10 +18,9 @@ pub const STATIC_VECTORS: usize = 66;
 /// Irradiance kept from the previous frame; relighting is noise-free, so this
 /// only smooths changes (camera-dependent shadowing at cache hits).
 pub(crate) const HYSTERESIS: f32 = 0.6;
-/// Frames that relight every probe without hysteresis, each adding one full
-/// bounce: after a capture reset (whose exposure re-meters as well, so captures
-/// converge within their settle frames whatever the preset's budget) and once a
-/// new volume's records have all landed.
+/// Full-volume bounces without hysteresis after new records or a capture reset.
+/// Live initialization spreads each bounce over its preset budget; a capture
+/// relights the full volume per frame and re-meters exposure within its settle.
 pub(crate) const CONVERGE_FRAMES: u32 = 8;
 /// Frames over which a newly converged volume fades into shading.
 const FADE_FRAMES: f32 = 30.;
@@ -46,6 +47,14 @@ pub struct ProbeSurfaces {
 }
 
 impl ProbeSurfaces {
+    /// Allocation layout, independent of the acquired texels and static records.
+    pub fn layout(&self) -> ProbeLayout {
+        ProbeLayout {
+            origin: self.origin,
+            spacing: self.spacing,
+            counts: self.counts,
+        }
+    }
     /// Probe count.
     pub fn len(&self) -> usize {
         self.counts.iter().map(|&n| n as usize).product()
@@ -56,19 +65,8 @@ impl ProbeSurfaces {
     }
     /// Checks the lattice shape and finite data before upload.
     pub fn validate(&self) -> Result<()> {
+        self.layout().validate()?;
         let n = self.len();
-        ensure!(
-            self.counts.iter().all(|&c| (2..=256).contains(&c)) && n <= 1 << 18,
-            "Invalid probe lattice"
-        );
-        ensure!(
-            self.origin
-                .iter()
-                .chain(&self.spacing)
-                .all(|v| v.is_finite())
-                && self.spacing.iter().all(|&s| s > 0.),
-            "Invalid probe positions"
-        );
         ensure!(
             self.texels.len() == n * SURFACE_TEXELS && self.statics.len() == n * STATIC_VECTORS,
             "Probe surfaces do not match the lattice"
@@ -104,6 +102,14 @@ pub struct ProbeUpdate {
 }
 
 impl ProbeUpdate {
+    /// Allocation layout; available before the first records are uploaded.
+    pub fn layout(&self) -> ProbeLayout {
+        ProbeLayout {
+            origin: self.origin,
+            spacing: self.spacing,
+            counts: self.counts,
+        }
+    }
     /// Records `probes` of `surfaces` (`None`: every probe).
     pub fn new(surfaces: &ProbeSurfaces, probes: Option<&[u32]>) -> Result<Self> {
         surfaces.validate()?;
@@ -152,18 +158,7 @@ impl ProbeUpdate {
 
     /// Checks the lattice and the record framing before upload.
     pub fn validate(&self) -> Result<()> {
-        ensure!(
-            self.counts.iter().all(|&c| (2..=256).contains(&c)) && self.probes() <= 1 << 18,
-            "Invalid probe lattice"
-        );
-        ensure!(
-            self.origin
-                .iter()
-                .chain(&self.spacing)
-                .all(|v| v.is_finite())
-                && self.spacing.iter().all(|&s| s > 0.),
-            "Invalid probe positions"
-        );
+        self.layout().validate()?;
         ensure!(
             self.records.len().is_multiple_of(PROBE_RECORD),
             "Probe records are not whole"
@@ -174,7 +169,7 @@ impl ProbeUpdate {
     /// Surface bias used when sampling the volume: a fifth of the smallest spacing,
     /// at most 15 cm.
     pub(crate) fn bias(&self) -> f32 {
-        (self.spacing.iter().copied().fold(f32::INFINITY, f32::min) * 0.2).min(0.15)
+        self.layout().bias()
     }
 }
 
@@ -218,13 +213,19 @@ pub(crate) struct GiGpu {
     pub irradiance_storage: [u32; 2],
     /// Storage index of `moments` (in-place edits, `giScatterMain`).
     pub moments_storage: u32,
+    pub surface_access: [Access; 3],
     pub access: [Access; 2],
-    /// Not yet cleared: the next frame imports it undefined and runs `GI.Clear`.
+    /// Initialization is incomplete; clear a bounded range before accepting data.
     pub fresh: bool,
+    pub clear_cursor: u32,
+    pub clear_budget: u32,
     pub slot: usize,
     pub cursor: u32,
-    /// Remaining [`CONVERGE_FRAMES`].
+    /// Remaining full-volume convergence bounces.
     pub converge: u32,
+    pub converge_progress: u32,
+    pub capture_convergence: bool,
+    pub relit_once: bool,
     /// Records written since the volume was created; a new lattice stays out of
     /// shading until every probe's has landed and the volume has converged.
     pub received: usize,
@@ -243,11 +244,12 @@ impl GiGpu {
         self.received += records;
         if self.received >= self.probes as usize {
             self.converge = CONVERGE_FRAMES;
+            self.converge_progress = 0;
         }
     }
-    /// Probes relit this frame: `budget`, or all of them while converging.
+    /// Captures retain full-grid bounces; live initialization uses its preset budget.
     fn window(&self, budget: u32) -> u32 {
-        if self.converge > 0 {
+        if self.converge > 0 && self.capture_convergence {
             self.probes
         } else {
             budget.min(self.probes)
@@ -255,6 +257,9 @@ impl GiGpu {
     }
     /// Fills the shader record's GI rows for this frame (`budget` probes relit).
     pub(crate) fn write(&self, frame: &mut super::frame::LookFrame, budget: u32) {
+        if self.clearing_in_slices() {
+            return;
+        }
         let [ox, oy, oz] = self.origin;
         let [sx, sy, sz] = self.spacing;
         let [cx, cy, cz] = self.counts;
@@ -279,12 +284,39 @@ impl GiGpu {
     }
     /// Advances the ping-pong slot and update window after a completed frame.
     pub(crate) fn advance(&mut self, budget: u32) {
+        if self.clearing_in_slices() {
+            return;
+        }
+        let window = self.window(budget);
+        self.relit_once = true;
         self.slot = 1 - self.slot;
-        self.cursor = (self.cursor + self.window(budget)) % self.probes;
+        self.cursor = (self.cursor + window) % self.probes;
         if self.converge > 0 {
-            self.converge -= 1;
+            self.converge_progress += window;
+            if self.converge_progress >= self.probes {
+                self.converge_progress -= self.probes;
+                self.converge -= 1;
+            }
         } else if self.received >= self.probes as usize {
             self.weight = (self.weight + 1. / FADE_FRAMES).min(1.);
+        }
+    }
+
+    pub(crate) fn clearing_in_slices(&self) -> bool {
+        self.fresh && self.clear_budget < self.probes
+    }
+
+    pub(crate) fn clear_window(&self) -> (u32, u32) {
+        (
+            self.clear_cursor,
+            (self.probes - self.clear_cursor).min(self.clear_budget),
+        )
+    }
+
+    pub(crate) fn cleared(&mut self) {
+        if self.fresh {
+            self.clear_cursor += self.clear_window().1;
+            self.fresh = self.clear_cursor < self.probes;
         }
     }
     /// Shows the volume at once (capture resets converge it within their frames).
