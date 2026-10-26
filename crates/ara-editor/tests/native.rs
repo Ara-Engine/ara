@@ -68,8 +68,7 @@ fn native_interaction_route_matches_reviewed_dark_and_light_goldens() {
         let comparison = ara_render::capture::compare(&golden, &actual, 0.005).unwrap();
         eprintln!("{theme}: 1-SSIM={}", comparison.score);
         if !comparison.passed {
-            let evidence =
-                PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("evidence/golden-failure");
+            let evidence = PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join("editor-golden-failure");
             std::fs::create_dir_all(&evidence).unwrap();
             actual.save(evidence.join(format!("{theme}.png"))).unwrap();
             comparison

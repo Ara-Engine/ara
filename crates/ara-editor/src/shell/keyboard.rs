@@ -258,6 +258,9 @@ impl Shell {
             }
             return self.open_context(editor);
         }
+        if !ctrl && !alt && !field && self.hierarchy_key(scancode)? {
+            return Ok(true);
+        }
         self.run_chord(editor, chord)
     }
     /// Run the keymap command for a chord; conflicts prefer the focused context.

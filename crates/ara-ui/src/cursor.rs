@@ -1,5 +1,5 @@
 //! Platform-neutral cursor hints resolved from visible hover and pointer capture.
-use crate::{Ui, input::InputState, source::stable_id};
+use crate::{Ui, input::InputState};
 
 /// Pointer shape; native hosts translate this into their platform cursor API.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -118,15 +118,5 @@ impl Ui {
             index = n.element.parent;
         }
         Cursor::Arrow
-    }
-    /// Current retained scroll position, including virtual view offsets.
-    pub fn scroll_position(&self, index: usize) -> Option<[f32; 2]> {
-        match self
-            .widgets
-            .get(&stable_id(&self.nodes.get(index)?.element.id))
-        {
-            Some(crate::widgets::Widget::Scroll(p)) => Some(*p),
-            _ => None,
-        }
     }
 }
