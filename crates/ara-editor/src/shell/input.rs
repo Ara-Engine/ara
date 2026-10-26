@@ -3,13 +3,20 @@ use ara_ui::input::InputEvent;
 use ara_ui_text::Clipboard;
 impl Shell {
     pub(crate) fn hover_tooltip(&mut self) -> ara_ui::Result<()> {
-        let description = self.ui.paint_order.iter().rev().find_map(|i| {
-            let node = &self.ui.nodes[*i];
-            (node.rect.contains(self.pointer[0], self.pointer[1])
-                && node.clip.contains(self.pointer[0], self.pointer[1]))
-            .then(|| node.element.attrs.get("description").map(String::as_str))
-            .flatten()
-        });
+        let description = self
+            .ui
+            .scrollbar_at(self.pointer)
+            .is_none()
+            .then(|| {
+                self.ui.paint_order.iter().rev().find_map(|i| {
+                    let node = &self.ui.nodes[*i];
+                    (node.rect.contains(self.pointer[0], self.pointer[1])
+                        && node.clip.contains(self.pointer[0], self.pointer[1]))
+                    .then(|| node.element.attrs.get("description").map(String::as_str))
+                    .flatten()
+                })
+            })
+            .flatten();
         if description == self.tooltip_text.as_deref() {
             return Ok(());
         }
@@ -35,7 +42,8 @@ impl Shell {
         event: InputEvent,
         clipboard: &mut dyn Clipboard,
     ) -> ara_ui::Result<()> {
-        self.input.event(&mut self.ui, event, clipboard)
+        self.input.event(&mut self.ui, event, clipboard)?;
+        self.sync_scroll_views()
     }
     /// Dispatch queued widget actions through the typed engine endpoint.
     pub fn dispatch(&mut self, editor: &mut Editor) -> ara_ui::Result<bool> {

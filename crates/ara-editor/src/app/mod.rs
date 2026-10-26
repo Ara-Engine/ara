@@ -1,6 +1,7 @@
 //! SDL event loop and same-device native UI/scene composition.
 mod capture;
 mod controller;
+mod cursors;
 mod drags;
 mod game;
 mod game_preview;
@@ -93,7 +94,7 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
     // they render offscreen and read the UI target back.
     let offscreen = options.offscreen();
     // Behind a loading window, the main window appears with its first frame.
-    let window = if offscreen || splash.is_some() {
+    let mut window = if offscreen || splash.is_some() {
         Window::hidden(&title, options.size)?
     } else {
         Window::new(&title, options.size)?
@@ -764,6 +765,14 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
             let ui_scope = profile_frame.map(|_| ara_profile::scope("editor.ui"));
             let ui_at = Instant::now();
             let work = shell.frame()?;
+            if !offscreen {
+                cursors::update(
+                    &mut window,
+                    &mut floats,
+                    &mut shell,
+                    controller.gizmo_state(),
+                )?;
+            }
             let ui_ms = ui_at.elapsed().as_secs_f64() * 1000.;
             let (mut render_ms, mut present_ms, mut presented) = (0., 0., false);
             let (mut scene_ms, mut icons_ms) = (0., 0.);

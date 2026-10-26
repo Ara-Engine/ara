@@ -52,6 +52,7 @@ const ARA_ICON_PNG: &[u8] = include_bytes!("../../../assets/brand/png/ara-icon-6
 /// Main-thread-owned resizable SDL3 Vulkan window and video subsystem reference.
 pub struct Window {
     pub(crate) handle: *mut SDL_Window,
+    pub(crate) cursors: crate::cursor::Cursors,
     _main_thread: PhantomData<*mut ()>,
 }
 impl Window {
@@ -94,6 +95,7 @@ impl Window {
             }
             let window = Self {
                 handle,
+                cursors: crate::cursor::Cursors::default(),
                 _main_thread: PhantomData,
             };
             // The icon is cosmetic: drivers without window icons (Wayland) still get a window.
@@ -371,7 +373,16 @@ impl Window {
                         },
                     ));
                 } else if ty == SDL_EVENT_MOUSE_WHEEL.0 {
-                    events.push((e.wheel.windowID.0, Event::Wheel([e.wheel.x, e.wheel.y])));
+                    let direction = if e.wheel.direction == sdl3_sys::mouse::SDL_MOUSEWHEEL_FLIPPED
+                    {
+                        -1.
+                    } else {
+                        1.
+                    };
+                    events.push((
+                        e.wheel.windowID.0,
+                        Event::Wheel([e.wheel.x * direction, e.wheel.y * direction]),
+                    ));
                 }
             }
         }
@@ -400,6 +411,7 @@ pub(crate) fn error() -> String {
 }
 impl Drop for Window {
     fn drop(&mut self) {
+        self.cursors.clear();
         // SAFETY: Single owner on the creating thread. Application destroys surfaces first.
         unsafe {
             SDL_DestroyWindow(self.handle);

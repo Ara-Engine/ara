@@ -10,6 +10,7 @@ pub(crate) mod build;
 mod chrome;
 pub mod commands;
 mod compound;
+mod cursors;
 mod dialog;
 mod drag;
 pub(crate) mod icons;
@@ -22,6 +23,7 @@ mod notices;
 mod ops;
 mod polish;
 pub(crate) mod scripts;
+mod scroll;
 mod scrub;
 mod settings_panel;
 mod testing;
@@ -1250,6 +1252,7 @@ impl Shell {
     /// Run retained style/layout/paint work for the current surface; unchanged frames
     /// return zero work counters.
     pub fn frame(&mut self) -> ara_ui::Result<ara_ui::Work> {
+        self.sync_scroll_views()?;
         if let Some(start) = self.panel_opened {
             let p = (start.elapsed().as_secs_f32() / 0.14).clamp(0., 1.);
             if let Some(i) = self
