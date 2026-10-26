@@ -275,8 +275,16 @@ fn a_two_lattice_pool_reserves_before_delivery_and_accepts_packets_across_its_bo
         renderer.render_view(&camera(), 1., ViewMode::Lit)?;
     }
     let gi = renderer.look.gi.as_ref().context("delivered pool")?;
-    assert_eq!((gi.received, gi.layout.lattices().len()), (20, 2));
-    // Ready only once every record landed, the pool converged and faded in.
+    assert_eq!(
+        (
+            gi.received,
+            gi.deferred_received,
+            gi.layout.lattices().len()
+        ),
+        (12, 8, 2)
+    );
+    // Ready once the coarse lattice's records landed and it converged and faded
+    // in; the fine lattice follows it.
     let mut frames = 0;
     while !renderer.probe_gi_ready() {
         renderer.render_view(&camera(), 1., ViewMode::Lit)?;
@@ -284,6 +292,63 @@ fn a_two_lattice_pool_reserves_before_delivery_and_accepts_packets_across_its_bo
         ensure!(frames < 256, "the pool never became ready");
     }
     assert_eq!(renderer.look.gi.as_ref().context("ready pool")?.converge, 0);
+    renderer.gpu.assert_clean()?;
+    Ok(())
+}
+
+#[test]
+fn a_pool_is_ready_on_its_coarse_lattice_and_cross_fades_the_fine_one_in_later() -> Result<()> {
+    let mut renderer = renderer("staged")?;
+    let layout = pool()?;
+    while !renderer.preallocate_probe_volume(layout, 6)? {
+        renderer.render_view(&camera(), 1., ViewMode::Lit)?;
+    }
+    let mut statics = vec![[1., 1., 0., 0.]; 20 * crate::look::gi::STATIC_VECTORS];
+    for p in 0..20 {
+        statics[p * crate::look::gi::STATIC_VECTORS + 64] = [0., 0., 0., 1.];
+    }
+    let surfaces = ProbeSurfaces {
+        layout,
+        texels: vec![[255 << 24, 0, 0, 0]; 20 * SURFACE_TEXELS],
+        statics,
+    };
+    // The coarse lattice (probes 8..20) lands first; the volume is ready on it.
+    let coarse = ProbeUpdate::new(&surfaces, Some(&(8..20).collect::<Vec<_>>()))?;
+    let fine = ProbeUpdate::new(&surfaces, Some(&(0..8).collect::<Vec<_>>()))?;
+    assert!(fine.finer_only() && !coarse.finer_only());
+    for packet in [0..6, 6..12] {
+        renderer.update_probe_records(&coarse, packet)?;
+        renderer.render_view(&camera(), 1., ViewMode::Lit)?;
+    }
+    let mut frames = 0;
+    while !renderer.probe_gi_ready() {
+        renderer.render_view(&camera(), 1., ViewMode::Lit)?;
+        frames += 1;
+        ensure!(frames < 256, "the coarse lattice never became ready");
+    }
+    let gi = renderer.look.gi.as_ref().context("ready pool")?;
+    assert_eq!(gi.deferred_weight, 0.);
+    // The fine lattice lands later: readiness holds while it converges and
+    // cross-fades in, a frame's step at a time.
+    for packet in [0..6, 6..8] {
+        renderer.update_probe_records(&fine, packet)?;
+        assert!(renderer.probe_gi_ready());
+        renderer.render_view(&camera(), 1., ViewMode::Lit)?;
+    }
+    let mut weight = 0.;
+    while weight < 1. {
+        renderer.render_view(&camera(), 1., ViewMode::Lit)?;
+        let next = renderer.look.gi.as_ref().context("pool")?.deferred_weight;
+        assert!(renderer.probe_gi_ready());
+        assert_eq!(renderer.probe_gi_needs_frame(), next < 1.);
+        assert!(
+            (0. ..=1. / 29.).contains(&(next - weight)),
+            "{weight} -> {next}"
+        );
+        weight = next;
+        frames += 1;
+        ensure!(frames < 512, "the fine lattice never faded in");
+    }
     renderer.gpu.assert_clean()?;
     Ok(())
 }

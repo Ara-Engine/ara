@@ -181,9 +181,15 @@ impl Renderer {
             self.look.probe_staging.push(staging);
             return Err(error.into());
         }
-        self.look.probe_writes.push((staging, records.len() as u32));
+        // Writes of a pool's finer lattices alone may land after readiness.
+        let deferred = self.look.gi.as_ref().is_some_and(|gi| {
+            gi.deferred > 0 && update.ids(records.clone()).all(|id| id < gi.deferred)
+        });
+        self.look
+            .probe_writes
+            .push((staging, records.len() as u32, deferred));
         if let Some(gi) = self.look.gi.as_mut() {
-            gi.received(records.len());
+            gi.received(update.ids(records));
         }
         Ok(())
     }
@@ -229,7 +235,7 @@ impl Renderer {
         }
         let written = std::mem::take(&mut self.look.probe_writes);
         let pool = &mut self.look.probe_staging;
-        pool.extend(written.into_iter().map(|(staging, _)| staging));
+        pool.extend(written.into_iter().map(|(staging, _, _)| staging));
         pool.sort_unstable_by_key(|s| std::cmp::Reverse(s.capacity));
         for extra in pool.split_off(pool.len().min(STAGING_KEPT)) {
             self.gpu.retire(Resource::Buffer(extra.buffer))?;
@@ -242,7 +248,7 @@ impl Renderer {
         let pending = std::mem::take(&mut self.look.probe_writes);
         self.look
             .probe_staging
-            .extend(pending.into_iter().map(|(staging, _)| staging));
+            .extend(pending.into_iter().map(|(staging, _, _)| staging));
         if let Some(old) = self.look.gi.take() {
             self.gpu.retire(Resource::Buffer(old.cache))?;
             self.gpu.retire(Resource::Buffer(old.meta))?;
@@ -341,6 +347,13 @@ impl Renderer {
             relit_once: false,
             received: 0,
             weight: 0.,
+            // A pool's finer lattices may land after its coarsest (the last).
+            deferred: layout.bases()[layout.lattices().len() - 1] as u32,
+            deferred_received: 0,
+            deferred_started: false,
+            deferred_converge: 0,
+            deferred_progress: 0,
+            deferred_weight: 0.,
         };
         Ok(volume)
     }

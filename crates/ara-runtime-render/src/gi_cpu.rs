@@ -879,19 +879,28 @@ fn centre(volume: &ProbeVolume, id: usize) -> Vec3 {
 /// Bakes every probe of the tracer's automatic pool ([`layout`]).
 #[cfg(test)]
 pub(crate) fn bake(tracer: &Tracer) -> Result<ProbeSurfaces> {
-    bake_with_layout(tracer, |_| {})
+    bake_with_layout(tracer, |_| {}, |_| {})
 }
 
 /// Publish the final pool's dimensions once, before tracing or allocating the
 /// payload: startup reserves its GPU resources while acquisition continues.
-/// The finest lattice (what the camera sees up close) bakes first.
+/// The coarsest lattice (the old single lattice, all a volume needs to be ready)
+/// bakes first and is handed to `coarse` before the finer lattices bake; with a
+/// single lattice `coarse` is not called.
 pub(crate) fn bake_with_layout(
     tracer: &Tracer,
     publish: impl FnOnce(ProbeLayout),
+    coarse: impl FnOnce(&ProbeSurfaces),
 ) -> Result<ProbeSurfaces> {
     let layout = layout(tracer)?;
     publish(layout);
-    bake_lattices(tracer, layout, 0..layout.lattices().len())
+    let n = layout.lattices().len();
+    let mut surfaces = bake_lattices(tracer, layout, n - 1..n)?;
+    if n > 1 {
+        coarse(&surfaces);
+        bake_into(tracer, &mut surfaces, 0..n - 1)?;
+    }
+    Ok(surfaces)
 }
 
 /// Bakes the lattices `which` of `layout` (the rest stay empty).
@@ -900,17 +909,31 @@ pub(crate) fn bake_lattices(
     layout: ProbeLayout,
     which: std::ops::Range<usize>,
 ) -> Result<ProbeSurfaces> {
-    let started = std::time::Instant::now();
     let probes = layout.probe_count();
-    let mut texels = vec![[0u32; 4]; probes * SURFACE_TEXELS];
-    let mut statics = vec![[0f32; 4]; probes * STATIC_VECTORS];
+    let mut surfaces = ProbeSurfaces {
+        layout,
+        texels: vec![[0u32; 4]; probes * SURFACE_TEXELS],
+        statics: vec![[0f32; 4]; probes * STATIC_VECTORS],
+    };
+    bake_into(tracer, &mut surfaces, which)?;
+    Ok(surfaces)
+}
+
+/// Bakes the lattices `which` of `surfaces`' pool in place.
+fn bake_into(
+    tracer: &Tracer,
+    surfaces: &mut ProbeSurfaces,
+    which: std::ops::Range<usize>,
+) -> Result<()> {
+    let started = std::time::Instant::now();
+    let layout = surfaces.layout;
     let bases = layout.bases();
     for i in which.clone() {
         let (lattice, base) = (layout.lattices()[i], bases[i]);
         let volume = volume(&lattice);
         let count = lattice.probe_count();
-        let texels = &mut texels[base * SURFACE_TEXELS..(base + count) * SURFACE_TEXELS];
-        let statics = &mut statics[base * STATIC_VECTORS..(base + count) * STATIC_VECTORS];
+        let texels = &mut surfaces.texels[base * SURFACE_TEXELS..(base + count) * SURFACE_TEXELS];
+        let statics = &mut surfaces.statics[base * STATIC_VECTORS..(base + count) * STATIC_VECTORS];
         // Workers take batches as they free up: buried probes skip their texel
         // rays, so equal shares of probes are far from equal work.
         let batches = std::sync::Mutex::new(
@@ -950,13 +973,7 @@ pub(crate) fn bake_lattices(
             .sum::<u32>(),
         started.elapsed().as_secs_f64()
     );
-    let surfaces = ProbeSurfaces {
-        layout,
-        texels,
-        statics,
-    };
-    surfaces.validate()?;
-    Ok(surfaces)
+    surfaces.validate()
 }
 
 /// Re-traces `probes` (global ids) of `surfaces` against `tracer`, keeping the pool.
@@ -1200,11 +1217,15 @@ mod tests {
         let (send, receive) = std::sync::mpsc::channel();
         let (release, wait) = std::sync::mpsc::channel();
         let worker = std::thread::spawn(move || {
-            bake_with_layout(&tracer, |layout| {
-                send.send(layout)
-                    .expect("layout receiver lives through the bake");
-                wait.recv().expect("test releases the bake");
-            })
+            bake_with_layout(
+                &tracer,
+                |layout| {
+                    send.send(layout)
+                        .expect("layout receiver lives through the bake");
+                    wait.recv().expect("test releases the bake");
+                },
+                |_| {},
+            )
         });
         let layout = receive.recv_timeout(std::time::Duration::from_secs(5))?;
         layout.validate()?;

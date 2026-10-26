@@ -84,7 +84,8 @@ void giLatticeLobes(Look l,GiLattice g,uint image,float3 position,float3 normal,
 float giPoolLobes(Look l,uint image,float3 position,float3 normal,float3 reflection,float3 v,bool both,out float3 diffuse,out float3 specular){
     diffuse=0;specular=0;float remaining=1;
     for(uint i=0;i<l.giCounts.x&&remaining>1e-3;i++){
-        GiLattice g=giLattice(l,i);float c=giLatticeCoverage(g,position);
+        // Finer lattices cross-fade in once they land after the coarsest (giParams.y).
+        GiLattice g=giLattice(l,i);float c=giLatticeCoverage(g,position)*(i+1<l.giCounts.x?l.giParams.y:1);
         if(c<=0)continue;
         float w=c*remaining;float3 d,s;giLatticeLobes(l,g,image,position,normal,reflection,v,both,d,s);
         diffuse+=d*w;specular+=s*w;remaining-=w;

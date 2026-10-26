@@ -65,7 +65,7 @@ device and per-view upload state; no simulation, window or process code.
   pipeline cache; delivered records apply 4096 per frame, scattered in-frame).
   The CPU bakes on half the cores (`gi_cpu.rs`: per-geometry SAH BVHs under an
   instance top level, map means via `NativeResidency::mean_texel` with the
-  material's sRGB-decode bit for raw graph maps, terrain hits splat-weighted). `gi_cpu::layout`: one lattice over all static triangles, plus a fine one over built-up content when markedly smaller (cache names carry `lattice_rule()`);
+  material's sRGB-decode bit for raw graph maps, terrain hits splat-weighted). `gi_cpu::layout`: one lattice over all static triangles, plus a fine one over built-up content when markedly smaller (cache names carry `lattice_rule()`). A pool's full bake delivers in stages: the coarsest lattice as soon as it is traced, then the finer ones (`Message::Surfaces { last }`); readiness waits only for the first;
   `ARA_PROBE_GI_RT=1` opts into a temporary ray-tracing `VulkanDevice` + fidelity
   view, which contends with presentation for the driver.
   GI follows edits: `gi::Mobility` keeps instances that moved within 30 frames (and

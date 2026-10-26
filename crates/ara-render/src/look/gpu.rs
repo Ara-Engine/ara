@@ -122,8 +122,9 @@ pub(crate) struct LookGpu {
     pub vsm: Option<super::vsm::VirtualShadowMap>,
     /// Idle host staging for probe records, reused.
     pub probe_staging: Vec<super::gi::ProbeStaging>,
-    /// Probe records uploaded for the next frame's `GI.Scatter`: staging, count.
-    pub probe_writes: Vec<(super::gi::ProbeStaging, u32)>,
+    /// Probe records uploaded for the next frame's `GI.Scatter`: staging, count,
+    /// and whether they are a pool's finer lattices only (readiness ignores those).
+    pub probe_writes: Vec<(super::gi::ProbeStaging, u32, bool)>,
 }
 
 /// Graph identities of the look's persistent resources for one frame.
@@ -450,7 +451,7 @@ impl LookGpu {
             probe_writes: self
                 .probe_writes
                 .iter()
-                .map(|(staging, _)| {
+                .map(|(staging, _, _)| {
                     graph.import(
                         Resource::Buffer(staging.buffer),
                         State {

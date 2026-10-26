@@ -35,7 +35,8 @@ pub(crate) struct LookFrame {
     pub sampled: [[u32; 4]; 2],
     pub storage: [[u32; 4]; 2],
     pub state: [u32; 4],
-    /// x irradiance hysteresis.
+    /// x irradiance hysteresis, y the weight of a pool's finer lattices (their arrival
+    /// cross-fade after the coarsest; 1 for a single lattice).
     pub gi_params: [f32; 4],
     /// x lattices in the probe pool, w probes (zero: no probe GI).
     pub gi_counts: [u32; 4],

@@ -25,9 +25,11 @@ impl RasterView {
                         .gi
                         .as_ref()
                         .is_some_and(crate::gi::Acquisition::is_pending)),
+            // A pool's finer lattices land after readiness (look::gi staging).
             gi_records_pending: self
                 .gi_updates
                 .iter()
+                .filter(|(update, _)| !update.finer_only())
                 .map(|(update, start)| update.len() - start)
                 .sum(),
             gi_volume_ready: renderer.probe_gi_ready(),

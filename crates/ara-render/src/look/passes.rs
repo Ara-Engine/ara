@@ -502,7 +502,7 @@ impl LookGpu {
         };
         let (staging, base, count, clear) = match pass {
             LookPass::GiScatter(n) => match self.probe_writes.get(n as usize) {
-                Some((staging, count)) => (staging.index, 0, *count, false),
+                Some((staging, count, _)) => (staging.index, 0, *count, false),
                 None => return,
             },
             _ => {

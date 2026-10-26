@@ -728,13 +728,18 @@ fn with_emitter_lights<T>(
     result
 }
 
-/// Queues a delivered update; one that rewrites every probe supersedes the
-/// updates still waiting.
+/// Queues a delivered update; one that rewrites every probe, or begins a new
+/// layout, supersedes the updates still waiting.
 fn queue_probe_gi(
     updates: &mut std::collections::VecDeque<(ProbeUpdate, usize)>,
     update: ProbeUpdate,
 ) {
-    if update.len() == update.probes() {
+    // A new pool arrives in stages, none of them whole: a changed layout
+    // supersedes what is queued for the old one.
+    let stale = updates
+        .back()
+        .is_some_and(|(queued, _)| queued.layout != update.layout);
+    if update.len() == update.probes() || stale {
         updates.clear();
     }
     updates.push_back((update, 0));
