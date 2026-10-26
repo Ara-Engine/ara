@@ -1,7 +1,7 @@
 //! The full game presenter is created and warmed on one temporary owner thread,
 //! then moved to the frame owner only after all its work has completed.
 use super::*;
-use std::{ffi::CString, thread::JoinHandle};
+use std::thread::JoinHandle;
 
 pub(super) struct Graphics {
     thread: JoinHandle<Result<(Presenter, Duration)>>,
@@ -9,14 +9,14 @@ pub(super) struct Graphics {
 impl Graphics {
     pub fn start(
         size: [u32; 2],
-        extensions: Vec<CString>,
+        gpu: ara_gpu::vulkan::VulkanDevice,
         cache: PathBuf,
         quality: QualityChoice,
         options: RenderOptions,
     ) -> Result<Self> {
         Self::spawn(move || {
             ara_gpu::cpu_scope!("Player.presenter_warmup_worker");
-            let mut presenter = Presenter::new(size, extensions, cache);
+            let mut presenter = Presenter::with_device(size, cache, gpu);
             presenter.set_probe_gi(false);
             presenter.set_render_options(options);
             presenter.set_quality(quality);

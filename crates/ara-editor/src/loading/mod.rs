@@ -273,6 +273,24 @@ pub(crate) struct Splash {
 }
 
 impl Splash {
+    /// An opening card while the main renderer's cold PSOs compile off-thread.
+    pub(crate) fn opening(status: &Status) -> anyhow::Result<Box<Self>> {
+        let mut splash = Box::new(Self::new(&status.project, status.light, None)?);
+        splash.show(status)?;
+        Ok(splash)
+    }
+
+    /// Pump and redraw during renderer preparation; closing cancels the open.
+    pub(crate) fn opening_frame(&mut self, status: &Status) -> anyhow::Result<bool> {
+        for event in self.window.poll()? {
+            if matches!(event, Event::Quit) {
+                return Ok(false);
+            }
+        }
+        self.show(status)?;
+        Ok(true)
+    }
+
     fn new(project: &str, light: bool, capture: Option<(&Path, f32)>) -> anyhow::Result<Self> {
         let offscreen = capture.is_some();
         // Its own title: the main window is found by its title (`Native::attach`).

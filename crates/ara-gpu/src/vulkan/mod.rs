@@ -13,6 +13,10 @@ mod heap;
 mod image_copy;
 mod lifetime;
 mod pipeline;
+mod pipeline_preparation;
+pub use pipeline_preparation::{
+    PipelinePreparation, PipelinePreparationId, PipelinePreparationKind,
+};
 mod preparation;
 pub use preparation::{
     BufferPreparation, ImagePreparation, InitialData, PreparationId, PreparationKind,
@@ -83,6 +87,7 @@ pub struct VulkanDevice {
     shader_worker: Option<reload::Worker>,
     disposal: Option<disposal::Disposal>,
     preparation: Option<preparation::Worker>,
+    pipeline_preparation: Option<pipeline_preparation::Worker>,
     deferred: Option<Vec<TimelinePoint>>,
     completion_pending: bool,
     deferred_waits: [u64; 2],
@@ -199,6 +204,7 @@ impl VulkanDevice {
             shader_worker,
             disposal: Some(disposal),
             preparation: None,
+            pipeline_preparation: None,
             deferred: None,
             completion_pending: false,
             deferred_waits: [0; 2],
@@ -206,6 +212,24 @@ impl VulkanDevice {
             clock,
             timing_window: Default::default(),
         })
+    }
+
+    /// Isolate loading transfers from this owner's game work, retaining the same
+    /// logical device so its window's swapchain survives the handoff. Call only
+    /// before submitting work. The returned owner accepts graphics work only.
+    /// # Safety
+    /// When the returned graphics queue aliases this owner's queue, serialize all
+    /// submission and teardown across the owners. Otherwise they may run in
+    /// parallel, with distinct resources and command pools. Raw integrations must
+    /// preserve the same queue ownership, including during cancellation.
+    pub unsafe fn split_loading(&mut self, cache: impl Into<PathBuf>) -> Result<Self> {
+        if self.submitted != [0; 2] {
+            return Err(GpuError::Contract(
+                "Loading split requires an unused device".into(),
+            ));
+        }
+        let context = self.context.split_presentation()?;
+        Self::from_context(context, cache.into())
     }
 
     /// Allocate a buffer. Host memory is coherent and may be mapped after completion.

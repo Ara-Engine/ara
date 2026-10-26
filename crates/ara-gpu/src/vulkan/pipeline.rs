@@ -42,6 +42,7 @@ pub(super) fn create_on_device(
     cooked: &CookedPipeline,
     dir: &Path,
 ) -> Result<NativePipeline> {
+    let trace_started = std::time::Instant::now();
     let legacy_preview = cooked.stages.len() == 2
         && cooked.stages.iter().all(|stage| {
             matches!(
@@ -248,6 +249,18 @@ pub(super) fn create_on_device(
         for module in modules {
             device.destroy_shader_module(module, None);
         }
+    }
+    if std::env::var_os("ARA_PIPELINE_TRACE").is_some() {
+        eprintln!(
+            "PIPELINE_TRACE thread={:?} entries={:?} ms={:.3}",
+            std::thread::current().name(),
+            cooked
+                .stages
+                .iter()
+                .map(|s| s.source_entry.as_str())
+                .collect::<Vec<_>>(),
+            trace_started.elapsed().as_secs_f64() * 1000.
+        );
     }
     result
 }

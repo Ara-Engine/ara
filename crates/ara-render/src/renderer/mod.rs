@@ -107,6 +107,7 @@ pub struct Renderer {
     /// Sky, fog, exposure, bloom and display grading after the G-buffer.
     look: crate::look::gpu::LookGpu,
     native: Option<native::Native>,
+    native_pipelines: native::pipelines::Pipelines,
     views: views::Views,
     secondary_active: bool,
     live: Option<live::Live>,
@@ -170,11 +171,17 @@ impl Renderer {
     ) -> Result<Self> {
         ensure!(!size.contains(&0), "Render extent is zero");
         ensure!(raster || !scene.meshes.is_empty(), "Scene has no geometry");
-        let mut gpu = if raster {
+        let gpu = if raster {
             VulkanDevice::new_raster(extensions, cache)?
         } else {
             VulkanDevice::new(extensions, cache)?
         };
+        Self::with_device(scene, size, gpu)
+    }
+    /// Prepare targets and pipelines on an existing exclusive GPU owner. Native
+    /// window integrations can retain their swapchain while this runs on a worker.
+    pub fn with_device(scene: Scene, size: [u32; 2], mut gpu: VulkanDevice) -> Result<Self> {
+        ensure!(!size.contains(&0), "Render extent is zero");
         let artifacts = ara_gpu::cooked::resource_dir(
             env!("CARGO_PKG_NAME"),
             concat!(env!("CARGO_MANIFEST_DIR"), "/cooked"),

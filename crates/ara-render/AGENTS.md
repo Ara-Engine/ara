@@ -1,7 +1,7 @@
 # ara-render
 
-NativeContent owns validation/packing on the worker; native_seed retains small GPU reuse metadata.
-Poll preallocate, then publish_native_content in the ordered scope, or destroy rejected candidates. The scene stays immutable until returned.
+NativeContent validates/packs on the worker; native_seed retains small GPU reuse metadata. Preallocate also polls native PSOs off-thread.
+Publish in the ordered scope or destroy rejected candidates; the scene stays immutable until returned. Native/IBL pipelines survive content replacements.
 
 Owns the M1 baseline renderer and agent visual feedback. Gameplay state stays in ECS; `Scene` is a render snapshot, not authoritative state.
 
