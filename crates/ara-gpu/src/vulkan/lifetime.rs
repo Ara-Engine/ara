@@ -106,6 +106,9 @@ impl Device for VulkanDevice {
     }
     fn collect(&mut self) -> Result<()> {
         crate::cpu_scope!("GPU.collect_retired");
+        if let Some(worker) = &mut self.preparation {
+            worker.drain(self.disposal.as_mut().expect("disposal worker alive"))?;
+        }
         let done = self.completed()?;
         let mut index = 0;
         while index < self.retired.len() {
@@ -154,6 +157,7 @@ impl Drop for VulkanDevice {
     fn drop(&mut self) {
         // Join the compiler and destroy unpublished replacements before layout/device teardown.
         drop(self.shader_worker.take());
+        drop(self.preparation.take());
         drop(self.disposal.take());
         // SAFETY: Last owner. Idle covers descriptors, pipelines, queries and command buffers.
         unsafe {

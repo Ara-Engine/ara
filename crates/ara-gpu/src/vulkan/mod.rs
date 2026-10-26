@@ -13,6 +13,11 @@ mod heap;
 mod image_copy;
 mod lifetime;
 mod pipeline;
+mod preparation;
+pub use preparation::{
+    BufferPreparation, ImagePreparation, InitialData, PreparationId, PreparationKind,
+    PreparedResources, ResourcePreparation,
+};
 mod queries;
 #[cfg(test)]
 mod query_tests;
@@ -77,6 +82,7 @@ pub struct VulkanDevice {
     query_pool_creations: usize,
     shader_worker: Option<reload::Worker>,
     disposal: Option<disposal::Disposal>,
+    preparation: Option<preparation::Worker>,
     deferred: Option<Vec<TimelinePoint>>,
     completion_pending: bool,
     deferred_waits: [u64; 2],
@@ -192,6 +198,7 @@ impl VulkanDevice {
             query_pool_creations: 0,
             shader_worker,
             disposal: Some(disposal),
+            preparation: None,
             deferred: None,
             completion_pending: false,
             deferred_waits: [0; 2],
@@ -260,69 +267,10 @@ impl VulkanDevice {
         mip_levels: u32,
         usage: vk::ImageUsageFlags,
     ) -> Result<Image> {
+        let desc = context::allocation::ImageDesc::new(size, format, mip_levels, usage);
+        self.context.validate_image(&desc)?;
         let [width, height] = size;
-        if matches!(
-            format,
-            vk::Format::BC4_UNORM_BLOCK
-                | vk::Format::BC5_UNORM_BLOCK
-                | vk::Format::BC6H_UFLOAT_BLOCK
-                | vk::Format::BC7_UNORM_BLOCK
-                | vk::Format::BC7_SRGB_BLOCK
-        ) && !self.context.info.texture_compression_bc
-        {
-            return Err(GpuError::Contract(
-                "BC texture compression is unavailable on this device".into(),
-            ));
-        }
-        if width == 0
-            || height == 0
-            || width > self.context.info.max_image_dimension
-            || height > self.context.info.max_image_dimension
-            || mip_levels == 0
-            || mip_levels > width.max(height).ilog2() + 1
-        {
-            return Err(GpuError::Contract(
-                "Image extent or mip count exceeds device limits".into(),
-            ));
-        }
-        if mip_levels > 1
-            && usage.intersects(
-                vk::ImageUsageFlags::STORAGE
-                    | vk::ImageUsageFlags::COLOR_ATTACHMENT
-                    | vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT,
-            )
-        {
-            return Err(GpuError::Contract(
-                "Mip chains are sampled textures, not storage or attachment images".into(),
-            ));
-        }
-        let aspect = if format == vk::Format::D32_SFLOAT {
-            vk::ImageAspectFlags::DEPTH
-        } else {
-            vk::ImageAspectFlags::COLOR
-        };
-        // SAFETY: Capability query is read-only and validates this format/usage combination.
-        let caps = unsafe {
-            self.context
-                .instance
-                .get_physical_device_image_format_properties(
-                    self.context.physical,
-                    format,
-                    vk::ImageType::TYPE_2D,
-                    vk::ImageTiling::OPTIMAL,
-                    usage,
-                    vk::ImageCreateFlags::empty(),
-                )
-        }
-        .map_err(anyhow::Error::from)?;
-        if mip_levels > caps.max_mip_levels
-            || width > caps.max_extent.width
-            || height > caps.max_extent.height
-        {
-            return Err(GpuError::Contract(
-                "Image shape exceeds format-specific limits".into(),
-            ));
-        }
+        let aspect = desc.aspect;
         let raw = self
             .context
             .image(width, height, format, mip_levels, usage, aspect)?;
