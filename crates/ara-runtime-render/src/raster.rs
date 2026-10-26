@@ -14,6 +14,7 @@ use std::path::PathBuf;
 mod batch;
 mod fade;
 mod prepared;
+mod readiness;
 pub use prepared::RasterContent;
 #[cfg(test)]
 mod tests;
