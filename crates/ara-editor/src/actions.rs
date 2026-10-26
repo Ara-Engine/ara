@@ -18,6 +18,8 @@ pub(crate) struct EditorService {
     pub settings: crate::settings::Settings,
     pub changes: Sender<EditorState>,
     pub controls: Sender<Control>,
+    /// The scenes' resolution kept current across edits, for selection and framing.
+    pub resolver: crate::world::SceneResolver,
 }
 pub(crate) enum Control {
     ProfileFreeze {
@@ -682,9 +684,9 @@ impl EditorService {
                         .find(&doc)
                         .ok_or_else(|| vec![crate::invalid("document not found")])?
                         .to_string();
-                    open_scene(&mut state, cx, d, agent.is_none())?;
+                    open_scene(&mut state, cx, &mut self.resolver, d, agent.is_none())?;
                 }
-                let resolved = crate::world::resolve(cx.store(), &state.doc)?;
+                let resolved = self.resolver.resolve(cx.store(), &state.doc)?;
                 for entity in &p.entities {
                     if !resolved.contains_key(entity) {
                         return Err(vec![crate::invalid(format!("no entity `{entity}`"))]);
@@ -729,7 +731,8 @@ impl EditorService {
                     camera.distance = distance.clamp(0.05, 100_000.);
                 }
                 if let Some(entity) = &p.entity {
-                    let (position, forward, fov) = scene_camera(cx, &state.doc, entity)?;
+                    let (position, forward, fov) =
+                        scene_camera(cx, &mut self.resolver, &state.doc, entity)?;
                     camera.look_from(position, forward);
                     camera.set_fov(fov);
                 }
@@ -749,11 +752,11 @@ impl EditorService {
             "editor.frame" => {
                 let p: EditorFrame = parse(params)?;
                 if p.opening == Some(true) {
-                    let resolved = crate::world::resolve(cx.store(), &state.doc)?;
+                    let resolved = self.resolver.resolve(cx.store(), &state.doc)?;
                     let transforms = crate::world::world_transforms(&resolved);
                     state.camera = crate::view_camera::opening(&resolved, &transforms);
                 } else {
-                    frame(&mut state, cx)?;
+                    frame(&mut state, cx, &mut self.resolver)?;
                 }
             }
             "editor.scene.open" => {
@@ -777,7 +780,7 @@ impl EditorService {
                         p.scene
                     ))]);
                 }
-                open_scene(&mut state, cx, id, agent.is_none())?;
+                open_scene(&mut state, cx, &mut self.resolver, id, agent.is_none())?;
             }
             "editor.theme" => {
                 let p: EditorTheme = parse(params)?;
@@ -987,8 +990,12 @@ fn ui_error(error: Box<dyn std::error::Error>) -> Vec<Diagnostic> {
 }
 /// Frame the selection, or the scene's content when nothing is selected (terrain,
 /// ground planes and unbounded entities only when selected), keeping the view angle.
-fn frame(state: &mut EditorState, cx: &mut Cx) -> Result<(), Vec<Diagnostic>> {
-    let resolved = crate::world::resolve(cx.store(), &state.doc)?;
+fn frame(
+    state: &mut EditorState,
+    cx: &mut Cx,
+    resolver: &mut crate::world::SceneResolver,
+) -> Result<(), Vec<Diagnostic>> {
+    let resolved = resolver.resolve(cx.store(), &state.doc)?;
     let transforms = crate::world::world_transforms(&resolved);
     if let Some(bounds) =
         crate::view_camera::framing_bounds(&resolved, &transforms, &state.selection)
@@ -1001,10 +1008,11 @@ fn frame(state: &mut EditorState, cx: &mut Cx) -> Result<(), Vec<Diagnostic>> {
 /// in degrees of `entity`'s `Camera` in scene `doc`.
 fn scene_camera(
     cx: &mut Cx,
+    resolver: &mut crate::world::SceneResolver,
     doc: &str,
     entity: &str,
 ) -> Result<(Vec3, Vec3, f32), Vec<Diagnostic>> {
-    let resolved = crate::world::resolve(cx.store(), doc)?;
+    let resolved = resolver.resolve(cx.store(), doc)?;
     let lens = resolved
         .get(entity)
         .ok_or_else(|| vec![crate::invalid(format!("no entity `{entity}` in `{doc}`"))])?
@@ -1029,6 +1037,7 @@ fn scene_camera(
 fn open_scene(
     state: &mut EditorState,
     cx: &mut Cx,
+    resolver: &mut crate::world::SceneResolver,
     doc: String,
     human: bool,
 ) -> Result<(), Vec<Diagnostic>> {
@@ -1039,7 +1048,7 @@ fn open_scene(
         match state.scene_cameras.get(&doc) {
             Some(camera) => state.camera = *camera,
             None => {
-                let resolved = crate::world::resolve(cx.store(), &doc)?;
+                let resolved = resolver.resolve(cx.store(), &doc)?;
                 let transforms = crate::world::world_transforms(&resolved);
                 state.camera = crate::view_camera::opening(&resolved, &transforms);
             }

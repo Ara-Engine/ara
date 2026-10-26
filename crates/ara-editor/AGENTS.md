@@ -91,8 +91,7 @@ Scene quality: `EditorState.render_quality` mirrors `viewport.quality` (None = p
 `SceneView` retains completed color/IDs without GPU waits; input coalesces while busy. Scene convergence is three jitter cycles of completed frames, then idle; preview work excludes that budget. Startup warms one camera quality; panel targets allocate on the worker. Capture/shutdown drain explicitly (`ara-render/AGENTS.md`).
 Scene camera: `state::Camera` (orbit pose, `fov_y_degrees` 10–120, default 50) feeds
 `spec()`. `editor.camera` reads it (no fields) or sets any subset (`fovYDegrees`;
-`entity` looks through a scene `Camera`). UI: toolbar FOV field, Camera menu presets,
-`view.camera.align` (Align View to Selected Camera).
+`entity` looks through a scene `Camera`). UI: toolbar FOV field, Camera menu presets, `view.camera.align`.
 Floating windows: `DockLayout` floating roots map to owned OS windows
 (`app/windows.rs`); each is a Shell `Surface` swapped into `self.ui` by
 `enter/leave`, and renders through `NativeUi::select_target`. Rects persist in
@@ -140,8 +139,9 @@ the real loop: per-frame costs, clicks, typing, drags, Play, startup. Shell rebu
 per revision (`rebuild_if_stale`), menubar, status bar, area headers and tab bodies as parts (`Ui::reconcile_parts`);
 inactive `panels::keep_alive` tabs stay mounted, hidden (geometry via `Shell::shown_node`). Memoized panels
 (`shell/memo.rs`: Assets) reuse markup+bindings while their input digest holds; `cargo test` sets `ARA_EDITOR_MEMO_CHECK=1`,
-which regenerates each reuse and fails on a difference. A commit frame resolves once (`Shell::document_view`), rebuilds once
-(`coalesce_rebuilds`), keeps Hierarchy rows unless the ops change what rows show, and defers the Scene a frame.
+which regenerates each reuse and fails on a difference. A commit frame resolves once (`Shell::document_view`; the Shell and
+`editor.select`/`frame` use `world::SceneResolver`, which re-resolves only the records the new transactions touched), rebuilds
+once (`coalesce_rebuilds`), keeps Hierarchy rows unless the ops change what rows show, and defers the Scene a frame.
 `ImportProgress` drives `loading/` (the window before the main one, `--verify-loading`) and
 `shell/imports.rs` (chip, Assets badges, Scene notice; `tests/loading.rs`); names drop file extensions (`shell/names.rs`). Only `scene_changed` state re-renders the Scene.
 Tool pages (`docs/design/editor-tool-pages.md`) share a breadcrumb toolbar, side column,

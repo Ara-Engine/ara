@@ -166,6 +166,7 @@ impl Editor {
             settings,
             changes,
             controls: control_send,
+            resolver: Default::default(),
         }))
         .map_err(|d| anyhow::anyhow!(d.to_string()))?;
         // Play runs in pooled ara-player processes; the toolbar binds play.* methods.

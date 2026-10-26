@@ -126,7 +126,7 @@ pub struct Shell {
     /// Outside Play: the gameplay camera's preview image size (physical px) once one
     /// is shown (`app/game_preview.rs`), and the camera by `resolved_key`.
     pub(crate) game_preview: Option<[u32; 2]>,
-    game_camera: Option<((String, u64, usize), Option<crate::state::Camera>)>,
+    game_camera: Option<((String, u64, u64), Option<crate::state::Camera>)>,
     /// The shown Play world's fault (`play.status`), shown instead of the game.
     pub(crate) game_fault: Option<String>,
     /// The shown Play world is still starting (`play.status`): its progress.
@@ -243,12 +243,10 @@ pub struct Shell {
     /// The editor's panels and store revisions the last rebuild reflected, so a
     /// revision the shell already rebuilt for does not rebuild it again.
     built: (u64, u64),
-    /// The open scene resolved, with the (document, store revision, document count)
-    /// it was resolved at (`resolved`).
-    resolved_cache: Option<(
-        (String, u64, usize),
-        std::sync::Arc<ara_doc::prefab::Resolved>,
-    )>,
+    /// The open scene's resolution, kept across transactions (`resolved`).
+    resolver: crate::world::SceneResolver,
+    /// The (document, store revision, workspace generation) `resolved` last answered.
+    resolved_key: Option<(String, u64, u64)>,
     tooltip_text: Option<String>,
     field_request: Option<String>,
     /// Each graph page's canvas (`graph_panel::GRAPH_PAGES`).
@@ -496,7 +494,8 @@ impl Shell {
             version: 0,
             stats: UiStats::default(),
             built: (u64::MAX, u64::MAX),
-            resolved_cache: None,
+            resolver: Default::default(),
+            resolved_key: None,
             tooltip_text: None,
             field_request: None,
             canvas_display: Default::default(),
@@ -590,28 +589,23 @@ impl Shell {
         self.stats.rebuild_ms += started.elapsed().as_secs_f64() * 1000.;
         result
     }
-    /// The open scene with prefabs resolved, reused by every panel until the store
-    /// changes: a transaction (the revision), or a document loaded or unloaded (the
-    /// count).
+    /// The open scene with prefabs resolved, shared by every panel and the Scene view
+    /// until the store changes; a transaction re-resolves only the records it touched
+    /// (`world::SceneResolver`).
     pub(crate) fn resolved(
         &mut self,
         editor: &Editor,
     ) -> ara_ui::Result<std::sync::Arc<ara_doc::prefab::Resolved>> {
         let store = editor.host.store();
-        let key = (
+        let resolved = self
+            .resolver
+            .resolve(store, &editor.state.doc)
+            .map_err(|d| format!("{d:?}"))?;
+        self.resolved_key = Some((
             editor.state.doc.clone(),
             store.revision(),
-            store.workspace().docs().count(),
-        );
-        if let Some((cached, resolved)) = &self.resolved_cache
-            && *cached == key
-        {
-            return Ok(resolved.clone());
-        }
-        let resolved = std::sync::Arc::new(
-            crate::world::resolve(store, &editor.state.doc).map_err(|d| format!("{d:?}"))?,
-        );
-        self.resolved_cache = Some((key, resolved.clone()));
+            store.workspace().generation(),
+        ));
         Ok(resolved)
     }
     /// The open scene's view at the current revision, built on [`Self::resolved`] so
@@ -626,9 +620,9 @@ impl Shell {
             resolved,
         ))
     }
-    /// The (document, store revision, document count) `resolved` last resolved at.
-    pub(crate) fn resolved_key(&self) -> Option<(String, u64, usize)> {
-        self.resolved_cache.as_ref().map(|(key, _)| key.clone())
+    /// The (document, store revision, workspace generation) `resolved` last answered.
+    pub(crate) fn resolved_key(&self) -> Option<(String, u64, u64)> {
+        self.resolved_key.clone()
     }
     /// Uncommitted field text, keyed by field (`path#axis`, or `@…` for other panels).
     pub(crate) fn drafts(&self) -> &BTreeMap<String, String> {

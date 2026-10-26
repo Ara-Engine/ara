@@ -4,6 +4,7 @@ pub mod gesture;
 mod ghosts;
 pub(crate) mod gltf;
 mod patch;
+mod resolver;
 use crate::state::EditorState;
 use ara_diag::Diagnostic;
 use ara_doc::prefab::Resolved;
@@ -14,6 +15,7 @@ use glam::{EulerRot, Mat4, Quat, Vec3};
 pub use gltf::ModelCache;
 pub(crate) use patch::Patch;
 pub use patch::scene_only;
+pub use resolver::SceneResolver;
 use serde_json::Value;
 use std::{
     collections::{BTreeMap, BTreeSet},
