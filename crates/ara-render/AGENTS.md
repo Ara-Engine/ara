@@ -63,7 +63,7 @@ Owns the M1 baseline renderer and agent visual feedback. Gameplay state stays in
   CSM-shadowed froxel fog, histogram or manual exposure (snaps to its meter on a reset and while new GI arrives;
   `exposure`/`seed_exposure` carry a converged exposure across views), bloom, grading and the display curve.
   Hosts map `SceneLook` with `FrameEnvironment::raster` (ara-render-fidelity). The sky IBL,
-  far map and cascades rebuild on any sun change past `SUN_HOLD` (noise only): once
+  far map, cascades and horizon sun map rebuild on any sun change past `SUN_HOLD` (noise only): once
   something animates the sun, add a threshold with an old/new crossfade.
 - `look::gi::ProbeSurfaces` (`Renderer::set_probe_surfaces`): probe GI. One-time 8x8 oct surface caches;
   `GI.Relight` relights a budget per frame (sun via CSM, local lights, sky, emissive, last frame's probes) into 6x6
@@ -75,9 +75,9 @@ Owns the M1 baseline renderer and agent visual feedback. Gameplay state stays in
   cached D32 map per cascade, redrawn only when its matrix or casters in its light volume change; moved casters
   patch only their texels (a per-list cell grid finds their casters, culling/patches.rs); outer cascades redraw whole at most one per frame, `Cascades::plan`), a cached far map (`look::far`),
   local-light shadows (`look::local`, patched alike; `in_gi_and_fog` also shadows GI relight and fog), half-res GTAO and SSR (cone footprint into
-  last frame's colour pyramid), GI relight, bloom, emitter lights, LOD/cull pixels,
-  terrain detail. Look images are allocated lazily (the bindless heap is shared);
-  probe GI is gathered at half resolution for G-buffer pixels.
+  last frame's colour pyramid), GI relight, bloom, emitter lights, LOD/cull pixels, terrain detail, and the
+  heightfield horizon (`look::horizon`: distant landforms' sun shadow, min'd into `visibility`, and sky visibility
+  outside the probe volume). Look images are allocated lazily; probe GI is gathered at half resolution.
 - `set_deferred_post` + `finish(color, sampled, state)`: temporally resolve and grade
   an externally composited HDR frame (landscape, particles) with the same look post.
   TAA reprojects with native motion (Frame.look.w) when present.

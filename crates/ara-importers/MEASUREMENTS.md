@@ -525,6 +525,12 @@ assertion failure remains in the ignored logs; no production codec fix was neede
 
 ## Bounded parallel geometry: 2026-10-26
 
+The subsequent eight-case fresh-project ABBA does not confirm a cold-import win:
+Outpost open-to-ready means regress from 28.567 s to 40.454 s (all runs retained).
+For preview 16, `mesh::PARALLEL_GEOMETRY = false` restores sequential LOD0 solves
+and classic/virtual cooks by default. Re-enable only after an end-to-end ABBA win.
+The diagnostic results below describe the experiment, not the shipping default.
+
 The fresh Hub-created Outpost profile `cold-mesh-profile-a0-outpost` uses the real
 daemon pipeline, default Balanced, a fresh project/import/profile/driver cache and
 the machine-wide GPU lock. It publishes all 115 assets in **55.556 s after open**,

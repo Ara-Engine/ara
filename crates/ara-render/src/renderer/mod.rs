@@ -425,6 +425,18 @@ impl Renderer {
                 self.look.local = Some(crate::look::local::LocalMap::new(&mut self.gpu, local)?);
             }
         }
+        if quality.horizon != self.look.horizon.as_ref().map(|h| h.resolution) {
+            if let Some(old) = self.look.horizon.take() {
+                old.destroy(&mut self.gpu)?;
+            }
+            if let Some(resolution) = quality.horizon {
+                self.look.horizon = Some(crate::look::horizon::Horizon::new(
+                    &mut self.gpu,
+                    resolution,
+                    std::mem::size_of::<frame::Frame>() as u64,
+                )?);
+            }
+        }
         self.look.quality = quality;
         Ok(())
     }
