@@ -15,7 +15,9 @@ use crate::gi_cpu::{self, Tracer};
 use anyhow::{Context, Result, ensure};
 use ara_gpu::vulkan::VulkanDevice;
 use ara_render::instanced::Scene;
-use ara_render::look::gi::{ProbeSurfaces, ProbeUpdate, STATIC_VECTORS, SURFACE_TEXELS};
+use ara_render::look::gi::{
+    ProbeLayout, ProbeSurfaces, ProbeUpdate, STATIC_VECTORS, SURFACE_TEXELS,
+};
 use ara_render_fidelity::{
     FidelityView, FrameInput, Mode, PostSettings, Settings, Tier, Upscaler,
     environment::FrameEnvironment,
@@ -142,6 +144,8 @@ struct Worker {
 }
 
 enum Message {
+    /// Small reservation metadata, before the expensive bake/payload completes.
+    Layout(ProbeLayout),
     /// The job's packed probe records (delivered as soon as they exist): the
     /// re-traced probes, or every probe after a full bake.
     Surfaces(Result<ProbeUpdate>),
@@ -159,6 +163,7 @@ struct Active {
 /// edits never stack bakes). Every finished job's update is delivered, in order:
 /// incremental updates build on the ones before them.
 pub(crate) struct Acquisition {
+    layout: Option<ProbeLayout>,
     cache: PathBuf,
     /// Trace on the CPU, the default: a second ray-tracing device contends with
     /// presentation for the driver (100+ ms submits), and the CPU bake matches
@@ -190,6 +195,7 @@ impl Acquisition {
     /// otherwise); each method caches separately.
     pub(crate) fn with_method(cache: PathBuf, cpu: bool) -> Self {
         Self {
+            layout: None,
             cache: cache.join("probe-gi"),
             cpu,
             key: None,
@@ -261,6 +267,11 @@ impl Acquisition {
         self.queued.is_some() || self.active.as_ref().is_some_and(|a| !a.delivered)
     }
 
+    /// Latest worker-published allocation dimensions; no surface payload or wait.
+    pub(crate) fn layout(&self) -> Option<ProbeLayout> {
+        self.layout
+    }
+
     fn start(&mut self, job: Job) -> Result<()> {
         let (cache, cpu, worker) = (self.cache.clone(), self.cpu, self.worker.take());
         let (send, receive) = channel();
@@ -292,6 +303,7 @@ impl Acquisition {
                 }
             };
             match message {
+                Some(Message::Layout(layout)) => self.layout = Some(layout),
                 Some(Message::Surfaces(result)) => {
                     active.delivered = true;
                     match result {
@@ -359,8 +371,10 @@ fn run(cache: &Path, cpu: bool, job: Job, worker: Option<Worker>, send: &Sender<
             started.elapsed().as_secs_f64()
         )
     };
-    let follow = match acquire(cache, cpu, &job, &mut worker) {
+    let follow = match acquire(cache, cpu, &job, &mut worker, send) {
         Ok((surfaces, changed, follow)) => {
+            // RT acquisition and cache hits use the same reservation contract.
+            let _ = send.send(Message::Layout(surfaces.layout()));
             // Packing happens here, off the render thread.
             let update = ProbeUpdate::new(&surfaces, changed.as_deref());
             let _ = send.send(Message::Surfaces(update));
@@ -430,6 +444,7 @@ fn acquire(
     cpu: bool,
     job: &Job,
     worker: &mut Option<Worker>,
+    send: &Sender<Message>,
 ) -> Result<(ProbeSurfaces, Option<Vec<u32>>, Option<FollowUp>)> {
     if let Some(worlds) = &job.edit
         && let Some(state) = worker.as_mut().filter(|w| w.key == job.key)
@@ -457,6 +472,7 @@ fn acquire(
     if let Ok(bytes) = std::fs::read(&path) {
         match decode(&bytes) {
             Ok(surfaces) => {
+                let _ = send.send(Message::Layout(surfaces.layout()));
                 *worker = Some(Worker {
                     key: job.key,
                     surfaces: surfaces.clone(),
@@ -535,7 +551,9 @@ fn acquire(
         None => {
             let tracer =
                 tracer.get_or_insert_with(|| Tracer::new(&prepared.scene, &shading, &job.dynamic));
-            gi_cpu::bake(tracer)?
+            gi_cpu::bake_with_layout(tracer, |layout| {
+                let _ = send.send(Message::Layout(layout));
+            })?
         }
     };
     std::fs::create_dir_all(cache)?;

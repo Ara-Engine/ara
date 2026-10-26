@@ -14,7 +14,7 @@
 use anyhow::{Context, Result, ensure};
 use ara_render::{
     instanced::{Geometry, Scene},
-    look::gi::{ProbeSurfaces, STATIC_VECTORS, SURFACE_TEXELS},
+    look::gi::{ProbeLayout, ProbeSurfaces, STATIC_VECTORS, SURFACE_TEXELS},
 };
 use ara_render_fidelity::probes::ProbeVolume;
 use glam30::{Mat3, Mat4, Vec2, Vec3};
@@ -776,12 +776,27 @@ fn centre(volume: &ProbeVolume, id: usize) -> Vec3 {
 }
 
 /// Bakes every probe of an automatic lattice around the tracer's instances.
+#[cfg(test)]
 pub(crate) fn bake(tracer: &Tracer) -> Result<ProbeSurfaces> {
+    bake_with_layout(tracer, |_| {})
+}
+
+/// Publish the allocation dimensions before tracing or allocating the payload.
+/// Startup can reserve GPU resources while the expensive acquisition continues.
+pub(crate) fn bake_with_layout(
+    tracer: &Tracer,
+    layout: impl FnOnce(ProbeLayout),
+) -> Result<ProbeSurfaces> {
     let started = std::time::Instant::now();
     let (lo, hi) = tracer
         .bounds()
         .context("the scene has no static triangles to bake")?;
     let volume = ProbeVolume::automatic(lo, hi)?;
+    layout(ProbeLayout {
+        origin: volume.origin.to_array(),
+        spacing: volume.spacing.to_array(),
+        counts: volume.counts,
+    });
     let probes = volume.len();
     let mut texels = vec![[0u32; 4]; probes * SURFACE_TEXELS];
     let mut statics = vec![[0f32; 4]; probes * STATIC_VECTORS];
@@ -1039,6 +1054,39 @@ fn probe(
 mod tests {
     use super::*;
     use ara_render::instanced::{Instance, Lod, NO_TEXTURE, Vertex};
+
+    #[test]
+    fn allocation_layout_precedes_a_blocked_bake_and_matches_the_delivered_payload() -> Result<()> {
+        let floor = [
+            Vec3::new(-1., 0., -1.),
+            Vec3::new(-1., 0., 1.),
+            Vec3::new(1., 0., 1.),
+            Vec3::new(1., 0., -1.),
+        ];
+        let source = scene(vec![geometry(1, &[floor], Vec3::Y)]);
+        let tracer = Tracer::new(&source, &[Shading::default()], &BTreeSet::new());
+        let (send, receive) = std::sync::mpsc::channel();
+        let (release, wait) = std::sync::mpsc::channel();
+        let worker = std::thread::spawn(move || {
+            bake_with_layout(&tracer, |layout| {
+                send.send(layout)
+                    .expect("layout receiver lives through the bake");
+                wait.recv().expect("test releases the bake");
+            })
+        });
+        let layout = receive.recv_timeout(std::time::Duration::from_secs(5))?;
+        layout.validate()?;
+        assert!(
+            !worker.is_finished(),
+            "GPU reservation can proceed before the payload exists"
+        );
+        release.send(())?;
+        let surfaces = worker
+            .join()
+            .map_err(|_| anyhow::anyhow!("probe bake panicked"))??;
+        assert_eq!(surfaces.layout(), layout);
+        Ok(())
+    }
 
     /// The quad `q` (two triangles) with normals facing `inside`.
     fn facing(q: [Vec3; 4], inside: Vec3) -> Vec3 {

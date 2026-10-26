@@ -195,7 +195,9 @@ fn a_new_volume_fades_into_live_frames_converged() -> Result<()> {
     renderer.set_probe_surfaces(Some(&emissive_surfaces(0x6000)))?;
     let arriving = live(&mut renderer, 1)?;
     let converging = live(&mut renderer, 6)?;
-    let faded = live(&mut renderer, 64)?;
+    // Eight probes at a one-probe budget need 64 frames for eight bounces,
+    // followed by the 30-frame arrival fade.
+    let faded = live(&mut renderer, 96)?;
     let converged = mean(&renderer.capture(&request)?.image);
     for (frame, name) in [(arriving, "arriving"), (converging, "converging")] {
         ensure!(
