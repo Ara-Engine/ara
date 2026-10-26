@@ -56,7 +56,7 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
     if options.headless {
         return headless(options);
     }
-    if options.verify_panels || options.verify_ux {
+    if options.verify_panels || options.verify_ux || options.verify_docking {
         panels_verify::fixtures(&options.project)?;
     }
     // Bounded runs resolve an isolated ARA_CONFIG_DIR (`Options::isolate_profile`);
@@ -100,7 +100,12 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
         Window::new(&title, options.size)?
     };
     let mut native = Native::attach(&title)?;
-    if options.verify || options.verify_panels || options.verify_ux || options.screenshot {
+    if options.verify
+        || options.verify_panels
+        || options.verify_ux
+        || options.verify_docking
+        || options.screenshot
+    {
         native.verification_extent(options.size)?;
     }
     let mut clipboard = OsClipboard;
@@ -109,7 +114,7 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
     let dpi = options.dpi.unwrap_or_else(|| native.dpi()) * windows::ui_scale(&editor);
     let physical = window.size()?;
     let logical = physical.map(|v| v as f32 / dpi);
-    if options.verify || options.verify_panels || options.verify_ux {
+    if options.verify || options.verify_panels || options.verify_ux || options.verify_docking {
         eprintln!("Verification extent {physical:?}; logical {logical:?}; DPI {dpi}");
     }
     let mut shell = Shell::new(&mut editor, logical)?;
@@ -208,7 +213,14 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
         None
     };
     // The UX route's drags run after its captures and camera timings.
-    let mut drag_check: Option<drags::DragCheck> = None;
+    let mut drag_check = if options.verify_docking {
+        editor.action("editor.preferences", json!({"reduceMotion": true}))?;
+        editor.action("editor.layout.reset", json!({}))?;
+        shell.rebuild(&mut editor)?;
+        Some(drags::DragCheck::new(&options.output, &shell))
+    } else {
+        None
+    };
     let mut ux_verification = if options.verify_ux {
         Some(ux_verify::UxVerification::new(
             &mut editor,
@@ -1101,7 +1113,7 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                 probe.end(&editor, &mut shell, sample);
             }
             if let Some(check) = &mut drag_check {
-                check.end(&editor, &mut shell)?;
+                check.end(&editor, &mut shell, &mut gpu, &floats)?;
             } else if ux_verification.as_ref().is_some_and(|v| v.finished())
                 && camera_samples.len() >= 240
             {
@@ -1154,6 +1166,8 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                             || ux_idle_since.get_or_insert_with(Instant::now).elapsed()
                                 >= UX_IDLE_PATIENCE)
                 })
+                || (options.verify_docking
+                    && drag_check.as_ref().is_some_and(drags::DragCheck::finished))
                 || journey.as_ref().is_some_and(journey::Journey::finished)
                 || first_hour.as_ref().is_some_and(qa::FirstHour::finished)
             {
@@ -1175,6 +1189,9 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
         }
         if let Some(check) = &drag_check {
             check.write()?;
+            if !check.finished() {
+                return Err("native docking verification did not finish".into());
+            }
             let failed = check.failures();
             if !failed.is_empty() {
                 return Err(format!("drags changed nothing: {}", failed.join(", ")).into());
@@ -1351,12 +1368,28 @@ fn route_event(
     view: &crate::world::DocumentView,
     clipboard: &mut OsClipboard,
 ) -> ara_ui::Result<(bool, bool, bool)> {
-    if let Some(handled) = game_input(&event, editor, shell, dpi) {
+    if !shell.tab_pending()
+        && let Some(handled) = game_input(&event, editor, shell, dpi)
+    {
         return Ok((handled, false, false));
     }
     // Tab drags follow the desktop pointer: preview in whichever window is under it.
     if shell.dragged_tab().is_some() {
         match &event {
+            Event::Key {
+                scancode: 41,
+                pressed: true,
+                ..
+            } => {
+                shell.drag = None;
+                shell.drop_preview = None;
+                shell.release_tab_capture(clipboard)?;
+                controller.release(1);
+                for float in &mut floats.windows {
+                    float.dirty = true;
+                }
+                return Ok((true, false, false));
+            }
             Event::MouseMotion { .. } => {
                 let global = desktop_pointer(shell);
                 let ui_scale = windows::ui_scale(editor);
@@ -1377,11 +1410,20 @@ fn route_event(
                 pressed: false,
             } => {
                 let global = desktop_pointer(shell);
+                // A release can follow a layout change without another motion event.
+                track_tab_drag(
+                    global,
+                    dpi,
+                    windows::ui_scale(editor),
+                    window,
+                    floats,
+                    shell,
+                )?;
                 let rect = [(global[0] - 60.) as i32, (global[1] - 14.) as i32, 420, 560];
                 shell.leave();
+                shell.release_tab_capture(clipboard)?;
                 let dropped = shell.finish_tab_drag(editor, Some(rect));
                 controller.release(1);
-                shell.event(InputEvent::Cancel, clipboard)?;
                 dropped?;
                 return Ok((true, false, false));
             }
@@ -1489,6 +1531,11 @@ fn track_tab_drag(
         ];
         shell.drag_over();
     } else {
+        let scale = crate::native::points_to_logical(window.raw(), dpi);
+        shell.pointer = [
+            (global[0] - m[0] as f32) * scale,
+            (global[1] - m[1] as f32) * scale,
+        ];
         shell.drag_outside();
     }
     Ok(())

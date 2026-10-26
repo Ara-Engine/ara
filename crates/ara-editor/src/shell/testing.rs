@@ -172,6 +172,7 @@ impl Shell {
         self.drag = Some(Drag::Tab {
             panel: panel.into(),
             start: [0., 0.],
+            surface: None,
         });
         self.pointer = [r.x + r.w * 0.5, r.y + r.h * 0.5];
         self.drag_over();

@@ -12,6 +12,7 @@ pub mod commands;
 mod compound;
 mod cursors;
 mod dialog;
+mod dock_drag;
 mod drag;
 pub(crate) mod icons;
 mod imports;
@@ -304,7 +305,7 @@ pub struct Shell {
     /// The settings `keymap` was built from (`input.keymap`, `input.shortcuts`).
     keymap_settings: (Option<Value>, Option<Value>),
     /// Live tab drag target, painted as a lit region with an action label.
-    pub(crate) drop_preview: Option<drag::DropPreview>,
+    pub(crate) drop_preview: Option<dock_drag::DropPreview>,
     /// The desktop pointer (points) cross-window tab drags follow; `None` reads the
     /// OS. Verification routes set it to drive those drags with synthetic events.
     pub(crate) desktop_pointer: Option<[f32; 2]>,
@@ -1253,6 +1254,7 @@ impl Shell {
     /// return zero work counters.
     pub fn frame(&mut self) -> ara_ui::Result<ara_ui::Work> {
         self.sync_scroll_views()?;
+        self.sync_tab_ghost()?;
         if let Some(start) = self.panel_opened {
             let p = (start.elapsed().as_secs_f32() / 0.14).clamp(0., 1.);
             if let Some(i) = self
@@ -1563,7 +1565,7 @@ impl Shell {
     }
 }
 /// Hidden nodes every surface keeps for in-place updates: tooltip and drop label.
-const POPUP_TAIL: &str = "<tooltip id='tooltip' class='tooltip'><text id='tooltip-text' class='tooltip-copy' text='' /></tooltip><panel id='drop-label' class='drop-label' style='left:0px;top:0px;width:180px'><text id='drop-label-text' text='' /></panel>";
+const POPUP_TAIL: &str = "<tooltip id='tooltip' class='tooltip'><text id='tooltip-text' class='tooltip-copy' text='' /></tooltip><panel id='drop-label' class='drop-label' style='left:0px;top:0px;width:140px;height:28px;flex-direction:row;gap:6px;background:var(--raised);color:var(--foreground);border-width:1px;border-color:var(--primary)'><image id='drop-label-icon' class='icon fg' src='icon-square' tint='true' /><text id='drop-label-text' text='' /></panel>";
 impl Shell {
     /// Show (or hide) the gizmo readout pill next to the pointer, without a rebuild.
     pub fn show_readout(&mut self, readout: Option<(String, [f32; 2])>) {
