@@ -22,11 +22,16 @@ Local developer binary. No engine dependencies; uses git and cargo as subprocess
   stale files, clean checkout, no symlinks/reparse points and no active Cargo lock.
 - `disk`: all mounted drive free-space report.
   Also flags configured Cargo outputs inside another checkout's target.
+- `history-rewrite`: rehearse message cleanup in a fresh independent bare mirror;
+  verify trees, metadata and ordered parents. Never rewrite a live checkout or push.
+  `history-match` finds unique full-message/tree/metadata forks; see `docs/releases.md`.
 - `perf`: optimized incremental build, once-frozen Outpost pack, GPU-locked frame
   windows, JSON/deltas, warm-player file controls and local stdio MCP bridge.
 - `d26`: the release scoreboard (`src/d26/`). It reuses `perf` windows on Outpost, Hangar and
   Showcase packs, `ara-samples capture --reference` (ꟻLIP) and the editor's responsiveness
   probe, and writes `target/d26/<ts>/report.{json,html}`. Unmeasured rows stay "not measured".
+  GPU windows require raster/GI readiness then warmup; readiness timeouts fail loudly.
+  CPU/hitches use whole-run samples; arrival peaks/time-to-ready have no budget gate.
 
 Agent checkpoints: `cargo test -p ara-dev`, `cargo clippy -p ara-dev --all-targets -- -D warnings`
 and `cargo fmt --all -- --check`. Set CARGO_BUILD_JOBS=2 on the shared PC.

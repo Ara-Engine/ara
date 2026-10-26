@@ -4,6 +4,48 @@ use ara_runtime::{
     extract::{Draw, Geometry},
 };
 
+#[test]
+fn disabled_probe_gi_does_not_report_a_queued_emitter_search() -> Result<()> {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../target/runtime-render/disabled-probes");
+    let mut presenter = crate::Presenter::new([64, 48], Vec::new(), root.join("gpu"));
+    let mut raster = RasterView::new(root.join("probes"));
+    let prepared = native::prepare(
+        &RenderFrame::default(),
+        Content::default(),
+        texture_config(),
+    )?;
+    raster
+        .emitter_search
+        .request(|| crate::emitters::Job::new(&prepared.scene, &[], |_, _, _| None))?;
+    // The rerun cannot finish before poll adopts the first result, regardless of
+    // worker scheduling. This forces the load-dependent prewarm failure.
+    raster.emitter_search.request(|| unreachable!("queued"))?;
+    raster.set_probe_gi(false);
+    assert!(
+        raster.needs_frame(),
+        "emitter work still needs presentation"
+    );
+    presenter.raster = Some(raster);
+    assert!(
+        !presenter.probe_gi_pending(),
+        "disabling GI must not count unrelated emitter work"
+    );
+    let raster = presenter.raster.as_mut().expect("raster");
+    raster.set_probe_gi(true);
+    assert!(
+        presenter.probe_gi_pending(),
+        "new GI acquisition is pending"
+    );
+    presenter
+        .raster
+        .as_mut()
+        .expect("raster")
+        .set_probe_gi(false);
+    assert!(!presenter.probe_gi_pending());
+    Ok(())
+}
+
 fn box_draw(id: u64, size: [f32; 3], position: [f32; 3], emission: [f32; 3]) -> Draw {
     Draw {
         entity: id,

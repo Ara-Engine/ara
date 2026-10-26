@@ -8,7 +8,7 @@ use ara_render::{
     instanced::{
         Geometry, Instance, Lod, Material, Scene, TextureBinding, TextureStats, Textures, Vertex,
     },
-    look::{LocalShadows, Quality},
+    look::{Fog, LocalShadows, Look, Quality},
     scene::{CameraSpec, Light},
 };
 use glam::{Mat4, Vec3};
@@ -91,10 +91,15 @@ fn scene() -> Scene {
 
 /// Luminance at the image centre (the ground under the occluder).
 fn centre(renderer: &mut Renderer) -> Result<f32> {
+    centre_from(renderer, Vec3::new(4., 3., 4.), Vec3::ZERO)
+}
+
+/// Luminance at the centre of a capture from `position` towards `target`.
+fn centre_from(renderer: &mut Renderer, position: Vec3, target: Vec3) -> Result<f32> {
     let capture = renderer.capture(&CaptureRequest {
         camera: CameraSpec::LookAt {
-            position: Vec3::new(4., 3., 4.),
-            target: Vec3::ZERO,
+            position,
+            target,
             vertical_fov: 0.6,
         },
         size: [64, 64],
@@ -138,6 +143,7 @@ fn an_occluder_shadows_the_ground_under_a_local_light() -> Result<()> {
             lights: 1,
             resolution: 256,
             redraws: 6,
+            in_gi_and_fog: false,
         }),
         ..unshadowed
     })?;
@@ -147,6 +153,50 @@ fn an_occluder_shadows_the_ground_under_a_local_light() -> Result<()> {
     ensure!(
         shadowed < lit * 0.5,
         "the occluder shadows it: {shadowed} vs {lit}"
+    );
+    renderer.gpu().assert_clean()?;
+    Ok(())
+}
+
+/// With `in_gi_and_fog`, the froxel fog samples the local shadow as well. Under a
+/// 10 m occluder the light reaches no fog, so a view through the gap between it and
+/// the ground darkens once the fog is shadowed.
+#[test]
+fn local_shadows_reach_the_fog_when_the_budget_allows_it() -> Result<()> {
+    let cache = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../target/ara-render/local-shadows-fog")
+        .join(std::process::id().to_string());
+    let mut scene = scene();
+    let roof = Mat4::from_translation(Vec3::Y) * Mat4::from_scale(Vec3::splat(10.));
+    (scene.instances[1].world, scene.instances[1].previous_world) = (roof, roof);
+    let mut renderer = Renderer::new_native(&scene, Box::new(NoTextures), [64, 64], &[], cache)?;
+    let (eye, target) = (Vec3::new(4.5, 0.5, 0.), Vec3::new(-4.5, 0.5, 0.));
+    renderer.set_look(Look {
+        fog: Some(Fog {
+            extinction: 0.1,
+            height: 50.,
+            albedo: 1.,
+            ..Fog::default()
+        }),
+        ..Look::default()
+    })?;
+    let local = |in_gi_and_fog| Quality {
+        local_shadows: Some(LocalShadows {
+            lights: 1,
+            resolution: 256,
+            redraws: 6,
+            in_gi_and_fog,
+        }),
+        ..Quality::default()
+    };
+    renderer.set_quality(local(false))?;
+    let leaking = centre_from(&mut renderer, eye, target)?;
+    renderer.set_quality(local(true))?;
+    let shadowed = centre_from(&mut renderer, eye, target)?;
+    eprintln!("fog under the occluder: {leaking} -> {shadowed}");
+    ensure!(
+        leaking > 20. && shadowed < leaking * 0.5,
+        "the shadow cone stops lighting the fog: {shadowed} vs {leaking}"
     );
     renderer.gpu().assert_clean()?;
     Ok(())

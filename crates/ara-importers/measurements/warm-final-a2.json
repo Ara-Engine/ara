@@ -1,0 +1,111 @@
+{
+  "cliSha256": "B3C05032BF4C5439A61EC6E6D909C7444240A23F0B07D9CF8CBB6F657140CA37",
+  "counts": {
+    "action.hash": 115,
+    "asset.published": 115,
+    "cache.load": 115,
+    "hash.blake3": 2027,
+    "ipc.decode": 234,
+    "ipc.encode": 238,
+    "ipc.read": 238,
+    "ipc.write": 238,
+    "sidecar.read": 230,
+    "source.snapshot": 230,
+    "texture.backend_prepare": 1,
+    "texture.service.exit": 1,
+    "texture.service.initialize": 1,
+    "texture.service.start": 1,
+    "worker.queue": 232,
+    "worker.spawn": 121
+  },
+  "cpuBefore": "19",
+  "deviceServices": 1,
+  "differentKeys": 0,
+  "discoveryBatches": 0,
+  "discoveryHits": 0,
+  "encoderPrepares": 1,
+  "finalCacheLoads": 115,
+  "identityHits": 0,
+  "imports": 0,
+  "label": "warm-final-a2",
+  "openToAllPublishedMs": 11911.0292,
+  "publications": 115,
+  "snapshotStartToSettledMs": 9434.76775,
+  "stages": [
+    {
+      "count": 115,
+      "maxMs": 20.084999999999997,
+      "name": "action.hash",
+      "summedMs": 631.2684
+    },
+    {
+      "count": 115,
+      "maxMs": 219.1056,
+      "name": "cache.load",
+      "summedMs": 3482.5852999999993
+    },
+    {
+      "count": 2027,
+      "maxMs": 12.517800000000001,
+      "name": "hash.blake3",
+      "summedMs": 475.7108999999991
+    },
+    {
+      "count": 234,
+      "maxMs": 1.3811,
+      "name": "ipc.decode",
+      "summedMs": 7.4106999999999985
+    },
+    {
+      "count": 238,
+      "maxMs": 2.8345000000000002,
+      "name": "ipc.encode",
+      "summedMs": 16.477600000000006
+    },
+    {
+      "count": 238,
+      "maxMs": 7912.9458,
+      "name": "ipc.read",
+      "summedMs": 18190.749999999993
+    },
+    {
+      "count": 238,
+      "maxMs": 29.5198,
+      "name": "ipc.write",
+      "summedMs": 315.4747999999999
+    },
+    {
+      "count": 230,
+      "maxMs": 0.1686,
+      "name": "sidecar.read",
+      "summedMs": 5.670800000000002
+    },
+    {
+      "count": 230,
+      "maxMs": 9321.9151,
+      "name": "source.snapshot",
+      "summedMs": 622124.1625000001
+    },
+    {
+      "count": 1,
+      "maxMs": 7642.2394,
+      "name": "texture.backend_prepare",
+      "summedMs": 7642.2394
+    },
+    {
+      "count": 1,
+      "maxMs": 327.5435,
+      "name": "texture.service.initialize",
+      "summedMs": 327.5435
+    },
+    {
+      "count": 232,
+      "maxMs": 9292.5339,
+      "name": "worker.queue",
+      "summedMs": 604608.6005999999
+    }
+  ],
+  "versionsStartToSettledMs": 9720.3615,
+  "workerSha256": "6016C200C3E88FC77F51766A57C28C9B459C64ED55F926E2FC317BEE19195A96",
+  "workers": 121
+}

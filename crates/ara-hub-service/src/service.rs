@@ -128,6 +128,7 @@ impl Hub {
         mut config: HubConfig,
         mut updates: UpdateConfig,
     ) -> Result<Self, RpcError> {
+        let startup = Instant::now();
         crate::validate_development_config(&config.directory).map_err(io_error)?;
         crate::isolation::validate_engine(&config.directory, &config.engine.executable)
             .map_err(io_error)?;
@@ -141,6 +142,7 @@ impl Hub {
             ))
         })?;
         let mut registry = Registry::load(&config.directory)?;
+        crate::startup::record("service.registry", startup.elapsed());
         let bootstrap = config
             .engine
             .executable
@@ -181,6 +183,7 @@ impl Hub {
         for project in hub.registry.projects.clone() {
             hub.discover_process(&project)?;
         }
+        crate::startup::record("service.open", startup.elapsed());
         Ok(hub)
     }
 

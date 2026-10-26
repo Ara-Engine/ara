@@ -68,7 +68,9 @@ pub enum Overlay {
         /// Semantic X/Z axis tints.
         axes: [[f32; 4]; 2],
     },
-    /// GPU-only hover lookup; no CPU ID-buffer readback per pointer event.
+    /// GPU-only hover lookup; no CPU ID-buffer readback per pointer event. With an
+    /// outline group table ([`NativeUi::outline_groups`]) it outlines every channel in
+    /// the hovered channel's hover group.
     Hover {
         /// Normalized pointer position in the viewport.
         uv: [f32; 2],
@@ -77,7 +79,9 @@ pub enum Overlay {
     },
     /// Silhouette from the real entity-ID texture.
     Outline {
-        /// Compact render index, one-based.
+        /// Compact render index, one-based; with an outline group table
+        /// ([`NativeUi::outline_groups`]), the outline colour group: every channel in it
+        /// outlines as one shape, with no edges between its channels.
         index: u32,
         /// Semantic selection or review tint.
         color: [f32; 4],
@@ -127,6 +131,8 @@ pub struct NativeUi {
     overlays: Vec<Overlay>,
     overlay_rect: Box2,
     outline_texture: Option<u32>,
+    /// UI image mapping entity-ID channels to outline groups (see `outline_groups`).
+    outline_groups: Option<u32>,
 }
 impl NativeUi {
     /// Create an adapter on an existing device, with no secondary viewport bridge.
@@ -167,6 +173,7 @@ impl NativeUi {
             overlays: Vec::new(),
             overlay_rect: Box2::default(),
             outline_texture: None,
+            outline_groups: None,
         };
         ui.overlays = Vec::new();
         ui.initialize(gpu.info.graphics_family)?;
@@ -193,6 +200,17 @@ impl NativeUi {
         self.overlay_rect = rect;
         self.outline_texture = Some(texture);
         self.overlays = overlays;
+    }
+    /// Outline and hover by group instead of by channel: `table` is a UI image (uploaded
+    /// through the UI renderer) whose texel `channel % 4096, channel / 4096` holds that
+    /// channel's hover group in red + green × 256 and its outline colour group in blue's
+    /// low 7 bits (0: none); blue's bit 7 marks ground (terrain). A group outlines as one
+    /// shape: several channels that are one object (a terrain's chunks, a model's parts)
+    /// show no edges between them, and ground only outlines against the sky, the void
+    /// or other ground (what stands on it is in front of it). `None` outlines single
+    /// channels.
+    pub fn outline_groups(&mut self, table: Option<u32>) {
+        self.outline_groups = table;
     }
     /// Borrow an offscreen renderer image as a UI resource; it must remain valid until replaced.
     /// The adapter transitions it from CopySource to sampled and back around its own submit.

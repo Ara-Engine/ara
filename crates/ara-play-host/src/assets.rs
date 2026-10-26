@@ -159,9 +159,10 @@ impl Assets {
         let cache = FileCache::new(root).map_err(|e| e.to_string())?;
         let cache_dir = cache.root().to_path_buf();
         let published = crate::published::Publisher::new(root, cache.clone())?;
+        let worker = ProcessWorker::new(worker).with_memo(Some(&cache_dir));
         let mut pipeline = AssetPipeline::new(
             root,
-            ProcessWorker::new(worker),
+            worker.clone(),
             Arc::new(cache),
             Arc::new(schema.clone()),
         )
@@ -175,7 +176,7 @@ impl Assets {
         sidecars(root, root, &mut files);
         files.sort();
         // An older worker without the query keeps every recorded version.
-        let installed = ProcessWorker::new(worker).versions().unwrap_or_default();
+        let installed = worker.versions_with_encoder_hint().unwrap_or_default();
         let mut sources = BTreeSet::new();
         let mut failures = BTreeMap::new();
         let mut notes = Vec::new();

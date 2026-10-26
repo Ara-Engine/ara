@@ -88,7 +88,7 @@ fn create_open_headless_close_and_remove_through_the_view_model() {
     assert_eq!(hub.templates[0].id, "blank");
     assert_eq!(hub.engines.len(), 1, "the service registers its own build");
 
-    // Samples from this checkout are templates; without their art, the service's
+    // Samples from this checkout are templates; with missing art or kits, the service's
     // dry run rejects them with a field-tagged diagnostic.
     if let Some(sample) = driver
         .hub
@@ -112,7 +112,12 @@ fn create_open_headless_close_and_remove_through_the_view_model() {
             .next()
             .expect("template problem");
         assert_eq!(problem.code, ara_diag::codes::TEMPLATE_INCOMPLETE);
-        assert!(problem.message.contains("ara-samples fetch outpost"));
+        let setup = sample.setup.as_ref().expect("incomplete sample setup");
+        assert!(
+            problem.message.contains(&setup.command),
+            "{}",
+            problem.message
+        );
     }
 
     // Inline validation comes from the service's diagnostics.

@@ -1,5 +1,5 @@
 //! Opt-in frame windows and a file control queue; ordinary exported games retain their CLI behavior.
-use anyhow::{Context, Result, ensure};
+use anyhow::{Context, Result, bail, ensure};
 use ara_gpu::vulkan::PassTiming;
 use ara_runtime_render::Presenter;
 use serde::Deserialize;
@@ -8,8 +8,11 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
+mod arrival;
+mod boundary;
 mod cpu;
 mod gpu;
+mod report;
 mod span;
 
 pub(super) struct CpuFrame {
@@ -28,6 +31,12 @@ pub(super) struct PerfOptions {
     perf_frames: u32,
     #[arg(long, default_value_t = 30)]
     perf_warmup: u32,
+    /// Wait for settled raster content, texture residency and converged GI before warmup.
+    #[arg(long, requires = "perf_output")]
+    perf_wait_ready: bool,
+    /// Fail the measurement if readiness has not arrived within this many milliseconds.
+    #[arg(long, default_value_t = 120_000, value_parser = clap::value_parser!(u64).range(1..))]
+    perf_ready_timeout_ms: u64,
     /// JSON request queue: quality, reload_shaders, measure and stop.
     #[arg(long, requires = "perf_output")]
     perf_control: Option<PathBuf>,
@@ -54,12 +63,18 @@ pub(super) struct Window {
     gpu: gpu::Samples,
     cpu: cpu::Samples,
     span: span::Samples,
+    run_cpu: cpu::Samples,
+    arrival: arrival::Samples,
+    boundary: boundary::Boundary,
+    began: Instant,
+    from_launch: bool,
+    ready_status: Option<ara_runtime_render::PresentationReadiness>,
     seen: u32,
     measured: u32,
     collecting: bool,
     next_control: Instant,
     waiting_for_shader_epoch: Option<u64>,
-    last_epoch: u64,
+    last_epoch: Option<u64>,
     live_status: Vec<u8>,
 }
 
@@ -82,8 +97,12 @@ impl Window {
     pub fn enabled(&self) -> bool {
         self.options.perf_output.is_some()
     }
-    pub fn new(options: PerfOptions, offscreen: bool) -> Self {
+    pub fn new(options: PerfOptions, offscreen: bool, began: Instant) -> Self {
         let collecting = options.perf_output.is_some();
+        let boundary = boundary::Boundary::new(
+            options.perf_warmup,
+            Duration::from_millis(options.perf_ready_timeout_ms),
+        );
         Self {
             offscreen: offscreen || collecting,
             options,
@@ -92,24 +111,43 @@ impl Window {
             gpu: gpu::Samples::default(),
             cpu: cpu::Samples::default(),
             span: span::Samples::default(),
+            run_cpu: cpu::Samples::default(),
+            arrival: arrival::Samples::default(),
+            boundary,
+            began,
+            from_launch: true,
+            ready_status: None,
             seen: 0,
             measured: 0,
             collecting,
             next_control: Instant::now(),
             waiting_for_shader_epoch: None,
-            last_epoch: 0,
+            last_epoch: None,
             live_status: Vec::new(),
         }
     }
 
-    fn reset(&mut self) {
+    fn clear_samples(&mut self) {
         self.frames.clear();
         self.passes.clear();
         self.gpu = gpu::Samples::default();
         self.cpu = cpu::Samples::default();
         self.span = span::Samples::default();
-        self.seen = 0;
         self.measured = 0;
+    }
+
+    fn reset(&mut self) {
+        self.clear_samples();
+        self.run_cpu = cpu::Samples::default();
+        self.arrival = arrival::Samples::default();
+        self.boundary = boundary::Boundary::new(
+            self.options.perf_warmup,
+            Duration::from_millis(self.options.perf_ready_timeout_ms),
+        );
+        self.began = Instant::now();
+        self.from_launch = false;
+        self.ready_status = None;
+        self.seen = 0;
         self.collecting = true;
     }
 
@@ -119,16 +157,23 @@ impl Window {
         }
         self.next_control = Instant::now() + Duration::from_millis(100);
         let shaders = presenter.shader_status();
-        if shaders.epoch != self.last_epoch && !shaders.pending && shaders.last_error.is_none() {
-            self.last_epoch = shaders.epoch;
-            self.reset();
+        if !shaders.pending && shaders.last_error.is_none() {
+            let changed = self
+                .last_epoch
+                .replace(shaders.epoch)
+                .is_some_and(|old| old != shaders.epoch);
+            // The first observed epoch is initial state. An explicit reload
+            // already started its window; retain its waiting CPU history/clock.
+            if changed && self.waiting_for_shader_epoch.is_none() {
+                self.reset();
+            }
         }
         if let Some(output) = &self.options.perf_output {
             if let Some(parent) = output.parent().filter(|p| !p.as_os_str().is_empty()) {
                 std::fs::create_dir_all(parent)?;
             }
             let status = serde_json::to_vec_pretty(
-                &json!({"quality":presenter.quality().map(|q| q.name()),"collecting":self.collecting,"shaders":shaders}),
+                &json!({"quality":presenter.quality().map(|q| q.name()),"collecting":self.collecting,"shaders":shaders,"readiness":presenter.readiness()}),
             )?;
             if status != self.live_status {
                 let path = output.with_file_name("status.json");
@@ -178,24 +223,66 @@ impl Window {
         if !self.collecting {
             return Ok(false);
         }
+        self.run_cpu
+            .record(frame.total_ms, frame.wait_ms, frame.first_presented);
+        let mut shaders_ready = true;
         if let Some(epoch) = self.waiting_for_shader_epoch {
             let status = presenter.shader_status();
-            if status.pending {
-                return Ok(false);
-            }
             if let Some(error) = status.last_error {
                 eprintln!("Shader reload failed; previous result retained: {error}");
                 self.collecting = false;
                 self.waiting_for_shader_epoch = None;
                 return Ok(false);
             }
-            if status.epoch == epoch {
-                return Ok(false);
+            if status.pending || status.epoch == epoch {
+                shaders_ready = false;
+            } else {
+                self.waiting_for_shader_epoch = None;
             }
-            self.waiting_for_shader_epoch = None;
+        }
+        if !shaders_ready && !self.options.perf_wait_ready {
+            return Ok(false);
         }
         self.seen += 1;
-        if self.seen <= self.options.perf_warmup {
+        if self.options.perf_wait_ready {
+            let status = presenter.readiness();
+            if self.boundary.confirmed() && (status.failed || !status.raster || !status.gi_enabled)
+            {
+                self.publish(presenter, phases, camera, report::Outcome::Failed)?;
+                bail!(
+                    "perf presentation lost its eligible raster/GI path: {:?}; {:?}",
+                    status,
+                    presenter.presentation_error()
+                );
+            }
+            let ready = shaders_ready && status.raster && status.gi_enabled && status.is_ready();
+            if ready && !self.boundary.confirmed() {
+                self.ready_status = Some(status);
+            }
+            match self
+                .boundary
+                .observe(self.seen, self.began.elapsed(), ready)
+            {
+                boundary::Step::Sample => {}
+                boundary::Step::Waiting | boundary::Step::Warmup => {
+                    if self.measured != 0 {
+                        self.clear_samples();
+                    }
+                    self.arrival.record(presenter, &frame);
+                    return Ok(false);
+                }
+                boundary::Step::TimedOut => {
+                    self.arrival.record(presenter, &frame);
+                    self.publish(presenter, phases, camera, report::Outcome::TimedOut)?;
+                    bail!(
+                        "perf readiness timed out after {} ms: {:?}; presentation error: {:?}",
+                        self.options.perf_ready_timeout_ms,
+                        status,
+                        presenter.presentation_error()
+                    );
+                }
+            }
+        } else if self.seen <= self.options.perf_warmup {
             return Ok(false);
         }
         let total = frame.total_ms;
@@ -246,42 +333,7 @@ impl Window {
         if self.measured < self.options.perf_frames {
             return Ok(false);
         }
-        let output = self
-            .options
-            .perf_output
-            .as_ref()
-            .context("metrics enabled")?;
-        if let Some(parent) = output.parent() {
-            std::fs::create_dir_all(parent)?;
-        }
-        let mut cpu: BTreeMap<_, _> = self
-            .frames
-            .iter()
-            .map(|(name, samples)| (name.to_owned(), quantiles(samples)))
-            .collect();
-        cpu.extend(self.cpu.report());
-        let passes: BTreeMap<_, _> = self
-            .passes
-            .iter()
-            .map(|(name, samples)| (name, quantiles(samples)))
-            .collect();
-        ensure!(
-            !passes.is_empty(),
-            "perf window did not receive GPU timestamp samples"
-        );
-        let mut report = json!({"format":"ara.player.perf/1","pid":std::process::id(),"quality":presenter.quality().map(|q|q.name()),"presentation":if self.offscreen {"hiddenWindow"} else {"window"},"validation":cfg!(debug_assertions),"startup":phases,"camera":camera,"frames":self.measured,"warmup":self.options.perf_warmup,"cpu":cpu,"gpu_passes":passes,"gpu_other":self.gpu.report(),"gpu_coverage":self.gpu.coverage(),"shaders":presenter.shader_status()});
-        report
-            .as_object_mut()
-            .context("performance report object")?
-            .extend(self.span.report());
-        report["gpu_timestamp_clock"] = presenter.renderer().map_or(Value::Null, |renderer| {
-            let info = &renderer.gpu().context().info;
-            json!({"extension":info.timestamp_clock,"period_ns":info.timestamp_period_ns,"valid_bits":info.timestamp_valid_bits})
-        });
-        let temporary = output.with_extension("json.tmp");
-        std::fs::write(&temporary, serde_json::to_vec_pretty(&report)?)?;
-        std::fs::rename(temporary, output)?;
-        eprintln!("Perf window published: {}", output.display());
+        self.publish(presenter, phases, camera, report::Outcome::Ready)?;
         self.collecting = false;
         Ok(!self.options.keep_alive)
     }
@@ -295,11 +347,32 @@ mod tests {
     fn performance_measurement_never_opens_a_visible_window() -> Result<()> {
         use clap::Parser;
         let normal = crate::Args::try_parse_from(["ara-player"])?;
-        assert!(!Window::new(normal.standalone.perf, normal.standalone.offscreen).offscreen());
+        assert!(
+            !Window::new(
+                normal.standalone.perf,
+                normal.standalone.offscreen,
+                Instant::now()
+            )
+            .offscreen()
+        );
         let perf = crate::Args::try_parse_from(["ara-player", "--perf-output", "metrics.json"])?;
-        assert!(Window::new(perf.standalone.perf, perf.standalone.offscreen).offscreen());
+        assert!(
+            Window::new(
+                perf.standalone.perf,
+                perf.standalone.offscreen,
+                Instant::now()
+            )
+            .offscreen()
+        );
         let hidden = crate::Args::try_parse_from(["ara-player", "--offscreen"])?;
-        assert!(Window::new(hidden.standalone.perf, hidden.standalone.offscreen).offscreen());
+        assert!(
+            Window::new(
+                hidden.standalone.perf,
+                hidden.standalone.offscreen,
+                Instant::now()
+            )
+            .offscreen()
+        );
         assert!(crate::Args::try_parse_from(["ara-player", "--offscreen", "--headless"]).is_err());
         Ok(())
     }

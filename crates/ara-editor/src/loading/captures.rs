@@ -117,6 +117,30 @@ impl Captures {
                     ..base.clone()
                 },
             ),
+            // A very long path and a long run: the path keeps its start and file name
+            // around "…"; the timer, the count and the button stay in the card.
+            (
+                "long-path",
+                Status {
+                    project: "Outpost with an unusually long project name for a loading window".into(),
+                    imports: Some(Imports {
+                        done: 81,
+                        pending: 32,
+                        failed: vec![(
+                            format!("assets/third_party/{}/broken_container_variant_with_a_long_name_8k.gltf", "nested_folder/".repeat(6)),
+                            "ARA4302 the glTF buffer `broken_container_variant_with_a_long_name_8k.bin` is missing from its folder".into(),
+                        )],
+                        ..importing.clone()
+                    }),
+                    latest: Some(format!(
+                        "assets/props/{}rock_large_moss_covered_variant_04_8k.glb",
+                        "industrial/scrapyard/rock_formations/".repeat(4)
+                    )),
+                    skip: true,
+                    elapsed: 3725,
+                    ..base.clone()
+                },
+            ),
             (
                 "opening-early",
                 Status {

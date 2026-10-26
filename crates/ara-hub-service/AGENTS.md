@@ -22,9 +22,8 @@ One service per config directory, enforced by an OS lock; projects run separatel
   (the samples lock) sets `setup {message,command}` for missing third-party pins
   or generated kit sources/local glTF companions. `hub.create` fails with ARA1913
   before writing; `cargo run -p ara-samples -- kits <sample>` restores kits.
-- When the engine runs from `<checkout>/target/<profile>/`, `Hub::open` layers the
-  checkout's `samples/` after the configured templates (installed builds ship them
-  in `<install>/templates`).
+- Run from `<checkout>/target/<profile>/`, `Hub::open` layers the checkout's `samples/`
+  after the configured templates (installed builds ship `<install>/templates`).
 - Templates resolve from registered engines in descending semantic version order,
   then configured/service templates and checkout samples. Each tile's `engineVersion`
   identifies its source; create defaults to that pin and uses that source's asset lock.
@@ -111,7 +110,9 @@ the existing editor owns the project authority/lock. Switching mode drops old RP
 routes; clients reconnect. There is no second editor authority for one project.
 Process startup errors point to `.ara/hub-process.log`; Hub startup to
 `hub-start.log`. Daemons start without a console window on Windows; Hub auto-start uses
-CreateProcessW without handle inheritance to preserve captured CLI/MCP EOF.
+CreateProcessW without handle inheritance to preserve captured CLI/MCP EOF. Services
+use their config directory as CWD, and project children use the project root, so
+neither keeps the Hub installation locked during a self-update.
 A project's root `thumbnail.png` becomes its card preview on register; `hub.create`
 copies the template's preview there. Templates must not contain symlinks; `.ara`, `.git`, `target` and `evidence` are skipped.
 A failed custom template can leave its newly created destination for inspection.

@@ -4,6 +4,7 @@ use crate::{
     instanced,
 };
 mod budgets;
+mod shadow_patches;
 mod shadows;
 
 struct EmptyTextures;
@@ -137,6 +138,7 @@ fn native_raster_keeps_instances_local_and_tracks_moving_and_skinned_poses_witho
                 Box::new(EmptyTextures),
                 &renderer.artifacts,
                 None,
+                0,
             )
             .is_err()
         );
@@ -222,9 +224,12 @@ fn native_raster_keeps_instances_local_and_tracks_moving_and_skinned_poses_witho
     renderer.update_native_changed(&scene, &move_only)?;
     renderer.render_view(&request.camera, 1., ViewMode::Albedo)?;
     let moved = renderer.native_frame_work().unwrap();
+    // The moved group (two instances) in five lists, and the four cascade patches
+    // it causes test at most those two again.
     assert!(
-        moved.cull_tests > 0 && moved.cull_tests <= 10,
-        "only the moved group is culled, not 128 unrelated instances"
+        moved.cull_tests > 0 && moved.cull_tests <= 18,
+        "only the moved group is culled, not 128 unrelated instances: {}",
+        moved.cull_tests
     );
     assert_eq!(
         (moved.instance_rows, moved.material_rows, moved.lod_tests),

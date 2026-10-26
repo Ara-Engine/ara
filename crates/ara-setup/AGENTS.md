@@ -38,6 +38,8 @@ stage → destination, delete the backup; failures before the new files are in p
 restore the old install (`-008`, or `-009` naming the backup). Registration
 (`install.ps1 -RegisterOnly`, System32 PowerShell, `CREATE_NO_WINDOW`, output
 captured) runs after the swap; failure is `-010` with the output, files kept.
+Hub replacements also hold `.ara-hub-update.lock`, shared with self-update and engine
+registration. A newer installed version/source generation is retained, never downgraded.
 
 ## Layout
 

@@ -11,7 +11,7 @@ packaging appends the portable ZIP to `target/release/ara-setup.exe`.
 `cargo run -p ara-release -- smoke`
 `smoke --artifacts <existing release-dist>` tests packages without rebuilding them.
 
-Always CARGO_BUILD_JOBS=4. Package is an explicit opt-in release build; no dev
+Always CARGO_BUILD_JOBS=2. Package is an explicit opt-in release build; no dev
 server or full workspace build. Outputs, logs, smoke projects and symbols belong
 under target/release-dist. Never tag, push, publish, or upload crashes unless explicitly requested.
 Every test/capture/manual check sets ARA_CONFIG_DIR to an existing scratch dir
@@ -43,8 +43,11 @@ pin that file and archive it privately. Other PDBs stay in the separate symbols 
 with binary hashes. The symbols command converts them through ara-crash when needed.
 
 `ara-hub.exe` and its updater ship when `crates/ara-hub` exists; the engine installer
-registers its build, installs/reuses the standalone Hub and points its Hub shortcut
-there. No-system-integration smoke leaves shared installations alone; smoke
+registers its build, upgrades the standalone Hub by commit/generation and points all
+Hub shortcuts there. `hub-installation.ps1` shares the updater/setup transaction lock,
+rejects running/locked files, and rolls back failed directory swaps. No-system-integration
+suppresses PATH/registry/Start-menu writes; smoke also isolates LOCALAPPDATA so its
+managed Hub never touches an existing user installation. Smoke
 captures every Hub page from the installed binary. Packaged samples get their
 `thumbnail.png` from `evidence/<main-scene>-player.png` (evidence is excluded).
 Sample kits (`assets/kit/*`, git-ignored) are generated into the staged copy by
@@ -64,3 +67,16 @@ and failures; never turn a failed smoke step into a pass.
 Smoke also installs the standalone Hub setup, seeds a distinct same-version service,
 runs its windowless --service-check, lists engine templates and creates Starter.
 Its LOCALAPPDATA/APPDATA and ARA_CONFIG_DIR all stay inside the smoke directory.
+Smoke seeds an older same-version Hub before engine setup, then launches both
+portable shortcut aliases with windowless `--build-info` and checks the embedded commit.
+Tiny SFX regression: set ARA_TEST_BIN_DIR to the built Hub/updater/setup binaries;
+run `cargo test -p ara-release installed_packages_replace_a_stale_hub -- --ignored`.
+
+`--features rehearsal` adds `rehearse --artifacts DIR --older-setup EXE --directory target/DIR`.
+Package both kinds with that feature and an external throwaway signing key's public
+key embedded at build time. It enables Hub's matching windowless rehearsal host and
+the loopback-only `ARA_RELEASE_TEST_API` transport. Rehearsal markers block real publish.
+The mock serves exact dry-run signed bytes and GitHub URLs, streaming large files.
+It exercises the real Hub model, external updater/startup health, managed engine
+install RPC, sample open and installed export's eight-tick ARA_RESULT. Every child
+uses isolated config/local/roaming/crash roots, and cleanup stops owned processes.

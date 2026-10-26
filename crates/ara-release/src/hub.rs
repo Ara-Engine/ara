@@ -20,27 +20,30 @@ pub fn package(root: &Path, version: &str) -> Result<()> {
     let name = format!("ara-hub-{version}-windows-x64");
     let output = dist.join(&name);
     ensure!(!output.exists(), "{} already exists", output.display());
-    run(
-        Command::new("cargo")
-            .current_dir(root)
-            .env("CARGO_BUILD_JOBS", "4")
-            .args([
-                "build",
-                "--release",
-                "-p",
-                "ara-hub",
-                "--bins",
-                "-p",
-                "ara",
-                "--bin",
-                "ara",
-                "-p",
-                "ara-setup",
-                "--bin",
-                "ara-setup",
-            ]),
-        &dist.join("logs/hub-release-build.log"),
-    )?;
+    let mut build = Command::new("cargo");
+    build
+        .current_dir(root)
+        .env("CARGO_BUILD_JOBS", "2")
+        .env("CARGO_PROFILE_RELEASE_DEBUG", "line-tables-only")
+        .args([
+            "build",
+            "--release",
+            "-p",
+            "ara-hub",
+            "--bins",
+            "-p",
+            "ara",
+            "--bin",
+            "ara",
+            "-p",
+            "ara-setup",
+            "--bin",
+            "ara-setup",
+        ]);
+    if cfg!(feature = "rehearsal") {
+        build.args(["--features", "ara-hub/rehearsal"]);
+    }
+    run(&mut build, &dist.join("logs/hub-release-build.log"))?;
     let stage = dist.join(format!(".stage-{name}-{}", std::process::id()));
     fs::create_dir(&stage)?;
     for binary in ["ara-hub", "ara-hub-updater"] {
@@ -73,14 +76,16 @@ pub fn package(root: &Path, version: &str) -> Result<()> {
     support::copy_tree(&root.join("assets/brand"), &stage.join("assets/brand"))?;
     copy(&root.join("release/LICENSE"), &stage.join("LICENSE"))?;
     copy(&root.join("release/paths.ps1"), &stage.join("paths.ps1"))?;
+    copy(
+        &root.join("release/hub-installation.ps1"),
+        &stage.join("hub-installation.ps1"),
+    )?;
     fs::write(
         stage.join("install.ps1"),
         include_str!("../hub-install.ps1"),
     )?;
-    support::json(
-        &stage.join("hub.json"),
-        &serde_json::json!({"format":"ara.hub/1","version":version}),
-    )?;
+    support::json(&stage.join("hub.json"), &marker(root, version)?)?;
+    verify_binary(root, &stage, version, &dist)?;
     crate::notices::generate(root, &stage, &dist)?;
     fs::rename(stage, &output)?;
     let zip = dist.join(format!("{name}.zip"));
@@ -99,5 +104,49 @@ pub fn package(root: &Path, version: &str) -> Result<()> {
         ),
     )?;
     println!("{}", output.display());
+    Ok(())
+}
+
+/// Both distributions carry the same ordered source identity, not just semver.
+pub(crate) fn marker(root: &Path, version: &str) -> Result<serde_json::Value> {
+    let git = |args: &[&str]| -> Result<String> {
+        let output = Command::new("git").current_dir(root).args(args).output()?;
+        ensure!(
+            output.status.success(),
+            "cannot identify release source commit"
+        );
+        Ok(String::from_utf8(output.stdout)?.trim().to_owned())
+    };
+    ensure!(
+        git(&["status", "--porcelain", "--untracked-files=no"])?.is_empty(),
+        "commit source changes before packaging a build-identified Hub"
+    );
+    Ok(
+        serde_json::json!({"format":"ara.hub/1","version":version,"rehearsal":cfg!(feature="rehearsal"),"build":{
+            "commit":git(&["rev-parse","HEAD"])?,"generation":git(&["rev-list","--count","HEAD"])?.parse::<u64>()?
+        }}),
+    )
+}
+
+/// Refuse stale compiler output before it can become a signed release package.
+pub(crate) fn verify_binary(root: &Path, stage: &Path, version: &str, dist: &Path) -> Result<()> {
+    let report = dist.join("logs/hub-build-info.json");
+    let mut command = Command::new(stage.join("ara-hub.exe"));
+    command
+        .arg("--build-info")
+        .arg(&report)
+        .env("ARA_CONFIG_DIR", dist.join("package-config"))
+        .env("ARA_CRASH_DIR", dist.join("package-crashes"));
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        command.creation_flags(0x0800_0000);
+    }
+    run(&mut command, &dist.join("logs/hub-build-info.log"))?;
+    let info: serde_json::Value = serde_json::from_slice(&fs::read(report)?)?;
+    ensure!(
+        info["build"] == marker(root, version)?["build"] && info["version"] == version,
+        "ara-hub.exe is from a different source build; rebuild before packaging"
+    );
     Ok(())
 }

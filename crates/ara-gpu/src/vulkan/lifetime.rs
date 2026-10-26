@@ -113,13 +113,18 @@ impl Device for VulkanDevice {
                 match self.retired.swap_remove(index) {
                     Retired::Buffer(b) => {
                         self.heap.retire_buffer(b.heap);
-                        self.context.destroy_buffer(b.raw);
+                        if let Some(memory) = self.context.release_buffer(b.raw) {
+                            self.disposal
+                                .as_mut()
+                                .expect("disposal worker outlives collection")
+                                .push(disposal::Object::Memory(memory));
+                        }
                     }
                     Retired::Pipeline(pipeline, _) => {
-                        // SAFETY: All submissions that could reference this pipeline have completed.
-                        unsafe {
-                            self.context.device.destroy_pipeline(pipeline.handle, None);
-                        }
+                        self.disposal
+                            .as_mut()
+                            .expect("disposal worker outlives collection")
+                            .push(disposal::Object::Pipeline(pipeline.handle));
                     }
                     Retired::Acceleration(a) => {
                         self.heap.retire_acceleration(a.heap);
@@ -127,14 +132,21 @@ impl Device for VulkanDevice {
                     }
                     Retired::Image(i) => {
                         self.heap.retire_image(i.raw.view, i.heap);
-                        self.context.destroy_image(i.raw);
+                        self.context.detach_image(i.raw);
+                        self.disposal
+                            .as_mut()
+                            .expect("disposal worker outlives collection")
+                            .push(disposal::Object::Image(i.raw));
                     }
                 }
             } else {
                 index += 1;
             }
         }
-        Ok(())
+        self.disposal
+            .as_mut()
+            .expect("disposal worker outlives collection")
+            .flush()
     }
 }
 
@@ -142,6 +154,7 @@ impl Drop for VulkanDevice {
     fn drop(&mut self) {
         // Join the compiler and destroy unpublished replacements before layout/device teardown.
         drop(self.shader_worker.take());
+        drop(self.disposal.take());
         // SAFETY: Last owner. Idle covers descriptors, pipelines, queries and command buffers.
         unsafe {
             let _ = self.context.device.device_wait_idle();

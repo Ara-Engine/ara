@@ -15,6 +15,48 @@ use std::{
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
+#[test]
+fn bootstrap_preparation_cannot_hold_the_first_frame_or_connecting_input() {
+    let (entered, waiting) = mpsc::channel();
+    let (release, held) = mpsc::channel();
+    let mut connection = Connection::start_preparing_with_wake(
+        "target/hub-async-tests/preparation".into(),
+        move || {
+            entered.send(()).expect("UI waiting for preparation");
+            held.recv_timeout(Duration::from_secs(10))
+                .expect("UI releases preparation");
+            Err(ara_diag::Diagnostic::error(
+                ara_diag::codes::DAEMON_UNREACHABLE,
+                "held test preparation finished",
+            )
+            .into())
+        },
+        || {},
+    );
+    waiting
+        .recv_timeout(Duration::from_secs(10))
+        .expect("preparation started");
+    assert!(connection.poll().is_empty());
+    let mut hub = Hub::new(Prefs::default(), "target/hub-async-tests".into(), None);
+    let mut app = App::new([1440., 900.], Vec::new()).expect("UI");
+    app.rebuild(&mut hub, capture::NOW).expect("first view");
+    assert!(app.frame().expect("first frame"));
+    for id in ["theme", "nav-settings"] {
+        let rect = app.ui.nodes[app.ui.find(id).expect("control")].rect;
+        let at = [rect.x + rect.w / 2., rect.y + rect.h / 2.];
+        app.dispatch_pointer(&mut hub, InputEvent::PointerDown(at), capture::NOW)
+            .expect("down");
+        app.dispatch_pointer(&mut hub, InputEvent::PointerUp(at), capture::NOW)
+            .expect("up");
+    }
+    assert!(hub.prefs.light);
+    assert_eq!(hub.view, ara_hub::model::View::Settings);
+    assert_eq!(hub.link, ara_hub::model::Link::Connecting);
+    // Neither the first frame nor either input activation depends on this release.
+    release.send(()).expect("release preparation");
+    connection.stop();
+}
+
 struct SlowService {
     build: String,
     announced: bool,

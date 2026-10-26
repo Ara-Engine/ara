@@ -11,6 +11,8 @@ pub(super) struct State {
     identity: OnceLock<Option<String>>,
     failed: AtomicBool,
     service: Mutex<Option<std::net::TcpStream>>,
+    prepared: Mutex<bool>,
+    hint_probed: AtomicBool,
 }
 
 impl ProcessWorker {
@@ -38,7 +40,7 @@ impl ProcessWorker {
         }
         self.encoder
             .identity
-            .get_or_init(|| match self.query_encoder() {
+            .get_or_init(|| match self.resolve_encoder() {
                 Ok(identity) => identity,
                 Err(error) => {
                     crate::trace::event(
@@ -50,6 +52,79 @@ impl ProcessWorker {
                 }
             })
             .as_deref()
+    }
+
+    fn resolve_encoder(&self) -> Result<Option<String>> {
+        // Additive probing keeps old/custom workers compatible. A valid hint
+        // selects action keys immediately; only a miss needs device preparation.
+        if !self.encoder.hint_probed.swap(true, Ordering::AcqRel)
+            && let Ok(Some(identity)) = self.query_encoder_hint()
+        {
+            crate::trace::event(
+                "texture.identity_cache_hit",
+                "encoder",
+                serde_json::json!({}),
+            );
+            return Ok(Some(identity));
+        }
+        let identity = self.query_encoder()?;
+        if identity.is_some() {
+            *self
+                .encoder
+                .prepared
+                .lock()
+                .map_err(|_| Error::Worker("encoder preparation poisoned".into()))? = true;
+        }
+        Ok(identity)
+    }
+
+    pub(super) fn accept_encoder_hint(&self, identity: Option<String>) {
+        self.encoder.hint_probed.store(true, Ordering::Release);
+        if let Some(identity) = identity
+            && self.encoder.identity.set(Some(identity)).is_ok()
+        {
+            crate::trace::event(
+                "texture.identity_cache_hit",
+                "metadata",
+                serde_json::json!({}),
+            );
+        }
+    }
+
+    fn query_encoder_hint(&self) -> Result<Option<String>> {
+        let mut job = self.start_request(Request::EncoderHint)?;
+        job.timeout = self.timeout.min(std::time::Duration::from_secs(30));
+        loop {
+            match job.message()? {
+                Some(Message::EncoderHint(identity)) => return Ok(identity),
+                Some(_) => return Ok(None),
+                None => std::thread::sleep(std::time::Duration::from_millis(2)),
+            }
+        }
+    }
+
+    fn prepare_encoder(&self, expected: Option<&str>) -> Result<()> {
+        let Some(expected) = expected else {
+            return Ok(());
+        };
+        let mut prepared = self
+            .encoder
+            .prepared
+            .lock()
+            .map_err(|_| Error::Worker("encoder preparation poisoned".into()))?;
+        if *prepared {
+            return Ok(());
+        }
+        let actual = self
+            .query_encoder()
+            .map_err(|error| Error::EncoderUnavailable(error.to_string()))?;
+        if actual.as_deref() != Some(expected) {
+            return Err(Error::EncoderUnavailable(
+                "cached encoder identity changed during miss negotiation".into(),
+            ));
+        }
+        *prepared = true;
+        Ok(())
     }
 
     fn query_encoder(&self) -> Result<Option<String>> {
@@ -103,9 +178,10 @@ impl ProcessWorker {
     ) -> Result<(Digest, ImportOutput)> {
         let backend = self.texture_encoder(&input);
         let key = input.key_with_backend(backend)?;
-        let result = self
-            .start_encoded(Arc::clone(&input), backend)?
-            .wait(cancellation, &mut progress);
+        let result = self.prepare_encoder(backend).and_then(|()| {
+            self.start_encoded(Arc::clone(&input), backend)?
+                .wait(cancellation, &mut progress)
+        });
         match result {
             Err(Error::EncoderUnavailable(reason)) if backend.is_some() => {
                 self.encoder.failed.store(true, Ordering::Release);

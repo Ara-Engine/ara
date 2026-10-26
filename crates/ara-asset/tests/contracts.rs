@@ -124,7 +124,31 @@ fn cache_is_immutable_verified_and_garbage_collectable() {
     assert_eq!(cache.load(key).unwrap().unwrap().output, output());
     let hash = Digest::of(&output().artifacts[0].bytes);
     std::fs::write(cache.root().join("objects").join(hash.to_string()), b"bad").unwrap();
-    assert!(cache.load(key).is_err());
+    assert!(cache.load(key).unwrap().is_none());
+    cache.store(key, &output()).unwrap();
+    assert_eq!(cache.load(key).unwrap().unwrap().output, output());
+}
+
+#[test]
+fn cache_torn_actions_and_missing_objects_recook_without_serving_partial_results() {
+    let root = tempfile::tempdir().unwrap();
+    let cache = FileCache::new(root.path()).unwrap();
+    let key = input().key().unwrap();
+    let expected = output();
+    cache.store(key, &expected).unwrap();
+    let action = cache.root().join("actions").join(key.to_string());
+    std::fs::write(&action, b"{\"version\":").unwrap();
+    assert!(cache.load(key).unwrap().is_none());
+    cache.store(key, &expected).unwrap();
+    assert_eq!(cache.load(key).unwrap().unwrap().output, expected);
+    let object = cache
+        .root()
+        .join("objects")
+        .join(Digest::of(&expected.artifacts[0].bytes).to_string());
+    std::fs::remove_file(&object).unwrap();
+    assert!(cache.load(key).unwrap().is_none());
+    cache.store(key, &expected).unwrap();
+    assert_eq!(cache.load(key).unwrap().unwrap().output, expected);
 }
 #[test]
 fn dependency_graph_removes_edges_and_invalidates_transitively_through_cycles() {

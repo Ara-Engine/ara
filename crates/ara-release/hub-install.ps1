@@ -2,6 +2,7 @@
 param([string]$Destination, [switch]$RegisterOnly, [switch]$Silent, [switch]$NoSystemIntegration)
 $ErrorActionPreference = 'Stop'
 . ([IO.Path]::Combine($PSScriptRoot, 'paths.ps1'))
+. ([IO.Path]::Combine($PSScriptRoot, 'hub-installation.ps1'))
 $source = ConvertTo-AraPath $PSScriptRoot
 $hub = Get-Content -LiteralPath (Join-Path $source 'hub.json') -Raw | ConvertFrom-Json
 if ($hub.format -ne 'ara.hub/1') { throw 'Invalid Ara Hub package' }
@@ -36,14 +37,7 @@ if (-not $NoSystemIntegration) {
         $_ -and -not $_.StartsWith($serviceBase + '\', [StringComparison]::OrdinalIgnoreCase)
     })
     if ($entries -notcontains $service) { [Environment]::SetEnvironmentVariable('Path', (($entries + $service) -join ';'), 'User') }
-    $shortcuts = Join-Path (ConvertTo-AraPath ([Environment]::GetFolderPath('Programs'))) 'Ara'
-    [IO.Directory]::CreateDirectory($shortcuts) | Out-Null
-    $shell = New-Object -ComObject WScript.Shell
-    $link = $shell.CreateShortcut((Join-Path $shortcuts 'Ara Hub.lnk'))
-    $link.TargetPath = Join-Path $source 'ara-hub.exe'
-    $link.WorkingDirectory = $source
-    $link.IconLocation = (Join-Path $source 'assets\brand\ara.ico') + ',0'
-    $link.Save()
+    Register-AraHubShortcuts $source (ConvertTo-AraPath ([Environment]::GetFolderPath('Programs')))
 }
 Write-Host "Ara Hub installed at $source"
 if (-not $Silent) { Write-Host 'Open Ara Hub from the Start menu to install an engine version.' }

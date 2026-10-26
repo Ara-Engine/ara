@@ -2,6 +2,7 @@
 mod isolation;
 mod registry;
 mod service;
+pub mod startup;
 mod templates;
 
 pub use isolation::validate_development_config;

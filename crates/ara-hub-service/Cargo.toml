@@ -28,3 +28,4 @@ workspace = true
 
 [dev-dependencies]
 ara-update = { path = "../ara-update", features = ["test-support"] }
+tempfile.workspace = true

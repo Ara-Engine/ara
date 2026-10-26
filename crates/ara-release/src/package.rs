@@ -53,7 +53,7 @@ pub fn package(root: &Path, version: &str) -> Result<()> {
     let mut build = Command::new("cargo");
     build
         .current_dir(root)
-        .env("CARGO_BUILD_JOBS", "4")
+        .env("CARGO_BUILD_JOBS", "2")
         .env("CARGO_PROFILE_RELEASE_DEBUG", "line-tables-only")
         .env("VULKAN_SDK", &sdk)
         .args(["build", "--release"]);
@@ -67,6 +67,9 @@ pub fn package(root: &Path, version: &str) -> Result<()> {
     if hub {
         build.args(["-p", "ara-hub", "--bin", "ara-hub"]);
         build.args(["--bin", "ara-hub-updater"]);
+        if cfg!(feature = "rehearsal") {
+            build.args(["--features", "ara-hub/rehearsal"]);
+        }
     }
     run(&mut build, &dist.join("logs/release-build.log"))?;
     let stage = dist.join(format!(".stage-{name}-{}", std::process::id()));
@@ -120,6 +123,7 @@ pub fn package(root: &Path, version: &str) -> Result<()> {
     for file in [
         "install.ps1",
         "paths.ps1",
+        "hub-installation.ps1",
         "uninstall.ps1",
         "launch-hub.ps1",
         "launch-editor.ps1",
@@ -131,12 +135,13 @@ pub fn package(root: &Path, version: &str) -> Result<()> {
     bundle_tools(root, &stage, &sdk)?;
     if hub {
         let script = stage.join("install.ps1");
+        crate::hub::verify_binary(root, &stage, version, &dist)?;
         let mut install = fs::read_to_string(&script)?;
         install.push_str(include_str!("../engine-hub.ps1"));
         fs::write(script, install)?;
         support::json(
             &stage.join("hub-launcher.json"),
-            &json!({"format":"ara.hub/1","version":version}),
+            &crate::hub::marker(root, version)?,
         )?;
         support::json(
             &stage.join("hub-service.json"),
@@ -152,7 +157,7 @@ pub fn package(root: &Path, version: &str) -> Result<()> {
     notices::generate(root, &stage, &dist)?;
     support::json(
         &stage.join("engine.json"),
-        &json!({"format":"ara.engine/1","version":version,"platform":"windows-x64","hub":{"binary":"ara-hub.exe","available":hub},"sourceCommit":git(root, &["rev-parse","HEAD"])? .trim(),"crashes":"%LOCALAPPDATA%/Ara/crashes"}),
+        &json!({"format":"ara.engine/1","version":version,"rehearsal":cfg!(feature="rehearsal"),"platform":"windows-x64","hub":{"binary":"ara-hub.exe","available":hub},"sourceCommit":git(root, &["rev-parse","HEAD"])? .trim(),"crashes":"%LOCALAPPDATA%/Ara/crashes"}),
     )?;
     support::json(
         &symbols.join("builds.json"),
@@ -453,7 +458,7 @@ pub fn symbols(root: &Path, directory: &Path) -> Result<()> {
     run(
         Command::new("cargo")
             .current_dir(root)
-            .env("CARGO_BUILD_JOBS", "4")
+            .env("CARGO_BUILD_JOBS", "2")
             .args([
                 "build",
                 "-p",

@@ -46,5 +46,9 @@ harness = false
 name = "worker_fairness"
 harness = false
 
+[[test]]
+name = "worker_metadata"
+harness = false
+
 [lints]
 workspace = true

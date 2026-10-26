@@ -345,29 +345,32 @@ pub fn image_barrier(
 impl Gpu {
     /// Destroy a timeline-retired buffer, removing the teardown record.
     pub(crate) fn destroy_buffer(&mut self, buffer: BufferAllocation) {
+        if let Some(memory) = self.release_buffer(buffer) {
+            // SAFETY: release_buffer destroyed the completed buffer and did not
+            // transfer its allocation to the bounded reuse pool.
+            unsafe { self.device.free_memory(memory, None) };
+        }
+    }
+
+    /// Destroy a completed buffer and retain reusable memory. The caller owns
+    /// any returned uncached block and may free it on the disposal worker.
+    pub(crate) fn release_buffer(&mut self, buffer: BufferAllocation) -> Option<vk::DeviceMemory> {
         self.buffers.retain(|b| b.handle != buffer.handle);
         // SAFETY: Caller proved every referencing queue completed before retirement.
         unsafe {
             self.device.destroy_buffer(buffer.handle, None);
             // Only memory is reused: a new exclusive VkBuffer starts with fresh
             // queue ownership and cannot inherit the retired buffer's access state.
-            if !buffer
-                .memory_key
-                .is_some_and(|key| self.buffer_memory.retain(key, buffer.memory))
-            {
-                self.device.free_memory(buffer.memory, None);
-            }
         }
+        (!buffer
+            .memory_key
+            .is_some_and(|key| self.buffer_memory.retain(key, buffer.memory)))
+        .then_some(buffer.memory)
     }
-    /// Destroy a timeline-retired image, removing the teardown record.
-    pub(crate) fn destroy_image(&mut self, image: ImageAllocation) {
+    /// Transfers an already-retired allocation to the device's disposal worker.
+    /// Removing the teardown record preserves sole destruction ownership.
+    pub(crate) fn detach_image(&mut self, image: ImageAllocation) {
         self.images.retain(|i| i.handle != image.handle);
-        // SAFETY: Descriptor slots and all submitted image uses have retired.
-        unsafe {
-            self.device.destroy_image_view(image.view, None);
-            self.device.destroy_image(image.handle, None);
-            self.device.free_memory(image.memory, None);
-        }
     }
 }
 

@@ -1,8 +1,8 @@
 # ara-runtime-render
 
 Raster presentation queues view, particles and post inside one completion scope,
-then waits before publication. Submission checkpoints separate view/feature pass
-timings; deferring helpers must never report their GPU work as zero.
+then waits before publication. The final particle tick shares its draw graph.
+Submission checkpoints preserve view/feature timings; deferred work is never zero-cost.
 
 Presents `ara_runtime::extract::RenderFrame`s through native raster on every GPU
 and preset (D27), with experimental fidelity as an explicit opt-in. Owns the
@@ -55,6 +55,7 @@ device and per-view upload state; no simulation, window or process code.
   native captures read the same view as windows and embedded Game. Raster puts
   terrain/foliage in the G-buffer, then particles before shared temporal/post.
 - `stats()`: rebuilt flag, updated poses/skins, CPU prepare/render time and GPU ms.
+  `readiness().is_ready()` gates settled raster content, residency and GI convergence/fade, allowing normal motion.
   `host_wait_stats()` exposes cumulative host waits; snapshot around the whole
   windowed frame (including presentation), never subtract GPU timestamps from wall time.
 - Raster look: `set_render_options(RenderOptions)` (D27: raster by default; RT opt-in),

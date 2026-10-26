@@ -48,8 +48,8 @@ Owns the M1 baseline renderer and agent visual feedback. Gameplay state stays in
   deforming revisions use `prepare_pose` then `commit_pose`/`cancel_pose`; retire
   the old dependent TLAS before committing. Three skin slots retain presented and
   published vertices while a candidate is prepared. `presented` advances history
-  only after a successful render. Current AS API rebuilds changed skin BLASes;
-  these are measured rebuild fallbacks, never claimed as native refits.
+  only after a successful render. Raster pose barriers join the consuming graph;
+  RT rebuilds changed skin BLASes (measured fallbacks, never claimed as refits).
 - `update_geometry`: atomically replace meshes/materials/lights, retaining the
   device, targets and last good scene on failure. Textures/environment belong to
   asset integration. `entity_channel`, `entities`, `entity_at` expose picking.
@@ -72,9 +72,9 @@ Owns the M1 baseline renderer and agent visual feedback. Gameplay state stays in
 - `look::Quality` (`Renderer::set_quality`): per-preset budgets from
   `ara_render_fidelity::presets::RasterPlan`: shadow cascades (count, texels,
   distance; stable light space, practical splits, gather PCF, cascade blend; one
-  cached D32 map per cascade, redrawn only when its matrix or casters in its light volume change, outer cascades
-  snapped coarsely and redrawn at most one per frame, `Cascades::plan`), a cached far map (`look::far`),
-  local-light shadows (`look::local`), half-res GTAO and SSR (cone footprint into
+  cached D32 map per cascade, redrawn only when its matrix or casters in its light volume change; moved casters
+  patch only their texels (a per-list cell grid finds their casters, culling/patches.rs); outer cascades redraw whole at most one per frame, `Cascades::plan`), a cached far map (`look::far`),
+  local-light shadows (`look::local`, patched alike; `in_gi_and_fog` also shadows GI relight and fog), half-res GTAO and SSR (cone footprint into
   last frame's colour pyramid), GI relight, bloom, emitter lights, LOD/cull pixels,
   terrain detail. Look images are allocated lazily (the bindless heap is shared);
   probe GI is gathered at half resolution for G-buffer pixels.

@@ -53,6 +53,9 @@ pub struct Manifest {
     pub kind: Kind,
     /// Semantic version; also the install-directory basename.
     pub version: String,
+    /// Source identity for same-version Hub previews; absent on legacy releases.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub build: Option<crate::BuildIdentity>,
     /// Signed channel, checked against GitHub's prerelease flag.
     pub channel: Channel,
     /// Minimum supported Hub version for engine installs.
@@ -157,6 +160,16 @@ pub fn verify(bytes: &[u8], signature: &[u8], keys: &[String]) -> Result<Verifie
     let manifest: Manifest = serde_json::from_slice(bytes)?;
     version(&manifest.version)?;
     version(&manifest.min_hub_version)?;
+    if let Some(build) = &manifest.build
+        && (build.generation == 0
+            || build.commit.len() != 40
+            || !build.commit.bytes().all(|c| c.is_ascii_hexdigit()))
+    {
+        return Err(Error::new(
+            MANIFEST,
+            "invalid release source build identity",
+        ));
+    }
     if manifest.format != "ara.release/1"
         || manifest.platform != "windows-x64"
         || manifest.assets.is_empty()
