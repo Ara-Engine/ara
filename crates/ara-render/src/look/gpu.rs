@@ -22,7 +22,9 @@ pub(crate) const GI_DIFFUSE: usize = 10;
 pub(crate) const GI_SPECULAR: usize = 11;
 pub(crate) const SSR_PYRAMID: usize = 12;
 pub(crate) const SSR_TRACE: usize = 13;
-const IMAGES: usize = 14;
+/// Projected virtual shadow page visibility (`look::vsm`), R16F at render size.
+pub(crate) const VSM_MASK: usize = 14;
+const IMAGES: usize = 15;
 /// The exposure state (four floats), then the metering histogram's 256 counts
 /// (look-post.slang exposureMain).
 pub(crate) const STATE_BYTES: usize = 16 + 256 * 4;
@@ -41,6 +43,7 @@ fn extent(image: usize, render: [u32; 2], display: [u32; 2]) -> [u32; 2] {
             render.map(|v| v.div_ceil(2))
         }
         SSR_PYRAMID => [render[0], (render[1] / 2).max(1)],
+        VSM_MASK => render,
         _ => [display[0], (display[1] / 2).max(1)],
     }
 }
@@ -64,6 +67,9 @@ pub(crate) struct Pipelines {
     pub ssr_trace: Pipeline,
     pub horizon_sun: Pipeline,
     pub horizon_sky: Pipeline,
+    pub vsm_mark: Pipeline,
+    pub vsm_project: Pipeline,
+    pub gi_relight_vsm: Pipeline,
 }
 
 /// What the sky LUTs (`aerosols`) and the sky IBL (sun and sky) were computed for.
@@ -112,6 +118,8 @@ pub(crate) struct LookGpu {
     pub local: Option<super::local::LocalMap>,
     /// Heightfield horizon shadows and sky visibility (`Quality::horizon`).
     pub horizon: Option<super::horizon::Horizon>,
+    /// Virtual shadow maps for the sun (`Quality::virtual_shadows`).
+    pub vsm: Option<super::vsm::VirtualShadowMap>,
     /// Idle host staging for probe records, reused.
     pub probe_staging: Vec<super::gi::ProbeStaging>,
     /// Probe records uploaded for the next frame's `GI.Scatter`: staging, count.
@@ -135,6 +143,8 @@ pub(crate) struct LookIds {
     pub local: Option<ResourceId>,
     /// The horizon's capture, sun and sky visibility (`look::horizon`).
     pub horizon: Option<[ResourceId; 3]>,
+    /// The virtual shadow atlas (`look::vsm`).
+    pub vsm: Option<ResourceId>,
 }
 
 impl LookIds {
@@ -180,6 +190,9 @@ impl LookGpu {
             ssr_trace: load("look_ssr_trace")?,
             horizon_sun: load("look_horizon_sun")?,
             horizon_sky: load("look_horizon_sky")?,
+            vsm_mark: load("look_vsm_mark")?,
+            vsm_project: load("look_vsm_project")?,
+            gi_relight_vsm: load("look_gi_relight_vsm")?,
         };
         let frame = gpu.create_buffer(
             std::mem::size_of::<LookFrame>() as u64,
@@ -223,6 +236,7 @@ impl LookGpu {
             cascades: None,
             local: None,
             horizon: None,
+            vsm: None,
             probe_staging: Vec::new(),
             probe_writes: Vec::new(),
         })
@@ -259,6 +273,7 @@ impl LookGpu {
             GI_SPECULAR,
             SSR_PYRAMID,
             SSR_TRACE,
+            VSM_MASK,
         ] {
             if let Some(old) = self.images[i].take() {
                 gpu.retire(Resource::Image(old))?;
@@ -290,16 +305,22 @@ impl LookGpu {
             self.gi.is_some(),
             self.quality.reflections.is_some(),
             self.quality.reflections.is_some(),
+            self.vsm.is_some(),
         ];
         for (i, needed) in needed.into_iter().enumerate() {
             if !needed || self.images[i].is_some() {
                 continue;
             }
             let [width, height] = extent(i, self.render, self.display);
+            let format = if i == VSM_MASK {
+                vk::Format::R16_SFLOAT
+            } else {
+                vk::Format::R16G16B16A16_SFLOAT
+            };
             let image = gpu.create_image(
                 width,
                 height,
-                vk::Format::R16G16B16A16_SFLOAT,
+                format,
                 vk::ImageUsageFlags::SAMPLED | vk::ImageUsageFlags::STORAGE,
             )?;
             self.sampled[i] = gpu.sampled_image(image, false)?.index;
@@ -413,6 +434,10 @@ impl LookGpu {
                 .local
                 .as_ref()
                 .map(|local| graph.import(Resource::Image(local.atlas), local.state)),
+            vsm: self
+                .vsm
+                .as_ref()
+                .map(|v| graph.import(Resource::Image(v.atlas), v.atlas_state)),
             horizon: self.horizon.as_ref().map(|h| {
                 let mut import = |image, state| graph.import(Resource::Image(image), state);
                 [
@@ -473,6 +498,9 @@ impl LookGpu {
         }
         if let (Some(local), Some(id)) = (&mut self.local, ids.local) {
             local.state = final_states[id.0];
+        }
+        if let (Some(vsm), Some(id)) = (&mut self.vsm, ids.vsm) {
+            vsm.atlas_state = final_states[id.0];
         }
         if let (Some(horizon), Some(ids)) = (&mut self.horizon, ids.horizon) {
             for (state, id) in horizon.states.iter_mut().zip(ids) {

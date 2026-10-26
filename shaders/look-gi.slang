@@ -25,9 +25,9 @@ void storeTile(Look l,uint id,uint lane){
     int2 p=int2(lane%8,lane/8)-1;images[NonUniformResourceIndex(l.giImages.z)][giTile(l,id,6)+p]=float4(tile[octIndex(p,6)],1);
 }
 // One workgroup per probe, one lane per cache texel. Probes outside this frame's
-// update window carry their irradiance forward; inactive probes stay black.
-[shader("compute")][numthreads(64,1,1)]
-void giRelightMain(uint3 group:SV_GroupID,uint lane:SV_GroupIndex){
+// update window carry their irradiance forward; inactive probes stay black. `pages`
+// (a literal per entry point) shadows hits with virtual shadow pages first.
+void giRelight(uint3 group,uint lane,bool pages){
     Frame f=frame();Look l=look(f);uint id=group.x;if(id>=l.giCounts.w)return;
     float4 meta=giMeta(l,id);uint read=l.giImages.x;
     uint relative=(id+l.giCounts.w-l.giUpdate.x)%l.giCounts.w;
@@ -42,7 +42,7 @@ void giRelightMain(uint3 group:SV_GroupID,uint lane:SV_GroupIndex){
     float3 dir=octDecode((float2(lane%8,lane/8)+0.5)/8),origin=giProbePosition(l,id)+meta.xyz,light=0;
     if(sky<1){
         float3 hit=origin+dir*distance,sun=f.sunDirection.xyz;
-        float3 irradiance=sunAt(f,l,hit)*saturate(dot(normal,sun))*visibility(f,l,hit,normal)+localIrradiance(f,l,hit,normal);
+        float3 irradiance=sunAt(f,l,hit)*saturate(dot(normal,sun))*visibility(f,l,hit,normal,pages?vsmVisibility(f,l,hit,normal,true):-1)+localIrradiance(f,l,hit,normal);
         // Last frame's probes close the loop: multiple bounces converge over frames.
         irradiance+=giIrradiance(l,read,hit,normal,normal*l.giSpacing.w);
         light=(1-sky)*(emissive+albedo/PI*irradiance);
@@ -59,6 +59,11 @@ void giRelightMain(uint3 group:SV_GroupID,uint lane:SV_GroupIndex){
     }
     GroupMemoryBarrierWithGroupSync();storeTile(l,id,lane);
 }
+[shader("compute")][numthreads(64,1,1)]
+void giRelightMain(uint3 group:SV_GroupID,uint lane:SV_GroupIndex){giRelight(group,lane,false);}
+// With virtual shadow maps (look::vsm): one page compare per hit.
+[shader("compute")][numthreads(64,1,1)]
+void giRelightVsmMain(uint3 group:SV_GroupID,uint lane:SV_GroupIndex){giRelight(group,lane,true);}
 // Two probe lobes per half-resolution pixel (the full-resolution pixel 2p): rgb
 // irradiance facing the normal (w: camera distance) and facing the mirror direction
 // (w: volume coverage). Lighting upsamples them depth-aware, so the per-pixel cost

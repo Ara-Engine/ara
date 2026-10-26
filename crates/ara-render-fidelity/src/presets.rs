@@ -7,7 +7,9 @@
 use crate::{FidelityView, Mode, PostSettings, Settings, Tier, Upscaler};
 use anyhow::{Result, bail};
 use ara_gpu::vulkan::VulkanDevice;
-use ara_render::look::{AmbientOcclusion, FarShadows, LocalShadows, Quality, Reflections, Shadows};
+use ara_render::look::{
+    AmbientOcclusion, FarShadows, LocalShadows, Quality, Reflections, Shadows, VirtualShadows,
+};
 
 /// User-facing quality tier. D27: every tier is raster by default
 /// ([`QualityPreset::raster_quality`]); with [`RenderOptions::ray_tracing`] on an RT
@@ -314,6 +316,7 @@ impl QualityPreset {
                 terrain_detail: 0.,
                 local_shadows: None,
                 horizon: Some(1024),
+                virtual_shadows: None,
             },
             Self::Medium => Quality {
                 shadows: shadows(3, 1024, 100., (1024, 1000.)),
@@ -332,6 +335,7 @@ impl QualityPreset {
                     in_gi_and_fog: true,
                 }),
                 horizon: Some(2048),
+                virtual_shadows: None,
             },
             Self::High => Quality {
                 shadows: shadows(4, 2048, 150., (2048, 1500.)),
@@ -350,6 +354,11 @@ impl QualityPreset {
                     in_gi_and_fog: true,
                 }),
                 horizon: Some(2048),
+                virtual_shadows: Some(VirtualShadows {
+                    pages: 1024,
+                    budget: 32,
+                    bias: 0.,
+                }),
             },
             Self::Epic => Quality {
                 shadows: shadows(4, 2048, 250., (2048, 2000.)),
@@ -368,6 +377,11 @@ impl QualityPreset {
                     in_gi_and_fog: true,
                 }),
                 horizon: Some(2048),
+                virtual_shadows: Some(VirtualShadows {
+                    pages: 2048,
+                    budget: 64,
+                    bias: 0.,
+                }),
             },
         }
     }

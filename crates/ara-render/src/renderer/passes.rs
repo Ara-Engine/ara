@@ -25,6 +25,8 @@ enum Recipe {
     LocalShadow,
     /// The horizon's heightfield capture (`look::horizon`) from native pass `.0`.
     HorizonCapture(usize),
+    /// This frame's virtual shadow pages (`look::vsm`).
+    VsmPages,
     GBuffer,
     Tile,
     Lighting,
@@ -252,6 +254,21 @@ impl Renderer {
                 }
             }
         }
+        // Virtual shadow pages (look::vsm): marks of completed frames become dirty
+        // pages; those within the budget whose casters fit draw into the atlas
+        // before shading, which falls back to the sun maps until a page lands.
+        let (mut vsm_draws, mut vsm_request) = (Vec::new(), None);
+        if self.native.is_some()
+            && let Some(mut vsm) = self.look.vsm.take()
+        {
+            let result = (|| -> Result<()> {
+                vsm_draws = self.native_shadow_pages(&mut vsm, capture || deterministic)?;
+                vsm_request = vsm.arm(&mut self.gpu, camera.position)?;
+                Ok(())
+            })();
+            self.look.vsm = Some(vsm);
+            result?;
+        }
         self.look.ensure(&mut self.gpu)?;
         let (sampled, storage) = self.look.indices();
         // Exposure snaps to its meter on a reset unless a host seeded it, and
@@ -303,6 +320,35 @@ impl Renderer {
             look_frame.horizon_height = rows.height;
             look_frame.horizon_images = rows.images;
             look_frame.horizon_storage = rows.storage;
+        }
+        // Shading samples the atlas only once it holds a page; native frames with a
+        // light space project it into the mask lighting reads.
+        let vsm_sampled = self
+            .look
+            .vsm
+            .as_ref()
+            .is_some_and(|v| v.written() || !vsm_draws.is_empty());
+        let vsm_rows = self
+            .look
+            .vsm
+            .as_ref()
+            .filter(|_| self.native.is_some())
+            .and_then(|v| v.rows(vsm_request));
+        let vsm_project = vsm_rows.is_some();
+        if let Some(rows) = vsm_rows {
+            look_frame.vsm = rows.vsm;
+            if !vsm_sampled {
+                look_frame.vsm[1] = 0;
+            }
+            look_frame.vsm_request = rows.request;
+            look_frame.vsm_space = rows.space.to_cols_array_2d();
+            look_frame.vsm_depth = rows.depth;
+            look_frame.vsm_mask = [
+                self.look.sampled[crate::look::gpu::VSM_MASK],
+                self.look.storage[crate::look::gpu::VSM_MASK],
+                0,
+                0,
+            ];
         }
         if let Some(local) = &self.look.local
             && self.native.is_some()
@@ -475,6 +521,18 @@ impl Renderer {
                 }
             }
         }
+        // Virtual shadow pages draw with the other sun maps; the atlas joins the
+        // sun-map reads once it holds a page.
+        if let Some(atlas) = look.vsm.filter(|_| self.native.is_some()) {
+            if !vsm_draws.is_empty() {
+                let pass = graph.pass("VSM.Pages", Queue::Graphics, [(atlas, Access::Depth)]);
+                declare(pass, Recipe::VsmPages);
+                shadow_passes.push(pass);
+            }
+            if vsm_sampled {
+                cascade_reads.push((atlas, Access::ShaderRead));
+            }
+        }
         if let (Some(local), false) = (look.local, local_draws.is_empty()) {
             let pass = graph.pass(
                 "ShadowAtlas.Local",
@@ -510,6 +568,49 @@ impl Renderer {
             .chain(self.native.as_ref().map(|_| (ids[MOTION], Access::Color))),
         );
         declare(gbuffer, Recipe::GBuffer);
+        // Page visibility for lighting and the pages this frame's pixels sample
+        // (look::vsm), read back once the frame completes.
+        let mut vsm_mask = None;
+        if let (true, Some(vsm), Some(atlas)) = (vsm_project, &self.look.vsm, look.vsm) {
+            if let Some(i) = vsm_request {
+                let request = graph.import(Resource::Buffer(vsm.requests[i]), host_write);
+                let mark = graph.pass(
+                    "VSM.Mark",
+                    Queue::Graphics,
+                    [
+                        (ids[DEPTH], Access::ShaderRead),
+                        (ids[NORMAL], Access::ShaderRead),
+                        (request, Access::Storage),
+                        (look.frame, Access::ShaderRead),
+                    ]
+                    .into_iter()
+                    .chain(graphics.iter().copied()),
+                );
+                declare(mark, Recipe::Look(LookPass::VsmMark));
+                let readback = graph.pass(
+                    "VSM.Requests",
+                    Queue::Graphics,
+                    [(request, Access::HostRead)],
+                );
+                declare(readback, Recipe::Empty);
+            }
+            let mask = look.image(crate::look::gpu::VSM_MASK);
+            let project = graph.pass(
+                "VSM.Project",
+                Queue::Graphics,
+                [
+                    (ids[DEPTH], Access::ShaderRead),
+                    (ids[NORMAL], Access::ShaderRead),
+                    (mask, Access::Storage),
+                    (look.frame, Access::ShaderRead),
+                ]
+                .into_iter()
+                .chain(vsm_sampled.then_some((atlas, Access::ShaderRead)))
+                .chain(graphics.iter().copied()),
+            );
+            declare(project, Recipe::Look(LookPass::VsmProject));
+            vsm_mask = Some((mask, Access::ShaderRead));
+        }
         let mut ao_reads = graphics.clone();
         ao_reads.extend([
             (ids[DEPTH], Access::ShaderRead),
@@ -568,6 +669,7 @@ impl Renderer {
             .chain(cascade_reads.iter().copied())
             .chain(far_read)
             .chain(local_read)
+            .chain(vsm_mask)
             .chain(look_reads.iter().copied()),
         );
         declare(lighting, Recipe::Lighting);
@@ -854,6 +956,41 @@ impl Renderer {
                         }
                         recorder.push(Command::EndRendering);
                     }
+                    Recipe::VsmPages => {
+                        let (vsm, native) = (
+                            self.look
+                                .vsm
+                                .as_ref()
+                                .expect("page draws are declared only with a virtual shadow map"),
+                            self.native
+                                .as_ref()
+                                .expect("page draws are declared only with native content"),
+                        );
+                        recorder.push(Command::BeginRendering {
+                            colors: Vec::new(),
+                            depth: Some(Attachment {
+                                image: vsm.atlas,
+                                clear: None,
+                            }),
+                            size: vsm.size(),
+                        });
+                        // Each page clears its square, then draws its casters through
+                        // its light view (look::vsm PAGE_DRAWS + i).
+                        let page = [ara_vsm::PAGE_SIZE; 2];
+                        for (i, draw) in vsm_draws.iter().enumerate() {
+                            let origin = vsm.origin(draw.page.slot);
+                            recorder.push(Command::Viewport { origin, size: page });
+                            recorder.push(Command::ClearDepth {
+                                origin,
+                                size: page,
+                                depth: 0.,
+                            });
+                            let mut constants = root;
+                            constants.words[4] = crate::look::vsm::PAGE_DRAWS + i as u32;
+                            native.record_page(&mut recorder, constants, vsm.page_rows_index, i);
+                        }
+                        recorder.push(Command::EndRendering);
+                    }
                     Recipe::LocalShadow => {
                         let local = self
                             .look
@@ -1063,6 +1200,11 @@ impl Renderer {
         }
         self.last_timings.clear();
         points.dedup();
+        let graphics_point = points
+            .iter()
+            .copied()
+            .filter(|p| p.queue == Queue::Graphics)
+            .max_by_key(|p| p.value);
         for point in points {
             self.last_timings.extend(self.gpu.resolve(point)?);
         }
@@ -1086,6 +1228,9 @@ impl Renderer {
                 horizon.sun_key = Some(crate::look::horizon::sun_key(self.content.sun_direction));
             }
             horizon.sky_done |= horizon_sky;
+        }
+        if let (Some(vsm), Some(point)) = (&mut self.look.vsm, graphics_point) {
+            vsm.submitted(&vsm_draws, vsm_request, point);
         }
         if let Some(cascades) = &mut self.look.cascades {
             for (&draw, patch) in cascade_draw.iter().zip(&cascade_patches) {

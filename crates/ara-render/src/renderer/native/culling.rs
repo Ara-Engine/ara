@@ -3,8 +3,10 @@ use super::*;
 use crate::instanced::FrameWork;
 use batches::{Batch, Group};
 use updates::Indices;
+mod pages;
 mod patches;
 mod projection;
+pub(crate) use pages::PageView;
 
 /// Cascades, opaque/forward camera lists and the existing far-shadow list.
 pub(super) const BASE_PASSES: usize = 7;
@@ -37,6 +39,10 @@ pub(super) struct Culling {
     /// Patch scratch: candidate instances, then (batch slot, instance) entries.
     candidates: Vec<u32>,
     entries: Vec<(usize, usize)>,
+    /// The opaque instances in the sun's light space (virtual shadow pages).
+    grid: pages::LightGrid,
+    /// The last `cull_pages`' batches, per page.
+    pub(super) page_batches: Vec<Vec<Batch>>,
 }
 impl Culling {
     pub fn new(groups: &Groups, scene: &NativeScene) -> Self {
@@ -81,6 +87,8 @@ impl Culling {
             grids: vec![patches::Grid::default(); BASE_PASSES],
             candidates: Vec::new(),
             entries: Vec::new(),
+            grid: pages::LightGrid::default(),
+            page_batches: Vec::new(),
             lod_view: None,
             pixels: [1., 1.5],
             lod_dirty: Indices::new(instances),
@@ -101,6 +109,7 @@ impl Culling {
     pub(super) fn refresh(&mut self, source: &Self, groups: &Groups) {
         self.projections.copy_from_slice(&source.projections);
         self.views.fill(None);
+        self.grid = pages::LightGrid::default();
         self.lod_view = None;
         for index in 0..self.selected.len() {
             self.lod_dirty.insert(index);
@@ -135,6 +144,7 @@ impl Culling {
     }
     pub fn instance(&mut self, groups: &Groups, index: usize, world: Mat4, bounds: [Vec3; 2]) {
         self.projections[index] = projection::LodBounds::new(world, bounds);
+        self.grid_moved(index, bounds);
         self.lod_dirty.insert(index);
         self.group(groups.instance_group[index]);
         if groups.groups[groups.instance_group[index]].transparent {

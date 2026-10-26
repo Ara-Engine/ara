@@ -40,6 +40,11 @@ pub(crate) enum LookPass {
     HorizonSun,
     /// The horizon's sky visibility (`look::horizon`).
     HorizonSky,
+    /// Marks the virtual shadow pages this frame's pixels sample (`look::vsm`).
+    VsmMark,
+    /// Resolves the G-buffer's virtual shadow page visibility into the mask lighting
+    /// reads (`look::vsm`).
+    VsmProject,
 }
 
 /// The frame records look passes run with: scene passes at the render size; the
@@ -451,8 +456,13 @@ impl LookGpu {
                 groups(size.map(|v| (v >> level).max(1))),
             ),
             LookPass::SsrTrace => (p.ssr_trace, 0, groups(size.map(|v| v.div_ceil(2)))),
+            // With virtual shadow maps, hits compare against their pages first.
             LookPass::GiRelight => (
-                p.gi_relight,
+                if self.vsm.is_some() {
+                    p.gi_relight_vsm
+                } else {
+                    p.gi_relight
+                },
                 0,
                 [self.gi.as_ref().map_or(0, |gi| gi.probes), 1, 1],
             ),
@@ -466,6 +476,8 @@ impl LookGpu {
                 0,
                 groups([self.horizon.as_ref().map_or(0, |h| h.sky_resolution()); 2]),
             ),
+            LookPass::VsmMark => (p.vsm_mark, 0, groups(size.map(|v| v.div_ceil(4)))),
+            LookPass::VsmProject => (p.vsm_project, 0, groups(size)),
             LookPass::GiClear | LookPass::GiScatter(_) => return,
         };
         recorder.push(Command::Pipeline(pipeline));
