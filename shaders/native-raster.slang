@@ -86,10 +86,69 @@ Surface surfaceMaterial(NativeMaterial m,Varying v){
     s.emissive=max(0,m.pbr.emissiveRoughness.rgb*sampleMap(m,3,v).rgb);
     s.ao=lerp(1,sampleMap(m,4,v).r,m.factors.x);s.transmission=saturate(m.factors.y*sampleMap(m,5,v).r);return s;
 }
+// Terrain projection weights from the surface normal: the top projection (world
+// X/Z, the layers' UVs) alone on gentle slopes; past about 26 degrees the world Z/Y
+// and X/Y side projections fade in.
+float3 terrainProjection(float3 n){
+    float3 w=pow(abs(n),4);w/=dot(w,1);
+    w.xz*=saturate((w.x+w.z-0.05)*10);w.y=1-w.x-w.z;
+    return w;
+}
+// A terrain layer map through the projections `w`. `sides` (uniform per pixel quad,
+// so texture derivatives stay valid) adds the side samples: maps keep their scale
+// on steep slopes instead of stretching into streaks down them.
+float4 terrainMap(NativeMaterial m,uint slot,Varying v,float3 w,bool sides){
+    float4 c=sampleMap(m,slot,v);
+    [branch]if(sides){
+        Varying x=v;x.uv=x.uv1=v.world.zy;Varying z=v;z.uv=z.uv1=v.world.xy;
+        c=c*w.y+sampleMap(m,slot,x)*w.x+sampleMap(m,slot,z)*w.z;
+    }
+    return c;
+}
+// A layer's base colour map at `v`, flattened: scaled by the map's mean luminance
+// over its tile-scale mean there (`tile`, its 8x8 mip), so a tile's own low
+// frequencies (shading baked across it) stop repeating as a grid.
+float4 terrainFlat(NativeMaterial m,Varying v,float mean,float tile,bool decode){
+    float4 c=sampleMap(m,0,v);
+    float local=luminance(ntSampleColorLevel(root.sample,m.pbr.textures[0],coordinates(m.uv[0],v),tile,decode).rgb);
+    c.rgb*=clamp(mean/max(local,1e-4),0.5,2);
+    return c;
+}
+// A layer's base colour through the projections (as terrainMap), each flattened.
+float4 terrainColor(NativeMaterial m,Varying v,float3 w,bool sides){
+    uint id=m.pbr.textures[0];
+    if(id==0xffffffff)return terrainMap(m,0,v,w,sides);
+    uint4 info=ntInfo(root.sample,id);float tile=max(0,log2(float(max(info.z,info.w)))-3);
+    bool decode=(m.pbr.flags.y&(1u<<25))!=0;
+    float mean=luminance(ntSampleColorLevel(root.sample,id,float2(0.5,0.5),64.,decode).rgb);
+    float4 c=terrainFlat(m,v,mean,tile,decode);
+    [branch]if(sides){
+        Varying x=v;x.uv=x.uv1=v.world.zy;Varying z=v;z.uv=z.uv1=v.world.xy;
+        c=c*w.y+terrainFlat(m,x,mean,tile,decode)*w.x+terrainFlat(m,z,mean,tile,decode)*w.z;
+    }
+    return c;
+}
+// Hashed value noise over integer lattice `p` in [0, 1).
+float terrainHash(int2 p){
+    uint h=uint(p.x)*0x8da6b343u^uint(p.y)*0xd8163841u;h=(h^(h>>16))*0x7feb352du;h^=h>>15;
+    return float(h&0xffffffu)/16777216.;
+}
+float terrainNoise(float2 p){
+    float2 i=floor(p),t=p-i;t=t*t*(3-2*t);int2 c=int2(i);
+    return lerp(lerp(terrainHash(c),terrainHash(c+int2(1,0)),t.x),lerp(terrainHash(c+int2(0,1)),terrainHash(c+int2(1,1)),t.x),t.y);
+}
+// Tile breakup: a smooth world-space brightness variation (two noise octaves, 31 m
+// and 11 m), so open ground does not repeat once tiles are flattened.
+float terrainBreakup(float3 world){
+    return lerp(0.8,1.2,terrainNoise(world.xz/31.)*0.65+terrainNoise(world.xz/11.+17.)*0.35);
+}
 // A terrain splat: its layers blend colour, metal/roughness and tangent-space
-// normals in one tangent frame (the splat's), transformed once. Beyond the look's
-// terrain detail distance (blended over a quarter more, decided per quad so
-// derivatives stay valid) layers keep colour maps and material factors only.
+// normals in one tangent frame (the splat's), transformed once; a layer absent
+// from a whole pixel quad is skipped. Layer maps project from the side too on steep
+// slopes (terrainMap; normal detail fades there), and colour tiles are flattened
+// (terrainColor) under a world-space breakup (terrainBreakup), at every distance.
+// Beyond the look's terrain detail distance (blended over a quarter more, decided
+// per quad so derivatives stay valid) layers keep colour maps and factors only.
 Surface terrainSurface(NativeMaterial m,Varying v){
     float4 weights=v.weights;for(uint i=m.slots.z;i<4;i++)weights[i]=0;
     float sum=dot(weights,float4(1));weights=sum>1e-8?weights/sum:float4(1,0,0,0);
@@ -106,22 +165,27 @@ Surface terrainSurface(NativeMaterial m,Varying v){
     float detail=range>0?1-saturate((length(v.world-f.camera.xyz)-range)/(0.25*range)):0;
     float quad=max(max(detail,QuadReadAcrossX(detail)),max(QuadReadAcrossY(detail),QuadReadAcrossDiagonal(detail)));
     Surface s=(Surface)0;float3 tangentNormal=0;
+    float3 projection=terrainProjection(normal);float side=projection.x+projection.z;
+    bool sides=max(max(side,QuadReadAcrossX(side)),max(QuadReadAcrossY(side),QuadReadAcrossDiagonal(side)))>0;
     for(uint i=0;i<m.slots.z;i++){
-        NativeMaterial layer=material(m.layers[i]);float w=weights[i];
-        float4 base=sampleMap(layer,0,v)*layer.pbr.color;
+        float w=weights[i];
+        [branch]if(max(max(w,QuadReadAcrossX(w)),max(QuadReadAcrossY(w),QuadReadAcrossDiagonal(w)))<=0)continue;
+        NativeMaterial layer=material(m.layers[i]);
+        float4 base=terrainColor(layer,v,projection,sides)*layer.pbr.color;
         // Far away, the metal/roughness map's coarsest mip (its mean) scales the
         // factors: glTF factors are often one, with the map holding the values.
         float4 mr=ntSampleLevel(root.sample,layer.pbr.textures[2],float2(0.5,0.5),64.);float3 n=float3(0,0,1);
         if(quad>0){
-            mr=lerp(mr,sampleMap(layer,2,v),detail);
-            n=lerp(float3(0,0,1),sampleMap(layer,1,v).xyz,detail);
+            mr=lerp(mr,terrainMap(layer,2,v,projection,sides),detail);
+            n=lerp(float3(0,0,1),sampleMap(layer,1,v).xyz,detail*projection.y);
         }
         float roughness=layer.pbr.emissiveRoughness.w*mr.g,metal=layer.pbr.surface.x*mr.b;
         s.albedo+=max(0,base.rgb)*w;s.alpha+=base.a*w;tangentNormal+=n*w;
         s.roughness+=clamp(roughness,0.045,1)*w;s.metal+=saturate(metal)*w;
-        s.emissive+=max(0,layer.pbr.emissiveRoughness.rgb*sampleMap(layer,3,v).rgb)*w;
-        s.ao+=lerp(1,sampleMap(layer,4,v).r,layer.factors.x)*w;
+        s.emissive+=max(0,layer.pbr.emissiveRoughness.rgb*terrainMap(layer,3,v,projection,sides).rgb)*w;
+        s.ao+=lerp(1,terrainMap(layer,4,v,projection,sides).r,layer.factors.x)*w;
     }
+    s.albedo*=terrainBreakup(v.world);
     s.normal=safeNormalize(t*tangentNormal.x+cross(normal,t)*handedness*tangentNormal.y+normal*tangentNormal.z,normal);
     return s;
 }

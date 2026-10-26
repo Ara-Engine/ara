@@ -7,6 +7,10 @@ Public API: Source::{rgba8,from_cooked}, Catalog, Residency, Binding, Stats.
 `mip`, `resident_bytes` and `stage` expose complete native mip tails for residency.
 `NativeResidency` deduplicates caller-provided cooked content hashes, uploads
 BC tails in batches, and publishes a fresh mapping table after successful upload.
+`preallocate(gpu, previous)` polls bounded worker allocation and compressed staging;
+it never submits/waits or publishes bindings. Keep previous alive through publish,
+freeze registrations/demand, and initialize only after readiness. Destroy/cancel
+superseded candidates; adopted tables/images transfer ownership only at publication.
 Native renderer replacements borrow matching digest/view images while preparing
 their new table, then transfer ownership only at publication. Rejected candidates
 leave the previous set live; table IDs may reorder without re-uploading images.

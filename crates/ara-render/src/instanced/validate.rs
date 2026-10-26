@@ -6,6 +6,23 @@ use std::collections::BTreeSet;
 #[derive(Clone, Copy)]
 pub(crate) struct ValidatedScene<'a>(&'a Scene);
 
+/// Owns the exact validated scene; no mutable access can invalidate the proof
+/// while a worker packs or allocates its publication.
+pub(crate) struct CheckedScene(Scene);
+
+impl CheckedScene {
+    pub(crate) fn new(scene: Scene) -> Result<Self> {
+        scene.validate()?;
+        Ok(Self(scene))
+    }
+    pub(crate) fn validated(&self) -> ValidatedScene<'_> {
+        ValidatedScene(&self.0)
+    }
+    pub(crate) fn into_scene(self) -> Scene {
+        self.0
+    }
+}
+
 impl<'a> ValidatedScene<'a> {
     pub(crate) fn scene(self) -> &'a Scene {
         self.0

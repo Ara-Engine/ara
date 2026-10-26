@@ -12,6 +12,8 @@ use glam::Vec4;
 mod batches;
 mod culling;
 mod environment;
+mod prepared;
+pub use prepared::{NativeContent, NativeSeed};
 #[cfg(test)]
 mod tests;
 mod updates;
@@ -71,6 +73,14 @@ impl Renderer {
     pub fn is_native(&self) -> bool {
         self.native.is_some()
     }
+    /// Poll candidate allocations without touching the current generation or
+    /// submitting commands. Call at a content boundary, then publish when ready.
+    pub fn preallocate_native_textures(&mut self, textures: &mut dyn Textures) -> Result<bool> {
+        textures.preallocate(
+            &mut self.gpu,
+            self.native.as_ref().map(|native| native.textures.as_ref()),
+        )
+    }
     /// Release native geometry/residency when an explicitly RT-enabled view
     /// switches back to the legacy diagnostic renderer on the same device.
     pub fn clear_native(&mut self) -> Result<()> {
@@ -107,7 +117,14 @@ impl Renderer {
         textures: Box<dyn Textures>,
     ) -> Result<()> {
         ara_gpu::cpu_scope!("RasterNative.publish");
-        self.publish_native(scene.validated()?, textures)
+        let validated = match scene.validated() {
+            Ok(validated) => validated,
+            Err(error) => {
+                textures.destroy(&mut self.gpu)?;
+                return Err(error);
+            }
+        };
+        self.publish_native(validated, textures)
     }
 
     fn publish_native(
@@ -115,14 +132,24 @@ impl Renderer {
         validated: ValidatedScene<'_>,
         textures: Box<dyn Textures>,
     ) -> Result<()> {
+        self.publish_native_pool(validated, textures, None, self.shadow_slots())
+    }
+
+    fn publish_native_pool(
+        &mut self,
+        validated: ValidatedScene<'_>,
+        textures: Box<dyn Textures>,
+        pool: Option<GeometryGpu>,
+        shadow_slots: usize,
+    ) -> Result<()> {
         let scene = validated.scene();
-        let shadow_slots = self.shadow_slots();
         let mut next = Native::new(
             &mut self.gpu,
             validated,
             textures,
             &self.artifacts,
             self.native.as_ref(),
+            pool,
             shadow_slots,
         )?;
         // The first native generation replaces bootstrap/legacy geometry. HDRI
@@ -317,8 +344,11 @@ impl Renderer {
     /// Shadow slots this quality culls into: its local faces, then one patch per
     /// cascade and `look::local::PATCHES` face patches (renderer/passes.rs).
     pub(crate) fn shadow_slots(&self) -> usize {
-        self.look
-            .quality
+        Self::shadow_slots_for_quality(&self.look.quality)
+    }
+
+    pub(crate) fn shadow_slots_for_quality(quality: &crate::look::Quality) -> usize {
+        quality
             .local_shadows
             .map_or(0, crate::look::local::capacity)
             + 4
@@ -540,6 +570,7 @@ impl Native {
         mut textures: Box<dyn Textures>,
         artifacts: &Path,
         previous: Option<&Self>,
+        mut provided_pool: Option<GeometryGpu>,
         shadow_slots: usize,
     ) -> Result<Self> {
         ara_gpu::cpu_scope!("RasterNative.create_content");
@@ -556,9 +587,15 @@ impl Native {
             .len()
             .checked_mul(capacity)
             .filter(|rows| *rows <= u32::MAX as usize)
-            .and_then(|rows| rows.checked_mul(8))
-            .context("Native shadow visibility capacity overflow")?
-            .max(16);
+            .and_then(|rows| rows.checked_mul(8));
+        let Some(visible_bytes) = visible_bytes else {
+            if let Some(pool) = provided_pool {
+                pool.destroy(gpu)?;
+            }
+            textures.destroy(gpu)?;
+            anyhow::bail!("Native shadow visibility capacity overflow");
+        };
+        let visible_bytes = visible_bytes.max(16);
         let upload = {
             ara_gpu::cpu_scope!("RasterNative.publish_textures");
             let initialized = match previous {
@@ -568,18 +605,30 @@ impl Native {
             match initialized {
                 Ok(upload) => upload,
                 Err(error) => {
+                    if let Some(pool) = provided_pool {
+                        pool.destroy(gpu)?;
+                    }
                     textures.destroy(gpu)?;
                     return Err(error);
                 }
             }
         };
         if textures.binding().map_or(0, |b| b.textures) != scene.textures {
+            if let Some(pool) = provided_pool {
+                pool.destroy(gpu)?;
+            }
             textures.destroy(gpu)?;
             anyhow::bail!("Native texture-table count mismatch");
         }
         let pool = {
             ara_gpu::cpu_scope!("RasterNative.publish_geometry");
-            match GeometryGpu::new_validated(gpu, validated, false, previous.map(|v| &v.pool)) {
+            let geometry = match provided_pool.take() {
+                Some(pool) => Ok(pool),
+                None => {
+                    GeometryGpu::new_validated(gpu, validated, false, previous.map(|v| &v.pool))
+                }
+            };
+            match geometry {
                 Ok(pool) => pool,
                 Err(error) => {
                     textures.destroy(gpu)?;

@@ -2,7 +2,6 @@ use super::Gpu;
 use super::buffer_memory::MemoryKey;
 use anyhow::{Context, Result, ensure};
 use ash::vk;
-use ash::vk::TaggedStructure;
 
 /// Lightweight allocation reference; Gpu retains sole destruction ownership.
 #[derive(Clone, Copy)]
@@ -12,7 +11,7 @@ pub(crate) struct BufferAllocation {
     pub size: u64,
     pub host: bool,
     pub usage: vk::BufferUsageFlags,
-    memory_key: Option<MemoryKey>,
+    pub(super) memory_key: Option<MemoryKey>,
 }
 /// ImageAllocation, view and allocation retained together by Gpu.
 #[derive(Clone, Copy)]
@@ -55,79 +54,17 @@ impl Gpu {
         host: bool,
         preferred: vk::MemoryPropertyFlags,
     ) -> Result<BufferAllocation> {
-        // SAFETY: Allocations satisfy queried requirements; resources are retained
-        // until device idle in Drop. Exclusive ownership is managed in render.rs.
-        unsafe {
-            let handle = self.device.create_buffer(
-                &vk::BufferCreateInfo::default()
-                    .size(size)
-                    .usage(usage)
-                    .sharing_mode(vk::SharingMode::EXCLUSIVE),
-                None,
-            )?;
-            let mut memory = vk::DeviceMemory::null();
-            let result = (|| -> Result<_> {
-                let mut dedicated = vk::MemoryDedicatedRequirements::default();
-                let mut requirements = vk::MemoryRequirements2::default().push(&mut dedicated);
-                self.device.get_buffer_memory_requirements2(
-                    &vk::BufferMemoryRequirementsInfo2::default().buffer(handle),
-                    &mut requirements,
-                );
-                let requirements = requirements.memory_requirements;
-                let flags = if host {
-                    vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT
-                } else {
-                    vk::MemoryPropertyFlags::DEVICE_LOCAL
-                };
-                let memory_type_index = self
-                    .memory_type(requirements.memory_type_bits, flags | preferred)
-                    .or_else(|_| self.memory_type(requirements.memory_type_bits, flags))?;
-                let key = MemoryKey {
-                    size: requirements.size,
-                    memory_type: memory_type_index,
-                    device_address: usage.contains(vk::BufferUsageFlags::SHADER_DEVICE_ADDRESS),
-                };
-                let memory_key =
-                    (dedicated.requires_dedicated_allocation == vk::FALSE).then_some(key);
-                let mut address_flags = vk::MemoryAllocateFlagsInfo::default()
-                    .flags(vk::MemoryAllocateFlags::DEVICE_ADDRESS);
-                let mut dedicated_info = vk::MemoryDedicatedAllocateInfo::default().buffer(handle);
-                let mut allocation = vk::MemoryAllocateInfo::default()
-                    .allocation_size(requirements.size)
-                    .memory_type_index(memory_type_index);
-                if key.device_address {
-                    allocation = allocation.push(&mut address_flags);
-                }
-                if memory_key.is_none() {
-                    allocation = allocation.push(&mut dedicated_info);
-                }
-                memory = match memory_key.and_then(|key| self.buffer_memory.take(key)) {
-                    Some(memory) => memory,
-                    None => self.device.allocate_memory(&allocation, None)?,
-                };
-                self.device.bind_buffer_memory(handle, memory, 0)?;
-                Ok(BufferAllocation {
-                    handle,
-                    memory,
-                    size,
-                    host,
-                    usage,
-                    memory_key,
-                })
-            })();
-            let buffer = match result {
-                Ok(buffer) => buffer,
-                Err(error) => {
-                    self.device.destroy_buffer(handle, None);
-                    if memory != vk::DeviceMemory::null() {
-                        self.device.free_memory(memory, None);
-                    }
-                    return Err(error);
-                }
-            };
-            self.buffers.push(buffer);
-            Ok(buffer)
-        }
+        let buffer = super::allocation::buffer(
+            &self.device,
+            &self.memory,
+            &mut self.buffer_memory,
+            size,
+            usage,
+            host,
+            preferred,
+        )?;
+        self.buffers.push(buffer);
+        Ok(buffer)
     }
 
     pub(crate) fn memory_type(&self, bits: u32, flags: vk::MemoryPropertyFlags) -> Result<u32> {
@@ -148,30 +85,7 @@ impl Gpu {
         offset: u64,
         data: &[u8],
     ) -> Result<()> {
-        ensure!(buffer.host, "Buffer is not host visible");
-        ensure!(
-            offset
-                .checked_add(data.len() as u64)
-                .is_some_and(|end| end <= buffer.size),
-            "Upload out of bounds"
-        );
-        // SAFETY: Caller uploads only before submission/after completion. The
-        // host-coherent mapped allocation has enough capacity and is unmapped here.
-        unsafe {
-            let ptr = self.device.map_memory(
-                buffer.memory,
-                0,
-                buffer.size,
-                vk::MemoryMapFlags::empty(),
-            )?;
-            std::ptr::copy_nonoverlapping(
-                data.as_ptr(),
-                ptr.cast::<u8>().add(offset as usize),
-                data.len(),
-            );
-            self.device.unmap_memory(buffer.memory);
-        }
-        Ok(())
+        super::allocation::upload(&self.device, buffer, offset, data)
     }
 
     /// Copy a completed coherent GPU readback into owned CPU bytes.
@@ -211,75 +125,19 @@ impl Gpu {
         usage: vk::ImageUsageFlags,
         aspect: vk::ImageAspectFlags,
     ) -> Result<ImageAllocation> {
-        // SAFETY: Memory/view match queried image requirements. Gpu owns all three.
-        unsafe {
-            let handle = self.device.create_image(
-                &vk::ImageCreateInfo::default()
-                    .image_type(vk::ImageType::TYPE_2D)
-                    .format(format)
-                    .extent(vk::Extent3D {
-                        width,
-                        height,
-                        depth: 1,
-                    })
-                    .mip_levels(mip_levels)
-                    .array_layers(1)
-                    .samples(vk::SampleCountFlags::TYPE_1)
-                    .tiling(vk::ImageTiling::OPTIMAL)
-                    .usage(usage)
-                    .sharing_mode(vk::SharingMode::EXCLUSIVE),
-                None,
-            )?;
-            let mut memory = vk::DeviceMemory::null();
-            let mut view = vk::ImageView::null();
-            let result = (|| -> Result<_> {
-                let req = self.device.get_image_memory_requirements(handle);
-                memory = self.device.allocate_memory(
-                    &vk::MemoryAllocateInfo::default()
-                        .allocation_size(req.size)
-                        .memory_type_index(self.memory_type(
-                            req.memory_type_bits,
-                            vk::MemoryPropertyFlags::DEVICE_LOCAL,
-                        )?),
-                    None,
-                )?;
-                self.device.bind_image_memory(handle, memory, 0)?;
-                view = self.device.create_image_view(
-                    &vk::ImageViewCreateInfo::default()
-                        .image(handle)
-                        .view_type(vk::ImageViewType::TYPE_2D)
-                        .format(format)
-                        .subresource_range(range(aspect).level_count(mip_levels)),
-                    None,
-                )?;
-                Ok(ImageAllocation {
-                    handle,
-                    memory,
-                    view,
-                    width,
-                    height,
-                    mip_levels,
-                    format,
-                    aspect,
-                    usage,
-                })
-            })();
-            let image = match result {
-                Ok(image) => image,
-                Err(error) => {
-                    if view != vk::ImageView::null() {
-                        self.device.destroy_image_view(view, None);
-                    }
-                    self.device.destroy_image(handle, None);
-                    if memory != vk::DeviceMemory::null() {
-                        self.device.free_memory(memory, None);
-                    }
-                    return Err(error);
-                }
-            };
-            self.images.push(image);
-            Ok(image)
-        }
+        let image = super::allocation::image(
+            &self.device,
+            &self.memory,
+            super::allocation::ImageDesc {
+                size: [width, height],
+                format,
+                mip_levels,
+                usage,
+                aspect,
+            },
+        )?;
+        self.images.push(image);
+        Ok(image)
     }
 
     /// Create an AS with owned, address-enabled backing storage.

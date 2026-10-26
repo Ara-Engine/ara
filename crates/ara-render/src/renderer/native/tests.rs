@@ -4,6 +4,7 @@ use crate::{
     instanced,
 };
 mod budgets;
+mod prepared;
 mod shadow_patches;
 mod shadows;
 
@@ -137,6 +138,7 @@ fn native_raster_keeps_instances_local_and_tracks_moving_and_skinned_poses_witho
                 scene.validated()?,
                 Box::new(EmptyTextures),
                 &renderer.artifacts,
+                None,
                 None,
                 0,
             )

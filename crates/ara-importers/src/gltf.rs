@@ -220,13 +220,23 @@ impl Importer for GltfImporter {
                 let preserve_card_area = material.alpha_mode() != gltf::material::AlphaMode::Opaque
                     || material.pbr_metallic_roughness().base_color_texture()
                         .is_some_and(|texture| opacity_maps.contains_key(&texture.texture().source().index()));
+                // Independent outputs share the same bounded worker pool; neither
+                // changes the other's input buffers or artifact ordering.
+                let (classic, virtual_geometry) = rayon::join(
+                    || crate::mesh::cook_mesh_with_tangent_uv(
+                        &vertices, &indices, &mesh_settings, deformed,
+                        preserve_card_area, metrics, |v| normal_uv.apply(v)),
+                    || {
+                        let _timer = metrics.map(|m| m.start(ara_asset::ImportStage::VirtualGeometry));
+                        crate::virtual_geometry::cook(
+                            &name, &vertices, &indices, &mesh_settings, deformed,
+                            material_counts[&mesh_index])
+                    },
+                );
                 let artifact = Artifact {
-                    name: name.clone(), kind: ArtifactKind::Mesh,
-                    bytes: crate::mesh::cook_mesh_with_tangent_uv(&vertices, &indices, &mesh_settings, deformed, preserve_card_area, metrics, |v| normal_uv.apply(v))?,
+                    name: name.clone(), kind: ArtifactKind::Mesh, bytes: classic?,
                 };
-                let (virtual_artifact, virtual_metadata) = crate::virtual_geometry::cook(
-                    &name, &vertices, &indices, &mesh_settings, deformed,
-                    material_counts[&mesh_index])?;
+                let (virtual_artifact, virtual_metadata) = virtual_geometry?;
                 // Preserve all morph target deltas independently of quantized base geometry.
                 let mut targets = Vec::new();
                 for (positions, normals, tangents) in reader.read_morph_targets() {

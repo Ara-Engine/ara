@@ -17,6 +17,7 @@ texture2ddecoder = { workspace = true }
 sha2.workspace = true
 
 [dev-dependencies]
+ash.workspace = true
 glam.workspace = true
 
 [lints]

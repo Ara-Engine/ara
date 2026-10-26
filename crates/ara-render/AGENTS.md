@@ -1,7 +1,7 @@
 # ara-render
 
-Native publications validate once per immutable upload borrow and copy unchanged key/revision geometry from the previous GPU pool.
-Candidate buffers stay independent until publication, so rejected content retains the previous frame.
+NativeContent owns validation/packing on the worker; native_seed retains small GPU reuse metadata.
+Poll preallocate, then publish_native_content in the ordered scope, or destroy rejected candidates. The scene stays immutable until returned.
 
 Owns the M1 baseline renderer and agent visual feedback. Gameplay state stays in ECS; `Scene` is a render snapshot, not authoritative state.
 
@@ -30,8 +30,8 @@ Owns the M1 baseline renderer and agent visual feedback. Gameplay state stays in
   `update_native` updates transforms/skin poses; structural changes use
   `replace_native_scene`. Native draw lists cull and select cooked LODs, and the
   RG16F motion target carries unjittered current-minus-previous screen UV.
-  Texture providers can prepare against the last resident set and transfer reused
-  image ownership at publication; rejected content keeps its previous environment.
+  `preallocate_native_textures` polls worker allocations against the last resident set;
+  reused image ownership transfers at publication; rejected content keeps last-good.
 - `update_native_changed(scene, instanced::Changes)` consumes exact instance,
   material and skin indices. Coherent writes/culling touch dirty groups only;
   idle frames retain visible lists and settle motion once; LOD bounds cache per pose. `native_frame_work`

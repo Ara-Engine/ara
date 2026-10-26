@@ -1,3 +1,4 @@
+pub(crate) mod allocation;
 mod buffer_memory;
 mod create;
 #[cfg(test)]

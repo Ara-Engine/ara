@@ -522,3 +522,102 @@ After the service exits, a fresh worker recovers the capability hint without a n
 service. Physical verification reads all 115 actions, 1,459 artifact references and
 909,360,516 logical referenced bytes successfully. The fixture's initial memo-hit
 assertion failure remains in the ignored logs; no production codec fix was needed.
+
+## Bounded parallel geometry: 2026-10-26
+
+The fresh Hub-created Outpost profile `cold-mesh-profile-a0-outpost` uses the real
+daemon pipeline, default Balanced, a fresh project/import/profile/driver cache and
+the machine-wide GPU lock. It publishes all 115 assets in **55.556 s after open**,
+or **60.439 s including project creation**. All 115 action keys and 1,459 artifact
+references match v4, with 97 GPU-backed imports and zero CPU fallbacks. This is a
+loaded storage outlier, retained rather than used as a speedup baseline. Available
+RAM falls from 4.67 to 3.98 GiB; point samples of machine CPU are 12/20 percent,
+not an interval average or evidence of quiet storage. No owned build runs during
+the timer. Ordinary filesystem/vendor caches are retained.
+
+| Stage | Summed elapsed seconds |
+|---|---:|
+| Parse | 0.025 |
+| Mesh, including classic and virtual geometry | 19.643 |
+| Classic LOD, nested in mesh | 12.086 |
+| Image decode | 7.059 |
+| Mips | 3.035 |
+| Compression, including GPU/service waits | 35.541 |
+| Device creation, helper total | 1.028 |
+| BLAKE3 hashing, all traced calls | 1.591 |
+| Cache store | 660.328 |
+| Atomic installation, nested in store | 630.509 |
+| Persist/close, nested in installation | 444.689 |
+| Writes, nested in installation | 137.049 |
+
+Stages overlap across workers and have nested spans; they must not be added into
+a critical path. Total tracked worker/helper CPU is 74.484 s. There are 51 cache
+installation spans above five seconds (maximum 9.993 s). The last asset waits
+47.891 s for admission. These waits explain why this loaded run cannot establish
+the cold targets or an isolated mesh speedup.
+
+A diagnostic now separates the final writer close from persist. A four-action,
+four-thread store-only replay verifies its outputs in 116.244 ms: 29 writes total
+6.527 ms, attributes/atomic renames 117.854 ms (maximum 101.306 ms), and closes
+0.957 ms (maximum 0.060 ms). This small replay does not reproduce the long storage
+waits. `tempfile` uses `SetFileAttributesW` followed by `MoveFileExW` without
+`MOVEFILE_WRITE_THROUGH`; these results do not attribute the outlier to Defender
+or justify another cache-policy change.
+
+Geometry can be isolated without encoding or storing. The explicit diagnostic
+example `cargo run -p ara-importers --example geometry_replay -- PROJECT 4` reads
+the completed project's verified texture memo and backend identity, forces classic
+and virtual geometry to cook, and compares each entire `ImportOutput` literally
+against the production action. It fails if any texture needs encoding, if settings
+or versions are stale, or if an output byte differs. Dependency discovery runs in
+this standalone diagnostic process, never in the editor. This replay is not a
+fresh-project end-to-end measurement.
+
+All three diagnostic variants below verify the same 101 registered glTF models
+from the fresh Outpost project. Each uses four worker threads, the same dev profile
+(own code opt-level 1, dependencies 3), a GPU lock and no owned compilation during
+the timer. Other agents remain active; these are single diagnostic passes.
+
+| Summed interval (s) | Original order/maps | Parallel scheduling | Plus topology lookups |
+|---|---:|---:|---:|
+| Model cook | 19.073 | 12.771 | 12.531 |
+| Mesh | 15.848 | 11.406 | 10.786 |
+| Classic LOD | 9.769 | 8.830 | 8.409 |
+| Topology/attribute preparation | 1.712 | 1.865 | 1.480 |
+| Native simplifier calls | 7.747 | 8.793 | 8.557 |
+| Card-area checks | 0.022 | 0.018 | 0.020 |
+| Virtual geometry | 5.875 | 6.564 | 6.504 |
+
+The implementation evaluates LOD0-based targets in pairs within the existing
+bounded pool, then applies acceptance, geometric/attribute fallback, area checks,
+monotone errors and the goal stop in original order. A one-thread budget evaluates
+one candidate at a time. At most one speculative candidate is unused. glTF classic
+and virtual cooks overlap, with the same immutable inputs and error precedence.
+Topology maps use a fixed hasher: IDs are assigned in source order; unordered
+iteration only ORs border flags. Floating-point reductions keep triangle order.
+No simplifier parameters, compression, importer versions, keys or artifact formats
+change. More simultaneous native work can increase summed simplifier/virtual
+intervals through preemption and overlap; these sums are not thread CPU time.
+
+The final source after syncing main repeats all 101 exact production-output
+comparisons (1,441 artifact references) at one and four threads. The replay's
+summed model cooks are 23.932 s and 11.038 s respectively. Both reuse all textures;
+neither creates a device or encodes. They are additional correctness/diagnostic
+passes, not a new controlled baseline/candidate wall comparison.
+
+The focused checkpoint runs formatting, strict all-target Clippy and all ordinary
+tests for `ara-asset`, `ara-importers` and `ara-import-worker`, plus the explicitly
+GPU-locked production-worker protocol test (six actual encodes and lease cleanup).
+There are 69 ordinary libtest passes, three declared ignores in that run, and
+successful custom worker-limit/fairness harnesses; the GPU ignore runs explicitly.
+LOD tests compare complete static and deformed outputs at caps 1/4/8 across private
+pools of one/four threads; existing seam, area, depth and sample-version tests pass.
+The main-sync shader cohort is re-cooked with all artifacts reused unchanged.
+
+The controlled fresh-project paired wall matrix is deliberately pending the
+owner's separate quiet slot. Neither the diagnostic reduction nor the retained
+55-second storage outlier is a claim of Showcase below 10 s or Outpost below 20 s.
+Canonical evidence is in `measurements/parallel-geometry-2026-10-26.json`; raw
+traces, per-model outputs, frozen worker hashes and logs remain under
+`target/ara-dev/import-speed/` (`cold-mesh-profile-a0-outpost/`, `geometry-*`,
+`cache-close-a0/`, `mesh-final-*`, `mesh-gpu-protocol/`).
