@@ -1,5 +1,6 @@
 use crate::*;
 use anyhow::{Result, ensure};
+mod compact;
 
 /// Builds meshlets, repeatedly partitions/reduces/reclusters, then packs pages.
 /// meshoptimizer preserves the open boundary of each group with LockBorder.
@@ -73,11 +74,11 @@ pub fn cook(source: &SourceMesh, settings: Settings) -> Result<Geometry> {
     };
     // This offline scratch retains original indices for exact shared boundary locks.
     let mut triangles = Vec::<Vec<u32>>::new();
+    let mut remap = compact::Remap::new(source);
     let mut active = append(
         &mut geometry,
         &mut triangles,
-        source,
-        &adapter,
+        &mut remap,
         &source.indices,
         ROOT,
         0,
@@ -114,7 +115,7 @@ pub fn cook(source: &SourceMesh, settings: Settings) -> Result<Geometry> {
                 .iter()
                 .flat_map(|&i| triangles[i as usize].iter().copied())
                 .collect();
-            let (local, source_ids) = compact(source, &input);
+            let (local, source_ids) = remap.compact(&input);
             let local_adapter = meshopt::VertexDataAdapter::new(
                 bytemuck::cast_slice(&local.vertices),
                 size_of::<Vertex>(),
@@ -188,8 +189,7 @@ pub fn cook(source: &SourceMesh, settings: Settings) -> Result<Geometry> {
             next.extend(append(
                 &mut geometry,
                 &mut triangles,
-                source,
-                &adapter,
+                &mut remap,
                 &output,
                 group,
                 level,
@@ -210,13 +210,12 @@ pub fn cook(source: &SourceMesh, settings: Settings) -> Result<Geometry> {
 fn append(
     geometry: &mut Geometry,
     triangles: &mut Vec<Vec<u32>>,
-    source: &SourceMesh,
-    _adapter: &meshopt::VertexDataAdapter<'_>,
+    remap: &mut compact::Remap<'_>,
     indices: &[u32],
     group: u32,
     level: u32,
 ) -> Result<Vec<u32>> {
-    let (local_source, source_ids) = compact(source, indices);
+    let (local_source, source_ids) = remap.compact(indices);
     let adapter = meshopt::VertexDataAdapter::new(
         bytemuck::cast_slice(&local_source.vertices),
         size_of::<Vertex>(),
@@ -278,28 +277,4 @@ fn distance(a: [f32; 3], b: [f32; 3]) -> f32 {
         .map(|(a, b)| (a - b).powi(2))
         .sum::<f32>()
         .sqrt()
-}
-
-fn compact(source: &SourceMesh, indices: &[u32]) -> (SourceMesh, Vec<u32>) {
-    let mut map = std::collections::BTreeMap::new();
-    let mut vertices = Vec::new();
-    let mut ids = Vec::new();
-    let local = indices
-        .iter()
-        .map(|&id| {
-            *map.entry(id).or_insert_with(|| {
-                let index = vertices.len() as u32;
-                vertices.push(source.vertices[id as usize]);
-                ids.push(id);
-                index
-            })
-        })
-        .collect();
-    (
-        SourceMesh {
-            vertices,
-            indices: local,
-        },
-        ids,
-    )
 }

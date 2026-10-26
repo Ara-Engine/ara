@@ -5,7 +5,7 @@ use bytemuck::{Pod, Zeroable};
 use serde::{Deserialize, Serialize};
 mod lods;
 
-/// Experimental nested scheduling; enable only after a fresh-project ABBA win.
+/// Off: current fresh-project ABBA shows no clear win after faster texture prep.
 pub(crate) const PARALLEL_GEOMETRY: bool = false;
 
 /// Decoded source vertex. Position is first for meshoptimizer's strided adapter.

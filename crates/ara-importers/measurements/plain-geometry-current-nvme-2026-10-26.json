@@ -1,0 +1,227 @@
+{
+  "date": "2026-10-26",
+  "decision": {
+    "adaptiveLimiter": "Rejected and reverted",
+    "experiment": "5428daff only changes PARALLEL_GEOMETRY;192b9d72 restores false",
+    "parallelGeometry": false,
+    "perVolumeFallback": "Dropped for now; lacks a clear current plain-parallel gain"
+  },
+  "definition": "Fresh Outpost NVMe A/B/B/A, sequential vs plain parallel without limiter; both include Color8/mips, no later geometry-efficiency experiment; one GPU lease, per-case evidence/verification/deletion",
+  "freshCache": "Each project starts without a content cache; OS/driver caches not deliberately flushed",
+  "interpretation": [
+    "Only two observations per variant; no statistical certainty claimed",
+    "A1/A2 spread2.0529647s exceeds mean gain0.97359595s",
+    "A2 is1.6065ms faster than B1; no clear win over current ~20s sequential baseline",
+    "Do not treat the pre-texture-optimization23.7% gain as current evidence"
+  ],
+  "means": {
+    "plainCreateThroughReadyMs": 22480.98105,
+    "plainParallelMs": 19543.8362,
+    "reductionPercent": 4.745213450114916,
+    "sequentialCreateThroughReadyMs": 24223.9774,
+    "sequentialMs": 20517.43215
+  },
+  "pair": {
+    "artifacts": 562,
+    "candidate": {
+      "cliPolicy": "Identical frozen control CLI; only worker geometry scheduling differs",
+      "cliSha256": "886B108DB9E1CD1F6FA46C728A62FDB7C8EC350AAD62BC0611FC766A89AB8BE8",
+      "compiledCliSha256": "8942D4B0446E4F135FD5010FA003C0EC3B47852F128646D4416BD00DDADE8930",
+      "playerSha256": "946B7D03E2BDA216AD4282FDD9D1934FE40F501E6D760BEFF135AF24F0759D29",
+      "profile": "dev; dependencies opt3; own code opt1; debug GPU validation",
+      "roots": [
+        "ara",
+        "ara-asset",
+        "ara-importers",
+        "ara-import-worker"
+      ],
+      "sourceHead": "5428daff7c19e5b122f61440f5a996db6835548a",
+      "variant": "candidate",
+      "worker": "D:/AraBuild/ara-dev-infra-target/import-speed/plain-geometry-candidate-bin/ara-import-worker.exe",
+      "workerSha256": "E42247C434089676C1B22CC7A924ACDCF5E59A695A9925BBB30D3413D0CCE316"
+    },
+    "control": {
+      "cliSha256": "886B108DB9E1CD1F6FA46C728A62FDB7C8EC350AAD62BC0611FC766A89AB8BE8",
+      "playerSha256": "946B7D03E2BDA216AD4282FDD9D1934FE40F501E6D760BEFF135AF24F0759D29",
+      "profile": "dev; dependencies opt3; own code opt1; debug GPU validation",
+      "roots": [
+        "ara",
+        "ara-asset",
+        "ara-importers",
+        "ara-import-worker"
+      ],
+      "sourceHead": "f9fc09c9047066c62e54d771d28396bd3aa70af3",
+      "variant": "control",
+      "worker": "D:/AraBuild/ara-dev-infra-target/import-speed/adaptive-control-bin/ara-import-worker.exe",
+      "workerSha256": "D140A9532BE4A5A5A97D19633B8F67720D5B4DE332F00773186DE11737FAEDA7"
+    },
+    "featureSetsEqual": true,
+    "timed": false
+  },
+  "rawEvidence": "C:\\Users\\snowy\\.t3\\worktrees\\snengine\\t3-602598ba/target/ara-dev/import-speed/plain-current-{a1,b1,b2,a2}-outpost",
+  "runs": {
+    "Count": 4,
+    "value": [
+      {
+        "assets": 115,
+        "binaryHashes": {
+          "cli": "886B108DB9E1CD1F6FA46C728A62FDB7C8EC350AAD62BC0611FC766A89AB8BE8",
+          "player": "946B7D03E2BDA216AD4282FDD9D1934FE40F501E6D760BEFF135AF24F0759D29",
+          "worker": "D140A9532BE4A5A5A97D19633B8F67720D5B4DE332F00773186DE11737FAEDA7"
+        },
+        "case": "a1",
+        "createMs": 2736.6375000000003,
+        "deletion": {
+          "deleted": true,
+          "deletedUtc": "2026-10-26T06:46:32.4268148Z",
+          "files": 4005,
+          "logicalBytes": 2058444453,
+          "path": "C:\\AraImportBench\\projects\\plain-current-a1-outpost",
+          "reparsePoints": [],
+          "verified": true
+        },
+        "fallbacks": 0,
+        "importMs": 21543.914500000003,
+        "loadAfter": {
+          "availableMemoryKiB": 5460444,
+          "cpuPercent": 37,
+          "dFreeBytes": 40651931648,
+          "utc": "2026-10-26T06:46:23.2144593Z"
+        },
+        "loadBefore": {
+          "availableMemoryKiB": 7192088,
+          "cpuPercent": 22,
+          "dFreeBytes": 40651931648,
+          "utc": "2026-10-26T06:45:58.0333746Z"
+        },
+        "physicalVerification": "C:/AraImportBench/projects/plain-current-a1-outpost/.ara/cache: 115 actions, 1459 artifacts, 909360516 bytes verified",
+        "project": "C:/AraImportBench/projects/plain-current-a1-outpost",
+        "totalMs": 24791.609,
+        "variant": "sequential"
+      },
+      {
+        "assets": 115,
+        "binaryHashes": {
+          "cli": "886B108DB9E1CD1F6FA46C728A62FDB7C8EC350AAD62BC0611FC766A89AB8BE8",
+          "player": "946B7D03E2BDA216AD4282FDD9D1934FE40F501E6D760BEFF135AF24F0759D29",
+          "worker": "E42247C434089676C1B22CC7A924ACDCF5E59A695A9925BBB30D3413D0CCE316"
+        },
+        "case": "b1",
+        "createMs": 3241.7205000000004,
+        "deletion": {
+          "deleted": true,
+          "deletedUtc": "2026-10-26T06:47:04.2227054Z",
+          "files": 4005,
+          "logicalBytes": 2058444453,
+          "path": "C:\\AraImportBench\\projects\\plain-current-b1-outpost",
+          "reparsePoints": [],
+          "verified": true
+        },
+        "fallbacks": 0,
+        "importMs": 19492.5563,
+        "loadAfter": {
+          "availableMemoryKiB": 5400012,
+          "cpuPercent": 11,
+          "dFreeBytes": 40637833216,
+          "utc": "2026-10-26T06:46:56.1209291Z"
+        },
+        "loadBefore": {
+          "availableMemoryKiB": 6999080,
+          "cpuPercent": 0,
+          "dFreeBytes": 40651931648,
+          "utc": "2026-10-26T06:46:32.7348386Z"
+        },
+        "physicalVerification": "C:/AraImportBench/projects/plain-current-b1-outpost/.ara/cache: 115 actions, 1459 artifacts, 909360516 bytes verified",
+        "project": "C:/AraImportBench/projects/plain-current-b1-outpost",
+        "totalMs": 23016.053,
+        "variant": "plainParallel"
+      },
+      {
+        "assets": 115,
+        "binaryHashes": {
+          "cli": "886B108DB9E1CD1F6FA46C728A62FDB7C8EC350AAD62BC0611FC766A89AB8BE8",
+          "player": "946B7D03E2BDA216AD4282FDD9D1934FE40F501E6D760BEFF135AF24F0759D29",
+          "worker": "E42247C434089676C1B22CC7A924ACDCF5E59A695A9925BBB30D3413D0CCE316"
+        },
+        "case": "b2",
+        "createMs": 2079.7458,
+        "deletion": {
+          "deleted": true,
+          "deletedUtc": "2026-10-26T06:47:34.8512880Z",
+          "files": 4005,
+          "logicalBytes": 2058444453,
+          "path": "C:\\AraImportBench\\projects\\plain-current-b2-outpost",
+          "reparsePoints": [],
+          "verified": true
+        },
+        "fallbacks": 0,
+        "importMs": 19595.1161,
+        "loadAfter": {
+          "availableMemoryKiB": 5377412,
+          "cpuPercent": 3,
+          "dFreeBytes": 40637833216,
+          "utc": "2026-10-26T06:47:26.8440091Z"
+        },
+        "loadBefore": {
+          "availableMemoryKiB": 7017912,
+          "cpuPercent": 14,
+          "dFreeBytes": 40637833216,
+          "utc": "2026-10-26T06:47:04.5298732Z"
+        },
+        "physicalVerification": "C:/AraImportBench/projects/plain-current-b2-outpost/.ara/cache: 115 actions, 1459 artifacts, 909360516 bytes verified",
+        "project": "C:/AraImportBench/projects/plain-current-b2-outpost",
+        "totalMs": 21945.9091,
+        "variant": "plainParallel"
+      },
+      {
+        "assets": 115,
+        "binaryHashes": {
+          "cli": "886B108DB9E1CD1F6FA46C728A62FDB7C8EC350AAD62BC0611FC766A89AB8BE8",
+          "player": "946B7D03E2BDA216AD4282FDD9D1934FE40F501E6D760BEFF135AF24F0759D29",
+          "worker": "D140A9532BE4A5A5A97D19633B8F67720D5B4DE332F00773186DE11737FAEDA7"
+        },
+        "case": "a2",
+        "createMs": 3907.3065,
+        "deletion": {
+          "deleted": true,
+          "deletedUtc": "2026-10-26T06:48:06.8549364Z",
+          "files": 4005,
+          "logicalBytes": 2058444453,
+          "path": "C:\\AraImportBench\\projects\\plain-current-a2-outpost",
+          "reparsePoints": [],
+          "verified": true
+        },
+        "fallbacks": 0,
+        "importMs": 19490.949800000002,
+        "loadAfter": {
+          "availableMemoryKiB": 5597668,
+          "cpuPercent": 10,
+          "dFreeBytes": 40637833216,
+          "utc": "2026-10-26T06:47:59.2489909Z"
+        },
+        "loadBefore": {
+          "availableMemoryKiB": 7240908,
+          "cpuPercent": 7,
+          "dFreeBytes": 40637833216,
+          "utc": "2026-10-26T06:47:35.2139365Z"
+        },
+        "physicalVerification": "C:/AraImportBench/projects/plain-current-a2-outpost/.ara/cache: 115 actions, 1459 artifacts, 909360516 bytes verified",
+        "project": "C:/AraImportBench/projects/plain-current-a2-outpost",
+        "totalMs": 23656.345800000003,
+        "variant": "sequential"
+      }
+    ]
+  },
+  "status": "NO_CLEAR_WIN",
+  "verification": {
+    "allProjectsDeleted": true,
+    "artifactReferences": 5836,
+    "differentArtifacts": 0,
+    "differentKeys": 0,
+    "fallbacks": 0,
+    "keys": 460,
+    "referencedBytesVerified": 3637442064,
+    "reparsePoints": 0,
+    "sourcesPerRun": 115
+  }
+}
