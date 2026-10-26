@@ -174,12 +174,8 @@ impl Applied {
         style.position = Position::Absolute;
         style.inset.left = LengthPercentageAuto::length(self.origin[0]);
         style.inset.top = LengthPercentageAuto::length(self.origin[1]);
-        if let Some(width) = self.clamp[0] {
-            style.size.width = Dimension::length(width);
-        }
-        if let Some(height) = self.clamp[1] {
-            style.size.height = Dimension::length(height);
-        }
+        style.size.width = self.clamp[0].map_or(Dimension::auto(), Dimension::length);
+        style.size.height = self.clamp[1].map_or(Dimension::auto(), Dimension::length);
     }
 }
 
@@ -252,7 +248,7 @@ impl Ui {
             let id = stable_id(&self.nodes[i].element.id);
             let node = &mut self.nodes[i];
             let current = self.tree.style(node.layout_id)?;
-            let mut style = node.computed.layout.clone();
+            let mut style = current.clone();
             applied.apply(&mut style);
             // A rebuilt node starts from its CSS; compare the style, not just the cache.
             if self.placed.get(&id) == Some(&applied) && style == *current {
