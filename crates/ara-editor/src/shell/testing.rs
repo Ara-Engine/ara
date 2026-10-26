@@ -200,6 +200,14 @@ impl Shell {
         self.game_start = Some(super::game_panel::StartProgress::from_status(&row));
         let _ = self.rebuild(editor);
     }
+    /// Reads the next `play.status` row as the window does on its cadence: progress
+    /// within one phase shape updates the starting screen in place. True when it did
+    /// (no rebuild); false when the window would rebuild.
+    pub fn move_play_row_for_test(&mut self, row: Value) -> bool {
+        let before = self.game_start.clone();
+        self.game_start = Some(super::game_panel::StartProgress::from_status(&row));
+        self.patch_start_progress(before.as_ref()).unwrap_or(false)
+    }
     /// The Hierarchy's rows as shown (collapsed groups hide their children).
     pub fn hierarchy_rows(&self) -> usize {
         self.hierarchy.items.len()

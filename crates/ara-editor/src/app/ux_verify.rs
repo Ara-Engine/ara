@@ -1,7 +1,9 @@
 //! Editor UX v2 capture route (`--verify-ux`): menus, context menus, palette,
 //! Settings, a floating Inspector window and every tool tab, in both themes,
 //! through the production window loop. It writes PNGs, layout reports, the
-//! registry export and a viewport-share report; timings come from the loop.
+//! registry export and a viewport-share report; timings come from the loop. The
+//! first capture waits until the project's imports are done and the Scene has no
+//! content work left, so the Scene region is the same from run to run.
 use super::*;
 use crate::shell::commands::{Target, menus::Context};
 
@@ -53,9 +55,18 @@ const STEPS: &[(&str, Setup)] = &[
     ("tab-assets", Setup::Tab("assets")),
     ("empty-inspector", Setup::Empty),
 ];
+/// Frames in a row without imports or Scene content work before the first capture,
+/// and the most the route waits for them.
+const CONTENT_QUIET: u32 = 60;
+const CONTENT_PATIENCE: Duration = Duration::from_secs(300);
+
 pub(super) struct UxVerification {
     step: usize,
     age: u32,
+    /// Frames in a row the content has been quiet (see [`CONTENT_QUIET`]); `None`
+    /// once the captures began.
+    quiet: Option<u32>,
+    started: Instant,
     output: PathBuf,
     report: Vec<Value>,
     pub finished_at: Option<Instant>,
@@ -78,6 +89,8 @@ impl UxVerification {
         Ok(Self {
             step: 0,
             age: 0,
+            quiet: Some(0),
+            started: Instant::now(),
             output: output.into(),
             report: Vec::new(),
             finished_at: None,
@@ -101,6 +114,18 @@ impl UxVerification {
     ) -> ara_ui::Result<bool> {
         if self.finished() {
             return Ok(false);
+        }
+        if let Some(quiet) = self.quiet {
+            let busy = shell
+                .import_counts()
+                .is_some_and(|(pending, _, _)| pending > 0)
+                || scene_view.preview_needs_frame();
+            let quiet = if busy { 0 } else { quiet + 1 };
+            if quiet < CONTENT_QUIET && self.started.elapsed() < CONTENT_PATIENCE {
+                self.quiet = Some(quiet);
+                return Ok(false);
+            }
+            self.quiet = None;
         }
         let (name, setup) = STEPS[self.step];
         self.age += 1;

@@ -68,6 +68,44 @@ fn play_starts_in_the_background_and_shows_its_progress() {
     );
     assert_eq!(text(&shell, "game-starting-time").as_deref(), Some("2.4 s"));
     assert!(shell.ui.find("game-starting-fill").is_some());
+    // Progress within the phase updates the screen in place, exactly as a rebuild
+    // would write it; a phase without a total changes its shape and rebuilds.
+    let rebuilds = shell.take_stats().rebuilds;
+    assert!(shell.move_play_row_for_test(
+        json!({"status":"starting","progress":{"phase":"assets","completed":5,"total":12,"elapsedMs":3150}})
+    ));
+    assert_eq!(shell.take_stats().rebuilds, 0, "{rebuilds} before");
+    let patched = [
+        "game-starting-phase",
+        "game-starting-count",
+        "game-starting-time",
+    ]
+    .map(|id| text(&shell, id));
+    let fill = |shell: &Shell| {
+        let i = shell.ui.find("game-starting-fill").unwrap();
+        shell.ui.nodes[i].element.attrs.get("style").cloned()
+    };
+    let patched_fill = fill(&shell);
+    assert_eq!(patched[1].as_deref(), Some("5 / 12"));
+    assert_eq!(patched[2].as_deref(), Some("3.1 s"));
+    shell.rebuild(&mut editor).unwrap();
+    assert_eq!(
+        [
+            "game-starting-phase",
+            "game-starting-count",
+            "game-starting-time"
+        ]
+        .map(|id| text(&shell, id)),
+        patched
+    );
+    assert_eq!(fill(&shell), patched_fill);
+    assert!(!shell.move_play_row_for_test(
+        json!({"status":"starting","progress":{"phase":"world","elapsedMs":3300}})
+    ));
+    shell.show_play_row_for_test(
+        &mut editor,
+        json!({"status":"starting","progress":{"phase":"assets","completed":3,"total":12,"elapsedMs":2450}}),
+    );
     assert!(shell.ui.find("game-stop").is_some());
     assert_eq!(
         text(&shell, "status-play-text").as_deref(),
