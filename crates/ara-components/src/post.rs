@@ -207,9 +207,12 @@ impl Default for PostProcessVolume {
 
 /// Version 1 was the scene-wide `PostProcess` component (flat exposure, display and
 /// grading fields). It becomes a global volume overriding every one of them, the
-/// former defaults included, so a migrated scene renders as before.
+/// former defaults included, so a migrated scene renders as before. A value that
+/// already carries a volume field is a volume written without a `versions` entry
+/// (hand-authored JSON): the two field sets are disjoint, so it stays as it is.
 fn upgrade_post_process(from: u32, v: &mut Value) -> Result<(), String> {
-    if from != 1 {
+    const VOLUME: [&str; 5] = ["shape", "blendDistance", "priority", "weight", "overrides"];
+    if from != 1 || VOLUME.iter().any(|key| v.get(key).is_some()) {
         return Ok(());
     }
     let old = std::mem::take(v);
