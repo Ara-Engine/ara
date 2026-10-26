@@ -160,7 +160,9 @@ float4 screenReflection(Frame f,Look l,int2 p){
 // environment map's (32x16 irradiance, five-level 256x640 GGX prefilter strip for
 // roughness 0, .25, .5, .75, 1). Inside the probe volume, probe irradiance replaces
 // the sky's diffuse light and occludes its reflections by the ratio of probe to
-// sky irradiance in the mirror direction; rough reflections use the probes.
+// sky irradiance facing the normal (sky visibility: a cosine lobe around the mirror
+// direction would count the ground below the horizon at grazing views); rough
+// reflections use the probes.
 // `gathered` reads the half-resolution gather at pixel `p` (deferred lighting);
 // forward surfaces search the probes directly.
 float3 ibl(Frame f,Look l,Surface s,float3 world,float3 v,int2 p,bool gathered) {
@@ -176,7 +178,7 @@ float3 ibl(Frame f,Look l,Surface s,float3 world,float3 v,int2 p,bool gathered) 
         coverage*=giWeight(l);
     }
     [branch]if(coverage>0){
-        float occlusion=saturate(luminance(specularGi)/max(luminance(envTex(irradiance,uv).rgb),1e-4));
+        float occlusion=saturate(luminance(diffuseGi)/max(luminance(ambient),1e-4));
         ambient=lerp(ambient,diffuseGi,coverage);
         spec=lerp(spec,lerp(spec*occlusion,specularGi/PI,s.roughness),coverage);
     }
