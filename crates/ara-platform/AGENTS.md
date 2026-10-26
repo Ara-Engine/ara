@@ -16,6 +16,9 @@ Minimal SDL3 native window/input and Vulkan presentation. Uses `sdl3-sys` 0.7.2
   window); `poll()` keeps the single-window shape. `rect`/`set_position`/`raise`/
   `toggle_fullscreen`/`display_scale`, `displays()` (usable bounds, for off-screen
   recovery) and `global_mouse()` (cross-window drags). `raw()` is for host adapters.
+- Custom captions: `Window::enable_custom_chrome` installs native caption/resize hit
+  testing. Update `chrome_mut()` after layout in SDL window points. `minimize` and
+  `toggle_maximize` retain native actions; other windows keep their existing frames.
 - Icon: `Window::new` applies the Ara app icon (`assets/brand/png/ara-icon-64.png`,
   embedded; failures are ignored because Wayland has no window icons). Games call
   `set_icon(rgba, [w, h])`. Regenerate the PNG with `cargo run -p ara-brand -- export`.

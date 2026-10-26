@@ -457,6 +457,31 @@ fn transform_reset(e: &mut Editor, t: &Target, field: &str) -> R {
 
 fn build() -> Vec<Spec> {
     let mut c = Vec::with_capacity(240);
+    // Native window actions share the command registry with menus, shortcuts and MCP.
+    c.extend([
+        cmd(
+            "window.minimize",
+            "Minimize Window",
+            "minus",
+            "",
+            "Minimize the editor window.",
+            |s, _, _| {
+                s.window_request = Some(super::super::WindowRequest::Minimize);
+                Ok(())
+            },
+        ),
+        cmd(
+            "window.maximize_window",
+            "Maximize or Restore Window",
+            "maximize",
+            "",
+            "Toggle the editor window's native maximize state.",
+            |s, _, _| {
+                s.window_request = Some(super::super::WindowRequest::Maximize);
+                Ok(())
+            },
+        ),
+    ]);
     // File
     c.extend([
         cmd("file.new_scene", "New Scene…", "file", "Ctrl+N", "Create an empty scene under levels/ and open it.", |s, e, _| s.new_scene(e)),

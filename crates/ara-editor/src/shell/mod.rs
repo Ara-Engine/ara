@@ -25,6 +25,7 @@ pub(crate) mod scripts;
 mod scrub;
 mod settings_panel;
 mod testing;
+mod titlebar;
 pub(crate) use drag::Drag;
 pub use testing::MenuRow;
 mod agents_panel;
@@ -88,6 +89,8 @@ pub struct Shell {
     /// Floating windows; the current one (if any) is swapped into `ui`.
     pub floats: Vec<Surface>,
     current: Option<String>,
+    /// The OS maximize state, reflected by the custom caption's restore button.
+    pub(crate) native_maximized: bool,
     /// Active schema field models keyed by widget identity.
     pub fields: BTreeMap<String, Field>,
     /// Pointer location in logical pixels of the current surface.
@@ -399,6 +402,7 @@ impl Shell {
             input: InputState::default(),
             floats: Vec::new(),
             current: None,
+            native_maximized: false,
             fields: BTreeMap::new(),
             pointer: [0.; 2],
             modifiers: [false; 3],
@@ -716,6 +720,7 @@ impl Shell {
         if editor.state.comfortable() {
             css.push_str(include_str!("editor-comfortable.css"));
         }
+        css.push_str(include_str!("editor-titlebar.css"));
         css
     }
     /// Reconcile markup into the current surface (nodes whose ID survives keep their

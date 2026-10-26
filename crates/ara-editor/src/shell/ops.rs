@@ -6,6 +6,10 @@ use super::*;
 /// Work only the window owner can do; the app loop drains it each frame.
 #[derive(Clone, Debug, PartialEq)]
 pub enum WindowRequest {
+    /// Minimize the main window.
+    Minimize,
+    /// Maximize or restore the main window.
+    Maximize,
     /// Toggle full screen for the main window.
     Fullscreen,
     /// Raise a floating window by id.

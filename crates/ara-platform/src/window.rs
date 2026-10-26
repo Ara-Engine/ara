@@ -52,6 +52,7 @@ const ARA_ICON_PNG: &[u8] = include_bytes!("../../../assets/brand/png/ara-icon-6
 /// Main-thread-owned resizable SDL3 Vulkan window and video subsystem reference.
 pub struct Window {
     pub(crate) handle: *mut SDL_Window,
+    pub(crate) chrome: Option<Box<crate::chrome::WindowChrome>>,
     _main_thread: PhantomData<*mut ()>,
 }
 impl Window {
@@ -94,6 +95,7 @@ impl Window {
             }
             let window = Self {
                 handle,
+                chrome: None,
                 _main_thread: PhantomData,
             };
             // The icon is cosmetic: drivers without window icons (Wayland) still get a window.
