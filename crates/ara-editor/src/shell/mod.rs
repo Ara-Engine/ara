@@ -983,8 +983,7 @@ impl Shell {
         if self.rename
             && let Some(id) = editor.state.selection.first()
         {
-            let resolved = crate::world::resolve(editor.host.store(), &editor.state.doc)
-                .map_err(|d| format!("{d:?}"))?;
+            let resolved = self.resolved(editor)?;
             let name = resolved
                 .get(id)
                 .and_then(|e| e.record.get("name"))

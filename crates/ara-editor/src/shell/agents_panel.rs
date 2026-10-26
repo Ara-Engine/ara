@@ -39,8 +39,7 @@ impl Shell {
         }
         out.push_str("<scroll id='agents-scroll' class='body' style='gap:0px'>");
         let now = std::time::Instant::now();
-        let names =
-            crate::world::resolve(editor.host.store(), &editor.state.doc).unwrap_or_default();
+        let names = self.resolved(editor).unwrap_or_default();
         for turn in &turns {
             let id = format!("turn-{}", turn.key);
             let store = editor.host.store();
