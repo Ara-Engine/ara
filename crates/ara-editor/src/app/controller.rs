@@ -368,15 +368,10 @@ impl Controller {
                     shell.commit_fields(editor)?;
                     shell.input.blur(&mut shell.ui);
                 }
-                if pressed
-                    && shell.menu.is_some()
-                    && !shell.menu_contains(shell.pointer)
-                    && !shell.over_open_title()
-                {
-                    // A click outside an open menu closes it; another title opens its
-                    // own, and the open menu's title closes it when released.
-                    shell.menu = None;
-                    shell.rebuild(editor)?;
+                // A press outside the open popovers (menus, the palette, pickers) closes
+                // them; another menu title then opens its own, and the open menu's title
+                // closes it when released.
+                if pressed && shell.dismiss_popovers(editor, shell.pointer)? {
                     dirty = true;
                 }
                 if button == 3 && !pressed && !self.orbited {

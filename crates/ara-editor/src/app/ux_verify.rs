@@ -27,7 +27,7 @@ const STEPS: &[(&str, Setup)] = &[
     ("menu-edit", Setup::Menu(1, Some(23))),
     ("menu-view", Setup::Menu(2, Some(1))),
     ("menu-create", Setup::Menu(3, Some(5))),
-    ("menu-window", Setup::Menu(7, Some(0))),
+    ("menu-window", Setup::Menu(4, Some(0))),
     ("context-hierarchy", Setup::Context(Context::Entity)),
     ("context-viewport", Setup::Context(Context::Viewport)),
     ("context-field", Setup::Context(Context::Field)),

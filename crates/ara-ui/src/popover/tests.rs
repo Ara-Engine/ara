@@ -188,3 +188,24 @@ fn popovers_dismiss_on_click_away_and_return_focus() -> Result<()> {
     assert!(toggle.on_anchor);
     Ok(())
 }
+
+/// CSS sizes stand unless the window is too small: a 260 px picker stays 260 px wide;
+/// a fixed-height flex popover (a palette) clamps to the room and stays clamped.
+#[test]
+fn popovers_keep_css_sizes_until_clamped() -> Result<()> {
+    let mut text = TextSystem::bundled()?;
+    let markup = "<ui id='r'><button id='swatch' text='S' style='position:absolute;left:300px;top:20px;width:20px;height:20px;padding:0px' /><popover id='picker' anchor='swatch' placement='left-start' style='width:260px'><button id='p0' text='Hue' style='height:20px;padding:0px' /></popover><popover id='palette' at='200,100' placement='bottom-center' offset='0' style='display:flex;width:300px;height:400px'><scroll id='results' style='flex-grow:1' /></popover></ui>";
+    let mut ui = Ui::editor(markup, EDITOR_CSS, WINDOW)?;
+    ui.frame(&mut text)?;
+    let rect = |ui: &Ui, id: &str| ui.nodes[ui.find(id).expect("node")].rect;
+    let picker = rect(&ui, "picker");
+    assert_eq!(picker.w, 260.);
+    assert_eq!(picker.x + picker.w, 296.);
+    let palette = rect(&ui, "palette");
+    assert_eq!(palette.w, 300.);
+    // 400 px tall in a 300 px window: below the point there are 300 - 100 - 4 = 196 px,
+    // above it 96; it opens below, clamped.
+    assert_eq!([palette.y, palette.h], [100., 196.]);
+    assert_eq!(ui.frame(&mut text)?.layout_passes, 0);
+    Ok(())
+}

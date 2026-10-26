@@ -168,14 +168,19 @@ pub(crate) struct Applied {
 }
 
 impl Applied {
-    /// Write the placement into a layout style computed from CSS.
+    /// Write the placement into a layout style computed from CSS: the position, and a
+    /// size only on a clamped axis (CSS sizes otherwise stand).
     pub(crate) fn apply(&self, style: &mut taffy::Style) {
         use taffy::prelude::*;
         style.position = Position::Absolute;
         style.inset.left = LengthPercentageAuto::length(self.origin[0]);
         style.inset.top = LengthPercentageAuto::length(self.origin[1]);
-        style.size.width = self.clamp[0].map_or(Dimension::auto(), Dimension::length);
-        style.size.height = self.clamp[1].map_or(Dimension::auto(), Dimension::length);
+        if let Some(width) = self.clamp[0] {
+            style.size.width = Dimension::length(width);
+        }
+        if let Some(height) = self.clamp[1] {
+            style.size.height = Dimension::length(height);
+        }
     }
 }
 
@@ -248,7 +253,8 @@ impl Ui {
             let id = stable_id(&self.nodes[i].element.id);
             let node = &mut self.nodes[i];
             let current = self.tree.style(node.layout_id)?;
-            let mut style = current.clone();
+            // From the CSS, so an earlier clamp does not stick once there is room.
+            let mut style = node.computed.layout.clone();
             applied.apply(&mut style);
             // A rebuilt node starts from its CSS; compare the style, not just the cache.
             if self.placed.get(&id) == Some(&applied) && style == *current {
@@ -261,10 +267,21 @@ impl Ui {
         }
         Ok(moved)
     }
-    /// A popover's content size: its laid-out width (it sizes to content unless the
-    /// window is narrower) and the bottom of its lowest child, which keeps its natural
-    /// height in a block container even when the popover is clamped.
+    /// A popover's content size: its CSS width and height where it sets them (a fixed
+    /// palette), otherwise its laid-out width (it sizes to content) and the bottom of its
+    /// lowest child, which keeps its natural height in a block container even when the
+    /// popover is clamped.
     fn natural_size(&self, index: usize) -> Result<[f32; 2]> {
+        let node = &self.nodes[index];
+        let css = &node.computed.layout.size;
+        let natural = self.content_size(index)?;
+        Ok([
+            css.width.into_option().unwrap_or(natural[0]),
+            css.height.into_option().unwrap_or(natural[1]),
+        ])
+    }
+    /// The laid-out width and the bottom of the lowest child (see `natural_size`).
+    fn content_size(&self, index: usize) -> Result<[f32; 2]> {
         let node = &self.nodes[index];
         let layout = self.tree.layout(node.layout_id)?;
         let mut size = [layout.size.width, 0.0_f32];

@@ -76,6 +76,8 @@ pub struct Surface {
     pub input: InputState,
     /// Pointer in this window's logical pixels.
     pub pointer: [f32; 2],
+    /// The window's open popovers (menus, pickers, the palette): dismissal and focus return.
+    pub popovers: ara_ui::popover::Popovers,
 }
 /// Native shell and its retained widget state; no authoring document is mirrored here.
 pub struct Shell {
@@ -275,7 +277,8 @@ pub struct Shell {
     axis_camera: crate::state::Camera,
     /// Open menu bar menu, context menu or value menu.
     pub(crate) menu: Option<menu::MenuState>,
-    menu_anchors: Vec<f32>,
+    /// The current surface's open popovers (`ara_ui::popover`), synced after each mount.
+    pub(crate) popovers: ara_ui::popover::Popovers,
     mnemonics: bool,
     alt_tap: bool,
     /// Modal information or input dialog.
@@ -519,7 +522,7 @@ impl Shell {
             vfx_collapsed: std::collections::BTreeSet::new(),
             axis_camera: Default::default(),
             menu: None,
-            menu_anchors: Vec::new(),
+            popovers: Default::default(),
             mnemonics: false,
             alt_tap: false,
             dialog: None,
@@ -556,6 +559,7 @@ impl Shell {
         std::mem::swap(&mut self.ui, &mut surface.ui);
         std::mem::swap(&mut self.input, &mut surface.input);
         std::mem::swap(&mut self.pointer, &mut surface.pointer);
+        std::mem::swap(&mut self.popovers, &mut surface.popovers);
         self.current = Some(id.to_owned());
         true
     }
@@ -568,6 +572,7 @@ impl Shell {
             std::mem::swap(&mut self.ui, &mut surface.ui);
             std::mem::swap(&mut self.input, &mut surface.input);
             std::mem::swap(&mut self.pointer, &mut surface.pointer);
+            std::mem::swap(&mut self.popovers, &mut surface.popovers);
         }
     }
     /// The floating window currently swapped in, if any.
@@ -691,6 +696,7 @@ impl Shell {
                     ui: Ui::editor("<ui id='float' />", include_str!("editor.css"), size)?,
                     input: InputState::default(),
                     pointer: [0.; 2],
+                    popovers: Default::default(),
                 });
             }
             self.enter(&window.id);
@@ -724,7 +730,9 @@ impl Shell {
     /// frames afterwards: new rows have geometry only after that frame.
     fn mount(&mut self, editor: &mut Editor, markup: &str) -> ara_ui::Result<()> {
         let started = std::time::Instant::now();
-        let result = self.mount_markup(editor, markup);
+        let result = self
+            .mount_markup(editor, markup)
+            .and_then(|()| self.popovers.sync(&mut self.ui, &mut self.input));
         self.stats.mount_ms += started.elapsed().as_secs_f64() * 1000.;
         result
     }
@@ -1000,10 +1008,6 @@ impl Shell {
         markup.push_str(POPUP_TAIL);
         markup.push_str("</ui>");
         self.mount(editor, &markup)?;
-        self.menu_anchors = (0..commands::menus::MENUS.len())
-            .filter_map(|i| self.ui.find(&format!("menu-title-{i}")))
-            .map(|i| self.ui.nodes[i].rect.x)
-            .collect();
         if editor.state.focus == "vfx"
             && let Some(item) = editor.state.resource_item.as_deref()
         {

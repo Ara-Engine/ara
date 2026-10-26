@@ -154,32 +154,16 @@ impl Shell {
                         rebuild = true;
                     }
                     Binding::AssetPicker(path, kind) => {
-                        let at = self
-                            .ui
-                            .by_id(action.node)
-                            .map(|i| {
-                                let r = self.ui.nodes[i].rect;
-                                [r.x, r.y + r.h + 2.]
-                            })
-                            .unwrap_or(self.pointer);
-                        self.open_menu_at(
+                        self.open_menu_from(
                             super::menu::Source::Assets(path.clone(), kind.clone()),
-                            at,
+                            action.node,
                         );
                         rebuild = true;
                     }
                     Binding::EnumMenu(path, options) => {
-                        let at = self
-                            .ui
-                            .by_id(action.node)
-                            .map(|i| {
-                                let r = self.ui.nodes[i].rect;
-                                [r.x, r.y + r.h + 2.]
-                            })
-                            .unwrap_or(self.pointer);
-                        self.open_menu_at(
+                        self.open_menu_from(
                             super::menu::Source::Enum(path.clone(), options.clone()),
-                            at,
+                            action.node,
                         );
                         rebuild = true;
                     }
@@ -200,15 +184,10 @@ impl Shell {
                         rebuild = true;
                     }
                     Binding::ContextMenu(kind, target) => {
-                        let at = self
-                            .ui
-                            .by_id(action.node)
-                            .map(|i| {
-                                let r = self.ui.nodes[i].rect;
-                                [r.x, r.y + r.h + 2.]
-                            })
-                            .unwrap_or(self.pointer);
-                        self.open_menu_at(super::menu::Source::Context(*kind, target.clone()), at);
+                        self.open_menu_from(
+                            super::menu::Source::Context(*kind, target.clone()),
+                            action.node,
+                        );
                         rebuild = true;
                     }
                     Binding::CameraFov => {
