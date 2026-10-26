@@ -485,12 +485,16 @@ impl Shell {
     /// A press at `point` outside the open popovers closes them (those above the one
     /// it lands in); a press on the open menu's own control is left to toggle it.
     /// Returns whether anything closed.
-    pub(crate) fn dismiss_popovers(
+    pub fn dismiss_popovers(
         &mut self,
         editor: &mut Editor,
         point: [f32; 2],
     ) -> ara_ui::Result<bool> {
-        let dismissal = self.popovers.pointer_down(&self.ui, point);
+        let mut dismissal = self.popovers.pointer_down(&self.ui, point);
+        // A pinned colour picker stays open through clicks outside it.
+        if self.color_picker.as_ref().is_some_and(|p| p.pinned()) {
+            dismissal.close.retain(|id| id != "color-picker");
+        }
         if dismissal.close.is_empty() || dismissal.on_anchor {
             return Ok(false);
         }
@@ -523,6 +527,11 @@ impl Shell {
                 }
             } else if id == "palette" && editor.state.palette {
                 editor.action("editor.palette", json!({"open": false}))?;
+            } else if id == "add-component-pop" {
+                self.add_component = None;
+            } else if id == "color-picker" {
+                // A click outside keeps the colour, as Enter does.
+                self.close_color_picker(editor, false)?;
             }
         }
         self.rebuild(editor)
@@ -706,7 +715,7 @@ impl Shell {
                     }
                     Binding::Field(path, _)
                     | Binding::Scrub(path, _)
-                    | Binding::ColorPicker(path)
+                    | Binding::ColorPicker(path, _)
                     | Binding::PickField(path) => {
                         return Some((Context::Field, Target::Field(path.clone())));
                     }

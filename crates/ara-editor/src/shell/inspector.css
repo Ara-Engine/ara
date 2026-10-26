@@ -24,4 +24,27 @@
 .override-toggle { width:16px; height:16px; }
 .nested-scrub-label { height:22px; flex-grow:1; flex-basis:0px; min-width:0px; justify-content:start; padding:0px; border-width:0px; background:transparent; color:var(--muted-foreground); }
 .nested-scrub-label:hover { color:var(--foreground); }
-.inspector-colour-popup { width:260px; padding:10px; gap:8px; background:var(--menu-surface); border-width:1px; border-color:var(--separator-strong); border-radius:var(--radius-sm); }
+.color-picker { width:288px; padding:10px; padding-top:6px; gap:6px; background:var(--menu-surface); border-width:1px; border-color:var(--separator-strong); border-radius:var(--radius-md); }
+.color-picker-pinned { border-color:var(--ring); }
+.cp-paint { padding:0px; border-width:0px; border-radius:0px; background:transparent; }
+.cp-paint:hover { background:transparent; }
+.cp-paint:active { background:transparent; color:var(--foreground); }
+.cp-title { flex-direction:row; align-items:center; justify-content:start; height:26px; gap:2px; flex-shrink:0; }
+.cp-top { flex-direction:row; gap:12px; flex-shrink:0; }
+.cp-wheel { width:196px; height:196px; flex-shrink:0; }
+.cp-side { flex-grow:1; flex-basis:0px; gap:3px; }
+.cp-preview { height:30px; flex-shrink:0; padding:0px; border-width:0px; background:transparent; }
+.cp-tool { height:28px; flex-shrink:0; justify-content:center; align-items:center; }
+.cp-row { flex-direction:row; align-items:center; gap:8px; height:24px; flex-shrink:0; }
+.cp-label { width:12px; flex-shrink:0; font-size:var(--font-size-small); color:var(--muted-foreground); }
+.cp-label-wide { width:74px; flex-shrink:0; font-size:var(--font-size-small); color:var(--muted-foreground); }
+.cp-track { flex-grow:1; flex-basis:0px; height:12px; }
+.cp-number { width:58px; flex-shrink:0; }
+.cp-hex { flex-grow:1; flex-basis:0px; min-width:0px; }
+.cp-mode { flex-grow:1; flex-basis:0px; justify-content:center; }
+.cp-exposure { flex-grow:1; flex-basis:0px; height:24px; padding:0px; border-width:0px; background:transparent; justify-content:center; align-items:center; }
+.cp-exposure-label { font-size:var(--font-size-small); color:#101010; }
+.cp-preset { flex-grow:1; flex-basis:0px; height:22px; padding:0px; border-width:0px; background:transparent; justify-content:center; align-items:center; }
+.cp-preset-label { font-size:10px; color:#101010; }
+.cp-swatches { flex-direction:row; gap:5px; height:20px; flex-shrink:0; }
+.cp-swatch { width:20px; height:20px; flex-shrink:0; padding:0px; border-width:0px; background:transparent; }

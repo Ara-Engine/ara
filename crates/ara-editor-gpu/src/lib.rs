@@ -268,7 +268,19 @@ impl NativeUi {
     }
     /// Read the actual GPU target for a screenshot or CPU-backend comparison.
     pub fn pixels(&mut self) -> Result<image::RgbaImage> {
-        self.readback()
+        let size = self.output()?.1;
+        self.readback([0, 0], size)
+    }
+    /// Read the `size` pixels at `origin` of the rendered target (the colour picker's
+    /// eyedropper samples a few pixels around the pointer), clamped to the target.
+    pub fn pixels_in(&mut self, origin: [u32; 2], size: [u32; 2]) -> Result<image::RgbaImage> {
+        let target = self.output()?.1;
+        let origin = [origin[0].min(target[0] - 1), origin[1].min(target[1] - 1)];
+        let size = [
+            size[0].clamp(1, target[0] - origin[0]),
+            size[1].clamp(1, target[1] - origin[1]),
+        ];
+        self.readback(origin, size)
     }
     fn upload_inner(&mut self, texture: TextureUpload<'_>) -> Result<()> {
         ara_gpu::cpu_scope!("UI.upload");

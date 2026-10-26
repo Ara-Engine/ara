@@ -5,6 +5,7 @@ mod chrome_verify;
 mod controller;
 mod cursors;
 mod drags;
+mod eyedropper;
 mod game;
 mod game_preview;
 mod journey;
@@ -193,6 +194,7 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
     floats.hidden = offscreen;
     let mut game = game::GameView::default();
     let mut game_preview = game_preview::Preview::default();
+    let mut eyedropper_buttons = eyedropper::Buttons::default();
     gpu.set_dpi(dpi)?;
     let mut ui_renderer = UiRenderer::default();
     crate::shell::icons::install(&mut ui_renderer, dpi)?;
@@ -626,6 +628,17 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                 dirty = true;
             }
             dirty |= shell.upload_thumbnails(&mut ui_renderer)?;
+            // The colour picker's eyedropper samples the last frame under the pointer,
+            // or the screen outside the window.
+            dirty |= eyedropper::sample(
+                &mut editor,
+                &mut shell,
+                &mut gpu,
+                &window,
+                last_dpi,
+                !options.offscreen(),
+                &mut eyedropper_buttons,
+            )?;
             let geometry_at = Instant::now();
             let mut view_ms = 0.;
             let mut stages = scene_sync::Stages::default();

@@ -8,6 +8,7 @@ mod assets;
 mod axis;
 pub(crate) mod build;
 mod chrome;
+mod color;
 pub mod commands;
 mod compound;
 mod cursors;
@@ -31,6 +32,7 @@ mod testing;
 mod titlebar;
 pub(crate) use drag::Drag;
 pub use testing::MenuRow;
+mod add_component;
 mod agents_panel;
 mod animation_panel;
 mod assets_panel;
@@ -45,7 +47,6 @@ mod import_panel;
 mod inspector_capture;
 mod inspector_fields;
 mod inspector_panel;
-mod inspector_popup;
 mod inspector_sections;
 mod live_styles;
 mod log_panels;
@@ -251,8 +252,12 @@ pub struct Shell {
     motion: motion::Motion,
     reduce_motion: bool,
     panel_opened: Option<std::time::Instant>,
-    color_picker: Option<String>,
-    inspector_popovers: ara_ui::popover::Popovers,
+    /// The open Add Component dropdown (`shell/add_component.rs`).
+    add_component: Option<add_component::AddComponent>,
+    /// The open colour picker (`shell/color`).
+    color_picker: Option<color::ColorPicker>,
+    /// The picker's slider units, kept between openings.
+    color_mode: color::Mode,
     modal_open: bool,
     canvas_modal_open: bool,
     inspector_sections: inspector_sections::Sections,
@@ -384,7 +389,10 @@ pub(crate) enum Binding {
     /// text parses, and whether empty text clears it.
     Nested(String, compound::Leaf, bool, Option<String>),
     RenameValue,
-    ColorPicker(String),
+    /// An Inspector colour swatch: its `path` (or `path#pointer`) and picker hints.
+    ColorPicker(String, color::Hints),
+    /// A control inside the colour picker.
+    Picker(color::Control),
     ComponentCollapse(String),
     NestedCollapse(String),
     Scrub(String, Option<usize>),
@@ -400,6 +408,8 @@ pub(crate) enum Binding {
     MenuBar(usize),
     MenuSub(usize, usize),
     MenuFilter,
+    /// The Add Component dropdown's search field.
+    AddComponentFilter,
     ContextMenu(commands::menus::Context, commands::Target),
     EnumMenu(String, Vec<String>),
     Setting(String),
@@ -526,8 +536,9 @@ impl Shell {
             motion: Default::default(),
             reduce_motion: false,
             panel_opened: None,
+            add_component: None,
             color_picker: None,
-            inspector_popovers: Default::default(),
+            color_mode: Default::default(),
             modal_open: false,
             canvas_modal_open: false,
             inspector_sections: inspector_sections::Sections::open(editor.host.root()),
@@ -985,7 +996,8 @@ impl Shell {
             &mut markup,
         )?;
         markup.push_str("</panel>");
-        self.inspector_colour_popup(&mut markup);
+        self.color_picker_markup(editor, &mut markup);
+        self.add_component_markup(editor, &mut markup)?;
         self.overlays(editor, &mut markup)?;
         self.asset_rename_markup(&mut markup);
         markup.push_str(POPUP_TAIL);
@@ -1038,7 +1050,8 @@ impl Shell {
         self.statusbar(editor, &mut statusbar);
         markup.push_str("<panel id='statusbar' />");
         self.parts.push(("statusbar".into(), statusbar));
-        self.inspector_colour_popup(&mut markup);
+        self.color_picker_markup(editor, &mut markup);
+        self.add_component_markup(editor, &mut markup)?;
         self.overlays(editor, &mut markup)?;
         if editor.state.palette {
             self.palette(editor, &mut markup)?;
@@ -1193,6 +1206,8 @@ impl Shell {
     /// Paint-time decorations shared by every surface. They are spliced in under the
     /// popup layer (menus, palette, dialogs, tooltips), which stays on top.
     fn paint_decorations(&mut self) {
+        // First, while `paint_starts` still index the UI's own commands.
+        self.paint_color_picker();
         let mut start = self.ui.display.commands.len();
         self.paint_swatches();
         self.paint_polish();
@@ -1216,6 +1231,8 @@ impl Shell {
         }
         // The axis triad splices its stems in under its own caps.
         self.paint_axis();
+        // The eyedropper's loupe is above everything.
+        self.paint_loupe();
     }
     /// Display-list index of the first node painted after the dock tree: the
     /// status bar, then menus, the palette, dialogs and tooltips.
@@ -1236,8 +1253,6 @@ impl Shell {
                 .set_virtual_extent(grid, [width, self.asset_grid_extent])?;
             self.ui.scroll_to(grid, [0., self.asset_offset])?;
         }
-        self.inspector_popovers
-            .sync(&mut self.ui, &mut self.input)?;
         self.paint_decorations();
         if self.field_request != editor.state.focus_field
             && self.shown_node("inspector-scroll").is_some()

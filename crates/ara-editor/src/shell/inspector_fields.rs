@@ -99,30 +99,36 @@ impl Shell {
                 out.push_str(&format!("<text id='none-{id}' class='caption fill' text='None' /><button id='{button}' class='ghost icon-button' label='Set' description='Set a value' action='Dispatch'>{}</button>",icons::icon_in(&button,"plus","icon-sm")));
             }
             Widget::Vector {
-                count, color: true, ..
+                count,
+                color: true,
+                hdr,
+                temperature,
+                ..
             } => {
                 self.bindings.insert(
                     ara_ui::source::stable_id(&format!("swatch-{id}")),
-                    Binding::ColorPicker(field.path.clone()),
+                    Binding::ColorPicker(
+                        field.path.clone(),
+                        super::color::Hints {
+                            hdr: *hdr,
+                            temperature: *temperature,
+                        },
+                    ),
                 );
                 out.push_str(&format!("<button id='swatch-{id}' class='swatch inspector-swatch' label='Pick colour' description='Open the colour picker' action='Dispatch' />"));
+                // An HDR colour shows its base colour's hex and its intensity in stops.
+                let channel = |n: usize| field.value[n].as_f64().unwrap_or(1.);
+                let (base, stops) =
+                    super::color::math::split_hdr([channel(0), channel(1), channel(2)]);
                 let hex = if field.mixed {
                     "—".to_owned()
                 } else {
                     format!(
                         "#{}",
-                        (0..3)
-                            .map(|n| format!(
-                                "{:02X}",
-                                (field.value[n]
-                                    .as_f64()
-                                    .unwrap_or(1.)
-                                    .clamp(0., 1.)
-                                    .powf(1. / 2.2)
-                                    * 255.)
-                                    .round() as u8
-                            ))
-                            .collect::<String>()
+                        super::color::math::format_hex(
+                            base.map(|c| super::color::math::linear_to_srgb(c.clamp(0., 1.))),
+                            None
+                        )
                     )
                 };
                 let widget = format!("edit-{id}");
@@ -131,6 +137,9 @@ impl Shell {
                     Binding::Field(field.path.clone(), None),
                 );
                 out.push_str(&format!("<field id='{widget}' class='mono' style='flex-grow:1;flex-basis:0px' text='{}' label='{} hex' description='sRGB hex; alpha keeps its value' action='Dispatch' />",escape(&hex),escape(&field.path)));
+                if !field.mixed && stops > 0.005 {
+                    out.push_str(&format!("<text id='stops-{id}' class='caption inspector-unit' text='{:+.1} EV' description='Intensity: the colour is its base times 2^{:.2}' />",stops,stops));
+                }
                 if *count > 3 {
                     let alpha = format!("edit-{id}-3");
                     self.bindings.insert(

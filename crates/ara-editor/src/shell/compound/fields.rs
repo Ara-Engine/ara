@@ -84,7 +84,13 @@ impl Shell {
                 let swatch = format!("nest-swatch-{rid}");
                 self.bindings.insert(
                     ara_ui::source::stable_id(&swatch),
-                    Binding::ColorPicker(target.to_owned()),
+                    Binding::ColorPicker(
+                        target.to_owned(),
+                        super::super::color::Hints {
+                            hdr: desc.is_some_and(|d| d.editor.hdr),
+                            temperature: desc.is_some_and(|d| d.editor.temperature),
+                        },
+                    ),
                 );
                 out.push_str(&format!("<button id='{swatch}' class='swatch inspector-swatch' label='Pick colour' description='Open the colour picker' action='Dispatch' />"));
                 self.nested_swatches.push((swatch, value.clone()));
@@ -272,17 +278,12 @@ impl Shell {
                     h: (r.h - 4.).max(0.),
                 },
                 radius: 3.,
-                color: ara_ui::style::Color(
-                    (channel(0).powf(1. / 2.2) * 255.) as u8,
-                    (channel(1).powf(1. / 2.2) * 255.) as u8,
-                    (channel(2).powf(1. / 2.2) * 255.) as u8,
-                    (value
-                        .get(3)
-                        .and_then(Value::as_f64)
-                        .unwrap_or(1.)
-                        .clamp(0., 1.)
-                        * 255.) as u8,
-                ),
+                color: super::super::color::math::ui_color([
+                    channel(0),
+                    channel(1),
+                    channel(2),
+                    value.get(3).and_then(Value::as_f64).unwrap_or(1.),
+                ]),
             });
             display.push(ara_ui::paint::Draw::PopClip);
         }

@@ -284,7 +284,9 @@ impl Shell {
                 } else {
                     &field.value
                 };
-                let channel = |n: usize| value[n].as_f64().unwrap_or(1.).clamp(0., 1.);
+                let channel = |n: usize| value[n].as_f64().unwrap_or(1.).max(0.);
+                // An HDR colour shows its base colour; the row shows its intensity.
+                let (base, _) = super::color::math::split_hdr([channel(0), channel(1), channel(2)]);
                 self.ui
                     .display
                     .commands
@@ -297,12 +299,7 @@ impl Shell {
                             h: (r.h - 4.).max(0.),
                         },
                         radius: 3.,
-                        color: Color(
-                            (channel(0).powf(1. / 2.2) * 255.) as u8,
-                            (channel(1).powf(1. / 2.2) * 255.) as u8,
-                            (channel(2).powf(1. / 2.2) * 255.) as u8,
-                            (channel(3) * 255.) as u8,
-                        ),
+                        color: super::color::math::ui_color([base[0], base[1], base[2], channel(3)]),
                     });
                 self.ui.display.commands.push(ara_ui::paint::Draw::PopClip);
             }

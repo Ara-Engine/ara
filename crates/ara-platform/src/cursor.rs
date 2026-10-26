@@ -30,6 +30,8 @@ pub enum SystemCursor {
     Grab,
     /// Closed hand while dragging.
     Grabbing,
+    /// Precise picking (the colour picker's eyedropper).
+    Crosshair,
 }
 
 #[derive(Default)]
@@ -56,6 +58,7 @@ impl Cursors {
                 SystemCursor::ResizeNesw => SDL_SYSTEM_CURSOR_NESW_RESIZE,
                 SystemCursor::Move => SDL_SYSTEM_CURSOR_MOVE,
                 SystemCursor::NotAllowed => SDL_SYSTEM_CURSOR_NOT_ALLOWED,
+                SystemCursor::Crosshair => SDL_SYSTEM_CURSOR_CROSSHAIR,
                 SystemCursor::Grab | SystemCursor::Grabbing => SDL_SYSTEM_CURSOR_POINTER,
             };
             // SAFETY: The owning Window retains SDL video on this thread; SDL copies bitmap data.

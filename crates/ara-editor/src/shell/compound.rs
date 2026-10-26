@@ -98,25 +98,24 @@ fn set_at(value: &mut Value, tokens: &[String], to: Value) -> Result<(), String>
     };
     set_at(child, rest, to)
 }
-/// `#RRGGBB` (sRGB) as linear channels, rounded for stable documents.
+/// `#RRGGBB` or `#RGB` (sRGB) as linear channels, rounded for stable documents; any
+/// alpha digits are ignored (the field keeps its alpha).
 pub(super) fn hex_linear(text: &str) -> Result<[f64; 3], String> {
-    let hex = text.trim().trim_start_matches('#');
-    if hex.len() != 6 || !hex.is_ascii() {
-        return Err("Enter a colour as #RRGGBB".into());
-    }
-    let channel = |n: usize| -> Result<f64, String> {
-        let byte = u8::from_str_radix(&hex[n * 2..n * 2 + 2], 16)
-            .map_err(|_| "Enter a colour as #RRGGBB".to_owned())?;
-        Ok(((byte as f64 / 255.).powf(2.2) * 10000.).round() / 10000.)
-    };
-    Ok([channel(0)?, channel(1)?, channel(2)?])
+    let (rgb, _) = super::color::math::parse_hex(text)
+        .ok_or_else(|| "Enter a colour as #RRGGBB".to_owned())?;
+    Ok(rgb.map(|c| super::color::math::stable(super::color::math::srgb_to_linear(c))))
 }
 /// Linear channels as `#RRGGBB` sRGB.
 pub(super) fn linear_hex(value: &Value) -> String {
-    let channel = |n: usize| {
-        (value[n].as_f64().unwrap_or(1.).clamp(0., 1.).powf(1. / 2.2) * 255.).round() as u8
-    };
-    format!("#{:02X}{:02X}{:02X}", channel(0), channel(1), channel(2))
+    let channel = |n: usize| value[n].as_f64().unwrap_or(1.);
+    let rgb = [channel(0), channel(1), channel(2)];
+    format!(
+        "#{}",
+        super::color::math::format_hex(
+            rgb.map(|c| super::color::math::linear_to_srgb(c.clamp(0., 1.))),
+            None
+        )
+    )
 }
 /// Applies one typed draft at `pointer` inside a field's whole value.
 fn apply_draft(whole: &mut Value, pointer: &str, code: &str, text: &str) -> Result<(), String> {

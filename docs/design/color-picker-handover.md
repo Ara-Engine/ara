@@ -1,43 +1,37 @@
-# Colour picker: handover notes (no code yet)
+# Colour picker: design
 
-Branch `t3/ara-color-picker` merges inspector handover `4b953ca6` (popover primitive `dd5a617c`
-included). No picker code was written; these are the findings and the design.
+Code: `crates/ara-editor/src/shell/color/` (`mod.rs` state and gestures, `markup.rs`,
+`paint.rs`, `eyedropper.rs`, `math.rs`), `crates/ara-editor/src/app/eyedropper.rs`
+(frame readback and Windows screen sampling), `Draw::Fill` in `ara-ui`.
 
-## Seams found
-- Placeholder: `crates/ara-editor/src/shell/inspector_popup.rs` (`Shell::color_picker: Option<String>`,
-  `Binding::ColorPicker(path)`, anchors `swatch-…`/`nest-swatch-…`, `inspector_popovers`,
-  `inspector_popup_contains`, `dismiss_inspector_colour`). Mounted from `shell/mod.rs`
-  `rebuild_main`/`rebuild_float`; routed in `app/controller.rs` (~L462, L515) and `shell/input.rs` L39;
-  Escape in `shell/keyboard.rs` (~L156).
-- Gesture pattern to copy: `shell/scrub.rs` (preview via a `@scrub|path` draft marker so SceneSync
-  re-previews; `draft_records` in `input.rs` projects it; release commits one `editor.apply`;
-  `editor.field_gesture`/`end_field_gestures` bracket it). The picker needs an `@picker|path` marker,
-  skipped in `commit_fields` like `@scrub|`, and a branch in `draft_records`.
-- Paint: `Shell::paint_decorations` splices all decorations *under* `popup_start` (before the
-  statusbar), i.e. under the popover. Picker draws must be spliced at the paint start of the first
-  node after the popover subtree (`ui.paint_order`/`paint_starts`), shifted by the commands the
-  earlier splices added, inside a clip of the popover rect.
-- `Popovers::sync` focuses the popover's first field on open (the hex field).
+## What it offers
+Hue ring around a saturation/value square; RGB (0–255), HSV (degrees, percent) and
+Linear (0–1) channel sliders with typed fields; sRGB and linear hex; alpha over a
+checkerboard; New/Old swatches (Old restores); an eyedropper; project swatches
+(`color.swatches`, project settings) and recent colours (`color.recent`, user
+settings). Schema hints add sections: `editor(hdr)` an intensity in stops (−10…+10)
+with −2…+2 exposure buttons, `editor(temperature)` a 1000–15000 K slider and presets.
 
-## Rendering design (not started)
-- Add `Draw::Fill { node, rect, radius, fill: Fill }` in `ara-ui/src/paint.rs` with
-  `Fill::Linear { from, to, vertical, linear_light }`, `Fill::Hue { ring: Option<thickness>, s, v }`,
-  `Fill::Checker { cell, light, dark }`.
-- New `Pipeline` modes 9/10/11 in `ara-ui-render/src/gpu.rs` (`prepare`), CPU reference in
-  `reference.rs`, `ara-ui-render/shaders/ui.slang` and `ara-editor-gpu/shaders/ui.slang`
-  (re-cook `.spv` with `compile.ps1`). `ara-editor-gpu` passes `batch.pipeline as u32` as the mode.
-  Update the exhaustive matches in `ara-ui-test/src/geometry.rs`.
-- SV square = horizontal white→hue gradient plus vertical transparent→black overlay (exact
-  V·lerp(1,hue,S) in sRGB display space). Ring = analytic AA annulus, hue by angle.
-  Linear-mode tracks interpolate in linear and encode sRGB per pixel (`linear_light`).
+## Colour maths
+Documents store linear RGB(A). The picker edits display-space HSV of a base colour
+(brightest channel ≤ 1) and stores `base · 2^stops`; sRGB conversions use the exact
+piecewise curve everywhere (hex, swatches, the Inspector), never gamma 2.2.
+Kelvin uses Krystek's Planckian-locus fit, through XYZ to linear Rec. 709.
 
-## Schema (inspector agent owns)
-Agreed with "UX: inspector fields": `EditorHints.hdr` and `EditorHints.temperature` (serde default
-false), exposed as `inspector::Field.hdr`/`.temperature`. Annotate `MeshRenderer.emissive`,
-`emissiveFactor`, `Light.color` (hdr) and `Light.color` (temperature). Snapshot gate:
-`cargo test -p ara --test cli`.
+## Rendering
+`Draw::Fill` (`Fill::Linear`, `Fill::Hue`, `Fill::Checker`) is drawn analytically by
+the UI shaders (pipeline mode 9) and the CPU reference. The SV square is a horizontal
+white→hue gradient under a vertical transparent→black one, exact in sRGB space on the
+UNORM UI target. Each painted part's draws are spliced right after its own box, so
+labels and later popovers stay above; the eyedropper loupe is appended last.
 
-## Interaction decisions
-One undoable transaction per drag gesture; Escape applies a revert-to-Old transaction (only if
-changed) and closes; Enter or click-outside commits. Pinned mode = `at='x,y'` popover, draggable
-title strip, exempt from click-outside, editing the entity IDs captured when it opened.
+## Interaction
+Drags preview through an `@picker|target` draft marker (the Scene previews it like a
+scrub) and apply one transaction on release; typed values, swatches, presets and
+exposure steps apply one each. Escape cancels the eyedropper or a drag, else restores
+the colour the picker opened with (one transaction) and closes. Enter or a click
+outside keeps the colour and records it as recent. Pinned, the picker is an
+`at='x,y'` popover moved by its title, ignores clicks outside and keeps editing the
+entities it opened on. The eyedropper samples the editor's last frame around the
+pointer (an 11×11 loupe); outside the window on Windows it samples the screen with
+GDI and takes the global click. Offscreen runs never sample the desktop.

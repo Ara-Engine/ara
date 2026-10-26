@@ -2046,10 +2046,7 @@ fn build() -> Vec<Spec> {
             let entities = t.entities(&e.state);
             s.create_script(e,t,"behaviour",entities)
         }).when(has_entity),
-        cmd("component.add", "Add Component…", "plus", "", "Search components to add.", |s, e, _| {
-            s.palette_command = Some("@components".into());
-            act(e, "editor.palette", json!({"open": true}))
-        }).when(has_entity),
+        cmd("component.add", "Add Component…", "plus", "", "Search components to add, or create a script.", |s, e, _| s.toggle_add_component(e)).when(has_entity),
         cmd("graph.delete", "Delete Nodes", "trash", "Del", "Delete the selected graph nodes.", |s, e, t| s.delete_graph_nodes(e, t)).when(graph_open),
         cmd("graph.frame", "Frame Graph", "focus", "", "Fit the graph in the canvas.", |s, e, _| s.frame_graph(e)).when(graph_open),
         cmd("graph.add", "Add Node…", "plus", "Space", "Search nodes to add at the pointer.", |_, e, _| act(e, "editor.canvas", json!({"add": true}))).when(graph_open),

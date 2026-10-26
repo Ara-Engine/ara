@@ -365,29 +365,169 @@ fn header_enable_is_a_reflected_field_edit_and_optional_assets_use_override_rows
     assert!(shell.ui.find("override-Brain-behavior").is_some());
 }
 
+/// The text of the node `id`.
+fn text(shell: &Shell, id: &str) -> String {
+    let i = shell.ui.find(id).unwrap_or_else(|| panic!("no {id}"));
+    shell.ui.nodes[i].text.as_ref().map(|t| t.value.clone()).unwrap_or_default()
+}
+/// A stored colour's channels as numbers (documents may write `1` or `1.0`).
+fn channels(value: Value) -> Vec<f64> {
+    value
+        .as_array()
+        .unwrap_or_else(|| panic!("not a colour: {value}"))
+        .iter()
+        .map(|c| c.as_f64().unwrap())
+        .collect()
+}
+fn history(editor: &Editor) -> usize {
+    editor.host.store().history().len()
+}
+fn picker_shown(shell: &Shell) -> bool {
+    shell.ui.find("color-picker").is_some_and(|i| shell.ui.shown(i))
+}
+
 #[test]
-fn colour_swatch_opens_an_anchored_editor_with_typed_values_and_clickaway() {
+fn the_colour_picker_previews_drags_applies_each_gesture_once_and_escape_restores() {
     let project = Project::new();
     let (mut editor, mut shell) = project.open();
     press(&mut shell, &mut editor, "swatch-MeshRenderer-color");
-    let popup = shell.ui.find("inspector-colour-popup").unwrap();
-    let rect = shell.ui.nodes[popup].rect;
+    let rect = shell.ui.nodes[shell.ui.find("color-picker").unwrap()].rect;
     assert!(rect.w > 0. && rect.h > 0. && rect.x >= 0. && rect.y >= 0.);
     assert!(rect.x + rect.w <= shell.ui.size[0] + 0.5 && rect.y + rect.h <= shell.ui.size[1] + 0.5);
-    let before = editor.host.store().history().len();
-    type_into(&mut shell, &mut editor, "inspector-colour-hex", "#FF0000");
-    let color = authored(&editor, "e_crate001", "MeshRenderer", "color");
-    assert_eq!(color[0].as_f64(), Some(1.));
-    assert_eq!(color[1].as_f64(), Some(0.));
-    assert_eq!(color[3].as_f64(), Some(1.));
-    assert_eq!(editor.host.store().history().len(), before + 1);
-    press(&mut shell, &mut editor, "entity-name");
-    assert!(
-        shell
-            .ui
-            .find("inspector-colour-popup")
-            .is_none_or(|index| !shell.ui.shown(index))
+    // Typed hex is exact sRGB and one transaction.
+    let before = history(&editor);
+    type_into(&mut shell, &mut editor, "cp-hex", "#FF0000");
+    assert_eq!(
+        channels(authored(&editor, "e_crate001", "MeshRenderer", "color")),
+        vec![1.0, 0.0, 0.0, 1.0]
     );
+    assert_eq!(history(&editor), before + 1);
+    type_into(&mut shell, &mut editor, "cp-hex", "#808080");
+    // Exact sRGB, not gamma 2.2 (0.2158, not 0.2176).
+    assert_eq!(
+        authored(&editor, "e_crate001", "MeshRenderer", "color")[0].as_f64(),
+        Some(0.21586)
+    );
+    // Dragging around the ring previews without authoring and applies once, on release.
+    type_into(&mut shell, &mut editor, "cp-hex", "#FF0000");
+    let before = history(&editor);
+    let wheel = shell.ui.nodes[shell.ui.find("cp-wheel").unwrap()].rect;
+    let (cx, cy, radius) = (wheel.x + wheel.w / 2., wheel.y + wheel.h / 2., wheel.w / 2. - 8.);
+    shell.pointer = [cx + radius, cy];
+    assert!(shell.begin_picker_drag(&mut editor).unwrap());
+    for angle in [0.5f32, 1.5, std::f32::consts::PI] {
+        shell.pointer = [cx + radius * angle.cos(), cy - radius * angle.sin()];
+        assert!(shell.move_picker().unwrap());
+        assert_eq!(history(&editor), before);
+    }
+    assert!(shell.finish_picker(&mut editor).unwrap());
+    assert_eq!(history(&editor), before + 1);
+    let cyan = authored(&editor, "e_crate001", "MeshRenderer", "color");
+    assert!(
+        cyan[0].as_f64().unwrap() < 0.01 && cyan[1].as_f64().unwrap() > 0.99,
+        "{cyan}"
+    );
+    // Escape restores the colour it opened with (white), as one more transaction.
+    assert!(shell.picker_escape(&mut editor).unwrap());
+    shell.rebuild(&mut editor).unwrap();
+    assert!(!picker_shown(&shell));
+    assert_eq!(
+        channels(authored(&editor, "e_crate001", "MeshRenderer", "color")),
+        vec![1.0, 1.0, 1.0, 1.0]
+    );
+    assert_eq!(history(&editor), before + 2);
+    assert_eq!(text(&shell, "edit-MeshRenderer-color"), "#FFFFFF");
+}
+
+#[test]
+fn the_colour_picker_closes_on_click_away_unless_pinned_and_keeps_swatches() {
+    let project = Project::new();
+    let (mut editor, mut shell) = project.open();
+    press(&mut shell, &mut editor, "swatch-MeshRenderer-color");
+    type_into(&mut shell, &mut editor, "cp-hex", "#3366CC");
+    // Saving a swatch writes the project's colour list; Recent fills when it closes.
+    press(&mut shell, &mut editor, "cp-add-swatch");
+    assert_eq!(editor.state.settings["color.swatches"].as_array().unwrap().len(), 1);
+    let away = centre(&shell, "entity-name");
+    assert!(shell.dismiss_popovers(&mut editor, away).unwrap());
+    assert!(!picker_shown(&shell));
+    assert_eq!(editor.state.settings["color.recent"].as_array().unwrap().len(), 1);
+    // A swatch applies in one transaction.
+    press(&mut shell, &mut editor, "swatch-MeshRenderer-color");
+    type_into(&mut shell, &mut editor, "cp-hex", "#000000");
+    let before = history(&editor);
+    press(&mut shell, &mut editor, "cp-swatch-0");
+    assert_eq!(history(&editor), before + 1);
+    assert_eq!(text(&shell, "cp-hex"), "3366CC");
+    // Pinned, it stays open through clicks outside it.
+    press(&mut shell, &mut editor, "cp-pin");
+    assert!(!shell.dismiss_popovers(&mut editor, away).unwrap());
+    assert!(picker_shown(&shell));
+}
+
+#[test]
+fn hdr_colours_edit_a_base_colour_and_an_intensity_in_stops() {
+    let project = Project::new();
+    let (mut editor, mut shell) = project.open();
+    press(&mut shell, &mut editor, "swatch-MeshRenderer-emissive");
+    assert!(shell.ui.find("cp-stops-track").is_some());
+    assert!(shell.ui.find("cp-kelvin-track").is_none());
+    type_into(&mut shell, &mut editor, "cp-hex", "#FF0000");
+    type_into(&mut shell, &mut editor, "cp-stops", "2");
+    assert_eq!(
+        channels(authored(&editor, "e_crate001", "MeshRenderer", "emissive")),
+        vec![4.0, 0.0, 0.0]
+    );
+    press(&mut shell, &mut editor, "cp-exposure-3");
+    assert_eq!(
+        channels(authored(&editor, "e_crate001", "MeshRenderer", "emissive")),
+        vec![8.0, 0.0, 0.0]
+    );
+    // The Inspector shows the base colour's hex and the intensity; typed hex keeps it.
+    shell.close_color_picker(&mut editor, false).unwrap();
+    shell.rebuild(&mut editor).unwrap();
+    assert_eq!(text(&shell, "edit-MeshRenderer-emissive"), "#FF0000");
+    assert_eq!(text(&shell, "stops-MeshRenderer-emissive"), "+3.0 EV");
+    type_into(&mut shell, &mut editor, "edit-MeshRenderer-emissive", "#00FF00");
+    assert_eq!(
+        channels(authored(&editor, "e_crate001", "MeshRenderer", "emissive")),
+        vec![0.0, 8.0, 0.0]
+    );
+}
+
+/// The Add Component row labelled `name`, when the dropdown shows it.
+fn add_row(shell: &Shell, name: &str) -> Option<String> {
+    shell
+        .ui
+        .nodes
+        .iter()
+        .find(|n| {
+            n.element.id.starts_with("add-component-")
+                && n.element.id.ends_with("-label")
+                && n.text.as_ref().is_some_and(|t| t.value == name)
+        })
+        .map(|n| n.element.id.trim_end_matches("-label").to_owned())
+}
+
+#[test]
+fn add_component_is_a_searchable_dropdown_that_adds_in_one_step() {
+    let project = Project::new();
+    let (mut editor, mut shell) = project.open();
+    press(&mut shell, &mut editor, "add-component");
+    let pop = shell.ui.find("add-component-pop").unwrap();
+    assert!(shell.ui.shown(pop));
+    // Components the selection already has are not offered; New Script is.
+    assert!(add_row(&shell, "MeshRenderer").is_none());
+    assert!(add_row(&shell, "New Script…").is_some());
+    type_into(&mut shell, &mut editor, "add-component-filter", "ligh");
+    let row = add_row(&shell, "Light").expect("Light matches the search");
+    assert!(add_row(&shell, "Camera").is_none());
+    let before = history(&editor);
+    press(&mut shell, &mut editor, &row);
+    assert_eq!(history(&editor), before + 1);
+    let resolved = ara_editor::world::resolve(editor.host.store(), &editor.state.doc).unwrap();
+    assert!(resolved["e_crate001"].record.contains_key("Light"));
+    assert!(shell.ui.find("add-component-pop").is_none_or(|i| !shell.ui.shown(i)));
 }
 
 /// Until the asset pipeline first reports, a project with imports says they are being

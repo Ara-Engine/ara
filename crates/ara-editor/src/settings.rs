@@ -42,6 +42,12 @@ pub enum Kind {
     Text,
     /// A string map edited on its own page (keyboard shortcuts).
     Map,
+    /// Up to `max` linear RGBA colours (`[[r, g, b, a], ...]`), edited from the colour
+    /// picker; Settings shows them and resets them.
+    Colors {
+        /// Longest list kept.
+        max: usize,
+    },
 }
 /// A default value, written as a literal in the table.
 #[derive(Clone, Copy, Debug)]
@@ -54,6 +60,8 @@ pub enum Lit {
     N(f64),
     /// Empty object.
     Empty,
+    /// Empty list.
+    None,
 }
 impl Lit {
     fn value(self) -> Value {
@@ -62,6 +70,7 @@ impl Lit {
             Self::S(v) => json!(v),
             Self::N(v) => json!(v),
             Self::Empty => json!({}),
+            Self::None => json!([]),
         }
     }
 }
@@ -112,6 +121,10 @@ pub const QUALITY_OVERRIDES: &[(&str, &str)] = &[
     ("high", "High"),
     ("epic", "Epic"),
 ];
+/// The most project colour swatches `color.swatches` keeps.
+pub const COLOR_SWATCHES: usize = 48;
+/// The most recent colours `color.recent` keeps.
+pub const RECENT_COLORS: usize = 12;
 /// Every setting, grouped by category in display order.
 pub const DEFS: &[Def] = &[
     def(
@@ -241,6 +254,24 @@ pub const DEFS: &[Def] = &[
         "Per-command bindings that replace the preset's.",
         Kind::Map,
         Lit::Empty,
+    ),
+    def(
+        "color.swatches",
+        Project,
+        "Colours",
+        "Colour swatches",
+        "The project's saved colours, shared by everyone. Add them from the colour picker.",
+        Kind::Colors { max: COLOR_SWATCHES },
+        Lit::None,
+    ),
+    def(
+        "color.recent",
+        User,
+        "Colours",
+        "Recent colours",
+        "Colours you picked lately, newest first, across projects.",
+        Kind::Colors { max: RECENT_COLORS },
+        Lit::None,
     ),
     def(
         "performance.frameCap",
@@ -685,6 +716,24 @@ pub fn valid(d: &Def, value: &Value) -> Result<(), String> {
         {
             Ok(())
         }
+        Kind::Colors { max } => match value.as_array() {
+            Some(list)
+                if list.len() <= max
+                    && list.iter().all(|c| {
+                        c.as_array().is_some_and(|c| {
+                            matches!(c.len(), 3 | 4)
+                                && c.iter()
+                                    .all(|v| v.as_f64().is_some_and(|v| v.is_finite() && v >= 0.))
+                        })
+                    }) =>
+            {
+                Ok(())
+            }
+            _ => Err(format!(
+                "{} must be at most {max} linear colours, each [r, g, b] or [r, g, b, a] from 0",
+                d.label
+            )),
+        },
         Kind::Choice(options) => Err(format!(
             "{} must be one of {}",
             d.label,

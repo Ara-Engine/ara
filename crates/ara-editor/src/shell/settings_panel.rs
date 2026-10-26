@@ -161,6 +161,27 @@ impl Shell {
                 );
                 out.push_str(&format!("<field id='set-{id}' class='number' style='width:120px' text='{}' label='{}' description='Enter to apply' action='Dispatch' /><text id='set-{id}-unit' class='caption' text='{}' />",escape(&panels::display(&value)),escape(d.label),escape(unit)));
             }
+            Kind::Colors { .. } => {
+                // Saved from the colour picker; shown here, cleared with reset.
+                let colors = value.as_array().cloned().unwrap_or_default();
+                out.push_str(&format!("<panel id='set-{id}' class='row' style='gap:3px'>"));
+                if colors.is_empty() {
+                    out.push_str(&format!(
+                        "<text id='set-{id}-none' class='caption' text='None yet: save colours from the colour picker' />"
+                    ));
+                }
+                for (n, color) in colors.iter().enumerate() {
+                    let channel = |i: usize| color.get(i).and_then(Value::as_f64).unwrap_or(1.);
+                    let rgb = [channel(0), channel(1), channel(2)]
+                        .map(|c| super::color::math::linear_to_srgb(c.clamp(0., 1.)));
+                    out.push_str(&format!(
+                        "<panel id='set-{id}-{n}' class='swatch' style='width:18px;background:#{}' description='#{}' />",
+                        super::color::math::format_hex(rgb, None),
+                        super::color::math::format_hex(rgb, None)
+                    ));
+                }
+                out.push_str("</panel>");
+            }
             Kind::Text | Kind::Map => {
                 self.bindings.insert(
                     ara_ui::source::stable_id(&format!("set-{id}")),
@@ -321,5 +342,6 @@ fn default_of(d: &Def) -> Value {
         crate::settings::Lit::S(v) => json!(v),
         crate::settings::Lit::N(v) => json!(v),
         crate::settings::Lit::Empty => json!({}),
+        crate::settings::Lit::None => json!([]),
     }
 }

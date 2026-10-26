@@ -44,6 +44,12 @@ pub enum Widget {
         /// Channels are addressed `r g b a` (a `color` value), not `x y z w`.
         #[serde(skip_serializing)]
         rgba: bool,
+        /// The colour may exceed 1: the picker edits a base colour and an intensity.
+        #[serde(skip_serializing_if = "std::ops::Not::not")]
+        hdr: bool,
+        /// A light colour: the picker offers a Kelvin slider and presets.
+        #[serde(skip_serializing_if = "std::ops::Not::not")]
+        temperature: bool,
     },
     /// Boolean checkbox.
     Bool,
@@ -363,6 +369,8 @@ pub fn widget(db: &SchemaDb, desc: &FieldDesc) -> Widget {
             count,
             color: *ty == ValueType::Color || desc.editor.color,
             rgba: *ty == ValueType::Color,
+            hdr: desc.editor.hdr,
+            temperature: desc.editor.temperature,
         };
     }
     if compound(db, ty) {

@@ -311,7 +311,7 @@ impl Controller {
             Event::MouseMotion { position, delta } => {
                 shell.pointer = position;
                 editor.input_active();
-                if shell.move_scrub()? {
+                if shell.move_picker()? || shell.move_scrub()? {
                     return Ok((true, false, false));
                 }
                 let inside = shell
@@ -375,6 +375,23 @@ impl Controller {
                     self.buttons[button as usize] = pressed;
                 }
                 editor.input_active();
+                // The colour picker's eyedropper owns clicks while it picks: a left
+                // click (or releasing a drag from its button) picks, a right click cancels.
+                if shell.eyedropper_active() {
+                    match (button, pressed) {
+                        (1, true) if !shell.eyedropper_held() => shell.pick_eyedropper(editor)?,
+                        (1, false) => {
+                            shell.finish_picker(editor)?;
+                            shell.event(InputEvent::Cancel, clipboard)?;
+                        }
+                        (3, true) => {
+                            shell.cancel_eyedropper();
+                            shell.rebuild(editor)?;
+                        }
+                        _ => {}
+                    }
+                    return Ok((true, true, false));
+                }
                 if pressed
                     && shell
                         .viewport()
@@ -454,20 +471,19 @@ impl Controller {
                             .hit_test(shell.pointer[0], shell.pointer[1])
                             .is_none()
                         && !editor.state.palette
-                        && !shell.inspector_popup_contains(shell.pointer)
                         && shell.menu.is_none();
                     if pressed && !shell.modifiers[2] {
                         if !inside {
                             shell.commit_fields(editor)?;
                             shell.event(InputEvent::PointerDown(shell.pointer), clipboard)?;
                             if !shell.input.scrolling()
+                                && !shell.begin_picker_drag(editor)?
                                 && !shell.begin_scrub(editor)?
                                 && !shell.begin_column_drag()
                             {
                                 shell.begin_drag();
                             }
                         } else {
-                            shell.dismiss_inspector_colour(shell.pointer)?;
                             shell.commit_fields(editor)?;
                             shell.input.blur(&mut shell.ui);
                             let rect = shell.viewport().ok_or("viewport missing")?;
@@ -510,7 +526,7 @@ impl Controller {
                             }
                         }
                     } else if !pressed {
-                        if shell.finish_scrub(editor, false)? {
+                        if shell.finish_picker(editor)? || shell.finish_scrub(editor, false)? {
                             shell.event(InputEvent::Cancel, clipboard)?;
                         } else if self.gizmo.take().is_some() {
                             editor.finish_gesture(false)?;

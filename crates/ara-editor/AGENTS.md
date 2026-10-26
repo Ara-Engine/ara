@@ -97,9 +97,9 @@ Floating windows: `DockLayout` floating roots map to owned OS windows
 `enter/leave`, and renders through `NativeUi::select_target`. Rects persist in
 the layout and off-screen windows are recovered at startup. Tab drags cross
 windows through the global mouse; Esc cancels.
-Paint-time decorations (swatches, row icons, graph, drop preview) go through
-`Shell::paint_decorations`, which splices them under the popup layer; never append
-draws after it. Icon tint classes must stay after `.icon` in editor.css.
+Paint-time decorations (swatches, row icons, graph, drop preview) go through `Shell::paint_decorations`, which splices them under the popup layer;
+the colour picker (`shell/color`) splices each painted part right after its own box, and only the eyedropper loupe appends last.
+Icon tint classes must stay after `.icon` in editor.css.
 Density: compact by default (`editor-comfortable.css` adds the other density),
 22 px tree rows, 24 px property rows. CSS colors come from theme tokens; labels use
 `color:inherit` and icons `tint` so state colors reach them.

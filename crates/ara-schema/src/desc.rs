@@ -394,6 +394,13 @@ pub struct EditorHints {
     /// Edit a `vec3`/`vec4` of linear RGB(A) with a colour swatch and picker.
     #[serde(default, skip_serializing_if = "is_default")]
     pub color: bool,
+    /// A colour that may exceed 1 (emission): the picker edits a base colour plus an
+    /// intensity in stops.
+    #[serde(default, skip_serializing_if = "is_default")]
+    pub hdr: bool,
+    /// A light colour: the picker offers a colour temperature (Kelvin) slider and presets.
+    #[serde(default, skip_serializing_if = "is_default")]
+    pub temperature: bool,
     /// Show the field only while a sibling field matches ([`ShowIf`]).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub show_if: Option<ShowIf>,

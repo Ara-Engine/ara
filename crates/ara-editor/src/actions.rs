@@ -350,6 +350,7 @@ impl EditorService {
                         Kind::Number { min, max, step, unit } => ("number", Value::Null, json!({"min": min, "max": max, "step": step, "unit": unit})),
                         Kind::Text => ("text", Value::Null, Value::Null),
                         Kind::Map => ("map", Value::Null, Value::Null),
+                        Kind::Colors { max } => ("colors", Value::Null, json!({"max": max})),
                     };
                     json!({"key": d.key, "scope": d.scope, "category": d.category, "label": d.label, "description": d.description, "control": control, "options": options, "range": range, "value": self.settings.value(d.key), "modified": self.settings.modified(d.key)})
                 })

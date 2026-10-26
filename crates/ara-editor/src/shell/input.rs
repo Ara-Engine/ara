@@ -42,13 +42,6 @@ impl Shell {
         event: InputEvent,
         clipboard: &mut dyn Clipboard,
     ) -> ara_ui::Result<()> {
-        if let InputEvent::PointerDown(point) = &event
-            && self.dismiss_inspector_colour(*point)?
-        {
-            return self
-                .input
-                .event(&mut self.ui, InputEvent::Cancel, clipboard);
-        }
         self.input.event(&mut self.ui, event, clipboard)?;
         self.sync_scroll_views()
     }
@@ -169,6 +162,7 @@ impl Shell {
                         let close_palette = editor.state.palette;
                         self.remember(id);
                         self.menu = None;
+                        self.add_component = None;
                         self.mnemonics = false;
                         if close_palette {
                             editor.action("editor.palette", json!({"open":false}))?;
@@ -204,6 +198,13 @@ impl Shell {
                             menu.open.truncate(*level);
                             menu.open.push(*row);
                             menu.active = None;
+                        }
+                        rebuild = true;
+                    }
+                    Binding::AddComponentFilter => {
+                        if let Some(add) = &mut self.add_component {
+                            add.query = action.value.as_str().unwrap_or("").into();
+                            add.active = 0;
                         }
                         rebuild = true;
                     }
@@ -319,13 +320,12 @@ impl Shell {
                     }
                     Binding::Scrub(_, _) => {}
                     Binding::NestedScrub { .. } => {}
-                    Binding::ColorPicker(path) => {
-                        self.color_picker = if self.color_picker.as_ref() == Some(path) {
-                            None
-                        } else {
-                            Some(path.clone())
-                        };
+                    Binding::ColorPicker(target, hints) => {
+                        self.toggle_color_picker(editor, target, *hints)?;
                         rebuild = true;
+                    }
+                    Binding::Picker(control) => {
+                        rebuild |= self.picker_control(editor, *control, &action.value)?;
                     }
                     Binding::Diagnostic(diagnostic) => {
                         if let Some(record) = &diagnostic.location.record {
@@ -355,6 +355,7 @@ impl Shell {
                     Binding::Content(commands, why) => {
                         editor.apply(commands.clone(), why, None)?;
                         self.menu = None;
+                        self.add_component = None;
                         if editor.state.palette {
                             editor.action("editor.palette", json!({"open":false}))?;
                         }
@@ -619,6 +620,11 @@ impl Shell {
     }
     /// Commit pending inspector text and slider values as one transaction.
     pub fn commit_fields(&mut self, editor: &mut Editor) -> ara_ui::Result<bool> {
+        if self.commit_picker_text(editor)? && self.drafts.keys().all(|k| k.starts_with("@picker|"))
+        {
+            self.rebuild(editor)?;
+            return Ok(true);
+        }
         if self.commit_asset_rename(editor)? {
             self.rebuild(editor)?;
             return Ok(true);
@@ -743,7 +749,7 @@ impl Shell {
             return Ok(false);
         }
         for (key, text) in &self.drafts {
-            if key.starts_with("@scrub|") {
+            if key.starts_with("@scrub|") || key.starts_with("@picker|") {
                 continue;
             }
             if key == "@name" {
@@ -785,10 +791,15 @@ impl Shell {
                 &edit.value,
             ));
         }
-        let result = editor.apply(commands, "Edit inspector values", None);
+        let result = if commands.is_empty() {
+            Ok(Value::Null)
+        } else {
+            editor.apply(commands, "Edit inspector values", None)
+        };
         editor.end_field_gestures()?;
         result?;
-        self.drafts.clear();
+        // A picker gesture's preview marker outlives a commit around it.
+        self.drafts.retain(|key, _| key.starts_with("@picker|"));
         self.rename = false;
         self.rebuild(editor)?;
         Ok(true)
@@ -806,11 +817,15 @@ impl Shell {
                 field.widget,
                 crate::inspector::Widget::Vector { color: true, .. }
             ) {
-            // `#RRGGBB` sRGB hex becomes linear channels; alpha keeps its value.
-            let mut rgb: Vec<Value> = compound::hex_linear(text)?
-                .into_iter()
-                .map(|v| json!(v))
-                .collect();
+            // `#RRGGBB` sRGB hex becomes linear channels; alpha keeps its value, and an
+            // HDR colour its intensity (the hex is its base colour).
+            let mut linear = compound::hex_linear(text)?;
+            if let crate::inspector::Widget::Vector { hdr: true, .. } = field.widget {
+                let channel = |n: usize| field.value.get(n).and_then(Value::as_f64).unwrap_or(0.);
+                let (_, stops) = super::color::math::split_hdr([channel(0), channel(1), channel(2)]);
+                linear = linear.map(|c| super::color::math::stable(c * stops.exp2()));
+            }
+            let mut rgb: Vec<Value> = linear.into_iter().map(|v| json!(v)).collect();
             // A `color` keeps its alpha; a colour-hinted vec3 has none.
             if let crate::inspector::Widget::Vector { count: 4, .. } = field.widget {
                 rgb.push(field.value.get(3).cloned().unwrap_or(json!(1.)));
@@ -839,7 +854,12 @@ impl Shell {
         } else {
             Some(axis.parse()?)
         };
-        Ok(DraftEdit { field, axis, value })
+        Ok(DraftEdit {
+            field,
+            axis,
+            value,
+            keeps_alpha: true,
+        })
     }
 
     /// The selected entities' records with the typed Inspector drafts applied, for a
@@ -868,11 +888,32 @@ impl Shell {
                     field,
                     axis: scrub.axis,
                     value,
+                    keeps_alpha: true,
                 };
                 if let Some(base) = view.entities().get(entity)
                     && let Some(record) = edit.applied(base.record.clone())
                 {
                     records.insert(entity.to_owned(), record);
+                }
+            }
+        }
+        // The colour picker previews its whole value on the entities it edits.
+        if let Some((field, value, entities)) = self
+            .color_picker
+            .as_ref()
+            .and_then(|picker| picker.preview(&self.drafts))
+        {
+            let edit = DraftEdit {
+                field,
+                axis: None,
+                value,
+                keeps_alpha: false,
+            };
+            for entity in entities {
+                if let Some(base) = view.entities().get(entity)
+                    && let Some(record) = edit.applied(base.record.clone())
+                {
+                    records.insert(entity.clone(), record);
                 }
             }
         }
@@ -902,6 +943,9 @@ struct DraftEdit<'a> {
     field: &'a crate::inspector::Field,
     axis: Option<usize>,
     value: Value,
+    /// A whole colour keeps the record's alpha (typed hex has none); the picker's
+    /// value carries its own.
+    keeps_alpha: bool,
 }
 impl DraftEdit<'_> {
     /// The `property.set` path: `Transform.position.x`, `MeshRenderer.color.r`.
@@ -936,14 +980,15 @@ impl DraftEdit<'_> {
         }
         let object = at.as_object_mut()?;
         match self.axis {
-            None if matches!(
-                self.field.widget,
-                crate::inspector::Widget::Vector {
-                    color: true,
-                    count: 4,
-                    ..
-                }
-            ) =>
+            None if self.keeps_alpha
+                && matches!(
+                    self.field.widget,
+                    crate::inspector::Widget::Vector {
+                        color: true,
+                        count: 4,
+                        ..
+                    }
+                ) =>
             {
                 let mut value = self.value.clone();
                 value[3] = object

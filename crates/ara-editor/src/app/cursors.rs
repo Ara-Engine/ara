@@ -41,6 +41,9 @@ pub(super) fn update(
     Ok(())
 }
 fn resolve(shell: &Shell, gizmo: &overlay::GizmoState) -> SystemCursor {
+    if shell.eyedropper_active() {
+        return SystemCursor::Crosshair;
+    }
     if shell.tab_dragging() {
         return SystemCursor::Grabbing;
     }

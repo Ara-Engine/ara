@@ -261,6 +261,8 @@ const ASSETS: &[(&str, &str)] = &[
         include_str!("../../assets/icons/person-standing.svg"),
     ),
     ("pill", include_str!("../../assets/icons/pill.svg")),
+    ("pin", include_str!("../../assets/icons/pin.svg")),
+    ("pipette", include_str!("../../assets/icons/pipette.svg")),
     ("play", include_str!("../../assets/icons/play.svg")),
     ("plus", include_str!("../../assets/icons/plus.svg")),
     ("redo-2", include_str!("../../assets/icons/redo-2.svg")),

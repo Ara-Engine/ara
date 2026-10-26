@@ -20,8 +20,26 @@ enum Setup {
     Settings(&'static str),
     Float(&'static str),
     Tab(&'static str),
+    /// The colour picker on an Inspector colour.
+    Picker(Picker),
     Empty,
 }
+/// A colour picker capture: the field, its units, intensity steps, pinned, eyedropper.
+#[derive(Clone, Copy)]
+struct Picker {
+    path: &'static str,
+    mode: &'static str,
+    stops: i8,
+    pinned: bool,
+    eyedropper: bool,
+}
+const PICKER: Picker = Picker {
+    path: "MeshRenderer.color",
+    mode: "rgb",
+    stops: 0,
+    pinned: false,
+    eyedropper: false,
+};
 const STEPS: &[(&str, Setup)] = &[
     ("main", Setup::Main),
     ("scene-universal", Setup::Tool("view.tool.universal")),
@@ -59,6 +77,32 @@ const STEPS: &[(&str, Setup)] = &[
     ("tab-console", Setup::Tab("console")),
     ("tab-agents", Setup::Tab("agents")),
     ("tab-assets", Setup::Tab("assets")),
+    ("picker", Setup::Picker(PICKER)),
+    (
+        "picker-hdr",
+        Setup::Picker(Picker {
+            path: "MeshRenderer.emissive",
+            mode: "hsv",
+            stops: 2,
+            ..PICKER
+        }),
+    ),
+    (
+        "picker-light",
+        Setup::Picker(Picker {
+            path: "Light.color",
+            mode: "linear",
+            pinned: true,
+            ..PICKER
+        }),
+    ),
+    (
+        "picker-eyedropper",
+        Setup::Picker(Picker {
+            eyedropper: true,
+            ..PICKER
+        }),
+    ),
     ("empty-inspector", Setup::Empty),
 ];
 /// Frames in a row without imports or Scene content work before the first capture,
@@ -78,6 +122,8 @@ pub(super) struct UxVerification {
     pub finished_at: Option<Instant>,
     /// Material, effect and controller documents opened by the tool-tab steps.
     resources: [String; 3],
+    /// A light the picker step added (the sample scene has none), undone after it.
+    added_light: bool,
 }
 impl UxVerification {
     pub fn new(editor: &mut Editor, output: &std::path::Path) -> ara_ui::Result<Self> {
@@ -101,6 +147,7 @@ impl UxVerification {
             report: Vec::new(),
             finished_at: None,
             resources: [material, vfx, animation],
+            added_light: false,
         })
     }
     pub fn finished(&self) -> bool {
@@ -232,6 +279,19 @@ impl UxVerification {
         shell: &mut Shell,
         setup: Setup,
     ) -> ara_ui::Result<()> {
+        // A light's picker needs a light: a warm (3200 K) work light, undone afterwards.
+        if let Setup::Picker(picker) = setup
+            && picker.path.starts_with("Light.")
+        {
+            let lit = crate::world::resolve(editor.host.store(), &editor.state.doc)
+                .map_err(|d| format!("{d:?}"))?
+                .values()
+                .any(|e| e.record.contains_key("Light"));
+            if !lit {
+                editor.apply(vec![json!({"cmd":"entity.create","args":{"name":"Work light","components":{"Transform":{"position":[1.5,2.5,1.5]},"Light":{"color":[1.0,0.51597,0.19347,1.0]}}}})], "Add a light for the colour picker capture", None)?;
+                self.added_light = true;
+            }
+        }
         // The fixture's crate, else (any other project) the first mesh, else the first
         // entity with a Transform: the Inspector steps need one selected.
         let entities = crate::world::resolve(editor.host.store(), &editor.state.doc)
@@ -246,10 +306,17 @@ impl UxVerification {
                 .iter()
                 .find(|(_, e)| components.iter().all(|c| e.record.contains_key(*c)))
         };
-        let crate_entity = named("Salvage crate")
-            .or_else(|| with(&["Transform", "MeshRenderer"]))
-            .or_else(|| with(&["Transform"]))
-            .map(|(id, _)| id.clone());
+        let crate_entity = match setup {
+            Setup::Picker(picker) => picker
+                .path
+                .split_once('.')
+                .and_then(|(component, _)| with(&[component])),
+            _ => None,
+        }
+        .or_else(|| named("Salvage crate"))
+        .or_else(|| with(&["Transform", "MeshRenderer"]))
+        .or_else(|| with(&["Transform"]))
+        .map(|(id, _)| id.clone());
         let select = crate_entity.clone().map(|e| vec![e]).unwrap_or_default();
         editor.action("editor.select", json!({"entities": select}))?;
         match setup {
@@ -313,6 +380,25 @@ impl UxVerification {
             }
             Setup::Empty => {
                 editor.action("editor.select", json!({"entities": []}))?;
+            }
+            Setup::Picker(picker) => {
+                shell.rebuild(editor)?;
+                shell.reveal_field(picker.path)?;
+                shell.rebuild(editor)?;
+                // Pinned over the Scene's upper left; the eyedropper over its centre.
+                let view = shell.viewport().ok_or("Scene view not visible")?;
+                let pin = picker.pinned.then_some([view.x + 24., view.y + 40.]);
+                shell.show_color_picker(
+                    editor,
+                    picker.path,
+                    picker.mode,
+                    picker.stops,
+                    pin,
+                    picker.eyedropper,
+                )?;
+                if picker.eyedropper {
+                    shell.pointer = [view.x + view.w * 0.55, view.y + view.h * 0.5];
+                }
             }
             _ => {}
         }
@@ -394,6 +480,14 @@ impl UxVerification {
             }
             Setup::Float(_) | Setup::Settings(_) | Setup::Tab(_) => {
                 editor.action("editor.layout.reset", json!({}))?;
+            }
+            Setup::Picker(_) => {
+                // Escape: the intensity steps the capture applied are restored.
+                shell.cancel_eyedropper();
+                shell.close_color_picker(editor, true)?;
+                if std::mem::take(&mut self.added_light) {
+                    editor.action("history.undo", json!({}))?;
+                }
             }
             _ => {}
         }

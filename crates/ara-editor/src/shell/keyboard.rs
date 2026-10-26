@@ -89,6 +89,9 @@ impl Shell {
         if self.menu.is_some() && self.menu_key(editor, scancode)? {
             return Ok(true);
         }
+        if self.add_component.is_some() && self.add_component_key(editor, scancode)? {
+            return Ok(true);
+        }
         if self.mnemonics && self.menu.is_none() {
             if let Some(index) = MENUS.iter().position(|m| {
                 Chord::parse(&m.mnemonic.to_string()).is_some_and(|c| c.key == scancode)
@@ -152,12 +155,20 @@ impl Shell {
             self.rebuild(editor)?;
             return Ok(true);
         }
+        if scancode == 41
+            && !editor.state.palette
+            && self.dialog.is_none()
+            && self.picker_escape(editor)?
+        {
+            // Escape cancels the eyedropper or a drag, else restores the old colour.
+            self.rebuild(editor)?;
+            return Ok(true);
+        }
         if scancode == 41 {
             if let Some(rename) = &mut self.asset_rename {
                 rename.name = names::stem(names::file_name(&rename.path)).into();
                 self.commit_asset_rename(editor)?;
             }
-            self.color_picker = None;
             self.finish_scrub(editor, true)?;
             editor.finish_gesture(true)?;
             let had_drag = self.drag.take().is_some();
