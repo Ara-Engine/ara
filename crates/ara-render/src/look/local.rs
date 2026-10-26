@@ -3,18 +3,20 @@
 //! a spot wider than 120 degrees, a cube of six 90-degree faces; a narrower spot
 //! one face over its cone. A face is redrawn only when its light changed or
 //! changed casters entered its frustum, at most `redraws` faces a frame, and a
-//! light shades unshadowed until all its faces are drawn. One table serves
+//! light shades unshadowed until all its faces are drawn; moved casters in front
+//! of a light patch only the texels they reach (`LocalDraw::patch`, beyond the
+//! budget), as cascades do. One table serves
 //! both: per light (first record, count); per tile its current view-projection,
 //! which the shadow draws read as cascade 4 + tile; then per shading record the
 //! face's view-projection and atlas tile.
-use super::LocalShadows;
+use super::{LocalShadows, cascades::Patch};
 use crate::{
     graph::State,
     scene::{Light, MAX_LOCAL_LIGHTS},
 };
 use anyhow::Result;
 use ara_gpu::{Access, Buffer, Device, Image, Queue, Resource, vk, vulkan::VulkanDevice};
-use glam::{Mat4, Vec3, Vec4};
+use glam::{Mat4, Vec2, Vec3, Vec4};
 use std::collections::BTreeSet;
 
 /// Tiles per atlas row.
@@ -26,6 +28,8 @@ const NEAR: f32 = 0.05;
 const MARGIN: f32 = 1.08;
 /// Narrowest spot cone (outer cosine) shadowed by one face rather than a cube.
 const SINGLE_FACE: f32 = 0.5;
+/// Most face patches a frame draws; more wait for the next frame.
+pub(crate) const PATCHES: usize = 4;
 /// Most tiles a budget may hold (16 lights x 6 faces).
 pub(crate) const MAX_FACES: usize = 96;
 /// Byte offset of the per-tile matrices in the table, after one (first, count)
@@ -92,6 +96,29 @@ pub(crate) fn overlaps(matrix: Mat4, lo: Vec3, hi: Vec3) -> bool {
         .all(|p| p.truncate().dot(centre) + p.w + p.truncate().abs().dot(extent) >= 0.)
 }
 
+/// The texels of a `tile`-texel face drawn with `matrix` that world bounds
+/// `lo..hi` reach (`texel_rect`); `None` when a corner is not in front of the
+/// light, where the projection cannot bound it.
+fn texels(matrix: Mat4, lo: Vec3, hi: Vec3, tile: u32) -> Option<[u32; 4]> {
+    let (mut min, mut max) = (Vec2::splat(f32::INFINITY), Vec2::splat(f32::NEG_INFINITY));
+    for corner in 0..8u32 {
+        let pick = |bit: u32, axis: usize| {
+            if corner >> bit & 1 == 0 {
+                lo[axis]
+            } else {
+                hi[axis]
+            }
+        };
+        let clip = matrix * Vec3::new(pick(0, 0), pick(1, 1), pick(2, 2)).extend(1.);
+        if clip.w < NEAR {
+            return None;
+        }
+        let p = clip.truncate().truncate() / clip.w;
+        (min, max) = (min.min(p), max.max(p));
+    }
+    super::cascades::texel_rect(min, max, tile)
+}
+
 /// Whether a sphere reaches the frustum of `matrix`.
 fn sphere_visible(planes: &[Vec4; 6], centre: Vec3, radius: f32) -> bool {
     planes.iter().all(|p| {
@@ -107,12 +134,24 @@ struct Face {
     matrix: Mat4,
     /// The matrix the tile was drawn with; `None` when it must be drawn.
     drawn: Option<Mat4>,
+    /// Texels changed casters reach in the drawn tile: it needs a patch.
+    dirty: Option<[u32; 4]>,
+}
+
+/// One face redraw this frame: its whole tile, or (`patch`) only the texels
+/// moved casters reach, through the cropped matrix the table gives that tile.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct LocalDraw {
+    pub face: usize,
+    /// The face's view-projection.
+    pub matrix: Mat4,
+    pub patch: Option<Patch>,
 }
 
 /// This frame's local-shadow work.
 pub(crate) struct LocalPlan {
-    /// Faces to draw, with their matrices.
-    pub draws: Vec<(usize, Mat4)>,
+    /// Faces to draw.
+    pub draws: Vec<LocalDraw>,
     /// The shading table, uploaded whole each frame.
     pub table: Vec<u8>,
 }
@@ -121,6 +160,8 @@ pub(crate) struct LocalPlan {
 pub(crate) struct LocalCache {
     faces: Vec<Face>,
     settings: LocalShadows,
+    /// Patches drawn since creation (diagnostics and tests).
+    pub patched: u64,
 }
 
 impl LocalCache {
@@ -131,21 +172,45 @@ impl LocalCache {
                     owner: None,
                     matrix: Mat4::IDENTITY,
                     drawn: None,
+                    dirty: None,
                 };
                 capacity(settings)
             ],
             settings,
+            patched: 0,
         }
     }
 
-    /// Forgets the tiles whose frustum holds changed casters (`bounds`: their old
-    /// and new world bounds), or all of them for new content.
+    /// Marks the texels of the tiles whose frustum holds changed casters
+    /// (`bounds`: their old and new world bounds), or forgets those it cannot
+    /// bound and, for new content, every tile.
     pub(crate) fn observe(&mut self, all: bool, bounds: &[[Vec3; 2]]) {
+        let tile = self.settings.resolution;
         for face in &mut self.faces {
-            if let Some(matrix) = face.drawn
-                && (all || bounds.iter().any(|&[lo, hi]| overlaps(matrix, lo, hi)))
+            let Some(matrix) = face.drawn else {
+                continue;
+            };
+            for &[lo, hi] in bounds.iter().filter(|_| !all) {
+                if !overlaps(matrix, lo, hi) {
+                    continue;
+                }
+                match texels(matrix, lo, hi, tile) {
+                    Some(rect) => face.dirty = Some(super::cascades::union(face.dirty, rect)),
+                    None => {
+                        face.drawn = None;
+                        break;
+                    }
+                }
+            }
+            if all
+                || face
+                    .dirty
+                    .is_some_and(|r| !super::cascades::patchable(r, tile))
             {
                 face.drawn = None;
+            }
+            if face.drawn.is_none() {
+                face.dirty = None;
             }
         }
     }
@@ -199,6 +264,7 @@ impl LocalCache {
                 for &f in &mine {
                     self.faces[f].owner = None;
                     self.faces[f].drawn = None;
+                    self.faces[f].dirty = None;
                     free.push(f);
                 }
                 if free.len() < matrices.len() {
@@ -210,6 +276,7 @@ impl LocalCache {
                 for &f in &mine {
                     self.faces[f].owner = Some(*k);
                     self.faces[f].drawn = None;
+                    self.faces[f].dirty = None;
                 }
             }
             for (&f, &matrix) in mine.iter().zip(matrices) {
@@ -223,20 +290,37 @@ impl LocalCache {
         } else {
             self.settings.redraws as usize
         };
-        let draws: Vec<(usize, Mat4)> = assigned
-            .iter()
-            .flat_map(|(_, faces)| faces.iter().copied())
+        let tile = self.settings.resolution;
+        let assigned_faces = || assigned.iter().flat_map(|(_, faces)| faces.iter().copied());
+        let mut draws: Vec<LocalDraw> = assigned_faces()
             .filter(|&f| self.faces[f].drawn != Some(self.faces[f].matrix))
             .take(budget)
-            .map(|f| (f, self.faces[f].matrix))
+            .map(|f| LocalDraw {
+                face: f,
+                matrix: self.faces[f].matrix,
+                patch: None,
+            })
             .collect();
+        // Moved casters in otherwise current tiles: patches, beyond the budget.
+        draws.extend(
+            assigned_faces()
+                .filter_map(|f| {
+                    let face = &self.faces[f];
+                    let rect = face.dirty.filter(|_| face.drawn == Some(face.matrix))?;
+                    Some(LocalDraw {
+                        face: f,
+                        matrix: face.matrix,
+                        patch: Some(Patch::new(rect, tile, face.matrix)),
+                    })
+                })
+                .take(PATCHES),
+        );
         // A light shades with its faces once all of them hold its current matrix.
         let ready = |f: usize| {
-            self.faces[f].drawn == Some(self.faces[f].matrix) || draws.iter().any(|d| d.0 == f)
+            self.faces[f].drawn == Some(self.faces[f].matrix) || draws.iter().any(|d| d.face == f)
         };
         let mut entries = vec![[u32::MAX, 0u32]; MAX_LOCAL_LIGHTS];
         let mut records: Vec<u8> = Vec::new();
-        let tile = self.settings.resolution;
         for (light, faces) in &assigned {
             if !faces.iter().all(|&f| ready(f)) {
                 continue;
@@ -260,6 +344,11 @@ impl LocalCache {
         for (slot, face) in matrices.iter_mut().zip(&self.faces) {
             *slot = face.matrix;
         }
+        for draw in &draws {
+            if let Some(patch) = draw.patch {
+                matrices[draw.face] = patch.matrix;
+            }
+        }
         table.extend(
             matrices
                 .iter()
@@ -269,10 +358,16 @@ impl LocalCache {
         LocalPlan { draws, table }
     }
 
-    /// Tile `face` now holds `matrix`.
-    pub(crate) fn drawn(&mut self, face: usize, matrix: Mat4) {
-        if let Some(f) = self.faces.get_mut(face) {
-            f.drawn = Some(matrix);
+    /// `draw` landed: a whole tile now holds its matrix; a patch only brings
+    /// the drawn one up to date.
+    pub(crate) fn drawn(&mut self, draw: &LocalDraw) {
+        if let Some(f) = self.faces.get_mut(draw.face) {
+            f.dirty = None;
+            if draw.patch.is_some() {
+                self.patched += 1;
+            } else {
+                f.drawn = Some(draw.matrix);
+            }
         }
     }
 }
@@ -314,7 +409,9 @@ impl LocalMap {
             size[0],
             size[1],
             vk::Format::D32_SFLOAT,
-            vk::ImageUsageFlags::SAMPLED | vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT,
+            vk::ImageUsageFlags::SAMPLED
+                | vk::ImageUsageFlags::TRANSFER_SRC
+                | vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT,
         )?;
         let mut buffers = Vec::new();
         let parts = (|| {
@@ -380,6 +477,7 @@ mod tests {
             lights,
             resolution: 256,
             redraws,
+            in_gi_and_fog: false,
         }
     }
 
@@ -403,15 +501,15 @@ mod tests {
         let plan = cache.plan(&lights, camera(), Vec3::new(0., 2., 12.), atlas, false);
         assert_eq!(plan.draws.len(), 4, "a cube's first four faces this frame");
         assert_eq!(entry(&plan, 2)[1], 0, "unshadowed until all six are drawn");
-        for &(f, m) in &plan.draws {
-            cache.drawn(f, m);
+        for draw in &plan.draws {
+            cache.drawn(draw);
         }
         let plan = cache.plan(&lights, camera(), Vec3::new(0., 2., 12.), atlas, false);
         assert_eq!(plan.draws.len(), 2, "the rest of the cube");
         assert_eq!(entry(&plan, 2), [0, 6], "shadowed with all six faces");
         assert_eq!(entry(&plan, 1)[1], 0, "over budget");
-        for &(f, m) in &plan.draws {
-            cache.drawn(f, m);
+        for draw in &plan.draws {
+            cache.drawn(draw);
         }
         let plan = cache.plan(&lights, camera(), Vec3::new(0., 2., 12.), atlas, false);
         assert!(plan.draws.is_empty(), "a still scene draws nothing");
@@ -431,16 +529,36 @@ mod tests {
         let mut cache = LocalCache::new(s);
         let lights = [point(0., 1000.)];
         let plan = cache.plan(&lights, camera(), Vec3::new(0., 2., 12.), atlas, true);
-        for &(f, m) in &plan.draws {
-            cache.drawn(f, m);
+        for draw in &plan.draws {
+            cache.drawn(draw);
         }
-        // A box right below the light reaches only the -Y face.
+        // A box right below the light reaches only the -Y face, and patches it.
         cache.observe(
             false,
             &[[Vec3::new(-0.5, 0., -0.5), Vec3::new(0.5, 0.5, 0.5)]],
         );
         let plan = cache.plan(&lights, camera(), Vec3::new(0., 2., 12.), atlas, false);
         assert_eq!(plan.draws.len(), 1, "{:?}", plan.draws.len());
+        let draw = plan.draws[0];
+        let patch = draw.patch.expect("a patch");
+        assert!(patch.size < 128, "{patch:?}");
+        let tiles: &[f32] = bytemuck::cast_slice(&plan.table[FACES..RECORDS]);
+        assert_eq!(
+            &tiles[draw.face * 16..draw.face * 16 + 16],
+            &patch.matrix.to_cols_array(),
+            "the patched tile draws through its cropped matrix"
+        );
+        cache.drawn(&draw);
+        assert_eq!(cache.patched, 1);
+        let plan = cache.plan(&lights, camera(), Vec3::new(0., 2., 12.), atlas, false);
+        assert!(plan.draws.is_empty());
+        // Casters behind a face's eye plane, or across most of it, redraw it whole.
+        cache.observe(false, &[[Vec3::new(-4., -1., -4.), Vec3::new(4., 2.9, 4.)]]);
+        let plan = cache.plan(&lights, camera(), Vec3::new(0., 2., 12.), atlas, false);
+        assert!(!plan.draws.is_empty() && plan.draws.iter().all(|d| d.patch.is_none()));
+        for draw in &plan.draws {
+            cache.drawn(draw);
+        }
         cache.observe(true, &[]);
         let plan = cache.plan(&lights, camera(), Vec3::new(0., 2., 12.), atlas, true);
         assert_eq!(plan.draws.len(), 6, "new content redraws every face");
@@ -457,17 +575,17 @@ mod tests {
         assert_eq!(faces(&spot).len(), 1);
         let plan = cache.plan(&[spot], camera(), Vec3::new(0., 2., 12.), atlas, false);
         assert_eq!(plan.draws.len(), 1);
-        for &(f, m) in &plan.draws {
-            cache.drawn(f, m);
+        for draw in &plan.draws {
+            cache.drawn(draw);
         }
         spot.position_range[0] = 1.;
         let plan = cache.plan(&[spot], camera(), Vec3::new(0., 2., 12.), atlas, false);
         assert_eq!(plan.draws.len(), 1, "the moved spot's face");
         // The view-projection keeps points in front of the light inside its frustum.
         let below = Vec3::new(1., 0., 0.);
-        assert!(overlaps(plan.draws[0].1, below - 0.1, below + 0.1));
+        assert!(overlaps(plan.draws[0].matrix, below - 0.1, below + 0.1));
         assert!(!overlaps(
-            plan.draws[0].1,
+            plan.draws[0].matrix,
             Vec3::new(1., 5.9, 0.),
             Vec3::new(1., 6.1, 0.)
         ));

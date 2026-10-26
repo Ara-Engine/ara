@@ -328,6 +328,7 @@ impl QualityPreset {
                     lights: 2,
                     resolution: 256,
                     redraws: 6,
+                    in_gi_and_fog: true,
                 }),
             },
             Self::High => Quality {
@@ -344,6 +345,7 @@ impl QualityPreset {
                     lights: 4,
                     resolution: 512,
                     redraws: 12,
+                    in_gi_and_fog: true,
                 }),
             },
             Self::Epic => Quality {
@@ -360,6 +362,7 @@ impl QualityPreset {
                     lights: 8,
                     resolution: 512,
                     redraws: 24,
+                    in_gi_and_fog: true,
                 }),
             },
         }

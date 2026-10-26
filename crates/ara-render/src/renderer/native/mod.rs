@@ -20,6 +20,14 @@ use batches::Groups;
 use culling::Culling;
 pub(in crate::renderer) use view::NativeView;
 
+/// The cached shadow list a patch redraws part of (`Renderer::cull_native_shadow_patch`).
+#[derive(Clone, Copy, Debug)]
+pub(crate) enum ShadowSource {
+    Cascade(usize),
+    /// A local-light face's reserved slot.
+    LocalFace(usize),
+}
+
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable)]
 struct InstanceRow {
@@ -365,6 +373,47 @@ impl Renderer {
             native.visible,
             &native.groups,
             &native.bounds,
+            pass,
+            view,
+            &mut native.changes.work,
+        )?;
+        Ok(pass)
+    }
+
+    /// Cull a shadow patch (look::cascades, look::local) into reserved slot `slot`:
+    /// the instances `source`'s cached list (drawn with `parent`, `resolution`
+    /// texels a side) holds under `patch`, plus those moved since, tested against
+    /// the patch's cropped matrix at its own size. Call after native preparation
+    /// and before graph resource declarations; record the returned pass.
+    pub(crate) fn cull_native_shadow_patch(
+        &mut self,
+        source: ShadowSource,
+        slot: usize,
+        (parent, resolution): (Mat4, u32),
+        patch: &crate::look::cascades::Patch,
+    ) -> Result<usize> {
+        let view = culling::View::shadow(patch.matrix, patch.size, self.look.quality.min_pixels);
+        let native = self
+            .native
+            .as_mut()
+            .context("Native raster content required")?;
+        let source = match source {
+            ShadowSource::Cascade(cascade) => cascade,
+            ShadowSource::LocalFace(face) => culling::BASE_PASSES + face,
+        };
+        let pass = culling::BASE_PASSES
+            .checked_add(slot)
+            .context("Native shadow slot overflow")?;
+        ensure!(
+            pass < native.culling.draws.len() && source < native.culling.draws.len(),
+            "Native shadow patch slot was not reserved"
+        );
+        native.culling.patch(
+            &mut self.gpu,
+            native.visible,
+            &native.groups,
+            &native.bounds,
+            (source, parent, patch.clip(resolution)),
             pass,
             view,
             &mut native.changes.work,

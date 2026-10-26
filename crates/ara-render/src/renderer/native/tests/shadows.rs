@@ -312,7 +312,12 @@ fn local_shadow_slots_keep_faces_independent_cache_casters_and_record_depth() ->
         "masked-to-blended edits invalidate the cached caster list"
     );
     renderer.replace_native_scene(&scene, Box::new(EmptyTextures))?;
-    assert_eq!(renderer.native.as_ref().unwrap().culling.draws.len(), 9);
+    // The moved caster's cascade patches reserved one slot per cascade and the
+    // local-face patch slots (look::local::PATCHES) past the two local faces.
+    assert_eq!(
+        renderer.native.as_ref().unwrap().culling.draws.len(),
+        culling::BASE_PASSES + 4 + crate::look::local::PATCHES
+    );
     assert_eq!(renderer.cull_native_shadow_pass(1, matrices[1])?, passes[1]);
     assert_eq!(selected(&renderer, passes[1]), [3]);
     assert_eq!(renderer.cull_native_shadow_pass(0, matrices[0])?, passes[0]);
