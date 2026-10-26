@@ -640,7 +640,9 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                 scene_dirty |= changed;
             }
             if let Some(route) = &mut first_hour {
-                let busy = scene_view.needs_frame(editor.state.quality);
+                // Content work, not temporal frames: a native Scene keeps submitting
+                // frames while it is shown, so it never stops wanting them.
+                let busy = scene_view.preview_needs_frame();
                 let changed = route.step(&mut editor, &mut shell, &mut gpu, busy)?;
                 dirty |= changed;
             }

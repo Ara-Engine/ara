@@ -121,8 +121,8 @@ pub(super) struct FirstHour {
     entity: Option<String>,
     clip: Clip,
     previous_build: Option<PathBuf>,
-    /// Frames in a row the Scene has wanted no more frames (its content loaded and
-    /// published, accumulation done).
+    /// Frames in a row the Scene has had no content work (its content loaded and
+    /// published, GI delivered, arrivals faded in).
     scene_quiet: u32,
 }
 
@@ -161,7 +161,8 @@ impl FirstHour {
     }
 
     /// Advance one frame; returns whether the UI changed. `scene_busy`: the Scene
-    /// still wants frames (`SceneView::needs_frame`).
+    /// still has content work: snapshots, publications, GI or fades
+    /// (`SceneView::preview_needs_frame`).
     pub fn step(
         &mut self,
         editor: &mut Editor,
@@ -440,7 +441,7 @@ impl FirstHour {
                     self.note = "waited for every import and the Scene showing them".into();
                 }
                 // The last import's publication reaches the Scene a little after the
-                // count hits zero: wait until the Scene stops wanting frames too.
+                // count hits zero: wait until the Scene's content work is done too.
                 Ok(shell
                     .import_counts()
                     .is_some_and(|(pending, _, _)| pending == 0)
