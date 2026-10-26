@@ -1143,3 +1143,38 @@ focused-green shim checkpoint; only the default feature and documentation change
 No algorithm, importer version, action key, format or compression change.
 Final default-enabled validation passes: Windows-batched workspace fmt, strict
 all-target Clippy, all 45 importer/shim tests, and opt-out all-target Clippy.
+
+## Current-tip cold sample imports for release notes, 2026-10-26
+
+Six fresh Hub-created projects ran at `15fb16fb` in the owner's quiet slot,
+alternating Outpost and Showcase three times under one GPU lease. CLI, worker
+and player were built together and frozen at that tip. Projects and caches were
+on C: NVMe; each case was verified and deleted before the next, with no reparse
+points. These are optimized **development** binaries: Rust workspace opt1,
+dependencies/native opt3, no debug information. They are not installed-release
+measurements. Balanced, pooled encoding and prepared LODs are the defaults;
+parallel geometry remains off. OS and driver caches were not flushed.
+
+| Seconds | Run 1 | Run 2 | Run 3 | Median | Observed range |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Outpost: open through 115 assets published | 29.787 | 25.124 | 20.138 | 25.124 | 20.138-29.787 |
+| Showcase: open through 33 assets published | 15.573 | 11.119 | 10.674 | 11.119 | 10.674-15.573 |
+| Outpost: create through assets ready | 32.951 | 27.161 | 22.135 | 27.161 | 22.135-32.951 |
+| Showcase: create through assets ready | 17.393 | 13.587 | 12.936 | 13.587 | 12.936-17.393 |
+
+Retain every observation. Both samples improve through the sequence; the first
+Outpost run takes nearly 30 seconds. Three runs do not establish a confidence
+interval or a paired speedup. Other agents were held, but the machine's initial
+CPU snapshot was 20%, not an OS-wide idle guarantee. Exact per-case CPU/memory
+snapshots, binaries, raw milliseconds and verification hashes are saved in
+`measurements/release-cold-2026-10-26.json`. Asset publication polling adds up to
+about 100 ms observation granularity. All **444 keys**, **5,370 artifact
+references** and **4,008,008,670 referenced bytes** match v4 and pass physical
+hash verification. Zero fallback; all six projects deleted. Extracted traces
+remain in `target/ara-dev/import-speed/release-current-15fb16fb-{o1,s1,o2,s2,o3,s3}-*/`.
+
+Release-note wording: **Outpost is about 20-25 seconds typical, with the first
+cold run up to about 30 seconds (median 25.1 s, observed range 20.1-29.8 s).
+Showcase is about 11 seconds typical (median 11.1 s, range 10.7-15.6 s).** State
+the optimized-development/NVMe methodology with those numbers. The under-20-second
+Outpost and under-10-second Showcase targets are not yet consistently met.
