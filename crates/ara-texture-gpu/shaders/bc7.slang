@@ -13,7 +13,7 @@ struct Root { uint input; uint output; uint blockCount; uint preset; uint a; uin
 #define BIND(n)
 ConstantBuffer<Root> root : register(b0,space0);
 #endif
-BIND(1) RWByteAddressBuffer buffers[64] : register(u0,space2);
+BIND(1) RWByteAddressBuffer buffers[] : register(u0,space2);
 
 // ceil(65536/n) gives exact floor(sum/n) for 0 <= sum <= 255*n, n <=16.
 static const uint MEAN_RECIP[17] = {0,65536,32768,21846,16384,13108,10923,9363,8192,7282,6554,5958,5462,5042,4682,4370,4096};

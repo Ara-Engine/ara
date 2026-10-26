@@ -165,7 +165,8 @@ fn failed_probe_and_content_allocations_preserve_heap_and_last_good_volume() -> 
     // Leave one descriptor: the new cache binds, then meta binding fails. Every
     // partially allocated buffer/image must retire and the previous GI survive.
     let mut pressure = Vec::new();
-    while renderer.gpu.descriptor_usage().storage_buffers < 63 {
+    let capacity = renderer.gpu.context().info.storage_buffer_capacity as usize;
+    while renderer.gpu.descriptor_usage().storage_buffers < capacity - 1 {
         let buffer = renderer
             .gpu
             .create_buffer(16, vk::BufferUsageFlags::STORAGE_BUFFER, true)?;

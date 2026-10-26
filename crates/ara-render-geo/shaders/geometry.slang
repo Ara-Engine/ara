@@ -7,7 +7,7 @@ struct Root {uint frame;uint phase;uint a;uint b;uint c;uint d;uint e;uint f;};
 #define BIND(n)
 ConstantBuffer<Root> root:register(b0,space0);
 #endif
-BIND(1) RWByteAddressBuffer buffers[64]:register(u0,space2);
+BIND(1) RWByteAddressBuffer buffers[]:register(u0,space2);
 BIND(3) RWTexture2D<float4> images[64]:register(u0,space3);
 struct Frame {
     float4x4 vp;float4x4 inverseVp;float4x4 previousVp;

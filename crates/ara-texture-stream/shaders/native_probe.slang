@@ -7,7 +7,7 @@ struct Root { uint table; uint output; uint count; uint lod; uint first; uint no
 ConstantBuffer<Root> root : register(b0,space0);
 #endif
 BIND(5) Texture2D<float4> textures[] : register(t0,space1);
-BIND(1) RWByteAddressBuffer buffers[64] : register(u0,space2);
+BIND(1) RWByteAddressBuffer buffers[] : register(u0,space2);
 BIND(2) SamplerState samplers[3] : register(s0,space0);
 #include "native_sample.slang"
 [shader("compute")][numthreads(64,1,1)]

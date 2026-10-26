@@ -72,6 +72,7 @@ mod tests {
             ray_tracing: false,
             texture_compression_bc: false,
             sampled_image_capacity: 65_536,
+            storage_buffer_capacity: 128,
             max_image_dimension: 16384,
             api_version: String::new(),
             driver_version: 3,
