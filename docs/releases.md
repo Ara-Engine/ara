@@ -67,6 +67,224 @@ Standalone Hub packaging is independent of an engine's NuGet restore: only an
 engine carrying managed assemblies requires that restored NuGet notice inventory.
 Both packages use the same release debug-info profile, avoiding a second dependency build.
 
+## Release-freeze history cleanup
+
+The owner approved the real rewrite **at release time**. Until then, run only the
+scratch rehearsal. `ara-dev history-rewrite` is a small Rust tool using raw
+`git cat-file` / `hash-object` objects, not Python or `filter-branch`. It creates a
+new independent bare mirror with `--mirror --no-local`, disables its push URL,
+and never opens the source repository for writes. It refuses an existing scratch
+directory, shared object stores, shallow history or attached worktrees. No push
+step exists in either history command.
+
+It removes case-insensitive Claude/Anthropic co-author trailer lines, Claude Code
+generated footers (with or without the robot), and standalone `claude.ai/code`
+session links, including Markdown links. Other co-authors stay. Trailing blank
+lines are removed only when exposed by removing an attribution footer; removing
+an interior attribution line preserves pre-existing trailing blanks. All other bytes,
+including CRLF, non-UTF-8 text, author/committer identities, dates, encoding and
+extra headers, stay unchanged. A session URL mixed into substantive text fails
+closed instead of deleting unrelated prose. Annotated tags receive the same
+message filter and their targets are mapped recursively; lightweight tags map
+directly. Merge parent **order and multiplicity** are preserved.
+
+The output directory contains `mirror.git`, `report.json`, `commit-map.tsv`
+(both tree hashes and ordered parent lists), `ref-map.tsv` and `fsck.log`.
+Verification rereads every new object, checks exact retained header/message
+bytes, verifies a bijective commit map and the reachable commit/ref counts,
+and runs `git fsck --full`. Commit collisions fail before ref publication.
+Signature headers/blocks are preserved, but changing a signed object's bytes
+invalidates its signature. `report.json.signatures` lists every signed commit/tag
+and whether its ID changed. Review that list; make final signed release tags
+against the rewritten tips rather than presenting an old signature as valid.
+
+### Rehearse without touching live refs
+
+```powershell
+$env:CARGO_BUILD_JOBS = '2'
+$env:CARGO_TARGET_DIR = 'D:\AraBuild\ara-dev-infra-target'
+cargo build -p ara-dev
+$tool = (Resolve-Path "$env:CARGO_TARGET_DIR/debug/ara-dev.exe").Path
+$source = (git rev-parse --path-format=absolute --git-common-dir).Trim()
+$scratch = "D:\AraBuild\history-rehearsal-$([guid]::NewGuid().ToString('N'))"
+& $tool history-rewrite --source $source --scratch $scratch
+if ($LASTEXITCODE -ne 0) { throw 'History verification failed; do not publish' }
+Get-Content "$scratch/report.json"
+```
+
+Use an explicit owned `CARGO_TARGET_DIR` when building the tool. Keep the full
+scratch directory until release review. It includes every locally advertised
+branch/tag and auxiliary ref, including offline agent branches. This is evidence,
+not a reason to publish local checkpoint/recovery refs.
+
+Measured rehearsal on 2026-10-26, while the batch gate/agents were active:
+**2,723 commits before and after**, across 82 local branches and 1,640 total refs
+(including three remote-tracking refs, one of which is `origin/HEAD`). No tags
+existed; read-only `ls-remote` confirmed that both advertised branches (`main` and
+`integration/0.0.1-alpha`) were included and no remote tags were missing. The filter
+changed 497 messages; parent propagation rehashed 2,721 commits.
+Every tree, ordered parent list, retained metadata byte and expected message byte
+verified; all **367 merge commits** retained their topology. An independent pair
+of Git log projections and a broader attribution regex also passed with zero
+remaining matches. **No GPG-signed commits or signed tags were present**; the real
+Git fixtures additionally cover nested/lightweight tags and preserved signatures.
+
+Clone took **53.00 s**, rewriting **217.01 s**, verification **46.29 s**, total
+**316.79 s**. An earlier 2,721-commit pass took 239.62 s under the same shared-machine
+conditions; all 2,721 common mappings were identical after tightening the interior
+whitespace guard. These are observed contended timings, not a quiet-machine bound.
+The source `main` snapshot was `8a18f0685a03f02ce5e7d5a512afb84e18ccf657`;
+no source ref or worktree was rewritten and nothing was pushed. The read-only
+message matcher also found the mapped real `e63f8219` fork uniquely. Reports:
+[rewrite proof](releases/history-rehearsal-20261026.json),
+[independent audit](releases/history-independent-audit-20261026.json).
+The complete mirror and per-commit maps remain at
+`D:\AraBuild\ara-history-rehearsal-20261026-aefa6558` for release review.
+
+### Release day: rewrite the remote branches together
+
+1. After the final gate, publish the accepted release tips normally. Then freeze
+   **all** writers: stop agents, packaging, fetch/push jobs and hooks that
+   create refs. Checkpoint dirty work with plain WIP commits, never stash. Save
+   `git worktree list --porcelain`, each branch/tip and the unmerged branch list.
+   Create an offline `git bundle create <outside-repo>/pre-rewrite.bundle --all`.
+   Keep the old checkouts and unmerged branches intact for recovery. Copy the
+   verified `ara-dev.exe` outside the old checkouts before rebuilding anything.
+
+```powershell
+$oldRepo = 'D:\Coding\projects\desktop\snengine'
+New-Item -ItemType Directory -Force 'D:\AraRelease\tools' -ErrorAction Stop | Out-Null
+Copy-Item 'D:\AraBuild\ara-dev-infra-target\debug\ara-dev.exe' `
+    'D:\AraRelease\tools\ara-dev.exe' -ErrorAction Stop # verified focused-green tool
+$archive = "D:\AraRelease\pre-freeze-$([guid]::NewGuid().ToString('N'))"
+New-Item -ItemType Directory -Path $archive -ErrorAction Stop | Out-Null
+git -C $oldRepo worktree list --porcelain | Set-Content "$archive/worktrees.txt"
+git -C $oldRepo for-each-ref '--format=%(refname) %(objectname)' |
+    Set-Content "$archive/refs.txt"
+git -C $oldRepo branch --no-merged main | Set-Content "$archive/unmerged.txt"
+git -C $oldRepo bundle create "$archive/pre-rewrite.bundle" --all
+if ($LASTEXITCODE -ne 0) { throw 'Backup failed; do not rewrite' }
+git -C $oldRepo bundle verify "$archive/pre-rewrite.bundle"
+if ($LASTEXITCODE -ne 0) { throw 'Backup verification failed' }
+```
+
+2. Make a new rehearsal from the **remote URL**, not a local repo, so the release
+   ref inventory is exactly what the server advertises. Rewrite `main` and
+   `integration/0.0.1-alpha` in this **one** invocation, together with every other
+   advertised branch/tag. Their shared commits must use the same mapping.
+
+```powershell
+$remote = 'https://github.com/Snowy7/ara.git'
+$tool = 'D:\AraRelease\tools\ara-dev.exe' # copied from the focused-green build
+$freeze = "D:\AraRelease\history-freeze-$([guid]::NewGuid().ToString('N'))"
+& $tool history-rewrite --source $remote --scratch $freeze
+if ($LASTEXITCODE -ne 0) { throw 'Do not push a failed rewrite' }
+$mirror = "$freeze/mirror.git"
+git -C $mirror show-ref --verify refs/heads/main
+if ($LASTEXITCODE -ne 0) { throw 'main is missing' }
+git -C $mirror show-ref --verify refs/heads/integration/0.0.1-alpha
+if ($LASTEXITCODE -ne 0) { throw 'integration/0.0.1-alpha is missing' }
+$rows = @(Import-Csv "$freeze/ref-map.tsv" -Delimiter "`t" |
+    Where-Object { $_.ref -match '^refs/(heads|tags)/' })
+$proof = Get-Content "$freeze/report.json" -Raw | ConvertFrom-Json
+if ($proof.commits_before -ne $proof.commits_after -or $proof.remaining_matches -ne 0) {
+    throw 'Invalid rewrite proof'
+}
+$proof.signatures | Format-Table
+```
+
+3. Review the proof, mappings and signatures. Immediately before publication,
+   compare the **complete** remote head/tag inventory with `ref-map.tsv`; a new,
+   deleted or advanced ref means abort and repeat from a fresh mirror. The
+   explicit leases below also reject concurrent changes to listed refs. Publish
+   all rewritten branches/tags atomically, with their frozen old OIDs as leases:
+
+```powershell
+$advertised = @(& git ls-remote --heads --tags $remote |
+    Where-Object { $_ -notmatch '\^\{\}$' } | ForEach-Object {
+        $fields = $_ -split "`t"; "$($fields[1])`t$($fields[0])"
+    } | Sort-Object)
+if ($LASTEXITCODE -ne 0) { throw 'Remote inventory failed' }
+$expected = @($rows | ForEach-Object { "$($_.ref)`t$($_.old)" } | Sort-Object)
+if (@(Compare-Object $expected $advertised).Count -ne 0) { throw 'Remote moved; abort' }
+$leases = @($rows | ForEach-Object { "--force-with-lease=$($_.ref):$($_.old)" })
+$refspecs = @($rows | ForEach-Object { "$($_.new):$($_.ref)" })
+& git -C $mirror push --atomic @leases $remote @refspecs
+if ($LASTEXITCODE -ne 0) { throw 'Lease/atomic push rejected; do not retry with --force' }
+$published = @(& git ls-remote --heads --tags $remote |
+    Where-Object { $_ -notmatch '\^\{\}$' } | ForEach-Object {
+        $fields = $_ -split "`t"; "$($fields[1])`t$($fields[0])"
+    } | Sort-Object)
+if ($LASTEXITCODE -ne 0) { throw 'Publication verification failed' }
+$wanted = @($rows | ForEach-Object { "$($_.ref)`t$($_.new)" } | Sort-Object)
+if (@(Compare-Object $wanted $published).Count -ne 0) { throw 'Published refs differ' }
+```
+
+Never use `push --mirror`, an implicit lease based on a mutable tracking ref, or
+plain `--force`. No checkpoint, stash, recovery, pull-request or remote-tracking
+refs are published. If branch protection prevents the approved rewrite, the
+owner must permit this release operation; do not bypass a rejected lease. The
+saved old/new map is also the rollback inventory: rollback would require explicit
+leases on the **new** OIDs. Retain the bundle and evidence offline.
+
+### Recreate agent worktrees and recover unmerged work
+
+Clone a fresh working repository after verifying the published refs. Preserve
+the old repository offline; do not fetch/merge its old main into the new one.
+For each agent that has no unmerged work, create a worktree **from new main**:
+
+```powershell
+$fresh = 'D:\Coding\ara-after-freeze' # nonexistent before clone
+git clone --branch main $remote $fresh
+if ($LASTEXITCODE -ne 0) { throw 'Fresh clone failed' }
+$agentPath = 'D:\AraWorktrees\dev-after-freeze'
+git -C $fresh worktree add --no-track -b t3/ara-dev-after-freeze $agentPath origin/main
+if ($LASTEXITCODE -ne 0) { throw 'Worktree recreation failed' }
+```
+
+Repeat with unique branch/path names for every saved worktree. Use T3's worktree
+handoff to bind each existing agent thread to the new path; `git worktree add`
+alone does not change a thread's workspace. Keep each owned Cargo target separate.
+Remove old worktrees only after every saved WIP is recovered and checked.
+
+For an **unmerged** branch, first run `history-rewrite` on the saved old local
+repository into another fresh scratch mirror. This cleans unsent commits too,
+without reintroducing attribution during rebase. Match its old fork against
+rewritten main using the **full cleaned message plus exact tree and retained
+metadata**, never just the subject. The read-only matcher requires exactly one
+match; no match/ambiguity stops recovery for inspection.
+
+```powershell
+$oldRepo = 'D:\Coding\projects\desktop\snengine' # saved old repo, still offline
+$branch = 't3/example-unmerged-agent'
+$localClean = "D:\AraRelease\local-clean-$([guid]::NewGuid().ToString('N'))"
+& $tool history-rewrite --source $oldRepo --scratch $localClean
+if ($LASTEXITCODE -ne 0) { throw 'Local branch cleanup failed' }
+$oldFork = (git -C $oldRepo merge-base main $branch).Trim()
+if ($LASTEXITCODE -ne 0) { throw 'Old fork not found' }
+$match = & $tool history-match --old-repo $oldRepo --old-base $oldFork `
+    --new-repo $fresh --new-tip origin/main | ConvertFrom-Json
+if ($LASTEXITCODE -ne 0) { throw 'Fork message match failed; do not guess' }
+$forkRow = @(Import-Csv "$localClean/commit-map.tsv" -Delimiter "`t" |
+    Where-Object { $_.old -eq $oldFork })
+if ($forkRow.Count -ne 1 -or $forkRow[0].new -ne $match.new) { throw 'Fork mappings disagree' }
+$recovered = 'recover/example-agent'
+git -C $fresh fetch "$localClean/mirror.git" "refs/heads/${branch}:refs/heads/$recovered"
+if ($LASTEXITCODE -ne 0) { throw 'Clean branch transfer failed' }
+$recoverPath = 'D:\AraWorktrees\example-recovered'
+git -C $fresh worktree add $recoverPath $recovered
+if ($LASTEXITCODE -ne 0) { throw 'Recovery worktree failed' }
+git -C $recoverPath rebase --rebase-merges --onto origin/main $match.new
+if ($LASTEXITCODE -ne 0) { throw 'Resolve the rebase here; do not merge old main' }
+```
+
+Review conflicts, compare the recovered work with its saved branch, then run its
+focused checks before handing over the new SHA. A recovery rebase normally gives
+new committer dates; it is separate from the byte-preserving release rewrite.
+Finally rebuild release packages from clean rewritten source and run the Hub
+checklist below: embedded commit IDs and build hashes changed even though every
+source tree is identical. Do not publish old binaries under a new commit identity.
+
 ## Package, verify, publish
 
 `workspace.package.version` must match `--version`. Bump it deliberately for each
