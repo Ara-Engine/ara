@@ -14,6 +14,7 @@ ara-host.workspace = true
 ara-json.workspace = true
 ara-proto.workspace = true
 ara-rpc.workspace = true
+dunce = "1.0"
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true, features = ["preserve_order", "float_roundtrip"] }
 

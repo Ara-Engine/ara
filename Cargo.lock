@@ -1042,6 +1042,7 @@ dependencies = [
  "ara-proto",
  "ara-rpc",
  "ara-update",
+ "dunce",
  "libc",
  "serde",
  "serde_json",

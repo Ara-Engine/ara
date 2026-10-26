@@ -208,12 +208,22 @@ fn bootstrap_service_uses_registered_engine_templates_and_their_pins() {
 fn engine_installations_register_durably_and_remove_only_the_matching_build() {
     let root = scratch("installed-engines");
     let mut hub = Hub::open(config(&root)).expect("Hub");
-    let installed = engine("0.0.1-alpha");
+    let mut installed = engine("0.0.1-alpha");
+    // Canonical Windows paths deliberately include the verbatim prefix.
+    installed.executable = fs::canonicalize(&installed.executable).expect("executable");
+    installed.editor = Some(installed.executable.clone());
     hub.call("hub.engine.register", json!({"engine":installed}))
         .expect("register installed build");
     hub.call("hub.engine.register", json!({"engine":installed}))
         .expect("idempotent registration");
     let registry = Registry::load(&root).expect("durable");
+    let expected = ara_hub_service::normalized_path(&installed.executable).to_owned();
+    let persisted: Value =
+        serde_json::from_slice(&fs::read(root.join("registry.json")).expect("persisted registry"))
+            .expect("registry JSON");
+    assert_eq!(persisted["engines"][1]["executable"], json!(expected));
+    assert_eq!(persisted["engines"][1]["editor"], json!(expected));
+    assert_eq!(registry.engines[1].executable, expected);
     assert_eq!(
         registry
             .engines
@@ -244,6 +254,20 @@ fn engine_installations_register_durably_and_remove_only_the_matching_build() {
     assert!(
         hub.call("hub.engine.register", json!({"engine":invalid}))
             .is_err()
+    );
+    drop(hub);
+    let mut legacy = Registry::default();
+    legacy.engines.push(installed);
+    fs::write(
+        root.join("registry.json"),
+        ara_json::to_canonical_string(&serde_json::to_value(&legacy).expect("legacy registry")),
+    )
+    .expect("old verbatim registry");
+    let reloaded = Registry::load(&root).expect("load old registry");
+    assert_eq!(reloaded.engines[0].executable, expected);
+    assert_eq!(
+        reloaded.engines[0].editor.as_deref(),
+        Some(expected.as_path())
     );
 }
 

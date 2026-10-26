@@ -5,6 +5,8 @@ mod service;
 pub mod startup;
 mod templates;
 
+/// Use shell-compatible Windows paths when possible, retaining required verbatim paths.
+pub use dunce::simplified as normalized_path;
 pub use isolation::validate_development_config;
 pub use registry::{EngineBuild, ProjectEntry, Registry};
 pub use service::{
