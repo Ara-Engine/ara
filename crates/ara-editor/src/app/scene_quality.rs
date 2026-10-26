@@ -109,11 +109,11 @@ impl SceneQuality {
         self.age += 1;
         let file = |s: &Self| format!("{}-{:04}.png", Self::label(phase), s.age);
         self.capture = match phase {
-            Phase::Open => (self.age % OPEN_EVERY == 0).then(|| file(self)),
-            Phase::Move(_) => (self.age % 3 == 0).then(|| file(self)),
-            Phase::Hold(_) => {
-                (self.age <= 60 && self.age % 3 == 0 || self.age % 10 == 0).then(|| file(self))
-            }
+            Phase::Open => self.age.is_multiple_of(OPEN_EVERY).then(|| file(self)),
+            Phase::Move(_) => self.age.is_multiple_of(3).then(|| file(self)),
+            Phase::Hold(_) => (self.age <= 60 && self.age.is_multiple_of(3)
+                || self.age.is_multiple_of(10))
+            .then(|| file(self)),
             Phase::Settle(_) => None,
         };
         let Phase::Move(kind) = phase else {
