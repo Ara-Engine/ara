@@ -2,6 +2,7 @@
 #![warn(missing_docs)]
 pub mod accessibility;
 pub mod binding;
+pub mod cursor;
 pub mod docking;
 mod emit;
 mod focus;
@@ -11,6 +12,7 @@ pub mod paint;
 mod pipeline;
 pub mod reconcile;
 pub mod runtime;
+pub mod scroll;
 pub mod style;
 pub mod theme;
 pub mod virtualize;

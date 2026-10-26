@@ -290,6 +290,14 @@ impl VirtualView {
             0.0,
             (model.len() as f32 * self.row_height - viewport).max(0.0),
         );
+        ui.set_virtual_extent(
+            self.parent,
+            [
+                self.columns.iter().sum(),
+                model.len() as f32 * self.row_height,
+            ],
+        )?;
+        ui.scroll_to(self.parent, [0., offset])?;
         let first = (offset / self.row_height).floor() as usize;
         let count = self.slots.len().min(model.len().saturating_sub(first));
         let rows: Vec<_> = (first..first + count).map(|i| model.row(i)).collect();
@@ -432,6 +440,7 @@ impl Ui {
             .get("text")
             .map(|t| ara_ui_text::Text::new(t.clone()));
         self.nodes.push(crate::runtime::Node {
+            virtual_extent: None,
             paint_offset: [0.0; 2],
             visible: true,
             element,

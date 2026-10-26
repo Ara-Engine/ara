@@ -1,4 +1,4 @@
-//! Clipping-aware tab/spatial focus graph in retained paint order.
+//! Focus navigation through shown controls and scrollable content in paint order.
 use crate::{Ui, input::Direction, runtime::is_focusable};
 /// Positive authored tab indices precede document-order controls; negative indices opt out.
 pub fn tab_order(ui: &Ui) -> Vec<usize> {
@@ -7,7 +7,7 @@ pub fn tab_order(ui: &Ui) -> Vec<usize> {
         .iter()
         .copied()
         .filter(|i| {
-            is_focusable(&ui.nodes[*i])
+            ui.focus_candidate(*i)
                 && ui.nodes[*i]
                     .element
                     .attrs
@@ -28,7 +28,7 @@ pub fn tab_order(ui: &Ui) -> Vec<usize> {
     });
     order
 }
-/// Next visible/enabled control in retained document order.
+/// Next shown/enabled control; input reveals clipped content in a scroll view.
 pub fn next_tab(ui: &Ui, current: usize, reverse: bool) -> Option<usize> {
     let order = tab_order(ui);
     let pos = order.iter().position(|i| *i == current)?;
@@ -40,7 +40,7 @@ pub fn next_tab(ui: &Ui, current: usize, reverse: bool) -> Option<usize> {
                 (pos + n) % order.len()
             }]
         })
-        .find(|i| is_focusable(&ui.nodes[*i]))
+        .find(|i| ui.focus_candidate(*i))
 }
 /// Directional navigation with validated explicit authored overrides.
 pub fn directional(ui: &Ui, current: usize, direction: Direction) -> Option<usize> {
@@ -59,7 +59,7 @@ pub(crate) fn directional_where(
         .get(direction.attribute())
         .and_then(|id| ui.find(id))
         && allowed(target)
-        && is_focusable(&ui.nodes[target])
+        && ui.focus_candidate(target)
     {
         return Some(target);
     }
@@ -68,7 +68,7 @@ pub(crate) fn directional_where(
     ui.paint_order
         .iter()
         .copied()
-        .filter(|i| *i != current && allowed(*i) && is_focusable(&ui.nodes[*i]))
+        .filter(|i| *i != current && allowed(*i) && ui.focus_candidate(*i))
         .filter_map(|i| {
             let r = ui.nodes[i].rect;
             let dx = r.x + r.w / 2.0 - center[0];

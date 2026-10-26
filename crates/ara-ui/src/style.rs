@@ -117,7 +117,7 @@ impl Computed {
             font_family: None,
             text_end: false,
             wrap_text: true,
-            clip: false,
+            clip: tag == "scroll",
             translate: [0.0; 2],
         }
     }
