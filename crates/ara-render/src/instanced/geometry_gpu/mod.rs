@@ -5,6 +5,7 @@ use ara_gpu::{AccelerationStructure, Access, Buffer, Device, Resource, vulkan::V
 
 mod pack;
 mod pose;
+pub(crate) mod preparation;
 pub use pose::PreparedPose;
 #[cfg(test)]
 mod tests;
@@ -68,6 +69,7 @@ pub struct GeometryGpu {
     stats: GeometryUpload,
 }
 
+#[derive(Clone)]
 struct GeometryLayout {
     key: [u8; 32],
     revision: u64,

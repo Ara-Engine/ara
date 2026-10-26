@@ -1,21 +1,26 @@
 //! Destruction of completed driver objects, off the frame thread.
-use super::{ImageAllocation, vk};
+use super::{BufferAllocation, ImageAllocation, vk};
 use crate::{GpuError, Result};
 use std::sync::mpsc::{self, SyncSender, TrySendError};
 use std::thread::JoinHandle;
 
 pub(super) enum Object {
+    Buffer(BufferAllocation),
     Image(ImageAllocation),
     Pipeline(vk::Pipeline),
     Memory(vk::DeviceMemory),
 }
 
 impl Object {
-    fn destroy(self, device: &ash::Device) {
+    pub(super) fn destroy(self, device: &ash::Device) {
         // SAFETY: The device owner admits only objects whose uses on both queue
         // timelines have completed, and joins this worker before device teardown.
         unsafe {
             match self {
+                Self::Buffer(buffer) => {
+                    device.destroy_buffer(buffer.handle, None);
+                    device.free_memory(buffer.memory, None);
+                }
                 Self::Image(image) => {
                     device.destroy_image_view(image.view, None);
                     device.destroy_image(image.handle, None);

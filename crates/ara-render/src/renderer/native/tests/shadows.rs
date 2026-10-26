@@ -2,7 +2,7 @@ use super::*;
 use ara_gpu::{Barrier, RootConstants, vulkan::Attachment};
 use std::time::Instant;
 
-fn scene() -> NativeScene {
+pub(super) fn scene() -> NativeScene {
     let mut materials = vec![instanced::Material::default(); 3];
     for material in &mut materials {
         material.pbr.textures = [u32::MAX; 4];

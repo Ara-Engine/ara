@@ -24,6 +24,7 @@ use ara_gpu::{
     vulkan::{PassTiming, VulkanDevice},
 };
 use glam::{Mat4, Vec3};
+pub use native::{NativeContent, NativeSeed};
 use std::path::{Path, PathBuf};
 pub use views::{ViewId, ViewOutput, ViewRequest};
 

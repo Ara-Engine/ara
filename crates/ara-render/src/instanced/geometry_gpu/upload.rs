@@ -33,11 +33,12 @@ impl GeometryGpu {
         }
         .limits;
         let previous = previous.filter(|_| !rt);
+        let reuse = previous.map(Self::preparation_seed);
         let packed = match previous {
-            Some(previous) => pack::Packed::new_reusing(
+            Some(_) => pack::Packed::new_reusing(
                 scene,
                 u64::from(limits.max_storage_buffer_range),
-                Some(previous),
+                reuse.as_ref(),
             )?,
             None => pack::Packed::new(scene, u64::from(limits.max_storage_buffer_range))?,
         };
@@ -63,6 +64,7 @@ impl GeometryGpu {
             rt,
             previous.and_then(|p| p.static_pool),
             &mut allocated,
+            None,
         ) {
             Ok((pool, stage)) => {
                 if let Some(stage) = stage {
@@ -81,14 +83,16 @@ impl GeometryGpu {
         }
     }
 
-    fn upload(
+    pub(super) fn upload(
         gpu: &mut VulkanDevice,
         packed: pack::Packed,
         rt: bool,
         resident: Option<Buffer>,
         allocated: &mut Vec<Resource>,
+        mut prepared: Option<&mut preparation::Buffers>,
     ) -> Result<(Self, Option<Buffer>)> {
         ara_gpu::cpu_scope!("NativeGeometry.upload");
+        let preallocated = prepared.is_some();
         let mut result = Self {
             static_pool: None,
             dynamic: None,
@@ -116,25 +120,31 @@ impl GeometryGpu {
             } else {
                 vk::BufferUsageFlags::empty()
             };
-        let pool = allocate(
+        let pool = preparation::take_or_allocate(
             gpu,
+            preparation::STATIC,
             packed.static_size,
             usage | vk::BufferUsageFlags::TRANSFER_DST | vk::BufferUsageFlags::TRANSFER_SRC,
             false,
             allocated,
+            &mut prepared,
         )?;
         result.static_pool = Some(pool);
-        let stage = if packed.static_bytes.is_empty() {
+        let stage = if packed.staged_bytes == 0 {
             None
         } else {
-            let stage = allocate(
+            let stage = preparation::take_or_allocate(
                 gpu,
-                packed.static_bytes.len() as u64,
+                preparation::STAGE,
+                packed.staged_bytes,
                 vk::BufferUsageFlags::TRANSFER_SRC,
                 true,
                 allocated,
+                &mut prepared,
             )?;
-            gpu.upload(stage, &packed.static_bytes)?;
+            if !preallocated {
+                gpu.upload(stage, &packed.static_bytes)?;
+            }
             Some(stage)
         };
         let pool_index = gpu.storage_buffer(pool)?.index;
@@ -142,12 +152,25 @@ impl GeometryGpu {
         let dynamic = if dynamic_bytes.is_empty() {
             None
         } else {
-            let a = allocate(gpu, dynamic_bytes.len() as u64, usage, true, allocated)?;
-            let b = allocate(gpu, dynamic_bytes.len() as u64, usage, true, allocated)?;
-            let c = allocate(gpu, dynamic_bytes.len() as u64, usage, true, allocated)?;
-            gpu.upload(a, dynamic_bytes)?;
-            gpu.upload(b, dynamic_bytes)?;
-            gpu.upload(c, dynamic_bytes)?;
+            let mut skin = [None; 3];
+            for (slot, buffer) in skin.iter_mut().enumerate() {
+                let b = preparation::take_or_allocate(
+                    gpu,
+                    preparation::SKIN0 + slot,
+                    dynamic_bytes.len() as u64,
+                    usage,
+                    true,
+                    allocated,
+                    &mut prepared,
+                )?;
+                if !preallocated {
+                    gpu.upload(b, dynamic_bytes)?;
+                }
+                *buffer = Some(b);
+            }
+            let [Some(a), Some(b), Some(c)] = skin else {
+                unreachable!("three skin buffers")
+            };
             Some([a, b, c])
         };
         result.dynamic = dynamic;
@@ -194,14 +217,18 @@ impl GeometryGpu {
             }
         }
         let row_bytes = bytemuck::cast_slice(&rows);
-        let table = allocate(
+        let table = preparation::take_or_allocate(
             gpu,
+            preparation::TABLE,
             row_bytes.len() as u64,
             vk::BufferUsageFlags::STORAGE_BUFFER,
             true,
             allocated,
+            &mut prepared,
         )?;
-        gpu.upload(table, row_bytes)?;
+        // Prefetched storage can have an earlier submission's conservative
+        // retention stamp even before binding; never overwrite it in flight.
+        gpu.upload_queued(table, row_bytes)?;
         result.table = Some((table, gpu.storage_buffer(table)?.index));
         let mut commands = gpu.begin(Queue::Graphics);
         commands.push(Command::BeginPass("Scene.Geometry.Upload".into()));
@@ -303,9 +330,8 @@ impl GeometryGpu {
         let timings = gpu.resolve(point)?;
         result.stats.bytes =
             packed.static_size + dynamic_bytes.len() as u64 * 3 + row_bytes.len() as u64;
-        result.stats.uploaded_bytes = packed.static_bytes.len() as u64
-            + dynamic_bytes.len() as u64 * 3
-            + row_bytes.len() as u64;
+        result.stats.uploaded_bytes =
+            packed.staged_bytes + dynamic_bytes.len() as u64 * 3 + row_bytes.len() as u64;
         result.stats.reused_bytes = packed
             .copies
             .iter()

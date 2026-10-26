@@ -8,6 +8,7 @@ use ara_gpu::{
     vk,
 };
 use glam::Vec3;
+mod preparation;
 mod reuse;
 
 fn fixture() -> Scene {

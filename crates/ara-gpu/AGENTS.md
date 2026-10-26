@@ -13,6 +13,8 @@ Owns the native GPU boundary. Vulkan uses ash revision
 - `Command::CopyBufferRange` copies aligned ranges with checked capacities/overflow;
   it preserves unrelated destination bytes and is rejected inside rendering.
 - `VulkanDevice`: Vulkan backend; `context()` is read-only native integration access.
+  `prepare_resources` admits two unpublished allocation/host-copy jobs; poll/cancel
+  never waits. Adoption stays on the owner, as do ordered uploads and queue access.
 - `Context::host_wait_stats` snapshots cumulative host time in explicit driver waits.
   Native integration uses `measure_host_wait` for leaf waits only; never nest it.
 - Completed timestamp pools are reused (32 pools, at most 1024 queries each).

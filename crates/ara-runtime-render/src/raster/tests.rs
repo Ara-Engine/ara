@@ -3,6 +3,7 @@ use ara_runtime::{
     components::MeshShape,
     extract::{Draw, Geometry},
 };
+mod preparation;
 
 #[test]
 fn disabled_probe_gi_does_not_report_a_queued_emitter_search() -> Result<()> {
@@ -95,7 +96,7 @@ fn unchanged_secondary_prepare_keeps_generation_and_starts_no_background_jobs() 
     frame.draws = vec![box_draw(1, [2.; 3], [0.; 3], [8.; 3])];
     let candidate = RasterContent::new(frame, Content::default())?;
     let mut renderer = Renderer::new_native(
-        &candidate.prepared.scene,
+        candidate.native.scene(),
         Box::new(candidate.prepared.textures.fork_sources(texture_config())?),
         [96, 64],
         &[],
@@ -282,7 +283,7 @@ fn cpu_prepared_worker_content_publishes_and_rejection_keeps_last_good() -> Resu
     let worker = std::thread::spawn(move || RasterContent::new(frame, terrain_content([0.7; 4])));
     let candidate = worker.join().expect("CPU content worker")?;
     let mut renderer = Renderer::new_native(
-        &candidate.prepared.scene,
+        candidate.native.scene(),
         Box::new(candidate.prepared.textures.fork_sources(texture_config())?),
         [160, 90],
         &[],

@@ -26,6 +26,7 @@ impl FidelityContent {
         schema: &ara_schema::SchemaDb,
         gesture: Option<&crate::world::gesture::Gesture>,
         hidden: &BTreeSet<String>,
+        native_seed: ara_render::NativeSeed,
     ) -> anyhow::Result<JoinHandle<anyhow::Result<PreparedScene>>> {
         ara_gpu::cpu_scope!("SceneContent.snapshot");
         let mut library = ara_runtime::animation::Library::default();
@@ -71,7 +72,8 @@ impl FidelityContent {
                     &hidden,
                 )?;
                 let resolved = content.content(&frame, &workspace, &schema)?;
-                let raster = ara_runtime_render::RasterContent::new(frame, resolved)?;
+                let raster =
+                    ara_runtime_render::RasterContent::new_reusing(frame, resolved, native_seed)?;
                 Ok(PreparedScene { content, raster })
             })
             .context("Scene content worker")
