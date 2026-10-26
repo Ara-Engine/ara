@@ -41,19 +41,19 @@ pub(super) const DEFINITIONS: &[(&str, &str)] = &[
     ),
     (
         "CPU work",
-        "The player's cpu.work_ms: each frame's wall time minus its explicit driver host waits, before quantiles. It gates D26 only when work_coverage covers every measured frame. Hitches are cpu.hitches_over_16ms, which excludes only the process's first presented frame.",
+        "The player's run.cpu.work_ms covers every game frame, including readiness, arrival and warmup, minus explicit driver host waits before quantiles. Full work coverage is required. Whole-run hitches exclude only the first game frame; loading-view latency is reported separately.",
     ),
     (
         "Wall bound",
-        "Where no complete CPU-work metric exists (older players, the editor), cpu.frame_ms and the editor's frame minus its UI fence wait still include GPU, present and other waits. Such a value passes at or under its limit and measures nothing above it.",
+        "Without complete CPU-work coverage, run.cpu.frame_ms and the editor's frame minus its UI fence wait still include GPU, present and other waits. Such a value passes at or under its limit and measures nothing above it. The editor's work_ms is its frame's wall time minus the renderer device's explicit host waits and the UI fence wait.",
     ),
     (
         "Cold / warm",
-        "Player cold: a fresh pipeline cache, only the first frame skipped; warm: the cache it left. Editor cold: a fresh copy of samples/outpost (imports and pipelines from nothing); warm: relaunched on that copy. The OS file cache and driver shader cache stay warm in both.",
+        "Player cold: a fresh pipeline cache; warm: the cache it left. GPU windows wait for raster content, residency and converged GI, then warmup; CPU/hitch rows retain the whole game run. Editor cold: a fresh Outpost copy; warm: relaunched on it. OS and driver caches stay warm.",
     ),
     (
         "Full first scene",
-        "Editor: the first Scene frame rendered and presented after no import is pending (models resolved; texture streaming not tracked). The player has no readiness signal yet.",
+        "Editor: the first Scene frame rendered and presented after no import is pending (models resolved; texture streaming not tracked). Frozen player packs report renderer readiness/GI arrival separately; that is not the editor full-scene metric.",
     ),
     (
         "ꟻLIP / RMSE",
@@ -170,6 +170,13 @@ impl Row {
             Status::Pass
         };
         self
+    }
+    fn failed(mut self, reason: String) -> Self {
+        for gate in &mut self.gates {
+            gate.status = Status::Fail;
+        }
+        self.status = Status::Fail;
+        self.note(reason)
     }
 }
 
@@ -301,14 +308,45 @@ fn gpu(results: &Results, rows: &mut Vec<Row>) {
                     {
                         value = Err("GPU span does not cover every measured frame".into());
                     }
+                    if let Err(reason) = crate::perf::readiness::validate(player) {
+                        value = Err(reason);
+                    }
                 }
+                let row = Row::new("GPU frame", &subject, format!("GPU frame {stat}"))
+                    .gate("D26", D26_GPU[index])
+                    .gate("D27", D27_GPU[index])
+                    .source(source);
                 rows.push(
-                    Row::new("GPU frame", &subject, format!("GPU frame {stat}"))
-                        .gate("D26", D26_GPU[index])
-                        .gate("D27", D27_GPU[index])
-                        .source(source)
-                        .value(value),
+                    if let Some(Ok(window)) = window
+                        && let Some(reason) = crate::perf::readiness::failure(&window.player)
+                    {
+                        row.failed(reason)
+                    } else {
+                        row.value(value)
+                    },
                 );
+            }
+            for (metric, path) in [
+                ("Time to readiness", vec!["readiness", "time_to_ready_ms"]),
+                (
+                    "Arrival/warmup GPU span max",
+                    vec!["arrival", "gpu_span_ms", "max"],
+                ),
+                (
+                    "Arrival/warmup wall frame max",
+                    vec!["arrival", "cpu", "frame_ms", "max"],
+                ),
+            ] {
+                let (value, source) = window_metric(results, window, &path);
+                let mut row = Row::new("Readiness", &subject, metric).source(source)
+                    .note("reported only; arrival includes readiness wait and warmup, with per-pass peaks/coverage in player.json");
+                if let Some(Ok(window)) = window {
+                    row = row.note(format!(
+                        "GPU arrival coverage {}",
+                        window.player["arrival"]["gpu_span_coverage"]
+                    ));
+                }
+                rows.push(row.value(value));
             }
             rows.extend(flip(results, scene.name, preset, &subject));
         }
@@ -367,11 +405,12 @@ fn flip(results: &Results, scene: &str, preset: Preset, subject: &str) -> [Row; 
     })
 }
 
-/// `Ok` when the window's `cpu.work_ms` covers every measured frame (a complete D26
-/// CPU verdict); otherwise why it does not.
+/// Every game frame, including readiness/arrival/warmup, must have CPU-work coverage.
 fn work_coverage(window: &Window) -> Result<(), String> {
-    let frames = window.player["frames"].as_f64();
-    let coverage = &window.player["cpu"]["work_coverage"];
+    let frames = window.player["run"]["cpu"]["frames"]
+        .as_f64()
+        .filter(|v| *v > 0.);
+    let coverage = &window.player["run"]["cpu"]["work_coverage"];
     match (
         coverage["measured"].as_f64(),
         coverage["unavailable"].as_f64(),
@@ -387,13 +426,25 @@ fn work_coverage(window: &Window) -> Result<(), String> {
     }
 }
 
+fn cpu_metric(
+    results: &Results,
+    window: Option<&Measured<Window>>,
+    path: &[&str],
+) -> (Measured<f64>, Option<String>) {
+    let path: Vec<_> = ["run", "cpu"]
+        .into_iter()
+        .chain(path.iter().copied())
+        .collect();
+    window_metric(results, window, &path)
+}
+
 /// A hitch row: the player's hitch count when it reports one, else its longest frame.
 fn hitch(results: &Results, window: Option<&Measured<Window>>, subject: &str, label: &str) -> Row {
-    let (count, source) = window_metric(results, window, &["cpu", "hitches_over_16ms"]);
-    let (longest, _) = window_metric(results, window, &["cpu", "frame_ms", "max"]);
+    let (count, source) = cpu_metric(results, window, &["hitches_over_16ms"]);
+    let (longest, _) = cpu_metric(results, window, &["frame_ms", "max"]);
     match count {
         Ok(count) => {
-            let (eligible, _) = window_metric(results, window, &["cpu", "hitch_samples"]);
+            let (eligible, _) = cpu_metric(results, window, &["hitch_samples"]);
             Row::new("CPU frame", subject, format!("Hitches over 16 ms, {label}"))
                 .unit("frames")
                 .gate("D26", 0.)
@@ -406,7 +457,7 @@ fn hitch(results: &Results, window: Option<&Measured<Window>>, subject: &str, la
                 .value(Ok(count))
         }
         Err(_) => {
-            let (value, source) = window_metric(results, window, &["cpu", "frame_ms", "max"]);
+            let (value, source) = cpu_metric(results, window, &["frame_ms", "max"]);
             Row::new("CPU frame", subject, format!("Longest frame, {label}"))
                 .gate("D26", D26_HITCH)
                 .source(source)
@@ -426,15 +477,14 @@ fn cpu(results: &Results, rows: &mut Vec<Row>) {
         for stat in ["p50", "p95"] {
             let row = match &coverage {
                 Ok(()) => {
-                    let (value, source) = window_metric(results, steady, &["cpu", "work_ms", stat]);
+                    let (value, source) = cpu_metric(results, steady, &["work_ms", stat]);
                     Row::new("CPU frame", &subject, format!("CPU work {stat}"))
                         .gate("D26", D26_CPU)
                         .source(source)
                         .value(value)
                 }
                 Err(reason) => {
-                    let (value, source) =
-                        window_metric(results, steady, &["cpu", "frame_ms", stat]);
+                    let (value, source) = cpu_metric(results, steady, &["frame_ms", stat]);
                     let mut row = Row::new(
                         "CPU frame",
                         &subject,
@@ -458,11 +508,34 @@ fn cpu(results: &Results, rows: &mut Vec<Row>) {
             "after the first frame (cold pipeline cache)",
         );
         rows.push(cold.note("a fresh launch: pipeline compiles must not hitch"));
-        rows.push(hitch(results, steady, &subject, "steady window"));
+        rows.push(hitch(results, steady, &subject, "whole warm run"));
     }
     let orbit = editor_frames(results, false, |name| name == "scene-orbit");
     let subject = "Editor · Outpost Scene orbit (after imports)";
+    // The editor's `work_ms` when every orbit frame reports it; otherwise the wall
+    // bound, which measures nothing above its limit.
+    let work: Option<Vec<f64>> = orbit.as_ref().ok().and_then(|(frames, _)| {
+        frames
+            .iter()
+            .map(|s| s["work_ms"].as_f64())
+            .collect::<Option<Vec<f64>>>()
+            .filter(|work| !work.is_empty())
+    });
     for (stat, fraction) in [("p50", 0.5), ("p95", 0.95)] {
+        if let Some(work) = &work {
+            let mut work = work.clone();
+            rows.push(
+                Row::new("CPU frame", subject, format!("CPU work {stat}"))
+                    .gate("D26", D26_CPU)
+                    .note("D26's CPU limit applied to the editor Scene view")
+                    .source(orbit.as_ref().ok().map(|(_, source)| source.clone()))
+                    .value(
+                        percentile(&mut work, fraction)
+                            .ok_or_else(|| "no Scene orbit frames".into()),
+                    ),
+            );
+            continue;
+        }
         let value = orbit
             .as_ref()
             .map_err(Clone::clone)
@@ -778,6 +851,13 @@ mod tests {
     use super::*;
     use serde_json::json;
     use std::path::PathBuf;
+    fn ready_player(mut player: Value) -> Value {
+        player["completed"] = json!(true);
+        player["readiness"] = json!({"required":true,"state":"ready","renderer_ready":true,
+            "renderer":{"raster":true,"gi_enabled":true},"ready_frame":430,
+            "warmup_frames":60,"gpu_start_frame":491,"time_to_ready_ms":2000.,"timeout_ms":120000.});
+        player
+    }
 
     #[test]
     fn missing_and_bounded_values_never_pass() {
@@ -803,7 +883,7 @@ mod tests {
             ("Outpost", "high"),
             Ok(Window {
                 report: PathBuf::from("r.json"),
-                player: json!({"frames":2,"gpu_span_ms": {"p50":4.0,"p95":6.5,"samples":2},"gpu_span_coverage":{"measured":2,"unavailable":0}}),
+                player: ready_player(json!({"frames":2,"gpu_span_ms": {"p50":4.0,"p95":6.5,"samples":2},"gpu_span_coverage":{"measured":2,"unavailable":0}})),
             }),
         );
         let rows = rows(&results);
@@ -845,7 +925,7 @@ mod tests {
                 ("Outpost", "high"),
                 Ok(Window {
                     report: PathBuf::from("r.json"),
-                    player,
+                    player: ready_player(player),
                 }),
             );
             let rows = rows(&results);
@@ -863,12 +943,13 @@ mod tests {
         let window = |measured: u32, unavailable: u32| {
             Ok(Window {
                 report: PathBuf::from("r.json"),
-                player: json!({"frames": 600, "cpu": {
+                player: json!({"frames": 2, "cpu":{"work_ms":{"p50":1.,"p95":1.},"hitches_over_16ms":0},"run":{"cpu": {
+                    "frames": 600,
                     "work_ms": {"p50": 3.0, "p95": 4.5},
                     "frame_ms": {"p50": 9.0, "p95": 10.0, "max": 40.0},
                     "work_coverage": {"measured": measured, "unavailable": unavailable},
                     "hitches_over_16ms": 2, "hitch_samples": 599,
-                }}),
+                }}}),
             })
         };
         let mut results = Results::default();
@@ -883,12 +964,52 @@ mod tests {
         let outpost = "Outpost · High (Play)";
         assert_eq!(find(outpost, "CPU work p50").status, Status::Pass);
         assert_eq!(find(outpost, "CPU work p95").status, Status::Fail);
-        let hitches = find(outpost, "Hitches over 16 ms, steady window");
+        let hitches = find(outpost, "Hitches over 16 ms, whole warm run");
         assert_eq!((hitches.value, hitches.status), (Some(2.), Status::Fail));
         // Partial coverage keeps the wall bound, which cannot fail.
         let hangar = find("Hangar · High (Play)", "CPU frame p95 (wall bound)");
         assert_eq!(hangar.status, Status::NotMeasured);
         assert!(hangar.note.contains("590 of 600"));
+    }
+
+    #[test]
+    fn readiness_timeout_fails_gpu_rows_and_old_reports_cannot_pass() {
+        for timed_out in [true, false] {
+            let mut player = ready_player(json!({"frames":2,
+                "gpu_span_ms":{"p50":0.1,"p95":0.1,"samples":2},
+                "gpu_span_coverage":{"measured":2,"unavailable":0}}));
+            if timed_out {
+                player["completed"] = json!(false);
+                player["readiness"]["state"] = json!("timed_out");
+            } else {
+                player["readiness"] = Value::Null;
+            }
+            let mut results = Results::default();
+            results.steady.insert(
+                ("Outpost", "high"),
+                Ok(Window {
+                    report: PathBuf::from("timeout/player.json"),
+                    player,
+                }),
+            );
+            for row in rows(&results)
+                .into_iter()
+                .filter(|r| r.subject == "Outpost · High" && r.metric.starts_with("GPU frame"))
+            {
+                assert_eq!(
+                    row.status,
+                    if timed_out {
+                        Status::Fail
+                    } else {
+                        Status::NotMeasured
+                    }
+                );
+                assert!(row.value.is_none());
+                if timed_out {
+                    assert!(row.note.contains("timed out"));
+                }
+            }
+        }
     }
 
     #[test]
@@ -974,5 +1095,44 @@ mod tests {
             "First presented frame (loading view), cold",
         );
         assert_eq!(startup.status, Status::Pass);
+    }
+    #[test]
+    fn editor_orbit_gates_on_cpu_work_only_when_every_frame_reports_it() {
+        let frame = |cpu: f64, work: Option<f64>| json!({"scenario": "scene-orbit", "sample": {"cpu_ms": cpu, "gpu_ms": 1.0, "importing": false, "work_ms": work}});
+        let run = |frames: Vec<Value>| {
+            Some(Ok(Output {
+                path: PathBuf::from("responsiveness.json"),
+                value: json!({"frames": frames, "clicks": {"total": 0, "landed": 0}}),
+            }))
+        };
+        let orbit = "Editor · Outpost Scene orbit (after imports)";
+        let rows_for = |frames: Vec<Value>| {
+            rows(&Results {
+                editor_warm: run(frames),
+                ..Results::default()
+            })
+        };
+        // Every frame reports its work: a measured row that can fail.
+        let complete = rows_for(vec![frame(30., Some(3.)), frame(31., Some(6.))]);
+        let p95 = complete
+            .iter()
+            .find(|r| r.subject == orbit && r.metric == "CPU work p95")
+            .expect("CPU work row");
+        assert_eq!((p95.value, p95.status), (Some(6.), Status::Fail));
+        assert!(
+            !complete
+                .iter()
+                .any(|r| r.subject == orbit && r.metric.contains("wall bound"))
+        );
+        // One frame without it: back to the wall bound, which cannot fail.
+        let partial = rows_for(vec![frame(30., Some(3.)), frame(31., None)]);
+        let bound = partial
+            .iter()
+            .find(|r| {
+                r.subject == orbit && r.metric == "Frame minus UI fence wait p95 (wall bound)"
+            })
+            .expect("bound row");
+        assert_eq!(bound.status, Status::NotMeasured);
+        assert!(!partial.iter().any(|r| r.metric == "CPU work p95"));
     }
 }

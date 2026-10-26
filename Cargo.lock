@@ -1045,6 +1045,7 @@ dependencies = [
  "libc",
  "serde",
  "serde_json",
+ "tempfile",
  "windows-sys 0.61.2",
 ]
 
@@ -1915,6 +1916,7 @@ dependencies = [
  "ara-export-installer",
  "embed-resource",
  "image",
+ "semver",
  "serde_json",
  "tempfile",
  "windows-sys 0.61.2",
@@ -1982,7 +1984,9 @@ dependencies = [
  "ara-asset-format",
  "ara-gpu",
  "ara-json",
+ "ash 0.38.0+1.4.352",
  "bcdec_rs",
+ "blake3",
  "bytemuck",
  "getrandom 0.4.3",
  "serde",
@@ -1999,6 +2003,7 @@ dependencies = [
  "ara-asset-format",
  "ara-gpu",
  "ara-render",
+ "ash 0.38.0+1.4.352",
  "bytemuck",
  "glam 0.30.9",
  "serde",

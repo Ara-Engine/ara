@@ -63,6 +63,11 @@ impl BlockEncoder for Fake {
     }
 }
 fn fixture() -> Result<(wire::Descriptor, mpsc::Receiver<()>, Arc<Counts>)> {
+    fixture_timeout(Duration::from_secs(30))
+}
+fn fixture_timeout(
+    timeout: Duration,
+) -> Result<(wire::Descriptor, mpsc::Receiver<()>, Arc<Counts>)> {
     let listener = TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, 0))?;
     let counts = Arc::new(Counts::default());
     let encoders = (0..2)
@@ -80,13 +85,50 @@ fn fixture() -> Result<(wire::Descriptor, mpsc::Receiver<()>, Arc<Counts>)> {
         server::serve(
             listener,
             &server_descriptor,
-            Arc::new(Pool::new(encoders)),
+            Arc::new(Pool::new(encoders).with_io_timeout(timeout)),
             Duration::from_millis(30),
         )
         .expect("fixture service");
         tx.send(()).expect("fixture receiver");
     });
     Ok((descriptor, rx, counts))
+}
+
+#[test]
+fn cpu_or_cache_work_between_encodes_does_not_expire_a_live_client() -> Result<()> {
+    let (descriptor, done, _) = fixture_timeout(Duration::from_secs(1))?;
+    let lease = descriptor.endpoint.lease()?;
+    let remote = Remote::connect(descriptor)?;
+    let cancel = Cancellation::default();
+    remote.encode(TextureFormat::Bc4, CookPreset::Balanced, &[3; 16], &cancel)?;
+    // Scale the observed 40-second filesystem stall down to a short protocol
+    // deadline; the host still owns the request and its normal worker watchdog.
+    thread::sleep(Duration::from_millis(1250));
+    assert_eq!(
+        remote.encode(TextureFormat::Bc4, CookPreset::Balanced, &[7; 16], &cancel)?,
+        vec![7; 8]
+    );
+    drop(remote);
+    drop(lease);
+    done.recv_timeout(Duration::from_secs(2))
+        .expect("service exits");
+    Ok(())
+}
+
+#[test]
+fn explicit_one_shot_clients_do_not_leave_an_unleased_service_running() -> Result<()> {
+    let (descriptor, done, _) = fixture()?;
+    let remote = Remote::connect(descriptor)?;
+    remote.encode(
+        TextureFormat::Bc4,
+        CookPreset::Balanced,
+        &[3; 16],
+        &Cancellation::default(),
+    )?;
+    drop(remote);
+    done.recv_timeout(Duration::from_secs(2))
+        .expect("one-shot client releases its service");
+    Ok(())
 }
 
 #[test]
@@ -183,6 +225,38 @@ fn authentication_revision_and_bounds_are_checked() -> Result<()> {
         remote.encode(TextureFormat::Bc7, CookPreset::Balanced, &[0; 16], &cancel),
         Err(Error::Cancelled)
     ));
+    drop(remote);
+    drop(lease);
+    done.recv_timeout(Duration::from_secs(2))
+        .expect("service exits");
+    Ok(())
+}
+
+#[test]
+fn bulk_transport_chunks_without_reordering_or_a_stale_tail() -> Result<()> {
+    let (descriptor, done, _) = fixture()?;
+    let lease = descriptor.endpoint.lease()?;
+    let remote = Remote::connect(descriptor)?;
+    let count = wire::MAX_BLOCKS + 7;
+    let mut words = vec![19; count * 16];
+    words[wire::MAX_BLOCKS * 16..].fill(71);
+    let output = remote.encode(
+        TextureFormat::Bc4,
+        CookPreset::Balanced,
+        &words,
+        &Cancellation::default(),
+    )?;
+    assert_eq!(output.len(), count * 8);
+    assert!(
+        output[..wire::MAX_BLOCKS * 8]
+            .iter()
+            .all(|byte| *byte == 19)
+    );
+    assert!(
+        output[wire::MAX_BLOCKS * 8..]
+            .iter()
+            .all(|byte| *byte == 71)
+    );
     drop(remote);
     drop(lease);
     done.recv_timeout(Duration::from_secs(2))

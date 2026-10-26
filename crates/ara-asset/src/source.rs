@@ -166,6 +166,7 @@ impl AssetPipeline {
         let root = root.as_ref().canonicalize()?;
         let watcher = FileWatcher::new(&root)?;
         let project_preset = Some(crate::ProjectImportSettings::read(&root, &schema)?.preset);
+        let worker = worker.with_memo(cache.worker_memo_root());
         let (tx, rx) = mpsc::channel();
         Ok(Self {
             root,

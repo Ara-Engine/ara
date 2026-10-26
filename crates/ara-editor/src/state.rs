@@ -822,8 +822,15 @@ pub(crate) struct Navigation {
     doc: AssetId,
     record: RecordId,
     pub state: EditorState,
+    /// Saves `.ara/editor-layout.json` off the UI thread (every tab switch, split drag
+    /// or window move changes it; a synchronous write once took 203 ms of a click).
+    layout: crate::persist::BackgroundWriter<String>,
 }
 impl Navigation {
+    /// Layout writes that failed since the last call.
+    pub fn take_failures(&self) -> Vec<String> {
+        self.layout.take_failures()
+    }
     pub fn history(&self) -> Value {
         json!(self.store.history())
     }
@@ -866,6 +873,10 @@ impl Navigation {
             doc,
             record,
             state,
+            layout: crate::persist::BackgroundWriter::new("layout-writer", move |text: String| {
+                crate::persist::write_text(&path, &text)
+                    .map_err(|e| format!("The window layout was not saved: {e}"))
+            }),
         })
     }
     pub fn commit(
@@ -873,7 +884,6 @@ impl Navigation {
         candidate: EditorState,
         author: Author,
         why: &str,
-        root: &Path,
     ) -> Result<Value, Vec<ara_diag::Diagnostic>> {
         let layout_changed = candidate.layout != self.state.layout
             || candidate.floating != self.state.floating
@@ -894,34 +904,28 @@ impl Navigation {
         let commit = self.store.transact(meta, [edit])?;
         let result = json!({"state":candidate,"txn":commit.txn(),"revision":self.store.revision()});
         if layout_changed {
-            persist_layout(root, &candidate).map_err(|e| {
+            self.layout.save(layout_text(&candidate).map_err(|e| {
                 vec![ara_diag::Diagnostic::error(
                     ara_diag::codes::IO,
                     e.to_string(),
                 )]
-            })?;
+            })?);
         }
         self.state = candidate;
         Ok(result)
     }
 }
-/// Write the main dock tree and floating windows with the canonical writer.
-pub(crate) fn persist_layout(root: &Path, state: &EditorState) -> anyhow::Result<()> {
-    write_layout(&root.join(".ara/editor-layout.json"), state)
+
+/// The main dock tree and floating windows, as the canonical writer stores them.
+fn layout_text(state: &EditorState) -> anyhow::Result<String> {
+    state
+        .dock()
+        .and_then(|d| d.serialize())
+        .map_err(|e| anyhow::anyhow!(e.to_string()))
 }
 /// Save a named layout (Window › Layouts › Save Layout As…).
 pub(crate) fn write_layout(path: &Path, state: &EditorState) -> anyhow::Result<()> {
-    let text = state
-        .dock()
-        .and_then(|d| d.serialize())
-        .map_err(|e| anyhow::anyhow!(e.to_string()))?;
-    if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent)?;
-    }
-    let temp = path.with_extension("json.tmp");
-    std::fs::write(&temp, text)?;
-    std::fs::rename(temp, path)?;
-    Ok(())
+    Ok(crate::persist::write_text(path, &layout_text(state)?)?)
 }
 /// Project-local saved layouts, by file stem.
 pub(crate) fn saved_layouts(root: &Path) -> Vec<String> {

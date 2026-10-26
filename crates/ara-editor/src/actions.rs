@@ -244,8 +244,11 @@ impl Service for EditorService {
     }
     fn call(&mut self, cx: &mut Cx<'_>, method: &str, params: Value) -> R {
         let result = self.dispatch(cx, method, params);
-        // Preferences that could not be written are warnings on the bus, not stderr.
-        for failure in self.settings.take_failures() {
+        // Preferences and layouts that could not be written are warnings on the bus,
+        // not stderr. Their writes run on writer threads, so a failure shows up here
+        // with the next call.
+        let failures = self.settings.take_failures();
+        for failure in failures.into_iter().chain(self.navigation.take_failures()) {
             cx.log(
                 Diagnostic::warning(crate::codes::SETTINGS, failure)
                     .subject(ara_diag::Subject::system("editor")),
@@ -910,7 +913,7 @@ impl EditorService {
             .session()
             .map(|s| s.author.clone())
             .unwrap_or(ara_ops::Author::Human);
-        let mut result = self.navigation.commit(state, author, method, cx.root())?;
+        let mut result = self.navigation.commit(state, author, method)?;
         if method == "editor.camera" {
             result["camera"] = json!(viewed);
         }

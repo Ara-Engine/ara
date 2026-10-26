@@ -4,6 +4,8 @@
 //! - **Flush:** a document edited by a transaction is written canonically once it
 //!   has been quiet for the debounce time (temp file, then rename), and a `flush`
 //!   entry with its revision and hash goes to the journal once the write lands.
+//!   Journal and diagnostics writes take the same queue (`journal`, `persist_diag`);
+//!   `settle_files` waits for all of it.
 //! - **Watch:** OS notifications (or polling) report changed files. A changed file
 //!   is validated, then three-way merged (base: the last synced text, ours: memory,
 //!   theirs: disk) and applied as a human transaction (`external edit`). Invalid
@@ -18,6 +20,7 @@ use std::time::Instant;
 
 use crate::file_io::{FileThread, Reply, Save, Stamp};
 use crate::project_settings::read;
+use ara_diag::bus::Meta;
 use ara_diag::{Diagnostic, codes};
 use ara_doc::{AssetId, Document, Edit, OrderKey, field};
 use ara_ops::{Author, TxnMeta};
@@ -195,7 +198,7 @@ impl State {
         let synced = self.files.synced.get(id).filter(|s| s.doc == *doc);
         if let Some(synced) = synced.filter(|_| !always) {
             let hash = journal::hash(&synced.text);
-            self.journal(&Entry::Flush {
+            self.journal(Entry::Flush {
                 doc: id.to_string(),
                 rev,
                 hash,
@@ -277,7 +280,7 @@ impl State {
                     self.files.deleted.remove(&id);
                     self.files.synced.remove(&id);
                     self.files.diverged.remove(&id);
-                    self.journal(&Entry::Flush {
+                    self.journal(Entry::Flush {
                         doc: id.to_string(),
                         rev,
                         hash: journal::hash("deleted"),
@@ -288,7 +291,34 @@ impl State {
                     self.log(d.file(path));
                 }
             },
-            Reply::Done => {}
+            Reply::Compacted { result, .. } => {
+                if let Err(d) = result {
+                    self.log(d);
+                }
+            }
+            Reply::JournalFailed(d) => self.log(d),
+            Reply::DiagnosticsFailed { seqs, error } => {
+                self.diag_file.retry(seqs);
+                let d = Diagnostic::warning(
+                    codes::IO,
+                    format!("cannot write `.ara/diagnostics.jsonl`: {error}"),
+                );
+                self.diag.push(d, Meta::default());
+            }
+            Reply::Done | Reply::Settled => {}
+        }
+    }
+
+    /// Waits until everything queued on the file thread so far has landed, journal
+    /// and diagnostics writes included, applying what it reports meanwhile.
+    pub(crate) fn settle_files(&mut self) {
+        self.files.io.settle();
+        while let Some(reply) = self.files.io.reply() {
+            let settled = matches!(reply, Reply::Settled);
+            self.file_reply(reply);
+            if settled {
+                break;
+            }
         }
     }
 
@@ -301,7 +331,7 @@ impl State {
                 self.files
                     .synced
                     .insert(id.clone(), Synced::new(path, text, doc));
-                self.journal(&Entry::Flush {
+                self.journal(Entry::Flush {
                     doc: id.to_string(),
                     rev,
                     hash,

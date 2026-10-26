@@ -26,6 +26,8 @@ pub use presentation::{PresentationImage, QualityChoice, QualityPreset, RenderOp
 mod raster;
 pub use raster::{RasterContent, RasterUpdate, RasterView};
 mod readback;
+mod readiness;
+pub use readiness::PresentationReadiness;
 pub mod terrain_mesh;
 pub mod two_d;
 pub mod vfx;

@@ -19,6 +19,11 @@ use std::{
 /// What the connection reports to the view-model.
 #[derive(Debug)]
 pub enum Event {
+    /// Bootstrap verification finished off-thread; native integrations may use this CLI.
+    Prepared {
+        /// Immutable, verified service executable, outside the GUI installation.
+        executable: PathBuf,
+    },
     /// Connected and subscribed: every view must refresh (no replay is promised).
     Connected,
     /// An older service is retained because it is supervising open projects.
@@ -79,6 +84,23 @@ impl Connection {
         executable: PathBuf,
         wake: impl Fn() + Send + 'static,
     ) -> Self {
+        Self::spawn(directory, move || Ok(executable.clone()), wake, false)
+    }
+    /// Prepare an installed bootstrap and connect on the worker, in parallel with
+    /// device/first-frame creation. Preparation errors use normal reconnect backoff.
+    pub fn start_preparing_with_wake(
+        directory: PathBuf,
+        prepare: impl FnMut() -> Result<PathBuf, RpcError> + Send + 'static,
+        wake: impl Fn() + Send + 'static,
+    ) -> Self {
+        Self::spawn(directory, prepare, wake, true)
+    }
+    fn spawn(
+        directory: PathBuf,
+        prepare: impl FnMut() -> Result<PathBuf, RpcError> + Send + 'static,
+        wake: impl Fn() + Send + 'static,
+        announce_prepared: bool,
+    ) -> Self {
         let (calls, inbox) = mpsc::channel();
         let (outbox, events) = mpsc::channel();
         let outbox = Outbox {
@@ -89,7 +111,16 @@ impl Connection {
         let flag = stop.clone();
         let worker = thread::Builder::new()
             .name("ara-hub-rpc".into())
-            .spawn(move || worker(&directory, &executable, &inbox, &outbox, &flag))
+            .spawn(move || {
+                worker(
+                    &directory,
+                    prepare,
+                    announce_prepared,
+                    &inbox,
+                    &outbox,
+                    &flag,
+                )
+            })
             .map_or_else(
                 |error| {
                     eprintln!("ara-hub: cannot start the connection thread: {error}");
@@ -145,29 +176,45 @@ fn unreachable(result: &Result<Value, RpcError>) -> bool {
 
 fn worker(
     directory: &Path,
-    executable: &Path,
+    mut prepare: impl FnMut() -> Result<PathBuf, RpcError>,
+    announce_prepared: bool,
     inbox: &Receiver<Call>,
     outbox: &Outbox,
     stop: &AtomicBool,
 ) {
     let log = directory.join("hub-start.log");
     let mut backoff = Duration::from_millis(250);
+    let mut executable = None;
     while !stop.load(Ordering::Relaxed) {
-        let connected = if executable.is_file() {
-            ara_hub_service::connect_checked(directory, executable).and_then(|mut service| {
-                service.client.call("hub.subscribe", json!({}))?;
-                Ok(service)
-            })
-        } else {
-            Err(ara_diag::Diagnostic::error(
-                codes::DAEMON_UNREACHABLE,
-                format!(
-                    "The Ara CLI was not found at `{}`; reinstall Ara or build `ara`",
-                    executable.display()
-                ),
-            )
-            .into())
-        };
+        let connected = (|| {
+            if executable.is_none() {
+                let path = prepare()?;
+                if announce_prepared {
+                    let _ = outbox.send(Event::Prepared {
+                        executable: path.clone(),
+                    });
+                }
+                executable = Some(path);
+            }
+            let executable = executable
+                .as_deref()
+                .expect("successful preparation supplies a path");
+            if executable.is_file() {
+                ara_hub_service::connect_checked(directory, executable).and_then(|mut service| {
+                    service.client.call("hub.subscribe", json!({}))?;
+                    Ok(service)
+                })
+            } else {
+                Err(ara_diag::Diagnostic::error(
+                    codes::DAEMON_UNREACHABLE,
+                    format!(
+                        "The Ara CLI was not found at `{}`; reinstall Ara or build `ara`",
+                        executable.display()
+                    ),
+                )
+                .into())
+            }
+        })();
         let service = match connected {
             Ok(service) => service,
             Err(error) => {

@@ -27,6 +27,9 @@ impl Remote {
                 "codec service revision changed".into(),
             ));
         }
+        // Waiting for GPU work belongs to the native import's existing watchdog,
+        // rather than a shorter socket deadline that can silently force CPU work.
+        stream.set_read_timeout(None)?;
         Ok(Self {
             descriptor,
             client: Mutex::new(Client {

@@ -13,7 +13,6 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
-use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
@@ -26,6 +25,7 @@ use ara_schema::{Schema, SchemaDb};
 use serde::Deserialize;
 use serde_json::{Value, json};
 
+use crate::file_io::DiagWrite;
 use crate::host::State;
 use crate::params::{LogsParams, SeverityParam};
 use crate::service::{Cx, Method, Service, parse};
@@ -437,13 +437,9 @@ impl Service for DiagService {
                 let p: DiagClearParams = parse(params)?;
                 let f = filter(p.codes, p.severity, p.subjects, p.origin)?;
                 let removed = st.diag.clear(&f);
-                if removed > 0
-                    && let Err(e) = st.diag_file.rewrite(&st.diag)
-                {
-                    st.log(Diagnostic::warning(
-                        codes::IO,
-                        format!("cannot rewrite `.ara/diagnostics.jsonl`: {e}"),
-                    ));
+                if removed > 0 {
+                    let write = st.diag_file.rewrite(&st.diag);
+                    st.files.io.diagnostics(write);
                 }
                 Ok(json!({ "removed": removed, "cursor": st.diag.cursor() }))
             }
@@ -460,7 +456,8 @@ impl Service for DiagService {
 /// still sees what a play process or an import worker reported after the host
 /// restarts. Call errors belong to their session and are not kept. Lines are
 /// appended as records change; the newest line per record wins, and the file is
-/// rewritten once it holds four times more lines than records.
+/// rewritten once it holds four times more lines than records. This prepares each
+/// write; the host's file thread (`file_io`) performs it.
 pub(crate) struct Persist {
     path: PathBuf,
     dirty: BTreeSet<u64>,
@@ -503,15 +500,20 @@ impl Persist {
         }
     }
 
-    /// Appends changed records (at most every `PERSIST_EVERY` unless `now`), and
-    /// compacts the file when it has grown.
-    pub(crate) fn flush(&mut self, store: &DiagStore, now: bool) -> std::io::Result<()> {
+    /// Marks records changed again after their write failed.
+    pub(crate) fn retry(&mut self, seqs: Vec<u64>) {
+        self.dirty.extend(seqs);
+    }
+
+    /// The append of changed records (at most every `PERSIST_EVERY` unless `now`),
+    /// or a rewrite when the file has grown; None when nothing is due.
+    pub(crate) fn flush(&mut self, store: &DiagStore, now: bool) -> Option<DiagWrite> {
         if self.dirty.is_empty() || (!now && self.last.elapsed() < PERSIST_EVERY) {
-            return Ok(());
+            return None;
         }
         self.last = Instant::now();
         if self.lines + self.dirty.len() > 4 * store.len() + 256 {
-            return self.rewrite(store);
+            return Some(self.rewrite(store));
         }
         let mut text = String::new();
         let mut lines = 0;
@@ -522,19 +524,18 @@ impl Persist {
                 lines += 1;
             }
         }
-        // On failure the records stay dirty and the next flush retries them.
-        fs::OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(&self.path)?
-            .write_all(text.as_bytes())?;
-        self.dirty.clear();
         self.lines += lines;
-        Ok(())
+        Some(DiagWrite {
+            path: self.path.clone(),
+            text,
+            append: true,
+            seqs: std::mem::take(&mut self.dirty).into_iter().collect(),
+        })
     }
 
-    /// Writes the engine's current records only (after a clear, or to compact).
-    pub(crate) fn rewrite(&mut self, store: &DiagStore) -> std::io::Result<()> {
+    /// The engine's current records only, replacing the file (after a clear, or to
+    /// compact).
+    pub(crate) fn rewrite(&mut self, store: &DiagStore) -> DiagWrite {
         let mut text = String::new();
         let mut lines = 0;
         for r in store.query(&Filter::default()) {
@@ -546,11 +547,12 @@ impl Persist {
                 lines += 1;
             }
         }
-        let tmp = self.path.with_extension("jsonl.tmp");
-        fs::write(&tmp, text)?;
-        fs::rename(&tmp, &self.path)?;
-        self.dirty.clear();
         self.lines = lines;
-        Ok(())
+        DiagWrite {
+            path: self.path.clone(),
+            text,
+            append: false,
+            seqs: std::mem::take(&mut self.dirty).into_iter().collect(),
+        }
     }
 }

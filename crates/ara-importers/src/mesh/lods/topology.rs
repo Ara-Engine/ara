@@ -1,8 +1,16 @@
 //! Geometric borders and per-sheet area budgets survive attribute vertex splits.
 use super::Vertex;
 use meshopt::SimplifyVertex;
-use std::collections::BTreeMap;
+use std::{
+    collections::HashMap,
+    hash::{BuildHasherDefault, DefaultHasher},
+};
 mod cards;
+
+// IDs are assigned in source order, never bucket order. The only map iteration
+// below ORs border bits; all floating-point reductions retain triangle order.
+// A fixed hasher avoids consulting randomness in the pure importer.
+type Lookup<K, V> = HashMap<K, V, BuildHasherDefault<DefaultHasher>>;
 
 pub(super) struct Topology {
     pub(super) locks: Vec<SimplifyVertex>,
@@ -34,7 +42,7 @@ fn find(parent: &mut [usize], mut i: usize) -> usize {
 
 impl Topology {
     pub(super) fn new(vertices: &[Vertex], indices: &[u32]) -> Self {
-        let mut positions = BTreeMap::new();
+        let mut positions = Lookup::default();
         let mut first = Vec::<usize>::new();
         let mut seam = Vec::new();
         let mut points = Vec::with_capacity(vertices.len());
@@ -57,7 +65,7 @@ impl Topology {
         }
         let triangles = indices.as_chunks::<3>().0;
         let mut parent: Vec<_> = (0..triangles.len()).collect();
-        let mut edges = BTreeMap::<(usize, usize), (usize, usize)>::new();
+        let mut edges = Lookup::<(usize, usize), (usize, usize)>::default();
         for (number, triangle) in triangles.iter().enumerate() {
             let ids = triangle.map(|i| points[i as usize]);
             for (a, b) in [(ids[0], ids[1]), (ids[1], ids[2]), (ids[2], ids[0])] {
@@ -70,7 +78,7 @@ impl Topology {
                 *count += 1;
             }
         }
-        let mut components = BTreeMap::new();
+        let mut components = Lookup::default();
         let ids: Vec<_> = (0..triangles.len())
             .map(|i| {
                 let next = components.len();

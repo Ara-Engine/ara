@@ -33,6 +33,16 @@ pub struct TextureStats {
 pub trait Textures: Send + std::any::Any {
     /// Address-independent cooked payload/view digest. Called at content publication.
     fn content_digest(&self) -> [u8; 32];
+    /// Poll optional allocation/host staging before publication. False retains
+    /// the candidate and last-good scene; this never submits GPU work or waits.
+    /// An abandoned candidate must cancel/retire preparation in `destroy`.
+    fn preallocate(
+        &mut self,
+        _gpu: &mut VulkanDevice,
+        _previous: Option<&dyn Textures>,
+    ) -> Result<bool> {
+        Ok(true)
+    }
     /// Initialize every registered map before the first draw.
     fn initialize(&mut self, gpu: &mut VulkanDevice) -> Result<TextureStats>;
     /// Prepare a replacement against the completed resident set. Borrowed images

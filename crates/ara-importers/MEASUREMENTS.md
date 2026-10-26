@@ -385,3 +385,340 @@ reflection snapshot pass. The snapshot updates exactly three preset doc strings,
 then passes with updates disabled. Formatting and strict all-target Clippy cover
 the touched packages; no full workspace integration gate was run. Five core tests
 are declared ignored in the normal run; the two GPU probes above ran explicitly.
+
+## Device reuse and sample versions: 2026-10-26
+
+The same-binary local/pooled follow-up measures Showcase at 13.260 -> 11.441 s
+mean, and Outpost at 33.018 -> 26.425 s in the first clean pair, with a second
+pooled Outpost run of 24.615 s. Two control I/O stalls remain explicitly marked
+in the full A/F/L/P/P/L/F/A matrix; they are not credited as improvements.
+These are fresh daemon assets-ready timings, not interactive installed editor
+startup. Showcase still misses 10 s. Full stage sums, lifecycle tests and canonical
+per-asset evidence are in
+[`ara-texture-gpu/MEASUREMENTS.md`](../ara-texture-gpu/MEASUREMENTS.md#leased-device-reuse-2026-10-26).
+
+Dedicated sidecar commit `21de76f5` refreshes 111 Outpost and 33 Showcase version
+strings, with no settings or other data changes. Expected versions come from the
+installed registry; `cargo test -p ara-importers --test sample_versions` detects
+future skew without writing tracked files. `ARA_UPDATE_DEMO=1` explicitly updates
+them through typed sidecar edits and the canonical writer. The test fails before
+regeneration, then passes with updates disabled. Current sidecars reduce source
+snapshot work (132/452 to 66/230 per sample); no isolated metadata wall-speedup
+claim follows from the failed exploratory comparison.
+
+## Verified cache publication: 2026-10-26
+
+Checkpoint `757e458b` removes per-object/action filesystem flushes. Objects are
+atomically published before actions. Every read verifies all referenced lengths,
+content hashes and payload formats before returning a result. Missing or torn data
+is a miss; repair atomically replaces damaged files under a per-entry OS lock.
+Readers never unlink a racing repair, and different verified results for one key
+remain nondeterminism errors. Import keys, compression and artifact bytes are unchanged.
+
+The store-only Showcase replay (33 actions, four threads) fell from 6.124 s to
+0.291 s initially and 0.439 s in the final replay. The control's 332 flushes used
+16.317 summed wall seconds but only 0.438 thread CPU seconds. Its writes used
+0.187 summed wall seconds. This attributes the control's wait to flushes.
+The new Outpost replay still took 10.226 s at 100% machine CPU: writes alone used
+26.869 summed wall seconds versus 0.234 thread CPU seconds. Retain that I/O outlier;
+removing flushes does not remove every storage wait. Defender was active, but its
+recorder was denied with `0x80070005`; these runs do not attribute waits to Defender.
+
+The real daemon cold-cache ABBA below used the same source/profile/roots and one
+GPU lock, with fresh project/import/driver caches. OS/vendor caches were retained.
+Batch-27 builds were active. There was no owned build or stress load during timers.
+
+| Order / cache policy | Showcase assets ready (s) | Outpost assets ready (s) |
+|---|---:|---:|
+| A1 / per-file flush | 21.235 | 22.198 |
+| B1 / verified atomic publication | 18.085 | 22.109 |
+| B2 / verified atomic publication | 11.077 | 23.280 |
+| A2 / per-file flush | 10.263 | 26.087 |
+
+This loaded matrix establishes no reliable end-to-end speedup or sub-10-second
+Showcase result. The control itself varied twofold. B1 Showcase retained a 3.593 s
+maximum cache-install wait; A2 Outpost retained 51.513 summed cache-store seconds.
+All 592 action keys and 7,160 artifact references match v4; a post-timer physical
+read verifies 5,344,011,560 logical referenced bytes across the eight caches.
+No CPU fallbacks occurred, and helper starts/exits balanced with two devices per run.
+
+Recovery checks kill writers during object writes, between object/action publication,
+after action publication and while repairing under the OS lock. Explicit torn and
+same-length lost-write injections cover failures a process kill alone cannot induce
+while the OS cache survives. The final stress passed 200 concurrent repairs and
+20 recovery loops (80 killed writers) in 29.995 s under the integration load.
+Exploratory sharing-denial failures remain in the ignored logs; the retained fix
+retries transient Windows sharing/access denials and only accepts a live replacement
+after exact verification. Permanent denied publication still fails.
+
+Raw evidence: `target/ara-dev/import-speed/cache-policy-summary.json`,
+`cache-policy-{a1,b1,b2,a2}-balanced-{showcase,outpost}/`,
+`cache-policy-verification.log`, and `cache-diagnostic/`.
+
+## Device-free warm import metadata: 2026-10-26
+
+Dependency discovery remains outside the editor/daemon. Concurrent cold requests
+share bounded one-shot worker batches; verified memos cover importer/version,
+source bytes, settings and worker arguments. Warm metadata hits start no discovery
+children. Settings/source/version changes invalidate metadata without changing the
+final action identity. Unsupported workers fall back to individual requests.
+
+A verified capability memo covers the immutable codec cohort, ordered adapter
+UUID/LUID identifiers, driver version/UUID and explicit Vulkan ICD selection.
+Looking it up creates a Vulkan instance only, never a device or encoder service.
+Unrelated worker rebuilds do not invalidate it. A cache miss prepares the encoder
+and confirms its identity; a mismatch retries with the CPU key. The daemon shares
+this hint with source/cook workers through its existing version-metadata request.
+No template content caches are shipped or copied, and no codec bytes changed.
+
+The frozen cached Outpost has 115 sources. Under batch-28 load, the eager control
+needed 119/121 worker launches, 2.651/4.899 s of encoder preparation, and
+18.431/10.523 s from the first source snapshot to final publication. It ran no
+imports. An intermediate two-control-worker implementation had zero encoder
+services/prepares/imports and unchanged keys: 5.237/1.081 s to settle. The first
+retains a 3.323 s cache-read wait; the repeat's identity lookup cost 0.211 s and
+one worker's spawn/queue span cost 0.479 s. These motivated combining the hint
+with versions in one control child. Hub launch is a separate boundary: the
+intermediate runs took 7.298/4.039 s including daemon/player startup.
+
+The final A/B/B/A uses the existing cached project, profile, codecs and cache policy;
+only metadata startup differs. Each run closes its daemon and waits for encoder
+helper exit. No owned compilation runs during the GPU-locked matrix.
+
+| Run | Source snapshot to settled (ms) | Version request to settled (ms) | Hub open to settled (ms) | Worker children | Encoder services |
+|---|---:|---:|---:|---:|---:|
+| A1 / eager control | 79116.405 | 79704.625 | 83425.214 | 121 | 1 |
+| B1 / combined cached metadata | 385.875 | 905.070 | 2182.337 | 1 | 0 |
+| B2 / combined cached metadata | 400.764 | 676.855 | 1352.502 | 1 | 0 |
+| A2 / eager control | 9434.768 | 9720.362 | 11911.029 | 121 | 1 |
+
+All four publish exactly 115 unchanged v4 action keys and run zero imports. Both
+candidate runs have zero encoder preparation and zero discovery batches. The
+source/cache work is below 0.5 s, while total import initialization including the
+one control process and validated identity lookup remains 0.677–0.905 s. Do not
+describe that latter boundary as below 0.5 s, or as editor first-frame acceptance.
+Candidate identity lookup takes 248/193 ms; peak individual cache loads take
+150/150 ms. These spans overlap other work and must not be summed as a stage total.
+
+Keep A1's 51.158 s cache-read wait and 21.301 s encoder preparation as outliers.
+A2's preparation takes 7.642 s. No speedup ratio is based on the 79-second control.
+Batch-28 is active; sampled machine CPU before A1/B1/B2/A2 is 23/49/0/19 percent,
+which is neither an interval average nor evidence of quiet storage. The checked-in
+`measurements/warm-*.json` records preserve counters, stage spans and binary hashes;
+raw traces/results are under the matching ignored `target/ara-dev/import-speed/`
+folders. `measurements/cache-policy-2026-10-26.json` retains the earlier cold matrix.
+
+Focused tests exercise batch/legacy compatibility, source/settings invalidation,
+torn metadata repair, zero device preparation on a cache hit, one preparation on
+the first miss and CPU-key retry after an identity mismatch. The production owner
+uses the same worker for metadata, snapshots and cooks; remote/custom workers keep
+the original fallbacks. No importer version bump or sample-sidecar rewrite is needed.
+
+Final validation also runs the ignored unified Compute integer-oracle probe and
+the production GPU-worker protocol probe through the GPU lock. The latter forces
+six real encodes across all presets by disabling intermediate texture memo reuse
+after capability negotiation; otherwise memo hits correctly have no encoder PID.
+After the service exits, a fresh worker recovers the capability hint without a new
+service. Physical verification reads all 115 actions, 1,459 artifact references and
+909,360,516 logical referenced bytes successfully. The fixture's initial memo-hit
+assertion failure remains in the ignored logs; no production codec fix was needed.
+
+## Bounded parallel geometry: 2026-10-26
+
+The subsequent eight-case fresh-project ABBA does not confirm a cold-import win:
+Outpost open-to-ready means regress from 28.567 s to 40.454 s (all runs retained).
+For preview 16, `mesh::PARALLEL_GEOMETRY = false` restores sequential LOD0 solves
+and classic/virtual cooks by default. Re-enable only after an end-to-end ABBA win.
+The diagnostic results below describe the experiment, not the shipping default.
+
+The fresh Hub-created Outpost profile `cold-mesh-profile-a0-outpost` uses the real
+daemon pipeline, default Balanced, a fresh project/import/profile/driver cache and
+the machine-wide GPU lock. It publishes all 115 assets in **55.556 s after open**,
+or **60.439 s including project creation**. All 115 action keys and 1,459 artifact
+references match v4, with 97 GPU-backed imports and zero CPU fallbacks. This is a
+loaded storage outlier, retained rather than used as a speedup baseline. Available
+RAM falls from 4.67 to 3.98 GiB; point samples of machine CPU are 12/20 percent,
+not an interval average or evidence of quiet storage. No owned build runs during
+the timer. Ordinary filesystem/vendor caches are retained.
+
+| Stage | Summed elapsed seconds |
+|---|---:|
+| Parse | 0.025 |
+| Mesh, including classic and virtual geometry | 19.643 |
+| Classic LOD, nested in mesh | 12.086 |
+| Image decode | 7.059 |
+| Mips | 3.035 |
+| Compression, including GPU/service waits | 35.541 |
+| Device creation, helper total | 1.028 |
+| BLAKE3 hashing, all traced calls | 1.591 |
+| Cache store | 660.328 |
+| Atomic installation, nested in store | 630.509 |
+| Persist/close, nested in installation | 444.689 |
+| Writes, nested in installation | 137.049 |
+
+Stages overlap across workers and have nested spans; they must not be added into
+a critical path. Total tracked worker/helper CPU is 74.484 s. There are 51 cache
+installation spans above five seconds (maximum 9.993 s). The last asset waits
+47.891 s for admission. These waits explain why this loaded run cannot establish
+the cold targets or an isolated mesh speedup.
+
+A diagnostic now separates the final writer close from persist. A four-action,
+four-thread store-only replay verifies its outputs in 116.244 ms: 29 writes total
+6.527 ms, attributes/atomic renames 117.854 ms (maximum 101.306 ms), and closes
+0.957 ms (maximum 0.060 ms). This small replay does not reproduce the long storage
+waits. `tempfile` uses `SetFileAttributesW` followed by `MoveFileExW` without
+`MOVEFILE_WRITE_THROUGH`; these results do not attribute the outlier to Defender
+or justify another cache-policy change.
+
+Geometry can be isolated without encoding or storing. The explicit diagnostic
+example `cargo run -p ara-importers --example geometry_replay -- PROJECT 4` reads
+the completed project's verified texture memo and backend identity, forces classic
+and virtual geometry to cook, and compares each entire `ImportOutput` literally
+against the production action. It fails if any texture needs encoding, if settings
+or versions are stale, or if an output byte differs. Dependency discovery runs in
+this standalone diagnostic process, never in the editor. This replay is not a
+fresh-project end-to-end measurement.
+
+All three diagnostic variants below verify the same 101 registered glTF models
+from the fresh Outpost project. Each uses four worker threads, the same dev profile
+(own code opt-level 1, dependencies 3), a GPU lock and no owned compilation during
+the timer. Other agents remain active; these are single diagnostic passes.
+
+| Summed interval (s) | Original order/maps | Parallel scheduling | Plus topology lookups |
+|---|---:|---:|---:|
+| Model cook | 19.073 | 12.771 | 12.531 |
+| Mesh | 15.848 | 11.406 | 10.786 |
+| Classic LOD | 9.769 | 8.830 | 8.409 |
+| Topology/attribute preparation | 1.712 | 1.865 | 1.480 |
+| Native simplifier calls | 7.747 | 8.793 | 8.557 |
+| Card-area checks | 0.022 | 0.018 | 0.020 |
+| Virtual geometry | 5.875 | 6.564 | 6.504 |
+
+The implementation evaluates LOD0-based targets in pairs within the existing
+bounded pool, then applies acceptance, geometric/attribute fallback, area checks,
+monotone errors and the goal stop in original order. A one-thread budget evaluates
+one candidate at a time. At most one speculative candidate is unused. glTF classic
+and virtual cooks overlap, with the same immutable inputs and error precedence.
+Topology maps use a fixed hasher: IDs are assigned in source order; unordered
+iteration only ORs border flags. Floating-point reductions keep triangle order.
+No simplifier parameters, compression, importer versions, keys or artifact formats
+change. More simultaneous native work can increase summed simplifier/virtual
+intervals through preemption and overlap; these sums are not thread CPU time.
+
+The final source after syncing main repeats all 101 exact production-output
+comparisons (1,441 artifact references) at one and four threads. The replay's
+summed model cooks are 23.932 s and 11.038 s respectively. Both reuse all textures;
+neither creates a device or encodes. They are additional correctness/diagnostic
+passes, not a new controlled baseline/candidate wall comparison.
+
+The focused checkpoint runs formatting, strict all-target Clippy and all ordinary
+tests for `ara-asset`, `ara-importers` and `ara-import-worker`, plus the explicitly
+GPU-locked production-worker protocol test (six actual encodes and lease cleanup).
+There are 69 ordinary libtest passes, three declared ignores in that run, and
+successful custom worker-limit/fairness harnesses; the GPU ignore runs explicitly.
+LOD tests compare complete static and deformed outputs at caps 1/4/8 across private
+pools of one/four threads; existing seam, area, depth and sample-version tests pass.
+The main-sync shader cohort is re-cooked with all artifacts reused unchanged.
+
+The controlled fresh-project wall matrix follows below. Neither the diagnostic
+reduction nor the retained 55-second storage outlier establishes Showcase below
+10 s or Outpost below 20 s.
+Canonical evidence is in `measurements/parallel-geometry-2026-10-26.json`; raw
+traces, per-model outputs, frozen worker hashes and logs remain under
+`target/ara-dev/import-speed/` (`cold-mesh-profile-a0-outpost/`, `geometry-*`,
+`cache-close-a0/`, `mesh-final-*`, `mesh-gpu-protocol/`).
+
+### Fresh-project ABBA and regression attribution
+
+Eight cases run through the real Hub/daemon pipeline under the GPU lock, with
+fresh project/import/profile/driver caches and the same frozen CLI/player/profile.
+A is the matched `63e07a1d` control worker; B is `939cb781`. Other agents are held;
+the installed preview may remain open and idle. OS/vendor caches are retained.
+
+| Run | Showcase open to ready (s) | Outpost open to ready (s) | Showcase including create (s) | Outpost including create (s) |
+|---|---:|---:|---:|---:|
+| A1 | 12.324 | 28.403 | 14.165 | 38.353 |
+| B1 | 13.401 | 34.035 | 15.732 | 42.799 |
+| B2 | 10.775 | 46.872 | 12.371 | 51.052 |
+| A2 | 11.275 | 28.732 | 12.582 | 35.956 |
+
+Retain all cases: mean Outpost regresses 28.567 to 40.454 s; Showcase is 11.800
+to 12.088 s. The runner exhausts PATH length before A2 by repeatedly appending
+native paths. Only its environment-path deduplication is corrected, then A2 resumes
+under the lock; no completed case is discarded or repeated. All 592 action keys
+and 7,160 artifact references match v4. Physical verification reads 5,344,011,560
+logical referenced bytes, with zero CPU fallbacks. The owner subsequently deletes
+the eight scratch projects after reparse checks; raw traces, catalogs and IDs stay
+under this worktree's `target/ara-dev/import-speed/parallel-lod-*` on C:.
+
+| Outpost interval/counter | A1 | B1 | B2 | A2 |
+|---|---:|---:|---:|---:|
+| Native worker CPU (s) | 64.391 | 64.719 | 64.781 | 63.250 |
+| Mesh elapsed sum (s) | 15.609 | 10.379 | 10.118 | 14.938 |
+| Classic LOD elapsed sum (s) | 9.764 | 7.971 | 7.805 | 9.176 |
+| Cache-store elapsed sum (s) | 72.745 | 104.949 | 258.034 | 61.063 |
+| Cache-write elapsed sum (s) | 33.850 | 28.383 | 99.510 | 10.822 |
+| Cache-write thread CPU (s) | 0.250 | 0.250 | 0.250 | 0.203 |
+| Longest cache install (s) | 4.541 | 6.401 | 8.623 | 2.463 |
+| Installs over one second | 8 | 7 | 22 | 4 |
+| Largest worker peak RSS (MiB) | 444.0 | 443.6 | 444.9 | 430.2 |
+
+Every worker uses four pool threads; the experiment adds tasks, not another pool.
+The observed cost is off-CPU filesystem waits: B1 includes 6.2–6.4 s link/read/write
+stalls, while B2 has several worker/daemon writes ending almost together after
+about 8.5 s. B2's last asset starts 41.725 s after open; its import takes 4.548 s,
+with only 0.469 s of process CPU. Both controls retain smaller I/O stalls too.
+There are 667 store and 2,477 install spans in each Outpost case, so this is not
+an increase in published content. Substage intervals overlap and nest; do not sum
+them into a critical path. Thread CPU counters are coarse, and individual process
+RSS peaks are not a simultaneous system-memory measurement.
+
+These traces locate the added wait but do not prove why the filesystem stalls.
+Changed arrival/order and storage pressure remain hypotheses; there is no recorded
+system fault/queue telemetry or Defender attribution. The shipping default is
+restored by `40cc47a7`; re-enabling requires an end-to-end ABBA win. Canonical
+evidence: `measurements/parallel-geometry-abba-2026-10-26.json`.
+
+## Byte-exact Color8 preparation: 2026-10-26
+
+The existing decode timer includes entropy decoding, serial RGBA32F expansion and
+sRGB transfer. PNG/JPEG/HDR/EXR are supported; there is no DDS/KTX source-import
+path to bypass for these samples. The measured change fuses eight-bit color
+expansion and transfer into one parallel destination. A 256-value table is built
+through image's conversion for the actual L8/LA8/RGB8/RGBA8 layout and the unchanged
+sRGB function. A direct u8/255 table initially fails one grayscale float bit;
+that failed probe log is retained. Small images below 256 pixels, other sample
+types, normals, masks, linear data and HDR use the qualified original path.
+There are no new dependencies, formats, versions, cache inputs or codec changes.
+
+The standalone probe compiles the production helper source, including cancellation
+and destination allocation. It runs A/B/B/A per semantic image over 147 albedo
+paths (229,403,604 base pixels), with two Rayon threads under the GPU lock and
+batch-32 gate load. This corpus includes repeated content, not 147 unique models.
+Every decoded base float bit matches; no encoding, device creation or cache store
+runs. The table below averages each variant's two preparation passes per image,
+then sums images; it is not a fresh-project import wall measurement.
+
+| Corpus phase total (s) | Own code opt1 | Own code opt3 |
+|---|---:|---:|
+| Reference entropy decode | 1.380 | 1.480 |
+| Reference RGBA32F conversion | 0.680 | 0.689 |
+| Reference transfer and validation | 3.563 | 3.391 |
+| Reference preparation, complete | 4.248 | 4.084 |
+| Production lookup preparation | 1.806 | 1.389 |
+| Preparation speed ratio | 2.35x | 2.94x |
+| Original mip generation, one pass | 1.417 | 1.292 |
+
+The earlier lighter prototype records 3.35x/3.60x; it omits the production
+cancellation/validation and buffer policy and is not the shipping-path result.
+Neither phase result establishes the cold targets. No mip or compression algorithm
+changes. Focused tests check all code values/four layouts/odd tails at one and four
+threads, literal complete KTX2 mip bytes against the pre-table path, cancellation,
+all preset/thread contracts and sample versions. Formatting, strict all-target
+Clippy and all 38 importer tests pass, with none ignored. The main-sync shader
+re-cook reuses every artifact unchanged.
+
+Canonical evidence: `measurements/texture-color-lookup-2026-10-26.json`.
+Raw probe inputs, source/library hashes, both failed/successful logs and all timing
+rows stay under `target/ara-dev/import-speed/texture-prepare/`. Fresh-project
+before/after remains a separate measurement; parallel geometry stays disabled.

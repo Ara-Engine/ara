@@ -177,6 +177,11 @@ pub(crate) struct Acquisition {
 }
 
 impl Acquisition {
+    #[cfg(test)]
+    pub(crate) fn request_serial(&self) -> u64 {
+        self.newest
+    }
+
     pub(crate) fn new(cache: PathBuf) -> Self {
         Self::with_method(cache, std::env::var_os("ARA_PROBE_GI_RT").is_none())
     }

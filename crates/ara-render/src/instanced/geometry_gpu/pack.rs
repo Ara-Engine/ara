@@ -1,6 +1,7 @@
 //! One static pool plus a separate deforming-vertex pool. LOD indices stay local.
 use super::*;
 
+#[derive(Clone)]
 pub(super) struct PackedLod {
     pub vertex_offset: u64,
     pub vertex_count: u32,
@@ -11,6 +12,7 @@ pub(super) struct PackedLod {
 
 pub(super) struct Packed {
     pub static_bytes: Vec<u8>,
+    pub staged_bytes: u64,
     pub static_size: u64,
     pub copies: Vec<Copy>,
     pub reused_geometries: usize,
@@ -32,7 +34,11 @@ impl Packed {
         Self::new_reusing(scene, limit, None)
     }
 
-    pub fn new_reusing(scene: &Scene, limit: u64, previous: Option<&GeometryGpu>) -> Result<Self> {
+    pub fn new_reusing(
+        scene: &Scene,
+        limit: u64,
+        previous: Option<&preparation::GeometrySeed>,
+    ) -> Result<Self> {
         ara_gpu::cpu_scope!("NativeGeometry.pack");
         let vertex_bytes = std::mem::size_of::<Vertex>() as u64;
         let mut static_len = 0u64;
@@ -129,6 +135,7 @@ impl Packed {
             .sum();
         let mut result = Self {
             static_bytes: Vec::with_capacity(usize::try_from(static_total - reused_bytes)?),
+            staged_bytes: 0,
             static_size: static_total,
             copies: Vec::new(),
             reused_geometries: reused.iter().filter(|old| old.is_some()).count(),
@@ -178,6 +185,7 @@ impl Packed {
                 count: u32::try_from(geometry.lods.len())?,
             });
         }
+        result.staged_bytes = result.static_bytes.len() as u64;
         Ok(result)
     }
 

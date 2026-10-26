@@ -39,7 +39,16 @@ fn numbers(value: &Value, prefix: &str, result: &mut BTreeMap<String, f64>) {
             for (key, value) in map {
                 if matches!(
                     key.as_str(),
-                    "samples" | "frames" | "warmup" | "epoch" | "pid"
+                    "samples"
+                        | "frames"
+                        | "warmup"
+                        | "epoch"
+                        | "pid"
+                        | "generation"
+                        | "ready_frame"
+                        | "gpu_start_frame"
+                        | "warmup_frames"
+                        | "timeout_ms"
                 ) {
                     continue;
                 }
@@ -110,6 +119,14 @@ impl Destination<'_> {
             "unsupported player metrics format"
         );
         ensure!(
+            player["completed"] != false,
+            "player measurement failed: {}",
+            player["readiness"]
+        );
+        if options.wait_ready {
+            super::readiness::validate(&player).map_err(anyhow::Error::msg)?;
+        }
+        ensure!(
             player["validation"] == false,
             "perf requires an optimized player with validation disabled"
         );
@@ -130,7 +147,7 @@ impl Destination<'_> {
             .get("quality")
             .and_then(Value::as_str)
             .unwrap_or(options.preset.name());
-        let identity = serde_json::json!({"pack":pack_hash,"preset": preset,"width":options.width,"height":options.height,"profile":options.profile,"camera":player.get("camera")});
+        let identity = serde_json::json!({"pack":pack_hash,"preset": preset,"width":options.width,"height":options.height,"profile":options.profile,"camera":player.get("camera"),"wait_ready":options.wait_ready,"warmup":options.warmup});
         let previous = base.join(format!(
             "previous-{}-{}x{}-{}.json",
             preset, options.width, options.height, options.profile

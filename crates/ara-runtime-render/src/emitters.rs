@@ -439,6 +439,8 @@ pub(crate) fn emission_edited(
 pub(crate) struct Search {
     running: Option<std::thread::JoinHandle<Emitters>>,
     queued: bool,
+    #[cfg(test)]
+    started: usize,
 }
 
 impl Search {
@@ -467,7 +469,16 @@ impl Search {
                 .spawn(move || job.run())
                 .context("emitter search thread")?,
         );
+        #[cfg(test)]
+        {
+            self.started += 1;
+        }
         Ok(())
+    }
+
+    #[cfg(test)]
+    pub(crate) fn searches_started(&self) -> usize {
+        self.started
     }
 
     /// Whether a search is running or queued.

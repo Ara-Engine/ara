@@ -249,6 +249,22 @@ pub fn run(exe: &Path, args: &Args, host: &mut dyn Host) -> Result<Outcome> {
             kind_name(kind)
         ),
     };
+    // The same OS lock is held by the updater and engine's Hub registration.
+    let _hub_lock = if kind == Kind::Hub {
+        let parent = plan.destination.parent().context("Hub install parent")?;
+        fs::create_dir_all(parent)?;
+        let lock = fs::File::options()
+            .create(true)
+            .truncate(false)
+            .write(true)
+            .read(true)
+            .open(parent.join(".ara-hub-update.lock"))?;
+        lock.try_lock()
+            .context("another Hub install/update is running")?;
+        Some(lock)
+    } else {
+        None
+    };
     if replacing {
         loop {
             let blockers = processes::running_from(&plan.destination);
@@ -275,6 +291,14 @@ pub fn run(exe: &Path, args: &Args, host: &mut dyn Host) -> Result<Outcome> {
             total: expanded,
         })
     })?;
+    if replacing && kind == Kind::Hub && !hub_build_is_newer(stage.path(), &plan.destination)? {
+        return Ok(Outcome::Installed(Installed {
+            plan,
+            replaced: false,
+            leftover: None,
+            output: "The installed Hub build is already current or newer.".into(),
+        }));
+    }
     host.progress(Step::Swap);
     let leftover = if replacing {
         match swap(stage, &plan, args, host)? {
@@ -293,6 +317,34 @@ pub fn run(exe: &Path, args: &Args, host: &mut dyn Host) -> Result<Outcome> {
         leftover,
         output,
     }))
+}
+
+fn hub_build_is_newer(source: &Path, destination: &Path) -> Result<bool> {
+    let read = |root: &Path| -> Result<Value> {
+        let bytes = fs::read(root.join("hub.json"))?;
+        Ok(serde_json::from_slice(
+            bytes.strip_prefix(b"\xef\xbb\xbf").unwrap_or(&bytes),
+        )?)
+    };
+    let new = read(source)?;
+    let old = read(destination)?;
+    let version = |v: &Value| -> Result<semver::Version> {
+        Ok(v["version"].as_str().context("Hub version")?.parse()?)
+    };
+    Ok(match version(&new)?.cmp(&version(&old)?) {
+        std::cmp::Ordering::Greater => true,
+        std::cmp::Ordering::Less => false,
+        std::cmp::Ordering::Equal => match (
+            new["build"]["generation"].as_u64(),
+            old["build"]["generation"].as_u64(),
+        ) {
+            (Some(new_generation), Some(old_generation)) => {
+                new["build"]["commit"] != old["build"]["commit"] && new_generation > old_generation
+            }
+            (Some(_), None) | (None, None) => true,
+            (None, Some(_)) => false,
+        },
+    })
 }
 
 fn kind_name(kind: Kind) -> &'static str {

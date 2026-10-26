@@ -14,8 +14,17 @@ pub use shared::PlaySurface;
 use std::collections::BTreeMap;
 
 struct Texture {
-    _image: Image,
+    image: Image,
     slot: u32,
+}
+/// A texture copy waiting for the frame's submission: `staged[offset..]` into `image`.
+struct PendingUpload {
+    id: u32,
+    image: vk::Image,
+    size: [u32; 2],
+    offset: u64,
+    /// The image is new (undefined contents) rather than one being updated.
+    fresh: bool,
 }
 #[derive(Clone, Copy)]
 struct Draw {
@@ -59,7 +68,9 @@ pub enum Overlay {
         /// Semantic X/Z axis tints.
         axes: [[f32; 4]; 2],
     },
-    /// GPU-only hover lookup; no CPU ID-buffer readback per pointer event.
+    /// GPU-only hover lookup; no CPU ID-buffer readback per pointer event. With an
+    /// outline group table ([`NativeUi::outline_groups`]) it outlines every channel in
+    /// the hovered channel's hover group.
     Hover {
         /// Normalized pointer position in the viewport.
         uv: [f32; 2],
@@ -68,7 +79,9 @@ pub enum Overlay {
     },
     /// Silhouette from the real entity-ID texture.
     Outline {
-        /// Compact render index, one-based.
+        /// Compact render index, one-based; with an outline group table
+        /// ([`NativeUi::outline_groups`]), the outline colour group: every channel in it
+        /// outlines as one shape, with no edges between its channels.
         index: u32,
         /// Semantic selection or review tint.
         color: [f32; 4],
@@ -97,6 +110,13 @@ pub struct NativeUi {
     instance_buffer: Option<Buffer>,
     mask_buffer: Option<Buffer>,
     textures: BTreeMap<u32, Texture>,
+    /// This frame's texture uploads: recorded at the start of its submission, so a
+    /// frame with new glyphs or images waits once, not once per upload.
+    pending: Vec<PendingUpload>,
+    /// Their pixels, copied into `staging` at submission.
+    staged: Vec<u8>,
+    /// Upload staging reused across frames (every submission completes first).
+    staging: Option<Buffer>,
     external: BTreeMap<u32, u32>,
     external_images: BTreeMap<u32, vk::Image>,
     free_slots: Vec<u32>,
@@ -111,6 +131,8 @@ pub struct NativeUi {
     overlays: Vec<Overlay>,
     overlay_rect: Box2,
     outline_texture: Option<u32>,
+    /// UI image mapping entity-ID channels to outline groups (see `outline_groups`).
+    outline_groups: Option<u32>,
 }
 impl NativeUi {
     /// Create an adapter on an existing device, with no secondary viewport bridge.
@@ -136,6 +158,9 @@ impl NativeUi {
             instance_buffer: None,
             mask_buffer: None,
             textures: BTreeMap::new(),
+            pending: Vec::new(),
+            staged: Vec::new(),
+            staging: None,
             external: BTreeMap::new(),
             external_images: BTreeMap::new(),
             free_slots: (0..256).rev().collect(),
@@ -148,6 +173,7 @@ impl NativeUi {
             overlays: Vec::new(),
             overlay_rect: Box2::default(),
             outline_texture: None,
+            outline_groups: None,
         };
         ui.overlays = Vec::new();
         ui.initialize(gpu.info.graphics_family)?;
@@ -174,6 +200,17 @@ impl NativeUi {
         self.overlay_rect = rect;
         self.outline_texture = Some(texture);
         self.overlays = overlays;
+    }
+    /// Outline and hover by group instead of by channel: `table` is a UI image (uploaded
+    /// through the UI renderer) whose texel `channel % 4096, channel / 4096` holds that
+    /// channel's hover group in red + green × 256 and its outline colour group in blue's
+    /// low 7 bits (0: none); blue's bit 7 marks ground (terrain). A group outlines as one
+    /// shape: several channels that are one object (a terrain's chunks, a model's parts)
+    /// show no edges between them, and ground only outlines against the sky, the void
+    /// or other ground (what stands on it is in front of it). `None` outlines single
+    /// channels.
+    pub fn outline_groups(&mut self, table: Option<u32>) {
+        self.outline_groups = table;
     }
     /// Borrow an offscreen renderer image as a UI resource; it must remain valid until replaced.
     /// The adapter transitions it from CopySource to sampled and back around its own submit.
@@ -234,6 +271,7 @@ impl NativeUi {
         self.readback()
     }
     fn upload_inner(&mut self, texture: TextureUpload<'_>) -> Result<()> {
+        ara_gpu::cpu_scope!("UI.upload");
         if self.external.contains_key(&texture.id) {
             return Ok(());
         }
@@ -243,16 +281,28 @@ impl NativeUi {
                 && texture.width as usize * texture.height as usize * 4 == texture.rgba.len(),
             "Invalid UI upload"
         );
-        let staging = self.memory.buffer(
-            texture.rgba.len() as u64,
-            vk::BufferUsageFlags::TRANSFER_SRC,
-        )?;
-        staging.write(texture.rgba)?;
+        let size = [texture.width, texture.height];
+        // A newer upload of the same texture this frame supersedes an earlier one.
+        self.pending.retain(|p| p.id != texture.id);
+        let offset = self.staged.len() as u64;
+        self.staged.extend_from_slice(texture.rgba);
+        // The same size updates the image in place: no allocation, same descriptor.
+        if let Some(existing) = self.textures.get(&texture.id)
+            && existing.image.size == size
+        {
+            self.pending.push(PendingUpload {
+                id: texture.id,
+                image: existing.image.image,
+                size,
+                offset,
+                fresh: false,
+            });
+            return Ok(());
+        }
         let image = self.memory.image(
-            [texture.width, texture.height],
+            size,
             vk::ImageUsageFlags::TRANSFER_DST | vk::ImageUsageFlags::SAMPLED,
         )?;
-        self.upload_texture(&image, &staging)?;
         let slot = if let Some(old) = self.textures.get(&texture.id) {
             old.slot
         } else {
@@ -261,13 +311,15 @@ impl NativeUi {
                 .ok_or_else(|| anyhow::anyhow!("UI texture heap exhausted"))?
         };
         self.write_texture(slot, image.view);
-        self.textures.insert(
-            texture.id,
-            Texture {
-                _image: image,
-                slot,
-            },
-        );
+        self.pending.push(PendingUpload {
+            id: texture.id,
+            image: image.image,
+            size,
+            offset,
+            fresh: true,
+        });
+        // The replaced image is idle: every submission completes before it returns.
+        self.textures.insert(texture.id, Texture { image, slot });
         Ok(())
     }
     fn write_texture(&self, slot: u32, view: vk::ImageView) {

@@ -7,6 +7,30 @@ use std::{
     process::{Command, Stdio},
 };
 
+/// Start bootstrap hashing/copying and service connection before creating the GPU.
+pub(super) fn connect(
+    directory: PathBuf,
+    config: PathBuf,
+    override_path: Option<PathBuf>,
+    wake: impl Fn() + Send + 'static,
+) -> crate::connection::Connection {
+    crate::connection::Connection::start_preparing_with_wake(
+        config,
+        move || {
+            let phase = std::time::Instant::now();
+            let result = service(&directory, override_path.as_deref()).map_err(|error| {
+                ara_proto::RpcError::from(ara_diag::Diagnostic::error(
+                    ara_diag::codes::DAEMON_UNREACHABLE,
+                    format!("Prepare Hub service: {error:#}"),
+                ))
+            });
+            ara_hub_service::startup::record("ui.bootstrap", phase.elapsed());
+            result
+        },
+        wake,
+    )
+}
+
 pub(super) fn service(directory: &Path, override_path: Option<&Path>) -> Result<PathBuf> {
     let standalone = directory.join("hub.json").is_file();
     // Older updaters forwarded --ara pointing to the previous bootstrap. Such a
@@ -45,6 +69,10 @@ pub(super) fn launch(
         directory.join("hub.json").is_file() && !directory.join("engine.json").exists(),
         "Install the standalone Ara Hub to enable self-updates; engine-bundled Hubs are updated with their engine"
     );
+    ensure!(
+        !config.starts_with(&directory),
+        "Hub update state must be outside its installation directory"
+    );
     fs::create_dir_all(config.join("updater"))?;
     let runner = config
         .join("updater")
@@ -64,6 +92,8 @@ pub(super) fn launch(
     ara_update::write_json(&request, &plan)?;
     let mut command = Command::new(runner);
     command
+        // Shortcut launches inherit the install cwd; retaining it blocks Windows rename.
+        .current_dir(config)
         .env("ARA_CONFIG_DIR", config)
         .arg(&request)
         .arg(std::process::id().to_string())
@@ -75,6 +105,14 @@ pub(super) fn launch(
         use std::os::windows::process::CommandExt;
         command.creation_flags(0x0800_0000);
     }
-    command.spawn().context("start external Hub updater")?;
+    let child = command.spawn().context("start external Hub updater")?;
+    #[cfg(feature = "rehearsal")]
+    if std::env::var_os("ARA_RELEASE_TEST_API").is_some() {
+        ara_update::write_json(
+            &config.join("rehearsal-updater.json"),
+            &serde_json::json!({"pid":child.id()}),
+        )?;
+    }
+    let _ = child;
     Ok(())
 }

@@ -1,0 +1,104 @@
+{
+  "cliSha256": "119327897F0F36FCE048960563B8130172D04DB89B1B918F277B99A527604BFE",
+  "counts": {
+    "action.hash": 115,
+    "asset.published": 115,
+    "cache.load": 346,
+    "hash.blake3": 2716,
+    "ipc.decode": 2,
+    "ipc.encode": 2,
+    "ipc.read": 2,
+    "ipc.write": 2,
+    "sidecar.read": 230,
+    "source.snapshot": 230,
+    "texture.identity_cache_hit": 1,
+    "texture.identity_lookup": 1,
+    "worker.discovery_cache_hit": 124,
+    "worker.queue": 1,
+    "worker.spawn": 1
+  },
+  "cpuBefore": "49",
+  "deviceServices": 0,
+  "differentKeys": 0,
+  "discoveryBatches": 0,
+  "discoveryHits": 124,
+  "encoderPrepares": 0,
+  "finalCacheLoads": 115,
+  "identityHits": 1,
+  "imports": 0,
+  "label": "warm-final-b1",
+  "openToAllPublishedMs": 2182.3372,
+  "publications": 115,
+  "snapshotStartToSettledMs": 385.8745,
+  "stages": [
+    {
+      "count": 115,
+      "maxMs": 24.1244,
+      "name": "action.hash",
+      "summedMs": 327.51990000000023
+    },
+    {
+      "count": 346,
+      "maxMs": 149.93400000000003,
+      "name": "cache.load",
+      "summedMs": 16694.75939999999
+    },
+    {
+      "count": 2716,
+      "maxMs": 15.1179,
+      "name": "hash.blake3",
+      "summedMs": 553.764900000001
+    },
+    {
+      "count": 2,
+      "maxMs": 0.0571,
+      "name": "ipc.decode",
+      "summedMs": 0.0756
+    },
+    {
+      "count": 2,
+      "maxMs": 0.0149,
+      "name": "ipc.encode",
+      "summedMs": 0.0249
+    },
+    {
+      "count": 2,
+      "maxMs": 272.1643,
+      "name": "ipc.read",
+      "summedMs": 272.17870000000005
+    },
+    {
+      "count": 2,
+      "maxMs": 0.018600000000000002,
+      "name": "ipc.write",
+      "summedMs": 0.025500000000000002
+    },
+    {
+      "count": 230,
+      "maxMs": 0.2185,
+      "name": "sidecar.read",
+      "summedMs": 5.818199999999999
+    },
+    {
+      "count": 230,
+      "maxMs": 103.84140000000001,
+      "name": "source.snapshot",
+      "summedMs": 15605.7991
+    },
+    {
+      "count": 1,
+      "maxMs": 248.3244,
+      "name": "texture.identity_lookup",
+      "summedMs": 248.3244
+    },
+    {
+      "count": 1,
+      "maxMs": 245.417,
+      "name": "worker.queue",
+      "summedMs": 245.417
+    }
+  ],
+  "versionsStartToSettledMs": 905.07,
+  "workerSha256": "40A71A7E2DD71C7A33A06F1D108D9AAC7BEB383E6A290C349ACA1E63F55298FC",
+  "workers": 1
+}

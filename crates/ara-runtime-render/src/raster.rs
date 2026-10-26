@@ -14,6 +14,7 @@ use std::path::PathBuf;
 mod batch;
 mod fade;
 mod prepared;
+mod readiness;
 pub use prepared::RasterContent;
 #[cfg(test)]
 mod tests;
@@ -29,7 +30,7 @@ pub struct RasterUpdate {
 
 struct Preparation {
     snapshot_changed: bool,
-    replacement: Option<(Prepared, u64)>,
+    replacement: Option<(Prepared, u64, ara_render::NativeContent)>,
 }
 
 /// Derived native content and VFX on a caller-owned renderer/device. It never
@@ -93,11 +94,17 @@ impl RasterView {
     /// Keep progressive editor views polling until acquired probe surfaces arrive
     /// and moved instances settle back into them.
     pub fn needs_frame(&self) -> bool {
-        self.emitter_search.is_busy()
-            || self.fades.is_active()
-            || self.gi.as_ref().is_some_and(|gi| {
-                gi.is_pending() || self.mobility.settling() || !self.gi_updates.is_empty()
-            })
+        self.emitter_search.is_busy() || self.fades.is_active() || self.probe_gi_pending()
+    }
+
+    /// GI acquisition/delivery only; emitters and model fades have their own work.
+    pub(crate) fn probe_gi_pending(&self) -> bool {
+        self.gi.as_ref().is_some_and(|gi| {
+            self.pending_gi
+                || gi.is_pending()
+                || self.mobility.settling()
+                || !self.gi_updates.is_empty()
+        })
     }
 
     /// Installs a finished emitter search (waiting for the running one when
@@ -218,19 +225,42 @@ impl RasterView {
     }
 
     /// Publish a CPU-prepared content snapshot at the device's frame boundary.
-    /// Call `RasterContent::new` on a worker; only GPU adoption runs here. Failure
-    /// retains the renderer's last completed content and presentation.
+    /// Build on a worker and preallocate before an asynchronous upload scope.
+    /// Synchronous callers drain preparation here. Failure retains last-good.
     pub fn publish_content(
         &mut self,
         renderer: &mut Renderer,
-        candidate: RasterContent,
+        mut candidate: RasterContent,
         plan: RasterPlan,
     ) -> Result<RenderFrame> {
+        if let Err(error) = candidate.native.reserve_shadow_quality(&plan.quality) {
+            candidate.destroy(renderer)?;
+            return Err(error);
+        }
+        loop {
+            match candidate.preallocate(renderer) {
+                Ok(true) => break,
+                Ok(false) if !renderer.gpu().deferring_completion() => {
+                    // Synchronous callers explicitly publish a complete generation.
+                    std::thread::sleep(std::time::Duration::from_millis(1));
+                }
+                result => {
+                    candidate.destroy(renderer)?;
+                    return match result {
+                        Err(error) => Err(error),
+                        _ => anyhow::bail!(
+                            "preallocate native content before an asynchronous upload scope"
+                        ),
+                    };
+                }
+            }
+        }
         let RasterContent {
             frame,
             content,
             prepared,
             key,
+            native,
         } = candidate;
         let look = FrameEnvironment::resolve(&frame.look, frame.environment.exposure);
         self.prepare_inner(
@@ -241,7 +271,7 @@ impl RasterView {
             || Ok(content),
             Preparation {
                 snapshot_changed: true,
-                replacement: Some((prepared, key)),
+                replacement: Some((prepared, key, native)),
             },
         )?;
         Ok(frame)
@@ -309,12 +339,19 @@ impl RasterView {
                 }
                 let config = texture_config();
                 let (mut prepared, key) = match replacement {
-                    Some((prepared, key)) => (prepared, Some(key)),
-                    None => (native::prepare(frame, content, config)?, None),
+                    Some((mut prepared, key, native)) => {
+                        prepared.scene = renderer.publish_native_content(native)?;
+                        (prepared, Some(key))
+                    }
+                    None => {
+                        let mut prepared = native::prepare(frame, content, config)?;
+                        prepared.enable_motion();
+                        let textures = prepared.textures.fork_sources(config)?;
+                        renderer.replace_native_scene(&prepared.scene, Box::new(textures))?;
+                        (prepared, None)
+                    }
                 };
                 prepared.enable_motion();
-                let textures = prepared.textures.fork_sources(config)?;
-                renderer.replace_native_scene(&prepared.scene, Box::new(textures))?;
                 self.key = key.unwrap_or_else(|| content_key(&prepared));
                 let arrivals = self
                     .prepared
@@ -526,13 +563,25 @@ impl RasterView {
         view: &mut ara_render::ViewId,
         request: &ara_render::ViewRequest<'_>,
     ) -> Result<ara_render::ViewOutput> {
+        self.prepare_secondary_frame(renderer)?;
+        let output = renderer.render_secondary(view, request)?;
+        self.secondary_frame_submitted();
+        Ok(output)
+    }
+
+    /// Apply shared model-arrival factors before the secondary camera copies its
+    /// native rows. Call inside that frame's ordered preparation scope.
+    pub fn prepare_secondary_frame(&mut self, renderer: &mut Renderer) -> Result<()> {
         let prepared = self.prepared.as_mut().context("native raster content")?;
         with_emitter_lights(&mut prepared.scene, &self.emitter_lights, |scene| {
             self.fades.apply(scene, renderer)
-        })?;
-        let output = renderer.render_secondary(view, request)?;
+        })
+    }
+
+    /// Advance arrival fades only for a successfully submitted secondary frame,
+    /// never while polling a retained image or rejecting/coalescing a request.
+    pub fn secondary_frame_submitted(&mut self) {
         self.fades.presented();
-        Ok(output)
     }
 
     /// Wait only at an explicit capture/measurement boundary, never in live rendering.

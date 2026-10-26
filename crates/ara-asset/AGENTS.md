@@ -35,7 +35,11 @@ below normal. Dependency discovery does not wait behind an entire encoder queue.
 HotReload only publishes from apply_boundary; never install results from poll.
 Cancellation/supersession invalidate epochs. Keep current assets alive on errors.
 Settings-selected source files use Importer::dependencies_with_settings and
-ProcessWorker::discover_with_settings. snapshot includes their exact bytes, so
+ProcessWorker::discover_with_settings. Concurrent cold discovery shares supervised
+one-shot batches; verified discovery memos avoid children on warm opens. Importer
+version, source bytes, settings and worker arguments invalidate this pure metadata.
+Old workers fall back to individual requests. `worker_metadata` covers both paths.
+snapshot includes dependency bytes, so
 companion edits participate in action identity and filesystem invalidation.
 
 Sidecars are import documents with one i_settings record. Commands return kernel
@@ -58,14 +62,25 @@ Export via exact ProcessWorker preset, or disable HotReload.progressive explicit
 ImportContext.metrics is optional offline profiling; never encode timing values.
 `ARA_IMPORT_TRACE_DIR` enables canonical JSON event streams (blank-line separated)
 for stage, CPU, queue, IPC, cache and final boundary-publication measurements.
+ARA_IMPORT_TRACE_CACHE_DETAIL=1 additionally separates cache read/create/write/persist.
 Importer/ImporterRegistry::import_with_memo optionally share pure texture tasks;
 custom importers and remote caches keep their existing default behavior. FileCache
-uses a disposable `intermediates/` namespace without fsync; final publication still
-validates and durably publishes immutable objects/actions. Quiescent GC evicts memo
-entries. Memo availability and thread scheduling never change final action keys.
+uses a disposable `intermediates/` namespace. Both caches publish objects atomically
+before action records, without per-file fsync. Every hit verifies all object hashes,
+lengths and payloads; torn/missing data is a miss that re-imports. Writers repair bad
+entries atomically; readers never unlink a concurrent repair. Different verified
+results for one key remain errors. Quiescent GC evicts memo entries. Cache recovery,
+memo availability and thread scheduling never change final action keys.
 
 ImportServices supplies an optional BlockEncoder. Resolve its immutable backend
 before action lookup; encoded actions and texture memo keys include it. Capability
-negotiation calls prepare once. EncoderUnavailable retries retained inputs with
+metadata hints defer prepare until a cache miss. Hints never alter backend action
+identity; miss preparation must confirm the exact hinted identity before cooking.
+`versions_with_encoder_hint` shares this device-free lookup with the version query;
+project owners must reuse that ProcessWorker for their AssetPipeline.
+EncoderUnavailable retries retained inputs with
 the CPU key and disables that backend for the session. CPU contract fixtures use
 ProcessWorker::with_texture_encoder(false); legacy CPU request bytes stay unchanged.
+Optional EncoderEndpoint leases keep an out-of-process device pool alive across
+jobs; ImportJob retains the lease even if its ProcessWorker handle is dropped.
+record_import_trace records helper CPU/stages through the same opt-in trace sink.

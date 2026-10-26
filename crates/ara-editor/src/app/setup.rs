@@ -30,6 +30,9 @@ pub struct Options {
     pub verify_ux: bool,
     /// Scene to open instead of the project's main scene (`levels/hangar.scene`).
     pub scene: Option<String>,
+    /// Entities to select once the scene is open (comma-separated addresses), e.g. for
+    /// a capture of their outline.
+    pub select: Option<String>,
     /// Start Play (in the Game view) once the window is up.
     pub play: bool,
     /// Run the alpha journey route (open, import, place, prefab, C#, Play, failure,
@@ -41,6 +44,10 @@ pub struct Options {
     /// Replay a new user's first hour on a fresh project (`app/qa.rs`); writes
     /// `first-hour.json` and a capture per step.
     pub verify_first_hour: bool,
+    /// Capture the Scene view from open to settled and through an orbit, a fly and a
+    /// pan, with per-frame renderer state (`app/scene_quality.rs`); writes
+    /// `scene-quality.json` and the captures.
+    pub verify_scene_quality: bool,
     /// Run the loading window offscreen on the project (`loading`): its real run's
     /// milestones and every state, in both themes, as PNGs in the output folder.
     pub verify_loading: bool,
@@ -69,6 +76,7 @@ impl Options {
             || self.verify_journey
             || self.verify_responsiveness
             || self.verify_first_hour
+            || self.verify_scene_quality
             || self.verify_loading
             || self.headless
     }
@@ -112,9 +120,11 @@ impl Default for Options {
             verify_panels: false,
             verify_ux: false,
             scene: None,
+            select: None,
             play: false,
             verify_journey: false,
             verify_first_hour: false,
+            verify_scene_quality: false,
             verify_loading: false,
             verify_responsiveness: false,
             settle: None,
@@ -124,6 +134,10 @@ impl Default for Options {
 pub(super) fn prepare(editor: &mut Editor, options: &Options) -> ara_ui::Result<()> {
     if let Some(scene) = &options.scene {
         editor.action("editor.scene.open", json!({"scene": scene}))?;
+    }
+    if let Some(select) = &options.select {
+        let entities: Vec<&str> = select.split(',').map(str::trim).collect();
+        editor.action("editor.select", json!({"entities": entities}))?;
     }
     if options.play {
         editor

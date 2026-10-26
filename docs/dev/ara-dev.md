@@ -324,23 +324,56 @@ value and limit per row). It builds the perf roots plus `ara-editor` and `ara-sa
 feature resolution, freezes Outpost, Hangar and Showcase packs once per sample tree
 (`target/d26/packs`), then runs, each step under the GPU lock:
 
-- per scene, a cold High player window (fresh pipeline cache, only the first frame skipped:
-  cold startup and hitches) and a steady window per preset (GPU p50/p95, CPU wall, warm startup);
+- per scene, a cold High launch (fresh pipeline cache) and a warm launch per preset.
+  GPU windows start after renderer readiness and warmup; CPU/hitch rows retain
+  readiness, content/GI arrival and warmup frames in both launches;
 - `ara-samples capture <project> <look> --quality all --reference 256` per scene (ꟻLIP/RMSE),
   or `--flip-from <capture-dir>` to reuse a sweep;
 - the editor's `--verify-responsiveness` on a fresh `samples/outpost` copy with
   `--settle-imports after` (interactions during imports), then again on that copy with
   `--settle-imports before` (warm startup, Scene orbit, Play, interactions after imports).
 
-A row without a measurement reads "not measured", never "pass". Player CPU rows gate on
-`cpu.work_ms` when its `work_coverage` covers every measured frame, and hitch rows on
-`cpu.hitches_over_16ms`. Otherwise wall-clock CPU values only bound CPU work, so they pass
+A row without a measurement reads "not measured", never "pass". A readiness timeout
+explicitly fails the GPU rows, retains `player.json` with the last renderer status,
+and exits the player unsuccessfully. `--ready-timeout 120` bounds this wait (seconds).
+Readiness requires native raster, GI enabled, complete publications/residency,
+GI delivery/scatter/convergence and settled fades. Frozen packs have immutable
+publications; this protocol does not certify a live editor's external import queue.
+The ready snapshot is latched for the immutable pack, so ordinary in-flight frames
+continue warmup. Quality/reload requests start a new readiness cycle. Presentation
+failures after readiness explicitly fail the GPU rows and retain diagnostics.
+
+Time to readiness, arrival/warmup GPU-span peaks and wall-frame peaks are reported
+separately without gates. `player.arrival.gpu_passes` retains per-pass quantiles;
+arrival coverage states how many frames have valid GPU spans. These are peaks of
+the excluded frames, not isolated GI-only costs. CPU rows gate on
+`run.cpu.work_ms` when its `work_coverage` covers every game frame, and hitch rows on
+`run.cpu.hitches_over_16ms`. Only the first game frame is excluded from hitch counts;
+the loading view remains in startup metrics. Window-only `cpu` metrics remain in
+the raw report, but do not gate whole-run CPU/hitches. Wall-clock CPU values only bound CPU work, so they pass
 at or under the limit and are unmeasured above it. `--skip
 player|flip|editor` leaves a section out; `--no-build` reuses the last d26 build;
 `--profile release` confirms on D26's named profile. `--prepare` builds and freezes the
 packs (`--refreeze` exports them again) without measuring anything, so it can run outside a
 quiet window; the measured run then follows with `--no-build`. The report's footer defines
 each metric.
+
+For the same steady protocol in the inner loop, use
+`cargo run -p ara-dev -- perf --wait-ready --ready-timeout 120`.
+The player accepts `--perf-wait-ready --perf-ready-timeout-ms 120000` with
+`--perf-output`; it stays hidden. `readiness.ready_frame` and `gpu_start_frame`
+prove the boundary: readiness at frame 430 with 60 warmup frames starts sampling
+at frame 491. A deadline failure never becomes a zero-cost GPU result.
+
+Protocol verification on Windows/RTX 4070 SUPER (2026-10-26): a hidden 640×360
+Low debug player on the frozen Outpost pack signalled readiness at frame 544;
+two warmup frames placed the five GPU samples at frames 547–551. `run.cpu`
+retained all 551 game frames. A separate 1 ms readiness deadline exited with code 2,
+`completed: false`, zero GPU samples and the last renderer status. Both runs had
+zero visible windows and no Vulkan validation errors, including timeout teardown.
+Evidence: `target/ara-dev/import-speed/d26-proof-r3-{ready,timeout}/verification.json`
+and `player.json`. These are functional protocol checks with debug validation,
+not D26 timing acceptance results.
 
 ### Measured iteration loop
 

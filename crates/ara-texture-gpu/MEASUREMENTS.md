@@ -126,3 +126,118 @@ cancellation, transfer reuse and a multi-chunk tail. The production-worker GPU
 test verifies negotiation, exact result bytes and protocol stdout. Both are
 ignored in ordinary CPU tests and run explicitly through the machine GPU lock.
 No GPU-vendor portability or 20-50x end-to-end claim follows from these results.
+
+## Leased device reuse: 2026-10-26
+
+Two lazy headless devices now retain pipelines and transfer allocations across
+disposable native import workers. The authenticated helper belongs to a private
+engine profile, immutable shader cohort and worker executable/library fingerprint.
+Host/job leases and active clients keep it alive; closing the last connection
+starts a two-second shutdown grace. Helpers run content-addressed executable and
+library copies under a writable cache, so they do not lock Cargo build outputs.
+`ARA_IMPORT_RUNTIME_DIR` can place those copies in an explicit owned directory.
+`ARA_TEXTURE_ENCODER_DEVICE=local` retains the former per-job route for controls.
+Routing, authentication and executable paths do not change import keys or bytes.
+
+The final matrix used merged source `e8ca4b61`, four admitted import workers,
+Balanced, the same frozen art/player and the real `ara hub create` then daemon
+open/import path. Every case had fresh project/action/object/intermediate and Ara
+Vulkan caches. OS file pages and the vendor driver disk cache were not flushed.
+This development build has opt-level 1, optimized dependencies and synchronization
+validation enabled. Other agents were active; no owned build or CPU burner ran
+during the matrix. All cases ran under one `ara-dev gpu` lock, with daemon/helper
+shutdown confirmed between cases. Times end at all assets published, not at an
+interactive installed editor's first usable frame.
+
+Arms ran A/F/L/P/P/L/F/A; each arm includes both samples:
+
+| Arm | Showcase runs, s | Outpost runs, s |
+|---|---:|---:|
+| A: frozen original `92e0b1a3`, old sidecars, local devices | 12.576 / 35.963* | 36.077 / 33.826 |
+| F: frozen fair-admission worker `8bbc0db8`, old sidecars, local | 13.037 / 14.775 | 36.018 / 34.135 |
+| L: candidate, current sidecars, local | 13.699 / 12.820 | 33.018 / 53.681* |
+| P: same candidate and sidecars, pooled | 11.663 / 11.218 | 26.425 / 24.615 |
+
+An asterisk retains an I/O outlier: a `cache.install` span exceeded the declared
+five-second threshold. A2 Showcase reached 13.004 s; L2 Outpost reached 8.363 s.
+Their raw results remain in the evidence. They are not credited as queue/device
+improvements. The earlier v5 30.947 s install stall is likewise separate. The
+v8 exploratory sidecar comparison encountered 40-43 s install spans and the old
+idle socket deadline; it is not a valid sidecar speedup measurement. The source
+of these off-CPU cache stalls is not established.
+
+The same-binary L/P comparison isolates device routing. Showcase means improve
+13.260 -> 11.441 s (13.7%). Outpost's first clean pair improves 33.018 -> 26.425 s
+(20.0%); its pooled repeat is 24.615 s. Do not use the stalled second local case
+to calculate the gain. Both pooled Outpost cases are below 30 s; Showcase remains
+above 10 s. The original Outpost control mean is 34.951 s versus pooled 25.520 s,
+an observed combined difference of 27.0%, not an isolated admission claim.
+Repeated A/F walls are close here; the earlier admission ABBA and late-audio
+latency evidence remains in `ara-asset/MEASUREMENTS.md`.
+
+### Remaining stages
+
+The first clean same-binary pair below gives summed elapsed spans in seconds
+across concurrent workers, not an additive critical-path breakdown. LOD is
+nested in mesh; GPU initialization and work overlap other stages. Cache store
+includes publication I/O. `cache.sync` on memo reuse can include hardlink and
+trace work, so it is not pure flush self-time.
+
+| Stage | Showcase local | Showcase pooled | Outpost local | Outpost pooled |
+|---|---:|---:|---:|---:|
+| Assets-ready wall | 13.699 | 11.663 | 33.018 | 26.425 |
+| Worker startup and input | 1.486 | 1.242 | 4.272 | 7.008 |
+| GPU device initialization | 7.387 | 0.393 | 34.196 | 0.461 |
+| glTF parse | 0.018 | 0.016 | 0.026 | 0.029 |
+| Mesh processing, including LOD | 3.668 | 3.145 | 19.510 | 19.523 |
+| LOD, nested in mesh | 3.145 | 2.558 | 12.412 | 12.320 |
+| Texture decode and mips | 4.686 | 4.599 | 7.828 | 8.314 |
+| Byte hashing (`hash.blake3`) | 0.602 | 0.577 | 1.322 | 1.313 |
+| Action hashing (`action.hash`) | 0.324 | 0.274 | 1.921 | 2.275 |
+| Cache store | 5.675 | 11.521 | 21.895 | 28.868 |
+| Tracked import process CPU | 37.375 | 30.000 | 113.578 | 85.297 |
+| Helper CPU, included above | 0 | 1.484 | 0 | 6.047 |
+
+Across both repetitions, mean device initialization spans fall from 7.276 to
+0.450 s Showcase and 33.795 to 0.460 s Outpost, with exactly two pooled devices
+per case. Local import initialization excludes its separate warm-up query;
+pooled initialization includes both shared devices. Wall times include warm-up
+in both routes. Mean tracked import CPU, including helpers, falls 37.023 ->
+30.766 CPU seconds Showcase and 111.344 -> 84.727 Outpost. CPU totals use the
+last recorded process CPU counter for actual import workers plus helpers;
+daemon, CLI and discovery/probe CPU are excluded.
+
+Mesh/LOD is unchanged in the isolated Outpost pair, at about 19.5/12.3 summed
+seconds. Decode/mips and variable cache I/O also remain. These are next profiling
+targets; the measurements do not establish a hardware floor or justify weakening
+durability. Optional `ARA_IMPORT_TRACE_CACHE_DETAIL=1` separates cache install
+read/create/write/persist spans without changing cache behavior. The immutable
+cache contract passes with it enabled. This checkpoint measures Balanced only;
+the native correctness probe also covers Fast and HQ, without a new HQ wall claim.
+
+### Correctness and lifecycle checkpoint
+
+All 16 runs published 33/33 or 115/115 assets with zero fallback events. All
+1,184 final action-key comparisons and 14,320 artifact references match the v4
+baseline. Each helper start has a matching exit; every pooled case created two
+devices. The opt-in native GPU protocol probe additionally checks six disposable
+imports across all three presets against direct encoded bytes/keys, replacing
+the original worker executable while the helper lives, and shutdown after the
+last lease drops. The old executable-lock behavior fails with Windows error 32;
+the runtime-copy implementation passes.
+
+Idle sockets have no independent operation deadline: a worker may spend a long
+time in CPU or cache I/O between encodes. Existing native-job watchdogs and
+cancellation own that deadline. A scaled idle regression fails before the fix
+and passes after it. Handshake/frame bounds and write deadlines remain. Tests
+also cover authentication, malformed bulk requests, bounded device concurrency,
+chunk tails, one-shot clients and executable/library snapshot invalidation.
+The accepted Windows socket is explicitly returned to blocking mode.
+
+Focused formatting and strict all-target Clippy pass for `ara-asset`,
+`ara-texture-gpu`, `ara-import-worker` and `ara-importers`: 91 standard tests pass,
+five are declared ignored, and three custom asset harnesses pass. The native
+GPU probe above ran explicitly through the GPU lock. Blocking Compute resolve
+and readback are unchanged. No full integration gate was run at this focused
+checkpoint. Canonical per-run/per-asset evidence, hashes, outliers and verification
+are in [`measurements/device-pool-2026-10-26.json`](measurements/device-pool-2026-10-26.json).

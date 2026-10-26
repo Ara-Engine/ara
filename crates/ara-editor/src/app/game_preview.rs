@@ -5,11 +5,14 @@
 //! It renders only while the Game surface is on screen, Play is not running and the
 //! scene has a camera, and only when what it shows changes: the scene (store
 //! revision), the camera, the frame size or newly published assets. Each change runs
-//! a short burst so temporal history and arrival fades settle. Until the scene's
-//! content is published it asks again every frame, keeping the empty state. The
-//! image is always detached from the UI before the preview camera is released.
-//! It does not poll the shared content's own work (GI, emitter search): each preview
-//! frame currently restarts that work, so polling it never settles.
+//! a short burst so temporal history and arrival fades settle. Frames are submitted
+//! without waiting: the panel shows the last completed image and re-attaches it when
+//! a newer one completes. After the burst the last submitted frame is only polled,
+//! never followed by another, unless the shared content still has work the preview
+//! must show (`SceneView::preview_needs_frame`: publication, late GI, emitter fades).
+//! Until the scene's content is published it asks again every frame, keeping the
+//! empty state. Hiding detaches the image and retains one camera without rendering;
+//! editor shutdown detaches and releases its targets.
 use std::time::{Duration, Instant};
 
 use ara_editor_gpu::NativeUi;
@@ -47,8 +50,8 @@ pub struct Preview {
     shown: Option<Key>,
     /// Frames keep coming until then (see [`SETTLE`]).
     settle_until: Option<Instant>,
-    /// `texture()` points at this preview's image.
-    attached: bool,
+    /// The completed image `texture()` points at.
+    attached: Option<ara_gpu::Image>,
 }
 
 impl Preview {
@@ -63,15 +66,24 @@ impl Preview {
         Some((shell.gameplay_camera(editor)?, target))
     }
 
-    /// Whether this frame has preview work: a change to show, a burst still settling
-    /// (it also runs while content is not published yet), or an image to detach.
-    pub fn wants_frame(&mut self, editor: &Editor, shell: &mut Shell) -> bool {
+    /// Whether this frame has preview work: a change to show, a burst still settling,
+    /// shared content work the preview must show, a submitted frame to collect, or an
+    /// image to detach.
+    pub fn wants_frame(
+        &mut self,
+        editor: &Editor,
+        shell: &mut Shell,
+        renderer: &Renderer,
+        scene: &SceneView,
+    ) -> bool {
         match Self::want(editor, shell) {
-            None => self.attached,
+            None => self.attached.is_some(),
             Some((camera, size)) => {
                 let key = self.key(editor, camera, size);
-                self.settle_until.is_some_and(|t| Instant::now() < t)
-                    || self.shown.as_ref() != Some(&key)
+                self.shown.as_ref() != Some(&key)
+                    || self.settle_until.is_some_and(|t| Instant::now() < t)
+                    || self.camera.pending(renderer)
+                    || scene.preview_needs_frame()
             }
         }
     }
@@ -90,8 +102,9 @@ impl Preview {
         }
     }
 
-    /// Render the preview when the Game view wants one, or let it go when it does
-    /// not. True when the Game panel must rebuild (an image appeared or went away).
+    /// Submit or collect preview frames when the Game view wants one, or let it go
+    /// when it does not. True when the Game panel must rebuild (an image appeared or
+    /// went away).
     pub fn update(
         &mut self,
         renderer: &mut Renderer,
@@ -108,35 +121,50 @@ impl Preview {
         let now = Instant::now();
         if self.shown.as_ref() != Some(&key) {
             self.settle_until = Some(now + SETTLE);
-        } else if self.settle_until.is_none_or(|t| now >= t) {
-            self.settle_until = None;
-            return Ok(false);
         }
-        let spec = camera.spec();
-        let request = PreviewCamera {
-            camera: &spec,
-            size,
-            // The project's rendering setting, as Play uses.
-            quality: None,
+        let settling = self.settle_until.is_some_and(|t| now < t);
+        if !settling {
+            self.settle_until = None;
+        }
+        let output = if settling || scene.preview_needs_frame() {
+            let spec = camera.spec();
+            let request = PreviewCamera {
+                camera: &spec,
+                size,
+                // The project's rendering setting, as Play uses.
+                quality: None,
+            };
+            scene.preview_game(renderer, editor, view, &mut self.camera, request)
+        } else if self.camera.pending(renderer) {
+            // The burst is over: collect its last frame without asking for another.
+            self.camera.poll(renderer)
+        } else {
+            return Ok(false);
         };
-        let output = match scene.preview_game(renderer, editor, view, &mut self.camera, request) {
+        self.shown = Some(key);
+        let output = match output {
             Ok(Some(output)) => output,
-            // No content published yet: keep the empty state and ask next frame.
+            // Nothing completed yet. Unpublished content submits nothing: keep the
+            // burst going so the preview asks again.
             Ok(None) => {
-                self.settle_until = Some(now + SETTLE);
+                if !self.camera.pending(renderer) {
+                    self.settle_until = Some(now + SETTLE);
+                }
                 return Ok(false);
             }
             Err(error) => {
                 // Reported once per change; the last image (if any) stays.
-                self.shown = Some(key);
                 self.settle_until = None;
                 editor.report_failure(&*error);
                 return Ok(false);
             }
         };
+        if self.attached == Some(output.image) {
+            return Ok(false);
+        }
         // SAFETY: the image and view live on the renderer's device, the one `gpu`
-        // draws with; the preview keeps them until it renders again (re-attached
-        // here) or is released, which detaches them first.
+        // draws with; the camera retains this completed image until a newer one
+        // completes (re-attached here) or it is released, which detaches it first.
         unsafe {
             gpu.external_image(
                 texture(),
@@ -144,8 +172,7 @@ impl Preview {
                 output.view,
             )?;
         }
-        self.attached = true;
-        self.shown = Some(key);
+        self.attached = Some(output.image);
         let appeared = shell.game_preview.is_none();
         shell.game_preview = Some(output.size);
         Ok(appeared)
@@ -153,24 +180,23 @@ impl Preview {
 
     /// Detach and free the preview at shutdown, before the Scene view is destroyed.
     pub fn destroy(mut self, renderer: &mut Renderer, gpu: &mut NativeUi) -> ara_ui::Result<()> {
-        if self.attached {
+        if self.attached.is_some() {
             gpu.forget_external(texture());
         }
         self.camera.release(renderer)
     }
 
-    /// Detach and free the preview (Play started, the Game view hid, no camera).
+    /// Detach a hidden preview without drawing. Keep its single camera resident so
+    /// tab switches and Stop reuse targets/history; `destroy` releases them.
     fn release(
         &mut self,
-        renderer: &mut Renderer,
+        _renderer: &mut Renderer,
         shell: &mut Shell,
         gpu: &mut NativeUi,
     ) -> ara_ui::Result<bool> {
-        if self.attached {
+        if self.attached.take().is_some() {
             gpu.forget_external(texture());
-            self.attached = false;
         }
-        self.camera.release(renderer)?;
         self.shown = None;
         self.settle_until = None;
         Ok(shell.game_preview.take().is_some())

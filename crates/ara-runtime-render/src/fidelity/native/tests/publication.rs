@@ -175,6 +175,12 @@ fn raster_adopts_staged_model_publications_without_unwritten_frames_or_descripto
             if stage > 0 && iteration == 0 {
                 assert!(raster.needs_frame(), "arrival fade continues live");
             }
+            if iteration == 12 {
+                // Emitter discovery is independent worker work, not a fade. A
+                // fixed number of tiny frames cannot guarantee it was scheduled
+                // on a loaded machine; drain it before asserting complete idle.
+                raster.wait_probe_gi(renderer)?;
+            }
             if iteration >= 12 {
                 assert!(!raster.needs_frame(), "completed fade has no idle work");
                 assert_eq!(

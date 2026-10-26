@@ -1,7 +1,7 @@
 # ara-render
 
-Native publications validate once per immutable upload borrow and copy unchanged key/revision geometry from the previous GPU pool.
-Candidate buffers stay independent until publication, so rejected content retains the previous frame.
+NativeContent owns validation/packing on the worker; native_seed retains small GPU reuse metadata.
+Poll preallocate, then publish_native_content in the ordered scope, or destroy rejected candidates. The scene stays immutable until returned.
 
 Owns the M1 baseline renderer and agent visual feedback. Gameplay state stays in ECS; `Scene` is a render snapshot, not authoritative state.
 
@@ -10,11 +10,11 @@ Owns the M1 baseline renderer and agent visual feedback. Gameplay state stays in
 - `Graph`: declared accesses, stable topological ordering, barriers, explicit queue release/acquire pairs, timeline dependencies, transient images.
   Compilation indexes resource uses once; declaration-order versions and queue handoffs stay deterministic.
 - `Renderer::new`, `render`, `render_view` (live debug view mode), `resize`, `capture`: cooked Vulkan rendering; read-only
-  `gpu()` access for diagnostics/native presentation. Resize resets history. `resize_upscaled(render, display)` is TAAU:
+  `gpu()` access for diagnostics/native presentation. Unchanged display resizes retain TAAU targets/history. `resize_upscaled(render, display)` is TAAU:
   scene passes, feature color/depth and IDs at `render_size()`; history, output, captures and picks at `size()`.
-- `create_view` / `render_secondary(ViewId, ViewRequest)`: lazy owned cameras on the shared device/content, with
-  independent color, IDs, motion, exposure and TAA(U) (`ViewRequest::render_size`). No primary render or readback;
-  GI/residency continue even if only this view draws. Drop queues retirement; `release_view` releases now.
+- `create_view` / `submit_secondary`: lazy Game cameras with retained completed color/IDs, independent motion,
+  exposure and TAA(U). Shared Prepare uploads and draws defer together; `poll_scene_frame` drains either camera.
+  No primary render/readback. `render_secondary` waits for captures; Drop/release retire after pending use.
 - `Scene`, `Mesh`, `Material`, `Light`, `CameraSpec`: extracted world data and camera pose/bounds requests. Materials use bindless texture indices.
 - `instanced::Scene`: native model-space content contract for shared geometry,
   current/previous instance transforms, deforming revisions, 64-byte UV0/UV1
@@ -30,8 +30,8 @@ Owns the M1 baseline renderer and agent visual feedback. Gameplay state stays in
   `update_native` updates transforms/skin poses; structural changes use
   `replace_native_scene`. Native draw lists cull and select cooked LODs, and the
   RG16F motion target carries unjittered current-minus-previous screen UV.
-  Texture providers can prepare against the last resident set and transfer reused
-  image ownership at publication; rejected content keeps its previous environment.
+  `preallocate_native_textures` polls worker allocations against the last resident set;
+  reused image ownership transfers at publication; rejected content keeps last-good.
 - `update_native_changed(scene, instanced::Changes)` consumes exact instance,
   material and skin indices. Coherent writes/culling touch dirty groups only;
   idle frames retain visible lists and settle motion once; LOD bounds cache per pose. `native_frame_work`
@@ -48,8 +48,8 @@ Owns the M1 baseline renderer and agent visual feedback. Gameplay state stays in
   deforming revisions use `prepare_pose` then `commit_pose`/`cancel_pose`; retire
   the old dependent TLAS before committing. Three skin slots retain presented and
   published vertices while a candidate is prepared. `presented` advances history
-  only after a successful render. Current AS API rebuilds changed skin BLASes;
-  these are measured rebuild fallbacks, never claimed as native refits.
+  only after a successful render. Raster pose barriers join the consuming graph;
+  RT rebuilds changed skin BLASes (measured fallbacks, never claimed as refits).
 - `update_geometry`: atomically replace meshes/materials/lights, retaining the
   device, targets and last good scene on failure. Textures/environment belong to
   asset integration. `entity_channel`, `entities`, `entity_at` expose picking.

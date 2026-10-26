@@ -63,8 +63,8 @@ pub(super) struct Output {
 /// Everything measured so far, keyed by scene name (and preset).
 #[derive(Default)]
 pub(super) struct Results {
-    /// The cold High window per scene: a fresh pipeline cache, only the first frame
-    /// skipped (player startup, cold; hitches after the first frame).
+    /// Cold High launch with a fresh pipeline cache. Whole-run CPU/hitch metrics
+    /// include readiness and warmup; GPU metrics begin only after readiness.
     pub cold: BTreeMap<&'static str, Measured<Window>>,
     /// Steady windows per (scene, preset).
     pub steady: BTreeMap<(&'static str, &'static str), Measured<Window>>,
@@ -115,12 +115,13 @@ impl Context<'_> {
                     warmup,
                     &options.profile,
                     cache.clone(),
+                    options.ready_timeout,
                 );
                 let directory = self
                     .output
                     .join("player")
                     .join(format!("{}-{label}", scene.name.to_lowercase()));
-                let report = perf::session(
+                let measured = perf::session(
                     self.root,
                     &options,
                     self.binary("ara-player").map_err(error)?,
@@ -128,8 +129,25 @@ impl Context<'_> {
                     &directory,
                     0.,
                     Instant::now(),
-                )
-                .map_err(error)?;
+                );
+                let report = match measured {
+                    Ok(report) => report,
+                    Err(problem) => {
+                        // The player fails the process and atomically retains its
+                        // last readiness snapshot plus whole-run CPU/arrival data.
+                        let raw = directory.join("player.json");
+                        if let Ok(bytes) = fs::read(&raw)
+                            && let Ok(player) = serde_json::from_slice::<Value>(&bytes)
+                            && perf::readiness::failure(&player).is_some()
+                        {
+                            return Ok(Window {
+                                report: raw,
+                                player,
+                            });
+                        }
+                        return Err(error(problem));
+                    }
+                };
                 let value: Value =
                     serde_json::from_slice(&fs::read(&report).map_err(|e| error(e.into()))?)
                         .map_err(|e| error(e.into()))?;

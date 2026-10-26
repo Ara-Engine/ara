@@ -36,29 +36,69 @@ fn gpu_worker_negotiates_and_encodes_without_contaminating_protocol_stdout()
         asset_dependencies: BTreeMap::new(),
     });
     let cancellation = Cancellation::default();
-    let expected = ara_importers::registry()?.import_with_services(
-        &input,
-        &mut ImportContext {
-            metrics: None,
-            cancellation: &cancellation,
-            progress: &mut |_| {},
-        },
-        ImportServices {
-            memo: None,
-            encoder: Some(&encoder),
-        },
+    let configured = std::env::var_os("ARA_TEST_IMPORT_WORKER")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| std::path::PathBuf::from(env!("CARGO_BIN_EXE_ara-import-worker")));
+    let owned_binary = tempfile::tempdir_in(configured.parent().expect("worker binary directory"))?;
+    let worker_binary = owned_binary.path().join("ara-import-worker.exe");
+    let original_bytes = std::fs::read(&configured)?;
+    std::fs::write(&worker_binary, &original_bytes)?;
+    std::fs::set_permissions(
+        &worker_binary,
+        std::fs::metadata(&configured)?.permissions(),
     )?;
-    let worker = ProcessWorker::new(env!("CARGO_BIN_EXE_ara-import-worker"));
+    let worker = ProcessWorker::new(&worker_binary).with_memo(Some(cache.path()));
     assert_eq!(
         worker.texture_encoder(&input),
         Some(encoder.backend()),
         "a usable device must negotiate through framed stdout"
     );
-    let key = input.key_with_backend(Some(encoder.backend()))?;
-    for _ in 0..3 {
-        let actual = worker.encode_with_fallback(Arc::clone(&input), &cancellation, |_| {})?;
-        assert_eq!(actual.0, key, "no silent CPU fallback");
-        assert_eq!(actual.1, expected);
+    // Keep the negotiated lease/capability memo, but force each disposable job
+    // to encode rather than hit the pure texture memo. This probe counts devices.
+    let worker = worker.with_memo(None);
+    for preset in [
+        CookPreset::Fast,
+        CookPreset::Balanced,
+        CookPreset::HighQuality,
+    ] {
+        let mut request = (*input).clone();
+        request.preset = preset;
+        let request = Arc::new(request);
+        let expected = ara_importers::registry()?.import_with_services(
+            &request,
+            &mut ImportContext {
+                metrics: None,
+                cancellation: &cancellation,
+                progress: &mut |_| {},
+            },
+            ImportServices {
+                memo: None,
+                encoder: Some(&encoder),
+            },
+        )?;
+        let key = request.key_with_backend(Some(encoder.backend()))?;
+        for _ in 0..2 {
+            let actual =
+                worker.encode_with_fallback(Arc::clone(&request), &cancellation, |_| {})?;
+            assert_eq!(actual.0, key, "no silent CPU fallback");
+            assert_eq!(actual.1, expected);
+        }
+    }
+    // Cargo must be able to replace its regular worker while the leased helper
+    // stays alive. Overwriting a mapped PE image fails on Windows; use our own
+    // private copy so this test never races Cargo's actual output file.
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    loop {
+        match std::fs::write(&worker_binary, &original_bytes) {
+            Ok(()) => break,
+            Err(error) => {
+                assert!(
+                    std::time::Instant::now() < deadline,
+                    "live GPU helper locked its source worker executable: {error}"
+                );
+                std::thread::sleep(std::time::Duration::from_millis(10));
+            }
+        }
     }
     // These are separate disposable imports. Their service identity and device
     // creation counter prove actual headless-device reuse, not just equal bytes.
@@ -66,6 +106,7 @@ fn gpu_worker_negotiates_and_encodes_without_contaminating_protocol_stdout()
         let mut services = std::collections::BTreeSet::new();
         let mut native = std::collections::BTreeSet::new();
         let mut initialized = 0.0_f64;
+        let mut helper_executables = Vec::new();
         for file in std::fs::read_dir(trace)? {
             for block in std::fs::read_to_string(file?.path())?.split("\n\n") {
                 let Ok(event) = serde_json::from_str::<serde_json::Value>(block) else {
@@ -80,14 +121,29 @@ fn gpu_worker_negotiates_and_encodes_without_contaminating_protocol_stdout()
                             .as_f64()
                             .expect("device count"),
                     );
+                } else if event["stage"] == "texture.service.start" {
+                    helper_executables.push(std::path::PathBuf::from(
+                        event["data"]["executable"]
+                            .as_str()
+                            .expect("helper executable path"),
+                    ));
                 }
             }
         }
         assert_eq!(services.len(), 1, "one service survives separate workers");
-        assert_eq!(native.len(), 3, "three actual disposable imports");
+        assert_eq!(
+            native.len(),
+            6,
+            "six actual disposable imports across presets"
+        );
         assert!(
             (1.0..=2.0).contains(&initialized),
             "bounded reusable devices"
+        );
+        assert_eq!(helper_executables.len(), 1);
+        assert_ne!(
+            helper_executables[0], worker_binary,
+            "helper runs an immutable runtime copy"
         );
         drop(worker);
         let service_pid = *services.first().expect("one service");
@@ -103,6 +159,22 @@ fn gpu_worker_negotiates_and_encodes_without_contaminating_protocol_stdout()
             );
             std::thread::sleep(std::time::Duration::from_millis(10));
         }
+        let warm = ProcessWorker::new(&worker_binary).with_memo(Some(cache.path()));
+        assert_eq!(warm.texture_encoder(&input), Some(encoder.backend()));
+        let mut starts = 0;
+        let mut hits = 0;
+        for file in std::fs::read_dir(&trace)? {
+            let text = std::fs::read_to_string(file?.path())?;
+            starts += text.matches("\"stage\": \"texture.service.start\"").count();
+            hits += text
+                .matches("\"stage\": \"texture.identity_cache_hit\"")
+                .count();
+        }
+        assert_eq!(starts, 1, "warm identity lookup recreated a device service");
+        assert_eq!(
+            hits, 1,
+            "warm identity was not recovered from its verified memo"
+        );
     }
     Ok(())
 }

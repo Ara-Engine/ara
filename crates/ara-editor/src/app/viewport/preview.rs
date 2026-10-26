@@ -19,20 +19,57 @@ pub(in crate::app) struct PreviewCamera<'a> {
 }
 
 impl GamePreview {
-    /// Release an inactive preview immediately at a completed GPU boundary.
-    /// Ordinary Drop also schedules retirement on the shared renderer.
+    /// Poll the retained preview without requesting another temporal frame.
+    /// Use this after a settling burst so its final pending image is published.
+    pub(in crate::app) fn poll(
+        &mut self,
+        renderer: &mut Renderer,
+    ) -> ara_ui::Result<Option<ara_render::ViewOutput>> {
+        self.view
+            .as_ref()
+            .map(|view| renderer.poll_view(view))
+            .transpose()
+            .map(Option::flatten)
+            .map_err(Into::into)
+    }
+
+    /// A visible Game panel must keep polling while shared uploads/draws complete.
+    pub(in crate::app) fn pending(&self, renderer: &Renderer) -> bool {
+        self.view.is_some() && renderer.scene_frame_pending()
+    }
+    /// Release an inactive preview without waiting. A submitted frame retains
+    /// its resources until completion; detach the UI image before this call.
     pub(in crate::app) fn release(&mut self, renderer: &mut Renderer) -> ara_ui::Result<()> {
+        let pending = self.pending(renderer);
         if let Some(view) = self.view.take() {
             renderer.release_view(view)?;
         }
+        debug_assert!(
+            !pending || renderer.scene_frame_pending(),
+            "releasing a preview must retain its pending completion"
+        );
         Ok(())
     }
 }
 
 impl SceneView {
+    /// Shared content work that a visible Game preview must poll. Scene-camera
+    /// accumulation is independent and must not keep the Game panel awake.
+    pub(in crate::app) fn preview_needs_frame(&self) -> bool {
+        self.content_job.is_some()
+            || self.content_ready.is_some()
+            || self
+                .raster
+                .as_ref()
+                .is_some_and(ara_runtime_render::RasterView::needs_frame)
+            || self.content.as_ref().is_some_and(|content| {
+                content.revision() != self.revision.map_or(0, |revision| revision.3)
+                    || content.progress_pending()
+            })
+    }
     /// Poll the existing content owner, then render only the Game camera's extent.
     /// This never draws a Scene frame, changes its camera, or invokes capture.
-    /// None means no content has been published yet; the caller keeps its empty
+    /// None means no preview has completed yet; the caller keeps its empty
     /// or loading presentation and polls again. Drive temporal frames on demand.
     pub(in crate::app) fn preview_game(
         &mut self,
@@ -42,16 +79,11 @@ impl SceneView {
         preview: &mut GamePreview,
         request: PreviewCamera<'_>,
     ) -> ara_ui::Result<Option<ara_render::ViewOutput>> {
+        ara_gpu::cpu_scope!("SceneView.preview_game");
         if request.size.contains(&0) {
             return Ok(None);
         }
-        self.render_raster_inner(renderer, editor, document, RasterWork::Prepare)?;
-        if renderer.scene_frame_pending() {
-            return Ok(None);
-        }
-        if self.raster_frame.is_none() || !renderer.is_native() {
-            return Ok(None);
-        }
+        let _ = preview.poll(renderer)?;
         let settings = crate::world::gltf::render_settings(editor.host.store().workspace())?;
         let plan = Plan::resolve(
             request.quality.unwrap_or(settings.quality.into()),
@@ -77,11 +109,34 @@ impl SceneView {
             quality: plan.quality,
             exposure,
         };
-        let output = self
-            .raster
-            .as_mut()
-            .ok_or("Game preview native content")?
-            .render_secondary(renderer, view, &request)?;
-        Ok(Some(output))
+        let mut submitted = false;
+        let output = renderer.submit_secondary(view, &request, |renderer, request| {
+            // Content adoption and probe delivery use the same deferred upload
+            // scope as this camera. Polling unchanged content must not extract
+            // another snapshot or restart GI/emitter jobs.
+            self.render_raster_inner(renderer, editor, document, RasterWork::Prepare)
+                .map_err(|error| anyhow::anyhow!("{error}"))?;
+            let Some(frame) = &self.raster_frame else {
+                return Ok(false);
+            };
+            if !renderer.is_native() {
+                return Ok(false);
+            }
+            request.exposure = FrameEnvironment::resolve(&frame.look, frame.environment.exposure)
+                .manual_exposure(frame.environment.exposure);
+            self.raster
+                .as_mut()
+                .ok_or_else(|| anyhow::anyhow!("Game preview content"))?
+                .prepare_secondary_frame(renderer)?;
+            submitted = true;
+            Ok(true)
+        })?;
+        if submitted {
+            self.raster
+                .as_mut()
+                .ok_or("Game preview content")?
+                .secondary_frame_submitted();
+        }
+        Ok(output)
     }
 }

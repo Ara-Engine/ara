@@ -17,13 +17,14 @@ text { flex-shrink:0; white-space:nowrap; color:inherit; }
 .name { font-size:20px; color:var(--foreground); }
 .stage { gap:8px; padding-top:24px; flex-shrink:0; }
 .line { flex-direction:row; align-items:center; gap:12px; height:20px; flex-shrink:0; }
-.title { font-size:14px; color:var(--foreground); }
+.title { font-size:14px; color:var(--foreground); flex-shrink:1; min-width:0px; overflow:hidden; }
 .count { font-size:12px; color:var(--muted-foreground); }
 .count-warning { font-size:12px; color:var(--warning-foreground); }
 .bar { height:6px; width:100%; flex-shrink:0; background:var(--raised); border-radius:3px; overflow:hidden; }
 .bar-fill { height:6px; background:var(--primary); border-radius:3px; }
 .bar-warning { background:var(--warning-foreground); }
-.detail { flex-grow:1; flex-shrink:1; flex-basis:0px; overflow:hidden; }
+/* Fitted to one line already; min-width keeps even an unfitted line from pushing the timer. */
+.detail { flex-grow:1; flex-shrink:1; flex-basis:0px; min-width:0px; overflow:hidden; }
 .elapsed { font-family:JetBrains Mono; }
 
 /* Failed imports: one quiet row each, the path then the error's first line. */

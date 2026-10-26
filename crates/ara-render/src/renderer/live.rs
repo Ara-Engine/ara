@@ -4,6 +4,7 @@ use ara_gpu::{
     Barrier,
     vulkan::{Command, Completion},
 };
+mod completion;
 #[cfg(test)]
 mod tests;
 
@@ -14,13 +15,14 @@ pub(super) struct Live {
     pending: Option<Pending>,
     /// A resize requested while a frame was pending: (render, display) sizes.
     pub resize: Option<([u32; 2], [u32; 2])>,
+    completed_timings: Option<Vec<PassTiming>>,
 }
 struct Pending {
     completion: Completion,
     output: Output,
     publish: bool,
 }
-struct Output {
+pub(super) struct Output {
     color: Image,
     ids: Image,
     size: [u32; 2],
@@ -57,7 +59,7 @@ impl Output {
         gpu.retire(Resource::Image(self.ids))?;
         Ok(())
     }
-    fn copy(&mut self, renderer: &mut Renderer) -> Result<()> {
+    pub(super) fn copy(&mut self, renderer: &mut Renderer) -> Result<()> {
         ensure!(
             [OUTPUT, ID]
                 .iter()
@@ -132,9 +134,9 @@ impl Live {
 }
 
 impl Renderer {
-    /// Whether a Scene frame still owns working targets and frame buffers.
+    /// Whether a Scene or secondary frame still owns shared frame data.
     pub fn scene_frame_pending(&self) -> bool {
-        self.live.as_ref().is_some_and(Live::pending)
+        self.views.pending() || self.live.as_ref().is_some_and(Live::pending)
     }
     /// True once the interactive Scene uses retained completed color and IDs.
     pub fn scene_frame_async(&self) -> bool {
@@ -144,31 +146,17 @@ impl Renderer {
     /// Poll the submitted Scene without a host wait. False keeps displaying the
     /// previous image; true permits applying coalesced input and submitting again.
     pub fn poll_scene_frame(&mut self) -> Result<bool> {
+        if !self.views.poll(&mut self.gpu)? {
+            return Ok(false);
+        }
         let Some(live) = &mut self.live else {
             return Ok(true);
         };
-        if let Some(pending) = &mut live.pending {
-            let timings = match self.gpu.poll_completion(&mut pending.completion) {
-                Ok(Some(timings)) => timings,
-                Ok(None) => return Ok(false),
-                Err(error) => {
-                    if pending.completion.is_resolved() {
-                        live.pending
-                            .take()
-                            .expect("completed rejected frame")
-                            .output
-                            .retire(&mut self.gpu)?;
-                    }
-                    return Err(error.into());
-                }
-            };
-            let pending = live.pending.take().expect("completed pending Scene frame");
-            if pending.publish {
-                self.last_timings = timings;
-                live.spare = live.shown.replace(pending.output);
-            } else {
-                pending.output.retire(&mut self.gpu)?;
-            }
+        if !live.poll(&mut self.gpu)? {
+            return Ok(false);
+        }
+        if let Some(timings) = live.completed_timings.take() {
+            self.last_timings = timings;
         }
         let resize = live.resize.take();
         if let Some((render, display)) = resize {
@@ -179,15 +167,11 @@ impl Renderer {
 
     /// Capture and shutdown boundary. UI frames poll instead of calling this.
     pub fn wait_scene_frame(&mut self) -> Result<()> {
-        if let Some(pending) = self.live.as_mut().and_then(|live| live.pending.as_mut()) {
-            self.last_timings = self.gpu.wait_completion(&mut pending.completion)?;
-            let live = self.live.as_mut().expect("pending Scene owner");
-            let pending = live.pending.take().expect("waited Scene frame");
-            if pending.publish {
-                live.spare = live.shown.replace(pending.output);
-            } else {
-                pending.output.retire(&mut self.gpu)?;
-            }
+        // Explicit capture/shutdown boundaries do not defer to tab scheduling.
+        self.views.cancel_request();
+        self.views.wait(&mut self.gpu)?;
+        if let Some(live) = &mut self.live {
+            live.wait(&mut self.gpu)?;
         }
         self.poll_scene_frame()?;
         Ok(())
@@ -200,24 +184,16 @@ impl Renderer {
         &mut self,
         render: impl FnOnce(&mut Self) -> Result<()>,
     ) -> Result<bool> {
-        if !self.poll_scene_frame()? {
+        if !self.poll_scene_frame()? || self.views.take_request() {
             return Ok(false);
         }
         let id_size = self.gpu.image_extent(self.targets.images[ID])?;
         let mut live = self.live.take().unwrap_or_default();
-        let mut output = match live.spare.take() {
-            Some(output) if output.size == self.size && output.id_size == id_size => output,
-            old => {
-                if let Some(old) = old {
-                    old.retire(&mut self.gpu)?;
-                }
-                match Output::new(&mut self.gpu, self.size, id_size) {
-                    Ok(output) => output,
-                    Err(error) => {
-                        self.live = Some(live);
-                        return Err(error);
-                    }
-                }
+        let mut output = match live.acquire(&mut self.gpu, self.size, id_size) {
+            Ok(output) => output,
+            Err(error) => {
+                self.live = Some(live);
+                return Err(error);
             }
         };
         if let Err(error) = self.gpu.begin_deferred_completion() {

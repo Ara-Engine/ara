@@ -109,6 +109,16 @@ pub fn publish(
         kind.name(),
         dist.display()
     );
+    let marker: serde_json::Value =
+        serde_json::from_slice(&fs::read(dist.join(&prefix).join(if kind == Kind::Hub {
+            "hub.json"
+        } else {
+            "engine.json"
+        }))?)?;
+    ensure!(
+        dry_run || (!cfg!(feature = "rehearsal") && marker["rehearsal"] != true),
+        "rehearsal packages cannot be published; rebuild without the rehearsal feature and with the real public key"
+    );
     let notes_path = dist.join(if kind == Kind::Hub {
         "HUB_RELEASE_NOTES.md"
     } else {
@@ -136,6 +146,10 @@ pub fn publish(
                 .context("artifact filename")?
                 .to_string_lossy()
                 .into_owned();
+            ensure!(
+                fs::metadata(path)?.len() < 2 * 1024 * 1024 * 1024,
+                "GitHub release assets must be smaller than 2 GiB: {name}"
+            );
             Ok(Asset {
                 url: format!("https://github.com/{repo}/releases/download/{tag}/{name}"),
                 name,
@@ -145,6 +159,13 @@ pub fn publish(
         })
         .collect::<Result<Vec<_>>>()?;
     let manifest = Manifest {
+        build: if kind == Kind::Hub {
+            let marker: serde_json::Value =
+                serde_json::from_slice(&fs::read(dist.join(&prefix).join("hub.json"))?)?;
+            serde_json::from_value(marker["build"].clone())?
+        } else {
+            None
+        },
         format: "ara.release/1".into(),
         kind,
         version: version.into(),
@@ -206,6 +227,22 @@ pub fn publish(
             "--notes-file",
         ])
         .arg(folder.join("RELEASE_NOTES.md"));
+    let target = if kind == Kind::Hub {
+        &marker["build"]["commit"]
+    } else {
+        &marker["sourceCommit"]
+    };
+    let target = target
+        .as_str()
+        .context("packaged source commit is missing")?;
+    ensure!(
+        target.len() == 40 && target.bytes().all(|c| c.is_ascii_hexdigit()),
+        "invalid packaged source commit"
+    );
+    // GitHub otherwise tags the default branch's current tip, which may have
+    // advanced since these binaries were built. Existing tags are verified below.
+    verify_remote_tag(repo, tag, target)?;
+    create.args(["--target", target]);
     if prerelease {
         create.arg("--prerelease");
     }
@@ -232,6 +269,50 @@ pub fn publish(
             .success(),
         "assets uploaded but draft could not be published"
     );
+    Ok(())
+}
+
+fn verify_remote_tag(repo: &str, tag: &str, target: &str) -> Result<()> {
+    let api = |path: &str| -> Result<serde_json::Value> {
+        let output = Command::new("gh").args(["api", path]).output()?;
+        ensure!(
+            output.status.success(),
+            "gh could not verify release source/tag; confirm the source commit is pushed and Contents write is granted"
+        );
+        Ok(serde_json::from_slice(&output.stdout)?)
+    };
+    ensure!(
+        api(&format!("repos/{repo}/commits/{target}"))?["sha"] == target,
+        "packaged source commit is not available on GitHub"
+    );
+    let refs = api(&format!("repos/{repo}/git/matching-refs/tags/{tag}"))?;
+    if let Some(reference) = refs
+        .as_array()
+        .context("GitHub tag refs")?
+        .iter()
+        .find(|reference| reference["ref"] == format!("refs/tags/{tag}"))
+    {
+        let mut object = reference["object"].clone();
+        for _ in 0..8 {
+            if object["type"] == "commit" {
+                ensure!(
+                    object["sha"] == target,
+                    "existing release tag points to another source commit; use a new version/tag"
+                );
+                return Ok(());
+            }
+            ensure!(
+                object["type"] == "tag",
+                "release tag does not resolve to a commit"
+            );
+            object = api(&format!(
+                "repos/{repo}/git/tags/{}",
+                object["sha"].as_str().context("annotated tag SHA")?
+            ))?["object"]
+                .clone();
+        }
+        anyhow::bail!("release tag nesting exceeded limit");
+    }
     Ok(())
 }
 

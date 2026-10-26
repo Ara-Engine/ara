@@ -17,6 +17,9 @@ use std::{collections::BTreeMap, path::PathBuf};
 /// Ticks replayed at most per capture (effects loop well within it).
 const MAX_REPLAY: u64 = 240;
 
+#[cfg(test)]
+mod tests;
+
 /// The cooked library effects shipped with ara-vfx-gpu (`cooked/<name>`); a project
 /// asset pipeline for authored effects is the next step.
 fn cooked_root() -> PathBuf {
@@ -175,7 +178,7 @@ impl Effects {
                 frame.tick.saturating_sub(live.tick).min(8)
             };
             if renderer.is_native() {
-                for _ in 0..count {
+                for _ in 1..count {
                     live.system.advance(renderer.gpu_mut(), &view)?;
                     self.gpu_ms += live
                         .system
@@ -184,7 +187,13 @@ impl Effects {
                         .map(|pass| pass.milliseconds)
                         .sum::<f64>();
                 }
-                live.system.render(renderer.gpu_mut(), &view)?;
+                // The final tick and draw share frame constants, barriers and
+                // one graph; earlier catch-up ticks stay simulation-only.
+                if count > 0 {
+                    live.system.step(renderer.gpu_mut(), &view)?;
+                } else {
+                    live.system.render(renderer.gpu_mut(), &view)?;
+                }
                 self.gpu_ms += live
                     .system
                     .timings()

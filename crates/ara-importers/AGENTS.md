@@ -27,6 +27,10 @@ alpha foliage also retains at least 90% area per connected card. Irreducible
 cards keep their last good level. Skin/morph chains retain the four-level/1% cap.
 Retain usable legacy LODs: replacing geometric errors with combined attribute
 errors can make runtime selection choose finer foliage despite deeper chains.
+LOD0 solves and each primitive's classic/virtual cooks run sequentially by default.
+The single mesh::PARALLEL_GEOMETRY experiment enables bounded pairs/overlap; it
+regressed cold Outpost and needs an end-to-end ABBA win before re-enabling.
+Keep bytes and error precedence stable; scheduling changes need no version bump.
 ARAG Custom artifacts are
 validated by ara-geo; its reflected settings are VirtualGeometrySettings.
 
@@ -38,6 +42,9 @@ ImportServices also supplies an optional integer block encoder. Keep device setu
 and filesystem access in the worker service. GPU/CPU identities never alias; normal
 maps retain ISPC BC5 after measured GPU angular outliers. Packing, preset and mip
 order must stay deterministic; raw HDR inputs use finite positive half codes.
+Color8 expansion uses per-layout tables derived through image's actual float
+conversion; grayscale rounding differs from RGB. Preserve all sample bits, alpha
+and cancellation. Small/16-bit/normal/HDR/data inputs retain the original path.
 No other filesystem, clocks,
 unseeded RNG or environment reads. Dependency discovery is also pure and runs in
 the worker: even discovering FBX dependencies must never run in the editor.
@@ -45,11 +52,17 @@ the worker: even discovering FBX dependencies must never run in the editor.
 Changing algorithms, dependencies or output policy requires an importer version
 bump. Intel ISPC is pinned and precompiled. CookPreset explicitly selects quality; HQ
 is selectable; Balanced is the import default. Keep output byte-identical across Rayon thread budgets.
+`cargo test -p ara-importers --test sample_versions` checks both tracked sample projects
+against registry versions. Set ARA_UPDATE_DEMO=1 explicitly to regenerate sidecars
+through typed version edits; run again without it and review version-only diffs.
 ASTC belongs behind a mobile importer plugin; never emit BCn for mobile silently.
 FORMAT.md in ara-asset-format and INTEGRATION.md here define runtime adoption.
 
 Downloaded third-party fixtures live in .fixtures (gitignored). Tests should not
 download from the network. See MEASUREMENTS.md for reproducible real-scene checks.
+`geometry_replay PROJECT [threads]` is an explicit diagnostic example: real inputs,
+verified cached textures, no device/encoding/stores, exact production-output checks.
+It requires a completed default-Balanced glTF project; it is not cold import latency.
 
 Project quality is a typed ara.imports document (import.project.configure). Sources
 inherit it unless preset is explicit; TextureSettings.preset and MeshSettings.texturePresets

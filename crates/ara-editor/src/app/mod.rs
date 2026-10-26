@@ -8,6 +8,7 @@ mod journey;
 mod panels_verify;
 mod qa;
 mod responsiveness;
+mod scene_quality;
 mod scene_sync;
 mod setup;
 mod ux_verify;
@@ -39,8 +40,13 @@ use std::{
     path::PathBuf,
     time::{Duration, Instant},
 };
-/// How long after the last input progressive Scene frames resume.
+/// How long after the last input Scene work that blocks this thread waits: ray-traced
+/// progressive frames, and adopting newly published content (`SceneSync::refresh`).
 const INTERACTION_PAUSE: Duration = Duration::from_millis(250);
+/// How long `--verify-ux` waits for its idle-frame samples once its captures, camera
+/// samples and drags are done: a scene with live content (effects previewing in the
+/// Scene view) never idles, and the route must still finish.
+const UX_IDLE_PATIENCE: Duration = Duration::from_secs(20);
 /// When the process started: `main` sets it first. Startup timings
 /// (`--verify-responsiveness`) count from it.
 pub static LAUNCHED: std::sync::OnceLock<Instant> = std::sync::OnceLock::new();
@@ -195,6 +201,15 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
         editor.action("editor.layout.reset", json!({}))?;
         editor.action("editor.theme", json!({"light": false}))?;
     }
+    let mut scene_quality = options
+        .verify_scene_quality
+        .then(|| scene_quality::SceneQuality::new(&options.output));
+    if scene_quality.is_some() {
+        // What a release build shows, from the default layout and theme.
+        shell.memo_check = false;
+        editor.action("editor.layout.reset", json!({}))?;
+        editor.action("editor.theme", json!({"light": false}))?;
+    }
     let mut journey = if options.verify_journey {
         Some(journey::Journey::new(&mut editor, &options.output)?)
     } else {
@@ -210,6 +225,7 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
         || journey.is_some()
         || first_hour.is_some()
         || probe.is_some()
+        || scene_quality.is_some()
     {
         shell.rebuild(&mut editor)?;
     }
@@ -240,11 +256,16 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
         let mut interaction_samples = Vec::new();
         let mut camera_samples = Vec::new();
         let mut wall_samples = Vec::new();
+        // When `--verify-ux` had everything but its idle samples.
+        let mut ux_idle_since: Option<Instant> = None;
         let mut last_ui = 0;
         let frame_budget = Duration::from_secs_f64(1. / 144.);
         // The last pointer, key or wheel input: progressive Scene frames wait while the
         // user is working (see below).
         let mut last_input: Option<Instant> = None;
+        // The last frame the Scene camera moved: right after navigation the Scene
+        // converges at once instead.
+        let mut last_navigation: Option<Instant> = None;
         let mut previous = Instant::now();
         loop {
             if let Some(probe) = &mut probe {
@@ -261,6 +282,9 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
             let mut profile_triangles = 0;
             let mut profile_gpu = false;
             let frame_start = Instant::now();
+            // Host waits on the renderer's device so far (timeline, upload idle,
+            // present): the probe subtracts this frame's share from its wall time.
+            let waits_before = renderer.gpu().context().host_wait_stats();
             let interval = frame_start.duration_since(previous).as_secs_f64() * 1000.;
             let mut camera_start = None;
             let mut graph_start = None;
@@ -430,6 +454,14 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                 let mut camera = editor.state.camera;
                 camera.yaw += 0.002;
                 set_camera(&mut editor, &camera)?;
+                dirty = true;
+                scene_dirty = true;
+            }
+            if let Some(route) = &mut scene_quality
+                && route.step(&mut editor)?
+            {
+                // Navigation is input: the Scene's interaction policies see it as such.
+                last_input = Some(Instant::now());
                 dirty = true;
                 scene_dirty = true;
             }
@@ -706,19 +738,32 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
             let graph_paint = graph_start.map(|start| start.elapsed().as_secs_f64() * 1000.);
             drop(ui_scope);
             dirty |= work.paint_nodes > 0 || work.layout_passes > 0 || work.restyled > 0;
-            // Progressive Scene frames (fidelity accumulation, newly published assets)
-            // block this thread for their GPU time (27-50 ms on large scenes), so they
-            // wait while the user is working: no pointer, key or wheel input for
-            // INTERACTION_PAUSE. A click or hover then never queues behind one. Scene
-            // changes made by input (camera, gizmo drags, edits) still render at once.
+            // Progressive Scene frames (temporal convergence after the camera moves,
+            // arriving content, GI) wait for INTERACTION_PAUSE without input, so a click
+            // or keystroke never queues behind one: a ray-traced frame blocks this
+            // thread for its GPU time (27-50 ms on large scenes), a native frame with
+            // content work (publications, styling, GI delivery) costs it 15-70 ms during
+            // imports, and even a native frame that only converges keeps the GPU busy
+            // when the UI presents. Right after navigation the user is looking at the
+            // Scene, so a native frame that only converges renders at once: holding it
+            // back left the image unconverged between moves. Changes made by input
+            // always render at once.
+            if editor.state.camera != edit_before.2 {
+                last_navigation = Some(Instant::now());
+            }
+            let converging = renderer.scene_frame_async()
+                && !scene_view.preview_needs_frame()
+                && last_navigation.is_some_and(|t| t.elapsed() < INTERACTION_PAUSE);
             if shell.viewport().is_some()
                 && scene_view.needs_frame(editor.state.quality)
-                && (scene_dirty || last_input.is_none_or(|t| t.elapsed() >= INTERACTION_PAUSE))
+                && (scene_dirty
+                    || converging
+                    || last_input.is_none_or(|t| t.elapsed() >= INTERACTION_PAUSE))
             {
                 dirty = true;
                 scene_dirty = true;
             }
-            dirty |= game_preview.wants_frame(&editor, &mut shell);
+            dirty |= game_preview.wants_frame(&editor, &mut shell, &renderer, &scene_view);
             // Typing and committing present the UI first: the Scene follows on the next
             // frame without such input, so a keystroke or Enter never waits for a Scene
             // render. Gestures and camera moves render at once.
@@ -758,7 +803,10 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                             &renderer,
                             &changed,
                             controller.gizmo_state(),
+                            &mut shell.outlines,
+                            editor.host.store().revision(),
                         )?;
+                        shell.outlines.upload(&mut ui_renderer, &mut gpu)?;
                         if rect.contains(shell.pointer[0], shell.pointer[1])
                             && !editor.state.palette
                             && shell.menu.is_none()
@@ -814,13 +862,16 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                 gpu.select_target(0);
                 gpu.set_dpi(dpi)?;
                 let render_at = Instant::now();
-                ui_renderer.render(
-                    &mut gpu,
-                    &shell.ui.display,
-                    &shell.text.assets,
-                    shell.ui.size.map(|v| v.round() as u32),
-                    TextMode::Raster,
-                )?;
+                {
+                    ara_gpu::cpu_scope!("UI.render");
+                    ui_renderer.render(
+                        &mut gpu,
+                        &shell.ui.display,
+                        &shell.text.assets,
+                        shell.ui.size.map(|v| v.round() as u32),
+                        TextMode::Raster,
+                    )?;
+                }
                 render_ms = render_at.elapsed().as_secs_f64() * 1000.;
                 let graph_gpu = graph_start.map(|start| start.elapsed().as_secs_f64() * 1000.);
                 let (image, size) = gpu.output()?;
@@ -973,8 +1024,19 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                     .map_err(String::from)?;
             }
             if let Some(probe) = &mut probe {
+                let cpu_ms = frame_start.elapsed().as_secs_f64() * 1000.;
+                let ui_wait_ms = gpu.take_gpu_wait().as_secs_f64() * 1000.;
+                // Unavailable when the device was replaced this frame.
+                let host_wait_ms = renderer
+                    .gpu()
+                    .context()
+                    .host_wait_stats()
+                    .elapsed_since(Some(waits_before))
+                    .map(|waited| waited.as_secs_f64() * 1000.);
                 let sample = responsiveness::Sample {
-                    cpu_ms: frame_start.elapsed().as_secs_f64() * 1000.,
+                    cpu_ms,
+                    host_wait_ms,
+                    work_ms: host_wait_ms.map(|waited| (cpu_ms - waited - ui_wait_ms).max(0.)),
                     inject_ms,
                     input_ms,
                     ui_ms,
@@ -988,7 +1050,7 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                     scene_ms,
                     icons_ms,
                     render_ms,
-                    gpu_ms: gpu.take_gpu_wait().as_secs_f64() * 1000.,
+                    gpu_ms: ui_wait_ms,
                     present_ms,
                     presented,
                     game_frame,
@@ -1011,6 +1073,22 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                     view_ms,
                 );
             }
+            if let Some(route) = &mut scene_quality {
+                route.end(
+                    &editor,
+                    &shell,
+                    &mut gpu,
+                    &renderer,
+                    &scene_view,
+                    scene_ms,
+                    presented,
+                )?;
+                if route.finished() {
+                    route.write(&serde_json::to_value(&renderer.gpu().context().info)?)?;
+                    game.close(&mut editor, &mut gpu)?;
+                    break;
+                }
+            }
             frames += 1;
             if probe.as_ref().is_some_and(responsiveness::Probe::finished) {
                 let device = serde_json::to_value(&renderer.gpu().context().info)?;
@@ -1029,9 +1107,11 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                     .is_some_and(|v| v.finished() && idle_samples.len() >= 1500)
                 || ux_verification.as_ref().is_some_and(|v| {
                     v.finished()
-                        && idle_samples.len() >= 1500
                         && camera_samples.len() >= 240
                         && drag_check.as_ref().is_some_and(drags::DragCheck::finished)
+                        && (idle_samples.len() >= 1500
+                            || ux_idle_since.get_or_insert_with(Instant::now).elapsed()
+                                >= UX_IDLE_PATIENCE)
                 })
                 || journey.as_ref().is_some_and(journey::Journey::finished)
                 || first_hour.as_ref().is_some_and(qa::FirstHour::finished)

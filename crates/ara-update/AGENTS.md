@@ -7,6 +7,11 @@ a resumable staging file; `extract` rejects unsafe ZIP paths and expansion bombs
 Asset transfers run a private Tokio runtime on the I/O worker so Cancel interrupts
 stalled headers/body reads; metadata uses reqwest's bounded blocking client.
 `updater` swaps only a standalone Hub directory, with rollback and health checks.
+Signed Hub manifests and hub.json carry optional `build {commit,generation}`;
+generation is `git rev-list --count HEAD` on the publishing branch. Same-version
+updates require a newer generation; legacy version-only installs are older.
+Staged hub.json must match the signed version/build. Hub jobs include the commit.
+Setup, engine registration and self-update share `.ara-hub-update.lock`.
 
 Default repository: Snowy7/ara. `ARA_RELEASE_REPO` overrides update.json's repo.
 `GITHUB_TOKEN` is sent only to api.github.com, never to redirected asset hosts.
@@ -19,6 +24,8 @@ Set ARA_CONFIG_DIR to an existing scratch dir under target/ for tests, captures
 and manual checks. tests/config_isolation.rs is also included by Hub/CLI/MCP/
 release tests and fails if isolation is missing. Dummy updater children are awaited.
 Production accepts HTTPS GitHub API/assets only; no runtime insecure switch.
+Opt-in test-support builds can load ARA_RELEASE_TEST_API, a loopback-only mirror:
+signed GitHub asset URLs map to that one origin; signatures and bytes stay intact.
 Cache is scoped to repo/API and verified again on every read. Rate limits/offline
 fall back only for transport errors, never for invalid signatures or manifests.
 

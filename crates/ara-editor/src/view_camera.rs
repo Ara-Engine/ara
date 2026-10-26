@@ -6,7 +6,7 @@
 //!   planes and unbounded entities (sky, lights, audio, colliders) count only when
 //!   selected ([`framing_bounds`]).
 use std::collections::BTreeMap;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::time::{Duration, Instant};
 
 use ara_doc::prefab::{Resolved, ResolvedEntity};
@@ -179,15 +179,14 @@ fn world_box(entity: &ResolvedEntity, matrix: &Mat4) -> (Vec3, Vec3) {
 
 /// The Scene view's last camera per scene, kept per project in `scene-cameras.json`
 /// beside the preferences file (none: memory only, as in tests). Changes are written
-/// at most once a second and when the editor closes.
+/// at most once a second and when the editor closes, on a writer thread
+/// (`crate::persist`): navigating never waits on the disk.
 pub(crate) struct SavedCameras {
-    path: Option<PathBuf>,
-    /// This project's key in the file: its absolute root.
-    project: String,
     /// Scene document → last camera, as last written or loaded.
     pub saved: BTreeMap<String, Camera>,
     dirty: bool,
     written: Option<Instant>,
+    writer: Option<crate::persist::BackgroundWriter<BTreeMap<String, Camera>>>,
 }
 
 impl SavedCameras {
@@ -206,12 +205,28 @@ impl SavedCameras {
             .and_then(|bytes| serde_json::from_slice::<Value>(&bytes).ok())
             .and_then(|file| serde_json::from_value(file["projects"][&project].clone()).ok())
             .unwrap_or_default();
+        // The file holds every project's cameras: the writer re-reads it and replaces
+        // only this project's entry.
+        let writer = path.map(|path| {
+            crate::persist::BackgroundWriter::new(
+                "cameras-writer",
+                move |saved: BTreeMap<String, Camera>| {
+                    let mut file = std::fs::read(&path)
+                        .ok()
+                        .and_then(|bytes| serde_json::from_slice::<Value>(&bytes).ok())
+                        .filter(Value::is_object)
+                        .unwrap_or_else(|| json!({}));
+                    file["projects"][&project] = json!(saved);
+                    crate::persist::write_text(&path, &ara_json::to_canonical_string(&file))
+                        .map_err(|e| e.to_string())
+                },
+            )
+        });
         Self {
-            path,
-            project,
             saved,
             dirty: false,
             written: None,
+            writer,
         }
     }
 
@@ -240,19 +255,9 @@ impl SavedCameras {
     fn write(&mut self) {
         self.dirty = false;
         self.written = Some(Instant::now());
-        let Some(path) = &self.path else {
-            return;
-        };
-        let mut file = std::fs::read(path)
-            .ok()
-            .and_then(|bytes| serde_json::from_slice::<Value>(&bytes).ok())
-            .filter(Value::is_object)
-            .unwrap_or_else(|| json!({}));
-        file["projects"][&self.project] = json!(self.saved);
-        if let Some(parent) = path.parent() {
-            let _ = std::fs::create_dir_all(parent);
-        }
         // Best effort: a lost camera only means the scene opens framed next time.
-        let _ = crate::settings::write_atomic(path, &file);
+        if let Some(writer) = &self.writer {
+            writer.save(self.saved.clone());
+        }
     }
 }

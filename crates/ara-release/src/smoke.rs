@@ -1,5 +1,8 @@
 //! The shipped binaries are the test subjects; no development executable is used.
 mod build;
+mod hub_upgrade;
+#[cfg(feature = "rehearsal")]
+pub(crate) mod rehearsal;
 use crate::support::{self, run};
 use anyhow::{Context, Result, ensure};
 use ara_proto::Endpoint;
@@ -119,6 +122,10 @@ pub fn smoke(dist: &Path, version: &str) -> Result<()> {
         result
     };
     step(
+        "install an older same-version Hub build",
+        hub_upgrade::seed(&env, dist, version),
+    )?;
+    step(
         "silent SFX install",
         run(
             env.command(dist.join(format!("{}-setup.exe", support::name(version))))
@@ -129,6 +136,10 @@ pub fn smoke(dist: &Path, version: &str) -> Result<()> {
         ),
     )?;
     let result = (|| -> Result<()> {
+        step(
+            "engine setup replaces older Hub and both shortcut aliases launch the new build",
+            hub_upgrade::verify(&env),
+        )?;
         step(
             "standalone Hub setup, stale service replacement and engine templates",
             standalone_hub(&env, dist, version),

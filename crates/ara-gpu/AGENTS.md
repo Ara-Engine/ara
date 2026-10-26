@@ -13,6 +13,8 @@ Owns the native GPU boundary. Vulkan uses ash revision
 - `Command::CopyBufferRange` copies aligned ranges with checked capacities/overflow;
   it preserves unrelated destination bytes and is rejected inside rendering.
 - `VulkanDevice`: Vulkan backend; `context()` is read-only native integration access.
+  `prepare_resources` admits two unpublished allocation/host-copy jobs; poll/cancel
+  never waits. Adoption stays on the owner, as do ordered uploads and queue access.
 - `Context::host_wait_stats` snapshots cumulative host time in explicit driver waits.
   Native integration uses `measure_host_wait` for leaf waits only; never nest it.
 - Completed timestamp pools are reused (32 pools, at most 1024 queries each).
@@ -71,6 +73,9 @@ immediately; allocation and descriptor reuse wait for both queue timelines.
 Retention is conservative across published resources in v0. A live TLAS prevents
 its BLAS from retiring. Static acceleration structures build once; replacement
 uses a fresh identity. Pipelines also retire through queue completion.
+Completed images/pipelines release identities on the owner; their destruction and
+uncached buffer-memory frees run on one worker (one active/one queued batch).
+Backpressure retains completed objects locally; device teardown drains and joins.
 Retired buffers destroy their VkBuffer but may retain up to 64 MiB/256 idle memory
 blocks. Reuse requires exact size, memory type and device-address allocation flags;
 required dedicated allocations are excluded. Fresh buffers keep queue ownership
@@ -124,7 +129,7 @@ Optional `tracy` enables literal `cpu_scope!` zones for submission, recording an
 timeline waits. The executable starts the client (`ara-player --features tracy`);
 without a running client library zones do nothing. Default builds erase them.
 
-Set `CARGO_BUILD_JOBS=4`. Use `../ara-render/run.ps1 -Mode Check` for all gates,
+Set `CARGO_BUILD_JOBS=2`. Use `../ara-render/run.ps1 -Mode Check` for all gates,
 or `cargo check -p ara-gpu`, `cargo test -p ara-gpu`,
 `cargo clippy -p ara-gpu --all-targets -- -D warnings`,
 `cargo fmt -p ara-gpu -- --check`.

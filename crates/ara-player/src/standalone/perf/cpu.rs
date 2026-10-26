@@ -26,6 +26,8 @@ impl Samples {
     }
     pub fn report(&self) -> BTreeMap<String, Value> {
         BTreeMap::from([
+            ("frames".into(), json!(self.frames.len())),
+            ("frame_ms".into(), quantiles(&self.frames)),
             ("work_ms".into(), quantiles(&self.work)),
             ("gpu_wait_ms".into(), quantiles(&self.waits)),
             ("frame_samples_ms".into(), json!(self.frames)),
