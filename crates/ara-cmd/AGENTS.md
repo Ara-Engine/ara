@@ -59,7 +59,9 @@ drops overrides aimed at it.
   (`$crate/e_lid1`). `symbols` in the result maps them.
 - `ReadCtx::resolved()` is an `Rc<Resolved>` shared by every read in a batch until
   the next edit (keyed by the staged op count); resolving a large scene clones every
-  entity, so commands should read it rather than re-resolve.
+  entity, so commands should read it rather than re-resolve. `target` and
+  `has_component` need one entity: they read the record itself (plain) or resolve
+  only its instance (`prefab::resolve_record`), so `property.set` costs ~0.3 ms.
 - Name selectors in entity params (`name:Crate`, `name:Floor/Crate`, prefab
   contents included) resolve against the staged document before validation; calls
   without names or bare names skip resolution entirely. One
