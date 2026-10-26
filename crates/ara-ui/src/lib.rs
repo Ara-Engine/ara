@@ -9,6 +9,7 @@ pub mod input;
 pub mod layers;
 pub mod paint;
 mod pipeline;
+pub mod popover;
 pub mod reconcile;
 pub mod runtime;
 pub mod style;

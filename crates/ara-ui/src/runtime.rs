@@ -70,6 +70,9 @@ pub struct Ui {
     pub(crate) editor_checks: bool,
     /// What `reconcile_parts` remembers between calls (part markup, index moves).
     pub(crate) parts: crate::reconcile::Parts,
+    /// Where `frame` last placed each popover, by stable identity; reapplied over the
+    /// popover's CSS whenever it restyles.
+    pub(crate) placed: std::collections::BTreeMap<u64, crate::popover::Applied>,
 }
 /// Actual incremental work counters for profiling and focused tests; `+=` sums
 /// several frames (a host's per-frame budget).
@@ -139,6 +142,7 @@ impl Ui {
             indexed: std::cell::Cell::new(usize::MAX),
             editor_checks: false,
             parts: Default::default(),
+            placed: Default::default(),
         })
     }
     /// Resolve an authored ID without panicking when the node is absent.

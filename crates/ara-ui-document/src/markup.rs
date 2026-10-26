@@ -25,8 +25,8 @@ pub struct Element {
 /// All primitives accepted by markup and type selectors.
 pub const TAGS: &[&str] = &[
     "ui", "panel", "text", "image", "button", "toggle", "slider", "field", "input", "scroll",
-    "splitter", "tabs", "tab", "dropdown", "menu", "popup", "tooltip", "modal", "progress", "list",
-    "tree", "table", "dock", "template", "instance", "slot",
+    "splitter", "tabs", "tab", "dropdown", "menu", "popup", "popover", "tooltip", "modal",
+    "progress", "list", "tree", "table", "dock", "template", "instance", "slot",
 ];
 /// Attributes shared by native controls; typed widget values are validated by the runtime.
 pub const ATTRIBUTES: &[&str] = &[
@@ -57,6 +57,10 @@ pub const ATTRIBUTES: &[&str] = &[
     "nav-up",
     "nav-down",
     "expanded",
+    "anchor",
+    "at",
+    "placement",
+    "offset",
 ];
 /// Parse the strict XML-shaped authoring subset without altering original bytes.
 pub fn parse(source: &str) -> Result<Vec<Element>> {

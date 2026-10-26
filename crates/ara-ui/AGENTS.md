@@ -29,6 +29,12 @@ Public API:
 - `virtualize::{Rows,VirtualList,VirtualTree,VirtualTable,VirtualView}` retains only viewport rows.
 - `input::{InputState,InputEvent}` owns per-player screen/modal focus, capture and drag/drop.
 - `layers::LayerStack` owns tooltip/popup/modal visibility and dismissal/focus restoration.
+- `popover`: a root-child `<popover anchor='id'|at='x,y' placement='bottom-start' offset='4'>`
+  is placed by `Ui::frame` against the anchor's painted rect (`popover::place`: flip to the
+  roomier side, shift inside the window, size to content, clamp and scroll when too tall; it is
+  a block container and a scroll view). `popover::Popovers` gives hosts click-outside
+  (`pointer_down` -> which to close, `on_anchor`), Escape (`top`), stacking (later is on top)
+  and focus return (`sync` after mounting: an opened popover focuses its first field).
 - `docking::{DockLayout,DockNode,DockDrop,Floating}` moves tabs, creates splits, tears panels
   off into floating windows (`float`, `close`, `set_rect`), persists and resets layouts.
   Panel/area IDs are unique across every window; emptied areas collapse and emptied

@@ -73,7 +73,8 @@ impl Widget {
                     .map_or(Ok(0), |v| v.parse::<usize>())?,
                 open: false,
             }),
-            "scroll" => Some(Self::Scroll([0.0; 2])),
+            // A popover clamped to the window scrolls its content.
+            "scroll" | "popover" => Some(Self::Scroll([0.0; 2])),
             "splitter" => Some(Self::Splitter(0.5)),
             _ => None,
         })
