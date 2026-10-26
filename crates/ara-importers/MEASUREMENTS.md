@@ -943,9 +943,71 @@ per-model timings are retained in `measurements/geometry-remap-2026-10-26.json`.
 This is a phase result under load, not a quiet fresh-import-wall claim. The
 unchanged LOD-solve stage varies from **8.180 / 6.702 / 7.524 / 7.099 s**, so the
 entire replay-time difference is not attributed to remapping. Both candidate
-virtual timings are below both control timings. Raw source snapshots, hashes,+build logs and results: `target/ara-dev/import-speed/geo-efficiency/`.
+virtual timings are below both control timings. Raw source snapshots, hashes,
+build logs and results: `target/ara-dev/import-speed/geo-efficiency/`.
 
 Focused tests cover first-encounter IDs, every copied vertex bit including signed
 zero, reuse across groups, generation wrap collisions and sparse allocation.
 Existing deterministic DAG/edge/page tests remain enabled; the declared explicit
 million-triangle benchmark remains opt-in.
+
+## Native LOD-solve profile: 2026-10-26
+
+Instrument an isolated copy of the existing meshopt 0.7 dependency, leaving the
+engine dependency, lockfile and registry sources untouched. Thread-cycle scopes
+cover native setup, candidate ranking, collapse and updates. Replay all 101 real
+Outpost model inputs with one thread under `ara-dev gpu`; every complete output
+matches the production cache. Textures are verified cache hits; this does not
+measure encoding, cache stores, worker startup or fresh-project latency. Background
+load is retained in the evidence (18% CPU and 7.24 GiB available at the second
+full run's start). Two instrumented runs agree on the dominant work:
+
+| Native work | Calls per run | Share of classic LOD cycles | Largest phases within this class, second run |
+| --- | ---: | ---: | --- |
+| Classic position-only | 897 | 20.9–21.9% | Pick 16.5%, position quadrics 15.1%, collapse 14.9%, rank 12.5% |
+| Classic attribute-aware | 1,149 | 78.1–79.1% | Rank 28.4%, attribute quadrics 23.1%, collapse 7.6%, pick 6.2% |
+| Virtual geometry, separate from classic | 12,113 | Excluded | Position quadrics 15.6%, pick 13.5%, classification 11.5% |
+
+All 15 configured attribute weights are positive: normals 3×0.05, tangent and
+handedness 4×0.01, UVs 4×0.01 and colour 4×0.01. The geometric prefix retains
+`LockBorder` and error ≤0.01; attribute solves retain `LockBorder | Permissive |
+RegularizeLight` and error 0.1. Changing weights, locks or the simplifier's error
+target would change the algorithm. There is no outer binary search over errors:
+the repeated native calls come from each LOD target and the existing attribute
+fallback. The native collapse loop itself uses a target-dependent error goal.
+Fully explicitly locked attribute inputs account for less than 0.5% of classic
+cycles in the second run, so that shortcut cannot address the main cost.
+
+Within conservatively inferred consecutive primitive runs, repeated pristine
+setup represents **28.6–29.7% of classic cycles**. Including the first candidate
+pick/rank/sort raises the measured second-run ceiling to **39.8%**. These figures
+subtract only the first call for each identical diagnostic setup fingerprint;
+they assume free reset/copy and are not speedup predictions. A prepared-context
+prototype would need to restore mutable quadrics, adjacency, edge loops and
+candidate buffers for each target. Reusing already-collapsed state is different.
+
+A captured `namaqualand_boulder_02` primitive proves progressive warm-starting is
+not byte-exact. It has 53,437 vertices and 293,892 LOD0 indices. All three direct
+replays with packed positions exactly match the captured stride-124 results.
+At the second target (73,473 indices), direct and progressive results both contain
+73,452 indices but differ from index zero and in error bits. At the third target,
+they even contain different counts: **36,720 direct versus 36,702 progressive**.
+Keep independent LOD0 solves; this shortcut would require an intentional importer
+revision and new quality validation.
+
+The native counter calibration estimates 3.4–3.6% read overhead across all native
+calls. Diagnostic input/output hashes run outside the native scopes but inside
+replay wall time; do not treat those wall timings as a before/after improvement.
+No new LOD algorithm, dependency, importer revision, action key or sidecar change
+ships with this profile. Parallel geometry remains off.
+
+Canonical aggregates, exact counter totals, binary/source hashes, all per-model
+stages and warm-start output digests: `measurements/lod-native-profile-2026-10-26.json`.
+The isolated instrumentation, original/probed native sources, capture and raw CSVs
+remain under `target/ara-dev/import-speed/lod-profile/` and
+`D:/AraBuild/ara-dev-infra-target/lod-profile/`. On this machine, reproduce with
+`powershell -File target/ara-dev/import-speed/lod-profile/build-v2.ps1`, then
+`ara-dev-gpu.exe gpu -- powershell -File target/ara-dev/import-speed/lod-profile/run-locked.ps1 -Full`.
+The same script without `-Full` captures the five rock inputs for
+`ara-dev-gpu.exe gpu -- D:/AraBuild/ara-dev-infra-target/lod-profile/warm-start-v2.exe target/ara-dev/import-speed/lod-profile/capture.bin`.
+`analyze.ps1` and `prefix.ps1` validate and aggregate the raw native records.
