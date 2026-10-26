@@ -122,13 +122,18 @@ fn position(directory: &Path, ticket: &Ticket) -> Result<usize> {
         .context("own GPU ticket disappeared")
 }
 
-pub(crate) fn run(timeout: u64, wait_for_quiet: bool, command: &[OsString]) -> Result<bool> {
+pub(crate) fn run(
+    timeout: u64,
+    wait_for_quiet: bool,
+    policy: crate::gpu_guard::Policy,
+    command: &[OsString],
+) -> Result<bool> {
     // Validate output ownership before even creating baseline diagnostics.
     let root = crate::git::text(Path::new("."), ["rev-parse", "--show-toplevel"])
         .map(PathBuf::from)
         .unwrap_or(std::env::current_dir()?);
     crate::build_paths::Directories::from_env(&root)?;
-    locked_with(timeout, wait_for_quiet, || {
+    locked_with(timeout, wait_for_quiet, policy, || {
         eprintln!("GPU lock acquired; running {command:?}");
         crate::platform::gpu_command(command)
     })
@@ -136,12 +141,18 @@ pub(crate) fn run(timeout: u64, wait_for_quiet: bool, command: &[OsString]) -> R
 
 /// Keep admission and crash recovery identical for direct commands and perf sessions.
 pub(crate) fn locked<T>(timeout: u64, operation: impl FnOnce() -> Result<T>) -> Result<T> {
-    locked_with(timeout, false, operation)
+    locked_with(
+        timeout,
+        false,
+        crate::gpu_guard::Policy::default(),
+        operation,
+    )
 }
 
 fn locked_with<T>(
     timeout: u64,
     wait_for_quiet: bool,
+    policy: crate::gpu_guard::Policy,
     operation: impl FnOnce() -> Result<T>,
 ) -> Result<T> {
     let local = std::env::var_os("LOCALAPPDATA")
@@ -193,6 +204,7 @@ fn locked_with<T>(
         Some(crate::gpu_guard::Guard::start(
             wait_for_quiet,
             path.clone(),
+            policy,
         )?)
     };
     let mut result = operation();

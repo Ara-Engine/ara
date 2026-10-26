@@ -13,7 +13,9 @@
 //! other missing measurements retain their reason. The report updates per section.
 mod html;
 mod measure;
+mod reclassify;
 mod rows;
+pub(crate) mod validity;
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -78,6 +80,11 @@ pub(crate) struct Options {
     /// Wait for games or foreign GPU work to clear before the three-second baseline.
     #[arg(long)]
     wait_for_quiet: bool,
+    #[command(flatten)]
+    gpu_policy: crate::gpu_guard::Policy,
+    /// Re-score saved GPU evidence and raw source reports without building or launching.
+    #[arg(long)]
+    reclassify: Option<PathBuf>,
 }
 
 /// What the report records about the run itself.
@@ -97,6 +104,9 @@ struct Run {
 }
 
 pub(crate) fn run(root: &Path, options: Options) -> Result<bool> {
+    if let Some(reading) = &options.reclassify {
+        return reclassify::run(root, reading, options.gpu_policy);
+    }
     let now = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs();
     let output = root.join("target/d26").join(stamp(now));
     fs::create_dir_all(&output)?;
@@ -139,7 +149,11 @@ pub(crate) fn run(root: &Path, options: Options) -> Result<bool> {
         options: &options,
     };
     let load_path = output.join("gpu-load.json");
-    let guard = match crate::gpu_guard::Guard::start(options.wait_for_quiet, load_path.clone()) {
+    let guard = match crate::gpu_guard::Guard::start(
+        options.wait_for_quiet,
+        load_path.clone(),
+        options.gpu_policy,
+    ) {
         Ok(guard) => guard,
         Err(error) => {
             let value: serde_json::Value = serde_json::from_slice(&fs::read(&load_path)?)?;
@@ -181,11 +195,7 @@ pub(crate) fn run(root: &Path, options: Options) -> Result<bool> {
     let verdict = write(&results)?;
     println!("{verdict}");
     println!("Report: {}", output.join("report.html").display());
-    if results
-        .gpu_load
-        .as_ref()
-        .is_some_and(crate::gpu_guard::Report::invalid)
-    {
+    if verdict.contains("INVALID") {
         return Err(crate::gpu_guard::invalid_error(
             results.gpu_load.as_ref().expect("guard report").detail(),
         ));
@@ -251,21 +261,40 @@ fn binaries(root: &Path, output: &Path, options: &Options) -> Result<(Binaries, 
 
 /// Write `report.json` and `report.html`; returns the one-line verdict.
 fn write(output: &Path, run: &Run, results: &measure::Results) -> Result<String> {
+    write_value(output, &serde_json::to_value(run)?, results)
+}
+
+fn write_value(
+    output: &Path,
+    run: &serde_json::Value,
+    results: &measure::Results,
+) -> Result<String> {
     let mut rows = rows::rows(results);
-    let invalid = results
+    let invalid_rows = if let Some(load) = &results.gpu_load {
+        validity::apply(&mut rows, load, &results.windows)?
+    } else {
+        0
+    };
+    let refused = results
         .gpu_load
         .as_ref()
-        .is_some_and(crate::gpu_guard::Report::invalid);
-    if invalid {
-        rows::invalidate(&mut rows);
-    }
+        .is_some_and(crate::gpu_guard::Report::invalid)
+        && rows.iter().all(|row| row.value.is_none());
+    let invalid = invalid_rows > 0 || refused;
+    let measured = rows
+        .iter()
+        .filter(|row| {
+            row.value.is_some() || matches!(row.status, rows::Status::Invalid | rows::Status::Fail)
+        })
+        .count();
     let summary = rows::Summary::of(&rows);
     let report = json!({
         "format": "ara.d26/1",
         "run": run,
         "device": results.device,
         "summary": summary,
-        "status": if invalid {"invalid"} else {"measured"},
+        "status": if refused||invalid_rows==measured&&invalid {"invalid"} else if invalid {"partially_invalid"}else {"measured"},
+        "invalidRows":invalid_rows,
         "gpuLoad": results.gpu_load,
         "diagnostic": if invalid {Some(crate::gpu_guard::CODE)} else {None},
         "skipped": results.skipped,
@@ -280,7 +309,14 @@ fn write(output: &Path, run: &Run, results: &measure::Results) -> Result<String>
         output.join("report.html"),
         html::page(&report, &rows, &summary),
     )?;
-    Ok(summary.verdict())
+    Ok(if invalid {
+        format!(
+            "Reading INVALID ({invalid_rows} overlapping rows): {}",
+            summary.verdict()
+        )
+    } else {
+        summary.verdict()
+    })
 }
 
 /// A folder-safe UTC timestamp, `YYYYMMDD-HHMMSS`.

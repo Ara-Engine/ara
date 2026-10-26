@@ -63,7 +63,9 @@ pub(super) struct Output {
 /// Everything measured so far, keyed by scene name (and preset).
 #[derive(Default)]
 pub(super) struct Results {
-    /// Whole-reading foreign GPU evidence; invalid readings never judge budgets.
+    /// Previously recorded row windows remain stable when saved readings move.
+    pub windows: BTreeMap<String, super::validity::Window>,
+    /// Foreign GPU intervals; only overlapping source rows lose their judgments.
     pub gpu_load: Option<crate::gpu_guard::Report>,
     /// Cold High launch with a fresh pipeline cache. Whole-run CPU/hitch metrics
     /// include readiness and warmup; GPU metrics begin only after readiness.
@@ -308,7 +310,10 @@ impl Context<'_> {
 /// Run a tool under the GPU lock, bounded by `limit`.
 fn run(command: &mut Command, limit: Duration, log: &Path) -> Result<()> {
     crate::gpu::locked(4 * 3600, || {
-        let outcome = crate::process::run(command, Some(Instant::now() + limit))?;
+        let launched = super::validity::unix_ms()?;
+        let outcome = crate::process::run(command, Some(Instant::now() + limit));
+        super::validity::record(&log.with_extension("window.json"), launched)?;
+        let outcome = outcome?;
         ensure!(
             outcome.success(),
             "failed or timed out after {} s; see {}",

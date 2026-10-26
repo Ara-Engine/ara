@@ -382,6 +382,7 @@ pub(crate) fn session(
                     ),
             )
         };
+        let launched = crate::d26::validity::unix_ms()?;
         let outcome = process::run_observed(command.current_dir(root), deadline, || {
             if options.keep_alive && Instant::now() >= next_report {
                 next_report = Instant::now() + Duration::from_millis(250);
@@ -394,7 +395,9 @@ pub(crate) fn session(
                 }
             }
             Ok(())
-        })?;
+        });
+        crate::d26::validity::record(&directory.join("measurement-window.json"), launched)?;
+        let outcome = outcome?;
         ensure!(
             outcome.success(),
             "perf player failed or timed out; {}",

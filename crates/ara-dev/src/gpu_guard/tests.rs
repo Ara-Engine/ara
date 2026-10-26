@@ -40,7 +40,15 @@ fn owned_players_are_excluded_and_single_bursts_do_not_invalidate() {
 }
 #[test]
 fn three_summed_samples_retain_original_start_peak_and_end() {
-    let mut c = Classifier::new(1).unwrap();
+    let mut c = Classifier::with_policy(
+        1,
+        Policy {
+            threshold_percent: 5.,
+            sustained_samples: 3,
+            ..Policy::default()
+        },
+    )
+    .unwrap();
     let mut r = Report::default();
     for (at, load) in [(1000, 6.), (2000, 12.), (3000, 8.), (4000, 7.)] {
         let mut s = sample(at, load - 3.);
@@ -52,7 +60,7 @@ fn three_summed_samples_retain_original_start_peak_and_end() {
     let p = &r.contaminants[0];
     assert_eq!(
         (p.pid, p.first_unix_ms, p.last_unix_ms, p.peak_percent),
-        (9, 1000, 4000, 12.)
+        (9, 0, 4000, 12.)
     );
     assert_eq!(r.status(), "invalid");
 }
@@ -118,18 +126,162 @@ fn idle_services_clients_and_overlays_never_invalidate_by_presence() {
     assert!(!report.invalid());
     assert!(report.contaminants.is_empty());
     // Idle residents are not an exclusion list: actual GPU work still counts.
-    for at in 4..=6 {
+    for at in 4..=8 {
         c.push(
             Snapshot {
                 unix_ms: at,
                 processes: vec![process(99, 0, "NVIDIA Overlay.exe", 1)],
-                engines: vec![("pid_99_luid_0_eng_0".into(), 6.)],
+                engines: vec![("pid_99_luid_0_eng_0".into(), 11.)],
             },
             &mut report,
         );
     }
     assert!(report.invalid());
     assert_eq!(report.contaminants[0].pid, 99);
+}
+
+#[test]
+fn compositor_allowance_and_kernel_information_do_not_hide_desktop_work() {
+    let mut c = Classifier::new(1).unwrap();
+    let mut r = Report::default();
+    for at in 1..=5 {
+        c.push(
+            Snapshot {
+                unix_ms: at * 1000,
+                processes: vec![
+                    process(4, 0, "System", 1),
+                    process(20, 0, "csrss.exe", 1),
+                    process(21, 0, "dwm.exe", 1),
+                    process(22, 0, "Discord.exe", 1),
+                ],
+                engines: vec![
+                    ("pid_4_eng_0".into(), 21.),
+                    ("pid_20_eng_0".into(), 15.),
+                    ("pid_21_eng_0".into(), 0.5),
+                    ("pid_22_eng_0".into(), 9.),
+                ],
+            },
+            &mut r,
+        );
+    }
+    assert!(!r.invalid());
+    assert_eq!(r.samples[0].foreign_percent, 9.);
+    assert_eq!(r.samples[0].informational.len(), 3);
+    for at in 6..=10 {
+        let mut s = sample(at * 1000, 9.);
+        s.processes.push(process(21, 0, "dwm.exe", 1));
+        s.engines.push(("pid_21_eng_0".into(), 12.));
+        c.push(s, &mut r);
+    }
+    assert!(r.invalid());
+    assert_eq!(r.samples.last().unwrap().foreign_percent, 18.);
+    // Replaying charged DWM values must never subtract the allowance twice.
+    let replay = r.reclassify(Policy::default()).unwrap();
+    assert_eq!(replay.samples.last().unwrap().foreign_percent, 18.);
+    assert_eq!(r.intervals, replay.intervals);
+    assert!(
+        !r.reclassify(Policy {
+            dwm_allowance_percent: 12.,
+            ..Policy::default()
+        })
+        .unwrap()
+        .invalid()
+    );
+}
+
+#[test]
+fn sustained_unknown_game_load_and_separated_bursts_keep_exact_intervals() {
+    let mut c = Classifier::new(1).unwrap();
+    let mut r = Report::default();
+    for at in 1..=20 {
+        c.push(
+            sample(at * 1000, if at <= 5 || at >= 16 { 30. } else { 0. }),
+            &mut r,
+        );
+    }
+    assert_eq!(
+        r.intervals,
+        vec![
+            Interval {
+                start_unix_ms: 0,
+                end_unix_ms: 5000
+            },
+            Interval {
+                start_unix_ms: 15000,
+                end_unix_ms: 20000
+            }
+        ]
+    );
+    assert!(!r.overlaps(Interval {
+        start_unix_ms: 6000,
+        end_unix_ms: 14000
+    }));
+    assert!(r.overlaps(Interval {
+        start_unix_ms: 17000,
+        end_unix_ms: 18000
+    }));
+    assert!(
+        Policy {
+            threshold_percent: f64::NAN,
+            ..Policy::default()
+        }
+        .validate()
+        .is_err()
+    );
+    assert!(
+        Policy {
+            sustained_samples: 0,
+            ..Policy::default()
+        }
+        .validate()
+        .is_err()
+    );
+    assert!(
+        !r.reclassify(Policy {
+            threshold_percent: 31.,
+            ..Policy::default()
+        })
+        .unwrap()
+        .invalid()
+    );
+}
+
+#[test]
+fn recorded_desktop_run_invalidates_outpost_low_but_keeps_medium_clean() {
+    #[derive(serde::Deserialize)]
+    struct Fixture {
+        processes: Vec<Load>,
+        samples: Vec<(u64, Vec<(usize, f64)>)>,
+        windows: std::collections::BTreeMap<String, Interval>,
+    }
+    let fixture: Fixture =
+        serde_json::from_str(include_str!("fixtures/desktop-20261026.json")).unwrap();
+    let mut c = Classifier::new(0).unwrap();
+    let mut report = Report::default();
+    for (unix_ms, values) in fixture.samples {
+        let raw = values
+            .into_iter()
+            .map(|(index, percent)| Load {
+                percent,
+                ..fixture.processes[index].clone()
+            })
+            .collect();
+        c.observe(
+            Sample {
+                unix_ms,
+                interval_start_unix_ms: 0,
+                foreign_percent: 0.,
+                foreign: vec![],
+                raw,
+                informational: vec![],
+            },
+            &mut report,
+        );
+    }
+    assert_eq!(report.samples.len(), 436);
+    assert_eq!(report.intervals.len(), 4);
+    assert!(report.overlaps(fixture.windows["outpost_low"]));
+    assert!(!report.overlaps(fixture.windows["outpost_medium"]));
 }
 #[test]
 fn orphaned_owned_children_stay_owned_but_recycled_pids_do_not() {
@@ -167,6 +319,7 @@ fn exited_owned_process_counter_tails_never_become_foreign() {
 }
 #[test]
 fn bad_samples_and_monitor_errors_cannot_be_valid() {
+    assert!(Report::default().reclassify(Policy::default()).is_err());
     let mut c = Classifier::new(1).unwrap();
     let mut r = Report::default();
     c.push(sample(1, f64::NAN), &mut r);
@@ -175,4 +328,62 @@ fn bad_samples_and_monitor_errors_cannot_be_valid() {
     assert_eq!(r.status(), "invalid");
     assert_eq!(counter_pid("pid_392_luid_0"), Some(392));
     assert_eq!(counter_pid("not-a-pid"), None);
+}
+
+#[test]
+fn cli_defaults_and_overrides_share_the_same_validated_policy() {
+    use clap::Parser;
+    let crate::Command::Gpu { gpu_policy, .. } =
+        crate::Cli::try_parse_from(["ara-dev", "gpu", "--", "unused"])
+            .unwrap()
+            .command
+    else {
+        unreachable!()
+    };
+    assert_eq!(gpu_policy, Policy::default());
+    assert!(
+        crate::Cli::try_parse_from([
+            "ara-dev",
+            "d26",
+            "--reclassify",
+            "unused",
+            "--dwm-allowance-percent",
+            "4"
+        ])
+        .is_ok()
+    );
+    let crate::Command::Gpu { gpu_policy, .. } = crate::Cli::try_parse_from([
+        "ara-dev",
+        "gpu",
+        "--foreign-gpu-percent",
+        "20",
+        "--foreign-gpu-samples",
+        "8",
+        "--dwm-allowance-percent",
+        "4",
+        "--",
+        "unused",
+    ])
+    .unwrap()
+    .command
+    else {
+        unreachable!()
+    };
+    assert_eq!(
+        gpu_policy,
+        Policy {
+            threshold_percent: 20.,
+            sustained_samples: 8,
+            dwm_allowance_percent: 4.
+        }
+    );
+    for (flag, value) in [
+        ("--foreign-gpu-percent", "NaN"),
+        ("--foreign-gpu-samples", "0"),
+        ("--dwm-allowance-percent", "-1"),
+    ] {
+        assert!(
+            crate::Cli::try_parse_from(["ara-dev", "gpu", flag, value, "--", "unused"]).is_err()
+        );
+    }
 }
