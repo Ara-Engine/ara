@@ -10,6 +10,7 @@ use ara_runtime_render::{PresentationImage, fidelity::vfx::Effects};
 mod content;
 mod convergence;
 mod preview;
+mod recovery;
 #[cfg(test)]
 mod scene_switch;
 mod startup;
@@ -63,6 +64,7 @@ pub(super) struct SceneView {
     raster_scene: Option<String>,
     /// Scene identity is independent of coincident geometry/material generations.
     fidelity_scene: Option<String>,
+    recovery: recovery::Recovery,
 }
 impl SceneView {
     /// Recheck native input at the next render boundary. Notifications for an
@@ -100,6 +102,9 @@ impl SceneView {
         else {
             return Ok(false);
         };
+        if !raster.has_prepared_content() {
+            return Ok(false);
+        }
         let publication = content.snapshot_revision();
         if self
             .revision
@@ -325,29 +330,97 @@ impl SceneView {
         view: &crate::world::DocumentView,
         work: RasterWork,
     ) -> ara_ui::Result<()> {
-        ara_gpu::cpu_scope!("SceneView.render_raster");
-        let wait_for_content = matches!(work, RasterWork::Capture(_));
-        if wait_for_content {
-            renderer.wait_scene_frame()?;
-        } else if !renderer.poll_scene_frame()? {
-            self.frame_pending = true;
-            return Ok(());
-        }
-        self.convergence.completed();
-        self.frame_pending = false;
         if self
             .raster_scene
             .as_ref()
             .is_some_and(|scene| scene != &editor.state.doc)
             && self.preview_view.is_some()
         {
-            // Inspector drafts belong to the outgoing document, including when
-            // both scenes reuse the same entity addresses.
+            // Drafts belong to the outgoing scene. Clear them before forming
+            // the recovery key, which must describe the same extraction input.
             self.set_preview_view(None);
         }
-        if renderer.scene_frame_async() {
-            self.active = renderer.presentation_ready();
+        self.recovery
+            .configure(renderer.size(), editor.state.render_quality);
+        let key = content::Key {
+            revision: (
+                editor.host.store().revision(),
+                editor.extraction_revision,
+                editor.review_revision,
+                self.content.as_ref().map_or(0, |c| c.revision()),
+            ),
+            epoch: self.content_epoch,
+            pose: pose_key(editor.gesture.as_ref()),
+            scene: content::scene_key(editor),
+        };
+        let result = (|| {
+            let waiting = loop {
+                match self.recovery.admit(key, std::time::Instant::now()) {
+                    recovery::Admission::Ready => break false,
+                    recovery::Admission::Wait(delay) if matches!(work, RasterWork::Capture(_)) => {
+                        std::thread::sleep(delay);
+                    }
+                    recovery::Admission::Wait(_) => break true,
+                    recovery::Admission::Exhausted(error) => {
+                        if matches!(work, RasterWork::Capture(_)) {
+                            return Err(
+                                format!("Scene content preparation rejected: {error}").into()
+                            );
+                        }
+                        break true;
+                    }
+                }
+            };
+            if matches!(work, RasterWork::Capture(_)) {
+                renderer.wait_scene_frame()?;
+            } else if !renderer.poll_scene_frame()? {
+                self.frame_pending = true;
+                return Ok(());
+            }
+            self.convergence.completed();
+            self.frame_pending = false;
+            if renderer.scene_frame_async() {
+                self.active = renderer.presentation_ready();
+            }
+            if waiting {
+                return Ok(());
+            }
+            self.render_raster_attempt(renderer, editor, view, work)
+        })();
+        if let Err(error) = result {
+            self.raster_input = None;
+            self.raster_snapshot_dirty = true;
+            let report = self
+                .recovery
+                .failed(key, std::time::Instant::now(), error.to_string());
+            if self.recovery.blocked(key.revision.3) {
+                self.content_job = None;
+                if let Some(candidate) = self.content_ready.take() {
+                    candidate.scene.raster.destroy(renderer)?;
+                }
+                self.convergence.failed();
+                self.raster_gpu_pending = false;
+            }
+            if report || matches!(work, RasterWork::Capture(_)) {
+                return Err(error);
+            }
+        } else if self.content_job.is_none()
+            && self.content_ready.is_none()
+            && self.raster_input.is_some_and(|shown| shown.same_input(key))
+        {
+            self.recovery.succeeded();
         }
+        Ok(())
+    }
+    fn render_raster_attempt(
+        &mut self,
+        renderer: &mut Renderer,
+        editor: &Editor,
+        view: &crate::world::DocumentView,
+        work: RasterWork,
+    ) -> ara_ui::Result<()> {
+        ara_gpu::cpu_scope!("SceneView.render_raster");
+        let wait_for_content = matches!(work, RasterWork::Capture(_));
         let settle = match work {
             RasterWork::Live(settle)
             | RasterWork::Submitted(settle)
@@ -412,13 +485,6 @@ impl SceneView {
             pose: pose_key(editor.gesture.as_ref()),
             scene: content::scene_key(editor),
         };
-        if self.failed == Some(revision)
-            && matches!(work, RasterWork::Live(_) | RasterWork::Submitted(_))
-        {
-            // Retry only when content/publication/preview changes, rather than
-            // allocating a failed generation on every UI frame.
-            return Ok(());
-        }
         if self.revision != Some(revision)
             && self.raster_frame.is_some()
             && self.raster_input.is_some_and(|shown| shown.same_input(key))
@@ -431,7 +497,12 @@ impl SceneView {
         let changed = self.revision != Some(revision)
             || self.raster_input.is_none_or(|shown| !shown.same_input(key))
             || (editor.gesture.is_some() && self.patched_pose != pose_key(editor.gesture.as_ref()))
-            || self.raster_frame.is_none();
+            || self.raster_frame.is_none()
+            || self.raster_input.is_none()
+            || self
+                .raster
+                .as_ref()
+                .is_some_and(|r| !r.has_prepared_content());
         content::poll(
             &mut self.content_job,
             &mut self.content_ready,
@@ -452,6 +523,10 @@ impl SceneView {
         }
         if matches!(work, RasterWork::Live(_)) {
             let ready = self.raster_frame.is_some()
+                && self
+                    .raster
+                    .as_ref()
+                    .is_some_and(|r| r.has_prepared_content())
                 || self
                     .content_ready
                     .as_ref()
@@ -470,7 +545,7 @@ impl SceneView {
             // CPU snapshotting is outside the scope. All GPU adoption, probe
             // delivery, feature composition and post share its completion token.
             let result = renderer.submit_scene_frame(|renderer| {
-                self.render_raster_inner(renderer, editor, view, RasterWork::Submitted(settle))
+                self.render_raster_attempt(renderer, editor, view, RasterWork::Submitted(settle))
                     .map_err(|error| anyhow::anyhow!("{error}"))
             });
             self.frame_pending = renderer.scene_frame_pending();
@@ -525,6 +600,13 @@ impl SceneView {
             return Ok(());
         }
         if self.raster_frame.is_none() {
+            return Ok(());
+        }
+        if self
+            .raster
+            .as_ref()
+            .is_some_and(|r| !r.has_prepared_content())
+        {
             return Ok(());
         }
         {
@@ -770,7 +852,14 @@ impl SceneView {
         Ok(())
     }
     pub fn needs_frame(&self, quality: bool) -> bool {
+        if self
+            .recovery
+            .blocked(self.content.as_ref().map_or(0, |c| c.revision()))
+        {
+            return self.frame_pending;
+        }
         self.frame_pending
+            || self.recovery.pending()
             || self.content_job.is_some()
             || self.content_ready.is_some()
             || (quality || self.raster.is_some())
@@ -1296,6 +1385,7 @@ mod tests {
             if !ray_tracing {
                 let idle_view = editor.view()?;
                 super::convergence::exercise_idle(&mut scene, &mut renderer, &editor, &idle_view)?;
+                super::recovery::exercise_pressure(&mut scene, &mut renderer, &editor, &idle_view)?;
             }
             renderer.gpu().assert_clean()?;
             Ok(())

@@ -32,7 +32,7 @@ impl Heap {
     pub fn usage(&self, gpu: &Context) -> DescriptorUsage {
         DescriptorUsage {
             sampled_images: gpu.info.sampled_image_capacity as usize - self.free_images.len(),
-            storage_buffers: 64 - self.free_buffers.len(),
+            storage_buffers: gpu.info.storage_buffer_capacity as usize - self.free_buffers.len(),
             storage_images: 64 - self.free_storage.len(),
             acceleration_structures: if gpu.info.ray_tracing { 16 } else { 0 }
                 - self.free_acceleration.len(),
@@ -48,7 +48,11 @@ impl Heap {
             let mut binding_flags = vec![flags, flags, vk::DescriptorBindingFlags::empty(), flags];
             let mut bindings = vec![
                 (0, vk::DescriptorType::SAMPLED_IMAGE, 128),
-                (1, vk::DescriptorType::STORAGE_BUFFER, 64),
+                (
+                    1,
+                    vk::DescriptorType::STORAGE_BUFFER,
+                    gpu.info.storage_buffer_capacity,
+                ),
                 (2, vk::DescriptorType::SAMPLER, 3),
                 (3, vk::DescriptorType::STORAGE_IMAGE, 64),
             ];
@@ -179,7 +183,7 @@ impl Heap {
                     Vec::new()
                 },
                 free_images: (0..gpu.info.sampled_image_capacity).rev().collect(),
-                free_buffers: (0..64).rev().collect(),
+                free_buffers: (0..gpu.info.storage_buffer_capacity).rev().collect(),
                 free_storage: (0..64).rev().collect(),
                 storage: Vec::new(),
             })
@@ -216,10 +220,12 @@ impl Heap {
         Ok(HeapIndex { index })
     }
     pub fn buffer(&mut self, gpu: &Context, buffer: BufferAllocation) -> Result<HeapIndex> {
-        let index = self
-            .free_buffers
-            .pop()
-            .ok_or_else(|| GpuError::Contract("Buffer heap exhausted".into()))?;
+        let index = self.free_buffers.pop().ok_or_else(|| {
+            GpuError::Contract(format!(
+                "Buffer heap exhausted ({} slots, including pending retirement)",
+                gpu.info.storage_buffer_capacity
+            ))
+        })?;
         let info = [vk::DescriptorBufferInfo::default()
             .buffer(buffer.handle)
             .range(buffer.size)];

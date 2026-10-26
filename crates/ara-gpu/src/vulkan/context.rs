@@ -1,6 +1,7 @@
 pub(crate) mod allocation;
 mod buffer_memory;
 mod create;
+mod descriptors;
 #[cfg(test)]
 mod diagnostics_tests;
 mod environment;
@@ -149,6 +150,8 @@ pub struct DeviceInfo {
     /// Allocated variable-count sampled-image slots at binding 5, capped at 65,536
     /// and by the device's update-after-bind set, stage and pool limits.
     pub sampled_image_capacity: u32,
+    /// Storage-buffer slots at binding 1, capped at 128 and by update-after-bind limits.
+    pub storage_buffer_capacity: u32,
     /// Enabled optional VK_EXT_mesh_shader mesh/task stages.
     pub mesh_shading: bool,
     /// Mesh indirect group limits: x, y, z, and the total group count.

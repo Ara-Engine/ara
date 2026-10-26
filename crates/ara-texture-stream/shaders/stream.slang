@@ -6,7 +6,7 @@ struct Root{uint desc;uint table;uint pool;uint feedback;uint upload;uint count;
 #define BIND(n)
 ConstantBuffer<Root> root:register(b0,space0);
 #endif
-BIND(1) RWByteAddressBuffer buffers[64]:register(u0,space2);
+BIND(1) RWByteAddressBuffer buffers[]:register(u0,space2);
 [shader("compute")][numthreads(64,1,1)]
 void uploadMain(uint3 gid:SV_GroupID,uint lane:SV_GroupIndex) {
     if(gid.x>=root.count)return;

@@ -67,7 +67,7 @@ pub(super) fn cook(
         .split("// Offline verification entry.")
         .next()
         .ok_or_else(|| anyhow::anyhow!("material preview source"))?;
-    let source=body.replace("textures[16]","textures[128]").replace("RWStructuredBuffer<float4> buffers[4]","RWByteAddressBuffer buffers[64]").replace("SamplerState linearSampler : register(s0, space0);","SamplerState samplers[3] : register(s0, space0);")
+    let source=body.replace("textures[16]","textures[128]").replace("RWStructuredBuffer<float4> buffers[4]","RWByteAddressBuffer buffers[]").replace("SamplerState linearSampler : register(s0, space0);","SamplerState samplers[3] : register(s0, space0);")
         .replace("return buffers[NonUniformResourceIndex(draw.bufferIndex)][draw.materialIndex + offset];","return buffers[NonUniformResourceIndex(draw.bufferIndex)].Load<float4>((draw.materialIndex+offset)*16);")
         .replace("linearSampler","samplers[0]");
     let source = format!(

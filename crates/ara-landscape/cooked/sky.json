@@ -1,22 +1,22 @@
 {
-  "binding_layout_hash": "35cd2a62b1ba741ce6823b3c8753d7b5aa97b54c5f0a837b56e542518013fd7e",
+  "binding_layout_hash": "f71261afa0d52758f34ca15c916d2da422ee92b118ede6e189c970911a274f1e",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "cf8bb916a71f18cdf74d7f87aad74c6b37a2b19fba21962329405cba708f1f1c",
+  "key": "3c841d93da2afa4c0c075d2b9865ecde13098dec1c8f1e194347cd1b51e131cc",
   "stages": [
     {
-      "dxil": "cf8bb916a71f18cdf74d7f87aad74c6b37a2b19fba21962329405cba708f1f1c/skyColor.dxil",
-      "dxil_hash": "987cdbfdb35702419b89806c83c816f5518cca5ff5645fdb51c636ae4b610d23",
+      "dxil": "3c841d93da2afa4c0c075d2b9865ecde13098dec1c8f1e194347cd1b51e131cc/skyColor.dxil",
+      "dxil_hash": "caeb85fb0a4dac25c9913ebc3f1cbce3a6dfeb4b8b05958a5ac01bb1aeb74ed2",
       "source_entry": "skyColor",
-      "spirv": "cf8bb916a71f18cdf74d7f87aad74c6b37a2b19fba21962329405cba708f1f1c/skyColor.spv",
+      "spirv": "3c841d93da2afa4c0c075d2b9865ecde13098dec1c8f1e194347cd1b51e131cc/skyColor.spv",
       "spirv_entry": "main",
-      "spirv_hash": "eda80eec83409baeb53687b54c81fdf5ad8460ae4fc6cb43f5cbe6484839b11c",
+      "spirv_hash": "a1b7367cc757b702de739c19a29336c1e0f3540aedcc1d1f6767da7a2b916a08",
       "stage": "fragment"
     },
     {
-      "dxil": "cf8bb916a71f18cdf74d7f87aad74c6b37a2b19fba21962329405cba708f1f1c/skyVertex.dxil",
+      "dxil": "3c841d93da2afa4c0c075d2b9865ecde13098dec1c8f1e194347cd1b51e131cc/skyVertex.dxil",
       "dxil_hash": "8413cecd660b07edb5577f00595fa3790455d5ace7284886b06b7208b78410d6",
       "source_entry": "skyVertex",
-      "spirv": "cf8bb916a71f18cdf74d7f87aad74c6b37a2b19fba21962329405cba708f1f1c/skyVertex.spv",
+      "spirv": "3c841d93da2afa4c0c075d2b9865ecde13098dec1c8f1e194347cd1b51e131cc/skyVertex.spv",
       "spirv_entry": "main",
       "spirv_hash": "fa64d2f8bb05acd064b9eb7a8903fa2072ab3c0c5f9596d54f45d5401797674d",
       "stage": "vertex"

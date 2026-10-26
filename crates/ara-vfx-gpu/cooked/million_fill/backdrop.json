@@ -1,22 +1,22 @@
 {
-  "binding_layout_hash": "35cd2a62b1ba741ce6823b3c8753d7b5aa97b54c5f0a837b56e542518013fd7e",
+  "binding_layout_hash": "f71261afa0d52758f34ca15c916d2da422ee92b118ede6e189c970911a274f1e",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "d5099ccca8fab760de4ae3a521357d31e85af18592afd3e1ae6c13eef794af35",
+  "key": "02de6ca38eea6bf26f1a5913aef52099c8f9aff84daaad2520d55eae70b2e16a",
   "stages": [
     {
-      "dxil": "d5099ccca8fab760de4ae3a521357d31e85af18592afd3e1ae6c13eef794af35/backdropFragment.dxil",
-      "dxil_hash": "c1418ea780a619a24e1a98093e724eee03356010cf8413e965be8afede2b499a",
+      "dxil": "02de6ca38eea6bf26f1a5913aef52099c8f9aff84daaad2520d55eae70b2e16a/backdropFragment.dxil",
+      "dxil_hash": "727a9fb35be4de6cf3040882562bf23b0470a9f01038bb6ff20d92c4fa4a8fc3",
       "source_entry": "backdropFragment",
-      "spirv": "d5099ccca8fab760de4ae3a521357d31e85af18592afd3e1ae6c13eef794af35/backdropFragment.spv",
+      "spirv": "02de6ca38eea6bf26f1a5913aef52099c8f9aff84daaad2520d55eae70b2e16a/backdropFragment.spv",
       "spirv_entry": "main",
-      "spirv_hash": "1d13b49176580a3a34b8c786c7b6e4d352a4ae0614ad7d7fb14eb200306f77d5",
+      "spirv_hash": "e0c3251197c97ce82bed13e91dfa4f8d3f91a6dea4730e6d17268c0e676b2d70",
       "stage": "fragment"
     },
     {
-      "dxil": "d5099ccca8fab760de4ae3a521357d31e85af18592afd3e1ae6c13eef794af35/screenVertex.dxil",
+      "dxil": "02de6ca38eea6bf26f1a5913aef52099c8f9aff84daaad2520d55eae70b2e16a/screenVertex.dxil",
       "dxil_hash": "b9e64d59497ad3f256cef5a57e9b679e98c1a935fbfd9d8610b6789cdda2eafe",
       "source_entry": "screenVertex",
-      "spirv": "d5099ccca8fab760de4ae3a521357d31e85af18592afd3e1ae6c13eef794af35/screenVertex.spv",
+      "spirv": "02de6ca38eea6bf26f1a5913aef52099c8f9aff84daaad2520d55eae70b2e16a/screenVertex.spv",
       "spirv_entry": "main",
       "spirv_hash": "355196214be9615bef01ad6af76e915afc39b52d4d87188f6fb43f92aa42909e",
       "stage": "vertex"

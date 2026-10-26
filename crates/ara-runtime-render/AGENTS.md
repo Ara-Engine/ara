@@ -31,7 +31,7 @@ device and per-view upload state; no simulation, window or process code.
 - `RasterView::prepare_unchanged` is for a retained immutable extraction (editor
   accumulation/camera frames); it polls GI without revisiting root draws. Edits use
   `prepare` and its exact dirty rows. Any failed preparation discards that candidate
-  CPU snapshot so retry cannot forget an accepted pose; GPU last-good stays live.
+  CPU snapshot (`has_prepared_content`) so UI retries use a worker; GPU last-good stays live.
 - `ModelPlaceholders` styles unpublished models from read-only import status:
   pending bounds are short grey corner marks (no filled faces or distant clutter);
   failed/missing stay solid magenta. Raster arrivals

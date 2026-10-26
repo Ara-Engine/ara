@@ -60,6 +60,11 @@ pub struct RasterView {
 }
 
 impl RasterView {
+    /// A rejected preparation discards its CPU snapshot. Interactive callers
+    /// must reconstruct it on their content worker, keeping last-good GPU data.
+    pub fn has_prepared_content(&self) -> bool {
+        self.prepared.is_some()
+    }
     /// The bake's allocation metadata is sufficient to reserve resources before
     /// its records arrive. Called by the owning presenter during startup only.
     pub(crate) fn preallocate_probe_resources(&mut self, renderer: &mut Renderer) -> Result<bool> {
