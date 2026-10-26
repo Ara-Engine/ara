@@ -45,7 +45,7 @@ struct Launch {
 }
 
 pub(super) fn run(args: Args, began: Instant) -> Result<()> {
-    let mut perf = perf::Window::new(args.standalone.perf, args.standalone.offscreen);
+    let mut perf = perf::Window::new(args.standalone.perf, args.standalone.offscreen, began);
     ensure!(
         !args.standalone.headless || !perf.enabled(),
         "perf frame windows need continuous presentation; use --offscreen instead of --headless"
@@ -267,7 +267,7 @@ pub(super) fn run(args: Args, began: Instant) -> Result<()> {
             }
             if perf.enabled() {
                 let camera = frame.camera.map(|camera| json!({"position":camera.position,"forward":camera.forward,"fov":camera.fov}));
-                if perf.frame(
+                let measurement = perf.frame(
                     &presenter,
                     &phases,
                     json!(camera),
@@ -292,7 +292,17 @@ pub(super) fn run(args: Args, began: Instant) -> Result<()> {
                         total_ms: frame_start.elapsed().as_secs_f64() * 1000.,
                         first_presented: frames == 1,
                     },
-                )? {
+                );
+                // A failed readiness window still owns a live swapchain. Retire
+                // it before the renderer/device leave scope on the error path.
+                let stop = match measurement {
+                    Ok(stop) => stop,
+                    Err(problem) => {
+                        window.shutdown(&presenter)?;
+                        return Err(problem);
+                    }
+                };
+                if stop {
                     break;
                 }
             }

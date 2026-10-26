@@ -1,6 +1,7 @@
 //! Optimized iteration builds and serialized measurements of immutable exported scenes.
 mod control;
 pub(crate) mod freeze;
+pub(crate) mod readiness;
 mod report;
 
 use std::fs::{self, File};
@@ -44,6 +45,12 @@ pub(crate) struct Options {
     frames: u32,
     #[arg(long, default_value_t = 30)]
     warmup: u32,
+    /// Wait for settled raster content/residency/GI before counting warmup frames.
+    #[arg(long)]
+    wait_ready: bool,
+    /// Maximum readiness wait in seconds; failure retains a diagnostic player report.
+    #[arg(long, default_value_t = 120, value_parser = clap::value_parser!(u64).range(1..=3600))]
+    ready_timeout: u64,
     #[arg(long, default_value_t = 2560, value_parser = clap::value_parser!(u32).range(1..))]
     width: u32,
     #[arg(long, default_value_t = 1440, value_parser = clap::value_parser!(u32).range(1..))]
@@ -88,12 +95,15 @@ impl Options {
         warmup: u32,
         profile: &str,
         gpu_cache: PathBuf,
+        ready_timeout: u64,
     ) -> Self {
         Self {
             scene: None,
             preset,
             frames,
             warmup,
+            wait_ready: true,
+            ready_timeout,
             width: 2560,
             height: 1440,
             keep_alive: false,
@@ -287,6 +297,9 @@ pub(crate) fn session(
     let base = root.join("target/ara-dev/perf");
     fs::create_dir_all(directory)?;
     let raw = directory.join("player.json");
+    if raw.is_file() {
+        fs::remove_file(&raw).context("clear the previous window's player metrics")?;
+    }
     let control = directory.join("control");
     fs::create_dir_all(&control)?;
     let empty_layers = directory.join("empty-vulkan-layers");
@@ -335,6 +348,12 @@ pub(crate) fn session(
     if options.keep_alive {
         command.arg("--keep-alive");
     }
+    if options.wait_ready {
+        command.arg("--perf-wait-ready").args([
+            "--perf-ready-timeout-ms",
+            &options.ready_timeout.saturating_mul(1000).to_string(),
+        ]);
+    }
     if let Some(capture) = &options.capture {
         command.arg("--capture").arg(capture);
     }
@@ -352,7 +371,16 @@ pub(crate) fn session(
         let deadline = if options.keep_alive {
             None
         } else {
-            Some(Instant::now() + Duration::from_secs(300))
+            Some(
+                Instant::now()
+                    + Duration::from_secs(
+                        300 + if options.wait_ready {
+                            options.ready_timeout
+                        } else {
+                            0
+                        },
+                    ),
+            )
         };
         let outcome = process::run_observed(command.current_dir(root), deadline, || {
             if options.keep_alive && Instant::now() >= next_report {

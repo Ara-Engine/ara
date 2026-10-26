@@ -27,6 +27,8 @@ Local developer binary. No engine dependencies; uses git and cargo as subprocess
 - `d26`: the release scoreboard (`src/d26/`). It reuses `perf` windows on Outpost, Hangar and
   Showcase packs, `ara-samples capture --reference` (ꟻLIP) and the editor's responsiveness
   probe, and writes `target/d26/<ts>/report.{json,html}`. Unmeasured rows stay "not measured".
+  GPU windows require raster/GI readiness then warmup; readiness timeouts fail loudly.
+  CPU/hitches use whole-run samples; arrival peaks/time-to-ready have no budget gate.
 
 Agent checkpoints: `cargo test -p ara-dev`, `cargo clippy -p ara-dev --all-targets -- -D warnings`
 and `cargo fmt --all -- --check`. Set CARGO_BUILD_JOBS=2 on the shared PC.
