@@ -3,9 +3,6 @@
 use super::Page;
 use crate::model::{AgentClient, Hub, Intent, Participant, Presence, State, text};
 
-/// Claude Code's one-line user-scope registration.
-pub const CLAUDE_ADD: &str = "claude mcp add --scope user ara -- ara mcp";
-
 pub(super) fn body(p: &mut Page, hub: &Hub) {
     let live: Vec<_> = hub
         .activity
@@ -137,12 +134,19 @@ fn connect(p: &mut Page, hub: &Hub) {
             });
         });
         p.leaf("divider");
+        let Some(executable)=hub.cli_executable.as_ref() else {
+            p.text("section-copy","Preparing Ara connection instructions…");
+            return;
+        };
+        let path=executable.to_string_lossy();
+        let quoted=if cfg!(windows) {format!("'{}'",path.replace('\'',"''"))}else{format!("'{}'",path.replace('\'',"'\\''"))};
+        let invoke=if cfg!(windows){"& "}else{""};
         let printed = hub.install.get(&client).map(String::as_str);
-        let install = format!("ara hub install-mcp --client {}", client.id());
+        let install = format!("{invoke}{quoted} hub install-mcp --client {}", client.id());
         match client {
             AgentClient::Claude => {
                 step(p, "1", "Register Ara with Claude Code (user scope)", |p| {
-                    code(p, copied, "copy-claude-add", CLAUDE_ADD);
+                    code(p, copied, "copy-claude-add", &format!("claude mcp add --scope user ara -- {quoted} mcp"));
                 });
                 step(p, "2", "Or add this entry to ~/.claude.json yourself", |p| {
                     block(p, copied, "copy-claude-json", printed, &install);

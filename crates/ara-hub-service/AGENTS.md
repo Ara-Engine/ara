@@ -9,6 +9,8 @@ One service per config directory, enforced by an OS lock; projects run separatel
 - `serve(config, port)` runs authenticated localhost WebSocket RPC.
 - `connect_or_start(directory, ara_executable)` auto-starts `ara hub serve`;
   `connect_checked` also reports `update_pending` for a busy older service.
+- `update_installed_engine(config, operation)` uses RPC or locks the registry offline;
+  setup's `register-engine/unregister-engine --no-start` never spawns a service.
 - `config_dir()`: `ARA_CONFIG_DIR`, else `%APPDATA%/Ara` on Windows,
   `~/Library/Application Support/Ara` on macOS, `$XDG_CONFIG_HOME/ara` or
   `~/.config/ara` elsewhere.
@@ -62,8 +64,8 @@ params/results use camelCase. No engine session is needed for `hub.*`.
 | `hub.subscribe` | `{}` | `{revision}`; subsequent `hub.changed {revision,kind,project}` notifications |
 | `hub.unsubscribe` | `{}` | `{ok:true}`; also automatic on socket close |
 
-`project` accepts a registered stable ID, unique name or canonical path. Agents
-cannot target an unregistered directory through global MCP. A status is
+`project` accepts an exact ID/path or one case-insensitive name. Ambiguous names
+list IDs/paths for disambiguation. Global MCP only targets registered projects. Status:
 `{project:card,state:"open"|"closed",pid,port,headless}`; closed fields are null.
 Use state, not stale discovery files, for the open indicator. A change notification
 invalidates the appropriate view: refresh projects/status/activity; revision is a
@@ -119,11 +121,9 @@ A failed custom template can leave its newly created destination for inspection.
 
 ## One-time global MCP installation
 
-`ara hub install-mcp --client claude` prints the `mcpServers.ara` JSON entry for
-Claude Code's user configuration (`~/.claude.json`). Equivalent registration:
-`claude mcp add --scope user ara -- ara mcp`.
-`ara hub install-mcp --client codex` prints `[mcp_servers.ara]` TOML for
-`~/.codex/config.toml`. Both run `ara mcp` once per client, with no root.
+`ara hub install-mcp --client claude|codex` prints Claude JSON / Codex TOML with
+the current executable's absolute path and `args:["mcp"]`; PATH is unnecessary.
+Hub displays/copies these instructions; it never edits the agent's config files.
 Register existing projects first with `ara hub add <absolute-path>`; create with
 `ara hub create <absolute-path> --name Name --template blank`.
 Use `ara_projects {action:"list"}` then `ara_session {action:"open",project:"Name"}`
@@ -139,7 +139,7 @@ tracked `.cargo/config.toml` sets `target/ara-config` for `cargo test`/`cargo ru
 closes projects, shuts down the owned service and waits for discovery removal.
 Do not stop or alter another user's/service's profile.
 
-`CARGO_BUILD_JOBS=4 cargo test -p ara-hub-service` covers durable registry/templates and release jobs.
+`CARGO_BUILD_JOBS=2 cargo test -p ara-hub-service` covers registry/templates and release jobs.
 `cargo test -p ara --test hub` runs real user Hub + global stdio MCP + two project
 daemons, concurrent clients, registry metadata, subscriptions, and install output.
 `cargo test -p ara --test engine` retains per-project MCP/HTTP coverage.

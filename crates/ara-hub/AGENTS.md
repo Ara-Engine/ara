@@ -51,6 +51,8 @@ This feature stays off in shipping builds; see ara-release's rehearsal command.
 - Built-in icons, wordmarks and Starter art decode/upload on first visible use,
   then stay resident across pages/themes. DPI changes invalidate that image set.
   MCP snippet helper processes start only on opening Agents, after bootstrap is ready.
+- Agent instructions quote the verified absolute CLI path (including spaces/apostrophes).
+  Hub copies configs/commands; it does not write or own the clients' config files.
 - `App::frame` consumes a retained presentation request: rebuilding must present
   even if its layout work was already consumed. Pointer activations apply before
   the next queued event. Worker results wake SDL; idle waits follow clock/toast deadlines.
