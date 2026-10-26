@@ -13,6 +13,9 @@ pub(super) struct Samples {
     hitch_samples: u32,
 }
 impl Samples {
+    pub fn count(&self) -> usize {
+        self.frames.len()
+    }
     pub fn record(&mut self, wall_ms: f64, wait_ms: Option<f64>, first_presented: bool) {
         self.frames.push(wall_ms);
         if let Some(wait) = wait_ms.filter(|v| v.is_finite() && *v >= 0. && *v <= wall_ms) {

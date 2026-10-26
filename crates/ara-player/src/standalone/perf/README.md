@@ -9,14 +9,21 @@ itself is excluded: ready at 430 plus 60 warmup frames samples from 491.
 wait or filesystem probe is added to the getter. Packed asset sources are immutable;
 this is not a readiness contract for an external live import queue.
 
-`run.cpu` has the same metrics described below for **all game frames in the
-measurement request**, including readiness, arrival and warmup. D26 gates those
+`run.cpu` has the same metrics described below for **all game frames since launch**,
+including readiness, arrival, warmup, keepalive gaps and later requests. D26 gates those
 whole-run CPU/hitch values. `cpu` keeps the GPU window's CPU samples for analysis.
 `arrival` reports excluded-frame peaks, per-pass quantiles and GPU coverage without
 a budget gate. The ready snapshot is latched for the immutable pack; normal
 in-flight rendering continues warmup. Later presentation errors fail the window.
 Loading-view latency stays in `startup`. New keep-alive requests reset
-the measurement clock; the first request uses the process launch clock.
+the GPU measurement clock; the first request uses the process launch clock. CPU
+collection continues between windows and never resets with a request. Stop/quit
+flushes it into the last report without changing that report's GPU samples.
+
+`run.hitches.frames` records the first 256 eligible hitches with one-based process
+frame index, launch time, CPU phases, measured host waits, GPU span/gap and renderer
+readiness. `run.hitches.omitted` counts further details; CPU totals always include
+every frame. Ordinary games do not enable this collection.
 
 `--perf-output` adds these fields under `player.json`'s `cpu` object:
 
