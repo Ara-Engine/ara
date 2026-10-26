@@ -19,6 +19,11 @@ impl ProbeVolume {
     /// Enclose geometry with half a padding cell and a bounded lattice.
     /// Probe centres avoid the bounding planes, where zero-distance hits vanish.
     pub fn automatic(min: Vec3, max: Vec3) -> Result<Self> {
+        Self::automatic_within(min, max, 32768)
+    }
+    /// [`ProbeVolume::automatic`] with at most `probes` probes (at least the
+    /// eight-probe minimum per axis allows).
+    pub fn automatic_within(min: Vec3, max: Vec3, probes: usize) -> Result<Self> {
         ensure!(
             min.is_finite() && max.is_finite() && min.cmple(max).all(),
             "Invalid probe bounds"
@@ -30,7 +35,9 @@ impl ProbeVolume {
         let mut counts = std::array::from_fn(|i| {
             ((extent[i] / 1.5).ceil().min(62.) as u32 + 2).clamp(minimum[i], 64)
         });
-        while counts.iter().map(|n| *n as usize).product::<usize>() > 32768 {
+        while counts.iter().map(|n| *n as usize).product::<usize>() > probes.min(32768)
+            && counts.iter().any(|&n| n > 3)
+        {
             let axis = (0..3).max_by_key(|i| counts[*i]).expect("Three probe axes");
             counts[axis] -= 1;
         }

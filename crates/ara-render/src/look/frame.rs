@@ -35,8 +35,12 @@ pub(crate) struct LookFrame {
     pub sampled: [[u32; 4]; 2],
     pub storage: [[u32; 4]; 2],
     pub state: [u32; 4],
-    pub gi_origin: [f32; 4],
-    pub gi_spacing: [f32; 4],
+    /// x irradiance hysteresis, y the weight of a pool's finer lattices (their arrival
+    /// cross-fade after the coarsest; 1 for a single lattice).
+    pub gi_params: [f32; 4],
+    /// x lattices in the probe pool, y/z the previous frame's relit window
+    /// (first probe, count; copied forward by the relight), w probes (zero: no
+    /// probe GI).
     pub gi_counts: [u32; 4],
     pub gi_buffers: [u32; 4],
     pub gi_update: [u32; 4],
@@ -78,6 +82,13 @@ pub(crate) struct LookFrame {
     pub vsm_depth: [f32; 4],
     /// x projected page visibility (sampled; zero: none this frame), y (storage).
     pub vsm_mask: [u32; 4],
+    /// Probe lattices, finest first (look/gi.rs `ProbeLayout`): xyz first probe
+    /// centre, w edge falloff in cells.
+    pub gi_lattice_origin: [[f32; 4]; super::gi::MAX_LATTICES],
+    /// xyz probe separation, w surface bias (m).
+    pub gi_lattice_spacing: [[f32; 4]; super::gi::MAX_LATTICES],
+    /// xyz dimensions, w first global probe id.
+    pub gi_lattice_counts: [[u32; 4]; super::gi::MAX_LATTICES],
 }
 
 /// Per-frame inputs that are not part of the authored look.
@@ -150,8 +161,7 @@ impl LookFrame {
             sampled: inputs.sampled,
             storage: inputs.storage,
             state: [inputs.state, 0, 0, 0],
-            gi_origin: [0.; 4],
-            gi_spacing: [1., 1., 1., 0.],
+            gi_params: [0.; 4],
             gi_counts: [0; 4],
             gi_buffers: [0; 4],
             gi_update: [0; 4],
@@ -176,6 +186,9 @@ impl LookFrame {
             vsm_space: [[0.; 4]; 4],
             vsm_depth: [0.; 4],
             vsm_mask: [0; 4],
+            gi_lattice_origin: [[0., 0., 0., 1.]; super::gi::MAX_LATTICES],
+            gi_lattice_spacing: [[1., 1., 1., 0.]; super::gi::MAX_LATTICES],
+            gi_lattice_counts: [[2, 2, 2, 0]; super::gi::MAX_LATTICES],
         }
     }
 }

@@ -16,7 +16,7 @@ use anyhow::{Context, Result, ensure};
 use ara_gpu::vulkan::VulkanDevice;
 use ara_render::instanced::Scene;
 use ara_render::look::gi::{
-    ProbeLayout, ProbeSurfaces, ProbeUpdate, STATIC_VECTORS, SURFACE_TEXELS,
+    ProbeLattice, ProbeLayout, ProbeSurfaces, ProbeUpdate, STATIC_VECTORS, SURFACE_TEXELS,
 };
 use ara_render_fidelity::{
     FidelityView, FrameInput, Mode, PostSettings, Settings, Tier, Upscaler,
@@ -34,7 +34,7 @@ use std::{
 };
 
 /// Bumped whenever the bake or the cache layout changes.
-const VERSION: u32 = 4;
+const VERSION: u32 = 5;
 const MAGIC: &[u8; 8] = b"ARAGI\0\0\x01";
 
 /// Residency used only while baking (full-resolution albedo for the caches).
@@ -147,14 +147,22 @@ enum Message {
     /// Small reservation metadata, before the expensive bake/payload completes.
     Layout(ProbeLayout),
     /// The job's packed probe records (delivered as soon as they exist): the
-    /// re-traced probes, or every probe after a full bake.
-    Surfaces(Result<ProbeUpdate>),
+    /// re-traced probes, or every probe after a full bake. A pool's full bake is
+    /// two of them: its coarsest lattice (all the volume needs to be ready), then
+    /// its finer lattices with `last` set.
+    Surfaces {
+        update: Result<ProbeUpdate>,
+        last: bool,
+    },
     /// The job finished, returning the worker state.
     Done(Option<Worker>),
 }
 
 struct Active {
+    /// The first records arrived: readiness no longer waits on this job.
     delivered: bool,
+    /// The last records arrived: captures stop waiting.
+    complete: bool,
     receive: Receiver<Message>,
 }
 
@@ -281,6 +289,7 @@ impl Acquisition {
             .context("starting the probe GI worker")?;
         self.active = Some(Active {
             delivered: false,
+            complete: false,
             receive,
         });
         Ok(())
@@ -292,7 +301,7 @@ impl Acquisition {
     pub(crate) fn poll(&mut self, wait: bool) -> Option<ProbeUpdate> {
         loop {
             let active = self.active.as_mut()?;
-            let block = wait && (!active.delivered || self.queued.is_some());
+            let block = wait && (!active.complete || self.queued.is_some());
             let message = if block {
                 active.receive.recv().ok()
             } else {
@@ -304,9 +313,10 @@ impl Acquisition {
             };
             match message {
                 Some(Message::Layout(layout)) => self.layout = Some(layout),
-                Some(Message::Surfaces(result)) => {
+                Some(Message::Surfaces { update, last }) => {
                     active.delivered = true;
-                    match result {
+                    active.complete |= last;
+                    match update {
                         Ok(update) => return Some(update),
                         Err(error) => {
                             eprintln!("ara-runtime-render: probe GI acquisition failed: {error:#}")
@@ -371,18 +381,22 @@ fn run(cache: &Path, cpu: bool, job: Job, worker: Option<Worker>, send: &Sender<
             started.elapsed().as_secs_f64()
         )
     };
-    let follow = match acquire(cache, cpu, &job, &mut worker, send) {
+    let mut early = false;
+    let follow = match acquire(cache, cpu, &job, &mut worker, send, &mut early) {
         Ok((surfaces, changed, follow)) => {
             // RT acquisition and cache hits use the same reservation contract.
             let _ = send.send(Message::Layout(surfaces.layout()));
             // Packing happens here, off the render thread.
-            let update = ProbeUpdate::new(&surfaces, changed.as_deref());
-            let _ = send.send(Message::Surfaces(update));
+            for (probes, last) in stages(&surfaces, changed, early) {
+                let update = ProbeUpdate::new(&surfaces, probes.as_deref());
+                let _ = send.send(Message::Surfaces { update, last });
+            }
             note("delivered");
             follow
         }
         Err(error) => {
-            let _ = send.send(Message::Surfaces(Err(error)));
+            let update = Err(error);
+            let _ = send.send(Message::Surfaces { update, last: true });
             note("failed");
             None
         }
@@ -433,18 +447,45 @@ fn dynamic_key(dynamic: &BTreeSet<u64>) -> u64 {
         .fold(seed, |key, e| crate::fnv(key, &e.to_le_bytes()))
 }
 
+/// What a job delivers, in order (probe ids, `None` for all; whether last): an
+/// edit's re-traced probes; a single lattice whole; a pool's coarsest lattice
+/// (unless the bake already sent it, `early`) and then its finer lattices.
+fn stages(
+    surfaces: &ProbeSurfaces,
+    changed: Option<Vec<u32>>,
+    early: bool,
+) -> Vec<(Option<Vec<u32>>, bool)> {
+    let layout = surfaces.layout();
+    let finer = layout.bases()[layout.lattices().len() - 1] as u32;
+    match changed {
+        Some(changed) => vec![(Some(changed), true)],
+        None if finer == 0 => vec![(None, true)],
+        None => {
+            let fine = (0..finer).collect();
+            let coarse = (finer..layout.probe_count() as u32).collect();
+            let mut stages = vec![(Some(coarse), false), (Some(fine), true)];
+            if early {
+                stages.remove(0);
+            }
+            stages
+        }
+    }
+}
+
 /// Produces the job's surfaces: an edit re-traces in place; a generation is
 /// incremental against the previous tracer where the lattice still fits and
 /// under half the probes change, else loaded from the cache or fully baked (on
 /// a new ray-tracing device where available). Also returns the re-traced probes
 /// (`None` after a full bake) and what the worker still needs for a tracer of the
-/// delivered scene.
+/// delivered scene. A CPU bake of a pool sends its coarsest lattice as soon as it
+/// is traced, before the finer ones (`early`).
 fn acquire(
     cache: &Path,
     cpu: bool,
     job: &Job,
     worker: &mut Option<Worker>,
     send: &Sender<Message>,
+    early: &mut bool,
 ) -> Result<(ProbeSurfaces, Option<Vec<u32>>, Option<FollowUp>)> {
     if let Some(worlds) = &job.edit
         && let Some(state) = worker.as_mut().filter(|w| w.key == job.key)
@@ -464,9 +505,11 @@ fn acquire(
         return Ok((state.surfaces.clone(), Some(changed), None));
     }
     let method = if cpu { "cpu" } else { "auto" };
+    // The lattice rule names the file: a changed rule misses older bakes.
     let path = cache.join(format!(
-        "{:016x}-{method}.gi",
-        job.key ^ dynamic_key(&job.dynamic)
+        "{:016x}-{method}-{}.gi",
+        job.key ^ dynamic_key(&job.dynamic),
+        gi_cpu::lattice_rule()
     ));
     let mut tracer = worker.as_mut().and_then(|w| w.tracer.take());
     if let Ok(bytes) = std::fs::read(&path) {
@@ -544,16 +587,32 @@ fn acquire(
                     && scene.geometry.get(i.geometry).is_some_and(|g| !g.deforming)
             });
             scene.instances = baked;
-            let surfaces = bake(&mut gpu, &job.frame, &prepared);
+            let tracer =
+                tracer.get_or_insert_with(|| Tracer::new(&prepared.scene, &shading, &job.dynamic));
+            let surfaces = bake(&mut gpu, &job.frame, &prepared, tracer, |layout| {
+                let _ = send.send(Message::Layout(layout));
+            });
             prepared.scene.instances.extend(excluded);
             surfaces?
         }
         None => {
             let tracer =
                 tracer.get_or_insert_with(|| Tracer::new(&prepared.scene, &shading, &job.dynamic));
-            gi_cpu::bake_with_layout(tracer, |layout| {
-                let _ = send.send(Message::Layout(layout));
-            })?
+            gi_cpu::bake_with_layout(
+                tracer,
+                |layout| {
+                    let _ = send.send(Message::Layout(layout));
+                },
+                |coarse| {
+                    let (probes, _) = stages(coarse, None, false).remove(0);
+                    let update = ProbeUpdate::new(coarse, probes.as_deref());
+                    let _ = send.send(Message::Surfaces {
+                        update,
+                        last: false,
+                    });
+                    *early = true;
+                },
+            )?
         }
     };
     std::fs::create_dir_all(cache)?;
@@ -572,13 +631,18 @@ fn acquire(
     Ok((surfaces, None, follow))
 }
 
+/// Cache file: [`MAGIC`], the lattice count, nine words per lattice (origin and
+/// spacing as f32, counts as u32), then the texels and statics of every probe.
 fn encode(s: &ProbeSurfaces) -> Vec<u8> {
     let mut bytes = MAGIC.to_vec();
-    for v in s.origin.iter().chain(&s.spacing) {
-        bytes.extend(v.to_le_bytes());
-    }
-    for c in s.counts {
-        bytes.extend(c.to_le_bytes());
+    bytes.extend((s.layout.lattices().len() as u32).to_le_bytes());
+    for lattice in s.layout.lattices() {
+        for v in lattice.origin.iter().chain(&lattice.spacing) {
+            bytes.extend(v.to_le_bytes());
+        }
+        for c in lattice.counts {
+            bytes.extend(c.to_le_bytes());
+        }
     }
     bytes.extend_from_slice(bytemuck::cast_slice(&s.texels));
     bytes.extend_from_slice(bytemuck::cast_slice(&s.statics));
@@ -587,31 +651,44 @@ fn encode(s: &ProbeSurfaces) -> Vec<u8> {
 
 fn decode(bytes: &[u8]) -> Result<ProbeSurfaces> {
     ensure!(
-        bytes.len() >= 44 && &bytes[..8] == MAGIC,
+        bytes.len() >= 12 && &bytes[..8] == MAGIC,
         "not a probe GI cache"
     );
-    let word = |i: usize| -> [u8; 4] {
-        [
-            bytes[8 + i * 4],
-            bytes[9 + i * 4],
-            bytes[10 + i * 4],
-            bytes[11 + i * 4],
-        ]
+    let word = |i: usize| -> Result<[u8; 4]> {
+        bytes
+            .get(8 + i * 4..12 + i * 4)
+            .and_then(|w| w.try_into().ok())
+            .context("truncated probe GI cache")
     };
-    let float = |i| f32::from_le_bytes(word(i));
-    let counts = [6, 7, 8].map(|i| u32::from_le_bytes(word(i)));
-    let probes = counts.iter().map(|&c| c as usize).product::<usize>();
+    let lattices = u32::from_le_bytes(word(0)?) as usize;
+    ensure!(
+        (1..=ara_render::look::gi::MAX_LATTICES).contains(&lattices),
+        "invalid probe GI cache lattices"
+    );
+    let mut all = Vec::with_capacity(lattices);
+    for l in 0..lattices {
+        let at = 1 + l * 9;
+        let float = |i: usize| -> Result<f32> { Ok(f32::from_le_bytes(word(at + i)?)) };
+        let count = |i: usize| -> Result<u32> { Ok(u32::from_le_bytes(word(at + i)?)) };
+        all.push(ProbeLattice {
+            origin: [float(0)?, float(1)?, float(2)?],
+            spacing: [float(3)?, float(4)?, float(5)?],
+            counts: [count(6)?, count(7)?, count(8)?],
+        });
+    }
+    let layout = ProbeLayout::new(&all)?;
+    layout.validate()?;
+    let header = 12 + lattices * 36;
+    let probes = layout.probe_count();
     let texel_bytes = probes * SURFACE_TEXELS * 16;
     ensure!(
-        bytes.len() == 44 + texel_bytes + probes * STATIC_VECTORS * 16,
+        bytes.len() == header + texel_bytes + probes * STATIC_VECTORS * 16,
         "truncated probe GI cache"
     );
     let surfaces = ProbeSurfaces {
-        origin: [float(0), float(1), float(2)],
-        spacing: [float(3), float(4), float(5)],
-        counts,
-        texels: bytemuck::pod_collect_to_vec(&bytes[44..44 + texel_bytes]),
-        statics: bytemuck::pod_collect_to_vec(&bytes[44 + texel_bytes..]),
+        layout,
+        texels: bytemuck::pod_collect_to_vec(&bytes[header..header + texel_bytes]),
+        statics: bytemuck::pod_collect_to_vec(&bytes[header + texel_bytes..]),
     };
     surfaces.validate()?;
     Ok(surfaces)
@@ -750,11 +827,16 @@ fn shade(prepared: &native::Prepared, surface: bool) -> Vec<crate::gi_cpu::Shadi
         .collect()
 }
 
-/// Bakes the probe surfaces of `frame`'s content on a ray-tracing device.
+/// Bakes the probe surfaces of `frame`'s content on a ray-tracing device: the
+/// fidelity view's lattice is traced there; a fine lattice over built-up content
+/// (`gi_cpu::layout`) bakes on `tracer`. The final pool is published before
+/// either traces.
 fn bake(
     gpu: &mut VulkanDevice,
     frame: &RenderFrame,
     prepared: &native::Prepared,
+    tracer: &Tracer,
+    publish: impl FnOnce(ProbeLayout),
 ) -> Result<ProbeSurfaces> {
     let started = std::time::Instant::now();
     let look = FrameEnvironment::resolve(&frame.look, frame.environment.exposure);
@@ -774,7 +856,19 @@ fn bake(
         },
         None,
     )?;
-    let surfaces = (|| {
+    let surfaces = (|| -> Result<ProbeSurfaces> {
+        let coarse = view.probe_volume();
+        let coarse = ProbeLattice {
+            origin: coarse.origin.to_array(),
+            spacing: coarse.spacing.to_array(),
+            counts: coarse.counts,
+        };
+        let cpu = gi_cpu::layout(tracer)?;
+        let layout = match cpu.lattices() {
+            [fine, _] => ProbeLayout::new(&[*fine, coarse])?,
+            _ => ProbeLayout::single(coarse),
+        };
+        publish(layout);
         view.set_environment(&look)?;
         for _ in 0..256 {
             if view.refine_native_textures(gpu)?.pending_textures == 0 {
@@ -793,15 +887,30 @@ fn bake(
                 deterministic: true,
             },
         )?;
-        view.bake_probe_surfaces(gpu)
+        let traced = view.bake_probe_surfaces(gpu)?;
+        if layout.lattices().len() == 1 {
+            return Ok(traced);
+        }
+        // The fine lattice from the CPU tracer; the coarse one as ray-traced.
+        let mut pool = gi_cpu::bake_lattices(tracer, layout, 0..1)?;
+        let base = layout.bases()[1];
+        pool.texels[base * SURFACE_TEXELS..].copy_from_slice(&traced.texels);
+        pool.statics[base * STATIC_VECTORS..].copy_from_slice(&traced.statics);
+        pool.validate()?;
+        Ok(pool)
     })();
     view.destroy(gpu)?;
     let surfaces = surfaces?;
     ensure!(!surfaces.is_empty(), "empty probe bake");
+    let counts: Vec<_> = surfaces
+        .layout
+        .lattices()
+        .iter()
+        .map(|l| l.counts)
+        .collect();
     eprintln!(
-        "ara-runtime-render: baked {} GI probes ({:?}) in {:.1} s",
+        "ara-runtime-render: baked {} GI probes ({counts:?}) in {:.1} s",
         surfaces.len(),
-        surfaces.counts,
         started.elapsed().as_secs_f64()
     );
     Ok(surfaces)
@@ -813,9 +922,11 @@ mod tests {
 
     fn lattice(origin: f32) -> ProbeSurfaces {
         ProbeSurfaces {
-            origin: [origin, 0., 0.],
-            spacing: [1.; 3],
-            counts: [2, 2, 2],
+            layout: ProbeLayout::single(ProbeLattice {
+                origin: [origin, 0., 0.],
+                spacing: [1.; 3],
+                counts: [2, 2, 2],
+            }),
             texels: vec![[0; 4]; 8 * SURFACE_TEXELS],
             statics: vec![[1., 1., 0., 1.]; 8 * STATIC_VECTORS],
         }
@@ -832,7 +943,10 @@ mod tests {
         for (key, origin) in [(1u64, 1.), (2, 2.), (3, 3.)] {
             let key = key ^ u64::from(VERSION);
             std::fs::write(
-                root.join(format!("probe-gi/{key:016x}-cpu.gi")),
+                root.join(format!(
+                    "probe-gi/{key:016x}-cpu-{}.gi",
+                    gi_cpu::lattice_rule()
+                )),
                 encode(&lattice(origin)),
             )?;
         }
@@ -848,7 +962,7 @@ mod tests {
         // Every finished job delivers, in order; the newest arrives last.
         let mut origins = Vec::new();
         while let Some(update) = acquisition.poll(true) {
-            origins.push(update.origin[0]);
+            origins.push(update.layout.lattices()[0].origin[0]);
         }
         assert_eq!(origins.last(), Some(&3.), "{origins:?}");
         assert!(!origins.contains(&2.), "the replaced request never ran");
@@ -1025,18 +1139,50 @@ mod tests {
 
     #[test]
     fn cache_round_trips_and_rejects_truncation() -> Result<()> {
+        // A two-lattice pool: eight fine probes, then twelve coarse ones.
         let surfaces = ProbeSurfaces {
-            origin: [1., 2., 3.],
-            spacing: [0.5, 1., 2.],
-            counts: [2, 2, 2],
-            texels: (0..8 * SURFACE_TEXELS as u32)
+            layout: ProbeLayout::new(&[
+                ProbeLattice {
+                    origin: [1., 2., 3.],
+                    spacing: [0.5, 1., 2.],
+                    counts: [2, 2, 2],
+                },
+                ProbeLattice {
+                    origin: [-4., 0., -4.],
+                    spacing: [4., 4., 4.],
+                    counts: [3, 2, 2],
+                },
+            ])?,
+            texels: (0..20 * SURFACE_TEXELS as u32)
                 .map(|i| [i, i + 1, i + 2, i + 3])
                 .collect(),
-            statics: vec![[0.25, 1., 0., 1.]; 8 * STATIC_VECTORS],
+            statics: vec![[0.25, 1., 0., 1.]; 20 * STATIC_VECTORS],
         };
         let bytes = encode(&surfaces);
         assert_eq!(decode(&bytes)?, surfaces);
         assert!(decode(&bytes[..bytes.len() - 4]).is_err());
+        // A full delivery of the pool is staged: the coarse lattice's twelve
+        // probes (all readiness needs), then the eight fine ones, last.
+        let (coarse, fine) = ((8..20).collect(), (0..8).collect());
+        assert_eq!(
+            stages(&surfaces, None, false),
+            [(Some(coarse), false), (Some(fine), true)]
+        );
+        // A CPU bake already sent the coarse lattice; edits stay one stage.
+        assert_eq!(
+            stages(&surfaces, None, true),
+            [(Some((0..8).collect()), true)]
+        );
+        assert_eq!(
+            stages(&surfaces, Some(vec![3, 9]), false),
+            [(Some(vec![3, 9]), true)]
+        );
+        let single = ProbeSurfaces {
+            layout: ProbeLayout::single(surfaces.layout.lattices()[1]),
+            texels: surfaces.texels[8 * SURFACE_TEXELS..].to_vec(),
+            statics: surfaces.statics[8 * STATIC_VECTORS..].to_vec(),
+        };
+        assert_eq!(stages(&single, None, false), [(None, true)]);
         Ok(())
     }
 }

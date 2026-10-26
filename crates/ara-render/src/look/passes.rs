@@ -471,7 +471,13 @@ impl LookGpu {
                     p.gi_relight
                 },
                 0,
-                [self.gi.as_ref().map_or(0, |gi| gi.probes), 1, 1],
+                [
+                    self.gi
+                        .as_ref()
+                        .map_or(0, |gi| gi.relight_groups(self.quality.gi_budget)),
+                    1,
+                    1,
+                ],
             ),
             LookPass::HorizonSun => (
                 p.horizon_sun,
@@ -502,7 +508,7 @@ impl LookGpu {
         };
         let (staging, base, count, clear) = match pass {
             LookPass::GiScatter(n) => match self.probe_writes.get(n as usize) {
-                Some((staging, count)) => (staging.index, 0, *count, false),
+                Some((staging, count, _)) => (staging.index, 0, *count, false),
                 None => return,
             },
             _ => {

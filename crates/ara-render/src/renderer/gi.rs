@@ -39,9 +39,7 @@ impl Renderer {
         );
         if let Some(gi) = &self.look.gi {
             ensure!(
-                gi.origin == layout.origin
-                    && gi.spacing == layout.spacing
-                    && gi.counts == layout.counts,
+                gi.layout == layout,
                 "Initial probe reservation would replace a live lattice"
             );
         } else {
@@ -160,9 +158,11 @@ impl Renderer {
             "probe records {records:?} outside the update's {}",
             update.len()
         );
-        let same = self.look.gi.as_ref().is_some_and(|gi| {
-            gi.origin == update.origin && gi.spacing == update.spacing && gi.counts == update.counts
-        });
+        let same = self
+            .look
+            .gi
+            .as_ref()
+            .is_some_and(|gi| gi.layout == update.layout);
         if !same {
             let volume = self.empty_volume(update.layout())?;
             self.drop_probe_volume()?;
@@ -181,10 +181,15 @@ impl Renderer {
             self.look.probe_staging.push(staging);
             return Err(error.into());
         }
-        self.look.probe_writes.push((staging, records.len() as u32));
+        // Writes of a pool's finer lattices alone may land after readiness.
+        let deferred = self.look.gi.as_ref().is_some_and(|gi| {
+            gi.deferred > 0 && update.ids(records.clone()).all(|id| id < gi.deferred)
+        });
+        self.look
+            .probe_writes
+            .push((staging, records.len() as u32, deferred));
         if let Some(gi) = self.look.gi.as_mut() {
-            gi.bias = update.bias();
-            gi.received(records.len());
+            gi.received(update.ids(records));
         }
         Ok(())
     }
@@ -230,7 +235,7 @@ impl Renderer {
         }
         let written = std::mem::take(&mut self.look.probe_writes);
         let pool = &mut self.look.probe_staging;
-        pool.extend(written.into_iter().map(|(staging, _)| staging));
+        pool.extend(written.into_iter().map(|(staging, _, _)| staging));
         pool.sort_unstable_by_key(|s| std::cmp::Reverse(s.capacity));
         for extra in pool.split_off(pool.len().min(STAGING_KEPT)) {
             self.gpu.retire(Resource::Buffer(extra.buffer))?;
@@ -243,7 +248,7 @@ impl Renderer {
         let pending = std::mem::take(&mut self.look.probe_writes);
         self.look
             .probe_staging
-            .extend(pending.into_iter().map(|(staging, _)| staging));
+            .extend(pending.into_iter().map(|(staging, _, _)| staging));
         if let Some(old) = self.look.gi.take() {
             self.gpu.retire(Resource::Buffer(old.cache))?;
             self.gpu.retire(Resource::Buffer(old.meta))?;
@@ -289,7 +294,8 @@ impl Renderer {
             .gpu
             .create_buffer((probes * 16) as u64, storage, false)?;
         allocated.push(Resource::Buffer(meta));
-        // Capture boundaries zero the irradiance with a copy (`reset_capture_history`).
+        // Capture boundaries zero the irradiance with a copy (`reset_capture_history`);
+        // tests read it back.
         let mut image = |gpu: &mut VulkanDevice, size: u32, format| {
             let image = gpu.create_image(
                 atlas * size,
@@ -297,7 +303,8 @@ impl Renderer {
                 format,
                 vk::ImageUsageFlags::SAMPLED
                     | vk::ImageUsageFlags::STORAGE
-                    | vk::ImageUsageFlags::TRANSFER_DST,
+                    | vk::ImageUsageFlags::TRANSFER_DST
+                    | vk::ImageUsageFlags::TRANSFER_SRC,
             )?;
             allocated.push(Resource::Image(image));
             Ok::<_, ara_gpu::GpuError>(image)
@@ -308,11 +315,8 @@ impl Renderer {
             image(&mut self.gpu, 8, vk::Format::R16G16B16A16_SFLOAT)?,
         ];
         let volume = GiGpu {
-            origin: layout.origin,
-            spacing: layout.spacing,
-            counts: layout.counts,
+            layout,
             probes: probes as u32,
-            bias: layout.bias(),
             atlas,
             indices: [
                 self.gpu.storage_buffer(cache)?.index,
@@ -339,12 +343,20 @@ impl Renderer {
             clear_budget: probes as u32,
             slot: 0,
             cursor: 0,
+            relit: (0, 0),
             converge: 0,
             converge_progress: 0,
             capture_convergence: false,
             relit_once: false,
             received: 0,
             weight: 0.,
+            // A pool's finer lattices may land after its coarsest (the last).
+            deferred: layout.bases()[layout.lattices().len() - 1] as u32,
+            deferred_received: 0,
+            deferred_started: false,
+            deferred_converge: 0,
+            deferred_progress: 0,
+            deferred_weight: 0.,
         };
         Ok(volume)
     }

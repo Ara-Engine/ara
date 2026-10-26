@@ -1,4 +1,5 @@
-// Probe-volume GI (look/gi.rs). Each probe owns a one-time 8x8 octahedral surface
+// Probe-volume GI (look/gi.rs): a pool of probe lattices, finest first (a fine one
+// over built-up content, a coarse one over the whole world). Each probe owns a one-time 8x8 octahedral surface
 // cache (averaged hit albedo, normal, emissive, distance and sky fraction per
 // texel), static 8x8 distance moments (atlas) and its relocation. Every frame the
 // caches are relit (sun, local lights, sky, emissive, last frame's probes for
@@ -13,10 +14,31 @@ uint octIndex(int2 p,int size){
 }
 // IEEE half to float from bits; no 16-bit shader capabilities are required.
 float halfToFloat(uint h){uint e=(h>>10)&31,m=h&1023;float v=e==0?float(m)*exp2(-24.):exp2(float(e)-15.)*(1+float(m)/1024.);return (h&0x8000)!=0?-v:v;}
-// A volume shades once converged, fading in by its weight (look/gi.rs GiGpu::weight).
+// A pool shades once converged, fading in by its weight (look/gi.rs GiGpu::weight).
 float giWeight(Look l){return asfloat(l.giUpdate.w);}
 bool giEnabled(Look l){return l.giCounts.w>0 && giWeight(l)>0;}
-float3 giProbePosition(Look l,uint id){uint x=id%l.giCounts.x,y=(id/l.giCounts.x)%l.giCounts.y,z=id/(l.giCounts.x*l.giCounts.y);return l.giOrigin.xyz+float3(x,y,z)*l.giSpacing.xyz;}
+// One lattice of the probe pool (look/gi.rs ProbeLayout; finest first): first probe
+// centre and edge falloff (cells), spacing and surface bias (m), dimensions and
+// first global probe id.
+// Rows are picked with constant indices only: indexing the record's arrays by a
+// variable spills them to local memory in every shader that includes this.
+struct GiLattice{float3 origin;float falloff;float3 spacing;float bias;uint3 counts;uint base;};
+GiLattice giLattice(Look l,uint i){
+    float4 o=i==0?l.giLatticeOrigin[0]:i==1?l.giLatticeOrigin[1]:i==2?l.giLatticeOrigin[2]:l.giLatticeOrigin[3];
+    float4 s=i==0?l.giLatticeSpacing[0]:i==1?l.giLatticeSpacing[1]:i==2?l.giLatticeSpacing[2]:l.giLatticeSpacing[3];
+    uint4 c=i==0?l.giLatticeCounts[0]:i==1?l.giLatticeCounts[1]:i==2?l.giLatticeCounts[2]:l.giLatticeCounts[3];
+    GiLattice g;g.origin=o.xyz;g.falloff=o.w;g.spacing=s.xyz;g.bias=s.w;g.counts=c.xyz;g.base=c.w;return g;
+}
+// The lattice holding global probe `id`.
+uint giLatticeOf(Look l,uint id){
+    uint n=l.giCounts.x;
+    return (n>3 && id>=l.giLatticeCounts[3].w)?3:(n>2 && id>=l.giLatticeCounts[2].w)?2:(n>1 && id>=l.giLatticeCounts[1].w)?1:0;
+}
+float3 giProbePosition(Look l,uint id){
+    GiLattice g=giLattice(l,giLatticeOf(l,id));uint local=id-g.base;
+    uint x=local%g.counts.x,y=(local/g.counts.x)%g.counts.y,z=local/(g.counts.x*g.counts.y);
+    return g.origin+float3(x,y,z)*g.spacing;
+}
 // Relocation offset (xyz) and active flag (w).
 float4 giMeta(Look l,uint probe){return buffers[NonUniformResourceIndex(l.giBuffers.y)].Load<float4>(probe*16);}
 // Probe tiles in an atlas, `l.giUpdate.z` per row, each with a one-texel border
@@ -29,41 +51,49 @@ float3 giSampleIrradiance(Look l,uint image,uint probe,float3 direction){
 float2 giSampleMoments(Look l,uint probe,float3 direction){
     return textures[NonUniformResourceIndex(l.giImages.w)].SampleLevel(samplers[2],(float2(giTile(l,probe,8))+octEncode(direction)*8)/giAtlas(l,8),0).xy;
 }
-// Weight of the volume at `p`: one inside, fading to zero over the outer half cell.
-float giCoverage(Look l,float3 p){
-    float3 grid=(p-l.giOrigin.xyz)/l.giSpacing.xyz,extent=float3(l.giCounts.xyz)-1;
-    float3 inside=saturate(min(grid+0.5,extent+0.5-grid)*2);return inside.x*inside.y*inside.z;
+// Weight of lattice `g` at `p`: one inside, falling smoothly to zero over its outer
+// `falloff` cells (from half a cell outside its outermost probes).
+float giLatticeCoverage(GiLattice g,float3 p){
+    float3 grid=(p-g.origin)/g.spacing,extent=float3(g.counts)-1;
+    float3 inside=saturate((min(grid,extent-grid)+0.5)/g.falloff);inside=inside*inside*(3-2*inside);
+    return inside.x*inside.y*inside.z;
 }
-// Diffuse irradiance at `position` facing `normal` from atlas `image` (DDGI
-// weights: trilinear, backface and Chebyshev visibility against static moments).
-float3 giIrradiance(Look l,uint image,float3 position,float3 normal,float3 bias){
-    float3 biased=position+bias;float3 grid=(biased-l.giOrigin.xyz)/l.giSpacing.xyz;
-    int3 base=clamp(int3(floor(grid)),int3(0),int3(l.giCounts.xyz)-2);float3 alpha=saturate(grid-base);float3 sum=0;float total=0;
+// Irradiance facing `normal` (and with `both`, facing `reflection`) from one
+// lattice's eight probes (DDGI weights: trilinear, backface and Chebyshev
+// visibility against static moments), the point offset along the normal and
+// towards `v` by the lattice's surface bias.
+void giLatticeLobes(Look l,GiLattice g,uint image,float3 position,float3 normal,float3 reflection,float3 v,bool both,out float3 diffuse,out float3 specular){
+    float3 biased=position+normal*g.bias+v*(g.bias*0.33);float3 grid=(biased-g.origin)/g.spacing;
+    int3 base=clamp(int3(floor(grid)),int3(0),int3(g.counts)-2);float3 alpha=saturate(grid-base);diffuse=0;specular=0;float total=0;
     for(uint k=0;k<8;k++){
-        uint3 d=uint3(k&1,(k>>1)&1,(k>>2)&1);uint3 p=uint3(base)+d;uint id=(p.z*l.giCounts.y+p.y)*l.giCounts.x+p.x;
+        uint3 d=uint3(k&1,(k>>1)&1,(k>>2)&1);uint3 p=uint3(base)+d;uint id=g.base+(p.z*g.counts.y+p.y)*g.counts.x+p.x;
         float4 meta=giMeta(l,id);if(meta.w<0.5)continue;
-        float3 delta=biased-giProbePosition(l,id)-meta.xyz;float distance=length(delta);float3 dir=delta/max(distance,1e-6);
+        float3 delta=biased-(g.origin+float3(p)*g.spacing)-meta.xyz;float distance=length(delta);float3 dir=delta/max(distance,1e-6);
         float2 moments=giSampleMoments(l,id,dir);
         float variance=max(moments.y-moments.x*moments.x,0.0001);float visibility=distance<=moments.x?1:pow(variance/(variance+pow(distance-moments.x,2)),3);
         float3 trilinear=lerp(1-alpha,alpha,float3(d));float weight=trilinear.x*trilinear.y*trilinear.z*max(0.02,pow(saturate(dot(-dir,normal)*0.5+0.5),2))*visibility;
-        sum+=giSampleIrradiance(l,image,id,normal)*weight;total+=weight;
-    }return total>1e-6?sum/total:float3(0);
-}
-// Surface-side bias: along the normal and towards the viewer, bounded by spacing.
-float3 giBias(Look l,float3 normal,float3 v){return normal*l.giSpacing.w+v*(l.giSpacing.w*0.33);}
-// Irradiance facing `normal` and facing `reflection` from the same probes and
-// weights (the shading pass needs both lobes; this shares visibility work).
-void giLobes(Look l,uint image,float3 position,float3 normal,float3 reflection,float3 bias,out float3 diffuse,out float3 specular){
-    float3 biased=position+bias;float3 grid=(biased-l.giOrigin.xyz)/l.giSpacing.xyz;
-    int3 base=clamp(int3(floor(grid)),int3(0),int3(l.giCounts.xyz)-2);float3 alpha=saturate(grid-base);diffuse=0;specular=0;float total=0;
-    for(uint k=0;k<8;k++){
-        uint3 d=uint3(k&1,(k>>1)&1,(k>>2)&1);uint3 p=uint3(base)+d;uint id=(p.z*l.giCounts.y+p.y)*l.giCounts.x+p.x;
-        float4 meta=giMeta(l,id);if(meta.w<0.5)continue;
-        float3 delta=biased-giProbePosition(l,id)-meta.xyz;float distance=length(delta);float3 dir=delta/max(distance,1e-6);
-        float2 moments=giSampleMoments(l,id,dir);
-        float variance=max(moments.y-moments.x*moments.x,0.0001);float visibility=distance<=moments.x?1:pow(variance/(variance+pow(distance-moments.x,2)),3);
-        float3 trilinear=lerp(1-alpha,alpha,float3(d));float weight=trilinear.x*trilinear.y*trilinear.z*max(0.02,pow(saturate(dot(-dir,normal)*0.5+0.5),2))*visibility;
-        diffuse+=giSampleIrradiance(l,image,id,normal)*weight;specular+=giSampleIrradiance(l,image,id,reflection)*weight;total+=weight;
+        diffuse+=giSampleIrradiance(l,image,id,normal)*weight;if(both)specular+=giSampleIrradiance(l,image,id,reflection)*weight;total+=weight;
     }
     if(total>1e-6){diffuse/=total;specular/=total;}
+}
+// Irradiance from the pool at `position`: lattices front to back, finest first,
+// each weighted by its coverage of what the finer ones left, so a fine lattice
+// blends into the coarse one across its falloff without a seam. Returns the pool's
+// coverage (the coarsest lattice fades to the sky at its own edge); `v` biases
+// towards the viewer (zero for probe relighting).
+float giPoolLobes(Look l,uint image,float3 position,float3 normal,float3 reflection,float3 v,bool both,out float3 diffuse,out float3 specular){
+    diffuse=0;specular=0;float remaining=1;
+    for(uint i=0;i<l.giCounts.x&&remaining>1e-3;i++){
+        // Finer lattices cross-fade in once they land after the coarsest (giParams.y).
+        GiLattice g=giLattice(l,i);float c=giLatticeCoverage(g,position)*(i+1<l.giCounts.x?l.giParams.y:1);
+        if(c<=0)continue;
+        float w=c*remaining;float3 d,s;giLatticeLobes(l,g,image,position,normal,reflection,v,both,d,s);
+        diffuse+=d*w;specular+=s*w;remaining-=w;
+    }
+    float coverage=1-remaining;if(coverage>1e-6){diffuse/=coverage;specular/=coverage;}
+    return coverage;
+}
+// Diffuse irradiance at `position` facing `normal` from the pool in atlas `image`.
+float3 giIrradiance(Look l,uint image,float3 position,float3 normal){
+    float3 d,s;giPoolLobes(l,image,position,normal,normal,float3(0,0,0),false,d,s);return d;
 }

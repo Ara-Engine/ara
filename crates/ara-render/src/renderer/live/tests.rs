@@ -102,9 +102,11 @@ fn scene_probe_content_and_skin_uploads_share_the_deferred_frame() -> Result<()>
     };
     let update = ProbeUpdate::new(
         &ProbeSurfaces {
-            origin: [-1.; 3],
-            spacing: [2.; 3],
-            counts: [2; 3],
+            layout: crate::look::gi::ProbeLayout::single(crate::look::gi::ProbeLattice {
+                origin: [-1.; 3],
+                spacing: [2.; 3],
+                counts: [2; 3],
+            }),
             texels: vec![[0; 4]; 8 * SURFACE_TEXELS],
             statics: vec![[0.; 4]; 8 * STATIC_VECTORS],
         },
@@ -143,16 +145,22 @@ fn failed_probe_and_content_allocations_preserve_heap_and_last_good_volume() -> 
     let scene = fixture::scene();
     let mut renderer = Renderer::new_native(&scene, Box::new(Textures), [64, 48], &[], root)?;
     let surfaces = ProbeSurfaces {
-        origin: [-1.; 3],
-        spacing: [2.; 3],
-        counts: [2; 3],
+        layout: crate::look::gi::ProbeLayout::single(crate::look::gi::ProbeLattice {
+            origin: [-1.; 3],
+            spacing: [2.; 3],
+            counts: [2; 3],
+        }),
         texels: vec![[0; 4]; 8 * SURFACE_TEXELS],
         statics: vec![[0.; 4]; 8 * STATIC_VECTORS],
     };
     renderer.update_probe_surfaces(&ProbeUpdate::new(&surfaces, None)?)?;
     let previous = renderer.look.gi.as_ref().expect("published GI").cache;
     let mut changed = surfaces;
-    changed.origin[0] += 1.;
+    changed.layout = crate::look::gi::ProbeLayout::single(crate::look::gi::ProbeLattice {
+        origin: [0., -1., -1.],
+        spacing: [2.; 3],
+        counts: [2; 3],
+    });
     let update = ProbeUpdate::new(&changed, None)?;
     // Leave one descriptor: the new cache binds, then meta binding fails. Every
     // partially allocated buffer/image must retire and the previous GI survive.

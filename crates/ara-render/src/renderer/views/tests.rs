@@ -43,9 +43,11 @@ fn secondary_view_preserves_primary_pixels_history_motion_and_shared_gi() -> Res
         root.join("cache"),
     )?;
     renderer.set_probe_surfaces(Some(&ProbeSurfaces {
-        origin: [-1.; 3],
-        spacing: [2.; 3],
-        counts: [2; 3],
+        layout: crate::look::gi::ProbeLayout::single(crate::look::gi::ProbeLattice {
+            origin: [-1.; 3],
+            spacing: [2.; 3],
+            counts: [2; 3],
+        }),
         texels: vec![[0; 4]; 8 * SURFACE_TEXELS],
         statics: vec![[0.; 4]; 8 * STATIC_VECTORS],
     }))?;
@@ -328,9 +330,11 @@ fn secondary_view_alone_drives_shared_probe_delivery_without_drawing_the_primary
         root.join("cache"),
     )?;
     renderer.set_probe_surfaces(Some(&ProbeSurfaces {
-        origin: [-1.; 3],
-        spacing: [2.; 3],
-        counts: [2; 3],
+        layout: crate::look::gi::ProbeLayout::single(crate::look::gi::ProbeLattice {
+            origin: [-1.; 3],
+            spacing: [2.; 3],
+            counts: [2; 3],
+        }),
         texels: vec![[0; 4]; 8 * SURFACE_TEXELS],
         statics: vec![[0.; 4]; 8 * STATIC_VECTORS],
     }))?;

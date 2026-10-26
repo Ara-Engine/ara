@@ -24,15 +24,22 @@ groupshared float3 tile[36];
 void storeTile(Look l,uint id,uint lane){
     int2 p=int2(lane%8,lane/8)-1;images[NonUniformResourceIndex(l.giImages.z)][giTile(l,id,6)+p]=float4(tile[octIndex(p,6)],1);
 }
-// One workgroup per probe, one lane per cache texel. Probes outside this frame's
-// update window carry their irradiance forward; inactive probes stay black. `pages`
+// One workgroup per relit probe, one lane per cache texel: this frame's window
+// (giUpdate.xy), then last frame's (giCounts.yz). The atlas written now held every
+// probe two frames ago, so only last frame's window is stale in it: those groups copy
+// it forward, skipping probes this frame relights. Inactive probes stay black. `pages`
 // (a literal per entry point) shadows hits with virtual shadow pages first.
 void giRelight(uint3 group,uint lane,bool pages){
-    Frame f=frame();Look l=look(f);uint id=group.x;if(id>=l.giCounts.w)return;
-    float4 meta=giMeta(l,id);uint read=l.giImages.x;
-    uint relative=(id+l.giCounts.w-l.giUpdate.x)%l.giCounts.w;
-    if(relative>=l.giUpdate.y || meta.w<0.5){
-        if(lane<36)tile[lane]=meta.w<0.5?float3(0):textures[NonUniformResourceIndex(read)].Load(int3(giTile(l,id,6)+uint2(lane%6,lane/6),0)).rgb;
+    Frame f=frame();Look l=look(f);uint cursor=l.giUpdate.x,window=l.giUpdate.y,read=l.giImages.x;
+    if(group.x>=window){
+        uint id=l.giCounts.y+group.x-window;if(id>=l.giCounts.w || id-cursor<window)return;
+        if(lane<36)tile[lane]=textures[NonUniformResourceIndex(read)].Load(int3(giTile(l,id,6)+uint2(lane%6,lane/6),0)).rgb;
+        GroupMemoryBarrierWithGroupSync();storeTile(l,id,lane);return;
+    }
+    uint id=cursor+group.x;if(id>=l.giCounts.w)return;
+    float4 meta=giMeta(l,id);
+    if(meta.w<0.5){
+        if(lane<36)tile[lane]=float3(0);
         GroupMemoryBarrierWithGroupSync();storeTile(l,id,lane);return;
     }
     uint4 t=buffers[NonUniformResourceIndex(l.giBuffers.x)].Load<uint4>((id*64+lane)*16);
@@ -44,7 +51,7 @@ void giRelight(uint3 group,uint lane,bool pages){
         float3 hit=origin+dir*distance,sun=f.sunDirection.xyz;
         float3 irradiance=sunAt(f,l,hit)*saturate(dot(normal,sun))*visibility(f,l,hit,normal,pages?vsmVisibility(f,l,hit,normal,true):-1)+localIrradiance(f,l,hit,normal);
         // Last frame's probes close the loop: multiple bounces converge over frames.
-        irradiance+=giIrradiance(l,read,hit,normal,normal*l.giSpacing.w);
+        irradiance+=giIrradiance(l,read,hit,normal);
         light=(1-sky)*(emissive+albedo/PI*irradiance);
     }
     if(sky>0)light+=sky*(physicalSky(l)?skyRadiance(f,l,dir,false):envTex(f.extra.w,environmentUv(dir)).rgb);
@@ -54,7 +61,7 @@ void giRelight(uint3 group,uint lane,bool pages){
         for(uint j=0;j<64;j++){float w=max(dot(n,directions[j]),0);sum+=radiance[j]*w;normalization+=w;}
         float3 value=sum*(PI/max(normalization,1e-5));
         float3 old=textures[NonUniformResourceIndex(read)].Load(int3(giTile(l,id,6)+uint2(lane%6,lane/6),0)).rgb;
-        float hysteresis=(l.flags.y&LOOK_RESET)!=0?0:l.giOrigin.w;
+        float hysteresis=(l.flags.y&LOOK_RESET)!=0?0:l.giParams.x;
         tile[lane]=lerp(value,old,hysteresis);
     }
     GroupMemoryBarrierWithGroupSync();storeTile(l,id,lane);
@@ -73,8 +80,9 @@ void giGatherMain(uint3 tid:SV_DispatchThreadID){
     Frame f=frame();Look l=look(f);uint2 half=(f.extent.xy+1)/2;if(any(tid.xy>=half))return;
     int2 p=int2(tid.xy)*2;bool covered;float3 world=gbufferWorld(f,p,covered);float4 diffuse=float4(0,0,0,1e9),specular=0;
     if(covered){
-        float3 n=normalize(gbufferNormal(f,p)),v=normalize(f.camera.xyz-world.xyz);float coverage=giCoverage(l,world.xyz);
-        if(coverage>0){float3 a,b;giLobes(l,l.giImages.y,world.xyz,n,reflect(-v,n),giBias(l,n,v),a,b);diffuse.rgb=a;specular=float4(b,coverage);}
+        float3 n=normalize(gbufferNormal(f,p)),v=normalize(f.camera.xyz-world.xyz),a,b;
+        float coverage=giPoolLobes(l,l.giImages.y,world.xyz,n,reflect(-v,n),v,true,a,b);
+        if(coverage>0){diffuse.rgb=a;specular=float4(b,coverage);}
         diffuse.w=length(world.xyz-f.camera.xyz);
     }
     images[NonUniformResourceIndex(l.giGather.z)][tid.xy]=diffuse;

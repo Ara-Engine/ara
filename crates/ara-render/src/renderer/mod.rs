@@ -580,6 +580,7 @@ impl Renderer {
         self.gpu.retire(Resource::Buffer(source))?;
         gi.slot = 0;
         gi.cursor = 0;
+        gi.relit = (0, 0);
         gi.converge = crate::look::gi::CONVERGE_FRAMES;
         gi.converge_progress = 0;
         gi.capture_convergence = true;

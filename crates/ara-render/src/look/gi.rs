@@ -9,7 +9,7 @@
 use anyhow::{Result, ensure};
 use ara_gpu::{Access, Buffer, Image};
 mod layout;
-pub use layout::ProbeLayout;
+pub use layout::{MAX_LATTICES, ProbeLattice, ProbeLayout};
 
 /// Cache texels per probe (8x8 octahedral directions).
 pub const SURFACE_TEXELS: usize = 64;
@@ -26,16 +26,17 @@ pub(crate) const CONVERGE_FRAMES: u32 = 8;
 const INITIAL_PROBES: u32 = 4096;
 /// Frames over which a newly converged volume fades into shading.
 const FADE_FRAMES: f32 = 30.;
+/// Cells over which a finer lattice fades into the next across its edge: full
+/// weight three cells inside its outermost probes (`look-gi.slangh`).
+const FINE_FALLOFF: f32 = 3.5;
+/// The coarsest lattice fades to the sky over half a cell past its outermost probes.
+const COARSE_FALLOFF: f32 = 0.5;
 
-/// What each probe of a lattice sees, from a one-time acquisition.
+/// What each probe of a pool sees, from a one-time acquisition.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ProbeSurfaces {
-    /// First probe centre in world metres.
-    pub origin: [f32; 3],
-    /// Probe separation per axis, in metres.
-    pub spacing: [f32; 3],
-    /// Lattice dimensions; probe `i` is at x = i % x, then y, then z.
-    pub counts: [u32; 3],
+    /// The pool's lattices, finest first; probes numbered lattice after lattice.
+    pub layout: ProbeLayout,
     /// [`SURFACE_TEXELS`] per probe, octahedral row-major. Packed per texel: x
     /// diffuse albedo RGB8 and sky fraction 8 (low to high bits); y octahedral hit
     /// normal as two UNORM16; z emissive red and green as f16; w emissive blue and
@@ -51,15 +52,11 @@ pub struct ProbeSurfaces {
 impl ProbeSurfaces {
     /// Allocation layout, independent of the acquired texels and static records.
     pub fn layout(&self) -> ProbeLayout {
-        ProbeLayout {
-            origin: self.origin,
-            spacing: self.spacing,
-            counts: self.counts,
-        }
+        self.layout
     }
     /// Probe count.
     pub fn len(&self) -> usize {
-        self.counts.iter().map(|&n| n as usize).product()
+        self.layout.probe_count()
     }
     /// A lattice always holds at least eight probes.
     pub fn is_empty(&self) -> bool {
@@ -93,12 +90,8 @@ pub const PROBE_RECORD: usize = 16 + (SURFACE_TEXELS + STATIC_VECTORS) * 16;
 /// its ranges apply in any order.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ProbeUpdate {
-    /// First probe centre in world metres.
-    pub origin: [f32; 3],
-    /// Probe separation per axis, in metres.
-    pub spacing: [f32; 3],
-    /// Lattice dimensions.
-    pub counts: [u32; 3],
+    /// The pool's lattices, finest first.
+    pub layout: ProbeLayout,
     /// Packed records, [`PROBE_RECORD`] bytes each.
     pub records: Vec<u8>,
 }
@@ -106,11 +99,7 @@ pub struct ProbeUpdate {
 impl ProbeUpdate {
     /// Allocation layout; available before the first records are uploaded.
     pub fn layout(&self) -> ProbeLayout {
-        ProbeLayout {
-            origin: self.origin,
-            spacing: self.spacing,
-            counts: self.counts,
-        }
+        self.layout
     }
     /// Records `probes` of `surfaces` (`None`: every probe).
     pub fn new(surfaces: &ProbeSurfaces, probes: Option<&[u32]>) -> Result<Self> {
@@ -136,9 +125,7 @@ impl ProbeUpdate {
             ));
         }
         Ok(Self {
-            origin: surfaces.origin,
-            spacing: surfaces.spacing,
-            counts: surfaces.counts,
+            layout: surfaces.layout,
             records,
         })
     }
@@ -153,9 +140,23 @@ impl ProbeUpdate {
         self.records.is_empty()
     }
 
-    /// Probes in the lattice.
+    /// Probes in the pool.
     pub fn probes(&self) -> usize {
-        self.counts.iter().map(|&n| n as usize).product()
+        self.layout.probe_count()
+    }
+
+    /// Whether every record is of a pool's finer lattices: a staged delivery's
+    /// later part, which may land after the volume is ready.
+    pub fn finer_only(&self) -> bool {
+        let finer = self.layout.bases()[self.layout.lattices().len() - 1] as u32;
+        finer > 0 && self.ids(0..self.len()).all(|id| id < finer)
+    }
+
+    /// Probe ids of `records` (a range of [`Self::len`]).
+    pub fn ids(&self, records: std::ops::Range<usize>) -> impl Iterator<Item = u32> + '_ {
+        records.map(|r| {
+            bytemuck::pod_read_unaligned(&self.records[r * PROBE_RECORD..r * PROBE_RECORD + 4])
+        })
     }
 
     /// Checks the lattice and the record framing before upload.
@@ -166,12 +167,6 @@ impl ProbeUpdate {
             "Probe records are not whole"
         );
         Ok(())
-    }
-
-    /// Surface bias used when sampling the volume: a fifth of the smallest spacing,
-    /// at most 15 cm.
-    pub(crate) fn bias(&self) -> f32 {
-        self.layout().bias()
     }
 }
 
@@ -192,14 +187,11 @@ pub(crate) struct ProbeStaging {
     pub index: u32,
 }
 
-/// Uploaded probe volume. Irradiance atlases ping-pong: frames read `1 - slot`
+/// Uploaded probe pool. Irradiance atlases ping-pong: frames read `1 - slot`
 /// and write `slot`.
 pub(crate) struct GiGpu {
-    pub origin: [f32; 3],
-    pub spacing: [f32; 3],
-    pub counts: [u32; 3],
+    pub layout: ProbeLayout,
     pub probes: u32,
-    pub bias: f32,
     /// Probes per atlas row.
     pub atlas: u32,
     pub cache: Buffer,
@@ -223,62 +215,151 @@ pub(crate) struct GiGpu {
     pub clear_budget: u32,
     pub slot: usize,
     pub cursor: u32,
+    /// The previous frame's relit window (first probe, count). The atlas this
+    /// frame writes last held every probe two frames ago, so only that window
+    /// is stale in it: the relight copies it forward rather than the whole
+    /// pool. Zero whenever both atlases hold the same irradiance.
+    pub relit: (u32, u32),
     /// Remaining full-volume convergence bounces.
     pub converge: u32,
     pub converge_progress: u32,
     pub capture_convergence: bool,
     pub relit_once: bool,
-    /// Records written since the volume was created; a new lattice stays out of
-    /// shading until every probe's has landed and the volume has converged.
+    /// Records of probes `deferred..` (the coarsest lattice) written since the
+    /// volume was created; it stays out of shading until they have all landed and
+    /// it has converged.
     pub received: usize,
     /// Shading weight: 0 while a new volume fills and converges (the ambient
     /// stays as it was), then rising to 1 over [`FADE_FRAMES`].
     pub weight: f32,
+    /// Probes `0..deferred`, a pool's finer lattices, may land after the
+    /// coarsest: the volume is ready on the coarsest alone, and they converge
+    /// and fade in afterwards. Zero for a single lattice.
+    pub deferred: u32,
+    /// Records of the deferred probes written since the volume was created.
+    pub deferred_received: usize,
+    /// Deferred convergence has begun (once the coarsest lattice converged).
+    pub deferred_started: bool,
+    /// Remaining bounces over the deferred probes, at the preset budget.
+    pub deferred_converge: u32,
+    pub deferred_progress: u32,
+    /// Shading weight of the finer lattices: 0 until they have landed and
+    /// converged, then rising to 1 over [`FADE_FRAMES`] (a cross-fade from the
+    /// coarsest lattice beneath them).
+    pub deferred_weight: f32,
 }
 
 impl GiGpu {
-    /// Counts `records` written; once every probe of a new volume has landed it
-    /// starts converging (still out of shading).
-    pub(crate) fn received(&mut self, records: usize) {
+    /// Whether every probe the volume needs, the coarsest lattice's, has landed.
+    pub(crate) fn landed(&self) -> bool {
+        self.received + self.deferred as usize >= self.probes as usize
+    }
+
+    /// Whether the finer lattices have landed but not yet faded fully in.
+    pub(crate) fn deferred_arriving(&self) -> bool {
+        self.deferred > 0
+            && self.deferred_received >= self.deferred as usize
+            && self.deferred_weight < 1.
+    }
+
+    /// Counts the records written for probes `ids`. Once the coarsest lattice of
+    /// a new volume has landed it starts converging (still out of shading); the
+    /// finer lattices are counted apart and converge after it.
+    pub(crate) fn received(&mut self, ids: impl Iterator<Item = u32>) {
+        let (mut coarse, mut fine) = (0, 0);
+        for id in ids {
+            if id < self.deferred {
+                fine += 1;
+            } else {
+                coarse += 1;
+            }
+        }
+        if !self.deferred_started {
+            self.deferred_received += fine;
+        }
         if self.weight > 0. || self.converge > 0 {
             return;
         }
-        self.received += records;
-        if self.received >= self.probes as usize {
+        self.received += coarse;
+        if self.landed() {
             self.converge = CONVERGE_FRAMES;
             self.converge_progress = 0;
+            self.cursor = self.range().0;
         }
     }
-    /// Captures retain full-grid bounces; live initialization uses a bounded window.
-    fn window(&self, budget: u32) -> u32 {
-        if self.converge > 0 && self.capture_convergence {
+
+    /// Probes relit this phase: the coarsest lattice while it converges, the
+    /// finer lattices while they do, else the whole pool.
+    fn range(&self) -> (u32, u32) {
+        if self.converge > 0 && !self.capture_convergence {
+            (self.deferred, self.probes)
+        } else if self.deferred_converge > 0 {
+            (0, self.deferred)
+        } else {
+            (0, self.probes)
+        }
+    }
+
+    /// This frame's relit window (first probe, count). Captures retain full-grid
+    /// bounces; live initialization uses a bounded window over the coarsest
+    /// lattice, and the finer lattices converge at the preset budget. A window
+    /// never runs past its range's end (the next one wraps).
+    fn window(&self, budget: u32) -> (u32, u32) {
+        let (start, end) = self.range();
+        let window = if self.converge > 0 && self.capture_convergence {
             self.probes
         } else if self.converge > 0 && budget > 0 {
-            budget.max(INITIAL_PROBES).min(self.probes)
+            budget.max(INITIAL_PROBES)
         } else {
-            budget.min(self.probes)
-        }
+            budget
+        };
+        let cursor = self.cursor.clamp(start, end);
+        (cursor, window.min(end - cursor))
+    }
+
+    /// Relight workgroups this frame: one per relit probe, then one per probe
+    /// of the previous window to copy forward. Proportional to the budget, not
+    /// to the pool.
+    pub(crate) fn relight_groups(&self, budget: u32) -> u32 {
+        self.window(budget).1 + self.relit.1
     }
     /// Fills the shader record's GI rows for this frame (`budget` probes relit).
     pub(crate) fn write(&self, frame: &mut super::frame::LookFrame, budget: u32) {
         if self.clearing_in_slices() {
             return;
         }
-        let [ox, oy, oz] = self.origin;
-        let [sx, sy, sz] = self.spacing;
-        let [cx, cy, cz] = self.counts;
         let (read, write) = (1 - self.slot, self.slot);
-        let hysteresis = if self.converge > 0 { 0. } else { HYSTERESIS };
-        frame.gi_origin = [ox, oy, oz, hysteresis];
-        frame.gi_spacing = [sx, sy, sz, self.bias];
-        frame.gi_counts = [cx, cy, cz, self.probes];
-        frame.gi_buffers = [self.indices[0], self.indices[1], 0, 0];
-        frame.gi_update = [
-            self.cursor,
-            self.window(budget),
-            self.atlas,
-            self.weight.to_bits(),
+        let converging = self.converge > 0 || self.deferred_converge > 0;
+        let hysteresis = if converging { 0. } else { HYSTERESIS };
+        let finer = if self.deferred > 0 {
+            self.deferred_weight
+        } else {
+            1.
+        };
+        frame.gi_params = [hysteresis, finer, 0., 0.];
+        let lattices = self.layout.lattices();
+        frame.gi_counts = [
+            lattices.len() as u32,
+            self.relit.0,
+            self.relit.1,
+            self.probes,
         ];
+        let bases = self.layout.bases();
+        for (i, lattice) in lattices.iter().enumerate() {
+            let falloff = if i + 1 == lattices.len() {
+                COARSE_FALLOFF
+            } else {
+                FINE_FALLOFF
+            };
+            let ([ox, oy, oz], [sx, sy, sz]) = (lattice.origin, lattice.spacing);
+            let [cx, cy, cz] = lattice.counts;
+            frame.gi_lattice_origin[i] = [ox, oy, oz, falloff];
+            frame.gi_lattice_spacing[i] = [sx, sy, sz, lattice.bias()];
+            frame.gi_lattice_counts[i] = [cx, cy, cz, bases[i] as u32];
+        }
+        frame.gi_buffers = [self.indices[0], self.indices[1], 0, 0];
+        let (cursor, window) = self.window(budget);
+        frame.gi_update = [cursor, window, self.atlas, self.weight.to_bits()];
         frame.gi_images = [
             self.irradiance_sampled[read],
             self.irradiance_sampled[write],
@@ -291,18 +372,44 @@ impl GiGpu {
         if self.clearing_in_slices() {
             return;
         }
-        let window = self.window(budget);
+        let (cursor, window) = self.window(budget);
+        let (start, end) = self.range();
         self.relit_once = true;
+        self.relit = (cursor, window);
         self.slot = 1 - self.slot;
-        self.cursor = (self.cursor + window) % self.probes;
+        self.cursor = cursor + window;
+        if self.cursor >= end {
+            self.cursor = start;
+        }
         if self.converge > 0 {
             self.converge_progress += window;
-            if self.converge_progress >= self.probes {
-                self.converge_progress -= self.probes;
+            if self.converge_progress >= end - start {
+                self.converge_progress -= end - start;
                 self.converge -= 1;
             }
-        } else if self.received >= self.probes as usize {
+            return;
+        }
+        if self.landed() {
             self.weight = (self.weight + 1. / FADE_FRAMES).min(1.);
+        }
+        if self.deferred_converge > 0 {
+            self.deferred_progress += window;
+            if self.deferred_progress >= end - start {
+                self.deferred_progress -= end - start;
+                self.deferred_converge -= 1;
+                if self.deferred_converge == 0 {
+                    self.cursor = 0;
+                }
+            }
+        } else if self.deferred_started {
+            self.deferred_weight = (self.deferred_weight + 1. / FADE_FRAMES).min(1.);
+        } else if self.deferred > 0 && self.deferred_received >= self.deferred as usize {
+            // The finer lattices landed after the coarsest converged: relight them
+            // alone, at the preset budget, before they fade in.
+            self.deferred_started = true;
+            self.deferred_converge = CONVERGE_FRAMES;
+            self.deferred_progress = 0;
+            self.cursor = 0;
         }
     }
 
@@ -331,7 +438,12 @@ impl GiGpu {
     }
 
     pub(crate) fn show(&mut self) {
-        self.received = self.probes as usize;
+        self.received = (self.probes - self.deferred) as usize;
         self.weight = 1.;
+        if self.deferred_received >= self.deferred as usize {
+            self.deferred_started = true;
+            self.deferred_converge = 0;
+            self.deferred_weight = 1.;
+        }
     }
 }

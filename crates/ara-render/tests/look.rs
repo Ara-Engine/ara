@@ -57,9 +57,11 @@ fn every_raster_look_feature_renders_validation_clean() -> Result<()> {
         statics[p * STATIC_VECTORS + 64] = [0., 0., 0., 1.];
     }
     renderer.set_probe_surfaces(Some(&ProbeSurfaces {
-        origin: [-6., 0.5, -6.],
-        spacing: [12., 6., 12.],
-        counts: [2, 2, 2],
+        layout: ara_render::look::gi::ProbeLayout::single(ara_render::look::gi::ProbeLattice {
+            origin: [-6., 0.5, -6.],
+            spacing: [12., 6., 12.],
+            counts: [2, 2, 2],
+        }),
         texels: vec![[255 << 24, 0, 0, 0]; probes * SURFACE_TEXELS],
         statics,
     }))?;
@@ -126,9 +128,11 @@ fn emissive_surfaces(emission: u32) -> ProbeSurfaces {
         emission | 0x3c00 << 16,
     ];
     ProbeSurfaces {
-        origin: [-6., 0.5, -6.],
-        spacing: [12., 6., 12.],
-        counts: [2, 2, 2],
+        layout: ara_render::look::gi::ProbeLayout::single(ara_render::look::gi::ProbeLattice {
+            origin: [-6., 0.5, -6.],
+            spacing: [12., 6., 12.],
+            counts: [2, 2, 2],
+        }),
         texels: vec![texel; probes * SURFACE_TEXELS],
         statics,
     }
