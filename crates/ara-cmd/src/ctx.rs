@@ -179,7 +179,9 @@ impl<'a> ReadCtx<'a> {
             (i, _) => i,
         };
         if let Some(i) = inner
-            && !self.resolved().contains_key(&format!("{head}/{i}"))
+            && !self
+                .record_entities(&id)
+                .contains_key(&format!("{head}/{i}"))
         {
             return Err(Diagnostic::error(
                 codes::RECORD_NOT_FOUND,
@@ -250,9 +252,28 @@ impl<'a> ReadCtx<'a> {
     }
 
     /// True if the entity has the component (inline, from its prefab, or overridden).
+    /// A plain record answers from its own fields, as prefab resolution would (it
+    /// keeps a plain record's components and name as they are), and an instance from
+    /// its own resolution, without resolving every instance of the scene.
     pub fn has_component(&self, target: &Target, component: &str) -> bool {
-        self.entity(target)
-            .is_some_and(|e| e.record.contains_key(component))
+        match target {
+            Target::Plain(id) => self.doc.record(id.as_str()).is_some_and(|record| {
+                (ara_doc::is_component_key(component) || component == field::NAME)
+                    && record.contains_key(component)
+            }),
+            Target::Prefab { instance, .. } => self
+                .record_entities(instance)
+                .get(&target.address())
+                .is_some_and(|e| e.record.contains_key(component)),
+        }
+    }
+
+    /// The entities one record of the document resolves to (an instance's root and
+    /// its prefab's entities; see `prefab::resolve_record`): what the whole
+    /// document's resolution holds for it, at the cost of that record alone.
+    fn record_entities(&self, id: &RecordId) -> Resolved {
+        ara_doc::prefab::resolve_record(self.doc, id, self.schema(), self.workspace())
+            .unwrap_or_default()
     }
 
     /// An order key placing an entity at `index` among `parent`'s children (`None`
@@ -513,5 +534,68 @@ impl JobCtx<'_, '_> {
     /// Reports progress in `[0, 1]` with a short message.
     pub fn progress(&mut self, fraction: f32, message: &str) {
         (self.progress)(fraction.clamp(0.0, 1.0), message);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ara_doc::{AssetIndex, Workspace, read};
+
+    /// `has_component` answers as the whole document's prefab resolution would, which
+    /// it no longer runs: a plain record from its own fields, an instance (its root
+    /// and the entities inside it) from that record's own resolution; for
+    /// components, `name` and structural fields alike.
+    #[test]
+    fn has_component_answers_as_the_resolution_would() {
+        let mut db = SchemaDb::new();
+        ara_doc::register(&mut db);
+        ara_components::register(&mut db);
+        let prefab = r#"{ "$schema": "ara://schema/prefab/1", "id": "pf_crate001", "records": {
+            "e_crt1": { "name": "Crate", "Transform": {}, "MeshRenderer": {} },
+            "e_lid1": { "name": "Lid", "parent": "e_crt1", "Transform": {}, "Light": {} } } }"#;
+        let scene = r#"{ "$schema": "ara://schema/scene/1", "id": "sc_level001", "records": {
+            "e_lamp1": { "name": "Lamp", "Transform": {}, "Light": {} },
+            "e_kid1": { "parent": "e_lamp1", "Transform": {} },
+            "e_box1": { "prefab": "@prefabs/crate.prefab#pf_crate001", "name": "Box" } } }"#;
+        let mut index = AssetIndex::new();
+        index.insert("pf_crate001", "prefabs/crate.prefab", Some("prefab".into()));
+        index.insert("sc_level001", "levels/level.scene", Some("scene".into()));
+        let mut ws = Workspace::new(index.clone());
+        for (path, text) in [
+            ("prefabs/crate.prefab", prefab),
+            ("levels/level.scene", scene),
+        ] {
+            ws.insert(path, read(text, path, &db, Some(&index)).doc.expect("doc"));
+        }
+        let store = Store::new(db, ws);
+        let doc = store
+            .workspace()
+            .find("levels/level.scene")
+            .cloned()
+            .expect("scene");
+        let symbols = BTreeMap::new();
+        let read = ReadCtx::new(&store, &doc, &symbols).expect("read");
+        let keys = [
+            "Transform",
+            "Light",
+            "MeshRenderer",
+            "name",
+            "parent",
+            "order",
+            "prefab",
+        ];
+        for id in ["e_lamp1", "e_kid1", "e_box1", "e_box1/e_lid1"] {
+            let target = read.target(id).expect("target");
+            for key in keys {
+                let resolved = read
+                    .entity(&target)
+                    .is_some_and(|e| e.record.contains_key(key));
+                assert_eq!(read.has_component(&target, key), resolved, "{id}.{key}");
+            }
+        }
+        let lid = read.target("e_box1/e_lid1").expect("inside the instance");
+        assert!(read.has_component(&lid, "Light"));
+        assert!(read.target("e_box1/e_none").is_err());
     }
 }
