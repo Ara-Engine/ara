@@ -1,4 +1,5 @@
 use super::model::*;
+use super::{FixtureFrame, Sampler, observe_tick};
 
 fn process(pid: u32, parent: u32, name: &str, birth: u64) -> Process {
     Process {
@@ -386,4 +387,123 @@ fn cli_defaults_and_overrides_share_the_same_validated_policy() {
             crate::Cli::try_parse_from(["ara-dev", "gpu", flag, value, "--", "unused"]).is_err()
         );
     }
+}
+
+#[test]
+fn instance_disappearing_mid_read_retries_and_keeps_the_reading_valid() {
+    let mut sampler = Sampler::Fixture {
+        frames: vec![
+            FixtureFrame::Sample(sample(1000, 0.)),
+            FixtureFrame::Sample(sample(2000, 0.)),
+            FixtureFrame::Missing {
+                unix_ms: 3000,
+                error: "read GPU counters: PDH 0xc0000bba".into(),
+            },
+            FixtureFrame::Sample(sample(4000, 0.)),
+            FixtureFrame::Sample(sample(5000, 0.)),
+        ]
+        .into(),
+        last_unix_ms: 0,
+    };
+    let mut classifier = Classifier::new(1).unwrap();
+    let mut report = Report::default();
+    for _ in 0..5 {
+        observe_tick(&mut classifier, &mut report, sampler.sample());
+    }
+    assert_eq!(report.samples.len(), 4);
+    assert_eq!(report.monitoring.retries.len(), 1);
+    assert!(report.monitoring.gaps.is_empty());
+    assert!(report.errors.is_empty());
+    assert!(!report.invalid());
+}
+
+#[test]
+fn sustained_loss_is_bounded_by_last_valid_sample_and_recovery() {
+    let mut classifier = Classifier::new(1).unwrap();
+    let mut report = Report::default();
+    observe_tick(&mut classifier, &mut report, (1000, Ok(sample(1000, 0.))));
+    for at in 2..=5 {
+        observe_tick(
+            &mut classifier,
+            &mut report,
+            (at * 1000, Err(anyhow::anyhow!("PDH_NO_COUNTER"))),
+        );
+        assert!(!report.invalid());
+    }
+    observe_tick(
+        &mut classifier,
+        &mut report,
+        (6000, Err(anyhow::anyhow!("PDH_NO_INSTANCE"))),
+    );
+    assert!(report.invalid());
+    observe_tick(&mut classifier, &mut report, (7000, Ok(sample(7000, 0.))));
+    observe_tick(&mut classifier, &mut report, (8000, Ok(sample(8000, 0.))));
+    assert_eq!(report.monitoring.gaps.len(), 1);
+    assert_eq!(
+        report.monitoring.gaps[0].interval,
+        Interval {
+            start_unix_ms: 1000,
+            end_unix_ms: 7000
+        }
+    );
+    assert!(!report.monitoring.overlaps(Interval {
+        start_unix_ms: 0,
+        end_unix_ms: 999
+    }));
+    assert!(report.monitoring.overlaps(Interval {
+        start_unix_ms: 2000,
+        end_unix_ms: 5000
+    }));
+    assert!(!report.monitoring.overlaps(Interval {
+        start_unix_ms: 7001,
+        end_unix_ms: 8000
+    }));
+    assert!(report.errors.is_empty());
+}
+
+#[test]
+fn a_missed_poll_breaks_the_consecutive_foreign_load_streak() {
+    let mut classifier = Classifier::new(1).unwrap();
+    let mut report = Report::default();
+    for at in 1..=9 {
+        let outcome = if at == 5 {
+            Err(anyhow::anyhow!("transient counter churn"))
+        } else {
+            Ok(sample(at * 1000, 30.))
+        };
+        observe_tick(&mut classifier, &mut report, (at * 1000, outcome));
+    }
+    assert!(!report.invalid());
+    observe_tick(
+        &mut classifier,
+        &mut report,
+        (10000, Ok(sample(10000, 30.))),
+    );
+    assert!(report.invalid());
+}
+
+#[test]
+fn old_sampler_death_becomes_a_trailing_unmonitored_gap() {
+    let mut classifier = Classifier::new(1).unwrap();
+    let mut report = Report::default();
+    for at in 1..=3 {
+        classifier.push(sample(at * 1000, 0.), &mut report);
+    }
+    report
+        .errors
+        .push("read GPU counters: PDH 0xc0000bba".into());
+    report.recover_legacy_monitoring(12000);
+    let report = report.reclassify(Policy::default()).unwrap();
+    assert!(report.errors.is_empty());
+    assert_eq!(
+        report.monitoring.gaps[0].interval,
+        Interval {
+            start_unix_ms: 3000,
+            end_unix_ms: 12000
+        }
+    );
+    assert!(!report.monitoring.overlaps(Interval {
+        start_unix_ms: 1000,
+        end_unix_ms: 2000
+    }));
 }

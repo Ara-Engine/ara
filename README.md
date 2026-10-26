@@ -32,7 +32,7 @@
 
 ## Download
 
-Download **Ara Hub for Windows** from [GitHub Releases](https://github.com/Snowy7/ara/releases).
+Download **Ara Hub for Windows** from [GitHub Releases](https://github.com/Ara-Engine/ara/releases).
 The Hub installs engine versions side by side and keeps itself up to date.
 See [releases and signing](docs/releases.md). There is no Authenticode code signing yet;
 Windows SmartScreen warns when running the installer.

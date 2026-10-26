@@ -13,8 +13,10 @@ updates require a newer generation; legacy version-only installs are older.
 Staged hub.json must match the signed version/build. Hub jobs include the commit.
 Setup, engine registration and self-update share `.ara-hub-update.lock`.
 
-Default repository: Snowy7/ara. `ARA_RELEASE_REPO` overrides update.json's repo.
+Default repository: Ara-Engine/ara. `ARA_RELEASE_REPO` overrides update.json's repo.
 `GITHUB_TOKEN` is sent only to api.github.com, never to redirected asset hosts.
+HTTPS same-origin API/download redirects support moved repos; both transports
+allow at most five redirects and rebuild sensitive authorization per hop.
 Trust roots come from embedded public-keys.txt and build-time ARA_RELEASE_PUBLIC_KEYS
 (comma-separated hexadecimal ed25519 public keys). Never embed a private key.
 An empty trust store fails closed. Key rotation: ship both keys before changing signer.

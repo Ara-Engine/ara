@@ -52,7 +52,7 @@ impl Default for Releases {
             hub: None,
             jobs: Vec::new(),
             channel: Channel::Stable,
-            repo: "Snowy7/ara".into(),
+            repo: ara_update::DEFAULT_REPOSITORY.into(),
             status: "Check for published versions".into(),
             checking: false,
             open_after: BTreeMap::new(),
@@ -302,7 +302,7 @@ mod build_tests {
         hub.release_reply("hub.updates",Ok(json!({"releases":[{
             "format":"ara.release/1","kind":"hub","version":version,"build":{"commit":commit,"generation":generation},"channel":"preview",
             "minHubVersion":version,"notes":"New preview","platform":"windows-x64","assets":[]
-        }],"checking":false,"channel":"preview","repo":"Snowy7/ara"})));
+        }],"checking":false,"channel":"preview","repo":"Ara-Engine/ara"})));
         assert_eq!(
             hub.releases
                 .hub

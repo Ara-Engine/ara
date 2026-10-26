@@ -9,7 +9,7 @@ mod smoke;
 mod support;
 
 use anyhow::{Context, Result, ensure};
-use clap::{Parser, Subcommand};
+use clap::{Parser, Subcommand, ValueEnum};
 use std::path::PathBuf;
 
 #[derive(Parser)]
@@ -17,6 +17,13 @@ use std::path::PathBuf;
 struct Cli {
     #[command(subcommand)]
     command: Command,
+}
+#[derive(Clone, Copy, ValueEnum)]
+enum PackageKind {
+    Hub,
+    Engine,
+    /// Build the union once, then package both distributions from those artifacts.
+    All,
 }
 #[derive(Subcommand)]
 enum Command {
@@ -35,7 +42,7 @@ enum Command {
         #[arg(long)]
         version: String,
         #[arg(long, value_enum, default_value = "engine")]
-        kind: publish::ReleaseKind,
+        kind: PackageKind,
     },
     /// Copy the reviewed RELEASE_NOTES.md into the release artifacts directory.
     Notes {
@@ -71,14 +78,18 @@ enum Command {
     },
     /// Prepare a signed release folder and optionally upload through the developer gh CLI.
     Publish {
+        /// GitHub owner/name; overrides ARA_RELEASE_REPO and the built-in default.
         #[arg(long)]
-        repo: String,
+        repo: Option<String>,
         #[arg(long)]
         tag: String,
         #[arg(long)]
         prerelease: bool,
         #[arg(long)]
         dry_run: bool,
+        /// Require this build's trust roots even for a local dry run.
+        #[arg(long)]
+        require_trusted_key: bool,
         #[arg(long)]
         key: Option<PathBuf>,
         /// Existing packaged artifacts (default target/release-dist).
@@ -102,8 +113,12 @@ fn main() -> Result<()> {
         Command::Package { version, kind } => {
             valid_version(&version)?;
             match kind {
-                publish::ReleaseKind::Hub => hub::package(&root, &version),
-                publish::ReleaseKind::Engine => package::package(&root, &version),
+                PackageKind::Hub => hub::package(&root, &version),
+                PackageKind::Engine => package::package(&root, &version),
+                PackageKind::All => {
+                    package::package(&root, &version)?;
+                    hub::package_prebuilt(&root, &version)
+                }
             }
         }
         Command::Notes { version } => {
@@ -129,18 +144,27 @@ fn main() -> Result<()> {
             tag,
             prerelease,
             dry_run,
+            require_trusted_key,
             key,
             artifacts,
         } => publish::publish(
             &root,
-            &repo,
+            &release_repo(repo, std::env::var("ARA_RELEASE_REPO").ok()),
             &tag,
-            prerelease,
-            dry_run,
+            publish::Mode {
+                prerelease,
+                dry_run,
+                require_trusted_key,
+            },
             key.as_deref(),
             artifacts.as_deref(),
         ),
     }
+}
+fn release_repo(explicit: Option<String>, environment: Option<String>) -> String {
+    explicit
+        .or(environment)
+        .unwrap_or_else(|| ara_update::DEFAULT_REPOSITORY.to_owned())
 }
 fn valid_version(version: &str) -> Result<()> {
     ensure!(
@@ -159,6 +183,41 @@ fn valid_version(version: &str) -> Result<()> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn combined_packaging_is_an_explicit_single_build_mode() {
+        use clap::Parser;
+        let parsed = super::Cli::try_parse_from([
+            "ara-release",
+            "package",
+            "--version",
+            env!("CARGO_PKG_VERSION"),
+            "--kind",
+            "all",
+        ])
+        .expect("combined package CLI");
+        assert!(matches!(
+            parsed.command,
+            super::Command::Package {
+                kind: super::PackageKind::All,
+                ..
+            }
+        ));
+    }
+    #[test]
+    fn publication_repo_preserves_explicit_and_environment_overrides() {
+        assert_eq!(super::release_repo(None, None), "Ara-Engine/ara");
+        assert_eq!(
+            super::release_repo(None, Some("custom/releases".into())),
+            "custom/releases"
+        );
+        assert_eq!(
+            super::release_repo(
+                Some("explicit/releases".into()),
+                Some("custom/releases".into())
+            ),
+            "explicit/releases"
+        );
+    }
     #[test]
     fn version_cannot_escape_output_or_mislabel_binaries() {
         assert!(super::valid_version(env!("CARGO_PKG_VERSION")).is_ok());

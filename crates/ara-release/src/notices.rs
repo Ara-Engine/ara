@@ -130,7 +130,7 @@ pub fn generate(root: &Path, stage: &Path, dist: &Path) -> Result<()> {
             });
         inventory.push(json!({"name":name,"version":version,"license":license,"repository":package["repository"],"source":package["source"],"originalLicenseFiles":texts.len()}));
         let source = match package["source"].as_str() {
-            None => "Workspace or vendored source in https://github.com/Snowy7/ara".into(),
+            None => "Workspace or vendored source in https://github.com/Ara-Engine/ara".into(),
             Some(source) if source.starts_with("git+") => source.to_owned(),
             Some(_) => format!("https://crates.io/api/v1/crates/{name}/{version}/download"),
         };

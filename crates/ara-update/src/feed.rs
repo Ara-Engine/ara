@@ -35,7 +35,7 @@ pub struct FeedConfig {
 impl Default for FeedConfig {
     fn default() -> Self {
         Self {
-            repo: "Snowy7/ara".into(),
+            repo: crate::DEFAULT_REPOSITORY.into(),
             channel: Channel::Stable,
             api: None,
             keys: None,
@@ -253,32 +253,6 @@ impl Feed {
     ) -> Result<Response, Error> {
         self.request_with_timeout(text, etag, range, Duration::from_secs(45))
     }
-    pub(crate) fn redirect(&self, current: &Url, location: &str) -> Result<Url, Error> {
-        let target = self.url(
-            current
-                .join(location)
-                .map_err(|_| Error::new(URL, "invalid release redirect"))?
-                .as_str(),
-        )?;
-        #[cfg(any(test, feature = "test-support"))]
-        if self.config.api.is_some() {
-            return Ok(target);
-        }
-        if !matches!(
-            target.host_str(),
-            Some(
-                "objects.githubusercontent.com"
-                    | "release-assets.githubusercontent.com"
-                    | "github-releases.githubusercontent.com"
-            )
-        ) {
-            return Err(Error::new(
-                URL,
-                "release redirects must target a GitHub asset host",
-            ));
-        }
-        Ok(target)
-    }
     fn request_with_timeout(
         &self,
         text: &str,
@@ -287,7 +261,7 @@ impl Feed {
         timeout: Duration,
     ) -> Result<Response, Error> {
         let mut url = self.url(text)?;
-        for _ in 0..6 {
+        for _ in 0..=crate::redirect::MAX_REDIRECTS {
             let mut request = self.client.get(url.clone()).timeout(timeout).header(
                 header::ACCEPT,
                 if url.path().contains("/releases/assets/") {
@@ -296,10 +270,10 @@ impl Feed {
                     "application/vnd.github+json"
                 },
             );
-            if url.host_str() == Some("api.github.com")
-                && let Ok(token) = std::env::var("GITHUB_TOKEN")
+            if let Some(value) =
+                crate::redirect::authorization(&url, std::env::var("GITHUB_TOKEN").ok().as_deref())?
             {
-                request = request.bearer_auth(token);
+                request = request.header(header::AUTHORIZATION, value);
             }
             if let Some(etag) = etag {
                 request = request.header(header::IF_NONE_MATCH, etag);
@@ -331,17 +305,23 @@ impl Feed {
         }
     }
     pub(crate) fn asset_url(&self, asset: &crate::Asset) -> Result<String, Error> {
+        self.asset_location(asset, std::env::var_os("GITHUB_TOKEN").is_some())
+    }
+    pub(crate) fn asset_location(
+        &self,
+        asset: &crate::Asset,
+        authenticated: bool,
+    ) -> Result<String, Error> {
         let url = self.url(&asset.url)?;
         let prefix = format!("/{}/releases/download/", self.config.repo);
-        if url.host_str() != Some("github.com") || std::env::var_os("GITHUB_TOKEN").is_none() {
+        if url.host_str() != Some("github.com") || !authenticated {
             return Ok(asset.url.clone());
         }
-        let path = url.path().strip_prefix(&prefix).ok_or_else(|| {
-            Error::new(
-                URL,
-                "private staging asset must belong to the configured repository",
-            )
-        })?;
+        let Some(path) = url.path().strip_prefix(&prefix) else {
+            // A signed legacy URL can name the repository's previous owner.
+            // Preserve it and follow anonymous HTTPS redirects; never rewrite signed metadata.
+            return Ok(asset.url.clone());
+        };
         let (tag, _) = path
             .split_once('/')
             .ok_or_else(|| Error::new(URL, "invalid release asset path"))?;
@@ -353,27 +333,23 @@ impl Feed {
             self.request(&endpoint, None, None)?,
             8 * 1024 * 1024,
         )?)?;
-        let api = release["assets"]
+        let id = release["assets"]
             .as_array()
             .and_then(|assets| {
                 assets
                     .iter()
                     .find(|a| a["name"].as_str() == Some(&asset.name))
             })
-            .and_then(|a| a["url"].as_str())
+            .and_then(|a| a["id"].as_u64())
             .ok_or_else(|| Error::new(MANIFEST, "private staging release has no matching asset"))?;
-        let parsed = self.url(api)?;
-        if parsed.host_str() != Some("api.github.com")
-            || !parsed
-                .path()
-                .starts_with(&format!("/repos/{}/releases/assets/", self.config.repo))
-        {
-            return Err(Error::new(
-                URL,
-                "private asset API URL left the configured repository",
-            ));
-        }
-        Ok(api.into())
+        // Reuse the configured repository alias. Its API redirect remains authenticated
+        // even when GitHub's payload uses the new owner or numeric repository path.
+        let api = format!(
+            "https://api.github.com/repos/{}/releases/assets/{id}",
+            self.config.repo
+        );
+        self.url(&api)?;
+        Ok(api)
     }
     fn verified(&self, records: &[CachedRelease]) -> Result<Vec<VerifiedRelease>, Error> {
         let keys = self.config.keys.clone().unwrap_or_else(trusted_keys);
@@ -470,7 +446,7 @@ impl Feed {
                     .and_then(next_link);
                 if let Some(next) = &next {
                     let parsed = self.url(next)?;
-                    let current = self.url(&page_url)?;
+                    let current = self.url(response.url().as_str())?;
                     if parsed.origin() != current.origin() || parsed.path() != current.path() {
                         return Err(Error::new(
                             URL,
@@ -604,7 +580,8 @@ mod rehearsal_tests {
     fn mirror_preserves_signed_github_urls_but_cannot_leave_loopback() {
         let root = crate::testing::scratch("release-mirror");
         let mut config = FeedConfig::for_test("http://127.0.0.1:12345".into(), vec![]);
-        let asset = "https://github.com/Snowy7/ara/releases/download/hub-v0.0.1-alpha/release.json";
+        let asset =
+            "https://github.com/Ara-Engine/ara/releases/download/hub-v0.0.1-alpha/release.json";
         let feed = Feed::new(config.clone(), &root).expect("feed");
         assert!(
             feed.url(asset).is_err(),
@@ -614,12 +591,12 @@ mod rehearsal_tests {
         let feed = Feed::new(config, &root).expect("mirror");
         assert_eq!(
             feed.url(asset).expect("mapped URL").as_str(),
-            "http://127.0.0.1:12345/Snowy7/ara/releases/download/hub-v0.0.1-alpha/release.json"
+            "http://127.0.0.1:12345/Ara-Engine/ara/releases/download/hub-v0.0.1-alpha/release.json"
         );
         for url in [
             "https://example.com/secret",
             "https://github.com/Other/repo/releases/download/x/file",
-            "https://user:secret@github.com/Snowy7/ara/releases/download/x/file",
+            "https://user:secret@github.com/Ara-Engine/ara/releases/download/x/file",
             "http://127.0.0.1:12346/file",
         ] {
             assert!(feed.url(url).is_err(), "escaped mirror: {url}");

@@ -70,7 +70,7 @@ pub(super) fn page(report: &Value, rows: &[Row], summary: &Summary) -> String {
         out.push_str(
             "<h2>INVALID rows — overlapping foreign GPU load or unavailable monitoring</h2><details><summary>GPU-load policy, contamination intervals and processes</summary><pre>",
         );
-        out.push_str(&escape(&serde_json::to_string_pretty(&serde_json::json!({"policy":report["gpuLoad"]["policy"],"intervals":report["gpuLoad"]["intervals"],"contaminants":report["gpuLoad"]["contaminants"],"errors":report["gpuLoad"]["errors"]})).unwrap_or_default()));
+        out.push_str(&escape(&serde_json::to_string_pretty(&serde_json::json!({"policy":report["gpuLoad"]["policy"],"intervals":report["gpuLoad"]["intervals"],"contaminants":report["gpuLoad"]["contaminants"],"monitoring":report["gpuLoad"]["monitoring"],"errors":report["gpuLoad"]["errors"]})).unwrap_or_default()));
         out.push_str("</pre></details>");
     }
     out.push_str(&format!(

@@ -12,7 +12,7 @@ A D26 scoreboard or GPU-leased reading is invalid because foreign GPU activity w
 Causes:
 - Foreign processes used more than 10% summed GPU-engine utilization for at least five consecutive samples. DWM counts only its excess over a 3% allowance; System (PID 4) and CSRSS are retained as information.
 - An actual game executable in the data-driven presence list was active. Idle services, launchers, tray apps and overlays never invalidate by presence alone; they count through measured GPU utilization.
-- Windows per-process GPU performance counters could not be sampled reliably.
+- No valid Windows per-process GPU sample arrived for five seconds or more. Vanished instances and short invalid-data reads retry automatically; only rows overlapping a sustained gap are unmonitored.
 
 Fixes:
 - Close or pause foreign GPU work yourself, then rerun; Ara never terminates other applications.

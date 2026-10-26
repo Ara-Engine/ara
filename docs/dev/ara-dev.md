@@ -1,5 +1,8 @@
 # Local developer infrastructure
 
+`ara-dev preview` prepares signed local engine/Hub previews, including smoke tests;
+only `--publish` uploads. See [the preview workflow](../releases.md#one-command-previews).
+
 Set `$env:CARGO_BUILD_JOBS='2'` in PowerShell on this shared Windows machine. GPU crates also need
 `VULKAN_SDK` pointing to the installed SDK. All commands run from any directory in
 the checkout; no Python, CMake, service or extra build tool is required.
@@ -143,6 +146,11 @@ are caught by counters; launcher ancestry alone is not a reliable game identity.
 Use `ara-dev gpu --wait-for-quiet -- COMMAND` or `ara-dev d26 --wait-for-quiet`
 to wait for a quiet baseline instead of refusing. Ara never kills, suspends or
 reconfigures foreign processes. Counter failures also invalidate timing evidence.
+Transient NO_COUNTER, NO_INSTANCE and invalid-data reads refresh the wildcard
+counter and retry at the next poll. A retiring individual instance is ignored
+when the remaining instances are valid. A read failure never stops the sampler.
+Only **five seconds without a valid sample** creates an unmonitored interval,
+from the last valid sample through recovery; shorter churn stays informational.
 The diagnostic is `ARA_GPU_FOREIGN_LOAD`; **exit code 3 means INVALID**, separate
 from a child/test failure. A lease prints `ARA_DEV_GPU_READING {json}` on stderr
 and writes its evidence path under `target/ara-dev/gpu-load/`. A contaminated lease
@@ -164,6 +172,12 @@ policy flags) to saved raw GPU samples and source metrics, without builds, count
 queries or launches. It preserves originals as `*.before-reclassify`, keeps the
 engine source ID and numbers, and regenerates JSON/HTML judgments. Repeated
 reclassification uses original counters, so the DWM allowance is subtracted once.
+Monitoring retries and gaps are recorded separately from foreign load. Overlapping
+rows have `invalid_reason: "unmonitored"`; earlier and recovered rows retain their
+judgments. For old readings whose sampler died, the last valid sample and original
+GPU evidence-file modification time bound the unknown tail. Preserve file times
+when copying an old reading. Reclassification never invents clean samples after
+the sampler stopped.
 
 New runs record UTC child-call bounds in window sidecars. GPU rows use the steady
 frame-duration envelope; CPU and hitch rows cover the whole run. Older player

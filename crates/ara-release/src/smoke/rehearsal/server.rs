@@ -36,7 +36,7 @@ impl Server {
                     fs::metadata(&path)?.len() < 2 * 1024 * 1024 * 1024,
                     "GitHub release asset must be under 2 GiB: {name}"
                 );
-                let route = format!("/Snowy7/ara/releases/download/{tag}/{name}");
+                let route = format!("/Ara-Engine/ara/releases/download/{tag}/{name}");
                 assets.push(json!({"name":name,"browser_download_url":format!("https://github.com{route}")}));
                 routes.insert(route, path);
             }
@@ -131,7 +131,7 @@ fn respond(
     }
     writeln!(log, "GET {path} range={offset:?} etag={etag}")?;
     log.flush()?;
-    if path == "/repos/Snowy7/ara/releases" {
+    if path == "/repos/Ara-Engine/ara/releases" {
         if etag {
             write!(
                 socket,

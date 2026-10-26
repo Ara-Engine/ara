@@ -19,12 +19,15 @@ Every test/capture/manual check sets ARA_CONFIG_DIR to an existing scratch dir
 under target/. The harness fails without it. Smoke children override it with
 their own scratch profile; failure cleanup also stops that profile's Hub.
 
-`package --kind hub|engine` builds independent distributions. Hub installs into
+`package --kind hub|engine|all` builds independent distributions; all builds the
+complete engine/Hub feature union once. CARGO_TARGET_DIR selects warm compiler
+outputs; packages remain in this checkout's target/release-dist. Hub installs into
 LOCALAPPDATA/Programs/Ara Hub; its bootstrap service runs from Ara/Services/version/build.
 `keygen --output <outside-repo-path>` prints only the public key; embed it in
 ara-update/public-keys.txt before packaging. `sign` and `publish` read --key or
 ARA_RELEASE_SIGNING_KEY (a path). Never store private keys/tokens in source.
-`publish --repo Snowy7/ara --tag hub-v<version>|engine-v<version> --prerelease --dry-run`
+`publish --repo Ara-Engine/ara --tag hub-v<version>|engine-v<version> --prerelease --dry-run`
+defaults to Ara-Engine/ara; `--repo` overrides ARA_RELEASE_REPO, then that default.
 creates a signed local folder. Without --dry-run, gh creates/uploads a draft then
 publishes it; gh is a publishing prerequisite only. See docs/releases.md.
 

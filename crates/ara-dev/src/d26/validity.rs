@@ -1,5 +1,5 @@
 //! Apply GPU intervals to source windows, never aggregate a PID's separated bursts.
-use super::rows::{Row, Status};
+use super::rows::{InvalidReason, Row, Status};
 use crate::gpu_guard::{Interval, Report};
 use anyhow::{Context, Result, ensure};
 use serde::{Deserialize, Serialize};
@@ -148,7 +148,7 @@ fn window(row: &Row, source: &(Window, Option<Window>)) -> Window {
 }
 
 /// Unknown source timing cannot prove a gated reading clean. It stays unmeasured;
-/// only an observed overlap is INVALID (monitor errors invalidate all evidence).
+/// only overlapping foreign activity or a sustained unmonitored gap is INVALID.
 pub(super) fn apply(
     rows: &mut [Row],
     report: &Report,
@@ -157,11 +157,6 @@ pub(super) fn apply(
     let mut sources = BTreeMap::<String, Result<(Window, Option<Window>), String>>::new();
     let mut invalid = 0;
     for row in rows {
-        if !report.errors.is_empty() {
-            row.invalidate("GPU monitoring was unavailable");
-            invalid += 1;
-            continue;
-        }
         if row.value.is_none() && row.status != Status::Fail {
             continue;
         }
@@ -187,10 +182,19 @@ pub(super) fn apply(
                     window.interval.start_unix_ms <= window.interval.end_unix_ms,
                     "invalid saved source window for {key}"
                 );
+                row.measurement_window = Some(window.clone());
+                if report.monitoring.overlaps(window.interval) {
+                    row.invalidate(InvalidReason::Unmonitored,"unmonitored: measurement window overlaps five seconds or more without valid GPU counters");
+                    invalid += 1;
+                    continue;
+                }
                 if let (Some(first), Some(last)) = (report.samples.first(), report.samples.last()) {
                     let coverage = Interval {
-                        start_unix_ms: first.interval_start_unix_ms,
-                        end_unix_ms: last.unix_ms,
+                        start_unix_ms: report
+                            .monitoring
+                            .start_unix_ms
+                            .unwrap_or(first.interval_start_unix_ms),
+                        end_unix_ms: report.monitoring.end_unix_ms.unwrap_or(last.unix_ms),
                     };
                     if (window.interval.start_unix_ms < coverage.start_unix_ms
                         || window.interval.end_unix_ms > coverage.end_unix_ms)
@@ -209,7 +213,10 @@ pub(super) fn apply(
                 let overlaps = report.overlaps(window.interval);
                 row.measurement_window = Some(window);
                 if overlaps {
-                    row.invalidate("measurement window overlaps foreign GPU contamination");
+                    row.invalidate(
+                        InvalidReason::ForeignGpuLoad,
+                        "measurement window overlaps foreign GPU contamination",
+                    );
                     invalid += 1;
                 }
             }
@@ -250,6 +257,7 @@ mod tests {
             note: String::new(),
             source: None,
             measurement_window: None,
+            invalid_reason: None,
         }
     }
 
@@ -380,5 +388,67 @@ mod tests {
         )]);
         assert_eq!(apply(&mut rows, &report, &saved).unwrap(), 0);
         assert_eq!(rows[0].status, Status::NotMeasured);
+    }
+
+    #[test]
+    fn unmonitored_gap_invalidates_only_the_overlapping_row() {
+        let mut rows = vec![
+            row("GPU frame", "before"),
+            row("GPU frame", "during"),
+            row("GPU frame", "after"),
+        ];
+        let report = Report {
+            monitoring: crate::gpu_guard::monitor::Monitoring {
+                start_unix_ms: Some(0),
+                end_unix_ms: Some(12000),
+                gaps: vec![crate::gpu_guard::monitor::Gap {
+                    interval: Interval {
+                        start_unix_ms: 3000,
+                        end_unix_ms: 9000,
+                    },
+                    reason: "counter read failed".into(),
+                }],
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        let saved = BTreeMap::from([
+            (
+                "Outpost|GPU frame|before".into(),
+                Window {
+                    interval: Interval {
+                        start_unix_ms: 1000,
+                        end_unix_ms: 2000,
+                    },
+                    basis: "fixture".into(),
+                },
+            ),
+            (
+                "Outpost|GPU frame|during".into(),
+                Window {
+                    interval: Interval {
+                        start_unix_ms: 4000,
+                        end_unix_ms: 5000,
+                    },
+                    basis: "fixture".into(),
+                },
+            ),
+            (
+                "Outpost|GPU frame|after".into(),
+                Window {
+                    interval: Interval {
+                        start_unix_ms: 10000,
+                        end_unix_ms: 11000,
+                    },
+                    basis: "fixture".into(),
+                },
+            ),
+        ]);
+        assert_eq!(apply(&mut rows, &report, &saved).unwrap(), 1);
+        assert_eq!(rows[0].status, Status::Pass);
+        assert_eq!(rows[1].status, Status::Invalid);
+        assert_eq!(rows[1].invalid_reason, Some(InvalidReason::Unmonitored));
+        assert!(rows[1].note.contains("unmonitored"));
+        assert_eq!(rows[2].status, Status::Pass);
     }
 }

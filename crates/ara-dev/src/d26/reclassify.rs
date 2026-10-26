@@ -155,7 +155,14 @@ pub(super) fn run(root: &Path, directory: &Path, policy: Policy) -> Result<bool>
     let original = json(&directory.join("report.json"))?;
     ensure!(original["format"] == "ara.d26/1", "not a D26 reading");
     let mut gpu = json(&directory.join("gpu-load.json"))?;
-    let previous: Report = serde_json::from_value(gpu["reading"].clone())?;
+    let mut previous: Report = serde_json::from_value(gpu["reading"].clone())?;
+    // Copying an old reading must preserve the GPU evidence file's timestamps.
+    // Its last save bounds a sampler which died before the timed run finished.
+    let end = fs::metadata(directory.join("gpu-load.json"))?
+        .modified()?
+        .duration_since(std::time::UNIX_EPOCH)?
+        .as_millis() as u64;
+    previous.recover_legacy_monitoring(end);
     let load = previous.reclassify(policy)?;
     let results = results(directory, &original, load.clone())?;
     // Preserve original evidence once. Source metrics, binaries and source IDs are untouched.
