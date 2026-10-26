@@ -25,8 +25,10 @@ const OPEN_EVERY: u32 = 6;
 /// Frames each camera move lasts, and the hold after it.
 const MOVE_FRAMES: u32 = 90;
 const HOLD_FRAMES: u32 = 150;
-/// A settled reference: the Scene wanted no frames for this many frames in a row...
-const SETTLED_FRAMES: u32 = 30;
+/// A settled reference: the Scene had no content work (snapshots, publications, GI,
+/// fades) for this many frames in a row, rendering temporal frames meanwhile: three
+/// times what its accumulation takes to converge (27-36 frames)...
+const SETTLED_FRAMES: u32 = 90;
 /// ...or this long passed (live content never settles).
 const SETTLE_CAP_SECONDS: f64 = 20.;
 
@@ -227,7 +229,9 @@ impl SceneQuality {
             Phase::Move(_) => self.age >= MOVE_FRAMES,
             Phase::Hold(_) => self.age >= HOLD_FRAMES,
             Phase::Settle(name) => {
-                self.quiet = if wants || importing {
+                // Content work, not `wants`: a native Scene keeps submitting frames
+                // while it is shown, so it never stops wanting them.
+                self.quiet = if shared || importing {
                     0
                 } else {
                     self.quiet + 1
