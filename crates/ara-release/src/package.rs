@@ -396,29 +396,13 @@ fn git(root: &Path, args: &[&str]) -> Result<String> {
     ensure!(output.status.success(), "git {args:?} failed");
     Ok(String::from_utf8(output.stdout)?)
 }
+/// Ship the reviewed notes verbatim instead of regenerating them from commit subjects.
 pub fn notes(root: &Path, version: &str) -> Result<()> {
-    let decisions = fs::read_to_string(root.join("docs/decisions.md"))?;
-    let highlights = decisions
-        .lines()
-        .filter(|line| {
-            ["D2", "D3", "D9", "D11", "D12", "D22", "D23", "D24", "D25"]
-                .iter()
-                .any(|id| line.starts_with(&format!("| {id} |")))
-        })
-        .collect::<Vec<_>>()
-        .join("\n");
-    let features = git(
-        root,
-        &[
-            "log",
-            "--first-parent",
-            "--max-count=80",
-            "--format=- %s (%h)",
-        ],
-    )?;
-    let issues = fs::read_to_string(root.join("docs/KNOWN_ISSUES.md"))?;
-    let notes = format!(
-        "# Ara {version}\n\nEarly Windows alpha for testers. No Authenticode code signing yet; Windows SmartScreen warns. No automatic crash uploads.\n\n## System requirements\n\n- Windows 10/11 x64; 16 GB RAM.\n- Vulkan 1.3 GPU and current driver; the default renderer is raster; hardware ray tracing is optional.\n- x64 .NET 10 SDK and runtime: https://dotnet.microsoft.com/en-us/download/dotnet/10.0\n- Microsoft VC++ v14 Redistributable (x64), required by bundled SDK shader tools: https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist\n- Slang, DXC and SPIR-V validation tools are bundled; no Vulkan SDK or Rust is needed to run the installed engine.\n\n## Installation\n\nRun the setup EXE, or extract the ZIP and run install.ps1. Versions install side by side under %LOCALAPPDATA%\\Programs\\Ara\\{version}. Connect agents with `ara hub install-mcp --client claude|codex`.\n\n## Decision highlights\n\n| ID | Decision | Date |\n|---|---|---|\n{highlights}\n\n## Merged features (first-parent history)\n\n{features}\n\n## Known issues (source document snapshot)\n\nThe following is copied from docs/KNOWN_ISSUES.md. See the packaged smoke report for the installed-build checks.\n\n{issues}\n"
+    let notes = fs::read_to_string(root.join("RELEASE_NOTES.md"))
+        .context("read the reviewed RELEASE_NOTES.md")?;
+    ensure!(
+        notes.lines().next() == Some(format!("# Ara {version}").as_str()),
+        "RELEASE_NOTES.md must start with '# Ara {version}' before packaging"
     );
     let dist = support::dist(root);
     fs::create_dir_all(&dist)?;
