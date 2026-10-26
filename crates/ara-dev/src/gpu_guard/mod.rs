@@ -1,12 +1,13 @@
 //! Observe foreign GPU users; never terminate or reconfigure them.
 mod model;
+pub(crate) mod monitor;
 #[cfg(test)]
 mod tests;
 #[cfg(windows)]
 mod windows;
 
 use anyhow::{Context, Result, bail};
-use model::{Classifier, Snapshot};
+use model::{Classifier, Sample, Snapshot};
 pub(crate) use model::{Interval, Policy, Report};
 use std::{
     fs,
@@ -73,7 +74,16 @@ impl Guard {
                     if stop_rx.recv_timeout(Duration::from_secs(1)).is_ok() {
                         return Ok(());
                     }
-                    let sample = classifier.push(sampler.sample()?, &mut baseline);
+                    let Some(sample) =
+                        observe_tick(&mut classifier, &mut baseline, sampler.sample())
+                    else {
+                        quiet = 0;
+                        *shared.lock().expect("GPU guard state") = baseline.clone();
+                        if baseline.invalid() && !wait_for_quiet {
+                            bail!("{}", baseline.detail());
+                        }
+                        continue;
+                    };
                     quiet = if sample.foreign_percent <= policy.threshold_percent
                         && !sample.foreign.iter().any(|p| p.known)
                     {
@@ -84,8 +94,8 @@ impl Guard {
                     if baseline.samples.len() < 3 {
                         continue;
                     }
-                    if (!baseline.invalid() && !classifier.pending())
-                        || wait_for_quiet && quiet >= 3
+                    if quiet >= 3
+                        && ((!baseline.invalid() && !classifier.pending()) || wait_for_quiet)
                     {
                         if wait_for_quiet && baseline.invalid() {
                             baseline = Report {
@@ -94,6 +104,14 @@ impl Guard {
                                 quiet_wait_seconds: started.elapsed().as_secs_f64(),
                                 policy,
                                 classification_version: 2,
+                                monitoring: monitor::Monitoring {
+                                    start_unix_ms: Some(
+                                        baseline.samples[baseline.samples.len() - 3]
+                                            .interval_start_unix_ms,
+                                    ),
+                                    end_unix_ms: Some(sample.unix_ms),
+                                    ..Default::default()
+                                },
                                 ..Default::default()
                             };
                         }
@@ -114,10 +132,10 @@ impl Guard {
                         Ok(()) | Err(mpsc::RecvTimeoutError::Disconnected) => true,
                         Err(mpsc::RecvTimeoutError::Timeout) => false,
                     };
-                    let snapshot = sampler.sample()?;
+                    let tick = sampler.sample();
                     let mut report = shared.lock().expect("GPU guard state");
                     let invalid = report.invalid();
-                    classifier.push(snapshot, &mut report);
+                    observe_tick(&mut classifier, &mut report, tick);
                     if report.invalid() && !invalid {
                         eprintln!("{CODE}: INVALID reading: {}", report.detail());
                         persist(&evidence, &report)?;
@@ -168,7 +186,12 @@ impl Guard {
         }
     }
     pub(crate) fn snapshot(&self) -> Report {
-        self.report.lock().expect("GPU guard state").clone()
+        let mut report = self.report.lock().expect("GPU guard state").clone();
+        if report.sampler == "windows_pdh" {
+            let last = report.samples.last().map(|sample| sample.unix_ms);
+            report.monitoring.finish(unix_ms(), last);
+        }
+        report
     }
     pub(crate) fn save(&self) -> Result<()> {
         persist(&self.path, &self.snapshot())
@@ -209,16 +232,29 @@ impl Drop for Guard {
     }
 }
 
+#[derive(serde::Deserialize)]
+#[serde(untagged)]
+enum FixtureFrame {
+    Missing { unix_ms: u64, error: String },
+    Sample(Snapshot),
+}
+
 enum Sampler {
     #[cfg(windows)]
     Windows(windows::Sampler),
-    Fixture(Vec<Snapshot>),
+    Fixture {
+        frames: std::collections::VecDeque<FixtureFrame>,
+        last_unix_ms: u64,
+    },
 }
 impl Sampler {
     fn new() -> Result<Self> {
         // Explicit test input is always labelled in evidence. It is not a native reading.
         if let Some(path) = std::env::var_os("ARA_DEV_GPU_GUARD_FIXTURE") {
-            return Ok(Self::Fixture(serde_json::from_slice(&fs::read(path)?)?));
+            return Ok(Self::Fixture {
+                frames: serde_json::from_slice(&fs::read(path)?)?,
+                last_unix_ms: 0,
+            });
         }
         #[cfg(windows)]
         {
@@ -233,20 +269,74 @@ impl Sampler {
         match self {
             #[cfg(windows)]
             Self::Windows(_) => "windows_pdh",
-            Self::Fixture(_) => "test_fixture",
+            Self::Fixture { .. } => "test_fixture",
         }
     }
-    fn sample(&mut self) -> Result<Snapshot> {
+    fn sample(&mut self) -> (u64, Result<Snapshot>) {
         match self {
             #[cfg(windows)]
-            Self::Windows(s) => s.sample(),
-            Self::Fixture(samples) => {
-                if samples.is_empty() {
-                    Ok(Snapshot::default())
-                } else {
-                    Ok(samples.remove(0))
+            Self::Windows(s) => {
+                let sample = s.sample();
+                (
+                    sample
+                        .as_ref()
+                        .map_or_else(|_| unix_ms(), |sample| sample.unix_ms),
+                    sample,
+                )
+            }
+            Self::Fixture {
+                frames,
+                last_unix_ms,
+            } => {
+                let frame = frames.pop_front().unwrap_or_else(|| {
+                    FixtureFrame::Sample(Snapshot {
+                        unix_ms: last_unix_ms.saturating_add(1000),
+                        ..Default::default()
+                    })
+                });
+                match frame {
+                    FixtureFrame::Missing { unix_ms, error } => {
+                        *last_unix_ms = unix_ms;
+                        (unix_ms, Err(anyhow::anyhow!(error)))
+                    }
+                    FixtureFrame::Sample(snapshot) => {
+                        *last_unix_ms = snapshot.unix_ms;
+                        (snapshot.unix_ms, Ok(snapshot))
+                    }
                 }
             }
+        }
+    }
+}
+
+fn unix_ms() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis() as u64
+}
+
+/// A read failure is one missed poll, not the end of the monitoring thread.
+fn observe_tick(
+    classifier: &mut Classifier,
+    report: &mut Report,
+    (at, outcome): (u64, Result<Snapshot>),
+) -> Option<Sample> {
+    let last = report.samples.last().map(|sample| sample.unix_ms);
+    match outcome {
+        Ok(snapshot) => {
+            if last.is_some_and(|last| at.saturating_sub(last) >= monitor::LOSS_TIMEOUT_MS) {
+                classifier.interrupted();
+            }
+            report.monitoring.valid(at, last);
+            Some(classifier.push(snapshot, report))
+        }
+        Err(error) => {
+            classifier.interrupted();
+            report
+                .monitoring
+                .unavailable(at, last, format!("{error:#}"));
+            None
         }
     }
 }

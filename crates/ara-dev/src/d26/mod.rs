@@ -387,7 +387,7 @@ mod tests {
     }
 
     #[test]
-    fn contaminated_readings_are_invalid_in_rows_summary_json_and_html() {
+    fn unavailable_baseline_refuses_without_invalidating_unrun_rows() {
         let output = Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("../../target/ara-dev/tests")
             .join(format!("invalid-report-{}", std::process::id()));
@@ -406,7 +406,7 @@ mod tests {
         };
         let results = measure::Results {
             gpu_load: Some(crate::gpu_guard::Report {
-                errors: vec!["foreign load proof: VALORANT.exe PID 99 peak 42%".into()],
+                errors: vec!["GPU counter query unavailable".into()],
                 ..Default::default()
             }),
             ..Default::default()
@@ -418,7 +418,7 @@ mod tests {
             serde_json::from_slice(&fs::read(output.join("report.json")).unwrap()).unwrap();
         assert_eq!(report["status"], "invalid");
         assert!(
-            report["summary"]["gates"]["D26"]["invalid"]
+            report["summary"]["gates"]["D26"]["not_measured"]
                 .as_u64()
                 .unwrap()
                 > 0
@@ -428,10 +428,10 @@ mod tests {
                 .as_array()
                 .unwrap()
                 .iter()
-                .all(|row| row["status"] == "invalid")
+                .all(|row| row["status"] == "not_measured")
         );
         let html = fs::read_to_string(output.join("report.html")).unwrap();
         assert!(html.contains("INVALID"));
-        assert!(html.contains("VALORANT.exe PID 99"));
+        assert!(html.contains("GPU counter query unavailable"));
     }
 }

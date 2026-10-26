@@ -25,6 +25,8 @@ Local developer binary. No engine dependencies; uses git and cargo as subprocess
   and their exited-counter tails are excluded. >10% summed over five samples or an
   actual game in gpu-processes.toml makes readings INVALID (exit 3), never FAIL.
   DWM counts above a 3% allowance; System PID 4/CSRSS stay informational.
+  Vanished PDH instances retry; five seconds without valid data creates a bounded
+  unmonitored gap. Only overlapping rows are invalid, including during reclassification.
   Idle services/launchers/overlays use measured GPU% only. --wait-for-quiet polls;
   no foreign process is altered. D26 invalidates overlapping rows only; saved
   readings can be re-scored with `d26 --reclassify <dir>` (see docs).
