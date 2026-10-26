@@ -40,7 +40,8 @@ use std::{
     path::PathBuf,
     time::{Duration, Instant},
 };
-/// How long after the last input progressive Scene frames resume.
+/// How long after the last input Scene work that blocks this thread waits: ray-traced
+/// progressive frames, and adopting newly published content (`SceneSync::refresh`).
 const INTERACTION_PAUSE: Duration = Duration::from_millis(250);
 /// How long `--verify-ux` waits for its idle-frame samples once its captures, camera
 /// samples and drags are done: a scene with live content (effects previewing in the
@@ -734,14 +735,18 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
             let graph_paint = graph_start.map(|start| start.elapsed().as_secs_f64() * 1000.);
             drop(ui_scope);
             dirty |= work.paint_nodes > 0 || work.layout_passes > 0 || work.restyled > 0;
-            // Progressive Scene frames (fidelity accumulation, newly published assets)
-            // block this thread for their GPU time (27-50 ms on large scenes), so they
-            // wait while the user is working: no pointer, key or wheel input for
-            // INTERACTION_PAUSE. A click or hover then never queues behind one. Scene
-            // changes made by input (camera, gizmo drags, edits) still render at once.
+            // Progressive Scene frames (temporal convergence after the camera moves,
+            // arriving content, GI) render whenever the Scene wants them. A native
+            // Scene frame is submitted without waiting for the GPU, so it also renders
+            // right after input (holding it back left the image unconverged between
+            // moves). A ray-traced frame blocks this thread for its GPU time (27-50 ms
+            // on large scenes), so it waits for INTERACTION_PAUSE without input: a click
+            // never queues behind one. Changes made by input always render at once.
             if shell.viewport().is_some()
                 && scene_view.needs_frame(editor.state.quality)
-                && (scene_dirty || last_input.is_none_or(|t| t.elapsed() >= INTERACTION_PAUSE))
+                && (scene_dirty
+                    || renderer.scene_frame_async()
+                    || last_input.is_none_or(|t| t.elapsed() >= INTERACTION_PAUSE))
             {
                 dirty = true;
                 scene_dirty = true;
