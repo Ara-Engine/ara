@@ -1771,3 +1771,22 @@ fn only_an_untouched_old_default_layout_moves_to_the_new_default() {
         }
     }
 }
+
+/// Layout changes are saved off the UI thread; however fast they come, the newest
+/// one is on disk once the editor closes.
+#[test]
+fn the_newest_layout_is_saved_when_the_editor_closes() {
+    let project = Project::new();
+    let mut editor = Editor::open(&project.0).unwrap();
+    for panel in [
+        "game", "scene", "game", "console", "problems", "scene", "game",
+    ] {
+        editor
+            .action("editor.layout.show", json!({ "panel": panel }))
+            .unwrap();
+    }
+    let expected = editor.state.layout.clone();
+    drop(editor);
+    let reopened = Editor::open(&project.0).unwrap();
+    assert_eq!(reopened.state.layout, expected);
+}
