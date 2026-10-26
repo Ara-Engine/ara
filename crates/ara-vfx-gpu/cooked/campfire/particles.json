@@ -1,22 +1,22 @@
 {
   "binding_layout_hash": "35cd2a62b1ba741ce6823b3c8753d7b5aa97b54c5f0a837b56e542518013fd7e",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "b09ecca0e6fb30db3a8f9cc476e4f814cc737ad85231d8e5bf92296af038e880",
+  "key": "38acf01ea93be1d9aff5cbf69bb3bc5e2c84a1bbabab2c45a2a9adac5d14c811",
   "stages": [
     {
-      "dxil": "b09ecca0e6fb30db3a8f9cc476e4f814cc737ad85231d8e5bf92296af038e880/particleFragment.dxil",
+      "dxil": "38acf01ea93be1d9aff5cbf69bb3bc5e2c84a1bbabab2c45a2a9adac5d14c811/particleFragment.dxil",
       "dxil_hash": "5178863896936433259e5debb4b98d57db5d35963bec7a14a8b3cf33d84f0ae4",
       "source_entry": "particleFragment",
-      "spirv": "b09ecca0e6fb30db3a8f9cc476e4f814cc737ad85231d8e5bf92296af038e880/particleFragment.spv",
+      "spirv": "38acf01ea93be1d9aff5cbf69bb3bc5e2c84a1bbabab2c45a2a9adac5d14c811/particleFragment.spv",
       "spirv_entry": "main",
       "spirv_hash": "4064416596aff3b6d1eada0b3f32ef611679fb2945face9823ea1992e019ed40",
       "stage": "fragment"
     },
     {
-      "dxil": "b09ecca0e6fb30db3a8f9cc476e4f814cc737ad85231d8e5bf92296af038e880/particleVertex.dxil",
+      "dxil": "38acf01ea93be1d9aff5cbf69bb3bc5e2c84a1bbabab2c45a2a9adac5d14c811/particleVertex.dxil",
       "dxil_hash": "33bb824f9c95b27dea949dc8dd7090b0a16048cc0092cacc39c4830a8149cffb",
       "source_entry": "particleVertex",
-      "spirv": "b09ecca0e6fb30db3a8f9cc476e4f814cc737ad85231d8e5bf92296af038e880/particleVertex.spv",
+      "spirv": "38acf01ea93be1d9aff5cbf69bb3bc5e2c84a1bbabab2c45a2a9adac5d14c811/particleVertex.spv",
       "spirv_entry": "main",
       "spirv_hash": "17922ee6f5953ea648ee0b1a42013e48b38f70c382f50bdc63bc903100324fd4",
       "stage": "vertex"

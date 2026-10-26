@@ -5,7 +5,16 @@ use ara_gpu::{
     commands::{Attachment, Command, Recorder},
 };
 use ara_render::graph::Graph;
-use ara_vfx::{Sorting, bounds_visible, sorting, spawn_demand};
+use ara_vfx::{bounds_visible, spawn_demand};
+#[cfg(test)]
+mod tests;
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum FrameOutput {
+    Simulation,
+    Hdr,
+    Display,
+}
 
 impl GpuSystem {
     pub(crate) fn run_frame(
@@ -14,8 +23,9 @@ impl GpuSystem {
         view: &View,
         readback: bool,
         advance: bool,
-        drawn: bool,
+        output: FrameOutput,
     ) -> Result<()> {
+        let drawn = output != FrameOutput::Simulation;
         ensure!(self.tick < u32::MAX, "VFX tick exhausted");
         ensure!(
             view.exposure.is_finite() && view.exposure > 0.,
@@ -192,14 +202,18 @@ impl GpuSystem {
             acquire.push((scene_depth, Access::ShaderRead));
         }
         graph.pass("Vfx.Acquire", Queue::Graphics, acquire);
-        let mut backdrop = vec![
-            (ids[2], Access::ShaderRead),
-            (ids[3], Access::ShaderRead),
-            (ids[4], Access::ShaderRead),
-            (scene_color, Access::Color),
-            (ids[8], Access::Color),
-        ];
-        if let Some(background) = view.scene_background {
+        let mut backdrop = if self.preview_background {
+            vec![
+                (ids[2], Access::ShaderRead),
+                (ids[3], Access::ShaderRead),
+                (ids[4], Access::ShaderRead),
+                (scene_color, Access::Color),
+                (ids[8], Access::Color),
+            ]
+        } else {
+            Vec::new()
+        };
+        if let Some(background) = view.scene_background.filter(|_| self.preview_background) {
             backdrop.push((
                 graph.import(ara_gpu::Resource::Image(background.image), background.state),
                 Access::ShaderRead,
@@ -218,8 +232,8 @@ impl GpuSystem {
             "Vfx.IndirectArgs",
         ] {
             let mut accesses = core(true);
-            // Spawn consumes the control buffer through both compute and indirect stages.
-            if name == "Vfx.Spawn" {
+            // Spawn and sort read control through both compute and indirect stages.
+            if name == "Vfx.Spawn" || name == "Vfx.Sort" {
                 accesses[2].1 = Access::Indirect;
             }
             if name == "Vfx.Update" {
@@ -248,15 +262,23 @@ impl GpuSystem {
             (scene_depth, Access::ShaderRead),
         ]);
         graph.pass("Vfx.Draw", Queue::Graphics, draw);
-        graph.pass(
-            "Vfx.Tonemap",
-            Queue::Graphics,
-            [
-                (ids[4], Access::ShaderRead),
-                (scene_color, Access::ShaderRead),
-                (ids[9], Access::Color),
-            ],
-        );
+        if output == FrameOutput::Hdr {
+            graph.pass(
+                "Vfx.HdrReady",
+                Queue::Graphics,
+                [(scene_color, Access::ShaderRead)],
+            );
+        } else {
+            graph.pass(
+                "Vfx.Tonemap",
+                Queue::Graphics,
+                [
+                    (ids[4], Access::ShaderRead),
+                    (scene_color, Access::ShaderRead),
+                    (ids[9], Access::Color),
+                ],
+            );
+        }
         let mut copy = vec![
             (ids[2], Access::CopySource),
             (ids[5], Access::CopyDestination),
@@ -287,6 +309,10 @@ impl GpuSystem {
         let mut recorder = gpu.begin(queue);
         let mut points = Vec::new();
         for pass in &compiled.passes {
+            // The retained graph slot has no accesses or recording for direct HDR.
+            if pass.id.0 == 1 && !self.preview_background {
+                continue;
+            }
             if pass.queue != queue {
                 let waits = points.last().copied().into_iter().collect::<Vec<_>>();
                 points.push(gpu.submit(recorder.finish(), &waits)?);
@@ -316,7 +342,8 @@ impl GpuSystem {
                 9 => self.sort(&mut recorder),
                 10 => self.compute_stage(&mut recorder, 9),
                 11 => self.draw(&mut recorder),
-                12 => self.tonemap(&mut recorder),
+                12 if output != FrameOutput::Hdr => self.tonemap(&mut recorder),
+                12 => {}
                 13 => {
                     recorder.push(Command::CopyBuffer {
                         source: self.control,
@@ -411,12 +438,16 @@ impl GpuSystem {
     }
     fn sort(&self, r: &mut Recorder) {
         for (i, c) in self.layout.configs.iter().enumerate() {
-            if sorting(&self.effect.emitters[i]) == Sorting::None {
+            if c.render[3] == 0 {
                 continue;
             }
             r.push(Command::Pipeline(self.pipelines.compute[7]));
             r.push(self.constants(i, 0, 0));
-            r.push(Command::Dispatch([c.partition[3], 1, 1]));
+            r.push(Command::DispatchIndirect {
+                arguments: self.control,
+                offset: u64::from(c.atlas[3]),
+            });
+            let mut offset = c.atlas[3] + crate::layout::SORT_HEADER;
             let mut k = 2;
             while k <= c.scratch[3] {
                 let mut j = k / 2;
@@ -429,7 +460,11 @@ impl GpuSystem {
                     }));
                     r.push(Command::Pipeline(self.pipelines.compute[8]));
                     r.push(self.constants(i, k, j));
-                    r.push(Command::Dispatch([c.partition[3], 1, 1]));
+                    r.push(Command::DispatchIndirect {
+                        arguments: self.control,
+                        offset: u64::from(offset),
+                    });
+                    offset += crate::layout::DISPATCH_BYTES;
                     j /= 2;
                 }
                 k *= 2;

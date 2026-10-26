@@ -10,6 +10,8 @@ events. Shader compilers are never runtime dependencies.
   capture through ara-render's channel/provenance API, return agent stats.
   `advance` simulates a tick without the backdrop copy, draw or tonemap: live
   composition advances by elapsed ticks, then renders once per presented frame.
+- `composite`: blend into supplied scene HDR, optionally advancing a tick; no
+  preview backdrop or display tonemap. The scene owns the final look post.
 - `PipelineWarmup`: poll bounded worker compilation; live frames omit the effect until ready.
   Consume the ready batch with `GpuSystem::new_prepared`, or retire/cancel it explicitly.
   Native pipeline compilation and its private cache I/O never run on the frame thread.
@@ -37,7 +39,10 @@ Alive/dead compaction uses group scans and deterministic group-prefix sums.
 Projected-coverage prefixes bound the selected draw list before depth/age sorting.
 Events copy positions before slot reuse, route on GPU, spawn on the next tick.
 Draw/dispatch arguments are GPU-generated; GPU events are cosmetic only.
-Depth/age sorts use deterministic bitonic passes with slot-ID ties.
+Depth/age sorts use deterministic bitonic passes with slot-ID ties over the selected
+live prefix's next power of two. Compaction writes indirect work sizes into the
+existing control buffer tail; capacity-only stages dispatch zero work. Additive
+sprites/meshes skip sorting; ribbons retain age order. No per-frame CPU readback.
 All heap-reachable resources must appear in graph accesses. Frame resources are
 owned; no mutexes, interior mutability or per-frame resource clones. Frame constants
 use `upload_queued` so an enclosing deferred Scene scope orders writes on the GPU.
