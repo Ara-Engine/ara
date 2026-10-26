@@ -969,7 +969,7 @@ fn starting_play_marks_the_title_bar_without_moving_the_ui() {
 
 /// The Scene view's Lit menu offers the project's default, Auto and the four presets
 /// with a check on the active one; menus, the palette and agents share the registry
-/// commands, and the toolbar and status bar show the active preset.
+/// commands. A narrow toolbar stays compact; its menu and status show the preset.
 #[test]
 fn scene_quality_menu_offers_project_auto_and_presets_from_the_registry() {
     use ara_render_fidelity::presets::{QualityChoice, QualityPreset};
@@ -1031,13 +1031,22 @@ fn scene_quality_menu_offers_project_auto_and_presets_from_the_registry() {
     assert!(editor.state.quality);
     shell.rebuild(&mut editor).unwrap();
     assert_eq!(text(&shell, "status-quality-text"), "Epic");
-    assert_eq!(text(&shell, "view-mode-label"), "Lit · Epic");
+    assert_eq!(text(&shell, "view-mode-label"), "Lit");
+    shell.click("view-mode", &mut clipboard).unwrap();
+    shell.dispatch(&mut editor).unwrap();
+    assert!(
+        shell
+            .open_menu_rows(&editor)
+            .iter()
+            .any(|row| { row.0 == "view.quality.epic" && row.2 == Some(true) })
+    );
     shell
         .run_command(&mut editor, "view.quality.low", &Default::default())
         .unwrap();
     assert!(!editor.state.quality, "Low is the raster view");
     shell.rebuild(&mut editor).unwrap();
-    assert_eq!(text(&shell, "view-mode-label"), "Lit · Low");
+    assert_eq!(text(&shell, "view-mode-label"), "Lit");
+    assert_eq!(text(&shell, "status-quality-text"), "Low");
 
     // The palette and agents (editor.commands) see the same commands and state.
     assert!(

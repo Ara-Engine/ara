@@ -133,22 +133,11 @@ mod tests {
             border: 5.,
             controls: vec![[10., 6., 300., 30.], [680., 6., 120., 30.]],
         };
-        assert_eq!(
-            chrome.hit_test([400., 20.], [800., 600.], false),
-            SDL_HITTEST_DRAGGABLE
-        );
-        assert_eq!(
-            chrome.hit_test([50., 20.], [800., 600.], false),
-            SDL_HITTEST_NORMAL
-        );
-        assert_eq!(
-            chrome.hit_test([700., 20.], [800., 600.], false),
-            SDL_HITTEST_NORMAL
-        );
-        assert_eq!(
-            chrome.hit_test([400., 200.], [800., 600.], false),
-            SDL_HITTEST_NORMAL
-        );
+        let hit = |point, maximized| chrome.hit_test(point, [800., 600.], maximized).0;
+        assert_eq!(hit([400., 20.], false), SDL_HITTEST_DRAGGABLE.0);
+        assert_eq!(hit([50., 20.], false), SDL_HITTEST_NORMAL.0);
+        assert_eq!(hit([700., 20.], false), SDL_HITTEST_NORMAL.0);
+        assert_eq!(hit([400., 200.], false), SDL_HITTEST_NORMAL.0);
         for (p, expected) in [
             ([1., 1.], SDL_HITTEST_RESIZE_TOPLEFT),
             ([400., 1.], SDL_HITTEST_RESIZE_TOP),
@@ -159,15 +148,9 @@ mod tests {
             ([1., 599.], SDL_HITTEST_RESIZE_BOTTOMLEFT),
             ([1., 300.], SDL_HITTEST_RESIZE_LEFT),
         ] {
-            assert_eq!(chrome.hit_test(p, [800., 600.], false), expected);
+            assert_eq!(hit(p, false), expected.0, "region at {p:?}");
         }
-        assert_eq!(
-            chrome.hit_test([400., 1.], [800., 600.], true),
-            SDL_HITTEST_DRAGGABLE
-        );
-        assert_eq!(
-            chrome.hit_test([1., 300.], [800., 600.], true),
-            SDL_HITTEST_NORMAL
-        );
+        assert_eq!(hit([400., 1.], true), SDL_HITTEST_DRAGGABLE.0);
+        assert_eq!(hit([1., 300.], true), SDL_HITTEST_NORMAL.0);
     }
 }
