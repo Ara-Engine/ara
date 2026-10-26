@@ -6,6 +6,7 @@ rust-version.workspace = true
 publish.workspace = true
 
 [features]
+default = ["prepared-lods"]
 prepared-lods = ["dep:ara-meshopt-sys"]
 
 [dependencies]

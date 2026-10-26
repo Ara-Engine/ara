@@ -7,6 +7,7 @@
   ],
   "date": "2026-10-26",
   "defaultEnabled": false,
+  "followupReport": "lod-production-abba-2026-10-26.json",
   "prerequisites": "Unchanged; cc with the existing C++ compiler; no generator/download/CMake/Python",
   "productionWallGainThresholdPercent": 3,
   "sourceBase": "d6bdb43b6009b90467f750c20a4d7e5ea9985b51",
@@ -80,7 +81,7 @@
       "sha256": "DB3B62E77E47817A7D39C10BFD643C342987B36279B491390F83E8D04E81B1EE"
     }
   ],
-  "status": "FOCUSED_GREEN_WALL_PAIRING_PENDING",
+  "status": "FOCUSED_GREEN_SOURCE_CHECKPOINT_WITH_FOLLOWUP",
   "validation": {
     "clippy": "Strict all-target both feature configurations",
     "fmt": "ara-dev fmt --check, Windows batches",

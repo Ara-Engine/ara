@@ -32,8 +32,9 @@ The mesh::PARALLEL_GEOMETRY classic/virtual overlap experiment regressed SATA
 and showed no clear NVMe win after Color8/mips (current ABBA).
 Keep it off; adaptive admission and the proposed per-volume fallback are dropped.
 Keep bytes and error precedence stable; scheduling changes need no version bump.
-Optional prepared-lods uses ara-meshopt-sys owned attribute contexts, one per
-primitive, with original LOD0 resets. Default stays off pending fresh NVMe ABBA.
+Default prepared-lods uses ara-meshopt-sys owned attribute contexts, one per
+primitive, with original LOD0 resets. Quiet NVMe ABBA supports roughly 3–8%
+lower import wall time, with noise; see MEASUREMENTS.md for every observation.
 Permanent shim tests compare upstream indices/error bits. Opt-in real corpus:
 `cargo run -p ara-importers --features prepared-lods --example geometry_replay -- PROJECT 1`.
 The completed production cache verifies every artifact (101 Outpost models).

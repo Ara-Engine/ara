@@ -20,12 +20,14 @@ Native exceptions are caught at the ABI. Failed calls never expose partial outpu
 cc compiles shim/context.cpp; no generator, bindgen, CMake, Python or download.
 Keep native optimization/FP flags compatible with meshopt's existing build.
 Set CARGO_BUILD_JOBS=2 on this shared PC.
-Run cargo fmt, clippy --all-targets -- -D warnings and test -p ara-meshopt-sys.
+Run cargo run -p ara-dev -- fmt --check, cargo clippy -p ara-meshopt-sys
+--all-targets -- -D warnings, and cargo test -p ara-meshopt-sys.
 Permanent fixtures compare indices and error bits against registry meshopt 0.7.
 Source-hash tests prevent silent vendor drift. Update both sides deliberately.
 The opt-in real corpus check is ara-importers' geometry_replay example with
 --features prepared-lods and a completed production-cache project (101 Outpost
 models). See ara-importers/MEASUREMENTS.md. Timing runs use ara-dev gpu --.
 
-Do not enable prepared-lods by default before its fresh-project NVMe ABBA wins.
+Prepared-lods is the importer default after the approved fresh NVMe ABBA win.
+Keep equivalence checks permanent; scheduling/CPU wins need end-to-end pairing.
 No importer/key/version changes: every output must stay byte-identical.

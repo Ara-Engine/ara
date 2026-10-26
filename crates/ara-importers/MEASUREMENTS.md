@@ -1087,10 +1087,10 @@ Setup or solve failures propagate as import errors, so the opt-in corpus check
 cannot hide a broken shim behind an upstream fallback. The existing geometric
 prefix, attribute fallback decisions and alpha-card area policy retain their order.
 
-`prepared-lods` is **off by default** until a fresh-project quiet-slot NVMe A/B/B/A
-demonstrates at least about 3% wall-time improvement. No importer version, action
-key, compression or sidecar changes. The single-thread prototype result above
-does not establish a production cold-import speedup.
+At this source checkpoint, `prepared-lods` stayed **off by default** pending a
+fresh-project quiet-slot NVMe A/B/B/A with at least about 3% wall-time improvement.
+No importer version, action key, compression or sidecar changes. The single-thread
+prototype alone did not establish a production cold-import speedup.
 
 Focused validation passes with the feature enabled: 41 importer tests and four
 permanent shim tests, strict all-target Clippy, and Windows-batched workspace fmt.
@@ -1105,4 +1105,41 @@ It compares every complete output with the retained production cache, including
 manifests, indices, error bits and virtual artifacts, and refuses texture cache
 misses. This shared-load replay is a correctness check, not a wall-time claim.
 Source/binary hashes and per-model evidence: `measurements/lod-production-shim-2026-10-26.json`.
-Fresh project pairing remains pending at this source checkpoint.
+Fresh project pairing was pending at this source checkpoint; the result follows.
+
+## Prepared LODs: fresh NVMe Outpost ABBA, 2026-10-26
+
+An owner-provided quiet slot ran four fresh Hub-created Outpost projects on C:
+NVMe, under one GPU lease. Frozen worker source is `1b10ede8` in both variants;
+only `prepared-lods` differs. The CLI/player, templates and all 558 common Cargo
+target/profile sets match. Each project is physically verified, reparse-checked
+and deleted before the next case; peak project count is one. No other agent
+builds or GPU jobs were permitted during this slot.
+
+| Seconds | A1 shim off | B1 shim on | B2 shim on | A2 shim off |
+| --- | ---: | ---: | ---: | ---: |
+| Open through all 115 assets published | 20.588562 | 20.046173 | 19.706015 | 22.426003 |
+| Create through assets ready | 23.942535 | 22.026547 | 21.621220 | 24.453475 |
+
+Assets-ready means are **21.507283 -> 19.876094 s (7.58% lower)**. Adjacent-pair
+wall savings are **0.542388 s** (A1–B1, 2.63%) and **2.719988 s** (A2–B2, 12.13%).
+Both on observations are below both off observations. Retain the slower final
+control and every other observation; two runs per variant do not establish a
+confidence interval. The practical claim is **roughly 3–8% faster**, using the
+first pair and pooled mean; do not advertise the noisier second pair as a 12% win.
+The earlier 31% native-phase saving is not the cold-import speedup.
+
+All **460 action keys**, **5,836 artifact references** and **3,637,442,064 physically
+verified referenced bytes** match v4. Every case published 115 assets with zero
+GPU fallback. All four project directories are deleted with no reparse points;
+their extracted evidence remains in `target/ara-dev/import-speed/prepared-prod-{a1,b1,b2,a2}-outpost/`.
+Canonical frozen-pair data, complete case values and verification hashes are in
+`measurements/lod-production-abba-2026-10-26.json`.
+
+**Decision:** enable prepared-lods by default, as approved after this pairing.
+It clears the requested approximately 3% wall gate with the noise caveat above.
+The source/ABI, permanent equivalence tests and MIT notice remain those of the
+focused-green shim checkpoint; only the default feature and documentation change.
+No algorithm, importer version, action key, format or compression change.
+Final default-enabled validation passes: Windows-batched workspace fmt, strict
+all-target Clippy, all 45 importer/shim tests, and opt-out all-target Clippy.

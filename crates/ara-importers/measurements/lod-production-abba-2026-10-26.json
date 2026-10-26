@@ -1,0 +1,356 @@
+{
+  "adjacentPairs": [
+    {
+      "control": "a1",
+      "prepared": "b1",
+      "savingMs": 542.3882,
+      "savingPercent": 2.634415218205433
+    },
+    {
+      "control": "a2",
+      "prepared": "b2",
+      "savingMs": 2719.988099999997,
+      "savingPercent": 12.128724193451237
+    }
+  ],
+  "cases": [
+    {
+      "case": "a1",
+      "createMs": 2763.0614,
+      "deletion": {
+        "deleted": true,
+        "deletedUtc": "2026-10-26T12:12:40.5381158Z",
+        "files": 4005,
+        "logicalBytes": 2058444453,
+        "path": "C:\\AraImportBench\\projects\\prepared-prod-a1-outpost",
+        "reparsePoints": [],
+        "verified": true
+      },
+      "evidence": [
+        {
+          "relativePath": "prepared-prod-a1-outpost/result.json",
+          "sha256": "4475EACE7FFCD952AE2F151FC18E6393C6B1719342524814DE3AC90A21C191B1"
+        },
+        {
+          "relativePath": "prepared-prod-a1-outpost/artifact-catalog.json",
+          "sha256": "EB9B9D1A1EEF6964C5617A79F2AAFC4DA3A06442C36940F276129AFBC80EFC03"
+        },
+        {
+          "relativePath": "prepared-prod-a1-outpost/source-ids.json",
+          "sha256": "71D4CD8F254736637F1B791269F94D4DFF496A56BF7F8CF00CDCA90978BBDC4E"
+        },
+        {
+          "relativePath": "prepared-prod-a1-outpost/physical-verification.log",
+          "sha256": "98FBC7BAED26597B40BB71B922BD7AE658C5D23891A3840BCFE1D408E0418138"
+        },
+        {
+          "relativePath": "prepared-prod-a1-outpost/deletion.json",
+          "sha256": "E3EBA8E766925444731328EE6DE6FF40C4E8B46AC7FC4E6FD06FCAFAEA86AA39"
+        }
+      ],
+      "importMs": 20588.5616,
+      "loadAfter": {
+        "availableMemoryKiB": 4791116,
+        "cpuPercent": 18,
+        "dFreeBytes": 19420622848,
+        "utc": "2026-10-26T12:12:32.6709036Z"
+      },
+      "loadBefore": {
+        "availableMemoryKiB": 6477336,
+        "cpuPercent": 13,
+        "dFreeBytes": 19434696704,
+        "utc": "2026-10-26T12:12:08.3261030Z"
+      },
+      "physicalVerification": "C:/AraImportBench/projects/prepared-prod-a1-outpost/.ara/cache: 115 actions, 1459 artifacts, 909360516 bytes verified",
+      "project": "C:/AraImportBench/projects/prepared-prod-a1-outpost",
+      "shim": "off",
+      "totalMs": 23942.535
+    },
+    {
+      "case": "b1",
+      "createMs": 1724.5103,
+      "deletion": {
+        "deleted": true,
+        "deletedUtc": "2026-10-26T12:13:11.2306511Z",
+        "files": 4005,
+        "logicalBytes": 2058444453,
+        "path": "C:\\AraImportBench\\projects\\prepared-prod-b1-outpost",
+        "reparsePoints": [],
+        "verified": true
+      },
+      "evidence": [
+        {
+          "relativePath": "prepared-prod-b1-outpost/result.json",
+          "sha256": "799BE2250CEAF48C3124C9E4BD15F19204D728567F77A209090E269152610D46"
+        },
+        {
+          "relativePath": "prepared-prod-b1-outpost/artifact-catalog.json",
+          "sha256": "FFD8C4A59F2BA6D32B6B3ADBFD1CB8C5E60D7DD64024FDEAA3449E363681789C"
+        },
+        {
+          "relativePath": "prepared-prod-b1-outpost/source-ids.json",
+          "sha256": "71D4CD8F254736637F1B791269F94D4DFF496A56BF7F8CF00CDCA90978BBDC4E"
+        },
+        {
+          "relativePath": "prepared-prod-b1-outpost/physical-verification.log",
+          "sha256": "9454EB93DE8C4ED33FA06B214EA7383292D9A37E6AD692D866FFFB413B9E6F5F"
+        },
+        {
+          "relativePath": "prepared-prod-b1-outpost/deletion.json",
+          "sha256": "9B66509AEA8BA0B2B4C91E6898FD26B5885956D81319536930EDCCC707393F6E"
+        }
+      ],
+      "importMs": 20046.1734,
+      "loadAfter": {
+        "availableMemoryKiB": 4641328,
+        "cpuPercent": 34,
+        "dFreeBytes": 19293761536,
+        "utc": "2026-10-26T12:13:03.2297642Z"
+      },
+      "loadBefore": {
+        "availableMemoryKiB": 6367172,
+        "cpuPercent": 7,
+        "dFreeBytes": 19420622848,
+        "utc": "2026-10-26T12:12:40.8391217Z"
+      },
+      "physicalVerification": "C:/AraImportBench/projects/prepared-prod-b1-outpost/.ara/cache: 115 actions, 1459 artifacts, 909360516 bytes verified",
+      "project": "C:/AraImportBench/projects/prepared-prod-b1-outpost",
+      "shim": "on",
+      "totalMs": 22026.5474
+    },
+    {
+      "case": "b2",
+      "createMs": 1648.6196,
+      "deletion": {
+        "deleted": true,
+        "deletedUtc": "2026-10-26T12:13:41.6233232Z",
+        "files": 4005,
+        "logicalBytes": 2058444453,
+        "path": "C:\\AraImportBench\\projects\\prepared-prod-b2-outpost",
+        "reparsePoints": [],
+        "verified": true
+      },
+      "evidence": [
+        {
+          "relativePath": "prepared-prod-b2-outpost/result.json",
+          "sha256": "E94A5CE58383990CA393CE43EC4741A7A03F12B6B0473B2D78EC5206D03381FC"
+        },
+        {
+          "relativePath": "prepared-prod-b2-outpost/artifact-catalog.json",
+          "sha256": "F077AD06B1637702B239252E7B62FA0EE62A61059D90874B38849846B6B6C923"
+        },
+        {
+          "relativePath": "prepared-prod-b2-outpost/source-ids.json",
+          "sha256": "71D4CD8F254736637F1B791269F94D4DFF496A56BF7F8CF00CDCA90978BBDC4E"
+        },
+        {
+          "relativePath": "prepared-prod-b2-outpost/physical-verification.log",
+          "sha256": "25419D12CA2FB7F74B4E97572F32B1D4BB7BED571E253C5F16322547C4EDB7CD"
+        },
+        {
+          "relativePath": "prepared-prod-b2-outpost/deletion.json",
+          "sha256": "883CC4C8E01C2EAE0D5C111CA9A78993E5207566C2C4128E30A7B4555F7EF60A"
+        }
+      ],
+      "importMs": 19706.015300000003,
+      "loadAfter": {
+        "availableMemoryKiB": 4536284,
+        "cpuPercent": 15,
+        "dFreeBytes": 19178463232,
+        "utc": "2026-10-26T12:13:33.5364365Z"
+      },
+      "loadBefore": {
+        "availableMemoryKiB": 6146444,
+        "cpuPercent": 12,
+        "dFreeBytes": 19292446720,
+        "utc": "2026-10-26T12:13:11.5424211Z"
+      },
+      "physicalVerification": "C:/AraImportBench/projects/prepared-prod-b2-outpost/.ara/cache: 115 actions, 1459 artifacts, 909360516 bytes verified",
+      "project": "C:/AraImportBench/projects/prepared-prod-b2-outpost",
+      "shim": "on",
+      "totalMs": 21621.2199
+    },
+    {
+      "case": "a2",
+      "createMs": 1727.6570000000002,
+      "deletion": {
+        "deleted": true,
+        "deletedUtc": "2026-10-26T12:14:14.6990613Z",
+        "files": 4005,
+        "logicalBytes": 2058444453,
+        "path": "C:\\AraImportBench\\projects\\prepared-prod-a2-outpost",
+        "reparsePoints": [],
+        "verified": true
+      },
+      "evidence": [
+        {
+          "relativePath": "prepared-prod-a2-outpost/result.json",
+          "sha256": "132CEE6A02507AA002C80CF594507EFF60115DEAF3A638BE1D0F16D9BD6C2847"
+        },
+        {
+          "relativePath": "prepared-prod-a2-outpost/artifact-catalog.json",
+          "sha256": "59A728DC507CD0F71D553ABBD31972860BD22FAF010468172979976BBA8A9EC5"
+        },
+        {
+          "relativePath": "prepared-prod-a2-outpost/source-ids.json",
+          "sha256": "71D4CD8F254736637F1B791269F94D4DFF496A56BF7F8CF00CDCA90978BBDC4E"
+        },
+        {
+          "relativePath": "prepared-prod-a2-outpost/physical-verification.log",
+          "sha256": "0E9CD280DDD4062B91713946883908CA5A803B87B9CFA99C5C5619A813BFAC3C"
+        },
+        {
+          "relativePath": "prepared-prod-a2-outpost/deletion.json",
+          "sha256": "9AF91F6EAACF443BC5D366FB0EAE3E86515E24A955A5F9D3A18EF0C0353B9A8C"
+        }
+      ],
+      "importMs": 22426.0034,
+      "loadAfter": {
+        "availableMemoryKiB": 4635436,
+        "cpuPercent": 11,
+        "dFreeBytes": 19174543360,
+        "utc": "2026-10-26T12:14:06.7633844Z"
+      },
+      "loadBefore": {
+        "availableMemoryKiB": 5969016,
+        "cpuPercent": 10,
+        "dFreeBytes": 19177091072,
+        "utc": "2026-10-26T12:13:41.9393539Z"
+      },
+      "physicalVerification": "C:/AraImportBench/projects/prepared-prod-a2-outpost/.ara/cache: 115 actions, 1459 artifacts, 909360516 bytes verified",
+      "project": "C:/AraImportBench/projects/prepared-prod-a2-outpost",
+      "shim": "off",
+      "totalMs": 24453.4751
+    }
+  ],
+  "caveats": [
+    "All four observations retained; final off case is slower",
+    "First adjacent pair2.63%, pooled mean7.58%; do not market the second noisy pair12.13%",
+    "Earlier31%native phase gain is not the end-to-end gain",
+    "Only default feature and documentation change after frozen same-source comparison; no version/key/compression changes"
+  ],
+  "claim": "Roughly 3–8% lower cold-import wall time; noisy, not a confidence interval",
+  "date": "2026-10-26",
+  "decision": "Enable prepared-lods by default; owner approved the observed mean/ordering with noise caveat",
+  "defaultEnabled": true,
+  "definition": "Quiet-slot fresh Hub projects, NVMe Outpost, one GPU lease, frozen same-source workers and identical CLI/player; each case verified and deleted before next",
+  "focusedValidation": {
+    "cargoBuildJobs": 2,
+    "checks": [
+      {
+        "exit": 0,
+        "log": "target/ara-dev/import-speed/prepared-production/final-fmt.log",
+        "name": "fmt",
+        "sha256": "C4D61909C7A82FDD9637DEDF9E025F803F393DAB9A1A96A7AEC1D9BF4DD98D95"
+      },
+      {
+        "exit": 0,
+        "log": "target/ara-dev/import-speed/prepared-production/final-clippy-default.log",
+        "name": "clippy-default",
+        "sha256": "ED113D91FF80F2B54034A4432AFD7D9B114C8F7D265CCAEFFF03F582E2CE2675"
+      },
+      {
+        "exit": 0,
+        "log": "target/ara-dev/import-speed/prepared-production/final-tests-default.log",
+        "name": "tests-default",
+        "sha256": "C3A81E55D18CE6FDCF3262761EC0C03DE466CAC8CC63D6CADA722C5A3077CD78"
+      },
+      {
+        "exit": 0,
+        "log": "target/ara-dev/import-speed/prepared-production/final-clippy-optout.log",
+        "name": "clippy-optout",
+        "sha256": "57AB3B899914B39A0D75241970B1AF70F7F63914075F2EA471BE824E8D78EE7E"
+      }
+    ],
+    "testsPassed": 45
+  },
+  "means": {
+    "offImportMs": 21507.2825,
+    "offTotalMs": 24198.00505,
+    "onImportMs": 19876.09435,
+    "onTotalMs": 21823.88365,
+    "savingPercent": 7.584352648922533
+  },
+  "pair": {
+    "addedShimTargets": [
+      "path+file:///C:/Users/snowy/.t3/worktrees/snengine/t3-602598ba/crates/ara-meshopt-sys#0.0.1-alpha|ara_meshopt_sys|lib",
+      "path+file:///C:/Users/snowy/.t3/worktrees/snengine/t3-602598ba/crates/ara-meshopt-sys#0.0.1-alpha|build-script-build|custom-build"
+    ],
+    "candidate": {
+      "cliPolicy": "Identical control CLI/player; only worker LOD feature differs",
+      "cliSha256": "EC759656A9F127D3F8577638624C9FF378680853EFA063E2CEE91432CB753BA8",
+      "compiledCliSha256": "46CA014E656F58B0C7073372237F8D5C70014D0F731366554FEF73364193F1E5",
+      "features": [
+        "ara-importers/prepared-lods"
+      ],
+      "playerSha256": "946B7D03E2BDA216AD4282FDD9D1934FE40F501E6D760BEFF135AF24F0759D29",
+      "profile": "dev; same complete package set; only prepared-lods differs",
+      "roots": [
+        "ara",
+        "ara-asset",
+        "ara-importers",
+        "ara-import-worker"
+      ],
+      "sourceHead": "1b10ede8dd9e21a6699c135f7215b74b48d4fdf7",
+      "variant": "candidate",
+      "worker": "D:/AraBuild/ara-dev-infra-target/import-speed/prepared-production-candidate-bin/ara-import-worker.exe",
+      "workerSha256": "C7B9C860C8A731326E0C8A69534089A26714023608300ECEB8F16A78A25CBB67"
+    },
+    "commonArtifactTargets": 558,
+    "control": {
+      "cliPolicy": "Identical control CLI/player; only worker LOD feature differs",
+      "cliSha256": "EC759656A9F127D3F8577638624C9FF378680853EFA063E2CEE91432CB753BA8",
+      "compiledCliSha256": "EC759656A9F127D3F8577638624C9FF378680853EFA063E2CEE91432CB753BA8",
+      "features": [],
+      "playerSha256": "946B7D03E2BDA216AD4282FDD9D1934FE40F501E6D760BEFF135AF24F0759D29",
+      "profile": "dev; same complete package set; only prepared-lods differs",
+      "roots": [
+        "ara",
+        "ara-asset",
+        "ara-importers",
+        "ara-import-worker"
+      ],
+      "sourceHead": "1b10ede8dd9e21a6699c135f7215b74b48d4fdf7",
+      "variant": "control",
+      "worker": "D:/AraBuild/ara-dev-infra-target/import-speed/prepared-production-control-bin/ara-import-worker.exe",
+      "workerSha256": "43CA93B928C21092BA724993DFB710F6D125445C278AFADD7A1358C2A0C023BB"
+    },
+    "estimatedMinutes": 4,
+    "featureDifferences": [
+      {
+        "candidate": "prepared-lods",
+        "control": "",
+        "target": "path+file:///C:/Users/snowy/.t3/worktrees/snengine/t3-602598ba/crates/ara-importers#0.0.1-alpha|ara_importers|lib"
+      }
+    ],
+    "order": [
+      "off",
+      "on",
+      "on",
+      "off"
+    ],
+    "peakProjectCount": 1,
+    "physicalVerification": "Every object hash, plus all action keys/artifact identities against v4 before per-case reparse-checked deletion",
+    "projectPaths": [
+      "C:/AraImportBench/projects/prepared-prod-a1-outpost",
+      "C:/AraImportBench/projects/prepared-prod-b1-outpost",
+      "C:/AraImportBench/projects/prepared-prod-b2-outpost",
+      "C:/AraImportBench/projects/prepared-prod-a2-outpost"
+    ],
+    "quietSlotRequired": true,
+    "requestedMinutes": 5,
+    "status": "COMPLETED",
+    "timed": true
+  },
+  "status": "GREEN_DEFAULT_ENABLED",
+  "verification": {
+    "actionKeys": 460,
+    "artifactReferences": 5836,
+    "differentArtifacts": 0,
+    "differentKeys": 0,
+    "gpuFallbacks": 0,
+    "projectsDeleted": 4,
+    "referencedBytesPhysicallyVerified": 3637442064,
+    "reparsePoints": 0
+  }
+}
