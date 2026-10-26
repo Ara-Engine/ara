@@ -168,6 +168,7 @@ impl RenderFrame {
         self.look.sky = None;
         self.look.fog = None;
         self.look.volumes.clear();
+        self.look.luts.clear();
         self.sun = None;
         self.lights.clear();
         self.draws.clear();
@@ -208,6 +209,17 @@ impl RenderFrame {
                 self.look.fog = entity.get::<ara_components::render::HeightFog>().copied();
             }
             if let Some(volume) = entity.get::<ara_components::post::PostProcessVolume>() {
+                // The lookup tables it references, shared from the library.
+                for lut in volume.overrides.iter().filter_map(|o| o.lut.as_ref()) {
+                    if let (Some(library), Ok(id)) = (library, crate::assets::asset_id(lut))
+                        && let Some(table) = library.luts.get(id)
+                        && !self.look.luts.iter().any(|(known, _)| known == id)
+                    {
+                        self.look
+                            .luts
+                            .push((id.to_owned(), std::sync::Arc::clone(table)));
+                    }
+                }
                 self.look.volumes.push(ara_components::post::PostVolume {
                     volume: volume.clone(),
                     translation: pose.translation.to_array(),

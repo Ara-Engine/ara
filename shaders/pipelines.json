@@ -491,6 +491,23 @@
       "vertex_stride": 0
     }
   },
+  "native_wire": {
+    "entries": {
+      "nativeWireFragment": "fragment",
+      "nativeWireVertex": "vertex"
+    },
+    "source": "native-raster.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [
+        9
+      ],
+      "depth_format": 126,
+      "depth_test": true,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
   "prefilter": {
     "entries": {
       "prefilterMain": "compute"
@@ -551,6 +568,20 @@
   "tonemap": {
     "entries": {
       "tonemapMain": "compute"
+    },
+    "source": "baseline.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
+  "wire_composite": {
+    "entries": {
+      "wireCompositeMain": "compute"
     },
     "source": "baseline.slang",
     "state": {

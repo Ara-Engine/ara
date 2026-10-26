@@ -53,6 +53,22 @@ Varying nativeVertex(uint vertex,uint instance,bool shadow) {
 }
 [shader("vertex")]
 Varying nativeGeometryVertex(uint vertex:SV_VertexID,uint instance:SV_InstanceID){return nativeVertex(vertex,instance,false);}
+// Wireframe view modes (Renderer `Wire.Draw`): the camera's draws again, with the same
+// clip position as the G-buffer (so the depth test against it passes on visible
+// surfaces). Draws are procedural over each triangle's corners in order, so a vertex's
+// corner, and its barycentric, is its index modulo three.
+struct WireVarying {float4 clip:SV_Position;float3 bary:TEXCOORD0;};
+[shader("vertex")]
+WireVarying nativeWireVertex(uint vertex:SV_VertexID,uint instance:SV_InstanceID){
+    Varying v=nativeVertex(vertex,instance,false);WireVarying o;o.clip=v.clip;
+    uint corner=vertex%3;o.bary=float3(corner==0,corner==1,corner==2);return o;
+}
+// Edge coverage: the distance to the nearest edge in pixels, antialiased over 1.5.
+[shader("fragment")]
+float4 nativeWireFragment(WireVarying v):SV_Target0{
+    float3 edge=smoothstep(float3(0),fwidth(v.bary)*1.5,v.bary);
+    return float4(1-min(edge.x,min(edge.y,edge.z)),0,0,0);
+}
 struct ShadowVarying {float4 clip:SV_Position;float2 uv:TEXCOORD0;float2 uv1:TEXCOORD1;nointerpolation uint material:TEXCOORD2;};
 [shader("vertex")]
 ShadowVarying nativeShadowVertex(uint vertex:SV_VertexID,uint instance:SV_InstanceID){Varying v=nativeVertex(vertex,instance,true);ShadowVarying s;s.clip=v.clip;s.uv=v.uv;s.uv1=v.uv1;s.material=v.material;return s;}

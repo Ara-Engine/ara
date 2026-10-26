@@ -7,9 +7,9 @@ Owns the M1 baseline renderer and agent visual feedback. Gameplay state stays in
 
 ## Public API
 
-- `Graph`: declared accesses, stable topological ordering, barriers, explicit queue release/acquire pairs, timeline dependencies, transient images.
-  Compilation indexes resource uses once; declaration-order versions and queue handoffs stay deterministic.
-- `Renderer::new`, `render`, `render_view` (live debug view mode), `resize`, `capture`: cooked Vulkan rendering; read-only
+- `Graph`: declared accesses, stable topological ordering, barriers, explicit queue release/acquire pairs, timeline dependencies, transient images. Compilation indexes resource uses once; declaration-order versions and queue handoffs stay deterministic.
+- `Renderer::new`, `render`, `render_view` (live debug view mode; `Wireframe`/`LitWireframe` draw native triangle edges, unjittered, into
+  the `WIRE` mask and composite them after post), `resize`, `capture`, `set_color_lut` (a 32³ host buffer): cooked Vulkan rendering; read-only
   `gpu()` access for diagnostics/native presentation. Unchanged display resizes retain TAAU targets/history. `resize_upscaled(render, display)` is TAAU:
   scene passes, feature color/depth and IDs at `render_size()`; history, output, captures and picks at `size()`.
 - `prewarm_view_quality` caches one camera on the startup worker; `create_view` claims it. `preallocate_view` reserves exact render/display targets, constants and retained pairs on the allocation worker; `submit_secondary` draws. Independent motion,

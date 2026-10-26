@@ -6,6 +6,11 @@
 /// The full-frame sensor height focal lengths follow from, in metres.
 const SENSOR_HEIGHT: f32 = 0.024;
 
+/// Focal length in metres for a vertical field of view on the full-frame sensor.
+fn focal_length(fov: f32) -> f32 {
+    0.5 * SENSOR_HEIGHT / (0.5 * fov).tan().max(1e-4)
+}
+
 /// A setting a look overrides over the quality preset's own value:
 /// `preset × keep + add`.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -46,12 +51,22 @@ impl DepthOfField {
     /// and the near strength, for a camera with vertical field of view `fov` (radians)
     /// rendering `height` pixels.
     pub(crate) fn constants(self, fov: f32, height: f32, quality: DepthOfFieldQuality) -> [f32; 4] {
-        let focal = 0.5 * SENSOR_HEIGHT / (0.5 * fov).tan().max(1e-4);
+        let focus = self.focus_distance.max(focal_length(fov) * 1.01);
+        [
+            focus,
+            self.circle_scale(fov, height),
+            quality.max_radius * height,
+            self.near,
+        ]
+    }
+
+    /// Blur radius in pixels at infinity for a camera with vertical field of view
+    /// `fov` (radians) rendering `height` pixels: the sensor blur diameter
+    /// f² / (N (P − f)) as a radius; a depth d blurs by this times |1 − P / d|.
+    pub fn circle_scale(self, fov: f32, height: f32) -> f32 {
+        let focal = focal_length(fov);
         let focus = self.focus_distance.max(focal * 1.01);
-        // Sensor blur diameter at infinity, f² / (N (P − f)), as a radius in pixels.
-        let scale =
-            focal * focal / (self.aperture * (focus - focal)) / SENSOR_HEIGHT * height * 0.5;
-        [focus, scale, quality.max_radius * height, self.near]
+        focal * focal / (self.aperture * (focus - focal)) / SENSOR_HEIGHT * height * 0.5
     }
 }
 

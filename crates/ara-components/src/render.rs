@@ -148,4 +148,7 @@ pub struct SceneLook {
     pub fog: Option<HeightFog>,
     /// Post-process volumes with their entity poses, in entity ID order.
     pub volumes: Vec<crate::post::PostVolume>,
+    /// The decoded lookup tables the volumes reference, by asset ID (shared with the
+    /// runtime's library; never copied per frame).
+    pub luts: Vec<(String, std::sync::Arc<crate::post::ColorLut>)>,
 }

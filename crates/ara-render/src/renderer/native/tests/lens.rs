@@ -201,3 +201,55 @@ fn motion_blur_smears_a_panning_view() -> Result<()> {
     renderer.gpu().assert_clean()?;
     Ok(())
 }
+
+#[test]
+fn a_colour_lookup_table_grades_the_display_by_its_contribution() -> Result<()> {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../target/ara-render/lut")
+        .join(std::process::id().to_string());
+    std::fs::create_dir_all(&root)?;
+    let mut renderer = Renderer::new_native(
+        &shadows::scene(),
+        Box::new(EmptyTextures),
+        [64, 48],
+        &[],
+        root.join("gpu"),
+    )?;
+    let request = CaptureRequest {
+        camera: CameraSpec::LookAt {
+            position: Vec3::new(0., 0., 3.),
+            target: Vec3::ZERO,
+            vertical_fov: 0.8,
+        },
+        size: [64, 48],
+        mode: ViewMode::Lit,
+        deterministic: true,
+        exposure: 1.,
+        settle_frames: 1,
+        tick: 0,
+        seed: 7,
+        marks: None,
+    };
+    let graded = |contribution: f32| Look {
+        grading: crate::look::Grading {
+            lut_contribution: contribution,
+            ..Default::default()
+        },
+        ..Look::default()
+    };
+    let plain = renderer.capture(&request)?.image;
+    // A 2-step table that maps every colour to pure red.
+    renderer.set_color_lut(Some((2, &[0xff00_00ff; 8])))?;
+    renderer.set_look(graded(1.))?;
+    let red = renderer.capture(&request)?.image;
+    assert!(red.pixels().all(|p| p[0] == 255 && p[1] == 0 && p[2] == 0));
+    renderer.set_look(graded(0.5))?;
+    let half = renderer.capture(&request)?.image;
+    let (p, h) = (plain.get_pixel(1, 1), half.get_pixel(1, 1));
+    assert!(h[0] > p[0] && h[1] < p[1].max(1), "{p:?} -> {h:?}");
+    renderer.set_color_lut(None)?;
+    assert_eq!(renderer.capture(&request)?.image.as_raw(), plain.as_raw());
+    assert!(renderer.set_color_lut(Some((3, &[0; 8]))).is_err());
+    renderer.gpu().assert_clean()?;
+    Ok(())
+}

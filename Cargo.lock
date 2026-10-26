@@ -1583,6 +1583,7 @@ dependencies = [
  "ara-components",
  "ara-gpu",
  "ara-render",
+ "ara-schema",
  "ara-texture-stream",
  "bytemuck",
  "glam 0.30.9",

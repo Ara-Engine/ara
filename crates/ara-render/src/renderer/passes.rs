@@ -34,6 +34,11 @@ enum Recipe {
     Forward,
     Taa,
     Tonemap,
+    /// The camera's native draws again into the wire mask (`ViewMode::wire`).
+    Wire,
+    /// The wire mask over the display output; `true` over the lit image (one
+    /// colour), `false` over the wireframe view's background (per-entity colours).
+    WireComposite(bool),
     Look(LookPass),
     /// Ownership/synchronization only.
     Empty,
@@ -272,10 +277,12 @@ impl Renderer {
         }
         self.look.ensure(&mut self.gpu)?;
         let (dof, motion) = self.look.blurs(self.native.is_some());
-        let lit = matches!(mode, ViewMode::Lit);
+        let lit = mode.lit();
         // Focus blur needs a perspective lens (an orthographic projection has no w).
         self.look.frame_dof = dof && lit && camera.projection.z_axis.w != 0.;
         self.look.frame_motion = motion && lit;
+        // Edges come from the native draws (legacy content has none).
+        self.look.frame_wire = mode.wire() && self.native.is_some();
         let (sampled, storage) = self.look.indices();
         // Exposure snaps to its meter on a reset unless a host seeded it, and
         // while new probe GI converges or fades in (no adaptation swing as the
@@ -392,6 +399,15 @@ impl Renderer {
                 tuning.intensity,
             ];
             look_frame.ao_images = self.look.ao_indices();
+        }
+        let contribution = self.look.look.grading.lut_contribution;
+        if self.look.lut_size > 0 && contribution > 0. {
+            look_frame.lut = [
+                self.look.lut_index,
+                self.look.lut_size,
+                contribution.to_bits(),
+                0,
+            ];
         }
         let lens = self.look.look.lens;
         if self.look.frame_dof
@@ -741,9 +757,19 @@ impl Renderer {
         declare(forward, Recipe::Forward);
         let mut shaded = shadow_passes;
         shaded.extend([gbuffer, lighting, forward]);
+        if self.look.frame_wire {
+            // Depth-tested against the frame's own depth, without writing it.
+            let wire = graph.pass(
+                "Wire.Draw",
+                Queue::Graphics,
+                [(ids[WIRE], Access::Color), (ids[DEPTH], Access::Depth)],
+            );
+            declare(wire, Recipe::Wire);
+            shaded.push(wire);
+        }
         // Deferred post leaves the lit scene in HDR for external composites (`finish`).
         // Captures always produce their own output, never a deferred frame.
-        let deferred = self.look.deferred && matches!(mode, ViewMode::Lit) && !capture;
+        let deferred = self.look.deferred && mode.lit() && !capture;
         if !deferred {
             let mut taa = vec![
                 (ids[HDR], Access::ShaderRead),
@@ -772,7 +798,7 @@ impl Renderer {
             declare(temporal, Recipe::Taa);
             shaded.push(temporal);
         }
-        if matches!(mode, ViewMode::Lit) && !deferred {
+        if mode.lit() && !deferred {
             for (id, pass) in self.look.post_passes(
                 &mut graph,
                 &look,
@@ -783,7 +809,7 @@ impl Renderer {
             ) {
                 declare(id, Recipe::Look(pass));
             }
-        } else if !matches!(mode, ViewMode::Lit) {
+        } else if !mode.lit() {
             let tonemap = graph.pass(
                 "DebugView.SDR",
                 Queue::Graphics,
@@ -804,6 +830,19 @@ impl Renderer {
             );
             declare(tonemap, Recipe::Tonemap);
             shaded.push(tonemap);
+        }
+        if self.look.frame_wire && !deferred {
+            let composite = graph.pass(
+                "Wire.Composite",
+                Queue::Graphics,
+                [
+                    (ids[WIRE], Access::ShaderRead),
+                    (ids[ID], Access::ShaderRead),
+                    (ids[OUTPUT], Access::Storage),
+                ],
+            );
+            declare(composite, Recipe::WireComposite(mode.lit()));
+            shaded.push(composite);
         }
         // A deferred frame has no output yet; `finish` produces it.
         if !deferred {
@@ -1211,6 +1250,24 @@ impl Renderer {
                         }
                         recorder.push(Command::EndRendering);
                     }
+                    Recipe::Wire => {
+                        recorder.push(Command::BeginRendering {
+                            colors: vec![Attachment {
+                                image: self.targets.images[WIRE],
+                                clear: Some([0.; 4]),
+                            }],
+                            depth: Some(Attachment {
+                                image: self.targets.images[DEPTH],
+                                clear: None,
+                            }),
+                            size: self.render,
+                        });
+                        if let Some(native) = &self.native {
+                            native.record_wire(&mut recorder, footprint);
+                        }
+                        recorder.push(Command::EndRendering);
+                    }
+                    Recipe::WireComposite(lit) => self.record_wire_composite(&mut recorder, lit),
                     Recipe::Taa | Recipe::Tonemap => {
                         let taa = matches!(recipes[pass.id.0], Recipe::Taa);
                         recorder.push(Command::Pipeline(if taa {
@@ -1363,6 +1420,10 @@ impl Renderer {
         };
         let depth = import(&mut graph, DEPTH);
         let vectors = self.look.frame_motion.then(|| import(&mut graph, MOTION));
+        let wire_inputs = self
+            .look
+            .frame_wire
+            .then(|| (import(&mut graph, WIRE), import(&mut graph, ID)));
         // Focus blur runs before a resolve; a frame graded directly keeps it sharp.
         let dof = self.look.frame_dof && slot.is_some();
         let resolve = slot.map(|slot| {
@@ -1426,6 +1487,19 @@ impl Renderer {
             &[(frame, Access::ShaderRead)],
         );
         passes.extend(dof_passes);
+        // Deferred frames are lit: their edges go over the lit image.
+        let wire = wire_inputs.map(|(mask, id)| {
+            graph.pass(
+                "Wire.Composite",
+                Queue::Graphics,
+                [
+                    (mask, Access::ShaderRead),
+                    (id, Access::ShaderRead),
+                    (output, Access::Storage),
+                    (frame, Access::ShaderRead),
+                ],
+            )
+        });
         graph.pass(
             "Output.Ready",
             Queue::Graphics,
@@ -1451,6 +1525,8 @@ impl Renderer {
                         input,
                         resolved.is_some(),
                     );
+                } else if wire == Some(pass.id) {
+                    self.record_wire_composite(&mut recorder, true);
                 } else if resolved.is_some_and(|(id, _, _)| id == pass.id) {
                     let taa_input = if dof {
                         self.look.sampled[DOF_COMPOSITE]
@@ -1493,6 +1569,23 @@ impl Renderer {
 }
 
 impl Renderer {
+    /// Records the wire mask's composite over the display output (`lit`: over the lit
+    /// image in one colour; otherwise per-entity colours over the wireframe view).
+    fn record_wire_composite(&self, recorder: &mut ara_gpu::vulkan::Recorder, lit: bool) {
+        recorder.push(Command::Pipeline(self.pipelines.wire_composite));
+        let mut words = [0; 8];
+        words[0] = self.display_frame_index;
+        words[1] = self.targets.sampled[WIRE];
+        words[2] = self.targets.sampled[ID];
+        words[5] = u32::from(lit);
+        recorder.push(Command::Constants(RootConstants { words }));
+        recorder.push(Command::Dispatch([
+            self.size[0].div_ceil(8),
+            self.size[1].div_ceil(8),
+            1,
+        ]));
+    }
+
     /// The frame records look passes record with (`look::passes::Frames`).
     fn frames(&self) -> Frames {
         Frames {

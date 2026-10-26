@@ -114,6 +114,17 @@ float3 grade(Frame f,Look l,float3 c,float2 uv){
 float3 liftGammaGain(Look l,float3 c){
     c=saturate(l.gain.rgb*(c+l.lift.rgb*(1-c)));return pow(c,1/max(l.gamma.rgb,float3(1e-3)));
 }
+// The colour lookup table (look.lut) at an sRGB-encoded colour: a size³ RGBA8 table in
+// strip order (red + blue × size across, green down), interpolated trilinearly.
+float3 colourLookup(Look l,float3 c){
+    uint n=l.lut.y;float3 at=saturate(c)*(n-1);uint3 base=min(uint3(at),uint3(n-2));float3 t=at-float3(base);float3 sum=0;
+    for(uint k=0;k<8;k++){
+        uint3 o=uint3(k&1,(k>>1)&1,k>>2),q=base+o;
+        uint texel=buffers[NonUniformResourceIndex(l.lut.x)].Load((q.y*n*n+q.z*n+q.x)*4);
+        float3 w=lerp(1-t,t,float3(o));
+        sum+=float3(texel&255,(texel>>8)&255,(texel>>16)&255)/255*(w.x*w.y*w.z);
+    }return sum;
+}
 // The scene at `p`, with lateral chromatic aberration (look.gain.w): red and blue
 // sampled radially in and out of the centre, growing with the square of the distance.
 float3 sceneColour(Frame f,Look l,int2 p,float2 uv){
@@ -136,8 +147,9 @@ void post<let MOTION:int>(uint3 tid){
     if(l.bloom.x>0)c=lerp(c,bloom(f,l,uv),l.bloom.x);
     c=grade(f,l,max(c*exposureState(l).x,0),uv);
     uint curve=l.flags.x;c=curve==1?neutralCurve(c):curve==2?filmicCurve(c):tonemap(c);
-    c=liftGammaGain(l,saturate(c));
-    images[NonUniformResourceIndex(f.post.w)][p]=float4(srgb(c),1);
+    c=srgb(liftGammaGain(l,saturate(c)));
+    if(l.lut.x!=0)c=lerp(c,colourLookup(l,c),asfloat(l.lut.z));
+    images[NonUniformResourceIndex(f.post.w)][p]=float4(c,1);
 }
 [shader("compute")][numthreads(8,8,1)]
 void postMain(uint3 tid:SV_DispatchThreadID){post<0>(tid);}

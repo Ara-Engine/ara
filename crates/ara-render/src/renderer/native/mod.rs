@@ -840,6 +840,14 @@ impl Native {
         self.record_with(recorder, root, pass, pipeline);
     }
 
+    /// Records the camera's opaque and forward draws (passes 4 and 5) again through
+    /// the wire PSO: the wireframe view modes' edge mask.
+    pub(super) fn record_wire(&self, recorder: &mut Recorder, root: RootConstants) {
+        for pass in [4, 5] {
+            self.record_with(recorder, root, pass, self.pipelines.wire);
+        }
+    }
+
     /// Records the G-buffer draws (pass 4) through the PSO for the preset's
     /// `terrain_detail` (`NativePipelines::gbuffer_for`).
     pub(super) fn record_gbuffer(

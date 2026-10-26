@@ -172,6 +172,7 @@ impl Look {
                 }],
                 None => scene.volumes,
             },
+            luts: scene.luts,
         }
     }
     /// Applies effect overrides to the extracted effects.

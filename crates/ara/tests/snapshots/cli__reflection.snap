@@ -7377,7 +7377,8 @@ expression: out
             "linear",
             "normal",
             "mask",
-            "hdr"
+            "hdr",
+            "lut"
           ]
         },
         "mipmaps": {
@@ -7423,6 +7424,9 @@ expression: out
         },
         "hdr": {
           "doc": "Nonnegative linear radiance, BC6H UFLOAT."
+        },
+        "lut": {
+          "doc": "A colour lookup table strip (post-process volumes' grading): values kept as authored, uncompressed RGBA half floats, without mips."
         }
       }
     },

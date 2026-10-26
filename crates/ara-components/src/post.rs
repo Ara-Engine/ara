@@ -14,6 +14,17 @@ use bevy_ecs::prelude::Component;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
+/// A decoded colour lookup table (a volume's `lut`, loaded by the runtime): `size`
+/// slices of `size`×`size` RGBA8 texels, in the strip order Unity and Unreal LUT
+/// images use (x = red + blue × size, y = green; sRGB in, sRGB out).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ColorLut {
+    /// Steps per channel, 2 to 32.
+    pub size: u32,
+    /// `size`³ texels, RGBA8 packed little-endian (red in the low byte).
+    pub texels: Vec<u32>,
+}
+
 /// Where a post-process volume applies.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Schema, Serialize, Deserialize)]
 #[ara(module = "render")]

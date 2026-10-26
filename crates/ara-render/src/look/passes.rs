@@ -473,7 +473,11 @@ impl LookGpu {
                 add(graph, name, LookPass::Bloom(pass as u32), uses);
             }
         }
-        let mut uses = vec![(ids.state, Access::ShaderRead), (output, Access::Storage)];
+        let mut uses = vec![
+            (ids.state, Access::ShaderRead),
+            (ids.lut, Access::ShaderRead),
+            (output, Access::Storage),
+        ];
         if bloom {
             uses.push((ids.image(BLOOM_UP), Access::ShaderRead));
         }

@@ -24,6 +24,8 @@ and the project's `RenderSettings { quality, ray_tracing }` (`ara.project.json` 
   `PresetBlend { keep, add }` until the renderer knows the preset.
 - `PostProcessVolume` is version 2 with alias `PostProcess`: old scenes upgrade on
   load into a global volume overriding every former field (defaults included).
+- `post::ColorLut { size, texels }`: a decoded lookup table (RGBA8, strip order);
+  `SceneLook::luts` lists the ones the volumes reference, by asset ID.
 
 ## Rules
 

@@ -342,6 +342,9 @@ pub struct Grading {
     pub gamma: [f32; 3],
     /// Display-space per-channel multiplier (neutral is one).
     pub gain: [f32; 3],
+    /// Share of the colour lookup table applied last (`Renderer::set_color_lut`),
+    /// from zero to one.
+    pub lut_contribution: f32,
 }
 impl Default for Grading {
     fn default() -> Self {
@@ -353,6 +356,7 @@ impl Default for Grading {
             lift: [0.; 3],
             gamma: [1.; 3],
             gain: [1.; 3],
+            lut_contribution: 1.,
         }
     }
 }
@@ -426,6 +430,7 @@ impl Look {
                 && (0.0..=1.0).contains(&g.vignette)
                 && finite(&g.lift)
                 && finite(&g.gain)
+                && (0.0..=1.0).contains(&g.lut_contribution)
                 && g.gamma.iter().all(|x| x.is_finite() && *x > 0.),
             "Invalid look grading or bloom"
         );

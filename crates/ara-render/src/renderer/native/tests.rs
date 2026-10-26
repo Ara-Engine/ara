@@ -9,6 +9,7 @@ mod lens;
 mod prepared;
 mod shadow_patches;
 mod shadows;
+mod wire;
 
 struct EmptyTextures;
 impl Textures for EmptyTextures {

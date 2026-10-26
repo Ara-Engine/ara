@@ -28,6 +28,11 @@ pub enum ViewMode {
     EntityIds = 5,
     /// Cascade selection multiplied by shadow visibility.
     ShadowCascades = 6,
+    /// Triangle edges of the native geometry over a dark background, coloured per
+    /// entity (no temporal jitter, so edges hold still).
+    Wireframe = 7,
+    /// The lit image with the native geometry's triangle edges drawn over it.
+    LitWireframe = 8,
 }
 impl ViewMode {
     /// Complete baseline debug capture set.
@@ -50,7 +55,21 @@ impl ViewMode {
             Self::RoughnessMetal => "roughness_metal",
             Self::EntityIds => "entity_ids",
             Self::ShadowCascades => "shadow_cascades",
+            Self::Wireframe => "wireframe",
+            Self::LitWireframe => "lit_wireframe",
         }
+    }
+    /// Renders the lit scene (`Lit`, and under `LitWireframe`'s edges).
+    pub fn lit(self) -> bool {
+        matches!(self, Self::Lit | Self::LitWireframe)
+    }
+    /// Draws triangle edges over the image.
+    pub fn wire(self) -> bool {
+        matches!(self, Self::Wireframe | Self::LitWireframe)
+    }
+    /// The debug view ID shaders read (`Frame.temporal.z`): lit modes are 0.
+    pub(crate) fn shader_mode(self) -> u32 {
+        if self.lit() { 0 } else { self as u32 }
     }
 }
 /// Agent-visible capture contract; no wall-clock values enter rendering.

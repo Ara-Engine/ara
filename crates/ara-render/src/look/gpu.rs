@@ -33,6 +33,8 @@ pub(crate) const DOF_COMPOSITE: usize = 17;
 pub(crate) const MOTION_TILES: usize = 18;
 pub(crate) const MOTION_NEIGHBOURS: usize = 19;
 const IMAGES: usize = 20;
+/// The largest colour lookup table: 32 steps per channel.
+pub(crate) const LUT_SIZE: u32 = 32;
 /// The exposure state (four floats), then the metering histogram's 256 counts
 /// (look-post.slang exposureMain).
 pub(crate) const STATE_BYTES: usize = 16 + 256 * 4;
@@ -104,6 +106,13 @@ pub(crate) struct LookGpu {
     pub state: Buffer,
     pub state_index: u32,
     pub state_access: Access,
+    /// The colour lookup table (`Renderer::set_color_lut`): up to `LUT_SIZE`³ RGBA8
+    /// texels, host-visible and allocated with the look, so setting a table never
+    /// allocates. Secondary views share the renderer's.
+    pub lut: Buffer,
+    pub lut_index: u32,
+    /// Steps per channel of the current table; zero without one.
+    pub lut_size: u32,
     pub images: [Option<Image>; IMAGES],
     pub sampled: [u32; IMAGES],
     pub storage: [u32; IMAGES],
@@ -120,6 +129,9 @@ pub(crate) struct LookGpu {
     /// agree on it.
     pub frame_dof: bool,
     pub frame_motion: bool,
+    /// This frame draws triangle edges (`ViewMode::wire`): the renderer composites
+    /// them after the post chain, here or in a deferred frame's `finish`.
+    pub frame_wire: bool,
     /// The renderer history slot a deferred frame left for `finish` to resolve into.
     pub deferred_history: Option<usize>,
     /// Remaining frames whose exposure snaps to its meter (capture resets).
@@ -151,6 +163,8 @@ pub(crate) struct LookIds {
     pub images: [Option<ResourceId>; IMAGES],
     pub state: ResourceId,
     pub frame: ResourceId,
+    /// The colour lookup table (host-written between frames).
+    pub lut: ResourceId,
     /// Surface caches, meta, moments, irradiance read and irradiance write.
     pub gi: Option<[ResourceId; 5]>,
     /// The far shadow map.
@@ -231,6 +245,12 @@ impl LookGpu {
         )?;
         gpu.upload(state, &[0; STATE_BYTES])?;
         let state_index = gpu.storage_buffer(state)?.index;
+        let lut = gpu.create_buffer(
+            u64::from(LUT_SIZE.pow(3)) * 4,
+            vk::BufferUsageFlags::STORAGE_BUFFER,
+            true,
+        )?;
+        let lut_index = gpu.storage_buffer(lut)?.index;
         Ok(Self {
             look: Look::default(),
             quality: Quality::default(),
@@ -240,6 +260,9 @@ impl LookGpu {
             state,
             state_index,
             state_access: Access::HostWrite,
+            lut,
+            lut_index,
+            lut_size: 0,
             images: [None; IMAGES],
             sampled: [0; IMAGES],
             storage: [0; IMAGES],
@@ -253,6 +276,7 @@ impl LookGpu {
             deferred: false,
             frame_dof: false,
             frame_motion: false,
+            frame_wire: false,
             deferred_history: None,
             settle: 0,
             seeded: false,
@@ -487,6 +511,13 @@ impl LookGpu {
             ),
             frame: graph.import(
                 Resource::Buffer(self.frame),
+                State {
+                    access: Access::HostWrite,
+                    queue: Queue::Graphics,
+                },
+            ),
+            lut: graph.import(
+                Resource::Buffer(self.lut),
                 State {
                     access: Access::HostWrite,
                     queue: Queue::Graphics,

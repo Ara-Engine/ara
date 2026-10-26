@@ -123,6 +123,8 @@ pub struct Presenter {
     environment: Option<fidelity::EnvironmentMap>,
     /// Host look override (`set_look_override`), replacing the frame's authored look.
     look_override: Option<ara_render_fidelity::environment::FrameEnvironment>,
+    /// The colour lookup table the baseline renderer holds (`apply_lut`).
+    lut: Option<std::sync::Arc<ara_components::post::ColorLut>>,
 }
 
 fn fnv(hash: u64, bytes: &[u8]) -> u64 {
@@ -216,6 +218,7 @@ impl Presenter {
             options: ara_render_fidelity::presets::RenderOptions::default(),
             environment: None,
             look_override: None,
+            lut: None,
         }
     }
 
@@ -335,7 +338,8 @@ impl Presenter {
         } else {
             self.update(frame)?;
         }
-        let look = self.frame_look(frame).raster();
+        let environment = self.frame_look(frame);
+        let look = environment.raster();
         let renderer = self
             .renderer
             .as_mut()
@@ -343,6 +347,7 @@ impl Presenter {
         if *renderer.look() != look {
             renderer.set_look(look)?;
         }
+        apply_lut(renderer, frame, &environment, &mut self.lut)?;
         self.stats.prepare = started.elapsed();
         Ok(resolved)
     }
@@ -918,6 +923,30 @@ pub fn environment(frame: &RenderFrame) -> ara_render_fidelity::environment::Fra
         glam30::Vec3::from_array(eye),
         frame.environment.exposure,
     )
+}
+
+/// Hands the raster renderer the colour lookup table `look` selects from `frame`'s
+/// (`FrameEnvironment::lut`) when it changes; `current` tracks the table it holds.
+pub fn apply_lut(
+    renderer: &mut Renderer,
+    frame: &RenderFrame,
+    look: &ara_render_fidelity::environment::FrameEnvironment,
+    current: &mut Option<std::sync::Arc<ara_components::post::ColorLut>>,
+) -> Result<()> {
+    let lut = look
+        .lut
+        .and_then(|i| frame.look.luts.get(i as usize))
+        .map(|(_, table)| table);
+    let same = match (lut, current.as_ref()) {
+        (Some(a), Some(b)) => std::sync::Arc::ptr_eq(a, b),
+        (None, None) => true,
+        _ => false,
+    };
+    if !same {
+        renderer.set_color_lut(lut.map(|t| (t.size, t.texels.as_slice())))?;
+        *current = lut.cloned();
+    }
+    Ok(())
 }
 
 /// The frame's camera, or an overview when the world has none.

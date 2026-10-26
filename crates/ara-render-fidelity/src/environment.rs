@@ -44,6 +44,11 @@ pub struct FrameEnvironment {
     pub ao: ara_render::look::AoTuning,
     /// Screen-space reflection tuning over the preset's (raster renderer).
     pub ssr: ara_render::look::SsrTuning,
+    /// The colour lookup table graded through last: an index into the resolved
+    /// `SceneLook::luts` (raster renderer, `Renderer::set_color_lut`).
+    pub lut: Option<u32>,
+    /// Share of that table applied, from zero to one.
+    pub lut_contribution: f32,
 }
 
 impl FrameEnvironment {
@@ -93,6 +98,8 @@ impl FrameEnvironment {
                 lens: Default::default(),
                 ao: Default::default(),
                 ssr: Default::default(),
+                lut: None,
+                lut_contribution: 0.,
             };
         };
         let (low, high) = (p.min_ev100.min(p.max_ev100), p.min_ev100.max(p.max_ev100));
@@ -135,12 +142,38 @@ impl FrameEnvironment {
                 intensity: p.reflection_intensity.clamp(0., 1.),
                 distance: over_preset(p.reflection_distance),
             },
+            // A table the runtime could not load (missing or not a `lut` import)
+            // grades as if absent.
+            lut: p.lut.as_ref().and_then(|reference| {
+                let id = ara_schema::grammar::parse_ref(&reference.0).ok()?.id?;
+                let index = look.luts.iter().position(|(known, _)| *known == id)?;
+                u32::try_from(index).ok()
+            }),
+            lut_contribution: p.lut_contribution.clamp(0., 1.),
         }
     }
 
-    /// `base` with this environment's exposure, display and fog controls. The
-    /// homogeneous frustum fog is off: authored fog is the atmosphere's height fog.
+    /// `base` with this environment's exposure, display and fog controls, and the
+    /// volumes' depth of field and motion blur (which switch the fidelity view to its
+    /// cinematic quality). Lift/gamma/gain, chromatic aberration, the lookup table and
+    /// AO/SSR tuning are raster-only. The homogeneous frustum fog is off: authored fog
+    /// is the atmosphere's height fog.
     pub fn post(&self, base: PostSettings) -> PostSettings {
+        let lens = self.lens;
+        let base = if lens.depth_of_field.is_some() || lens.motion_blur > 0. {
+            let focus = lens.depth_of_field;
+            PostSettings {
+                quality: crate::settings::Quality::Cinematic,
+                focus_distance: focus.map_or(base.focus_distance, |d| d.focus_distance),
+                // Motion blur alone keeps everything in focus.
+                aperture: 0.,
+                f_number: focus.map(|d| d.aperture),
+                shutter: lens.motion_blur,
+                ..base
+            }
+        } else {
+            base
+        };
         PostSettings {
             ev100: self.ev100,
             compensation: self.compensation,
@@ -205,6 +238,11 @@ impl FrameEnvironment {
                 lift: self.display[0],
                 gamma: self.display[1],
                 gain: self.display[2],
+                lut_contribution: if self.lut.is_some() {
+                    self.lut_contribution
+                } else {
+                    0.
+                },
             },
             lens: self.lens,
             ao: self.ao,
@@ -365,6 +403,7 @@ mod tests {
                     ..Default::default()
                 },
             ]),
+            luts: Vec::new(),
         };
         let env = FrameEnvironment::resolve(&look, Vec3::ZERO, 1.);
         let a = env.atmosphere.unwrap();
@@ -398,6 +437,7 @@ mod tests {
                 ..Default::default()
             }),
             volumes: volume(Vec::new()),
+            luts: Vec::new(),
         };
         let env = FrameEnvironment::resolve(&look, Vec3::ZERO, 1.);
         let raster = env.raster();
@@ -409,5 +449,43 @@ mod tests {
         let raster = legacy.raster();
         assert!(raster.sky.is_none() && raster.fog.is_none() && raster.auto_exposure.is_none());
         assert!((legacy.manual_exposure(1.) - 0.0015).abs() < 1e-7);
+    }
+
+    #[test]
+    fn volume_lens_effects_map_onto_both_renderers() {
+        let look = SceneLook {
+            volumes: volume(vec![
+                PostOverride {
+                    module: PostModule::DepthOfField,
+                    focus_distance: Some(8.),
+                    aperture: Some(2.),
+                    ..Default::default()
+                },
+                PostOverride {
+                    module: PostModule::MotionBlur,
+                    shutter_angle: Some(180.),
+                    ..Default::default()
+                },
+            ]),
+            ..Default::default()
+        };
+        let env = FrameEnvironment::resolve(&look, Vec3::ZERO, 1.);
+        let raster = env.raster();
+        raster.validate().unwrap();
+        let focus = raster.lens.depth_of_field.unwrap();
+        assert_eq!((focus.focus_distance, focus.aperture), (8., 2.));
+        assert_eq!(raster.lens.motion_blur, 0.5);
+        let post = env.post(PostSettings::default());
+        assert_eq!(post.quality, crate::settings::Quality::Cinematic);
+        assert_eq!(
+            (post.focus_distance, post.f_number, post.shutter),
+            (8., Some(2.), 0.5)
+        );
+        // Without lens effects the host's own lens settings stay as they were.
+        let plain = FrameEnvironment::resolve(&SceneLook::default(), Vec3::ZERO, 1.);
+        assert_eq!(
+            plain.post(PostSettings::default()).quality,
+            crate::settings::Quality::Gameplay
+        );
     }
 }

@@ -12,6 +12,7 @@ workspace = true
 ara-gpu = { path = "../ara-gpu" }
 ara-render = { path = "../ara-render" }
 ara-components.workspace = true
+ara-schema.workspace = true
 ara-texture-stream = { path = "../ara-texture-stream" }
 anyhow = { workspace = true }
 bytemuck = { workspace = true, features = ["derive"] }
