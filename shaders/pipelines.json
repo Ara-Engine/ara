@@ -171,6 +171,20 @@
       "vertex_stride": 0
     }
   },
+  "look_gi_relight_vsm": {
+    "entries": {
+      "giRelightVsmMain": "compute"
+    },
+    "source": "look-gi.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
   "look_gi_scatter": {
     "entries": {
       "giScatterMain": "compute"
@@ -316,6 +330,34 @@
       "transmittanceMain": "compute"
     },
     "source": "look-sky.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
+  "look_vsm_mark": {
+    "entries": {
+      "vsmMarkMain": "compute"
+    },
+    "source": "look-vsm.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
+  "look_vsm_project": {
+    "entries": {
+      "vsmProjectMain": "compute"
+    },
+    "source": "look-vsm.slang",
     "state": {
       "blend": false,
       "color_formats": [],

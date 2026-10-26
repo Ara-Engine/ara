@@ -432,6 +432,17 @@ impl Renderer {
                 self.look.local = Some(crate::look::local::LocalMap::new(&mut self.gpu, local)?);
             }
         }
+        if quality.virtual_shadows != self.look.vsm.as_ref().map(|v| v.settings) {
+            if let Some(old) = self.look.vsm.take() {
+                old.destroy(&mut self.gpu)?;
+            }
+            if let Some(settings) = quality.virtual_shadows {
+                self.look.vsm = Some(crate::look::vsm::VirtualShadowMap::new(
+                    &mut self.gpu,
+                    settings,
+                )?);
+            }
+        }
         if quality.horizon != self.look.horizon.as_ref().map(|h| h.resolution) {
             if let Some(old) = self.look.horizon.take() {
                 old.destroy(&mut self.gpu)?;

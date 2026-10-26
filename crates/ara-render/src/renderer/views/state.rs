@@ -157,6 +157,9 @@ impl ViewState {
         if let Some(horizon) = self.look.horizon {
             horizon.destroy(gpu)?;
         }
+        if let Some(vsm) = self.look.vsm {
+            vsm.destroy(gpu)?;
+        }
         if let Some(native) = self.native {
             native.destroy(gpu)?;
         }
@@ -221,6 +224,9 @@ fn fork_look(
             ssr_trace: p.ssr_trace,
             horizon_sun: p.horizon_sun,
             horizon_sky: p.horizon_sky,
+            vsm_mark: p.vsm_mark,
+            vsm_project: p.vsm_project,
+            gi_relight_vsm: p.gi_relight_vsm,
         },
         frame,
         frame_index,
@@ -246,6 +252,7 @@ fn fork_look(
         cascades: None,
         local: None,
         horizon: None,
+        vsm: None,
         probe_staging: Vec::new(),
         probe_writes: Vec::new(),
     })
