@@ -50,7 +50,11 @@ pub(super) fn warm(
         ara_gpu::cpu_scope!("Player.content_warmup_worker");
         presenter.set_probe_gi(true);
         presenter.present_with(&frame, || Ok(content))?;
-        while presenter.readiness().pipelines_pending {
+        loop {
+            let resources_ready = presenter.preallocate_startup_resources()?;
+            if !presenter.readiness().pipelines_pending && resources_ready {
+                break;
+            }
             presenter.present_with(&frame, || {
                 anyhow::bail!("unchanged startup content unexpectedly rebuilt")
             })?;

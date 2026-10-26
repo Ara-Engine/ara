@@ -59,6 +59,15 @@ pub struct RasterView {
 }
 
 impl RasterView {
+    /// The bake's allocation metadata is sufficient to reserve resources before
+    /// its records arrive. Called by the owning presenter during startup only.
+    pub(crate) fn preallocate_probe_resources(&mut self, renderer: &mut Renderer) -> Result<bool> {
+        let Some(gi) = &self.gi else { return Ok(true) };
+        match gi.layout() {
+            Some(layout) => renderer.preallocate_probe_volume(layout, PROBES_PER_FRAME),
+            None => Ok(!gi.is_pending()),
+        }
+    }
     /// Creates CPU view state. Probe surfaces are acquired asynchronously and
     /// disk-cached; no GPU work or file IO happens in this constructor.
     pub fn new(cache: impl Into<PathBuf>) -> Self {
@@ -612,6 +621,7 @@ impl RasterView {
                 queue_probe_gi(&mut self.gi_updates, update);
             }
         }
+        renderer.complete_probe_preparation()?;
         apply_probe_gi(renderer, &mut self.gi_updates, usize::MAX)?;
         Ok(())
     }
@@ -738,7 +748,7 @@ fn apply_probe_gi(
     updates: &mut std::collections::VecDeque<(ProbeUpdate, usize)>,
     budget: usize,
 ) -> Result<()> {
-    if updates.is_empty() {
+    if updates.is_empty() || renderer.probe_preparation_pending() {
         return Ok(());
     }
     let started = std::time::Instant::now();

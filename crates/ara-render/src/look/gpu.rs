@@ -460,16 +460,15 @@ impl LookGpu {
                 })
                 .collect(),
             gi: self.gi.as_ref().map(|gi| {
-                // A fresh volume's contents are undefined until `GI.Clear`.
                 let state = |access| State {
-                    access: if gi.fresh { Access::Undefined } else { access },
+                    access,
                     queue: Queue::Graphics,
                 };
                 let (read, write) = (1 - gi.slot, gi.slot);
                 [
-                    graph.import(Resource::Buffer(gi.cache), state(Access::ShaderRead)),
-                    graph.import(Resource::Buffer(gi.meta), state(Access::ShaderRead)),
-                    graph.import(Resource::Image(gi.moments), state(Access::ShaderRead)),
+                    graph.import(Resource::Buffer(gi.cache), state(gi.surface_access[0])),
+                    graph.import(Resource::Buffer(gi.meta), state(gi.surface_access[1])),
+                    graph.import(Resource::Image(gi.moments), state(gi.surface_access[2])),
                     graph.import(Resource::Image(gi.irradiance[read]), state(gi.access[read])),
                     graph.import(
                         Resource::Image(gi.irradiance[write]),
@@ -489,6 +488,9 @@ impl LookGpu {
         }
         self.state_access = final_states[ids.state.0].access;
         if let (Some(gi), Some(ids)) = (&mut self.gi, ids.gi) {
+            for (access, id) in gi.surface_access.iter_mut().zip(&ids[..3]) {
+                *access = final_states[id.0].access;
+            }
             let (read, write) = (1 - gi.slot, gi.slot);
             gi.access[read] = final_states[ids[3].0].access;
             gi.access[write] = final_states[ids[4].0].access;
