@@ -15,6 +15,16 @@ impl NativeUi {
                 height: (rect.h * self.dpi) as u32,
             },
         };
+        // Outline and hover flags: bit 0 hover, the rest the group table's slot + 1.
+        let groups = self
+            .outline_groups
+            .and_then(|id| {
+                self.textures
+                    .get(&id)
+                    .map(|t| t.slot)
+                    .or_else(|| self.external.get(&id).copied())
+            })
+            .map_or(0., |slot| (slot + 1) as f32 * 2.);
         for overlay in &self.overlays {
             if let Overlay::Grid {
                 camera,
@@ -100,7 +110,7 @@ impl NativeUi {
                         rect: [rect.x, rect.y, rect.w, rect.h],
                         uv: [0., 0., 1., 1.],
                         color: *color,
-                        params: [uv[0], uv[1], 0., 1.],
+                        params: [uv[0], uv[1], 0., groups + 1.],
                     },
                     5,
                     self.outline_texture
@@ -111,7 +121,7 @@ impl NativeUi {
                         rect: [rect.x, rect.y, rect.w, rect.h],
                         uv: [0., 0., 1., 1.],
                         color: *color,
-                        params: [0., 0., *index as f32, 0.],
+                        params: [0., 0., *index as f32, groups],
                     },
                     5,
                     self.outline_texture

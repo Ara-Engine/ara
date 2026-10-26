@@ -261,6 +261,9 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
             let mut profile_triangles = 0;
             let mut profile_gpu = false;
             let frame_start = Instant::now();
+            // Host waits on the renderer's device so far (timeline, upload idle,
+            // present): the probe subtracts this frame's share from its wall time.
+            let waits_before = renderer.gpu().context().host_wait_stats();
             let interval = frame_start.duration_since(previous).as_secs_f64() * 1000.;
             let mut camera_start = None;
             let mut graph_start = None;
@@ -758,7 +761,10 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                             &renderer,
                             &changed,
                             controller.gizmo_state(),
+                            &mut shell.outlines,
+                            editor.host.store().revision(),
                         )?;
+                        shell.outlines.upload(&mut ui_renderer, &mut gpu)?;
                         if rect.contains(shell.pointer[0], shell.pointer[1])
                             && !editor.state.palette
                             && shell.menu.is_none()
@@ -973,8 +979,19 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                     .map_err(String::from)?;
             }
             if let Some(probe) = &mut probe {
+                let cpu_ms = frame_start.elapsed().as_secs_f64() * 1000.;
+                let ui_wait_ms = gpu.take_gpu_wait().as_secs_f64() * 1000.;
+                // Unavailable when the device was replaced this frame.
+                let host_wait_ms = renderer
+                    .gpu()
+                    .context()
+                    .host_wait_stats()
+                    .elapsed_since(Some(waits_before))
+                    .map(|waited| waited.as_secs_f64() * 1000.);
                 let sample = responsiveness::Sample {
-                    cpu_ms: frame_start.elapsed().as_secs_f64() * 1000.,
+                    cpu_ms,
+                    host_wait_ms,
+                    work_ms: host_wait_ms.map(|waited| (cpu_ms - waited - ui_wait_ms).max(0.)),
                     inject_ms,
                     input_ms,
                     ui_ms,
@@ -988,7 +1005,7 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                     scene_ms,
                     icons_ms,
                     render_ms,
-                    gpu_ms: gpu.take_gpu_wait().as_secs_f64() * 1000.,
+                    gpu_ms: ui_wait_ms,
                     present_ms,
                     presented,
                     game_frame,

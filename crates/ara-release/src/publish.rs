@@ -145,6 +145,13 @@ pub fn publish(
         })
         .collect::<Result<Vec<_>>>()?;
     let manifest = Manifest {
+        build: if kind == Kind::Hub {
+            let marker: serde_json::Value =
+                serde_json::from_slice(&fs::read(dist.join(&prefix).join("hub.json"))?)?;
+            serde_json::from_value(marker["build"].clone())?
+        } else {
+            None
+        },
         format: "ara.release/1".into(),
         kind,
         version: version.into(),

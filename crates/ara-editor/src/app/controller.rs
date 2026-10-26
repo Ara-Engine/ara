@@ -398,11 +398,11 @@ impl Controller {
                         } else {
                             None
                         };
-                        let entity = view
-                            .entities()
-                            .keys()
-                            .find(|a| Some(crate::world::render_id(a)) == id)
-                            .cloned();
+                        // Through the channel map: a terrain tile is its Terrain, a
+                        // model part its entity.
+                        let entity = id
+                            .and_then(|id| shell.outlines.channels.target_of(id))
+                            .map(str::to_owned);
                         let source = match entity {
                             Some(entity) => {
                                 if !editor.state.selection.contains(&entity) {
@@ -464,13 +464,12 @@ impl Controller {
                                     .max(0.) as u32;
                                 if x < renderer.size()[0] && y < renderer.size()[1] {
                                     let id = renderer.entity_at([x, y])?;
-                                    let entity = view
-                                        .entities()
-                                        .keys()
-                                        .find(|address| {
-                                            Some(crate::world::render_id(address)) == id
-                                        })
-                                        .filter(|a| !editor.state.locked.contains(*a));
+                                    // Through the channel map: a terrain tile selects its
+                                    // Terrain, a model part its entity.
+                                    let entity = id
+                                        .and_then(|id| shell.outlines.channels.target_of(id))
+                                        .map(str::to_owned)
+                                        .filter(|a| !editor.state.locked.contains(a));
                                     if let Some(path) = shell.pick_field.take() {
                                         if let Some(entity) = entity {
                                             editor.apply(

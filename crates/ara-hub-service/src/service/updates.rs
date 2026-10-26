@@ -330,7 +330,15 @@ impl Hub {
                         release.manifest().min_hub_version
                     )));
                 }
-                let id = format!("{}-{version}", kind.name());
+                let id = match release
+                    .manifest()
+                    .build
+                    .as_ref()
+                    .filter(|_| kind == Kind::Hub)
+                {
+                    Some(build) => format!("hub-{version}-{}", build.commit),
+                    None => format!("{}-{version}", kind.name()),
+                };
                 if let Some(job) = self.updates.jobs.get(&id)
                     && job.state == "running"
                 {

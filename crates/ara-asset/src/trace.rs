@@ -71,6 +71,31 @@ fn process_cpu_ms() -> Option<f64> {
 }
 
 #[cfg(windows)]
+fn thread_cpu_ms() -> Option<f64> {
+    use windows_sys::Win32::{
+        Foundation::FILETIME,
+        System::Threading::{GetCurrentThread, GetThreadTimes},
+    };
+    let mut times = [FILETIME {
+        dwLowDateTime: 0,
+        dwHighDateTime: 0,
+    }; 4];
+    let [created, exited, kernel, user] = &mut times;
+    // SAFETY: The pseudo handle denotes the calling thread; all output pointers
+    // reference distinct initialized FILETIME values for this synchronous call.
+    if unsafe { GetThreadTimes(GetCurrentThread(), created, exited, kernel, user) } == 0 {
+        return None;
+    }
+    let ticks = |t: &FILETIME| (u64::from(t.dwHighDateTime) << 32) | u64::from(t.dwLowDateTime);
+    Some((ticks(kernel) + ticks(user)) as f64 / 10_000.0)
+}
+
+#[cfg(not(windows))]
+fn thread_cpu_ms() -> Option<f64> {
+    None
+}
+
+#[cfg(windows)]
 pub(crate) fn peak_rss_bytes() -> Option<usize> {
     use windows_sys::Win32::System::{
         ProcessStatus::{GetProcessMemoryInfo, PROCESS_MEMORY_COUNTERS},
@@ -90,25 +115,49 @@ pub(crate) fn peak_rss_bytes() -> Option<usize> {
     None
 }
 
-pub(crate) struct Scope(Option<(&'static str, String, Instant, Option<usize>)>);
+struct ScopeState {
+    stage: &'static str,
+    subject: String,
+    start: Instant,
+    bytes: Option<usize>,
+    thread_start_ms: Option<f64>,
+}
+pub(crate) struct Scope(Option<ScopeState>);
 impl Scope {
     pub(crate) fn new(stage: &'static str, subject: &str) -> Self {
-        Self(enabled().then(|| (stage, subject.to_owned(), Instant::now(), None)))
+        Self(enabled().then(|| ScopeState {
+            stage,
+            subject: subject.to_owned(),
+            start: Instant::now(),
+            bytes: None,
+            thread_start_ms: None,
+        }))
+    }
+    /// Adds calling-thread CPU to a same-thread probe; disabled traces do no work.
+    pub(crate) fn with_thread_cpu(mut self) -> Self {
+        if let Some(state) = &mut self.0 {
+            state.thread_start_ms = thread_cpu_ms();
+        }
+        self
     }
     pub(crate) fn bytes(mut self, bytes: usize) -> Self {
         if let Some(state) = &mut self.0 {
-            state.3 = Some(bytes);
+            state.bytes = Some(bytes);
         }
         self
     }
 }
 impl Drop for Scope {
     fn drop(&mut self) {
-        if let Some((stage, subject, start, bytes)) = &self.0 {
+        if let Some(state) = &self.0 {
+            let elapsed_ms = state.start.elapsed().as_secs_f64() * 1000.0;
+            let cpu_ms = state
+                .thread_start_ms
+                .and_then(|start| thread_cpu_ms().map(|end| (end - start).max(0.0)));
             event(
-                stage,
-                subject,
-                json!({"elapsedMs":start.elapsed().as_secs_f64()*1000.0,"bytes":bytes}),
+                state.stage,
+                &state.subject,
+                json!({"elapsedMs":elapsed_ms,"bytes":state.bytes,"threadCpuMs":cpu_ms}),
             );
         }
     }

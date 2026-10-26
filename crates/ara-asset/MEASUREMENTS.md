@@ -114,3 +114,37 @@ isolates local/pooled routing on one current binary. Its clean Outpost pair is
 earlier admission percentages above are observations, not a universal speedup.
 See [`ara-texture-gpu/MEASUREMENTS.md`](../ara-texture-gpu/MEASUREMENTS.md#leased-device-reuse-2026-10-26)
 for all raw arm times, I/O outliers, remaining stages and lifecycle verification.
+
+## Durable-store attribution: 2026-10-26
+
+An isolated replay preloads the 33 completed Showcase control actions, then
+stores their unchanged outputs into a fresh cache with four threads. It validates
+every action and complete output again after the timer. This is an operation
+probe under the active batch-26 integration gate (55/56% total CPU observations),
+not a project-import A/B or a speedup claim. All final objects/actions are new;
+this first replay has no intermediate objects available for hard-link reuse.
+
+| Cache operation | Calls | Summed elapsed ms | Summed calling-thread CPU ms | Longest ms |
+|---|---:|---:|---:|---:|
+| File flush (`cache.install.sync`) | 332 | 16316.925 | 437.500 | 269.442 |
+| Atomic no-clobber persist | 332 | 2452.100 | 171.875 | 184.737 |
+| Temporary file creation | 332 | 1715.789 | 187.500 | 140.316 |
+| Payload writes | 332 | 186.730 | 78.125 | 15.833 |
+| Existing-entry reads | 364 | 147.754 | 15.625 | 65.038 |
+
+The four-thread store interval is 6124.169 ms; per-operation spans overlap. The
+large elapsed/CPU difference is time blocked or descheduled inside flush, not
+evidence of encoder CPU work or a store-index mutex (there is no shared index).
+Calling-thread times are Windows accounting observations, with coarse scheduler
+resolution; subtracting them does not identify the kernel wait's owner. Defender
+is active, but its performance recorder failed with access denied `0x80070005` in
+the non-admin session. No scan attribution or exclusion recommendation follows.
+The cache still durably publishes objects before its action manifest.
+
+`ARA_IMPORT_TRACE_CACHE_DETAIL=1` now separates intermediate read/open/flush/link
+and temporary read/create/write/flush/persist. Detailed spans include optional
+`threadCpuMs` alongside elapsed time (null where unavailable); ordinary traces
+avoid those additional thread-time calls. Focused `ara-asset` tests, its three
+custom worker harnesses, formatting and strict all-target Clippy pass. Replay
+commands, CSV, traces and load observations are in the ignored
+`target/ara-dev/import-speed/cache-diagnostic/store-showcase-01/` directory.
