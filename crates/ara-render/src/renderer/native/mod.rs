@@ -62,7 +62,7 @@ pub(super) struct Native {
     groups: Groups,
     culling: Culling,
     changes: updates::Updates,
-    pipelines: [Pipeline; 3],
+    pipelines: pipelines::NativePipelines,
     upload: TextureStats,
     material_dirty: bool,
     update_gpu_ms: f64,
@@ -669,7 +669,7 @@ impl Native {
         gpu: &mut VulkanDevice,
         validated: ValidatedScene<'_>,
         mut textures: Box<dyn Textures>,
-        pipelines: [Pipeline; 3],
+        pipelines: pipelines::NativePipelines,
         previous: Option<&Self>,
         mut provided_pool: Option<GeometryGpu>,
         shadow_slots: usize,
@@ -832,16 +832,35 @@ impl Native {
     }
 
     pub(super) fn record(&self, recorder: &mut Recorder, root: RootConstants, pass: usize) {
+        let pipeline = match pass {
+            4 => self.pipelines.gbuffer,
+            5 => self.pipelines.forward,
+            _ => self.pipelines.shadow,
+        };
+        self.record_with(recorder, root, pass, pipeline);
+    }
+
+    /// Records the G-buffer draws (pass 4) through the PSO for the preset's
+    /// `terrain_detail` (`NativePipelines::gbuffer_for`).
+    pub(super) fn record_gbuffer(
+        &self,
+        recorder: &mut Recorder,
+        root: RootConstants,
+        terrain_detail: f32,
+    ) {
+        let pipeline = self.pipelines.gbuffer_for(terrain_detail);
+        self.record_with(recorder, root, 4, pipeline);
+    }
+
+    fn record_with(
+        &self,
+        recorder: &mut Recorder,
+        root: RootConstants,
+        pass: usize,
+        pipeline: Pipeline,
+    ) {
         ara_gpu::cpu_scope!("RasterNative.record");
-        recorder.push(Command::Pipeline(
-            self.pipelines[if !(4..6).contains(&pass) {
-                0
-            } else if pass == 4 {
-                1
-            } else {
-                2
-            }],
-        ));
+        recorder.push(Command::Pipeline(pipeline));
         for batch in &self.culling.draws[pass] {
             if batch.count == 0 {
                 continue;
@@ -870,7 +889,7 @@ impl Native {
         rows: u32,
         page: usize,
     ) {
-        recorder.push(Command::Pipeline(self.pipelines[0]));
+        recorder.push(Command::Pipeline(self.pipelines.shadow));
         for batch in self.culling.page_batches.get(page).into_iter().flatten() {
             let mut constants = root;
             constants.words[1] = self.material_index;

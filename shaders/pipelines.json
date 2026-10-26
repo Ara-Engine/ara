@@ -412,6 +412,28 @@
       "vertex_stride": 0
     }
   },
+  "native_gbuffer_top": {
+    "entries": {
+      "nativeGeometryTopFragment": "fragment",
+      "nativeGeometryVertex": "vertex"
+    },
+    "source": "native-raster.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [
+        43,
+        77,
+        37,
+        122,
+        100,
+        83
+      ],
+      "depth_format": 126,
+      "depth_test": true,
+      "depth_write": true,
+      "vertex_stride": 0
+    }
+  },
   "native_shadow": {
     "entries": {
       "nativeShadowFragment": "fragment",

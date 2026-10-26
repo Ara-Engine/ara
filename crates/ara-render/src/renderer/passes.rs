@@ -1048,7 +1048,8 @@ impl Renderer {
                             size: self.render,
                         });
                         if let Some(native) = &self.native {
-                            native.record(&mut recorder, footprint, 4);
+                            let detail = self.look.quality.terrain_detail;
+                            native.record_gbuffer(&mut recorder, footprint, detail);
                         }
                         for (index, mesh) in self
                             .content

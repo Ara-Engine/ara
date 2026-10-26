@@ -1,21 +1,56 @@
-//! Three native PSOs are retained by the renderer across content generations.
+//! Four native PSOs are retained by the renderer across content generations.
 use super::*;
 use ara_gpu::vulkan::{PipelinePreparation, PipelinePreparationId};
+
+/// The native PSOs (`shaders/pipelines.json`), prepared together behind loading.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(in crate::renderer) struct NativePipelines {
+    /// Shadow casters: cascades, the far map, local faces and VSM pages.
+    pub shadow: Pipeline,
+    /// The G-buffer fill, terrain with steep-slope side projections.
+    pub gbuffer: Pipeline,
+    /// The forward pass (blended and transmissive materials).
+    pub forward: Pipeline,
+    /// The G-buffer fill for presets without terrain detail
+    /// (`Quality::terrain_detail` zero): terrain keeps its top projection, and
+    /// compiled without the side projections, every pixel saves their registers.
+    pub gbuffer_top: Pipeline,
+}
+
+impl NativePipelines {
+    /// The G-buffer PSO for a preset's `Quality::terrain_detail`: without terrain
+    /// detail, the one compiled without side projections.
+    pub fn gbuffer_for(&self, terrain_detail: f32) -> Pipeline {
+        if terrain_detail > 0. {
+            self.gbuffer
+        } else {
+            self.gbuffer_top
+        }
+    }
+}
+
+/// Cooked recipe names, in `NativePipelines` field order.
+const RECIPES: [&str; 4] = [
+    "native_shadow",
+    "native_gbuffer",
+    "native_forward",
+    "native_gbuffer_top",
+];
 
 #[derive(Default)]
 pub(in crate::renderer) enum Pipelines {
     #[default]
     Empty,
     Pending(PipelinePreparationId),
-    Ready([Pipeline; 3]),
+    Ready(NativePipelines),
 }
 impl Renderer {
-    /// Poll the native fill/shadow/forward PSOs without compiling or waiting on
-    /// this thread. Content stays unpublished until this and its uploads are ready.
+    /// Poll the native PSOs without compiling or waiting on this thread. Content
+    /// stays unpublished until this and its uploads are ready.
     pub fn preallocate_native_pipelines(&mut self) -> Result<bool> {
         if matches!(self.native_pipelines, Pipelines::Empty) {
             let mut recipes = Vec::new();
-            for name in ["native_shadow", "native_gbuffer", "native_forward"] {
+            for name in RECIPES {
                 let cooked: ara_gpu::cooked::CookedPipeline = serde_json::from_slice(
                     &std::fs::read(self.artifacts.join(format!("{name}.json")))?,
                 )?;
@@ -38,16 +73,20 @@ impl Renderer {
                 self.native_pipelines = Pipelines::Empty;
             }
             if let Some(handles) = result? {
-                self.native_pipelines = Pipelines::Ready(
-                    handles
-                        .try_into()
-                        .map_err(|_| anyhow::anyhow!("native PSO count differs"))?,
-                );
+                let [shadow, gbuffer, forward, gbuffer_top]: [Pipeline; RECIPES.len()] = handles
+                    .try_into()
+                    .map_err(|_| anyhow::anyhow!("native PSO count differs"))?;
+                self.native_pipelines = Pipelines::Ready(NativePipelines {
+                    shadow,
+                    gbuffer,
+                    forward,
+                    gbuffer_top,
+                });
             }
         }
         Ok(matches!(self.native_pipelines, Pipelines::Ready(_)))
     }
-    pub(super) fn native_pipeline_handles(&mut self) -> Result<[Pipeline; 3]> {
+    pub(super) fn native_pipeline_handles(&mut self) -> Result<NativePipelines> {
         while !self.preallocate_native_pipelines()? {
             ensure!(
                 !self.gpu.deferring_completion(),

@@ -46,7 +46,9 @@ pub struct Quality {
     pub local_shadows: Option<LocalShadows>,
     /// Distance in metres to which terrain splat layers sample their normal and
     /// metal/roughness maps; beyond it (blended over a quarter more) they keep
-    /// colour maps and the metal/roughness maps' means. Zero: none, anywhere.
+    /// colour maps and the metal/roughness maps' means. Zero: none, anywhere, and
+    /// no side projections on steep slopes either: the G-buffer binds the native
+    /// PSO compiled without them (layers keep the top projection).
     pub terrain_detail: f32,
     /// Heightfield horizon shadows and sky visibility for distant terrain
     /// (`look::horizon`): texels per side of the top-down capture over the content
