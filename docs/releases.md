@@ -181,6 +181,12 @@ manifest; prefer `publish`, which hashes the actual packaged files.
    Confirm both tags, both manifests/signatures and the six complete asset sets
    in GitHub; a prerelease is not the repository's stable `/releases/latest`.
 
+Earlier preview builds can leave a service whose working directory locks the Hub
+installation (Windows error 32). For that one-time migration, close its projects,
+stop the idle service with `ara hub shutdown`, and run the current Hub setup before
+testing automatic updates. Current builds start services in their profile and
+project processes in their project root, outside the Hub being swapped.
+
 ## Local rehearsal, with no publication
 
 Generate a throwaway key in an OS temporary directory outside the checkout; keep

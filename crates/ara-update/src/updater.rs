@@ -47,21 +47,52 @@ pub fn swap(
             "previous Hub backup exists; recover it before updating",
         ));
     }
-    fs::rename(current, &backup)?;
-    if let Err(error) = fs::rename(staged, current) {
-        fs::rename(&backup, current)?;
-        return Err(error.into());
+    rename(current, &backup, "move current Hub to backup")?;
+    if let Err(error) = rename(staged, current, "activate staged Hub") {
+        rename(
+            &backup,
+            current,
+            "restore previous Hub after activation failure",
+        )?;
+        return Err(error);
     }
     if let Err(error) = health(current) {
-        fs::rename(current, staged)?;
-        fs::rename(&backup, current)?;
+        rename(
+            current,
+            staged,
+            "remove failed Hub from active installation",
+        )?;
+        rename(
+            &backup,
+            current,
+            "restore previous Hub after health failure",
+        )?;
         return Err(Error::new(
             ROLLBACK,
             format!("new Hub failed its startup health check; previous version restored: {error}"),
         ));
     }
-    fs::remove_dir_all(backup)?;
+    fs::remove_dir_all(&backup).map_err(|error| {
+        Error::new(
+            crate::IO,
+            format!("remove successful Hub backup {}: {error}", backup.display()),
+        )
+    })?;
     Ok(())
+}
+
+/// Preserve the transaction phase and both paths when Windows reports a locked file.
+fn rename(from: &Path, to: &Path, operation: &str) -> Result<(), Error> {
+    fs::rename(from, to).map_err(|error| {
+        Error::new(
+            crate::IO,
+            format!(
+                "{operation}: {} -> {}: {error}",
+                from.display(),
+                to.display()
+            ),
+        )
+    })
 }
 /// Wait for the original GUI process to exit without stopping any service/editor.
 pub fn wait_for_parent(pid: u32) -> Result<(), Error> {

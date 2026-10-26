@@ -254,6 +254,48 @@ fn cancel_interrupts_a_stalled_body_and_redirects_cannot_escape_the_allowed_orig
     assert!(other.requests().is_empty());
 }
 #[test]
+#[cfg(windows)]
+fn a_locked_hub_reports_the_failed_swap_and_preserves_both_builds() {
+    use std::os::windows::fs::OpenOptionsExt;
+    let root = testing::scratch("locked-swap");
+    let current = root.join("Ara Hub");
+    let staged = root.join("new");
+    fs::create_dir(&current).unwrap();
+    fs::create_dir(&staged).unwrap();
+    let locked = fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .share_mode(0)
+        .open(current.join("ara-hub.exe"))
+        .unwrap();
+    fs::write(staged.join("ara-hub.exe"), b"new").unwrap();
+    let error = updater::swap(&current, &staged, |_| {
+        panic!("locked build must not launch")
+    })
+    .unwrap_err();
+    assert_eq!(error.code, IO);
+    assert!(
+        error.message.contains("move current Hub to backup"),
+        "{error}"
+    );
+    assert!(
+        error.message.contains(&current.display().to_string()),
+        "{error}"
+    );
+    assert!(
+        error
+            .message
+            .contains(&current.with_extension("old").display().to_string()),
+        "{error}"
+    );
+    assert!(current.join("ara-hub.exe").is_file());
+    assert!(staged.join("ara-hub.exe").is_file());
+    assert!(!current.with_extension("old").exists());
+    drop(locked);
+    updater::swap(&current, &staged, |_| Ok(())).unwrap();
+}
+
+#[test]
 fn atomic_hub_swap_and_startup_rollback_with_dummy_executables() {
     let root = testing::scratch("swap");
     let current = root.join("Ara Hub");
