@@ -4,7 +4,8 @@
 //! then a settled reference; then an orbit, a fly-forward and a pan, each followed by a
 //! hold (captured closely) and a settled reference. Offscreen only. Writes
 //! `scene-quality.json` (one row per frame: render and display size, preset, texture
-//! residency, whether the Scene still wants frames and why, camera, imports) and the
+//! residency, whether the Scene still wants frames and why, the last completed Scene
+//! frame's GPU start and pass time, camera, imports) and the
 //! PNGs; offline tooling scores each capture against its phase's settled reference.
 use std::path::PathBuf;
 use std::time::Instant;
@@ -178,6 +179,10 @@ impl SceneQuality {
             RenderPath::Fidelity(_) => display,
         };
         let textures = renderer.native_texture_stats();
+        // The last completed Scene frame's passes: a new start time is a new frame.
+        let timings = renderer.timings();
+        let gpu_start = timings.iter().map(|t| t.start_ms).reduce(f64::min);
+        let gpu_ms: f64 = timings.iter().map(|t| t.milliseconds).sum();
         let wants = scene.needs_frame(editor.state.quality);
         let shared = scene.preview_needs_frame();
         let importing = shell
@@ -211,6 +216,8 @@ impl SceneQuality {
             "sharedWork": shared,
             "sceneRendered": scene_ms > 0.,
             "sceneMs": scene_ms,
+            "gpuStartMs": gpu_start,
+            "gpuMs": gpu_ms,
             "importing": importing,
             "camera": {"target": camera.target.to_array(), "yaw": camera.yaw, "pitch": camera.pitch, "distance": camera.distance},
             "capture": capture,
