@@ -41,6 +41,10 @@ use std::{
 };
 /// How long after the last input progressive Scene frames resume.
 const INTERACTION_PAUSE: Duration = Duration::from_millis(250);
+/// How long `--verify-ux` waits for its idle-frame samples once its captures, camera
+/// samples and drags are done: a scene with live content (effects previewing in the
+/// Scene view) never idles, and the route must still finish.
+const UX_IDLE_PATIENCE: Duration = Duration::from_secs(20);
 /// When the process started: `main` sets it first. Startup timings
 /// (`--verify-responsiveness`) count from it.
 pub static LAUNCHED: std::sync::OnceLock<Instant> = std::sync::OnceLock::new();
@@ -240,6 +244,8 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
         let mut interaction_samples = Vec::new();
         let mut camera_samples = Vec::new();
         let mut wall_samples = Vec::new();
+        // When `--verify-ux` had everything but its idle samples.
+        let mut ux_idle_since: Option<Instant> = None;
         let mut last_ui = 0;
         let frame_budget = Duration::from_secs_f64(1. / 144.);
         // The last pointer, key or wheel input: progressive Scene frames wait while the
@@ -1046,9 +1052,11 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                     .is_some_and(|v| v.finished() && idle_samples.len() >= 1500)
                 || ux_verification.as_ref().is_some_and(|v| {
                     v.finished()
-                        && idle_samples.len() >= 1500
                         && camera_samples.len() >= 240
                         && drag_check.as_ref().is_some_and(drags::DragCheck::finished)
+                        && (idle_samples.len() >= 1500
+                            || ux_idle_since.get_or_insert_with(Instant::now).elapsed()
+                                >= UX_IDLE_PATIENCE)
                 })
                 || journey.as_ref().is_some_and(journey::Journey::finished)
                 || first_hour.as_ref().is_some_and(qa::FirstHour::finished)
