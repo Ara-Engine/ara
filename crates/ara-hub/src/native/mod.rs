@@ -9,6 +9,7 @@ pub(crate) mod os;
 mod prefs;
 #[cfg(feature = "rehearsal")]
 mod rehearsal;
+mod startup;
 mod updates;
 mod wake;
 
@@ -35,6 +36,8 @@ use std::{
 /// Command-line options of `ara-hub`.
 #[derive(Clone, Debug)]
 pub struct Options {
+    /// Measure the live installed startup offscreen and write frames/timings here.
+    pub startup_probe: Option<PathBuf>,
     /// Windowless, compile-time-only release rehearsal driver.
     #[cfg(feature = "rehearsal")]
     pub rehearse_update: Option<PathBuf>,
@@ -56,6 +59,7 @@ pub struct Options {
 impl Default for Options {
     fn default() -> Self {
         Self {
+            startup_probe: None,
             #[cfg(feature = "rehearsal")]
             rehearse_update: None,
             service_check: None,
@@ -196,6 +200,7 @@ fn load_prefs(config: &Path) -> Prefs {
 }
 /// Open the Hub window and run until it closes (or until captures are written).
 pub fn run(options: Options) -> anyhow::Result<()> {
+    let startup = std::time::Instant::now();
     let exe_dir = exe_dir();
     let config = match &options.config {
         Some(dir) => dir.clone(),
@@ -203,6 +208,9 @@ pub fn run(options: Options) -> anyhow::Result<()> {
     };
     let config = std::path::absolute(config)?;
     ara_hub_service::validate_development_config(&config)?;
+    if let Some(output) = &options.startup_probe {
+        return startup::run(&options, output, &exe_dir, &config);
+    }
     if let Some(report) = &options.service_check {
         use ara_proto::Endpoint;
         let ara = updates::service(&exe_dir, options.ara.as_deref())?;
@@ -237,7 +245,10 @@ pub fn run(options: Options) -> anyhow::Result<()> {
         return capture::run(&mut offscreen, &mut app, &mut hub, &directory);
     }
     let mut host = Host::new(&options, hub.prefs.light)?;
+    ara_hub_service::startup::record("ui.gpu_images", startup.elapsed());
+    let phase = std::time::Instant::now();
     let ara = updates::service(&exe_dir, options.ara.as_deref())?;
+    ara_hub_service::startup::record("ui.bootstrap", phase.elapsed());
     hub.releases.can_self_update = exe_dir.join("hub.json").is_file();
     let mut app = App::new(host.logical(), docs).map_err(err)?;
     interactive(

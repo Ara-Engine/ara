@@ -100,6 +100,12 @@ user profile, even via --config-dir. Never register worktree builds there.
   `VK_IMPLICIT_LAYER_PATH=<empty dir> VK_LAYER_PATH=$VULKAN_SDK/Bin`, then
   `target/debug/ara-hub --capture target/hub-captures --size 1440x900 --dpi 1`
   and `--size 2560x1440 --dpi 2`. Look at every PNG.
+- Installed startup: `measure-startup.ps1 -Setup <Hub setup> -Directory <fresh target/dir>`
+  through `ara-dev gpu`. Five fresh-profile/no-service launches paired with same-profile,
+  running-service launches; OS caches are not flushed. `--startup-probe DIR` draws the
+  live model offscreen, injects input while connecting and saves both milestone frames.
+  Timings start immediately before Process.Start and exclude PNG encoding. Optional
+  ARA_HUB_STARTUP_TRACE appends spans from GUI/service; probes never check the network.
 - Verification uses offscreen captures only. Stop/join the connection worker
   before shutting down a test service; await removal of its discovery file.
   Never leave a service/updater you started running after a check.

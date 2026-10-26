@@ -110,7 +110,9 @@ pub fn connect_checked(directory: &Path, executable: &Path) -> Result<ConnectedS
     crate::validate_development_config(directory).map_err(io_error)?;
     crate::isolation::validate_engine(directory, executable).map_err(io_error)?;
     let discovery = directory.join("hub");
+    let phase = Instant::now();
     let build = ara_update::sha256_file(executable).map_err(io_error)?;
+    crate::startup::record("client.hash", phase.elapsed());
     fs::create_dir_all(directory).map_err(io_error)?;
     // Serialize discovery/replacement/start across simultaneous Hub and MCP clients.
     // Never hold the service's own lock: it must be able to exit and start here.
@@ -127,8 +129,10 @@ pub fn connect_checked(directory: &Path, executable: &Path) -> Result<ConnectedS
     // Legacy clients don't take hub-start.lock. If one wins a simultaneous
     // startup, validate that service too, then retry the same safe replacement.
     for _ in 0..3 {
+        let phase = Instant::now();
         if let Some(mut client) = Client::for_project(&discovery) {
             let status = client.call("hub.status", json!({}))?;
+            crate::startup::record("client.handshake", phase.elapsed());
             if status["build"].as_str() == Some(&build) {
                 return Ok(ConnectedService {
                     client,
@@ -169,6 +173,7 @@ pub fn connect_checked(directory: &Path, executable: &Path) -> Result<ConnectedS
                 std::thread::sleep(Duration::from_millis(25));
             }
         }
+        let phase = Instant::now();
         super::background::spawn(executable, directory).map_err(io_error)?;
         let until = Instant::now() + Duration::from_secs(20);
         loop {
@@ -177,6 +182,7 @@ pub fn connect_checked(directory: &Path, executable: &Path) -> Result<ConnectedS
                 if status["build"].as_str() != Some(&build) {
                     break;
                 }
+                crate::startup::record("client.spawn_ready", phase.elapsed());
                 return Ok(ConnectedService {
                     client,
                     update_pending: false,
