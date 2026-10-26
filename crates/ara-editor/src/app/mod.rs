@@ -8,6 +8,7 @@ mod journey;
 mod panels_verify;
 mod qa;
 mod responsiveness;
+mod scene_quality;
 mod scene_sync;
 mod setup;
 mod ux_verify;
@@ -199,6 +200,15 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
         editor.action("editor.layout.reset", json!({}))?;
         editor.action("editor.theme", json!({"light": false}))?;
     }
+    let mut scene_quality = options
+        .verify_scene_quality
+        .then(|| scene_quality::SceneQuality::new(&options.output));
+    if scene_quality.is_some() {
+        // What a release build shows, from the default layout and theme.
+        shell.memo_check = false;
+        editor.action("editor.layout.reset", json!({}))?;
+        editor.action("editor.theme", json!({"light": false}))?;
+    }
     let mut journey = if options.verify_journey {
         Some(journey::Journey::new(&mut editor, &options.output)?)
     } else {
@@ -214,6 +224,7 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
         || journey.is_some()
         || first_hour.is_some()
         || probe.is_some()
+        || scene_quality.is_some()
     {
         shell.rebuild(&mut editor)?;
     }
@@ -439,6 +450,14 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                 let mut camera = editor.state.camera;
                 camera.yaw += 0.002;
                 set_camera(&mut editor, &camera)?;
+                dirty = true;
+                scene_dirty = true;
+            }
+            if let Some(route) = &mut scene_quality
+                && route.step(&mut editor)?
+            {
+                // Navigation is input: the Scene's interaction policies see it as such.
+                last_input = Some(Instant::now());
                 dirty = true;
                 scene_dirty = true;
             }
@@ -1033,6 +1052,22 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                     tick_ms,
                     view_ms,
                 );
+            }
+            if let Some(route) = &mut scene_quality {
+                route.end(
+                    &editor,
+                    &shell,
+                    &mut gpu,
+                    &renderer,
+                    &scene_view,
+                    scene_ms,
+                    presented,
+                )?;
+                if route.finished() {
+                    route.write(&serde_json::to_value(&renderer.gpu().context().info)?)?;
+                    game.close(&mut editor, &mut gpu)?;
+                    break;
+                }
             }
             frames += 1;
             if probe.as_ref().is_some_and(responsiveness::Probe::finished) {
