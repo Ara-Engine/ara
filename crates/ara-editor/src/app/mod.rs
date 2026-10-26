@@ -8,6 +8,7 @@ mod journey;
 mod panels_verify;
 mod qa;
 mod responsiveness;
+mod scene_quality;
 mod scene_sync;
 mod setup;
 mod ux_verify;
@@ -39,7 +40,8 @@ use std::{
     path::PathBuf,
     time::{Duration, Instant},
 };
-/// How long after the last input progressive Scene frames resume.
+/// How long after the last input Scene work that blocks this thread waits: ray-traced
+/// progressive frames, and adopting newly published content (`SceneSync::refresh`).
 const INTERACTION_PAUSE: Duration = Duration::from_millis(250);
 /// How long `--verify-ux` waits for its idle-frame samples once its captures, camera
 /// samples and drags are done: a scene with live content (effects previewing in the
@@ -199,6 +201,15 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
         editor.action("editor.layout.reset", json!({}))?;
         editor.action("editor.theme", json!({"light": false}))?;
     }
+    let mut scene_quality = options
+        .verify_scene_quality
+        .then(|| scene_quality::SceneQuality::new(&options.output));
+    if scene_quality.is_some() {
+        // What a release build shows, from the default layout and theme.
+        shell.memo_check = false;
+        editor.action("editor.layout.reset", json!({}))?;
+        editor.action("editor.theme", json!({"light": false}))?;
+    }
     let mut journey = if options.verify_journey {
         Some(journey::Journey::new(&mut editor, &options.output)?)
     } else {
@@ -214,6 +225,7 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
         || journey.is_some()
         || first_hour.is_some()
         || probe.is_some()
+        || scene_quality.is_some()
     {
         shell.rebuild(&mut editor)?;
     }
@@ -251,6 +263,9 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
         // The last pointer, key or wheel input: progressive Scene frames wait while the
         // user is working (see below).
         let mut last_input: Option<Instant> = None;
+        // The last frame the Scene camera moved: right after navigation the Scene
+        // converges at once instead.
+        let mut last_navigation: Option<Instant> = None;
         let mut previous = Instant::now();
         loop {
             if let Some(probe) = &mut probe {
@@ -439,6 +454,14 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                 let mut camera = editor.state.camera;
                 camera.yaw += 0.002;
                 set_camera(&mut editor, &camera)?;
+                dirty = true;
+                scene_dirty = true;
+            }
+            if let Some(route) = &mut scene_quality
+                && route.step(&mut editor)?
+            {
+                // Navigation is input: the Scene's interaction policies see it as such.
+                last_input = Some(Instant::now());
                 dirty = true;
                 scene_dirty = true;
             }
@@ -715,14 +738,27 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
             let graph_paint = graph_start.map(|start| start.elapsed().as_secs_f64() * 1000.);
             drop(ui_scope);
             dirty |= work.paint_nodes > 0 || work.layout_passes > 0 || work.restyled > 0;
-            // Progressive Scene frames (fidelity accumulation, newly published assets)
-            // block this thread for their GPU time (27-50 ms on large scenes), so they
-            // wait while the user is working: no pointer, key or wheel input for
-            // INTERACTION_PAUSE. A click or hover then never queues behind one. Scene
-            // changes made by input (camera, gizmo drags, edits) still render at once.
+            // Progressive Scene frames (temporal convergence after the camera moves,
+            // arriving content, GI) wait for INTERACTION_PAUSE without input, so a click
+            // or keystroke never queues behind one: a ray-traced frame blocks this
+            // thread for its GPU time (27-50 ms on large scenes), a native frame with
+            // content work (publications, styling, GI delivery) costs it 15-70 ms during
+            // imports, and even a native frame that only converges keeps the GPU busy
+            // when the UI presents. Right after navigation the user is looking at the
+            // Scene, so a native frame that only converges renders at once: holding it
+            // back left the image unconverged between moves. Changes made by input
+            // always render at once.
+            if editor.state.camera != edit_before.2 {
+                last_navigation = Some(Instant::now());
+            }
+            let converging = renderer.scene_frame_async()
+                && !scene_view.preview_needs_frame()
+                && last_navigation.is_some_and(|t| t.elapsed() < INTERACTION_PAUSE);
             if shell.viewport().is_some()
                 && scene_view.needs_frame(editor.state.quality)
-                && (scene_dirty || last_input.is_none_or(|t| t.elapsed() >= INTERACTION_PAUSE))
+                && (scene_dirty
+                    || converging
+                    || last_input.is_none_or(|t| t.elapsed() >= INTERACTION_PAUSE))
             {
                 dirty = true;
                 scene_dirty = true;
@@ -1036,6 +1072,22 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                     tick_ms,
                     view_ms,
                 );
+            }
+            if let Some(route) = &mut scene_quality {
+                route.end(
+                    &editor,
+                    &shell,
+                    &mut gpu,
+                    &renderer,
+                    &scene_view,
+                    scene_ms,
+                    presented,
+                )?;
+                if route.finished() {
+                    route.write(&serde_json::to_value(&renderer.gpu().context().info)?)?;
+                    game.close(&mut editor, &mut gpu)?;
+                    break;
+                }
             }
             frames += 1;
             if probe.as_ref().is_some_and(responsiveness::Probe::finished) {

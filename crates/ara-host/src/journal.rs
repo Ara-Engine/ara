@@ -7,9 +7,16 @@
 //! entry whose content hash matches the file.
 //!
 //! The journal is bounded: past [`MAX_ENTRIES`] it is rewritten with a `base` entry
-//! and the newest [`KEEP_TXNS`] transactions (plus the entries they need).
-//! Entries are written and flushed per commit (safe against process crashes, not
-//! against power loss: no fsync per entry).
+//! and the newest [`KEEP_TXNS`] transactions (plus the entries they need); the
+//! rewrite is synced to disk before it replaces the file.
+//!
+//! The host's file thread writes it, in the order the host commits, through the
+//! same queue as document writes: the host thread never waits on the disk, a
+//! document's file never gets ahead of its transaction here, and a crash leaves an
+//! ordered prefix (a torn last line is skipped on open). A command is acknowledged
+//! once its ops are applied in memory; each entry is flushed to the OS as soon as
+//! the thread reaches it, so a process crash loses at most the entries still
+//! queued. There is no fsync per entry: not safe against power loss.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs::{self, File, OpenOptions};
@@ -150,7 +157,14 @@ impl Journal {
         self.entries == 0
     }
 
-    /// Rewrites the journal as `entries` (atomically: temp file, then rename).
+    /// Compacts the journal in place: reads it back, keeps what [`compact`] keeps
+    /// ([`KEEP_TXNS`] transactions) and rewrites it.
+    pub fn compact(&mut self) -> io::Result<()> {
+        let entries = self.read_all()?;
+        self.rewrite(&compact(&entries, KEEP_TXNS))
+    }
+
+    /// Rewrites the journal as `entries` (atomically: temp file, synced, then rename).
     pub fn rewrite(&mut self, entries: &[Entry]) -> io::Result<()> {
         let tmp = self.path.with_extension("tmp");
         {

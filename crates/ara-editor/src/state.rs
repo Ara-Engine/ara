@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::{
     collections::{BTreeMap, BTreeSet},
-    path::{Path, PathBuf},
+    path::Path,
 };
 
 /// Editor transform handle mode.
@@ -822,10 +822,15 @@ pub(crate) struct Navigation {
     doc: AssetId,
     record: RecordId,
     pub state: EditorState,
-    /// Saves `.ara/editor-layout.json` off the UI thread.
-    layout: LayoutWriter,
+    /// Saves `.ara/editor-layout.json` off the UI thread (every tab switch, split drag
+    /// or window move changes it; a synchronous write once took 203 ms of a click).
+    layout: crate::persist::BackgroundWriter<String>,
 }
 impl Navigation {
+    /// Layout writes that failed since the last call.
+    pub fn take_failures(&self) -> Vec<String> {
+        self.layout.take_failures()
+    }
     pub fn history(&self) -> Value {
         json!(self.store.history())
     }
@@ -868,7 +873,10 @@ impl Navigation {
             doc,
             record,
             state,
-            layout: LayoutWriter::new(path),
+            layout: crate::persist::BackgroundWriter::new("layout-writer", move |text: String| {
+                crate::persist::write_text(&path, &text)
+                    .map_err(|e| format!("The window layout was not saved: {e}"))
+            }),
         })
     }
     pub fn commit(
@@ -908,51 +916,6 @@ impl Navigation {
     }
 }
 
-/// Saves the window layout (`.ara/editor-layout.json`) on its own thread: a layout
-/// change (every tab switch, split drag or window move) only hands the serialized
-/// layout over, so the UI thread never waits on the disk (a write and rename
-/// occasionally took 200 ms there). The thread writes the newest layout it has;
-/// dropping the writer flushes it.
-struct LayoutWriter {
-    tx: Option<std::sync::mpsc::Sender<String>>,
-    thread: Option<std::thread::JoinHandle<()>>,
-}
-impl LayoutWriter {
-    fn new(path: PathBuf) -> Self {
-        let (tx, rx) = std::sync::mpsc::channel::<String>();
-        let thread = std::thread::Builder::new()
-            .name("layout-writer".into())
-            .spawn(move || {
-                while let Ok(mut text) = rx.recv() {
-                    // Only the newest layout matters.
-                    if let Some(newest) = rx.try_iter().last() {
-                        text = newest;
-                    }
-                    if let Err(error) = write_text(&path, &text) {
-                        eprintln!("ara-editor: could not save the window layout: {error}");
-                    }
-                }
-            })
-            .ok();
-        Self {
-            tx: Some(tx),
-            thread,
-        }
-    }
-    fn save(&self, text: String) {
-        if let Some(tx) = &self.tx {
-            let _ = tx.send(text);
-        }
-    }
-}
-impl Drop for LayoutWriter {
-    fn drop(&mut self) {
-        drop(self.tx.take());
-        if let Some(thread) = self.thread.take() {
-            let _ = thread.join();
-        }
-    }
-}
 /// The main dock tree and floating windows, as the canonical writer stores them.
 fn layout_text(state: &EditorState) -> anyhow::Result<String> {
     state
@@ -960,19 +923,9 @@ fn layout_text(state: &EditorState) -> anyhow::Result<String> {
         .and_then(|d| d.serialize())
         .map_err(|e| anyhow::anyhow!(e.to_string()))
 }
-/// Write `text` to `path` through a temporary file, so a reader never sees half.
-fn write_text(path: &Path, text: &str) -> anyhow::Result<()> {
-    if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent)?;
-    }
-    let temp = path.with_extension("json.tmp");
-    std::fs::write(&temp, text)?;
-    std::fs::rename(temp, path)?;
-    Ok(())
-}
 /// Save a named layout (Window › Layouts › Save Layout As…).
 pub(crate) fn write_layout(path: &Path, state: &EditorState) -> anyhow::Result<()> {
-    write_text(path, &layout_text(state)?)
+    Ok(crate::persist::write_text(path, &layout_text(state)?)?)
 }
 /// Project-local saved layouts, by file stem.
 pub(crate) fn saved_layouts(root: &Path) -> Vec<String> {
