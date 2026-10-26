@@ -804,7 +804,7 @@ mod tests {
         assert_eq!(s.value("play.tickHz"), json!("60"));
         s.undo(&Author::Human, true).expect("redo");
         assert_eq!(s.value("play.tickHz"), json!("120"));
-        // Dropping the preferences writer flushes before the file is reopened.
+        // Closing flushes background preference saves before a new editor reads them.
         drop(s);
         let reopened = Settings::open(&root, Some(user)).expect("reopen");
         assert_eq!(reopened.value("appearance.theme"), json!("light"));

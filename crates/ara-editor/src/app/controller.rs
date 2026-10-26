@@ -52,13 +52,16 @@ impl Controller {
         pointer: [f32; 2],
         rect: ara_ui::paint::Box2,
     ) -> ara_ui::Result<()> {
-        editor.begin_gesture()?;
+        let tool = handle.tool(editor.state.tool);
+        let operation = handles.for_tool(tool);
+        let handles = &operation;
+        editor.begin_gesture_tool(tool)?;
         let camera = editor.state.camera;
         let forward = (camera.target - camera.position()).normalize_or_zero();
-        let (vector, rotation, plane) = match handle {
+        let (vector, rotation, plane) = match handle.base() {
             overlay::Handle::Axis(axis) => (
                 Vec2::from(handles.ends[axis]) - Vec2::from(handles.origin),
-                (editor.state.tool == crate::state::Tool::Rotate)
+                (tool == crate::state::Tool::Rotate)
                     .then(|| {
                         overlay::plane_point(
                             &camera,
@@ -84,6 +87,9 @@ impl Controller {
                 overlay::plane_point(&camera, rect, pointer, handles.pivot, forward)
                     .map(|start| (forward, start)),
             ),
+            overlay::Handle::RotateAxis(_) | overlay::Handle::ScaleAxis(_) => {
+                unreachable!("base handle")
+            }
         };
         self.gizmo = Some(GizmoDrag {
             handle,
@@ -108,8 +114,10 @@ impl Controller {
         let drag = self.gizmo.as_ref()?;
         let camera = editor.state.camera;
         let snap = if editor.state.snapping {
-            match editor.state.tool {
-                crate::state::Tool::Translate => format!(" · snap {}", editor.state.move_snap),
+            match drag.handle.tool(editor.state.tool) {
+                crate::state::Tool::Translate | crate::state::Tool::Universal => {
+                    format!(" · snap {}", editor.state.move_snap)
+                }
                 crate::state::Tool::Rotate => format!(" · snap {}°", editor.state.rotate_snap),
                 crate::state::Tool::Scale => format!(" · snap {}", editor.state.scale_snap),
             }
@@ -119,12 +127,14 @@ impl Controller {
         let gesture = editor.gesture.as_mut()?;
         let typed = drag.typed.parse::<f32>().ok();
         let names = ["X", "Y", "Z"];
-        let (delta, text) = match drag.handle {
+        let (delta, text) = match drag.handle.base() {
             overlay::Handle::Axis(axis) => {
                 let movement = Vec2::from(position) - Vec2::from(drag.start);
                 let amount = movement.dot(drag.vector) / drag.vector.length_squared().max(0.01);
                 let amount = match gesture.tool {
-                    crate::state::Tool::Translate => typed.unwrap_or(amount * drag.length),
+                    crate::state::Tool::Translate | crate::state::Tool::Universal => {
+                        typed.unwrap_or(amount * drag.length)
+                    }
                     crate::state::Tool::Rotate => typed.unwrap_or_else(|| {
                         if let (Some((pivot, normal, start)), Some(rect)) = (drag.rotation, rect) {
                             overlay::plane_point(&camera, rect, position, pivot, normal)
@@ -143,7 +153,9 @@ impl Controller {
                 let mut delta = Vec3::ZERO;
                 delta[axis] = amount;
                 let value = match gesture.tool {
-                    crate::state::Tool::Translate => format!("{} {:+.3} m", names[axis], amount),
+                    crate::state::Tool::Translate | crate::state::Tool::Universal => {
+                        format!("{} {:+.3} m", names[axis], amount)
+                    }
                     crate::state::Tool::Rotate => format!("{} {:+.1}°", names[axis], amount),
                     crate::state::Tool::Scale => format!("{} ×{:.3}", names[axis], 1. + amount),
                 };
@@ -233,16 +245,25 @@ impl Controller {
                             }
                             27..=29 => {
                                 let axis = (scancode - 27) as usize;
-                                if let overlay::Handle::Axis(_) = drag.handle
+                                if let overlay::Handle::Axis(_) = drag.handle.base()
                                     && let Some(rect) = shell.viewport()
                                     && let Some(handles) =
                                         overlay::handles(view, &editor.state, rect)
                                 {
-                                    drag.handle = overlay::Handle::Axis(axis);
+                                    let tool = drag.handle.tool(editor.state.tool);
+                                    let handles = handles.for_tool(tool);
+                                    drag.handle = match drag.handle {
+                                        overlay::Handle::RotateAxis(_) => {
+                                            overlay::Handle::RotateAxis(axis)
+                                        }
+                                        overlay::Handle::ScaleAxis(_) => {
+                                            overlay::Handle::ScaleAxis(axis)
+                                        }
+                                        _ => overlay::Handle::Axis(axis),
+                                    };
                                     drag.vector =
                                         Vec2::from(handles.ends[axis]) - Vec2::from(handles.origin);
-                                    drag.rotation = (editor.state.tool
-                                        == crate::state::Tool::Rotate)
+                                    drag.rotation = (tool == crate::state::Tool::Rotate)
                                         .then(|| {
                                             overlay::plane_point(
                                                 &editor.state.camera,
@@ -433,6 +454,7 @@ impl Controller {
                             .hit_test(shell.pointer[0], shell.pointer[1])
                             .is_none()
                         && !editor.state.palette
+                        && !shell.inspector_popup_contains(shell.pointer)
                         && shell.menu.is_none();
                     if pressed && !shell.modifiers[2] {
                         if !inside {
@@ -445,6 +467,7 @@ impl Controller {
                                 shell.begin_drag();
                             }
                         } else {
+                            shell.dismiss_inspector_colour(shell.pointer)?;
                             shell.commit_fields(editor)?;
                             shell.input.blur(&mut shell.ui);
                             let rect = shell.viewport().ok_or("viewport missing")?;
@@ -471,11 +494,11 @@ impl Controller {
                                     if let Some(path) = shell.pick_field.take() {
                                         if let Some(entity) = entity {
                                             editor.apply(
-                                                crate::inspector::edit_commands(
+                                                shell.field_commands(
                                                     &editor.state.selection,
                                                     &path,
-                                                    &json!(entity),
-                                                ),
+                                                    json!(entity),
+                                                )?,
                                                 "Pick entity reference",
                                                 None,
                                             )?;

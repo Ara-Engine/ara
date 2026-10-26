@@ -40,11 +40,18 @@ mod graph_input;
 mod graph_panel;
 mod hierarchy;
 mod import_panel;
+#[cfg(test)]
+mod inspector_capture;
+mod inspector_fields;
 mod inspector_panel;
+mod inspector_popup;
+mod inspector_sections;
+mod live_styles;
 mod log_panels;
 mod material_panel;
 mod memo;
 mod names;
+mod scene_panel;
 pub(crate) use animation_panel::LiveChange;
 pub(crate) use log_panels::LogView;
 mod material_inspector;
@@ -85,6 +92,7 @@ pub struct Surface {
 }
 /// Native shell and its retained widget state; no authoring document is mirrored here.
 pub struct Shell {
+    styles: live_styles::LiveStyles,
     /// Native runtime tree and renderer-neutral display list of the current surface.
     pub ui: Ui,
     /// Explicit bundled fonts and retained shaping contexts.
@@ -241,9 +249,11 @@ pub struct Shell {
     reduce_motion: bool,
     panel_opened: Option<std::time::Instant>,
     color_picker: Option<String>,
+    inspector_popovers: ara_ui::popover::Popovers,
     modal_open: bool,
     canvas_modal_open: bool,
-    collapsed_components: std::collections::BTreeSet<String>,
+    inspector_sections: inspector_sections::Sections,
+    component_clipboard: Option<(String, Value)>,
     hierarchy_style: BTreeMap<u64, polish::RowStyle>,
     selected_rows: std::collections::BTreeSet<u64>,
     pub(crate) version: u64,
@@ -369,11 +379,20 @@ pub(crate) enum Binding {
     AssetPicker(String, Option<String>),
     /// A typed text box inside a compound field: its `path#pointer` target, how its
     /// text parses, and whether empty text clears it.
-    Nested(String, compound::Leaf, bool),
+    Nested(String, compound::Leaf, bool, Option<String>),
     RenameValue,
     ColorPicker(String),
     ComponentCollapse(String),
-    Scrub(String, usize),
+    NestedCollapse(String),
+    Scrub(String, Option<usize>),
+    /// Numeric gesture inside a compound field; target is `path#pointer`.
+    NestedScrub {
+        target: String,
+        widget: String,
+        step: f64,
+        min: Option<f64>,
+        max: Option<f64>,
+    },
     Diagnostic(ara_diag::Diagnostic),
     MenuBar(usize),
     MenuSub(usize, usize),
@@ -406,6 +425,7 @@ impl Shell {
         let text = text_system()?;
         let ui = Ui::editor("<ui id='editor' />", include_str!("editor.css"), size)?;
         let mut shell = Self {
+            styles: live_styles::LiveStyles::new()?,
             ui,
             text,
             input: InputState::default(),
@@ -503,9 +523,11 @@ impl Shell {
             reduce_motion: false,
             panel_opened: None,
             color_picker: None,
+            inspector_popovers: Default::default(),
             modal_open: false,
             canvas_modal_open: false,
-            collapsed_components: Default::default(),
+            inspector_sections: inspector_sections::Sections::open(editor.host.root()),
+            component_clipboard: None,
             hierarchy_style: BTreeMap::new(),
             selected_rows: Default::default(),
             version: 0,
@@ -547,7 +569,7 @@ impl Shell {
             recent_commands: Vec::new(),
             recording: None,
             key_search: false,
-            label_width: 0.45,
+            label_width: 0.38,
             keymap: commands::keymap(&editor.state),
             keymap_revision: 0,
             keymap_settings: keymap_settings(&editor.state),
@@ -730,10 +752,24 @@ impl Shell {
     pub(crate) fn shown_node(&self, id: &str) -> Option<usize> {
         self.ui.find(id).filter(|i| self.ui.shown(*i))
     }
-    fn stylesheet(editor: &Editor) -> String {
-        let mut css = include_str!("editor.css").to_owned();
+    fn stylesheet(&self, editor: &Editor) -> String {
+        let mut css = self
+            .styles
+            .css("editor.css", include_str!("editor.css"))
+            .to_owned();
+        css.push_str(
+            self.styles
+                .css("viewport.css", include_str!("viewport.css")),
+        );
+        css.push_str(
+            self.styles
+                .css("inspector.css", include_str!("inspector.css")),
+        );
         if editor.state.comfortable() {
-            css.push_str(include_str!("editor-comfortable.css"));
+            css.push_str(self.styles.css(
+                "editor-comfortable.css",
+                include_str!("editor-comfortable.css"),
+            ));
         }
         css
     }
@@ -750,12 +786,9 @@ impl Shell {
         result
     }
     fn mount_markup(&mut self, editor: &mut Editor, markup: &str) -> ara_ui::Result<()> {
-        self.ui.set_stylesheet(&Self::stylesheet(editor))?;
-        self.ui.switch_theme(if editor.state.light {
-            ara_ui::theme::EditorTheme::Light
-        } else {
-            ara_ui::theme::EditorTheme::Dark
-        })?;
+        self.ui
+            .set_theme_tokens(self.styles.tokens(editor.state.light));
+        self.ui.set_stylesheet(&self.stylesheet(editor))?;
         let reconciling = std::time::Instant::now();
         // Area headers and tab bodies are parts: an unchanged one keeps its retained
         // subtree, virtual rows included.
@@ -944,6 +977,7 @@ impl Shell {
             &mut markup,
         )?;
         markup.push_str("</panel>");
+        self.inspector_colour_popup(&mut markup);
         self.overlays(editor, &mut markup)?;
         self.asset_rename_markup(&mut markup);
         markup.push_str(POPUP_TAIL);
@@ -996,6 +1030,7 @@ impl Shell {
         self.statusbar(editor, &mut statusbar);
         markup.push_str("<panel id='statusbar' />");
         self.parts.push(("statusbar".into(), statusbar));
+        self.inspector_colour_popup(&mut markup);
         self.overlays(editor, &mut markup)?;
         if editor.state.palette {
             self.palette(editor, &mut markup)?;
@@ -1193,6 +1228,8 @@ impl Shell {
                 .set_virtual_extent(grid, [width, self.asset_grid_extent])?;
             self.ui.scroll_to(grid, [0., self.asset_offset])?;
         }
+        self.inspector_popovers
+            .sync(&mut self.ui, &mut self.input)?;
         self.paint_decorations();
         if self.field_request != editor.state.focus_field
             && self.shown_node("inspector-scroll").is_some()
@@ -1229,11 +1266,10 @@ impl Shell {
             // Rects are on screen (already scrolled); `scroll_to` takes the absolute
             // offset, so the row's distance from the top adds to the current one.
             let delta = self.ui.nodes[row].rect.y - self.ui.nodes[scroll].rect.y;
-            let key = ara_ui::source::stable_id(&self.ui.nodes[scroll].element.id);
-            let current = match self.ui.widgets.get(&key) {
-                Some(ara_ui::widgets::Widget::Scroll(offset)) => offset[1],
-                _ => 0.,
-            };
+            let current = self
+                .ui
+                .scroll_position(scroll)
+                .map_or(0., |position| position[1]);
             self.ui.scroll_to(scroll, [0., current + delta])?;
             self.stats.work += self.ui.frame(&mut self.text)?;
         }
@@ -1475,7 +1511,7 @@ impl Shell {
             .iter()
             .all(|path| self.thumbnail_slots.contains_key(*path))
     }
-    /// Scripted pointer activation through the actual UI input helper.
+    /// Scripted pointer activation through the shell's normal input route.
     pub fn click(
         &mut self,
         id: &str,
@@ -1485,16 +1521,8 @@ impl Shell {
         let r = self.ui.nodes[index].rect;
         let p = [r.x + r.w * 0.5, r.y + r.h * 0.5];
         self.pointer = p;
-        self.input.event(
-            &mut self.ui,
-            ara_ui::input::InputEvent::PointerDown(p),
-            clipboard,
-        )?;
-        self.input.event(
-            &mut self.ui,
-            ara_ui::input::InputEvent::PointerUp(p),
-            clipboard,
-        )
+        self.event(ara_ui::input::InputEvent::PointerDown(p), clipboard)?;
+        self.event(ara_ui::input::InputEvent::PointerUp(p), clipboard)
     }
     /// Scripted hierarchy selection through its visible virtual row control.
     pub fn click_entity(
@@ -1515,16 +1543,8 @@ impl Shell {
         let r = self.ui.nodes[index].rect;
         let p = [r.x + 64., r.y + r.h * 0.5];
         self.pointer = p;
-        self.input.event(
-            &mut self.ui,
-            ara_ui::input::InputEvent::PointerDown(p),
-            clipboard,
-        )?;
-        self.input.event(
-            &mut self.ui,
-            ara_ui::input::InputEvent::PointerUp(p),
-            clipboard,
-        )
+        self.event(ara_ui::input::InputEvent::PointerDown(p), clipboard)?;
+        self.event(ara_ui::input::InputEvent::PointerUp(p), clipboard)
     }
     pub(crate) fn bind_button(
         &mut self,

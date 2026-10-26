@@ -1,8 +1,8 @@
-ui { width:100%; height:100%; background:var(--chrome); color:var(--foreground); font-size:12px; gap:0px; }
+ui { width:100%; height:100%; background:var(--chrome); color:var(--foreground); font-size:var(--font-size-body); gap:0px; }
 panel { gap:0px; min-width:0px; min-height:0px; }
 text { flex-shrink:0; white-space:nowrap; color:inherit; }
 /* Icons first: the color utilities below tint them (`icon_in`). */
-.icon { width:16px; height:16px; flex-shrink:0; color:var(--muted-foreground); }
+.icon { width:var(--icon-size); height:var(--icon-size); flex-shrink:0; color:var(--muted-foreground); }
 .icon-sm { width:14px; height:14px; }
 .icon-lg { width:28px; height:28px; }
 .icon-xs { width:12px; height:12px; }
@@ -15,7 +15,7 @@ text { flex-shrink:0; white-space:nowrap; color:inherit; }
 .chart-6 { color:var(--chart-6); }
 .muted-foreground { color:var(--muted-foreground); }
 .muted { color:var(--muted-foreground); }
-.caption { font-size:11px; color:var(--muted-foreground); }
+.caption { font-size:var(--font-size-small); color:var(--muted-foreground); }
 .success { color:var(--success-foreground); }
 .warning { color:var(--warning-foreground); }
 .destructive { color:var(--destructive-foreground); }
@@ -50,7 +50,7 @@ text { flex-shrink:0; white-space:nowrap; color:inherit; }
 .chip:hover { background:var(--raised); color:var(--foreground); }
 .split-main:hover { background:var(--raised); }
 .split-more:hover { background:var(--raised); }
-.statusbar { height:24px; flex-shrink:0; flex-direction:row; align-items:center; gap:4px; padding-left:8px; padding-right:4px; background:var(--chrome); font-size:11px; }
+.statusbar { height:var(--statusbar-size); flex-shrink:0; flex-direction:row; align-items:center; gap:4px; padding-left:8px; padding-right:4px; background:var(--chrome); font-size:var(--font-size-small); }
 .status-dot { width:6px; height:6px; border-radius:3px; background:var(--success-foreground); }
 /* Over the menubar's lower edge, out of the layout: Play starting never moves the UI. */
 .play-line { position:absolute; left:0px; right:0px; top:34px; height:2px; background:var(--success-foreground); }
@@ -62,16 +62,16 @@ text { flex-shrink:0; white-space:nowrap; color:inherit; }
 .dock-focused { border-width:1px; border-color:var(--separator-strong); }
 .splitter { background:transparent; }
 .splitter:hover { background:var(--primary); }
-.panel-header { height:28px; flex-shrink:0; flex-direction:row; align-items:center; gap:6px; padding-left:8px; padding-right:2px; background:var(--panel-header); }
+.panel-header { height:var(--panel-header-size); flex-shrink:0; flex-direction:row; align-items:center; gap:var(--space-md); padding-left:8px; padding-right:2px; background:var(--panel-header); }
 .panel-title { font-size:12px; color:var(--foreground); }
-.tabbar { height:28px; flex-shrink:0; flex-direction:row; align-items:center; gap:0px; padding-right:2px; background:var(--panel-header); }
-.tab { height:28px; padding-left:10px; padding-right:10px; gap:6px; font-size:12px; background:transparent; color:var(--muted-foreground); border-width:0px; border-radius:0px; }
+.tabbar { height:var(--tab-size); flex-shrink:0; flex-direction:row; align-items:center; gap:0px; padding-right:2px; background:var(--panel-header); }
+.tab { height:var(--tab-size); padding-left:10px; padding-right:10px; gap:var(--space-md); font-size:var(--font-size-body); background:transparent; color:var(--muted-foreground); border-width:0px; border-radius:0px; }
 .tab:hover { color:var(--foreground); background:var(--raised); }
 .tab-selected { background:var(--card); color:var(--foreground); }
-.toolbar { height:28px; flex-shrink:0; flex-direction:row; align-items:center; padding-left:4px; padding-right:4px; gap:4px; }
+.toolbar { height:var(--toolbar-size); flex-shrink:0; flex-direction:row; align-items:center; padding-left:4px; padding-right:4px; gap:4px; }
 .toolbar-sep { width:1px; height:16px; flex-shrink:0; background:var(--separator-strong); }
-.body { flex-grow:1; flex-basis:0px; min-height:0px; padding:8px; gap:6px; overflow:hidden; }
-.footer { height:22px; flex-shrink:0; flex-direction:row; align-items:center; gap:8px; padding-left:8px; padding-right:8px; font-size:11px; color:var(--muted-foreground); background:var(--panel-header); }
+.body { flex-grow:1; flex-basis:0px; min-height:0px; padding:var(--panel-padding); gap:var(--space-md); overflow:hidden; }
+.footer { height:22px; flex-shrink:0; flex-direction:row; align-items:center; gap:8px; padding-left:8px; padding-right:8px; font-size:var(--font-size-small); color:var(--muted-foreground); background:var(--panel-header); }
 .empty { flex-grow:1; flex-basis:0px; align-items:center; justify-content:center; gap:8px; padding:16px; }
 .empty-title { font-size:13px; color:var(--foreground); }
 .empty-hint { font-size:12px; color:var(--muted-foreground); white-space:normal; max-width:360px; }
@@ -84,17 +84,17 @@ text { flex-shrink:0; white-space:nowrap; color:inherit; }
 .field-label { font-size:12px; color:var(--muted-foreground); }
 .badge { font-size:11px; color:var(--muted-foreground); }
 .heading { font-size:12px; color:var(--foreground); }
-.title { font-size:15px; color:var(--foreground); }
+.title { font-size:var(--font-size-heading); color:var(--foreground); }
 .section { padding:8px; gap:6px; background:var(--panel-header); border-radius:var(--radius-sm); }
 .divider { height:1px; flex-shrink:0; background:var(--separator-strong); }
 
-button { height:22px; flex-shrink:0; flex-direction:row; align-items:center; justify-content:center; gap:6px; padding-left:8px; padding-right:8px; background:var(--raised); color:var(--foreground); font-size:12px; border-radius:var(--radius-sm); border-width:1px; border-color:var(--separator-strong); white-space:nowrap; }
+button { height:22px; flex-shrink:0; flex-direction:row; align-items:center; justify-content:center; gap:var(--space-md); padding-left:8px; padding-right:8px; background:var(--raised); color:var(--foreground); font-size:var(--font-size-body); border-radius:var(--radius-sm); border-width:1px; border-color:var(--separator-strong); white-space:nowrap; }
 button:hover { background:var(--hover-surface); }
 button:active { background:var(--selection-surface); color:var(--selection-foreground); }
 button:focus { border-color:var(--ring); }
 button:disabled { color:var(--muted-foreground); background:transparent; }
 .quiet { gap:6px; }
-.small { height:22px; font-size:12px; }
+.small { height:22px; font-size:var(--font-size-body); }
 .primary { background:var(--primary); color:var(--primary-foreground); border-color:var(--primary); }
 .primary:hover { background:var(--primary); }
 .ghost { background:transparent; border-width:0px; }

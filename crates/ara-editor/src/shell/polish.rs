@@ -279,7 +279,12 @@ impl Shell {
                     .display
                     .commands
                     .push(ara_ui::paint::Draw::PushClip { rect: clip });
-                let channel = |n: usize| field.value[n].as_f64().unwrap_or(1.).clamp(0., 1.);
+                let value = if field.optional && field.value.is_null() {
+                    &field.fallback
+                } else {
+                    &field.value
+                };
+                let channel = |n: usize| value[n].as_f64().unwrap_or(1.).clamp(0., 1.);
                 self.ui
                     .display
                     .commands

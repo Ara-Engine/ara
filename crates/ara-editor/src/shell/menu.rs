@@ -695,6 +695,9 @@ impl Shell {
                     Binding::AssetFolder(path, _) => {
                         return Some((Context::Folder, Target::Folder(path.clone())));
                     }
+                    Binding::ContextMenu(context, target) => {
+                        return Some((*context, target.clone()));
+                    }
                     Binding::Select(entity) => {
                         return Some((Context::Entity, Target::Entity(entity.clone())));
                     }

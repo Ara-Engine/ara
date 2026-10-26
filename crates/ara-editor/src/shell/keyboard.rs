@@ -157,6 +157,7 @@ impl Shell {
                 rename.name = names::stem(names::file_name(&rename.path)).into();
                 self.commit_asset_rename(editor)?;
             }
+            self.color_picker = None;
             self.finish_scrub(editor, true)?;
             editor.finish_gesture(true)?;
             let had_drag = self.drag.take().is_some();
