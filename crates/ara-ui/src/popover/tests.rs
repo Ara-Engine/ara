@@ -146,10 +146,10 @@ fn placed_controls_keep_their_authored_width_when_they_fit() -> Result<()> {
     assert_eq!(ui.nodes[picker].rect.w, 260.);
     let channel = ui.find("channel").expect("channel");
     assert!(ui.nodes[channel].rect.w >= 230.);
-    ui.resize([200., 300.]);
+    ui.resize([200., 300.])?;
     ui.frame(&mut text)?;
     assert!(ui.nodes[picker].rect.w <= 192.);
-    ui.resize(WINDOW);
+    ui.resize(WINDOW)?;
     ui.frame(&mut text)?;
     assert_eq!(ui.nodes[picker].rect.w, 260.);
     Ok(())
