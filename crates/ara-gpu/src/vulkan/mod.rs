@@ -350,6 +350,17 @@ impl VulkanDevice {
         self.context.upload_range(b.raw, offset, bytes)?;
         Ok(())
     }
+    /// Read coherent mapped storage that only work up to `point` writes, once `point`
+    /// completed (after a HostRead barrier there). Every later submission retains
+    /// all buffers (bindless), so `read` would wait for those too; the caller
+    /// guarantees none of them writes `buffer`. Never waits.
+    pub fn read_completed(&self, buffer: Buffer, point: TimelinePoint) -> Result<Vec<u8>> {
+        let b = self.buffers.get(buffer)?;
+        if self.completed()?[point.queue.index()] < point.value {
+            return Err(GpuError::Contract("Readback still in flight".into()));
+        }
+        Ok(self.context.read(b.raw)?)
+    }
     /// Read coherent mapped storage after timeline completion and a HostRead barrier.
     pub fn read(&self, buffer: Buffer) -> Result<Vec<u8>> {
         let b = self.buffers.get(buffer)?;

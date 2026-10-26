@@ -2,6 +2,7 @@
 // Include after raster.slangh and look.slangh.
 #include "look-gi.slangh"
 #include "look-horizon.slangh"
+#include "look-vsm.slangh"
 // Cascaded sun shadows (renderer/frame.rs): f.look.y texels per cascade side in a
 // 2x2 D32 atlas, f.look.z active cascades, far distances in f.splits.
 uint cascadeIndex(Frame f,float3 world){float d=dot(world-f.camera.xyz,f.forward.xyz);return d<f.splits.x?0:d<f.splits.y?1:d<f.splits.z?2:3;}
@@ -99,10 +100,13 @@ float mapVisibility(Frame f,Look l,float3 world,float3 normal) {
     if(blend>0)v=lerp(v,c+1<count?cascadeVisibility(f,l,c+1,world,normal):farVisibility(l,world,normal),blend);
     return v;
 }
-// Sun visibility at `world`: the sun maps, and at every distance the horizon of
-// distant landforms (look-horizon.slangh), so far terrain stays shadowed past them.
-float visibility(Frame f,Look l,float3 world,float3 normal){
-    float v=mapVisibility(f,l,world,normal);
+// Sun visibility at `world`: `pages` where the virtual shadow map resolved it
+// (look-vsm.slangh: vsmMask, vsmVisibility), else the sun maps; at every distance the
+// horizon of distant landforms (look-horizon.slangh), so far terrain stays shadowed
+// past them. Shaders sample pages only through the mask or their own entry points:
+// inline page lookups would cost every preset registers (and occupancy).
+float visibility(Frame f,Look l,float3 world,float3 normal,float pages=-1){
+    float v=pages>=0?pages:mapVisibility(f,l,world,normal);
     return v>0?min(v,horizonSun(l,world)):0;
 }
 float3 fresnel(float cosine,float3 f0){return f0+(1-f0)*pow(1-saturate(cosine),5);}
@@ -211,7 +215,7 @@ float3 ibl(Frame f,Look l,Surface s,float3 world,float3 v,int2 p,bool gathered) 
 float3 shade(Frame f,Look l,Surface s,float3 world,int2 p,bool gathered) {
     float3 v=normalize(f.camera.xyz-world);float3 result=s.emissive+ibl(f,l,s,world,v,p,gathered);
     // The sun lights front faces only (brdf ends in N.L): back faces skip its shadows.
-    if(dot(s.normal,f.sunDirection.xyz)>0)result+=brdf(s,v,f.sunDirection.xyz)*sunAt(f,l,world)*visibility(f,l,world,s.normal);
+    if(dot(s.normal,f.sunDirection.xyz)>0)result+=brdf(s,v,f.sunDirection.xyz)*sunAt(f,l,world)*visibility(f,l,world,s.normal,gathered?vsmMask(l,p):-1);
     uint tilesX=(f.extent.x+15)/16;uint tile=(uint(p.y)/16*tilesX+uint(p.x)/16)*TILE_STRIDE;
     uint count=buffers[NonUniformResourceIndex(f.lighting.z)].Load(tile*4);
     for(uint i=0;i<count;i++) {

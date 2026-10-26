@@ -67,6 +67,17 @@ pub(crate) struct LookFrame {
     pub horizon_images: [u32; 4],
     /// x sun visibility, y sky visibility (storage), z sky texels per side.
     pub horizon_storage: [u32; 4],
+    /// Virtual shadow maps (`look::vsm`): x page table, y atlas (sampled; zero:
+    /// none), z page light views (storage), w atlas pages per row.
+    pub vsm: [u32; 4],
+    /// x this frame's page-request bits (storage; zero: no marks), z atlas page rows.
+    pub vsm_request: [u32; 4],
+    /// The sun's light rotation.
+    pub vsm_space: [[f32; 4]; 4],
+    /// depth = x * light z + y; z level bias; w level zero's radius (m).
+    pub vsm_depth: [f32; 4],
+    /// x projected page visibility (sampled; zero: none this frame), y (storage).
+    pub vsm_mask: [u32; 4],
 }
 
 /// Per-frame inputs that are not part of the authored look.
@@ -160,6 +171,11 @@ impl LookFrame {
             horizon_height: [0.; 4],
             horizon_images: [0; 4],
             horizon_storage: [0; 4],
+            vsm: [0; 4],
+            vsm_request: [0; 4],
+            vsm_space: [[0.; 4]; 4],
+            vsm_depth: [0.; 4],
+            vsm_mask: [0; 4],
         }
     }
 }

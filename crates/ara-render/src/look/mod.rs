@@ -13,6 +13,7 @@ pub(crate) mod gpu;
 pub(crate) mod horizon;
 pub(crate) mod local;
 pub(crate) mod passes;
+pub(crate) mod vsm;
 
 pub use crate::renderer::post::ToneCurve;
 
@@ -52,6 +53,21 @@ pub struct Quality {
     /// (a power of two, 256 to 4096). `None` leaves distance to the cascades and
     /// far map.
     pub horizon: Option<u32>,
+    /// Virtual shadow maps for the sun (`look::vsm`): cached clipmap pages wherever
+    /// pixels need them, sampled before the cascades and far map (which remain the
+    /// fallback while pages render). `None` keeps the cascades alone.
+    pub virtual_shadows: Option<VirtualShadows>,
+}
+
+/// Virtual shadow map budgets (`look::vsm`).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct VirtualShadows {
+    /// Physical 128-texel pages in the atlas (a multiple of 32, 256 to 4096).
+    pub pages: u32,
+    /// Pages rendered per frame at most; the rest wait while shading falls back.
+    pub budget: u32,
+    /// Clipmap level bias: positive values sample coarser (fewer) pages.
+    pub bias: f32,
 }
 impl Default for Quality {
     fn default() -> Self {
@@ -67,6 +83,7 @@ impl Default for Quality {
             terrain_detail: 150.,
             local_shadows: None,
             horizon: None,
+            virtual_shadows: None,
         }
     }
 }
@@ -204,7 +221,13 @@ impl Quality {
                 })
                 && self
                     .horizon
-                    .is_none_or(|h| h.is_power_of_two() && (256..=4096).contains(&h)),
+                    .is_none_or(|h| h.is_power_of_two() && (256..=4096).contains(&h))
+                && self.virtual_shadows.is_none_or(|v| {
+                    v.pages % 32 == 0
+                        && (256..=4096).contains(&v.pages)
+                        && (1..=256).contains(&v.budget)
+                        && (-2.0..=4.0).contains(&v.bias)
+                }),
             "Invalid raster quality"
         );
         Ok(())
