@@ -59,6 +59,10 @@ pub(crate) struct Frames {
 }
 
 impl LookGpu {
+    /// Explicit capture boundaries may drain a loading reservation synchronously.
+    pub(crate) fn record_probe_clear(&self, recorder: &mut Recorder) {
+        self.record_scatter(recorder, LookPass::GiClear);
+    }
     /// Declares the sky and fog passes. LUTs are rebuilt when the aerosols change,
     /// the sky IBL when the sun or sky changes, the sky view and froxels per frame.
     /// `shared` is the frame's conservative bindless reachability.
@@ -179,6 +183,9 @@ impl LookGpu {
                     .chain(shared.iter().copied()),
                 );
                 passes.push((id, LookPass::GiScatter(n as u32)));
+            }
+            if self.gi.as_ref().is_some_and(|g| g.clearing_in_slices()) {
+                return passes;
             }
             let id = graph.pass(
                 "GI.Relight",
@@ -493,12 +500,15 @@ impl LookGpu {
         let Some(gi) = &self.gi else {
             return;
         };
-        let (staging, count, clear) = match pass {
+        let (staging, base, count, clear) = match pass {
             LookPass::GiScatter(n) => match self.probe_writes.get(n as usize) {
-                Some((staging, count)) => (staging.index, *count, false),
+                Some((staging, count)) => (staging.index, 0, *count, false),
                 None => return,
             },
-            _ => (0, gi.probes, true),
+            _ => {
+                let (first, count) = gi.clear_window();
+                (0, first, count, true)
+            }
         };
         let mut words = [
             0,
@@ -512,7 +522,7 @@ impl LookGpu {
         ];
         recorder.push(Command::Pipeline(self.pipelines.gi_scatter));
         for first in (0..count).step_by(DISPATCH_PROBES as usize) {
-            words[0] = first;
+            words[0] = base + first;
             recorder.push(Command::Constants(RootConstants { words }));
             recorder.push(Command::Dispatch([
                 (count - first).min(DISPATCH_PROBES),
