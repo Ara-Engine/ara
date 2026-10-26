@@ -820,13 +820,16 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                 gpu.select_target(0);
                 gpu.set_dpi(dpi)?;
                 let render_at = Instant::now();
-                ui_renderer.render(
-                    &mut gpu,
-                    &shell.ui.display,
-                    &shell.text.assets,
-                    shell.ui.size.map(|v| v.round() as u32),
-                    TextMode::Raster,
-                )?;
+                {
+                    ara_gpu::cpu_scope!("UI.render");
+                    ui_renderer.render(
+                        &mut gpu,
+                        &shell.ui.display,
+                        &shell.text.assets,
+                        shell.ui.size.map(|v| v.round() as u32),
+                        TextMode::Raster,
+                    )?;
+                }
                 render_ms = render_at.elapsed().as_secs_f64() * 1000.;
                 let graph_gpu = graph_start.map(|start| start.elapsed().as_secs_f64() * 1000.);
                 let (image, size) = gpu.output()?;

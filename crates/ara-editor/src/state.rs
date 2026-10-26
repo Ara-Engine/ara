@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::{
     collections::{BTreeMap, BTreeSet},
-    path::Path,
+    path::{Path, PathBuf},
 };
 
 /// Editor transform handle mode.
@@ -822,6 +822,8 @@ pub(crate) struct Navigation {
     doc: AssetId,
     record: RecordId,
     pub state: EditorState,
+    /// Saves `.ara/editor-layout.json` off the UI thread.
+    layout: LayoutWriter,
 }
 impl Navigation {
     pub fn history(&self) -> Value {
@@ -866,6 +868,7 @@ impl Navigation {
             doc,
             record,
             state,
+            layout: LayoutWriter::new(path),
         })
     }
     pub fn commit(
@@ -873,7 +876,6 @@ impl Navigation {
         candidate: EditorState,
         author: Author,
         why: &str,
-        root: &Path,
     ) -> Result<Value, Vec<ara_diag::Diagnostic>> {
         let layout_changed = candidate.layout != self.state.layout
             || candidate.floating != self.state.floating
@@ -894,27 +896,72 @@ impl Navigation {
         let commit = self.store.transact(meta, [edit])?;
         let result = json!({"state":candidate,"txn":commit.txn(),"revision":self.store.revision()});
         if layout_changed {
-            persist_layout(root, &candidate).map_err(|e| {
+            self.layout.save(layout_text(&candidate).map_err(|e| {
                 vec![ara_diag::Diagnostic::error(
                     ara_diag::codes::IO,
                     e.to_string(),
                 )]
-            })?;
+            })?);
         }
         self.state = candidate;
         Ok(result)
     }
 }
-/// Write the main dock tree and floating windows with the canonical writer.
-pub(crate) fn persist_layout(root: &Path, state: &EditorState) -> anyhow::Result<()> {
-    write_layout(&root.join(".ara/editor-layout.json"), state)
+
+/// Saves the window layout (`.ara/editor-layout.json`) on its own thread: a layout
+/// change (every tab switch, split drag or window move) only hands the serialized
+/// layout over, so the UI thread never waits on the disk (a write and rename
+/// occasionally took 200 ms there). The thread writes the newest layout it has;
+/// dropping the writer flushes it.
+struct LayoutWriter {
+    tx: Option<std::sync::mpsc::Sender<String>>,
+    thread: Option<std::thread::JoinHandle<()>>,
 }
-/// Save a named layout (Window › Layouts › Save Layout As…).
-pub(crate) fn write_layout(path: &Path, state: &EditorState) -> anyhow::Result<()> {
-    let text = state
+impl LayoutWriter {
+    fn new(path: PathBuf) -> Self {
+        let (tx, rx) = std::sync::mpsc::channel::<String>();
+        let thread = std::thread::Builder::new()
+            .name("layout-writer".into())
+            .spawn(move || {
+                while let Ok(mut text) = rx.recv() {
+                    // Only the newest layout matters.
+                    if let Some(newest) = rx.try_iter().last() {
+                        text = newest;
+                    }
+                    if let Err(error) = write_text(&path, &text) {
+                        eprintln!("ara-editor: could not save the window layout: {error}");
+                    }
+                }
+            })
+            .ok();
+        Self {
+            tx: Some(tx),
+            thread,
+        }
+    }
+    fn save(&self, text: String) {
+        if let Some(tx) = &self.tx {
+            let _ = tx.send(text);
+        }
+    }
+}
+impl Drop for LayoutWriter {
+    fn drop(&mut self) {
+        drop(self.tx.take());
+        if let Some(thread) = self.thread.take() {
+            let _ = thread.join();
+        }
+    }
+}
+/// The main dock tree and floating windows, as the canonical writer stores them.
+fn layout_text(state: &EditorState) -> anyhow::Result<String> {
+    state
         .dock()
         .and_then(|d| d.serialize())
-        .map_err(|e| anyhow::anyhow!(e.to_string()))?;
+        .map_err(|e| anyhow::anyhow!(e.to_string()))
+}
+/// Write `text` to `path` through a temporary file, so a reader never sees half.
+fn write_text(path: &Path, text: &str) -> anyhow::Result<()> {
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;
     }
@@ -922,6 +969,10 @@ pub(crate) fn write_layout(path: &Path, state: &EditorState) -> anyhow::Result<(
     std::fs::write(&temp, text)?;
     std::fs::rename(temp, path)?;
     Ok(())
+}
+/// Save a named layout (Window › Layouts › Save Layout As…).
+pub(crate) fn write_layout(path: &Path, state: &EditorState) -> anyhow::Result<()> {
+    write_text(path, &layout_text(state)?)
 }
 /// Project-local saved layouts, by file stem.
 pub(crate) fn saved_layouts(root: &Path) -> Vec<String> {

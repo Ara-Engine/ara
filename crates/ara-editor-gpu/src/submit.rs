@@ -28,6 +28,7 @@ impl NativeUi {
         Ok(())
     }
     fn finish(&self) -> Result<()> {
+        ara_gpu::cpu_scope!("UI.finish");
         let device = &self.memory.device;
         // SAFETY: This main thread serializes queue use; fence completion owns command-buffer reuse.
         unsafe {
@@ -50,56 +51,104 @@ impl NativeUi {
     pub fn take_gpu_wait(&self) -> std::time::Duration {
         self.gpu_wait.take()
     }
-    pub(super) fn upload_texture(&self, image: &Image, staging: &Buffer) -> Result<()> {
-        self.start()?;
+    /// Copy this frame's pending texture uploads into their images at the start of its
+    /// submission (after `start`), ahead of the draws that sample them: one staging
+    /// write and one wait for the whole frame. Images being updated go from
+    /// shader-read; new ones from undefined.
+    fn record_uploads(&mut self) -> Result<()> {
+        if self.pending.is_empty() {
+            return Ok(());
+        }
+        let bytes = self.staged.len() as u64;
+        if self.staging.as_ref().is_none_or(|s| s.size < bytes) {
+            // The previous staging buffer is idle: every submission completes first.
+            self.staging = Some(self.memory.buffer(
+                bytes.next_power_of_two().max(65536),
+                vk::BufferUsageFlags::TRANSFER_SRC,
+            )?);
+        }
+        let staging = self
+            .staging
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("UI upload staging"))?;
+        staging.write(&self.staged)?;
+        let write = (
+            vk::PipelineStageFlags2::COPY,
+            vk::AccessFlags2::TRANSFER_WRITE,
+        );
+        let to_copy: Vec<_> = self
+            .pending
+            .iter()
+            .map(|p| {
+                if p.fresh {
+                    barrier(
+                        p.image,
+                        vk::ImageLayout::UNDEFINED,
+                        vk::ImageLayout::TRANSFER_DST_OPTIMAL,
+                        (vk::PipelineStageFlags2::NONE, vk::AccessFlags2::NONE),
+                        write,
+                    )
+                } else {
+                    barrier(
+                        p.image,
+                        vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
+                        vk::ImageLayout::TRANSFER_DST_OPTIMAL,
+                        SAMPLE,
+                        write,
+                    )
+                }
+            })
+            .collect();
+        let to_sample: Vec<_> = self
+            .pending
+            .iter()
+            .map(|p| {
+                barrier(
+                    p.image,
+                    vk::ImageLayout::TRANSFER_DST_OPTIMAL,
+                    vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
+                    write,
+                    SAMPLE,
+                )
+            })
+            .collect();
         let device = &self.memory.device;
-        // SAFETY: New image has no prior contents; host-coherent staging was filled before submission.
+        // SAFETY: The command buffer is recording (`start`); every pending image is live
+        // (superseded uploads were dropped with their image) and idle, and the
+        // host-coherent staging was written above for this submission only.
         unsafe {
             device.cmd_pipeline_barrier2(
                 self.command,
-                &vk::DependencyInfo::default().image_memory_barriers(&[barrier(
-                    image.image,
-                    vk::ImageLayout::UNDEFINED,
+                &vk::DependencyInfo::default().image_memory_barriers(&to_copy),
+            );
+            for p in &self.pending {
+                device.cmd_copy_buffer_to_image(
+                    self.command,
+                    staging.buffer,
+                    p.image,
                     vk::ImageLayout::TRANSFER_DST_OPTIMAL,
-                    (vk::PipelineStageFlags2::NONE, vk::AccessFlags2::NONE),
-                    (
-                        vk::PipelineStageFlags2::COPY,
-                        vk::AccessFlags2::TRANSFER_WRITE,
-                    ),
-                )]),
-            );
-            device.cmd_copy_buffer_to_image(
-                self.command,
-                staging.buffer,
-                image.image,
-                vk::ImageLayout::TRANSFER_DST_OPTIMAL,
-                &[vk::BufferImageCopy::default()
-                    .image_subresource(
-                        vk::ImageSubresourceLayers::default()
-                            .aspect_mask(vk::ImageAspectFlags::COLOR)
-                            .layer_count(1),
-                    )
-                    .image_extent(vk::Extent3D {
-                        width: image.size[0],
-                        height: image.size[1],
-                        depth: 1,
-                    })],
-            );
+                    &[vk::BufferImageCopy::default()
+                        .buffer_offset(p.offset)
+                        .image_subresource(
+                            vk::ImageSubresourceLayers::default()
+                                .aspect_mask(vk::ImageAspectFlags::COLOR)
+                                .layer_count(1),
+                        )
+                        .image_extent(vk::Extent3D {
+                            width: p.size[0],
+                            height: p.size[1],
+                            depth: 1,
+                        })],
+                );
+            }
             device.cmd_pipeline_barrier2(
                 self.command,
-                &vk::DependencyInfo::default().image_memory_barriers(&[barrier(
-                    image.image,
-                    vk::ImageLayout::TRANSFER_DST_OPTIMAL,
-                    vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
-                    (
-                        vk::PipelineStageFlags2::COPY,
-                        vk::AccessFlags2::TRANSFER_WRITE,
-                    ),
-                    SAMPLE,
-                )]),
+                &vk::DependencyInfo::default().image_memory_barriers(&to_sample),
             );
         }
-        self.finish()
+        self.pending.clear();
+        self.staged.clear();
+        Ok(())
     }
     pub(super) fn submit(&mut self) -> Result<()> {
         let instance_size = (self.instances.len().max(1) * 64) as u64;
@@ -144,6 +193,9 @@ impl NativeUi {
         let mask_info = [vk::DescriptorBufferInfo::default()
             .buffer(masks.buffer)
             .range(masks.size)];
+        // This frame's texture uploads first, ahead of everything that samples them.
+        self.start()?;
+        self.record_uploads()?;
         let target = self
             .target
             .as_ref()
@@ -167,7 +219,6 @@ impl NativeUi {
                 &[],
             );
         }
-        self.start()?;
         let mut before = Vec::with_capacity(self.external_images.len() + 1);
         for image in self.external_images.values() {
             before.push(barrier(

@@ -910,7 +910,7 @@ impl EditorService {
             .session()
             .map(|s| s.author.clone())
             .unwrap_or(ara_ops::Author::Human);
-        let mut result = self.navigation.commit(state, author, method, cx.root())?;
+        let mut result = self.navigation.commit(state, author, method)?;
         if method == "editor.camera" {
             result["camera"] = json!(viewed);
         }

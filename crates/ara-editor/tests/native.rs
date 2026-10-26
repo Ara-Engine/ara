@@ -1,4 +1,5 @@
-//! Opt-in native GPU golden gate. This opens the production SDL window.
+//! Opt-in native GPU golden gate: the production UI through `--verify`, a bounded run
+//! that renders offscreen. `ARA_EDITOR_UPDATE_GOLDENS=1` rewrites the reviewed goldens.
 #![allow(clippy::unwrap_used)] // A failed fixture/capture operation should fail the test immediately.
 use serde_json::json;
 use std::{path::PathBuf, process::Command};
