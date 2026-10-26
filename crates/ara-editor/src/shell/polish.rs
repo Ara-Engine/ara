@@ -13,9 +13,9 @@ pub(super) struct RowStyle {
     pub locked: bool,
     pub hidden: bool,
 }
-/// Hover gutter: the eye sits 44 px and the lock 24 px from the row's right edge.
-pub(super) const EYE: f32 = 44.;
-pub(super) const LOCK: f32 = 24.;
+/// Hover actions leave twelve pixels at the row's right edge for the scrollbar.
+pub(super) const EYE: f32 = 56.;
+pub(super) const LOCK: f32 = 36.;
 impl Shell {
     pub(super) fn paint_polish(&mut self) {
         let color = |name: &str| self.ui.sheet.color_token(name).unwrap_or(Color(0, 0, 0, 0));

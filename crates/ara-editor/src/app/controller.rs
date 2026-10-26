@@ -443,7 +443,10 @@ impl Controller {
                         if !inside {
                             shell.commit_fields(editor)?;
                             shell.event(InputEvent::PointerDown(shell.pointer), clipboard)?;
-                            if !shell.begin_scrub(editor)? && !shell.begin_column_drag() {
+                            if !shell.input.scrolling()
+                                && !shell.begin_scrub(editor)?
+                                && !shell.begin_column_drag()
+                            {
                                 shell.begin_drag();
                             }
                         } else {
@@ -520,19 +523,40 @@ impl Controller {
                 if shell
                     .viewport()
                     .is_some_and(|r| r.contains(shell.pointer[0], shell.pointer[1]))
+                    && shell
+                        .ui
+                        .hit_test(shell.pointer[0], shell.pointer[1])
+                        .is_none()
+                    && shell.ui.scrollbar_at(shell.pointer).is_none()
+                    && shell.menu.is_none()
+                    && !editor.state.palette
                 {
                     let mut camera = editor.state.camera;
                     camera.zoom(delta[1]);
                     set_camera(editor, &camera)?;
                     scene_dirty = true;
-                } else if !shell.scroll_hierarchy(-delta[1] * 52.)? {
-                    shell.event(
-                        InputEvent::Wheel {
-                            position: shell.pointer,
-                            delta: [-delta[0] * 26., -delta[1] * 26.],
-                        },
-                        clipboard,
-                    )?;
+                } else {
+                    // Keep the old card pool scrollable until its owner adopts <scroll>.
+                    let legacy_grid = !editor.state.palette
+                        && shell.menu.is_none()
+                        && shell.ui.find("asset-grid").is_some_and(|i| {
+                            shell.ui.shown(i)
+                                && shell.ui.scroll_position(i).is_none()
+                                && shell.ui.nodes[i]
+                                    .rect
+                                    .contains(shell.pointer[0], shell.pointer[1])
+                        });
+                    if legacy_grid {
+                        shell.scroll_hierarchy(-delta[1] * 26.)?;
+                    } else {
+                        shell.event(
+                            InputEvent::Wheel {
+                                position: shell.pointer,
+                                delta: [-delta[0] * 26., -delta[1] * 26.],
+                            },
+                            clipboard,
+                        )?;
+                    }
                 }
                 dirty = true;
             }

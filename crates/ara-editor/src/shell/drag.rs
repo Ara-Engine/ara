@@ -43,46 +43,6 @@ pub(crate) struct DropPreview {
     pub surface: Option<String>,
 }
 impl Shell {
-    /// Scroll a finite row pool over the full hierarchy model.
-    pub fn scroll_hierarchy(&mut self, delta: f32) -> ara_ui::Result<bool> {
-        if let Some(i) = self.shown_node("asset-grid") {
-            let rect = self.ui.nodes[i].rect;
-            if rect.contains(self.pointer[0], self.pointer[1]) {
-                self.asset_offset = (self.asset_offset + delta)
-                    .clamp(0., (self.asset_grid_extent - rect.h).max(0.));
-                self.asset_grid_dirty = true;
-                return Ok(true);
-            }
-        }
-        if let Some(index) = self.shown_node("asset-rows")
-            && let Some(view) = &mut self.asset_view
-        {
-            let r = self.ui.nodes[index].rect;
-            if r.contains(self.pointer[0], self.pointer[1]) {
-                self.asset_offset = (self.asset_offset + delta)
-                    .clamp(0., (self.asset_rows.items.len() as f32 * 26. - r.h).max(0.));
-                view.scroll(&mut self.ui, &self.asset_rows, self.asset_offset, r.h)?;
-                self.bind_asset_rows();
-                return Ok(true);
-            }
-        }
-        let Some(index) = self.shown_node("hierarchy-rows") else {
-            return Ok(false);
-        };
-        let Some(view) = &mut self.hierarchy_view else {
-            return Ok(false);
-        };
-        let r = self.ui.nodes[index].rect;
-        if !r.contains(self.pointer[0], self.pointer[1]) {
-            return Ok(false);
-        }
-        self.hierarchy_offset = (self.hierarchy_offset + delta)
-            .clamp(0., (self.hierarchy.items.len() as f32 * 26. - r.h).max(0.));
-        view.scroll(&mut self.ui, &self.hierarchy, self.hierarchy_offset, r.h)?;
-        self.bind_hierarchy_rows();
-        self.decorate_hierarchy();
-        Ok(true)
-    }
     /// Capture an entity, asset or dock tab as a typed drag payload.
     pub fn begin_drag(&mut self) {
         // A single-panel area's header (`header-{panel}`) is a plain panel, which hit
