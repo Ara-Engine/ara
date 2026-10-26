@@ -50,6 +50,7 @@ impl Shell {
             if rect.contains(self.pointer[0], self.pointer[1]) {
                 self.asset_offset = (self.asset_offset + delta)
                     .clamp(0., (self.asset_grid_extent - rect.h).max(0.));
+                self.ui.scroll_to(i, [0., self.asset_offset])?;
                 self.asset_grid_dirty = true;
                 return Ok(true);
             }

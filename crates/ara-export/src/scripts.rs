@@ -26,31 +26,11 @@ fn path_xml(path: &Path) -> String {
 
 /// Finds module folders, excluding build outputs and editor-only modules.
 pub fn modules(root: &Path) -> Result<Vec<ModuleSpec>> {
-    fn walk(root: &Path, found: &mut Vec<ModuleSpec>) -> Result<()> {
-        if root.join(ara_script::MODULE_FILE).is_file() {
-            let spec = ModuleSpec::from_dir(root).map_err(|e| anyhow::anyhow!("{e}"))?;
-            if spec.profile == ModuleProfile::Gameplay {
-                found.push(spec);
-            }
-            return Ok(());
-        }
-        let mut paths = std::fs::read_dir(root)?
-            .map(|e| Ok(e?.path()))
-            .collect::<Result<Vec<_>>>()?;
-        paths.sort();
-        for path in paths {
-            let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
-            if path.is_dir()
-                && !name.starts_with('.')
-                && !["target", "bin", "obj", "artifacts"].contains(&name)
-            {
-                walk(&path, found)?;
-            }
-        }
-        Ok(())
-    }
-    let mut specs = Vec::new();
-    walk(root, &mut specs)?;
+    let mut specs = ara_play_host::script_modules(root)
+        .into_iter()
+        .map(|path| ModuleSpec::from_dir(&path).map_err(|e| anyhow::anyhow!("{e}")))
+        .collect::<Result<Vec<_>>>()?;
+    specs.retain(|spec| spec.profile == ModuleProfile::Gameplay);
     let mut names = std::collections::BTreeSet::new();
     for spec in &specs {
         ensure!(
@@ -172,12 +152,7 @@ pub fn prepare(
         let csproj = &projects[spec.name.as_str()];
         std::fs::create_dir_all(csproj.parent().context("module project directory")?)?;
         let source = dunce::canonicalize(&spec.dir)?;
-        let includes = format!(
-            r#"<Compile Include="{}/**/*.cs" Exclude="{}/bin/**;{}/obj/**" />"#,
-            path_xml(&source),
-            path_xml(&source),
-            path_xml(&source)
-        );
+        let includes = source_items(&source, &spec.dir, &ara_play_host::script_modules(project));
         let refs = spec
             .references
             .iter()
@@ -237,4 +212,47 @@ pub fn write_manifest(output: &Path, library: &str, modules: &[String]) -> Resul
         &output.join("scripts.json"),
         &serde_json::to_value(manifest)?,
     )
+}
+
+/// The shipping compiler respects the same nested-module boundaries as Roslyn.
+fn source_items(source: &Path, module: &Path, roots: &[PathBuf]) -> String {
+    let mut excludes = [
+        "bin",
+        "obj",
+        "target",
+        "artifacts",
+        "node_modules",
+        "spikes",
+        ".*",
+    ]
+    .into_iter()
+    .map(|dir| format!("{}/**/{dir}/**", path_xml(source)))
+    .collect::<Vec<_>>();
+    excludes.extend(
+        roots
+            .iter()
+            .filter(|root| root.as_path() != module)
+            .filter_map(|root| root.strip_prefix(module).ok())
+            .map(|relative| format!("{}/**", path_xml(&source.join(relative)))),
+    );
+    format!(
+        r#"<Compile Include="{}/**/*.cs" Exclude="{}" />"#,
+        path_xml(source),
+        excludes.join(";")
+    )
+}
+
+#[cfg(test)]
+mod source_tests {
+    use super::*;
+    #[test]
+    fn shipping_sources_exclude_nested_modules_and_generated_code() {
+        let module = Path::new("/game");
+        let roots = vec![module.to_owned(), module.join("Gameplay")];
+        let xml = source_items(module, module, &roots);
+        assert!(xml.contains(&format!("{}/**", path_xml(&module.join("Gameplay")))));
+        assert!(xml.contains("/game/**/obj/**"));
+        assert!(xml.contains("/game/**/.*/**"));
+        assert!(!xml.contains(";/game/**;"));
+    }
 }

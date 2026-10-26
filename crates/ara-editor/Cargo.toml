@@ -54,6 +54,8 @@ ara-rpc = { path = "../ara-rpc" }
 ara-runtime = { path = "../ara-runtime" }
 ara-runtime-render = { path = "../ara-runtime-render" }
 ara-schema = { path = "../ara-schema" }
+ara-script = { path = "../ara-script" }
+bevy_ecs.workspace = true
 ara-ui = { path = "../ara-ui" }
 ara-ui-render = { path = "../ara-ui-render" }
 ara-ui-text = { path = "../ara-ui-text" }

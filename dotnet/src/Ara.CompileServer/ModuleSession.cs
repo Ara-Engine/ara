@@ -75,7 +75,7 @@ internal sealed class ModuleSession
     {
         Slot = slot;
         Name = name;
-        Dir = Path.GetFullPath(dir);
+        Dir = Path.TrimEndingDirectorySeparator(Path.GetFullPath(dir));
         _startHot = hot;
         References = references;
         Profile = profile;
@@ -115,6 +115,16 @@ internal sealed class ModuleSession
     internal bool IsIgnored(string path)
     {
         var rel = Path.GetRelativePath(Dir, path).Replace('\\', '/');
+        if (rel.Split('/').Any(part => part.StartsWith(".", StringComparison.Ordinal)
+            || part is "target" or "artifacts" or "node_modules" or "spikes")) return true;
+        // A nested module owns its sources; creating a script beside it must not
+        // compile that module twice or steal its hot-reload identity.
+        var parent = Path.GetDirectoryName(path);
+        while (parent is not null && !ModuleState.Paths.Equals(parent, Dir))
+        {
+            if (File.Exists(Path.Combine(parent, "ara.module.toml"))) return true;
+            parent = Path.GetDirectoryName(parent);
+        }
         return rel.StartsWith("bin/", StringComparison.OrdinalIgnoreCase) || rel.StartsWith("obj/", StringComparison.OrdinalIgnoreCase)
             || rel.Contains("/bin/", StringComparison.OrdinalIgnoreCase) || rel.Contains("/obj/", StringComparison.OrdinalIgnoreCase);
     }

@@ -1,4 +1,5 @@
 //! SDL event loop and same-device native UI/scene composition.
+mod assets_verify;
 mod capture;
 mod chrome_verify;
 mod controller;
@@ -225,6 +226,14 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
     };
     // The UX route's drags run after its captures and camera timings.
     let mut drag_check: Option<drags::DragCheck> = None;
+    let mut assets_verification = if options.verify_assets {
+        Some(assets_verify::AssetsVerification::new(
+            &mut editor,
+            &options.output,
+        )?)
+    } else {
+        None
+    };
     let mut ux_verification = if options.verify_ux {
         Some(ux_verify::UxVerification::new(
             &mut editor,
@@ -739,6 +748,16 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                     wall_samples.clear();
                 }
             }
+            if let Some(route) = &mut assets_verification {
+                dirty |= route.step(
+                    &mut editor,
+                    &mut shell,
+                    &mut gpu,
+                    &mut ui_renderer,
+                    &mut renderer,
+                    &mut scene_view,
+                )?;
+            }
             drop(authority_scope);
             let physical = window.size()?;
             if physical.contains(&0) {
@@ -1161,6 +1180,9 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                 break;
             }
             if options.frames.is_some_and(|limit| frames >= limit)
+                || assets_verification
+                    .as_ref()
+                    .is_some_and(assets_verify::AssetsVerification::finished)
                 || verification
                     .as_ref()
                     .is_some_and(|v| v.finished() && idle_samples.len() >= 5000)

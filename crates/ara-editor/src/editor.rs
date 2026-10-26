@@ -124,6 +124,8 @@ impl Editor {
         .map_err(|d| anyhow::anyhow!(d.to_string()))?;
         host.register(Box::new(crate::authoring::AuthoringService))
             .map_err(|d| anyhow::anyhow!(d.to_string()))?;
+        host.register(Box::new(crate::script_assets::ScriptService::default()))
+            .map_err(|d| anyhow::anyhow!(d.to_string()))?;
         *host.profiler() = ara_profile::Profiler::new(ara_profile::Config {
             budget_ns: 6_944_444,
             ..Default::default()

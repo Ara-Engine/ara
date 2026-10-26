@@ -300,6 +300,7 @@ pub(crate) const MENUS: &[Menu] = &[
                     C("assets.create.vfx"),
                     C("assets.create.animation"),
                     C("assets.create.script"),
+                    C("assets.create.system"),
                     C("assets.create.prefab"),
                 ],
             ),
@@ -578,6 +579,8 @@ pub(crate) fn context(kind: Context) -> &'static [Item] {
             C("view.game"),
         ],
         Context::Asset => &[
+            Sub("Create", ASSET_CREATE),
+            C("assets.open_ide"),
             C("assets.open"),
             C("assets.reveal"),
             C("assets.copy_reference"),
@@ -591,20 +594,11 @@ pub(crate) fn context(kind: Context) -> &'static [Item] {
             C("assets.open"),
             C("assets.reveal"),
             S,
-            C("assets.create.folder"),
-            C("assets.create.material"),
+            Sub("Create", ASSET_CREATE),
             C("assets.import"),
         ],
         Context::Assets => &[
-            Sub(
-                "Create",
-                &[
-                    C("assets.create.folder"),
-                    C("assets.create.material"),
-                    C("assets.create.vfx"),
-                    C("assets.create.animation"),
-                ],
-            ),
+            Sub("Create", ASSET_CREATE),
             C("assets.import"),
             C("assets.reveal"),
             C("assets.rebuild_thumbnails"),
@@ -781,3 +775,14 @@ pub(crate) fn context(kind: Context) -> &'static [Item] {
         ],
     }
 }
+
+const ASSET_CREATE: &[Item] = &[
+    C("assets.create.folder"),
+    C("assets.create.script"),
+    C("assets.create.system"),
+    C("assets.create.material"),
+    C("assets.create.scene"),
+    C("assets.create.prefab"),
+    C("assets.create.vfx"),
+    C("assets.create.animation"),
+];

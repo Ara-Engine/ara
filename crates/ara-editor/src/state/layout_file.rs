@@ -30,6 +30,9 @@ pub(crate) fn serialize(state: &EditorState) -> anyhow::Result<String> {
         .map_err(|e| anyhow::anyhow!(e.to_string()))?;
     let layout: serde_json::Value = ara_json::parse(&text)?;
     Ok(ara_json::to_canonical_string(
-        &json!({"version": VERSION, "layout": layout}),
+        &json!({"version": VERSION, "layout": layout, "assets": {
+            "sidebarWidth": state.asset_sidebar_width,
+            "expandedFolders": state.asset_expanded_folders
+        }}),
     ))
 }

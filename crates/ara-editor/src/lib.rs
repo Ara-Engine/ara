@@ -18,6 +18,7 @@ pub mod inspector;
 mod loading;
 mod native;
 mod persist;
+mod script_assets;
 pub mod settings;
 pub mod shell;
 pub mod state;
@@ -27,6 +28,8 @@ pub mod world;
 
 pub use app::{LAUNCHED, Options, Settle, run};
 pub use editor::{Editor, EditorError};
+#[doc(hidden)]
+pub use script_assets::worker::compile_scripts;
 
 pub(crate) fn invalid(message: impl Into<String>) -> ara_diag::Diagnostic {
     ara_diag::Diagnostic::error(ara_diag::codes::INVALID_PARAMS, message)
