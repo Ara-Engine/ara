@@ -538,6 +538,7 @@ impl Renderer {
     /// their residency remain intact; live camera changes use the cheaper
     /// temporal-only reset instead.
     pub fn reset_capture_history(&mut self) -> Result<()> {
+        self.complete_probe_preparation()?;
         self.reset_temporal_history();
         self.look.reset_exposure(&mut self.gpu)?;
         self.look.settle = crate::look::gi::CONVERGE_FRAMES;
@@ -577,6 +578,8 @@ impl Renderer {
         gi.slot = 0;
         gi.cursor = 0;
         gi.converge = crate::look::gi::CONVERGE_FRAMES;
+        gi.converge_progress = 0;
+        gi.capture_convergence = true;
         gi.show();
         Ok(())
     }
