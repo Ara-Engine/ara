@@ -4,6 +4,7 @@ use crate::{
     instanced,
 };
 mod budgets;
+mod gbuffer;
 mod prepared;
 mod shadow_patches;
 mod shadows;

@@ -1,13 +1,13 @@
 {
   "binding_layout_hash": "35cd2a62b1ba741ce6823b3c8753d7b5aa97b54c5f0a837b56e542518013fd7e",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "07a54d59d8206b6c65076b15dcfbdbc226d6ed98a2942b28c8fc7889c0f638e1",
+  "key": "8fab479b98caea276369406bf40c1456e8f8ec433c6fc9d75d0240869425ca3b",
   "stages": [
     {
-      "dxil": "07a54d59d8206b6c65076b15dcfbdbc226d6ed98a2942b28c8fc7889c0f638e1/horizonSunMain.dxil",
+      "dxil": "8fab479b98caea276369406bf40c1456e8f8ec433c6fc9d75d0240869425ca3b/horizonSunMain.dxil",
       "dxil_hash": "07b88787d2291a11b2d073de428e296e0d7fd15b71083bf5801744c57dfab63d",
       "source_entry": "horizonSunMain",
-      "spirv": "07a54d59d8206b6c65076b15dcfbdbc226d6ed98a2942b28c8fc7889c0f638e1/horizonSunMain.spv",
+      "spirv": "8fab479b98caea276369406bf40c1456e8f8ec433c6fc9d75d0240869425ca3b/horizonSunMain.spv",
       "spirv_entry": "main",
       "spirv_hash": "c0c3bb385dbcad8bb7bc3948b234e7f79b8acc3554f611bbbfb065dfb3921ff9",
       "stage": "compute"

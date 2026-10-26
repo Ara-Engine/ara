@@ -147,12 +147,13 @@ float terrainBreakup(float3 world){
 }
 // A terrain splat: its layers blend colour, metal/roughness and tangent-space
 // normals in one tangent frame (the splat's), transformed once; a layer absent
-// from a whole pixel quad is skipped. Layer maps project from the side too on steep
-// slopes (terrainMap; normal detail fades there), and colour tiles are flattened
-// (terrainColor) under a world-space breakup (terrainBreakup), at every distance.
-// Beyond the look's terrain detail distance (blended over a quarter more, decided
-// per quad so derivatives stay valid) layers keep colour maps and factors only.
-Surface terrainSurface(NativeMaterial m,Varying v){
+// from a whole pixel quad is skipped. With SIDES, layer maps project from the side
+// too on steep slopes (terrainMap; normal detail fades there); without, they keep
+// the top projection. Colour tiles are flattened (terrainColor) under a world-space
+// breakup (terrainBreakup), at every distance. Beyond the look's terrain detail
+// distance (blended over a quarter more, decided per quad so derivatives stay
+// valid) layers keep colour maps and factors only.
+Surface terrainSurface<let SIDES:int>(NativeMaterial m,Varying v){
     float4 weights=v.weights;for(uint i=m.slots.z;i<4;i++)weights[i]=0;
     float sum=dot(weights,float4(1));weights=sum>1e-8?weights/sum:float4(1,0,0,0);
     // The layers share the splat geometry; the frame follows the first layer's
@@ -169,7 +170,7 @@ Surface terrainSurface(NativeMaterial m,Varying v){
     float quad=max(max(detail,QuadReadAcrossX(detail)),max(QuadReadAcrossY(detail),QuadReadAcrossDiagonal(detail)));
     Surface s=(Surface)0;float3 tangentNormal=0;
     float3 projection=terrainProjection(normal);float side=projection.x+projection.z;
-    bool sides=max(max(side,QuadReadAcrossX(side)),max(QuadReadAcrossY(side),QuadReadAcrossDiagonal(side)))>0;
+    bool sides=SIDES!=0 && max(max(side,QuadReadAcrossX(side)),max(QuadReadAcrossY(side),QuadReadAcrossDiagonal(side)))>0;
     for(uint i=0;i<m.slots.z;i++){
         float w=weights[i];
         [branch]if(max(max(w,QuadReadAcrossX(w)),max(QuadReadAcrossY(w),QuadReadAcrossDiagonal(w)))<=0)continue;
@@ -192,7 +193,10 @@ Surface terrainSurface(NativeMaterial m,Varying v){
     s.normal=safeNormalize(t*tangentNormal.x+cross(normal,t)*handedness*tangentNormal.y+normal*tangentNormal.z,normal);
     return s;
 }
-Surface surface(Varying v){
+// A native fragment's surface. SIDES is a compile-time choice: the side projections
+// cost every G-buffer pixel registers even when no terrain uses them, so presets
+// without terrain detail bind a PSO compiled without (nativeGeometryTopFragment).
+Surface surface<let SIDES:int>(Varying v){
     footprint=root.cascade==0?1:asfloat(root.cascade);NativeMaterial m=material(v.material);
     // Guessed loading bounds must not cover the view or form stair-like bands
     // across pending foliage. Keep only short one-pixel corner brackets; tiny
@@ -202,17 +206,21 @@ Surface surface(Varying v){
         float2 edge=min(v.uv,1-v.uv)/step;
         if(min(edge.x,edge.y)>1 || max(edge.x,edge.y)>8 || max(step.x,step.y)>0.125)discard;
     }
-    Surface s=m.slots.z>0?terrainSurface(m,v):surfaceMaterial(m,v);
+    Surface s=m.slots.z>0?terrainSurface<SIDES>(m,v):surfaceMaterial(m,v);
     if(m.pbr.flags.x==1 && s.alpha<m.pbr.surface.w)discard;
     float3 du=ddx(s.normal),dv=ddy(s.normal);float kernel=min(2*0.15915494*(dot(du,du)+dot(dv,dv)),0.18);
     s.roughness=sqrt(sqrt(saturate(pow(s.roughness,4)+kernel)));return s;
 }
 float2 motion(Varying v){float2 now=v.currentClip.xy/v.currentClip.w,previous=v.previousClip.xy/v.previousClip.w;return (now-previous)*float2(0.5,-0.5);}
 struct GBuffer {float4 albedo:SV_Target0;float4 normal:SV_Target1;float4 material:SV_Target2;float4 emissive:SV_Target3;float id:SV_Target4;float2 velocity:SV_Target5;};
+GBuffer geometry<let SIDES:int>(Varying v){Surface s=surface<SIDES>(v);GBuffer g;g.albedo=float4(s.albedo,s.ao);g.normal=gbufferEncodeNormal(s.normal,1);g.material=gbufferEncodeMaterial(s.roughness,s.metal,material(v.material).pbr.flags.x==1?0:1,1);g.emissive=gbufferEncodeEmissive(s.emissive,1);g.id=float(v.id);g.velocity=motion(v);return g;}
 [shader("fragment")]
-GBuffer nativeGeometryFragment(Varying v){Surface s=surface(v);GBuffer g;g.albedo=float4(s.albedo,s.ao);g.normal=gbufferEncodeNormal(s.normal,1);g.material=gbufferEncodeMaterial(s.roughness,s.metal,material(v.material).pbr.flags.x==1?0:1,1);g.emissive=gbufferEncodeEmissive(s.emissive,1);g.id=float(v.id);g.velocity=motion(v);return g;}
+GBuffer nativeGeometryFragment(Varying v){return geometry<1>(v);}
+// The G-buffer for presets without terrain detail: terrain keeps its top projection.
+[shader("fragment")]
+GBuffer nativeGeometryTopFragment(Varying v){return geometry<0>(v);}
 [shader("fragment")]
 void nativeShadowFragment(ShadowVarying shadow){Varying v=(Varying)0;v.uv=shadow.uv;v.uv1=shadow.uv1;NativeMaterial m=material(shadow.material);if(m.pbr.flags.x==1 && sampleMap(m,0,v).a*m.pbr.color.a<m.pbr.surface.w)discard;}
 struct Forward {float4 color:SV_Target0;float id:SV_Target1;float4 albedo:SV_Target2;float4 normal:SV_Target3;float4 material:SV_Target4;float4 emissive:SV_Target5;float4 velocity:SV_Target6;};
 [shader("fragment")]
-Forward nativeForwardFragment(Varying v){Surface s=surface(v);Frame f=frame();Look l=look(f);Forward o;o.color=forwardColour(f,l,s,v.world,int2(v.clip.xy));o.id=float(v.id);o.albedo=float4(s.albedo,s.alpha);o.normal=gbufferEncodeNormal(s.normal,s.alpha);o.material=gbufferEncodeMaterial(s.roughness,s.metal,1,s.alpha);o.emissive=gbufferEncodeEmissive(s.emissive,s.alpha);o.velocity=float4(motion(v),0,1);return o;}
+Forward nativeForwardFragment(Varying v){Surface s=surface<1>(v);Frame f=frame();Look l=look(f);Forward o;o.color=forwardColour(f,l,s,v.world,int2(v.clip.xy));o.id=float(v.id);o.albedo=float4(s.albedo,s.alpha);o.normal=gbufferEncodeNormal(s.normal,s.alpha);o.material=gbufferEncodeMaterial(s.roughness,s.metal,1,s.alpha);o.emissive=gbufferEncodeEmissive(s.emissive,s.alpha);o.velocity=float4(motion(v),0,1);return o;}

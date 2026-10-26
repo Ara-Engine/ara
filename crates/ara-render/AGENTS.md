@@ -75,7 +75,7 @@ Owns the M1 baseline renderer and agent visual feedback. Gameplay state stays in
   cached D32 map per cascade, redrawn only when its matrix or casters in its light volume change; moved casters
   patch only their texels (a per-list cell grid finds their casters, culling/patches.rs); outer cascades redraw whole at most one per frame, `Cascades::plan`), a cached far map (`look::far`),
   local-light shadows (`look::local`, patched alike; `in_gi_and_fog` also shadows GI relight and fog), half-res GTAO and SSR (cone footprint into
-  last frame's colour pyramid), GI relight, bloom, emitter lights, LOD/cull pixels, terrain detail, and the
+  last frame's colour pyramid), GI relight, bloom, emitter lights, LOD/cull pixels, terrain detail (zero binds `gbuffer_top`, no side projections), and the
   heightfield horizon (`look::horizon`: distant landforms' sun shadow, min'd into `visibility`, and sky visibility
   outside the probe volume), and sun virtual shadow maps (`look::vsm`, High/Epic: clipmap pages that pixels mark in `VSM.Mark`, read back once their frame
   completes, cached in world space, drawn under a per-frame budget; `VSM.Project` resolves them into a mask lighting reads, GI relight
