@@ -734,7 +734,10 @@ impl Shell {
                 include_str!("editor-comfortable.css"),
             ));
         }
-        css.push_str(include_str!("editor-titlebar.css"));
+        css.push_str(
+            self.styles
+                .css("editor-titlebar.css", include_str!("editor-titlebar.css")),
+        );
         css
     }
     /// Reconcile markup into the current surface (nodes whose ID survives keep their
