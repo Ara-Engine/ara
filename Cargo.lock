@@ -1981,6 +1981,7 @@ dependencies = [
  "ara-asset-format",
  "ara-gpu",
  "ara-json",
+ "ash 0.38.0+1.4.352",
  "bcdec_rs",
  "blake3",
  "bytemuck",

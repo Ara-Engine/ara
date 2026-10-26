@@ -405,3 +405,111 @@ them through typed sidecar edits and the canonical writer. The test fails before
 regeneration, then passes with updates disabled. Current sidecars reduce source
 snapshot work (132/452 to 66/230 per sample); no isolated metadata wall-speedup
 claim follows from the failed exploratory comparison.
+
+## Verified cache publication: 2026-10-26
+
+Checkpoint `757e458b` removes per-object/action filesystem flushes. Objects are
+atomically published before actions. Every read verifies all referenced lengths,
+content hashes and payload formats before returning a result. Missing or torn data
+is a miss; repair atomically replaces damaged files under a per-entry OS lock.
+Readers never unlink a racing repair, and different verified results for one key
+remain nondeterminism errors. Import keys, compression and artifact bytes are unchanged.
+
+The store-only Showcase replay (33 actions, four threads) fell from 6.124 s to
+0.291 s initially and 0.439 s in the final replay. The control's 332 flushes used
+16.317 summed wall seconds but only 0.438 thread CPU seconds. Its writes used
+0.187 summed wall seconds. This attributes the control's wait to flushes.
+The new Outpost replay still took 10.226 s at 100% machine CPU: writes alone used
+26.869 summed wall seconds versus 0.234 thread CPU seconds. Retain that I/O outlier;
+removing flushes does not remove every storage wait. Defender was active, but its
+recorder was denied with `0x80070005`; these runs do not attribute waits to Defender.
+
+The real daemon cold-cache ABBA below used the same source/profile/roots and one
+GPU lock, with fresh project/import/driver caches. OS/vendor caches were retained.
+Batch-27 builds were active. There was no owned build or stress load during timers.
+
+| Order / cache policy | Showcase assets ready (s) | Outpost assets ready (s) |
+|---|---:|---:|
+| A1 / per-file flush | 21.235 | 22.198 |
+| B1 / verified atomic publication | 18.085 | 22.109 |
+| B2 / verified atomic publication | 11.077 | 23.280 |
+| A2 / per-file flush | 10.263 | 26.087 |
+
+This loaded matrix establishes no reliable end-to-end speedup or sub-10-second
+Showcase result. The control itself varied twofold. B1 Showcase retained a 3.593 s
+maximum cache-install wait; A2 Outpost retained 51.513 summed cache-store seconds.
+All 592 action keys and 7,160 artifact references match v4; a post-timer physical
+read verifies 5,344,011,560 logical referenced bytes across the eight caches.
+No CPU fallbacks occurred, and helper starts/exits balanced with two devices per run.
+
+Recovery checks kill writers during object writes, between object/action publication,
+after action publication and while repairing under the OS lock. Explicit torn and
+same-length lost-write injections cover failures a process kill alone cannot induce
+while the OS cache survives. The final stress passed 200 concurrent repairs and
+20 recovery loops (80 killed writers) in 29.995 s under the integration load.
+Exploratory sharing-denial failures remain in the ignored logs; the retained fix
+retries transient Windows sharing/access denials and only accepts a live replacement
+after exact verification. Permanent denied publication still fails.
+
+Raw evidence: `target/ara-dev/import-speed/cache-policy-summary.json`,
+`cache-policy-{a1,b1,b2,a2}-balanced-{showcase,outpost}/`,
+`cache-policy-verification.log`, and `cache-diagnostic/`.
+
+## Device-free warm import metadata: 2026-10-26
+
+Dependency discovery remains outside the editor/daemon. Concurrent cold requests
+share bounded one-shot worker batches; verified memos cover importer/version,
+source bytes, settings and worker arguments. Warm metadata hits start no discovery
+children. Settings/source/version changes invalidate metadata without changing the
+final action identity. Unsupported workers fall back to individual requests.
+
+A verified capability memo covers the immutable codec cohort, ordered adapter
+UUID/LUID identifiers, driver version/UUID and explicit Vulkan ICD selection.
+Looking it up creates a Vulkan instance only, never a device or encoder service.
+Unrelated worker rebuilds do not invalidate it. A cache miss prepares the encoder
+and confirms its identity; a mismatch retries with the CPU key. The daemon shares
+this hint with source/cook workers through its existing version-metadata request.
+No template content caches are shipped or copied, and no codec bytes changed.
+
+The frozen cached Outpost has 115 sources. Under batch-28 load, the eager control
+needed 119/121 worker launches, 2.651/4.899 s of encoder preparation, and
+18.431/10.523 s from the first source snapshot to final publication. It ran no
+imports. An intermediate two-control-worker implementation had zero encoder
+services/prepares/imports and unchanged keys: 5.237/1.081 s to settle. The first
+retains a 3.323 s cache-read wait; the repeat's identity lookup cost 0.211 s and
+one worker's spawn/queue span cost 0.479 s. These motivated combining the hint
+with versions in one control child. Hub launch is a separate boundary: the
+intermediate runs took 7.298/4.039 s including daemon/player startup.
+
+The final A/B/B/A uses the existing cached project, profile, codecs and cache policy;
+only metadata startup differs. Each run closes its daemon and waits for encoder
+helper exit. No owned compilation runs during the GPU-locked matrix.
+
+| Run | Source snapshot to settled (ms) | Version request to settled (ms) | Hub open to settled (ms) | Worker children | Encoder services |
+|---|---:|---:|---:|---:|---:|
+| A1 / eager control | 79116.405 | 79704.625 | 83425.214 | 121 | 1 |
+| B1 / combined cached metadata | 385.875 | 905.070 | 2182.337 | 1 | 0 |
+| B2 / combined cached metadata | 400.764 | 676.855 | 1352.502 | 1 | 0 |
+| A2 / eager control | 9434.768 | 9720.362 | 11911.029 | 121 | 1 |
+
+All four publish exactly 115 unchanged v4 action keys and run zero imports. Both
+candidate runs have zero encoder preparation and zero discovery batches. The
+source/cache work is below 0.5 s, while total import initialization including the
+one control process and validated identity lookup remains 0.677–0.905 s. Do not
+describe that latter boundary as below 0.5 s, or as editor first-frame acceptance.
+Candidate identity lookup takes 248/193 ms; peak individual cache loads take
+150/150 ms. These spans overlap other work and must not be summed as a stage total.
+
+Keep A1's 51.158 s cache-read wait and 21.301 s encoder preparation as outliers.
+A2's preparation takes 7.642 s. No speedup ratio is based on the 79-second control.
+Batch-28 is active; sampled machine CPU before A1/B1/B2/A2 is 23/49/0/19 percent,
+which is neither an interval average nor evidence of quiet storage. The checked-in
+`measurements/warm-*.json` records preserve counters, stage spans and binary hashes;
+raw traces/results are under the matching ignored `target/ara-dev/import-speed/`
+folders. `measurements/cache-policy-2026-10-26.json` retains the earlier cold matrix.
+
+Focused tests exercise batch/legacy compatibility, source/settings invalidation,
+torn metadata repair, zero device preparation on a cache hit, one preparation on
+the first miss and CPU-key retry after an identity mismatch. The production owner
+uses the same worker for metadata, snapshots and cooks; remote/custom workers keep
+the original fallbacks. No importer version bump or sample-sidecar rewrite is needed.

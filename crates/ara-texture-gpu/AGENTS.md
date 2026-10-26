@@ -6,8 +6,12 @@ BC4/BC5/BC7 inputs are 16 packed RGBA8 u32 words per block; BC6H uses 32 words
 headers and host recorders. All output-
 affecting shader math, reductions and tie breaking are integer and explicit.
 Fast/Balanced/HQ shader preset IDs are 0/1/2, independent of CookPreset order.
-`Encoder` implements ara-asset's BlockEncoder. Services are negotiated before cache
-lookup; a failed GPU encode retries with a CPU key. ARA_TEXTURE_ENCODER=cpu disables
+`Encoder` implements ara-asset's BlockEncoder. Verified capability hints select keys
+without creating a device. Hints cover codec/cohort, ordered physical adapter UUIDs,
+LUID, driver version/UUID and explicit ICD selection; unrelated binary rebuilds do
+not invalidate them. Lookup creates only a Vulkan instance, never a VkDevice/service.
+Preparation on a miss confirms the hinted identity; a failed encode retries with
+a CPU key. ARA_TEXTURE_ENCODER=cpu disables
 the optional device for controlled CPU measurements and CPU-only tests.
 Negotiation warms common BC7 kernels in a leased helper. Two lazy headless devices
 reuse pipelines/transfers across disposable imports; workers send bounded raw blocks.

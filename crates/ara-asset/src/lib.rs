@@ -29,7 +29,8 @@ pub use sidecar::{ImportSettings, Sidecar, SidecarCommand, VersionCheck, registe
 pub use source::{AssetPipeline, SourceAsset, snapshot};
 pub use trace::event as record_import_trace;
 pub use worker::{
-    EncoderFactory, ImportJob, JobEvent, ProcessWorker, serve_worker, serve_worker_with_encoder,
+    EncoderFactory, EncoderHintFactory, ImportJob, JobEvent, ProcessWorker, serve_worker,
+    serve_worker_with_encoder, serve_worker_with_encoder_hint,
 };
 
 /// Asset errors preserve the last published generation.
