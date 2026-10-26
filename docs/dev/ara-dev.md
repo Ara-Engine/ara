@@ -355,7 +355,10 @@ arrival coverage states how many frames have valid GPU spans. These are peaks of
 the excluded frames, not isolated GI-only costs. CPU rows gate on
 `run.cpu.work_ms` when its `work_coverage` covers every game frame, and hitch rows on
 `run.cpu.hitches_over_16ms`. Only the first game frame is excluded from hitch counts;
-the loading view remains in startup metrics. Window-only `cpu` metrics remain in
+the loading view remains in startup metrics. Keepalive gaps and later measurement
+requests remain in `run.cpu`; Stop/quit flushes the final CPU totals while retaining
+the last GPU window. `run.hitches` adds indexed host-phase/wait/readiness evidence
+for the first 256 hitches (further details counted as omitted). Window-only `cpu` metrics remain in
 the raw report, but do not gate whole-run CPU/hitches. Wall-clock CPU values only bound CPU work, so they pass
 at or under the limit and are unmeasured above it. `--skip
 player|flip|editor` leaves a section out; `--no-build` reuses the last d26 build;

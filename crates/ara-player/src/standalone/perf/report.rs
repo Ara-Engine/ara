@@ -1,5 +1,7 @@
 //! Atomic complete/failed reports preserve whole-run and arrival evidence.
 use super::*;
+#[cfg(test)]
+mod tests;
 #[derive(Clone, Copy, PartialEq, Eq, serde::Serialize)]
 #[serde(rename_all = "snake_case")]
 pub(super) enum Outcome {
@@ -9,7 +11,7 @@ pub(super) enum Outcome {
 }
 impl Window {
     pub(super) fn publish(
-        &self,
+        &mut self,
         presenter: &Presenter,
         phases: &BTreeMap<&str, u128>,
         camera: Value,
@@ -50,7 +52,7 @@ impl Window {
             json!({"extension":info.timestamp_clock,"period_ns":info.timestamp_period_ns,"valid_bits":info.timestamp_valid_bits})
         });
         report["completed"] = json!(state == Outcome::Ready);
-        report["run"] = json!({"definition":"All game frames in this measurement request, including readiness and warmup; loading-view latency is in startup.","cpu":self.run_cpu.report()});
+        self.update_run(&mut report);
         report["arrival"] = self.arrival.report();
         if self.options.perf_wait_ready {
             let current = presenter.readiness();
@@ -69,10 +71,34 @@ impl Window {
             ready["presentation_error"] = json!(presenter.presentation_error());
             report["readiness"] = ready;
         }
-        let temporary = output.with_extension("json.tmp");
-        std::fs::write(&temporary, serde_json::to_vec_pretty(&report)?)?;
-        std::fs::rename(temporary, output)?;
+        self.write_report(&report)?;
         eprintln!("Perf window published: {}", output.display());
+        self.last_report = Some(report);
+        Ok(())
+    }
+
+    fn update_run(&self, report: &mut Value) {
+        report["run"] = json!({"definition":"All game frames since launch, including readiness, warmup, keepalive gaps and later measurement requests; loading-view latency is in startup.","cpu":self.run_cpu.report(),"hitches":self.hitches.report()});
+    }
+
+    fn write_report(&self, report: &Value) -> Result<()> {
+        let output = self
+            .options
+            .perf_output
+            .as_ref()
+            .context("metrics enabled")?;
+        let temporary = output.with_extension("json.tmp");
+        std::fs::write(&temporary, serde_json::to_vec_pretty(report)?)?;
+        std::fs::rename(temporary, output)?;
+        Ok(())
+    }
+
+    /// Retain the last GPU window while flushing every CPU frame through Stop/quit.
+    pub fn finish(&mut self) -> Result<()> {
+        if let Some(mut report) = self.last_report.take() {
+            self.update_run(&mut report);
+            self.write_report(&report)?;
+        }
         Ok(())
     }
 }
