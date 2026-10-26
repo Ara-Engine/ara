@@ -23,6 +23,7 @@ impl Native {
     /// shadow slots included), sharing every static GPU allocation, material,
     /// texture and pipeline with the primary camera.
     pub(in crate::renderer) fn new_view(&self, gpu: &mut VulkanDevice) -> Result<NativeView> {
+        ara_gpu::cpu_scope!("Raster.secondary_rows");
         let mut allocated = Vec::new();
         let result = (|| {
             let instances = host_buffer(

@@ -5,6 +5,7 @@ use super::*;
 pub(super) struct Retained {
     pub live: live::Live,
     pub retired: bool,
+    pub preparation: Option<preparation::Pending>,
 }
 
 impl Views {

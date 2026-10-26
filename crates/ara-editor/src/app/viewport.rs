@@ -8,6 +8,7 @@ use ara_render_fidelity::{
 use ara_runtime_render::fidelity::native::{self, FrameChange, NativeConfig, Prepared};
 use ara_runtime_render::{PresentationImage, fidelity::vfx::Effects};
 mod content;
+mod convergence;
 mod preview;
 mod startup;
 pub(super) use preview::{GamePreview, PreviewCamera};
@@ -38,6 +39,9 @@ pub(super) struct SceneView {
     failed: Option<(u64, u64, u64, u64)>,
     tick: u32,
     remaining: u32,
+    convergence: convergence::Convergence,
+    raster_gpu_pending: bool,
+    raster_presentation: Option<(ViewMode, ara_render_fidelity::presets::RasterPlan)>,
     camera: Option<crate::state::Camera>,
     /// The fidelity view applies to the Lit mode only; debug views show the raster output.
     lit: bool,
@@ -62,6 +66,7 @@ impl SceneView {
         self.revision = None;
         self.failed = None;
         self.remaining = self.remaining.max(8);
+        self.convergence.reset();
         self.patched_pose = None;
     }
     /// Project typed Inspector drafts without authoring documents or baking meshes.
@@ -138,8 +143,9 @@ impl SceneView {
         self.preview_view = preview;
         if !patch.is_empty() {
             self.content_epoch = self.content_epoch.wrapping_add(1);
+            self.convergence.reset();
         }
-        self.raster_snapshot_dirty = true;
+        self.raster_snapshot_dirty |= !patch.is_empty();
         self.patched_pose = pose_key(editor.gesture.as_ref());
         let revision = (
             store.revision(),
@@ -173,6 +179,7 @@ impl SceneView {
         settle: u32,
     ) -> ara_ui::Result<()> {
         renderer.wait_scene_frame()?;
+        self.convergence.completed();
         self.frame_pending = false;
         if super::scene_sync::native(editor, renderer) {
             self.lit = matches!(view_mode(&editor.state.view_mode), ViewMode::Lit);
@@ -233,6 +240,7 @@ impl SceneView {
             if let Err(error) = self.render_raster(renderer, editor, view, settle) {
                 eprintln!("Scene raster keeps its last good presentation: {error}");
                 self.remaining = 0;
+                self.convergence.failed();
                 self.frame_pending = renderer.scene_frame_pending();
                 self.raster_input = None;
                 self.failed = Some((
@@ -268,6 +276,9 @@ impl SceneView {
         if let Some(raster) = self.raster.take() {
             raster.destroy(renderer)?;
             renderer.clear_native()?;
+            self.raster_gpu_pending = false;
+            self.raster_presentation = None;
+            self.convergence.failed();
             self.raster_frame = None;
             self.raster_input = None;
             self.invalidate();
@@ -315,6 +326,7 @@ impl SceneView {
             self.frame_pending = true;
             return Ok(());
         }
+        self.convergence.completed();
         self.frame_pending = false;
         if renderer.scene_frame_async() {
             self.active = renderer.presentation_ready();
@@ -342,6 +354,19 @@ impl SceneView {
         let RenderPath::Raster(plan) = plan.path else {
             return Ok(());
         };
+        self.convergence.configure(ara_render::temporal_phases(
+            plan.render_size,
+            plan.display_size,
+        ));
+        let presentation = (view_mode(&editor.state.view_mode), plan);
+        if self.raster_presentation != Some(presentation) {
+            self.raster_presentation = Some(presentation);
+            self.convergence.reset();
+        }
+        if self.camera != Some(editor.state.camera) {
+            self.camera = Some(editor.state.camera);
+            self.convergence.reset();
+        }
         if let Some(fidelity) = self.fidelity.take() {
             fidelity.destroy(renderer.gpu_mut())?;
             self.prepared = None;
@@ -415,6 +440,14 @@ impl SceneView {
             if !ready {
                 return Ok(());
             }
+            if !self.raster_snapshot_dirty
+                && !self.convergence.needs_frame()
+                && !self.preview_needs_frame()
+            {
+                // A completion only publishes its retained image. It must not
+                // turn an exhausted convergence budget into another submission.
+                return Ok(());
+            }
             // CPU snapshotting is outside the scope. All GPU adoption, probe
             // delivery, feature composition and post share its completion token.
             let result = renderer.submit_scene_frame(|renderer| {
@@ -458,7 +491,7 @@ impl SceneView {
                 .map(|revision| content::Key { revision, ..key });
             self.patched_pose = key.pose;
             self.failed = None;
-            self.remaining = 64;
+            self.convergence.reset();
         }
         if wait_for_content && (self.content_job.is_some() || self.content_ready.is_some()) {
             // Explicit capture drains preparation. Live/preview calls only poll
@@ -475,7 +508,7 @@ impl SceneView {
                 content.style_pending(frame, self.preview_view.as_ref().unwrap_or(view))
             {
                 self.raster_snapshot_dirty |= changed;
-                self.remaining = self.remaining.max(8);
+                self.convergence.reset();
                 self.raster
                     .as_mut()
                     .ok_or("raster view")?
@@ -490,14 +523,17 @@ impl SceneView {
                 raster.prepare_unchanged(renderer, frame, plan, look, resolve)?;
             }
             self.raster_snapshot_dirty = false;
+            self.raster_gpu_pending = renderer.probe_gi_needs_frame()
+                || renderer
+                    .native_texture_stats()
+                    .is_some_and(|t| t.pending_textures > 0);
+            if self.raster_gpu_pending || raster.needs_frame() {
+                self.convergence.reset();
+            }
         }
         self.failed = None;
         if matches!(work, RasterWork::Prepare) {
             return Ok(());
-        }
-        if self.camera != Some(editor.state.camera) {
-            self.remaining = self.remaining.max(8);
-            self.camera = Some(editor.state.camera);
         }
         let raster = self.raster.as_mut().ok_or("raster view")?;
         let frame = self.raster_frame.as_ref().ok_or("raster frame")?;
@@ -516,15 +552,20 @@ impl SceneView {
                 &editor.state.camera.spec(),
                 view_mode(&editor.state.view_mode),
             )?;
-            self.remaining = self.remaining.saturating_sub(1);
-            if renderer
-                .native_texture_stats()
-                .is_some_and(|stats| stats.pending_textures > 0)
-            {
-                self.remaining = self.remaining.max(1);
+            self.raster_gpu_pending = renderer.probe_gi_needs_frame()
+                || renderer
+                    .native_texture_stats()
+                    .is_some_and(|t| t.pending_textures > 0);
+            if self.raster_gpu_pending || raster.needs_frame() {
+                self.convergence.reset();
+            }
+            if !matches!(work, RasterWork::Submitted(_)) {
+                self.convergence.submitted(1);
+                self.convergence.completed();
             }
         }
         if matches!(work, RasterWork::Submitted(_)) {
+            self.convergence.submitted(settle.max(1));
             return Ok(());
         }
         let output = renderer.output();
@@ -697,8 +738,11 @@ impl SceneView {
             || (quality || self.raster.is_some())
                 && self.active
                 && self.lit
-                && ((self.fidelity.is_some() || self.raster.is_some()) && self.remaining > 0
-                    || self.preview_needs_frame())
+                && (if self.raster.is_some() {
+                    self.convergence.needs_frame()
+                } else {
+                    self.fidelity.is_some() && self.remaining > 0
+                } || self.preview_needs_frame())
     }
     pub fn attach(
         &self,
@@ -997,7 +1041,29 @@ mod tests {
                     output.is_none(),
                     "the first preview does not wait for its GPU frame"
                 );
-                assert!(preview.pending(&renderer));
+                // The first request now starts bounded target allocation before
+                // it can submit a GPU frame. Keep polling as the live panel does.
+                let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+                while !preview.pending(&renderer) {
+                    assert!(
+                        std::time::Instant::now() < deadline,
+                        "preview target preparation timed out"
+                    );
+                    scene
+                        .preview_game(
+                            &mut renderer,
+                            &editor,
+                            &view,
+                            &mut preview,
+                            PreviewCamera {
+                                camera: &camera,
+                                size: [96, 54],
+                                quality: None,
+                            },
+                        )
+                        .map_err(|error| anyhow::anyhow!("{error}"))?;
+                    std::thread::sleep(std::time::Duration::from_millis(1));
+                }
                 renderer.wait_scene_frame()?;
                 assert!(
                     preview
@@ -1188,6 +1254,10 @@ mod tests {
                     scene.failed.is_none(),
                     "scene reopen must publish without heap exhaustion"
                 );
+            }
+            if !ray_tracing {
+                let idle_view = editor.view()?;
+                super::convergence::exercise_idle(&mut scene, &mut renderer, &editor, &idle_view)?;
             }
             renderer.gpu().assert_clean()?;
             Ok(())

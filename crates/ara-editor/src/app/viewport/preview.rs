@@ -56,7 +56,8 @@ impl SceneView {
     /// Shared content work that a visible Game preview must poll. Scene-camera
     /// accumulation is independent and must not keep the Game panel awake.
     pub(in crate::app) fn preview_needs_frame(&self) -> bool {
-        self.content_job.is_some()
+        self.raster_gpu_pending
+            || self.content_job.is_some()
             || self.content_ready.is_some()
             || self
                 .raster
@@ -109,6 +110,9 @@ impl SceneView {
             quality: plan.quality,
             exposure,
         };
+        if !renderer.preallocate_view(view, &request)? {
+            return renderer.view_output(view).map_err(Into::into);
+        }
         let mut submitted = false;
         let output = renderer.submit_secondary(view, &request, |renderer, request| {
             // Content adoption and probe delivery use the same deferred upload
@@ -132,6 +136,13 @@ impl SceneView {
             Ok(true)
         })?;
         if submitted {
+            self.raster_gpu_pending = renderer.probe_gi_needs_frame()
+                || renderer
+                    .native_texture_stats()
+                    .is_some_and(|t| t.pending_textures > 0);
+            if self.raster_gpu_pending {
+                self.convergence.reset();
+            }
             self.raster
                 .as_mut()
                 .ok_or("Game preview content")?

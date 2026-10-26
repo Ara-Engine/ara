@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 use std::path::Path;
 
 /// Debug view IDs are also the cooked shader ABI.
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 #[repr(u32)]
 pub enum ViewMode {

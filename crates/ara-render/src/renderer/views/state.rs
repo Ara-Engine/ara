@@ -21,57 +21,93 @@ pub(super) struct ViewState {
 }
 
 impl ViewState {
-    pub fn new(renderer: &mut Renderer, size: [u32; 2]) -> Result<Self> {
-        let mut targets = Some(Renderer::targets(&mut renderer.gpu, size, size)?);
-        let mut allocated = Vec::new();
+    pub fn new(renderer: &mut Renderer, render: [u32; 2], size: [u32; 2]) -> Result<Self> {
+        let resources =
+            targets::allocate(&mut renderer.gpu, preparation::request(render, size, false))?;
+        Self::from_prepared(renderer, render, size, resources).map(|(state, _)| state)
+    }
+
+    pub(super) fn matches_extent(&self, render: [u32; 2], display: [u32; 2]) -> bool {
+        self.render == render && self.size == display
+    }
+
+    pub(super) fn from_prepared(
+        renderer: &mut Renderer,
+        render: [u32; 2],
+        size: [u32; 2],
+        mut resources: ara_gpu::vulkan::PreparedResources,
+    ) -> Result<(Self, Vec<Image>)> {
+        let owned = ara_gpu::vulkan::PreparedResources {
+            images: resources.images.to_vec(),
+            buffers: resources.buffers.to_vec(),
+        };
         let result = (|| {
-            let (frame, frame_index) = buffer(
+            ensure!(
+                resources.buffers.len() == 8 && resources.images.len() >= TARGET_COUNT,
+                "Invalid prepared camera"
+            );
+            let mut buffers = resources.buffers.split_off(3).into_iter();
+            let output_images = resources.images.split_off(TARGET_COUNT);
+            let targets = targets::bind(&mut renderer.gpu, resources)?;
+            let mut next = || buffers.next().context("prepared camera constants");
+            let frame = next()?;
+            let display_frame = next()?;
+            let compute_frame = next()?;
+            let look_frame = next()?;
+            let look_state = next()?;
+            let look = fork_look(
                 &mut renderer.gpu,
-                std::mem::size_of::<frame::Frame>(),
-                &mut allocated,
-            )?;
-            let (display_frame, display_frame_index) = buffer(
-                &mut renderer.gpu,
-                std::mem::size_of::<frame::Frame>(),
-                &mut allocated,
-            )?;
-            let (compute_frame, compute_frame_index) = buffer(
-                &mut renderer.gpu,
-                std::mem::size_of::<frame::Frame>(),
-                &mut allocated,
-            )?;
-            let look = fork_look(&mut renderer.gpu, &renderer.look, size, &mut allocated)?;
-            Ok(Self {
+                &renderer.look,
+                render,
                 size,
-                render: size,
-                targets: targets.take().context("secondary targets allocated")?,
-                frame,
-                frame_index,
-                display_frame,
-                display_frame_index,
-                compute_frame,
-                compute_frame_index,
-                previous_vp: Mat4::IDENTITY,
-                frame_number: 0,
-                last_timings: Vec::new(),
-                look,
-                native: None,
-                source_hash: renderer.content.base_hash.to_owned(),
-            })
+                look_frame,
+                look_state,
+            )?;
+            Ok((
+                Self {
+                    size,
+                    render,
+                    targets,
+                    frame_index: renderer.gpu.storage_buffer(frame)?.index,
+                    frame,
+                    display_frame_index: renderer.gpu.storage_buffer(display_frame)?.index,
+                    display_frame,
+                    compute_frame_index: renderer.gpu.storage_buffer(compute_frame)?.index,
+                    compute_frame,
+                    previous_vp: Mat4::IDENTITY,
+                    frame_number: 0,
+                    last_timings: Vec::new(),
+                    look,
+                    native: None,
+                    source_hash: renderer.content.base_hash.to_owned(),
+                },
+                output_images,
+            ))
         })();
         if result.is_err() {
-            if let Some(targets) = targets {
-                retire_targets(&mut renderer.gpu, targets)?;
-            }
-            for resource in allocated {
-                renderer.gpu.retire(resource)?;
-            }
-            renderer.gpu.collect()?;
+            targets::retire(&mut renderer.gpu, owned)?;
         }
         result
     }
 
+    /// Target replacement retains the camera's quality maps and exposure state.
+    /// Look::resize drops only view-sized images, leaving world/cascade caches.
+    pub(super) fn inherit(
+        &mut self,
+        old: &mut Self,
+        gpu: &mut VulkanDevice,
+        render: [u32; 2],
+        display: [u32; 2],
+    ) -> Result<()> {
+        // Resize the still-owned old look before swapping, so an allocation
+        // failure cannot strand the newly prepared target batch.
+        old.look.resize(gpu, render, display)?;
+        std::mem::swap(&mut self.look, &mut old.look);
+        self.native = old.native.take();
+        Ok(())
+    }
     pub fn prepare_native(&mut self, renderer: &mut Renderer) -> Result<()> {
+        ara_gpu::cpu_scope!("Raster.secondary_native");
         let mut reset = self.source_hash != renderer.content.base_hash;
         match &renderer.native {
             Some(source) => {
@@ -178,28 +214,16 @@ fn retire_targets(gpu: &mut VulkanDevice, targets: Targets) -> Result<()> {
     Ok(())
 }
 
-fn buffer(
-    gpu: &mut VulkanDevice,
-    bytes: usize,
-    allocated: &mut Vec<Resource>,
-) -> Result<(Buffer, u32)> {
-    let buffer = gpu.create_buffer(bytes as u64, vk::BufferUsageFlags::STORAGE_BUFFER, true)?;
-    allocated.push(Resource::Buffer(buffer));
-    Ok((buffer, gpu.storage_buffer(buffer)?.index))
-}
-
 fn fork_look(
     gpu: &mut VulkanDevice,
     source: &LookGpu,
+    render: [u32; 2],
     size: [u32; 2],
-    allocated: &mut Vec<Resource>,
+    frame: Buffer,
+    state: Buffer,
 ) -> Result<LookGpu> {
-    let (frame, frame_index) = buffer(
-        gpu,
-        std::mem::size_of::<crate::look::frame::LookFrame>(),
-        allocated,
-    )?;
-    let (state, state_index) = buffer(gpu, STATE_BYTES, allocated)?;
+    let frame_index = gpu.storage_buffer(frame)?.index;
+    let state_index = gpu.storage_buffer(state)?.index;
     gpu.upload(state, &[0; STATE_BYTES])?;
     let p = &source.pipelines;
     Ok(LookGpu {
@@ -240,7 +264,7 @@ fn fork_look(
             access: Access::Undefined,
             queue: Queue::Graphics,
         }),
-        render: size,
+        render,
         display: size,
         sky: None,
         deferred: false,
