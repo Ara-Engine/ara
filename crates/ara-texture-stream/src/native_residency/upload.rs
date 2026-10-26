@@ -13,6 +13,10 @@ impl NativeResidency {
         gpu: &mut VulkanDevice,
         initialize: bool,
     ) -> Result<NativeStats> {
+        ensure!(
+            self.initial.as_ref().is_none_or(initial::Initial::is_ready),
+            "native texture allocation is still pending"
+        );
         if !self.dirty && self.stats.pending_textures == 0 {
             self.stats.uploaded_bytes = 0;
             self.stats.upload_gpu_ms = 0.0;
@@ -77,6 +81,9 @@ impl NativeResidency {
                 for resource in allocated {
                     gpu.retire(resource)?;
                 }
+                if let Some(initial) = self.initial.take() {
+                    initial.destroy(gpu)?;
+                }
                 gpu.collect()?;
                 return Err(error);
             }
@@ -99,6 +106,9 @@ impl NativeResidency {
             if matches!(resource, Resource::Buffer(buffer) if buffer != published_table) {
                 gpu.retire(resource)?;
             }
+        }
+        if let Some(initial) = self.initial.take() {
+            initial.destroy(gpu)?;
         }
         gpu.collect()?;
         self.last = Some(point);
@@ -134,34 +144,29 @@ impl NativeResidency {
             let mip = source
                 .mip(first)
                 .ok_or_else(|| anyhow::anyhow!("native mip plan"))?;
-            let (format, encoding) = match source.format() {
-                TextureFormat::Bc4 => (vk::Format::BC4_UNORM_BLOCK, 1),
-                TextureFormat::Bc5 => (vk::Format::BC5_UNORM_BLOCK, 2),
-                TextureFormat::Bc7 => (vk::Format::BC7_UNORM_BLOCK, 0),
-                TextureFormat::Bc7Srgb => (
-                    if self.entries[index].srgb {
-                        vk::Format::BC7_SRGB_BLOCK
-                    } else {
-                        vk::Format::BC7_UNORM_BLOCK
-                    },
-                    0,
-                ),
-                _ => anyhow::bail!("unsupported native texture encoding"),
+            let (format, encoding) = format(&self.entries[index])?;
+            let bytes = plan::bytes(&self.entries[index], first)?;
+            let (image, stage) = if let Some(initial) = &mut self.initial {
+                let (image, stage) = initial
+                    .take_tail(index)
+                    .ok_or_else(|| anyhow::anyhow!("native prepared mip tail is missing"))?;
+                allocated.extend([Resource::Image(image), Resource::Buffer(stage)]);
+                (image, stage)
+            } else {
+                let image = gpu.create_mip_image(
+                    mip.size,
+                    format,
+                    source.mip_count() - first,
+                    vk::ImageUsageFlags::SAMPLED
+                        | vk::ImageUsageFlags::TRANSFER_DST
+                        | vk::ImageUsageFlags::TRANSFER_SRC,
+                )?;
+                allocated.push(Resource::Image(image));
+                let stage = gpu.create_buffer(bytes, vk::BufferUsageFlags::TRANSFER_SRC, true)?;
+                allocated.push(Resource::Buffer(stage));
+                gpu.upload(stage, &source.stage(first)?)?;
+                (image, stage)
             };
-            let image = gpu.create_mip_image(
-                mip.size,
-                format,
-                source.mip_count() - first,
-                vk::ImageUsageFlags::SAMPLED
-                    | vk::ImageUsageFlags::TRANSFER_DST
-                    | vk::ImageUsageFlags::TRANSFER_SRC,
-            )?;
-            allocated.push(Resource::Image(image));
-            let bytes = source.stage(first)?;
-            let stage =
-                gpu.create_buffer(bytes.len() as u64, vk::BufferUsageFlags::TRANSFER_SRC, true)?;
-            allocated.push(Resource::Buffer(stage));
-            gpu.upload(stage, &bytes)?;
             let slot = gpu.sampled_image(image, false)?.index;
             let [width, height] = source.size();
             let row = Row([
@@ -201,16 +206,21 @@ impl NativeResidency {
                 resident: Resident {
                     image,
                     row,
-                    bytes: bytes.len() as u64,
+                    bytes,
                     borrowed: false,
                 },
             });
         }
-        let buffer = gpu.create_buffer(
-            (self.rows.len() * std::mem::size_of::<Row>()) as u64,
-            vk::BufferUsageFlags::STORAGE_BUFFER,
-            true,
-        )?;
+        let buffer = match &mut self.initial {
+            Some(initial) => initial
+                .take_table()
+                .ok_or_else(|| anyhow::anyhow!("native prepared table is missing"))?,
+            None => gpu.create_buffer(
+                (self.rows.len() * std::mem::size_of::<Row>()) as u64,
+                vk::BufferUsageFlags::STORAGE_BUFFER,
+                true,
+            )?,
+        };
         allocated.push(Resource::Buffer(buffer));
         gpu.upload(buffer, bytemuck::cast_slice(&self.rows))?;
         let binding = NativeBinding {
@@ -227,6 +237,23 @@ impl NativeResidency {
         let milliseconds = gpu.resolve(point)?.iter().map(|t| t.milliseconds).sum();
         Ok((pending, Table { buffer, binding }, point, milliseconds))
     }
+}
+
+pub(super) fn format(entry: &Entry) -> Result<(vk::Format, u32)> {
+    Ok(match entry.source.format() {
+        TextureFormat::Bc4 => (vk::Format::BC4_UNORM_BLOCK, 1),
+        TextureFormat::Bc5 => (vk::Format::BC5_UNORM_BLOCK, 2),
+        TextureFormat::Bc7 => (vk::Format::BC7_UNORM_BLOCK, 0),
+        TextureFormat::Bc7Srgb => (
+            if entry.srgb {
+                vk::Format::BC7_SRGB_BLOCK
+            } else {
+                vk::Format::BC7_UNORM_BLOCK
+            },
+            0,
+        ),
+        _ => anyhow::bail!("unsupported native texture encoding"),
+    })
 }
 
 fn barrier(resource: Resource, before: Access, after: Access) -> Barrier {

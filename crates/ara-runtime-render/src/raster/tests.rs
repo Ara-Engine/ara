@@ -3,6 +3,7 @@ use ara_runtime::{
     components::MeshShape,
     extract::{Draw, Geometry},
 };
+mod preparation;
 
 #[test]
 fn disabled_probe_gi_does_not_report_a_queued_emitter_search() -> Result<()> {

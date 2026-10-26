@@ -61,6 +61,14 @@ impl Renderer {
     pub fn is_native(&self) -> bool {
         self.native.is_some()
     }
+    /// Poll candidate allocations without touching the current generation or
+    /// submitting commands. Call at a content boundary, then publish when ready.
+    pub fn preallocate_native_textures(&mut self, textures: &mut dyn Textures) -> Result<bool> {
+        textures.preallocate(
+            &mut self.gpu,
+            self.native.as_ref().map(|native| native.textures.as_ref()),
+        )
+    }
     /// Release native geometry/residency when an explicitly RT-enabled view
     /// switches back to the legacy diagnostic renderer on the same device.
     pub fn clear_native(&mut self) -> Result<()> {
@@ -97,7 +105,14 @@ impl Renderer {
         textures: Box<dyn Textures>,
     ) -> Result<()> {
         ara_gpu::cpu_scope!("RasterNative.publish");
-        self.publish_native(scene.validated()?, textures)
+        let validated = match scene.validated() {
+            Ok(validated) => validated,
+            Err(error) => {
+                textures.destroy(&mut self.gpu)?;
+                return Err(error);
+            }
+        };
+        self.publish_native(validated, textures)
     }
 
     fn publish_native(
@@ -458,9 +473,12 @@ impl Native {
             .len()
             .checked_mul(passes)
             .filter(|rows| *rows <= u32::MAX as usize)
-            .and_then(|rows| rows.checked_mul(8))
-            .context("Native shadow visibility capacity overflow")?
-            .max(16);
+            .and_then(|rows| rows.checked_mul(8));
+        let Some(visible_bytes) = visible_bytes else {
+            textures.destroy(gpu)?;
+            anyhow::bail!("Native shadow visibility capacity overflow");
+        };
+        let visible_bytes = visible_bytes.max(16);
         let upload = {
             ara_gpu::cpu_scope!("RasterNative.publish_textures");
             let initialized = match previous {

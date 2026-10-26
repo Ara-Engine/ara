@@ -57,6 +57,7 @@ impl SceneView {
     /// accumulation is independent and must not keep the Game panel awake.
     pub(in crate::app) fn preview_needs_frame(&self) -> bool {
         self.content_job.is_some()
+            || self.content_ready.is_some()
             || self
                 .raster
                 .as_ref()

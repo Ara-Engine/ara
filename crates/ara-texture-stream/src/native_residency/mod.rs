@@ -7,6 +7,7 @@ use std::{collections::BTreeMap, sync::Arc};
 
 #[cfg(test)]
 mod benchmark;
+mod initial;
 mod plan;
 mod reuse;
 #[cfg(test)]
@@ -86,6 +87,7 @@ pub struct NativeResidency {
     table: Option<Table>,
     last: Option<TimelinePoint>,
     stats: NativeStats,
+    initial: Option<initial::Initial>,
 }
 
 impl ara_render::instanced::Textures for NativeResidency {
@@ -100,6 +102,13 @@ impl ara_render::instanced::Textures for NativeResidency {
     }
     fn initialize(&mut self, gpu: &mut VulkanDevice) -> Result<NativeStats> {
         Self::initialize(self, gpu)
+    }
+    fn preallocate(
+        &mut self,
+        gpu: &mut VulkanDevice,
+        previous: Option<&dyn ara_render::instanced::Textures>,
+    ) -> Result<bool> {
+        Self::preallocate(self, gpu, previous)
     }
     fn initialize_reusing(
         &mut self,
@@ -170,6 +179,7 @@ impl NativeResidency {
             table: None,
             last: None,
             stats: NativeStats::default(),
+            initial: None,
         })
     }
 
@@ -205,6 +215,10 @@ impl NativeResidency {
             );
             return Ok(id);
         }
+        ensure!(
+            self.initial.is_none(),
+            "native preparation freezes registrations"
+        );
         let id = NativeTextureId(u32::try_from(self.entries.len())?);
         self.entries.push(Entry {
             source,
@@ -304,6 +318,7 @@ impl NativeResidency {
             "invalid native texture demand"
         );
         if entry.desired != first_mip || entry.priority != priority {
+            ensure!(self.initial.is_none(), "native preparation freezes demand");
             entry.desired = first_mip;
             entry.priority = priority;
             self.dirty = true;
@@ -366,7 +381,10 @@ impl NativeResidency {
     }
 
     /// Retires native images and the binding table before the device is destroyed.
-    pub fn destroy(self, gpu: &mut VulkanDevice) -> Result<()> {
+    pub fn destroy(mut self, gpu: &mut VulkanDevice) -> Result<()> {
+        if let Some(initial) = self.initial.take() {
+            initial.destroy(gpu)?;
+        }
         for entry in self.entries {
             if let Some(resident) = entry.resident
                 && !resident.borrowed

@@ -30,7 +30,7 @@ pub struct RasterUpdate {
 
 struct Preparation {
     snapshot_changed: bool,
-    replacement: Option<(Prepared, u64)>,
+    replacement: Option<(Prepared, u64, ara_texture_stream::NativeResidency)>,
 }
 
 /// Derived native content and VFX on a caller-owned renderer/device. It never
@@ -238,6 +238,7 @@ impl RasterView {
             content,
             prepared,
             key,
+            textures,
         } = candidate;
         let look = FrameEnvironment::resolve(&frame.look, frame.environment.exposure);
         self.prepare_inner(
@@ -248,7 +249,7 @@ impl RasterView {
             || Ok(content),
             Preparation {
                 snapshot_changed: true,
-                replacement: Some((prepared, key)),
+                replacement: Some((prepared, key, textures)),
             },
         )?;
         Ok(frame)
@@ -315,12 +316,15 @@ impl RasterView {
                     bake_content = Some(content.clone());
                 }
                 let config = texture_config();
-                let (mut prepared, key) = match replacement {
-                    Some((prepared, key)) => (prepared, Some(key)),
-                    None => (native::prepare(frame, content, config)?, None),
+                let (mut prepared, key, textures) = match replacement {
+                    Some((prepared, key, textures)) => (prepared, Some(key), textures),
+                    None => {
+                        let prepared = native::prepare(frame, content, config)?;
+                        let textures = prepared.textures.fork_sources(config)?;
+                        (prepared, None, textures)
+                    }
                 };
                 prepared.enable_motion();
-                let textures = prepared.textures.fork_sources(config)?;
                 renderer.replace_native_scene(&prepared.scene, Box::new(textures))?;
                 self.key = key.unwrap_or_else(|| content_key(&prepared));
                 let arrivals = self

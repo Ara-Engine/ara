@@ -61,6 +61,67 @@ pub(super) struct Job {
     pub thread: JoinHandle<anyhow::Result<PreparedScene>>,
 }
 
+/// One CPU-complete candidate, retained while its native allocations are prepared.
+pub(super) struct Publication {
+    pub key: Key,
+    pub scene: PreparedScene,
+    pub ready: bool,
+}
+
+/// Poll only; live calls never join an unfinished extraction or wait for native
+/// allocations. Superseded candidates cancel their resources before being dropped.
+pub(super) fn poll(
+    job: &mut Option<Job>,
+    publication: &mut Option<Publication>,
+    current: Key,
+    renderer: &mut ara_render::Renderer,
+    wait: bool,
+) -> anyhow::Result<()> {
+    if publication
+        .as_ref()
+        .is_some_and(|p| !p.key.matches(current))
+    {
+        publication
+            .take()
+            .expect("superseded publication")
+            .scene
+            .raster
+            .destroy(renderer)?;
+    }
+    if job
+        .as_ref()
+        .is_some_and(|job| wait || job.thread.is_finished())
+    {
+        let job = job.take().expect("completed content job");
+        let result = job
+            .thread
+            .join()
+            .map_err(|_| anyhow::anyhow!("Scene content worker panicked"))?;
+        if job.key.matches(current) {
+            *publication = Some(Publication {
+                key: job.key,
+                scene: result?,
+                ready: false,
+            });
+        }
+    }
+    if let Some(candidate) = publication {
+        match candidate.scene.raster.preallocate(renderer) {
+            Ok(ready) => candidate.ready = ready,
+            Err(error) => {
+                publication
+                    .take()
+                    .expect("failed publication")
+                    .scene
+                    .raster
+                    .destroy(renderer)?;
+                return Err(error);
+            }
+        }
+    }
+    Ok(())
+}
+
 impl Job {
     pub fn start(
         key: Key,
