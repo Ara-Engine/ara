@@ -12,6 +12,7 @@ mod tests;
 pub(super) struct Live {
     shown: Option<Output>,
     spare: Option<Output>,
+    reserved: Option<Output>,
     pending: Option<Pending>,
     /// A resize requested while a frame was pending: (render, display) sizes.
     pub resize: Option<([u32; 2], [u32; 2])>,

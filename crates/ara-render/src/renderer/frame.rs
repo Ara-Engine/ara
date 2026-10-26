@@ -32,6 +32,12 @@ pub(super) struct Frame {
     /// (render / display width: a negative mip bias when upscaled), w unused.
     pub upscale: [f32; 4],
 }
+/// Halton sample count for a render/display pixel ratio. View schedulers use
+/// whole cycles to converge the same sequence as the renderer.
+pub fn temporal_phases(render: [u32; 2], display: [u32; 2]) -> u32 {
+    let pixels = |s: [u32; 2]| s[0] as f32 * s[1] as f32;
+    ((8. * pixels(display) / pixels(render).max(1.)).round() as u32).clamp(8, 32)
+}
 impl Renderer {
     pub(super) fn frame_data(
         &self,
@@ -47,8 +53,7 @@ impl Renderer {
         if !deterministic {
             // Halton(2,3) phases grow with the upscale (eight times the display
             // pixels per render pixel), so samples land near every display pixel.
-            let ratio = display[0] * display[1] / (render[0] * render[1]);
-            let phases = ((8. * ratio).round() as u32).clamp(8, 32);
+            let phases = temporal_phases(self.render, self.size);
             let sample = self.frame_number % phases + 1;
             let jitter = glam::Vec2::new(halton(sample, 2) - 0.5, halton(sample, 3) - 0.5);
             projection = Mat4::from_translation(Vec3::new(

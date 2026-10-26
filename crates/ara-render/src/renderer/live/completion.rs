@@ -2,21 +2,49 @@
 use super::*;
 
 impl Live {
+    pub(in crate::renderer) fn replace_preallocated(
+        &mut self,
+        gpu: &mut VulkanDevice,
+        images: Vec<Image>,
+        size: [u32; 2],
+        id_size: [u32; 2],
+    ) -> Result<()> {
+        ensure!(
+            images.len() == 4 && !self.pending(),
+            "Invalid retained target preparation"
+        );
+        for old in [self.spare.take(), self.reserved.take()]
+            .into_iter()
+            .flatten()
+        {
+            old.retire(gpu)?;
+        }
+        let output = |color, ids| Output {
+            color,
+            ids,
+            size,
+            id_size,
+            labels: Vec::new(),
+            epoch: None,
+            written: false,
+        };
+        self.spare = Some(output(images[0], images[1]));
+        self.reserved = Some(output(images[2], images[3]));
+        Ok(())
+    }
     pub(in crate::renderer) fn acquire(
         &mut self,
         gpu: &mut VulkanDevice,
         size: [u32; 2],
         id_size: [u32; 2],
     ) -> Result<Output> {
-        match self.spare.take() {
-            Some(output) if output.size == size && output.id_size == id_size => Ok(output),
-            old => {
-                if let Some(old) = old {
-                    old.retire(gpu)?;
-                }
-                Output::new(gpu, size, id_size)
+        while let Some(output) = self.spare.take().or_else(|| self.reserved.take()) {
+            if output.size == size && output.id_size == id_size {
+                return Ok(output);
             }
+            output.retire(gpu)?;
         }
+        Output::new(gpu, size, id_size)
     }
 
     pub(in crate::renderer) fn submitted(
@@ -74,7 +102,10 @@ impl Live {
 
     pub(in crate::renderer) fn destroy(self, gpu: &mut VulkanDevice) -> Result<()> {
         ensure!(!self.pending(), "Retained camera is still in flight");
-        for output in [self.shown, self.spare].into_iter().flatten() {
+        for output in [self.shown, self.spare, self.reserved]
+            .into_iter()
+            .flatten()
+        {
             output.retire(gpu)?;
         }
         Ok(())

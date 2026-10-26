@@ -288,6 +288,7 @@ impl LookGpu {
     /// froxels with sky or fog, bloom atlases with bloom). Never frees: looks rarely
     /// change, and a later frame would only allocate them again.
     pub(crate) fn ensure(&mut self, gpu: &mut VulkanDevice) -> Result<()> {
+        ara_gpu::cpu_scope!("Look.ensure");
         let look = self.effective();
         let sky = look.sky.is_some();
         let needed = [

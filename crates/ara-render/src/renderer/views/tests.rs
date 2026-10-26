@@ -6,6 +6,7 @@ use crate::{
 use ara_gpu::{Barrier, commands::Command};
 use std::sync::atomic::{AtomicUsize, Ordering};
 pub(in crate::renderer) mod fixture;
+mod preparation;
 
 struct Textures(Arc<AtomicUsize>);
 impl instanced::Textures for Textures {
