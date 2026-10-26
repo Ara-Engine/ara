@@ -102,8 +102,12 @@ pub fn hub(command: HubCommand) -> Result<bool, RpcError> {
             Some(directory) => directory,
             None => ara_hub_service::config_dir().map_err(io_error)?,
         };
+        let directory = std::path::absolute(directory).map_err(io_error)?;
         let config =
             ara_hub_service::HubConfig::for_directory(executable, directory).map_err(io_error)?;
+        // Direct/legacy launches must also release the caller's installation directory.
+        std::fs::create_dir_all(&config.directory).map_err(io_error)?;
+        std::env::set_current_dir(&config.directory).map_err(io_error)?;
         let log = config.directory.join("hub-start.log");
         if let Err(error) = ara_hub_service::serve(config, port) {
             let _ = std::fs::write(log, error.to_string());

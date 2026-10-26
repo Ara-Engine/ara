@@ -26,6 +26,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .ok_or("invalid PID")?
         .parse()?;
     let plan: ara_update::updater::Plan = serde_json::from_slice(&std::fs::read(&request)?)?;
+    // Protect direct/legacy callers that inherited the install directory.
+    std::env::set_current_dir(&plan.config)?;
     ara_update::updater::wait_for_parent(pid)?;
     let result = ara_update::updater::apply(&plan);
     if result.is_ok() {

@@ -25,6 +25,10 @@ zip = { workspace = true, features = ["deflate"] }
 [lints]
 workspace = true
 
+[features]
+# Explicit release rehearsal; never use this build to publish real releases.
+rehearsal = ["ara-update/test-support"]
+
 [dev-dependencies]
 ara-update = { path = "../ara-update", features = ["test-support"] }
 tempfile.workspace = true

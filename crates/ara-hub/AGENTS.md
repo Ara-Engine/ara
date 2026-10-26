@@ -35,6 +35,11 @@ contract is `crates/ara-hub-service/AGENTS.md`.
 
 ## Behavior worth knowing
 
+The opt-in `rehearsal` feature adds `--rehearse-update REPORT`; with the test-only
+loopback feed it drives the actual update model and external updater without a
+window. Updated Hub health renders offscreen and waits for the updater's ack.
+This feature stays off in shipping builds; see ara-release's rehearsal command.
+
 - Equal markup replies do no UI work. Changed markup uses `Ui::reconcile` on the
   same tree, retaining shaped text, layouts, widget state and input identity.
   Scroll offsets clamp after layout; explicit focus requests and hover update then.

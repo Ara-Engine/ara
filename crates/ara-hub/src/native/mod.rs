@@ -7,6 +7,8 @@ mod images;
 mod input;
 pub(crate) mod os;
 mod prefs;
+#[cfg(feature = "rehearsal")]
+mod rehearsal;
 mod updates;
 mod wake;
 
@@ -33,6 +35,9 @@ use std::{
 /// Command-line options of `ara-hub`.
 #[derive(Clone, Debug)]
 pub struct Options {
+    /// Windowless, compile-time-only release rehearsal driver.
+    #[cfg(feature = "rehearsal")]
+    pub rehearse_update: Option<PathBuf>,
     /// Internal, windowless installed-service check used by release smoke.
     pub service_check: Option<PathBuf>,
     /// Internal updater acknowledgment, written after the first rendered GUI frame.
@@ -51,6 +56,8 @@ pub struct Options {
 impl Default for Options {
     fn default() -> Self {
         Self {
+            #[cfg(feature = "rehearsal")]
+            rehearse_update: None,
             service_check: None,
             update_health: None,
             size: [1440, 900],
@@ -212,6 +219,10 @@ pub fn run(options: Options) -> anyhow::Result<()> {
             &serde_json::json!({"executable":ara,"status":status,"templates":templates["templates"]}),
         )?;
         return Ok(());
+    }
+    #[cfg(feature = "rehearsal")]
+    if std::env::var_os("ARA_RELEASE_TEST_API").is_some() {
+        return rehearsal::run(&options, &exe_dir, &config);
     }
     let prefs = if options.capture.is_some() {
         Prefs::default()

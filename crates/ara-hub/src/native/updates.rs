@@ -45,6 +45,10 @@ pub(super) fn launch(
         directory.join("hub.json").is_file() && !directory.join("engine.json").exists(),
         "Install the standalone Ara Hub to enable self-updates; engine-bundled Hubs are updated with their engine"
     );
+    ensure!(
+        !config.starts_with(&directory),
+        "Hub update state must be outside its installation directory"
+    );
     fs::create_dir_all(config.join("updater"))?;
     let runner = config
         .join("updater")
@@ -64,6 +68,8 @@ pub(super) fn launch(
     ara_update::write_json(&request, &plan)?;
     let mut command = Command::new(runner);
     command
+        // Shortcut launches inherit the install cwd; retaining it blocks Windows rename.
+        .current_dir(config)
         .env("ARA_CONFIG_DIR", config)
         .arg(&request)
         .arg(std::process::id().to_string())
@@ -75,6 +81,14 @@ pub(super) fn launch(
         use std::os::windows::process::CommandExt;
         command.creation_flags(0x0800_0000);
     }
-    command.spawn().context("start external Hub updater")?;
+    let child = command.spawn().context("start external Hub updater")?;
+    #[cfg(feature = "rehearsal")]
+    if std::env::var_os("ARA_RELEASE_TEST_API").is_some() {
+        ara_update::write_json(
+            &config.join("rehearsal-updater.json"),
+            &serde_json::json!({"pid":child.id()}),
+        )?;
+    }
+    let _ = child;
     Ok(())
 }
