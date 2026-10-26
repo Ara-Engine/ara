@@ -58,7 +58,7 @@ impl NativeUi {
     pub fn forget_external(&mut self, id: u32) {
         if let Some(slot) = self.external.remove(&id) {
             self.external_images.remove(&id);
-            if let Some(view) = self.textures.get(&0).map(|t| t._image.view) {
+            if let Some(view) = self.textures.get(&0).map(|t| t.image.view) {
                 self.write_texture(slot, view);
             }
             self.free_slots.push(slot);
