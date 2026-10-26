@@ -215,6 +215,11 @@ pub(crate) struct GiGpu {
     pub clear_budget: u32,
     pub slot: usize,
     pub cursor: u32,
+    /// The previous frame's relit window (first probe, count). The atlas this
+    /// frame writes last held every probe two frames ago, so only that window
+    /// is stale in it: the relight copies it forward rather than the whole
+    /// pool. Zero whenever both atlases hold the same irradiance.
+    pub relit: (u32, u32),
     /// Remaining full-volume convergence bounces.
     pub converge: u32,
     pub converge_progress: u32,
@@ -295,10 +300,11 @@ impl GiGpu {
         }
     }
 
-    /// Captures retain full-grid bounces; live initialization uses a bounded window
-    /// over the coarsest lattice, and the finer lattices converge at the preset
-    /// budget. A window never runs past its range's end (the next one wraps).
-    fn window(&self, budget: u32) -> u32 {
+    /// This frame's relit window (first probe, count). Captures retain full-grid
+    /// bounces; live initialization uses a bounded window over the coarsest
+    /// lattice, and the finer lattices converge at the preset budget. A window
+    /// never runs past its range's end (the next one wraps).
+    fn window(&self, budget: u32) -> (u32, u32) {
         let (start, end) = self.range();
         let window = if self.converge > 0 && self.capture_convergence {
             self.probes
@@ -307,7 +313,15 @@ impl GiGpu {
         } else {
             budget
         };
-        window.min(end - self.cursor.clamp(start, end))
+        let cursor = self.cursor.clamp(start, end);
+        (cursor, window.min(end - cursor))
+    }
+
+    /// Relight workgroups this frame: one per relit probe, then one per probe
+    /// of the previous window to copy forward. Proportional to the budget, not
+    /// to the pool.
+    pub(crate) fn relight_groups(&self, budget: u32) -> u32 {
+        self.window(budget).1 + self.relit.1
     }
     /// Fills the shader record's GI rows for this frame (`budget` probes relit).
     pub(crate) fn write(&self, frame: &mut super::frame::LookFrame, budget: u32) {
@@ -324,7 +338,12 @@ impl GiGpu {
         };
         frame.gi_params = [hysteresis, finer, 0., 0.];
         let lattices = self.layout.lattices();
-        frame.gi_counts = [lattices.len() as u32, 0, 0, self.probes];
+        frame.gi_counts = [
+            lattices.len() as u32,
+            self.relit.0,
+            self.relit.1,
+            self.probes,
+        ];
         let bases = self.layout.bases();
         for (i, lattice) in lattices.iter().enumerate() {
             let falloff = if i + 1 == lattices.len() {
@@ -339,12 +358,8 @@ impl GiGpu {
             frame.gi_lattice_counts[i] = [cx, cy, cz, bases[i] as u32];
         }
         frame.gi_buffers = [self.indices[0], self.indices[1], 0, 0];
-        frame.gi_update = [
-            self.cursor,
-            self.window(budget),
-            self.atlas,
-            self.weight.to_bits(),
-        ];
+        let (cursor, window) = self.window(budget);
+        frame.gi_update = [cursor, window, self.atlas, self.weight.to_bits()];
         frame.gi_images = [
             self.irradiance_sampled[read],
             self.irradiance_sampled[write],
@@ -357,11 +372,12 @@ impl GiGpu {
         if self.clearing_in_slices() {
             return;
         }
-        let window = self.window(budget);
+        let (cursor, window) = self.window(budget);
         let (start, end) = self.range();
         self.relit_once = true;
+        self.relit = (cursor, window);
         self.slot = 1 - self.slot;
-        self.cursor = self.cursor.clamp(start, end) + window;
+        self.cursor = cursor + window;
         if self.cursor >= end {
             self.cursor = start;
         }

@@ -17,7 +17,7 @@ struct Look {
     uint4 storage1;    // as sampled1
     uint4 state;       // x exposure state buffer
     float4 giParams;   // x irradiance hysteresis, y finer lattices' arrival weight
-    uint4 giCounts;    // x lattices in the pool, w probes (0: no probe GI)
+    uint4 giCounts;    // x lattices in the pool, y/z last frame's relit window (first, count), w probes (0: no probe GI)
     uint4 giBuffers;   // x surface caches, y probe relocation/state (buffers)
     uint4 giUpdate;    // x first relit probe, y relit probes this frame, z atlas probes per row, w shading weight (f32 bits)
     uint4 giImages;    // irradiance read (sampled), write (sampled), write (storage), moments (sampled)

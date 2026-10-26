@@ -24,15 +24,22 @@ groupshared float3 tile[36];
 void storeTile(Look l,uint id,uint lane){
     int2 p=int2(lane%8,lane/8)-1;images[NonUniformResourceIndex(l.giImages.z)][giTile(l,id,6)+p]=float4(tile[octIndex(p,6)],1);
 }
-// One workgroup per probe, one lane per cache texel. Probes outside this frame's
-// update window carry their irradiance forward; inactive probes stay black. `pages`
+// One workgroup per relit probe, one lane per cache texel: this frame's window
+// (giUpdate.xy), then last frame's (giCounts.yz). The atlas written now held every
+// probe two frames ago, so only last frame's window is stale in it: those groups copy
+// it forward, skipping probes this frame relights. Inactive probes stay black. `pages`
 // (a literal per entry point) shadows hits with virtual shadow pages first.
 void giRelight(uint3 group,uint lane,bool pages){
-    Frame f=frame();Look l=look(f);uint id=group.x;if(id>=l.giCounts.w)return;
-    float4 meta=giMeta(l,id);uint read=l.giImages.x;
-    uint relative=(id+l.giCounts.w-l.giUpdate.x)%l.giCounts.w;
-    if(relative>=l.giUpdate.y || meta.w<0.5){
-        if(lane<36)tile[lane]=meta.w<0.5?float3(0):textures[NonUniformResourceIndex(read)].Load(int3(giTile(l,id,6)+uint2(lane%6,lane/6),0)).rgb;
+    Frame f=frame();Look l=look(f);uint cursor=l.giUpdate.x,window=l.giUpdate.y,read=l.giImages.x;
+    if(group.x>=window){
+        uint id=l.giCounts.y+group.x-window;if(id>=l.giCounts.w || id-cursor<window)return;
+        if(lane<36)tile[lane]=textures[NonUniformResourceIndex(read)].Load(int3(giTile(l,id,6)+uint2(lane%6,lane/6),0)).rgb;
+        GroupMemoryBarrierWithGroupSync();storeTile(l,id,lane);return;
+    }
+    uint id=cursor+group.x;if(id>=l.giCounts.w)return;
+    float4 meta=giMeta(l,id);
+    if(meta.w<0.5){
+        if(lane<36)tile[lane]=float3(0);
         GroupMemoryBarrierWithGroupSync();storeTile(l,id,lane);return;
     }
     uint4 t=buffers[NonUniformResourceIndex(l.giBuffers.x)].Load<uint4>((id*64+lane)*16);

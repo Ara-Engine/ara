@@ -471,7 +471,13 @@ impl LookGpu {
                     p.gi_relight
                 },
                 0,
-                [self.gi.as_ref().map_or(0, |gi| gi.probes), 1, 1],
+                [
+                    self.gi
+                        .as_ref()
+                        .map_or(0, |gi| gi.relight_groups(self.quality.gi_budget)),
+                    1,
+                    1,
+                ],
             ),
             LookPass::HorizonSun => (
                 p.horizon_sun,

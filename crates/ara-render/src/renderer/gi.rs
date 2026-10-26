@@ -294,7 +294,8 @@ impl Renderer {
             .gpu
             .create_buffer((probes * 16) as u64, storage, false)?;
         allocated.push(Resource::Buffer(meta));
-        // Capture boundaries zero the irradiance with a copy (`reset_capture_history`).
+        // Capture boundaries zero the irradiance with a copy (`reset_capture_history`);
+        // tests read it back.
         let mut image = |gpu: &mut VulkanDevice, size: u32, format| {
             let image = gpu.create_image(
                 atlas * size,
@@ -302,7 +303,8 @@ impl Renderer {
                 format,
                 vk::ImageUsageFlags::SAMPLED
                     | vk::ImageUsageFlags::STORAGE
-                    | vk::ImageUsageFlags::TRANSFER_DST,
+                    | vk::ImageUsageFlags::TRANSFER_DST
+                    | vk::ImageUsageFlags::TRANSFER_SRC,
             )?;
             allocated.push(Resource::Image(image));
             Ok::<_, ara_gpu::GpuError>(image)
@@ -341,6 +343,7 @@ impl Renderer {
             clear_budget: probes as u32,
             slot: 0,
             cursor: 0,
+            relit: (0, 0),
             converge: 0,
             converge_progress: 0,
             capture_convergence: false,
