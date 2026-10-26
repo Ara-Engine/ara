@@ -42,26 +42,36 @@ impl ScriptPaths {
     }
 }
 
-/// Module folders under `root` (each holding `ara.module.toml`), sorted.
+/// Module folders at or under `root`, sorted, including nested module boundaries.
 pub fn modules(root: &Path) -> Vec<PathBuf> {
     fn walk(dir: &Path, out: &mut Vec<PathBuf>) {
+        if dir.join("ara.module.toml").is_file() {
+            out.push(dir.to_owned());
+        }
         let Ok(entries) = std::fs::read_dir(dir) else {
             return;
         };
         for entry in entries.flatten() {
             let path = entry.path();
             let name = entry.file_name().to_string_lossy().into_owned();
-            if !path.is_dir()
+            if !entry.file_type().is_ok_and(|t| t.is_dir())
                 || name.starts_with('.')
-                || ["target", "bin", "obj"].contains(&name.as_str())
+                || [
+                    "target",
+                    "bin",
+                    "obj",
+                    "artifacts",
+                    "node_modules",
+                    "spikes",
+                ]
+                .contains(&name.as_str())
             {
                 continue;
             }
-            if path.join("ara.module.toml").is_file() {
-                out.push(path);
-            } else {
-                walk(&path, out);
+            if path.join("ara.project.json").is_file() {
+                continue;
             }
+            walk(&path, out);
         }
     }
     let mut out = Vec::new();
@@ -264,5 +274,38 @@ impl PlayService {
             .ok_or_else(|| fail(codes::PLAY, "player returned no snapshot"))?
             .to_owned();
         self.restart(id, Some(&bytes))
+    }
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used)]
+mod discovery_tests {
+    use super::*;
+    #[test]
+    fn root_and_nested_modules_keep_their_own_identity() {
+        let root =
+            std::env::temp_dir().join(format!("ara-script-discovery-{}", std::process::id()));
+        std::fs::create_dir_all(root.join("Gameplay/Nested")).unwrap();
+        std::fs::write(root.join("ara.module.toml"), "[module]\nname=\"Root\"\n").unwrap();
+        std::fs::write(
+            root.join("Gameplay/ara.module.toml"),
+            "[module]\nname=\"Gameplay\"\n",
+        )
+        .unwrap();
+        std::fs::write(
+            root.join("Gameplay/Nested/ara.module.toml"),
+            "[module]\nname=\"Nested\"\n",
+        )
+        .unwrap();
+        assert_eq!(
+            modules(&root),
+            vec![
+                root.clone(),
+                root.join("Gameplay"),
+                root.join("Gameplay/Nested")
+            ]
+        );
+        assert!(root.starts_with(std::env::temp_dir()));
+        std::fs::remove_dir_all(root).unwrap();
     }
 }

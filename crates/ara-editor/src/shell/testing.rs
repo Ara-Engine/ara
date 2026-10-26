@@ -7,6 +7,16 @@ use super::*;
 /// A rendered menu row: command id, title as shown, and the disabled reason.
 pub type MenuRow = (String, String, Option<String>);
 impl Shell {
+    /// Right-click empty space in the asset grid through the production hit route.
+    pub fn open_assets_context(&mut self, editor: &mut Editor) -> ara_ui::Result<bool> {
+        let i = self
+            .ui
+            .find("assets-content")
+            .ok_or("Assets panel is not visible")?;
+        let r = self.ui.nodes[i].rect;
+        self.pointer = [r.x + r.w - 16., r.y + r.h - 16.];
+        self.open_context(editor)
+    }
     /// Open every menu and submenu; returns `(menu path, command id)` for each row,
     /// failing if a rendered row is not bound to the command it shows.
     pub fn walk_menus(&mut self, editor: &mut Editor) -> ara_ui::Result<Vec<(String, String)>> {

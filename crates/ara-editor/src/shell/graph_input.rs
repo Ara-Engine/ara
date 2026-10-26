@@ -23,19 +23,19 @@ impl Shell {
         editor: &mut Editor,
         domain: &str,
     ) -> ara_ui::Result<()> {
-        let folder = match domain {
-            "material" => "materials",
-            "vfx" => "effects",
-            "animation" => "animations",
-            _ => "graphs",
-        };
+        let folder = &editor.state.asset_folder;
         let extension = if domain == "animation" {
             "animation"
         } else {
             "graph"
         };
         let path = format!(
-            "{folder}/{domain}-{}.{}",
+            "{}{domain}-{}.{}",
+            if folder.is_empty() {
+                String::new()
+            } else {
+                format!("{folder}/")
+            },
             editor.host.store().revision(),
             extension
         );

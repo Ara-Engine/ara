@@ -7,20 +7,40 @@
 //! context menu's Import.
 use super::*;
 impl Shell {
+    /// The scroll widget owns the full offset; cards retain their bounded pool.
+    pub(super) fn sync_asset_grid_scroll(&mut self) {
+        if let Some(grid) = self.shown_node("asset-grid")
+            && let Some([_, offset]) = self.ui.scroll_position(grid)
+            && (offset - self.asset_offset).abs() > 0.01
+        {
+            self.asset_offset = offset;
+            self.asset_grid_dirty = true;
+        }
+    }
     /// A digest of everything [`assets_panel`](Self::assets_panel) reads: the files,
     /// the folder, search, view mode and selection, density, thumbnails, import progress,
     /// the content's size and scroll, Show All and the keymap.
     pub(super) fn assets_key(&self, editor: &Editor) -> u64 {
-        let content = self.ui.find("assets-content").map(|i| {
-            let rect = self.ui.nodes[i].rect;
-            [rect.w.to_bits(), rect.h.to_bits()]
-        });
+        let extent = |name| {
+            self.ui.find(name).map(|i| {
+                let rect = self.ui.nodes[i].rect;
+                [rect.w.to_bits(), rect.h.to_bits()]
+            })
+        };
+        let content = (extent("assets-content"), extent("asset-grid"));
         memo::digest((
             self.browser.revision,
-            &editor.state.asset_folder,
+            (
+                &editor.state.asset_folder,
+                editor.state.asset_sidebar_width.to_bits(),
+                &editor.state.asset_expanded_folders,
+            ),
             editor.state.searches.get("assets"),
             editor.state.asset_grid,
-            &editor.state.asset_path,
+            (
+                &editor.state.asset_path,
+                self.asset_rename.as_ref().map(|r| &r.path),
+            ),
             editor.state.comfortable(),
             (self.thumbnail_revision, self.imports.revision),
             content,
@@ -37,7 +57,7 @@ impl Shell {
             ara_ui::source::stable_id("asset-create"),
             Binding::ContextMenu(commands::menus::Context::Assets, commands::Target::None),
         );
-        out.push_str(&format!("<button id='asset-create' class='ghost' style='padding-left:4px;padding-right:2px' label='Create' description='Create folders, materials, effects and controllers' action='Dispatch'>{}{}</button>",icons::icon("asset-create","plus"),icons::icon_in("asset-create-more","chevron-down","icon-sm")));
+        out.push_str(&format!("<button id='asset-create' class='ghost' style='padding-left:4px;padding-right:2px' label='Create' description='Create folders, C# scripts, materials, scenes and prefabs' action='Dispatch'>{}{}</button>",icons::icon("asset-create","plus"),icons::icon_in("asset-create-more","chevron-down","icon-sm")));
         let content = self
             .ui
             .find("assets-content")
@@ -84,12 +104,10 @@ impl Shell {
             let on = editor.state.asset_grid == grid;
             out.push_str(&format!("<button id='{id}' class='{} icon-button' label='{label}' description='{label} view' action='Dispatch'>{}</button>",if on{"selected"}else{"ghost"},if on{icons::icon_in(id,icon,"on-selection")}else{icons::icon(id,icon)}));
         }
-        let side = if content < 420. {
+        let side = if narrow {
             0.
-        } else if content < 720. {
-            140.
         } else {
-            168.
+            editor.state.asset_sidebar_width.min(content * 0.6).max(96.)
         };
         out.push_str("</panel>");
         if !narrow {
@@ -121,31 +139,7 @@ impl Shell {
         }
         out.push_str("<panel id='assets-content' style='flex-direction:row;flex-grow:1;flex-basis:0px;min-height:0px'>");
         if side > 0. {
-            out.push_str(&format!("<scroll id='asset-folders' style='width:{side}px;min-width:{side}px;flex-basis:{side}px;flex-shrink:0;padding:4px;gap:0px;background:var(--panel-header)'>"));
-            self.bindings.insert(
-                ara_ui::source::stable_id("asset-folder-root"),
-                Binding::Protocol("editor.workspace", json!({"folder":""})),
-            );
-            out.push_str(&format!("<button id='asset-folder-root' class='folder-row{}' label='Project' action='Dispatch'>{}<text id='asset-folder-root-label' text='Project' /></button>",if folder.is_empty(){" selected"}else{""},icons::icon("asset-folder-root","package-open")));
-            let mut folders = std::collections::BTreeSet::new();
-            for asset in &self.browser.items {
-                let mut parts = asset.path.split('/').collect::<Vec<_>>();
-                parts.pop();
-                for n in 1..=parts.len() {
-                    folders.insert(parts[..n].join("/"));
-                }
-            }
-            for (n, path) in folders.iter().enumerate() {
-                let depth = path.matches('/').count();
-                let id = format!("asset-folder-{n}");
-                self.bindings.insert(
-                    ara_ui::source::stable_id(&id),
-                    Binding::Protocol("editor.workspace", json!({"folder":path})),
-                );
-                let on = *path == folder;
-                out.push_str(&format!("<button id='{id}' class='folder-row{}' style='padding-left:{}px' label='{}' action='Dispatch'>{}<text id='{id}-label' text='{}' /></button>",if on{" selected"}else{""},8+12*(depth+1),escape(path),if on{icons::icon_in(&id,"folder-open","on-selection")}else{icons::icon(&id,"folder")},escape(path.rsplit('/').next().unwrap_or(path))));
-            }
-            out.push_str("</scroll>");
+            self.asset_tree(editor, out, side / (content - side - 5.).max(1.));
         }
         let query = editor
             .state
@@ -170,7 +164,11 @@ impl Shell {
                 if !self.assets_show_all && is_noise(asset) {
                     continue;
                 }
-                let parent = asset.path.rsplit_once('/').map_or("", |(p, _)| p);
+                let parent = if asset.kind == "folder" {
+                    asset.path.as_str()
+                } else {
+                    asset.path.rsplit_once('/').map_or("", |(p, _)| p)
+                };
                 let mut path = parent;
                 // Every ancestor of a visible file that is directly in this folder.
                 while !path.is_empty() {
@@ -195,7 +193,8 @@ impl Shell {
                 .items
                 .iter()
                 .filter(|a| {
-                    (self.assets_show_all || !is_noise(a))
+                    a.kind != "folder"
+                        && (self.assets_show_all || !is_noise(a))
                         && matches_query(a, query)
                         && (searching || in_folder(&a.path))
                 })
@@ -269,16 +268,16 @@ impl Shell {
             // The row height is in the markup: a density change remounts the row pool.
             let row = if editor.state.comfortable() { 26 } else { 22 };
             out.push_str(&format!(
-                "<scroll id='asset-rows' class='body asset-list rows-{row}' /></panel>"
+                "<scroll id='asset-rows' class='body asset-list rows-{row}' style='min-height:0px;min-width:0px;flex-grow:1;flex-basis:0px' /></panel>"
             ));
             self.asset_footer(out, items.len(), editor);
             return;
         }
         let width = self
             .ui
-            .find("assets-content")
-            .map(|i| self.ui.nodes[i].rect.w - side)
-            .unwrap_or(self.ui.size[0] - side);
+            .find("asset-grid")
+            .map(|i| self.ui.nodes[i].rect.w)
+            .unwrap_or(self.ui.size[0] - side - if side > 0. { 5. } else { 0. });
         let height = self
             .ui
             .find("assets-content")
@@ -294,11 +293,20 @@ impl Shell {
         };
         let column_step = card_width + GAP;
         let row_step = card_height + GAP;
-        let columns = ((width - GAP) / column_step).floor().max(1.) as usize;
+        let available = (width - 12.).max(1.);
+        let columns = ((available - GAP) / column_step).floor().max(1.) as usize;
         // The columns are centred: the space a partial column would take is shared by
         // both sides instead of piling up on the right.
-        let left = ((width - columns as f32 * column_step + GAP) * 0.5).max(GAP);
+        let left = ((available - columns as f32 * column_step + GAP) * 0.5).max(GAP);
         self.asset_grid_extent = items.len().div_ceil(columns) as f32 * row_step;
+        if let Some(rename) = &self.asset_rename
+            && let Some(at) = items.iter().position(|asset| asset.path == rename.path)
+        {
+            let top = (at / columns) as f32 * row_step;
+            if top < self.asset_offset || top + card_height > self.asset_offset + height {
+                self.asset_offset = top;
+            }
+        }
         self.asset_offset = self
             .asset_offset
             .clamp(0., (self.asset_grid_extent - height).max(0.));
@@ -308,7 +316,7 @@ impl Shell {
         // Cards sit at non-negative offsets from the first visible row; the partial-row
         // scroll is a translation (ARA4014 rejects negative lengths, FINDINGS #18).
         let scroll = self.asset_offset - first_row as f32 * row_step;
-        out.push_str(&format!("<panel id='asset-grid' style='flex-grow:1;flex-basis:0px;overflow:hidden'><panel id='asset-grid-rows' style='position:absolute;left:0px;top:0px;width:100%;height:100%;translate-y:-{scroll}px'>"));
+        out.push_str(&format!("<scroll id='asset-grid' style='min-width:0px;flex-grow:1;flex-basis:0px;overflow:hidden'><panel id='asset-grid-rows' style='position:absolute;left:0px;top:0px;width:100%;height:100%;translate-y:-{scroll}px'>"));
         // Where the thumbnail sits in its card (badges hang off its corners).
         let thumb = if compact {
             [8., (card_height - thumbnail) * 0.5]
@@ -387,7 +395,7 @@ impl Shell {
             }
             out.push_str("</panel></button>");
         }
-        out.push_str("</panel></panel></panel>");
+        out.push_str("</panel></scroll></panel>");
         self.asset_footer(out, items.len(), editor);
     }
     fn asset_footer(&mut self, out: &mut String, count: usize, editor: &Editor) {

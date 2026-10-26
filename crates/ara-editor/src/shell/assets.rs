@@ -63,8 +63,31 @@ pub(super) struct Browser {
     /// Bumped whenever `items` changes (memoized panels list them).
     pub revision: u64,
     pending: Receiver<Vec<Asset>>,
+    optimistic: std::collections::BTreeMap<String, Option<Asset>>,
 }
 impl Browser {
+    /// Publish command outputs immediately; the next filesystem scan reconciles stamps.
+    pub(super) fn insert_path(&mut self, path: &str, kind: &str) {
+        self.remove_path(path);
+        self.items.push(Asset {
+            path: path.into(),
+            kind: kind.into(),
+            reference: None,
+            domain: None,
+            uses: Vec::new(),
+            stamp: 0,
+        });
+        if let Some(asset) = self.items.last() {
+            self.optimistic.insert(path.into(), Some(asset.clone()));
+        }
+        self.items.sort_by(|a, b| a.path.cmp(&b.path));
+        self.revision += 1;
+    }
+    pub(super) fn remove_path(&mut self, path: &str) {
+        self.items.retain(|a| a.path != path);
+        self.optimistic.insert(path.into(), None);
+        self.revision += 1;
+    }
     pub fn new(root: &Path) -> Self {
         let root = root.to_owned();
         let (tx, pending) = mpsc::channel();
@@ -86,10 +109,26 @@ impl Browser {
             items: Vec::new(),
             revision: 0,
             pending,
+            optimistic: Default::default(),
         }
     }
     pub fn poll(&mut self) -> bool {
-        if let Ok(items) = self.pending.try_recv() {
+        if let Ok(mut items) = self.pending.try_recv() {
+            self.optimistic.retain(|path, asset| {
+                let found = items.iter().position(|a| a.path == *path);
+                match (asset.as_ref(), found) {
+                    (Some(_), Some(_)) | (None, None) => false,
+                    (Some(asset), None) => {
+                        items.push(asset.clone());
+                        true
+                    }
+                    (None, Some(at)) => {
+                        items.remove(at);
+                        true
+                    }
+                }
+            });
+            items.sort_by(|a, b| a.path.cmp(&b.path));
             let changed = self.items != items;
             self.items = items;
             self.revision += u64::from(changed);
@@ -140,6 +179,18 @@ fn walk(
             if path != root && path.join("ara.project.json").exists() {
                 continue;
             }
+            out.push(Asset {
+                path: path
+                    .strip_prefix(root)
+                    .unwrap_or(&path)
+                    .to_string_lossy()
+                    .replace('\\', "/"),
+                reference: None,
+                kind: "folder".into(),
+                domain: None,
+                uses: Vec::new(),
+                stamp: 0,
+            });
             walk(root, &path, out, cache);
         } else {
             let relative = path

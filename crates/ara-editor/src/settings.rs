@@ -115,6 +115,15 @@ pub const QUALITY_OVERRIDES: &[(&str, &str)] = &[
 /// Every setting, grouped by category in display order.
 pub const DEFS: &[Def] = &[
     def(
+        "scripts.ide",
+        User,
+        "Scripts",
+        "Script editor",
+        "Executable path for Open in IDE. Empty tries VS Code, then the system handler; system always uses the file association.",
+        Kind::Text,
+        Lit::S(""),
+    ),
+    def(
         "appearance.theme",
         User,
         "Appearance",
@@ -795,6 +804,7 @@ mod tests {
         assert_eq!(s.value("play.tickHz"), json!("60"));
         s.undo(&Author::Human, true).expect("redo");
         assert_eq!(s.value("play.tickHz"), json!("120"));
+        drop(s); // Closing flushes the background preference writer.
         let reopened = Settings::open(&root, Some(user)).expect("reopen");
         assert_eq!(reopened.value("appearance.theme"), json!("light"));
         let _ = std::fs::remove_dir_all(root);

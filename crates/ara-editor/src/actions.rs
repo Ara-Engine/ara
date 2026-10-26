@@ -410,6 +410,19 @@ impl EditorService {
                 if let Some(folder) = p.folder {
                     state.asset_folder = folder;
                 }
+                if let Some(width) = p.sidebar_width {
+                    state.asset_sidebar_width = width.clamp(96., 480.);
+                }
+                if let Some(folder) = p.toggle_folder {
+                    let expand = p
+                        .expand_folder
+                        .unwrap_or_else(|| !state.asset_expanded_folders.contains(&folder));
+                    if expand {
+                        state.asset_expanded_folders.insert(folder);
+                    } else {
+                        state.asset_expanded_folders.remove(&folder);
+                    }
+                }
                 if let Some(grid) = p.grid {
                     state.asset_grid = grid;
                 }
