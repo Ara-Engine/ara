@@ -22,6 +22,8 @@ enum Setup {
     Tab(&'static str),
     /// The colour picker on an Inspector colour.
     Picker(Picker),
+    /// The Add Component dropdown.
+    AddComponent,
     Empty,
 }
 /// A colour picker capture: the field, its units, intensity steps, pinned, eyedropper.
@@ -103,6 +105,7 @@ const STEPS: &[(&str, Setup)] = &[
             ..PICKER
         }),
     ),
+    ("add-component", Setup::AddComponent),
     ("empty-inspector", Setup::Empty),
 ];
 /// Frames in a row without imports or Scene content work before the first capture,
@@ -381,6 +384,10 @@ impl UxVerification {
             Setup::Empty => {
                 editor.action("editor.select", json!({"entities": []}))?;
             }
+            Setup::AddComponent => {
+                shell.rebuild(editor)?;
+                shell.run_command(editor, "component.add", &Target::None)?;
+            }
             Setup::Picker(picker) => {
                 shell.rebuild(editor)?;
                 shell.reveal_field(picker.path)?;
@@ -480,6 +487,9 @@ impl UxVerification {
             }
             Setup::Float(_) | Setup::Settings(_) | Setup::Tab(_) => {
                 editor.action("editor.layout.reset", json!({}))?;
+            }
+            Setup::AddComponent => {
+                shell.run_command(editor, "component.add", &Target::None)?;
             }
             Setup::Picker(_) => {
                 // Escape: the intensity steps the capture applied are restored.

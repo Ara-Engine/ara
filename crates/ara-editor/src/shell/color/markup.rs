@@ -8,11 +8,11 @@ const SWATCH_ROW: usize = 11;
 
 /// Every picker field's ID and text.
 pub(super) fn field_texts(picker: &ColorPicker) -> Vec<(String, String)> {
-    let mut out: Vec<_> = (0..picker.count)
+    let mut out: Vec<_> = (0..picker.channels())
         .map(|i| (format!("cp-field-{i}"), picker.channel_text(i)))
         .collect();
     let base = picker.base();
-    let alpha = (picker.count > 3 && picker.alpha < 1.).then_some(picker.alpha);
+    let alpha = (picker.channels() > 3 && picker.alpha < 1.).then_some(picker.alpha);
     out.push((
         "cp-hex".into(),
         math::format_hex(base.map(math::linear_to_srgb), alpha),
@@ -122,7 +122,7 @@ impl Shell {
         bind("cp-hex", Control::Text(Input::Hex { linear: false }));
         bind("cp-hex-linear", Control::Text(Input::Hex { linear: true }));
         out.push_str(&format!(
-            "<panel id='cp-hexes' class='cp-row'><text id='cp-hex-label' class='cp-label-wide' text='Hex' /><field id='cp-hex' class='mono cp-hex' text='{}' label='Hex sRGB' description='sRGB #RRGGBB, #RGB or #RRGGBBAA' action='Dispatch' /><text id='cp-hex-linear-label' class='caption' text='Linear' /><field id='cp-hex-linear' class='mono cp-hex' text='{}' label='Hex linear' description='Linear-light #RRGGBB, as stored' action='Dispatch' /></panel>",
+            "<panel id='cp-hexes' class='cp-row'><text id='cp-hex-label' class='caption' text='Hex' /><field id='cp-hex' class='mono cp-hex' text='{}' label='Hex sRGB' description='sRGB #RRGGBB, #RGB or #RRGGBBAA' action='Dispatch' /><text id='cp-hex-linear-label' class='caption' text='Linear' /><field id='cp-hex-linear' class='mono cp-hex' text='{}' label='Hex linear' description='Linear-light #RRGGBB, as stored' action='Dispatch' /></panel>",
             escape(text("cp-hex")),
             escape(text("cp-hex-linear")),
         ));
@@ -172,7 +172,7 @@ impl Shell {
             Mode::Hsv => "Alpha, 0–100%",
             Mode::Linear => "Alpha, 0–1",
         };
-        for i in 0..picker.count {
+        for i in 0..picker.channels() {
             let (name, description) = names.get(i).copied().unwrap_or(("A", alpha_name));
             let field = format!("cp-field-{i}");
             bind(&field, Control::Text(Input::Channel(i)));

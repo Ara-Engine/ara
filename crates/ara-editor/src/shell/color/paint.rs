@@ -144,7 +144,8 @@ impl Shell {
                 return;
             };
             let mut painter = Painter {
-                node: ara_ui::source::stable_id(id),
+                // Its own identity: shell motion tweens a node's box colours by node.
+                node: ara_ui::source::stable_id(&format!("{id}#paint")),
                 draws: vec![Draw::PushClip {
                     rect: ui.nodes[i].clip,
                 }],
@@ -173,7 +174,7 @@ impl Shell {
         let hue = display(math::hsv_to_rgb([picker.hsv[0], 1., 1.]), 1.);
         let current = display(math::hsv_to_rgb(picker.hsv), 1.);
         let value = picker.value();
-        let alpha = if picker.count > 3 { value[3] } else { 1. };
+        let alpha = if picker.channels() > 3 { value[3] } else { 1. };
         // The ring, the square and their markers.
         part("cp-wheel", &mut |p, r| {
             p.fill(r, 0., Fill::Hue { ring: Some(RING) });
@@ -230,14 +231,14 @@ impl Shell {
                 4.,
                 linear(
                     [old[0], old[1], old[2]],
-                    if picker.count > 3 { old[3] } else { 1. },
+                    if picker.channels() > 3 { old[3] } else { 1. },
                 ),
             );
         });
         // Channel tracks.
         let base_display = math::hsv_to_rgb(picker.hsv);
         let base_linear = picker.base();
-        for i in 0..picker.count {
+        for i in 0..picker.channels() {
             let id = format!("cp-track-{i}");
             part(&id, &mut |p, r| {
                 let t = picker.channel(i);
@@ -399,6 +400,10 @@ impl Shell {
     /// The eyedropper's loupe: the pixels around the sample, magnified beside the
     /// pointer, on top of everything. Runs last in the decoration pass.
     pub(in crate::shell) fn paint_loupe(&mut self) {
+        // The pointer and the sampled frame are the main window's.
+        if self.current.is_some() {
+            return;
+        }
         let Some((pixels, at)) = self
             .color_picker
             .as_ref()

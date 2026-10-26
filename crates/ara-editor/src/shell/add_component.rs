@@ -28,6 +28,16 @@ impl Shell {
             editor.action("editor.palette", json!({"open": true}))?;
             return self.rebuild(editor);
         }
+        // From a shortcut or the palette the button may be scrolled away: bring it in.
+        if let Some(button) = self.shown_node("add-component") {
+            let node = &self.ui.nodes[button];
+            let visible = node.clip.intersection(node.rect);
+            if (visible.h < node.rect.h - 0.5)
+                && let Some(scroll) = self.ui.find("inspector-scroll")
+            {
+                self.ui.scroll_to(scroll, [0., 1.0e9])?;
+            }
+        }
         self.add_component = Some(AddComponent::default());
         self.rebuild(editor)
     }

@@ -133,6 +133,11 @@ pub(crate) struct ColorPicker {
 }
 
 impl ColorPicker {
+    /// The channels the picker edits: RGB, plus alpha when the value has one that
+    /// matters (a light ignores its colour's alpha).
+    fn channels(&self) -> usize {
+        if self.hints.temperature { 3 } else { self.count }
+    }
     /// The linear base colour (at most 1), before the HDR intensity.
     fn base(&self) -> [f64; 3] {
         math::hsv_to_rgb(self.hsv).map(math::srgb_to_linear)
@@ -239,7 +244,7 @@ impl ColorPicker {
                 } else {
                     rgb
                 });
-                if let Some(alpha) = alpha.filter(|_| self.count > 3) {
+                if let Some(alpha) = alpha.filter(|_| self.channels() > 3) {
                     self.alpha = alpha;
                 }
                 self.kelvin = None;
