@@ -83,6 +83,26 @@ pub fn resolve(
     resolved
 }
 
+/// The entities record `id` of `doc` contributes to [`resolve`], exactly as it has
+/// them: a plain record itself, an instance's root at `id` and its prefab's other
+/// entities at `id/…`. It costs that record alone, not the whole document. `None`
+/// when the document has no such record.
+pub fn resolve_record(
+    doc: &Document,
+    id: &RecordId,
+    db: &SchemaDb,
+    lookup: &dyn DocLookup,
+) -> Option<Resolved> {
+    let rec = doc.record(id.as_str())?;
+    let mut stack = vec![doc.id.clone()];
+    let mut ctx = Ctx {
+        db,
+        lookup,
+        stack: &mut stack,
+    };
+    Some(ctx.record(doc, id, rec, &Location::default(), None))
+}
+
 /// Reports the problems of one instance record of `doc` (missing or cyclic prefab,
 /// bad overrides or removals) exactly as [`resolve`] reports them for it. A plain or
 /// missing record reports nothing.
@@ -128,33 +148,42 @@ impl Ctx<'_, '_> {
     ) -> Resolved {
         let mut all = Resolved::new();
         for (id, rec) in doc.records() {
-            let plain = ResolvedEntity {
-                record: rec
-                    .iter()
-                    .filter(|(k, _)| is_component_key(k) || k.as_str() == field::NAME)
-                    .map(|(k, v)| (k.clone(), v.clone()))
-                    .collect(),
-                parent: parent_of(rec).map(str::to_owned),
-                order: order_of(rec).map(str::to_owned),
-                source: (doc.id.clone(), id.clone()),
-            };
-            match prefab_of(rec) {
-                None => {
-                    all.insert(id.to_string(), plain);
-                }
-                Some(reference) => {
-                    let rbase = Location {
-                        record: Some(id.to_string()),
-                        ..base.clone()
-                    };
-                    let entities = self
-                        .instance(id, rec, reference, &rbase, out.as_deref_mut())
-                        .unwrap_or_else(|| BTreeMap::from([(id.to_string(), plain)]));
-                    all.extend(entities);
-                }
-            }
+            all.extend(self.record(doc, id, rec, base, out.as_deref_mut()));
         }
         all
+    }
+
+    /// One record's entities: itself when plain, else its instance expanded (or
+    /// itself, when its prefab can't be used). Records never share addresses.
+    fn record(
+        &mut self,
+        doc: &Document,
+        id: &RecordId,
+        rec: &Record,
+        base: &Location,
+        out: Option<&mut Vec<Diagnostic>>,
+    ) -> Resolved {
+        let plain = ResolvedEntity {
+            record: rec
+                .iter()
+                .filter(|(k, _)| is_component_key(k) || k.as_str() == field::NAME)
+                .map(|(k, v)| (k.clone(), v.clone()))
+                .collect(),
+            parent: parent_of(rec).map(str::to_owned),
+            order: order_of(rec).map(str::to_owned),
+            source: (doc.id.clone(), id.clone()),
+        };
+        match prefab_of(rec) {
+            None => BTreeMap::from([(id.to_string(), plain)]),
+            Some(reference) => {
+                let rbase = Location {
+                    record: Some(id.to_string()),
+                    ..base.clone()
+                };
+                self.instance(id, rec, reference, &rbase, out)
+                    .unwrap_or_else(|| BTreeMap::from([(id.to_string(), plain)]))
+            }
+        }
     }
 
     /// Expands one instance record. `None` if the prefab can't be used.
