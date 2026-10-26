@@ -177,7 +177,6 @@ impl Logs {
         command
             .current_dir(root)
             .args(args)
-            .env("CARGO_BUILD_JOBS", "2")
             .env("CARGO_TERM_COLOR", "never");
         if self.no_compiler_cache {
             // An empty wrapper overrides Cargo config; clippy's workspace wrapper stays active.

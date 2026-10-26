@@ -14,6 +14,7 @@ Local developer binary. No engine dependencies; uses git and cargo as subprocess
   Native test workers share a RAM budget and resource groups; each suite has a deadline.
   `test-tiers.toml` labels slow GPU/.NET/process/capture suites; `--full` runs all.
 - `cargo -- <args>`: focused checks with optional `ARA_SHARED_BUILD_DIR` reuse.
+  Explicit CARGO_BUILD_JOBS is preserved; the unset default is two.
   Keep targets separate; the shared admission lease covers builds and test execution.
   Editor build/run pairs ara-player in one Cargo build, probes both RT values,
   and pins the exact companion artifact. Stale overrides/failed builds stop launch.
