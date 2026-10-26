@@ -1,15 +1,15 @@
 {
-  "binding_layout_hash": "35cd2a62b1ba741ce6823b3c8753d7b5aa97b54c5f0a837b56e542518013fd7e",
+  "binding_layout_hash": "f71261afa0d52758f34ca15c916d2da422ee92b118ede6e189c970911a274f1e",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "cf8bb916a71f18cdf74d7f87aad74c6b37a2b19fba21962329405cba708f1f1c",
+  "key": "3c841d93da2afa4c0c075d2b9865ecde13098dec1c8f1e194347cd1b51e131cc",
   "stages": [
     {
-      "dxil": "cf8bb916a71f18cdf74d7f87aad74c6b37a2b19fba21962329405cba708f1f1c/terrainCull.dxil",
-      "dxil_hash": "4b342959ecb21611fa107e63ae709035295eecbe178488aea246190091d460b9",
+      "dxil": "3c841d93da2afa4c0c075d2b9865ecde13098dec1c8f1e194347cd1b51e131cc/terrainCull.dxil",
+      "dxil_hash": "0c72b8fa882589a362f0b280fa15661afefb0da7a3ac599586d82fff0371753b",
       "source_entry": "terrainCull",
-      "spirv": "cf8bb916a71f18cdf74d7f87aad74c6b37a2b19fba21962329405cba708f1f1c/terrainCull.spv",
+      "spirv": "3c841d93da2afa4c0c075d2b9865ecde13098dec1c8f1e194347cd1b51e131cc/terrainCull.spv",
       "spirv_entry": "main",
-      "spirv_hash": "654314e6c9fc526de02e6a65332e91faf257eabd517ca596b3f30f3aab868b73",
+      "spirv_hash": "3d5f78a8bfe7cec86c8ec4d5cd213894c641ee494e3e2fc5b0b51d35f2a7fd19",
       "stage": "compute"
     }
   ],

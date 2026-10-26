@@ -6,7 +6,7 @@ struct Root { uint scene; uint output; uint a; uint b; uint c; uint d; uint e; u
 #define BIND(n)
 ConstantBuffer<Root> root : register(b0,space0);
 #endif
-BIND(1) RWByteAddressBuffer buffers[64] : register(u0,space2);
+BIND(1) RWByteAddressBuffer buffers[] : register(u0,space2);
 BIND(4) RaytracingAccelerationStructure acceleration[16] : register(t0,space4);
 [shader("compute")][numthreads(4,1,1)]
 void rangeProbe(uint3 id : SV_DispatchThreadID) {

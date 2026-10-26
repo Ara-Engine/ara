@@ -1,15 +1,15 @@
 {
-  "binding_layout_hash": "35cd2a62b1ba741ce6823b3c8753d7b5aa97b54c5f0a837b56e542518013fd7e",
+  "binding_layout_hash": "f71261afa0d52758f34ca15c916d2da422ee92b118ede6e189c970911a274f1e",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "fe7c1e203eb7c440acac71a2ae9144e28cbf086b6742c6b6ac4ab1072ece4298",
+  "key": "218e387f9612e4b9194444c304b0007b424e55c1299aa24107ac14981be9879e",
   "stages": [
     {
-      "dxil": "fe7c1e203eb7c440acac71a2ae9144e28cbf086b6742c6b6ac4ab1072ece4298/shadowReset.dxil",
-      "dxil_hash": "7c297d4f77088515e5160cd7c339daae850703d209ffda2e85a139ec01bff8f3",
+      "dxil": "218e387f9612e4b9194444c304b0007b424e55c1299aa24107ac14981be9879e/shadowReset.dxil",
+      "dxil_hash": "dcb863adf88925f4c7a6c93aebd47c087c1ca9ba3352eabcef2934e4ae7fc618",
       "source_entry": "shadowReset",
-      "spirv": "fe7c1e203eb7c440acac71a2ae9144e28cbf086b6742c6b6ac4ab1072ece4298/shadowReset.spv",
+      "spirv": "218e387f9612e4b9194444c304b0007b424e55c1299aa24107ac14981be9879e/shadowReset.spv",
       "spirv_entry": "main",
-      "spirv_hash": "b62ebc0683704cf0789926b3bcedfef2d5301aba2cb885673362962031ae6d0c",
+      "spirv_hash": "6bd75b2971b0a014157c768f58a242a6774e4ab9120bf52baad8340e1611d413",
       "stage": "compute"
     }
   ],

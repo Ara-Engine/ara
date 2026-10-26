@@ -1,15 +1,15 @@
 {
-  "binding_layout_hash": "35cd2a62b1ba741ce6823b3c8753d7b5aa97b54c5f0a837b56e542518013fd7e",
+  "binding_layout_hash": "f71261afa0d52758f34ca15c916d2da422ee92b118ede6e189c970911a274f1e",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "d349c4bb6e29e4c6b68a3a59398c282134bc53c7a145a0e006216015da6acd1c",
+  "key": "16ef2d730a3d162562ffdb584dffa2c3c6835437024587a3169264cae208696c",
   "stages": [
     {
-      "dxil": "d349c4bb6e29e4c6b68a3a59398c282134bc53c7a145a0e006216015da6acd1c/vsmProjectMain.dxil",
-      "dxil_hash": "488e0bc4579486a1ad5c2c6b9fd23ed8e86b9fb08d6bb76c6ce497d46e7a118c",
+      "dxil": "16ef2d730a3d162562ffdb584dffa2c3c6835437024587a3169264cae208696c/vsmProjectMain.dxil",
+      "dxil_hash": "7624895be436b11661d5090e53b0e49eac92e8010c2b0db2720e3f9d7027d09f",
       "source_entry": "vsmProjectMain",
-      "spirv": "d349c4bb6e29e4c6b68a3a59398c282134bc53c7a145a0e006216015da6acd1c/vsmProjectMain.spv",
+      "spirv": "16ef2d730a3d162562ffdb584dffa2c3c6835437024587a3169264cae208696c/vsmProjectMain.spv",
       "spirv_entry": "main",
-      "spirv_hash": "0b808d8632bc91b3d308f882bb97673b44e7288ad7a28cb54f1ec8035afd149e",
+      "spirv_hash": "52e3a19b440f226dacc64f90751a703e445892b2c84c3b049ee39f016b951940",
       "stage": "compute"
     }
   ],

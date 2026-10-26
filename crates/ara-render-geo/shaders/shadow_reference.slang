@@ -7,7 +7,7 @@ struct Root{uint acceleration;uint world;uint normal;uint output;uint width;uint
 ConstantBuffer<Root> root:register(b0,space0);
 #endif
 BIND(5) Texture2D<float4> textures[]:register(t0,space1);
-BIND(1) RWByteAddressBuffer buffers[64]:register(u0,space2);
+BIND(1) RWByteAddressBuffer buffers[]:register(u0,space2);
 BIND(3) RWTexture2D<float4> images[64]:register(u0,space3);
 BIND(4) RaytracingAccelerationStructure structures[16]:register(t0,space4);
 [shader("compute")][numthreads(8,8,1)]

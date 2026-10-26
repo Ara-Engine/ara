@@ -1,15 +1,15 @@
 {
-  "binding_layout_hash": "35cd2a62b1ba741ce6823b3c8753d7b5aa97b54c5f0a837b56e542518013fd7e",
+  "binding_layout_hash": "f71261afa0d52758f34ca15c916d2da422ee92b118ede6e189c970911a274f1e",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "f1a4b8ed976206787a15b17776937231d71dec874a7dc441a3a1fa6d9ef21f9b",
+  "key": "d2dea5981ce625a9e55c9fe40c483a8247f2102b575d84cc0486a579eee127c3",
   "stages": [
     {
-      "dxil": "f1a4b8ed976206787a15b17776937231d71dec874a7dc441a3a1fa6d9ef21f9b/ddgiLayersMain.dxil",
-      "dxil_hash": "02de052d643afcb8dc9c18229e3b63e20b7e5835904b41b5b390459ad71d6ab4",
+      "dxil": "d2dea5981ce625a9e55c9fe40c483a8247f2102b575d84cc0486a579eee127c3/ddgiLayersMain.dxil",
+      "dxil_hash": "e24d10ed45c5ab5220fb05d1a45df7fcd0a06ecd6a6b401a90c377872b88b7f3",
       "source_entry": "ddgiLayersMain",
-      "spirv": "f1a4b8ed976206787a15b17776937231d71dec874a7dc441a3a1fa6d9ef21f9b/ddgiLayersMain.spv",
+      "spirv": "d2dea5981ce625a9e55c9fe40c483a8247f2102b575d84cc0486a579eee127c3/ddgiLayersMain.spv",
       "spirv_entry": "main",
-      "spirv_hash": "fd61b81eaced629a8d35757eda6f9478290d975a168fd019edcdf43735b1d0ae",
+      "spirv_hash": "aeda6e9b3fd5d64662b758e96d8aec8a0a4f67ad2fdbbce4bac4cf82eb9959da",
       "stage": "compute"
     }
   ],

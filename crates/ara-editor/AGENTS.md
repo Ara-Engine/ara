@@ -37,9 +37,9 @@ C# integration registers host services/schema types, not mutable UI state.
 `world/gltf.rs` retains one read-only publication reader and decoded models keyed
 by asset ID/digest. `Editor::models` survives document edits; extraction selects
 the source node/primitive and pivot without reopening sidecars or decoding per
-entity. Unpublished models use placeholders; failed reloads retain last good.
+entity. Unpublished models use placeholders; failed reloads retain last good. Scene recovery uses three worker attempts/generation and reports once.
 
-Gate with targeted check/test/clippy. The GPU gate (`run.ps1 -Mode Verify`, `tests/native.rs
+Gate with focused checks. The GPU gate (`run.ps1 -Mode Verify`, `tests/native.rs
 --ignored`) needs validation layers, SDL3 and this machine's GPU. Goldens live in
 `tests/goldens` (update only with `ARA_EDITOR_UPDATE_GOLDENS=1`); evidence in `evidence`.
 
