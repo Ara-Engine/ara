@@ -119,6 +119,40 @@ once per merge batch on main; `--base` names the previous integrated checkpoint.
 Final full-gate scope, duration and curated manual hardware/export checks:
 [`release-gate.md`](release-gate.md).
 
+### Foreign GPU load
+
+On Windows, `ara-dev gpu -- COMMAND` and D26 sample the native PDH
+`\GPU Engine(*)\Utilization Percentage` counters. A three-second baseline
+precedes the timed part; monitoring continues about once per second, including
+a final sample. No GPU device or window is created by the guard. Own descendants
+are excluded by PID/creation identity, including counter tails after child exit.
+Counter buffers follow the Windows
+[PDH wildcard-array API](https://learn.microsoft.com/en-us/windows/win32/api/pdh/nf-pdh-pdhgetformattedcounterarrayw).
+
+Foreign utilization summed across engines/processes above **5% for three
+consecutive samples** invalidates the entire reading. Presence-only refusal is
+restricted to actual game executables in `crates/ara-dev/gpu-processes.toml`.
+Vanguard, Riot/Steam/Epic clients, Discord/NVIDIA overlays and other residents
+do not block at idle: their measured GPU use counts normally. Unknown games
+are caught by counters; launcher ancestry alone is not a reliable game identity.
+
+Use `ara-dev gpu --wait-for-quiet -- COMMAND` or `ara-dev d26 --wait-for-quiet`
+to wait for a quiet baseline instead of refusing. Ara never kills, suspends or
+reconfigures foreign processes. Counter failures also invalidate timing evidence.
+The diagnostic is `ARA_GPU_FOREIGN_LOAD`; **exit code 3 means INVALID**, separate
+from a child/test failure. A lease prints `ARA_DEV_GPU_READING {json}` on stderr
+and writes its evidence path under `target/ara-dev/gpu-load/`. D26 retains values
+but marks rows and summaries INVALID in report.json/report.html, with GPU-load
+evidence in `gpu-load.json`. Evidence includes process names, PIDs, peak percentage
+and first/last UTC epoch-millisecond times. The first contamination is persisted
+immediately; final reports retain the full sample history. A/B scripts must reject
+exit 3 and rerun rather than report a speedup or budget failure.
+
+The explicit `ARA_DEV_GPU_GUARD_FIXTURE` JSON stream is for subprocess tests only;
+quiet fixture evidence is labelled `test_only`, never a native timing validation.
+D26 refuses fixtures. Unit tests cover actual game presence, sustained aggregate
+load, idle residents, owned descendants, exited tails, PID reuse and report status.
+
 The normal gate tests source owners and **direct** consumers; clippy covers their full
 reverse dependency closure. Test/example/bench edits stay local. Markdown (including
 diagnostic catalog wording), docs and captures never cascade; fixture/golden changes

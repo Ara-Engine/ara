@@ -10,6 +10,7 @@ mod d26;
 mod editor;
 mod git;
 mod gpu;
+mod gpu_guard;
 mod history;
 mod hygiene;
 mod known;
@@ -99,6 +100,9 @@ enum Command {
     Gpu {
         #[arg(long, default_value_t = 3600)]
         timeout: u64,
+        /// Wait for foreign games/GPU work to clear instead of refusing the timed run.
+        #[arg(long)]
+        wait_for_quiet: bool,
         #[arg(last = true, required = true, num_args = 1..)]
         command: Vec<OsString>,
     },
@@ -137,8 +141,13 @@ fn run() -> Result<bool> {
         }
         return Ok(healthy);
     }
-    if let Command::Gpu { timeout, command } = cli.command {
-        return gpu::run(timeout, &command);
+    if let Command::Gpu {
+        timeout,
+        wait_for_quiet,
+        command,
+    } = cli.command
+    {
+        return gpu::run(timeout, wait_for_quiet, &command);
     }
     let root = PathBuf::from(git::text(
         std::path::Path::new("."),
@@ -212,7 +221,11 @@ fn main() -> ExitCode {
         Ok(false) => ExitCode::FAILURE,
         Err(error) => {
             eprintln!("ara-dev: {error:#}");
-            ExitCode::FAILURE
+            if gpu_guard::is_invalid(&error) {
+                ExitCode::from(3)
+            } else {
+                ExitCode::FAILURE
+            }
         }
     }
 }

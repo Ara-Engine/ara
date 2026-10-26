@@ -122,8 +122,13 @@ fn position(directory: &Path, ticket: &Ticket) -> Result<usize> {
         .context("own GPU ticket disappeared")
 }
 
-pub(crate) fn run(timeout: u64, command: &[OsString]) -> Result<bool> {
-    locked(timeout, || {
+pub(crate) fn run(timeout: u64, wait_for_quiet: bool, command: &[OsString]) -> Result<bool> {
+    // Validate output ownership before even creating baseline diagnostics.
+    let root = crate::git::text(Path::new("."), ["rev-parse", "--show-toplevel"])
+        .map(PathBuf::from)
+        .unwrap_or(std::env::current_dir()?);
+    crate::build_paths::Directories::from_env(&root)?;
+    locked_with(timeout, wait_for_quiet, || {
         eprintln!("GPU lock acquired; running {command:?}");
         crate::platform::gpu_command(command)
     })
@@ -131,6 +136,14 @@ pub(crate) fn run(timeout: u64, command: &[OsString]) -> Result<bool> {
 
 /// Keep admission and crash recovery identical for direct commands and perf sessions.
 pub(crate) fn locked<T>(timeout: u64, operation: impl FnOnce() -> Result<T>) -> Result<T> {
+    locked_with(timeout, false, operation)
+}
+
+fn locked_with<T>(
+    timeout: u64,
+    wait_for_quiet: bool,
+    operation: impl FnOnce() -> Result<T>,
+) -> Result<T> {
     let local = std::env::var_os("LOCALAPPDATA")
         .map(PathBuf::from)
         .or_else(|| std::env::var_os("XDG_RUNTIME_DIR").map(PathBuf::from))
@@ -170,7 +183,29 @@ pub(crate) fn locked<T>(timeout: u64, operation: impl FnOnce() -> Result<T>) -> 
         }
         std::thread::sleep(Duration::from_millis(200));
     }
-    let result = operation();
+    let root = crate::git::text(Path::new("."), ["rev-parse", "--show-toplevel"])
+        .map(PathBuf::from)
+        .unwrap_or(std::env::current_dir()?);
+    let path = crate::gpu_guard::default_path(&root);
+    let guard = if crate::gpu_guard::active() {
+        None
+    } else {
+        Some(crate::gpu_guard::Guard::start(
+            wait_for_quiet,
+            path.clone(),
+        )?)
+    };
+    let mut result = operation();
+    if let Some(guard) = guard {
+        let report = guard.finish()?;
+        eprintln!(
+            "ARA_DEV_GPU_READING {}",
+            serde_json::json!({"status":report.status(),"report":path,"diagnostic":if report.invalid(){Some(crate::gpu_guard::CODE)}else{None},"reading":report})
+        );
+        if report.invalid() {
+            result = Err(crate::gpu_guard::invalid_error(report.detail()));
+        }
+    }
     drop(gpu);
     drop(ticket);
     result

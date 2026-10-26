@@ -14,6 +14,7 @@ fn pill(status: Status) -> &'static str {
     match status {
         Status::Pass => "<span class='pill pass'>pass</span>",
         Status::Fail => "<span class='pill fail'>fail</span>",
+        Status::Invalid => "<span class='pill none'>INVALID</span>",
         Status::NotMeasured => "<span class='pill none'>not measured</span>",
         Status::Reported => "<span class='pill info'>reported</span>",
     }
@@ -64,6 +65,11 @@ pub(super) fn page(report: &Value, rows: &[Row], summary: &Summary) -> String {
         escape(run["createdAt"].as_str().unwrap_or(""))
     );
     out.push_str("<h1>Ara D26 scoreboard</h1>");
+    if report["status"] == "invalid" {
+        out.push_str("<h2>INVALID — foreign GPU load or unavailable monitoring</h2><pre>");
+        out.push_str(&escape(&serde_json::to_string_pretty(&serde_json::json!({"contaminants":report["gpuLoad"]["contaminants"],"errors":report["gpuLoad"]["errors"]})).unwrap_or_default()));
+        out.push_str("</pre>");
+    }
     out.push_str(&format!(
         "<div class='meta'><code>{}</code>{} · {} profile · {} · {} frames per window, warmup {} · {} · {} UTC</div>",
         escape(&run["sourceHead"].as_str().unwrap_or("").chars().take(10).collect::<String>()),
@@ -79,8 +85,8 @@ pub(super) fn page(report: &Value, rows: &[Row], summary: &Summary) -> String {
     for (gate, counts) in &summary.gates {
         let word = Summary::word(counts);
         out.push_str(&format!(
-            "<div class='card'><div class='gate'>{gate}</div><div class='word {word}'>{word}</div><div>{} pass · {} fail · {} not measured</div></div>",
-            counts.pass, counts.fail, counts.not_measured
+            "<div class='card'><div class='gate'>{gate}</div><div class='word {word}'>{word}</div><div>{} pass · {} fail · {} not measured · {} invalid</div></div>",
+            counts.pass, counts.fail, counts.not_measured, counts.invalid
         ));
     }
     out.push_str("</div>");

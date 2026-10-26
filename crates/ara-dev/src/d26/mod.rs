@@ -75,6 +75,9 @@ pub(crate) struct Options {
     /// Keep the editor's scratch project copy (deleted by default).
     #[arg(long)]
     keep_project: bool,
+    /// Wait for games or foreign GPU work to clear before the three-second baseline.
+    #[arg(long)]
+    wait_for_quiet: bool,
 }
 
 /// What the report records about the run itself.
@@ -135,23 +138,58 @@ pub(crate) fn run(root: &Path, options: Options) -> Result<bool> {
         binaries: &binaries,
         options: &options,
     };
+    let load_path = output.join("gpu-load.json");
+    let guard = match crate::gpu_guard::Guard::start(options.wait_for_quiet, load_path.clone()) {
+        Ok(guard) => guard,
+        Err(error) => {
+            let value: serde_json::Value = serde_json::from_slice(&fs::read(&load_path)?)?;
+            results.gpu_load = Some(serde_json::from_value(value["reading"].clone())?);
+            let verdict = write(&output, &run, &results)?;
+            eprintln!("{verdict}; {error:#}");
+            println!("Report: {}", output.join("report.html").display());
+            return Err(error);
+        }
+    };
+    if guard.snapshot().sampler != "windows_pdh" {
+        let mut report = guard.finish()?;
+        report
+            .errors
+            .push("D26 requires native Windows PDH evidence, not a test fixture".into());
+        let detail = report.detail();
+        results.gpu_load = Some(report);
+        write(&output, &run, &results)?;
+        return Err(crate::gpu_guard::invalid_error(detail));
+    }
     let write = |results: &measure::Results| write(&output, &run, results);
     write(&results)?;
     if !results.skipped.contains_key(&Section::Player) {
         context.player(&mut results);
+        results.gpu_load = Some(guard.snapshot());
         write(&results)?;
     }
     if !results.skipped.contains_key(&Section::Flip) {
         context.flip(&mut results);
+        results.gpu_load = Some(guard.snapshot());
         write(&results)?;
     }
     if !results.skipped.contains_key(&Section::Editor) {
         context.editor(&mut results);
+        results.gpu_load = Some(guard.snapshot());
         write(&results)?;
     }
+    results.gpu_load = Some(guard.finish()?);
     let verdict = write(&results)?;
     println!("{verdict}");
     println!("Report: {}", output.join("report.html").display());
+    if results
+        .gpu_load
+        .as_ref()
+        .is_some_and(crate::gpu_guard::Report::invalid)
+    {
+        return Err(crate::gpu_guard::invalid_error(
+            results.gpu_load.as_ref().expect("guard report").detail(),
+        ));
+    }
     Ok(true)
 }
 
@@ -213,13 +251,23 @@ fn binaries(root: &Path, output: &Path, options: &Options) -> Result<(Binaries, 
 
 /// Write `report.json` and `report.html`; returns the one-line verdict.
 fn write(output: &Path, run: &Run, results: &measure::Results) -> Result<String> {
-    let rows = rows::rows(results);
+    let mut rows = rows::rows(results);
+    let invalid = results
+        .gpu_load
+        .as_ref()
+        .is_some_and(crate::gpu_guard::Report::invalid);
+    if invalid {
+        rows::invalidate(&mut rows);
+    }
     let summary = rows::Summary::of(&rows);
     let report = json!({
         "format": "ara.d26/1",
         "run": run,
         "device": results.device,
         "summary": summary,
+        "status": if invalid {"invalid"} else {"measured"},
+        "gpuLoad": results.gpu_load,
+        "diagnostic": if invalid {Some(crate::gpu_guard::CODE)} else {None},
         "skipped": results.skipped,
         "rows": rows,
         "definitions": rows::DEFINITIONS,
@@ -300,5 +348,54 @@ mod tests {
         assert_eq!(stamp(1_792_897_445), "20261025-030405");
         // A leap day.
         assert_eq!(stamp(1_709_164_800), "20240229-000000");
+    }
+
+    #[test]
+    fn contaminated_readings_are_invalid_in_rows_summary_json_and_html() {
+        let output = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../target/ara-dev/tests")
+            .join(format!("invalid-report-{}", std::process::id()));
+        fs::create_dir_all(&output).unwrap();
+        let run = Run {
+            created_at: "test".into(),
+            source_head: "test".into(),
+            source_dirty: false,
+            profile: "perf".into(),
+            resolution: "2560x1440",
+            frames: 10,
+            warmup: 1,
+            ready_timeout: 10,
+            reference_spp: 1,
+            build_seconds: 0.,
+        };
+        let results = measure::Results {
+            gpu_load: Some(crate::gpu_guard::Report {
+                errors: vec!["foreign load proof: VALORANT.exe PID 99 peak 42%".into()],
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let verdict = write(&output, &run, &results).unwrap();
+        assert!(verdict.contains("INVALID"));
+        assert!(!verdict.contains("FAIL"));
+        let report: serde_json::Value =
+            serde_json::from_slice(&fs::read(output.join("report.json")).unwrap()).unwrap();
+        assert_eq!(report["status"], "invalid");
+        assert!(
+            report["summary"]["gates"]["D26"]["invalid"]
+                .as_u64()
+                .unwrap()
+                > 0
+        );
+        assert!(
+            report["rows"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .all(|row| row["status"] == "invalid")
+        );
+        let html = fs::read_to_string(output.join("report.html")).unwrap();
+        assert!(html.contains("INVALID"));
+        assert!(html.contains("VALORANT.exe PID 99"));
     }
 }

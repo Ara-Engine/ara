@@ -67,6 +67,8 @@ pub(super) const DEFINITIONS: &[(&str, &str)] = &[
 pub(super) enum Status {
     Pass,
     Fail,
+    /// Foreign GPU load or unavailable monitoring makes timing judgments invalid.
+    Invalid,
     NotMeasured,
     /// Measured, with no gate to hold it to.
     Reported,
@@ -186,6 +188,7 @@ pub(super) struct Counts {
     pub pass: usize,
     pub fail: usize,
     pub not_measured: usize,
+    pub invalid: usize,
 }
 
 #[derive(Serialize)]
@@ -201,6 +204,7 @@ impl Summary {
             match judged.status {
                 Status::Pass => counts.pass += 1,
                 Status::Fail => counts.fail += 1,
+                Status::Invalid => counts.invalid += 1,
                 Status::NotMeasured | Status::Reported => counts.not_measured += 1,
             }
         }
@@ -209,7 +213,9 @@ impl Summary {
     /// PASS only when every row of a gate passed; one failure is FAIL; otherwise a gate
     /// with unmeasured rows is INCOMPLETE.
     pub fn word(counts: &Counts) -> &'static str {
-        if counts.fail > 0 {
+        if counts.invalid > 0 {
+            "INVALID"
+        } else if counts.fail > 0 {
             "FAIL"
         } else if counts.not_measured > 0 {
             "INCOMPLETE"
@@ -222,15 +228,26 @@ impl Summary {
             .iter()
             .map(|(gate, c)| {
                 format!(
-                    "{gate}: {} ({} pass, {} fail, {} not measured)",
+                    "{gate}: {} ({} pass, {} fail, {} not measured, {} invalid)",
                     Self::word(c),
                     c.pass,
                     c.fail,
-                    c.not_measured
+                    c.not_measured,
+                    c.invalid
                 )
             })
             .collect::<Vec<_>>()
             .join(" · ")
+    }
+}
+
+pub(super) fn invalidate(rows: &mut [Row]) {
+    for row in rows {
+        row.status = Status::Invalid;
+        row.note.push_str("; ARA_GPU_FOREIGN_LOAD: reading invalidated by foreign GPU load/monitor error; values retained for diagnosis");
+        for gate in &mut row.gates {
+            gate.status = Status::Invalid;
+        }
     }
 }
 

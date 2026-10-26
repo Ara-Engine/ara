@@ -1,0 +1,4 @@
+# Actual game executables only: exact, case-insensitive names.
+# Services, trays, clients and overlays count only through measured foreign GPU%.
+# Launcher ancestry alone cannot reliably identify a Steam/Epic child as a game.
+presence = ["VALORANT-Win64-Shipping.exe"]

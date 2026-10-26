@@ -3,6 +3,22 @@
 `ara-gpu` reports problems with named codes. They keep their names on the bus;
 the numbers are internal slots.
 
+## ARA6090 GPU_FOREIGN_LOAD: Invalid GPU timing reading
+owner: ara-dev
+shown as: ARA_GPU_FOREIGN_LOAD
+
+A D26 scoreboard or GPU-leased reading is invalid because foreign GPU activity was observed, an actual game executable was present, or monitoring was unavailable. This is not an engine budget failure. Evidence retains process names, PIDs, peak utilization and UTC epoch-millisecond time ranges.
+
+Causes:
+- Another process used more than 5% summed GPU-engine utilization for at least three consecutive samples.
+- An actual game executable in the data-driven presence list was active. Idle services, launchers, tray apps and overlays never invalidate by presence alone; they count through measured GPU utilization.
+- Windows per-process GPU performance counters could not be sampled reliably.
+
+Fixes:
+- Close or pause foreign GPU work yourself, then rerun; Ara never terminates other applications.
+- Use `ara-dev gpu --wait-for-quiet -- COMMAND` or `ara-dev d26 --wait-for-quiet` to poll for a quiet three-second baseline before starting.
+- Inspect `gpu-load.json` or the leased reading's reported evidence path. Restore unavailable Windows GPU counters before relying on timing results. INVALID exits with code 3.
+
 ## ARA6001 GPU_STALE_HANDLE: Stale GPU handle
 owner: ara-gpu
 shown as: ARA_GPU_STALE_HANDLE

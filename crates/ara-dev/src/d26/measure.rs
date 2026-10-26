@@ -63,6 +63,8 @@ pub(super) struct Output {
 /// Everything measured so far, keyed by scene name (and preset).
 #[derive(Default)]
 pub(super) struct Results {
+    /// Whole-reading foreign GPU evidence; invalid readings never judge budgets.
+    pub gpu_load: Option<crate::gpu_guard::Report>,
     /// Cold High launch with a fresh pipeline cache. Whole-run CPU/hitch metrics
     /// include readiness and warmup; GPU metrics begin only after readiness.
     pub cold: BTreeMap<&'static str, Measured<Window>>,
