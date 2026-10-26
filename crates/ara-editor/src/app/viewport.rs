@@ -10,6 +10,8 @@ use ara_runtime_render::{PresentationImage, fidelity::vfx::Effects};
 mod content;
 mod convergence;
 mod preview;
+#[cfg(test)]
+mod scene_switch;
 mod startup;
 pub(super) use preview::{GamePreview, PreviewCamera};
 pub(super) use startup::prepare_renderer;
@@ -57,6 +59,10 @@ pub(super) struct SceneView {
     /// Input actually reflected by the retained native frame. SceneSync can
     /// invalidate after this view already adopted the same publication.
     raster_input: Option<content::Key>,
+    /// Document whose scene-specific render state was successfully published.
+    raster_scene: Option<String>,
+    /// Scene identity is independent of coincident geometry/material generations.
+    fidelity_scene: Option<String>,
 }
 impl SceneView {
     /// Recheck native input at the next render boundary. Notifications for an
@@ -281,6 +287,7 @@ impl SceneView {
             self.convergence.failed();
             self.raster_frame = None;
             self.raster_input = None;
+            self.raster_scene = None;
             self.invalidate();
         }
         renderer.render_view(&editor.state.camera.spec(), 0.0015, mode)?;
@@ -328,6 +335,16 @@ impl SceneView {
         }
         self.convergence.completed();
         self.frame_pending = false;
+        if self
+            .raster_scene
+            .as_ref()
+            .is_some_and(|scene| scene != &editor.state.doc)
+            && self.preview_view.is_some()
+        {
+            // Inspector drafts belong to the outgoing document, including when
+            // both scenes reuse the same entity addresses.
+            self.set_preview_view(None);
+        }
         if renderer.scene_frame_async() {
             self.active = renderer.presentation_ready();
         }
@@ -369,6 +386,7 @@ impl SceneView {
         }
         if let Some(fidelity) = self.fidelity.take() {
             fidelity.destroy(renderer.gpu_mut())?;
+            self.fidelity_scene = None;
             self.prepared = None;
             self.plan = None;
             self.revision = None;
@@ -411,6 +429,7 @@ impl SceneView {
             self.patched_pose = key.pose;
         }
         let changed = self.revision != Some(revision)
+            || self.raster_input.is_none_or(|shown| !shown.same_input(key))
             || (editor.gesture.is_some() && self.patched_pose != pose_key(editor.gesture.as_ref()))
             || self.raster_frame.is_none();
         content::poll(
@@ -472,10 +491,16 @@ impl SceneView {
             let raster = self.raster.get_or_insert_with(|| {
                 ara_runtime_render::RasterView::new(editor.host.root().join(".ara/gpu"))
             });
-            let frame = raster.publish_content(renderer, prepared.raster, plan)?;
+            let scene_changed = self.raster_scene.as_deref() != Some(editor.state.doc.as_str());
+            let frame = if scene_changed {
+                raster.publish_scene(renderer, prepared.raster, plan)?
+            } else {
+                raster.publish_content(renderer, prepared.raster, plan)?
+            };
+            self.raster_scene = Some(editor.state.doc.clone());
             *content = prepared.content;
             let arrivals = content.take_arrivals();
-            if !arrivals.is_empty() {
+            if !scene_changed && !arrivals.is_empty() {
                 raster.fade_models(&arrivals)?;
             }
             self.raster_frame = Some(frame);
@@ -612,7 +637,8 @@ impl SceneView {
             self.remaining = self.remaining.max(8);
             self.camera = Some(editor.state.camera);
         }
-        let reset = self.revision != Some(revision) || editor.gesture.is_some();
+        let scene_changed = self.fidelity_scene.as_deref() != Some(editor.state.doc.as_str());
+        let reset = self.revision != Some(revision) || editor.gesture.is_some() || scene_changed;
         let resized = self.plan != Some(settings);
         if reset || resized {
             self.remaining = 64;
@@ -633,12 +659,13 @@ impl SceneView {
                 &editor.state.hidden,
             )?;
             let look = FrameEnvironment::resolve(&frame.look, frame.environment.exposure);
-            let rebuild = self
-                .prepared
-                .as_mut()
-                .map(|prepared| prepared.update_frame(&frame))
-                .transpose()?
-                .is_none_or(|change| change == FrameChange::Rebuild);
+            let rebuild = scene_changed
+                || self
+                    .prepared
+                    .as_mut()
+                    .map(|prepared| prepared.update_frame(&frame))
+                    .transpose()?
+                    .is_none_or(|change| change == FrameChange::Rebuild);
             if rebuild {
                 let assets = content.content(&frame, store.workspace(), store.schema())?;
                 let mut prepared = native::prepare(&frame, assets, texture_config())?;
@@ -664,6 +691,16 @@ impl SceneView {
                 .as_mut()
                 .ok_or("fidelity allocation")?
                 .set_environment(&look)?;
+            if scene_changed {
+                self.fidelity
+                    .as_mut()
+                    .ok_or("fidelity allocation")?
+                    .reset_accumulation(renderer.gpu_mut())?;
+                if let Some(effects) = self.effects.take() {
+                    effects.destroy(renderer.gpu_mut())?;
+                }
+                self.tick = 0;
+            }
             let sun = frame.sun.map_or((Vec3::Y, Vec3::ZERO), |(direction, lux)| {
                 (Vec3::from_array(direction), Vec3::from_array(lux))
             });
@@ -681,6 +718,7 @@ impl SceneView {
                 &frame.effects,
                 sun,
             )?;
+            self.fidelity_scene = Some(editor.state.doc.clone());
             self.failed = None;
         }
         if self.fidelity.is_none() {
