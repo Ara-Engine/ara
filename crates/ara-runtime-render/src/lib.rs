@@ -278,12 +278,7 @@ impl Presenter {
         &self,
         frame: &RenderFrame,
     ) -> ara_render_fidelity::environment::FrameEnvironment {
-        self.look_override.unwrap_or_else(|| {
-            ara_render_fidelity::environment::FrameEnvironment::resolve(
-                &frame.look,
-                frame.environment.exposure,
-            )
-        })
+        self.look_override.unwrap_or_else(|| environment(frame))
     }
 
     /// Uploads `frame`'s content (rebuilding only on structural change). A rebuild
@@ -911,6 +906,20 @@ fn lights(frame: &RenderFrame) -> Vec<scene::Light> {
         .collect()
 }
 
+/// Where [`camera`] looks from when the world has no camera.
+const OVERVIEW: [f32; 3] = [12.0, 10.0, 12.0];
+
+/// The frame's authored look as seen from [`camera`]: post-process volumes blend by
+/// that eye position.
+pub fn environment(frame: &RenderFrame) -> ara_render_fidelity::environment::FrameEnvironment {
+    let eye = frame.camera.map_or(OVERVIEW, |c| c.position);
+    ara_render_fidelity::environment::FrameEnvironment::resolve(
+        &frame.look,
+        glam30::Vec3::from_array(eye),
+        frame.environment.exposure,
+    )
+}
+
 /// The frame's camera, or an overview when the world has none.
 pub fn camera(frame: &RenderFrame) -> Result<CameraSpec> {
     Ok(match frame.camera {
@@ -924,7 +933,7 @@ pub fn camera(frame: &RenderFrame) -> Result<CameraSpec> {
             }
         }
         None => CameraSpec::LookAt {
-            position: glam30::Vec3::new(12.0, 10.0, 12.0),
+            position: glam30::Vec3::from_array(OVERVIEW),
             target: glam30::Vec3::ZERO,
             vertical_fov: 55f32.to_radians(),
         },

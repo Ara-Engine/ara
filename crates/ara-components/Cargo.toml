@@ -9,7 +9,9 @@ publish.workspace = true
 [dependencies]
 ara-schema.workspace = true
 bevy_ecs = { workspace = true, features = ["std"] }
+glam.workspace = true
 serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
 
 [dev-dependencies]
 serde_json = { workspace = true, features = ["preserve_order", "float_roundtrip"] }

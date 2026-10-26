@@ -274,7 +274,7 @@ impl RasterView {
             key,
             native,
         } = candidate;
-        let look = FrameEnvironment::resolve(&frame.look, frame.environment.exposure);
+        let look = crate::environment(&frame);
         self.prepare_inner(
             renderer,
             &frame,

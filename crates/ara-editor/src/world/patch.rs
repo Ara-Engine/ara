@@ -31,7 +31,7 @@ const SCENE_WIDE: [&str; 8] = [
     "Environment",
     "SkyAtmosphere",
     "HeightFog",
-    "PostProcess",
+    "PostProcessVolume",
     "Terrain",
     "TerrainChunk",
     "TerrainView",

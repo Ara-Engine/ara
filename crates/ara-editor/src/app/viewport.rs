@@ -514,7 +514,12 @@ impl SceneView {
                     .ok_or("raster view")?
                     .style_unpublished(renderer, |asset| content.model_is_pending(asset))?;
             }
-            let look = FrameEnvironment::resolve(&frame.look, frame.environment.exposure);
+            // Volumes blend for the Scene view's camera.
+            let look = FrameEnvironment::resolve(
+                &frame.look,
+                editor.state.camera.position(),
+                frame.environment.exposure,
+            );
             let raster = self.raster.as_mut().ok_or("raster view")?;
             let resolve = || content.content(frame, store.workspace(), store.schema());
             if self.raster_snapshot_dirty {
@@ -632,7 +637,12 @@ impl SceneView {
                 editor.gesture.as_ref(),
                 &editor.state.hidden,
             )?;
-            let look = FrameEnvironment::resolve(&frame.look, frame.environment.exposure);
+            // Volumes blend for the Scene view's camera.
+            let look = FrameEnvironment::resolve(
+                &frame.look,
+                editor.state.camera.position(),
+                frame.environment.exposure,
+            );
             let rebuild = self
                 .prepared
                 .as_mut()

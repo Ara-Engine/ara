@@ -1,8 +1,8 @@
 //! `<project>/look/<scene>.look.json`: what the captures need that a scene document
 //! cannot express yet: camera shots, an HDRI sky and the ground material. Scenes own
 //! geometry, lights, the sun, the physical sky, fog and post processing
-//! (`SkyAtmosphere`, `HeightFog`, `PostProcess`); `sky.kind = atmosphere` and `post`
-//! remain as overrides for looks that predate those components.
+//! (`SkyAtmosphere`, `HeightFog`, `PostProcessVolume`); `sky.kind = atmosphere` and
+//! `post` remain as overrides for looks that predate those components.
 use ara_render_fidelity::{ToneMapper, atmosphere::Atmosphere, environment::FrameEnvironment};
 use serde::Deserialize;
 
@@ -21,7 +21,7 @@ pub struct Look {
     /// Sky and image-based lighting; absent uses the scene's own sky.
     #[serde(default)]
     pub sky: Option<Sky>,
-    /// Exposure and display override; absent uses the scene's `PostProcess`.
+    /// Exposure and display override; absent uses the scene's post-process volumes.
     pub post: Option<Post>,
     /// Look-component overrides applied over the scene's own while tuning a look;
     /// the scene owns the final values.
@@ -130,8 +130,8 @@ pub struct Ground {
     pub rock_tint: [f32; 3],
 }
 
-/// Replacement `SkyAtmosphere`/`HeightFog`/`PostProcess` values (partial JSON fills
-/// the component defaults).
+/// Replacement `SkyAtmosphere`/`HeightFog`/`PostProcessVolume` values (partial JSON
+/// fills the component defaults).
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(rename_all = "PascalCase", deny_unknown_fields)]
 pub struct Components {
@@ -139,8 +139,8 @@ pub struct Components {
     pub sky_atmosphere: Option<ara_components::render::SkyAtmosphere>,
     /// Height fog.
     pub height_fog: Option<ara_components::render::HeightFog>,
-    /// Exposure and display.
-    pub post_process: Option<ara_components::render::PostProcess>,
+    /// A volume replacing every post-process volume of the scene (placed at the origin).
+    pub post_process_volume: Option<ara_components::post::PostProcessVolume>,
 }
 
 /// A `VisualEffect`'s size and brightness.
@@ -163,7 +163,15 @@ impl Look {
         ara_components::render::SceneLook {
             sky: c.sky_atmosphere.or(scene.sky),
             fog: c.height_fog.or(scene.fog),
-            post: c.post_process.or(scene.post),
+            volumes: match &c.post_process_volume {
+                Some(volume) => vec![ara_components::post::PostVolume {
+                    volume: volume.clone(),
+                    translation: [0.; 3],
+                    rotation: [0., 0., 0., 1.],
+                    scale: [1.; 3],
+                }],
+                None => scene.volumes,
+            },
         }
     }
     /// Applies effect overrides to the extracted effects.

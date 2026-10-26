@@ -708,6 +708,7 @@ version = "0.0.1-alpha"
 dependencies = [
  "ara-schema",
  "bevy_ecs",
+ "glam 0.30.9",
  "serde",
  "serde_json",
 ]
