@@ -96,6 +96,9 @@ pub(super) struct Row {
     pub note: String,
     /// The tool output the value came from.
     pub source: Option<String>,
+    /// UTC bounds used for contamination overlap, with explicit provenance.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub measurement_window: Option<super::validity::Window>,
 }
 
 fn judge(value: Option<f64>, bound: bool, limit: f64) -> Status {
@@ -120,6 +123,7 @@ impl Row {
             status: Status::NotMeasured,
             note: String::new(),
             source: None,
+            measurement_window: None,
         }
     }
     fn unit(mut self, unit: &'static str) -> Self {
@@ -180,6 +184,16 @@ impl Row {
         self.status = Status::Fail;
         self.note(reason)
     }
+
+    pub(super) fn invalidate(&mut self, reason: &str) {
+        self.status = Status::Invalid;
+        self.note.push_str(&format!(
+            "; ARA_GPU_FOREIGN_LOAD: {reason}; values retained for diagnosis"
+        ));
+        for gate in &mut self.gates {
+            gate.status = Status::Invalid;
+        }
+    }
 }
 
 /// Pass/fail/not-measured counts per gate.
@@ -238,16 +252,6 @@ impl Summary {
             })
             .collect::<Vec<_>>()
             .join(" · ")
-    }
-}
-
-pub(super) fn invalidate(rows: &mut [Row]) {
-    for row in rows {
-        row.status = Status::Invalid;
-        row.note.push_str("; ARA_GPU_FOREIGN_LOAD: reading invalidated by foreign GPU load/monitor error; values retained for diagnosis");
-        for gate in &mut row.gates {
-            gate.status = Status::Invalid;
-        }
     }
 }
 

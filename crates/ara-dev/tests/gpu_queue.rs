@@ -141,9 +141,11 @@ fn foreign_load_refuses_start_and_invalidates_a_running_lease() {
             .contains("VALORANT-Win64-Shipping.exe")
     );
 
-    let quiet = serde_json::json!({"unix_ms":1000,"processes":[],"engines":[]});
-    let mut frames = vec![quiet; 3];
-    for at in [4000, 5000, 6000] {
+    let mut frames: Vec<_> = [1000, 2000, 3000]
+        .into_iter()
+        .map(|at| serde_json::json!({"unix_ms":at,"processes":[],"engines":[]}))
+        .collect();
+    for at in [4000, 5000, 6000, 7000, 8000] {
         frames.push(serde_json::json!({"unix_ms":at,"processes":[{"pid":9998,"parent":0,"name":"foreign-game.exe","birth":1}],"engines":[["pid_9998_luid_0_eng_0",23.]]}));
     }
     fs::write(
@@ -166,7 +168,7 @@ fn foreign_load_refuses_start_and_invalidates_a_running_lease() {
     let report: serde_json::Value = serde_json::from_str(line).unwrap();
     assert_eq!(report["status"], "invalid");
     assert_eq!(report["reading"]["contaminants"][0]["peak_percent"], 23.);
-    assert_eq!(report["reading"]["contaminants"][0]["first_unix_ms"], 4000);
+    assert_eq!(report["reading"]["contaminants"][0]["first_unix_ms"], 3000);
 }
 
 #[test]

@@ -6,8 +6,8 @@ mod tests;
 mod windows;
 
 use anyhow::{Context, Result, bail};
-pub(crate) use model::Report;
 use model::{Classifier, Snapshot};
+pub(crate) use model::{Interval, Policy, Report};
 use std::{
     fs,
     path::{Path, PathBuf},
@@ -52,7 +52,8 @@ pub(crate) struct Guard {
 }
 
 impl Guard {
-    pub(crate) fn start(wait_for_quiet: bool, path: PathBuf) -> Result<Self> {
+    pub(crate) fn start(wait_for_quiet: bool, path: PathBuf, policy: Policy) -> Result<Self> {
+        let policy = policy.validate()?;
         let report = Arc::new(Mutex::new(Report::default()));
         let shared = Arc::clone(&report);
         let evidence = path.clone();
@@ -61,7 +62,7 @@ impl Guard {
         let worker = thread::spawn(move || {
             let outcome = (|| -> Result<()> {
                 let mut sampler = Sampler::new()?;
-                let mut classifier = Classifier::new(std::process::id())?;
+                let mut classifier = Classifier::with_policy(std::process::id(), policy)?;
                 let started = Instant::now();
                 let mut baseline = Report {
                     sampler: sampler.name().into(),
@@ -73,7 +74,7 @@ impl Guard {
                         return Ok(());
                     }
                     let sample = classifier.push(sampler.sample()?, &mut baseline);
-                    quiet = if sample.foreign_percent <= 5.
+                    quiet = if sample.foreign_percent <= policy.threshold_percent
                         && !sample.foreign.iter().any(|p| p.known)
                     {
                         quiet + 1
@@ -83,12 +84,16 @@ impl Guard {
                     if baseline.samples.len() < 3 {
                         continue;
                     }
-                    if !baseline.invalid() || wait_for_quiet && quiet >= 3 {
+                    if (!baseline.invalid() && !classifier.pending())
+                        || wait_for_quiet && quiet >= 3
+                    {
                         if wait_for_quiet && baseline.invalid() {
                             baseline = Report {
                                 sampler: sampler.name().into(),
                                 samples: baseline.samples[baseline.samples.len() - 3..].to_vec(),
                                 quiet_wait_seconds: started.elapsed().as_secs_f64(),
+                                policy,
+                                classification_version: 2,
                                 ..Default::default()
                             };
                         }
@@ -97,7 +102,7 @@ impl Guard {
                         break;
                     }
                     *shared.lock().expect("GPU guard state") = baseline.clone();
-                    if !wait_for_quiet {
+                    if !wait_for_quiet && baseline.invalid() {
                         bail!("{}", baseline.detail());
                     }
                     if baseline.samples.len() % 10 == 3 {
@@ -188,7 +193,7 @@ fn persist(path: &Path, report: &Report) -> Result<()> {
     fs::write(
         path,
         serde_json::to_vec_pretty(
-            &serde_json::json!({"format":"ara.gpu-load/1","status":report.status(),"diagnostic":if report.invalid(){Some(CODE)}else{None},"threshold_percent":5.,"sustained_samples":3,"baseline_seconds":3,"reading":report}),
+            &serde_json::json!({"format":"ara.gpu-load/1","status":report.status(),"diagnostic":if report.invalid(){Some(CODE)}else{None},"threshold_percent":report.policy.threshold_percent,"sustained_samples":report.policy.sustained_samples,"dwm_allowance_percent":report.policy.dwm_allowance_percent,"baseline_seconds":3,"reading":report}),
         )?,
     )?;
     Ok(())

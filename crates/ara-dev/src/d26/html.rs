@@ -40,7 +40,8 @@ h1 { font-size: 22px; margin: 0 0 4px; } h2 { font-size: 15px; margin: 32px 0 8p
 .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px 16px; min-width: 220px; }
 .card .gate { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .06em; }
 .card .word { font-size: 22px; font-weight: 700; margin: 2px 0; }
-.word.PASS { color: #4ade80; } .word.FAIL { color: #f87171; } .word.INCOMPLETE { color: #fbbf24; }
+.word.PASS { color: #4ade80; } .word.FAIL { color: #f87171; } .word.INCOMPLETE, .word.INVALID { color: #fbbf24; }
+summary { cursor: pointer; } pre { overflow-x: auto; }
 table { width: 100%; border-collapse: collapse; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
 th, td { padding: 6px 10px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
 th { color: var(--muted); font-weight: 600; font-size: 12px; background: #1c2027; position: sticky; top: 0; }
@@ -65,10 +66,12 @@ pub(super) fn page(report: &Value, rows: &[Row], summary: &Summary) -> String {
         escape(run["createdAt"].as_str().unwrap_or(""))
     );
     out.push_str("<h1>Ara D26 scoreboard</h1>");
-    if report["status"] == "invalid" {
-        out.push_str("<h2>INVALID — foreign GPU load or unavailable monitoring</h2><pre>");
-        out.push_str(&escape(&serde_json::to_string_pretty(&serde_json::json!({"contaminants":report["gpuLoad"]["contaminants"],"errors":report["gpuLoad"]["errors"]})).unwrap_or_default()));
-        out.push_str("</pre>");
+    if report["status"] == "invalid" || report["status"] == "partially_invalid" {
+        out.push_str(
+            "<h2>INVALID rows — overlapping foreign GPU load or unavailable monitoring</h2><details><summary>GPU-load policy, contamination intervals and processes</summary><pre>",
+        );
+        out.push_str(&escape(&serde_json::to_string_pretty(&serde_json::json!({"policy":report["gpuLoad"]["policy"],"intervals":report["gpuLoad"]["intervals"],"contaminants":report["gpuLoad"]["contaminants"],"errors":report["gpuLoad"]["errors"]})).unwrap_or_default()));
+        out.push_str("</pre></details>");
     }
     out.push_str(&format!(
         "<div class='meta'><code>{}</code>{} · {} profile · {} · {} frames per window, warmup {} · {} · {} UTC</div>",
@@ -145,9 +148,20 @@ pub(super) fn page(report: &Value, rows: &[Row], summary: &Summary) -> String {
                 escape(&source.replace('\\', "/"))
             )
         });
+        let window = row
+            .measurement_window
+            .as_ref()
+            .map_or(String::new(), |window| {
+                format!(
+                    "<details><summary>GPU-load window</summary>{}–{} UTC epoch ms · {}</details>",
+                    window.interval.start_unix_ms,
+                    window.interval.end_unix_ms,
+                    escape(&window.basis)
+                )
+            });
         // Gated rows read per gate; the column says whether an ungated row was measured.
         out.push_str(&format!(
-            "<td>{}</td><td class='note'>{}{source}</td></tr>",
+            "<td>{}</td><td class='note'>{}{source}{window}</td></tr>",
             if row.gates.is_empty() {
                 pill(row.status)
             } else {

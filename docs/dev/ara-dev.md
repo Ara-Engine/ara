@@ -129,8 +129,12 @@ are excluded by PID/creation identity, including counter tails after child exit.
 Counter buffers follow the Windows
 [PDH wildcard-array API](https://learn.microsoft.com/en-us/windows/win32/api/pdh/nf-pdh-pdhgetformattedcounterarrayw).
 
-Foreign utilization summed across engines/processes above **5% for three
-consecutive samples** invalidates the entire reading. Presence-only refusal is
+Foreign utilization summed across engines/processes above **10% for five
+consecutive samples** marks that time interval contaminated. DWM's first **3%**
+is allowed for our own presentation; only its excess counts. System (PID 4) and
+CSRSS are informational, because kernel paging and copy work can be ours.
+Raw counters are retained, including full DWM usage, for policy reclassification.
+Presence-only refusal is
 restricted to actual game executables in `crates/ara-dev/gpu-processes.toml`.
 Vanguard, Riot/Steam/Epic clients, Discord/NVIDIA overlays and other residents
 do not block at idle: their measured GPU use counts normally. Unknown games
@@ -141,17 +145,41 @@ to wait for a quiet baseline instead of refusing. Ara never kills, suspends or
 reconfigures foreign processes. Counter failures also invalidate timing evidence.
 The diagnostic is `ARA_GPU_FOREIGN_LOAD`; **exit code 3 means INVALID**, separate
 from a child/test failure. A lease prints `ARA_DEV_GPU_READING {json}` on stderr
-and writes its evidence path under `target/ara-dev/gpu-load/`. D26 retains values
-but marks rows and summaries INVALID in report.json/report.html, with GPU-load
-evidence in `gpu-load.json`. Evidence includes process names, PIDs, peak percentage
-and first/last UTC epoch-millisecond times. The first contamination is persisted
+and writes its evidence path under `target/ara-dev/gpu-load/`. A contaminated lease
+is INVALID. D26 retains values and invalidates only rows whose source window
+overlaps contamination; clean rows keep their PASS/FAIL judgments. report.json
+uses `partially_invalid` when only some measured rows overlap. GPU-load evidence
+is in `gpu-load.json`: policy, separate intervals, names, PIDs, raw peak percentage
+and UTC epoch-millisecond times. Separate bursts never bridge a quiet gap just
+because the PID is the same. The first contamination is persisted
 immediately; final reports retain the full sample history. A/B scripts must reject
-exit 3 and rerun rather than report a speedup or budget failure.
+exit 3 and rerun affected cases rather than report a speedup or budget failure.
+
+Both commands accept `--foreign-gpu-percent 10`, `--foreign-gpu-samples 5` and
+`--dwm-allowance-percent 3`. A high partial streak extends baseline sampling until
+it resolves or reaches the sustained limit. An actual game still refuses immediately.
+
+`ara-dev d26 --reclassify <reading-dir>` reapplies these defaults (or explicit
+policy flags) to saved raw GPU samples and source metrics, without builds, counter
+queries or launches. It preserves originals as `*.before-reclassify`, keeps the
+engine source ID and numbers, and regenerates JSON/HTML judgments. Repeated
+reclassification uses original counters, so the DWM allowance is subtracted once.
+
+New runs record UTC child-call bounds in window sidecars. GPU rows use the steady
+frame-duration envelope; CPU and hitch rows cover the whole run. Older player
+reports have no absolute UTC fields: original launch-log creation and raw metrics
+write times provide a labelled conservative envelope, with one PDH sample of
+margin around steady frames. Editor scenarios without individual UTC markers use
+their whole probe envelope. Resolved row windows are saved in report.json, so
+later copies do not rely on changed filesystem dates. A gated source with missing
+timing or incomplete monitoring coverage becomes **not measured**, never PASS.
 
 The explicit `ARA_DEV_GPU_GUARD_FIXTURE` JSON stream is for subprocess tests only;
 quiet fixture evidence is labelled `test_only`, never a native timing validation.
 D26 refuses fixtures. Unit tests cover actual game presence, sustained aggregate
-load, idle residents, owned descendants, exited tails, PID reuse and report status.
+load, idle residents, owned descendants, exited tails, PID reuse and per-row status.
+The recorded 20261026 desktop fixture keeps Outpost Low INVALID (DWM excess plus
+desktop activity), while its Outpost Medium source window stays clean.
 
 The normal gate tests source owners and **direct** consumers; clippy covers their full
 reverse dependency closure. Test/example/bench edits stay local. Markdown (including

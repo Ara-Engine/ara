@@ -22,10 +22,12 @@ Local developer binary. No engine dependencies; uses git and cargo as subprocess
   affected gate (or `--full`), commit and optional push.
 - `gpu`: machine-wide FIFO file-lock queue with OS crash recovery and timeout.
   PDH guard: three-second baseline then 1 Hz foreign GPU sampling; owned descendants
-  and their exited-counter tails are excluded. >5% summed over three samples or an
+  and their exited-counter tails are excluded. >10% summed over five samples or an
   actual game in gpu-processes.toml makes readings INVALID (exit 3), never FAIL.
+  DWM counts above a 3% allowance; System PID 4/CSRSS stay informational.
   Idle services/launchers/overlays use measured GPU% only. --wait-for-quiet polls;
-  no foreign process is altered. D26 also marks JSON/HTML rows/summary invalid.
+  no foreign process is altered. D26 invalidates overlapping rows only; saved
+  readings can be re-scored with `d26 --reclassify <dir>` (see docs).
 - `clean-worktrees`: inspect targets; deletion requires `--yes`, merged branch,
   stale files, clean checkout, no symlinks/reparse points and no active Cargo lock.
 - `disk`: all mounted drive free-space report.
