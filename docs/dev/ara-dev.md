@@ -116,6 +116,8 @@ suites their change touches. Commit and hand over the SHA. The integrator runs `
 once per merge batch on main; `--base` names the previous integrated checkpoint.
 `--full` is the nightly/dependency-update validation path. Performance iterations use
 `ara-dev perf` plus focused checks. Historical gate measurements above predate this policy.
+Final full-gate scope, duration and curated manual hardware/export checks:
+[`release-gate.md`](release-gate.md).
 
 The normal gate tests source owners and **direct** consumers; clippy covers their full
 reverse dependency closure. Test/example/bench edits stay local. Markdown (including
