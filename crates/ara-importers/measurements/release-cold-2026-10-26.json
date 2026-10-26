@@ -1,0 +1,332 @@
+{
+  "cases": [
+    {
+      "actions": 115,
+      "artifactReferences": 1459,
+      "createMs": 3029.8139,
+      "createThroughReadyMs": 32951.0689,
+      "deletion": {
+        "deleted": true,
+        "deletedUtc": "2026-10-26T13:35:13.8059735Z",
+        "files": 4005,
+        "logicalBytes": 2058444464,
+        "path": "C:\\AraImportBench\\projects\\release-current-15fb16fb-o1-outpost",
+        "reparsePoints": [],
+        "verified": true
+      },
+      "evidenceSha256": {
+        "catalog": "728FDFADC5F6CC92857DD4FF4DEF33D51862E9D5313CC184526AC921A044943D",
+        "deletion": "BEA5B25E254BBEFA1FF52F4D87560E18D19D0B55AFFCFE6A83BE9729225C1B4A",
+        "physicalVerification": "D341BE214F3D5B6CF70C6FF4F1F699FE586BEBE241E57E7EFFBBED3754D0B005",
+        "result": "238E9661A72FEEC28090EF7A7D97A142F9545F0A10C8B7DEA5B28D6C89CB56E6"
+      },
+      "fallbacks": 0,
+      "importMs": 29787.372600000002,
+      "loadAfter": {
+        "availableMemoryKiB": 4684152,
+        "cpuPercent": 5,
+        "dFreeBytes": 17947058176,
+        "utc": "2026-10-26T13:35:05.5829793Z"
+      },
+      "loadBefore": {
+        "availableMemoryKiB": 5604896,
+        "cpuPercent": 20,
+        "dFreeBytes": 17961156608,
+        "utc": "2026-10-26T13:34:32.2255958Z"
+      },
+      "phase": "release-current-15fb16fb-o1",
+      "project": "C:/AraImportBench/projects/release-current-15fb16fb-o1-outpost",
+      "published": 115,
+      "referencedBytes": 909360516,
+      "sample": "outpost"
+    },
+    {
+      "actions": 33,
+      "artifactReferences": 331,
+      "createMs": 1797.5377,
+      "createThroughReadyMs": 17393.4064,
+      "deletion": {
+        "deleted": true,
+        "deletedUtc": "2026-10-26T13:35:36.4139326Z",
+        "files": 900,
+        "logicalBytes": 992790588,
+        "path": "C:\\AraImportBench\\projects\\release-current-15fb16fb-s1-showcase",
+        "reparsePoints": [],
+        "verified": true
+      },
+      "evidenceSha256": {
+        "catalog": "0638E7F64150973E4AA4647C68BB8769A264039932DDD50216E836095DB55884",
+        "deletion": "2C5369D70DA9E38206B1F9CD335C2136C605966E66BC260481C742AB1430DB69",
+        "physicalVerification": "E4FC15096D23B32932E717B9E0BDAF83EBF22A1F8CD2BB66D14FD37548A94242",
+        "result": "5A82DB6A6EBC3F2F94FA979A68BE68DA755FB4E753792D9734F73BFBD30E0127"
+      },
+      "fallbacks": 0,
+      "importMs": 15572.800500000001,
+      "loadAfter": {
+        "availableMemoryKiB": 5170968,
+        "cpuPercent": 17,
+        "dFreeBytes": 17947058176,
+        "utc": "2026-10-26T13:35:31.8994718Z"
+      },
+      "loadBefore": {
+        "availableMemoryKiB": 6064708,
+        "cpuPercent": 19,
+        "dFreeBytes": 17947058176,
+        "utc": "2026-10-26T13:35:14.1232027Z"
+      },
+      "phase": "release-current-15fb16fb-s1",
+      "project": "C:/AraImportBench/projects/release-current-15fb16fb-s1-showcase",
+      "published": 33,
+      "referencedBytes": 426642374,
+      "sample": "showcase"
+    },
+    {
+      "actions": 115,
+      "artifactReferences": 1459,
+      "createMs": 1920.0971000000002,
+      "createThroughReadyMs": 27160.7301,
+      "deletion": {
+        "deleted": true,
+        "deletedUtc": "2026-10-26T13:36:12.3120090Z",
+        "files": 4005,
+        "logicalBytes": 2058444464,
+        "path": "C:\\AraImportBench\\projects\\release-current-15fb16fb-o2-outpost",
+        "reparsePoints": [],
+        "verified": true
+      },
+      "evidenceSha256": {
+        "catalog": "8BDF1FD0138022E7A27C65A56A59AD34F4F40C1C914A99232C13A98721AFC2D5",
+        "deletion": "F46EAABC4572F9361A81AE6739C8AB737323396848893DC7BF6EE945BFEC9F48",
+        "physicalVerification": "67D472D05542E030658CF5373B2D9344830C0DC02195B088700622331C6960C8",
+        "result": "99B76E853CFA971E834CB9F3FD2C345039BBD07A618A8FB31F2912243B67BAAA"
+      },
+      "fallbacks": 0,
+      "importMs": 25124.0282,
+      "loadAfter": {
+        "availableMemoryKiB": 4720848,
+        "cpuPercent": 11,
+        "dFreeBytes": 17947058176,
+        "utc": "2026-10-26T13:36:04.2612889Z"
+      },
+      "loadBefore": {
+        "availableMemoryKiB": 5840416,
+        "cpuPercent": 39,
+        "dFreeBytes": 17947058176,
+        "utc": "2026-10-26T13:35:36.7172046Z"
+      },
+      "phase": "release-current-15fb16fb-o2",
+      "project": "C:/AraImportBench/projects/release-current-15fb16fb-o2-outpost",
+      "published": 115,
+      "referencedBytes": 909360516,
+      "sample": "outpost"
+    },
+    {
+      "actions": 33,
+      "artifactReferences": 331,
+      "createMs": 2441.9971,
+      "createThroughReadyMs": 13586.767,
+      "deletion": {
+        "deleted": true,
+        "deletedUtc": "2026-10-26T13:36:30.5992322Z",
+        "files": 900,
+        "logicalBytes": 992790588,
+        "path": "C:\\AraImportBench\\projects\\release-current-15fb16fb-s2-showcase",
+        "reparsePoints": [],
+        "verified": true
+      },
+      "evidenceSha256": {
+        "catalog": "177416914A68CF29A09A97E0542A259DCCB7F64973D94BE50AA547707E391B4B",
+        "deletion": "D211935484CFF8B95E6DB41EE7BEC2BAAD6D27C2C1DA86D6294EC7DCD70ACE61",
+        "physicalVerification": "A2A72EF2FA6182588CCEEBBD04F249605685DF484CC24AFBA01B1E50A22288F8",
+        "result": "A357D564E58E22E60EBC743104DD9E42368ECCC6930F3519B0DDC09D12BA10FE"
+      },
+      "fallbacks": 0,
+      "importMs": 11118.7005,
+      "loadAfter": {
+        "availableMemoryKiB": 5382008,
+        "cpuPercent": 10,
+        "dFreeBytes": 17947058176,
+        "utc": "2026-10-26T13:36:26.5866980Z"
+      },
+      "loadBefore": {
+        "availableMemoryKiB": 6403880,
+        "cpuPercent": 8,
+        "dFreeBytes": 17947058176,
+        "utc": "2026-10-26T13:36:12.6168945Z"
+      },
+      "phase": "release-current-15fb16fb-s2",
+      "project": "C:/AraImportBench/projects/release-current-15fb16fb-s2-showcase",
+      "published": 33,
+      "referencedBytes": 426642374,
+      "sample": "showcase"
+    },
+    {
+      "actions": 115,
+      "artifactReferences": 1459,
+      "createMs": 1880.6874,
+      "createThroughReadyMs": 22134.822200000002,
+      "deletion": {
+        "deleted": true,
+        "deletedUtc": "2026-10-26T13:37:01.7754370Z",
+        "files": 4005,
+        "logicalBytes": 2058444464,
+        "path": "C:\\AraImportBench\\projects\\release-current-15fb16fb-o3-outpost",
+        "reparsePoints": [],
+        "verified": true
+      },
+      "evidenceSha256": {
+        "catalog": "23392C0CC66AF99FFE33F9DBC28F84127CFE4E9FD1BFC7095606F0B558C95F83",
+        "deletion": "25FE03022BFB4284DBA2901AC1F2A5D386C556B0EF6DF6F8E902BC1A5AF0EE7E",
+        "physicalVerification": "1312535A6FC10356F6068D1A673418FD5C8A6D407969A87A70CB6FBDC92A1EB7",
+        "result": "11C8474638D74A0526D690314EB483FFC6EBEF1BDCC6AC823D953B788979E45B"
+      },
+      "fallbacks": 0,
+      "importMs": 20138.4623,
+      "loadAfter": {
+        "availableMemoryKiB": 4553524,
+        "cpuPercent": 11,
+        "dFreeBytes": 17947058176,
+        "utc": "2026-10-26T13:36:53.4141810Z"
+      },
+      "loadBefore": {
+        "availableMemoryKiB": 6550972,
+        "cpuPercent": 3,
+        "dFreeBytes": 17947058176,
+        "utc": "2026-10-26T13:36:30.9004713Z"
+      },
+      "phase": "release-current-15fb16fb-o3",
+      "project": "C:/AraImportBench/projects/release-current-15fb16fb-o3-outpost",
+      "published": 115,
+      "referencedBytes": 909360516,
+      "sample": "outpost"
+    },
+    {
+      "actions": 33,
+      "artifactReferences": 331,
+      "createMs": 2236.6698,
+      "createThroughReadyMs": 12935.7775,
+      "deletion": {
+        "deleted": true,
+        "deletedUtc": "2026-10-26T13:37:19.2544302Z",
+        "files": 900,
+        "logicalBytes": 992790588,
+        "path": "C:\\AraImportBench\\projects\\release-current-15fb16fb-s3-showcase",
+        "reparsePoints": [],
+        "verified": true
+      },
+      "evidenceSha256": {
+        "catalog": "177416914A68CF29A09A97E0542A259DCCB7F64973D94BE50AA547707E391B4B",
+        "deletion": "0A4D3B5A693FBD317F44CBB978445F8224610F3B1A2AB9E330B83F77378CF802",
+        "physicalVerification": "52D2184CA1364D71FAC913FD57965E7EFD147F058C1CAFC5C172A2E6D39A1BAB",
+        "result": "A3DDC70D31FD61B6B1A4177E84C1F0DB4F813B0B7358F0469791F9A3EA3A7E1D"
+      },
+      "fallbacks": 0,
+      "importMs": 10674.017100000001,
+      "loadAfter": {
+        "availableMemoryKiB": 5591212,
+        "cpuPercent": 5,
+        "dFreeBytes": 17947058176,
+        "utc": "2026-10-26T13:37:15.3948495Z"
+      },
+      "loadBefore": {
+        "availableMemoryKiB": 5770948,
+        "cpuPercent": 2,
+        "dFreeBytes": 17945587712,
+        "utc": "2026-10-26T13:37:02.0836292Z"
+      },
+      "phase": "release-current-15fb16fb-s3",
+      "project": "C:/AraImportBench/projects/release-current-15fb16fb-s3-showcase",
+      "published": 33,
+      "referencedBytes": 426642374,
+      "sample": "showcase"
+    }
+  ],
+  "caveats": [
+    "Every observation retained, including the slow initial runs.",
+    "Strong downward sequence drift; neither a confidence interval nor a first-ever OS-cold claim.",
+    "Outpost <20 s and Showcase <10 s are not consistently met."
+  ],
+  "frozen": {
+    "bin": "D:/AraBuild/ara-dev-infra-target/import-speed/release-cold-15fb16fb-bin",
+    "cliSha256": "2287E435CB491AD38DA928A0FF2796B30BE94ACE5E2D5A0E80E3F023A73FCCDD",
+    "defaultPreparedLods": true,
+    "player": "D:/AraBuild/ara-dev-infra-target/import-speed/release-cold-15fb16fb-bin/ara-player.exe",
+    "playerSha256": "1311FD6382D460ABE068A65CC53E9CBE7F59FF9FB6DCD420128975782E349C5C",
+    "profile": "dev: Rust workspace opt1, dependencies/native opt3, no debug info; same as prior paired runs",
+    "roots": [
+      "ara",
+      "ara-asset",
+      "ara-importers",
+      "ara-import-worker",
+      "ara-player"
+    ],
+    "sourceHead": "15fb16fb5afa8582280daadbfef90d31c14f80d9",
+    "templateRoot": "D:/AraBuild/ara-dev-infra-target/import-speed/current-sidecars-templates",
+    "timed": false,
+    "trackedRuntimeTemplateFiles": 197,
+    "workerSha256": "BACFA8C2B9DF8E4E7E2161A1C9D78894E137DEA784327AE1125CBCB2F8BB10FA"
+  },
+  "method": {
+    "assetReadyDefinition": "Start before fresh Hub open, through every expected source publishing; polling includes up to about 100 ms observation granularity",
+    "cachePolicy": "Fresh per-project content-addressed cache; OS/driver caches not flushed",
+    "comparison": "Current-tip observations, not a paired speedup claim or an installed-release timing",
+    "date": "2026-10-26",
+    "host": "Windows shared 16-thread PC, RTX 4070 SUPER",
+    "peakProjectCount": 1,
+    "perCaseDeletion": true,
+    "profile": "dev: Rust workspace opt1, dependencies/native opt3, no debug info; same as prior paired runs",
+    "projectAndCacheVolume": "C: NVMe",
+    "projectBase": "C:/AraImportBench/projects",
+    "quality": "Balanced default, pooled GPU device, parallel geometry off, prepared LODs on",
+    "quiet": "Owner-held other agents after renderer comparison; baseline CPU snapshots retained, no OS-wide idle claim",
+    "sequence": [
+      "outpost",
+      "showcase",
+      "outpost",
+      "showcase",
+      "outpost",
+      "showcase"
+    ],
+    "timed": true,
+    "verification": "All action keys and artifact identities against v4, plus every cached object physically hash-verified"
+  },
+  "sourceHead": "15fb16fb5afa8582280daadbfef90d31c14f80d9",
+  "status": "VERIFIED",
+  "summaries": {
+    "outpost": {
+      "createThroughReadyMs": {
+        "max": 32951.0689,
+        "median": 27160.7301,
+        "min": 22134.822200000002
+      },
+      "importMs": {
+        "max": 29787.372600000002,
+        "median": 25124.0282,
+        "min": 20138.4623
+      },
+      "runs": 3
+    },
+    "showcase": {
+      "createThroughReadyMs": {
+        "max": 17393.4064,
+        "median": 13586.767,
+        "min": 12935.7775
+      },
+      "importMs": {
+        "max": 15572.800500000001,
+        "median": 11118.7005,
+        "min": 10674.017100000001
+      },
+      "runs": 3
+    }
+  },
+  "totals": {
+    "actionKeys": 444,
+    "artifactReferences": 5370,
+    "differentArtifacts": 0,
+    "differentKeys": 0,
+    "fallbacks": 0,
+    "projectsDeleted": 6,
+    "referencedBytesPhysicallyVerified": 4008008670
+  }
+}
