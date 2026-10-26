@@ -39,10 +39,16 @@ impl Shell {
             .get("hierarchy")
             .map(|s| s.to_lowercase())
             .unwrap_or_default();
-        // The row model (hundreds of rows) is rebuilt only when what it shows changed.
+        // The row model (hundreds of rows) is rebuilt only when what it shows changed;
+        // the selection only restyles the visible rows (`decorate_hierarchy`).
+        self.selected_rows = editor
+            .state
+            .selection
+            .iter()
+            .map(|s| crate::world::render_id(s))
+            .collect();
         let key = HierarchyKey {
             scene: self.hierarchy_structure(editor),
-            selection: editor.state.selection.clone(),
             collapsed: editor.state.collapsed.clone(),
             expanded: editor.state.expanded.clone(),
             hidden: editor.state.hidden.clone(),
@@ -72,12 +78,6 @@ impl Shell {
                 .collect();
             self.hierarchy.items.clear();
             self.hierarchy_style.clear();
-            self.selected_rows = editor
-                .state
-                .selection
-                .iter()
-                .map(|s| crate::world::render_id(s))
-                .collect();
             self.hierarchy_entities.clear();
             while let Some((id, depth)) = stack.pop() {
                 let e = &resolved[id];
@@ -281,7 +281,6 @@ pub const LARGE_GROUP: usize = 32;
 pub(super) struct HierarchyKey {
     /// The scene's structure (`hierarchy_structure`), not every revision.
     scene: (String, usize, u64),
-    selection: Vec<String>,
     collapsed: std::collections::BTreeSet<String>,
     expanded: std::collections::BTreeSet<String>,
     hidden: std::collections::BTreeSet<String>,
