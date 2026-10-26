@@ -27,9 +27,10 @@ alpha foliage also retains at least 90% area per connected card. Irreducible
 cards keep their last good level. Skin/morph chains retain the four-level/1% cap.
 Retain usable legacy LODs: replacing geometric errors with combined attribute
 errors can make runtime selection choose finer foliage despite deeper chains.
-LOD0-based solves run in bounded pairs; accept/fallback in original level order.
-glTF classic and virtual geometry share the same bounded worker pool. Keep their
-bytes and error precedence stable; scheduling changes need no version bump.
+LOD0 solves and each primitive's classic/virtual cooks run sequentially by default.
+The single mesh::PARALLEL_GEOMETRY experiment enables bounded pairs/overlap; it
+regressed cold Outpost and needs an end-to-end ABBA win before re-enabling.
+Keep bytes and error precedence stable; scheduling changes need no version bump.
 ARAG Custom artifacts are
 validated by ara-geo; its reflected settings are VirtualGeometrySettings.
 
