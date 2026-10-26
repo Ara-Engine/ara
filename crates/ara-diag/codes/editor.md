@@ -86,3 +86,14 @@ Causes:
 Fixes:
 - Restore the file at the named path (or reimport it), then the model appears.
 - Point the entity's MeshRenderer.model at an existing asset, or remove the entity.
+
+## ARA4507 editor::LAYOUT_RESET: Saved layout reset
+owner: ara-editor
+
+The editor reset an older saved layout to the current default and saved the new layout format. This is a one-time informational notice; scene content is unchanged.
+
+Causes:
+- The saved layout predates the custom title bar and full-height sidebars.
+
+Fixes:
+- Rearrange panels if desired and save the layout from Window > Layouts.

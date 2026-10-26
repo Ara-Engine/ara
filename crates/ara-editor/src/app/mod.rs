@@ -1,6 +1,7 @@
 //! SDL event loop and same-device native UI/scene composition.
 mod assets_verify;
 mod capture;
+mod chrome_verify;
 mod controller;
 mod cursors;
 mod drags;
@@ -16,6 +17,7 @@ mod setup;
 mod ux_verify;
 mod verify;
 mod viewport;
+mod window_chrome;
 mod windows;
 use crate::{
     Editor,
@@ -109,6 +111,8 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
     {
         native.verification_extent(options.size)?;
     }
+    window.enable_custom_chrome()?;
+    let mut caption = window_chrome::SnapCaption::new(&window)?;
     let mut clipboard = OsClipboard;
     crate::native::frame::style(window.raw(), editor.state.light);
     let main_id = window.id();
@@ -120,6 +124,19 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
     }
     let mut shell = Shell::new(&mut editor, logical)?;
     shell.offscreen = offscreen;
+    if let Some(button) = shell.update_chrome(&mut window, dpi) {
+        caption.update(button);
+    }
+    if options.verify {
+        chrome_verify::verify(
+            &mut editor,
+            &mut shell,
+            &mut window,
+            &mut caption,
+            &options.output,
+            dpi,
+        )?;
+    }
     let mut view = editor.view()?;
     editor.report_missing_sources(&view);
     let viewport = shell.viewport().unwrap_or(ara_ui::paint::Box2 {
@@ -462,6 +479,8 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
             let input_ms = routed_at.elapsed().as_secs_f64() * 1000.;
             if let Some(request) = shell.window_request.take() {
                 match request {
+                    crate::shell::WindowRequest::Minimize => window.minimize()?,
+                    crate::shell::WindowRequest::Maximize => window.toggle_maximize()?,
                     crate::shell::WindowRequest::Fullscreen => window.toggle_fullscreen()?,
                     crate::shell::WindowRequest::Raise(id) => {
                         if let Some(f) = floats.windows.iter().find(|f| f.id == id) {
@@ -798,7 +817,14 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
             shell.orient_axis(editor.state.camera);
             let ui_scope = profile_frame.map(|_| ara_profile::scope("editor.ui"));
             let ui_at = Instant::now();
+            if shell.native_maximized != window.maximized() {
+                shell.native_maximized = window.maximized();
+                shell.rebuild(&mut editor)?;
+            }
             let work = shell.frame()?;
+            if let Some(button) = shell.update_chrome(&mut window, dpi) {
+                caption.update(button);
+            }
             if !offscreen {
                 cursors::update(
                     &mut window,

@@ -1,5 +1,5 @@
 //! Reflected editor actions. Each successful navigation command produces reversible ops.
-use crate::state::{EditorState, Navigation, Tool, default_layout};
+use crate::state::{EditorState, Navigation, Tool};
 use ara_diag::Diagnostic;
 use ara_host::{Cx, Method, Service, parse};
 use ara_render_fidelity::presets::QualityPreset;
@@ -246,6 +246,7 @@ impl Service for EditorService {
     }
     fn call(&mut self, cx: &mut Cx<'_>, method: &str, params: Value) -> R {
         let result = self.dispatch(cx, method, params);
+        self.report_layout_notice(cx);
         // Preferences and layouts that could not be written are warnings on the bus,
         // not stderr. Their writes run on writer threads, so a failure shows up here
         // with the next call.
@@ -258,8 +259,20 @@ impl Service for EditorService {
         }
         result
     }
+    fn tick(&mut self, cx: &mut Cx<'_>) {
+        self.report_layout_notice(cx);
+    }
 }
 impl EditorService {
+    /// A migration is informational and must be visible even before the first UI command.
+    fn report_layout_notice(&mut self, cx: &mut Cx<'_>) {
+        if self.navigation.take_layout_notice() {
+            cx.log(
+                Diagnostic::info(crate::codes::LAYOUT_RESET, crate::state::MIGRATION_NOTICE)
+                    .subject(ara_diag::Subject::system("editor")),
+            );
+        }
+    }
     fn dispatch(&mut self, cx: &mut Cx<'_>, method: &str, params: Value) -> R {
         if method == "editor.state" {
             return Ok(json!({"state":self.navigation.state}));
@@ -588,8 +601,16 @@ impl EditorService {
                         .join(format!("{}.json", safe_name(&p.name)?));
                     let text = std::fs::read_to_string(&path)
                         .map_err(|_| vec![crate::invalid(format!("no layout `{}`", p.name))])?;
-                    let mut dock = DockLayout::new(default_layout()).map_err(ui_error)?;
-                    dock.restore(&text).map_err(ui_error)?;
+                    let (dock, migrated) = crate::state::restore_layout(&text).map_err(ui_error)?;
+                    if migrated {
+                        state.set_dock(&dock);
+                        crate::state::write_layout(&path, &state)
+                            .map_err(|e| vec![crate::invalid(e.to_string())])?;
+                        cx.log(Diagnostic::info(
+                            crate::codes::LAYOUT_RESET,
+                            crate::state::MIGRATION_NOTICE,
+                        ));
+                    }
                     dock
                 };
                 state.set_dock(&dock);

@@ -1,0 +1,20 @@
+
+/* One client-drawn caption; native hit regions follow these retained bounds. */
+.menubar { height:36px; padding-left:0px; padding-right:0px; gap:0px; }
+.titlebar-side { flex-direction:row; align-items:center; flex-grow:1; flex-basis:0px; min-width:0px; height:100%; overflow:hidden; }
+.titlebar-right { justify-content:end; }
+.titlebar-menus { flex-direction:row; gap:0px; padding-left:4px; flex-shrink:0; }
+.titlebar-center { width:168px; flex-shrink:0; align-items:center; justify-content:center; }
+.brand { width:28px; height:28px; padding:3px; border-width:0px; background:transparent; border-radius:var(--radius-sm); }
+.brand:hover { background:var(--raised); }
+.menu-title { padding-left:6px; padding-right:6px; font-size:12px; }
+.play-cluster { height:28px; border-radius:var(--radius-sm); }
+.titlebar-path { flex-direction:row; align-items:center; justify-content:end; gap:6px; flex-shrink:1; min-width:0px; overflow:hidden; padding-left:8px; padding-right:12px; }
+.titlebar-project { font-size:11px; color:var(--muted-foreground); flex-shrink:0; }
+.titlebar-scene { font-size:11px; color:var(--muted-foreground); flex-shrink:1; min-width:0px; overflow:hidden; }
+.caption-buttons { flex-direction:row; align-items:stretch; height:100%; flex-shrink:0; }
+.caption-button { width:44px; height:100%; padding:0px; border-width:0px; border-radius:0px; background:transparent; color:var(--muted-foreground); }
+.caption-button:hover { background:var(--raised); color:var(--foreground); }
+.caption-close:hover { background:var(--destructive); color:var(--destructive-foreground); }
+.caption-glyph { font-size:14px; color:inherit; }
+

@@ -52,6 +52,7 @@ const ARA_ICON_PNG: &[u8] = include_bytes!("../../../assets/brand/png/ara-icon-6
 /// Main-thread-owned resizable SDL3 Vulkan window and video subsystem reference.
 pub struct Window {
     pub(crate) handle: *mut SDL_Window,
+    pub(crate) chrome: Option<Box<crate::chrome::WindowChrome>>,
     pub(crate) cursors: crate::cursor::Cursors,
     _main_thread: PhantomData<*mut ()>,
 }
@@ -95,6 +96,7 @@ impl Window {
             }
             let window = Self {
                 handle,
+                chrome: None,
                 cursors: crate::cursor::Cursors::default(),
                 _main_thread: PhantomData,
             };

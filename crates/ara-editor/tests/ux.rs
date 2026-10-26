@@ -969,7 +969,7 @@ fn starting_play_marks_the_title_bar_without_moving_the_ui() {
 
 /// The Scene view's Lit menu offers the project's default, Auto and the four presets
 /// with a check on the active one; menus, the palette and agents share the registry
-/// commands, and the toolbar and status bar show the active preset.
+/// commands. A narrow toolbar stays compact; its menu and status show the preset.
 #[test]
 fn scene_quality_menu_offers_project_auto_and_presets_from_the_registry() {
     use ara_render_fidelity::presets::{QualityChoice, QualityPreset};
@@ -1031,13 +1031,22 @@ fn scene_quality_menu_offers_project_auto_and_presets_from_the_registry() {
     assert!(editor.state.quality);
     shell.rebuild(&mut editor).unwrap();
     assert_eq!(text(&shell, "status-quality-text"), "Epic");
-    assert_eq!(text(&shell, "view-mode-label"), "Lit · Epic");
+    assert_eq!(text(&shell, "view-mode-label"), "Lit");
+    shell.click("view-mode", &mut clipboard).unwrap();
+    shell.dispatch(&mut editor).unwrap();
+    assert!(
+        shell
+            .open_menu_rows(&editor)
+            .iter()
+            .any(|row| { row.0 == "view.quality.epic" && row.2 == Some(true) })
+    );
     shell
         .run_command(&mut editor, "view.quality.low", &Default::default())
         .unwrap();
     assert!(!editor.state.quality, "Low is the raster view");
     shell.rebuild(&mut editor).unwrap();
-    assert_eq!(text(&shell, "view-mode-label"), "Lit · Low");
+    assert_eq!(text(&shell, "view-mode-label"), "Lit");
+    assert_eq!(text(&shell, "status-quality-text"), "Low");
 
     // The palette and agents (editor.commands) see the same commands and state.
     assert!(
@@ -1496,7 +1505,7 @@ fn panels(node: &ara_ui::docking::DockNode) -> Vec<(String, Vec<String>)> {
 }
 
 #[test]
-fn the_default_layout_puts_the_views_left_tools_right_and_a_collapsed_bar_below() {
+fn the_default_layout_keeps_full_height_sidebars_and_a_center_bottom_dock() {
     let project = Project::new();
     let mut editor = Editor::open(&project.0).unwrap();
     let areas = panels(&editor.state.layout);
@@ -1504,35 +1513,41 @@ fn the_default_layout_puts_the_views_left_tools_right_and_a_collapsed_bar_below(
     assert_eq!(
         areas,
         [
-            ("view".into(), s(&["scene", "game"])),
             ("outline".into(), s(&["hierarchy"])),
-            ("right".into(), s(&["inspector"])),
+            ("view".into(), s(&["scene", "game"])),
             (
                 "bottom".into(),
                 s(&["assets", "console", "problems", "agents"])
             ),
+            ("right".into(), s(&["inspector"])),
         ]
     );
-    assert!(editor.state.collapsed_areas.contains("bottom"));
-    // The collapsed bar shows its tabs, no body; a tab opens the area on that panel.
+    assert!(editor.state.collapsed_areas.is_empty());
     let mut shell = Shell::new(&mut editor, [1440., 900.]).unwrap();
-    shell.rebuild(&mut editor).unwrap();
-    assert!(shell.ui.find("tab-console").is_some());
-    assert!(shell.ui.find("body-assets").is_none());
+    let rect = |shell: &Shell, id: &str| shell.ui.nodes[shell.ui.find(id).unwrap()].rect;
+    let left = rect(&shell, "area-outline");
+    let right = rect(&shell, "area-right");
+    let view = rect(&shell, "area-view");
+    let bottom = rect(&shell, "area-bottom");
+    assert!((left.y - right.y).abs() < 1. && (left.h - right.h).abs() < 1.);
+    assert!(left.x + left.w <= bottom.x && bottom.x + bottom.w <= right.x);
+    assert!((view.x - bottom.x).abs() < 1. && (view.w - bottom.w).abs() < 1.);
+    assert!(view.y + view.h < bottom.y && bottom.h > 100.);
     let mut clip = MemoryClipboard::default();
     shell.click("tab-console", &mut clip).unwrap();
     shell.dispatch(&mut editor).unwrap();
     shell.rebuild(&mut editor).unwrap();
-    assert!(!editor.state.collapsed_areas.contains("bottom"));
     assert!(shell.ui.find("body-console").is_some());
-    // The chevron folds it again.
     shell.click("fold-bottom", &mut clip).unwrap();
     shell.dispatch(&mut editor).unwrap();
     assert!(editor.state.collapsed_areas.contains("bottom"));
+    editor.action("editor.layout.reset", json!({})).unwrap();
+    assert_eq!(editor.state.layout, ara_editor::state::default_layout());
+    assert!(editor.state.collapsed_areas.is_empty());
 }
 
 #[test]
-fn the_title_bar_names_the_scene_without_its_extension() {
+fn the_title_bar_shows_project_and_scene_path() {
     let project = Project::new();
     let mut editor = Editor::open(&project.0).unwrap();
     let mut shell = Shell::new(&mut editor, [1440., 900.]).unwrap();
@@ -1544,7 +1559,10 @@ fn the_title_bar_names_the_scene_without_its_extension() {
         Some("UX test")
     );
     let crumb = &shell.ui.nodes[shell.ui.find("crumb-scene").unwrap()];
-    assert_eq!(crumb.text.as_ref().map(|t| t.value.as_str()), Some("main"));
+    assert_eq!(
+        crumb.text.as_ref().map(|t| t.value.as_str()),
+        Some("levels/main.scene")
+    );
     assert_eq!(
         crumb.element.attrs.get("description").map(String::as_str),
         Some("levels/main.scene")
@@ -1738,76 +1756,71 @@ fn tool_pages_open_floating_and_stay_where_they_are_docked() {
 }
 
 #[test]
-fn only_an_untouched_old_default_layout_moves_to_the_new_default() {
-    use ara_ui::docking::{Axis, DockNode};
-    let area = |id: &str, tabs: &[&str]| DockNode::Area {
-        id: id.into(),
-        tabs: tabs.iter().map(|t| t.to_string()).collect(),
-        active: 0,
-    };
-    let split = |axis, ratio, first, second| DockNode::Split {
-        axis,
-        ratio,
-        first: Box::new(first),
-        second: Box::new(second),
-    };
-    // The old default, resized (ratios differ): still the old default.
-    let old = split(
-        Axis::Horizontal,
-        0.22,
-        split(
-            Axis::Vertical,
-            0.6,
-            area("left", &["hierarchy"]),
-            area("bottom", &["assets", "console", "problems", "agents"]),
-        ),
-        split(
-            Axis::Horizontal,
-            0.7,
-            area(
-                "view",
-                &["scene", "game", "material", "vfx", "animation", "profiler"],
-            ),
-            area("right", &["inspector"]),
-        ),
-    );
-    // A rearranged layout: the user's.
-    let custom = split(
-        Axis::Horizontal,
-        0.5,
-        area(
-            "view",
-            &["scene", "game", "material", "vfx", "animation", "profiler"],
-        ),
-        area(
-            "right",
-            &[
-                "inspector",
-                "hierarchy",
-                "assets",
-                "console",
-                "problems",
-                "agents",
-            ],
-        ),
-    );
-    for (layout, migrates) in [(old, true), (custom.clone(), false)] {
-        let project = Project::new();
-        std::fs::create_dir_all(project.0.join(".ara")).unwrap();
-        std::fs::write(
-            project.0.join(".ara/editor-layout.json"),
-            ara_json::to_canonical_string(&serde_json::to_value(&layout).unwrap()),
+fn old_layouts_reset_once_and_current_layouts_preserve_customization() {
+    let project = Project::new();
+    std::fs::create_dir_all(project.0.join(".ara")).unwrap();
+    let path = project.0.join(".ara/editor-layout.json");
+    let custom = ara_editor::state::preset_layout("laptop").unwrap();
+    // Release layouts were unversioned, including user arrangements and floating windows.
+    let legacy = ara_ui::docking::DockLayout::new(custom)
+        .unwrap()
+        .serialize()
+        .unwrap();
+    std::fs::write(&path, &legacy).unwrap();
+    let mut editor = Editor::open(&project.0).unwrap();
+    assert_eq!(editor.state.layout, ara_editor::state::default_layout());
+    let logs = editor
+        .action("logs", json!({"group":false,"limit":100}))
+        .unwrap()
+        .to_string();
+    assert!(logs.contains("Saved layout reset for the new editor layout."));
+    drop(editor);
+    let saved: Value = serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+    assert_eq!(saved["version"], 2);
+    let mut editor = Editor::open(&project.0).unwrap();
+    let logs = editor
+        .action("logs", json!({"group":false,"limit":100}))
+        .unwrap()
+        .to_string();
+    assert!(!logs.contains("Saved layout reset for the new editor layout."));
+    editor
+        .action(
+            "editor.layout.move",
+            json!({"panel":"console","slot":"float","rect":[50,60,700,400]}),
         )
         .unwrap();
-        let editor = Editor::open(&project.0).unwrap();
-        if migrates {
-            assert_eq!(editor.state.layout, ara_editor::state::default_layout());
-            assert!(editor.state.collapsed_areas.contains("bottom"));
-        } else {
-            assert_eq!(editor.state.layout, custom);
-            assert!(editor.state.collapsed_areas.is_empty());
-        }
-    }
+    editor
+        .action("editor.layout.save", json!({"name":"custom"}))
+        .unwrap();
+    let expected = editor.state.clone();
+    editor.action("editor.layout.reset", json!({})).unwrap();
+    editor
+        .action("editor.layout.apply", json!({"name":"custom"}))
+        .unwrap();
+    assert_eq!(editor.state.layout, expected.layout);
+    assert_eq!(editor.state.floating, expected.floating);
+    drop(editor);
+    let mut editor = Editor::open(&project.0).unwrap();
+    assert_eq!(editor.state.layout, expected.layout);
+    assert_eq!(editor.state.floating, expected.floating);
+    let named = project.0.join(".ara/layouts/legacy.json");
+    std::fs::write(&named, legacy).unwrap();
+    editor
+        .action("editor.layout.apply", json!({"name":"legacy"}))
+        .unwrap();
+    assert_eq!(editor.state.layout, ara_editor::state::default_layout());
+    let upgraded: Value = serde_json::from_str(&std::fs::read_to_string(named).unwrap()).unwrap();
+    assert_eq!(upgraded["version"], 2);
+    editor
+        .action("editor.layout.apply", json!({"name":"legacy"}))
+        .unwrap();
+    let notices = editor
+        .action(
+            "logs",
+            json!({"codes":["ARA4507"],"group":false,"limit":100}),
+        )
+        .unwrap();
+    assert_eq!(notices["total"], 1);
 }
 
 /// Layout changes are saved off the UI thread; however fast they come, the newest
@@ -1827,4 +1840,56 @@ fn the_newest_layout_is_saved_when_the_editor_closes() {
     drop(editor);
     let reopened = Editor::open(&project.0).unwrap();
     assert_eq!(reopened.state.layout, expected);
+}
+#[test]
+fn titlebar_controls_stay_in_one_row_and_logo_opens_about() {
+    let project = Project::new();
+    let mut editor = Editor::open(&project.0).unwrap();
+    for size in [[960., 600.], [1440., 900.], [1280., 720.]] {
+        let mut shell = Shell::new(&mut editor, size).unwrap();
+        let rect = |id: &str| shell.ui.nodes[shell.ui.find(id).unwrap()].rect;
+        let bar = rect("menubar");
+        assert_eq!(bar.h, 36.);
+        let play = rect("play-controls");
+        assert!((play.x + play.w * 0.5 - size[0] * 0.5).abs() < 1.);
+        let menus: Vec<_> = shell
+            .ui
+            .nodes
+            .iter()
+            .filter(|n| n.element.id.starts_with("menu-title-") && n.element.tag == "button")
+            .collect();
+        assert_eq!(menus.len(), 6);
+        for node in menus {
+            assert!(node.rect.y >= bar.y && node.rect.y + node.rect.h <= bar.y + bar.h);
+        }
+        let right = rect("caption-buttons");
+        assert!((right.x + right.w - size[0]).abs() < 1.);
+        assert!(rect("crumbs").x + rect("crumbs").w <= right.x + 1.);
+        let bindings = shell.command_bindings();
+        for (id, command) in [
+            ("brand", "help.about"),
+            ("play", "play.start"),
+            ("pause", "play.start_paused"),
+            ("step", "play.step"),
+            ("window-minimize", "window.minimize"),
+            ("window-maximize", "window.maximize_window"),
+            ("window-close", "file.exit"),
+        ] {
+            assert!(
+                bindings.iter().any(|(i, c)| i == id && *c == command),
+                "{id}"
+            );
+        }
+        let mut clip = MemoryClipboard::default();
+        shell.click("brand", &mut clip).unwrap();
+        shell.dispatch(&mut editor).unwrap();
+        shell.rebuild(&mut editor).unwrap();
+        let version = &shell.ui.nodes[shell.ui.find("dialog-line-0").unwrap()];
+        assert_eq!(
+            version.text.as_ref().unwrap().value,
+            format!("Ara {}", env!("CARGO_PKG_VERSION"))
+        );
+        shell.click("dialog-close", &mut clip).unwrap();
+        shell.dispatch(&mut editor).unwrap();
+    }
 }
