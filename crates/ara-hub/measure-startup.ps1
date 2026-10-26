@@ -7,6 +7,14 @@ $target=[IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../../target')).TrimEnd
 $root=[IO.Path]::GetFullPath($Directory).TrimEnd('\')
 if(!$root.StartsWith($target+'\',[StringComparison]::OrdinalIgnoreCase) -or (Test-Path -LiteralPath $root)) { throw 'Use a fresh directory under this checkout target' }
 $Setup=(Resolve-Path -LiteralPath $Setup).ProviderPath
+# .NET Framework's UtcNow can use a coarse clock; match Rust's precise Windows clock.
+Add-Type -TypeDefinition @'
+public static class HubStartupClock {
+    [System.Runtime.InteropServices.DllImport("kernel32.dll")]
+    private static extern void GetSystemTimePreciseAsFileTime(out long time);
+    public static long UnixMs() { long time; GetSystemTimePreciseAsFileTime(out time); return (time-116444736000000000L)/10000; }
+}
+'@
 New-Item -ItemType Directory -Path $root | Out-Null
 $measurements=@()
 function Run-Hidden([string]$Exe,[string[]]$Arguments,[string]$Log,[string]$Cwd) {
@@ -21,7 +29,7 @@ function Run-Hidden([string]$Exe,[string[]]$Arguments,[string]$Log,[string]$Cwd)
     $start.RedirectStandardError=$true
     $process=New-Object Diagnostics.Process
     $process.StartInfo=$start
-    $launched=[DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
+    $launched=[HubStartupClock]::UnixMs()
     if(!$process.Start()){ throw 'Process failed to start' }
     $stdout=$process.StandardOutput.ReadToEndAsync()
     $stderr=$process.StandardError.ReadToEndAsync()
@@ -51,7 +59,9 @@ for($index=1;$index -le $Runs;$index++) {
             $env:ARA_HUB_STARTUP_TRACE=Join-Path $output 'trace.jsonl'
             $launched=Run-Hidden (Join-Path $hub 'ara-hub.exe') @('--startup-probe',$output,'--size','1440x900','--dpi','1') (Join-Path $output 'process.log') $hub
             $report=Get-Content (Join-Path $output 'startup.json') -Raw | ConvertFrom-Json
-            $measurements+= [pscustomobject]@{pair=$index;mode=$mode;firstFrameMs=($report.firstFrameUnixMs-$launched);connectedMs=($report.connectedUnixMs-$launched);inputMs=$report.inputWhileConnectingMs;output=$output;build=$report.build}
+            $entry=Get-Content (Join-Path $output 'trace.jsonl') | ForEach-Object {ConvertFrom-Json $_} | Where-Object {$_.pid -eq $report.pid -and $_.phase -eq 'ui.entry'} | Select-Object -First 1
+            $entryMs=if($entry){$entry.endUnixMs-$entry.ms-$launched}else{$null}
+            $measurements+= [pscustomobject]@{pair=$index;mode=$mode;firstFrameMs=($report.firstFrameUnixMs-$launched);connectedMs=($report.connectedUnixMs-$launched);entryMs=$entryMs;inputMs=$report.inputWhileConnectingMs;output=$output;build=$report.build}
             $measurements | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $root 'measurements.json') -Encoding UTF8
         }
     } finally {

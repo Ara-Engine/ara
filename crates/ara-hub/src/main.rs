@@ -76,6 +76,7 @@ fn options() -> Result<Option<Options>, String> {
 }
 
 fn main() -> std::process::ExitCode {
+    let entered = std::time::Instant::now();
     match ara_crash::monitor_from_args() {
         Ok(true) => return std::process::ExitCode::SUCCESS,
         Ok(false) => {}
@@ -93,6 +94,7 @@ fn main() -> std::process::ExitCode {
         && options.startup_probe.is_none()
         && options.service_check.is_none()
         && !(cfg!(feature = "rehearsal") && std::env::var_os("ARA_RELEASE_TEST_API").is_some());
+    ara_hub_service::startup::record("ui.entry", entered.elapsed());
     let phase = std::time::Instant::now();
     let _crashes = ara_crash::desktop::start("ara-hub", interactive)
         .map_err(|error| eprintln!("ARA-EXP-CRASH-004: {error:#}"))
