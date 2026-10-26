@@ -91,6 +91,7 @@ pub struct Presenter {
     published_quality: Option<QualityPreset>,
     failure: Option<String>,
     renderer: Option<Renderer>,
+    initial_device: Option<ara_gpu::vulkan::VulkanDevice>,
     effects: vfx::Effects,
     landscapes: landscape::Landscapes,
     terrain: terrain_mesh::TerrainMeshes,
@@ -191,6 +192,7 @@ impl Presenter {
             published_quality: None,
             failure: None,
             renderer: None,
+            initial_device: None,
             effects: vfx::Effects::default(),
             landscapes: landscape::Landscapes::default(),
             terrain: terrain_mesh::TerrainMeshes::default(),
@@ -215,6 +217,18 @@ impl Presenter {
             environment: None,
             look_override: None,
         }
+    }
+
+    /// Adopt an unused GPU owner before preparation. It may share its native
+    /// lifetime with a shaderless loading owner; it retains its own arenas/queues.
+    pub fn with_device(
+        size: [u32; 2],
+        cache: impl Into<PathBuf>,
+        gpu: ara_gpu::vulkan::VulkanDevice,
+    ) -> Self {
+        let mut presenter = Self::new(size, Vec::new(), cache);
+        presenter.initial_device = Some(gpu);
+        presenter
     }
 
     /// The renderer, once the first frame was presented.

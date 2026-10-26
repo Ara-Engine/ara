@@ -9,7 +9,9 @@ use ara_runtime_render::fidelity::native::{self, FrameChange, NativeConfig, Prep
 use ara_runtime_render::{PresentationImage, fidelity::vfx::Effects};
 mod content;
 mod preview;
+mod startup;
 pub(super) use preview::{GamePreview, PreviewCamera};
+pub(super) use startup::prepare_renderer;
 
 #[derive(Clone, Copy)]
 enum RasterWork {
@@ -499,6 +501,14 @@ impl SceneView {
         }
         let raster = self.raster.as_mut().ok_or("raster view")?;
         let frame = self.raster_frame.as_ref().ok_or("raster frame")?;
+        if wait_for_content {
+            raster.wait_capture_effects(
+                renderer,
+                frame,
+                &editor.state.camera.spec(),
+                view_mode(&editor.state.view_mode),
+            )?;
+        }
         for _ in 0..settle.max(1) {
             raster.render(
                 renderer,

@@ -30,6 +30,15 @@ pub(super) fn persist(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
 }
 
 pub(super) fn compatible(bytes: &[u8], info: &DeviceInfo) -> bool {
+    compatible_identity(
+        bytes,
+        info.vendor_id,
+        info.device_id,
+        &info.pipeline_cache_uuid,
+    )
+}
+
+pub(super) fn compatible_identity(bytes: &[u8], vendor: u32, device: u32, uuid: &[u8]) -> bool {
     if bytes.len() < 32 {
         return false;
     }
@@ -37,9 +46,9 @@ pub(super) fn compatible(bytes: &[u8], info: &DeviceInfo) -> bool {
         |at: usize| u32::from_le_bytes([bytes[at], bytes[at + 1], bytes[at + 2], bytes[at + 3]]);
     word(0) == 32
         && word(4) == 1
-        && word(8) == info.vendor_id
-        && word(12) == info.device_id
-        && bytes[16..32] == info.pipeline_cache_uuid
+        && word(8) == vendor
+        && word(12) == device
+        && bytes[16..32] == *uuid
 }
 #[cfg(test)]
 mod tests {

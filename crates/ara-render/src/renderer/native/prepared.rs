@@ -69,7 +69,8 @@ impl NativeContent {
         );
         let textures = renderer.preallocate_native_textures(self.textures.as_mut())?;
         let geometry = self.geometry.preallocate(&mut renderer.gpu)?;
-        Ok(textures && geometry)
+        let pipelines = renderer.preallocate_native_pipelines()?;
+        Ok(textures && geometry && pipelines)
     }
 
     /// Cancel work and retire adopted allocations without altering last-good.

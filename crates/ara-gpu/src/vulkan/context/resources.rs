@@ -55,8 +55,8 @@ impl Gpu {
         preferred: vk::MemoryPropertyFlags,
     ) -> Result<BufferAllocation> {
         let buffer = super::allocation::buffer(
-            &self.device,
-            &self.memory,
+            &self.shared.device,
+            &self.shared.memory,
             &mut self.buffer_memory,
             size,
             usage,

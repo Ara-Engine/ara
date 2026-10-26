@@ -131,13 +131,16 @@ fn native_raster_keeps_instances_local_and_tracks_moving_and_skinned_poses_witho
     );
     let descriptors = renderer.gpu().descriptor_usage();
     let artifacts = std::mem::replace(&mut renderer.artifacts, root.join("missing-cohort"));
+    let pipelines = renderer.native_pipeline_handles()?;
+    let textures = scene.textures;
+    scene.textures = 1;
     for _ in 0..80 {
         assert!(
             Native::new(
                 &mut renderer.gpu,
                 scene.validated()?,
                 Box::new(EmptyTextures),
-                &renderer.artifacts,
+                pipelines,
                 None,
                 None,
                 0,
@@ -150,6 +153,7 @@ fn native_raster_keeps_instances_local_and_tracks_moving_and_skinned_poses_witho
             "failed native upload must retire its buffers"
         );
     }
+    scene.textures = textures;
     // Published pipelines need no artifact I/O on a content-only replacement.
     let cached_pipelines = renderer.native.as_ref().unwrap().pipelines;
     renderer.replace_native_scene(&scene, Box::new(EmptyTextures))?;
@@ -167,6 +171,7 @@ fn native_raster_keeps_instances_local_and_tracks_moving_and_skinned_poses_witho
                 &root.join("missing-cohort"),
                 &renderer.shader_metadata,
                 renderer.compute_frame,
+                None,
             )
             .is_err()
         );

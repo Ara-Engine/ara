@@ -109,6 +109,9 @@ impl Device for VulkanDevice {
         if let Some(worker) = &mut self.preparation {
             worker.drain(self.disposal.as_mut().expect("disposal worker alive"))?;
         }
+        if let Some(worker) = &mut self.pipeline_preparation {
+            worker.drain(self.disposal.as_mut().expect("disposal worker alive"))?;
+        }
         let done = self.completed()?;
         let mut index = 0;
         while index < self.retired.len() {
@@ -157,11 +160,24 @@ impl Drop for VulkanDevice {
     fn drop(&mut self) {
         // Join the compiler and destroy unpublished replacements before layout/device teardown.
         drop(self.shader_worker.take());
+        drop(self.pipeline_preparation.take());
         drop(self.preparation.take());
         drop(self.disposal.take());
-        // SAFETY: Last owner. Idle covers descriptors, pipelines, queries and command buffers.
+        // SAFETY: This arena owner's submitted work completes before its
+        // descriptors, pipelines, queries and command buffers are destroyed.
         unsafe {
-            let _ = self.context.device.device_wait_idle();
+            if self.context.presentation_only() {
+                // The other owner may still be compiling/uploading on an
+                // aliased queue. Wait only for this owner's submitted work.
+                let _ = self.context.device.wait_semaphores(
+                    &vk::SemaphoreWaitInfo::default()
+                        .semaphores(&self.timelines)
+                        .values(&self.submitted),
+                    u64::MAX,
+                );
+            } else {
+                let _ = self.context.wait_owned_queues();
+            }
             if let Ok(bytes) = self.context.device.get_pipeline_cache_data(self.cache) {
                 let _ = cache::persist(&self.cache_path, &bytes);
             }
