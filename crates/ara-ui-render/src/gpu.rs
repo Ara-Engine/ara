@@ -22,8 +22,13 @@ pub enum Pipeline {
     Msdf = 3,
     /// Color glyph, preserving authored glyph color.
     ColorGlyph = 4,
-    /// Analytic round-capped line; modes 5 and 7 are editor viewport overlays.
+    /// Analytic round-capped line; modes 5, 7 and 8 are editor viewport overlays.
     Line = 6,
+    /// Analytic gradient, hue strip or ring, or checkerboard ([`ara_ui::paint::Fill`]):
+    /// `params` = radius, kind (0 linear, 1 hue strip, 2 hue ring, 3 checker), ring
+    /// thickness or checker cell, flags (1 vertical, 2 linear light); `color` is the
+    /// first colour and `uv` the second.
+    Fill = 9,
 }
 /// Exact 64-byte Slang instance ABI, four float4 records, alignment 16.
 #[repr(C, align(16))]
@@ -275,6 +280,39 @@ impl Renderer {
                         _ => {}
                     }
                     self.push(Pipeline::Shape, 0, clip, instance);
+                }
+                Draw::Fill {
+                    rect: r,
+                    radius,
+                    fill,
+                    ..
+                } => {
+                    instance.rect = array(rect(*r));
+                    instance.params[0] = *radius;
+                    match fill {
+                        ara_ui::paint::Fill::Linear {
+                            from,
+                            to,
+                            vertical,
+                            linear_light,
+                        } => {
+                            instance.color = color_array(*from);
+                            instance.uv = color_array(*to);
+                            instance.params[3] =
+                                f32::from(u8::from(*vertical) | (u8::from(*linear_light) << 1));
+                        }
+                        ara_ui::paint::Fill::Hue { ring } => {
+                            instance.params[1] = if ring.is_some() { 2. } else { 1. };
+                            instance.params[2] = ring.unwrap_or(0.);
+                        }
+                        ara_ui::paint::Fill::Checker { cell, light, dark } => {
+                            instance.params[1] = 3.;
+                            instance.params[2] = *cell;
+                            instance.color = color_array(*light);
+                            instance.uv = color_array(*dark);
+                        }
+                    }
+                    self.push(Pipeline::Fill, 0, clip, instance);
                 }
                 Draw::Image {
                     rect: r,

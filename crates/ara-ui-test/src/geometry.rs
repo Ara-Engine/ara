@@ -106,6 +106,17 @@ pub(crate) fn mirror_rtl(ui: &mut Ui) {
                 image,
                 tint,
             },
+            Draw::Fill {
+                node,
+                rect: r,
+                radius,
+                fill,
+            } => Draw::Fill {
+                node,
+                rect: rect(r),
+                radius,
+                fill,
+            },
             Draw::PushClip { rect: r } => Draw::PushClip { rect: rect(r) },
             Draw::PushRoundedClip { rect: r, radius } => Draw::PushRoundedClip {
                 rect: rect(r),
@@ -212,6 +223,29 @@ pub(crate) fn physical_list(list: &DisplayList, scale: f32) -> DisplayList {
                     rect: scaled(*rect, scale),
                     image: *image,
                     tint: *tint,
+                },
+                Draw::Fill {
+                    node,
+                    rect,
+                    radius,
+                    fill,
+                } => Draw::Fill {
+                    node: *node,
+                    rect: scaled(*rect, scale),
+                    radius: radius * scale,
+                    fill: match *fill {
+                        ara_ui::paint::Fill::Hue { ring } => ara_ui::paint::Fill::Hue {
+                            ring: ring.map(|t| t * scale),
+                        },
+                        ara_ui::paint::Fill::Checker { cell, light, dark } => {
+                            ara_ui::paint::Fill::Checker {
+                                cell: cell * scale,
+                                light,
+                                dark,
+                            }
+                        }
+                        linear => linear,
+                    },
                 },
                 Draw::GlyphRun {
                     node,
