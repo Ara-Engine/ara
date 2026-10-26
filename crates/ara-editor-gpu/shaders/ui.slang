@@ -12,6 +12,15 @@ float roundedDistance(float2 p,float2 size,float radius) {
     radius=clamp(radius,0,min(size.x,size.y)*0.5);float2 q=abs(p-size*0.5)-size*0.5+radius;
     return length(max(q,0))+min(max(q.x,q.y),0)-radius;
 }
+// What an outline or hover compares for entity-ID channel `id`: the channel itself, or
+// with a group table (slot + 1, NativeUi::outline_groups) its hover group (red + green
+// × 256) or outline colour group (blue's low 7 bits); bit 8 of the result marks ground
+// (blue's bit 7: terrain). Texel: id % 4096, id / 4096.
+uint outlineKey(uint table,uint id,bool hover){
+    if(table==0||id==0)return id;
+    uint4 g=uint4(round(textures[NonUniformResourceIndex(table-1)].Load(int3(id%4096,id/4096,0))*255));
+    return (hover?g.r|(g.g<<8):g.b&127)|((g.b&128)<<9);
+}
 [shader("vertex")]
 Varying vertexMain(uint vertex:SV_VertexID,uint instance:SV_InstanceID) {
     static const float2 corners[6]={float2(0,0),float2(1,0),float2(0,1),float2(0,1),float2(1,0),float2(1,1)};
@@ -57,14 +66,31 @@ float4 fragmentMain(Varying input):SV_Target {
         bool covered=textures[NonUniformResourceIndex(pc.textureIndex)].Load(int3(pixel,0)).r>0;
         color.a*=distance>0&&!covered?exp(-distance/max(i.parameters.w,0.01))*smoothstep(0.01,0.1,abs(ray.y)):0;
     }else if(pc.mode==5){
+        // Outline (z: the channel or colour group) or hover (bit 0 of w: the group under
+        // xy). w's other bits: the outline group table's slot + 1 (NativeUi::outline_groups).
         uint width,height;textures[NonUniformResourceIndex(pc.textureIndex)].GetDimensions(width,height);
         int2 pixel=clamp(int2(input.uv*float2(width,height)),int2(0,0),int2(width-1,height-1));
+        uint flags=uint(i.parameters.w+0.5);bool hover=(flags&1)!=0;uint table=flags>>1;
         uint wanted=uint(i.parameters.z);
-        if(i.parameters.w>0){int2 at=clamp(int2(i.parameters.xy*float2(width,height)),int2(0,0),int2(width-1,height-1));wanted=uint(textures[NonUniformResourceIndex(pc.textureIndex)].Load(int3(at,0)).r);}
-        uint centre=uint(textures[NonUniformResourceIndex(pc.textureIndex)].Load(int3(pixel,0)).r);
+        if(hover){int2 at=clamp(int2(i.parameters.xy*float2(width,height)),int2(0,0),int2(width-1,height-1));wanted=outlineKey(table,uint(textures[NonUniformResourceIndex(pc.textureIndex)].Load(int3(at,0)).r),true);}
+        // The ground bit only exists with a table; raw channel IDs use every bit.
+        uint GROUND=table!=0?(1u<<16):0;
+        wanted&=~GROUND;
+        uint centreId=uint(textures[NonUniformResourceIndex(pc.textureIndex)].Load(int3(pixel,0)).r);
+        uint centre=outlineKey(table,centreId,hover);
         bool edge=false;
         static const int2 offsets[4]={int2(-1,0),int2(1,0),int2(0,-1),int2(0,1)};
-        for(uint n=0;n<4;n++){int2 other=clamp(pixel+offsets[n]*max(1,int(round(1.25*pc.dpi))),int2(0,0),int2(width-1,height-1));uint neighbor=uint(textures[NonUniformResourceIndex(pc.textureIndex)].Load(int3(other,0)).r);edge=edge||((centre==wanted)!=(neighbor==wanted));}
+        for(uint n=0;n<4;n++){
+            int2 other=clamp(pixel+offsets[n]*max(1,int(round(1.25*pc.dpi))),int2(0,0),int2(width-1,height-1));
+            uint otherId=uint(textures[NonUniformResourceIndex(pc.textureIndex)].Load(int3(other,0)).r);
+            uint neighbor=outlineKey(table,otherId,hover);
+            bool inside=(centre&~GROUND)==wanted;
+            if(inside==((neighbor&~GROUND)==wanted))continue;
+            // Ground (terrain) outlines against the sky, the void and other ground only:
+            // what stands on it is in front of it, not its edge.
+            uint inner=inside?centre:neighbor;uint outerId=inside?otherId:centreId;uint outer=inside?neighbor:centre;
+            edge=edge||(inner&GROUND)==0||outerId==0||(outer&GROUND)!=0;
+        }
         color.a*=edge&&wanted>0?1:0;
     }else if(pc.mode==8){
         // Convex quad: signed distance to the nearest edge, oriented by the winding.

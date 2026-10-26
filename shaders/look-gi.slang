@@ -2,15 +2,19 @@
 #include "raster.slangh"
 #include "look.slangh"
 #include "look-shading.slangh"
-// Unshadowed local-light irradiance on a surface facing `n`.
-float3 localIrradiance(Frame f,float3 p,float3 n){
+// Local-light irradiance on a surface facing `n`; with LOOK_LOCAL_INDIRECT, shadowed
+// by the lights that own a local shadow map this frame (look::local; the rest stay
+// unshadowed).
+float3 localIrradiance(Frame f,Look l,float3 p,float3 n){
     float3 sum=0;
     for(uint i=0;i<f.extent.z;i++){
         Light light=buffers[NonUniformResourceIndex(f.lighting.w)].Load<Light>(i*64);
         float3 delta=light.positionRange.xyz-p;float d2=max(dot(delta,delta),max(0.01,light.parameters.z*light.parameters.z)),d=sqrt(d2);if(d>light.positionRange.w)continue;
         float3 toLight=normalize(delta);float fade=pow(saturate(1-pow(d/light.positionRange.w,4)),2);float spot=1;
         if(light.parameters.x>0.5)spot=smoothstep(light.directionOuter.w,light.parameters.y,dot(-toLight,light.directionOuter.xyz));
-        sum+=light.colorLumens.rgb*(light.colorLumens.w/(4*PI*d2))*fade*spot*saturate(dot(n,toLight));
+        float3 e=light.colorLumens.rgb*(light.colorLumens.w/(4*PI*d2))*fade*spot*saturate(dot(n,toLight));
+        if(any(e>0) && (l.flags.y&LOOK_LOCAL_INDIRECT)!=0)e*=localShadow(l,i,p,n,light.positionRange.xyz);
+        sum+=e;
     }return sum;
 }
 groupshared float3 radiance[64];
@@ -38,7 +42,7 @@ void giRelightMain(uint3 group:SV_GroupID,uint lane:SV_GroupIndex){
     float3 dir=octDecode((float2(lane%8,lane/8)+0.5)/8),origin=giProbePosition(l,id)+meta.xyz,light=0;
     if(sky<1){
         float3 hit=origin+dir*distance,sun=f.sunDirection.xyz;
-        float3 irradiance=sunAt(f,l,hit)*saturate(dot(normal,sun))*visibility(f,l,hit,normal)+localIrradiance(f,hit,normal);
+        float3 irradiance=sunAt(f,l,hit)*saturate(dot(normal,sun))*visibility(f,l,hit,normal)+localIrradiance(f,l,hit,normal);
         // Last frame's probes close the loop: multiple bounces converge over frames.
         irradiance+=giIrradiance(l,read,hit,normal,normal*l.giSpacing.w);
         light=(1-sky)*(emissive+albedo/PI*irradiance);

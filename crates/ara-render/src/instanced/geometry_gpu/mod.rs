@@ -46,6 +46,8 @@ pub struct GeometryUpload {
 #[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
 struct Row([u32; 8]);
 
+const TABLE_HOST_WRITE: u8 = 1 << 3;
+
 /// Immutable model-space vertex/index allocation and one BLAS per cooked LOD.
 /// Skin vertices have separate presented, published and candidate buffers; moving instances never copy the
 /// static pool. The owner retires dependent TLAS objects before destroying this set.
@@ -61,6 +63,8 @@ pub struct GeometryGpu {
     current_slot: usize,
     presented_slot: usize,
     pending_pose: bool,
+    // Bits 0..2 (skin slots) and bit 3 (row table) written since the consuming frame.
+    pose_host_writes: u8,
     stats: GeometryUpload,
 }
 
@@ -98,13 +102,37 @@ impl GeometryGpu {
         self.stats
     }
 
-    /// Vertex/index/table resources reached through the native shading ABI.
+    /// Vertex/index/table resources and their initial access for the consuming graph.
     pub fn resources(&self) -> impl Iterator<Item = (Resource, Access)> + '_ {
         self.static_pool
             .into_iter()
-            .chain(self.dynamic.into_iter().flatten())
-            .chain(self.table.map(|(buffer, _)| buffer))
             .map(|buffer| (Resource::Buffer(buffer), Access::ShaderRead))
+            .chain(
+                self.dynamic
+                    .into_iter()
+                    .flatten()
+                    .enumerate()
+                    .map(|(slot, buffer)| {
+                        (
+                            Resource::Buffer(buffer),
+                            if self.pose_host_writes & (1 << slot) != 0 {
+                                Access::HostWrite
+                            } else {
+                                Access::ShaderRead
+                            },
+                        )
+                    }),
+            )
+            .chain(self.table.map(|(buffer, _)| {
+                (
+                    Resource::Buffer(buffer),
+                    if self.pose_host_writes & TABLE_HOST_WRITE != 0 {
+                        Access::HostWrite
+                    } else {
+                        Access::ShaderRead
+                    },
+                )
+            }))
     }
 
     /// Retires content after every dependent TLAS has been retired.

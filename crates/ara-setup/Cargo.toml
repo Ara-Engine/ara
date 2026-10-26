@@ -17,6 +17,7 @@ embed-resource.workspace = true
 anyhow.workspace = true
 ara-export-installer = { path = "../ara-export-installer" }
 serde_json.workspace = true
+semver = "1.0"
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { workspace = true, features = [

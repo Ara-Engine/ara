@@ -1,4 +1,5 @@
 //! Local crash capture for installed desktop applications. Never uploads reports.
+mod seen;
 use anyhow::{Context, Result};
 use std::path::PathBuf;
 
@@ -23,28 +24,7 @@ pub fn directory() -> Result<PathBuf> {
 pub fn start(application: &str, interactive: bool) -> Result<crate::Capture> {
     let directory = directory()?;
     std::fs::create_dir_all(&directory)?;
-    let marker = directory.join(format!(".{application}-seen"));
-    let seen = std::fs::metadata(&marker).and_then(|m| m.modified()).ok();
-    let pending = std::fs::read_dir(&directory)?
-        .filter_map(Result::ok)
-        .any(|entry| {
-            let path = entry.path();
-            matches!(
-                path.extension().and_then(|e| e.to_str()),
-                Some("dmp" | "json" | "managed")
-            ) && entry
-                .metadata()
-                .and_then(|m| m.modified())
-                .ok()
-                .is_some_and(|time| seen.is_none_or(|seen| time > seen))
-        });
-    if interactive && pending {
-        offer_folder(&directory);
-    }
-    // Bounded/headless launches must not consume the next interactive notification.
-    if interactive {
-        std::fs::write(marker, [])?;
-    }
+    seen::acknowledge(&directory, application, interactive, offer_folder)?;
     crate::Capture::start(
         &directory,
         &format!("{application}-{}", env!("CARGO_PKG_VERSION")),

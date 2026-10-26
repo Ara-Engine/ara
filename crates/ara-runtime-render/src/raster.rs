@@ -14,6 +14,7 @@ use std::path::PathBuf;
 mod batch;
 mod fade;
 mod prepared;
+mod readiness;
 pub use prepared::RasterContent;
 #[cfg(test)]
 mod tests;
@@ -93,11 +94,17 @@ impl RasterView {
     /// Keep progressive editor views polling until acquired probe surfaces arrive
     /// and moved instances settle back into them.
     pub fn needs_frame(&self) -> bool {
-        self.emitter_search.is_busy()
-            || self.fades.is_active()
-            || self.gi.as_ref().is_some_and(|gi| {
-                gi.is_pending() || self.mobility.settling() || !self.gi_updates.is_empty()
-            })
+        self.emitter_search.is_busy() || self.fades.is_active() || self.probe_gi_pending()
+    }
+
+    /// GI acquisition/delivery only; emitters and model fades have their own work.
+    pub(crate) fn probe_gi_pending(&self) -> bool {
+        self.gi.as_ref().is_some_and(|gi| {
+            self.pending_gi
+                || gi.is_pending()
+                || self.mobility.settling()
+                || !self.gi_updates.is_empty()
+        })
     }
 
     /// Installs a finished emitter search (waiting for the running one when

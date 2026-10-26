@@ -28,7 +28,9 @@ struct Gate {
     opened: bool,
 }
 
+mod resize;
 mod secondary;
+mod skin;
 
 impl Gate {
     fn new(gpu: &VulkanDevice, queue: Queue) -> Result<Self> {

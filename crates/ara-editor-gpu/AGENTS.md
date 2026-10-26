@@ -29,7 +29,9 @@ editor verification route, with process-local empty VK_IMPLICIT_LAYER_PATH.
 Scene overlays are inserted immediately after the viewport image, before later
 UI controls/popovers. Grid and hover execute on the GPU against the scene ID map.
 The grid uses derivatives for antialiasing and distance fade, with theme axis tints.
-Gizmos draw antialiased `Line`s and filled convex `Quad`s (cones, plane squares,
+Outlines and hover (mode 5) group channels through an optional table
+(`outline_groups`): a group outlines as one shape; ground (terrain) only against sky,
+void and other ground. Gizmos draw antialiased `Line`s and filled convex `Quad`s (cones, plane squares,
 cubes; shader mode 8). After editing `shaders/ui.slang`, re-cook with
 `shaders/compile.ps1` (slangc + spirv-val from VULKAN_SDK) and commit both .spv.
 

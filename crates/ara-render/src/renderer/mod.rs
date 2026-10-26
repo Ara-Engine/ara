@@ -8,6 +8,7 @@ mod native;
 mod passes;
 pub mod post;
 mod readback;
+mod readiness;
 mod submission;
 mod transfer;
 mod upload;
@@ -288,9 +289,20 @@ impl Renderer {
     pub fn set_completed_timings(&mut self, timings: Vec<PassTiming>) {
         self.last_timings = timings;
     }
-    /// Reallocate per-view graph resources at `size`, rendering natively, and
-    /// reset temporal history.
+    /// Apply a changed display extent at native resolution. An unchanged window
+    /// notification preserves its active render size and temporal history; use
+    /// `resize_upscaled(size, size)` to explicitly switch an upscaled view to native.
     pub fn resize(&mut self, size: [u32; 2]) -> Result<()> {
+        if size == self.size {
+            if let Some(live) = &mut self.live
+                && live.resize.is_some_and(|(_, display)| display != size)
+            {
+                // A window can return to its current extent before the pending
+                // resize is adopted. Keep the still-valid render allocation.
+                live.resize = Some((self.render, size));
+            }
+            return Ok(());
+        }
         self.resize_upscaled(size, size)
     }
     /// Temporal upscaling (TAAU): the scene passes (G-buffer, lighting, the
@@ -316,6 +328,7 @@ impl Renderer {
         if render == self.render && display == self.size {
             return Ok(());
         }
+        ara_gpu::cpu_scope!("Raster.resize_targets");
         let replacement = Self::targets(&mut self.gpu, render, display)?;
         if let Err(error) = self.look.resize(&mut self.gpu, render, display) {
             for image in replacement.images {
@@ -430,6 +443,7 @@ impl Renderer {
                 &mut self.gpu,
                 shadows.cascades,
                 shadows.resolution,
+                std::mem::size_of::<frame::Frame>() as u64,
             )?);
         }
         Ok(())

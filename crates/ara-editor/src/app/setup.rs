@@ -30,6 +30,9 @@ pub struct Options {
     pub verify_ux: bool,
     /// Scene to open instead of the project's main scene (`levels/hangar.scene`).
     pub scene: Option<String>,
+    /// Entities to select once the scene is open (comma-separated addresses), e.g. for
+    /// a capture of their outline.
+    pub select: Option<String>,
     /// Start Play (in the Game view) once the window is up.
     pub play: bool,
     /// Run the alpha journey route (open, import, place, prefab, C#, Play, failure,
@@ -112,6 +115,7 @@ impl Default for Options {
             verify_panels: false,
             verify_ux: false,
             scene: None,
+            select: None,
             play: false,
             verify_journey: false,
             verify_first_hour: false,
@@ -124,6 +128,10 @@ impl Default for Options {
 pub(super) fn prepare(editor: &mut Editor, options: &Options) -> ara_ui::Result<()> {
     if let Some(scene) = &options.scene {
         editor.action("editor.scene.open", json!({"scene": scene}))?;
+    }
+    if let Some(select) = &options.select {
+        let entities: Vec<&str> = select.split(',').map(str::trim).collect();
+        editor.action("editor.select", json!({"entities": entities}))?;
     }
     if options.play {
         editor

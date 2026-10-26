@@ -336,7 +336,8 @@ fn updater_verifies_and_health_checks_dummy_processes_without_a_window() {
         let current = directory.join("Ara Hub");
         fs::create_dir(&current).unwrap();
         fs::write(current.join("ara-hub.exe"), &bytes).unwrap();
-        fs::write(current.join("hub.json"), b"old marker").unwrap();
+        let old_marker = br#"{"format":"ara.hub/1","version":"1.0.0","build":{"commit":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","generation":1}}"#;
+        fs::write(current.join("hub.json"), old_marker).unwrap();
         let mut zip = zip::ZipWriter::new(std::io::Cursor::new(Vec::new()));
         zip.start_file("ara-hub.exe", zip::write::SimpleFileOptions::default())
             .unwrap();
@@ -353,7 +354,7 @@ fn updater_verifies_and_health_checks_dummy_processes_without_a_window() {
         }
         zip.start_file("hub.json", zip::write::SimpleFileOptions::default())
             .unwrap();
-        zip.write_all(br#"{"format":"ara.hub/1","version":"1.0.0"}"#)
+        zip.write_all(br#"{"format":"ara.hub/1","version":"1.0.0","build":{"commit":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","generation":2}}"#)
             .unwrap();
         if failed {
             zip.start_file("fail.txt", zip::write::SimpleFileOptions::default())
@@ -361,11 +362,15 @@ fn updater_verifies_and_health_checks_dummy_processes_without_a_window() {
             zip.write_all(b"fail startup").unwrap();
         }
         let server = Server::new();
-        let listing = server.release(
+        let listing = server.release_build(
             Kind::Hub,
             "1.0.0",
             Channel::Stable,
             zip.finish().unwrap().into_inner(),
+            Some(BuildIdentity {
+                commit: "b".repeat(40),
+                generation: 2,
+            }),
         );
         server.releases(vec![listing]);
         let feed = Feed::new(server.config(), &directory.join("cache")).unwrap();
@@ -392,9 +397,16 @@ fn updater_verifies_and_health_checks_dummy_processes_without_a_window() {
         let result = updater::apply_for_test(&plan, &[testing::test_public_key()]);
         if failed {
             assert_eq!(result.unwrap_err().code, ROLLBACK);
-            assert_eq!(fs::read(current.join("hub.json")).unwrap(), b"old marker");
+            assert_eq!(fs::read(current.join("hub.json")).unwrap(), old_marker);
         } else {
             result.unwrap();
+            let installed = fs::read(current.join("hub.json")).unwrap();
+            updater::apply_for_test(&plan, &[testing::test_public_key()]).unwrap();
+            assert_eq!(
+                fs::read(current.join("hub.json")).unwrap(),
+                installed,
+                "same build must not be swapped again"
+            );
             assert!(!current.with_extension("old").exists());
             assert!(
                 fs::read_to_string(current.join("hub.json"))

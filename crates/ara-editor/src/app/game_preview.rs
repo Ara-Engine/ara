@@ -11,8 +11,8 @@
 //! never followed by another, unless the shared content still has work the preview
 //! must show (`SceneView::preview_needs_frame`: publication, late GI, emitter fades).
 //! Until the scene's content is published it asks again every frame, keeping the
-//! empty state. The image is always detached from the UI before the preview camera
-//! is released.
+//! empty state. Hiding detaches the image and retains one camera without rendering;
+//! editor shutdown detaches and releases its targets.
 use std::time::{Duration, Instant};
 
 use ara_editor_gpu::NativeUi;
@@ -186,19 +186,17 @@ impl Preview {
         self.camera.release(renderer)
     }
 
-    /// Detach and free the preview (Play started, the Game view hid, no camera). The
-    /// release does not wait: a frame still in flight keeps its resources until it
-    /// completes.
+    /// Detach a hidden preview without drawing. Keep its single camera resident so
+    /// tab switches and Stop reuse targets/history; `destroy` releases them.
     fn release(
         &mut self,
-        renderer: &mut Renderer,
+        _renderer: &mut Renderer,
         shell: &mut Shell,
         gpu: &mut NativeUi,
     ) -> ara_ui::Result<bool> {
         if self.attached.take().is_some() {
             gpu.forget_external(texture());
         }
-        self.camera.release(renderer)?;
         self.shown = None;
         self.settle_until = None;
         Ok(shell.game_preview.take().is_some())

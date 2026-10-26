@@ -21,7 +21,7 @@ pub struct PreparedPose {
     pub geometries: usize,
     /// Number of changed-geometry BLAS builds (all cooked LODs).
     pub blas: usize,
-    /// GPU skin upload/barrier and BLAS-build time.
+    /// Standalone BLAS-build time. Raster host-write barriers belong to its draw graph.
     pub milliseconds: f64,
 }
 
@@ -97,6 +97,9 @@ impl GeometryGpu {
         let mut allocated = Vec::new();
         let result = (|| {
             gpu.upload_queued(buffers[slot], bytemuck::cast_slice(&self.staging))?;
+            if self.structures.is_empty() {
+                self.pose_host_writes |= 1 << slot;
+            }
             let pool = self
                 .static_pool
                 .expect("populated skin pool has static indices");
@@ -152,21 +155,26 @@ impl GeometryGpu {
                     }
                 }
             }
-            let mut commands = gpu.begin(Queue::Graphics);
-            commands.push(Command::BeginPass("Scene.Geometry.Pose".into()));
-            commands.barriers([
-                edge(
-                    Resource::Buffer(buffers[slot]),
-                    Access::HostWrite,
-                    Access::ShaderRead,
-                ),
-                edge(
-                    Resource::Buffer(table),
-                    Access::HostWrite,
-                    Access::ShaderRead,
-                ),
-            ]);
-            if built != 0 {
+            let milliseconds = if built == 0 {
+                // Raster imports these host writes in its first consuming pass.
+                // A barrier-only submit here would idle the GPU while CPU frame
+                // preparation and command recording continue.
+                0.
+            } else {
+                let mut commands = gpu.begin(Queue::Graphics);
+                commands.push(Command::BeginPass("Scene.Geometry.Pose".into()));
+                commands.barriers([
+                    edge(
+                        Resource::Buffer(buffers[slot]),
+                        Access::HostWrite,
+                        Access::ShaderRead,
+                    ),
+                    edge(
+                        Resource::Buffer(table),
+                        Access::HostWrite,
+                        Access::ShaderRead,
+                    ),
+                ]);
                 commands.barriers([edge(
                     Resource::Buffer(buffers[slot]),
                     Access::HostWrite,
@@ -187,10 +195,10 @@ impl GeometryGpu {
                         ),
                     ]);
                 }
-            }
-            commands.push(Command::EndPass);
-            let point = gpu.submit(commands.finish(), &[])?;
-            let milliseconds = gpu.resolve(point)?.iter().map(|t| t.milliseconds).sum();
+                commands.push(Command::EndPass);
+                let point = gpu.submit(commands.finish(), &[])?;
+                gpu.resolve(point)?.iter().map(|t| t.milliseconds).sum()
+            };
             Ok(PreparedPose {
                 owner,
                 table: (table, table_index),
@@ -234,6 +242,9 @@ impl GeometryGpu {
         gpu.retire(Resource::Buffer(pose.owner))?;
         self.table = Some(pose.table);
         self.current_slot = pose.slot;
+        if pose.blas == 0 {
+            self.pose_host_writes |= (1 << pose.slot) | TABLE_HOST_WRITE;
+        }
         self.pending_pose = false;
         for (index, revision) in pose.revisions {
             self.layout[index].revision = revision;
@@ -259,6 +270,7 @@ impl GeometryGpu {
     /// Called only after a successful render; this slot supplies future velocities.
     pub fn presented(&mut self) {
         self.presented_slot = self.current_slot;
+        self.pose_host_writes = 0;
     }
 }
 

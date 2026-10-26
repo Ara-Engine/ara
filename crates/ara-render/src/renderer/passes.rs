@@ -121,15 +121,49 @@ impl Renderer {
                 self.cull_native_shadow(matrix)?;
             }
         }
+        // Shadow patches (look::cascades, look::local) cull the casters under them
+        // into native shadow slots after the local faces': one per cascade, then
+        // `local::PATCHES`. Cascades draw them through their own frame record, whose
+        // matrix is cropped to the patch. Legacy content reports no caster changes,
+        // so it never patches.
+        let local_capacity = self
+            .look
+            .local
+            .as_ref()
+            .map_or(0, |local| crate::look::local::capacity(local.settings));
+        let patch_slots = local_capacity + 4 + crate::look::local::PATCHES;
+        let mut cascade_patches = Vec::with_capacity(cascade_draw.len());
+        for draw in &cascade_draw {
+            let (Some(rect), true, Some(cascades)) =
+                (draw.rect, self.native.is_some(), &self.look.cascades)
+            else {
+                cascade_patches.push(None);
+                continue;
+            };
+            let parent = (frame.shadows[draw.cascade], cascades.resolution);
+            let patch = crate::look::cascades::Patch::new(rect, parent.1, parent.0);
+            let buffer = cascades.frames[draw.cascade];
+            let mut patch_frame = frame;
+            patch_frame.shadows[draw.cascade] = patch.matrix;
+            self.gpu
+                .upload_queued(buffer, bytemuck::bytes_of(&patch_frame))?;
+            self.reserve_native_shadow_passes(patch_slots)?;
+            let pass = self.cull_native_shadow_patch(
+                super::native::ShadowSource::Cascade(draw.cascade),
+                local_capacity + draw.cascade,
+                parent,
+                &patch,
+            )?;
+            cascade_patches.push(Some((pass, patch)));
+        }
         // Local-light shadows (look::local): this frame's faces are culled as
         // native shadow passes 7+face and drawn as cascade 4+face, whose matrix
-        // the table (rewritten every frame) holds.
-        let mut local_draws: Vec<(usize, usize, glam::Mat4)> = Vec::new();
+        // the table (rewritten every frame) holds: a patch's cropped one.
+        let mut local_draws: Vec<(crate::look::local::LocalDraw, usize)> = Vec::new();
         if self.native.is_some()
             && let Some(mut local) = self.look.local.take()
         {
             let result = (|| -> Result<()> {
-                self.reserve_native_shadow_passes(crate::look::local::capacity(local.settings))?;
                 let plan = local.cache.plan(
                     &self.content.lights,
                     camera.projection * camera.view,
@@ -137,13 +171,32 @@ impl Renderer {
                     local.size,
                     capture || deterministic,
                 );
-                for &(face, matrix) in &plan.draws {
-                    let pass = self.cull_native_shadow_pass_with_resolution(
-                        face,
-                        matrix,
-                        local.settings.resolution,
-                    )?;
-                    local_draws.push((face, pass, matrix));
+                let patches = plan.draws.iter().filter(|d| d.patch.is_some()).count();
+                self.reserve_native_shadow_passes(if patches > 0 {
+                    patch_slots
+                } else {
+                    local_capacity
+                })?;
+                let mut slot = local_capacity + 4;
+                for &draw in &plan.draws {
+                    let resolution = local.settings.resolution;
+                    let pass = match &draw.patch {
+                        Some(patch) => {
+                            slot += 1;
+                            self.cull_native_shadow_patch(
+                                super::native::ShadowSource::LocalFace(draw.face),
+                                slot - 1,
+                                (draw.matrix, resolution),
+                                patch,
+                            )?
+                        }
+                        None => self.cull_native_shadow_pass_with_resolution(
+                            draw.face,
+                            draw.matrix,
+                            resolution,
+                        )?,
+                    };
+                    local_draws.push((draw, pass));
                 }
                 self.gpu.upload_queued(local.table, &plan.table)?;
                 Ok(())
@@ -201,6 +254,9 @@ impl Renderer {
                 local.size[0],
                 local.size[1],
             ];
+            if local.settings.in_gi_and_fog {
+                look_frame.flags[1] |= crate::look::frame::LOCAL_INDIRECT;
+            }
         }
         if let Some(r) = self.look.quality.reflections
             && self.targets.history.is_some()
@@ -300,7 +356,7 @@ impl Renderer {
                 Queue::Graphics,
                 cascade_draw
                     .iter()
-                    .map(|&i| (look.cascades[i], Access::Depth)),
+                    .map(|draw| (look.cascades[draw.cascade], Access::Depth)),
             );
             declare(shadow, Recipe::Shadow);
             shadow_passes.push(shadow);
@@ -365,9 +421,11 @@ impl Renderer {
         for (id, pass) in self.look.ssr_passes(&mut graph, &look, history, &ssr_reads) {
             declare(id, Recipe::Look(pass));
         }
+        // Fog and GI relight shadow local lights too (look::local).
         let mut sky_shared = graphics.clone();
         sky_shared.extend(cascade_reads.iter().copied());
         sky_shared.extend(far_read);
+        sky_shared.extend(local_read);
         let sun = {
             let d = self.content.sun_direction;
             let l = self.content.sun_lux;
@@ -562,8 +620,36 @@ impl Renderer {
                             .as_ref()
                             .expect("a cascade pass is declared only with cascade maps");
                         recorder.push(Command::Pipeline(self.pipelines.shadow));
-                        for &index in &cascade_draw {
+                        for (planned, patch) in cascade_draw.iter().zip(&cascade_patches) {
+                            let index = planned.cascade;
                             let cascade = index as u32;
+                            // A patch keeps the map and redraws its square: cleared,
+                            // then its casters through the cropped matrix.
+                            if let (Some((pass, patch)), Some(native)) = (patch, &self.native) {
+                                recorder.push(Command::BeginRendering {
+                                    colors: Vec::new(),
+                                    depth: Some(Attachment {
+                                        image: maps.images[index],
+                                        clear: None,
+                                    }),
+                                    size: [maps.resolution; 2],
+                                });
+                                recorder.push(Command::Viewport {
+                                    origin: patch.origin,
+                                    size: [patch.size; 2],
+                                });
+                                recorder.push(Command::ClearDepth {
+                                    origin: patch.origin,
+                                    size: [patch.size; 2],
+                                    depth: 0.,
+                                });
+                                let mut constants = root;
+                                constants.words[0] = maps.frame_indices[index];
+                                constants.words[4] = cascade;
+                                native.record(&mut recorder, constants, *pass);
+                                recorder.push(Command::EndRendering);
+                                continue;
+                            }
                             recorder.push(Command::BeginRendering {
                                 colors: Vec::new(),
                                 depth: Some(Attachment {
@@ -653,19 +739,23 @@ impl Renderer {
                             }),
                             size: local.size,
                         });
-                        for &(face, pass, _) in &local_draws {
-                            let origin = crate::look::local::origin(face, tile);
+                        for &(draw, pass) in &local_draws {
+                            // A patch clears and redraws its square of the tile.
+                            let [x, y] = crate::look::local::origin(draw.face, tile);
+                            let (origin, size) = draw.patch.map_or(([x, y], tile), |patch| {
+                                ([x + patch.origin[0], y + patch.origin[1]], patch.size)
+                            });
                             recorder.push(Command::Viewport {
                                 origin,
-                                size: [tile; 2],
+                                size: [size; 2],
                             });
                             recorder.push(Command::ClearDepth {
                                 origin,
-                                size: [tile; 2],
+                                size: [size; 2],
                                 depth: 0.,
                             });
                             let mut constants = root;
-                            constants.words[4] = 4 + face as u32;
+                            constants.words[4] = 4 + draw.face as u32;
                             if let Some(native) = &self.native {
                                 native.record(&mut recorder, constants, pass);
                             }
@@ -853,13 +943,18 @@ impl Renderer {
             far.cache.drawn(matrix, view);
         }
         if let Some(local) = &mut self.look.local {
-            for &(face, _, matrix) in &local_draws {
-                local.cache.drawn(face, matrix);
+            for (draw, _) in &local_draws {
+                local.cache.drawn(draw);
             }
         }
         if let Some(cascades) = &mut self.look.cascades {
-            for &index in &cascade_draw {
-                cascades.drawn(index, frame.shadows[index]);
+            for (&draw, patch) in cascade_draw.iter().zip(&cascade_patches) {
+                // A patch that could not be culled (legacy content) drew whole.
+                let draw = crate::look::cascades::CascadeDraw {
+                    rect: patch.and(draw.rect),
+                    ..draw
+                };
+                cascades.drawn(draw, frame.shadows[draw.cascade]);
             }
         }
         if let Some(gi) = &mut self.look.gi {

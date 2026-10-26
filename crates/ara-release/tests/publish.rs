@@ -12,6 +12,7 @@ fn dry_run_publishes_manifest_the_hub_verifies_without_gh_or_network() {
             "ara-0.0.1-alpha-windows-x64"
         };
         fs::create_dir(root.join(prefix)).unwrap();
+        fs::write(root.join(prefix).join("hub.json"), br#"{"format":"ara.hub/1","version":"0.0.1-alpha","build":{"commit":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","generation":1}}"#).unwrap();
         fs::write(
             root.join(prefix).join("THIRD_PARTY_NOTICES.txt"),
             "fixture notices",

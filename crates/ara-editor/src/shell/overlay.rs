@@ -12,6 +12,120 @@ pub fn viewport_image() -> u32 {
 }
 /// Resource handle of the renderer's entity-ID image.
 pub const ENTITY_IMAGE: u32 = 0x7fff_0001;
+/// Resource handle of the outline group table (`NativeUi::outline_groups`).
+pub const OUTLINE_GROUPS: u32 = 0x7fff_0002;
+
+/// Selection, review and hover outlines by entity, not by renderer channel: an entity
+/// drawn as several instances (a terrain's chunks, a model's parts) outlines as one
+/// shape, and a terrain chunk hovers and outlines as its whole terrain. Holds the
+/// channel map and the group table for the outline shader; both rebuild only when the
+/// scene, the renderer's entities, the selection or the review tints change.
+#[derive(Default)]
+pub struct Outlines {
+    /// Renderer channel → scene entity (also what Scene clicks select).
+    pub channels: crate::world::channels::Channels,
+    key: u64,
+    /// Outline colour groups: group `n + 1` is `groups[n]` (token, and whether any
+    /// channel is in it: only those get an outline pass).
+    groups: Vec<(String, bool)>,
+    upload: Option<ara_ui_render::gpu::Image>,
+}
+impl Outlines {
+    /// Refresh the channel map and group table; the outline overlays, one per colour group.
+    fn refresh(
+        &mut self,
+        view: &DocumentView,
+        revision: u64,
+        state: &EditorState,
+        renderer: &ara_render::Renderer,
+        changed: &std::collections::BTreeMap<u64, &str>,
+        selection: bool,
+    ) {
+        let entities = renderer.entities();
+        self.channels.update(view.entities(), revision, entities);
+        let key = state
+            .selection
+            .iter()
+            .map(|s| crate::world::render_id(s))
+            .chain(
+                changed
+                    .iter()
+                    .flat_map(|(id, token)| [*id, crate::world::render_id(token)]),
+            )
+            .chain([u64::from(selection), self.channels.key()])
+            .fold(0xcbf2_9ce4_8422_2325u64, |hash, id| {
+                (hash ^ id).wrapping_mul(0x0000_0100_0000_01b3)
+            });
+        if key == self.key {
+            return;
+        }
+        self.key = key;
+        let channels = &self.channels;
+        let selected: Vec<bool> = channels
+            .addresses
+            .iter()
+            .map(|a| selection && state.selection.contains(a))
+            .collect();
+        let mut groups = vec![("accent".to_owned(), false)];
+        // Texel 0 is the background; channel `n` is texel `n + 1`, as the renderer writes.
+        let width = 4096usize;
+        let height = (entities.len() + 1).div_ceil(width).max(1);
+        let mut rgba = vec![0u8; width * height * 4];
+        for (n, (id, _)) in entities.iter().enumerate() {
+            let owner = channels.owners[n];
+            let colour = if owner.is_some_and(|o| channels.within(o, &selected)) {
+                1
+            } else if let Some(token) = changed.get(id).or_else(|| {
+                owner.and_then(|o| {
+                    changed.get(&crate::world::render_id(&channels.addresses[o as usize]))
+                })
+            }) {
+                match groups.iter().position(|(g, _)| g == token) {
+                    Some(at) => at + 1,
+                    None if groups.len() < 127 => {
+                        groups.push(((*token).to_owned(), false));
+                        groups.len()
+                    }
+                    None => 0,
+                }
+            } else {
+                0
+            };
+            if colour > 0 {
+                groups[colour - 1].1 = true;
+            }
+            // Hover groups are 16-bit: a scene past 65 535 entities hovers single channels.
+            let hover = channels.targets[n]
+                .map(|t| t as usize + 1)
+                .filter(|h| *h <= 0xffff)
+                .unwrap_or(0);
+            let texel = (n + 1) * 4;
+            rgba[texel] = (hover & 0xff) as u8;
+            rgba[texel + 1] = (hover >> 8) as u8;
+            // Blue: the colour group, and bit 7 for ground (terrain).
+            rgba[texel + 2] = colour as u8 | if channels.ground[n] { 0x80 } else { 0 };
+            rgba[texel + 3] = 255;
+        }
+        self.groups = groups;
+        self.upload = Some(ara_ui_render::gpu::Image {
+            width: width as u32,
+            height: height as u32,
+            rgba,
+        });
+    }
+    /// Upload a rebuilt group table and point the outline shader at it.
+    pub fn upload(
+        &mut self,
+        ui: &mut ara_ui_render::gpu::Renderer,
+        gpu: &mut crate::gpu::NativeUi,
+    ) -> ara_ui::Result<()> {
+        if let Some(table) = self.upload.take() {
+            ui.image(OUTLINE_GROUPS, table)?;
+        }
+        gpu.outline_groups(Some(OUTLINE_GROUPS));
+        Ok(())
+    }
+}
 /// Project a world point into a logical UI viewport, rejecting points behind the camera.
 pub fn project(camera: &Camera, rect: Box2, point: Vec3) -> Option<[f32; 2]> {
     let camera = camera
@@ -272,7 +386,9 @@ pub struct GizmoState {
     /// Handle being dragged; others fade and a constraint line appears.
     pub active: Option<Handle>,
 }
-/// Create semantic-token grid, silhouette review tints and transform handles.
+/// Create semantic-token grid, silhouette review tints and transform handles. Outlines
+/// go by entity (`outlines`, refreshed here; upload its table with `Outlines::upload`).
+#[allow(clippy::too_many_arguments)]
 pub fn build(
     view: &DocumentView,
     state: &EditorState,
@@ -280,6 +396,8 @@ pub fn build(
     renderer: &ara_render::Renderer,
     changed: &std::collections::BTreeMap<u64, &str>,
     gizmo: GizmoState,
+    outlines: &mut Outlines,
+    revision: u64,
 ) -> ara_ui::Result<Vec<Overlay>> {
     let tokens = if state.light {
         EditorTheme::Light
@@ -329,20 +447,20 @@ pub fn build(
             ],
         });
     }
-    let outlined: Vec<u64> = if show("viewport.outline") {
-        state
-            .selection
-            .iter()
-            .map(|s| crate::world::render_id(s))
-            .collect()
-    } else {
-        Vec::new()
-    };
-    for (index, (id, _)) in renderer.entities().iter().enumerate() {
-        if outlined.contains(id) || changed.contains_key(id) {
-            let token = changed.get(id).copied().unwrap_or("accent");
+    // One outline per colour group: the selection (with everything under it) and each
+    // review tint, each as one shape however many channels it spans.
+    outlines.refresh(
+        view,
+        revision,
+        state,
+        renderer,
+        changed,
+        show("viewport.outline"),
+    );
+    for (n, (token, used)) in outlines.groups.iter().enumerate() {
+        if *used {
             overlays.push(Overlay::Outline {
-                index: index as u32 + 1,
+                index: n as u32 + 1,
                 color: color(token, 1.)?,
             });
         }

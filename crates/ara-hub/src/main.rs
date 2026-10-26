@@ -20,6 +20,11 @@ fn options() -> Result<Option<Options>, String> {
     };
     while let Some(arg) = args.next() {
         match arg.as_str() {
+            "--build-info" => {
+                let path = value(&mut args, &arg)?;
+                ara_update::write_json(std::path::Path::new(&path), &serde_json::json!({"version":env!("CARGO_PKG_VERSION"),"build":ara_hub::build_identity()})).map_err(|e|e.to_string())?;
+                return Ok(None);
+            }
             "--service-check" => {
                 options.service_check = Some(PathBuf::from(value(&mut args, &arg)?))
             }

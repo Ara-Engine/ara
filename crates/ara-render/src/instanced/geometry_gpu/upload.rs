@@ -101,6 +101,7 @@ impl GeometryGpu {
             current_slot: 0,
             presented_slot: 0,
             pending_pose: false,
+            pose_host_writes: 0,
             stats: GeometryUpload::default(),
         };
         result.stats.geometries = result.ranges.len();
