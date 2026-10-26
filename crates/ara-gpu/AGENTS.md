@@ -12,7 +12,7 @@ Owns the native GPU boundary. Vulkan uses ash revision
 - `Device`: portable descriptors, queues, cooked pipelines, recording and retirement.
 - `Command::CopyBufferRange` copies aligned ranges with checked capacities/overflow;
   it preserves unrelated destination bytes and is rejected inside rendering.
-- `VulkanDevice`: Vulkan backend; `context()` is read-only native integration access.
+- `VulkanDevice`: Vulkan backend; `context()` is read-only native integration access. Unsafe startup-only `split_loading` shares native lifetime with separate pools/arenas; serialize owners if graphics queues alias.
   `prepare_resources` admits two unpublished allocation/host-copy jobs; poll/cancel
   never waits. Adoption stays on the owner, as do ordered uploads and queue access.
 - `Context::host_wait_stats` snapshots cumulative host time in explicit driver waits.
@@ -119,9 +119,9 @@ transfers SRC→SRC; each side waits on a fence before notifying the other. A sl
 written only after the owner released that exact frame (generation, slot, serial).
 Metal: unsupported (error).
 
-Pipeline caches validate vendor/device/UUID headers and are keyed by UUID,
-vendor/device and driver; saves replace the file atomically. Cooked artifact hashes
-and layout hashes are checked separately before pipeline creation.
+`prepare_pipelines` admits two PSO batches (running/queued/ready); poll/cancel never waits. One compiler owns a private persisted cache.
+Caches check vendor/device/UUID/driver and save atomically; cooked artifact and layout hashes are checked separately.
+Adopt ready pipeline handles on the owner and retire normally. Keep the last presentation or skip draws until ready.
 
 ## Verification
 

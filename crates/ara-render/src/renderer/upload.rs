@@ -76,7 +76,14 @@ impl Renderer {
             true,
         )?;
         let compute_frame_index = gpu.storage_buffer(compute_frame)?.index;
-        let content = upload_content(&mut gpu, scene, artifacts, &shader_metadata, compute_frame)?;
+        let content = upload_content(
+            &mut gpu,
+            scene,
+            artifacts,
+            &shader_metadata,
+            compute_frame,
+            None,
+        )?;
         let look = crate::look::gpu::LookGpu::new(
             &mut gpu,
             artifacts,
@@ -103,6 +110,7 @@ impl Renderer {
             last_timings: Vec::new(),
             look,
             native: None,
+            native_pipelines: Default::default(),
             views: views::Views::default(),
             secondary_active: false,
             live: None,
@@ -122,6 +130,7 @@ impl Renderer {
             &self.artifacts,
             &self.shader_metadata,
             self.compute_frame,
+            Some(self.content.ibl_pipelines),
         )?;
         let old = std::mem::replace(&mut self.content, content);
         self.retire_content(old)?;
@@ -137,9 +146,6 @@ impl Renderer {
         for mesh in old.meshes {
             self.gpu.retire(Resource::Buffer(mesh.vertices))?;
             self.gpu.retire(Resource::Buffer(mesh.indices))?;
-        }
-        for pipeline in old.ibl_pipelines {
-            self.gpu.retire_pipeline(pipeline)?;
         }
         self.gpu.collect()?;
         Ok(())
@@ -454,14 +460,18 @@ pub(super) fn upload_content(
     artifacts: &Path,
     shader_metadata: &crate::capture::ShaderMetadata,
     compute_frame: Buffer,
+    cached_ibl: Option<[Pipeline; 2]>,
 ) -> Result<Content> {
     let mut allocated = Vec::new();
     let mut pipelines = Vec::new();
     let result = upload_content_inner(
         gpu,
         scene,
-        artifacts,
-        shader_metadata,
+        Ibl {
+            artifacts,
+            metadata: shader_metadata,
+            cached: cached_ibl,
+        },
         compute_frame,
         &mut allocated,
         &mut pipelines,
@@ -478,11 +488,15 @@ pub(super) fn upload_content(
     result
 }
 
+struct Ibl<'a> {
+    artifacts: &'a Path,
+    metadata: &'a crate::capture::ShaderMetadata,
+    cached: Option<[Pipeline; 2]>,
+}
 fn upload_content_inner(
     gpu: &mut VulkanDevice,
     scene: Scene,
-    artifacts: &Path,
-    shader_metadata: &crate::capture::ShaderMetadata,
+    ibl: Ibl<'_>,
     compute_frame: Buffer,
     allocated: &mut Vec<Resource>,
     pipelines: &mut Vec<Pipeline>,
@@ -637,17 +651,23 @@ fn upload_content_inner(
     );
     let load = |gpu: &mut VulkanDevice, name: &str| -> Result<_> {
         let cooked: ara_gpu::cooked::CookedPipeline =
-            serde_json::from_slice(&std::fs::read(artifacts.join(format!("{name}.json")))?)?;
+            serde_json::from_slice(&std::fs::read(ibl.artifacts.join(format!("{name}.json")))?)?;
         ensure!(
-            cooked.key == shader_metadata.content_key,
+            cooked.key == ibl.metadata.content_key,
             "IBL and raster cooks must share one source cohort"
         );
-        Ok(gpu.create_pipeline(&cooked, artifacts)?)
+        Ok(gpu.create_pipeline(&cooked, ibl.artifacts)?)
     };
-    let irradiance_pipeline = load(gpu, "irradiance")?;
-    pipelines.push(irradiance_pipeline);
-    let specular_pipeline = load(gpu, "prefilter")?;
-    pipelines.push(specular_pipeline);
+    let [irradiance_pipeline, specular_pipeline] = match ibl.cached {
+        Some(pipelines) => pipelines,
+        None => {
+            let irradiance = load(gpu, "irradiance")?;
+            pipelines.push(irradiance);
+            let prefilter = load(gpu, "prefilter")?;
+            pipelines.push(prefilter);
+            [irradiance, prefilter]
+        }
+    };
     let compiled = graph.compile()?;
     let mut points = Vec::new();
     for (index, pass) in compiled.passes.iter().enumerate() {

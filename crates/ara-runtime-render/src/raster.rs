@@ -94,7 +94,10 @@ impl RasterView {
     /// Keep progressive editor views polling until acquired probe surfaces arrive
     /// and moved instances settle back into them.
     pub fn needs_frame(&self) -> bool {
-        self.emitter_search.is_busy() || self.fades.is_active() || self.probe_gi_pending()
+        self.emitter_search.is_busy()
+            || self.fades.is_active()
+            || self.probe_gi_pending()
+            || self.effects.is_pending()
     }
 
     /// GI acquisition/delivery only; emitters and model fades have their own work.
@@ -614,6 +617,26 @@ impl RasterView {
     }
 
     /// Capture this presentation, retaining authored automatic exposure and TAA.
+    /// Complete lazy effects before a capture's temporal settle window. Live
+    /// callers only poll; this explicit boundary may wait for the compiler.
+    pub fn wait_capture_effects(
+        &mut self,
+        renderer: &mut Renderer,
+        frame: &RenderFrame,
+        camera: &CameraSpec,
+        mode: ViewMode,
+    ) -> Result<()> {
+        if matches!(mode, ViewMode::Lit) {
+            self.effects.wait_pipelines(renderer, frame)?;
+            while self.effects.is_pending() {
+                self.render(renderer, frame, camera, mode)?;
+            }
+        }
+        renderer.reset_capture_history()?;
+        Ok(())
+    }
+
+    /// Capture this presentation, retaining authored automatic exposure and TAA.
     pub fn capture(
         &mut self,
         renderer: &mut Renderer,
@@ -622,6 +645,7 @@ impl RasterView {
     ) -> Result<Capture> {
         ensure!(request.settle_frames <= 1024, "Settle frame limit is 1024");
         self.reset_capture(renderer)?;
+        self.wait_capture_effects(renderer, frame, &request.camera, request.mode)?;
         for _ in 0..request.settle_frames.max(4) {
             self.render(renderer, frame, &request.camera, request.mode)?;
         }

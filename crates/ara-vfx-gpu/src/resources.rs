@@ -11,17 +11,47 @@ use bytemuck::Zeroable;
 use std::path::Path;
 
 impl GpuSystem {
-    /// Load matching offline pipelines and allocate device-local SoA/list storage.
-    /// No shader compiler runs here. Shader/pipeline publication belongs at a frame boundary.
+    /// Synchronous tools/capture constructor from an offline cook. Live hosts use
+    /// `PipelineWarmup` and `new_prepared` to keep driver compilation off-frame.
     pub fn new(
         gpu: &mut VulkanDevice,
         effect: &Effect,
         cooked: &Path,
         size: [u32; 2],
     ) -> Result<Self> {
+        Self::construct(gpu, effect, cooked, size, None)
+    }
+
+    /// Allocate an effect from worker-compiled PSOs. Live callers poll
+    /// `PipelineWarmup` first, so no native pipeline is created on this thread.
+    pub fn new_prepared(
+        gpu: &mut VulkanDevice,
+        effect: &Effect,
+        cooked: &Path,
+        size: [u32; 2],
+        pipelines: crate::PreparedPipelines,
+    ) -> Result<Self> {
+        Self::construct(gpu, effect, cooked, size, Some(pipelines))
+    }
+
+    fn construct(
+        gpu: &mut VulkanDevice,
+        effect: &Effect,
+        cooked: &Path,
+        size: [u32; 2],
+        mut supplied: Option<crate::PreparedPipelines>,
+    ) -> Result<Self> {
         let mut resources = Vec::new();
         let mut pipelines = Vec::new();
-        let result = Self::allocate(gpu, effect, cooked, size, &mut resources, &mut pipelines);
+        let result = Self::allocate(
+            gpu,
+            effect,
+            cooked,
+            size,
+            &mut resources,
+            &mut pipelines,
+            &mut supplied,
+        );
         match result {
             Ok(mut system) => {
                 if let Err(error) = system.reset(gpu) {
@@ -37,6 +67,9 @@ impl GpuSystem {
                 for pipeline in pipelines {
                     gpu.retire_pipeline(pipeline)?;
                 }
+                if let Some(supplied) = supplied {
+                    supplied.retire(gpu)?;
+                }
                 gpu.collect()?;
                 Err(error)
             }
@@ -51,6 +84,7 @@ impl GpuSystem {
         size: [u32; 2],
         resources: &mut Vec<Tracked>,
         created_pipelines: &mut Vec<Pipeline>,
+        supplied: &mut Option<crate::PreparedPipelines>,
     ) -> Result<Self> {
         ensure!(!size.contains(&0), "zero VFX capture extent");
         let hash = effect
@@ -74,7 +108,16 @@ impl GpuSystem {
             } else {
                 cohort = Some(p.key.clone());
             }
-            let pipeline = gpu.create_pipeline(&p, cooked)?;
+            let pipeline = match supplied {
+                Some(supplied) => {
+                    ensure!(supplied.key == p.key, "prepared VFX shader cohort differs");
+                    supplied
+                        .handles
+                        .pop_front()
+                        .ok_or_else(|| anyhow::anyhow!("incomplete prepared VFX pipelines"))?
+                }
+                None => gpu.create_pipeline(&p, cooked)?,
+            };
             created_pipelines.push(pipeline);
             Ok(pipeline)
         };
@@ -88,6 +131,10 @@ impl GpuSystem {
             particles: load("particles")?,
             tonemap: load("tonemap")?,
         };
+        ensure!(
+            supplied.as_ref().is_none_or(|p| p.handles.is_empty()),
+            "excess prepared VFX pipelines"
+        );
         let p: ara_gpu::cooked::CookedPipeline =
             serde_json::from_slice(&std::fs::read(cooked.join("particles.json"))?)?;
         let metadata = ShaderMetadata {

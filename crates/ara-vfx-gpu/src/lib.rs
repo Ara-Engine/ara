@@ -5,6 +5,7 @@ mod atlas;
 mod cook;
 mod layout;
 mod passes;
+mod pipeline_preparation;
 mod readback;
 mod resources;
 mod runtime;
@@ -12,6 +13,7 @@ mod stats;
 
 pub use atlas::{ATLAS_SIZE, cook_atlas};
 pub use cook::cook_source;
+pub use pipeline_preparation::{PipelineWarmup, PreparedPipelines};
 pub use runtime::{GpuSystem, Lighting, Placement, ProbeLighting, SceneColor, SceneDepth, View};
 pub use stats::{EmitterStats, Stats};
 

@@ -24,7 +24,10 @@ fn live_tick_advances_and_draws_in_one_particle_graph() -> Result<()> {
         intensity: 1.,
     });
     let camera = crate::camera(&frame)?;
-    present(&mut effects, renderer, &frame, &camera)?;
+    effects.wait_pipelines(renderer, &frame)?;
+    while effects.is_pending() {
+        present(&mut effects, renderer, &frame, &camera)?;
+    }
     // A frozen redraw, one tick, and bounded catch-up all draw exactly once;
     // catch-up's earlier ticks remain simulation-only graphs.
     let mut simulated = 150;

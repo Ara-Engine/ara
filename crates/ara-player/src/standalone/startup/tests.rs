@@ -6,33 +6,50 @@ fn loading_can_present_while_presenter_warmup_is_blocked_and_then_hands_off_its_
 {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../target/renderer-unification/loading-worker");
-    let (mut window, extensions, _) =
+    let (mut window, extensions, size) =
         device::Windowed::open_unprepared("Loading test", [320, 180], true)?;
-    let mut loading = device::Loading::new(&extensions, &root)?;
+    let (mut loading, gpu, parallel) = device::Loading::for_game(&extensions, &root, false)?;
     let (started, wait_started) = std::sync::mpsc::channel();
     let (release, wait_release) = std::sync::mpsc::channel();
     let cache = root.join("game");
     let worker = graphics::Graphics::spawn(move || {
         started.send(thread::current().id())?;
         wait_release.recv()?;
-        let mut presenter = Presenter::new([64, 64], extensions, cache);
+        let mut presenter = Presenter::with_device(size, cache, gpu);
         presenter.set_probe_gi(false);
         presenter.prepare(&device::warm_frame())?;
         Ok(presenter)
     })?;
     assert_ne!(wait_started.recv()?, thread::current().id());
     assert!(window.present_loading(&mut loading, 0.25)?);
+    let swapchain = loading.swapchain().context("loading swapchain")?;
+    let device = loading.native_device();
     assert!(
         !worker.is_finished(),
         "the first presented frame does not await warmup"
     );
     release.send(())?;
+    if parallel {
+        while !worker.is_finished() {
+            window.present_loading(&mut loading, 0.5)?;
+        }
+    }
     let (mut presenter, _) = worker.finish()?;
-    // The loading surface is gone before another device uses the same window.
-    drop(loading);
+    assert_eq!(
+        presenter
+            .renderer()
+            .context("renderer")?
+            .gpu()
+            .context()
+            .device
+            .handle(),
+        device
+    );
+    window.finish_loading(loading);
     window.present(&mut presenter, &device::warm_frame(), || {
         Ok(ara_runtime_render::fidelity::native::Content::default())
     })?;
+    assert_eq!(window.swapchain(), Some(swapchain));
     window.shutdown(&presenter)?;
     presenter
         .renderer()
