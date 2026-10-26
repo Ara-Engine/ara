@@ -557,6 +557,8 @@ impl EditorService {
                             | "roughnessMetal"
                             | "entityIds"
                             | "shadowCascades"
+                            | "wireframe"
+                            | "litWireframe"
                     ) {
                         return Err(vec![crate::invalid(format!("unknown view mode `{mode}`"))]);
                     }

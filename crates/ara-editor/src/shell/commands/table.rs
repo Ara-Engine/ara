@@ -833,9 +833,26 @@ fn build() -> Vec<Spec> {
             |_, e, _| view(e, json!({"viewMode": "shadowCascades"})),
         )
         .when(|c| mode(c, "shadowCascades")),
+        cmd(
+            "view.mode.wireframe",
+            "Wireframe",
+            "",
+            "",
+            "Triangle edges over a dark background, coloured per entity.",
+            |_, e, _| view(e, json!({"viewMode": "wireframe"})),
+        )
+        .when(|c| mode(c, "wireframe")),
+        cmd(
+            "view.mode.lit_wireframe",
+            "Lit Wireframe",
+            "",
+            "",
+            "The lit image with its triangle edges drawn over it.",
+            |_, e, _| view(e, json!({"viewMode": "litWireframe"})),
+        )
+        .when(|c| mode(c, "litWireframe")),
     ]);
     c.extend([
-        later("view.mode.wireframe", "Wireframe", "", "", "ara-render has no wireframe pass yet."),
         later("view.mode.overdraw", "Overdraw", "", "", "ara-render has no overdraw visualisation yet."),
         later("view.mode.gi_debug", "GI Debug", "", "", "GI debug views live in ara-render-fidelity captures; live viewport output is not wired yet."),
         cmd("view.show.grid", "Grid", "grid-2x2", "", "Show the ground grid.", |_, e, _| toggle(e, "viewport.grid")).when(|c| flag(c, "viewport.grid")),

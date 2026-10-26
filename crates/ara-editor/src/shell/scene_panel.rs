@@ -164,6 +164,8 @@ impl Shell {
                 "roughnessMetal" => "Rough / metal".into(),
                 "entityIds" => "Entity IDs".into(),
                 "shadowCascades" => "Cascades".into(),
+                "wireframe" => "Wireframe".into(),
+                "litWireframe" => "Lit wire".into(),
                 // Lit shows the preset the view renders with (`Lit · Auto` until detected).
                 _ if narrow => "Lit".into(),
                 _ => format!(

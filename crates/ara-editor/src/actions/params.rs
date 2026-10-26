@@ -399,7 +399,7 @@ pub(super) struct EditorView {
     /// Live protocol session, validated by the host.
     #[expect(dead_code, reason = "Host validates sessions before dispatch")]
     pub session: String,
-    /// `lit`, `baseColor`, `normals`, `depth`, `roughnessMetal`, `entityIds` or `shadowCascades`.
+    /// `lit`, `baseColor`, `normals`, `depth`, `roughnessMetal`, `entityIds`, `shadowCascades`, `wireframe` or `litWireframe`.
     pub view_mode: Option<String>,
     /// Hide every editor visual in the viewport.
     pub game_view: Option<bool>,
