@@ -3,6 +3,7 @@ mod acceleration;
 mod cache;
 mod completion;
 mod context;
+mod disposal;
 use ash::vk::TaggedStructure;
 pub use completion::Completion;
 mod encode;
@@ -75,6 +76,7 @@ pub struct VulkanDevice {
     #[cfg(test)]
     query_pool_creations: usize,
     shader_worker: Option<reload::Worker>,
+    disposal: Option<disposal::Disposal>,
     deferred: Option<Vec<TimelinePoint>>,
     completion_pending: bool,
     deferred_waits: [u64; 2],
@@ -160,6 +162,7 @@ impl VulkanDevice {
             guard.push(guard::Object::Semaphore(*semaphore));
         }
         let clock = timestamps::Clock::new(&context)?;
+        let disposal = disposal::Disposal::new(context.device.clone())?;
         let heap = Heap::new(&context)?;
         let shader_worker = if std::env::var_os("ARA_SHADER_DIR").is_some() {
             Some(reload::Worker::new(
@@ -188,6 +191,7 @@ impl VulkanDevice {
             #[cfg(test)]
             query_pool_creations: 0,
             shader_worker,
+            disposal: Some(disposal),
             deferred: None,
             completion_pending: false,
             deferred_waits: [0; 2],
