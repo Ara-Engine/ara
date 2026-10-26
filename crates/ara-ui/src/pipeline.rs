@@ -148,6 +148,9 @@ impl Ui {
             }
             work.layout_passes = 1;
         }
+        if layout {
+            self.clamp_scrolls()?;
+        }
         if paint {
             self.display.commands.clear();
             self.display.glyphs.clear();
