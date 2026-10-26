@@ -341,20 +341,17 @@ impl Ui {
         }
         let node = &self.nodes[index];
         let viewport = self.tree.layout(node.layout_id)?;
-        let mut extent = [viewport.size.width, viewport.size.height];
-        for child in &node.element.children {
-            let l = self.tree.layout(self.nodes[*child].layout_id)?;
-            extent[0] = extent[0].max(l.location.x + l.size.width);
-            extent[1] = extent[1].max(l.location.y + l.size.height);
-        }
+        let extent = self.scroll_extent(index)?;
         let target = [
             position[0].clamp(0.0, (extent[0] - viewport.size.width).max(0.0)),
             position[1].clamp(0.0, (extent[1] - viewport.size.height).max(0.0)),
         ];
-        if let Some(Widget::Scroll(p)) = self.widgets.get_mut(&id) {
+        if let Some(Widget::Scroll(p)) = self.widgets.get_mut(&id)
+            && *p != target
+        {
             *p = target;
+            self.nodes[index].dirty.paint = true;
         }
-        self.nodes[index].dirty.paint = true;
         Ok(())
     }
 }

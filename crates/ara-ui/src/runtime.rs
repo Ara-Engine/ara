@@ -20,6 +20,8 @@ pub struct Dirty {
 }
 /// Retained node and cached layout/text state, indexed by its stable authored identity.
 pub struct Node {
+    /// Full virtual content extent; present only when a row/card pool owns translation.
+    pub virtual_extent: Option<[f32; 2]>,
     /// Runtime paint translation, preserved across restyles and theme switches.
     pub paint_offset: [f32; 2],
     /// Runtime visibility, independent of authored style and theme switching.
@@ -43,6 +45,7 @@ pub struct Node {
 }
 /// One retained UI surface with layout, text caches, input states and an engine-neutral display list.
 pub struct Ui {
+    pub(crate) pointer: Option<[f32; 2]>,
     /// Native control state, indexed by stable identity.
     pub widgets: std::collections::BTreeMap<u64, crate::widgets::Widget>,
     pub(crate) actions: Vec<crate::binding::Action>,
@@ -96,6 +99,23 @@ impl std::ops::AddAssign for Work {
     }
 }
 impl Ui {
+    pub(crate) fn focus_candidate(&self, index: usize) -> bool {
+        let n = &self.nodes[index];
+        if is_focusable(n) {
+            return self.shown(index);
+        }
+        if !is_control(n) || !self.shown(index) {
+            return false;
+        }
+        let mut parent = n.element.parent;
+        while let Some(i) = parent {
+            if self.scroll_position(i).is_some() {
+                return true;
+            }
+            parent = self.nodes[i].element.parent;
+        }
+        false
+    }
     /// Parse and eagerly validate all native syntax before creating runtime state.
     pub fn parse(markup: &str, css: &str, size: [f32; 2]) -> Result<Self> {
         Self::with_tokens(markup, css, size, std::collections::BTreeMap::new())
@@ -128,6 +148,7 @@ impl Ui {
             tree.set_children(node.layout_id, &children)?;
         }
         Ok(Self {
+            pointer: None,
             widgets: crate::widgets::collect(&nodes)?,
             actions: Vec::new(),
             stylesheet_source: css.into(),
@@ -159,6 +180,11 @@ impl Ui {
                 return false;
             };
             if !node.visible || node.computed.layout.display == Display::None {
+                return false;
+            }
+            if let Some(parent) = node.element.parent
+                && !self.nodes[parent].element.children.contains(&i)
+            {
                 return false;
             }
             at = node.element.parent;
@@ -241,7 +267,7 @@ impl Ui {
                 && self.rounded_hit(*index, x, y)
         })
     }
-    fn rounded_hit(&self, index: usize, x: f32, y: f32) -> bool {
+    pub(crate) fn rounded_hit(&self, index: usize, x: f32, y: f32) -> bool {
         let mut current = Some(index);
         while let Some(i) = current {
             let n = &self.nodes[i];
@@ -287,6 +313,7 @@ pub(crate) fn build_node(
     let text = element.attrs.get("text").map(|v| Text::new(v.to_owned()));
     let layout_id = tree.new_leaf_with_context(computed.layout.clone(), index)?;
     Ok(Node {
+        virtual_extent: None,
         paint_offset: [0.0; 2],
         visible: true,
         element,
@@ -305,6 +332,9 @@ pub(crate) fn build_node(
 }
 /// Native UI is focusable.
 pub fn is_focusable(n: &Node) -> bool {
+    is_control(n) && n.rect.intersects(n.clip)
+}
+fn is_control(n: &Node) -> bool {
     matches!(
         n.element.tag.as_str(),
         "button"
@@ -319,5 +349,4 @@ pub fn is_focusable(n: &Node) -> bool {
             | "menu"
     ) && n.visible
         && !n.state.disabled
-        && n.rect.intersects(n.clip)
 }
