@@ -1,0 +1,606 @@
+{
+    "version": "1.1",
+    "parameters": [
+        {
+            "name": "root",
+            "binding": {"kind": "pushConstantBuffer", "index": 0},
+            "type": {
+                "kind": "constantBuffer",
+                "elementType": {
+                    "kind": "struct",
+                    "name": "Root",
+                    "fields": [
+                        {
+                            "name": "frame",
+                            "type": {
+                                "kind": "scalar",
+                                "scalarType": "uint32",
+                                "sizes": [
+                                    {"kind": "uniform", "value": 4, "alignment": 4}
+                                ]
+                            },
+                            "binding": {"kind": "uniform", "offset": 0, "size": 4, "elementStride": 0}
+                        },
+                        {
+                            "name": "a",
+                            "type": {
+                                "kind": "scalar",
+                                "scalarType": "uint32",
+                                "sizes": [
+                                    {"kind": "uniform", "value": 4, "alignment": 4}
+                                ]
+                            },
+                            "binding": {"kind": "uniform", "offset": 4, "size": 4, "elementStride": 0}
+                        },
+                        {
+                            "name": "b",
+                            "type": {
+                                "kind": "scalar",
+                                "scalarType": "uint32",
+                                "sizes": [
+                                    {"kind": "uniform", "value": 4, "alignment": 4}
+                                ]
+                            },
+                            "binding": {"kind": "uniform", "offset": 8, "size": 4, "elementStride": 0}
+                        },
+                        {
+                            "name": "c",
+                            "type": {
+                                "kind": "scalar",
+                                "scalarType": "uint32",
+                                "sizes": [
+                                    {"kind": "uniform", "value": 4, "alignment": 4}
+                                ]
+                            },
+                            "binding": {"kind": "uniform", "offset": 12, "size": 4, "elementStride": 0}
+                        },
+                        {
+                            "name": "d",
+                            "type": {
+                                "kind": "scalar",
+                                "scalarType": "uint32",
+                                "sizes": [
+                                    {"kind": "uniform", "value": 4, "alignment": 4}
+                                ]
+                            },
+                            "binding": {"kind": "uniform", "offset": 16, "size": 4, "elementStride": 0}
+                        },
+                        {
+                            "name": "e",
+                            "type": {
+                                "kind": "scalar",
+                                "scalarType": "uint32",
+                                "sizes": [
+                                    {"kind": "uniform", "value": 4, "alignment": 4}
+                                ]
+                            },
+                            "binding": {"kind": "uniform", "offset": 20, "size": 4, "elementStride": 0}
+                        },
+                        {
+                            "name": "f",
+                            "type": {
+                                "kind": "scalar",
+                                "scalarType": "uint32",
+                                "sizes": [
+                                    {"kind": "uniform", "value": 4, "alignment": 4}
+                                ]
+                            },
+                            "binding": {"kind": "uniform", "offset": 24, "size": 4, "elementStride": 0}
+                        },
+                        {
+                            "name": "g",
+                            "type": {
+                                "kind": "scalar",
+                                "scalarType": "uint32",
+                                "sizes": [
+                                    {"kind": "uniform", "value": 4, "alignment": 4}
+                                ]
+                            },
+                            "binding": {"kind": "uniform", "offset": 28, "size": 4, "elementStride": 0}
+                        }
+                    ],
+                    "sizes": [
+                        {"kind": "uniform", "value": 32, "alignment": 4}
+                    ]
+                },
+                "containerVarLayout": {
+                    "binding": {"kind": "pushConstantBuffer", "index": 0}
+                },
+                "elementVarLayout": {
+                    "type": {
+                        "kind": "struct",
+                        "name": "Root",
+                        "fields": [
+                            {
+                                "name": "frame",
+                                "type": {
+                                    "kind": "scalar",
+                                    "scalarType": "uint32",
+                                    "sizes": [
+                                        {"kind": "uniform", "value": 4, "alignment": 4}
+                                    ]
+                                },
+                                "binding": {"kind": "uniform", "offset": 0, "size": 4, "elementStride": 0}
+                            },
+                            {
+                                "name": "a",
+                                "type": {
+                                    "kind": "scalar",
+                                    "scalarType": "uint32",
+                                    "sizes": [
+                                        {"kind": "uniform", "value": 4, "alignment": 4}
+                                    ]
+                                },
+                                "binding": {"kind": "uniform", "offset": 4, "size": 4, "elementStride": 0}
+                            },
+                            {
+                                "name": "b",
+                                "type": {
+                                    "kind": "scalar",
+                                    "scalarType": "uint32",
+                                    "sizes": [
+                                        {"kind": "uniform", "value": 4, "alignment": 4}
+                                    ]
+                                },
+                                "binding": {"kind": "uniform", "offset": 8, "size": 4, "elementStride": 0}
+                            },
+                            {
+                                "name": "c",
+                                "type": {
+                                    "kind": "scalar",
+                                    "scalarType": "uint32",
+                                    "sizes": [
+                                        {"kind": "uniform", "value": 4, "alignment": 4}
+                                    ]
+                                },
+                                "binding": {"kind": "uniform", "offset": 12, "size": 4, "elementStride": 0}
+                            },
+                            {
+                                "name": "d",
+                                "type": {
+                                    "kind": "scalar",
+                                    "scalarType": "uint32",
+                                    "sizes": [
+                                        {"kind": "uniform", "value": 4, "alignment": 4}
+                                    ]
+                                },
+                                "binding": {"kind": "uniform", "offset": 16, "size": 4, "elementStride": 0}
+                            },
+                            {
+                                "name": "e",
+                                "type": {
+                                    "kind": "scalar",
+                                    "scalarType": "uint32",
+                                    "sizes": [
+                                        {"kind": "uniform", "value": 4, "alignment": 4}
+                                    ]
+                                },
+                                "binding": {"kind": "uniform", "offset": 20, "size": 4, "elementStride": 0}
+                            },
+                            {
+                                "name": "f",
+                                "type": {
+                                    "kind": "scalar",
+                                    "scalarType": "uint32",
+                                    "sizes": [
+                                        {"kind": "uniform", "value": 4, "alignment": 4}
+                                    ]
+                                },
+                                "binding": {"kind": "uniform", "offset": 24, "size": 4, "elementStride": 0}
+                            },
+                            {
+                                "name": "g",
+                                "type": {
+                                    "kind": "scalar",
+                                    "scalarType": "uint32",
+                                    "sizes": [
+                                        {"kind": "uniform", "value": 4, "alignment": 4}
+                                    ]
+                                },
+                                "binding": {"kind": "uniform", "offset": 28, "size": 4, "elementStride": 0}
+                            }
+                        ],
+                        "sizes": [
+                            {"kind": "uniform", "value": 32, "alignment": 4}
+                        ]
+                    },
+                    "binding": {"kind": "uniform", "offset": 0, "size": 32, "elementStride": 0}
+                },
+                "sizes": [
+                    {"kind": "pushConstantBuffer", "value": 1}
+                ]
+            }
+        },
+        {
+            "name": "textures",
+            "binding": {"kind": "descriptorTableSlot", "index": 5},
+            "type": {
+                "kind": "array",
+                "elementCount": 0,
+                "elementType": {
+                    "kind": "resource",
+                    "baseShape": "texture2D",
+                    "resultType": {
+                        "kind": "vector",
+                        "elementCount": 4,
+                        "elementType": {
+                            "kind": "scalar",
+                            "scalarType": "float32"
+                        }
+                    },
+                    "sizes": [
+                        {"kind": "descriptorTableSlot", "value": 1}
+                    ]
+                },
+                "sizes": [
+                    {"kind": "descriptorTableSlot", "value": 1}
+                ]
+            }
+        },
+        {
+            "name": "buffers",
+            "binding": {"kind": "descriptorTableSlot", "index": 1},
+            "type": {
+                "kind": "array",
+                "elementCount": 0,
+                "elementType": {
+                    "kind": "resource",
+                    "baseShape": "byteAddressBuffer",
+                    "access": "readWrite",
+                    "sizes": [
+                        {"kind": "descriptorTableSlot", "value": 1}
+                    ]
+                },
+                "sizes": [
+                    {"kind": "descriptorTableSlot", "value": 1}
+                ]
+            }
+        },
+        {
+            "name": "images",
+            "binding": {"kind": "descriptorTableSlot", "index": 3},
+            "type": {
+                "kind": "array",
+                "elementCount": 64,
+                "elementType": {
+                    "kind": "resource",
+                    "baseShape": "texture2D",
+                    "access": "readWrite",
+                    "resultType": {
+                        "kind": "vector",
+                        "elementCount": 4,
+                        "elementType": {
+                            "kind": "scalar",
+                            "scalarType": "float32"
+                        }
+                    },
+                    "sizes": [
+                        {"kind": "descriptorTableSlot", "value": 1}
+                    ]
+                },
+                "sizes": [
+                    {"kind": "descriptorTableSlot", "value": 1}
+                ]
+            }
+        }
+    ],
+    "globalScope": {
+        "kind": "none",
+        "parameters": [
+            {
+                "name": "root",
+                "binding": {"kind": "pushConstantBuffer", "index": 0},
+                "type": {
+                    "kind": "constantBuffer",
+                    "elementType": {
+                        "kind": "struct",
+                        "name": "Root",
+                        "fields": [
+                            {
+                                "name": "frame",
+                                "type": {
+                                    "kind": "scalar",
+                                    "scalarType": "uint32",
+                                    "sizes": [
+                                        {"kind": "uniform", "value": 4, "alignment": 4}
+                                    ]
+                                },
+                                "binding": {"kind": "uniform", "offset": 0, "size": 4, "elementStride": 0}
+                            },
+                            {
+                                "name": "a",
+                                "type": {
+                                    "kind": "scalar",
+                                    "scalarType": "uint32",
+                                    "sizes": [
+                                        {"kind": "uniform", "value": 4, "alignment": 4}
+                                    ]
+                                },
+                                "binding": {"kind": "uniform", "offset": 4, "size": 4, "elementStride": 0}
+                            },
+                            {
+                                "name": "b",
+                                "type": {
+                                    "kind": "scalar",
+                                    "scalarType": "uint32",
+                                    "sizes": [
+                                        {"kind": "uniform", "value": 4, "alignment": 4}
+                                    ]
+                                },
+                                "binding": {"kind": "uniform", "offset": 8, "size": 4, "elementStride": 0}
+                            },
+                            {
+                                "name": "c",
+                                "type": {
+                                    "kind": "scalar",
+                                    "scalarType": "uint32",
+                                    "sizes": [
+                                        {"kind": "uniform", "value": 4, "alignment": 4}
+                                    ]
+                                },
+                                "binding": {"kind": "uniform", "offset": 12, "size": 4, "elementStride": 0}
+                            },
+                            {
+                                "name": "d",
+                                "type": {
+                                    "kind": "scalar",
+                                    "scalarType": "uint32",
+                                    "sizes": [
+                                        {"kind": "uniform", "value": 4, "alignment": 4}
+                                    ]
+                                },
+                                "binding": {"kind": "uniform", "offset": 16, "size": 4, "elementStride": 0}
+                            },
+                            {
+                                "name": "e",
+                                "type": {
+                                    "kind": "scalar",
+                                    "scalarType": "uint32",
+                                    "sizes": [
+                                        {"kind": "uniform", "value": 4, "alignment": 4}
+                                    ]
+                                },
+                                "binding": {"kind": "uniform", "offset": 20, "size": 4, "elementStride": 0}
+                            },
+                            {
+                                "name": "f",
+                                "type": {
+                                    "kind": "scalar",
+                                    "scalarType": "uint32",
+                                    "sizes": [
+                                        {"kind": "uniform", "value": 4, "alignment": 4}
+                                    ]
+                                },
+                                "binding": {"kind": "uniform", "offset": 24, "size": 4, "elementStride": 0}
+                            },
+                            {
+                                "name": "g",
+                                "type": {
+                                    "kind": "scalar",
+                                    "scalarType": "uint32",
+                                    "sizes": [
+                                        {"kind": "uniform", "value": 4, "alignment": 4}
+                                    ]
+                                },
+                                "binding": {"kind": "uniform", "offset": 28, "size": 4, "elementStride": 0}
+                            }
+                        ],
+                        "sizes": [
+                            {"kind": "uniform", "value": 32, "alignment": 4}
+                        ]
+                    },
+                    "containerVarLayout": {
+                        "binding": {"kind": "pushConstantBuffer", "index": 0}
+                    },
+                    "elementVarLayout": {
+                        "type": {
+                            "kind": "struct",
+                            "name": "Root",
+                            "fields": [
+                                {
+                                    "name": "frame",
+                                    "type": {
+                                        "kind": "scalar",
+                                        "scalarType": "uint32",
+                                        "sizes": [
+                                            {"kind": "uniform", "value": 4, "alignment": 4}
+                                        ]
+                                    },
+                                    "binding": {"kind": "uniform", "offset": 0, "size": 4, "elementStride": 0}
+                                },
+                                {
+                                    "name": "a",
+                                    "type": {
+                                        "kind": "scalar",
+                                        "scalarType": "uint32",
+                                        "sizes": [
+                                            {"kind": "uniform", "value": 4, "alignment": 4}
+                                        ]
+                                    },
+                                    "binding": {"kind": "uniform", "offset": 4, "size": 4, "elementStride": 0}
+                                },
+                                {
+                                    "name": "b",
+                                    "type": {
+                                        "kind": "scalar",
+                                        "scalarType": "uint32",
+                                        "sizes": [
+                                            {"kind": "uniform", "value": 4, "alignment": 4}
+                                        ]
+                                    },
+                                    "binding": {"kind": "uniform", "offset": 8, "size": 4, "elementStride": 0}
+                                },
+                                {
+                                    "name": "c",
+                                    "type": {
+                                        "kind": "scalar",
+                                        "scalarType": "uint32",
+                                        "sizes": [
+                                            {"kind": "uniform", "value": 4, "alignment": 4}
+                                        ]
+                                    },
+                                    "binding": {"kind": "uniform", "offset": 12, "size": 4, "elementStride": 0}
+                                },
+                                {
+                                    "name": "d",
+                                    "type": {
+                                        "kind": "scalar",
+                                        "scalarType": "uint32",
+                                        "sizes": [
+                                            {"kind": "uniform", "value": 4, "alignment": 4}
+                                        ]
+                                    },
+                                    "binding": {"kind": "uniform", "offset": 16, "size": 4, "elementStride": 0}
+                                },
+                                {
+                                    "name": "e",
+                                    "type": {
+                                        "kind": "scalar",
+                                        "scalarType": "uint32",
+                                        "sizes": [
+                                            {"kind": "uniform", "value": 4, "alignment": 4}
+                                        ]
+                                    },
+                                    "binding": {"kind": "uniform", "offset": 20, "size": 4, "elementStride": 0}
+                                },
+                                {
+                                    "name": "f",
+                                    "type": {
+                                        "kind": "scalar",
+                                        "scalarType": "uint32",
+                                        "sizes": [
+                                            {"kind": "uniform", "value": 4, "alignment": 4}
+                                        ]
+                                    },
+                                    "binding": {"kind": "uniform", "offset": 24, "size": 4, "elementStride": 0}
+                                },
+                                {
+                                    "name": "g",
+                                    "type": {
+                                        "kind": "scalar",
+                                        "scalarType": "uint32",
+                                        "sizes": [
+                                            {"kind": "uniform", "value": 4, "alignment": 4}
+                                        ]
+                                    },
+                                    "binding": {"kind": "uniform", "offset": 28, "size": 4, "elementStride": 0}
+                                }
+                            ],
+                            "sizes": [
+                                {"kind": "uniform", "value": 32, "alignment": 4}
+                            ]
+                        },
+                        "binding": {"kind": "uniform", "offset": 0, "size": 32, "elementStride": 0}
+                    },
+                    "sizes": [
+                        {"kind": "pushConstantBuffer", "value": 1}
+                    ]
+                }
+            },
+            {
+                "name": "textures",
+                "binding": {"kind": "descriptorTableSlot", "index": 5},
+                "type": {
+                    "kind": "array",
+                    "elementCount": 0,
+                    "elementType": {
+                        "kind": "resource",
+                        "baseShape": "texture2D",
+                        "resultType": {
+                            "kind": "vector",
+                            "elementCount": 4,
+                            "elementType": {
+                                "kind": "scalar",
+                                "scalarType": "float32"
+                            }
+                        },
+                        "sizes": [
+                            {"kind": "descriptorTableSlot", "value": 1}
+                        ]
+                    },
+                    "sizes": [
+                        {"kind": "descriptorTableSlot", "value": 1}
+                    ]
+                }
+            },
+            {
+                "name": "buffers",
+                "binding": {"kind": "descriptorTableSlot", "index": 1},
+                "type": {
+                    "kind": "array",
+                    "elementCount": 0,
+                    "elementType": {
+                        "kind": "resource",
+                        "baseShape": "byteAddressBuffer",
+                        "access": "readWrite",
+                        "sizes": [
+                            {"kind": "descriptorTableSlot", "value": 1}
+                        ]
+                    },
+                    "sizes": [
+                        {"kind": "descriptorTableSlot", "value": 1}
+                    ]
+                }
+            },
+            {
+                "name": "images",
+                "binding": {"kind": "descriptorTableSlot", "index": 3},
+                "type": {
+                    "kind": "array",
+                    "elementCount": 64,
+                    "elementType": {
+                        "kind": "resource",
+                        "baseShape": "texture2D",
+                        "access": "readWrite",
+                        "resultType": {
+                            "kind": "vector",
+                            "elementCount": 4,
+                            "elementType": {
+                                "kind": "scalar",
+                                "scalarType": "float32"
+                            }
+                        },
+                        "sizes": [
+                            {"kind": "descriptorTableSlot", "value": 1}
+                        ]
+                    },
+                    "sizes": [
+                        {"kind": "descriptorTableSlot", "value": 1}
+                    ]
+                }
+            }
+        ]
+    },
+    "entryPoints": [
+        {
+            "name": "shadowFinalize",
+            "stage": "compute",
+            "scope": {
+                "kind": "none",
+                "parameters": [
+
+                ]
+            },
+            "threadGroupSize": [1, 1, 1],
+            "bindings": [
+                {
+                    "name": "root",
+                    "binding": {"kind": "pushConstantBuffer", "index": 0}
+                },
+                {
+                    "name": "textures",
+                    "binding": {"kind": "descriptorTableSlot", "index": 5, "used": 0}
+                },
+                {
+                    "name": "buffers",
+                    "binding": {"kind": "descriptorTableSlot", "index": 1, "used": 1}
+                },
+                {
+                    "name": "images",
+                    "binding": {"kind": "descriptorTableSlot", "index": 3, "used": 0}
+                }
+            ]
+        }
+    ],
+    "bindlessSpaceIndex": 1
+}

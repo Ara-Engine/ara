@@ -146,7 +146,7 @@ impl Server {
     /// Replace the first releases page.
     pub fn releases(&self, releases: Vec<Value>) {
         self.set(
-            "/repos/Snowy7/ara/releases?per_page=100",
+            "/repos/Ara-Engine/ara/releases?per_page=100",
             Response::ok(serde_json::to_vec(&releases).unwrap()),
         );
     }

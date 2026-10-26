@@ -91,6 +91,61 @@ pub fn copy_tree(source: &Path, target: &Path) -> Result<()> {
 pub fn dist(root: &Path) -> PathBuf {
     root.join("target/release-dist")
 }
+
+/// Compiler outputs may live in a warm external target; staged packages stay local.
+pub fn profile(root: &Path, profile: &str) -> PathBuf {
+    profile_at(
+        root,
+        profile,
+        std::env::var_os("CARGO_TARGET_DIR"),
+        std::env::var_os("CARGO_BUILD_TARGET"),
+    )
+}
+
+fn profile_at(
+    root: &Path,
+    profile: &str,
+    target: Option<std::ffi::OsString>,
+    triple: Option<std::ffi::OsString>,
+) -> PathBuf {
+    let mut path = match target {
+        Some(target) => root.join(target),
+        None => root.join("target"),
+    };
+    if let Some(triple) = triple {
+        path.push(triple);
+    }
+    path.join(profile)
+}
+
 pub fn name(version: &str) -> String {
     format!("ara-{version}-windows-x64")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn warm_compiler_outputs_do_not_move_staged_packages() {
+        let root = std::env::current_dir().expect("test working directory");
+        assert_eq!(
+            profile_at(&root, "release", None, None),
+            root.join("target/release")
+        );
+        assert_eq!(
+            profile_at(
+                &root,
+                "release",
+                Some("warm".into()),
+                Some("x86_64-pc-windows-msvc".into())
+            ),
+            root.join("warm/x86_64-pc-windows-msvc/release")
+        );
+        let external = std::env::temp_dir().join("ara-release-warm");
+        assert_eq!(
+            profile_at(&root, "release", Some(external.clone().into()), None),
+            external.join("release")
+        );
+        assert_eq!(dist(&root), root.join("target/release-dist"));
+    }
 }

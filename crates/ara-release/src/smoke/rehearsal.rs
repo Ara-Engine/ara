@@ -72,7 +72,7 @@ pub(crate) fn run(artifacts: &Path, older_setup: &Path, directory: &Path) -> Res
                     .current_dir(&hub)
                     .args(["--rehearse-update"])
                     .arg(env.directory.join("update-discovery.json"))
-                    .env("ARA_RELEASE_REPO", "Snowy7/ara")
+                    .env("ARA_RELEASE_REPO", "Ara-Engine/ara")
                     .env("ARA_RELEASE_TEST_API", &server.api),
                 &env.directory.join("old-hub-update.log"),
             )?;
@@ -122,7 +122,7 @@ pub(crate) fn run(artifacts: &Path, older_setup: &Path, directory: &Path) -> Res
                 env.command(hub.join("ara-hub.exe"))
                     .arg("--service-check")
                     .arg(env.directory.join("updated-service.json"))
-                    .env("ARA_RELEASE_REPO", "Snowy7/ara")
+                    .env("ARA_RELEASE_REPO", "Ara-Engine/ara")
                     .env("ARA_RELEASE_TEST_API", &server.api),
                 &env.directory.join("updated-service.log"),
             )
@@ -136,7 +136,7 @@ pub(crate) fn run(artifacts: &Path, older_setup: &Path, directory: &Path) -> Res
             client
                 .call(
                     "hub.releases.configure",
-                    json!({"repo":"Snowy7/ara","channel":"preview"}),
+                    json!({"repo":"Ara-Engine/ara","channel":"preview"}),
                 )
                 .map_err(|e| anyhow::anyhow!("{e}"))?;
             let deadline = Instant::now() + Duration::from_secs(60);

@@ -58,10 +58,10 @@ Owns the native GPU boundary. Vulkan uses ash revision
 
 ## Contracts
 
-The v2 global update-after-bind heap has a variable-count runtime sampled-image
-array at binding 5 (up to 65,536 slots, clamped to queried set/stage/pool limits),
-64 storage buffers, 64 storage images and, on RT devices, 16 acceleration structures.
-`DeviceInfo.sampled_image_capacity` records the selected capacity. Binding 0 mirrors
+The v3 heap uses runtime image/buffer arrays at bindings 5/1: up to 65,536 sampled
+images and 128 storage buffers, clamped jointly to set/stage/pool limits (minimum
+128 images/64 buffers), plus 64 storage images and optional 16 acceleration structures.
+`DeviceInfo` records both selected capacities. Binding 0 mirrors
 the first 128 slots for cached editor material previews only. All engine pipelines
 must be recooked; only `previewVertex`/`previewFragment` caches accept the old ABI.
 Binding 2 has three fixed trilinear samplers: material repeat, environment U

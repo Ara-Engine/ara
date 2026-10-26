@@ -1,6 +1,6 @@
 //! Native PDH queries avoid launching a PowerShell process every second.
 use super::model::{Process, Snapshot};
-use anyhow::{Result, bail, ensure};
+use anyhow::{Result, ensure};
 use std::{
     collections::BTreeMap,
     mem, ptr,
@@ -22,9 +22,59 @@ pub(super) struct Sampler {
     query: PDH_HQUERY,
     counter: PDH_HCOUNTER,
 }
-fn check(code: u32, operation: &str) -> Result<()> {
-    ensure!(code == 0, "{operation}: PDH 0x{code:08x}");
+#[derive(Debug)]
+struct PdhError {
+    code: u32,
+    operation: &'static str,
+}
+impl std::fmt::Display for PdhError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}: PDH 0x{:08x}", self.operation, self.code)
+    }
+}
+impl std::error::Error for PdhError {}
+fn check(code: u32, operation: &'static str) -> Result<()> {
+    if code != 0 {
+        return Err(PdhError { code, operation }.into());
+    }
     Ok(())
+}
+
+fn transient(code: u32) -> bool {
+    matches!(
+        code,
+        PDH_CSTATUS_NO_COUNTER
+            | PDH_CSTATUS_NO_INSTANCE
+            | PDH_CSTATUS_INVALID_DATA
+            | PDH_INVALID_DATA
+            | PDH_CSTATUS_ITEM_NOT_VALIDATED
+            | PDH_NO_DATA
+            | PDH_MORE_DATA
+    )
+}
+fn transient_error(error: &anyhow::Error) -> bool {
+    error
+        .downcast_ref::<PdhError>()
+        .is_some_and(|error| transient(error.code))
+}
+
+type Values = Vec<(String, f64)>;
+/// Re-registering the wildcard discards a stale instance expansion. Its first
+/// collection primes percentages; the following 1 Hz poll supplies valid data.
+fn read_or_refresh<T>(
+    source: &mut T,
+    read: fn(&mut T) -> Result<Values>,
+    refresh: fn(&mut T) -> Result<()>,
+) -> Result<Values> {
+    let result = read(source);
+    if result.as_ref().is_err_and(transient_error)
+        && let Err(error) = refresh(source)
+    {
+        return Err(result
+            .expect_err("failed read")
+            .context(format!("refresh GPU wildcard: {error:#}")));
+    }
+    result
 }
 impl Sampler {
     pub fn new() -> Result<Self> {
@@ -38,37 +88,60 @@ impl Sampler {
             query,
             counter: ptr::null_mut(),
         };
+        if let Err(error) = sampler.refresh()
+            && !transient_error(&error)
+        {
+            return Err(error);
+        }
+        Ok(sampler)
+    }
+    fn refresh(&mut self) -> Result<()> {
+        if !self.counter.is_null() {
+            // SAFETY: this query owns the counter; no read is in flight.
+            let code = unsafe { PdhRemoveCounter(self.counter) };
+            if code != 0 && !transient(code) {
+                check(code, "remove stale GPU counter")?;
+            }
+            self.counter = ptr::null_mut();
+        }
         let path: Vec<_> = r"\GPU Engine(*)\Utilization Percentage"
             .encode_utf16()
             .chain(Some(0))
             .collect();
         check(
             // SAFETY: query is live, path terminated, output counter writable.
-            unsafe { PdhAddEnglishCounterW(query, path.as_ptr(), 0, &mut sampler.counter) },
+            unsafe { PdhAddEnglishCounterW(self.query, path.as_ptr(), 0, &mut self.counter) },
             "add per-process GPU counter",
         )?;
         // SAFETY: prime the live query; percentages require two collections.
-        let code = unsafe { PdhCollectQueryData(query) };
-        if code != PDH_NO_DATA {
+        let code = unsafe { PdhCollectQueryData(self.query) };
+        if !transient(code) {
             check(code, "prime GPU counters")?;
         }
-        Ok(sampler)
+        Ok(())
     }
     pub fn sample(&mut self) -> Result<Snapshot> {
-        // SAFETY: query belongs to this sampler and remains open.
-        let code = unsafe { PdhCollectQueryData(self.query) };
-        let engines = if code == PDH_NO_DATA {
-            Vec::new()
-        } else {
-            check(code, "collect GPU counters")?;
-            self.values()?
-        };
+        let engines = read_or_refresh(self, Self::read, Self::refresh)?;
         let processes = processes()?;
         Ok(Snapshot {
             unix_ms: SystemTime::now().duration_since(UNIX_EPOCH)?.as_millis() as u64,
             processes,
             engines,
         })
+    }
+    fn read(&mut self) -> Result<Vec<(String, f64)>> {
+        if self.counter.is_null() {
+            self.refresh()?;
+            return Err(PdhError {
+                code: PDH_NO_DATA,
+                operation: "prime refreshed GPU counter",
+            }
+            .into());
+        }
+        // SAFETY: query belongs to this sampler and remains open.
+        let code = unsafe { PdhCollectQueryData(self.query) };
+        check(code, "collect GPU counters")?;
+        self.values()
     }
     fn values(&self) -> Result<Vec<(String, f64)>> {
         for _ in 0..3 {
@@ -83,15 +156,15 @@ impl Sampler {
                     ptr::null_mut(),
                 )
             };
-            if code == PDH_NO_DATA || code == PDH_CSTATUS_NO_INSTANCE {
-                return Ok(Vec::new());
+            if code != PDH_MORE_DATA {
+                check(code, "size GPU counters")?;
             }
-            ensure!(
-                code == PDH_MORE_DATA || code == 0,
-                "size GPU counters: PDH 0x{code:08x}"
-            );
             if bytes == 0 {
-                return Ok(Vec::new());
+                return Err(PdhError {
+                    code: PDH_NO_DATA,
+                    operation: "empty GPU counters",
+                }
+                .into());
             }
             // usize storage supplies sufficient alignment for the Win64 structures.
             let mut storage = vec![0usize; (bytes as usize).div_ceil(mem::size_of::<usize>())];
@@ -119,6 +192,7 @@ impl Sampler {
             let items = unsafe { std::slice::from_raw_parts(output, count as usize) };
             let mut values = Vec::new();
             for item in items {
+                // A retired instance is not loss of the remaining wildcard data.
                 if item.FmtValue.CStatus != PDH_CSTATUS_VALID_DATA
                     && item.FmtValue.CStatus != PDH_CSTATUS_NEW_DATA
                 {
@@ -136,13 +210,25 @@ impl Sampler {
                     .position(|c| *c == 0)
                     .ok_or_else(|| anyhow::anyhow!("unterminated GPU instance name"))?;
                 // SAFETY: PDH_FMT_DOUBLE requested the initialized union member.
-                values.push((String::from_utf16_lossy(&name[..end]), unsafe {
-                    item.FmtValue.Anonymous.doubleValue
-                }));
+                let value = unsafe { item.FmtValue.Anonymous.doubleValue };
+                if value.is_finite() && value >= 0. {
+                    values.push((String::from_utf16_lossy(&name[..end]), value));
+                }
+            }
+            if values.is_empty() {
+                return Err(PdhError {
+                    code: PDH_CSTATUS_INVALID_DATA,
+                    operation: "no valid GPU counter instance",
+                }
+                .into());
             }
             return Ok(values);
         }
-        bail!("GPU counter instances changed repeatedly while reading")
+        Err(PdhError {
+            code: PDH_MORE_DATA,
+            operation: "GPU instances changed repeatedly while reading",
+        }
+        .into())
     }
 }
 impl Drop for Sampler {
@@ -207,5 +293,51 @@ fn birth(pid: u32) -> u64 {
         0
     } else {
         (u64::from(created.dwHighDateTime) << 32) | u64::from(created.dwLowDateTime)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn disappearing_array_between_size_probe_and_read_refreshes_then_recovers() {
+        struct Fake {
+            status: u32,
+            reads: u32,
+            refreshes: u32,
+        }
+        fn read(fake: &mut Fake) -> Result<Values> {
+            fake.reads += 1;
+            if fake.reads == 1 {
+                Err(PdhError {
+                    code: fake.status,
+                    operation: "read GPU counters",
+                }
+                .into())
+            } else {
+                Ok(vec![("pid_99_eng_0".into(), 0.)])
+            }
+        }
+        fn refresh(fake: &mut Fake) -> Result<()> {
+            fake.refreshes += 1;
+            Ok(())
+        }
+        for status in [
+            PDH_CSTATUS_NO_COUNTER,
+            PDH_CSTATUS_NO_INSTANCE,
+            PDH_CSTATUS_INVALID_DATA,
+            PDH_INVALID_DATA,
+        ] {
+            let mut fake = Fake {
+                status,
+                reads: 0,
+                refreshes: 0,
+            };
+            assert!(read_or_refresh(&mut fake, read, refresh).is_err());
+            assert_eq!(fake.refreshes, 1);
+            assert_eq!(read_or_refresh(&mut fake, read, refresh).unwrap().len(), 1);
+            assert_eq!(fake.refreshes, 1);
+        }
     }
 }

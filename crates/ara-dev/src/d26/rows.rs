@@ -81,6 +81,13 @@ pub(super) struct Judged {
     pub status: Status,
 }
 
+#[derive(Clone, Copy, Debug, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub(super) enum InvalidReason {
+    ForeignGpuLoad,
+    Unmonitored,
+}
+
 #[derive(Serialize)]
 pub(super) struct Row {
     pub section: &'static str,
@@ -99,6 +106,8 @@ pub(super) struct Row {
     /// UTC bounds used for contamination overlap, with explicit provenance.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub measurement_window: Option<super::validity::Window>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub invalid_reason: Option<InvalidReason>,
 }
 
 fn judge(value: Option<f64>, bound: bool, limit: f64) -> Status {
@@ -124,6 +133,7 @@ impl Row {
             note: String::new(),
             source: None,
             measurement_window: None,
+            invalid_reason: None,
         }
     }
     fn unit(mut self, unit: &'static str) -> Self {
@@ -185,8 +195,9 @@ impl Row {
         self.note(reason)
     }
 
-    pub(super) fn invalidate(&mut self, reason: &str) {
+    pub(super) fn invalidate(&mut self, kind: InvalidReason, reason: &str) {
         self.status = Status::Invalid;
+        self.invalid_reason = Some(kind);
         self.note.push_str(&format!(
             "; ARA_GPU_FOREIGN_LOAD: {reason}; values retained for diagnosis"
         ));

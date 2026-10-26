@@ -320,30 +320,9 @@ impl Gpu {
                     .push(&mut v13_properties)
                     .push(&mut id_properties),
             );
-            // Retain bindings 0..4 for existing material-preview cooks. Both the
-            // legacy alias and the new runtime array count against native limits.
-            let sampled_image_capacity = [
-                65_536,
-                indexing
-                    .max_per_stage_descriptor_update_after_bind_sampled_images
-                    .saturating_sub(128),
-                indexing
-                    .max_descriptor_set_update_after_bind_sampled_images
-                    .saturating_sub(128),
-                indexing
-                    .max_per_stage_update_after_bind_resources
-                    .saturating_sub(275),
-                indexing
-                    .max_update_after_bind_descriptors_in_all_pools
-                    .saturating_sub(275),
-            ]
-            .into_iter()
-            .min()
-            .unwrap_or(0);
-            ensure!(
-                sampled_image_capacity >= 128,
-                "Insufficient update-after-bind sampled-image capacity"
-            );
+            let capacities = super::descriptors::select(&indexing, ray_tracing)?;
+            let sampled_image_capacity = capacities.sampled_images;
+            let storage_buffer_capacity = capacities.storage_buffers;
             let info = DeviceInfo {
                 name: CStr::from_ptr(properties.device_name.as_ptr())
                     .to_string_lossy()
@@ -365,6 +344,7 @@ impl Gpu {
                 ray_tracing,
                 texture_compression_bc: core_supported.texture_compression_bc != 0,
                 sampled_image_capacity,
+                storage_buffer_capacity,
                 mesh_shading,
                 mesh_dispatch: [
                     mesh_properties.max_mesh_work_group_count[0],

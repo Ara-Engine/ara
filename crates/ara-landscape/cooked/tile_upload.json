@@ -1,15 +1,15 @@
 {
-  "binding_layout_hash": "35cd2a62b1ba741ce6823b3c8753d7b5aa97b54c5f0a837b56e542518013fd7e",
+  "binding_layout_hash": "f71261afa0d52758f34ca15c916d2da422ee92b118ede6e189c970911a274f1e",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "cf8bb916a71f18cdf74d7f87aad74c6b37a2b19fba21962329405cba708f1f1c",
+  "key": "3c841d93da2afa4c0c075d2b9865ecde13098dec1c8f1e194347cd1b51e131cc",
   "stages": [
     {
-      "dxil": "cf8bb916a71f18cdf74d7f87aad74c6b37a2b19fba21962329405cba708f1f1c/tileUpload.dxil",
-      "dxil_hash": "385a58862cf1992d9408bc8f0020ea53a0ab81788fee4a8a0a9dec3f07310622",
+      "dxil": "3c841d93da2afa4c0c075d2b9865ecde13098dec1c8f1e194347cd1b51e131cc/tileUpload.dxil",
+      "dxil_hash": "6771140f3708482ac557db202a8805a4eda430679bc233b88bfc019c90611a29",
       "source_entry": "tileUpload",
-      "spirv": "cf8bb916a71f18cdf74d7f87aad74c6b37a2b19fba21962329405cba708f1f1c/tileUpload.spv",
+      "spirv": "3c841d93da2afa4c0c075d2b9865ecde13098dec1c8f1e194347cd1b51e131cc/tileUpload.spv",
       "spirv_entry": "main",
-      "spirv_hash": "fecf874fadaad595c85b8888fe64030bb055fcfd64181058b955c0316098cc59",
+      "spirv_hash": "759a8c0532c992029bb29bbb06ffed0aba05af46ffb5aa192bb0b406299c81b1",
       "stage": "compute"
     }
   ],

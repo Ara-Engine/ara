@@ -1,24 +1,24 @@
 {
-  "binding_layout_hash": "35cd2a62b1ba741ce6823b3c8753d7b5aa97b54c5f0a837b56e542518013fd7e",
+  "binding_layout_hash": "f71261afa0d52758f34ca15c916d2da422ee92b118ede6e189c970911a274f1e",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "fe7c1e203eb7c440acac71a2ae9144e28cbf086b6742c6b6ac4ab1072ece4298",
+  "key": "218e387f9612e4b9194444c304b0007b424e55c1299aa24107ac14981be9879e",
   "stages": [
     {
-      "dxil": "fe7c1e203eb7c440acac71a2ae9144e28cbf086b6742c6b6ac4ab1072ece4298/meshFragment.dxil",
-      "dxil_hash": "f888477dab39f482bf50f66034e4541391421f74007968c84df7e8df425dba37",
+      "dxil": "218e387f9612e4b9194444c304b0007b424e55c1299aa24107ac14981be9879e/meshFragment.dxil",
+      "dxil_hash": "8049da92653156403fec90d006befb74c7e4bcc024faa5688478dd828e6298bd",
       "source_entry": "meshFragment",
-      "spirv": "fe7c1e203eb7c440acac71a2ae9144e28cbf086b6742c6b6ac4ab1072ece4298/meshFragment.spv",
+      "spirv": "218e387f9612e4b9194444c304b0007b424e55c1299aa24107ac14981be9879e/meshFragment.spv",
       "spirv_entry": "main",
-      "spirv_hash": "c425c79ecab6b8e1d2fbbdf11d57c3f15949fb186d7965edff49d43f54d8f185",
+      "spirv_hash": "976a17a4ab606f607b3b658c0bd6316de5afb0224723df70b0488c93d5e06479",
       "stage": "fragment"
     },
     {
-      "dxil": "fe7c1e203eb7c440acac71a2ae9144e28cbf086b6742c6b6ac4ab1072ece4298/meshMain.dxil",
-      "dxil_hash": "2ced9d61aa04e7225906e8b635b123de23f38b7eebbd76a77b42bfdecd752d93",
+      "dxil": "218e387f9612e4b9194444c304b0007b424e55c1299aa24107ac14981be9879e/meshMain.dxil",
+      "dxil_hash": "fe5d7c03bafa657d56f54007aa1f809ab705fcd8673fb7ac4f2aa49d3bdc894d",
       "source_entry": "meshMain",
-      "spirv": "fe7c1e203eb7c440acac71a2ae9144e28cbf086b6742c6b6ac4ab1072ece4298/meshMain.spv",
+      "spirv": "218e387f9612e4b9194444c304b0007b424e55c1299aa24107ac14981be9879e/meshMain.spv",
       "spirv_entry": "main",
-      "spirv_hash": "176fca73ca19517b1d874ad50b004e4e215e19f7dab40770df87fbf98d913443",
+      "spirv_hash": "b59518ce0ec1752b12ad3949a5e5ebf165802ae4839a1f947af158588be3c9c4",
       "stage": "mesh"
     }
   ],

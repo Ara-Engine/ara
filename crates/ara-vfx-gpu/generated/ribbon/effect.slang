@@ -8,7 +8,7 @@ struct Root {uint particles;uint lists;uint control;uint frame;uint tick;uint em
 ConstantBuffer<Root> root : register(b0,space0);
 #endif
 BIND(5) Texture2D<float4> textures[] : register(t0,space1);
-BIND(1) RWByteAddressBuffer buffers[64] : register(u0,space2);
+BIND(1) RWByteAddressBuffer buffers[] : register(u0,space2);
 BIND(2) SamplerState samplers[3] : register(s0,space0);
 struct Config {uint4 partition;uint4 lists;uint4 scratch;uint4 render;uint4 atlas;float4 surface;float4 boundsMin;float4 boundsMax;float4 lightColor;float4 lightPosition;uint4 appearance;float4 motion;};
 struct Frame {float4x4 vp;float4x4 inverseVp;float4 camera;float4 right;float4 up;float4 forward;uint4 extent;float4 clock;uint4 inputs;uint4 demands[16];uint4 visuals;float4 ambient;float4 sunDirection;float4 sunColor;float4 probeOrigin;float4 probeSpacing;uint4 probeCounts;};

@@ -8,7 +8,7 @@ struct Root { uint frame; uint instances; uint first; uint unused0; uint unused1
 ConstantBuffer<Root> root : register(b0,space0);
 #endif
 BIND(5) Texture2D<float4> textures[] : register(t0,space1);
-BIND(1) RWByteAddressBuffer buffers[64] : register(u0,space2);
+BIND(1) RWByteAddressBuffer buffers[] : register(u0,space2);
 BIND(2) SamplerState samplers[3] : register(s0,space0);
 struct Frame { float4 view; float4 ambient; uint4 counts; uint4 offsets; };
 struct Instance { float4 pose; float4 sizePivot; float4 uv; float4 borders; float4 color; uint4 info; float4 parallaxSource; float4 basis; };

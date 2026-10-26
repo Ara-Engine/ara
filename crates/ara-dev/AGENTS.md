@@ -25,6 +25,8 @@ Local developer binary. No engine dependencies; uses git and cargo as subprocess
   and their exited-counter tails are excluded. >10% summed over five samples or an
   actual game in gpu-processes.toml makes readings INVALID (exit 3), never FAIL.
   DWM counts above a 3% allowance; System PID 4/CSRSS stay informational.
+  Vanished PDH instances retry; five seconds without valid data creates a bounded
+  unmonitored gap. Only overlapping rows are invalid, including during reclassification.
   Idle services/launchers/overlays use measured GPU% only. --wait-for-quiet polls;
   no foreign process is altered. D26 invalidates overlapping rows only; saved
   readings can be re-scored with `d26 --reclassify <dir>` (see docs).
@@ -37,6 +39,9 @@ Local developer binary. No engine dependencies; uses git and cargo as subprocess
   `history-match` finds unique full-message/tree/metadata forks; see `docs/releases.md`.
 - `perf`: optimized incremental build, once-frozen Outpost pack, GPU-locked frame
   windows, JSON/deltas, warm-player file controls and local stdio MCP bridge.
+- `preview`: isolate a workspace-version commit, package/smoke/sign both kinds
+  locally. Only --publish pushes/uploads; --prepared resumes a reviewed record.
+  --target-dir explicitly opts into warm external release outputs. See docs/releases.md.
 - `d26`: the release scoreboard (`src/d26/`). It reuses `perf` windows on Outpost, Hangar and
   Showcase packs, `ara-samples capture --reference` (ꟻLIP) and the editor's responsiveness
   probe, and writes `target/d26/<ts>/report.{json,html}`. Unmeasured rows stay "not measured".

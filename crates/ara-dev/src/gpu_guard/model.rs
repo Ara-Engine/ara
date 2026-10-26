@@ -126,10 +126,13 @@ pub(crate) struct Report {
     pub intervals: Vec<Interval>,
     #[serde(default)]
     pub classification_version: u32,
+    #[serde(default)]
+    pub monitoring: super::monitor::Monitoring,
 }
 impl Report {
     pub fn invalid(&self) -> bool {
         !self.intervals.is_empty()
+            || !self.monitoring.gaps.is_empty()
             || !self.errors.is_empty()
             || self.classification_version == 0 && !self.contaminants.is_empty()
     }
@@ -143,7 +146,7 @@ impl Report {
         }
     }
     pub fn overlaps(&self, window: Interval) -> bool {
-        !self.errors.is_empty() || self.intervals.iter().any(|span| span.overlaps(window))
+        self.intervals.iter().any(|span| span.overlaps(window))
     }
     pub fn detail(&self) -> String {
         let mut result: Vec<_> = self
@@ -157,6 +160,12 @@ impl Report {
             })
             .collect();
         result.extend(self.errors.clone());
+        result.extend(self.monitoring.gaps.iter().map(|gap| {
+            format!(
+                "unmonitored {}..{} UTC epoch ms: {}",
+                gap.interval.start_unix_ms, gap.interval.end_unix_ms, gap.reason
+            )
+        }));
         result.join("; ")
     }
     fn interval(&mut self, interval: Interval) {
@@ -211,6 +220,7 @@ impl Report {
             sampler: self.sampler.clone(),
             quiet_wait_seconds: self.quiet_wait_seconds,
             errors: self.errors.clone(),
+            monitoring: self.monitoring.clone(),
             policy,
             classification_version: 2,
             ..Default::default()
@@ -219,6 +229,35 @@ impl Report {
             classifier.observe(sample.clone(), &mut result);
         }
         Ok(result)
+    }
+
+    /// Older guards stopped at their first read error. The lost tail is unknown,
+    /// not clean; retain the error as a retry and bound its gap to the saved run.
+    pub fn recover_legacy_monitoring(&mut self, end_unix_ms: u64) {
+        if self.monitoring.end_unix_ms.is_some() {
+            return;
+        }
+        let Some(first) = self.samples.first() else {
+            return;
+        };
+        self.monitoring.start_unix_ms = Some(if first.interval_start_unix_ms == 0 {
+            first.unix_ms.saturating_sub(1000)
+        } else {
+            first.interval_start_unix_ms
+        });
+        let last = self.samples.last().map(|sample| sample.unix_ms);
+        if !self.errors.is_empty() {
+            let reason = self.errors.join("; ");
+            self.monitoring.unavailable(
+                last.unwrap_or(end_unix_ms)
+                    .saturating_add(1000)
+                    .min(end_unix_ms),
+                last,
+                reason,
+            );
+            self.errors.clear();
+        }
+        self.monitoring.finish(end_unix_ms, last);
     }
 }
 
@@ -259,6 +298,9 @@ impl Classifier {
     }
     pub fn pending(&self) -> bool {
         !self.high.is_empty()
+    }
+    pub fn interrupted(&mut self) {
+        self.high.clear();
     }
     pub fn push(&mut self, snapshot: Snapshot, report: &mut Report) -> Sample {
         let processes: BTreeMap<_, _> =

@@ -26,15 +26,15 @@ impl Feed {
             .build()
             .map_err(|_| Error::new(NETWORK, "cannot initialize asset HTTPS client"))?;
         let mut url = self.url(text)?;
-        for _ in 0..6 {
+        for _ in 0..=crate::redirect::MAX_REDIRECTS {
             cancel.check()?;
             let mut request = client
                 .get(url.clone())
                 .header(header::ACCEPT, "application/octet-stream");
-            if url.host_str() == Some("api.github.com")
-                && let Ok(token) = std::env::var("GITHUB_TOKEN")
+            if let Some(value) =
+                crate::redirect::authorization(&url, std::env::var("GITHUB_TOKEN").ok().as_deref())?
             {
-                request = request.bearer_auth(token);
+                request = request.header(header::AUTHORIZATION, value);
             }
             if let Some(offset) = range {
                 request = request.header(header::RANGE, format!("bytes={offset}-"));
