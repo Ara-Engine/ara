@@ -1,0 +1,3444 @@
+{
+  "caveats": [
+    "Thread-cycle timing scopes add overhead; calibration is an estimate",
+    "Post-call diagnostic hashes are excluded from native scopes but included in replay walls",
+    "Setup fingerprints are diagnostic only, not content-addressed cache identities",
+    "Primitive runs conservatively inferred from consecutive geometry fingerprints, target order and fallback class",
+    "Reuse ceiling assumes free reset/copy and is not an achieved speedup",
+    "Shipping meshopt 0.7 dependency, Cargo.lock and registry sources unchanged"
+  ],
+  "date": "2026-10-26",
+  "definition": "One-thread full geometry replay; isolated meshopt native instrumentation, two runs and a real warm-start counterexample; no cold-import wall claim",
+  "rawArtifacts": {
+    "files": [
+      {
+        "bytes": 4972,
+        "relativePath": "instrument.ps1",
+        "sha256": "F82128BA88F58A518F48CC4BAF4F0E4F06D562983CE28AF89367268579BBA7AA"
+      },
+      {
+        "bytes": 6008,
+        "relativePath": "analyze.ps1",
+        "sha256": "6453EBF5EBFBFCCF402BB6943B67AA295365AC24A308B75B5AED0F224F6CDE19"
+      },
+      {
+        "bytes": 2344,
+        "relativePath": "prefix.ps1",
+        "sha256": "B891B9321E23C220781AC3E46D24F4F8238CA8B465CFFDBBD4235B8054284723"
+      },
+      {
+        "bytes": 1860,
+        "relativePath": "run-locked.ps1",
+        "sha256": "BACD012D13087E83625FE2D0C0660F3BBB79D09459B1BFF08673FD255B0BA0E7"
+      },
+      {
+        "bytes": 1419,
+        "relativePath": "build-v2.ps1",
+        "sha256": "31407BD752550BE572858E6115A3930BB341036C434E1EC9493A87F8756E69BC"
+      },
+      {
+        "bytes": 8989,
+        "relativePath": "src/main.rs",
+        "sha256": "894DA7EE8E23B41214C66FA29B830F57AC1DB00C9A91FB91ECBEDAA51C8F271C"
+      },
+      {
+        "bytes": 3056,
+        "relativePath": "src/bin/warm_start.rs",
+        "sha256": "6D475F2DB607E3C6DA283BAC276DC12FABA7FED9E11E6E25BACAEF957B67703E"
+      },
+      {
+        "bytes": 2845352,
+        "relativePath": "capture.bin",
+        "sha256": "77976AB2B27DCFEDFB894B50DE5E7F05138BBDFCBA05C6D2E42030FBBC13774B"
+      },
+      {
+        "bytes": 3235297,
+        "relativePath": "full-v1.log",
+        "sha256": "E0D9ECE0464833329305E83EE47B81E791061E45BC69699A46C3C9C4DFF5EC95"
+      },
+      {
+        "bytes": 3316019,
+        "relativePath": "full.log",
+        "sha256": "A9150C791BAAB08B74357D674D3300BF5A2B096095B44AF12393BA8DEE8282F8"
+      },
+      {
+        "bytes": 4674400,
+        "relativePath": "full-native.csv",
+        "sha256": "82374E18E99BFEAC8A258A68B5F514C777B658B08176367E87B84678DD8B050B"
+      },
+      {
+        "bytes": 909,
+        "relativePath": "Cargo.toml",
+        "sha256": "8451856749FF2BEC751BDED694372409299722BA2391F321E388088F4F716DAF"
+      },
+      {
+        "bytes": 60633,
+        "relativePath": "Cargo.lock",
+        "sha256": "872E727C62703838BA280DEA86DACFEE60B851AFDC031B460734B4C10478CDB0"
+      }
+    ],
+    "nativeCopy": "D:/AraBuild/ara-dev-infra-target/lod-profile/meshopt",
+    "root": "C:\\Users\\snowy\\.t3\\worktrees\\snengine\\t3-602598ba/target/ara-dev/import-speed/lod-profile"
+  },
+  "reuseCeilings": {
+    "byClass": [
+      {
+        "class": "classicPosition",
+        "groups": 299,
+        "prefixCycles": 1831577079,
+        "setupCycles": 1295867969
+      },
+      {
+        "class": "classicAttributes",
+        "groups": 231,
+        "prefixCycles": 8980739525,
+        "setupCycles": 6789397077
+      }
+    ],
+    "caveat": "Upper bounds; includes mutable state needing reset/copy, target scalar setup and allocations; not a measured speedup",
+    "classicCycles": 27196792927,
+    "repeatedPrefixCycles": 10812316604,
+    "repeatedPrefixUpperBoundPercent": 39.75585148227503,
+    "repeatedSetupCycles": 8085265046,
+    "repeatedSetupUpperBoundPercent": 29.728744369609988
+  },
+  "runs": [
+    {
+      "label": "v1",
+      "provenance": {
+        "binary": "D:/AraBuild/ara-dev-infra-target/lod-profile/profile.exe",
+        "binarySha256": "2710ADA0B9207B4F6A062DB20B541BA136C5B2DD46FD36C673328ED67E27CAC8",
+        "instrumentation": {
+          "algorithm": "Unchanged; only thread-cycle scopes, call metadata and post-call hashes added",
+          "callsites": [
+            {
+              "callsites": 1,
+              "function": "prepareEdgeAdjacency"
+            },
+            {
+              "callsites": 3,
+              "function": "updateEdgeAdjacency"
+            },
+            {
+              "callsites": 1,
+              "function": "buildPositionRemap"
+            },
+            {
+              "callsites": 1,
+              "function": "classifyVertices"
+            },
+            {
+              "callsites": 1,
+              "function": "rescalePositions"
+            },
+            {
+              "callsites": 1,
+              "function": "rescaleAttributes"
+            },
+            {
+              "callsites": 1,
+              "function": "fillFaceQuadrics"
+            },
+            {
+              "callsites": 1,
+              "function": "fillVertexQuadrics"
+            },
+            {
+              "callsites": 1,
+              "function": "fillEdgeQuadrics"
+            },
+            {
+              "callsites": 1,
+              "function": "fillFoldQuadrics"
+            },
+            {
+              "callsites": 1,
+              "function": "fillAttributeQuadrics"
+            },
+            {
+              "callsites": 1,
+              "function": "boundEdgeCollapses"
+            },
+            {
+              "callsites": 1,
+              "function": "pickEdgeCollapses"
+            },
+            {
+              "callsites": 1,
+              "function": "rankEdgeCollapses"
+            },
+            {
+              "callsites": 1,
+              "function": "sortEdgeCollapses"
+            },
+            {
+              "callsites": 1,
+              "function": "performEdgeCollapses"
+            },
+            {
+              "callsites": 1,
+              "function": "updateQuadrics"
+            },
+            {
+              "callsites": 2,
+              "function": "remapEdgeLoops"
+            },
+            {
+              "callsites": 1,
+              "function": "remapIndexBuffer"
+            }
+          ],
+          "instrumentedNative": "57BA2C4F9AB73D454D99A8DA0F5C4743E7E3117FA565D91EA977B96C042E3BE0",
+          "originalNative": "719303B6970398631E30724E8EEBC6CD2E7E08B67FE8AB7CBF7EECAFDAA08616",
+          "profilerHeader": "C25A7BBC95FC0EF2E4F5EF73CCB64FADF490E5016AD7670F7E54FF59981BAE33",
+          "sourceHead": "49e838a917a453a2eccb64eae369504c99f4a92f",
+          "sourceRegistryUntouched": true
+        },
+        "manifestSha256": "4256FA3A8E1BA088F766BA4A2081648448EAA127CADE0A3ADDF5E067FFFD28BE",
+        "privateLockSha256": "7BE1B8DDD5246DD9348F185E38B5E5832DB80AC502CF8990DD33CECC29105584",
+        "sourceHead": "49e838a917a453a2eccb64eae369504c99f4a92f",
+        "threads": 1
+      },
+      "summary": {
+        "calls": 14159,
+        "caveats": [
+          "Per-thread cycle scopes in isolated dependency copy; counters add overhead",
+          "Post-call hashes are outside native counters but included in replay wall stages",
+          "Setup hashes are diagnostic fingerprints, never cache identities",
+          "Repeated setup is a theoretical upper bound before mutable-state copy/reset costs",
+          "Thread budget1; full output bytes verified against production on every model"
+        ],
+        "counter": {
+          "clockFailures": 0,
+          "estimatedCyclesPerRead": 1091.064693530647,
+          "estimatedReadOverheadFraction": 0.03399418009566416,
+          "reads": 1249298
+        },
+        "exactCallRepeats": [
+          {
+            "calls": 2672,
+            "class": "virtual",
+            "cyclesAfterFirst": 580486422,
+            "groups": 1019,
+            "outputHashDisagreements": 0
+          },
+          {
+            "calls": 107,
+            "class": "classicPosition",
+            "cyclesAfterFirst": 286595754,
+            "groups": 42,
+            "outputHashDisagreements": 0
+          },
+          {
+            "calls": 178,
+            "class": "classicAttributes",
+            "cyclesAfterFirst": 1408350162,
+            "groups": 69,
+            "outputHashDisagreements": 0
+          }
+        ],
+        "groups": [
+          {
+            "calls": 897,
+            "class": "classicPosition",
+            "cycles": 7119249746,
+            "loopPercent": 66.5810754660383,
+            "phases": [
+              {
+                "cycles": 1126468799,
+                "percent": 15.822858295326897,
+                "phase": "quadrics_position"
+              },
+              {
+                "cycles": 1116351416,
+                "percent": 15.680745244640839,
+                "phase": "pick"
+              },
+              {
+                "cycles": 1042040641,
+                "percent": 14.636944596380788,
+                "phase": "collapse"
+              },
+              {
+                "cycles": 940879695,
+                "percent": 13.215995063646135,
+                "phase": "rank"
+              },
+              {
+                "cycles": 593513425,
+                "percent": 8.336741176041333,
+                "phase": "classify"
+              },
+              {
+                "cycles": 498474083,
+                "percent": 7.001778288225823,
+                "phase": "adjacency_iteration"
+              },
+              {
+                "cycles": 335858013,
+                "percent": 4.717604031080721,
+                "phase": "loops_update"
+              },
+              {
+                "cycles": 263740132,
+                "percent": 3.704605701579499,
+                "phase": "indices_remap"
+              },
+              {
+                "cycles": 240620799,
+                "percent": 3.3798617492692187,
+                "phase": "position_weld"
+              },
+              {
+                "cycles": 226081269,
+                "percent": 3.175633347137812,
+                "phase": "sort"
+              },
+              {
+                "cycles": 220090885,
+                "percent": 3.0914898739668404,
+                "phase": "quadrics_update"
+              },
+              {
+                "cycles": 173746244,
+                "percent": 2.440513399570236,
+                "phase": "adjacency_initial"
+              },
+              {
+                "cycles": 73366297,
+                "percent": 1.030534109878943,
+                "phase": "rescale_positions"
+              },
+              {
+                "cycles": 23050121,
+                "percent": 0.323771771217197,
+                "phase": "candidates"
+              },
+              {
+                "cycles": 0,
+                "percent": 0,
+                "phase": "rescale_attributes"
+              },
+              {
+                "cycles": 0,
+                "percent": 0,
+                "phase": "quadrics_attributes"
+              }
+            ],
+            "repeatedSetupCycles": 1539120884,
+            "repeatedSetupUpperBoundPercent": 21.61914441707521,
+            "reusedSetupCalls": 861,
+            "reusedSetupGroups": 299,
+            "setupPercent": 32.88012518896679,
+            "stops": [
+              {
+                "calls": 53,
+                "cycles": 24258687,
+                "reason": "1"
+              },
+              {
+                "calls": 475,
+                "cycles": 5432443307,
+                "reason": "0"
+              },
+              {
+                "calls": 369,
+                "cycles": 1662547752,
+                "reason": "2"
+              }
+            ]
+          },
+          {
+            "calls": 1149,
+            "class": "classicAttributes",
+            "cycles": 26917234445,
+            "loopPercent": 58.20126802406354,
+            "phases": [
+              {
+                "cycles": 8269675752,
+                "percent": 30.722605507253846,
+                "phase": "rank"
+              },
+              {
+                "cycles": 6333845392,
+                "percent": 23.530817792377405,
+                "phase": "quadrics_attributes"
+              },
+              {
+                "cycles": 2014096271,
+                "percent": 7.482552767875927,
+                "phase": "collapse"
+              },
+              {
+                "cycles": 1537931601,
+                "percent": 5.713557253225463,
+                "phase": "pick"
+              },
+              {
+                "cycles": 1494371701,
+                "percent": 5.551728221015612,
+                "phase": "quadrics_position"
+              },
+              {
+                "cycles": 1365526858,
+                "percent": 5.073057786787798,
+                "phase": "quadrics_update"
+              },
+              {
+                "cycles": 1219593641,
+                "percent": 4.530902472510675,
+                "phase": "classify"
+              },
+              {
+                "cycles": 779616428,
+                "percent": 2.8963466867036085,
+                "phase": "adjacency_iteration"
+              },
+              {
+                "cycles": 759881315,
+                "percent": 2.823028928000259,
+                "phase": "loops_update"
+              },
+              {
+                "cycles": 402757341,
+                "percent": 1.4962805403465735,
+                "phase": "indices_remap"
+              },
+              {
+                "cycles": 324499375,
+                "percent": 1.2055450037523348,
+                "phase": "position_weld"
+              },
+              {
+                "cycles": 320653662,
+                "percent": 1.191257826487308,
+                "phase": "sort"
+              },
+              {
+                "cycles": 303735552,
+                "percent": 1.1284054928474283,
+                "phase": "rescale_attributes"
+              },
+              {
+                "cycles": 213797487,
+                "percent": 0.7942773149182637,
+                "phase": "adjacency_initial"
+              },
+              {
+                "cycles": 101700019,
+                "percent": 0.3778249181126081,
+                "phase": "rescale_positions"
+              },
+              {
+                "cycles": 33179684,
+                "percent": 0.12326557569573525,
+                "phase": "candidates"
+              }
+            ],
+            "repeatedSetupCycles": 8192306606,
+            "repeatedSetupUpperBoundPercent": 30.435172018653496,
+            "reusedSetupCalls": 1110,
+            "reusedSetupGroups": 231,
+            "setupPercent": 40.83731661014628,
+            "stops": [
+              {
+                "calls": 132,
+                "cycles": 208381384,
+                "reason": "1"
+              },
+              {
+                "calls": 146,
+                "cycles": 8496461718,
+                "reason": "0"
+              },
+              {
+                "calls": 871,
+                "cycles": 18212391343,
+                "reason": "2"
+              }
+            ]
+          },
+          {
+            "calls": 12113,
+            "class": "virtual",
+            "cycles": 6060524640,
+            "loopPercent": 58.87023973884875,
+            "phases": [
+              {
+                "cycles": 989911776,
+                "percent": 16.333763738315564,
+                "phase": "quadrics_position"
+              },
+              {
+                "cycles": 789149476,
+                "percent": 13.021141285220484,
+                "phase": "pick"
+              },
+              {
+                "cycles": 653953219,
+                "percent": 10.790373075688048,
+                "phase": "classify"
+              },
+              {
+                "cycles": 510182355,
+                "percent": 8.418121949917525,
+                "phase": "collapse"
+              },
+              {
+                "cycles": 476519760,
+                "percent": 7.862681670410633,
+                "phase": "rank"
+              },
+              {
+                "cycles": 403828254,
+                "percent": 6.663255707842482,
+                "phase": "adjacency_iteration"
+              },
+              {
+                "cycles": 318753010,
+                "percent": 5.25949532316397,
+                "phase": "sort"
+              },
+              {
+                "cycles": 270226500,
+                "percent": 4.458797151264449,
+                "phase": "loops_update"
+              },
+              {
+                "cycles": 249493550,
+                "percent": 4.116698880379439,
+                "phase": "position_weld"
+              },
+              {
+                "cycles": 196077051,
+                "percent": 3.23531480601323,
+                "phase": "indices_remap"
+              },
+              {
+                "cycles": 166060575,
+                "percent": 2.7400362982436453,
+                "phase": "adjacency_initial"
+              },
+              {
+                "cycles": 154775042,
+                "percent": 2.5538225020730216,
+                "phase": "quadrics_update"
+              },
+              {
+                "cycles": 82402943,
+                "percent": 1.3596668258080047,
+                "phase": "rescale_positions"
+              },
+              {
+                "cycles": 48038688,
+                "percent": 0.7926490007637359,
+                "phase": "candidates"
+              },
+              {
+                "cycles": 0,
+                "percent": 0,
+                "phase": "quadrics_attributes"
+              },
+              {
+                "cycles": 0,
+                "percent": 0,
+                "phase": "rescale_attributes"
+              }
+            ],
+            "repeatedSetupCycles": 275431978,
+            "repeatedSetupUpperBoundPercent": 4.544688692165765,
+            "reusedSetupCalls": 2672,
+            "reusedSetupGroups": 1019,
+            "setupPercent": 40.18703554021027,
+            "stops": [
+              {
+                "calls": 952,
+                "cycles": 215114119,
+                "reason": "1"
+              },
+              {
+                "calls": 5507,
+                "cycles": 3533163658,
+                "reason": "0"
+              },
+              {
+                "calls": 5654,
+                "cycles": 2312246863,
+                "reason": "2"
+              }
+            ]
+          }
+        ],
+        "instrumentedWallStages": {
+          "lodSolveMs": 8894.7452,
+          "virtualMs": 4882.919499999999
+        },
+        "models": 101,
+        "threads": 1,
+        "totalCycles": 40097008831
+      }
+    },
+    {
+      "label": "v2",
+      "load": {
+        "availableMemoryKiB": 7587104,
+        "context": "One-thread geometry replay, instrumented meshopt 0.7 native phases; thread cycles, gate/background load possible; no encoding/store/device; not import walls",
+        "cpuPercent": 18,
+        "utc": "2026-10-26T08:19:56.3598384Z"
+      },
+      "models": [
+        {
+          "artifacts": 6,
+          "cookMs": 4.5,
+          "key": "a6cbd37299fadd2b55cc356bf8367ed9597e23301a457ab682e2eb996a9591a7",
+          "source": "assets/kit/apron.gltf",
+          "stages": {
+            "compressionMs": 0,
+            "decodeMs": 0,
+            "gpuPackingMs": 0,
+            "lodAreaMs": 0,
+            "lodPreparationMs": 0,
+            "lodSimplificationMs": 0,
+            "lodsMs": 0.0022,
+            "meshMs": 0.189,
+            "mipsMs": 0,
+            "opacityMs": 0.0059,
+            "parseMs": 0.0291,
+            "textureCacheHits": 3,
+            "textureCooks": 0,
+            "validationMs": 0.0336,
+            "virtualGeometryMs": 0.0526
+          }
+        },
+        {
+          "artifacts": 3,
+          "cookMs": 7.2185,
+          "key": "f2a62812538d7a2a20d04a7e0dcffb3baf1b4ac3ba616fbe26d52672e631bafa",
+          "source": "assets/kit/cables.gltf",
+          "stages": {
+            "compressionMs": 0,
+            "decodeMs": 0,
+            "gpuPackingMs": 0,
+            "lodAreaMs": 0,
+            "lodPreparationMs": 0.4836,
+            "lodSimplificationMs": 3.4871,
+            "lodsMs": 4.0029,
+            "meshMs": 6.8873,
+            "mipsMs": 0,
+            "opacityMs": 0.0003,
+            "parseMs": 0.0239,
+            "textureCacheHits": 0,
+            "textureCooks": 0,
+            "validationMs": 0.0347,
+            "virtualGeometryMs": 0.76
+          }
+        },
+        {
+          "artifacts": 13,
+          "cookMs": 12.6666,
+          "key": "f7ae08f32743eb8961d0ab6c3dd377dad507885dae925798b0786044ac012e1e",
+          "source": "assets/kit/container_blue.gltf",
+          "stages": {
+            "compressionMs": 0,
+            "decodeMs": 0,
+            "gpuPackingMs": 0,
+            "lodAreaMs": 0,
+            "lodPreparationMs": 0,
+            "lodSimplificationMs": 0,
+            "lodsMs": 0.0008,
+            "meshMs": 0.8756,
+            "mipsMs": 0,
+            "opacityMs": 0.0021,
+            "parseMs": 0.0508,
+            "textureCacheHits": 6,
+            "textureCooks": 0,
+            "validationMs": 0.0975,
+            "virtualGeometryMs": 0.2753
+          }
+        },
+        {
+          "artifacts": 13,
+          "cookMs": 11.469,
+          "key": "f654dd8d5553865d30b1a5c64863ef29ab14d5d4c81f451fd094426d295f1936",
+          "source": "assets/kit/container_green.gltf",
+          "stages": {
+            "compressionMs": 0,
+            "decodeMs": 0,
+            "gpuPackingMs": 0,
+            "lodAreaMs": 0,
+            "lodPreparationMs": 0,
+            "lodSimplificationMs": 0,
+            "lodsMs": 0.0011,
+            "meshMs": 1.0376,
+            "mipsMs": 0,
+            "opacityMs": 0.0018,
+            "parseMs": 0.052,
+            "textureCacheHits": 6,
+            "textureCooks": 0,
+            "validationMs": 0.0964,
+            "virtualGeometryMs": 0.3399
+          }
+        },
+        {
+          "artifacts": 13,
+          "cookMs": 6.396599999999999,
+          "key": "5ea290804a7d6120463ebda3d17291ef412fbeed8db0a5a89603be5b6bd7a4ba",
+          "source": "assets/kit/container_rust.gltf",
+          "stages": {
+            "compressionMs": 0,
+            "decodeMs": 0,
+            "gpuPackingMs": 0,
+            "lodAreaMs": 0,
+            "lodPreparationMs": 0,
+            "lodSimplificationMs": 0,
+            "lodsMs": 0.001,
+            "meshMs": 1.0148,
+            "mipsMs": 0,
+            "opacityMs": 0.0012,
+            "parseMs": 0.0545,
+            "textureCacheHits": 6,
+            "textureCooks": 0,
+            "validationMs": 0.0833,
+            "virtualGeometryMs": 0.3473
+          }
+        },
+        {
+          "artifacts": 5,
+          "cookMs": 39.8478,
+          "key": "78f2d156165c8b77270bf73ba9d3a182ccbedea0cf9299162f2416effa86684e",
+          "source": "assets/kit/embers.gltf",
+          "stages": {
+            "compressionMs": 0,
+            "decodeMs": 0,
+            "gpuPackingMs": 0,
+            "lodAreaMs": 0,
+            "lodPreparationMs": 1.4343,
+            "lodSimplificationMs": 15.5929,
+            "lodsMs": 17.4279,
+            "meshMs": 39.2241,
+            "mipsMs": 0,
+            "opacityMs": 0.0004,
+            "parseMs": 0.0501,
+            "textureCacheHits": 0,
+            "textureCooks": 0,
+            "validationMs": 0.0792,
+            "virtualGeometryMs": 7.4051
+          }
+        },
+        {
+          "artifacts": 5,
+          "cookMs": 79.9046,
+          "key": "2c3508ae83b6dc2580b509a521850e5e318f36ee5898f4de0c99537e5b2d38f5",
+          "source": "assets/kit/festoon.gltf",
+          "stages": {
+            "compressionMs": 0,
+            "decodeMs": 0,
+            "gpuPackingMs": 0,
+            "lodAreaMs": 0,
+            "lodPreparationMs": 2.842,
+            "lodSimplificationMs": 22.4193,
+            "lodsMs": 26.433,
+            "meshMs": 78.0187,
+            "mipsMs": 0,
+            "opacityMs": 0.0004,
+            "parseMs": 0.0439,
+            "textureCacheHits": 0,
+            "textureCooks": 0,
+            "validationMs": 0.0993,
+            "virtualGeometryMs": 14.8072
+          }
+        },
+        {
+          "artifacts": 18,
+          "cookMs": 10.6036,
+          "key": "46ecd0afb3f3eca3b38c55bc1b3f63354e85f29e1221fe18c05a161b28f2d12f",
+          "source": "assets/kit/guard_hut.gltf",
+          "stages": {
+            "compressionMs": 0,
+            "decodeMs": 0,
+            "gpuPackingMs": 0,
+            "lodAreaMs": 0,
+            "lodPreparationMs": 0,
+            "lodSimplificationMs": 0,
+            "lodsMs": 0.001,
+            "meshMs": 0.5324,
+            "mipsMs": 0,
+            "opacityMs": 0.0019,
+            "parseMs": 0.0487,
+            "textureCacheHits": 9,
+            "textureCooks": 0,
+            "validationMs": 0.1122,
+            "virtualGeometryMs": 0.1686
+          }
+        },
+        {
+          "artifacts": 23,
+          "cookMs": 23.5485,
+          "key": "94beee1b529c4ee8916a6f9362b338742d4179469c583d6b48599640b33e82b1",
+          "source": "assets/kit/hangar.gltf",
+          "stages": {
+            "compressionMs": 0,
+            "decodeMs": 0,
+            "gpuPackingMs": 0,
+            "lodAreaMs": 0,
+            "lodPreparationMs": 0.2591,
+            "lodSimplificationMs": 2.0488,
+            "lodsMs": 2.3212,
+            "meshMs": 4.3006,
+            "mipsMs": 0,
+            "opacityMs": 0.0026,
+            "parseMs": 0.0852,
+            "textureCacheHits": 12,
+            "textureCooks": 0,
+            "validationMs": 0.1613,
+            "virtualGeometryMs": 0.6633
+          }
+        },
+        {
+          "artifacts": 5,
+          "cookMs": 0.5433,
+          "key": "e18a9ee19ea4da03793f70e617996a0b9b4ece16b9ed26275e9c3d9b8137b756",
+          "source": "assets/kit/light_panel.gltf",
+          "stages": {
+            "compressionMs": 0,
+            "decodeMs": 0,
+            "gpuPackingMs": 0,
+            "lodAreaMs": 0,
+            "lodPreparationMs": 0,
+            "lodSimplificationMs": 0,
+            "lodsMs": 0.0005,
+            "meshMs": 0.1254,
+            "mipsMs": 0,
+            "opacityMs": 0.0007,
+            "parseMs": 0.0314,
+            "textureCacheHits": 0,
+            "textureCooks": 0,
+            "validationMs": 0.0531,
+            "virtualGeometryMs": 0.0362
+          }
+        },
+        {
+          "artifacts": 10,
+          "cookMs": 11.5913,
+          "key": "94f471370e9692dc78c38e918ee62b06a7cd35331a4f205255323ad281d27e87",
+          "source": "assets/kit/mast.gltf",
+          "stages": {
+            "compressionMs": 0,
+            "decodeMs": 0,
+            "gpuPackingMs": 0,
+            "lodAreaMs": 0,
+            "lodPreparationMs": 0.4717,
+            "lodSimplificationMs": 4.2157,
+            "lodsMs": 4.7392,
+            "meshMs": 8.9331,
+            "mipsMs": 0,
+            "opacityMs": 0.0012,
+            "parseMs": 0.045,
+            "textureCacheHits": 3,
+            "textureCooks": 0,
+            "validationMs": 0.0958,
+            "virtualGeometryMs": 1.434
+          }
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 3.7952,
+          "key": "426d0628e765866f99296f2e4bf46662244bc3d55f501e6fe27de37e804eb509",
+          "source": "assets/kit/pad.gltf",
+          "stages": {
+            "compressionMs": 0,
+            "decodeMs": 0,
+            "gpuPackingMs": 0,
+            "lodAreaMs": 0,
+            "lodPreparationMs": 0,
+            "lodSimplificationMs": 0,
+            "lodsMs": 0.0002,
+            "meshMs": 0.0713,
+            "mipsMs": 0,
+            "opacityMs": 0.0006,
+            "parseMs": 0.0249,
+            "textureCacheHits": 3,
+            "textureCooks": 0,
+            "validationMs": 0.0339,
+            "virtualGeometryMs": 0.0288
+          }
+        },
+        {
+          "artifacts": 3,
+          "cookMs": 0.4359,
+          "key": "ed68c675777a577c399c29d2c5cc53ce8ca35c3d2274f16a74953198aed23c72",
+          "source": "assets/kit/puddle_a.gltf",
+          "stages": {
+            "compressionMs": 0,
+            "decodeMs": 0,
+            "gpuPackingMs": 0,
+            "lodAreaMs": 0,
+            "lodPreparationMs": 0,
+            "lodSimplificationMs": 0,
+            "lodsMs": 0.0002,
+            "meshMs": 0.1507,
+            "mipsMs": 0,
+            "opacityMs": 0.0003,
+            "parseMs": 0.0213,
+            "textureCacheHits": 0,
+            "textureCooks": 0,
+            "validationMs": 0.0311,
+            "virtualGeometryMs": 0.0306
+          }
+        },
+        {
+          "artifacts": 3,
+          "cookMs": 0.3986,
+          "key": "59b809d6dbaa2de02fb42cf1a53839725bde57c2792c24b3074a5ed251c4aa25",
+          "source": "assets/kit/puddle_b.gltf",
+          "stages": {
+            "compressionMs": 0,
+            "decodeMs": 0,
+            "gpuPackingMs": 0,
+            "lodAreaMs": 0,
+            "lodPreparationMs": 0,
+            "lodSimplificationMs": 0,
+            "lodsMs": 0.0002,
+            "meshMs": 0.144,
+            "mipsMs": 0,
+            "opacityMs": 0.0002,
+            "parseMs": 0.0235,
+            "textureCacheHits": 0,
+            "textureCooks": 0,
+            "validationMs": 0.0244,
+            "virtualGeometryMs": 0.0268
+          }
+        },
+        {
+          "artifacts": 3,
+          "cookMs": 0.4612,
+          "key": "5658e45091e66e4d2ea1a307ecf76d0bea07ac3068f0c454fdf2d2045fcd78b9",
+          "source": "assets/kit/puddle_c.gltf",
+          "stages": {
+            "compressionMs": 0,
+            "decodeMs": 0,
+            "gpuPackingMs": 0,
+            "lodAreaMs": 0,
+            "lodPreparationMs": 0,
+            "lodSimplificationMs": 0,
+            "lodsMs": 0.0002,
+            "meshMs": 0.1736,
+            "mipsMs": 0,
+            "opacityMs": 0.0003,
+            "parseMs": 0.0263,
+            "textureCacheHits": 0,
+            "textureCooks": 0,
+            "validationMs": 0.0285,
+            "virtualGeometryMs": 0.0349
+          }
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 27.7274,
+          "key": "67d6ef5868f5f41e2c1eedb0b8ce7381ef357a0d924327c698a870bf0a709148",
+          "source": "assets/kit/road.gltf",
+          "stages": {
+            "compressionMs": 0,
+            "decodeMs": 0,
+            "gpuPackingMs": 0,
+            "lodAreaMs": 0,
+            "lodPreparationMs": 0.592,
+            "lodSimplificationMs": 4.3451,
+            "lodsMs": 5.1065,
+            "meshMs": 10.4658,
+            "mipsMs": 0,
+            "opacityMs": 0.002,
+            "parseMs": 0.0531,
+            "textureCacheHits": 3,
+            "textureCooks": 0,
+            "validationMs": 0.0545,
+            "virtualGeometryMs": 2.3095
+          }
+        },
+        {
+          "artifacts": 5,
+          "cookMs": 0.7409,
+          "key": "cf9c141adb27cb803d9da84dad64cf7ba50cccb75558f139efc5bf4c92cddd4d",
+          "source": "assets/kit/window.gltf",
+          "stages": {
+            "compressionMs": 0,
+            "decodeMs": 0,
+            "gpuPackingMs": 0,
+            "lodAreaMs": 0,
+            "lodPreparationMs": 0,
+            "lodSimplificationMs": 0,
+            "lodsMs": 0.0005,
+            "meshMs": 0.3044,
+            "mipsMs": 0,
+            "opacityMs": 0.0005,
+            "parseMs": 0.0495,
+            "textureCacheHits": 0,
+            "textureCooks": 0,
+            "validationMs": 0.044,
+            "virtualGeometryMs": 0.1079
+          }
+        },
+        {
+          "artifacts": 10,
+          "cookMs": 46.436,
+          "key": "47c4d9fc786d0774b0dacce52d89da99686ab3de44ebba9b2fa8203534df6ffb",
+          "source": "assets/third_party/adjustable_wrench/adjustable_wrench_1k.gltf",
+          "stages": {
+            "compressionMs": 0,
+            "decodeMs": 0,
+            "gpuPackingMs": 0,
+            "lodAreaMs": 0,
+            "lodPreparationMs": 1.7987,
+            "lodSimplificationMs": 20.1514,
+            "lodsMs": 22.3661,
+            "meshMs": 41.8825,
+            "mipsMs": 0,
+            "opacityMs": 0.0008,
+            "parseMs": 0.0379,
+            "textureCacheHits": 3,
+            "textureCooks": 0,
+            "validationMs": 0.1132,
+            "virtualGeometryMs": 8.643
+          }
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 24.8144,
+          "key": "c818ecbc3459369591cf4bed807239cdf328615036b35c48cd1ef82e1557e48e",
+          "source": "assets/third_party/barrel_01/Barrel_01_1k.gltf",
+          "stages": {
+            "compressionMs": 0,
+            "decodeMs": 0,
+            "gpuPackingMs": 0,
+            "lodAreaMs": 0,
+            "lodPreparationMs": 0.8294,
+            "lodSimplificationMs": 11.3738,
+            "lodsMs": 12.3793,
+            "meshMs": 22.4015,
+            "mipsMs": 0,
+            "opacityMs": 0.0009,
+            "parseMs": 0.0263,
+            "textureCacheHits": 3,
+            "textureCooks": 0,
+            "validationMs": 0.0586,
+            "virtualGeometryMs": 4.4321
+          }
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 24.216,
+          "key": "836e5e4e4bc85e91c4257630fef910c0bd69696c87ddd3274aab2a475f9d3121",
+          "source": "assets/third_party/barrel_02/Barrel_02_1k.gltf",
+          "stages": {
+            "compressionMs": 0,
+            "decodeMs": 0,
+            "gpuPackingMs": 0,
+            "lodAreaMs": 0,
+            "lodPreparationMs": 0.8934,
+            "lodSimplificationMs": 10.3131,
+            "lodsMs": 11.4547,
+            "meshMs": 21.3599,
+            "mipsMs": 0,
+            "opacityMs": 0.0017,
+            "parseMs": 0.0392,
+            "textureCacheHits": 3,
+            "textureCooks": 0,
+            "validationMs": 0.0578,
+            "virtualGeometryMs": 4.7512
+          }
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 11.223600000000001,
+          "key": "3844d70faa9a9b25210c1e35b36d220c709bddd5f555aff84c84702fa449dc57",
+          "source": "assets/third_party/barrel_03/barrel_03_1k.gltf",
+          "stages": {
+            "compressionMs": 0,
+            "decodeMs": 0,
+            "gpuPackingMs": 0,
+            "lodAreaMs": 0,
+            "lodPreparationMs": 0.4154,
+            "lodSimplificationMs": 2.498,
+            "lodsMs": 3.0379,
+            "meshMs": 8.1306,
+            "mipsMs": 0,
+            "opacityMs": 0.0009,
+            "parseMs": 0.0278,
+            "textureCacheHits": 3,
+            "textureCooks": 0,
+            "validationMs": 0.0475,
+            "virtualGeometryMs": 2.207
+          }
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 76.3055,
+          "key": "f07f33bbb76b0337cc2a788228ccae6254aad3b7d2f97fb03201e3b622f286d2",
+          "source": "assets/third_party/barrel_stove/barrel_stove_1k.gltf",
+          "stages": {
+            "compressionMs": 0,
+            "decodeMs": 0,
+            "gpuPackingMs": 0,
+            "lodAreaMs": 0,
+            "lodPreparationMs": 2.4027,
+            "lodSimplificationMs": 36.034,
+            "lodsMs": 39.4113,
+            "meshMs": 71.7816,
+            "mipsMs": 0,
+            "opacityMs": 0.001,
+            "parseMs": 0.0298,
+            "textureCacheHits": 3,
+            "textureCooks": 0,
+            "validationMs": 0.0934,
+            "virtualGeometryMs": 14.4752
+          }
+        },
+        {
+          "artifacts": 9,
+          "cookMs": 13.1989,
+          "key": "b90542a4669e38e56c47bad26dbc5128e8d12a73b9fa67304f8ea9cbb2729367",
+          "source": "assets/third_party/bench_vice_01/bench_vice_01_1k.gltf",
+          "stages": {
+            "compressionMs": 0,
+            "decodeMs": 0,
+            "gpuPackingMs": 0,
+            "lodAreaMs": 0,
+            "lodPreparationMs": 0.1137,
+            "lodSimplificationMs": 2.4056,
+            "lodsMs": 2.7279,
+            "meshMs": 8.4365,
+            "mipsMs": 0,
+            "opacityMs": 0.001,
+            "parseMs": 0.0723,
+            "textureCacheHits": 3,
+            "textureCooks": 0,
+            "validationMs": 0.1627,
+            "virtualGeometryMs": 0.0031
+          }
+        },
+        {
+          "artifacts": 7,
+          "cookMs": 167.8523,
+          "key": "05db3a2e5b35a240223e78934dc227685c0370bba05c66474195679ecd80b9e6",
+          "source": "assets/third_party/caged_hanging_light/caged_hanging_light_1k.gltf",
+          "stages": {
+            "compressionMs": 0,
+            "decodeMs": 0,
+            "gpuPackingMs": 0,
+            "lodAreaMs": 0,
+            "lodPreparationMs": 7.4144,
+            "lodSimplificationMs": 73.4901,
+            "lodsMs": 82.7692,
+            "meshMs": 162.0742,
+            "mipsMs": 0,
+            "opacityMs": 0.0007,
+            "parseMs": 0.037,
+            "textureCacheHits": 4,
+            "textureCooks": 0,
+            "validationMs": 0.1834,
+            "virtualGeometryMs": 37.311
+          }
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 110.7452,
+          "key": "efd9b63d1e3855e9c5657107d1b6bcdb5a79c61e4e2154c85f55f3d3a2125c39",
+          "source": "assets/third_party/cardboard_box_01/cardboard_box_01_1k.gltf",
+          "stages": {
+            "compressionMs": 0,
+            "decodeMs": 0,
+            "gpuPackingMs": 0,
+            "lodAreaMs": 0,
+            "lodPreparationMs": 4.4742,
+            "lodSimplificationMs": 36.4505,
+            "lodsMs": 43.239,
+            "meshMs": 101.6137,
+            "mipsMs": 0,
+            "opacityMs": 0.0009,
+            "parseMs": 0.0282,
+            "textureCacheHits": 3,
+            "textureCooks": 0,
+            "validationMs": 0.1352,
+            "virtualGeometryMs": 25.7345
+          }
+        },
+        {
+          "artifacts": 12,
+          "cookMs": 116.0834,
+          "key": "dfa0b3cdfe21c50f4f50d195e22136bf9f390d5e31c0e264f0c544c6ec683b33",
+          "source": "assets/third_party/classic_laptop/classic_laptop_1k.gltf",
+          "stages": {
+            "compressionMs": 0,
+            "decodeMs": 0,
+            "gpuPackingMs": 0,
+            "lodAreaMs": 0,
+            "lodPreparationMs": 4.5376,
+            "lodSimplificationMs": 54.2775,
+            "lodsMs": 60.0521,
+            "meshMs": 111.8666,
+            "mipsMs": 0,
+            "opacityMs": 0.0023,
+            "parseMs": 0.0697,
+            "textureCacheHits": 3,
+            "textureCooks": 0,
+            "validationMs": 0.1836,
+            "virtualGeometryMs": 24.112
+          }
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 388.9579,
+          "key": "979d5853c26b951a02204a2050601cfcff74df3b3bc5b34dd0385077c1f1785b",
+          "source": "assets/third_party/concrete_road_barrier/concrete_road_barrier_1k.gltf",
+          "stages": {
+            "compressionMs": 0,
+            "decodeMs": 0,
+            "gpuPackingMs": 0,
+            "lodAreaMs": 0,
+            "lodPreparationMs": 18.6648,
+            "lodSimplificationMs": 137.7369,
+            "lodsMs": 164.8603,
+            "meshMs": 384.1425,
+            "mipsMs": 0,
+            "opacityMs": 0.0013,
+            "parseMs": 0.0344,
+            "textureCacheHits": 3,
+            "textureCooks": 0,
+            "validationMs": 0.3737,
+            "virtualGeometryMs": 93.1961
+          }
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 158.4588,
+          "key": "9e17b165dfe3c6c2f96651a5a6a3c5ec7dadfc3f867aa5799d982b67aad22d31",
+          "source": "assets/third_party/concrete_road_barrier_02/concrete_road_barrier_02_1k.gltf",
+          "stages": {
+            "compressionMs": 0,
+            "decodeMs": 0,
+            "gpuPackingMs": 0,
+            "lodAreaMs": 0,
+            "lodPreparationMs": 7.0133,
+            "lodSimplificationMs": 55.7666,
+            "lodsMs": 66.5434,
+            "meshMs": 154.0916,
+            "mipsMs": 0,
+            "opacityMs": 0.0015,
+            "parseMs": 0.043,
+            "textureCacheHits": 3,
+            "textureCooks": 0,
+            "validationMs": 0.1884,
+            "virtualGeometryMs": 36.5919
+          }
+        },
+        {
+          "artifacts": 14,
+          "cookMs": 97.7102,
+          "key": "ea6d6385d0154478490531cb2c3644119c8620f2f14aac6ee4fd286fbc1a0ce8",
+          "source": "assets/third_party/covered_car/covered_car_1k.gltf",
+          "stages": {
+            "compressionMs": 0,
+            "decodeMs": 0,
+            "gpuPackingMs": 0,
+            "lodAreaMs": 0,
+            "lodPreparationMs": 3.4524,
+            "lodSimplificationMs": 46.0531,
+            "lodsMs": 50.5075,
+            "meshMs": 93.34,
+            "mipsMs": 0,
+            "opacityMs": 0.0024,
+            "parseMs": 0.0807,
+            "textureCacheHits": 3,
+            "textureCooks": 0,
+            "validationMs": 0.1765,
+            "virtualGeometryMs": 20.2556
+          }
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 15.338,
+          "key": "aae4188bfbf12aa66671808e6bbe91135601b6aa57b93138e98fab40a7a87968",
+          "source": "assets/third_party/crowbar_01/crowbar_01_1k.gltf",
+          "stages": {
+            "compressionMs": 0,
+            "decodeMs": 0,
+            "gpuPackingMs": 0,
+            "lodAreaMs": 0,
+            "lodPreparationMs": 0.6268,
+            "lodSimplificationMs": 2.7678,
+            "lodsMs": 3.6291,
+            "meshMs": 11.6885,
+            "mipsMs": 0,
+            "opacityMs": 0.0012,
+            "parseMs": 0.0298,
+            "textureCacheHits": 3,
+            "textureCooks": 0,
+            "validationMs": 0.056,
+            "virtualGeometryMs": 3.3058
+          }
+        },
+        {
+          "artifacts": 20,
+          "cookMs": 126.02730000000001,
+          "key": "75509c9cd511c943dc88b5d1ed06100125c55bf5fc257e03155a11a7697da8ea",
+          "source": "assets/third_party/crystalline_iceplant/crystalline_iceplant_1k.gltf",
+          "stages": {
+            "compressionMs": 0,
+            "decodeMs": 0,
+            "gpuPackingMs": 0,
+            "lodAreaMs": 0.1532,
+            "lodPreparationMs": 3.7044,
+            "lodSimplificationMs": 39.3594,
+            "lodsMs": 44.7496,
+            "meshMs": 88.7884,
+            "mipsMs": 0,
+            "opacityMs": 32.2529,
+            "parseMs": 0.0718,
+            "textureCacheHits": 3,
+            "textureCooks": 0,
+            "validationMs": 0.221,
+            "virtualGeometryMs": 19.5693
+          }
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 101.2321,
+          "key": "e48728fd4f7a68e1e9ad5254dda06d9c1f7a8d620705032777ac5243e8e09ad5",
+          "source": "assets/third_party/dead_quiver_branch_01/dead_quiver_branch_01_1k.gltf",
+          "stages": {
+            "compressionMs": 0,
+            "decodeMs": 0,
+            "gpuPackingMs": 0,
+            "lodAreaMs": 0,
+            "lodPreparationMs": 4.5327,
+            "lodSimplificationMs": 34.1252,
+            "lodsMs": 40.677,
+            "meshMs": 97.1355,
+            "mipsMs": 0,
+            "opacityMs": 0.0017,
+            "parseMs": 0.0377,
+            "textureCacheHits": 3,
+            "textureCooks": 0,
+            "validationMs": 0.1446,
+            "virtualGeometryMs": 22.7868
+          }
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 119.0471,
+          "key": "e9957dee22071e8edc0b003e637c050e76a8f0c8965dc838ffd550082fd8c767",
+          "source": "assets/third_party/dead_quiver_trunk/dead_quiver_trunk_1k.gltf",
+          "stages": {
+            "compressionMs": 0,
+            "decodeMs": 0,
+            "gpuPackingMs": 0,
+            "lodAreaMs": 0,
+            "lodPreparationMs": 5.3919,
+            "lodSimplificationMs": 39.7462,
+            "lodsMs": 47.5324,
+            "meshMs": 115.4105,
+            "mipsMs": 0,
+            "opacityMs": 0.0026,
+            "parseMs": 0.0516,
+            "textureCacheHits": 3,
+            "textureCooks": 0,
+            "validationMs": 0.1203,
+            "virtualGeometryMs": 27.68
+          }
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 769.9101,
+          "key": "cc313783e832f79e892fad96288f0ec78a846894dc74924d8b871caa3765d185",
+          "source": "assets/third_party/dead_tree_trunk/dead_tree_trunk_1k.gltf",
+          "stages": {
+            "compressionMs": 0,
+            "decodeMs": 0,
+            "gpuPackingMs": 0,
+            "lodAreaMs": 0,
+            "lodPreparationMs": 34.7213,
+            "lodSimplificationMs": 263.5824,
+            "lodsMs": 313.5433,
+            "meshMs": 761.7253,
+            "mipsMs": 0,
+            "opacityMs": 0.0014,
+            "parseMs": 0.0378,
+            "textureCacheHits": 3,
+            "textureCooks": 0,
+            "validationMs": 0.6276,
+            "virtualGeometryMs": 163.3703
+          }
+        },
+        {
+          "artifacts": 30,
+          "cookMs": 514.1514000000001,
+          "key": "dabf753365ef856ed06b2d816e534caff71849bac549e135f39ab70b28629d3e",
+          "source": "assets/third_party/drill_press_01/drill_press_01_1k.gltf",
+          "stages": {
+            "compressionMs": 0,
+            "decodeMs": 0,
+            "gpuPackingMs": 0,
+            "lodAreaMs": 0,
+            "lodPreparationMs": 25.0275,
+            "lodSimplificationMs": 232.0153,
+            "lodsMs": 262.9228,
+            "meshMs": 506.3781,
+            "mipsMs": 0,
+            "opacityMs": 0.0029,
+            "parseMs": 0.1751,
+            "textureCacheHits": 3,
+            "textureCooks": 0,
+            "validationMs": 0.5807,
+            "virtualGeometryMs": 124.9036
+          }
+        },
+        {
+          "artifacts": 10,
+          "cookMs": 137.3992,
+          "key": "037ba168fe75b17bfefbbef8c149f172728724e576e18326864775e055ed5b91",
+          "source": "assets/third_party/dry_branches_medium_01/dry_branches_medium_01_1k.gltf",
+          "stages": {
+            "compressionMs": 0,
+            "decodeMs": 0,
+            "gpuPackingMs": 0,
+            "lodAreaMs": 0,
+            "lodPreparationMs": 5.2828,
+            "lodSimplificationMs": 57.5155,
+            "lodsMs": 64.6689,
+            "meshMs": 132.6207,
+            "mipsMs": 0,
+            "opacityMs": 0.0018,
+            "parseMs": 0.0642,
+            "textureCacheHits": 3,
+            "textureCooks": 0,
+            "validationMs": 0.1549,
+            "virtualGeometryMs": 30.4769
+          }
+        },
+        {
+          "artifacts": 21,
+          "cookMs": 201.0411,
+          "key": "ce006adb11c06c5d24938a3e20948b8bfbe67ed04333f1c4595d8eaabbb005f4",
+          "source": "assets/third_party/exterior_aircon_unit/exterior_aircon_unit_1k.gltf",
+          "stages": {
+            "compressionMs": 0,
+            "decodeMs": 0,
+            "gpuPackingMs": 0,
+            "lodAreaMs": 0.1348,
+            "lodPreparationMs": 7.1495,
+            "lodSimplificationMs": 68.6346,
+            "lodsMs": 77.6536,
+            "meshMs": 150.3244,
+            "mipsMs": 0,
+            "opacityMs": 34.1177,
+            "parseMs": 0.0744,
+            "textureCacheHits": 12,
+            "textureCooks": 0,
+            "validationMs": 0.2452,
+            "virtualGeometryMs": 31.0655
+          }
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 153.4872,
+          "key": "3cf0239f95a1d6ad3d690b084bca9fbd91726ec4ec9d408e272f7691ebacfc13",
+          "source": "assets/third_party/hand_truck/hand_truck_1k.gltf",
+          "stages": {
+            "compressionMs": 0,
+            "decodeMs": 0,
+            "gpuPackingMs": 0,
+            "lodAreaMs": 0,
+            "lodPreparationMs": 4.4936,
+            "lodSimplificationMs": 83.1162,
+            "lodsMs": 88.6178,
+            "meshMs": 148.5192,
+            "mipsMs": 0,
+            "opacityMs": 0.0024,
+            "parseMs": 0.0661,
+            "textureCacheHits": 3,
+            "textureCooks": 0,
+            "validationMs": 0.1117,
+            "virtualGeometryMs": 33.0962
+          }
+        },
+        {
+          "artifacts": 10,
+          "cookMs": 72.60940000000001,
+          "key": "0f88f981e02cf619179ad087ab4b4864c8e5665af6f4d95e6fc835d8a347009c",
+          "source": "assets/third_party/hanging_industrial_lamp/hanging_industrial_lamp_1k.gltf",
+          "stages": {
+            "compressionMs": 0,
+            "decodeMs": 0,
+            "gpuPackingMs": 0,
+            "lodAreaMs": 0,
+            "lodPreparationMs": 2.8122,
+            "lodSimplificationMs": 29.5163,
+            "lodsMs": 32.9763,
+            "meshMs": 66.0803,
+            "mipsMs": 0,
+            "opacityMs": 0.0024,
+            "parseMs": 0.0707,
+            "textureCacheHits": 5,
+            "textureCooks": 0,
+            "validationMs": 0.199,
+            "virtualGeometryMs": 15.6066
+          }
+        },
+        {
+          "artifacts": 27,
+          "cookMs": 209.126,
+          "key": "61db4d1abf6e3286c7ef068426c111554feb8c9fc4883bf032ea4dc81462ecb6",
+          "source": "assets/third_party/industrial_caged_sconce/industrial_caged_sconce_1k.gltf",
+          "stages": {
+            "compressionMs": 0,
+            "decodeMs": 0,
+            "gpuPackingMs": 0,
+            "lodAreaMs": 0,
+            "lodPreparationMs": 8.2993,
+            "lodSimplificationMs": 93.4667,
+            "lodsMs": 103.5628,
+            "meshMs": 203.0725,
+            "mipsMs": 0,
+            "opacityMs": 0.0018,
+            "parseMs": 0.1001,
+            "textureCacheHits": 4,
+            "textureCooks": 0,
+            "validationMs": 0.2995,
+            "virtualGeometryMs": 49.7448
+          }
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 191.28390000000002,
+          "key": "ace2376530b6ffe480707b3d78526d0bda617e38a5f39eb93e0388dede71d495",
+          "source": "assets/third_party/industrial_storage_cart/industrial_storage_cart_1k.gltf",
+          "stages": {
+            "compressionMs": 0,
+            "decodeMs": 0,
+            "gpuPackingMs": 0,
+            "lodAreaMs": 0,
+            "lodPreparationMs": 5.7237,
+            "lodSimplificationMs": 102.1493,
+            "lodsMs": 109.2905,
+            "meshMs": 186.5295,
+            "mipsMs": 0,
+            "opacityMs": 0.0023,
+            "parseMs": 0.0409,
+            "textureCacheHits": 3,
+            "textureCooks": 0,
+            "validationMs": 0.2014,
+            "virtualGeometryMs": 41.7873
+          }
+        },
+        {
+          "artifacts": 12,
+          "cookMs": 221.48229999999998,
+          "key": "3140706ddc746141777fa351aa0aa0b7a0035a3a5be1906ce6049a94c0e7ea43",
+          "source": "assets/third_party/ladder_sectioned_01/ladder_sectioned_01_1k.gltf",
+          "stages": {
+            "compressionMs": 0,
+            "decodeMs": 0,
+            "gpuPackingMs": 0,
+            "lodAreaMs": 0,
+            "lodPreparationMs": 9.2321,
+            "lodSimplificationMs": 99.1035,
+            "lodsMs": 110.6242,
+            "meshMs": 216.7396,
+            "mipsMs": 0,
+            "opacityMs": 0.0017,
+            "parseMs": 0.0704,
+            "textureCacheHits": 3,
+            "textureCooks": 0,
+            "validationMs": 0.2162,
+            "virtualGeometryMs": 49.2061
+          }
+        },
+        {
+          "artifacts": 91,
+          "cookMs": 325.19120000000004,
+          "key": "cf7d666e7e56caf9af71a7056c9787476dcd2e364e53a14af781196c2a2bb673",
+          "source": "assets/third_party/m2m_human/human-base-animations.glb",
+          "stages": {
+            "compressionMs": 0,
+            "decodeMs": 0,
+            "gpuPackingMs": 0,
+            "lodAreaMs": 0,
+            "lodPreparationMs": 0.3556,
+            "lodSimplificationMs": 10.6726,
+            "lodsMs": 12.1338,
+            "meshMs": 39.0445,
+            "mipsMs": 0,
+            "opacityMs": 0.0025,
+            "parseMs": 9.5854,
+            "textureCacheHits": 1,
+            "textureCooks": 0,
+            "validationMs": 47.6694,
+            "virtualGeometryMs": 0.0023
+          }
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 141.80429999999998,
+          "key": "85c7f92efcbcc04d3c7240cd35d50e4c6bb29bade8218a16fbfe124cdf19e9e6",
+          "source": "assets/third_party/metal_jerrycan/metal_jerrycan_1k.gltf",
+          "stages": {
+            "compressionMs": 0,
+            "decodeMs": 0,
+            "gpuPackingMs": 0,
+            "lodAreaMs": 0,
+            "lodPreparationMs": 6.6909,
+            "lodSimplificationMs": 48.5122,
+            "lodsMs": 58.5665,
+            "meshMs": 137.7418,
+            "mipsMs": 0,
+            "opacityMs": 0.0017,
+            "parseMs": 0.0357,
+            "textureCacheHits": 3,
+            "textureCooks": 0,
+            "validationMs": 0.1339,
+            "virtualGeometryMs": 36.9683
+          }
+        },
+        {
+          "artifacts": 14,
+          "cookMs": 56.628499999999995,
+          "key": "5b2b4ec13bcafcb4332c4459343269ea556396f2ca6a1950675677e46485ad64",
+          "source": "assets/third_party/metal_jerrycan_green/metal_jerrycan_green_1k.gltf",
+          "stages": {
+            "compressionMs": 0,
+            "decodeMs": 0,
+            "gpuPackingMs": 0,
+            "lodAreaMs": 0,
+            "lodPreparationMs": 2.6287,
+            "lodSimplificationMs": 14.6461,
+            "lodsMs": 18.072,
+            "meshMs": 52.7108,
+            "mipsMs": 0,
+            "opacityMs": 0.0017,
+            "parseMs": 0.0491,
+            "textureCacheHits": 3,
+            "textureCooks": 0,
+            "validationMs": 0.1322,
+            "virtualGeometryMs": 16.4588
+          }
+        },
+        {
+          "artifacts": 22,
+          "cookMs": 58.2552,
+          "key": "bff95482c0f869ea3edc6fe8673bf0152589c4f7aaf5f3eaf468f187f25d7fc4",
+          "source": "assets/third_party/metal_office_desk/metal_office_desk_1k.gltf",
+          "stages": {
+            "compressionMs": 0,
+            "decodeMs": 0,
+            "gpuPackingMs": 0,
+            "lodAreaMs": 0,
+            "lodPreparationMs": 3.2888,
+            "lodSimplificationMs": 17.8745,
+            "lodsMs": 21.8091,
+            "meshMs": 53.187,
+            "mipsMs": 0,
+            "opacityMs": 0.0037,
+            "parseMs": 0.1641,
+            "textureCacheHits": 3,
+            "textureCooks": 0,
+            "validationMs": 0.171,
+            "virtualGeometryMs": 15.0475
+          }
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 77.3593,
+          "key": "5a18e0ef23d732292e35d47b8bdbc7571655e60aa53d933a1ad8c9250db10299",
+          "source": "assets/third_party/metal_stool_01/metal_stool_01_1k.gltf",
+          "stages": {
+            "compressionMs": 0,
+            "decodeMs": 0,
+            "gpuPackingMs": 0,
+            "lodAreaMs": 0,
+            "lodPreparationMs": 3.7553,
+            "lodSimplificationMs": 32.4525,
+            "lodsMs": 37.2272,
+            "meshMs": 73.5177,
+            "mipsMs": 0,
+            "opacityMs": 0.0031,
+            "parseMs": 0.0526,
+            "textureCacheHits": 3,
+            "textureCooks": 0,
+            "validationMs": 0.0759,
+            "virtualGeometryMs": 16.3975
+          }
+        },
+        {
+          "artifacts": 18,
+          "cookMs": 126.56139999999999,
+          "key": "8cb054166f6d1ee2a368c4ec53a6be0b480181285f9b90a15a13163ac2b33762",
+          "source": "assets/third_party/metal_tool_chest/metal_tool_chest_1k.gltf",
+          "stages": {
+            "compressionMs": 0,
+            "decodeMs": 0,
+            "gpuPackingMs": 0,
+            "lodAreaMs": 0,
+            "lodPreparationMs": 5.1553,
+            "lodSimplificationMs": 51.1754,
+            "lodsMs": 57.7099,
+            "meshMs": 121.53,
+            "mipsMs": 0,
+            "opacityMs": 0.0018,
+            "parseMs": 0.07,
+            "textureCacheHits": 3,
+            "textureCooks": 0,
+            "validationMs": 0.1914,
+            "virtualGeometryMs": 30.6382
+          }
+        },
+        {
+          "artifacts": 16,
+          "cookMs": 149.7622,
+          "key": "c08e4d1efdd15face6c14cc71017fa93a2965b4ce9b16d85d876834f31718c11",
+          "source": "assets/third_party/metal_toolbox/metal_toolbox_1k.gltf",
+          "stages": {
+            "compressionMs": 0,
+            "decodeMs": 0,
+            "gpuPackingMs": 0,
+            "lodAreaMs": 0,
+            "lodPreparationMs": 6.5958,
+            "lodSimplificationMs": 69.3934,
+            "lodsMs": 77.5453,
+            "meshMs": 144.3282,
+            "mipsMs": 0,
+            "opacityMs": 0.0024,
+            "parseMs": 0.0796,
+            "textureCacheHits": 3,
+            "textureCooks": 0,
+            "validationMs": 0.221,
+            "virtualGeometryMs": 31.7487
+          }
+        },
+        {
+          "artifacts": 23,
+          "cookMs": 124.1153,
+          "key": "09f2ef13298b0482d15d25fc85bc79cc82599abaa816863a007d8951b983f0f4",
+          "source": "assets/third_party/metal_trash_can/metal_trash_can_1k.gltf",
+          "stages": {
+            "compressionMs": 0,
+            "decodeMs": 0,
+            "gpuPackingMs": 0,
+            "lodAreaMs": 0,
+            "lodPreparationMs": 5.9896,
+            "lodSimplificationMs": 47.7813,
+            "lodsMs": 55.3934,
+            "meshMs": 115.9463,
+            "mipsMs": 0,
+            "opacityMs": 0.0018,
+            "parseMs": 0.0968,
+            "textureCacheHits": 6,
+            "textureCooks": 0,
+            "validationMs": 0.2053,
+            "virtualGeometryMs": 27.5453
+          }
+        },
+        {
+          "artifacts": 57,
+          "cookMs": 331.7904,
+          "key": "cc88717762227aa2627ba6765d1c3fa24cfe30cd9d3d328f2de5153fa667849c",
+          "source": "assets/third_party/modular_airduct_rectangular_01/modular_airduct_rectangular_01_1k.gltf",
+          "stages": {
+            "compressionMs": 0,
+            "decodeMs": 0,
+            "gpuPackingMs": 0,
+            "lodAreaMs": 0,
+            "lodPreparationMs": 15.557,
+            "lodSimplificationMs": 147.795,
+            "lodsMs": 165.7801,
+            "meshMs": 324.5395,
+            "mipsMs": 0,
+            "opacityMs": 0.0027,
+            "parseMs": 0.1779,
+            "textureCacheHits": 6,
+            "textureCooks": 0,
+            "validationMs": 0.5522,
+            "virtualGeometryMs": 77.5991
+          }
+        },
+        {
+          "artifacts": 59,
+          "cookMs": 710.4575,
+          "key": "83bc71ac7dd7d85f0380396a32e21ea57eb0ebb261d139527219b4de5cb48951",
+          "source": "assets/third_party/modular_chainlink_fence/modular_chainlink_fence_1k.gltf",
+          "stages": {
+            "compressionMs": 0,
+            "decodeMs": 0,
+            "gpuPackingMs": 0,
+            "lodAreaMs": 1.0537,
+            "lodPreparationMs": 31.8212,
+            "lodSimplificationMs": 264.6642,
+            "lodsMs": 302.278,
+            "meshMs": 623.0271,
+            "mipsMs": 0,
+            "opacityMs": 76.3626,
+            "parseMs": 0.2443,
+            "textureCacheHits": 6,
+            "textureCooks": 0,
+            "validationMs": 0.8292,
+            "virtualGeometryMs": 157.4868
+          }
+        },
+        {
+          "artifacts": 213,
+          "cookMs": 1627.6375,
+          "key": "2868fa3fd5fd3bc94cc8963a3250a3db2105ee39453d9abf674a11a30dd7fd81",
+          "source": "assets/third_party/modular_electricity_poles/modular_electricity_poles_1k.gltf",
+          "stages": {
+            "compressionMs": 0,
+            "decodeMs": 0,
+            "gpuPackingMs": 0,
+            "lodAreaMs": 0,
+            "lodPreparationMs": 64.061,
+            "lodSimplificationMs": 757.8239,
+            "lodsMs": 832.5017,
+            "meshMs": 1603.002,
+            "mipsMs": 0,
+            "opacityMs": 0.0028,
+            "parseMs": 0.4062,
+            "textureCacheHits": 6,
+            "textureCooks": 0,
+            "validationMs": 2.2132,
+            "virtualGeometryMs": 406.4009
+          }
+        },
+        {
+          "artifacts": 23,
+          "cookMs": 135.8759,
+          "key": "fda41dc4a42acf1ddfd414e9688391b8526cb6630d2bdc052db3583d2392ed61",
+          "source": "assets/third_party/modular_industrial_pipes_01/modular_industrial_pipes_01_1k.gltf",
+          "stages": {
+            "compressionMs": 0,
+            "decodeMs": 0,
+            "gpuPackingMs": 0,
+            "lodAreaMs": 0,
+            "lodPreparationMs": 4.7002,
+            "lodSimplificationMs": 70.5949,
+            "lodsMs": 76.2338,
+            "meshMs": 126.1326,
+            "mipsMs": 0,
+            "opacityMs": 0.0019,
+            "parseMs": 0.0768,
+            "textureCacheHits": 6,
+            "textureCooks": 0,
+            "validationMs": 0.1896,
+            "virtualGeometryMs": 24.4608
+          }
+        },
+        {
+          "artifacts": 33,
+          "cookMs": 112.32109999999999,
+          "key": "f5423a717ed812afc813e54f6982652930a2729d4b8efb5cc37a51c4dee77c26",
+          "source": "assets/third_party/mounted_fluorescent_lights/mounted_fluorescent_lights_1k.gltf",
+          "stages": {
+            "compressionMs": 0,
+            "decodeMs": 0,
+            "gpuPackingMs": 0,
+            "lodAreaMs": 0,
+            "lodPreparationMs": 4.8256,
+            "lodSimplificationMs": 41.9121,
+            "lodsMs": 47.9019,
+            "meshMs": 107.9981,
+            "mipsMs": 0,
+            "opacityMs": 0.0016,
+            "parseMs": 0.083,
+            "textureCacheHits": 4,
+            "textureCooks": 0,
+            "validationMs": 0.2686,
+            "virtualGeometryMs": 27.2481
+          }
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 720.1858,
+          "key": "dc119f962dee2c39582be516b3b2b26b23fdbeed77a3ac8108213a397b60733a",
+          "source": "assets/third_party/namaqualand_boulder_02/namaqualand_boulder_02_1k.gltf",
+          "stages": {
+            "compressionMs": 0,
+            "decodeMs": 0,
+            "gpuPackingMs": 0,
+            "lodAreaMs": 0,
+            "lodPreparationMs": 38.6273,
+            "lodSimplificationMs": 261.9115,
+            "lodsMs": 315.61,
+            "meshMs": 713.1413,
+            "mipsMs": 0,
+            "opacityMs": 0.0013,
+            "parseMs": 0.0337,
+            "textureCacheHits": 3,
+            "textureCooks": 0,
+            "validationMs": 0.4832,
+            "virtualGeometryMs": 160.8663
+          }
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 437.94440000000003,
+          "key": "ae4abdd69ebb9770163b86731cad3bdfbf97add7ba05a2ccb6820fc3a1b232ea",
+          "source": "assets/third_party/namaqualand_boulder_03/namaqualand_boulder_03_1k.gltf",
+          "stages": {
+            "compressionMs": 0,
+            "decodeMs": 0,
+            "gpuPackingMs": 0,
+            "lodAreaMs": 0,
+            "lodPreparationMs": 24.9846,
+            "lodSimplificationMs": 147.9588,
+            "lodsMs": 182.1213,
+            "meshMs": 433.0644,
+            "mipsMs": 0,
+            "opacityMs": 0.0014,
+            "parseMs": 0.0274,
+            "textureCacheHits": 3,
+            "textureCooks": 0,
+            "validationMs": 0.3396,
+            "virtualGeometryMs": 100.7584
+          }
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 413.8322,
+          "key": "2469ce3f2603db5f07b8c3811a52177165bc1dbfbfa231e3c3eab9531011c371",
+          "source": "assets/third_party/namaqualand_boulder_04/namaqualand_boulder_04_1k.gltf",
+          "stages": {
+            "compressionMs": 0,
+            "decodeMs": 0,
+            "gpuPackingMs": 0,
+            "lodAreaMs": 0,
+            "lodPreparationMs": 17.5765,
+            "lodSimplificationMs": 142.9206,
+            "lodsMs": 168.9793,
+            "meshMs": 407.9208,
+            "mipsMs": 0,
+            "opacityMs": 0.0016,
+            "parseMs": 0.0317,
+            "textureCacheHits": 3,
+            "textureCooks": 0,
+            "validationMs": 0.3272,
+            "virtualGeometryMs": 92.9661
+          }
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 645.7248,
+          "key": "e7bea83cc0df13e8948ea4026df05f414097093086b25ed7ebc0925b1b036964",
+          "source": "assets/third_party/namaqualand_boulder_05/namaqualand_boulder_05_1k.gltf",
+          "stages": {
+            "compressionMs": 0,
+            "decodeMs": 0,
+            "gpuPackingMs": 0,
+            "lodAreaMs": 0,
+            "lodPreparationMs": 37.1468,
+            "lodSimplificationMs": 221.9439,
+            "lodsMs": 272.6978,
+            "meshMs": 639.422,
+            "mipsMs": 0,
+            "opacityMs": 0.0019,
+            "parseMs": 0.0399,
+            "textureCacheHits": 3,
+            "textureCooks": 0,
+            "validationMs": 0.4418,
+            "virtualGeometryMs": 141.4852
+          }
+        },
+        {
+          "artifacts": 12,
+          "cookMs": 575.6648,
+          "key": "e82aaba0ea07ca5faa8b936c4822b817d85998c53529538689a2c1e7277c35dd",
+          "source": "assets/third_party/namaqualand_rocks_01/namaqualand_rocks_01_1k.gltf",
+          "stages": {
+            "compressionMs": 0,
+            "decodeMs": 0,
+            "gpuPackingMs": 0,
+            "lodAreaMs": 0,
+            "lodPreparationMs": 27.7036,
+            "lodSimplificationMs": 198.1151,
+            "lodsMs": 237.2547,
+            "meshMs": 569.4533,
+            "mipsMs": 0,
+            "opacityMs": 0.0015,
+            "parseMs": 0.0403,
+            "textureCacheHits": 3,
+            "textureCooks": 0,
+            "validationMs": 0.4594,
+            "virtualGeometryMs": 142.8124
+          }
+        },
+        {
+          "artifacts": 8,
+          "cookMs": 183.376,
+          "key": "33d6fa6dd588966de28cd72488ba36a86f4661fdae539d52dfb3ab8c6ac50aff",
+          "source": "assets/third_party/old_drill_press/old_drill_press_1k.gltf",
+          "stages": {
+            "compressionMs": 0,
+            "decodeMs": 0,
+            "gpuPackingMs": 0,
+            "lodAreaMs": 0,
+            "lodPreparationMs": 6.4129,
+            "lodSimplificationMs": 84.6076,
+            "lodsMs": 92.8504,
+            "meshMs": 178.7373,
+            "mipsMs": 0,
+            "opacityMs": 0.0015,
+            "parseMs": 0.0414,
+            "textureCacheHits": 3,
+            "textureCooks": 0,
+            "validationMs": 0.2368,
+            "virtualGeometryMs": 43.7361
+          }
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 149.3292,
+          "key": "757ef163e122292219235c019e2c4eb4dfd7d781ca4ee91262e502c432bf152f",
+          "source": "assets/third_party/old_gas_mask/old_gas_mask_2k.gltf",
+          "stages": {
+            "compressionMs": 0,
+            "decodeMs": 0,
+            "gpuPackingMs": 0,
+            "lodAreaMs": 0,
+            "lodPreparationMs": 8.4911,
+            "lodSimplificationMs": 58.9485,
+            "lodsMs": 69.3408,
+            "meshMs": 138.1515,
+            "mipsMs": 0,
+            "opacityMs": 0.0021,
+            "parseMs": 0.0452,
+            "textureCacheHits": 3,
+            "textureCooks": 0,
+            "validationMs": 0.139,
+            "virtualGeometryMs": 30.9455
+          }
+        },
+        {
+          "artifacts": 9,
+          "cookMs": 647.293,
+          "key": "b1ba717f97656a8428d39576f59c258127247109542286ca03e94f00da7c239d",
+          "source": "assets/third_party/old_military_compressor/old_military_compressor_1k.gltf",
+          "stages": {
+            "compressionMs": 0,
+            "decodeMs": 0,
+            "gpuPackingMs": 0,
+            "lodAreaMs": 0.001,
+            "lodPreparationMs": 37.0827,
+            "lodSimplificationMs": 281.1665,
+            "lodsMs": 325.2083,
+            "meshMs": 640.4968,
+            "mipsMs": 0,
+            "opacityMs": 0.0021,
+            "parseMs": 0.0462,
+            "textureCacheHits": 3,
+            "textureCooks": 0,
+            "validationMs": 0.4844,
+            "virtualGeometryMs": 144.8985
+          }
+        },
+        {
+          "artifacts": 14,
+          "cookMs": 76.6131,
+          "key": "fb6f91f35f5f3317693f6687e2512277754c4d29ff5af228a8cbb6ed287c2309",
+          "source": "assets/third_party/old_military_crate/old_military_crate_1k.gltf",
+          "stages": {
+            "compressionMs": 0,
+            "decodeMs": 0,
+            "gpuPackingMs": 0,
+            "lodAreaMs": 0,
+            "lodPreparationMs": 3.0965,
+            "lodSimplificationMs": 27.3514,
+            "lodsMs": 31.3627,
+            "meshMs": 72.4167,
+            "mipsMs": 0,
+            "opacityMs": 0.0016,
+            "parseMs": 0.0505,
+            "textureCacheHits": 3,
+            "textureCooks": 0,
+            "validationMs": 0.1416,
+            "virtualGeometryMs": 18.5396
+          }
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 22.2511,
+          "key": "4ee89ae82aab2b4617f166b6760a5997039e1ff63bbfc12bf8c67233f10a0abc",
+          "source": "assets/third_party/old_tyre/old_tyre_1k.gltf",
+          "stages": {
+            "compressionMs": 0,
+            "decodeMs": 0,
+            "gpuPackingMs": 0,
+            "lodAreaMs": 0,
+            "lodPreparationMs": 0.9124,
+            "lodSimplificationMs": 7.2518,
+            "lodsMs": 8.422,
+            "meshMs": 18.3209,
+            "mipsMs": 0,
+            "opacityMs": 0.0009,
+            "parseMs": 0.0319,
+            "textureCacheHits": 3,
+            "textureCooks": 0,
+            "validationMs": 0.0477,
+            "virtualGeometryMs": 4.4192
+          }
+        },
+        {
+          "artifacts": 17,
+          "cookMs": 793.8853,
+          "key": "4212a7a46e3f58eb6c3783f1e266b3130ad42728ac5706d73ed4ba921ab019d0",
+          "source": "assets/third_party/overhead_crane/overhead_crane_1k.gltf",
+          "stages": {
+            "compressionMs": 0,
+            "decodeMs": 0,
+            "gpuPackingMs": 0,
+            "lodAreaMs": 0,
+            "lodPreparationMs": 29.5835,
+            "lodSimplificationMs": 378.0845,
+            "lodsMs": 414.1714,
+            "meshMs": 783.4002,
+            "mipsMs": 0,
+            "opacityMs": 0.0023,
+            "parseMs": 0.0668,
+            "textureCacheHits": 6,
+            "textureCooks": 0,
+            "validationMs": 0.5373,
+            "virtualGeometryMs": 184.5996
+          }
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 81.0043,
+          "key": "82a493604e57973741d827114b72605150b736fa18a101bb3e16b8dfc51cd17c",
+          "source": "assets/third_party/pipe_wrench/pipe_wrench_1k.gltf",
+          "stages": {
+            "compressionMs": 0,
+            "decodeMs": 0,
+            "gpuPackingMs": 0,
+            "lodAreaMs": 0,
+            "lodPreparationMs": 5.7664,
+            "lodSimplificationMs": 27.5155,
+            "lodsMs": 34.4114,
+            "meshMs": 76.8346,
+            "mipsMs": 0,
+            "opacityMs": 0.0017,
+            "parseMs": 0.0383,
+            "textureCacheHits": 3,
+            "textureCooks": 0,
+            "validationMs": 0.0855,
+            "virtualGeometryMs": 18.6694
+          }
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 194.1842,
+          "key": "8a529f04949ef84892e8cb03e006a909212d29dc2dc30650f8573b3e187d36a9",
+          "source": "assets/third_party/plastic_crate_03/plastic_crate_03_1k.gltf",
+          "stages": {
+            "compressionMs": 0,
+            "decodeMs": 0,
+            "gpuPackingMs": 0,
+            "lodAreaMs": 0,
+            "lodPreparationMs": 7.8367,
+            "lodSimplificationMs": 96.8372,
+            "lodsMs": 106.1637,
+            "meshMs": 189.6551,
+            "mipsMs": 0,
+            "opacityMs": 0.0013,
+            "parseMs": 0.0309,
+            "textureCacheHits": 3,
+            "textureCooks": 0,
+            "validationMs": 0.1368,
+            "virtualGeometryMs": 40.065
+          }
+        },
+        {
+          "artifacts": 15,
+          "cookMs": 252.25360000000003,
+          "key": "499899076785f329a0ececac232574c05eab181d8ca6c7271b0267c6c612af8b",
+          "source": "assets/third_party/portable_generator/portable_generator_1k.gltf",
+          "stages": {
+            "compressionMs": 0,
+            "decodeMs": 0,
+            "gpuPackingMs": 0,
+            "lodAreaMs": 0,
+            "lodPreparationMs": 11.4802,
+            "lodSimplificationMs": 108.6362,
+            "lodsMs": 121.9834,
+            "meshMs": 246.806,
+            "mipsMs": 0,
+            "opacityMs": 0.0014,
+            "parseMs": 0.0618,
+            "textureCacheHits": 3,
+            "textureCooks": 0,
+            "validationMs": 0.2164,
+            "virtualGeometryMs": 70.5522
+          }
+        },
+        {
+          "artifacts": 9,
+          "cookMs": 143.12949999999998,
+          "key": "f405d5e22a0bb7053a75ec733fb59508470494c457f276559bb7d0f9580e536a",
+          "source": "assets/third_party/portable_searchlight/portable_searchlight_1k.gltf",
+          "stages": {
+            "compressionMs": 0,
+            "decodeMs": 0,
+            "gpuPackingMs": 0,
+            "lodAreaMs": 0.0151,
+            "lodPreparationMs": 5.4026,
+            "lodSimplificationMs": 62.2508,
+            "lodsMs": 69.8672,
+            "meshMs": 139.2515,
+            "mipsMs": 0,
+            "opacityMs": 0.0014,
+            "parseMs": 0.0351,
+            "textureCacheHits": 3,
+            "textureCooks": 0,
+            "validationMs": 0.1589,
+            "virtualGeometryMs": 31.1862
+          }
+        },
+        {
+          "artifacts": 9,
+          "cookMs": 228.1454,
+          "key": "968f5be343f300e4449f9f6fdca042ea7f5b94e17f67576f910ecf7f02a58984",
+          "source": "assets/third_party/portable_welding_cart/portable_welding_cart_1k.gltf",
+          "stages": {
+            "compressionMs": 0,
+            "decodeMs": 0,
+            "gpuPackingMs": 0,
+            "lodAreaMs": 0,
+            "lodPreparationMs": 9.0939,
+            "lodSimplificationMs": 100.913,
+            "lodsMs": 112.2427,
+            "meshMs": 222.6315,
+            "mipsMs": 0,
+            "opacityMs": 0.0018,
+            "parseMs": 0.0471,
+            "textureCacheHits": 3,
+            "textureCooks": 0,
+            "validationMs": 0.2324,
+            "virtualGeometryMs": 47.1564
+          }
+        },
+        {
+          "artifacts": 8,
+          "cookMs": 181.5584,
+          "key": "df7d0a8c11effbf0b55615ce04d9fcf1d8d537fd38d827fcab7d75aae32574fc",
+          "source": "assets/third_party/power_box_01/power_box_01_1k.gltf",
+          "stages": {
+            "compressionMs": 0,
+            "decodeMs": 0,
+            "gpuPackingMs": 0,
+            "lodAreaMs": 0,
+            "lodPreparationMs": 7.6203,
+            "lodSimplificationMs": 72.4579,
+            "lodsMs": 81.0778,
+            "meshMs": 176.7482,
+            "mipsMs": 0,
+            "opacityMs": 0.0016,
+            "parseMs": 0.0505,
+            "textureCacheHits": 3,
+            "textureCooks": 0,
+            "validationMs": 0.1501,
+            "virtualGeometryMs": 56.0555
+          }
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 50.035700000000006,
+          "key": "41f97f492244a60e8c46dbc65765087805d170b1e3b7dd7266bcd32217845138",
+          "source": "assets/third_party/propane_tank/propane_tank_1k.gltf",
+          "stages": {
+            "compressionMs": 0,
+            "decodeMs": 0,
+            "gpuPackingMs": 0,
+            "lodAreaMs": 0,
+            "lodPreparationMs": 2.4867,
+            "lodSimplificationMs": 21.4829,
+            "lodsMs": 24.4069,
+            "meshMs": 46.6514,
+            "mipsMs": 0,
+            "opacityMs": 0.0012,
+            "parseMs": 0.0281,
+            "textureCacheHits": 3,
+            "textureCooks": 0,
+            "validationMs": 0.0644,
+            "virtualGeometryMs": 9.7219
+          }
+        },
+        {
+          "artifacts": 11,
+          "cookMs": 1187.0525,
+          "key": "c48977cda311a9f0bdad24c7a76c02cd3a0312569874c1feff751d2c86ec3079",
+          "source": "assets/third_party/quiver_tree_01/quiver_tree_01_1k.gltf",
+          "stages": {
+            "compressionMs": 0,
+            "decodeMs": 0,
+            "gpuPackingMs": 0,
+            "lodAreaMs": 2.5908,
+            "lodPreparationMs": 60.2841,
+            "lodSimplificationMs": 481.3741,
+            "lodsMs": 562.7945,
+            "meshMs": 1169.4843,
+            "mipsMs": 0,
+            "opacityMs": 0.0023,
+            "parseMs": 0.0643,
+            "textureCacheHits": 6,
+            "textureCooks": 0,
+            "validationMs": 0.9674,
+            "virtualGeometryMs": 253.6425
+          }
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 688.6778,
+          "key": "a1673a31e24f3466545d2bddec6d58d1cd9f53d9878e0f4f7aa93160ca9b5af5",
+          "source": "assets/third_party/quiver_tree_02/quiver_tree_02_1k.gltf",
+          "stages": {
+            "compressionMs": 0,
+            "decodeMs": 0,
+            "gpuPackingMs": 0,
+            "lodAreaMs": 0,
+            "lodPreparationMs": 46.0243,
+            "lodSimplificationMs": 230.3041,
+            "lodsMs": 287.5333,
+            "meshMs": 683.0733,
+            "mipsMs": 0,
+            "opacityMs": 0.0021,
+            "parseMs": 0.0513,
+            "textureCacheHits": 3,
+            "textureCooks": 0,
+            "validationMs": 0.42,
+            "virtualGeometryMs": 155.171
+          }
+        },
+        {
+          "artifacts": 21,
+          "cookMs": 59.689899999999994,
+          "key": "396e57531d5dd5494587c3bdf70f54467829558e0607abb7efff9ba1a8ab41c5",
+          "source": "assets/third_party/retro_multimeter/retro_multimeter_1k.gltf",
+          "stages": {
+            "compressionMs": 0,
+            "decodeMs": 0,
+            "gpuPackingMs": 0,
+            "lodAreaMs": 0,
+            "lodPreparationMs": 2.165,
+            "lodSimplificationMs": 23.5834,
+            "lodsMs": 26.4358,
+            "meshMs": 56.3326,
+            "mipsMs": 0,
+            "opacityMs": 0.0014,
+            "parseMs": 0.0663,
+            "textureCacheHits": 3,
+            "textureCooks": 0,
+            "validationMs": 0.1606,
+            "virtualGeometryMs": 14.8622
+          }
+        },
+        {
+          "artifacts": 9,
+          "cookMs": 12.588099999999999,
+          "key": "6c81606b4ff8b9adf2fb406a0be64c094244e5c9484c378c3538475f72494bda",
+          "source": "assets/third_party/rollershutter_door/rollershutter_door_1k.gltf",
+          "stages": {
+            "compressionMs": 0,
+            "decodeMs": 0,
+            "gpuPackingMs": 0,
+            "lodAreaMs": 0,
+            "lodPreparationMs": 0.4046,
+            "lodSimplificationMs": 4.903,
+            "lodsMs": 5.3525,
+            "meshMs": 8.9157,
+            "mipsMs": 0,
+            "opacityMs": 0.001,
+            "parseMs": 0.0399,
+            "textureCacheHits": 4,
+            "textureCooks": 0,
+            "validationMs": 0.0624,
+            "virtualGeometryMs": 1.5369
+          }
+        },
+        {
+          "artifacts": 5,
+          "cookMs": 84.7698,
+          "key": "51dcf311052e387b31a436385b1b06fb9a099fe65a170e31fce3fe7b5ded6f40",
+          "source": "assets/third_party/rusted_wheel_rim_01/rusted_wheel_rim_01_1k.gltf",
+          "stages": {
+            "compressionMs": 0,
+            "decodeMs": 0,
+            "gpuPackingMs": 0,
+            "lodAreaMs": 0,
+            "lodPreparationMs": 0.7821,
+            "lodSimplificationMs": 9.7886,
+            "lodsMs": 11.9522,
+            "meshMs": 51.2454,
+            "mipsMs": 0,
+            "opacityMs": 0.0009,
+            "parseMs": 0.0354,
+            "textureCacheHits": 3,
+            "textureCooks": 0,
+            "validationMs": 4.2419,
+            "virtualGeometryMs": 0.0024
+          }
+        },
+        {
+          "artifacts": 11,
+          "cookMs": 34.9183,
+          "key": "5238914da157adce6700c6f9032d23344f61335dcf6b183eac8658711e3b6a83",
+          "source": "assets/third_party/security_light/security_light_1k.gltf",
+          "stages": {
+            "compressionMs": 0,
+            "decodeMs": 0,
+            "gpuPackingMs": 0,
+            "lodAreaMs": 0,
+            "lodPreparationMs": 1.1682,
+            "lodSimplificationMs": 14.2787,
+            "lodsMs": 15.7923,
+            "meshMs": 31.5347,
+            "mipsMs": 0,
+            "opacityMs": 0.0016,
+            "parseMs": 0.0503,
+            "textureCacheHits": 3,
+            "textureCooks": 0,
+            "validationMs": 0.1036,
+            "virtualGeometryMs": 7.7201
+          }
+        },
+        {
+          "artifacts": 12,
+          "cookMs": 92.36529999999999,
+          "key": "eca92118f1c5cf48b30876d3510357225cda706db4938ae6ba5016dd349ae4cb",
+          "source": "assets/third_party/shrub_03/shrub_03_1k.gltf",
+          "stages": {
+            "compressionMs": 0,
+            "decodeMs": 0,
+            "gpuPackingMs": 0,
+            "lodAreaMs": 0.0814,
+            "lodPreparationMs": 2.3447,
+            "lodSimplificationMs": 23.9297,
+            "lodsMs": 26.9499,
+            "meshMs": 50.8134,
+            "mipsMs": 0,
+            "opacityMs": 38.0813,
+            "parseMs": 0.0555,
+            "textureCacheHits": 3,
+            "textureCooks": 0,
+            "validationMs": 0.1047,
+            "virtualGeometryMs": 10.3154
+          }
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 15.5223,
+          "key": "cace5a51bf9b0fe34fb6d37cd9b34dd5ac51a2e07cc5a01423484f9a5d656a3f",
+          "source": "assets/third_party/sledgehammer_01/sledgehammer_01_1k.gltf",
+          "stages": {
+            "compressionMs": 0,
+            "decodeMs": 0,
+            "gpuPackingMs": 0,
+            "lodAreaMs": 0,
+            "lodPreparationMs": 0.6404,
+            "lodSimplificationMs": 3.2443,
+            "lodsMs": 4.1385,
+            "meshMs": 12.9219,
+            "mipsMs": 0,
+            "opacityMs": 0.0009,
+            "parseMs": 0.0274,
+            "textureCacheHits": 3,
+            "textureCooks": 0,
+            "validationMs": 0.0457,
+            "virtualGeometryMs": 3.9342
+          }
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 110.5723,
+          "key": "222b8444ca350415970b1f3dee67520ffbc9b441971b1214da45e41f1e3ce0d5",
+          "source": "assets/third_party/small_lpg_tank/small_lpg_tank_1k.gltf",
+          "stages": {
+            "compressionMs": 0,
+            "decodeMs": 0,
+            "gpuPackingMs": 0,
+            "lodAreaMs": 0,
+            "lodPreparationMs": 4.1962,
+            "lodSimplificationMs": 45.3784,
+            "lodsMs": 51.1078,
+            "meshMs": 106.2842,
+            "mipsMs": 0,
+            "opacityMs": 0.0011,
+            "parseMs": 0.054,
+            "textureCacheHits": 3,
+            "textureCooks": 0,
+            "validationMs": 0.108,
+            "virtualGeometryMs": 25.0589
+          }
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 136.015,
+          "key": "a02f6ffc2a1232de3442421e2b437e2de7d6b9f213a91e2cbfc482e957f9aa3f",
+          "source": "assets/third_party/small_oil_can_01/small_oil_can_01_1k.gltf",
+          "stages": {
+            "compressionMs": 0,
+            "decodeMs": 0,
+            "gpuPackingMs": 0,
+            "lodAreaMs": 0,
+            "lodPreparationMs": 4.4687,
+            "lodSimplificationMs": 59.3555,
+            "lodsMs": 65.1632,
+            "meshMs": 133.1396,
+            "mipsMs": 0,
+            "opacityMs": 0.0012,
+            "parseMs": 0.0292,
+            "textureCacheHits": 3,
+            "textureCooks": 0,
+            "validationMs": 0.1351,
+            "virtualGeometryMs": 32.5228
+          }
+        },
+        {
+          "artifacts": 8,
+          "cookMs": 36.5542,
+          "key": "a3467e0e707e0f608ec1222546c65fd37c07677bf2e83a83005457bfff6d9213",
+          "source": "assets/third_party/spray_paint_bottles_02/spray_paint_bottles_02_1k.gltf",
+          "stages": {
+            "compressionMs": 0,
+            "decodeMs": 0,
+            "gpuPackingMs": 0,
+            "lodAreaMs": 0,
+            "lodPreparationMs": 1.4754,
+            "lodSimplificationMs": 8.7227,
+            "lodsMs": 10.9043,
+            "meshMs": 33.527,
+            "mipsMs": 0,
+            "opacityMs": 0.0011,
+            "parseMs": 0.035,
+            "textureCacheHits": 3,
+            "textureCooks": 0,
+            "validationMs": 0.0765,
+            "virtualGeometryMs": 9.4332
+          }
+        },
+        {
+          "artifacts": 17,
+          "cookMs": 63.99530000000001,
+          "key": "49e701995e7c818a62f94766976f69fb05efd86c1050f62f167af448c2598cbe",
+          "source": "assets/third_party/steel_frame_shelves_03/steel_frame_shelves_03_1k.gltf",
+          "stages": {
+            "compressionMs": 0,
+            "decodeMs": 0,
+            "gpuPackingMs": 0,
+            "lodAreaMs": 0,
+            "lodPreparationMs": 2.3496,
+            "lodSimplificationMs": 25.6892,
+            "lodsMs": 28.7071,
+            "meshMs": 57.8155,
+            "mipsMs": 0,
+            "opacityMs": 0.0014,
+            "parseMs": 0.0671,
+            "textureCacheHits": 6,
+            "textureCooks": 0,
+            "validationMs": 0.1359,
+            "virtualGeometryMs": 13.6014
+          }
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 29.1089,
+          "key": "7f8e45e687ceec92546a3d6babc0e69426d8a6d64d7758c2f926f30bddac0dfc",
+          "source": "assets/third_party/stone_fire_pit/stone_fire_pit_1k.gltf",
+          "stages": {
+            "compressionMs": 0,
+            "decodeMs": 0,
+            "gpuPackingMs": 0,
+            "lodAreaMs": 0,
+            "lodPreparationMs": 0.961,
+            "lodSimplificationMs": 11.366,
+            "lodsMs": 12.7731,
+            "meshMs": 25.9801,
+            "mipsMs": 0,
+            "opacityMs": 0.001,
+            "parseMs": 0.0289,
+            "textureCacheHits": 3,
+            "textureCooks": 0,
+            "validationMs": 0.0723,
+            "virtualGeometryMs": 5.7596
+          }
+        },
+        {
+          "artifacts": 11,
+          "cookMs": 228.2382,
+          "key": "c03ce118c705f8e071c275b28755bced106f51dc5ef9057b24fc7d88f1649ccf",
+          "source": "assets/third_party/street_lamp_01/street_lamp_01_1k.gltf",
+          "stages": {
+            "compressionMs": 0,
+            "decodeMs": 0,
+            "gpuPackingMs": 0,
+            "lodAreaMs": 0.0039,
+            "lodPreparationMs": 9.732,
+            "lodSimplificationMs": 97.2486,
+            "lodsMs": 110.9106,
+            "meshMs": 223.9208,
+            "mipsMs": 0,
+            "opacityMs": 0.0009,
+            "parseMs": 0.0466,
+            "textureCacheHits": 3,
+            "textureCooks": 0,
+            "validationMs": 0.2081,
+            "virtualGeometryMs": 49.8893
+          }
+        },
+        {
+          "artifacts": 11,
+          "cookMs": 145.7628,
+          "key": "61739baf37df7323313130f99774b632a8a477c459c8fa467b5df2f113d33b7b",
+          "source": "assets/third_party/street_lamp_02/street_lamp_02_1k.gltf",
+          "stages": {
+            "compressionMs": 0,
+            "decodeMs": 0,
+            "gpuPackingMs": 0,
+            "lodAreaMs": 0.0021,
+            "lodPreparationMs": 6.2466,
+            "lodSimplificationMs": 58.4531,
+            "lodsMs": 66.5834,
+            "meshMs": 141.6262,
+            "mipsMs": 0,
+            "opacityMs": 0.0013,
+            "parseMs": 0.0388,
+            "textureCacheHits": 3,
+            "textureCooks": 0,
+            "validationMs": 0.1706,
+            "virtualGeometryMs": 35.4266
+          }
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 251.9167,
+          "key": "6539ac0fe1662f2a7c7e3dea00d6a06e6af0ee2d5236975f5b273f5de5c4ba44",
+          "source": "assets/third_party/tool_cart/tool_cart_1k.gltf",
+          "stages": {
+            "compressionMs": 0,
+            "decodeMs": 0,
+            "gpuPackingMs": 0,
+            "lodAreaMs": 0,
+            "lodPreparationMs": 8.7375,
+            "lodSimplificationMs": 111.0934,
+            "lodsMs": 122.8062,
+            "meshMs": 247.3029,
+            "mipsMs": 0,
+            "opacityMs": 0.0019,
+            "parseMs": 0.0355,
+            "textureCacheHits": 3,
+            "textureCooks": 0,
+            "validationMs": 0.1788,
+            "virtualGeometryMs": 65.9908
+          }
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 39.353899999999996,
+          "key": "3b1df73293fa6acb1120e7a27a9972e578561c29fa9ab21f34b947457f3c0658",
+          "source": "assets/third_party/trashbag/trashbag_1k.gltf",
+          "stages": {
+            "compressionMs": 0,
+            "decodeMs": 0,
+            "gpuPackingMs": 0,
+            "lodAreaMs": 0,
+            "lodPreparationMs": 1.939,
+            "lodSimplificationMs": 14.1556,
+            "lodsMs": 16.7854,
+            "meshMs": 35.8842,
+            "mipsMs": 0,
+            "opacityMs": 0.0012,
+            "parseMs": 0.0336,
+            "textureCacheHits": 3,
+            "textureCooks": 0,
+            "validationMs": 0.0577,
+            "virtualGeometryMs": 7.1505
+          }
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 39.8662,
+          "key": "1e2f2c8e1a8361738302e5f9415f1ea79ce7a977f3852aa69df1f1f3144a1928",
+          "source": "assets/third_party/utility_box_01/utility_box_01_1k.gltf",
+          "stages": {
+            "compressionMs": 0,
+            "decodeMs": 0,
+            "gpuPackingMs": 0,
+            "lodAreaMs": 0,
+            "lodPreparationMs": 1.1821,
+            "lodSimplificationMs": 16.772,
+            "lodsMs": 18.2936,
+            "meshMs": 36.5214,
+            "mipsMs": 0,
+            "opacityMs": 0.0026,
+            "parseMs": 0.057,
+            "textureCacheHits": 3,
+            "textureCooks": 0,
+            "validationMs": 0.0612,
+            "virtualGeometryMs": 9.2435
+          }
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 51.5732,
+          "key": "92190b76a3383d42c85e9419e08414b65dd22294ea753e7c6ffe5597efeae9f3",
+          "source": "assets/third_party/utility_box_02/utility_box_02_1k.gltf",
+          "stages": {
+            "compressionMs": 0,
+            "decodeMs": 0,
+            "gpuPackingMs": 0,
+            "lodAreaMs": 0,
+            "lodPreparationMs": 1.7923,
+            "lodSimplificationMs": 18.0481,
+            "lodsMs": 20.2796,
+            "meshMs": 48.4367,
+            "mipsMs": 0,
+            "opacityMs": 0.001,
+            "parseMs": 0.0279,
+            "textureCacheHits": 3,
+            "textureCooks": 0,
+            "validationMs": 0.0693,
+            "virtualGeometryMs": 16.9346
+          }
+        },
+        {
+          "artifacts": 35,
+          "cookMs": 359.9129,
+          "key": "cbc7eb235bf70fe16db01ba9c61fe485a8f160eb26db5931b97aafa084e57c83",
+          "source": "assets/third_party/vintage_radio_transceiver/vintage_radio_transceiver_2k.gltf",
+          "stages": {
+            "compressionMs": 0,
+            "decodeMs": 0,
+            "gpuPackingMs": 0,
+            "lodAreaMs": 0,
+            "lodPreparationMs": 16.3883,
+            "lodSimplificationMs": 154.1504,
+            "lodsMs": 173.037,
+            "meshMs": 333.7534,
+            "mipsMs": 0,
+            "opacityMs": 0.003,
+            "parseMs": 0.1409,
+            "textureCacheHits": 6,
+            "textureCooks": 0,
+            "validationMs": 0.4383,
+            "virtualGeometryMs": 78.4063
+          }
+        },
+        {
+          "artifacts": 36,
+          "cookMs": 232.9015,
+          "key": "901395f9e8aed40823d01ee08a4c599effe6f5f7e41c7c32181e46e1e322b125",
+          "source": "assets/third_party/wild_rooibos_bush/wild_rooibos_bush_1k.gltf",
+          "stages": {
+            "compressionMs": 0,
+            "decodeMs": 0,
+            "gpuPackingMs": 0,
+            "lodAreaMs": 0.1141,
+            "lodPreparationMs": 11.2779,
+            "lodSimplificationMs": 67.8304,
+            "lodsMs": 80.2019,
+            "meshMs": 155.231,
+            "mipsMs": 0,
+            "opacityMs": 71.2533,
+            "parseMs": 0.0829,
+            "textureCacheHits": 3,
+            "textureCooks": 0,
+            "validationMs": 0.3408,
+            "virtualGeometryMs": 27.6274
+          }
+        },
+        {
+          "artifacts": 10,
+          "cookMs": 44.1207,
+          "key": "68172f03c6b9baf9326abad3a536c89559e11284912344a79ef90de5a8bb97ca",
+          "source": "assets/third_party/wooden_crate_01/wooden_crate_01_1k.gltf",
+          "stages": {
+            "compressionMs": 0,
+            "decodeMs": 0,
+            "gpuPackingMs": 0,
+            "lodAreaMs": 0,
+            "lodPreparationMs": 1.6382,
+            "lodSimplificationMs": 16.2186,
+            "lodsMs": 18.4762,
+            "meshMs": 40.7847,
+            "mipsMs": 0,
+            "opacityMs": 0.0023,
+            "parseMs": 0.0471,
+            "textureCacheHits": 3,
+            "textureCooks": 0,
+            "validationMs": 0.0888,
+            "virtualGeometryMs": 9.8965
+          }
+        },
+        {
+          "artifacts": 8,
+          "cookMs": 38.379000000000005,
+          "key": "28e9552cbebef11287d6bcb8396af4665e26c158509048afad92051839c390cc",
+          "source": "assets/third_party/wooden_crate_02/wooden_crate_02_1k.gltf",
+          "stages": {
+            "compressionMs": 0,
+            "decodeMs": 0,
+            "gpuPackingMs": 0,
+            "lodAreaMs": 0,
+            "lodPreparationMs": 1.3029,
+            "lodSimplificationMs": 13.4665,
+            "lodsMs": 15.2224,
+            "meshMs": 34.9436,
+            "mipsMs": 0,
+            "opacityMs": 0.0011,
+            "parseMs": 0.035,
+            "textureCacheHits": 3,
+            "textureCooks": 0,
+            "validationMs": 0.0713,
+            "virtualGeometryMs": 8.8945
+          }
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 29.0359,
+          "key": "0045b9b3467364b1a4541a0677a655115f196071e0fe1741ee27cbd7f0e39a78",
+          "source": "assets/third_party/wooden_hammer_01/wooden_hammer_01_1k.gltf",
+          "stages": {
+            "compressionMs": 0,
+            "decodeMs": 0,
+            "gpuPackingMs": 0,
+            "lodAreaMs": 0,
+            "lodPreparationMs": 1.1636,
+            "lodSimplificationMs": 11.3043,
+            "lodsMs": 12.8037,
+            "meshMs": 25.454,
+            "mipsMs": 0,
+            "opacityMs": 0.0007,
+            "parseMs": 0.0288,
+            "textureCacheHits": 3,
+            "textureCooks": 0,
+            "validationMs": 0.0882,
+            "virtualGeometryMs": 5.4258
+          }
+        },
+        {
+          "artifacts": 8,
+          "cookMs": 67.3367,
+          "key": "9875654cafdbca62c013ddff44ce21f442ba89f90138131db16edb7af9d0d6f7",
+          "source": "assets/third_party/wooden_ladder/wooden_ladder_1k.gltf",
+          "stages": {
+            "compressionMs": 0,
+            "decodeMs": 0,
+            "gpuPackingMs": 0,
+            "lodAreaMs": 0,
+            "lodPreparationMs": 2.4461,
+            "lodSimplificationMs": 30.5861,
+            "lodsMs": 33.598,
+            "meshMs": 63.4847,
+            "mipsMs": 0,
+            "opacityMs": 0.0012,
+            "parseMs": 0.0434,
+            "textureCacheHits": 3,
+            "textureCooks": 0,
+            "validationMs": 0.092,
+            "virtualGeometryMs": 13.6612
+          }
+        },
+        {
+          "artifacts": 10,
+          "cookMs": 184.72050000000002,
+          "key": "71f583c0820d4af7a8d0a7ba5fb2ab18b5c3cf88fdded08f3096f5f998dde5bd",
+          "source": "assets/third_party/wooden_military_crate/wooden_military_crate_1k.gltf",
+          "stages": {
+            "compressionMs": 0,
+            "decodeMs": 0,
+            "gpuPackingMs": 0,
+            "lodAreaMs": 0,
+            "lodPreparationMs": 7.1077,
+            "lodSimplificationMs": 78.2327,
+            "lodsMs": 87.3762,
+            "meshMs": 179.4751,
+            "mipsMs": 0,
+            "opacityMs": 0.0016,
+            "parseMs": 0.0486,
+            "textureCacheHits": 3,
+            "textureCooks": 0,
+            "validationMs": 0.2112,
+            "virtualGeometryMs": 43.6042
+          }
+        },
+        {
+          "artifacts": 16,
+          "cookMs": 15.3852,
+          "key": "6509f2a032189e9cf13a95d200aecbe48b9c2012ff894179efbc285c9dac7230",
+          "source": "assets/third_party/woodentable_03/WoodenTable_03_1k.gltf",
+          "stages": {
+            "compressionMs": 0,
+            "decodeMs": 0,
+            "gpuPackingMs": 0,
+            "lodAreaMs": 0,
+            "lodPreparationMs": 0.591,
+            "lodSimplificationMs": 4.2081,
+            "lodsMs": 4.8638,
+            "meshMs": 12.3509,
+            "mipsMs": 0,
+            "opacityMs": 0.0011,
+            "parseMs": 0.0479,
+            "textureCacheHits": 3,
+            "textureCooks": 0,
+            "validationMs": 0.1022,
+            "virtualGeometryMs": 3.2355
+          }
+        },
+        {
+          "artifacts": 6,
+          "cookMs": 54.0512,
+          "key": "fdf7a2a4f76283d8cf4480e4d6c00ffd9c98b6aeb1d96ffbb6db1e20a222e559",
+          "source": "assets/third_party/worn_metal_rack/worn_metal_rack_1k.gltf",
+          "stages": {
+            "compressionMs": 0,
+            "decodeMs": 0,
+            "gpuPackingMs": 0,
+            "lodAreaMs": 0,
+            "lodPreparationMs": 2.021,
+            "lodSimplificationMs": 26.6275,
+            "lodsMs": 28.8807,
+            "meshMs": 50.8308,
+            "mipsMs": 0,
+            "opacityMs": 0.0008,
+            "parseMs": 0.0303,
+            "textureCacheHits": 3,
+            "textureCooks": 0,
+            "validationMs": 0.0662,
+            "virtualGeometryMs": 9.4084
+          }
+        }
+      ],
+      "provenance": {
+        "binary": "D:/AraBuild/ara-dev-infra-target/lod-profile/profile-v2.exe",
+        "binarySha256": "11D3C073C986006832ACE3C0C2A49D152625ACC17427FE6D8781F3328E7437CF",
+        "instrumentation": {
+          "algorithm": "Unchanged; only thread-cycle scopes, call metadata and post-call hashes added",
+          "callsites": [
+            {
+              "callsites": 1,
+              "function": "prepareEdgeAdjacency"
+            },
+            {
+              "callsites": 3,
+              "function": "updateEdgeAdjacency"
+            },
+            {
+              "callsites": 1,
+              "function": "buildPositionRemap"
+            },
+            {
+              "callsites": 1,
+              "function": "classifyVertices"
+            },
+            {
+              "callsites": 1,
+              "function": "rescalePositions"
+            },
+            {
+              "callsites": 1,
+              "function": "rescaleAttributes"
+            },
+            {
+              "callsites": 1,
+              "function": "fillFaceQuadrics"
+            },
+            {
+              "callsites": 1,
+              "function": "fillVertexQuadrics"
+            },
+            {
+              "callsites": 1,
+              "function": "fillEdgeQuadrics"
+            },
+            {
+              "callsites": 1,
+              "function": "fillFoldQuadrics"
+            },
+            {
+              "callsites": 1,
+              "function": "fillAttributeQuadrics"
+            },
+            {
+              "callsites": 1,
+              "function": "boundEdgeCollapses"
+            },
+            {
+              "callsites": 1,
+              "function": "pickEdgeCollapses"
+            },
+            {
+              "callsites": 1,
+              "function": "rankEdgeCollapses"
+            },
+            {
+              "callsites": 1,
+              "function": "sortEdgeCollapses"
+            },
+            {
+              "callsites": 1,
+              "function": "performEdgeCollapses"
+            },
+            {
+              "callsites": 1,
+              "function": "updateQuadrics"
+            },
+            {
+              "callsites": 2,
+              "function": "remapEdgeLoops"
+            },
+            {
+              "callsites": 1,
+              "function": "remapIndexBuffer"
+            }
+          ],
+          "instrumentedNative": "C9E247D1ABF801670C837CD9C3528DF9F6C6B2BE600A15CC4392AB6EE6B36A94",
+          "originalNative": "719303B6970398631E30724E8EEBC6CD2E7E08B67FE8AB7CBF7EECAFDAA08616",
+          "profilerHeader": "357A7E66CB78CF64264E20BE454A2ABFD8BF7517A9EB8DC761E9EB235CF57A1C",
+          "sourceHead": "49e838a917a453a2eccb64eae369504c99f4a92f",
+          "sourceRegistryUntouched": true
+        },
+        "privateLockSha256": "872E727C62703838BA280DEA86DACFEE60B851AFDC031B460734B4C10478CDB0",
+        "sourceHead": "49e838a917a453a2eccb64eae369504c99f4a92f"
+      },
+      "summary": {
+        "calls": 14159,
+        "caveats": [
+          "Per-thread cycle scopes in isolated dependency copy; counters add overhead",
+          "Post-call hashes are outside native counters but included in replay wall stages",
+          "Setup hashes are diagnostic fingerprints, never cache identities",
+          "Repeated setup is a theoretical upper bound before mutable-state copy/reset costs",
+          "Thread budget1; full output bytes verified against production on every model"
+        ],
+        "counter": {
+          "clockFailures": 0,
+          "estimatedCyclesPerRead": 924.1182881711828,
+          "estimatedReadOverheadFraction": 0.036233101253056815,
+          "reads": 1262884
+        },
+        "exactCallRepeats": [
+          {
+            "calls": 2672,
+            "class": "virtual",
+            "cyclesAfterFirst": 480486069,
+            "groups": 1019,
+            "outputHashDisagreements": 0
+          },
+          {
+            "calls": 107,
+            "class": "classicPosition",
+            "cyclesAfterFirst": 232701707,
+            "groups": 42,
+            "outputHashDisagreements": 0
+          },
+          {
+            "calls": 178,
+            "class": "classicAttributes",
+            "cyclesAfterFirst": 1162191715,
+            "groups": 69,
+            "outputHashDisagreements": 0
+          }
+        ],
+        "groups": [
+          {
+            "calls": 897,
+            "class": "classicPosition",
+            "cycles": 5944101361,
+            "loopPercent": 66.0424587937978,
+            "phases": [
+              {
+                "cycles": 980837434,
+                "percent": 16.501021339161515,
+                "phase": "pick"
+              },
+              {
+                "cycles": 895039783,
+                "percent": 15.057613062799854,
+                "phase": "quadrics_position"
+              },
+              {
+                "cycles": 887429183,
+                "percent": 14.929576888148896,
+                "phase": "collapse"
+              },
+              {
+                "cycles": 744027665,
+                "percent": 12.51707566566175,
+                "phase": "rank"
+              },
+              {
+                "cycles": 525104178,
+                "percent": 8.834038084297735,
+                "phase": "classify"
+              },
+              {
+                "cycles": 416365742,
+                "percent": 7.004687785639529,
+                "phase": "adjacency_iteration"
+              },
+              {
+                "cycles": 254817406,
+                "percent": 4.286895369447923,
+                "phase": "loops_update"
+              },
+              {
+                "cycles": 232324420,
+                "percent": 3.908486849236957,
+                "phase": "indices_remap"
+              },
+              {
+                "cycles": 216699571,
+                "percent": 3.645623750997809,
+                "phase": "position_weld"
+              },
+              {
+                "cycles": 172694509,
+                "percent": 2.905308952721945,
+                "phase": "sort"
+              },
+              {
+                "cycles": 157631346,
+                "percent": 2.651895323223106,
+                "phase": "adjacency_initial"
+              },
+              {
+                "cycles": 155963790,
+                "percent": 2.6238413601641812,
+                "phase": "quadrics_update"
+              },
+              {
+                "cycles": 58664516,
+                "percent": 0.9869366694334202,
+                "phase": "rescale_positions"
+              },
+              {
+                "cycles": 18876138,
+                "percent": 0.3175608364259857,
+                "phase": "candidates"
+              },
+              {
+                "cycles": 0,
+                "percent": 0,
+                "phase": "quadrics_attributes"
+              },
+              {
+                "cycles": 0,
+                "percent": 0,
+                "phase": "rescale_attributes"
+              }
+            ],
+            "repeatedSetupCycles": 1295867969,
+            "repeatedSetupUpperBoundPercent": 21.800906315332263,
+            "reusedSetupCalls": 861,
+            "reusedSetupGroups": 299,
+            "setupPercent": 33.403471936521036,
+            "stops": [
+              {
+                "calls": 53,
+                "cycles": 24045726,
+                "reason": "1"
+              },
+              {
+                "calls": 475,
+                "cycles": 4548687247,
+                "reason": "0"
+              },
+              {
+                "calls": 369,
+                "cycles": 1371368388,
+                "reason": "2"
+              }
+            ]
+          },
+          {
+            "calls": 1149,
+            "class": "classicAttributes",
+            "cycles": 21252691566,
+            "loopPercent": 55.86016779160554,
+            "phases": [
+              {
+                "cycles": 6027731685,
+                "percent": 28.362203753256125,
+                "phase": "rank"
+              },
+              {
+                "cycles": 4919783559,
+                "percent": 23.148990534783167,
+                "phase": "quadrics_attributes"
+              },
+              {
+                "cycles": 1623428724,
+                "percent": 7.638697051422687,
+                "phase": "collapse"
+              },
+              {
+                "cycles": 1325312538,
+                "percent": 6.235975024077569,
+                "phase": "pick"
+              },
+              {
+                "cycles": 1160051291,
+                "percent": 5.458373530700681,
+                "phase": "quadrics_position"
+              },
+              {
+                "cycles": 1045459648,
+                "percent": 4.919187034514366,
+                "phase": "classify"
+              },
+              {
+                "cycles": 959823744,
+                "percent": 4.516245582444359,
+                "phase": "quadrics_update"
+              },
+              {
+                "cycles": 635872284,
+                "percent": 2.9919611924226426,
+                "phase": "adjacency_iteration"
+              },
+              {
+                "cycles": 548253670,
+                "percent": 2.5796905220094324,
+                "phase": "loops_update"
+              },
+              {
+                "cycles": 350516635,
+                "percent": 1.649281145926738,
+                "phase": "indices_remap"
+              },
+              {
+                "cycles": 285589619,
+                "percent": 1.3437809423484295,
+                "phase": "position_weld"
+              },
+              {
+                "cycles": 283777850,
+                "percent": 1.3352560503629904,
+                "phase": "rescale_attributes"
+              },
+              {
+                "cycles": 229060125,
+                "percent": 1.0777934845977335,
+                "phase": "sort"
+              },
+              {
+                "cycles": 186319313,
+                "percent": 0.8766857243534891,
+                "phase": "adjacency_initial"
+              },
+              {
+                "cycles": 78778983,
+                "percent": 0.37067767513283073,
+                "phase": "rescale_positions"
+              },
+              {
+                "cycles": 27474812,
+                "percent": 0.12927685848485249,
+                "phase": "candidates"
+              }
+            ],
+            "repeatedSetupCycles": 6789397077,
+            "repeatedSetupUpperBoundPercent": 31.946057542479277,
+            "reusedSetupCalls": 1110,
+            "reusedSetupGroups": 231,
+            "setupPercent": 42.95729152539662,
+            "stops": [
+              {
+                "calls": 132,
+                "cycles": 215705220,
+                "reason": "1"
+              },
+              {
+                "calls": 146,
+                "cycles": 6731098554,
+                "reason": "0"
+              },
+              {
+                "calls": 871,
+                "cycles": 14305887792,
+                "reason": "2"
+              }
+            ]
+          },
+          {
+            "calls": 12113,
+            "class": "virtual",
+            "cycles": 5012820931,
+            "loopPercent": 58.67383833344435,
+            "phases": [
+              {
+                "cycles": 781093233,
+                "percent": 15.581909742069739,
+                "phase": "quadrics_position"
+              },
+              {
+                "cycles": 676802214,
+                "percent": 13.501424114604982,
+                "phase": "pick"
+              },
+              {
+                "cycles": 577315967,
+                "percent": 11.51678815075551,
+                "phase": "classify"
+              },
+              {
+                "cycles": 432804643,
+                "percent": 8.633953794827864,
+                "phase": "collapse"
+              },
+              {
+                "cycles": 376151504,
+                "percent": 7.503788967880848,
+                "phase": "rank"
+              },
+              {
+                "cycles": 341448108,
+                "percent": 6.8114962154031105,
+                "phase": "adjacency_iteration"
+              },
+              {
+                "cycles": 233315373,
+                "percent": 4.65437278154391,
+                "phase": "sort"
+              },
+              {
+                "cycles": 221319091,
+                "percent": 4.415060782070454,
+                "phase": "position_weld"
+              },
+              {
+                "cycles": 203457206,
+                "percent": 4.058736763202364,
+                "phase": "loops_update"
+              },
+              {
+                "cycles": 166290805,
+                "percent": 3.3173098997339787,
+                "phase": "indices_remap"
+              },
+              {
+                "cycles": 138873021,
+                "percent": 2.7703567095562787,
+                "phase": "adjacency_initial"
+              },
+              {
+                "cycles": 112083189,
+                "percent": 2.235930438026652,
+                "phase": "quadrics_update"
+              },
+              {
+                "cycles": 64993647,
+                "percent": 1.2965483486168439,
+                "phase": "rescale_positions"
+              },
+              {
+                "cycles": 42512749,
+                "percent": 0.8480803440852055,
+                "phase": "candidates"
+              },
+              {
+                "cycles": 0,
+                "percent": 0,
+                "phase": "quadrics_attributes"
+              },
+              {
+                "cycles": 0,
+                "percent": 0,
+                "phase": "rescale_attributes"
+              }
+            ],
+            "repeatedSetupCycles": 226459373,
+            "repeatedSetupUpperBoundPercent": 4.517603483490562,
+            "reusedSetupCalls": 2672,
+            "reusedSetupGroups": 1019,
+            "setupPercent": 40.465896307118655,
+            "stops": [
+              {
+                "calls": 952,
+                "cycles": 176544408,
+                "reason": "1"
+              },
+              {
+                "calls": 5507,
+                "cycles": 2926136666,
+                "reason": "0"
+              },
+              {
+                "calls": 5654,
+                "cycles": 1910139857,
+                "reason": "2"
+              }
+            ]
+          }
+        ],
+        "instrumentedWallStages": {
+          "lodSolveMs": 7219.7228000000005,
+          "virtualMs": 4038.9313999999986
+        },
+        "models": 101,
+        "threads": 1,
+        "totalCycles": 32209613858
+      }
+    }
+  ],
+  "shippingChanges": "None: profile/docs only, dependency and registry unchanged, parallel geometry off",
+  "sourceHead": "49e838a917a453a2eccb64eae369504c99f4a92f",
+  "validation": {
+    "completeOutputsByteEqual": true,
+    "counterFailures": 0,
+    "models": 101,
+    "textureEntriesVerified": 335,
+    "threadBudget": 1,
+    "warmDirectPackedMatchesCapturedStride124": true
+  },
+  "warmStart": {
+    "captureSha256": "77976AB2B27DCFEDFB894B50DE5E7F05138BBDFCBA05C6D2E42030FBBC13774B",
+    "conclusion": "Previous-LOD input changes indices/error: keep LOD0 input per target",
+    "result": {
+      "levels": [
+        {
+          "directDigest": "35421a87a30708dd432e1da657049374bdfa4d489484b720babbaf1bd29d3a39",
+          "directErrorBits": 978538732,
+          "directIndices": 146946,
+          "equal": true,
+          "firstDifference": null,
+          "level": 1,
+          "progressiveDigest": "35421a87a30708dd432e1da657049374bdfa4d489484b720babbaf1bd29d3a39",
+          "progressiveErrorBits": 978538732,
+          "progressiveIndices": 146946,
+          "targetIndices": 146946
+        },
+        {
+          "directDigest": "ab96efc98cb13716c7f83529d6c7e042f4cae79e921464d4a339acbecfbd2ef9",
+          "directErrorBits": 984267605,
+          "directIndices": 73452,
+          "equal": false,
+          "firstDifference": 0,
+          "level": 2,
+          "progressiveDigest": "32e6dcfbedf4c6ca3de43f8bc94b61a09e6a4ebab2ea5b144c109455143db946",
+          "progressiveErrorBits": 984363793,
+          "progressiveIndices": 73452,
+          "targetIndices": 73473
+        },
+        {
+          "directDigest": "33e317a622d8775c5344561278998db2ad5ec5d18c13b4095099a2791e9adae2",
+          "directErrorBits": 990844960,
+          "directIndices": 36720,
+          "equal": false,
+          "firstDifference": 0,
+          "level": 3,
+          "progressiveDigest": "a87d913937ed0d465a120f24044c26ef6258af5203074d40a78a0407a571ae3d",
+          "progressiveErrorBits": 990364545,
+          "progressiveIndices": 36702,
+          "targetIndices": 36735
+        }
+      ],
+      "originalDigest": "fdcba50ac04d3f132137feb33d7eb1f53f3e9607adee3fff45bebb6464c7bdea",
+      "originalIndices": 293892,
+      "vertices": 53437
+    },
+    "source": "assets/third_party/namaqualand_boulder_02/namaqualand_boulder_02_1k.gltf"
+  }
+}
