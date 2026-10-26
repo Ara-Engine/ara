@@ -33,6 +33,10 @@ struct Look {
     uint4 cascadeMaps; // sampled cascade maps, in cascade order
     float4 terrain;    // x terrain detail distance (m): layer normal/MR maps end there
     uint4 localShadows; // x shading table (storage), y atlas (sampled; 0 none), zw atlas texels
+    float4 horizonRect;    // heightfield (look::horizon): world x, z origin, x, z size
+    float4 horizonHeight;  // height = x*depth + y of the capture; z top-surface tolerance (m)
+    uint4 horizonImages;   // x capture, y sun visibility, z sky visibility (sampled; 0 none), w capture texels
+    uint4 horizonStorage;  // x sun visibility, y sky visibility (storage), z sky texels
 };
 static const uint LOOK_PHYSICAL_SKY=1,LOOK_FOG=2,LOOK_RESET=4,LOOK_AMBIENT_OCCLUSION=8,LOOK_REFLECTIONS=16,LOOK_SNAP=32,LOOK_LOCAL_INDIRECT=64;
 Look look(Frame f){return buffers[NonUniformResourceIndex(f.look.x)].Load<Look>(0);}

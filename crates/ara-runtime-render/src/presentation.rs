@@ -155,12 +155,17 @@ impl Presenter {
             skin: None,
         });
         let scene = self.scene(&warm, &[])?;
-        let create = if self.options.ray_tracing {
-            Renderer::new
+        let renderer = if let Some(gpu) = self.initial_device.take() {
+            Renderer::with_device(scene, [64, 64], gpu)?
         } else {
-            Renderer::new_raster
+            let create = if self.options.ray_tracing {
+                Renderer::new
+            } else {
+                Renderer::new_raster
+            };
+            create(scene, [64, 64], &self.extensions, &self.cache)?
         };
-        self.renderer = Some(create(scene, [64, 64], &self.extensions, &self.cache)?);
+        self.renderer = Some(renderer);
         Ok(())
     }
 

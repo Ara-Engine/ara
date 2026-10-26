@@ -12,6 +12,7 @@ use glam::Vec4;
 mod batches;
 mod culling;
 mod environment;
+pub(in crate::renderer) mod pipelines;
 mod prepared;
 pub use prepared::{NativeContent, NativeSeed};
 #[cfg(test)]
@@ -62,7 +63,6 @@ pub(super) struct Native {
     culling: Culling,
     changes: updates::Updates,
     pipelines: [Pipeline; 3],
-    owns_pipelines: bool,
     upload: TextureStats,
     material_dirty: bool,
     update_gpu_ms: f64,
@@ -143,11 +143,21 @@ impl Renderer {
         shadow_slots: usize,
     ) -> Result<()> {
         let scene = validated.scene();
+        let pipelines = match self.native_pipeline_handles() {
+            Ok(pipelines) => pipelines,
+            Err(error) => {
+                if let Some(pool) = pool {
+                    pool.destroy(&mut self.gpu)?;
+                }
+                textures.destroy(&mut self.gpu)?;
+                return Err(error);
+            }
+        };
         let mut next = Native::new(
             &mut self.gpu,
             validated,
             textures,
-            &self.artifacts,
+            pipelines,
             self.native.as_ref(),
             pool,
             shadow_slots,
@@ -165,6 +175,7 @@ impl Renderer {
                 &self.artifacts,
                 &self.shader_metadata,
                 self.compute_frame,
+                Some(self.content.ibl_pipelines),
             ) {
                 Ok(content) => content,
                 Err(error) => {
@@ -203,10 +214,6 @@ impl Renderer {
                 self.retire_content(content)?;
             }
             return Err(error);
-        }
-        if let Some(previous) = &mut self.native {
-            previous.owns_pipelines = false;
-            next.owns_pipelines = true;
         }
         let old = self.native.replace(next);
         self.entity_epoch = self.entity_epoch.wrapping_add(1);
@@ -342,7 +349,8 @@ impl Renderer {
     }
 
     /// Shadow slots this quality culls into: its local faces, then one patch per
-    /// cascade and `look::local::PATCHES` face patches (renderer/passes.rs).
+    /// cascade, `look::local::PATCHES` face patches and the horizon capture (the
+    /// last; renderer/passes.rs).
     pub(crate) fn shadow_slots(&self) -> usize {
         Self::shadow_slots_for_quality(&self.look.quality)
     }
@@ -353,6 +361,38 @@ impl Renderer {
             .map_or(0, crate::look::local::capacity)
             + 4
             + crate::look::local::PATCHES
+            + 1
+    }
+
+    /// World bounds (min, max) of every native instance; `None` without native
+    /// content.
+    pub(crate) fn native_content_bounds(&self) -> Option<[Vec3; 2]> {
+        let native = self.native.as_ref()?;
+        native
+            .bounds
+            .iter()
+            .copied()
+            .reduce(|[lo, hi], [a, b]| [lo.min(a), hi.max(b)])
+    }
+
+    /// Cull the landforms of a heightfield capture (look::horizon) into reserved
+    /// slot `slot`: opaque casters with bound radii of at least `min_radius` metres
+    /// at the view's texel density, with the LODs a shadow view of `resolution`
+    /// texels picks.
+    pub(crate) fn cull_native_landforms(
+        &mut self,
+        slot: usize,
+        matrix: Mat4,
+        resolution: u32,
+        min_radius: f32,
+    ) -> Result<usize> {
+        ensure!(
+            matrix.is_finite() && resolution > 0 && min_radius.is_finite(),
+            "Invalid native landform view"
+        );
+        let texel = 2. / (matrix.row(0).truncate().length() * resolution as f32);
+        let view = culling::View::shadow(matrix, resolution, min_radius / texel);
+        self.cull_native_slot(slot, view)
     }
 
     /// Size this camera's culling rows for `count` shadow slots without reserving
@@ -414,6 +454,10 @@ impl Renderer {
             "Invalid native shadow view"
         );
         let view = culling::View::shadow(matrix, resolution, self.look.quality.min_pixels);
+        self.cull_native_slot(slot, view)
+    }
+
+    fn cull_native_slot(&mut self, slot: usize, view: culling::View) -> Result<usize> {
         let native = self
             .native
             .as_mut()
@@ -425,7 +469,6 @@ impl Renderer {
             pass < native.culling.draws.len(),
             "Native shadow slot was not reserved"
         );
-        ensure!(matrix.is_finite(), "Native shadow matrix must be finite");
         native.culling.opaque(
             &mut self.gpu,
             native.visible,
@@ -568,7 +611,7 @@ impl Native {
         gpu: &mut VulkanDevice,
         validated: ValidatedScene<'_>,
         mut textures: Box<dyn Textures>,
-        artifacts: &Path,
+        pipelines: [Pipeline; 3],
         previous: Option<&Self>,
         mut provided_pool: Option<GeometryGpu>,
         shadow_slots: usize,
@@ -637,7 +680,6 @@ impl Native {
             }
         };
         let mut owned = Vec::new();
-        let mut pipelines = previous.map_or_else(Vec::new, |old| old.pipelines.to_vec());
         let prepared = (|| {
             let materials = host_buffer(
                 gpu,
@@ -651,16 +693,6 @@ impl Native {
                 &mut owned,
             )?;
             let visible = host_buffer(gpu, visible_bytes, &mut owned)?;
-            if previous.is_none() {
-                ara_gpu::cpu_scope!("RasterNative.create_pipelines");
-                for name in ["native_shadow", "native_gbuffer", "native_forward"] {
-                    let cooked = serde_json::from_slice(&std::fs::read(
-                        artifacts.join(format!("{name}.json")),
-                    )?)?;
-                    let pipeline = gpu.create_pipeline(&cooked, artifacts)?;
-                    pipelines.push(pipeline);
-                }
-            }
             Ok((
                 materials,
                 gpu.storage_buffer(materials)?.index,
@@ -678,11 +710,6 @@ impl Native {
                     textures.destroy(gpu)?;
                     for resource in owned {
                         gpu.retire(resource)?;
-                    }
-                    if previous.is_none() {
-                        for pipeline in pipelines {
-                            gpu.retire_pipeline(pipeline)?;
-                        }
                     }
                     gpu.collect()?;
                     return Err(error);
@@ -721,10 +748,7 @@ impl Native {
                 .collect(),
             culling,
             changes: updates::Updates::new(scene.instances.len()),
-            pipelines: pipelines
-                .try_into()
-                .map_err(|_| anyhow::anyhow!("Native raster pipeline count"))?,
-            owns_pipelines: previous.is_none(),
+            pipelines,
             upload,
             material_dirty: true,
             update_gpu_ms: 0.,
@@ -799,11 +823,6 @@ impl Native {
         self.textures.destroy(gpu)?;
         for buffer in [self.materials, self.instances, self.visible] {
             gpu.retire(Resource::Buffer(buffer))?;
-        }
-        if self.owns_pipelines {
-            for pipeline in self.pipelines {
-                gpu.retire_pipeline(pipeline)?;
-            }
         }
         gpu.collect()?;
         Ok(())

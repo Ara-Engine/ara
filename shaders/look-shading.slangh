@@ -1,6 +1,7 @@
 // Raster surface shading shared by deferred lighting and forward transparency.
 // Include after raster.slangh and look.slangh.
 #include "look-gi.slangh"
+#include "look-horizon.slangh"
 // Cascaded sun shadows (renderer/frame.rs): f.look.y texels per cascade side in a
 // 2x2 D32 atlas, f.look.z active cascades, far distances in f.splits.
 uint cascadeIndex(Frame f,float3 world){float d=dot(world-f.camera.xyz,f.forward.xyz);return d<f.splits.x?0:d<f.splits.y?1:d<f.splits.z?2:3;}
@@ -51,6 +52,7 @@ float bilinearShadow(uint map,float4x4 m,float res,float3 world){
     return lerp(lerp(lit.w,lit.z,t.x),lerp(lit.x,lit.y,t.x),t.y);
 }
 // Cheap sun visibility for fog samples: the cascade holding `world`, else the far map.
+// (The horizon describes the ground, not the air above it: fog keeps the maps.)
 float fogVisibility(Frame f,Look l,float3 world){
     uint c=cascadeIndex(f,world);float d=dot(world-f.camera.xyz,f.forward.xyz);
     if(c<f.look.z && d<f.splits[c]){float v=bilinearShadow(l.cascadeMaps[c],f.shadows[c],float(f.look.y),world);if(v>=0)return v;}
@@ -87,15 +89,21 @@ float localShadow(Look l,uint index,float3 world,float3 normal,float3 light){
     }
     return sum;
 }
-// Sun visibility at `world`: blends into the next cascade over the last tenth of
-// each and fades out over the last tenth of the shadow distance.
-float visibility(Frame f,Look l,float3 world,float3 normal) {
+// Sun visibility at `world` in the sun maps: blends into the next cascade over the
+// last tenth of each, then the far map, past which it is lit.
+float mapVisibility(Frame f,Look l,float3 world,float3 normal) {
     float d=dot(world-f.camera.xyz,f.forward.xyz);float4 splits=f.splits;uint count=f.look.z,c=cascadeIndex(f,world);
     if(c>=count)return farVisibility(l,world,normal);
     float far=splits[c],near=c==0?0:splits[c-1],band=(far-near)*0.1,blend=saturate((d-(far-band))/max(band,1e-3));
     float v=cascadeVisibility(f,l,c,world,normal);
     if(blend>0)v=lerp(v,c+1<count?cascadeVisibility(f,l,c+1,world,normal):farVisibility(l,world,normal),blend);
     return v;
+}
+// Sun visibility at `world`: the sun maps, and at every distance the horizon of
+// distant landforms (look-horizon.slangh), so far terrain stays shadowed past them.
+float visibility(Frame f,Look l,float3 world,float3 normal){
+    float v=mapVisibility(f,l,world,normal);
+    return v>0?min(v,horizonSun(l,world)):0;
 }
 float3 fresnel(float cosine,float3 f0){return f0+(1-f0)*pow(1-saturate(cosine),5);}
 float3 brdf(Surface s,float3 v,float3 l) {
@@ -160,7 +168,10 @@ float4 screenReflection(Frame f,Look l,int2 p){
 // environment map's (32x16 irradiance, five-level 256x640 GGX prefilter strip for
 // roughness 0, .25, .5, .75, 1). Inside the probe volume, probe irradiance replaces
 // the sky's diffuse light and occludes its reflections by the ratio of probe to
-// sky irradiance in the mirror direction; rough reflections use the probes.
+// sky irradiance facing the normal (sky visibility: a cosine lobe around the mirror
+// direction would count the ground below the horizon at grazing views); rough
+// reflections use the probes. Outside the volume, the heightfield's sky visibility
+// (look-horizon.slangh) occludes the sky's light instead.
 // `gathered` reads the half-resolution gather at pixel `p` (deferred lighting);
 // forward surfaces search the probes directly.
 float3 ibl(Frame f,Look l,Surface s,float3 world,float3 v,int2 p,bool gathered) {
@@ -175,11 +186,15 @@ float3 ibl(Frame f,Look l,Surface s,float3 world,float3 v,int2 p,bool gathered) 
         else{coverage=giCoverage(l,world);if(coverage>0)giLobes(l,l.giImages.y,world,s.normal,reflected,giBias(l,s.normal,v),diffuseGi,specularGi);}
         coverage*=giWeight(l);
     }
+    // Where the probe volume does not reach (and across its fade), distant
+    // landforms occlude the sky's light (look-horizon.slangh): no seam at its edge.
+    // Inside it the sky term weighs under 1%: the lookup is skipped.
+    float sky=coverage<0.99?horizonSky(l,world):1;float3 ambientSky=ambient*sky,specSky=spec*sky;
     [branch]if(coverage>0){
-        float occlusion=saturate(luminance(specularGi)/max(luminance(envTex(irradiance,uv).rgb),1e-4));
-        ambient=lerp(ambient,diffuseGi,coverage);
-        spec=lerp(spec,lerp(spec*occlusion,specularGi/PI,s.roughness),coverage);
-    }
+        float occlusion=saturate(luminance(diffuseGi)/max(luminance(ambient),1e-4));
+        ambient=lerp(ambientSky,diffuseGi,coverage);
+        spec=lerp(specSky,lerp(spec*occlusion,specularGi/PI,s.roughness),coverage);
+    }else{ambient=ambientSky;spec=specSky;}
     if(gathered){float4 r=screenReflection(f,l,p);spec=lerp(spec,r.rgb,r.a);}
     // Analytic split-sum environment BRDF fit (Lazarov, Epic 2014). Its scale and
     // bias already integrate Fresnel over the lobe, so they take F0: Fresnel at
@@ -195,7 +210,8 @@ float3 ibl(Frame f,Look l,Surface s,float3 world,float3 v,int2 p,bool gathered) 
 // `gathered`: deferred G-buffer pixels read the half-resolution probe gather.
 float3 shade(Frame f,Look l,Surface s,float3 world,int2 p,bool gathered) {
     float3 v=normalize(f.camera.xyz-world);float3 result=s.emissive+ibl(f,l,s,world,v,p,gathered);
-    result+=brdf(s,v,f.sunDirection.xyz)*sunAt(f,l,world)*visibility(f,l,world,s.normal);
+    // The sun lights front faces only (brdf ends in N.L): back faces skip its shadows.
+    if(dot(s.normal,f.sunDirection.xyz)>0)result+=brdf(s,v,f.sunDirection.xyz)*sunAt(f,l,world)*visibility(f,l,world,s.normal);
     uint tilesX=(f.extent.x+15)/16;uint tile=(uint(p.y)/16*tilesX+uint(p.x)/16)*TILE_STRIDE;
     uint count=buffers[NonUniformResourceIndex(f.lighting.z)].Load(tile*4);
     for(uint i=0;i<count;i++) {

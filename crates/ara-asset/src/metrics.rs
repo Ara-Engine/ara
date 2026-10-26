@@ -27,11 +27,19 @@ pub enum ImportStage {
     Opacity,
     /// CPU quantization and block packing for the optional GPU encoder.
     GpuPacking,
+    /// LOD topology, seam/card classification and attribute preparation.
+    LodPreparation,
+    /// Geometric and attribute-aware simplification calls, excluding area checks.
+    LodSimplification,
+    /// Per-card area checks on candidate LODs.
+    LodArea,
+    /// Virtual-geometry construction and encoding, included in Mesh.
+    VirtualGeometry,
 }
 /// Thread-safe, per-job timers. No global counters and no effect on output bytes.
 #[derive(Debug, Default)]
 pub struct ImportMetrics {
-    nanos: [AtomicU64; 9],
+    nanos: [AtomicU64; 13],
     texture_tasks: [AtomicU64; 2],
 }
 /// Summed elapsed stage intervals in milliseconds. Overlapping plugin spans may exceed wall time.
@@ -60,6 +68,14 @@ pub struct StageTimes {
     pub opacity_ms: f64,
     /// CPU packing for GPU compression, included in compression time.
     pub gpu_packing_ms: f64,
+    /// Topology/attribute preparation, nested in classic LOD work.
+    pub lod_preparation_ms: f64,
+    /// Simplifier calls, nested in classic LOD work.
+    pub lod_simplification_ms: f64,
+    /// Card-area checks, nested in classic LOD work.
+    pub lod_area_ms: f64,
+    /// Virtual-geometry construction/encoding, nested in Mesh.
+    pub virtual_geometry_ms: f64,
 }
 /// Records one scoped interval even if the stage fails.
 pub struct StageTimer<'a> {
@@ -98,6 +114,10 @@ impl ImportMetrics {
             lods_ms: n[6],
             opacity_ms: n[7],
             gpu_packing_ms: n[8],
+            lod_preparation_ms: n[9],
+            lod_simplification_ms: n[10],
+            lod_area_ms: n[11],
+            virtual_geometry_ms: n[12],
         }
     }
 }
