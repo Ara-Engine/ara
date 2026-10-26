@@ -116,12 +116,14 @@ impl Renderer {
         textures: Box<dyn Textures>,
     ) -> Result<()> {
         let scene = validated.scene();
+        let shadow_slots = self.shadow_slots();
         let mut next = Native::new(
             &mut self.gpu,
             validated,
             textures,
             &self.artifacts,
             self.native.as_ref(),
+            shadow_slots,
         )?;
         // The first native generation replaces bootstrap/legacy geometry. HDRI
         // changes rebuild the actual environment and its IBL, rather than merely
@@ -310,6 +312,17 @@ impl Renderer {
             view,
             &mut native.changes.work,
         )
+    }
+
+    /// Shadow slots this quality culls into: its local faces, then one patch per
+    /// cascade and `look::local::PATCHES` face patches (renderer/passes.rs).
+    pub(crate) fn shadow_slots(&self) -> usize {
+        self.look
+            .quality
+            .local_shadows
+            .map_or(0, crate::look::local::capacity)
+            + 4
+            + crate::look::local::PATCHES
     }
 
     /// Size this camera's culling rows for `count` shadow slots without reserving
@@ -518,12 +531,16 @@ impl Native {
         gpu.retire(Resource::Buffer(previous))?;
         Ok(())
     }
+    /// A content generation whose culling rows hold `shadow_slots` shadow slots
+    /// (`Renderer::shadow_slots`) or, when larger, the previous generation's, so
+    /// its frames never grow them (a growth retires a buffer mid-session).
     fn new(
         gpu: &mut VulkanDevice,
         validated: ValidatedScene<'_>,
         mut textures: Box<dyn Textures>,
         artifacts: &Path,
         previous: Option<&Self>,
+        shadow_slots: usize,
     ) -> Result<Self> {
         ara_gpu::cpu_scope!("RasterNative.create_content");
         let scene = validated.scene();
@@ -531,7 +548,9 @@ impl Native {
         // Local-light face slots belong to the view's quality configuration,
         // which is not re-applied when only a content generation changes.
         let passes = previous.map_or(culling::BASE_PASSES, |old| old.culling.draws.len());
-        let capacity = previous.map_or(passes, |old| old.capacity.max(passes));
+        let capacity = (culling::BASE_PASSES + shadow_slots)
+            .max(passes)
+            .max(previous.map_or(0, |old| old.capacity));
         let visible_bytes = scene
             .instances
             .len()
