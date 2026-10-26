@@ -244,7 +244,8 @@ pub(crate) fn fill_sample(i: &Instance, r: Box2, p: [f32; 2]) -> [f32; 4] {
             let radius = d[0].hypot(d[1]);
             let outer = r.w.min(r.h) / 2.0;
             let inner = outer - i.params[2];
-            coverage = (outer - radius + 0.5).clamp(0.0, 1.0) * (radius - inner + 0.5).clamp(0.0, 1.0);
+            coverage =
+                (outer - radius + 0.5).clamp(0.0, 1.0) * (radius - inner + 0.5).clamp(0.0, 1.0);
             let angle = (-d[1]).atan2(d[0]);
             let [r_, g, b] = hue((angle / std::f32::consts::TAU).rem_euclid(1.0));
             [r_, g, b, i.color[3]]
@@ -260,13 +261,26 @@ pub(crate) fn fill_sample(i: &Instance, r: Box2, p: [f32; 2]) -> [f32; 4] {
 }
 /// Full-saturation, full-value RGB at hue `h` in turns.
 fn hue(h: f32) -> [f32; 3] {
-    [0.0, 4.0, 2.0].map(|o: f32| ((h * 6.0 + o).rem_euclid(6.0) - 3.0).abs().sub(1.0).clamp(0.0, 1.0))
+    [0.0, 4.0, 2.0].map(|o: f32| {
+        ((h * 6.0 + o).rem_euclid(6.0) - 3.0)
+            .abs()
+            .sub(1.0)
+            .clamp(0.0, 1.0)
+    })
 }
 fn srgb_to_linear(c: f32) -> f32 {
-    if c <= 0.04045 { c / 12.92 } else { ((c + 0.055) / 1.055).powf(2.4) }
+    if c <= 0.04045 {
+        c / 12.92
+    } else {
+        ((c + 0.055) / 1.055).powf(2.4)
+    }
 }
 fn linear_to_srgb(c: f32) -> f32 {
-    if c <= 0.003_130_8 { c * 12.92 } else { 1.055 * c.max(0.0).powf(1.0 / 2.4) - 0.055 }
+    if c <= 0.003_130_8 {
+        c * 12.92
+    } else {
+        1.055 * c.max(0.0).powf(1.0 / 2.4) - 0.055
+    }
 }
 fn distance(r: Box2, radius: f32, p: [f32; 2]) -> f32 {
     let radius = radius.max(0.0).min(r.w / 2.0).min(r.h / 2.0);

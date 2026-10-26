@@ -261,7 +261,9 @@ pub const DEFS: &[Def] = &[
         "Colours",
         "Colour swatches",
         "The project's saved colours, shared by everyone. Add them from the colour picker.",
-        Kind::Colors { max: COLOR_SWATCHES },
+        Kind::Colors {
+            max: COLOR_SWATCHES,
+        },
         Lit::None,
     ),
     def(

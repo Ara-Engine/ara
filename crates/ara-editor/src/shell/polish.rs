@@ -299,7 +299,12 @@ impl Shell {
                             h: (r.h - 4.).max(0.),
                         },
                         radius: 3.,
-                        color: super::color::math::ui_color([base[0], base[1], base[2], channel(3)]),
+                        color: super::color::math::ui_color([
+                            base[0],
+                            base[1],
+                            base[2],
+                            channel(3),
+                        ]),
                     });
                 self.ui.display.commands.push(ara_ui::paint::Draw::PopClip);
             }

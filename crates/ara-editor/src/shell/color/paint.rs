@@ -150,9 +150,15 @@ impl Shell {
                 }],
             };
             paint(&mut painter, ui.nodes[i].rect);
-            let clickable = ["cp-old", "cp-swatch-", "cp-recent-", "cp-exposure-", "cp-preset-"]
-                .iter()
-                .any(|prefix| id.starts_with(prefix));
+            let clickable = [
+                "cp-old",
+                "cp-swatch-",
+                "cp-recent-",
+                "cp-exposure-",
+                "cp-preset-",
+            ]
+            .iter()
+            .any(|prefix| id.starts_with(prefix));
             if clickable && hovered.as_deref() == Some(id) {
                 painter.outline(inset(ui.nodes[i].rect, -1.), 4., 1.5, WHITE);
             }
@@ -197,7 +203,10 @@ impl Shell {
             let radius = r.w.min(r.h) / 2. - RING / 2.;
             let centre = [r.x + r.w / 2., r.y + r.h / 2.];
             p.marker(
-                [centre[0] + angle.cos() * radius, centre[1] - angle.sin() * radius],
+                [
+                    centre[0] + angle.cos() * radius,
+                    centre[1] - angle.sin() * radius,
+                ],
                 RING / 2. + 1.,
                 hue,
             );
@@ -216,7 +225,14 @@ impl Shell {
         });
         let old = picker.old;
         part("cp-old", &mut |p, r| {
-            p.swatch(r, 4., linear([old[0], old[1], old[2]], if picker.count > 3 { old[3] } else { 1. }));
+            p.swatch(
+                r,
+                4.,
+                linear(
+                    [old[0], old[1], old[2]],
+                    if picker.count > 3 { old[3] } else { 1. },
+                ),
+            );
         });
         // Channel tracks.
         let base_display = math::hsv_to_rgb(picker.hsv);
@@ -270,7 +286,10 @@ impl Shell {
             let base = display(base_display, 1.);
             part("cp-stops-track", &mut |p, r| {
                 let half = (r.w / 2.).round();
-                p.draws.push(Draw::PushRoundedClip { rect: r, radius: 3. });
+                p.draws.push(Draw::PushRoundedClip {
+                    rect: r,
+                    radius: 3.,
+                });
                 p.fill(
                     Box2 { w: half, ..r },
                     0.,
@@ -304,7 +323,12 @@ impl Shell {
                 let color = linear(base_linear.map(|c| c * scale), 1.);
                 part(&format!("cp-exposure-{n}"), &mut |p, r| {
                     p.solid(r, 4., color);
-                    p.outline(r, 4., if step == 0 { 2. } else { 1. }, if step == 0 { WHITE } else { OUTLINE });
+                    p.outline(
+                        r,
+                        4.,
+                        if step == 0 { 2. } else { 1. },
+                        if step == 0 { WHITE } else { OUTLINE },
+                    );
                 });
             }
         }
@@ -312,7 +336,10 @@ impl Shell {
         if picker.hints.temperature {
             let (low, high) = math::KELVIN;
             part("cp-kelvin-track", &mut |p, r| {
-                p.draws.push(Draw::PushRoundedClip { rect: r, radius: 3. });
+                p.draws.push(Draw::PushRoundedClip {
+                    rect: r,
+                    radius: 3.,
+                });
                 let at = |n: usize| low + (high - low) * n as f64 / KELVIN_SEGMENTS as f64;
                 for n in 0..KELVIN_SEGMENTS {
                     let x0 = r.x + r.w * n as f32 / KELVIN_SEGMENTS as f32;
@@ -342,7 +369,12 @@ impl Shell {
                 let current = picker.kelvin == Some(*kelvin);
                 part(&format!("cp-preset-{n}"), &mut |p, r| {
                     p.solid(r, 4., linear(math::kelvin_to_linear(*kelvin), 1.));
-                    p.outline(r, 4., if current { 2. } else { 1. }, if current { WHITE } else { OUTLINE });
+                    p.outline(
+                        r,
+                        4.,
+                        if current { 2. } else { 1. },
+                        if current { WHITE } else { OUTLINE },
+                    );
                 });
             }
         }
@@ -350,7 +382,9 @@ impl Shell {
         for (prefix, list) in [("swatch", &picker.swatches), ("recent", &picker.recent)] {
             for (n, c) in list.iter().enumerate() {
                 let color = linear([c[0], c[1], c[2]], c[3]);
-                part(&format!("cp-{prefix}-{n}"), &mut |p, r| p.swatch(r, 3., color));
+                part(&format!("cp-{prefix}-{n}"), &mut |p, r| {
+                    p.swatch(r, 3., color)
+                });
             }
         }
         drop(part);

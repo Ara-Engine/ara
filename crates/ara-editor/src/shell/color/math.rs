@@ -78,7 +78,12 @@ pub(crate) fn parse_hex(text: &str) -> Option<([f64; 3], Option<f64>)> {
 /// 0–1 channels as `RRGGBB`, or `RRGGBBAA` when `alpha` is given.
 pub(crate) fn format_hex(rgb: [f64; 3], alpha: Option<f64>) -> String {
     let byte = |c: f64| (c.clamp(0., 1.) * 255.).round() as u8;
-    let mut out = format!("{:02X}{:02X}{:02X}", byte(rgb[0]), byte(rgb[1]), byte(rgb[2]));
+    let mut out = format!(
+        "{:02X}{:02X}{:02X}",
+        byte(rgb[0]),
+        byte(rgb[1]),
+        byte(rgb[2])
+    );
     if let Some(a) = alpha {
         out.push_str(&format!("{:02X}", byte(a)));
     }
@@ -180,7 +185,12 @@ mod tests {
 
     #[test]
     fn hsv_round_trips_and_keeps_hue_order() {
-        for rgb in [[1., 0., 0.], [0.2, 0.6, 0.4], [0.9, 0.9, 0.1], [0.3, 0.1, 0.8]] {
+        for rgb in [
+            [1., 0., 0.],
+            [0.2, 0.6, 0.4],
+            [0.9, 0.9, 0.1],
+            [0.3, 0.1, 0.8],
+        ] {
             let back = hsv_to_rgb(rgb_to_hsv(rgb));
             for i in 0..3 {
                 assert!((back[i] - rgb[i]).abs() < 1e-12, "{rgb:?} -> {back:?}");
@@ -222,8 +232,8 @@ mod tests {
         let d65 = kelvin_to_linear(6504.);
         assert!(d65.iter().all(|c| *c > 0.95), "{d65:?}");
         for kelvin in [1900., 3200., 5600., 10000.] {
-            let found = linear_to_kelvin(kelvin_to_linear(kelvin).map(|c| c * 0.4))
-                .expect("on the locus");
+            let found =
+                linear_to_kelvin(kelvin_to_linear(kelvin).map(|c| c * 0.4)).expect("on the locus");
             assert!((found - kelvin).abs() <= 25., "{kelvin} -> {found}");
         }
         assert_eq!(linear_to_kelvin([0., 1., 0.]), None);

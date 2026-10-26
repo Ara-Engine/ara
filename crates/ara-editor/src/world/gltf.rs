@@ -310,7 +310,13 @@ impl FidelityContent {
                 })?;
             }
             // Changed colour lookup tables reload with the snapshot.
-            for id in self.library.luts.ids().map(str::to_owned).collect::<Vec<_>>() {
+            for id in self
+                .library
+                .luts
+                .ids()
+                .map(str::to_owned)
+                .collect::<Vec<_>>()
+            {
                 let _ = self.library.luts.load(source, &id);
             }
             self.materials = Some(materials);

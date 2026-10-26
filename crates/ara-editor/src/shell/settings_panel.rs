@@ -164,7 +164,9 @@ impl Shell {
             Kind::Colors { .. } => {
                 // Saved from the colour picker; shown here, cleared with reset.
                 let colors = value.as_array().cloned().unwrap_or_default();
-                out.push_str(&format!("<panel id='set-{id}' class='row' style='gap:3px'>"));
+                out.push_str(&format!(
+                    "<panel id='set-{id}' class='row' style='gap:3px'>"
+                ));
                 if colors.is_empty() {
                     out.push_str(&format!(
                         "<text id='set-{id}-none' class='caption' text='None yet: save colours from the colour picker' />"

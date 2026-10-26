@@ -24,7 +24,9 @@ pub(super) fn field_texts(picker: &ColorPicker) -> Vec<(String, String)> {
     if picker.hints.temperature {
         out.push((
             "cp-kelvin".into(),
-            picker.kelvin.map_or_else(|| "—".into(), |k| format!("{k:.0} K")),
+            picker
+                .kelvin
+                .map_or_else(|| "—".into(), |k| format!("{k:.0} K")),
         ));
     }
     out
@@ -74,7 +76,10 @@ impl Shell {
             super::super::inspector_panel::sentence(&picker.field.label)
         );
         if let Some(pointer) = &picker.pointer {
-            title.push_str(&format!(" {}", pointer.trim_start_matches('/').replace('/', " ")));
+            title.push_str(&format!(
+                " {}",
+                pointer.trim_start_matches('/').replace('/', " ")
+            ));
         }
         let mut bindings: Vec<(String, Control)> = Vec::new();
         let mut bind = |id: &str, control: Control| bindings.push((id.to_owned(), control));
@@ -125,8 +130,16 @@ impl Shell {
         out.push_str("<panel id='cp-modes' class='segment'>");
         for (mode, label, description) in [
             (Mode::Rgb, "RGB", "sRGB channels, 0–255"),
-            (Mode::Hsv, "HSV", "Hue in degrees, saturation and value in percent"),
-            (Mode::Linear, "Linear", "Linear-light channels, 0–1, as stored"),
+            (
+                Mode::Hsv,
+                "HSV",
+                "Hue in degrees, saturation and value in percent",
+            ),
+            (
+                Mode::Linear,
+                "Linear",
+                "Linear-light channels, 0–1, as stored",
+            ),
         ] {
             let id = format!("cp-mode-{}", label.to_lowercase());
             bind(&id, Control::Mode(mode));
@@ -138,9 +151,21 @@ impl Shell {
         out.push_str("</panel>");
         // Channel sliders and their fields.
         let names = match picker.mode {
-            Mode::Hsv => [("H", "Hue, 0–360°"), ("S", "Saturation, 0–100%"), ("V", "Value, 0–100%")],
-            Mode::Rgb => [("R", "Red, 0–255"), ("G", "Green, 0–255"), ("B", "Blue, 0–255")],
-            Mode::Linear => [("R", "Linear red, 0–1"), ("G", "Linear green, 0–1"), ("B", "Linear blue, 0–1")],
+            Mode::Hsv => [
+                ("H", "Hue, 0–360°"),
+                ("S", "Saturation, 0–100%"),
+                ("V", "Value, 0–100%"),
+            ],
+            Mode::Rgb => [
+                ("R", "Red, 0–255"),
+                ("G", "Green, 0–255"),
+                ("B", "Blue, 0–255"),
+            ],
+            Mode::Linear => [
+                ("R", "Linear red, 0–1"),
+                ("G", "Linear green, 0–1"),
+                ("B", "Linear blue, 0–1"),
+            ],
         };
         let alpha_name = match picker.mode {
             Mode::Rgb => "Alpha, 0–255",
@@ -210,14 +235,24 @@ impl Shell {
             out.push_str("<text id='cp-swatches-empty' class='caption wrap-text' text='Save colours with + to share them with the project.' />");
         }
         for (prefix, list, description) in [
-            ("swatch", swatches, "Click to apply; Shift+click removes it from the project"),
-            ("recent", recent, "A colour you picked lately; click to apply"),
+            (
+                "swatch",
+                swatches,
+                "Click to apply; Shift+click removes it from the project",
+            ),
+            (
+                "recent",
+                recent,
+                "A colour you picked lately; click to apply",
+            ),
         ] {
             if prefix == "recent" && !list.is_empty() {
                 out.push_str("<text id='cp-recent-title' class='caption' text='Recent' />");
             }
             for (row, chunk) in list.chunks(SWATCH_ROW).enumerate() {
-                out.push_str(&format!("<panel id='cp-{prefix}-row-{row}' class='cp-swatches'>"));
+                out.push_str(&format!(
+                    "<panel id='cp-{prefix}-row-{row}' class='cp-swatches'>"
+                ));
                 for n in 0..chunk.len() {
                     let index = row * SWATCH_ROW + n;
                     let id = format!("cp-{prefix}-{index}");
@@ -230,7 +265,8 @@ impl Shell {
                         },
                     );
                     let hex = math::format_hex(
-                        [chunk[n][0], chunk[n][1], chunk[n][2]].map(|c| math::linear_to_srgb(c.min(1.))),
+                        [chunk[n][0], chunk[n][1], chunk[n][2]]
+                            .map(|c| math::linear_to_srgb(c.min(1.))),
                         None,
                     );
                     out.push_str(&format!(

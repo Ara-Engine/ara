@@ -33,7 +33,11 @@ impl Shell {
     }
     /// Components to offer: registered by the schema, not on every selected entity,
     /// matching the filter; with their first doc line.
-    fn addable_components(&mut self, editor: &Editor, query: &str) -> ara_ui::Result<Vec<(String, String)>> {
+    fn addable_components(
+        &mut self,
+        editor: &Editor,
+        query: &str,
+    ) -> ara_ui::Result<Vec<(String, String)>> {
         let resolved = self.resolved(editor)?;
         let on_all = |name: &str| {
             !editor.state.selection.is_empty()
@@ -50,14 +54,25 @@ impl Shell {
             .schema()
             .components()
             .filter(|t| !on_all(&t.name))
-            .filter(|t| query.is_empty() || palette::fuzzy(&t.name.to_lowercase(), &query).is_some())
-            .map(|t| (t.name.clone(), t.doc.lines().next().unwrap_or("").to_owned()))
+            .filter(|t| {
+                query.is_empty() || palette::fuzzy(&t.name.to_lowercase(), &query).is_some()
+            })
+            .map(|t| {
+                (
+                    t.name.clone(),
+                    t.doc.lines().next().unwrap_or("").to_owned(),
+                )
+            })
             .collect();
         out.sort();
         Ok(out)
     }
     /// The dropdown's popover markup.
-    pub(super) fn add_component_markup(&mut self, editor: &Editor, out: &mut String) -> ara_ui::Result<()> {
+    pub(super) fn add_component_markup(
+        &mut self,
+        editor: &Editor,
+        out: &mut String,
+    ) -> ara_ui::Result<()> {
         let Some(state) = self.add_component.clone() else {
             return Ok(());
         };
@@ -94,7 +109,11 @@ impl Shell {
                 ara_ui::source::stable_id(&id),
                 Binding::Content(calls, format!("Add {name}")),
             );
-            let active = if index == state.active { " menu-active" } else { "" };
+            let active = if index == state.active {
+                " menu-active"
+            } else {
+                ""
+            };
             out.push_str(&format!("<button id='{id}' class='menu-item{active}' label='Add {}' description='{}' action='Dispatch'>{}<text id='{id}-label' class='menu-label' text='{}' /></button>",escape(name),escape(doc),icons::icon(&format!("{id}-icon"),"box"),escape(name)));
         }
         if commands::get(NEW_SCRIPT).is_some() {
@@ -107,7 +126,11 @@ impl Shell {
     }
     /// Keys while the dropdown is open: arrows move the highlight, Enter adds it,
     /// Escape closes. Returns whether the key was used.
-    pub(crate) fn add_component_key(&mut self, editor: &mut Editor, scancode: i32) -> ara_ui::Result<bool> {
+    pub(crate) fn add_component_key(
+        &mut self,
+        editor: &mut Editor,
+        scancode: i32,
+    ) -> ara_ui::Result<bool> {
         let Some(state) = self.add_component.clone() else {
             return Ok(false);
         };
@@ -115,7 +138,11 @@ impl Shell {
         match scancode {
             81 | 82 if !rows.is_empty() => {
                 let n = rows.len();
-                let active = if scancode == 81 { (state.active + 1) % n } else { (state.active + n - 1) % n };
+                let active = if scancode == 81 {
+                    (state.active + 1) % n
+                } else {
+                    (state.active + n - 1) % n
+                };
                 if let Some(s) = &mut self.add_component {
                     s.active = active;
                 }

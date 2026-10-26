@@ -368,7 +368,11 @@ fn header_enable_is_a_reflected_field_edit_and_optional_assets_use_override_rows
 /// The text of the node `id`.
 fn text(shell: &Shell, id: &str) -> String {
     let i = shell.ui.find(id).unwrap_or_else(|| panic!("no {id}"));
-    shell.ui.nodes[i].text.as_ref().map(|t| t.value.clone()).unwrap_or_default()
+    shell.ui.nodes[i]
+        .text
+        .as_ref()
+        .map(|t| t.value.clone())
+        .unwrap_or_default()
 }
 /// A stored colour's channels as numbers (documents may write `1` or `1.0`).
 fn channels(value: Value) -> Vec<f64> {
@@ -383,7 +387,10 @@ fn history(editor: &Editor) -> usize {
     editor.host.store().history().len()
 }
 fn picker_shown(shell: &Shell) -> bool {
-    shell.ui.find("color-picker").is_some_and(|i| shell.ui.shown(i))
+    shell
+        .ui
+        .find("color-picker")
+        .is_some_and(|i| shell.ui.shown(i))
 }
 
 #[test]
@@ -412,7 +419,11 @@ fn the_colour_picker_previews_drags_applies_each_gesture_once_and_escape_restore
     type_into(&mut shell, &mut editor, "cp-hex", "#FF0000");
     let before = history(&editor);
     let wheel = shell.ui.nodes[shell.ui.find("cp-wheel").unwrap()].rect;
-    let (cx, cy, radius) = (wheel.x + wheel.w / 2., wheel.y + wheel.h / 2., wheel.w / 2. - 8.);
+    let (cx, cy, radius) = (
+        wheel.x + wheel.w / 2.,
+        wheel.y + wheel.h / 2.,
+        wheel.w / 2. - 8.,
+    );
     shell.pointer = [cx + radius, cy];
     assert!(shell.begin_picker_drag(&mut editor).unwrap());
     for angle in [0.5f32, 1.5, std::f32::consts::PI] {
@@ -447,11 +458,23 @@ fn the_colour_picker_closes_on_click_away_unless_pinned_and_keeps_swatches() {
     type_into(&mut shell, &mut editor, "cp-hex", "#3366CC");
     // Saving a swatch writes the project's colour list; Recent fills when it closes.
     press(&mut shell, &mut editor, "cp-add-swatch");
-    assert_eq!(editor.state.settings["color.swatches"].as_array().unwrap().len(), 1);
+    assert_eq!(
+        editor.state.settings["color.swatches"]
+            .as_array()
+            .unwrap()
+            .len(),
+        1
+    );
     let away = centre(&shell, "entity-name");
     assert!(shell.dismiss_popovers(&mut editor, away).unwrap());
     assert!(!picker_shown(&shell));
-    assert_eq!(editor.state.settings["color.recent"].as_array().unwrap().len(), 1);
+    assert_eq!(
+        editor.state.settings["color.recent"]
+            .as_array()
+            .unwrap()
+            .len(),
+        1
+    );
     // A swatch applies in one transaction.
     press(&mut shell, &mut editor, "swatch-MeshRenderer-color");
     type_into(&mut shell, &mut editor, "cp-hex", "#000000");
@@ -488,7 +511,12 @@ fn hdr_colours_edit_a_base_colour_and_an_intensity_in_stops() {
     shell.rebuild(&mut editor).unwrap();
     assert_eq!(text(&shell, "edit-MeshRenderer-emissive"), "#FF0000");
     assert_eq!(text(&shell, "stops-MeshRenderer-emissive"), "+3.0 EV");
-    type_into(&mut shell, &mut editor, "edit-MeshRenderer-emissive", "#00FF00");
+    type_into(
+        &mut shell,
+        &mut editor,
+        "edit-MeshRenderer-emissive",
+        "#00FF00",
+    );
     assert_eq!(
         channels(authored(&editor, "e_crate001", "MeshRenderer", "emissive")),
         vec![0.0, 8.0, 0.0]
@@ -527,7 +555,12 @@ fn add_component_is_a_searchable_dropdown_that_adds_in_one_step() {
     assert_eq!(history(&editor), before + 1);
     let resolved = ara_editor::world::resolve(editor.host.store(), &editor.state.doc).unwrap();
     assert!(resolved["e_crate001"].record.contains_key("Light"));
-    assert!(shell.ui.find("add-component-pop").is_none_or(|i| !shell.ui.shown(i)));
+    assert!(
+        shell
+            .ui
+            .find("add-component-pop")
+            .is_none_or(|i| !shell.ui.shown(i))
+    );
 }
 
 /// Until the asset pipeline first reports, a project with imports says they are being

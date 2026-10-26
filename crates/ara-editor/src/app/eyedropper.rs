@@ -52,7 +52,10 @@ pub(super) fn sample(
         return Ok(false);
     };
     let pixel = [(point[0] * dpi) as u32, (point[1] * dpi) as u32];
-    let origin = [pixel[0].saturating_sub(side / 2), pixel[1].saturating_sub(side / 2)];
+    let origin = [
+        pixel[0].saturating_sub(side / 2),
+        pixel[1].saturating_sub(side / 2),
+    ];
     // A frame that cannot be read back (none rendered yet) just previews nothing.
     let Ok(block) = gpu.pixels_in(origin, [side, side]) else {
         return Ok(false);
@@ -66,7 +69,9 @@ mod screen {
     use ::windows::Win32::Foundation::{HWND, POINT};
     use ::windows::Win32::Graphics::Gdi::{GetDC, GetPixel, ReleaseDC};
     use ::windows::Win32::UI::Input::KeyboardAndMouse::{GetAsyncKeyState, VK_LBUTTON, VK_RBUTTON};
-    use ::windows::Win32::UI::WindowsAndMessaging::{GA_ROOT, GetAncestor, GetCursorPos, WindowFromPoint};
+    use ::windows::Win32::UI::WindowsAndMessaging::{
+        GA_ROOT, GetAncestor, GetCursorPos, WindowFromPoint,
+    };
 
     /// The screen under the cursor while it is over another window.
     pub(super) struct Screen {

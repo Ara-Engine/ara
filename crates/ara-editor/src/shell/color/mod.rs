@@ -232,8 +232,8 @@ impl ColorPicker {
                 self.set_channel(i, t);
             }
             Input::Hex { linear } => {
-                let (rgb, alpha) = math::parse_hex(text)
-                    .ok_or("Enter a colour as #RRGGBB, #RGB or #RRGGBBAA")?;
+                let (rgb, alpha) =
+                    math::parse_hex(text).ok_or("Enter a colour as #RRGGBB, #RGB or #RRGGBBAA")?;
                 self.set_display(if linear {
                     rgb.map(math::linear_to_srgb)
                 } else {
@@ -387,11 +387,7 @@ impl Shell {
     }
     /// Close the picker. `revert` (Escape) restores the colour it opened with as one
     /// transaction; otherwise the colour stays, and joins the recent colours.
-    pub fn close_color_picker(
-        &mut self,
-        editor: &mut Editor,
-        revert: bool,
-    ) -> ara_ui::Result<()> {
+    pub fn close_color_picker(&mut self, editor: &mut Editor, revert: bool) -> ara_ui::Result<()> {
         if !revert {
             self.commit_picker_text(editor)?;
         }
@@ -416,7 +412,9 @@ impl Shell {
     }
     /// Whether the picker is open on `target` (`path` or `path#pointer`).
     pub fn color_picker_open(&self, target: &str) -> bool {
-        self.color_picker.as_ref().is_some_and(|p| p.target == target)
+        self.color_picker
+            .as_ref()
+            .is_some_and(|p| p.target == target)
     }
     /// Verification routes: open the picker on the Inspector field `path` as its swatch
     /// does, in `mode` (`rgb`, `hsv` or `linear`), `stops` brighter (applied), pinned
@@ -625,7 +623,9 @@ impl Shell {
                 return Ok(true);
             }
             "cp-title" | "cp-title-text" => match pinned {
-                Some(origin) => Part::Move([self.pointer[0] - origin[0], self.pointer[1] - origin[1]]),
+                Some(origin) => {
+                    Part::Move([self.pointer[0] - origin[0], self.pointer[1] - origin[1]])
+                }
                 None => return Ok(false),
             },
             "cp-stops-track" => Part::Stops,
@@ -715,10 +715,11 @@ impl Shell {
     /// its button stays armed when released on it, else picks where it was released.
     pub fn finish_picker(&mut self, editor: &mut Editor) -> ara_ui::Result<bool> {
         if self.eyedropper_held() {
-            let on_button = self
-                .ui
-                .find("cp-eyedropper")
-                .is_some_and(|i| self.ui.nodes[i].rect.contains(self.pointer[0], self.pointer[1]));
+            let on_button = self.ui.find("cp-eyedropper").is_some_and(|i| {
+                self.ui.nodes[i]
+                    .rect
+                    .contains(self.pointer[0], self.pointer[1])
+            });
             if on_button {
                 self.arm_eyedropper(false);
             } else {
@@ -742,7 +743,8 @@ impl Shell {
         let Some(picker) = &self.color_picker else {
             return Ok(());
         };
-        self.drafts.insert(picker.marker(), picker.json().to_string());
+        self.drafts
+            .insert(picker.marker(), picker.json().to_string());
         let texts = markup::field_texts(picker);
         for (id, text) in texts {
             if let Some(i) = self.ui.find(&id)
@@ -760,14 +762,20 @@ impl Shell {
 
 /// Which part of the wheel a press at `point` lands on: the ring band or the square.
 fn wheel_part(wheel: Box2, point: [f32; 2]) -> Option<Part> {
-    let (dx, dy) = (point[0] - (wheel.x + wheel.w / 2.), point[1] - (wheel.y + wheel.h / 2.));
+    let (dx, dy) = (
+        point[0] - (wheel.x + wheel.w / 2.),
+        point[1] - (wheel.y + wheel.h / 2.),
+    );
     let distance = (dx * dx + dy * dy).sqrt();
     let outer = wheel.w.min(wheel.h) / 2.;
     if (outer - RING - 2.0..=outer + 1.).contains(&distance) {
         return Some(Part::Ring);
     }
     let s = square(wheel);
-    (point[0] >= s.x - 4. && point[0] <= s.x + s.w + 4. && point[1] >= s.y - 4. && point[1] <= s.y + s.h + 4.)
+    (point[0] >= s.x - 4.
+        && point[0] <= s.x + s.w + 4.
+        && point[1] >= s.y - 4.
+        && point[1] <= s.y + s.h + 4.)
         .then_some(Part::Square)
 }
 /// The saturation/value square inscribed in the ring.

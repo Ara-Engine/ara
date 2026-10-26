@@ -822,7 +822,8 @@ impl Shell {
             let mut linear = compound::hex_linear(text)?;
             if let crate::inspector::Widget::Vector { hdr: true, .. } = field.widget {
                 let channel = |n: usize| field.value.get(n).and_then(Value::as_f64).unwrap_or(0.);
-                let (_, stops) = super::color::math::split_hdr([channel(0), channel(1), channel(2)]);
+                let (_, stops) =
+                    super::color::math::split_hdr([channel(0), channel(1), channel(2)]);
                 linear = linear.map(|c| super::color::math::stable(c * stops.exp2()));
             }
             let mut rgb: Vec<Value> = linear.into_iter().map(|v| json!(v)).collect();
