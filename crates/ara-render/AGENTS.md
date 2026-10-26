@@ -48,8 +48,8 @@ Owns the M1 baseline renderer and agent visual feedback. Gameplay state stays in
   deforming revisions use `prepare_pose` then `commit_pose`/`cancel_pose`; retire
   the old dependent TLAS before committing. Three skin slots retain presented and
   published vertices while a candidate is prepared. `presented` advances history
-  only after a successful render. Current AS API rebuilds changed skin BLASes;
-  these are measured rebuild fallbacks, never claimed as native refits.
+  only after a successful render. Raster pose barriers join the consuming graph;
+  RT rebuilds changed skin BLASes (measured fallbacks, never claimed as refits).
 - `update_geometry`: atomically replace meshes/materials/lights, retaining the
   device, targets and last good scene on failure. Textures/environment belong to
   asset integration. `entity_channel`, `entities`, `entity_at` expose picking.
