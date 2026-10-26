@@ -289,14 +289,12 @@ fn same_geometry(a: Option<&Value>, b: Option<&Value>) -> bool {
 }
 
 /// Import settings compare by value (they decide how FBX meshes cook).
-fn same_imports(
-    a: &BTreeMap<String, ara_asset::ImportSettings>,
-    b: &BTreeMap<String, ara_asset::ImportSettings>,
-) -> bool {
-    a.len() == b.len()
-        && a.iter().zip(b).all(|((pa, sa), (pb, sb))| {
-            pa == pb && serde_json::to_value(sa).ok() == serde_json::to_value(sb).ok()
-        })
+fn same_imports(a: &std::sync::Arc<super::Imports>, b: &std::sync::Arc<super::Imports>) -> bool {
+    std::sync::Arc::ptr_eq(a, b)
+        || a.len() == b.len()
+            && a.iter().zip(b.iter()).all(|((pa, sa), (pb, sb))| {
+                pa == pb && serde_json::to_value(sa).ok() == serde_json::to_value(sb).ok()
+            })
 }
 
 #[cfg(test)]
@@ -333,7 +331,7 @@ mod tests {
                 ),
             ])),
             ghosts: BTreeMap::new(),
-            imports: BTreeMap::new(),
+            imports: Default::default(),
         }
     }
     fn edit(view: &DocumentView, id: &str, path: &[&str], value: Value) -> DocumentView {

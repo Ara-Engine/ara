@@ -123,7 +123,8 @@ impl Effects {
                 },
                 intensity: effect.intensity,
                 exposure: frame.environment.exposure,
-                scene_background: Some(color),
+                scene_background: (!renderer.is_native()).then_some(color),
+                scene_color: renderer.is_native().then_some(color),
                 scene_depth: Some(depth),
                 lighting: match frame.sun {
                     Some((direction, lux)) => Lighting {
@@ -158,11 +159,8 @@ impl Effects {
                 }
                 // The final tick and draw share frame constants, barriers and
                 // one graph; earlier catch-up ticks stay simulation-only.
-                if count > 0 {
-                    live.system.step(renderer.gpu_mut(), &view)?;
-                } else {
-                    live.system.render(renderer.gpu_mut(), &view)?;
-                }
+                live.system
+                    .composite(renderer.gpu_mut(), &view, count > 0)?;
                 self.gpu_ms += live
                     .system
                     .timings()

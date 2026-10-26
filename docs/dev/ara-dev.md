@@ -116,6 +116,8 @@ suites their change touches. Commit and hand over the SHA. The integrator runs `
 once per merge batch on main; `--base` names the previous integrated checkpoint.
 `--full` is the nightly/dependency-update validation path. Performance iterations use
 `ara-dev perf` plus focused checks. Historical gate measurements above predate this policy.
+Final full-gate scope, duration and curated manual hardware/export checks:
+[`release-gate.md`](release-gate.md).
 
 The normal gate tests source owners and **direct** consumers; clippy covers their full
 reverse dependency closure. Test/example/bench edits stay local. Markdown (including
@@ -155,7 +157,8 @@ $env:CARGO_BUILD_BUILD_DIR=$env:ARA_SHARED_BUILD_DIR
 .\crates\ara-dev\run.ps1 check --base <last-batch> --json
 ```
 
-This lane uses two Cargo jobs, disables incremental output, and bypasses the optional Rust
+This lane defaults to two Cargo jobs and honours an explicit `CARGO_BUILD_JOBS`
+(the integrator can use four). It disables incremental output and bypasses the optional Rust
 compiler wrapper. Cargo's shared fingerprints provide reuse without going through a second
 compiler jobserver. It does not stop or reset another agent's sccache server. The existing
 single disk cache is `D:\AraCache\sccache`; ordinary Cargo invocations keep their configured

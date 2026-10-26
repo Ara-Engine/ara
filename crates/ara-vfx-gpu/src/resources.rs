@@ -165,7 +165,7 @@ impl GpuSystem {
         let lists = buffer(gpu, u64::from(layout.list_bytes), false, storage)?;
         let control = buffer(
             gpu,
-            layout.configs.len() as u64 * CONTROL_STRIDE as u64,
+            u64::from(layout.control_bytes),
             false,
             storage | vk::BufferUsageFlags::INDIRECT_BUFFER,
         )?;
@@ -300,7 +300,7 @@ impl GpuSystem {
             particle_data[slot * 4 + 3] = (-1f32).to_bits();
         }
         let mut lists = vec![0u32; self.layout.list_bytes as usize / 4];
-        let mut control = vec![0u32; self.layout.configs.len() * 16];
+        let mut control = vec![0u32; self.layout.control_bytes as usize / 4];
         for (i, c) in self.layout.configs.iter().enumerate() {
             for slot in 0..c.partition[1] {
                 lists[(c.lists[1] / 4 + slot) as usize] = slot;

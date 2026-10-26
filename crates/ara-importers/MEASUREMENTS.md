@@ -1178,3 +1178,40 @@ cold run up to about 30 seconds (median 25.1 s, observed range 20.1-29.8 s).
 Showcase is about 11 seconds typical (median 11.1 s, range 10.7-15.6 s).** State
 the optimized-development/NVMe methodology with those numbers. The under-20-second
 Outpost and under-10-second Showcase targets are not yet consistently met.
+
+## Bit-exact eight-bit normal preparation, 2026-10-26
+
+Eight-bit normals now use the same per-layout sample ramp as Color8, followed
+by a single expansion/normalization pass. This removes the intermediate RGBA32F
+conversion walk. The original normalization sum, square root and divisions stay
+unchanged; so do alpha and Y-flip arithmetic. Small images, wider samples and
+non-normal data keep their existing paths. No codec, version, key or setting
+changes; ISPC still encodes BC5.
+
+An isolated prototype was qualified first, then the integrated production source
+was compared against a frozen pre-change pixel module. Every float bit matches
+for **135 unique real normal contents**, both Y conventions and **all 16,777,216
+RGB triples**, plus four eight-bit layouts and tails. Timers cover preparation
+only: source decode, image cloning, mips, encoding, devices and cache I/O are
+excluded. Two Rayon threads, per-image A/B/B/A, under the GPU lease outside the
+formal quiet slot. Load snapshots are retained; this is not cold import latency.
+
+| Summed mean preparation, ms | Original | Integrated normal8 | Lower |
+| --- | ---: | ---: | ---: |
+| Workspace development code, opt1 | 1643.213 | 1522.104 | 7.4% |
+| Optimized code, opt3 | 1349.543 | 1004.086 | 25.6% |
+
+These final integration numbers supersede the prototype's 20-25% phase saving.
+They save **0.12-0.35 seconds summed across the normal corpus**; there is no new
+fresh-project wall-speed claim. The release measurements immediately above
+predate this change.
+
+Separate public-API probes link the frozen `15fb16fb` and new importer libraries
+independently. All **540 complete KTX2 artifacts** (135 inputs, both Y conventions,
+Balanced and HQ) have equal byte lengths and SHA-256 identities, including every
+mip. Permanent tests cover literal output equality, layout/tail/thread/Y bits,
+16-bit fallback, cancellation and nonfinite validation. All **43 importer tests**
+and strict all-target Clippy pass. Canonical report, every artifact identity,
+raw phase observations and binary/library hashes:
+`measurements/normal-prepare-2026-10-26.json`. Probe source and full logs remain
+under `target/ara-dev/import-speed/normal-prepare/`.

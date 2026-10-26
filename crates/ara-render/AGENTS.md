@@ -68,7 +68,7 @@ Owns the M1 baseline renderer and agent visual feedback. Gameplay state stays in
 - `look::gi::ProbeSurfaces` (`Renderer::set_probe_surfaces`): probe GI over a `ProbeLayout` pool (up to four lattices, finest first, blended front to back by coverage so a fine lattice never seams into the next; `giPoolLobes`). One-time 8x8 oct surface caches;
   `GI.Relight` relights a budget per frame (sun via CSM, local lights, sky, emissive, last frame's probes) into 6x6
   irradiance, DDGI-style, without rays or noise. Capture resets relight all for `gi::CONVERGE_FRAMES` (exposure
-  re-meters); live convergence uses the preset budget. `preallocate_probe_volume` reserves/clears from `ProbeLayout` behind loading, including two staging slots; captures drain a partial clear. A new lattice fades in after convergence; `GI.Scatter` applies record uploads.
+  re-meters); live initial convergence uses bounded 4096-probe windows, then the preset budget. `preallocate_probe_volume` reserves/clears from `ProbeLayout` behind loading, including two staging slots; captures drain a partial clear. A new lattice fades in after convergence; `GI.Scatter` applies record uploads.
 - `look::Quality` (`Renderer::set_quality`): per-preset budgets from
   `ara_render_fidelity::presets::RasterPlan`: shadow cascades (count, texels,
   distance; stable light space, practical splits, gather PCF, cascade blend; one

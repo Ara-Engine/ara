@@ -3,6 +3,7 @@ pub(crate) mod channels;
 pub mod gesture;
 mod ghosts;
 pub(crate) mod gltf;
+mod imports;
 mod patch;
 mod resolver;
 use crate::state::EditorState;
@@ -13,6 +14,7 @@ use ara_render::scene::{Light, Material, Mesh, Scene, Texture, Vertex};
 use ara_runtime::components::MeshRenderer;
 use glam::{EulerRot, Mat4, Quat, Vec3};
 pub use gltf::ModelCache;
+pub use imports::{Imports, ImportsCache};
 pub(crate) use patch::Patch;
 pub use patch::scene_only;
 pub use resolver::SceneResolver;
@@ -41,7 +43,8 @@ pub struct DocumentView {
     /// Shared with the Shell's resolve of the same revision (`Shell::document_view`).
     entities: Arc<Resolved>,
     ghosts: BTreeMap<String, ara_doc::Record>,
-    imports: BTreeMap<String, ara_asset::ImportSettings>,
+    /// Shared with other views of the same settings (`ImportsCache`).
+    imports: Arc<Imports>,
 }
 impl DocumentView {
     /// Resolve a scene once per committed document revision.
@@ -49,23 +52,17 @@ impl DocumentView {
         Ok(Self::with_entities(store, Arc::new(resolve(store, doc)?)))
     }
     /// The view of `entities`, the open scene already resolved at the store's current
-    /// revision (no second resolve).
+    /// revision (no second resolve), with the import settings parsed.
     pub fn with_entities(store: &Store, entities: Arc<Resolved>) -> Self {
+        Self::with_imports(entities, Arc::new(imports::parse(store)))
+    }
+    /// The view of `entities` and the import settings at the same revision, both
+    /// shared (`Shell::document_view` keeps an [`ImportsCache`]).
+    pub fn with_imports(entities: Arc<Resolved>, imports: Arc<Imports>) -> Self {
         Self {
             entities,
             ghosts: BTreeMap::new(),
-            imports: store
-                .workspace()
-                .docs()
-                .filter(|(_, d)| d.kind == "import")
-                .filter_map(|(_, d)| {
-                    let path = store.workspace().index().path_of(d.id.as_str())?;
-                    let settings =
-                        serde_json::from_value(Value::Object(d.record("i_settings")?.clone()))
-                            .ok()?;
-                    Some((path.to_owned(), settings))
-                })
-                .collect(),
+            imports,
         }
     }
     /// Model sources the scene references, other than the `known` paths, each checked

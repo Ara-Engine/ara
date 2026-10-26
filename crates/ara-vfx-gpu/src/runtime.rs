@@ -1,4 +1,5 @@
 use crate::layout::*;
+use crate::passes::FrameOutput;
 use anyhow::{Result, ensure};
 use ara_gpu::{Access, Buffer, Device, Image, Pipeline, Queue, Resource, vulkan::VulkanDevice};
 use ara_render::{
@@ -228,13 +229,26 @@ impl GpuSystem {
 
     /// Advance one fixed tick and render it through declared graph passes.
     pub fn step(&mut self, gpu: &mut VulkanDevice, view: &View) -> Result<()> {
-        self.run_frame(gpu, view, false, true, true)
+        self.run_frame(gpu, view, false, true, FrameOutput::Display)
     }
     /// Advance one fixed tick without drawing it (no backdrop copy, draw or
     /// tonemap). Live composition advances by the elapsed ticks, then calls
     /// [`GpuSystem::render`] once per presented frame.
     pub fn advance(&mut self, gpu: &mut VulkanDevice, view: &View) -> Result<()> {
-        self.run_frame(gpu, view, false, true, false)
+        self.run_frame(gpu, view, false, true, FrameOutput::Simulation)
+    }
+    /// Blend into `view.scene_color` for the scene's shared post stack. Optionally
+    /// advance one fixed tick; omit the preview background and display tonemap.
+    pub fn composite(&mut self, gpu: &mut VulkanDevice, view: &View, advance: bool) -> Result<()> {
+        ensure!(
+            view.scene_color.is_some(),
+            "HDR composition needs scene_color"
+        );
+        ensure!(
+            advance || self.tick > 0,
+            "step before compositing a completed tick"
+        );
+        self.run_frame(gpu, view, false, advance, FrameOutput::Hdr)
     }
     /// Replay from tick zero and assemble a standard ara-render capture at time T.
     /// Capture tick is completed fixed ticks; settle frames are bounded and do not advance time.
@@ -273,12 +287,12 @@ impl GpuSystem {
             ..scene
         };
         for _ in 1..request.tick {
-            self.run_frame(gpu, &view, false, true, true)?;
+            self.run_frame(gpu, &view, false, true, FrameOutput::Display)?;
         }
         let settle = request.settle_frames.max(1);
-        self.run_frame(gpu, &view, settle == 1, true, true)?;
+        self.run_frame(gpu, &view, settle == 1, true, FrameOutput::Display)?;
         for frame in 1..settle {
-            self.run_frame(gpu, &view, frame + 1 == settle, false, true)?;
+            self.run_frame(gpu, &view, frame + 1 == settle, false, FrameOutput::Display)?;
         }
         let rgba = gpu.read(self.read_color)?;
         let ids = gpu
@@ -333,7 +347,7 @@ impl GpuSystem {
     /// Redraw a completed tick with new view inputs, without advancing simulation.
     pub fn render(&mut self, gpu: &mut VulkanDevice, view: &View) -> Result<()> {
         ensure!(self.tick > 0, "step before rendering a completed tick");
-        self.run_frame(gpu, view, false, false, true)
+        self.run_frame(gpu, view, false, false, FrameOutput::Display)
     }
     /// Bind material-system instance rows and all texture images reachable by them.
     /// Call at a completed frame boundary; textures return in Graphics/ShaderRead.
