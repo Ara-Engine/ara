@@ -1011,3 +1011,61 @@ remain under `target/ara-dev/import-speed/lod-profile/` and
 The same script without `-Full` captures the five rock inputs for
 `ara-dev-gpu.exe gpu -- D:/AraBuild/ara-dev-infra-target/lod-profile/warm-start-v2.exe target/ara-dev/import-speed/lod-profile/capture.bin`.
 `analyze.ps1` and `prefix.ps1` validate and aggregate the raw native records.
+
+## Prepared attribute-state prototype: 2026-10-26
+
+This experiment stays entirely in the isolated meshopt copy. A private copy of
+the importer adds a lexical context guard around each primitive's LOD run; all
+other 20 source files match production. The original native function is retained
+byte-for-byte as the control. A runtime switch selects original or prepared
+attribute mode 97 in the **same frozen binary**. Other modes use the control.
+No engine source, shipping dependency, version, key, compression or sidecar changes.
+
+The first attribute target builds pristine adjacency, position/attribute quadrics,
+edge loops, normalized attributes and initial candidate ranking. Save snapshots of
+the mutable arrays and ranked candidates. Subsequent targets restore those bytes,
+copy the original index buffer, and run the unchanged collapse/update sequence.
+Immutable inputs remain borrowed for the lexical run; all solves still start at
+LOD0. Context destruction occurs before the enclosing LOD timer ends.
+
+One-thread A/B/B/A replays all 101 real Outpost models, comparing **every complete
+ImportOutput** to the production cache on every pass. An extra full prepared pass
+also verifies all 101 models. Each replay used the GPU lock; this was a shared-load
+phase measurement, not a quiet fresh-project experiment. CPU load sampled at case
+start was 30/14/5/45%; all observations are retained:
+
+| Phase seconds | A1 original | B1 prepared | B2 prepared | A2 original |
+| --- | ---: | ---: | ---: | ---: |
+| Native LOD calls plus context destruction | 7.774 | 5.339 | 4.581 | 6.632 |
+| Enclosing LOD phase, including topology/area/cache optimization | 9.005 | 6.601 | 5.616 | 7.693 |
+| Unchanged virtual geometry | 4.231 | 4.318 | 3.654 | 3.648 |
+
+Mean native time is **7.203 -> 4.960 s, 31.1% lower (1.45x)**. Native thread cycles
+fall **31.3%**. The broader LOD phase falls **8.349 -> 6.109 s, 26.8% lower**.
+Both prepared observations are below both controls in both LOD measures, clearing
+the proposed 10% stopping threshold. Virtual-geometry means differ by +1.2%; the
+unchanged geometric-call timing also varies with load. These are phase results,
+not an end-to-end cold-import speedup or a confidence interval.
+
+Each prepared pass builds **270 contexts** and performs **879 resets** for the
+same **1,149 attribute calls**; the same **897 geometric calls** remain untouched.
+The B1/B2 means include **894.3 ms** of initial setup/snapshot construction,
+**70.0 ms** of resets and **33.0 ms** of destruction. Setup and reset are already
+inside the native attribute timer; only destruction is added separately. Do not
+add setup/reset twice. Reset traffic is **2,170,487,556 bytes** per full replay.
+Peak pristine snapshots are **29,044,820 bytes (27.7 MiB)** for one context, in
+addition to working allocations; this is not total process memory.
+
+Complete output equality covers emitted indices, error bits, manifests and virtual
+artifacts, with verified cached textures and no texture cooks or stores. Strict
+Clippy passes for the isolated importer, and the canonical report validates all
+call counts and source/binary hashes. Source snapshots and reproduction notes are
+in `measurements/lod-prepared-2026-10-26/`; full results and per-model observations
+are in `measurements/lod-prepared-2026-10-26.json`. The working experiment and logs
+remain under `target/ara-dev/import-speed/lod-prepared/`, with private sources and
+the frozen executable in `D:/AraBuild/ara-dev-infra-target/lod-prepared/`.
+
+**Decision:** this prototype clears the phase threshold and merits a production
+integration proposal. It does not ship a dependency fork. A production native shim
+or fork needs explicit approval, a bounded ownership API and concurrency tests
+before integration. Parallel geometry remains off; no new project cleanup is needed.
