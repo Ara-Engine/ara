@@ -27,9 +27,10 @@ alpha foliage also retains at least 90% area per connected card. Irreducible
 cards keep their last good level. Skin/morph chains retain the four-level/1% cap.
 Retain usable legacy LODs: replacing geometric errors with combined attribute
 errors can make runtime selection choose finer foliage despite deeper chains.
-LOD0 solves and each primitive's classic/virtual cooks run sequentially by default.
-The single mesh::PARALLEL_GEOMETRY experiment enables bounded pairs/overlap; it
-regressed cold Outpost and needs an end-to-end ABBA win before re-enabling.
+LOD0 solves use bounded pairs and each primitive overlaps classic/virtual cooks.
+FileCache's adaptive per-volume write admission bounds their publication bursts.
+Keep the sequential control available for paired volume-specific import checks;
+the former unbounded-write policy gained on NVMe but regressed on shared SATA.
 Keep bytes and error precedence stable; scheduling changes need no version bump.
 ARAG Custom artifacts are
 validated by ara-geo; its reflected settings are VirtualGeometrySettings.
