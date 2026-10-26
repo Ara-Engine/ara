@@ -93,10 +93,12 @@ impl Presenter {
         }
     }
 
-    /// Whether probe GI acquisition is still running or queued: a view that stops
-    /// redrawing once converged must keep presenting until the result arrives.
+    /// Whether probe GI acquisition/delivery or settling remains pending. False
+    /// when disabled, independently of emitter searches and model arrival fades.
     pub fn probe_gi_pending(&self) -> bool {
-        self.raster.as_ref().is_some_and(RasterView::needs_frame)
+        self.raster
+            .as_ref()
+            .is_some_and(RasterView::probe_gi_pending)
     }
 
     /// Blocks until a pending probe GI acquisition is installed (captures and
