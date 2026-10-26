@@ -41,6 +41,8 @@ pub const ATTRIBUTES: &[&str] = &[
     "tint",
     "label",
     "description",
+    "cursor",
+    "active-cursor",
     "test-id",
     "value",
     "min",
