@@ -1,6 +1,29 @@
 use super::*;
 
 #[test]
+fn loading_and_game_share_native_lifetime_but_not_allocations() -> Result<()> {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../target/renderer-unification/loading-shared-lifetime");
+    let (mut loading, game, _) = Loading::for_game(&[], &root.join("first"), false)?;
+    assert_eq!(loading.native_device(), game.context().device.handle());
+    assert_eq!(game.descriptor_usage().sampled_images, 0);
+    drop(game);
+    loading.draw(0.5)?;
+    assert_eq!(loading.read_pixels()?, loading.pixels);
+    loading.gpu.assert_clean()?;
+    drop(loading);
+
+    let (mut loading, mut game, _) = Loading::for_game(&[], &root.join("second"), false)?;
+    loading.draw(0.5)?;
+    drop(loading);
+    let buffer = game.create_buffer(16, vk::BufferUsageFlags::STORAGE_BUFFER, true)?;
+    game.upload(buffer, &[7; 16])?;
+    assert_eq!(game.read(buffer)?, vec![7; 16]);
+    game.assert_clean()?;
+    Ok(())
+}
+
+#[test]
 fn shaderless_loading_progress_uploads_exactly_without_scene_or_descriptor_allocations()
 -> Result<()> {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"))

@@ -22,6 +22,8 @@ Minimal SDL3 native window/input and Vulkan presentation. Uses `sdl3-sys` 0.7.2
 - `Present`: unsafe native integration over an existing GPU context. Retain both
   native owners, present only completed CopySource images, and destroy after idle.
   Leaf acquire/present/queue-idle waits contribute to `Context::host_wait_stats`.
+  Loading/game may transfer the same Present between owners of one native device;
+  all uses must be complete first. `native_swapchain()` exposes its stable identity.
 
 Per-image render semaphores are reused after reacquisition. Construction cleans
 partially created surface/swapchain/semaphores; destruction is idempotent.

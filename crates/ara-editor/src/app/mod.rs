@@ -123,18 +123,42 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
     });
     // The publication the first extraction sees; SceneSync re-extracts on newer ones.
     let models_at_open = editor.models.revision();
-    let create_renderer =
-        if crate::world::gltf::render_settings(editor.host.store().workspace())?.ray_tracing {
-            Renderer::new
-        } else {
-            Renderer::new_raster
-        };
-    let mut renderer = create_renderer(
+    let ray_tracing =
+        crate::world::gltf::render_settings(editor.host.store().workspace())?.ray_tracing;
+    let mut opening = crate::loading::Status {
+        project: crate::shell::project_name(&editor),
+        folder: editor.host.root().display().to_string(),
+        light: editor.state.light,
+        opening: true,
+        ..Default::default()
+    };
+    let Some(mut renderer) = viewport::prepare_renderer(
         view.scene(editor.host.root(), &editor.state, None, &mut editor.models)?,
         extent_scaled(viewport, dpi),
-        &window.extensions()?,
+        window.extensions()?,
         editor.host.root().join(".ara/gpu"),
-    )?;
+        ray_tracing,
+        |elapsed| {
+            server.pump(&mut editor);
+            editor.tick();
+            opening.elapsed = elapsed.as_secs();
+            if splash.is_none() && !offscreen && elapsed >= Duration::from_millis(400) {
+                splash = Some(crate::loading::Splash::opening(&opening)?);
+            }
+            if let Some(splash) = &mut splash {
+                return Ok(splash.opening_frame(&opening)?);
+            }
+            Ok(!window
+                .poll()?
+                .iter()
+                .any(|event| matches!(event, Event::Quit)))
+        },
+    )?
+    else {
+        return Ok(());
+    };
+    // Typed authority commands/imports continued while the renderer was built.
+    view = editor.view()?;
     detect_quality(&mut editor, &renderer);
     // SAFETY: Renderer/device are declared before the UI adapter, and survive its destruction.
     let mut gpu = unsafe { NativeUi::new(renderer.gpu().context())? };
