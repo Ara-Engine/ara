@@ -28,10 +28,15 @@ cards keep their last good level. Skin/morph chains retain the four-level/1% cap
 Retain usable legacy LODs: replacing geometric errors with combined attribute
 errors can make runtime selection choose finer foliage despite deeper chains.
 LOD0 solves and each primitive's classic/virtual cooks run sequentially by default.
-The single mesh::PARALLEL_GEOMETRY experiment enables bounded pairs/overlap; it
-regressed SATA and showed no clear NVMe win after Color8/mips (current ABBA).
+The mesh::PARALLEL_GEOMETRY classic/virtual overlap experiment regressed SATA
+and showed no clear NVMe win after Color8/mips (current ABBA).
 Keep it off; adaptive admission and the proposed per-volume fallback are dropped.
 Keep bytes and error precedence stable; scheduling changes need no version bump.
+Optional prepared-lods uses ara-meshopt-sys owned attribute contexts, one per
+primitive, with original LOD0 resets. Default stays off pending fresh NVMe ABBA.
+Permanent shim tests compare upstream indices/error bits. Opt-in real corpus:
+`cargo run -p ara-importers --features prepared-lods --example geometry_replay -- PROJECT 1`.
+The completed production cache verifies every artifact (101 Outpost models).
 ARAG Custom artifacts are
 validated by ara-geo; its reflected settings are VirtualGeometrySettings.
 

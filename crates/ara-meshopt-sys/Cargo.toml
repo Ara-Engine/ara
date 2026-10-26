@@ -1,0 +1,19 @@
+[package]
+name = "ara-meshopt-sys"
+description = "Owned prepared attribute LOD contexts over pinned meshoptimizer sources."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+links = "ara_meshopt_prepared"
+
+[build-dependencies]
+cc.workspace = true
+
+[dev-dependencies]
+meshopt = "0.7.0"
+bytemuck.workspace = true
+sha2.workspace = true
+
+[lints]
+workspace = true

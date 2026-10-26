@@ -1069,3 +1069,40 @@ the frozen executable in `D:/AraBuild/ara-dev-infra-target/lod-prepared/`.
 integration proposal. It does not ship a dependency fork. A production native shim
 or fork needs explicit approval, a bounded ownership API and concurrency tests
 before integration. Parallel geometry remains off; no new project cleanup is needed.
+
+## Owned prepared LOD shim: source checkpoint, 2026-10-26
+
+The approved production integration is `ara-meshopt-sys`, built with `cc` from
+committed sources. It vendors the exact meshoptimizer 1.3 native files bundled in
+meshopt 0.7.0, with permanent SHA-256 checks and the MIT notice. Vendor files are
+unmodified. Private symbol names keep the ordinary registry dependency and its
+other entry points intact; no new build prerequisite or generated binding tool.
+
+The Rust API owns a context after construction, accepts exclusive reset/solve
+calls, and frees all memory on Drop. No input pointer, global context or TLS
+lease survives construction. Independent worker contexts can run concurrently;
+one context cannot be shared or transferred. The importer constructs it lazily
+for attribute mode 97 only; geometric/deformed solves retain registry meshopt.
+Setup or solve failures propagate as import errors, so the opt-in corpus check
+cannot hide a broken shim behind an upstream fallback. The existing geometric
+prefix, attribute fallback decisions and alpha-card area policy retain their order.
+
+`prepared-lods` is **off by default** until a fresh-project quiet-slot NVMe A/B/B/A
+demonstrates at least about 3% wall-time improvement. No importer version, action
+key, compression or sidecar changes. The single-thread prototype result above
+does not establish a production cold-import speedup.
+
+Focused validation passes with the feature enabled: 41 importer tests and four
+permanent shim tests, strict all-target Clippy, and Windows-batched workspace fmt.
+Default-off importer tests and strict all-target Clippy pass too. Permanent
+fixtures compare every index and the exact error bits against unmodified registry
+meshopt across target/error order, seams, locks, unused vertices, owned-input
+lifetimes and four independent threads. Invalid layouts fail before native access.
+
+The opt-in production example also passes all **101 real Outpost model inputs**:
+`cargo run -p ara-importers --features prepared-lods --example geometry_replay -- PROJECT 1`.
+It compares every complete output with the retained production cache, including
+manifests, indices, error bits and virtual artifacts, and refuses texture cache
+misses. This shared-load replay is a correctness check, not a wall-time claim.
+Source/binary hashes and per-model evidence: `measurements/lod-production-shim-2026-10-26.json`.
+Fresh project pairing remains pending at this source checkpoint.

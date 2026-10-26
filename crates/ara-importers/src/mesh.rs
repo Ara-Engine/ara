@@ -280,7 +280,7 @@ pub(crate) fn cook_mesh_with_tangent_uv(
         deformed,
         preserve_card_area,
         metrics,
-    );
+    )?;
     drop(lod_timer);
     let mut b = Builder::new(Kind::Mesh);
     b.section(*b"BNDS", 24, bytemuck::cast_slice(&bounds).to_vec())
