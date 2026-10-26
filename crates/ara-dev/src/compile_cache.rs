@@ -60,10 +60,19 @@ fn acquire_at(directory: &Path, deadline: Option<Instant>) -> Result<Lease> {
 }
 
 /// Cargo fingerprints are the shared cache. Avoid the independent sccache jobserver
-/// in this lane; rustc inherits Cargo's two-job budget and registry artifacts stay fresh.
+/// in this lane; rustc inherits Cargo's requested budget (two by default).
 pub(crate) fn configure(command: &mut Command) {
-    command.env("CARGO_BUILD_JOBS", "2");
-    if std::env::var_os("ARA_SHARED_BUILD_DIR").is_some() {
+    configure_with(
+        command,
+        std::env::var_os("CARGO_BUILD_JOBS"),
+        std::env::var_os("ARA_SHARED_BUILD_DIR").is_some(),
+    );
+}
+
+fn configure_with(command: &mut Command, jobs: Option<OsString>, shared: bool) {
+    // Preserve explicit values verbatim: Cargo validates its own job syntax.
+    command.env("CARGO_BUILD_JOBS", jobs.unwrap_or_else(|| "2".into()));
+    if shared {
         command
             .env("CARGO_INCREMENTAL", "0")
             .env("RUSTC_WRAPPER", "");
@@ -89,6 +98,22 @@ pub(crate) fn cargo(root: &Path, args: &[OsString]) -> Result<bool> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn explicit_build_jobs_survive_both_cache_modes_and_unset_defaults_to_two() {
+        for shared in [false, true] {
+            for (requested, expected) in [(None, "2"), (Some("4"), "4"), (Some("1"), "1")] {
+                let mut command = Command::new("cargo");
+                configure_with(&mut command, requested.map(OsString::from), shared);
+                assert_eq!(
+                    command
+                        .get_envs()
+                        .find(|(key, _)| *key == "CARGO_BUILD_JOBS")
+                        .and_then(|(_, value)| value),
+                    Some(std::ffi::OsStr::new(expected))
+                );
+            }
+        }
+    }
     #[test]
     fn shared_artifacts_remain_exclusive_until_execution_releases_the_lease() {
         let target = std::env::var_os("CARGO_TARGET_DIR")
