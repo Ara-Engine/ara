@@ -307,6 +307,63 @@ impl Shell {
         }
         out.push_str("</panel>");
     }
+    /// Play's start progress moved from `before` without changing the shape of the
+    /// Game view's starting screen (still starting or still stopping; a bar or not):
+    /// update its phase, bar, count and time in place, as `starting_markup` would
+    /// write them, instead of rebuilding the editor ten times a second while Play
+    /// starts. False when the shape changed, or the screen is in a floating window,
+    /// and the caller must rebuild.
+    pub(crate) fn patch_start_progress(
+        &mut self,
+        before: Option<&StartProgress>,
+    ) -> ara_ui::Result<bool> {
+        let (Some(before), Some(now)) = (before, self.game_start.clone()) else {
+            return Ok(false);
+        };
+        if self.current.is_some()
+            || before.stopping != now.stopping
+            || (before.total > 0) != (now.total > 0)
+        {
+            return Ok(false);
+        }
+        if self.ui.find("game-starting").is_none() {
+            // Shown in a floating window: rebuild there. Not shown at all: the next
+            // build writes the current progress.
+            return Ok(!self
+                .floats
+                .iter()
+                .any(|f| f.ui.find("game-starting").is_some()));
+        }
+        let detail = if now.stopping {
+            String::new()
+        } else {
+            now.label()
+        };
+        let texts = [
+            ("game-starting-phase", detail),
+            (
+                "game-starting-count",
+                format!("{} / {}", now.completed, now.total),
+            ),
+            (
+                "game-starting-time",
+                format!("{:.1} s", now.tenths as f64 / 10.),
+            ),
+        ];
+        for (id, text) in texts {
+            if let Some(i) = self.ui.find(id) {
+                self.ui.set_text(i, &text)?;
+            }
+        }
+        if now.total > 0
+            && let Some(i) = self.ui.find("game-starting-fill")
+        {
+            let percent = now.completed as f64 * 100. / now.total as f64;
+            self.ui.set_style(i, &format!("width:{percent:.0}%"))?;
+        }
+        self.ui.forget_part("body-game");
+        Ok(true)
+    }
 }
 
 /// The Game view's stats line: frame rate (a dash until it is measured) and size.

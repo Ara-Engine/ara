@@ -526,7 +526,12 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                 if !shell.game_live {
                     shell.game_captured = false;
                 }
-                shell.rebuild(&mut editor)?;
+                // Start progress alone (the phase, bar, count, elapsed time) updates
+                // the starting screen in place; anything else changes the Game view.
+                let progress_only = shell.game_live == was_live && shell.game_fault == was_fault;
+                if !(progress_only && shell.patch_start_progress(was_start.as_ref())?) {
+                    shell.rebuild(&mut editor)?;
+                }
                 dirty = true;
             }
             if shell.run_queued(&mut editor) {
