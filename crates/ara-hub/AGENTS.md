@@ -22,6 +22,9 @@ contract is `crates/ara-hub-service/AGENTS.md`.
   `ara` beside `ara-hub` (`--ara` overrides), `hub.subscribe` before `Connected`
   (the model then refreshes every list), `hub.changed` → `Event::Changed`, a 2 s
   `hub.subscribe` heartbeat, reconnect with backoff, `Offline` names `hub-start.log`.
+  Native startup uses `start_preparing_with_wake` before device creation: bootstrap
+  hashing/copying and the handshake overlap GPU initialization. `Prepared` supplies
+  the verified CLI for native integrations; preparation failures are non-fatal/retried.
 - `view/`: markup per page from the model (`page`), `hub.css` (theme tokens only,
   D18), and `Page::bindings` mapping each control's stable ID to its `Intent`.
 - `native/`: window/GPU host and loop (`mod.rs`), retained `App` (`app.rs`: rebuild,

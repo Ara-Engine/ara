@@ -200,7 +200,6 @@ fn load_prefs(config: &Path) -> Prefs {
 }
 /// Open the Hub window and run until it closes (or until captures are written).
 pub fn run(options: Options) -> anyhow::Result<()> {
-    let startup = std::time::Instant::now();
     let exe_dir = exe_dir();
     let config = match &options.config {
         Some(dir) => dir.clone(),
@@ -244,11 +243,15 @@ pub fn run(options: Options) -> anyhow::Result<()> {
         let mut app = App::new(offscreen.logical(), docs).map_err(err)?;
         return capture::run(&mut offscreen, &mut app, &mut hub, &directory);
     }
-    let mut host = Host::new(&options, hub.prefs.light)?;
-    ara_hub_service::startup::record("ui.gpu_images", startup.elapsed());
+    let connection = updates::connect(
+        exe_dir.clone(),
+        config.clone(),
+        options.ara.clone(),
+        wake::wake,
+    );
     let phase = std::time::Instant::now();
-    let ara = updates::service(&exe_dir, options.ara.as_deref())?;
-    ara_hub_service::startup::record("ui.bootstrap", phase.elapsed());
+    let mut host = Host::new(&options, hub.prefs.light)?;
+    ara_hub_service::startup::record("ui.gpu_images", phase.elapsed());
     hub.releases.can_self_update = exe_dir.join("hub.json").is_file();
     let mut app = App::new(host.logical(), docs).map_err(err)?;
     interactive(
@@ -256,7 +259,7 @@ pub fn run(options: Options) -> anyhow::Result<()> {
         &mut app,
         &mut hub,
         &config,
-        &ara,
+        connection,
         options.update_health.as_deref(),
     )
 }
@@ -311,20 +314,13 @@ fn interactive(
     app: &mut App,
     hub: &mut Hub,
     config: &Path,
-    ara: &Path,
+    connection: Connection,
     mut health: Option<&Path>,
 ) -> anyhow::Result<()> {
     let prefs = prefs::Writer::new(config.to_owned())?;
-    let connection = Connection::start_with_wake(config.to_owned(), ara.to_owned(), wake::wake);
     let picks = os::picks();
     let (send, snippets) = std::sync::mpsc::channel();
-    let snippet_ara = ara.to_owned();
-    std::thread::spawn(move || {
-        for snippet in os::install_snippets(&snippet_ara) {
-            let _ = send.send(snippet);
-            wake::wake();
-        }
-    });
+    let mut ara = None;
     let mut saved = hub.prefs.clone();
     let mut dirty = false;
     let mut last_minute = 0;
@@ -410,6 +406,17 @@ fn interactive(
             dirty = true;
         }
         for event in connection.poll() {
+            if let crate::connection::Event::Prepared { executable } = &event {
+                ara = Some(executable.clone());
+                let snippet_ara = executable.clone();
+                let send = send.clone();
+                std::thread::spawn(move || {
+                    for snippet in os::install_snippets(&snippet_ara) {
+                        let _ = send.send(snippet);
+                        wake::wake();
+                    }
+                });
+            }
             hub.event(event);
             dirty = true;
         }
@@ -424,7 +431,11 @@ fn interactive(
                     archive,
                     manifest,
                     signature,
-                } => match updates::launch(config, ara, archive, manifest, signature) {
+                } => match ara
+                    .as_deref()
+                    .context("The Hub service is still connecting; retry once connected")
+                    .and_then(|ara| updates::launch(config, ara, archive, manifest, signature))
+                {
                     Ok(()) => return Ok(()),
                     Err(error) => {
                         hub.update_error(error.to_string());

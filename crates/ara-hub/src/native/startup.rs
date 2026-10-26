@@ -31,15 +31,17 @@ pub(super) fn run(options: &Options, output: &Path, directory: &Path, config: &P
         config.to_owned(),
         engines::installed(directory),
     );
+    let mut connection = updates::connect(
+        directory.to_owned(),
+        config.to_owned(),
+        options.ara.clone(),
+        || {},
+    );
     let phase = Instant::now();
     let mut surface = Offscreen::new(options.size, options.dpi.unwrap_or(1.))?;
     ara_hub_service::startup::record("ui.gpu_images", phase.elapsed());
     let phase = Instant::now();
-    let ara = updates::service(directory, options.ara.as_deref())?;
-    ara_hub_service::startup::record("ui.bootstrap", phase.elapsed());
-    let phase = Instant::now();
     let mut app = App::new(surface.logical(), os::docs(directory)).map_err(err)?;
-    let mut connection = Connection::start(config.to_owned(), ara);
     app.rebuild(&mut hub, now_ms()).map_err(err)?;
     app.frame().map_err(err)?;
     draw(&mut surface.renderer, &mut surface.ui_gpu, &app)?;
