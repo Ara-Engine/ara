@@ -5,8 +5,8 @@ use bytemuck::{Pod, Zeroable};
 use serde::{Deserialize, Serialize};
 mod lods;
 
-/// Experimental nested scheduling; enable only after a fresh-project ABBA win.
-pub(crate) const PARALLEL_GEOMETRY: bool = false;
+/// Bounded native overlap; FileCache admission limits per-volume write bursts.
+pub(crate) const PARALLEL_GEOMETRY: bool = true;
 
 /// Decoded source vertex. Position is first for meshoptimizer's strided adapter.
 #[derive(Debug, Clone, Copy, Default, Pod, Zeroable)]

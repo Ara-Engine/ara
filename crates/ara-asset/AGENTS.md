@@ -71,6 +71,14 @@ lengths and payloads; torn/missing data is a miss that re-imports. Writers repai
 entries atomically; readers never unlink a concurrent repair. Different verified
 results for one key remain errors. Quiescent GC evicts memo entries. Cache recovery,
 memo availability and thread scheduling never change final action keys.
+FileCache admission coordinates writers across processes on the destination volume
+(Windows volume GUID, Unix device ID), using OS-locked leases and disposable
+checksummed feedback in OS temp. Warm hits take no leases. Payload publication
+latency excludes admission wait: p90 of 16 >=64 KiB writes halves the cap at 25 ms,
+and recovers one slot at <=4 ms with hysteresis (1..8; initial four). Smaller action
+records are admitted but do not hide payload pressure. Count every live lease when
+shrinking; never expire a live writer's cap. Process exit releases slots. A corrupt
+feedback record resets scheduling only. No fsync, prerequisite or key/version change.
 
 ImportServices supplies an optional BlockEncoder. Resolve its immutable backend
 before action lookup; encoded actions and texture memo keys include it. Capability
