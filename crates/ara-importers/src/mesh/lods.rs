@@ -64,10 +64,14 @@ pub(super) fn append(
     let steps: Vec<_> = (1..count)
         .take_while(|step| (original.len() >> step) / 3 * 3 >= 3)
         .collect();
-    // Each native solve reads LOD0, not the preceding LOD. Keep only two
-    // candidates in flight, then make all fallback/acceptance decisions in the
-    // original order. Nested work uses the registry's existing bounded pool.
-    let width = rayon::current_num_threads().min(2);
+    // Default to sequential LOD0 solves within the already-parallel primitive
+    // pool. The opt-in experiment keeps at most two candidates in flight;
+    // acceptance/fallback decisions always retain their original order.
+    let width = if super::PARALLEL_GEOMETRY {
+        rayon::current_num_threads().min(2)
+    } else {
+        1
+    };
     for batch in steps.chunks(width) {
         if !deformed && previous_count <= goal {
             break;
