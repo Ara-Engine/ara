@@ -94,7 +94,7 @@ pub(crate) struct State {
     pub(crate) external: BTreeMap<String, (String, Value)>,
     pub(crate) sessions: Sessions,
     pub(crate) review: Review,
-    pub(crate) journal: Journal,
+    /// Documents on disk; its file thread also writes the journal and diagnostics.
     pub(crate) files: Files,
     /// The diagnostics bus store: everything logged here or drained from the bus.
     pub(crate) diag: DiagStore,
@@ -226,10 +226,16 @@ impl Host {
                 (p, m)
             })
             .collect();
+        let (journal, entries, journal_diags) =
+            Journal::open(&state_dir).map_err(|e| io_error("open", &state_dir, e))?;
+        for d in journal_diags {
+            diag.push(d, Meta::default());
+        }
         let io = crate::file_io::FileThread::start(
             root.clone(),
             db.clone(),
             type_files,
+            journal,
             config.watch_every,
             config.scan_every,
         )
@@ -250,11 +256,6 @@ impl Host {
             .seed
             .map_or_else(IdGen::from_entropy, |s| IdGen::seeded(s ^ 0x5eed));
         let mut store = Store::with_ids(db, ws, store_ids);
-        let (journal, entries, journal_diags) =
-            Journal::open(&state_dir).map_err(|e| io_error("open", &state_dir, e))?;
-        for d in journal_diags {
-            diag.push(d, Meta::default());
-        }
         let ops = store.subscribe();
         let mut st = State {
             profiler: ara_profile::Profiler::new(ara_profile::Config::default())
@@ -270,7 +271,6 @@ impl Host {
             external: BTreeMap::new(),
             sessions: Sessions::default(),
             review: Review::default(),
-            journal,
             files,
             diag,
             bus: consumer,
@@ -521,12 +521,14 @@ impl Host {
         !self.st.files.changed.is_empty() || self.st.files.io.pending() > 0
     }
 
-    /// Writes every document with unsaved changes now.
+    /// Writes every document with unsaved changes now, and waits until the journal
+    /// and diagnostics writes queued so far have landed too.
     pub fn flush(&mut self) {
         self.st.drain();
         self.st.flush(true);
         self.st.pump_bus();
         self.st.persist_diag(true);
+        self.st.settle_files();
     }
 
     /// Forgets a closed connection's subscriptions.
@@ -544,8 +546,9 @@ impl Host {
 }
 
 impl Host {
-    /// Drops the host without writing pending documents, as a crash would. The
-    /// journal already holds every commit; the next open replays them.
+    /// Drops the host without writing pending documents, as a crash would. Journal
+    /// entries already queued are still written (the file thread finishes its queue),
+    /// so the next open replays every commit.
     pub fn kill(mut self) {
         self.st.files.changed.clear();
         self.st.killed = true;
@@ -646,14 +649,11 @@ impl State {
         self.published(&[seq]);
     }
 
-    /// Appends changed engine diagnostics to `.ara/diagnostics.jsonl`.
+    /// Queues changed engine diagnostics for `.ara/diagnostics.jsonl` on the file
+    /// thread.
     pub(crate) fn persist_diag(&mut self, now: bool) {
-        if let Err(e) = self.diag_file.flush(&self.diag, now) {
-            let d = Diagnostic::warning(
-                codes::IO,
-                format!("cannot write `.ara/diagnostics.jsonl`: {e}"),
-            );
-            self.diag.push(d, Meta::default());
+        if let Some(write) = self.diag_file.flush(&self.diag, now) {
+            self.files.io.diagnostics(write);
         }
     }
 
@@ -708,14 +708,10 @@ impl State {
         }
     }
 
-    /// Appends to the journal, logging (not failing) on IO errors.
-    pub(crate) fn journal(&mut self, entry: &Entry) {
-        if let Err(e) = self.journal.append(entry) {
-            self.log(Diagnostic::error(
-                codes::IO,
-                format!("cannot append to `.ara/journal`: {e}"),
-            ));
-        }
+    /// Queues a journal entry on the file thread, after everything queued before
+    /// it; an IO error is logged when the thread reports it.
+    pub(crate) fn journal(&mut self, entry: Entry) {
+        self.files.io.append(entry);
     }
 
     /// A new host ID (`ses_…`, `cp_…`, `jb_…`).
@@ -733,7 +729,7 @@ impl State {
                 .owner(&txn.id)
                 .map(|p| p.0.clone())
                 .or_else(|| self.calling.clone());
-            self.journal(&Entry::Txn {
+            self.journal(Entry::Txn {
                 session: session.clone(),
                 txn: txn.clone(),
             });
@@ -982,24 +978,20 @@ impl State {
         }
     }
 
-    /// Rewrites the journal once it grows past its bound. Only safe when every
-    /// document is flushed, so their flush entries cover all dropped transactions.
+    /// Has the file thread rewrite the journal once it grows past its bound. Only
+    /// safe when every document is flushed, so their flush entries cover all dropped
+    /// transactions; the thread compacts what was queued before the request.
     pub(crate) fn maybe_compact(&mut self) {
-        if self.journal.len() <= journal::MAX_ENTRIES
+        if self.files.io.journal_len() <= journal::MAX_ENTRIES
+            || self.files.io.compacting()
             || !self.files.changed.is_empty()
             || self.files.io.pending() > 0
         {
             return;
         }
-        let result = self.journal.read_all().and_then(|entries| {
-            self.journal
-                .rewrite(&journal::compact(&entries, journal::KEEP_TXNS))
-        });
-        if let Err(e) = result {
-            self.log(Diagnostic::warning(
-                codes::IO,
-                format!("cannot compact `.ara/journal`: {e}"),
-            ));
-        }
+        self.files.io.compact();
     }
 }
+
+#[cfg(test)]
+mod tests;
