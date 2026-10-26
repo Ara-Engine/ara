@@ -36,6 +36,10 @@ pub(crate) enum LookPass {
     /// Reflection colour pyramid level (1..4) from the previous history.
     SsrPyramid(u32),
     SsrTrace,
+    /// The horizon's sun visibility (`look::horizon`).
+    HorizonSun,
+    /// The horizon's sky visibility (`look::horizon`).
+    HorizonSky,
 }
 
 /// The frame records look passes run with: scene passes at the render size; the
@@ -451,6 +455,16 @@ impl LookGpu {
                 p.gi_relight,
                 0,
                 [self.gi.as_ref().map_or(0, |gi| gi.probes), 1, 1],
+            ),
+            LookPass::HorizonSun => (
+                p.horizon_sun,
+                0,
+                groups([self.horizon.as_ref().map_or(0, |h| h.resolution); 2]),
+            ),
+            LookPass::HorizonSky => (
+                p.horizon_sky,
+                0,
+                groups([self.horizon.as_ref().map_or(0, |h| h.sky_resolution()); 2]),
             ),
             LookPass::GiClear | LookPass::GiScatter(_) => return,
         };
