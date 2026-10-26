@@ -9,6 +9,7 @@ pub(crate) mod os;
 mod prefs;
 #[cfg(feature = "rehearsal")]
 mod rehearsal;
+mod startup;
 mod updates;
 mod wake;
 
@@ -35,6 +36,8 @@ use std::{
 /// Command-line options of `ara-hub`.
 #[derive(Clone, Debug)]
 pub struct Options {
+    /// Measure the live installed startup offscreen and write frames/timings here.
+    pub startup_probe: Option<PathBuf>,
     /// Windowless, compile-time-only release rehearsal driver.
     #[cfg(feature = "rehearsal")]
     pub rehearse_update: Option<PathBuf>,
@@ -56,6 +59,7 @@ pub struct Options {
 impl Default for Options {
     fn default() -> Self {
         Self {
+            startup_probe: None,
             #[cfg(feature = "rehearsal")]
             rehearse_update: None,
             service_check: None,
@@ -77,6 +81,7 @@ struct Host {
     gpu: Gpu,
     window: Window,
     renderer: Renderer,
+    builtins: images::Builtins,
     dpi: f32,
     fixed_dpi: Option<f32>,
     physical: [u32; 2],
@@ -101,11 +106,11 @@ impl Host {
             physical: window.size()?,
             window,
             renderer: Renderer::default(),
+            builtins: images::Builtins::new(dpi),
             dpi,
             fixed_dpi: options.dpi,
         };
         host.ui_gpu.set_dpi(dpi)?;
-        images::install(&mut host.renderer, dpi)?;
         Ok(host)
     }
     /// Logical size at the current scale.
@@ -126,7 +131,7 @@ impl Host {
             self.present = Present::new(&self.gpu, &self.window)?;
         }
         if dpi != self.dpi {
-            images::install(&mut self.renderer, dpi)?;
+            self.builtins = images::Builtins::new(dpi);
         }
         self.physical = physical;
         self.dpi = dpi;
@@ -134,7 +139,12 @@ impl Host {
         Ok(true)
     }
     fn render(&mut self, app: &App) -> anyhow::Result<()> {
-        draw(&mut self.renderer, &mut self.ui_gpu, app)?;
+        draw(
+            &mut self.renderer,
+            &mut self.ui_gpu,
+            &mut self.builtins,
+            app,
+        )?;
         let (image, size) = self.ui_gpu.output()?;
         // SAFETY: The UI submission completed; the image is CopySource; owners are live.
         unsafe { self.present.display(&self.gpu, image, size) }
@@ -152,7 +162,13 @@ impl Drop for Host {
 }
 
 /// Render the app's display list into the adapter's current target.
-fn draw(renderer: &mut Renderer, ui_gpu: &mut NativeUi, app: &App) -> anyhow::Result<()> {
+fn draw(
+    renderer: &mut Renderer,
+    ui_gpu: &mut NativeUi,
+    builtins: &mut images::Builtins,
+    app: &App,
+) -> anyhow::Result<()> {
+    builtins.prepare(renderer, &app.ui.display)?;
     ui_gpu.select_target(0);
     renderer
         .render(
@@ -203,6 +219,9 @@ pub fn run(options: Options) -> anyhow::Result<()> {
     };
     let config = std::path::absolute(config)?;
     ara_hub_service::validate_development_config(&config)?;
+    if let Some(output) = &options.startup_probe {
+        return startup::run(&options, output, &exe_dir, &config);
+    }
     if let Some(report) = &options.service_check {
         use ara_proto::Endpoint;
         let ara = updates::service(&exe_dir, options.ara.as_deref())?;
@@ -236,8 +255,15 @@ pub fn run(options: Options) -> anyhow::Result<()> {
         let mut app = App::new(offscreen.logical(), docs).map_err(err)?;
         return capture::run(&mut offscreen, &mut app, &mut hub, &directory);
     }
+    let connection = updates::connect(
+        exe_dir.clone(),
+        config.clone(),
+        options.ara.clone(),
+        wake::wake,
+    );
+    let phase = std::time::Instant::now();
     let mut host = Host::new(&options, hub.prefs.light)?;
-    let ara = updates::service(&exe_dir, options.ara.as_deref())?;
+    ara_hub_service::startup::record("ui.gpu_images", phase.elapsed());
     hub.releases.can_self_update = exe_dir.join("hub.json").is_file();
     let mut app = App::new(host.logical(), docs).map_err(err)?;
     interactive(
@@ -245,7 +271,7 @@ pub fn run(options: Options) -> anyhow::Result<()> {
         &mut app,
         &mut hub,
         &config,
-        &ara,
+        connection,
         options.update_health.as_deref(),
     )
 }
@@ -255,6 +281,7 @@ pub fn run(options: Options) -> anyhow::Result<()> {
 pub struct Offscreen {
     ui_gpu: NativeUi,
     renderer: Renderer,
+    builtins: images::Builtins,
     // Declared last so the adapter above drops first.
     _gpu: Gpu,
     physical: [u32; 2],
@@ -266,11 +293,11 @@ impl Offscreen {
         // SAFETY: `_gpu` is a later field, so it outlives the adapter; single-threaded use.
         let mut ui_gpu = unsafe { NativeUi::new(&gpu)? };
         ui_gpu.set_dpi(dpi)?;
-        let mut renderer = Renderer::default();
-        images::install(&mut renderer, dpi)?;
+        let renderer = Renderer::default();
         Ok(Self {
             ui_gpu,
             renderer,
+            builtins: images::Builtins::new(dpi),
             _gpu: gpu,
             physical,
             dpi,
@@ -290,8 +317,16 @@ impl Offscreen {
     }
     /// Render and read back the actual GPU target.
     pub fn capture(&mut self, app: &App) -> anyhow::Result<image::RgbaImage> {
-        draw(&mut self.renderer, &mut self.ui_gpu, app)?;
+        self.render(app)?;
         self.ui_gpu.pixels()
+    }
+    fn render(&mut self, app: &App) -> anyhow::Result<()> {
+        draw(
+            &mut self.renderer,
+            &mut self.ui_gpu,
+            &mut self.builtins,
+            app,
+        )
     }
 }
 
@@ -300,20 +335,14 @@ fn interactive(
     app: &mut App,
     hub: &mut Hub,
     config: &Path,
-    ara: &Path,
+    connection: Connection,
     mut health: Option<&Path>,
 ) -> anyhow::Result<()> {
     let prefs = prefs::Writer::new(config.to_owned())?;
-    let connection = Connection::start_with_wake(config.to_owned(), ara.to_owned(), wake::wake);
     let picks = os::picks();
     let (send, snippets) = std::sync::mpsc::channel();
-    let snippet_ara = ara.to_owned();
-    std::thread::spawn(move || {
-        for snippet in os::install_snippets(&snippet_ara) {
-            let _ = send.send(snippet);
-            wake::wake();
-        }
-    });
+    let mut ara = None;
+    let mut snippets_requested = false;
     let mut saved = hub.prefs.clone();
     let mut dirty = false;
     let mut last_minute = 0;
@@ -399,6 +428,9 @@ fn interactive(
             dirty = true;
         }
         for event in connection.poll() {
+            if let crate::connection::Event::Prepared { executable } = &event {
+                ara = Some(executable.clone());
+            }
             hub.event(event);
             dirty = true;
         }
@@ -407,13 +439,30 @@ fn interactive(
             dirty = true;
         }
         connection.send(hub.take_calls());
+        if !snippets_requested
+            && hub.view == crate::model::View::Agents
+            && let Some(snippet_ara) = ara.clone()
+        {
+            snippets_requested = true;
+            let send = send.clone();
+            std::thread::spawn(move || {
+                for snippet in os::install_snippets(&snippet_ara) {
+                    let _ = send.send(snippet);
+                    wake::wake();
+                }
+            });
+        }
         for effect in hub.take_effects() {
             match effect {
                 Effect::ApplyUpdate {
                     archive,
                     manifest,
                     signature,
-                } => match updates::launch(config, ara, archive, manifest, signature) {
+                } => match ara
+                    .as_deref()
+                    .context("The Hub service is still connecting; retry once connected")
+                    .and_then(|ara| updates::launch(config, ara, archive, manifest, signature))
+                {
                     Ok(()) => return Ok(()),
                     Err(error) => {
                         hub.update_error(error.to_string());

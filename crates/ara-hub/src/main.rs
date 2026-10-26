@@ -32,6 +32,9 @@ fn options() -> Result<Option<Options>, String> {
             "--service-check" => {
                 options.service_check = Some(PathBuf::from(value(&mut args, &arg)?))
             }
+            "--startup-probe" => {
+                options.startup_probe = Some(PathBuf::from(value(&mut args, &arg)?))
+            }
             "--update-health" => {
                 options.update_health = Some(PathBuf::from(value(&mut args, &arg)?))
             }
@@ -73,6 +76,7 @@ fn options() -> Result<Option<Options>, String> {
 }
 
 fn main() -> std::process::ExitCode {
+    let entered = std::time::Instant::now();
     match ara_crash::monitor_from_args() {
         Ok(true) => return std::process::ExitCode::SUCCESS,
         Ok(false) => {}
@@ -87,11 +91,15 @@ fn main() -> std::process::ExitCode {
         }
     };
     let interactive = options.capture.is_none()
+        && options.startup_probe.is_none()
         && options.service_check.is_none()
         && !(cfg!(feature = "rehearsal") && std::env::var_os("ARA_RELEASE_TEST_API").is_some());
+    ara_hub_service::startup::record("ui.entry", entered.elapsed());
+    let phase = std::time::Instant::now();
     let _crashes = ara_crash::desktop::start("ara-hub", interactive)
         .map_err(|error| eprintln!("ARA-EXP-CRASH-004: {error:#}"))
         .ok();
+    ara_hub_service::startup::record("ui.crash_monitor", phase.elapsed());
     match native::run(options) {
         Ok(()) => std::process::ExitCode::SUCCESS,
         Err(error) => {

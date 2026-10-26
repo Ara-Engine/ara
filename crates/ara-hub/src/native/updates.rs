@@ -7,6 +7,30 @@ use std::{
     process::{Command, Stdio},
 };
 
+/// Start bootstrap hashing/copying and service connection before creating the GPU.
+pub(super) fn connect(
+    directory: PathBuf,
+    config: PathBuf,
+    override_path: Option<PathBuf>,
+    wake: impl Fn() + Send + 'static,
+) -> crate::connection::Connection {
+    crate::connection::Connection::start_preparing_with_wake(
+        config,
+        move || {
+            let phase = std::time::Instant::now();
+            let result = service(&directory, override_path.as_deref()).map_err(|error| {
+                ara_proto::RpcError::from(ara_diag::Diagnostic::error(
+                    ara_diag::codes::DAEMON_UNREACHABLE,
+                    format!("Prepare Hub service: {error:#}"),
+                ))
+            });
+            ara_hub_service::startup::record("ui.bootstrap", phase.elapsed());
+            result
+        },
+        wake,
+    )
+}
+
 pub(super) fn service(directory: &Path, override_path: Option<&Path>) -> Result<PathBuf> {
     let standalone = directory.join("hub.json").is_file();
     // Older updaters forwarded --ara pointing to the previous bootstrap. Such a
