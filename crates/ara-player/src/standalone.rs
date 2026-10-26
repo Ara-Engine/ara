@@ -308,6 +308,7 @@ pub(super) fn run(args: Args, began: Instant) -> Result<()> {
             }
         }
         window.shutdown(&presenter)?;
+        perf.finish()?;
     }
     let capture = args
         .standalone

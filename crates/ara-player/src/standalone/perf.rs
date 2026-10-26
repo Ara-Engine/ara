@@ -12,6 +12,7 @@ mod arrival;
 mod boundary;
 mod cpu;
 mod gpu;
+mod hitches;
 mod report;
 mod span;
 
@@ -64,6 +65,9 @@ pub(super) struct Window {
     cpu: cpu::Samples,
     span: span::Samples,
     run_cpu: cpu::Samples,
+    hitches: hitches::Samples,
+    launched: Instant,
+    last_report: Option<Value>,
     arrival: arrival::Samples,
     boundary: boundary::Boundary,
     began: Instant,
@@ -112,6 +116,9 @@ impl Window {
             cpu: cpu::Samples::default(),
             span: span::Samples::default(),
             run_cpu: cpu::Samples::default(),
+            hitches: hitches::Samples::default(),
+            launched: began,
+            last_report: None,
             arrival: arrival::Samples::default(),
             boundary,
             began,
@@ -138,7 +145,6 @@ impl Window {
 
     fn reset(&mut self) {
         self.clear_samples();
-        self.run_cpu = cpu::Samples::default();
         self.arrival = arrival::Samples::default();
         self.boundary = boundary::Boundary::new(
             self.options.perf_warmup,
@@ -220,11 +226,20 @@ impl Window {
         camera: Value,
         frame: CpuFrame,
     ) -> Result<bool> {
+        if self.enabled() {
+            self.run_cpu
+                .record(frame.total_ms, frame.wait_ms, frame.first_presented);
+            self.hitches.record(
+                self.run_cpu.count(),
+                self.launched.elapsed(),
+                self.collecting,
+                presenter,
+                &frame,
+            );
+        }
         if !self.collecting {
             return Ok(false);
         }
-        self.run_cpu
-            .record(frame.total_ms, frame.wait_ms, frame.first_presented);
         let mut shaders_ready = true;
         if let Some(epoch) = self.waiting_for_shader_epoch {
             let status = presenter.shader_status();
