@@ -30,6 +30,9 @@ impl Ui {
                 if !node.visible {
                     layout.display = Display::None;
                 }
+                if let Some(placed) = self.placed.get(&crate::source::stable_id(&node.element.id)) {
+                    placed.apply(&mut layout);
+                }
                 if layout != *self.tree.style(node.layout_id)? {
                     self.tree.set_style(node.layout_id, layout)?;
                     node.dirty.layout = true;
@@ -71,6 +74,29 @@ impl Ui {
         let layout = self.nodes.iter().any(|n| n.dirty.layout);
         let paint = layout || self.nodes.iter().any(|n| n.dirty.paint);
         if layout {
+            self.compute_layout(text_system)?;
+            work.layout_passes = 1;
+        }
+        if paint {
+            work.paint_nodes = self.emit_display(text_system)?;
+            // Popovers are placed against painted anchors; one that moved lays out and
+            // paints once more.
+            if self.place_popovers()? {
+                self.compute_layout(text_system)?;
+                work.layout_passes += 1;
+                work.paint_nodes += self.emit_display(text_system)?;
+            }
+        }
+        for node in &mut self.nodes {
+            node.dirty.layout = false;
+            node.dirty.paint = false;
+        }
+        work.shaped = text_system.shapes - before;
+        Ok(work)
+    }
+    /// Taffy layout with Parley text measurement, then text finalized at its laid-out width.
+    fn compute_layout(&mut self, text_system: &mut TextSystem) -> Result<()> {
+        {
             let root = self.nodes[0].layout_id;
             let nodes = &mut self.nodes;
             self.tree.compute_layout_with_measure(
@@ -146,9 +172,12 @@ impl Ui {
                     );
                 }
             }
-            work.layout_passes = 1;
         }
-        if paint {
+        Ok(())
+    }
+    /// Rebuild the display list, rects and clips; returns the nodes visited.
+    fn emit_display(&mut self, text_system: &mut TextSystem) -> Result<usize> {
+        {
             self.display.commands.clear();
             self.display.glyphs.clear();
             self.paint_order.clear();
@@ -164,13 +193,7 @@ impl Ui {
                 h: self.size[1],
             };
             self.paint_node(0, [0.0, 0.0], [0.0, 0.0], clip, text_system)?;
-            work.paint_nodes = self.paint_order.len();
         }
-        for node in &mut self.nodes {
-            node.dirty.layout = false;
-            node.dirty.paint = false;
-        }
-        work.shaped = text_system.shapes - before;
-        Ok(work)
+        Ok(self.paint_order.len())
     }
 }
