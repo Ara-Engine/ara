@@ -11,6 +11,7 @@ use crate::shell::commands::{Target, menus::Context};
 #[derive(Clone, Copy)]
 enum Setup {
     Main,
+    Tool(&'static str),
     Menu(usize, Option<usize>),
     Context(Context),
     /// A toolbar dropdown opened under its button: (button id, its menu).
@@ -23,6 +24,11 @@ enum Setup {
 }
 const STEPS: &[(&str, Setup)] = &[
     ("main", Setup::Main),
+    ("scene-universal", Setup::Tool("view.tool.universal")),
+    (
+        "menu-camera-speed",
+        Setup::Dropdown("view-speed", Context::CameraSpeed),
+    ),
     ("menu-file", Setup::Menu(0, None)),
     ("menu-edit", Setup::Menu(1, Some(23))),
     ("menu-view", Setup::Menu(2, Some(1))),
@@ -247,6 +253,9 @@ impl UxVerification {
         let select = crate_entity.clone().map(|e| vec![e]).unwrap_or_default();
         editor.action("editor.select", json!({"entities": select}))?;
         match setup {
+            Setup::Tool(command) => {
+                shell.run_command(editor, command, &Target::None)?;
+            }
             Setup::Tab(panel) => {
                 let resource = match panel {
                     "material" => Some(&self.resources[0]),
@@ -380,6 +389,9 @@ impl UxVerification {
             editor.action("editor.palette", json!({"open": false}))?;
         }
         match setup {
+            Setup::Tool(_) => {
+                shell.run_command(editor, "view.tool.move", &Target::None)?;
+            }
             Setup::Float(_) | Setup::Settings(_) | Setup::Tab(_) => {
                 editor.action("editor.layout.reset", json!({}))?;
             }

@@ -134,7 +134,7 @@ impl Service for EditorService {
             Method::new::<EditorTool>(
                 db,
                 "editor.tool",
-                "Configure translate/rotate/scale handles and snapping.",
+                "Configure translate/rotate/scale/universal handles and snapping.",
             ),
             Method::new::<EditorEntityView>(
                 db,

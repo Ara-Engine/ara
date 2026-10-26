@@ -472,15 +472,21 @@ impl Editor {
     }
     /// Start a spatial gesture at the current revision.
     pub fn begin_gesture(&mut self) -> anyhow::Result<()> {
+        self.begin_gesture_tool(self.state.tool)
+    }
+    /// Begin the operation chosen by a transform handle, keeping the toolbar's
+    /// universal tool selected.
+    pub fn begin_gesture_tool(&mut self, tool: crate::state::Tool) -> anyhow::Result<()> {
         let resolved = crate::world::resolve(self.host.store(), &self.state.doc)
             .map_err(|d| anyhow::anyhow!(format!("{d:?}")))?;
-        self.gesture = Some(Gesture::begin(
+        self.gesture = Some(Gesture::begin_tool(
             &resolved,
             &self.state,
             self.host.store().revision(),
+            tool,
         )?);
-        let field = match self.state.tool {
-            crate::state::Tool::Translate => "Transform.position",
+        let field = match tool {
+            crate::state::Tool::Translate | crate::state::Tool::Universal => "Transform.position",
             crate::state::Tool::Rotate => "Transform.rotation",
             crate::state::Tool::Scale => "Transform.scale",
         };

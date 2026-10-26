@@ -1,12 +1,12 @@
 //! The one orientation aid (docs/design/editor-scene-view.md): a 60 px transparent
-//! widget, top-right with a 12 px inset. Positive axes are 16 px filled caps lettered
+//! widget, top-right below the toolbar. Positive axes are 16 px filled caps lettered
 //! X, Y and Z, with stems; negative axes are 10 px hollow rings with no letter. Caps
 //! are real accessible buttons ("+X view", "Look along +X").
 use super::*;
 use ara_ui::{paint::Draw, source::stable_id, style::Color};
 use glam::Vec3;
 
-/// Widget size; it sits 12 px inside the viewport's top-right corner.
+/// Widget size; theme tokens place it below the viewport toolbar.
 pub(super) const SIZE: f32 = 60.;
 const RADIUS: f32 = 21.;
 /// Cap diameters: positive (lettered) and negative (hollow) axes.
@@ -14,7 +14,9 @@ const POSITIVE: f32 = 16.;
 const NEGATIVE: f32 = 10.;
 impl Shell {
     pub(super) fn axis_markup(&mut self, editor: &Editor, out: &mut String) {
-        out.push_str(&format!("<panel id='view-cube' style='position:absolute;right:12px;top:12px;width:{SIZE}px;height:{SIZE}px'>"));
+        out.push_str(&format!(
+            "<panel id='view-cube' class='view-orientation' style='width:{SIZE}px;height:{SIZE}px'>"
+        ));
         let camera = editor.state.camera;
         self.axis_camera = camera;
         let mut caps = caps(&camera);

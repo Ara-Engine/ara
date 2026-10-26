@@ -756,6 +756,7 @@ impl Verification {
         for (name, command) in [
             ("scene-rotate", "view.tool.rotate"),
             ("scene-scale", "view.tool.scale"),
+            ("scene-universal", "view.tool.universal"),
         ] {
             shell.run_command(editor, command, &Target::None)?;
             shell.rebuild(editor)?;
@@ -765,6 +766,7 @@ impl Verification {
         for (name, button, context) in [
             ("scene-menu-view", "view-mode", Context::ViewModes),
             ("scene-menu-camera", "view-camera", Context::Camera),
+            ("scene-menu-speed", "view-speed", Context::CameraSpeed),
         ] {
             shell.rebuild(editor)?;
             let r = shell

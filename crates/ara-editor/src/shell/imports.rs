@@ -189,11 +189,13 @@ impl Shell {
                 "window.assets",
             ),
         };
-        let top = if editor.state.follow.is_some() {
-            48.
-        } else {
-            12.
-        };
+        let toolbar = if editor.state.hide_overlays { 0. } else { 36. };
+        let top = toolbar
+            + if editor.state.follow.is_some() {
+                48.
+            } else {
+                12.
+            };
         self.bind_command("scene-loading", command, Target::None);
         out.push_str(&format!("<button id='scene-loading' class='loading-pill' style='top:{top}px' label='Scene assets' description='Assets this scene uses that are not ready yet' action='Dispatch'>{}<text id='scene-loading-text' text='{}' /></button>",icons::icon_in("scene-loading",icon,tint),escape(&text)));
     }

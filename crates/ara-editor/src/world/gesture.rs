@@ -27,6 +27,16 @@ pub struct Gesture {
 impl Gesture {
     /// Capture all selected transforms once. Selected descendants follow their selected ancestor.
     pub fn begin(entities: &Resolved, state: &EditorState, base: u64) -> anyhow::Result<Self> {
+        Self::begin_tool(entities, state, base, state.tool)
+    }
+    /// Begin the operation picked from a combined gizmo, preserving the toolbar's
+    /// selected tool and its coordinate, pivot and snapping settings.
+    pub fn begin_tool(
+        entities: &Resolved,
+        state: &EditorState,
+        base: u64,
+        tool: Tool,
+    ) -> anyhow::Result<Self> {
         let worlds = super::world_transforms(entities);
         let mut initial = BTreeMap::new();
         let mut parents = BTreeMap::new();
@@ -74,8 +84,8 @@ impl Gesture {
             "select an entity with a Transform first"
         );
         pivot /= count;
-        let snap = state.snapping.then_some(match state.tool {
-            Tool::Translate => state.move_snap,
+        let snap = state.snapping.then_some(match tool {
+            Tool::Translate | Tool::Universal => state.move_snap,
             Tool::Rotate => state.rotate_snap,
             Tool::Scale => state.scale_snap,
         });
@@ -91,7 +101,7 @@ impl Gesture {
         };
         Ok(Self {
             base,
-            tool: state.tool,
+            tool,
             current: initial.clone(),
             initial,
             parents,
@@ -122,7 +132,7 @@ impl Gesture {
             let world = parent * (*start);
             let world_position = world.transform_point3(Vec3::ZERO);
             let next = match self.tool {
-                Tool::Translate => {
+                Tool::Translate | Tool::Universal => {
                     let movement = self.axes * delta;
                     let p = parent.inverse().transform_point3(world_position + movement);
                     Mat4::from_scale_rotation_translation(scale, rotation, p)
