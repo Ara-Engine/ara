@@ -48,6 +48,9 @@ This feature stays off in shipping builds; see ara-release's rehearsal command.
   Scroll offsets clamp after layout; explicit focus requests and hover update then.
 - Theme changes call `switch_theme` once to swap palette tokens. Initial inherited
   colors resolve in the runtime; `Ui::editor` is used only for window creation.
+- Built-in icons, wordmarks and Starter art decode/upload on first visible use,
+  then stay resident across pages/themes. DPI changes invalidate that image set.
+  MCP snippet helper processes start only on opening Agents, after bootstrap is ready.
 - `App::frame` consumes a retained presentation request: rebuilding must present
   even if its layout work was already consumed. Pointer activations apply before
   the next queued event. Worker results wake SDL; idle waits follow clock/toast deadlines.

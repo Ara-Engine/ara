@@ -44,8 +44,9 @@ pub(super) fn run(options: &Options, output: &Path, directory: &Path, config: &P
     let mut app = App::new(surface.logical(), os::docs(directory)).map_err(err)?;
     app.rebuild(&mut hub, now_ms()).map_err(err)?;
     app.frame().map_err(err)?;
-    draw(&mut surface.renderer, &mut surface.ui_gpu, &app)?;
+    surface.render(&app)?;
     let first = now_ms();
+    let first_images = surface.builtins.loaded();
     ara_hub_service::startup::record("ui.first_draw", phase.elapsed());
     let first_pixels = surface.ui_gpu.pixels()?;
     // Use the same retained input path while service connection is pending.
@@ -78,7 +79,7 @@ pub(super) fn run(options: &Options, output: &Path, directory: &Path, config: &P
             if hub.link == Link::Online {
                 app.rebuild(&mut hub, now_ms()).map_err(err)?;
                 app.frame().map_err(err)?;
-                draw(&mut surface.renderer, &mut surface.ui_gpu, &app)?;
+                surface.render(&app)?;
                 break now_ms();
             }
         }
@@ -91,7 +92,7 @@ pub(super) fn run(options: &Options, output: &Path, directory: &Path, config: &P
         .save(output.join("connected.png"))?;
     ara_update::write_json(
         &output.join("startup.json"),
-        &json!({"firstFrameUnixMs":first,"connectedUnixMs":connected,"probeMs":started.elapsed().as_secs_f64()*1000.,"inputWhileConnectingMs":input_ms,"build":crate::build_identity(),"pid":std::process::id()}),
+        &json!({"firstFrameUnixMs":first,"connectedUnixMs":connected,"firstFrameBuiltinImages":first_images,"probeMs":started.elapsed().as_secs_f64()*1000.,"inputWhileConnectingMs":input_ms,"build":crate::build_identity(),"pid":std::process::id()}),
     )?;
     Ok(())
 }

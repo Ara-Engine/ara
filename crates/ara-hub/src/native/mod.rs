@@ -81,6 +81,7 @@ struct Host {
     gpu: Gpu,
     window: Window,
     renderer: Renderer,
+    builtins: images::Builtins,
     dpi: f32,
     fixed_dpi: Option<f32>,
     physical: [u32; 2],
@@ -105,11 +106,11 @@ impl Host {
             physical: window.size()?,
             window,
             renderer: Renderer::default(),
+            builtins: images::Builtins::new(dpi),
             dpi,
             fixed_dpi: options.dpi,
         };
         host.ui_gpu.set_dpi(dpi)?;
-        images::install(&mut host.renderer, dpi)?;
         Ok(host)
     }
     /// Logical size at the current scale.
@@ -130,7 +131,7 @@ impl Host {
             self.present = Present::new(&self.gpu, &self.window)?;
         }
         if dpi != self.dpi {
-            images::install(&mut self.renderer, dpi)?;
+            self.builtins = images::Builtins::new(dpi);
         }
         self.physical = physical;
         self.dpi = dpi;
@@ -138,7 +139,12 @@ impl Host {
         Ok(true)
     }
     fn render(&mut self, app: &App) -> anyhow::Result<()> {
-        draw(&mut self.renderer, &mut self.ui_gpu, app)?;
+        draw(
+            &mut self.renderer,
+            &mut self.ui_gpu,
+            &mut self.builtins,
+            app,
+        )?;
         let (image, size) = self.ui_gpu.output()?;
         // SAFETY: The UI submission completed; the image is CopySource; owners are live.
         unsafe { self.present.display(&self.gpu, image, size) }
@@ -156,7 +162,13 @@ impl Drop for Host {
 }
 
 /// Render the app's display list into the adapter's current target.
-fn draw(renderer: &mut Renderer, ui_gpu: &mut NativeUi, app: &App) -> anyhow::Result<()> {
+fn draw(
+    renderer: &mut Renderer,
+    ui_gpu: &mut NativeUi,
+    builtins: &mut images::Builtins,
+    app: &App,
+) -> anyhow::Result<()> {
+    builtins.prepare(renderer, &app.ui.display)?;
     ui_gpu.select_target(0);
     renderer
         .render(
@@ -269,6 +281,7 @@ pub fn run(options: Options) -> anyhow::Result<()> {
 pub struct Offscreen {
     ui_gpu: NativeUi,
     renderer: Renderer,
+    builtins: images::Builtins,
     // Declared last so the adapter above drops first.
     _gpu: Gpu,
     physical: [u32; 2],
@@ -280,11 +293,11 @@ impl Offscreen {
         // SAFETY: `_gpu` is a later field, so it outlives the adapter; single-threaded use.
         let mut ui_gpu = unsafe { NativeUi::new(&gpu)? };
         ui_gpu.set_dpi(dpi)?;
-        let mut renderer = Renderer::default();
-        images::install(&mut renderer, dpi)?;
+        let renderer = Renderer::default();
         Ok(Self {
             ui_gpu,
             renderer,
+            builtins: images::Builtins::new(dpi),
             _gpu: gpu,
             physical,
             dpi,
@@ -304,8 +317,16 @@ impl Offscreen {
     }
     /// Render and read back the actual GPU target.
     pub fn capture(&mut self, app: &App) -> anyhow::Result<image::RgbaImage> {
-        draw(&mut self.renderer, &mut self.ui_gpu, app)?;
+        self.render(app)?;
         self.ui_gpu.pixels()
+    }
+    fn render(&mut self, app: &App) -> anyhow::Result<()> {
+        draw(
+            &mut self.renderer,
+            &mut self.ui_gpu,
+            &mut self.builtins,
+            app,
+        )
     }
 }
 
@@ -321,6 +342,7 @@ fn interactive(
     let picks = os::picks();
     let (send, snippets) = std::sync::mpsc::channel();
     let mut ara = None;
+    let mut snippets_requested = false;
     let mut saved = hub.prefs.clone();
     let mut dirty = false;
     let mut last_minute = 0;
@@ -408,14 +430,6 @@ fn interactive(
         for event in connection.poll() {
             if let crate::connection::Event::Prepared { executable } = &event {
                 ara = Some(executable.clone());
-                let snippet_ara = executable.clone();
-                let send = send.clone();
-                std::thread::spawn(move || {
-                    for snippet in os::install_snippets(&snippet_ara) {
-                        let _ = send.send(snippet);
-                        wake::wake();
-                    }
-                });
             }
             hub.event(event);
             dirty = true;
@@ -425,6 +439,19 @@ fn interactive(
             dirty = true;
         }
         connection.send(hub.take_calls());
+        if !snippets_requested
+            && hub.view == crate::model::View::Agents
+            && let Some(snippet_ara) = ara.clone()
+        {
+            snippets_requested = true;
+            let send = send.clone();
+            std::thread::spawn(move || {
+                for snippet in os::install_snippets(&snippet_ara) {
+                    let _ = send.send(snippet);
+                    wake::wake();
+                }
+            });
+        }
         for effect in hub.take_effects() {
             match effect {
                 Effect::ApplyUpdate {
