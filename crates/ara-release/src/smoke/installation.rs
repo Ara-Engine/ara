@@ -133,6 +133,16 @@ impl Preserved {
 }
 
 pub(super) fn uninstall(env: &Environment) -> Result<()> {
+    // Exercise the other teardown case too: a bootstrap service outside this
+    // engine must remain available after its engine is removed.
+    run(
+        env.command(env.directory.join("standalone Hub/ara-hub.exe"))
+            .arg("--service-check")
+            .arg(env.directory.join("service-before-uninstall.json")),
+        &env.directory.join("service-before-uninstall.log"),
+    )?;
+    let discovery = env.directory.join("config/hub");
+    let service = ara_rpc::DaemonInfo::read(&discovery).context("independent Hub service")?;
     let preserved = Preserved::before_uninstall(env)?;
     let path = env.installed.join("uninstall.cmd");
     let mut command = env.command("cmd.exe");
@@ -144,5 +154,10 @@ pub(super) fn uninstall(env: &Environment) -> Result<()> {
     #[cfg(not(windows))]
     command.args(["/d", "/c"]).arg(path).arg("-Silent");
     run(&mut command, &env.directory.join("uninstall.log"))?;
-    preserved.after_uninstall(env)
+    preserved.after_uninstall(env)?;
+    ensure!(
+        ara_rpc::DaemonInfo::read(&discovery).is_some_and(|info| info.pid == service.pid),
+        "uninstall stopped the independent Hub service"
+    );
+    Ok(())
 }

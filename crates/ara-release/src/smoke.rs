@@ -574,11 +574,16 @@ impl Mcp {
             .iter()
             .map(|value| value.as_str().context("MCP argument"))
             .collect::<Result<Vec<_>>>()?;
-        let without_ara = std::env::split_paths(&std::env::var_os("PATH").unwrap_or_default())
+        let mut command = env.command(executable);
+        let clean_path = command
+            .get_envs()
+            .find(|(key, _)| *key == "PATH")
+            .and_then(|(_, value)| value)
+            .context("sanitized smoke PATH")?;
+        let without_ara = std::env::split_paths(clean_path)
             .filter(|directory| !directory.join("ara.exe").is_file())
             .collect::<Vec<_>>();
-        let mut child = env
-            .command(executable)
+        let mut child = command
             .args(args)
             .env("PATH", std::env::join_paths(without_ara)?)
             .stdin(Stdio::piped())
