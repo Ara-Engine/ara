@@ -117,7 +117,7 @@ impl NetHost {
                 },
                 local_owner: PlayerId(HOST_PLAYER),
                 max_clients: config.clients.len().max(1),
-                start_clients: config.clients.len(),
+                start_clients: usize::from(config.dedicated && !config.clients.is_empty()),
                 hz,
                 snapshot_hz: hz.min(30),
                 expected_addresses: expected,

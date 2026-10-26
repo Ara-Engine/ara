@@ -4,7 +4,7 @@
 //! press), Left Shift Sprint, right-drag Look. Injections go through
 //! `Session::inject`, the replayable path agents use too.
 use ara_input::{ActionValue, Injection, PlayerId};
-use ara_runtime::control::{JUMP, LOOK, MOVE, SPRINT};
+use ara_runtime::control::{JUMP, LOOK, MOVE, SPRINT, INTERACT, INVENTORY};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 
@@ -65,6 +65,8 @@ pub struct Mapper {
     orbit: bool,
     look: [f32; 2],
     jump: bool,
+    interact: bool,
+    inventory: bool,
     sent_move: [f32; 2],
     sent_sprint: bool,
 }
@@ -80,6 +82,8 @@ impl Mapper {
             } => {
                 if self.keys.insert(scancode) {
                     self.jump |= scancode == SPACE;
+                    self.interact |= scancode == 8;
+                    self.inventory |= scancode == 43;
                 }
             }
             DeviceEvent::Key {
@@ -104,6 +108,8 @@ impl Mapper {
                 self.orbit = false;
                 self.look = [0.0; 2];
                 self.jump = false;
+                self.interact = false;
+                self.inventory = false;
             }
         }
     }
@@ -153,6 +159,11 @@ impl Mapper {
                 value: ActionValue::Axis2(look),
                 hold_ticks: 1,
             });
+        }
+        for (action, pressed) in [(INTERACT, &mut self.interact), (INVENTORY, &mut self.inventory)] {
+            if std::mem::take(pressed) {
+                inputs.push(Injection { player, action: action.into(), value: ActionValue::Button(true), hold_ticks: 1 });
+            }
         }
         inputs
     }

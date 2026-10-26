@@ -43,6 +43,8 @@ pub struct PendingPatch {
 
 /// The assigned world.
 pub struct World<R = Play> {
+    /// Portable native game UI; render state stays with the main-thread surface.
+    pub ui: Option<ara_play::GameUi>,
     /// The simulation and presentation source, in its (network) role.
     pub runtime: R,
     /// The first error of a frame advance (networked transport faults), for status.
@@ -73,6 +75,7 @@ impl<R> World<R> {
     /// Attach the runtime's main-thread role without copying its ECS or metadata.
     pub(crate) fn map_runtime<T>(self, attach: impl FnOnce(R) -> Result<T>) -> Result<World<T>> {
         Ok(World {
+            ui: self.ui,
             runtime: attach(self.runtime)?,
             fault: self.fault,
             scene: self.scene,
@@ -203,6 +206,12 @@ impl World {
         Self::prepare_with_source(scene, None, true, None, Some(source))
     }
 
+    /// Prepares a source or exported game away from the UI; network owners attach on the main thread.
+    pub(crate) fn prepare_game(scene: &PlayScene, net: Option<&ara_play::NetStart>,
+        source: Option<Arc<dyn ara_runtime::assets::AssetSource>>) -> Result<(World<Runtime>, f64)> {
+        Self::prepare_with_source(scene, net, false, None, source)
+    }
+
     fn prepare_with_source(
         scene: &PlayScene,
         net: Option<&ara_play::NetStart>,
@@ -310,6 +319,7 @@ impl World {
         }
         Ok((
             World {
+                ui: scene.ui.clone(),
                 runtime,
                 fault: None,
                 scene: id,
@@ -758,6 +768,10 @@ impl World {
                     || self.fidelity_content(frame),
                 )?
             };
+            let mut capture = capture;
+            if let Some(ui) = &self.ui {
+                crate::game_ui::capture(ui, &self.runtime, self.runtime.player().0, &mut capture.image)?;
+            }
             capture.write(std::path::Path::new(path))?;
             marks = capture
                 .legend
@@ -849,6 +863,14 @@ pub struct Audio {
 }
 
 impl Audio {
+    /// Applies presentation preferences to the game's authored mixer buses.
+    pub(crate) fn volumes(&mut self, master:f32, music:f32, sfx:f32) -> Result<()> {
+        let engine=self.presenter.engine();
+        for (name,gain) in [("master",master),("music",music),("sfx",sfx)] {
+            if let Some(bus)=engine.bus(name) {engine.set_bus_gain(bus,gain,256)?;}
+        }
+        Ok(())
+    }
     /// Feeds the live device after the control worker has updated voices.
     pub fn pump(
         &mut self,

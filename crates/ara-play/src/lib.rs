@@ -13,6 +13,8 @@
 mod imports;
 pub mod link;
 pub mod shm;
+mod game_ui;
+pub use game_ui::{GameUi, UiBinding};
 pub use imports::{ImportState, Stall};
 
 use ara_doc::{AssetId, Document, Record, RecordId, Workspace};
@@ -684,6 +686,9 @@ pub struct DocumentData {
 /// tick rate and the published asset generations it must load.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct PlayScene {
+    /// Portable native game UI, present in both Play and exported packs.
+    #[serde(default)]
+    pub ui: Option<GameUi>,
     /// Typed project rendering defaults. A player command-line override wins.
     /// Omitted by older format-1 senders, which retain hardware auto-detection.
     #[serde(default)]

@@ -19,6 +19,7 @@ mod kit;
 mod lock;
 mod play;
 mod sources;
+mod game;
 
 #[derive(Parser)]
 #[command(about = "Ara sample projects with real CC0 art")]
@@ -32,6 +33,8 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
+    /// Author Outpost's C# co-op game layer over its existing real-art scene.
+    Game,
     /// Pin a Poly Haven model, texture set or HDRI.
     AddPolyhaven {
         /// Poly Haven ID (`Barrel_01`).
@@ -175,6 +178,7 @@ fn main() -> Result<()> {
         }
     };
     match cli.command {
+        Command::Game => game::author(&build::Ctx::open(&samples,"outpost","Outpost",read_lock()?)?)?,
         Command::AddPolyhaven {
             polyhaven,
             id,

@@ -28,7 +28,7 @@ pub use clr::Runtime;
 pub use ecs::cmdbuf::Applied;
 pub use host::{
     Boundary, CommandRecord, ComponentWrite, Cue, EditOrigin, EngineBindings, LogSink,
-    ModuleStatus, ResourceWrite, ScriptConfig, ScriptHost,
+    ModuleStatus, ResourceWrite, ScriptConfig, ScriptHost, ScriptInputs, ScriptNavigation,
 };
 pub use module::{MODULE_FILE, ModuleProfile, ModuleSpec, load_order};
 

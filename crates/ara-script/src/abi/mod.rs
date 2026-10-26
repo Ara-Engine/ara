@@ -20,7 +20,7 @@ pub(crate) use describe::Fnv;
 pub use describe::{AbiConst, AbiField, AbiFn, AbiStruct, AbiTable};
 
 /// Bumped on any incompatible change to the semantics of the tables.
-pub const ABI_VERSION: u32 = 2;
+pub const ABI_VERSION: u32 = 3;
 
 abi_structs! { PUBLIC_STRUCTS;
     /// The fixed simulation tick that every system, behaviour and command sees.
@@ -282,6 +282,16 @@ abi_table! {
         fn cmd_push(ctx: *mut c_void, buf: *mut c_void, op: u32, type_index: u32, entity: u64, data: *const u8, len: u32);
         /// The compile server started (1) or finished (0) a compile; the host raises tick-thread priority meanwhile.
         fn compile_state(ctx: *mut c_void, active: u32);
+        /// Copies entity handles carrying a component in ascending handle order. Returns
+        /// the required count; writes nothing when cap is too small. Exclusive phases only.
+        fn query_entities(ctx: *mut c_void, component: u32, out: *mut u64, cap: u32) -> u32;
+        /// Reads a fixed-tick action axis (button = axis 0). Missing actions are zero.
+        /// Exclusive phases only; the embedding runtime publishes the tick's input snapshot.
+        fn input_axis(ctx: *mut c_void, player: u64, name: *const u8, len: u32, axis: u32) -> f32;
+        /// Authored input owner for an entity, or zero. Exclusive gameplay phases only.
+        fn input_player(ctx: *mut c_void, entity: u64) -> u64;
+        /// Queues a navmesh destination after the exclusive gameplay phase; enabled=0 stops.
+        fn navigate(ctx: *mut c_void, entity: u64, x: f32, y: f32, z: f32, enabled: u32);
     }
 }
 

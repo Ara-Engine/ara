@@ -1479,6 +1479,7 @@ dependencies = [
  "ara-crash",
  "ara-diag",
  "ara-doc",
+ "ara-editor-gpu",
  "ara-gpu",
  "ara-host",
  "ara-import2d",
@@ -1500,6 +1501,9 @@ dependencies = [
  "ara-runtime-world",
  "ara-schema",
  "ara-sim",
+ "ara-ui",
+ "ara-ui-render",
+ "ara-ui-text",
  "ciborium",
  "clap",
  "embed-resource",
@@ -1781,6 +1785,7 @@ dependencies = [
  "ara-components",
  "ara-diag",
  "ara-input",
+ "ara-nav",
  "ara-runtime",
  "ara-schema",
  "ara-script",
@@ -1850,6 +1855,7 @@ dependencies = [
  "image",
  "serde",
  "serde_json",
+ "zip 2.6.1",
 ]
 
 [[package]]

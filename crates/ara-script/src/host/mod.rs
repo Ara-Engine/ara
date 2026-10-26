@@ -34,6 +34,20 @@ pub use bindings::EngineBindings;
 pub use command::{CommandRecord, ComponentWrite, Cue, ResourceWrite};
 pub use ctx::LogSink;
 
+/// Fixed-tick input snapshot supplied by the embedding runtime before C# callbacks.
+/// Derived from replayable actions, never sampled from devices by gameplay.
+#[derive(Resource, Default)]
+pub struct ScriptInputs {
+    /// Applied actions indexed by authenticated owner and action name.
+    pub actions: BTreeMap<(u64, String), [f32; 2]>,
+    /// Entity handles mapped to their authored input owner.
+    pub players: BTreeMap<u64, u64>,
+}
+
+/// Navigation requests emitted by exclusive C# callbacks and drained before navigation.
+#[derive(Resource, Default)]
+pub struct ScriptNavigation(pub Vec<(u64, Option<[f32; 3]>)>);
+
 use crate::abi::{self, Frame, HostInit, PHASE_FRAME, PHASE_TICK, ReloadReport, ScriptApi, Tick};
 use crate::clr::{self, Loaded, Runtime};
 use crate::codes;

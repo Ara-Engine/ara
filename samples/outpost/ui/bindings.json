@@ -1,0 +1,18 @@
+[
+  {"node":"salvaged","entity":"e_run","component":"SalvageRun","field":"salvaged"},
+  {"node":"goal","entity":"e_run","component":"SalvageRun","field":"goal"},
+  {"node":"health","entity":"player","component":"Survivor","field":"health","template":"{value} HP"},
+  {"node":"clock","entity":"e_run","component":"SalvageRun","field":"ticksLeft","template":"{value} ticks until nightfall"},
+  {"node":"crew","entity":"e_run","component":"SalvageRun","field":"activePlayers","template":"{value} scavengers online"},
+  {"node":"alert","entity":"e_run","component":"SalvageRun","field":"alert","template":"{value} drones chasing"},
+  {"node":"prompt","entity":"player","component":"Survivor","field":"prompt","template":"Interaction {value}  /  E to use"},
+  {"node":"inventory","entity":"player","component":"Survivor","field":"inventoryOpen","visibility":true},
+  {"node":"circuits","entity":"player","component":"Survivor","field":"circuits","template":"Circuit boards: {value}"},
+  {"node":"cells","entity":"player","component":"Survivor","field":"cells","template":"Battery cells: {value}"},
+  {"node":"radios","entity":"player","component":"Survivor","field":"radios","template":"Radio parts: {value}"},
+  {"node":"win","entity":"e_run","component":"SalvageRun","field":"won","visibility":true},
+  {"node":"lose","entity":"e_run","component":"SalvageRun","field":"lost","visibility":true},
+  {"node":"win-salvage","entity":"e_run","component":"SalvageRun","field":"salvaged","template":"Salvage recovered: {value}"},
+  {"node":"win-time","entity":"e_run","component":"SalvageRun","field":"elapsedTicks","template":"Elapsed ticks: {value}"},
+  {"node":"win-revives","entity":"e_run","component":"SalvageRun","field":"revives","template":"Teammates revived: {value}"}
+]

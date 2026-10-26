@@ -100,6 +100,7 @@ fn package(
         })?
     };
     Ok(PlayScene {
+        ui: crate::game_ui::read(root)?,
         format: 1,
         scene,
         documents: PlayScene::documents(&workspace)

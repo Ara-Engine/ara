@@ -75,6 +75,11 @@ impl SimContext {
         self.inputs.get(player, action)
     }
 
+    /// Active actions in stable player/name order, sampled once by language adapters.
+    pub fn actions(&self) -> impl Iterator<Item = (PlayerId, &str, ActionValue)> {
+        self.inputs.iter()
+    }
+
     /// Independent deterministic stream for a stable system name and entity identity.
     /// Borrow once per entity update for several draws; other streams' traversal
     /// order cannot affect its sequence.

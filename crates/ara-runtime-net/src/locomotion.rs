@@ -1,6 +1,6 @@
 //! Complete predicted movement state and a bounded multi-action input codec.
 use super::*;
-use ara_runtime::control::{JUMP, LOOK, SPRINT};
+use ara_runtime::control::{JUMP, LOOK, SPRINT, INTERACT, INVENTORY};
 use std::collections::BTreeMap;
 
 /// Every control sampled into one native prediction-history entry.
@@ -14,6 +14,10 @@ pub struct MotorInput {
     pub sprint: bool,
     /// Jump while grounded; a hold requires release before another jump.
     pub jump: bool,
+    /// Authoritative interaction hold; gameplay edge-detects in its ECS component.
+    pub interact: bool,
+    /// Owner inventory display toggle; gameplay edge-detects in ECS.
+    pub inventory: bool,
 }
 
 /// Complete owner rollback state. Positions are millimetres, camera/facing angles
@@ -97,7 +101,7 @@ impl SimulationFeature for Locomotion {
     type State = NetMotor;
     type Input = MotorInput;
     const ACTION: &'static str = MOVE;
-    const VERSION: u32 = 2;
+    const VERSION: u32 = 3;
 
     fn input(action: Option<ActionValue>) -> std::result::Result<MotorInput, SimError> {
         let mut actions = BTreeMap::new();
@@ -242,6 +246,8 @@ pub(crate) fn sample(
         look: look.map(|v| (v * 1000.0).round() as i32),
         sprint: button(SPRINT)?,
         jump: button(JUMP)?,
+        interact: button(INTERACT)?,
+        inventory: button(INVENTORY)?,
     })
 }
 
@@ -264,12 +270,14 @@ pub(crate) fn expand(
         ),
         (SPRINT.into(), ActionValue::Button(input.sprint)),
         (JUMP.into(), ActionValue::Button(input.jump)),
+        (INTERACT.into(), ActionValue::Button(input.interact)),
+        (INVENTORY.into(), ActionValue::Button(input.inventory)),
     ])
 }
 
 pub(crate) fn codec() -> ara_net::ActionCodec<MotorInput> {
     ara_net::ActionCodec {
-        names: &[MOVE, LOOK, SPRINT, JUMP],
+        names: &[MOVE, LOOK, SPRINT, JUMP, INTERACT, INVENTORY],
         sample,
         expand,
     }

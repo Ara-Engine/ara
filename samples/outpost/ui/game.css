@@ -1,0 +1,23 @@
+ui { width:100%; height:100%; color:#f1eee5; font-size:17px; }
+#hud { width:100%; height:100%; }
+.screen { position:absolute; left:0px; top:0px; width:100%; height:100%; padding:44px; gap:16px; background:#101a25; color:#e8ebdf; }
+.logo { font-size:78px; color:#f6cd78; }
+.menu-buttons { width:460px; gap:14px;  }
+input { background:#23343e; padding:14px; width:310px; }
+slider { width:430px; height:24px; background:#273c46; color:#9ee6e0; }
+#settings { gap:8px; }
+#settings button { width:470px; padding:9px; }
+panel { display:flex; flex-direction:column; gap:10px; }
+text { flex-shrink:0; }
+#top { position:absolute; left:28px; right:28px; top:24px; flex-direction:row; justify-content:space-between; align-items:start; }
+.mission { background:#131b22e8; padding:22px; border-radius:10px; width:540px; }
+.eyebrow { color:#e5b56a; font-size:13px; }
+.title { font-size:30px; color:#fff9ea; }
+.row { flex-direction:row; gap:3px; font-size:24px; color:#9ee6e0; }
+.status { background:#131b22e8; padding:20px; border-radius:10px; width:280px; }
+#health { font-size:25px; color:#a9edd0; }
+#help { position:absolute; left:28px; bottom:24px; background:#131b22e8; border-radius:10px; padding:20px; }
+#prompt { color:#f6cd78; font-size:20px; }
+.modal { position:absolute; left:350px; top:190px; width:560px; background:#101a25f5; padding:34px; border-radius:14px; border-width:2px; border-color:#719ba4; gap:20px; }
+button { background:#bdddce; color:#13252d; padding:14px; border-radius:6px; font-size:20px; }
+button:hover { background:#e5b56a; }

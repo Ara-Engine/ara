@@ -8,6 +8,24 @@ namespace Ara.Generators.Tests;
 
 public class GeneratorTests
 {
+    [Fact]
+    public void BehaviourGeneratesWhenAHelperPartialPrecedesTheBaseDeclaration()
+    {
+        var result = Run("""
+            namespace Game;
+            /// <summary>Mission helpers.</summary>
+            public sealed partial class Mission { void Helper() { } }
+            /// <summary>The authoritative mission.</summary>
+            public sealed partial class Mission : Behaviour
+            {
+                /// <summary>Salvage recovered.</summary>
+                [Property] public partial int Salvage { get; set; }
+            }
+            """);
+        Assert.Empty(result.Diags.Where(d => d.Severity == DiagnosticSeverity.Error));
+        Assert.Empty(result.Out.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error));
+        Assert.Single(result.Sources.Keys.Where(k => k.Contains("behaviour", StringComparison.Ordinal)));
+    }
     const string Usings = "global using System;\nglobal using System.Numerics;\nglobal using Ara;\n";
 
     static readonly ImmutableArray<MetadataReference> References =

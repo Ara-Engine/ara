@@ -215,6 +215,7 @@ impl Windowed {
         Ok((
             Self {
                 window,
+                game_ui: None,
                 present: None,
                 present2d: None,
                 input: Mapper::default(),

@@ -9,6 +9,8 @@ mod crash;
 mod device;
 mod embed;
 mod input;
+mod game_ui;
+mod game_app;
 mod net;
 mod packed;
 mod pending_models;
@@ -36,6 +38,8 @@ use world::{PendingPatch, World};
 #[derive(Parser)]
 #[command(name = "ara-player", about = "Ara game player and editor Play process")]
 struct Args {
+    #[command(flatten)]
+    game: game_app::Options,
     /// Owner's live-link port on 127.0.0.1.
     #[arg(long)]
     owner: Option<u16>,
@@ -167,6 +171,7 @@ struct Player {
 fn run(args: Args, launched: Instant) -> Result<()> {
     ara_gpu::cpu_scope!("Player.run");
     if args.owner.is_none() {
+        if args.game.game { return game_app::run(args); }
         return standalone::run(args, launched);
     }
     let init = launched;
@@ -343,6 +348,9 @@ impl Player {
                 Err(_) => {}
             }
             world.mark();
+            if let Some(window) = &mut self.window {
+                window.update_game_ui(world.ui.as_ref(), &world.runtime, world.runtime.player().0)?;
+            }
             let tick = world.runtime.tick();
             let due: Vec<PendingPatch> = {
                 let (ready, waiting) = std::mem::take(&mut world.pending)

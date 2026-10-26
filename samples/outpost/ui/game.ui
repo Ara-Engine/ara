@@ -1,0 +1,48 @@
+<ui id="outpost">
+  <panel id="hud">
+  <panel id="top">
+    <panel class="mission"><text class="eyebrow" text="OUTPOST / DUSK SHIFT"/><text class="title" text="Bring the signal home."/>
+      <panel class="row"><text id="salvaged" text="0"/><text text=" / "/><text id="goal" text="8"/><text text=" SALVAGE"/></panel>
+      <text text="Search the compound. Gather your team at the blue extraction beacon."/>
+    </panel>
+    <panel class="status"><text id="health" text="100 HP"/><text id="clock" text="18000 ticks until nightfall"/><text id="crew" text="1 scavenger online"/><text id="alert" text="0 drones chasing"/></panel>
+  </panel>
+  <panel id="help"><text text="WASD  Move     SHIFT  Sprint     SPACE  Jump     RMB  Orbit"/><text text="E  Open / salvage / EMP     Hold E  Revive     TAB  Inventory"/><text id="prompt" text="Explore the outpost"/></panel>
+  <panel id="inventory" class="modal"><text class="eyebrow" text="PRIVATE SATCHEL"/><text class="title" text="Your share of the haul"/>
+    <text text="Only you receive these inventory fields."/>
+    <text id="circuits" text="Circuit boards: 0"/><text id="cells" text="Battery cells: 0"/><text id="radios" text="Radio parts: 0"/>
+    <text text="TAB to close. Every cache contributes to the team's extraction quota."/>
+  </panel>
+  <panel id="win" class="modal"><text class="eyebrow" text="RUN COMPLETE"/><text class="title" text="Signal recovered."/>
+    <text text="The team extracted before nightfall."/><text id="win-salvage" text="Salvage recovered: 0"/><text id="win-time" text="Elapsed ticks: 0"/><text id="win-revives" text="Teammates revived: 0"/><button id="back" action="leave" text="Return to menu"/>
+  </panel>
+  <panel id="lose" class="modal"><text class="eyebrow" text="SIGNAL LOST"/><text class="title" text="Night owns the outpost."/>
+    <text text="Stay together, stun drones with E, and hold E beside a downed teammate."/><button id="retry" action="leave" text="Return to menu"/>
+  </panel>
+  </panel>
+  <panel id="main-menu" class="screen"><text class="eyebrow" text="A CO-OP SALVAGE RUN / 1–4 PLAYERS"/><text class="logo" text="OUTPOST"/><text class="title" text="Dusk shift."/>
+    <text text="Recover eight caches. Dodge security drones. Bring everyone home before nightfall."/>
+    <panel class="menu-buttons"><button id="solo" action="solo" text="Play solo"/><button id="host" action="host" text="Host a crew"/>
+      <panel class="row"><input id="address" text="127.0.0.1:41090"/><button id="join" action="join" text="Join"/></panel>
+      <button id="open-settings" action="settings" text="Settings"/><button id="quit" action="quit" text="Quit"/></panel>
+    <text id="connection-error" text="Host and Join can run together on this PC."/>
+  </panel>
+  <panel id="lobby" class="screen"><text class="eyebrow" text="CREW CHANNEL / OUTPOST"/><text class="title" text="Check your kit."/>
+    <text id="lobby-address" text="127.0.0.1:41090"/><text id="lobby-players" text="Connecting crew…"/>
+    <text text="Everyone enters at the extraction beacon. E opens doors, grabs salvage and stuns drones."/>
+    <button id="ready" action="ready" text="Ready — enter the outpost"/><button id="lobby-leave" action="leave" text="Back to menu"/>
+  </panel>
+  <panel id="loading" class="screen"><text class="eyebrow" text="OUTPOST / PREPARING THE RUN"/><text class="title" text="Checking the signal…"/><text id="loading-progress" text="Loading the compound, physics, navmesh and gameplay."/></panel>
+  <panel id="settings" class="screen"><text class="eyebrow" text="SETTINGS"/><text class="title" text="Make yourself comfortable."/>
+    <button id="quality" action="quality" text="Graphics: High"/><button id="resolution" action="resolution" text="Resolution: 1280 × 720"/><button id="window-mode" action="window-mode" text="Window: Windowed"/>
+    <text text="Master volume"/><slider id="master" action="master" min="0" max="1" step="0.05" value="0.8"/>
+    <text text="Music volume"/><slider id="music" action="music" min="0" max="1" step="0.05" value="0.45"/>
+    <text text="SFX volume"/><slider id="sfx" action="sfx" min="0" max="1" step="0.05" value="0.8"/>
+    <text text="Mouse sensitivity"/><slider id="sensitivity" action="sensitivity" min="0.1" max="3" step="0.1" value="1"/>
+    <toggle id="invert" action="invert" text="Invert vertical look"/>
+    <button id="apply" action="apply" text="Save and return"/>
+  </panel>
+  <panel id="pause" class="modal"><text class="eyebrow" text="CREW CHANNEL OPEN"/><text class="title" text="Take a breath."/>
+    <text text="A co-op run keeps ticking while you are in the menu."/><button id="resume" action="resume" text="Resume"/><button id="pause-settings" action="settings" text="Settings"/><button id="leave" action="leave" text="Leave run"/>
+  </panel>
+</ui>

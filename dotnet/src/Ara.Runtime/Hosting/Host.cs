@@ -8,6 +8,42 @@ namespace Ara.Hosting;
 /// </summary>
 public static unsafe class Host
 {
+    /// <summary>Copies sorted handles without exposing engine storage to managed code.</summary>
+    public static int QueryEntities(uint component, Span<Entity> entities)
+    {
+        RequireExclusive();
+        fixed (Entity* p = entities)
+        {
+            var count = s_init.Api.QueryEntities(s_init.Ctx, component, (ulong*)p, (uint)entities.Length);
+            if (count > entities.Length) throw new ArgumentException($"Query needs {count} entity slots", nameof(entities));
+            return (int)count;
+        }
+    }
+
+    /// <summary>Samples an action from the current fixed tick, in exclusive gameplay callbacks.</summary>
+    public static float InputAxis(ulong player, string name, uint axis)
+    {
+        RequireExclusive();
+        var count = Encoding.UTF8.GetByteCount(name);
+        if (count > 128) throw new ArgumentException("Action names are limited to 128 UTF-8 bytes", nameof(name));
+        Span<byte> bytes = stackalloc byte[count];
+        Encoding.UTF8.GetBytes(name, bytes);
+        fixed (byte* p = bytes) return s_init.Api.InputAxis(s_init.Ctx, player, p, (uint)count, axis);
+    }
+
+    /// <summary>The authored input owner of this entity, or zero.</summary>
+    public static ulong InputPlayer(Entity entity)
+    {
+        RequireExclusive();
+        return s_init.Api.InputPlayer(s_init.Ctx, entity.Bits);
+    }
+
+    /// <summary>Queues a destination for the engine navmesh agent, after the gameplay callback.</summary>
+    public static void Navigate(Entity entity, System.Numerics.Vector3 target, bool enabled)
+    {
+        RequireExclusive();
+        s_init.Api.Navigate(s_init.Ctx, entity.Bits, target.X, target.Y, target.Z, enabled ? 1u : 0u);
+    }
     static HostInit s_init;
     static volatile bool s_detached;
     [ThreadStatic] static bool t_exclusive;
