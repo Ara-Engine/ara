@@ -51,7 +51,7 @@ pub(crate) fn run(artifacts: &Path, older_setup: &Path, directory: &Path) -> Res
         report.push(json!({"step":name,"passed":result.is_ok(),"seconds":started.elapsed().as_secs_f64(),"error":result.as_ref().err().map(|e|format!("{e:#}"))}));
         support::json(
             &env.directory.join("REHEARSAL_RESULTS.json"),
-            &json!({"version":version,"steps":report}),
+            &json!({"version":version,"sourceBuild":expected["build"],"steps":report}),
         )?;
         result
     };
@@ -122,6 +122,7 @@ pub(crate) fn run(artifacts: &Path, older_setup: &Path, directory: &Path) -> Res
                 env.command(hub.join("ara-hub.exe"))
                     .arg("--service-check")
                     .arg(env.directory.join("updated-service.json"))
+                    .env("ARA_RELEASE_REPO", "Snowy7/ara")
                     .env("ARA_RELEASE_TEST_API", &server.api),
                 &env.directory.join("updated-service.log"),
             )
@@ -129,6 +130,43 @@ pub(crate) fn run(artifacts: &Path, older_setup: &Path, directory: &Path) -> Res
     )?;
     let mut client = ara_rpc::Client::for_project(&env.directory.join("config/hub"))
         .context("installed Hub service discovery")?;
+    step(
+        "discover engine releases after the service handover",
+        &mut || {
+            client
+                .call(
+                    "hub.releases.configure",
+                    json!({"repo":"Snowy7/ara","channel":"preview"}),
+                )
+                .map_err(|e| anyhow::anyhow!("{e}"))?;
+            let deadline = Instant::now() + Duration::from_secs(60);
+            loop {
+                let available = client
+                    .call("hub.engines.available", json!({"channel":"preview"}))
+                    .map_err(|e| anyhow::anyhow!("{e}"))?;
+                ensure!(
+                    available["status"]["state"] != "error",
+                    "engine feed failed: {available}"
+                );
+                if available["checking"] == false {
+                    ensure!(
+                        available["releases"].as_array().is_some_and(|list| list
+                            .iter()
+                            .any(|release| release["version"] == version)),
+                        "published alpha engine is missing: {available}"
+                    );
+                    support::json(&env.directory.join("available-engines.json"), &available)?;
+                    break;
+                }
+                ensure!(
+                    Instant::now() < deadline,
+                    "engine feed did not become ready"
+                );
+                thread::sleep(Duration::from_millis(50));
+            }
+            Ok(())
+        },
+    )?;
     step(
         "install the signed engine ZIP from the feed and register it",
         &mut || {
@@ -158,15 +196,32 @@ pub(crate) fn run(artifacts: &Path, older_setup: &Path, directory: &Path) -> Res
             let engines = client
                 .call("hub.engines", json!({}))
                 .map_err(|e| anyhow::anyhow!("{e}"))?;
+            let engine = engines["engines"]
+                .as_array()
+                .and_then(|list| {
+                    list.iter()
+                        .find(|engine| engine["version"] == version && engine["managed"] == true)
+                })
+                .with_context(|| {
+                    format!("installed engine is not registered as managed: {engines}")
+                })?;
             ensure!(
-                engines["engines"].as_array().is_some_and(|list| list
-                    .iter()
-                    .any(|engine| engine["version"] == version && engine["managed"] == true)),
-                "installed engine is not registered as managed: {engines}"
+                fs::canonicalize(Path::new(
+                    engine["executable"]
+                        .as_str()
+                        .context("registered CLI path")?
+                ))? == fs::canonicalize(env.installed.join("ara.exe"))?,
+                "service registered an executable outside the downloaded engine"
             );
             ensure!(
                 env.installed.join("ara.exe").is_file(),
                 "engine installed outside the isolated managed root"
+            );
+            let marker: Value =
+                serde_json::from_slice(&fs::read(env.installed.join("engine.json"))?)?;
+            ensure!(
+                marker["sourceCommit"] == expected["build"]["commit"],
+                "engine and Hub were packaged from different source commits"
             );
             Ok(())
         },
@@ -179,6 +234,27 @@ pub(crate) fn run(artifacts: &Path, older_setup: &Path, directory: &Path) -> Res
                 .call("hub.templates", json!({}))
                 .map_err(|e| anyhow::anyhow!("{e}"))?;
             support::json(&env.directory.join("templates.json"), &templates)?;
+            for id in ["outpost", "showcase", "starter"] {
+                let template = templates["templates"]
+                    .as_array()
+                    .and_then(|list| list.iter().find(|template| template["id"] == id))
+                    .with_context(|| format!("downloaded engine has no {id} template"))?;
+                ensure!(
+                    template["engineVersion"] == version && template["setup"].is_null(),
+                    "installed {id} template is incomplete or from another engine: {template}"
+                );
+                let thumbnail = Path::new(
+                    template["thumbnail"]
+                        .as_str()
+                        .context("installed thumbnail")?,
+                );
+                ensure!(
+                    thumbnail.is_file()
+                        && fs::canonicalize(thumbnail)?
+                            .starts_with(fs::canonicalize(&env.installed)?),
+                    "{id} preview is outside the downloaded engine"
+                );
+            }
             let created = client.call("hub.create",json!({"name":"Rehearsal Starter","path":project,"template":"starter","engineVersion":version})).map_err(|e|anyhow::anyhow!("{e}"))?;
             support::json(&env.directory.join("created.json"), &created)?;
             let id = created["id"].as_str().context("created project id")?;

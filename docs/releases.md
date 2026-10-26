@@ -63,6 +63,10 @@ including restarting the Hub service from the new build, before changing the
 signing key. A busy service keeps supervising its open projects until they close.
 Keep the old public key while its engine releases remain installable.
 
+Standalone Hub packaging is independent of an engine's NuGet restore: only an
+engine carrying managed assemblies requires that restored NuGet notice inventory.
+Both packages use the same release debug-info profile, avoiding a second dependency build.
+
 ## Package, verify, publish
 
 `workspace.package.version` must match `--version`. Bump it deliberately for each
@@ -71,6 +75,7 @@ last two commands. Packaging refuses existing output directories.
 
 ```powershell
 $env:ARA_RELEASE_SIGNING_KEY = "$env:APPDATA\Ara\release-signing.key"
+$env:CARGO_PROFILE_RELEASE_DEBUG = 'line-tables-only'
 cargo run -p ara-release -- package --kind engine --version 0.0.1-alpha
 cargo run -p ara-release -- package --kind hub --version 0.0.1-alpha
 cargo run -p ara-release -- smoke --version 0.0.1-alpha
@@ -105,6 +110,12 @@ manifest; prefer `publish`, which hashes the actual packaged files.
    dry runs need no GitHub credentials. Use full Git history for build generations.
    Install Rust/MSVC, Vulkan SDK 1.4.363.0 and .NET 10 SDK on the packaging machine;
    run with two Cargo jobs. Leave the `rehearsal` feature off for shipping builds.
+   Prepare the git-ignored real sample art first: with
+   CARGO_PROFILE_RELEASE_DEBUG=line-tables-only, run
+   `cargo run --release -p ara-samples -- fetch`, then the same command with `verify`.
+   Downloads are pinned by samples/assets.lock.json (no asset-site secret is needed).
+   An existing verified samples/.cache/blobs cache can be reused. Packaging generates
+   kits in staging, but does not download missing source art. See [sample setup](../samples/README.md).
 2. Generate the release signing key once, outside all checkouts, using the keygen
    command above; otherwise reuse the backed-up key. Commit only its reviewed
    public key in public-keys.txt before packaging, or supply that public key through
@@ -138,7 +149,8 @@ manifest; prefer `publish`, which hashes the actual packaged files.
    ZIP downloads to 16 GiB, expanded installs to 64 GiB, API pages to 8 MiB,
    release.json to 1 MiB and its signature to 1 KiB.
    [GitHub release limits](https://docs.github.com/en/repositories/releasing-projects-on-github/about-releases).
-6. Install/authenticate `gh` on the publisher. Recommended: a fine-grained token
+6. Install/authenticate `gh` on the publisher; set GH_HOST=github.com if the shell
+   normally targets an enterprise host. Recommended: a fine-grained token
    restricted to Snowy7/ara with **Contents: read and write**, supplied privately as
    GH_TOKEN. The account also needs repository write access and permission under
    any tag ruleset to create `hub-v*` and `engine-v*`. A classic token can use
@@ -226,6 +238,7 @@ LOCALAPPDATA so its managed launcher installation stays inside target.
 
 Standalone Hub updates download in the background. **Restart to update** starts
 an updater copied outside the Hub directory. It waits only for that GUI PID,
+with its working directory outside the install too (Windows otherwise locks the swap),
 rechecks the signature/hash, extracts to a sibling, swaps current → `.old` and
 new → current, and launches the new Hub with its own bootstrap. Only
 after the GUI renders a frame does it acknowledge health and permit `.old`
