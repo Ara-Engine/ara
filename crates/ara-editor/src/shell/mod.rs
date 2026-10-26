@@ -245,6 +245,8 @@ pub struct Shell {
     built: (u64, u64),
     /// The open scene's resolution, kept across transactions (`resolved`).
     resolver: crate::world::SceneResolver,
+    /// The import settings `document_view` shares across revisions.
+    import_settings: crate::world::ImportsCache,
     /// The (document, store revision, workspace generation) `resolved` last answered.
     resolved_key: Option<(String, u64, u64)>,
     tooltip_text: Option<String>,
@@ -495,6 +497,7 @@ impl Shell {
             stats: UiStats::default(),
             built: (u64::MAX, u64::MAX),
             resolver: Default::default(),
+            import_settings: Default::default(),
             resolved_key: None,
             tooltip_text: None,
             field_request: None,
@@ -609,16 +612,15 @@ impl Shell {
         Ok(resolved)
     }
     /// The open scene's view at the current revision, built on [`Self::resolved`] so
-    /// a commit resolves the scene once for the panels and the Scene view.
+    /// a commit resolves the scene once for the panels and the Scene view, and on the
+    /// import settings, parsed again only when an import document changes.
     pub(crate) fn document_view(
         &mut self,
         editor: &Editor,
     ) -> ara_ui::Result<crate::world::DocumentView> {
         let resolved = self.resolved(editor)?;
-        Ok(crate::world::DocumentView::with_entities(
-            editor.host.store(),
-            resolved,
-        ))
+        let imports = self.import_settings.get(editor.host.store());
+        Ok(crate::world::DocumentView::with_imports(resolved, imports))
     }
     /// The (document, store revision, workspace generation) `resolved` last answered.
     pub(crate) fn resolved_key(&self) -> Option<(String, u64, u64)> {
