@@ -50,6 +50,8 @@ pub(super) struct Native {
     instance_index: u32,
     visible: Buffer,
     visible_index: u32,
+    /// Passes `visible` holds rows for; reservations up to it allocate nothing.
+    capacity: usize,
     rows: Vec<InstanceRow>,
     presented: Vec<Mat4>,
     previous_vp: Option<Mat4>,
@@ -310,10 +312,23 @@ impl Renderer {
         )
     }
 
+    /// Size this camera's culling rows for `count` shadow slots without reserving
+    /// them, so later reservations up to it (shadow patches after an edit)
+    /// allocate nothing. Call before graph resource declarations; growth is
+    /// transactional and O(1) once sized.
+    pub(crate) fn ensure_native_shadow_capacity(&mut self, count: usize) -> Result<()> {
+        let native = self
+            .native
+            .as_mut()
+            .context("Native raster content required")?;
+        native.ensure_shadow_capacity(&mut self.gpu, count)
+    }
+
     /// Reserve independently cached local-light shadow lists. Call before graph
     /// resource declarations; growth preserves the camera/cascade/far lists and
     /// is transactional on GPU allocation/upload failure. No storage is allocated
-    /// for local shadows until requested, and repeated reservations are O(1).
+    /// for local shadows until requested (or sized by `ensure_native_shadow_capacity`),
+    /// and repeated reservations are O(1).
     pub fn reserve_native_shadow_passes(&mut self, count: usize) -> Result<()> {
         let native = self
             .native
@@ -455,6 +470,20 @@ impl Native {
         if passes <= self.culling.draws.len() {
             return Ok(());
         }
+        self.ensure_shadow_capacity(gpu, count)?;
+        self.culling.reserve(&self.groups, passes);
+        Ok(())
+    }
+
+    /// Grows `visible` to hold rows for `count` shadow slots (the reserved lists'
+    /// rows carry over), leaving the reserved lists as they are.
+    fn ensure_shadow_capacity(&mut self, gpu: &mut VulkanDevice, count: usize) -> Result<()> {
+        let passes = culling::BASE_PASSES
+            .checked_add(count)
+            .context("Native shadow count overflow")?;
+        if passes <= self.capacity {
+            return Ok(());
+        }
         ara_gpu::cpu_scope!("RasterNative.reserve_shadow_passes");
         let rows = self
             .rows
@@ -483,9 +512,9 @@ impl Native {
                 return Err(error);
             }
         };
-        self.culling.reserve(&self.groups, passes);
         let previous = std::mem::replace(&mut self.visible, buffer);
         self.visible_index = index;
+        self.capacity = passes;
         gpu.retire(Resource::Buffer(previous))?;
         Ok(())
     }
@@ -502,10 +531,11 @@ impl Native {
         // Local-light face slots belong to the view's quality configuration,
         // which is not re-applied when only a content generation changes.
         let passes = previous.map_or(culling::BASE_PASSES, |old| old.culling.draws.len());
+        let capacity = previous.map_or(passes, |old| old.capacity.max(passes));
         let visible_bytes = scene
             .instances
             .len()
-            .checked_mul(passes)
+            .checked_mul(capacity)
             .filter(|rows| *rows <= u32::MAX as usize)
             .and_then(|rows| rows.checked_mul(8))
             .context("Native shadow visibility capacity overflow")?
@@ -611,6 +641,7 @@ impl Native {
             materials,
             instances,
             visible,
+            capacity,
             rows,
             material_data: scene.materials.to_vec(),
             presented: scene.instances.iter().map(|i| i.world).collect(),

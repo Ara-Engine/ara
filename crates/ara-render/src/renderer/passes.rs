@@ -132,6 +132,11 @@ impl Renderer {
             .as_ref()
             .map_or(0, |local| crate::look::local::capacity(local.settings));
         let patch_slots = local_capacity + 4 + crate::look::local::PATCHES;
+        // Every shadowed frame sizes this camera's rows for them, so an edit's
+        // first patch allocates nothing (edits keep their GPU allocations).
+        if self.native.is_some() {
+            self.ensure_native_shadow_capacity(patch_slots)?;
+        }
         let mut cascade_patches = Vec::with_capacity(cascade_draw.len());
         for draw in &cascade_draw {
             let (Some(rect), true, Some(cascades)) =
