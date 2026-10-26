@@ -224,6 +224,16 @@ impl AssetsVerification {
                 capture.screenshot("05-hot-compiled", editor, shell, gpu, ui, renderer, scene)?;
             }
             8 => {
+                // Keep the scratch project alive until every compiler has released it.
+                let jobs = editor.action("jobs.list", json!({}))?;
+                if jobs["jobs"]
+                    .as_array()
+                    .into_iter()
+                    .flatten()
+                    .any(|job| job["status"] == "running")
+                {
+                    return Ok(false);
+                }
                 std::fs::write(
                     self.output.join("assets-scripts.json"),
                     ara_json::to_canonical_string(
