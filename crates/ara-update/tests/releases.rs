@@ -13,14 +13,14 @@ fn feed_pagination_channels_etags_offline_and_rate_limit() {
     let hub = server.release(Kind::Hub, "0.2.0", Channel::Stable, vec![1; 128]);
     let engine = server.release(Kind::Engine, "0.3.0-alpha", Channel::Preview, vec![2; 128]);
     server.set(
-        "/repos/Snowy7/ara/releases?per_page=100",
+        "/repos/Ara-Engine/ara/releases?per_page=100",
         Response {
             headers: vec![
                 ("ETag".into(), "\"one\"".into()),
                 (
                     "Link".into(),
                     format!(
-                        "<{}/repos/Snowy7/ara/releases?per_page=100&page=2>; rel=\"next\"",
+                        "<{}/repos/Ara-Engine/ara/releases?per_page=100&page=2>; rel=\"next\"",
                         server.base
                     ),
                 ),
@@ -29,7 +29,7 @@ fn feed_pagination_channels_etags_offline_and_rate_limit() {
         },
     );
     server.set(
-        "/repos/Snowy7/ara/releases?per_page=100&page=2",
+        "/repos/Ara-Engine/ara/releases?per_page=100&page=2",
         Response {
             headers: vec![("ETag".into(), "\"two\"".into())],
             ..Response::ok(serde_json::to_vec(&vec![engine]).unwrap())
@@ -46,7 +46,7 @@ fn feed_pagination_channels_etags_offline_and_rate_limit() {
     assert_eq!(requests.len() - before, 2);
     assert!(requests[before].headers.contains_key("if-none-match"));
     server.set(
-        "/repos/Snowy7/ara/releases?per_page=100",
+        "/repos/Ara-Engine/ara/releases?per_page=100",
         Response {
             status: 429,
             headers: vec![("Retry-After".into(), "30".into())],
@@ -68,7 +68,7 @@ fn no_cache_reports_rate_limit_and_wrong_keys_cannot_use_a_cache() {
     let server = Server::new();
     let root = testing::scratch("no-cache");
     server.set(
-        "/repos/Snowy7/ara/releases?per_page=100",
+        "/repos/Ara-Engine/ara/releases?per_page=100",
         Response {
             status: 403,
             ..Response::default()

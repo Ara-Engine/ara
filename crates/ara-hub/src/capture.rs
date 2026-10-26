@@ -193,7 +193,7 @@ fn seed_with(hub: &mut Hub, with_projects: bool) {
             "format":"ara.release/1","kind":kind,"version":version,"channel":channel,
             "minHubVersion":"0.0.1-alpha","platform":"windows-x64",
             "notes":"Improved editor tools, faster project startup and renderer fixes. Installs beside your current engine; existing project pins stay as they are.",
-            "assets":[{"name":format!("ara-{kind}-{version}-windows-x64.zip"),"size":864_000_000_u64,"sha256":"00".repeat(32),"url":"https://github.com/Snowy7/ara/releases"}]
+            "assets":[{"name":format!("ara-{kind}-{version}-windows-x64.zip"),"size":864_000_000_u64,"sha256":"00".repeat(32),"url":"https://github.com/Ara-Engine/ara/releases"}]
         })
     };
     for (method, value) in [
@@ -203,7 +203,7 @@ fn seed_with(hub: &mut Hub, with_projects: bool) {
         ),
         (
             "hub.updates",
-            json!({"releases":[release("hub","0.1.0","stable")],"status":{"state":"fresh"},"checking":false,"channel":"preview","repo":"Snowy7/ara"}),
+            json!({"releases":[release("hub","0.1.0","stable")],"status":{"state":"fresh"},"checking":false,"channel":"preview","repo":"Ara-Engine/ara"}),
         ),
         (
             "hub.downloads",

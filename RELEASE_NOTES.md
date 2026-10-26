@@ -6,7 +6,7 @@ agents working alongside people. This first public alpha ships for **Windows x64
 ## Install
 
 1. Download `ara-hub-0.0.1-alpha-windows-x64-setup.exe` from
-   [GitHub Releases](https://github.com/Snowy7/ara/releases) and install Ara Hub.
+   [GitHub Releases](https://github.com/Ara-Engine/ara/releases) and install Ara Hub.
 2. Open **Installs**, select **Preview**, and install engine **0.0.1-alpha**.
    Hub and engine releases are separate; the alpha is a prerelease.
 3. Create a Starter, Outpost or Material showcase project from **New project**.

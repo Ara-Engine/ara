@@ -71,8 +71,9 @@ enum Command {
     },
     /// Prepare a signed release folder and optionally upload through the developer gh CLI.
     Publish {
+        /// GitHub owner/name; overrides ARA_RELEASE_REPO and the built-in default.
         #[arg(long)]
-        repo: String,
+        repo: Option<String>,
         #[arg(long)]
         tag: String,
         #[arg(long)]
@@ -133,7 +134,7 @@ fn main() -> Result<()> {
             artifacts,
         } => publish::publish(
             &root,
-            &repo,
+            &release_repo(repo, std::env::var("ARA_RELEASE_REPO").ok()),
             &tag,
             prerelease,
             dry_run,
@@ -141,6 +142,11 @@ fn main() -> Result<()> {
             artifacts.as_deref(),
         ),
     }
+}
+fn release_repo(explicit: Option<String>, environment: Option<String>) -> String {
+    explicit
+        .or(environment)
+        .unwrap_or_else(|| ara_update::DEFAULT_REPOSITORY.to_owned())
 }
 fn valid_version(version: &str) -> Result<()> {
     ensure!(
@@ -159,6 +165,21 @@ fn valid_version(version: &str) -> Result<()> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn publication_repo_preserves_explicit_and_environment_overrides() {
+        assert_eq!(super::release_repo(None, None), "Ara-Engine/ara");
+        assert_eq!(
+            super::release_repo(None, Some("custom/releases".into())),
+            "custom/releases"
+        );
+        assert_eq!(
+            super::release_repo(
+                Some("explicit/releases".into()),
+                Some("custom/releases".into())
+            ),
+            "explicit/releases"
+        );
+    }
     #[test]
     fn version_cannot_escape_output_or_mislabel_binaries() {
         assert!(super::valid_version(env!("CARGO_PKG_VERSION")).is_ok());

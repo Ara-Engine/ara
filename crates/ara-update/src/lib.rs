@@ -5,6 +5,7 @@ pub use build::BuildIdentity;
 mod download;
 mod feed;
 mod manifest;
+mod redirect;
 #[cfg(any(test, feature = "test-support"))]
 #[allow(clippy::unwrap_used)]
 #[path = "../tests/support/mod.rs"]
@@ -18,6 +19,9 @@ pub use manifest::{
     Asset, Channel, Kind, Manifest, VerifiedRelease, canonical_manifest, sign, trusted_keys,
     verify, version,
 };
+
+/// GitHub repository used when neither saved settings nor an override selects one.
+pub const DEFAULT_REPOSITORY: &str = "Ara-Engine/ara";
 
 use ara_diag::{Code, Diagnostic};
 use std::fmt;

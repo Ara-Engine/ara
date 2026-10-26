@@ -23,7 +23,7 @@ fn real_publication_rejects_rehearsal_packages_and_github_oversized_assets() {
             .args([
                 "publish",
                 "--repo",
-                "Snowy7/ara",
+                "Ara-Engine/ara",
                 "--tag",
                 "hub-v0.0.1-alpha",
                 "--prerelease",
@@ -86,10 +86,9 @@ fn dry_run_publishes_manifest_the_hub_verifies_without_gh_or_network() {
         let tag = format!("{kind}-v0.0.1-alpha");
         let invoke = || {
             Command::new(env!("CARGO_BIN_EXE_ara-release"))
+                .env_remove("ARA_RELEASE_REPO")
                 .args([
                     "publish",
-                    "--repo",
-                    "Snowy7/ara",
                     "--tag",
                     &tag,
                     "--prerelease",
@@ -116,7 +115,7 @@ fn dry_run_publishes_manifest_the_hub_verifies_without_gh_or_network() {
         assert!(release.manifest().notes.contains("Authenticode"));
         assert!(release.manifest().assets.iter().all(|a| {
             a.url
-                .starts_with("https://github.com/Snowy7/ara/releases/download/")
+                .starts_with("https://github.com/Ara-Engine/ara/releases/download/")
         }));
         assert!(
             invoke().status.success(),

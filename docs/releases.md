@@ -1,7 +1,7 @@
 # Ara releases
 
-Download Ara Hub from [GitHub Releases](https://github.com/Snowy7/ara/releases).
-The source repository is public; releases live in **Snowy7/ara** itself.
+Download Ara Hub from [GitHub Releases](https://github.com/Ara-Engine/ara/releases).
+The source repository is public; releases live in **Ara-Engine/ara** itself.
 Run the `ara-hub-<version>-windows-x64-setup.exe` per-user installer, then use
 **Installs** to install an engine. Windows x64 is the initial packaged platform.
 There is **no Authenticode code signing yet**: Windows SmartScreen warns.
@@ -26,14 +26,17 @@ keeps a newer standalone Hub and updates older copies under the shared update lo
 Running Hubs/locked files must be closed before replacement; editors and versioned
 services remain separate. Packaging checks the Hub executable's embedded commit.
 
-The default feed is `Snowy7/ara`. Settings → Release source persists an
+The default feed is `Ara-Engine/ara`. Settings → Release source persists an
 owner/name in `<Ara config>/update.json`; `ARA_RELEASE_REPO` overrides that value.
 Set optional `GITHUB_TOKEN` privately in the Hub service's environment for API
 quota or private staging repositories. Restart the service after changing its
 environment; project processes survive `ara hub shutdown`. Tokens never go in
 settings, manifests, logs or URLs and are sent only to api.github.com. HTTPS is
-required; redirects are restricted to GitHub asset hosts. Tests use an explicit,
-compile-time-only loopback transport.
+required; redirects may remain on the same GitHub API/download origin (including
+moved repository paths) or target the approved GitHub asset hosts. Both clients
+allow at most five redirects and rebuild authorization for each hop. Tests use an
+explicit, compile-time-only loopback transport. `ara-release publish` defaults to
+`Ara-Engine/ara`; explicit `--repo` takes precedence over `ARA_RELEASE_REPO`.
 
 Checks run on Hub start and every four hours, on a worker. Per-page ETags avoid
 redownloading an unchanged feed. Offline/rate-limit fallback visibly identifies
@@ -174,7 +177,7 @@ if ($LASTEXITCODE -ne 0) { throw 'Backup verification failed' }
    advertised branch/tag. Their shared commits must use the same mapping.
 
 ```powershell
-$remote = 'https://github.com/Snowy7/ara.git'
+$remote = 'https://github.com/Ara-Engine/ara.git'
 $tool = 'D:\AraRelease\tools\ara-dev.exe' # copied from the focused-green build
 $freeze = "D:\AraRelease\history-freeze-$([guid]::NewGuid().ToString('N'))"
 & $tool history-rewrite --source $remote --scratch $freeze
@@ -297,8 +300,8 @@ $env:CARGO_PROFILE_RELEASE_DEBUG = 'line-tables-only'
 cargo run -p ara-release -- package --kind engine --version 0.0.1-alpha
 cargo run -p ara-release -- package --kind hub --version 0.0.1-alpha
 cargo run -p ara-release -- smoke --version 0.0.1-alpha
-cargo run -p ara-release -- publish --repo Snowy7/ara --tag engine-v0.0.1-alpha --prerelease --dry-run
-cargo run -p ara-release -- publish --repo Snowy7/ara --tag hub-v0.0.1-alpha --prerelease --dry-run
+cargo run -p ara-release -- publish --repo Ara-Engine/ara --tag engine-v0.0.1-alpha --prerelease --dry-run
+cargo run -p ara-release -- publish --repo Ara-Engine/ara --tag hub-v0.0.1-alpha --prerelease --dry-run
 ```
 
 Review the signed folders under `target/release-dist/published/<tag>` and the
@@ -307,11 +310,11 @@ The real commands reuse those folders only if their manifests, signatures,
 notes and artifact hashes are identical; extra or changed files are rejected.
 Publish the Hub first so engines' minimum Hub version is already downloadable.
 The developer must have
-`gh` installed and authenticated with write access to Snowy7/ara:
+`gh` installed and authenticated with write access to Ara-Engine/ara:
 
 ```powershell
-cargo run -p ara-release -- publish --repo Snowy7/ara --tag hub-v0.0.1-alpha --prerelease
-cargo run -p ara-release -- publish --repo Snowy7/ara --tag engine-v0.0.1-alpha --prerelease
+cargo run -p ara-release -- publish --repo Ara-Engine/ara --tag hub-v0.0.1-alpha --prerelease
+cargo run -p ara-release -- publish --repo Ara-Engine/ara --tag engine-v0.0.1-alpha --prerelease
 ```
 
 Publication first creates a draft, uploads the complete signed artifact set, then
@@ -370,7 +373,7 @@ manifest; prefer `publish`, which hashes the actual packaged files.
    [GitHub release limits](https://docs.github.com/en/repositories/releasing-projects-on-github/about-releases).
 6. Install/authenticate `gh` on the publisher; set GH_HOST=github.com if the shell
    normally targets an enterprise host. Recommended: a fine-grained token
-   restricted to Snowy7/ara with **Contents: read and write**, supplied privately as
+   restricted to Ara-Engine/ara with **Contents: read and write**, supplied privately as
    GH_TOKEN. The account also needs repository write access and permission under
    any tag ruleset to create `hub-v*` and `engine-v*`. A classic token can use
    `public_repo` for this public repository; `repo` is broader. `gh auth login`'s
