@@ -848,3 +848,52 @@ ignored tests. Differential tests cover complete chains at one/four threads,
 maximum-axis dimensions, transparent/tiny-alpha pixels, all usages and arbitrary
 area-filter fallback sizes. Complete POT/NPOT KTX2 bytes match the original filter
 in Balanced/HQ; sample-version checks pass without regeneration.
+
+## Current cold Outpost and rejected cache admission: 2026-10-26
+
+The current **sequential** NVMe control imports all 115 Outpost sources in
+**20.099653 / 19.8313339 s**, mean **19.96549345 s**, through fresh Hub-created
+projects and the real daemon/worker publication path. It includes the Color8 and
+byte-exact mip improvements. Create-through-assets-ready is **23.4508058 /
+21.3755066 s**, mean **22.4131562 s**. This is approximately **20 seconds** for
+real cold import, versus the owner's approximately **135 seconds** in installed
+preview 13. That historical comparison is roughly **6.8x lower latency**, but is
+not a paired installed-build benchmark: builds/profiles differ, and preview QA's
+endpoint was editor usability while this endpoint is all assets published. It is
+not a D26 first-scene-frame or startup acceptance claim. Projects have fresh
+content caches; OS and driver caches are not deliberately flushed.
+
+### Adaptive admission failed its acceptance test
+
+The machine was quiet, held for this bundle after batch 34. One GPU lease covered
+eight Outpost cases, C: A/B/B/A followed by D: A/B/B/A. Control source is
+`f9fc09c9`; candidate `a594a74c` combines parallel geometry with cross-process,
+per-volume write leases and p90 latency feedback. Both include Color8/mips and
+have identical package/feature sets, matching owned CLI/daemon/worker builds and
+the same frozen player. All observations are retained:
+
+- C: assets-ready seconds **20.099653 / 24.0846499 / 25.2615612 / 19.8313339**.
+  Means **19.96549345 -> 24.67310555 s**, **23.6% slower**.
+- D: assets-ready seconds **23.2907832 / 39.1448357 / 38.6021749 / 23.2392544**.
+  Means **23.2650188 -> 38.8735053 s**, **67.1% slower**.
+- Create-through-assets-ready means: C: **22.4131562 -> 26.1969949 s**;
+  D: **25.0587296 -> 40.02238025 s**.
+
+All **920 action keys**, **11,672 artifact references** and **7,274,884,128
+physically verified referenced bytes** match v4; zero encoder fallbacks. Evidence,
+catalogs, source IDs, feedback snapshots and verification logs were extracted
+before each project was deleted. Exact target, ancestor and descendant reparse
+checks passed. Peak retained usage was one current project, and all eight were
+removed; no pending project-cleanup request remains. Canonical results:
+`measurements/adaptive-cache-abba-2026-10-26.json`. Raw evidence:
+`target/ara-dev/import-speed/adaptive-{c,d}-{a1,b1,b2,a2}-outpost/`.
+
+The candidate is rejected. `bd5b5799` reverts it and restores the exact
+`f9fc09c9` tree; parallel geometry remains **off**, with no write limiter or
+per-volume fallback. The earlier plain-parallel NVMe pairing's 25.4-second
+sequential baseline predates the texture improvements. Its 23.7% win cannot
+establish a win against today's approximately 20-second control. A new quiet-slot
+NVMe A/B/B/A must compare current sequential versus **plain parallel, no limiter**,
+both with Color8/mips. Keep parallel off unless that pairing clearly wins; only
+then reconsider a volume-specific policy. The observed regressions do not, by
+themselves, identify which coordination or storage operation caused them.
