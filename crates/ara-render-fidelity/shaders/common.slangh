@@ -8,7 +8,7 @@ struct Root {uint frame;uint pass;uint arg;uint pad0;uint pad1;uint pad2;uint pa
 ConstantBuffer<Root> root:register(b0,space0);
 #endif
 BIND(5) Texture2D<float4> textures[]:register(t0,space1);
-BIND(1) RWByteAddressBuffer buffers[64]:register(u0,space2);
+BIND(1) RWByteAddressBuffer buffers[]:register(u0,space2);
 BIND(2) SamplerState samplers[3]:register(s0,space0);
 BIND(3) RWTexture2D<float4> images[64]:register(u0,space3);
 #ifndef RASTER

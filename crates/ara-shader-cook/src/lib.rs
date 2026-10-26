@@ -141,7 +141,11 @@ pub fn cook(manifest: &Path, output: &Path, tools: &Toolchain) -> Result<usize> 
         inputs.insert(name.clone(), input_key.clone());
         if let Ok(bytes) = std::fs::read(&path)
             && let Ok(mut old) = serde_json::from_slice::<CookedPipeline>(&bytes)
-            && (old.key == key || previous.get(&name) == Some(&input_key))
+            && old.binding_layout_hash == binding_layout_hash()
+            && (old.key == key
+                || previous
+                    .get(&name)
+                    .is_some_and(|cached| *cached == format!("{input_key}:{}", hash(&bytes))))
             && old.stages.iter().all(|s| {
                 std::fs::read(output.join(&s.spirv)).is_ok_and(|b| hash(b) == s.spirv_hash)
                     && std::fs::read(output.join(&s.dxil)).is_ok_and(|b| hash(b) == s.dxil_hash)
@@ -223,6 +227,12 @@ pub fn cook(manifest: &Path, output: &Path, tools: &Toolchain) -> Result<usize> 
         let temporary = path.with_extension("json.tmp");
         ara_gpu::cooked::write_json(&temporary, &cooked)?;
         std::fs::rename(temporary, path)?;
+    }
+    // Associate local input keys with the metadata actually published. Restoring
+    // another checkout's metadata must not inherit this checkout's cache hits.
+    for (name, input) in &mut inputs {
+        let metadata = std::fs::read(output.join(format!("{name}.json")))?;
+        *input = format!("{input}:{}", hash(metadata));
     }
     ara_gpu::cooked::write_json(&cache_path, &inputs)?;
     if changed {

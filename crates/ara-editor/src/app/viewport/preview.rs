@@ -56,7 +56,14 @@ impl SceneView {
     /// Shared content work that a visible Game preview must poll. Scene-camera
     /// accumulation is independent and must not keep the Game panel awake.
     pub(in crate::app) fn preview_needs_frame(&self) -> bool {
+        if self
+            .recovery
+            .blocked(self.content.as_ref().map_or(0, |c| c.revision()))
+        {
+            return false;
+        }
         self.raster_gpu_pending
+            || self.recovery.pending()
             || self.content_job.is_some()
             || self.content_ready.is_some()
             || self
@@ -123,6 +130,13 @@ impl SceneView {
                 return Ok(false);
             };
             if !renderer.is_native() {
+                return Ok(false);
+            }
+            if self
+                .raster
+                .as_ref()
+                .is_none_or(|r| !r.has_prepared_content())
+            {
                 return Ok(false);
             }
             request.exposure =

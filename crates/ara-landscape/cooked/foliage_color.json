@@ -1,24 +1,24 @@
 {
-  "binding_layout_hash": "35cd2a62b1ba741ce6823b3c8753d7b5aa97b54c5f0a837b56e542518013fd7e",
+  "binding_layout_hash": "f71261afa0d52758f34ca15c916d2da422ee92b118ede6e189c970911a274f1e",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "cf8bb916a71f18cdf74d7f87aad74c6b37a2b19fba21962329405cba708f1f1c",
+  "key": "3c841d93da2afa4c0c075d2b9865ecde13098dec1c8f1e194347cd1b51e131cc",
   "stages": [
     {
-      "dxil": "cf8bb916a71f18cdf74d7f87aad74c6b37a2b19fba21962329405cba708f1f1c/foliageColor.dxil",
-      "dxil_hash": "12f0d4b4fdb6f9dbb4a4a3087153fa2f31ab1e12320017784ec1e80bb0ae8ffb",
+      "dxil": "3c841d93da2afa4c0c075d2b9865ecde13098dec1c8f1e194347cd1b51e131cc/foliageColor.dxil",
+      "dxil_hash": "be5fc7ca95a3f5b6703f1496325aa65c5f9fd5d20845a44ce4e85236aab105d8",
       "source_entry": "foliageColor",
-      "spirv": "cf8bb916a71f18cdf74d7f87aad74c6b37a2b19fba21962329405cba708f1f1c/foliageColor.spv",
+      "spirv": "3c841d93da2afa4c0c075d2b9865ecde13098dec1c8f1e194347cd1b51e131cc/foliageColor.spv",
       "spirv_entry": "main",
-      "spirv_hash": "b8e4d838d578cfabda5d349643a872289c0dd8dffdf6df79cb2850c2c250fe45",
+      "spirv_hash": "c554718353c65fc3ac8aa4435d7e2aa4852c56e84f7d27f4af23ca18dc8556a8",
       "stage": "fragment"
     },
     {
-      "dxil": "cf8bb916a71f18cdf74d7f87aad74c6b37a2b19fba21962329405cba708f1f1c/foliageVertex.dxil",
-      "dxil_hash": "3ae4b4ce6b8a367aab7117de5ad54366b06b6aa68dd051663de37e09b3d8e42d",
+      "dxil": "3c841d93da2afa4c0c075d2b9865ecde13098dec1c8f1e194347cd1b51e131cc/foliageVertex.dxil",
+      "dxil_hash": "b0f6adad07889106f4a2857db92b03dfb70908b531e69ea4c167e4471452bfbd",
       "source_entry": "foliageVertex",
-      "spirv": "cf8bb916a71f18cdf74d7f87aad74c6b37a2b19fba21962329405cba708f1f1c/foliageVertex.spv",
+      "spirv": "3c841d93da2afa4c0c075d2b9865ecde13098dec1c8f1e194347cd1b51e131cc/foliageVertex.spv",
       "spirv_entry": "main",
-      "spirv_hash": "7803d153d9b232949f710f709c05094d192eec4d82d87cc1d1eaffc89ed9538c",
+      "spirv_hash": "2cc97a3d1a3dadc41f074fd0fe7afae40a2470ff5f0e0857820b6f9a535da24c",
       "stage": "vertex"
     }
   ],

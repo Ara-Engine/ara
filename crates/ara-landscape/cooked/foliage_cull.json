@@ -1,15 +1,15 @@
 {
-  "binding_layout_hash": "35cd2a62b1ba741ce6823b3c8753d7b5aa97b54c5f0a837b56e542518013fd7e",
+  "binding_layout_hash": "f71261afa0d52758f34ca15c916d2da422ee92b118ede6e189c970911a274f1e",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "cf8bb916a71f18cdf74d7f87aad74c6b37a2b19fba21962329405cba708f1f1c",
+  "key": "3c841d93da2afa4c0c075d2b9865ecde13098dec1c8f1e194347cd1b51e131cc",
   "stages": [
     {
-      "dxil": "cf8bb916a71f18cdf74d7f87aad74c6b37a2b19fba21962329405cba708f1f1c/foliageCull.dxil",
-      "dxil_hash": "65f8ecdcb6a7a34579df31f392e9387279764816778c6cc046f28e5c40a35723",
+      "dxil": "3c841d93da2afa4c0c075d2b9865ecde13098dec1c8f1e194347cd1b51e131cc/foliageCull.dxil",
+      "dxil_hash": "a721dccd558176de82cbe0e676ad29ba0bcd5a145ff94464d5e7135b8b24ba07",
       "source_entry": "foliageCull",
-      "spirv": "cf8bb916a71f18cdf74d7f87aad74c6b37a2b19fba21962329405cba708f1f1c/foliageCull.spv",
+      "spirv": "3c841d93da2afa4c0c075d2b9865ecde13098dec1c8f1e194347cd1b51e131cc/foliageCull.spv",
       "spirv_entry": "main",
-      "spirv_hash": "cc36ac353c7579415e77b0cb28699b37f003b1401037341b8dfb6abe1d1ca238",
+      "spirv_hash": "241fd4a396d60d75dad945d2bb69f2a8a3f7984803a7e51819e814b819a065d6",
       "stage": "compute"
     }
   ],

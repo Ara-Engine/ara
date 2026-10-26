@@ -15,6 +15,8 @@ compiler version, recipe/flags, binding ABI and pipeline manifest enter the key.
 Artifacts live below that content key. A failed new source revision preserves
 the previous pipeline manifest and its artifacts. Intact unchanged stages are
 reused; corrupt SPIR-V/DXIL are rebuilt. Includes must live within the source tree.
+Reuse also requires the current binding ABI; a local input cache cannot override it.
+Input-cache hits are tied to the published metadata hash, so checkout restores recook.
 SPIR-V entry names are `main`; DXIL keeps source entry names. Vertex SPIR-V inverts
 Y, DXIL does not. Both targets use column-major matrices and 32-byte root data.
 

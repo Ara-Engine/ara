@@ -26,6 +26,22 @@ fn cook_reuses_intact_artifacts_and_recovers_corruption() -> Result<()> {
     assert_eq!(cook(&manifest, &output, &tools)?, 0);
     let cooked: ara_gpu::cooked::CookedPipeline =
         serde_json::from_slice(&std::fs::read(output.join("test.json"))?)?;
+    // A checkout can restore metadata from a different binding ABI while the
+    // local input cache and every artifact hash still match. Neither cache path
+    // may reuse that cohort, even when a previous cook already updated its key.
+    let mut restored = serde_json::to_value(&cooked)?;
+    restored["binding_layout_hash"] = "previous-binding-abi".into();
+    for key in [cooked.key.as_str(), "restored-old-cohort"] {
+        restored["key"] = key.into();
+        std::fs::write(output.join("test.json"), serde_json::to_vec(&restored)?)?;
+        assert_eq!(cook(&manifest, &output, &tools)?, 1);
+        let corrected: ara_gpu::cooked::CookedPipeline =
+            serde_json::from_slice(&std::fs::read(output.join("test.json"))?)?;
+        assert_eq!(
+            corrected.binding_layout_hash,
+            ara_gpu::cooked::binding_layout_hash()
+        );
+    }
     std::fs::write(output.join(&cooked.stages[0].spirv), b"corrupt")?;
     assert_eq!(cook(&manifest, &output, &tools)?, 1);
     let good_manifest = std::fs::read(output.join("test.json"))?;
@@ -61,6 +77,16 @@ fn cook_reuses_intact_artifacts_and_recovers_corruption() -> Result<()> {
         serde_json::from_slice(&std::fs::read(output.join("test.json"))?)?;
     assert_eq!(other_before.stages[0].spirv, other_after.stages[0].spirv);
     assert_eq!(other_after.key, test_after.key);
+    // The same-ABI checkout case must also reject a stale metadata restore,
+    // even though the local cache still describes the current shader inputs.
+    std::fs::write(output.join("test.json"), serde_json::to_vec(&cooked)?)?;
+    assert_eq!(cook(&manifest, &output, &tools)?, 1);
+    let repaired: ara_gpu::cooked::CookedPipeline =
+        serde_json::from_slice(&std::fs::read(output.join("test.json"))?)?;
+    assert_eq!(
+        repaired.stages[0].spirv_hash,
+        test_after.stages[0].spirv_hash
+    );
     let good = std::fs::read(output.join("test.json"))?;
     let other_good = std::fs::read(output.join("other.json"))?;
     // "other" cooks first, then "test" fails: no earlier successful cook may publish.

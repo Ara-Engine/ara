@@ -16,7 +16,7 @@ struct Root { uint input; uint output; uint blockCount; uint preset; uint a; uin
 #define BIND(n)
 ConstantBuffer<Root> root : register(b0,space0);
 #endif
-BIND(1) RWByteAddressBuffer buffers[64] : register(u0,space2);
+BIND(1) RWByteAddressBuffer buffers[] : register(u0,space2);
 
 struct Candidate { uint error; uint first; uint second; };
 groupshared uint samples[32];

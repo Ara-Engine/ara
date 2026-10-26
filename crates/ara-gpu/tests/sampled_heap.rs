@@ -32,6 +32,16 @@ fn variable_heap_samples_high_slots_and_filters_native_mips() {
     let pipeline = gpu.create_pipeline(&metadata, &cooked).unwrap();
     let mut commands = gpu.begin(Queue::Graphics);
     let mut resources = Vec::new();
+    // The same runtime buffer binding must really address slots above 63.
+    let buffer_capacity = gpu.context().info.storage_buffer_capacity;
+    let reserved = buffer_capacity.saturating_sub(2).min(70);
+    for _ in 0..reserved {
+        let buffer = gpu
+            .create_buffer(16, vk::BufferUsageFlags::STORAGE_BUFFER, true)
+            .unwrap();
+        gpu.storage_buffer(buffer).unwrap();
+        resources.push(Resource::Buffer(buffer));
+    }
     let mut indices = Vec::new();
     let mut expected = Vec::new();
     for i in 0..257u32 {
@@ -104,6 +114,12 @@ fn variable_heap_samples_high_slots_and_filters_native_mips() {
     gpu.upload(input, bytemuck::cast_slice(&indices)).unwrap();
     let input_slot = gpu.storage_buffer(input).unwrap().index;
     let output_slot = gpu.storage_buffer(output).unwrap().index;
+    if buffer_capacity > 64 {
+        assert!(
+            output_slot > 63,
+            "shader must write above the old buffer ceiling"
+        );
+    }
     resources.extend([Resource::Buffer(input), Resource::Buffer(output)]);
     commands.barriers([
         edge(
@@ -168,5 +184,13 @@ fn variable_heap_samples_high_slots_and_filters_native_mips() {
     }
     gpu.retire_pipeline(pipeline).unwrap();
     gpu.collect().unwrap();
+    assert_eq!(gpu.descriptor_usage().storage_buffers, 0);
+    let reused = gpu
+        .create_buffer(16, vk::BufferUsageFlags::STORAGE_BUFFER, true)
+        .unwrap();
+    assert!(gpu.storage_buffer(reused).unwrap().index < buffer_capacity);
+    gpu.retire(Resource::Buffer(reused)).unwrap();
+    gpu.collect().unwrap();
+    assert_eq!(gpu.descriptor_usage().storage_buffers, 0);
     gpu.assert_clean().unwrap();
 }

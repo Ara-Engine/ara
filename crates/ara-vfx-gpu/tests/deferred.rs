@@ -58,7 +58,8 @@ fn deferred_vfx_initialization_and_failed_retries_release_their_heap_slots() -> 
     assert_eq!(gpu.descriptor_usage(), baseline);
 
     let mut pressure = Vec::new();
-    while gpu.descriptor_usage().storage_buffers < 62 {
+    let capacity = gpu.context().info.storage_buffer_capacity as usize;
+    while gpu.descriptor_usage().storage_buffers < capacity - 2 {
         let buffer = gpu.create_buffer(16, vk::BufferUsageFlags::STORAGE_BUFFER, true)?;
         gpu.storage_buffer(buffer)?;
         pressure.push(buffer);
