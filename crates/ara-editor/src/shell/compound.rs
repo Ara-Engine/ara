@@ -112,7 +112,7 @@ pub(super) fn hex_linear(text: &str) -> Result<[f64; 3], String> {
     Ok([channel(0)?, channel(1)?, channel(2)?])
 }
 /// Linear channels as `#RRGGBB` sRGB.
-fn linear_hex(value: &Value) -> String {
+pub(super) fn linear_hex(value: &Value) -> String {
     let channel = |n: usize| {
         (value[n].as_f64().unwrap_or(1.).clamp(0., 1.).powf(1. / 2.2) * 255.).round() as u8
     };

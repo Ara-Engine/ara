@@ -438,6 +438,7 @@ impl Controller {
                             .hit_test(shell.pointer[0], shell.pointer[1])
                             .is_none()
                         && !editor.state.palette
+                        && !shell.inspector_popup_contains(shell.pointer)
                         && shell.menu.is_none();
                     if pressed && !shell.modifiers[2] {
                         if !inside {
@@ -447,6 +448,7 @@ impl Controller {
                                 shell.begin_drag();
                             }
                         } else {
+                            shell.dismiss_inspector_colour(shell.pointer)?;
                             shell.commit_fields(editor)?;
                             shell.input.blur(&mut shell.ui);
                             let rect = shell.viewport().ok_or("viewport missing")?;

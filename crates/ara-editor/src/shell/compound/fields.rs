@@ -82,7 +82,11 @@ impl Shell {
         if let Some(count) = ty.vector_len() {
             if *ty == ValueType::Color || desc.is_some_and(|d| d.editor.color) {
                 let swatch = format!("nest-swatch-{rid}");
-                out.push_str(&format!("<panel id='{swatch}' class='swatch' />"));
+                self.bindings.insert(
+                    ara_ui::source::stable_id(&swatch),
+                    Binding::ColorPicker(target.to_owned()),
+                );
+                out.push_str(&format!("<button id='{swatch}' class='swatch inspector-swatch' label='Pick colour' description='Open the colour picker' action='Dispatch' />"));
                 self.nested_swatches.push((swatch, value.clone()));
                 text_box(
                     self,

@@ -40,6 +40,7 @@ mod import_panel;
 mod inspector_capture;
 mod inspector_fields;
 mod inspector_panel;
+mod inspector_popup;
 mod inspector_sections;
 mod log_panels;
 mod material_panel;
@@ -236,6 +237,7 @@ pub struct Shell {
     reduce_motion: bool,
     panel_opened: Option<std::time::Instant>,
     color_picker: Option<String>,
+    inspector_popovers: ara_ui::popover::Popovers,
     modal_open: bool,
     canvas_modal_open: bool,
     inspector_sections: inspector_sections::Sections,
@@ -502,6 +504,7 @@ impl Shell {
             reduce_motion: false,
             panel_opened: None,
             color_picker: None,
+            inspector_popovers: Default::default(),
             modal_open: false,
             canvas_modal_open: false,
             inspector_sections: inspector_sections::Sections::open(editor.host.root()),
@@ -939,6 +942,7 @@ impl Shell {
             &mut markup,
         )?;
         markup.push_str("</panel>");
+        self.inspector_colour_popup(&mut markup);
         self.overlays(editor, &mut markup)?;
         markup.push_str(POPUP_TAIL);
         markup.push_str("</ui>");
@@ -990,6 +994,7 @@ impl Shell {
         self.statusbar(editor, &mut statusbar);
         markup.push_str("<panel id='statusbar' />");
         self.parts.push(("statusbar".into(), statusbar));
+        self.inspector_colour_popup(&mut markup);
         self.overlays(editor, &mut markup)?;
         if editor.state.palette {
             self.palette(editor, &mut markup)?;
@@ -1183,6 +1188,8 @@ impl Shell {
     }
     /// Run after every mount: decorations, a pending Inspector field reveal, motion.
     fn after_mount(&mut self, editor: &Editor) -> ara_ui::Result<()> {
+        self.inspector_popovers
+            .sync(&mut self.ui, &mut self.input)?;
         self.paint_decorations();
         if self.field_request != editor.state.focus_field
             && self.shown_node("inspector-scroll").is_some()

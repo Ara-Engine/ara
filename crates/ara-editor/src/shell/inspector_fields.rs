@@ -336,20 +336,6 @@ impl Shell {
             out.push_str(&disabled.replace("disabled='true' disabled='true'", "disabled='true'"));
         }
         self.compound_rows(editor, field, label, out);
-        if let Widget::Vector {
-            count, color: true, ..
-        } = &field.widget
-            && self.color_picker.as_deref() == Some(field.path.as_str())
-        {
-            for axis in 0..*count {
-                let widget = format!("color-slider-{id}-{axis}");
-                self.bindings.insert(
-                    ara_ui::source::stable_id(&widget),
-                    Binding::Field(field.path.clone(), Some(axis)),
-                );
-                out.push_str(&format!("<panel id='picker-{id}-{axis}' class='prop-row'><panel id='picker-label-{id}-{axis}' class='prop-label' style='width:{label}px'><text id='picker-name-{id}-{axis}' text='{}' /></panel><panel id='picker-value-{id}-{axis}' class='prop-value'><slider id='{widget}' style='flex-grow:1' min='0' max='1' step='0.01' value='{}' label='{}' action='Dispatch' /></panel></panel>",["Red","Green","Blue","Alpha"][axis],field.value[axis].as_f64().unwrap_or(1.).clamp(0.,1.),["Red","Green","Blue","Alpha"][axis]));
-            }
-        }
         if self.pick_field.as_deref() == Some(field.path.as_str()) {
             let what = match &field.widget {
                 Widget::Asset { kind } => {

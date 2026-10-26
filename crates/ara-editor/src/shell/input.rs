@@ -35,6 +35,13 @@ impl Shell {
         event: InputEvent,
         clipboard: &mut dyn Clipboard,
     ) -> ara_ui::Result<()> {
+        if let InputEvent::PointerDown(point) = &event
+            && self.dismiss_inspector_colour(*point)?
+        {
+            return self
+                .input
+                .event(&mut self.ui, InputEvent::Cancel, clipboard);
+        }
         self.input.event(&mut self.ui, event, clipboard)
     }
     /// Dispatch queued widget actions through the typed engine endpoint.

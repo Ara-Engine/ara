@@ -10,6 +10,14 @@ fn native_inspector_component_captures() {
         .unwrap_or_else(|| std::path::PathBuf::from("target/inspector-captures"));
     let root = output.join(format!("project-{}", std::process::id()));
     std::fs::create_dir_all(root.join("levels")).unwrap();
+    std::fs::create_dir_all(root.join(".ara")).unwrap();
+    std::fs::write(
+        root.join(".ara/editor-layout.json"),
+        ara_json::to_canonical_string(
+            &json!({"Area":{"id":"max","tabs":["inspector"],"active":0}}),
+        ),
+    )
+    .unwrap();
     std::fs::write(
         root.join("ara.project.json"),
         ara_json::to_canonical_string(
@@ -28,24 +36,17 @@ fn native_inspector_component_captures() {
         .unwrap();
     let mut shell = Shell::new(&mut editor, [500., 1050.]).unwrap();
     shell.offscreen = true;
-    shell
-        .run_command(
-            &mut editor,
-            "window.maximize",
-            &commands::Target::Panel("inspector".into()),
-        )
-        .unwrap();
     let device = ara_gpu::vulkan::VulkanDevice::new_raster(&[], output.join("gpu-cache")).unwrap();
     // SAFETY: this headless device outlives the UI adapter, and this thread owns its queue.
     let mut gpu = unsafe { crate::gpu::NativeUi::new(device.context()) }.unwrap();
     let mut draw = ara_ui_render::gpu::Renderer::default();
     icons::install(&mut draw, 1.).unwrap();
     let mut timings = Vec::new();
-    for (name, entity, component) in [
-        ("Light", "e_light001", "Light"),
-        ("Transform", "e_mesh0001", "Transform"),
-        ("Mesh", "e_mesh0001", "MeshRenderer"),
-        ("PostProcess", "e_post0001", "PostProcess"),
+    for (name, entity) in [
+        ("Light", "e_light001"),
+        ("Transform", "e_mesh0001"),
+        ("Mesh", "e_mesh0001"),
+        ("PostProcess", "e_post0001"),
     ] {
         editor
             .action("editor.select", json!({"entities":[entity]}))
@@ -53,7 +54,6 @@ fn native_inspector_component_captures() {
         let start = std::time::Instant::now();
         shell.rebuild(&mut editor).unwrap();
         let rebuild_ms = start.elapsed().as_secs_f64() * 1000.;
-        shell.reveal_field(component).unwrap();
         shell.settle_transitions();
         shell.frame().unwrap();
         draw.render(
@@ -95,6 +95,7 @@ fn native_inspector_component_captures() {
         ara_json::to_canonical_string(&json!(timings)),
     )
     .unwrap();
+    std::fs::write(output.join("capture-fixture.json"),ara_json::to_canonical_string(&json!({"project":root,"size":[500,1050],"captures":{"Light":"e_light001","Transform":"e_mesh0001","Mesh":"e_mesh0001","PostProcess":"e_post0001"}}))).unwrap();
     drop(gpu);
     device.assert_clean().unwrap();
 }

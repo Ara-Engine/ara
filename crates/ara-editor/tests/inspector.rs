@@ -343,6 +343,31 @@ fn header_enable_is_a_reflected_field_edit_and_optional_assets_use_override_rows
     assert!(shell.ui.find("override-Brain-behavior").is_some());
 }
 
+#[test]
+fn colour_swatch_opens_an_anchored_editor_with_typed_values_and_clickaway() {
+    let project = Project::new();
+    let (mut editor, mut shell) = project.open();
+    press(&mut shell, &mut editor, "swatch-MeshRenderer-color");
+    let popup = shell.ui.find("inspector-colour-popup").unwrap();
+    let rect = shell.ui.nodes[popup].rect;
+    assert!(rect.w > 0. && rect.h > 0. && rect.x >= 0. && rect.y >= 0.);
+    assert!(rect.x + rect.w <= shell.ui.size[0] + 0.5 && rect.y + rect.h <= shell.ui.size[1] + 0.5);
+    let before = editor.host.store().history().len();
+    type_into(&mut shell, &mut editor, "inspector-colour-hex", "#FF0000");
+    let color = authored(&editor, "e_crate001", "MeshRenderer", "color");
+    assert_eq!(color[0].as_f64(), Some(1.));
+    assert_eq!(color[1].as_f64(), Some(0.));
+    assert_eq!(color[3].as_f64(), Some(1.));
+    assert_eq!(editor.host.store().history().len(), before + 1);
+    press(&mut shell, &mut editor, "entity-name");
+    assert!(
+        shell
+            .ui
+            .find("inspector-colour-popup")
+            .is_none_or(|index| !shell.ui.shown(index))
+    );
+}
+
 /// Until the asset pipeline first reports, a project with imports says they are being
 /// prepared rather than showing nothing (the loading window shows the same stage).
 #[test]

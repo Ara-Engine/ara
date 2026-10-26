@@ -21,3 +21,4 @@
 .override-toggle { width:16px; height:16px; }
 .nested-scrub-label { height:22px; flex-grow:1; flex-basis:0px; min-width:0px; justify-content:start; padding:0px; border-width:0px; background:transparent; color:var(--muted-foreground); }
 .nested-scrub-label:hover { color:var(--foreground); }
+.inspector-colour-popup { width:260px; padding:10px; gap:8px; background:var(--menu-surface); border-width:1px; border-color:var(--separator-strong); border-radius:var(--radius-sm); }

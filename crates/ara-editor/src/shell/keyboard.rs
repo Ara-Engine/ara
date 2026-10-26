@@ -153,6 +153,7 @@ impl Shell {
             return Ok(true);
         }
         if scancode == 41 {
+            self.color_picker = None;
             self.finish_scrub(editor, true)?;
             editor.finish_gesture(true)?;
             let had_drag = self.drag.take().is_some();

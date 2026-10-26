@@ -180,10 +180,10 @@ impl Shell {
         // SceneSync keys transient previews by drafts; this marker is never authored.
         self.drafts
             .insert(format!("@scrub|{}", scrub.path), scrub.delta.to_string());
-        if let Some((_, value)) = scrub.values().next() {
-            if let Some(i) = self.ui.find(&scrub.widget) {
-                self.ui.set_text(i, &super::panels::display(&value))?;
-            }
+        if let Some((_, value)) = scrub.values().next()
+            && let Some(i) = self.ui.find(&scrub.widget)
+        {
+            self.ui.set_text(i, &super::panels::display(&value))?;
         }
         Ok(true)
     }
