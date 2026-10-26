@@ -18,6 +18,7 @@ mod manifest;
 mod merge;
 mod perf;
 mod platform;
+mod preview;
 mod process;
 mod selection;
 mod test_runner;
@@ -57,6 +58,8 @@ enum Command {
     },
     /// Build and measure a frozen packed scene, or control a warm perf session.
     Perf(perf::Options),
+    /// Prepare signed local Hub/engine previews; --publish explicitly uploads them.
+    Preview(preview::Options),
     /// Measure every D26/D27 release target; writes target/d26/<timestamp>/report.html.
     D26(d26::Options),
     /// Check changed crates and their reverse dependencies before handing off work.
@@ -160,6 +163,7 @@ fn run() -> Result<bool> {
         Command::Fmt { check } => check::format(&root, check),
         Command::Cargo { args } => compile_cache::cargo(&root, &args),
         Command::Perf(options) => perf::run(&root, options),
+        Command::Preview(options) => preview::run(&root, options),
         Command::D26(options) => d26::run(&root, options),
         Command::Check {
             base,

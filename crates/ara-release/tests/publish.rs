@@ -84,8 +84,9 @@ fn dry_run_publishes_manifest_the_hub_verifies_without_gh_or_network() {
         let key = root.join("synthetic-test-key");
         fs::write(&key, testing::test_seed()).unwrap();
         let tag = format!("{kind}-v0.0.1-alpha");
-        let invoke = || {
-            Command::new(env!("CARGO_BIN_EXE_ara-release"))
+        let invoke = |trusted: bool| {
+            let mut command = Command::new(env!("CARGO_BIN_EXE_ara-release"));
+            command
                 .env_remove("ARA_RELEASE_REPO")
                 .args([
                     "publish",
@@ -97,11 +98,13 @@ fn dry_run_publishes_manifest_the_hub_verifies_without_gh_or_network() {
                 ])
                 .arg(&key)
                 .arg("--artifacts")
-                .arg(&root)
-                .output()
-                .unwrap()
+                .arg(&root);
+            if trusted {
+                command.arg("--require-trusted-key");
+            }
+            command.output().unwrap()
         };
-        let output = invoke();
+        let output = invoke(false);
         assert!(
             output.status.success(),
             "{}",
@@ -118,12 +121,15 @@ fn dry_run_publishes_manifest_the_hub_verifies_without_gh_or_network() {
                 .starts_with("https://github.com/Ara-Engine/ara/releases/download/")
         }));
         assert!(
-            invoke().status.success(),
+            invoke(false).status.success(),
             "an identical reviewed folder is reusable"
         );
+        let trusted = invoke(true);
+        assert!(!trusted.status.success());
+        assert!(String::from_utf8_lossy(&trusted.stderr).contains("not embedded"));
         fs::write(folder.join(&release.manifest().assets[0].name), b"tampered").unwrap();
         assert!(
-            !invoke().status.success(),
+            !invoke(false).status.success(),
             "a changed reviewed artifact cannot be published"
         );
         fs::remove_file(key).unwrap();

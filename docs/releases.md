@@ -7,6 +7,44 @@ Run the `ara-hub-<version>-windows-x64-setup.exe` per-user installer, then use
 There is **no Authenticode code signing yet**: Windows SmartScreen warns.
 Manifest signing authenticates updates; it does not remove SmartScreen warnings.
 
+## One-command previews
+
+From a clean committed checkout, with `ARA_RELEASE_SIGNING_KEY` pointing to a
+private key file outside it:
+
+```powershell
+ara-dev preview --target-dir D:\Coding\ara-after-freeze\target
+# Later, after reviewing the signed local packages and smoke logs:
+ara-dev preview --prepared "<printed preview.json path>" --publish
+```
+
+The default prepares **signed local artifacts**, including an installed-package
+smoke test, without uploading. It creates an independent source clone under
+`target/ara-dev/previews/<version>/source`, bumps the workspace version and lockfile
+there, and commits those version files with preview notes. The caller's checkout
+and refs remain unchanged. `0.0.1-alpha` starts `0.0.2-alpha.1`; subsequent local
+preparations reserve successive numbers. `--version` selects an explicit newer
+`alpha.N`. Third-party lockfile resolutions must remain unchanged.
+
+The external target is an explicit opt-in to warm compiler outputs, including
+matching PDBs. `ara-release package --kind all` builds the complete union once;
+engine and Hub packages stay under the isolated source's `target/release-dist`.
+Smoke uses the guarded GPU lease and isolated profiles. The record identifies the
+version commit, tool hash, packages and completed smoke. `--prepared` re-verifies
+the signed folders and source identity before any remote write.
+
+`--publish` pushes only the version commit to `previews/<version>`, then publishes
+the Hub and engine as signed GitHub **prereleases** via `ara-release publish`.
+Both manifests use the Preview channel. Per-kind completion is recorded so a
+partial publication can skip already completed kinds with the same command. If
+`gh` left a partial draft within a kind, inspect/remove that draft before retrying;
+the publisher refuses to overwrite an existing release. Repository precedence is
+`--repo`, `ARA_RELEASE_REPO`, then `Ara-Engine/ara`. The key/token never appears in
+the preview record or command output. `--json` prints the record; progress goes
+to stderr and per-step logs. Private keys are not copied into the source clone.
+Local signing also requires an embedded trusted key (`--require-trusted-key`),
+so a bootstrap-only key cannot pass preparation then fail after the source push.
+
 ## Streams and channels
 
 Hub tags are `hub-v<semver>`; engine tags are `engine-v<semver>`.

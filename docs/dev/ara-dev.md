@@ -1,5 +1,8 @@
 # Local developer infrastructure
 
+`ara-dev preview` prepares signed local engine/Hub previews, including smoke tests;
+only `--publish` uploads. See [the preview workflow](../releases.md#one-command-previews).
+
 Set `$env:CARGO_BUILD_JOBS='2'` in PowerShell on this shared Windows machine. GPU crates also need
 `VULKAN_SDK` pointing to the installed SDK. All commands run from any directory in
 the checkout; no Python, CMake, service or extra build tool is required.
