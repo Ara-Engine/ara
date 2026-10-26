@@ -104,7 +104,11 @@ float3 historyCatmullRom(Frame f,float2 uv){
 // pixels, each sample weighted by its exposed luminance so lone HDR points (lamps,
 // sparks) cannot spill over the window. It blends in by how near its nearest
 // sample lies, so history gathers the detail between samples. Native frames take
-// their own pixel, as plain TAA.
+// their own pixel, as plain TAA. Resampling softens history a little every frame, so
+// moving pixels (fully from four display pixels a frame, and pixels without history)
+// lean on the current frame (weight up to 0.4) reconstructed with a kernel twice as
+// wide in area, so render-pixel steps do not show; pixels at rest keep the long
+// accumulation.
 // History is RGBA16F, pre-exposed (look.slangh exposureState); w keeps the depth.
 [shader("compute")]
 [numthreads(8,8,1)]
@@ -119,14 +123,7 @@ void taaMain(uint3 t:SV_DispatchThreadID){
     float3 current=pixel(input,c).rgb;float depth=pixel(f.extra.x,c).x;float3 result=current;
     bool temporal=f.temporal.x!=0 && f.temporal.y==0;
     if(temporal || upscaled){
-        float3 mean=0,square=0,sum=0;float total=0;
-        for(int y=-1;y<=1;y++)for(int x=-1;x<=1;x++){
-            int2 q=clamp(c+int2(x,y),int2(0),size-1);float3 s=pixel(input,q).rgb,v=toYCoCg(s);mean+=v;square+=v*v;
-            float2 d=(float2(q)+0.5+f.upscale.xy-at)*toDisplay;float w=exp(-5.56*dot(d,d))/(1+luminance(s)*exposure);sum+=s*w;total+=w;
-        }
-        mean/=9;float3 sigma=sqrt(max(square/9-mean*mean,0));
-        if(upscaled)current=sum/total;
-        result=current;
+        // History position first: how far this pixel moved shapes both blends below.
         float2 hv=0;bool valid=false;
         if(temporal && f.look.w!=0xffffffffu){
             hv=uv-pixel(f.look.w,c).xy;valid=all(hv>0)&&all(hv<1);
@@ -139,15 +136,27 @@ void taaMain(uint3 t:SV_DispatchThreadID){
             float4 history=historyTex(f.post.y,hv);
             valid=depth>0 && prior.w>0 && all(hv>0)&&all(hv<1)&&abs(history.w-prior.z/prior.w)<0.002;
         }
+        // 0 at rest, 1 from four display pixels a frame (or without history): every
+        // frame's resampling softens history, so moving pixels lean on the current
+        // frame, reconstructed wider so render-pixel steps do not show.
+        float moving=valid?saturate(length((uv-hv)*float2(f.extent.xy))/4):1;
+        float3 mean=0,square=0,sum=0;float total=0;float spread=lerp(5.56,2.78,moving);
+        for(int y=-1;y<=1;y++)for(int x=-1;x<=1;x++){
+            int2 q=clamp(c+int2(x,y),int2(0),size-1);float3 s=pixel(input,q).rgb,v=toYCoCg(s);mean+=v;square+=v*v;
+            float2 d=(float2(q)+0.5+f.upscale.xy-at)*toDisplay;float w=exp(-spread*dot(d,d))/(1+luminance(s)*exposure);sum+=s*w;total+=w;
+        }
+        mean/=9;float3 sigma=sqrt(max(square/9-mean*mean,0));
+        if(upscaled)current=sum/total;
+        result=current;
         if(valid){
             float3 history=toYCoCg(historyCatmullRom(f,hv)/previous),low=mean-1.25*sigma,high=mean+1.25*sigma;
             // Clip towards the neighbourhood mean (not a per-channel clamp).
             float3 delta=history-mean,extent=max(high-mean,1e-5);float3 scale=abs(delta)/extent;float m=max(scale.x,max(scale.y,scale.z));
             history=fromYCoCg(m>1?mean+delta/m:history);
             // Upscaled, the nearest sample's distance in display pixels sets how much
-            // the current frame counts.
+            // the current frame counts; motion raises it.
             float2 near=(float2(c)+0.5+f.upscale.xy-at)*toDisplay;
-            float alpha=upscaled?0.15*exp(-2.29*dot(near,near)):0.1;
+            float alpha=lerp(upscaled?0.15:0.1,0.4,moving)*(upscaled?exp(-2.29*dot(near,near)):1);
             float wc=alpha/(1+luminance(current)*exposure),wh=(1-alpha)/(1+luminance(history)*exposure);
             result=(current*wc+history*wh)/(wc+wh);
         }
