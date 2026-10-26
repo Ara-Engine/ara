@@ -20,7 +20,7 @@ pub struct Dirty {
 }
 /// Retained node and cached layout/text state, indexed by its stable authored identity.
 pub struct Node {
-    /// Full virtual content extent; present only when a row/card pool owns translation.
+    /// Full virtual content extent; a row/card pool owns vertical translation.
     pub virtual_extent: Option<[f32; 2]>,
     /// Runtime paint translation, preserved across restyles and theme switches.
     pub paint_offset: [f32; 2],
@@ -259,6 +259,9 @@ impl Ui {
     }
     /// Find the top visible, enabled control within transformed ancestor clips.
     pub fn hit_test(&self, x: f32, y: f32) -> Option<usize> {
+        if let Some((index, _)) = self.scrollbar_at([x, y]) {
+            return Some(index);
+        }
         self.paint_order.iter().copied().rev().find(|index| {
             let n = &self.nodes[*index];
             is_focusable(n)

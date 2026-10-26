@@ -18,7 +18,7 @@ impl Clipboard for Clip {
 }
 fn fixture() -> Result<(Ui, TextSystem, usize)> {
     let mut ui = Ui::parse(
-        "<ui id='root'><scroll id='list'><button id='a' text='First' action='Choose'/><button id='b' text='Second' action='Choose'/><button id='c' text='Third' action='Choose'/><button id='d' text='Fourth' action='Choose'/></scroll></ui>",
+        "<ui id='root'><scroll id='list'><button id='a' text='First' action='Choose' cursor='grab' active-cursor='grabbing'/><button id='b' text='Second' action='Choose'/><button id='c' text='Third' action='Choose'/><button id='d' text='Fourth' action='Choose'/></scroll></ui>",
         "ui{width:200px;height:120px} scroll{width:200px;height:120px;overflow:hidden} button{height:60px;padding:0px}",
         [200., 120.],
     )?;
@@ -34,6 +34,11 @@ fn thumb_ratio_drag_capture_track_paging_and_fractional_wheel() -> Result<()> {
     assert_eq!(bar.axis, 1);
     assert_eq!(bar.maximum, 120.);
     assert_eq!(bar.thumb.h, 60.);
+    assert_eq!(
+        ui.hit_test(195., 15.),
+        Some(list),
+        "bars block host scene input"
+    );
     let mut input = InputState::default();
     let mut clip = Clip;
     let painted_width = |ui: &Ui| {
@@ -154,15 +159,45 @@ fn virtual_scrollbar_represents_100k_rows_with_a_bounded_pool() -> Result<()> {
     Ok(())
 }
 #[test]
+fn virtual_columns_scroll_horizontally_without_resetting_on_row_recycling() -> Result<()> {
+    let mut ui = Ui::parse(
+        "<ui id='root'><scroll id='list'/></ui>",
+        "ui{width:200px;height:100px} scroll{width:200px;height:100px}",
+        [200., 100.],
+    )?;
+    let mut text = TextSystem::bundled()?;
+    ui.frame(&mut text)?;
+    let list = ui.find("list").expect("list");
+    let model = VirtualList {
+        items: (0..20).map(|i| (i, format!("Wide row {i}"))).collect(),
+    };
+    let mut view = VirtualView::mount(&mut ui, list, 20., 100., vec![400.])?;
+    view.scroll(&mut ui, &model, 0., 100.)?;
+    ui.frame(&mut text)?;
+    assert_eq!(ui.scrollbars(list)?.len(), 2);
+    ui.scroll_to(list, [100., 40.])?;
+    view.scroll(&mut ui, &model, 40., 100.)?;
+    ui.frame(&mut text)?;
+    assert_eq!(ui.scroll_position(list), Some([100., 40.]));
+    let first = view.visible_nodes()[0];
+    assert_eq!(ui.nodes[first].rect.x, -100.);
+    assert!(ui.nodes[first].rect.w >= 400.);
+    assert_eq!(ui.hit_test(170., 10.), Some(first));
+    let id = stable_id(&ui.nodes[first].element.id);
+    InputState::default().focus(&mut ui, id)?;
+    assert_eq!(
+        ui.scroll_position(list),
+        Some([100., 40.]),
+        "focusing a wide row preserves horizontal position"
+    );
+    Ok(())
+}
+#[test]
 fn cursors_follow_children_capture_disabled_state_and_split_orientation() -> Result<()> {
     let (mut ui, mut text, _) = fixture()?;
     let mut input = InputState::default();
-    assert_eq!(ui.cursor(&input, [50., 20.]), Cursor::Pointer);
+    assert_eq!(ui.cursor(&input, [50., 80.]), Cursor::Pointer);
     let a = ui.find("a").expect("row");
-    ui.nodes[a]
-        .element
-        .attrs
-        .insert("cursor".into(), "grab".into());
     assert_eq!(ui.cursor(&input, [50., 20.]), Cursor::Grab);
     input.event(&mut ui, InputEvent::PointerDown([50., 20.]), &mut Clip)?;
     assert_eq!(ui.cursor(&input, [500., 500.]), Cursor::Grabbing);

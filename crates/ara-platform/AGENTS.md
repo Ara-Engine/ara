@@ -10,6 +10,8 @@ Minimal SDL3 native window/input and Vulkan presentation. Uses `sdl3-sys` 0.7.2
   physical pixels. It is intentionally neither Send nor Sync.
 - `Event`: close, drawable resize, key/repeat, mouse motion/button and wheel input.
   Hosts translate these events into deterministic simulation actions.
+- `Window::set_cursor(SystemCursor)` lazily owns native cursor shapes until video
+  shutdown. Resolve UI hover/capture every frame; offscreen hosts skip selection.
 - Multi-window: `Window::floating(title, rect, parent)` opens an owned tool window
   (above its parent, minimizes with it). `poll_tagged()` drains every window's
   events tagged with `id()` (0 = application; a close request is `Quit` for its
@@ -48,6 +50,8 @@ Set `CARGO_BUILD_JOBS=2`. Run `cargo check -p ara-platform`,
 `cargo test -p ara-platform`,
 `cargo clippy -p ara-platform --all-targets -- -D warnings`, and
 `cargo fmt -p ara-platform -- --check`.
+The ignored `hidden_window_loads` lib test verifies all cursor resources without
+showing a window or selecting a desktop cursor.
 
 `cargo test -p ara-platform --test native -- --ignored` opens a short-lived native
 window/audio stream and checks injected key/mouse events, virtual gamepad

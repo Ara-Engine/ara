@@ -67,7 +67,9 @@ fn golden(
         assert_eq!(actual.width(), expected.width());
         assert_eq!(actual.height(), expected.height());
         if actual.data() != expected.data() {
-            let path = path.with_extension("actual.png");
+            let path = std::path::Path::new(env!("CARGO_TARGET_TMPDIR"))
+                .join(format!("{name}.actual.png"));
+            std::fs::create_dir_all(path.parent().expect("target output directory"))?;
             cpu.save(&path)?;
             panic!("golden mismatch: {}", path.display());
         }

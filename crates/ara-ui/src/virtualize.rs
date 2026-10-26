@@ -229,6 +229,7 @@ impl VirtualView {
     fn grow(&mut self, ui: &mut Ui, viewport: f32) -> Result<()> {
         let count = (viewport / self.row_height).ceil() as usize + 2;
         let (parent, row_height, namespace) = (self.parent, self.row_height, &self.namespace);
+        let min_width: f32 = self.columns.iter().sum();
         for i in self.slots.len()..count {
             let id = format!("{namespace}/pool-{i}");
             let row = ui.append(
@@ -243,7 +244,7 @@ impl VirtualView {
                         (
                             "style".into(),
                             format!(
-                                "height:{row_height}px; flex-direction:row; gap:0px; padding:0px"
+                                "height:{row_height}px; min-width:{min_width}px; flex-direction:row; gap:0px; padding:0px"
                             ),
                         ),
                     ]),
@@ -297,7 +298,8 @@ impl VirtualView {
                 model.len() as f32 * self.row_height,
             ],
         )?;
-        ui.scroll_to(self.parent, [0., offset])?;
+        let horizontal = ui.scroll_position(self.parent).map_or(0., |p| p[0]);
+        ui.scroll_to(self.parent, [horizontal, offset])?;
         let first = (offset / self.row_height).floor() as usize;
         let count = self.slots.len().min(model.len().saturating_sub(first));
         let rows: Vec<_> = (first..first + count).map(|i| model.row(i)).collect();
@@ -322,6 +324,7 @@ impl VirtualView {
             .rev()
             .collect();
         let previous = std::mem::take(&mut self.order);
+        let min_width: f32 = self.columns.iter().sum();
         let mut entered = false;
         for row in rows {
             let slot = if let Some(i) = existing.get(&row.key) {
@@ -348,7 +351,7 @@ impl VirtualView {
             }
             let node = &mut ui.nodes[s.node];
             let style = format!(
-                "height:{}px; flex-direction:row; gap:0px; padding:0px; padding-left:{}px",
+                "height:{}px; min-width:{min_width}px; flex-direction:row; gap:0px; padding:0px; padding-left:{}px",
                 self.row_height,
                 row.depth as f32 * 14.0
             );

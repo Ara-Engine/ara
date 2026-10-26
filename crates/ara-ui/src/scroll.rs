@@ -20,6 +20,16 @@ pub struct Scrollbar {
     pub maximum: f32,
 }
 impl Ui {
+    /// Current retained scroll position, including virtual view offsets.
+    pub fn scroll_position(&self, index: usize) -> Option<[f32; 2]> {
+        match self
+            .widgets
+            .get(&stable_id(&self.nodes.get(index)?.element.id))
+        {
+            Some(Widget::Scroll(p)) => Some(*p),
+            _ => None,
+        }
+    }
     /// Full content size, including a virtual model's unmounted rows.
     pub fn scroll_extent(&self, index: usize) -> Result<[f32; 2]> {
         let node = self.nodes.get(index).ok_or("ARA4044: not a scroll view")?;
@@ -36,7 +46,7 @@ impl Ui {
         Ok(extent)
     }
     /// Publish a virtual viewport's model size; rows remain bounded to its visible pool.
-    /// The virtualizer owns row translation; the scroll widget owns its full offset.
+    /// The pool owns vertical translation; the widget applies horizontal scrolling.
     pub fn set_virtual_extent(&mut self, index: usize, extent: [f32; 2]) -> Result<()> {
         if extent.iter().any(|n| !n.is_finite() || *n < 0.) || self.scroll_position(index).is_none()
         {
@@ -196,12 +206,16 @@ impl Ui {
         while let Some(i) = ancestor {
             if let Some(position) = self.scroll_position(i) {
                 let r = self.nodes[i].rect;
-                let dx = if target.x < r.x {
+                let dx = if target.x <= r.x && target.x + target.w >= r.x + r.w {
+                    0.
+                } else if target.x < r.x {
                     target.x - r.x
                 } else {
                     (target.x + target.w - r.x - r.w).max(0.)
                 };
-                let dy = if target.y < r.y {
+                let dy = if target.y <= r.y && target.y + target.h >= r.y + r.h {
+                    0.
+                } else if target.y < r.y {
                     target.y - r.y
                 } else {
                     (target.y + target.h - r.y - r.h).max(0.)

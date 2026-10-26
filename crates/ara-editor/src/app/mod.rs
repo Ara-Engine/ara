@@ -3,6 +3,7 @@ mod assets_verify;
 mod capture;
 mod chrome_verify;
 mod controller;
+mod cursors;
 mod drags;
 mod game;
 mod game_preview;
@@ -811,6 +812,14 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
             let work = shell.frame()?;
             if let Some(button) = shell.update_chrome(&mut window, dpi) {
                 caption.update(button);
+            }
+            if !offscreen {
+                cursors::update(
+                    &mut window,
+                    &mut floats,
+                    &mut shell,
+                    controller.gizmo_state(),
+                )?;
             }
             let ui_ms = ui_at.elapsed().as_secs_f64() * 1000.;
             let (mut render_ms, mut present_ms, mut presented) = (0., 0., false);
