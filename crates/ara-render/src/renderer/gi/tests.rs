@@ -153,9 +153,11 @@ fn initial_bounces_use_a_bounded_window_then_restore_the_preset_budget() -> Resu
         statics[p * crate::look::gi::STATIC_VECTORS + 64] = [0., 0., 0., 1.];
     }
     renderer.set_probe_surfaces(Some(&ProbeSurfaces {
-        origin: [-1.; 3],
-        spacing: [2.; 3],
-        counts,
+        layout: ProbeLayout::single(crate::look::gi::ProbeLattice {
+            origin: [-1.; 3],
+            spacing: [2.; 3],
+            counts,
+        }),
         texels: vec![[255 << 24, 0, 0, 0]; probes * SURFACE_TEXELS],
         statics,
     }))?;
@@ -238,7 +240,10 @@ fn a_two_lattice_pool_reserves_before_delivery_and_accepts_packets_across_its_bo
         let waits = renderer.gpu.context().host_wait_stats().calls;
         let ready = renderer.preallocate_probe_volume(layout, 6)?;
         assert_eq!(renderer.gpu.context().host_wait_stats().calls, waits);
-        assert_eq!(renderer.gpu.descriptor_usage().storage_buffers, usage.storage_buffers);
+        assert_eq!(
+            renderer.gpu.descriptor_usage().storage_buffers,
+            usage.storage_buffers
+        );
         if ready {
             break;
         }
