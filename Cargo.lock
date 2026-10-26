@@ -1095,6 +1095,7 @@ dependencies = [
  "ara-doc",
  "ara-geo",
  "ara-json",
+ "ara-meshopt-sys",
  "ara-ops",
  "ara-schema",
  "base64 0.22.1",
@@ -1231,6 +1232,16 @@ dependencies = [
  "ara-schema",
  "insta",
  "serde_json",
+]
+
+[[package]]
+name = "ara-meshopt-sys"
+version = "0.0.1-alpha"
+dependencies = [
+ "bytemuck",
+ "cc",
+ "meshopt",
+ "sha2 0.10.9",
 ]
 
 [[package]]

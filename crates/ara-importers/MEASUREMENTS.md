@@ -1011,3 +1011,135 @@ remain under `target/ara-dev/import-speed/lod-profile/` and
 The same script without `-Full` captures the five rock inputs for
 `ara-dev-gpu.exe gpu -- D:/AraBuild/ara-dev-infra-target/lod-profile/warm-start-v2.exe target/ara-dev/import-speed/lod-profile/capture.bin`.
 `analyze.ps1` and `prefix.ps1` validate and aggregate the raw native records.
+
+## Prepared attribute-state prototype: 2026-10-26
+
+This experiment stays entirely in the isolated meshopt copy. A private copy of
+the importer adds a lexical context guard around each primitive's LOD run; all
+other 20 source files match production. The original native function is retained
+byte-for-byte as the control. A runtime switch selects original or prepared
+attribute mode 97 in the **same frozen binary**. Other modes use the control.
+No engine source, shipping dependency, version, key, compression or sidecar changes.
+
+The first attribute target builds pristine adjacency, position/attribute quadrics,
+edge loops, normalized attributes and initial candidate ranking. Save snapshots of
+the mutable arrays and ranked candidates. Subsequent targets restore those bytes,
+copy the original index buffer, and run the unchanged collapse/update sequence.
+Immutable inputs remain borrowed for the lexical run; all solves still start at
+LOD0. Context destruction occurs before the enclosing LOD timer ends.
+
+One-thread A/B/B/A replays all 101 real Outpost models, comparing **every complete
+ImportOutput** to the production cache on every pass. An extra full prepared pass
+also verifies all 101 models. Each replay used the GPU lock; this was a shared-load
+phase measurement, not a quiet fresh-project experiment. CPU load sampled at case
+start was 30/14/5/45%; all observations are retained:
+
+| Phase seconds | A1 original | B1 prepared | B2 prepared | A2 original |
+| --- | ---: | ---: | ---: | ---: |
+| Native LOD calls plus context destruction | 7.774 | 5.339 | 4.581 | 6.632 |
+| Enclosing LOD phase, including topology/area/cache optimization | 9.005 | 6.601 | 5.616 | 7.693 |
+| Unchanged virtual geometry | 4.231 | 4.318 | 3.654 | 3.648 |
+
+Mean native time is **7.203 -> 4.960 s, 31.1% lower (1.45x)**. Native thread cycles
+fall **31.3%**. The broader LOD phase falls **8.349 -> 6.109 s, 26.8% lower**.
+Both prepared observations are below both controls in both LOD measures, clearing
+the proposed 10% stopping threshold. Virtual-geometry means differ by +1.2%; the
+unchanged geometric-call timing also varies with load. These are phase results,
+not an end-to-end cold-import speedup or a confidence interval.
+
+Each prepared pass builds **270 contexts** and performs **879 resets** for the
+same **1,149 attribute calls**; the same **897 geometric calls** remain untouched.
+The B1/B2 means include **894.3 ms** of initial setup/snapshot construction,
+**70.0 ms** of resets and **33.0 ms** of destruction. Setup and reset are already
+inside the native attribute timer; only destruction is added separately. Do not
+add setup/reset twice. Reset traffic is **2,170,487,556 bytes** per full replay.
+Peak pristine snapshots are **29,044,820 bytes (27.7 MiB)** for one context, in
+addition to working allocations; this is not total process memory.
+
+Complete output equality covers emitted indices, error bits, manifests and virtual
+artifacts, with verified cached textures and no texture cooks or stores. Strict
+Clippy passes for the isolated importer, and the canonical report validates all
+call counts and source/binary hashes. Source snapshots and reproduction notes are
+in `measurements/lod-prepared-2026-10-26/`; full results and per-model observations
+are in `measurements/lod-prepared-2026-10-26.json`. The working experiment and logs
+remain under `target/ara-dev/import-speed/lod-prepared/`, with private sources and
+the frozen executable in `D:/AraBuild/ara-dev-infra-target/lod-prepared/`.
+
+**Decision:** this prototype clears the phase threshold and merits a production
+integration proposal. It does not ship a dependency fork. A production native shim
+or fork needs explicit approval, a bounded ownership API and concurrency tests
+before integration. Parallel geometry remains off; no new project cleanup is needed.
+
+## Owned prepared LOD shim: source checkpoint, 2026-10-26
+
+The approved production integration is `ara-meshopt-sys`, built with `cc` from
+committed sources. It vendors the exact meshoptimizer 1.3 native files bundled in
+meshopt 0.7.0, with permanent SHA-256 checks and the MIT notice. Vendor files are
+unmodified. Private symbol names keep the ordinary registry dependency and its
+other entry points intact; no new build prerequisite or generated binding tool.
+
+The Rust API owns a context after construction, accepts exclusive reset/solve
+calls, and frees all memory on Drop. No input pointer, global context or TLS
+lease survives construction. Independent worker contexts can run concurrently;
+one context cannot be shared or transferred. The importer constructs it lazily
+for attribute mode 97 only; geometric/deformed solves retain registry meshopt.
+Setup or solve failures propagate as import errors, so the opt-in corpus check
+cannot hide a broken shim behind an upstream fallback. The existing geometric
+prefix, attribute fallback decisions and alpha-card area policy retain their order.
+
+At this source checkpoint, `prepared-lods` stayed **off by default** pending a
+fresh-project quiet-slot NVMe A/B/B/A with at least about 3% wall-time improvement.
+No importer version, action key, compression or sidecar changes. The single-thread
+prototype alone did not establish a production cold-import speedup.
+
+Focused validation passes with the feature enabled: 41 importer tests and four
+permanent shim tests, strict all-target Clippy, and Windows-batched workspace fmt.
+Default-off importer tests and strict all-target Clippy pass too. Permanent
+fixtures compare every index and the exact error bits against unmodified registry
+meshopt across target/error order, seams, locks, unused vertices, owned-input
+lifetimes and four independent threads. Invalid layouts fail before native access.
+
+The opt-in production example also passes all **101 real Outpost model inputs**:
+`cargo run -p ara-importers --features prepared-lods --example geometry_replay -- PROJECT 1`.
+It compares every complete output with the retained production cache, including
+manifests, indices, error bits and virtual artifacts, and refuses texture cache
+misses. This shared-load replay is a correctness check, not a wall-time claim.
+Source/binary hashes and per-model evidence: `measurements/lod-production-shim-2026-10-26.json`.
+Fresh project pairing was pending at this source checkpoint; the result follows.
+
+## Prepared LODs: fresh NVMe Outpost ABBA, 2026-10-26
+
+An owner-provided quiet slot ran four fresh Hub-created Outpost projects on C:
+NVMe, under one GPU lease. Frozen worker source is `1b10ede8` in both variants;
+only `prepared-lods` differs. The CLI/player, templates and all 558 common Cargo
+target/profile sets match. Each project is physically verified, reparse-checked
+and deleted before the next case; peak project count is one. No other agent
+builds or GPU jobs were permitted during this slot.
+
+| Seconds | A1 shim off | B1 shim on | B2 shim on | A2 shim off |
+| --- | ---: | ---: | ---: | ---: |
+| Open through all 115 assets published | 20.588562 | 20.046173 | 19.706015 | 22.426003 |
+| Create through assets ready | 23.942535 | 22.026547 | 21.621220 | 24.453475 |
+
+Assets-ready means are **21.507283 -> 19.876094 s (7.58% lower)**. Adjacent-pair
+wall savings are **0.542388 s** (A1–B1, 2.63%) and **2.719988 s** (A2–B2, 12.13%).
+Both on observations are below both off observations. Retain the slower final
+control and every other observation; two runs per variant do not establish a
+confidence interval. The practical claim is **roughly 3–8% faster**, using the
+first pair and pooled mean; do not advertise the noisier second pair as a 12% win.
+The earlier 31% native-phase saving is not the cold-import speedup.
+
+All **460 action keys**, **5,836 artifact references** and **3,637,442,064 physically
+verified referenced bytes** match v4. Every case published 115 assets with zero
+GPU fallback. All four project directories are deleted with no reparse points;
+their extracted evidence remains in `target/ara-dev/import-speed/prepared-prod-{a1,b1,b2,a2}-outpost/`.
+Canonical frozen-pair data, complete case values and verification hashes are in
+`measurements/lod-production-abba-2026-10-26.json`.
+
+**Decision:** enable prepared-lods by default, as approved after this pairing.
+It clears the requested approximately 3% wall gate with the noise caveat above.
+The source/ABI, permanent equivalence tests and MIT notice remain those of the
+focused-green shim checkpoint; only the default feature and documentation change.
+No algorithm, importer version, action key, format or compression change.
+Final default-enabled validation passes: Windows-batched workspace fmt, strict
+all-target Clippy, all 45 importer/shim tests, and opt-out all-target Clippy.
