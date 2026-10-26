@@ -1,6 +1,7 @@
 //! The shipped binaries are the test subjects; no development executable is used.
 mod build;
 mod hub_upgrade;
+mod installation;
 #[cfg(feature = "rehearsal")]
 pub(crate) mod rehearsal;
 use crate::support::{self, run};
@@ -126,16 +127,21 @@ pub fn smoke(dist: &Path, version: &str) -> Result<()> {
         hub_upgrade::seed(&env, dist, version),
     )?;
     step(
-        "silent SFX install",
+        "silent SFX install without service autostart",
         run(
             env.command(dist.join(format!("{}-setup.exe", support::name(version))))
                 .arg("--destination")
                 .arg(&env.installed)
                 .args(["--silent", "--no-system-integration"]),
             &env.directory.join("install.log"),
-        ),
+        )
+        .and_then(|()| installation::no_autostart(&env)),
     )?;
     let result = (|| -> Result<()> {
+        step(
+            "installed MCP configs use absolute executable paths without starting the service",
+            installation::mcp_config(&env),
+        )?;
         step(
             "engine setup replaces older Hub and both shortcut aliases launch the new build",
             hub_upgrade::verify(&env),
@@ -368,21 +374,10 @@ pub fn smoke(dist: &Path, version: &str) -> Result<()> {
     })();
     // Best effort close on failure too; never leave a test user Hub/player running.
     let _ = env.cli(&["hub", "close", "Release smoke"], "close.log");
-    let uninstall = run(
-        env.command("powershell.exe")
-            .args(["-NoProfile", "-ExecutionPolicy", "Bypass", "-File"])
-            .arg(env.installed.join("uninstall.ps1"))
-            .arg("-Silent"),
-        &env.directory.join("uninstall.log"),
-    )
-    .and_then(|()| {
-        ensure!(
-            !env.installed.exists(),
-            "uninstaller left installation files"
-        );
-        Ok(())
-    });
-    step("uninstall", uninstall)?;
+    step(
+        "uninstall.cmd exits zero and preserves projects/settings/crashes",
+        installation::uninstall(&env),
+    )?;
     result?;
     fs::write(
         dist.join("SMOKE_RESULTS.txt"),
@@ -410,7 +405,13 @@ fn standalone_hub(env: &Environment, dist: &Path, version: &str) -> Result<()> {
     )?;
     // Preserve the real registered engine, but start a distinct same-version
     // executable. PE overlays don't change execution and do change its build hash.
-    env.cli(&["hub", "engines"], "standalone-engines.log")?;
+    installation::no_autostart(env)?;
+    run(
+        env.command(installed.join("ara-hub.exe"))
+            .arg("--service-check")
+            .arg(env.directory.join("initial-hub-service.json")),
+        &env.directory.join("initial-hub-service.log"),
+    )?;
     env.stop_hub()?;
     let stale_dir = env.directory.join("local/Ara/Services").join(version);
     fs::create_dir_all(&stale_dir)?;
@@ -522,6 +523,14 @@ fn standalone_hub(env: &Environment, dist: &Path, version: &str) -> Result<()> {
         "standalone Hub Starter creation failed: {created}"
     );
     support::json(&env.directory.join("standalone-starter.json"), &created)?;
+    env.cli(
+        &["hub", "open", "standalone starter", "--headless"],
+        "case-insensitive-open.log",
+    )?;
+    env.cli(
+        &["hub", "close", "STANDALONE STARTER"],
+        "case-insensitive-close.log",
+    )?;
     Ok(())
 }
 
@@ -555,9 +564,28 @@ struct Mcp {
 }
 impl Mcp {
     fn start(env: &Environment) -> Result<Self> {
-        let mut child = env
-            .command(env.installed.join("ara.exe"))
-            .arg("mcp")
+        let config: Value =
+            serde_json::from_slice(&fs::read(env.directory.join("mcp-config-claude.log"))?)?;
+        let server = &config["mcpServers"]["ara"];
+        let executable = server["command"].as_str().context("printed MCP command")?;
+        let args = server["args"]
+            .as_array()
+            .context("printed MCP args")?
+            .iter()
+            .map(|value| value.as_str().context("MCP argument"))
+            .collect::<Result<Vec<_>>>()?;
+        let mut command = env.command(executable);
+        let clean_path = command
+            .get_envs()
+            .find(|(key, _)| *key == "PATH")
+            .and_then(|(_, value)| value)
+            .context("sanitized smoke PATH")?;
+        let without_ara = std::env::split_paths(clean_path)
+            .filter(|directory| !directory.join("ara.exe").is_file())
+            .collect::<Vec<_>>();
+        let mut child = command
+            .args(args)
+            .env("PATH", std::env::join_paths(without_ara)?)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::from(fs::File::create(

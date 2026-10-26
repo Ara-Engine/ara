@@ -8,7 +8,8 @@ mod templates;
 pub use isolation::validate_development_config;
 pub use registry::{EngineBuild, ProjectEntry, Registry};
 pub use service::{
-    ConnectedService, Hub, HubConfig, UpdateConfig, connect_checked, connect_or_start, serve,
+    ConnectedService, EngineRegistration, Hub, HubConfig, UpdateConfig, connect_checked,
+    connect_or_start, serve, update_installed_engine,
 };
 pub use templates::{DirectoryTemplates, Template, TemplateSource};
 

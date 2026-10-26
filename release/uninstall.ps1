@@ -23,15 +23,21 @@ $targets = foreach ($relative in $paths) {
 $hubWindows = @(Get-Process -Name 'ara-hub' -ErrorAction SilentlyContinue | Where-Object { $_.Path -and (ConvertTo-AraPath $_.Path).StartsWith($root + '\', [StringComparison]::OrdinalIgnoreCase) })
 if ($hubWindows.Count -gt 0) { throw 'Close the Ara Hub window before uninstalling' }
 $ara = Join-Path $root 'ara.exe'
-& $ara hub unregister-engine
+& $ara hub unregister-engine --no-start
 if ($LASTEXITCODE -ne 0) { throw 'Close projects using this engine before uninstalling' }
 $configRoot = if ($env:ARA_CONFIG_DIR) { ConvertTo-AraPath $env:ARA_CONFIG_DIR } else { Join-Path (ConvertTo-AraPath $env:APPDATA) 'Ara' }
-$discovery = Get-Content -LiteralPath (Join-Path $configRoot 'hub\.ara\daemon.json') -Encoding UTF8 -Raw | ConvertFrom-Json
-$hubProcess = Get-Process -Id $discovery.pid -ErrorAction SilentlyContinue
-# A Hub hosted by this installation holds ara.exe open. Shutdown preserves projects.
-& $ara hub shutdown
-if ($LASTEXITCODE -ne 0) { throw 'Could not stop the Hub; installation retained' }
-if ($hubProcess -and -not $hubProcess.WaitForExit(10000)) { throw 'Hub did not exit; installation retained for retry' }
+$discoveryPath = Join-Path $configRoot 'hub\.ara\daemon.json'
+if (Test-Path -LiteralPath $discoveryPath) {
+    $discovery = Get-Content -LiteralPath $discoveryPath -Encoding UTF8 -Raw | ConvertFrom-Json
+    $hubProcess = Get-Process -Id $discovery.pid -ErrorAction SilentlyContinue
+    # Stop only a service hosted by the engine being removed. Independent Hub
+    # bootstraps and services for other versions continue supervising their projects.
+    if ($hubProcess -and $hubProcess.Path -and (ConvertTo-AraPath $hubProcess.Path).StartsWith($root + '\',[StringComparison]::OrdinalIgnoreCase)) {
+        & $ara hub shutdown
+        if ($LASTEXITCODE -ne 0) { throw 'Could not stop the Hub; installation retained' }
+        if (-not $hubProcess.WaitForExit(10000)) { throw 'Hub did not exit; installation retained for retry' }
+    }
+}
 if ($receipt.integration) {
     $expected = Join-Path (ConvertTo-AraPath ([Environment]::GetFolderPath('Programs'))) ('Ara\' + $receipt.version)
     if ((ConvertTo-AraPath $receipt.shortcuts) -ne $expected) { throw 'Invalid shortcut directory in receipt' }

@@ -33,7 +33,9 @@ foreach ($dll in @('msvcp140.dll','vcruntime140.dll','vcruntime140_1.dll')) {
         throw 'Install Microsoft Visual C++ v14 Redistributable (x64), then rerun install.ps1 -RegisterOnly: https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist'
     }
 }
-& $ara hub register-engine
+$registration = @('hub','register-engine')
+if ($NoSystemIntegration) { $registration += '--no-start' }
+& $ara @registration
 if ($LASTEXITCODE -ne 0) { throw 'Hub engine registration failed; installation retained for retry' }
 & $ara doctor
 if ($LASTEXITCODE -ne 0) { Write-Warning 'Prerequisites missing. Run ara doctor and install the x64 .NET 10 SDK: https://dotnet.microsoft.com/en-us/download/dotnet/10.0' }
@@ -64,7 +66,7 @@ if (-not $NoSystemIntegration) {
     $properties = @{ DisplayName=('Ara ' + $engine.version); DisplayVersion=$engine.version; Publisher='Ara'; InstallLocation=$source; DisplayIcon=(Join-Path $source 'assets\brand\ara.ico'); UninstallString=('"' + (Join-Path $source 'uninstall.cmd') + '"'); NoModify=1; NoRepair=1 }
     foreach ($entry in $properties.GetEnumerator()) { Set-ItemProperty -LiteralPath $key -Name $entry.Key -Value $entry.Value }
 }
-$uninstall = '@echo off' + "`r`n" + 'powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0uninstall.ps1" %*' + "`r`n"
+$uninstall = '@echo off' + "`r`n" + '(goto) 2>nul & powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0uninstall.ps1" %*' + "`r`n"
 [IO.File]::WriteAllText((Join-Path $source 'uninstall.cmd'), $uninstall, [Text.Encoding]::ASCII)
 Write-Host "Ara $($engine.version) installed at $source"
 Write-Host 'Connect agents once: ara hub install-mcp --client claude|codex'

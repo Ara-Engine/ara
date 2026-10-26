@@ -408,6 +408,8 @@ pub struct Hub {
     pub engine_errors: BTreeMap<String, String>,
     /// `ara hub install-mcp` output per client (filled by the native shell).
     pub install: BTreeMap<AgentClient, String>,
+    /// Verified absolute CLI path used by the displayed MCP setup commands.
+    pub cli_executable: Option<PathBuf>,
     /// The installed build this Hub ships with; registered on first run.
     pub local_engine: Option<Engine>,
     /// Field the window should focus after the next rebuild.
@@ -447,6 +449,7 @@ impl Hub {
             notices: Vec::new(),
             engine_errors: BTreeMap::new(),
             install: BTreeMap::new(),
+            cli_executable: None,
             local_engine,
             focus: None,
             copied: None,
@@ -784,7 +787,7 @@ impl Hub {
     /// Apply one connection event.
     pub fn event(&mut self, event: Event) {
         match event {
-            Event::Prepared { .. } => {}
+            Event::Prepared { executable } => self.cli_executable = Some(executable),
             Event::Connected => {
                 self.dismissed_banners.remove("offline");
                 self.link = Link::Online;

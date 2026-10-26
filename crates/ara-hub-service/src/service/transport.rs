@@ -116,16 +116,7 @@ pub fn connect_checked(directory: &Path, executable: &Path) -> Result<ConnectedS
     fs::create_dir_all(directory).map_err(io_error)?;
     // Serialize discovery/replacement/start across simultaneous Hub and MCP clients.
     // Never hold the service's own lock: it must be able to exit and start here.
-    let start_lock = lock_file(&directory.join("hub-start.lock"))?;
-    let until = Instant::now() + Duration::from_secs(20);
-    while start_lock.try_lock().is_err() {
-        if Instant::now() >= until {
-            return Err(io_error(
-                "Hub startup lock timed out; another client is updating the service; see hub-start.log",
-            ));
-        }
-        std::thread::sleep(Duration::from_millis(25));
-    }
+    let _start_lock = startup_lock(directory)?;
     // Legacy clients don't take hub-start.lock. If one wins a simultaneous
     // startup, validate that service too, then retry the same safe replacement.
     for _ in 0..3 {
@@ -213,4 +204,18 @@ pub(super) fn lock_file(path: &Path) -> Result<File, RpcError> {
         .truncate(false)
         .open(path)
         .map_err(io_error)
+}
+
+pub(super) fn startup_lock(directory: &Path) -> Result<File, RpcError> {
+    let lock = lock_file(&directory.join("hub-start.lock"))?;
+    let until = Instant::now() + Duration::from_secs(20);
+    while lock.try_lock().is_err() {
+        if Instant::now() >= until {
+            return Err(io_error(
+                "Hub startup lock timed out; another client is updating the service; see hub-start.log",
+            ));
+        }
+        std::thread::sleep(Duration::from_millis(25));
+    }
+    Ok(lock)
 }
