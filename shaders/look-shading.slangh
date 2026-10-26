@@ -188,7 +188,8 @@ float3 ibl(Frame f,Look l,Surface s,float3 world,float3 v,int2 p,bool gathered) 
     }
     // Where the probe volume does not reach (and across its fade), distant
     // landforms occlude the sky's light (look-horizon.slangh): no seam at its edge.
-    float sky=coverage<1?horizonSky(l,world):1;float3 ambientSky=ambient*sky,specSky=spec*sky;
+    // Inside it the sky term weighs under 1%: the lookup is skipped.
+    float sky=coverage<0.99?horizonSky(l,world):1;float3 ambientSky=ambient*sky,specSky=spec*sky;
     [branch]if(coverage>0){
         float occlusion=saturate(luminance(diffuseGi)/max(luminance(ambient),1e-4));
         ambient=lerp(ambientSky,diffuseGi,coverage);

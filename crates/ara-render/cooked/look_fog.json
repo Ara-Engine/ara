@@ -1,13 +1,13 @@
 {
   "binding_layout_hash": "35cd2a62b1ba741ce6823b3c8753d7b5aa97b54c5f0a837b56e542518013fd7e",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "a7c52230c723479ebba79b096ba6bb89bb7bb799c6ac3224acc844705ba92d59",
+  "key": "c9d9ca14d1fdd551c69e0ba0cae60accbb254ffabb562c6265031b0ab05648b1",
   "stages": [
     {
-      "dxil": "a7c52230c723479ebba79b096ba6bb89bb7bb799c6ac3224acc844705ba92d59/fogMain.dxil",
+      "dxil": "c9d9ca14d1fdd551c69e0ba0cae60accbb254ffabb562c6265031b0ab05648b1/fogMain.dxil",
       "dxil_hash": "7f4f277f0bb55f1ecafcfd9f0c1cf05ff8caccfeb233ca0901ca7489a0d448e1",
       "source_entry": "fogMain",
-      "spirv": "a7c52230c723479ebba79b096ba6bb89bb7bb799c6ac3224acc844705ba92d59/fogMain.spv",
+      "spirv": "c9d9ca14d1fdd551c69e0ba0cae60accbb254ffabb562c6265031b0ab05648b1/fogMain.spv",
       "spirv_entry": "main",
       "spirv_hash": "1dc314fc4e7aa7b319a65f88f684e811613e461fc823443ff8214aed31e1e47c",
       "stage": "compute"
