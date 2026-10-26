@@ -793,3 +793,58 @@ The earlier D: placement was an explicit benchmark choice. A four-case NVMe
 Outpost A/B/B/A is prepared with the same frozen workers/CLI/player, projects and
 caches on `C:/AraImportBench/projects`, and Cargo/binaries still on D:. It awaits
 the next quiet slot; no NVMe win or adaptive-write policy is established yet.
+
+## NVMe geometry ABBA: 2026-10-26
+
+The subsequent quiet slot used the same frozen workers, CLI, player and dev
+profile as the SATA pairing, with fresh Hub-created Outpost projects and their
+content caches at `C:/AraImportBench/projects`. One GPU lease covered all four
+runs and physical verification. Open-to-assets-ready seconds, in order:
+**A1 27.5219161, B1 19.5642159, B2 19.2434134, A2 23.3599563**.
+Sequential mean **25.4409362 s**, parallel mean **19.40381465 s**: **23.7% lower**.
+Create-through-ready seconds are **30.6671606 / 22.6523806 / 21.2705094 /
+25.9346803** (means 28.30092045 / 21.961445). Every result is retained; the A1/A2
+difference remains visible. Fresh content caches do not imply flushed OS/driver
+caches. These frozen workers precede the Color8 and mip improvements below.
+
+All 460 action keys and 5,836 artifact references match v4. Physical verification
+checked 3,637,442,064 referenced bytes; each run publishes 115 assets with zero
+fallbacks. Evidence and exact binaries: `measurements/parallel-geometry-nvme-2026-10-26.json`.
+Raw traces/catalogs/source IDs/results remain under
+`target/ara-dev/import-speed/nvme-parallel-{a1,b1,b2,a2}-outpost/`.
+The owner deleted all four projects after independent reparse checks.
+
+NVMe gains contrast with the SATA pairing's **28.56711525 -> 40.4538923 s**
+(41.6% slower). Parallel geometry stays disabled until adaptive cache-write
+admission is validated on both devices; this experiment does not validate an
+adaptive policy or identify the device's internal cause.
+
+## Byte-exact color mips: 2026-10-26
+
+For power-of-two color textures, a half-size mip has exactly four unit-weight
+samples. Specialize their coordinate/weight calculation while preserving sample
+order, premultiplied-alpha sums and the original alpha cutoff. Levels still depend
+on their rounded predecessor. NPOT, one-axis, normal, data and HDR levels keep
+the original area filter verbatim. No codec, version, key or sidecar changes.
+
+The production module was compiled into the standalone full-chain differential
+probe and run under `ara-dev gpu` with two Rayon threads, per-texture A/B/B/A.
+The batch-33 gate was active: CPU snapshots 3% before / 7% after, with Cargo and
+later rustc/linker processes present. These are phase measurements, not quiet-window
+fresh-project walls. All 147 semantic albedo paths (142 unique input hashes),
+229,403,604 base pixels and 76,466,837 generated mip pixels retain every float bit
+in both profiles. All repeats and per-texture times are retained in
+`measurements/texture-mips-2026-10-26.json`.
+
+One corpus pass, averaging the two repetitions per variant: dev/opt1
+**1.3070384 -> 0.26782325 s (4.88x)**; opt3
+**1.15200885 -> 0.2220697 s (5.19x)**. The earlier prototype's 5.01x/5.14x results
+are not substituted for these production-source results. No cold-import-wall
+claim follows yet. Raw scripts, provenance and logs remain under
+`target/ara-dev/import-speed/mips/`.
+
+Focused fmt, strict all-target Clippy and all **41 importer tests** pass, with no
+ignored tests. Differential tests cover complete chains at one/four threads,
+maximum-axis dimensions, transparent/tiny-alpha pixels, all usages and arbitrary
+area-filter fallback sizes. Complete POT/NPOT KTX2 bytes match the original filter
+in Balanced/HQ; sample-version checks pass without regeneration.

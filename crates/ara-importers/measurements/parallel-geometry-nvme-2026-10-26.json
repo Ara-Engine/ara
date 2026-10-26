@@ -1,0 +1,187 @@
+{
+  "candidate": {
+    "cliSha256": "119327897F0F36FCE048960563B8130172D04DB89B1B918F277B99A527604BFE",
+    "gpuTest": "D:/AraBuild/ara-dev-infra-target\\debug\\deps\\gpu-c1c66621a795055e.exe",
+    "profile": "dev; dependencies opt3; own code opt1; debug GPU validation",
+    "roots": [
+      "ara-asset",
+      "ara-importers",
+      "ara-import-worker"
+    ],
+    "sourceDirty": true,
+    "sourceHead": "63e07a1d7e8533b3df0b6d3f15e7c5b1b739a71c",
+    "worker": "D:/AraBuild/ara-dev-infra-target/import-speed/parallel-lod-bin/ara-import-worker.exe",
+    "workerSha256": "038B917371160C5C253A37B6B71DD5042736178AC294F7BA16B5CBF4A8BF6AD9"
+  },
+  "caveats": [
+    "All four runs retained; A1 27.522 s versus A2 23.360 s shows order variation",
+    "Frozen dev workers precede the color and mip improvements; identical CLI/player/profile to SATA pairing",
+    "All runs have fresh per-project content caches, not flushed OS/driver caches",
+    "NVMe gain and SATA regression support volume-sensitive scheduling; no adaptive-policy proof yet"
+  ],
+  "control": {
+    "cliSha256": "119327897F0F36FCE048960563B8130172D04DB89B1B918F277B99A527604BFE",
+    "profile": "dev; dependencies opt3; own code opt1; debug GPU validation",
+    "roots": [
+      "ara-asset",
+      "ara-importers",
+      "ara-import-worker"
+    ],
+    "sourceHead": "63e07a1d7e8533b3df0b6d3f15e7c5b1b739a71c",
+    "worker": "D:/AraBuild/ara-dev-infra-target/import-speed/parallel-lod-control-bin/ara-import-worker.exe",
+    "workerSha256": "AACE3CAE8A93EB84AF1251FB239F22BAC698FABC353D0F2DC4DCF71EC2A5F234"
+  },
+  "date": "2026-10-26",
+  "definition": "Fresh Hub-created Outpost projects and content caches on C: NVMe; frozen sequential/parallel workers; one quiet-window A/B/B/A under one GPU lease",
+  "meanSeconds": {
+    "parallelCreateThroughReady": 21.961445,
+    "parallelReady": 19.40381465,
+    "readyReductionPercent": 23.729950433191995,
+    "sequentialCreateThroughReady": 28.30092045,
+    "sequentialReady": 25.4409362
+  },
+  "projectLifecycle": "Owner deleted all four projects after independent reparse checks; traces/catalogs/source IDs and results retained outside projects",
+  "projects": {
+    "Count": 4,
+    "value": [
+      {
+        "files": 4005,
+        "logicalBytes": 2058444453,
+        "path": "C:\\AraImportBench\\projects\\nvme-parallel-a1-outpost",
+        "reparsePoints": [],
+        "safeAfterEvidenceExtraction": true
+      },
+      {
+        "files": 4005,
+        "logicalBytes": 2058444453,
+        "path": "C:\\AraImportBench\\projects\\nvme-parallel-b1-outpost",
+        "reparsePoints": [],
+        "safeAfterEvidenceExtraction": true
+      },
+      {
+        "files": 4005,
+        "logicalBytes": 2058444453,
+        "path": "C:\\AraImportBench\\projects\\nvme-parallel-b2-outpost",
+        "reparsePoints": [],
+        "safeAfterEvidenceExtraction": true
+      },
+      {
+        "files": 4005,
+        "logicalBytes": 2058444453,
+        "path": "C:\\AraImportBench\\projects\\nvme-parallel-a2-outpost",
+        "reparsePoints": [],
+        "safeAfterEvidenceExtraction": true
+      }
+    ]
+  },
+  "runs": {
+    "Count": 4,
+    "value": [
+      {
+        "assets": 115,
+        "case": "a1",
+        "createMs": 2525.4283,
+        "daemonId": 2724,
+        "fallbacks": 0,
+        "gpuWorkers": 97,
+        "importMs": 27521.916100000002,
+        "loadAfter": {
+          "availableMemoryKiB": 7134656,
+          "cpuPercent": 2,
+          "dFreeBytes": 25023635456,
+          "utc": "2026-10-26T05:23:51.6118822Z"
+        },
+        "loadBefore": {
+          "availableMemoryKiB": 8359248,
+          "cpuPercent": 29,
+          "dFreeBytes": 25023635456,
+          "utc": "2026-10-26T05:23:20.5483388Z"
+        },
+        "project": "C:/AraImportBench/projects/nvme-parallel-a1-outpost",
+        "totalMs": 30667.160600000003,
+        "variant": "sequential"
+      },
+      {
+        "assets": 115,
+        "case": "b1",
+        "createMs": 2841.0396,
+        "daemonId": 77552,
+        "fallbacks": 0,
+        "gpuWorkers": 98,
+        "importMs": 19564.2159,
+        "loadAfter": {
+          "availableMemoryKiB": 6809172,
+          "cpuPercent": 9,
+          "dFreeBytes": 25023635456,
+          "utc": "2026-10-26T05:24:21.1471337Z"
+        },
+        "loadBefore": {
+          "availableMemoryKiB": 8219540,
+          "cpuPercent": 7,
+          "dFreeBytes": 25023635456,
+          "utc": "2026-10-26T05:23:58.1334258Z"
+        },
+        "project": "C:/AraImportBench/projects/nvme-parallel-b1-outpost",
+        "totalMs": 22652.3806,
+        "variant": "parallel"
+      },
+      {
+        "assets": 115,
+        "case": "b2",
+        "createMs": 1772.7267000000002,
+        "daemonId": 44760,
+        "fallbacks": 0,
+        "gpuWorkers": 98,
+        "importMs": 19243.4134,
+        "loadAfter": {
+          "availableMemoryKiB": 6720668,
+          "cpuPercent": 13,
+          "dFreeBytes": 25023635456,
+          "utc": "2026-10-26T05:24:49.9214092Z"
+        },
+        "loadBefore": {
+          "availableMemoryKiB": 8034952,
+          "cpuPercent": 0,
+          "dFreeBytes": 25023635456,
+          "utc": "2026-10-26T05:24:28.2856188Z"
+        },
+        "project": "C:/AraImportBench/projects/nvme-parallel-b2-outpost",
+        "totalMs": 21270.509400000003,
+        "variant": "parallel"
+      },
+      {
+        "assets": 115,
+        "case": "a2",
+        "createMs": 2278.856,
+        "daemonId": 73612,
+        "fallbacks": 0,
+        "gpuWorkers": 98,
+        "importMs": 23359.9563,
+        "loadAfter": {
+          "availableMemoryKiB": 6825324,
+          "cpuPercent": 6,
+          "dFreeBytes": 25023635456,
+          "utc": "2026-10-26T05:25:23.0029344Z"
+        },
+        "loadBefore": {
+          "availableMemoryKiB": 8075640,
+          "cpuPercent": 16,
+          "dFreeBytes": 25023635456,
+          "utc": "2026-10-26T05:24:56.6997234Z"
+        },
+        "project": "C:/AraImportBench/projects/nvme-parallel-a2-outpost",
+        "totalMs": 25934.6803,
+        "variant": "sequential"
+      }
+    ]
+  },
+  "shippingDefault": "Parallel geometry remains disabled pending validated adaptive write admission",
+  "verification": {
+    "actionKeys": 460,
+    "artifactReferences": 5836,
+    "differentArtifacts": 0,
+    "differentKeys": 0,
+    "fallbacks": 0,
+    "referencedBytesPhysicallyVerified": 3637442064
+  }
+}

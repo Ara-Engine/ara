@@ -1,0 +1,2462 @@
+{
+  "correctness": {
+    "allMipFloatBits": "Identical on every repeat and both optimization profiles",
+    "basePixels": 229403604,
+    "focusedTests": 41,
+    "fullKtx2": "POT and NPOT color fixtures byte-equal in Balanced and HighQuality",
+    "generatedPixels": 76466837,
+    "ignoredTests": 0,
+    "sampleSidecars": "Current; no regeneration",
+    "semanticAlbedoPaths": 147,
+    "threadBudgets": [1, 4],
+    "uniqueInputHashes": 142,
+    "versionsKeysCodec": "Unchanged"
+  },
+  "date": "2026-10-26",
+  "definition": "Production mip module compiled into standalone full-chain probe; two Rayon threads, per-texture A/B/B/A; no compression/device/cache stores; phase timing, not fresh import latency",
+  "freshProjectMeasurement": "Pending controlled pairing; no import-wall claim",
+  "implementation": "Only power-of-two color half-size levels specialize the same ordered four unit-weight samples; other sizes/usages retain unchanged area filter; sequential level dependencies retained",
+  "load": {
+    "after": {
+      "at": "2026-10-26T05:19:40.5569750Z",
+      "availableMemoryKiB": 7886372,
+      "buildProcesses": [
+        {
+          "ExecutablePath": "C:\\Users\\snowy\\.t3\\worktrees\\snengine\\t3-ffec1356\\target\\ara-dev-bootstrap\\debug\\ara-dev.exe",
+          "Name": "ara-dev.exe",
+          "ProcessId": 72612
+        },
+        {
+          "ExecutablePath": "C:\\Users\\snowy\\.rustup\\toolchains\\1.99.1-x86_64-pc-windows-msvc\\bin\\cargo.exe",
+          "Name": "cargo.exe",
+          "ProcessId": 9208
+        },
+        {
+          "ExecutablePath": "C:\\Users\\snowy\\.rustup\\toolchains\\1.99.1-x86_64-pc-windows-msvc\\bin\\rustc.exe",
+          "Name": "rustc.exe",
+          "ProcessId": 45612
+        },
+        {
+          "ExecutablePath": "C:\\Users\\snowy\\.rustup\\toolchains\\1.99.1-x86_64-pc-windows-msvc\\lib\\rustlib\\x86_64-pc-windows-msvc\\bin\\rust-lld.exe",
+          "Name": "rust-lld.exe",
+          "ProcessId": 33364
+        }
+      ],
+      "cpuPercent": 7
+    },
+    "before": {
+      "at": "2026-10-26T05:19:26.5618063Z",
+      "availableMemoryKiB": 8284176,
+      "buildProcesses": [
+        {
+          "ExecutablePath": "C:\\Users\\snowy\\.t3\\worktrees\\snengine\\t3-ffec1356\\target\\ara-dev-bootstrap\\debug\\ara-dev.exe",
+          "Name": "ara-dev.exe",
+          "ProcessId": 72612
+        },
+        {
+          "ExecutablePath": "C:\\Users\\snowy\\.rustup\\toolchains\\1.99.1-x86_64-pc-windows-msvc\\bin\\cargo.exe",
+          "Name": "cargo.exe",
+          "ProcessId": 9208
+        }
+      ],
+      "cpuPercent": 3
+    },
+    "definition": "Phase-only two-thread mip ABBA; batch-33 integration gate active, not a quiet-window import measurement"
+  },
+  "profiles": [
+    {
+      "cases": [
+        {
+          "candidateMs": [1.2622, 1.3725],
+          "dimensions": [499, 500],
+          "generatedPixels": 82839,
+          "id": "000-albedo-outpost-human-0",
+          "levels": 8,
+          "referenceMs": [1.7148, 1.3863]
+        },
+        {
+          "candidateMs": [1.3964999999999999, 1.373],
+          "dimensions": [499, 500],
+          "generatedPixels": 82839,
+          "id": "001-albedo-showcase-human-0",
+          "levels": 8,
+          "referenceMs": [1.2721, 1.2699]
+        },
+        {
+          "candidateMs": [0.14559999999999998, 0.102],
+          "dimensions": [256, 256],
+          "generatedPixels": 21845,
+          "id": "002-albedo-chainlink",
+          "levels": 8,
+          "referenceMs": [0.5488, 0.31980000000000003]
+        },
+        {
+          "candidateMs": [1.4168, 1.303],
+          "dimensions": [499, 500],
+          "generatedPixels": 82839,
+          "id": "003-albedo-human_suit",
+          "levels": 8,
+          "referenceMs": [1.4065, 1.4487]
+        },
+        {
+          "candidateMs": [0.8899999999999999, 0.8809],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "004-albedo-iceplant_cutout",
+          "levels": 10,
+          "referenceMs": [4.8397, 5.0235]
+        },
+        {
+          "candidateMs": [0.8103, 0.889],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "005-albedo-rooibos_cutout",
+          "levels": 10,
+          "referenceMs": [4.7871, 4.6821]
+        },
+        {
+          "candidateMs": [0.8981, 0.8426],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "006-albedo-shrub_03_cutout",
+          "levels": 10,
+          "referenceMs": [4.9615, 4.5518]
+        },
+        {
+          "candidateMs": [1.0425, 0.9863000000000001],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "007-albedo-adjustable_wrench_diff_1k",
+          "levels": 10,
+          "referenceMs": [4.7164, 5.2383999999999995]
+        },
+        {
+          "candidateMs": [0.9073, 0.9223],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "008-albedo-Barrel_01_explosive_diff_1k",
+          "levels": 10,
+          "referenceMs": [5.1928, 4.785]
+        },
+        {
+          "candidateMs": [0.9380999999999999, 0.8738],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "009-albedo-Barrel_02_diff_1k",
+          "levels": 10,
+          "referenceMs": [5.1061, 5.1066]
+        },
+        {
+          "candidateMs": [0.9329, 0.9242],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "010-albedo-barrel_03_diff_1k",
+          "levels": 10,
+          "referenceMs": [4.8424000000000005, 4.8365]
+        },
+        {
+          "candidateMs": [0.9457, 0.9224],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "011-albedo-barrel_stove_diff_1k",
+          "levels": 10,
+          "referenceMs": [4.7777, 4.9418999999999995]
+        },
+        {
+          "candidateMs": [0.884, 0.8869],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "012-albedo-bench_vice_01_diff_1k",
+          "levels": 10,
+          "referenceMs": [4.7976, 4.7744]
+        },
+        {
+          "candidateMs": [0.9446, 0.9495],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "013-albedo-caged_hanging_light_diff_1k",
+          "levels": 10,
+          "referenceMs": [5.155200000000001, 4.5661]
+        },
+        {
+          "candidateMs": [0.916, 0.9817],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "014-albedo-cardboard_box_01_diff_1k",
+          "levels": 10,
+          "referenceMs": [4.8371, 4.7438]
+        },
+        {
+          "candidateMs": [1.0144, 0.9183],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "015-albedo-classic_laptop_diff_1k",
+          "levels": 10,
+          "referenceMs": [5.3119, 4.6043]
+        },
+        {
+          "candidateMs": [1.0405, 0.9679000000000001],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "016-albedo-concrete_block_wall_diff_1k",
+          "levels": 10,
+          "referenceMs": [5.1779, 4.7817]
+        },
+        {
+          "candidateMs": [1.0424, 0.9732000000000001],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "017-albedo-concrete_floor_worn_001_diff_1k",
+          "levels": 10,
+          "referenceMs": [4.6796, 4.7425999999999995]
+        },
+        {
+          "candidateMs": [0.9051, 1.1936],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "018-albedo-concrete_road_barrier_diff_1k",
+          "levels": 10,
+          "referenceMs": [4.602, 4.6162]
+        },
+        {
+          "candidateMs": [0.9311, 0.9722],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "019-albedo-concrete_road_barrier_02_diff_1k",
+          "levels": 10,
+          "referenceMs": [4.6996, 4.9534]
+        },
+        {
+          "candidateMs": [4.1199, 3.5595000000000003],
+          "dimensions": [2048, 2048],
+          "generatedPixels": 1398101,
+          "id": "020-albedo-container_side_diff_2k",
+          "levels": 11,
+          "referenceMs": [19.0593, 20.010099999999998]
+        },
+        {
+          "candidateMs": [0.8901, 0.9447],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "021-albedo-corrugated_iron_02_diff_1k",
+          "levels": 10,
+          "referenceMs": [4.845000000000001, 4.8386000000000005]
+        },
+        {
+          "candidateMs": [0.9675, 1.0143000000000002],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "022-albedo-covered_car_diff_1k",
+          "levels": 10,
+          "referenceMs": [5.0873, 5.515199999999999]
+        },
+        {
+          "candidateMs": [0.9844, 0.919],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "023-albedo-crowbar_01_diff_1k",
+          "levels": 10,
+          "referenceMs": [4.7877, 4.789899999999999]
+        },
+        {
+          "candidateMs": [0.9423, 0.9810000000000001],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "024-albedo-crystalline_iceplant_diff_1k",
+          "levels": 10,
+          "referenceMs": [4.7259, 4.6857]
+        },
+        {
+          "candidateMs": [0.9295, 0.9006],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "025-albedo-dead_quiver_branch_01_diff_1k",
+          "levels": 10,
+          "referenceMs": [5.568499999999999, 4.867500000000001]
+        },
+        {
+          "candidateMs": [1.064, 1.0174999999999998],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "026-albedo-dead_quiver_trunk_diff_1k",
+          "levels": 10,
+          "referenceMs": [4.8519000000000005, 5.6162]
+        },
+        {
+          "candidateMs": [0.9684, 0.8698],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "027-albedo-dead_tree_trunk_diff_1k",
+          "levels": 10,
+          "referenceMs": [5.1921, 4.5755]
+        },
+        {
+          "candidateMs": [0.9749, 0.8759],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "028-albedo-drill_press_01_diff_1k",
+          "levels": 10,
+          "referenceMs": [4.725499999999999, 4.559900000000001]
+        },
+        {
+          "candidateMs": [1.0069000000000001, 0.9435],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "029-albedo-dry_branches_medium_01_diff_1k",
+          "levels": 10,
+          "referenceMs": [4.9698, 4.717]
+        },
+        {
+          "candidateMs": [1.0173999999999999, 0.9825999999999999],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "030-albedo-exterior_aircon_unit_01_diff_1k",
+          "levels": 10,
+          "referenceMs": [4.7808, 5.0097]
+        },
+        {
+          "candidateMs": [1.1936, 1.1217],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "031-albedo-exterior_aircon_unit_01_opacity_1k",
+          "levels": 10,
+          "referenceMs": [5.6968000000000005, 6.8033]
+        },
+        {
+          "candidateMs": [1.1028, 0.9703],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "032-albedo-exterior_aircon_unit_rusted_01_diff_1k",
+          "levels": 10,
+          "referenceMs": [5.0505, 4.8293]
+        },
+        {
+          "candidateMs": [1.1114, 0.9473],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "033-albedo-exterior_aircon_unit_rusted_02_opacity_1k",
+          "levels": 10,
+          "referenceMs": [4.988, 4.9582999999999995]
+        },
+        {
+          "candidateMs": [0.9108, 0.9121],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "034-albedo-green_metal_rust_diff_1k",
+          "levels": 10,
+          "referenceMs": [4.8285, 4.6062]
+        },
+        {
+          "candidateMs": [0.8804000000000001, 0.8543],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "035-albedo-hand_truck_diff_1k",
+          "levels": 10,
+          "referenceMs": [4.770499999999999, 4.850700000000001]
+        },
+        {
+          "candidateMs": [3.4625, 3.4897],
+          "dimensions": [2048, 2048],
+          "generatedPixels": 1398101,
+          "id": "036-albedo-hangar_concrete_floor_diff_2k",
+          "levels": 11,
+          "referenceMs": [19.3376, 19.1202]
+        },
+        {
+          "candidateMs": [0.9246, 0.8878999999999999],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "037-albedo-hanging_industrial_lamp_diff_1k",
+          "levels": 10,
+          "referenceMs": [5.281700000000001, 5.7478]
+        },
+        {
+          "candidateMs": [0.9997, 0.8369],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "038-albedo-industrial_caged_sconce_diff_1k",
+          "levels": 10,
+          "referenceMs": [5.1329, 5.1213]
+        },
+        {
+          "candidateMs": [0.8981, 0.9231],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "039-albedo-industrial_storage_cart_diff_1k",
+          "levels": 10,
+          "referenceMs": [4.725499999999999, 5.2513000000000005]
+        },
+        {
+          "candidateMs": [0.8976999999999999, 0.9481999999999999],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "040-albedo-ladder_sectioned_01_diff_1k",
+          "levels": 10,
+          "referenceMs": [4.8396, 4.6715]
+        },
+        {
+          "candidateMs": [0.9445, 0.9631000000000001],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "041-albedo-metal_jerrycan_diff_1k",
+          "levels": 10,
+          "referenceMs": [5.1106, 4.6553]
+        },
+        {
+          "candidateMs": [0.9172, 0.9327],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "042-albedo-metal_jerrycan_green_diff_1k",
+          "levels": 10,
+          "referenceMs": [4.6937999999999995, 4.5532]
+        },
+        {
+          "candidateMs": [0.9472, 0.9092],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "043-albedo-metal_office_desk_diff_1k",
+          "levels": 10,
+          "referenceMs": [4.938599999999999, 5.1978]
+        },
+        {
+          "candidateMs": [0.9771000000000001, 0.9041],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "044-albedo-metal_stool_01_diff_1k",
+          "levels": 10,
+          "referenceMs": [4.7116, 4.913]
+        },
+        {
+          "candidateMs": [0.9014, 0.8241],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "045-albedo-metal_tool_chest_diff_1k",
+          "levels": 10,
+          "referenceMs": [4.6695, 4.8491]
+        },
+        {
+          "candidateMs": [1.0306, 0.875],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "046-albedo-metal_toolbox_diff_1k",
+          "levels": 10,
+          "referenceMs": [4.7497, 4.7401]
+        },
+        {
+          "candidateMs": [0.8936999999999999, 0.9565],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "047-albedo-metal_trash_can_diff_1k",
+          "levels": 10,
+          "referenceMs": [4.9004, 4.6195]
+        },
+        {
+          "candidateMs": [0.9026000000000001, 0.9805],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "048-albedo-metal_trash_can_rust_diff_1k",
+          "levels": 10,
+          "referenceMs": [5.0339, 4.561800000000001]
+        },
+        {
+          "candidateMs": [0.8876, 0.9459],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "049-albedo-modular_airduct_rectangular_01_parts01_diff_1k",
+          "levels": 10,
+          "referenceMs": [4.7379, 4.5748999999999995]
+        },
+        {
+          "candidateMs": [0.9409000000000001, 0.9318],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "050-albedo-modular_airduct_rectangular_01_parts02_diff_1k",
+          "levels": 10,
+          "referenceMs": [4.9863, 4.9229]
+        },
+        {
+          "candidateMs": [0.8509, 0.8527],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "051-albedo-modular_chainlink_fence_posts_diff_1k",
+          "levels": 10,
+          "referenceMs": [5.2490000000000006, 4.8199000000000005]
+        },
+        {
+          "candidateMs": [1.0555, 0.8442000000000001],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "052-albedo-modular_chainlink_fence_wire_diff_1k",
+          "levels": 10,
+          "referenceMs": [5.213500000000001, 4.7818000000000005]
+        },
+        {
+          "candidateMs": [0.9301999999999999, 1.1296],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "053-albedo-modular_electric_cables_boxes_diff_1k",
+          "levels": 10,
+          "referenceMs": [4.6642, 4.8745]
+        },
+        {
+          "candidateMs": [0.8503000000000001, 0.8691],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "054-albedo-modular_electric_cables_diff_1k",
+          "levels": 10,
+          "referenceMs": [4.5595, 5.1165]
+        },
+        {
+          "candidateMs": [0.9771999999999998, 0.8889],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "055-albedo-modular_electricity_poles_diff_1k",
+          "levels": 10,
+          "referenceMs": [4.8278, 4.8514]
+        },
+        {
+          "candidateMs": [0.8501, 0.94],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "056-albedo-modular_electricity_poles_pieces_diff_1k",
+          "levels": 10,
+          "referenceMs": [5.0069, 4.7878]
+        },
+        {
+          "candidateMs": [0.9401, 0.9459],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "057-albedo-modular_industrial_pipes_01_group01_diff_1k",
+          "levels": 10,
+          "referenceMs": [4.8874, 4.6683]
+        },
+        {
+          "candidateMs": [0.8792, 0.962],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "058-albedo-modular_industrial_pipes_01_group02_diff_1k",
+          "levels": 10,
+          "referenceMs": [4.9264, 4.8059]
+        },
+        {
+          "candidateMs": [0.8982, 0.9152],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "059-albedo-mounted_fluorescent_lights_diff_1k",
+          "levels": 10,
+          "referenceMs": [4.7844999999999995, 4.9447]
+        },
+        {
+          "candidateMs": [0.8605, 0.9276],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "060-albedo-namaqualand_boulder_02_diff_1k",
+          "levels": 10,
+          "referenceMs": [4.7471, 4.7865]
+        },
+        {
+          "candidateMs": [1.0031, 0.9515],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "061-albedo-namaqualand_boulder_03_diff_1k",
+          "levels": 10,
+          "referenceMs": [5.074999999999999, 4.4814]
+        },
+        {
+          "candidateMs": [0.9499000000000001, 0.9491999999999999],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "062-albedo-namaqualand_boulder_04_diff_1k",
+          "levels": 10,
+          "referenceMs": [5.0438, 4.6753]
+        },
+        {
+          "candidateMs": [0.9552999999999999, 0.9642999999999999],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "063-albedo-namaqualand_boulder_05_diff_1k",
+          "levels": 10,
+          "referenceMs": [5.3467, 4.842]
+        },
+        {
+          "candidateMs": [0.9470000000000001, 1.0062],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "064-albedo-namaqualand_rocks_01_diff_1k",
+          "levels": 10,
+          "referenceMs": [4.875, 4.9798]
+        },
+        {
+          "candidateMs": [1.1558, 0.8564999999999999],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "065-albedo-namaqualand_stones_01_diff_1k",
+          "levels": 10,
+          "referenceMs": [4.8404, 4.7603]
+        },
+        {
+          "candidateMs": [0.8584, 0.9631000000000001],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "066-albedo-old_drill_press_diff_1k",
+          "levels": 10,
+          "referenceMs": [4.7753, 4.8696]
+        },
+        {
+          "candidateMs": [3.6804, 3.6797],
+          "dimensions": [2048, 2048],
+          "generatedPixels": 1398101,
+          "id": "067-albedo-old_gas_mask_diff_2k",
+          "levels": 11,
+          "referenceMs": [18.878800000000002, 21.3339]
+        },
+        {
+          "candidateMs": [0.9195, 0.9397],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "068-albedo-old_military_compressor_diff_1k",
+          "levels": 10,
+          "referenceMs": [4.8672, 5.306]
+        },
+        {
+          "candidateMs": [0.8999, 1.0576999999999999],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "069-albedo-old_military_crate_diff_1k",
+          "levels": 10,
+          "referenceMs": [4.6456, 4.9162]
+        },
+        {
+          "candidateMs": [0.9015, 0.9306],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "070-albedo-old_tyre_diff_1k",
+          "levels": 10,
+          "referenceMs": [4.7466, 5.0584999999999996]
+        },
+        {
+          "candidateMs": [0.9277000000000001, 1.0269000000000001],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "071-albedo-overhead_crane_diff_1k",
+          "levels": 10,
+          "referenceMs": [4.9243999999999994, 5.7792]
+        },
+        {
+          "candidateMs": [0.8876, 0.9236],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "072-albedo-overhead_crane_trim_diff_1k",
+          "levels": 10,
+          "referenceMs": [4.8672, 4.9704]
+        },
+        {
+          "candidateMs": [0.9668, 0.937],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "073-albedo-painted_metal_shutter_diff_1k",
+          "levels": 10,
+          "referenceMs": [5.0923, 4.7457]
+        },
+        {
+          "candidateMs": [0.9304, 0.9305],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "074-albedo-pipe_wrench_diff_1k",
+          "levels": 10,
+          "referenceMs": [4.8767000000000005, 5.0142]
+        },
+        {
+          "candidateMs": [0.9990000000000001, 1.0011],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "075-albedo-plastic_crate_03_diff_1k",
+          "levels": 10,
+          "referenceMs": [5.2136, 4.6823999999999995]
+        },
+        {
+          "candidateMs": [0.8735999999999999, 1.0351],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "076-albedo-portable_generator_diff_1k",
+          "levels": 10,
+          "referenceMs": [4.9491, 4.9382]
+        },
+        {
+          "candidateMs": [0.9335, 0.9963000000000001],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "077-albedo-portable_searchlight_diff_1k",
+          "levels": 10,
+          "referenceMs": [4.7372, 4.708]
+        },
+        {
+          "candidateMs": [0.9833000000000001, 0.9207],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "078-albedo-portable_welding_cart_diff_1k",
+          "levels": 10,
+          "referenceMs": [4.714099999999999, 5.0699]
+        },
+        {
+          "candidateMs": [0.9164000000000001, 0.8492000000000001],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "079-albedo-power_box_01_diff_1k",
+          "levels": 10,
+          "referenceMs": [4.8243, 4.8724]
+        },
+        {
+          "candidateMs": [0.8994, 0.948],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "080-albedo-propane_tank_diff_1k",
+          "levels": 10,
+          "referenceMs": [4.6038, 4.7253]
+        },
+        {
+          "candidateMs": [0.9501, 0.8959],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "081-albedo-quiver_tree_01_leaf_diff_1k",
+          "levels": 10,
+          "referenceMs": [5.0076, 4.7546]
+        },
+        {
+          "candidateMs": [0.9944999999999999, 0.9573999999999999],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "082-albedo-quiver_tree_01_trunk_diff_1k",
+          "levels": 10,
+          "referenceMs": [5.1097, 4.8065]
+        },
+        {
+          "candidateMs": [1.016, 0.9642000000000001],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "083-albedo-quiver_tree_02_diff_1k",
+          "levels": 10,
+          "referenceMs": [6.067, 4.891900000000001]
+        },
+        {
+          "candidateMs": [1.142, 0.9502999999999999],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "084-albedo-retro_multimeter_diff_1k",
+          "levels": 10,
+          "referenceMs": [4.81, 4.8212]
+        },
+        {
+          "candidateMs": [0.8954, 0.9751],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "085-albedo-rock_07_diff_1k",
+          "levels": 10,
+          "referenceMs": [4.982600000000001, 4.8672]
+        },
+        {
+          "candidateMs": [0.9459, 0.9938],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "086-albedo-rock_09_diff_1k",
+          "levels": 10,
+          "referenceMs": [4.6704, 6.8195]
+        },
+        {
+          "candidateMs": [3.5705, 3.6587],
+          "dimensions": [2048, 2048],
+          "generatedPixels": 1398101,
+          "id": "087-albedo-rocky_trail_diff_2k",
+          "levels": 11,
+          "referenceMs": [18.8189, 18.9555]
+        },
+        {
+          "candidateMs": [0.9734, 0.9266],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "088-albedo-rollershutter_door_diff_1k",
+          "levels": 10,
+          "referenceMs": [4.8072, 4.8161000000000005]
+        },
+        {
+          "candidateMs": [0.9458, 0.8868],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "089-albedo-rollershutter_door_graffiti_diff_1k",
+          "levels": 10,
+          "referenceMs": [5.0023, 5.0583]
+        },
+        {
+          "candidateMs": [0.9801, 0.9692999999999999],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "090-albedo-rusted_wheel_rim_01_diff_1k",
+          "levels": 10,
+          "referenceMs": [4.8691, 5.0335]
+        },
+        {
+          "candidateMs": [1.5656999999999999, 1.6041],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "091-albedo-rusty_corrugated_iron_diff_1k",
+          "levels": 10,
+          "referenceMs": [6.8398, 7.6803]
+        },
+        {
+          "candidateMs": [1.5768, 1.5231999999999999],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "092-albedo-rusty_metal_02_diff_1k",
+          "levels": 10,
+          "referenceMs": [6.499300000000001, 7.6191]
+        },
+        {
+          "candidateMs": [1.6364999999999998, 1.6116],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "093-albedo-security_light_diff_1k",
+          "levels": 10,
+          "referenceMs": [7.4786, 7.7215]
+        },
+        {
+          "candidateMs": [1.5598, 1.5513000000000001],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "094-albedo-shrub_03_diff_1k",
+          "levels": 10,
+          "referenceMs": [7.002000000000001, 7.7223]
+        },
+        {
+          "candidateMs": [1.7249999999999999, 1.6899],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "095-albedo-sledgehammer_01_diff_1k",
+          "levels": 10,
+          "referenceMs": [6.9797, 8.1045]
+        },
+        {
+          "candidateMs": [1.4305999999999999, 1.2512999999999999],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "096-albedo-small_lpg_tank_diff_1k",
+          "levels": 10,
+          "referenceMs": [7.1301000000000005, 6.3716]
+        },
+        {
+          "candidateMs": [1.6165, 1.5967],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "097-albedo-small_oil_can_01_diff_1k",
+          "levels": 10,
+          "referenceMs": [6.6071, 7.9305]
+        },
+        {
+          "candidateMs": [1.6378, 1.5962999999999998],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "098-albedo-spray_paint_bottles_02_diff_1k",
+          "levels": 10,
+          "referenceMs": [6.928, 7.8779]
+        },
+        {
+          "candidateMs": [1.7519, 1.3652],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "099-albedo-steel_frame_shelves_01_diff_1k",
+          "levels": 10,
+          "referenceMs": [6.3221, 6.5884]
+        },
+        {
+          "candidateMs": [1.6519, 1.5954000000000002],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "100-albedo-steel_frame_shelves_03_diff_1k",
+          "levels": 10,
+          "referenceMs": [7.5503, 7.6904]
+        },
+        {
+          "candidateMs": [1.6376, 1.6266],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "101-albedo-steel_frame_shelves_03_drawers_diff_1k",
+          "levels": 10,
+          "referenceMs": [7.5392, 7.17]
+        },
+        {
+          "candidateMs": [1.6338, 1.5690000000000002],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "102-albedo-stone_fire_pit_diff_1k",
+          "levels": 10,
+          "referenceMs": [6.7328, 7.8709999999999996]
+        },
+        {
+          "candidateMs": [1.0711, 1.6486999999999998],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "103-albedo-street_lamp_01_diff_1k",
+          "levels": 10,
+          "referenceMs": [6.867, 8.0911]
+        },
+        {
+          "candidateMs": [1.5494, 1.5931000000000002],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "104-albedo-street_lamp_02_diff_1k",
+          "levels": 10,
+          "referenceMs": [6.8137, 7.8065]
+        },
+        {
+          "candidateMs": [1.638, 1.6142],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "105-albedo-tool_cart_diff_1k",
+          "levels": 10,
+          "referenceMs": [6.607, 7.8221]
+        },
+        {
+          "candidateMs": [1.5888, 1.5548],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "106-albedo-trashbag_diff_1k",
+          "levels": 10,
+          "referenceMs": [6.499, 7.4335]
+        },
+        {
+          "candidateMs": [1.1405, 1.0338999999999998],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "107-albedo-utility_box_01_diff_1k",
+          "levels": 10,
+          "referenceMs": [6.1314, 6.0838]
+        },
+        {
+          "candidateMs": [1.5956, 1.6053],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "108-albedo-utility_box_02_diff_1k",
+          "levels": 10,
+          "referenceMs": [6.7545, 7.6384]
+        },
+        {
+          "candidateMs": [5.8965, 6.2271],
+          "dimensions": [2048, 2048],
+          "generatedPixels": 1398101,
+          "id": "109-albedo-vintage_radio_transceiver_accessories_diff_2k",
+          "levels": 11,
+          "referenceMs": [29.1396, 30.7288]
+        },
+        {
+          "candidateMs": [6.6030999999999995, 5.9759],
+          "dimensions": [2048, 2048],
+          "generatedPixels": 1398101,
+          "id": "110-albedo-vintage_radio_transceiver_diff_2k",
+          "levels": 11,
+          "referenceMs": [30.8552, 30.3602]
+        },
+        {
+          "candidateMs": [1.6574, 1.6316],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "111-albedo-wild_rooibos_bush_diff_1k",
+          "levels": 10,
+          "referenceMs": [7.2096, 10.7806]
+        },
+        {
+          "candidateMs": [1.6595, 1.6193],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "112-albedo-wooden_crate_01_diff_1k",
+          "levels": 10,
+          "referenceMs": [7.5725999999999996, 8.0001]
+        },
+        {
+          "candidateMs": [1.6077000000000001, 1.4871],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "113-albedo-wooden_crate_02_diff_1k",
+          "levels": 10,
+          "referenceMs": [6.9148, 7.4802]
+        },
+        {
+          "candidateMs": [1.1047, 1.1096000000000001],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "114-albedo-wooden_hammer_01_diff_1k",
+          "levels": 10,
+          "referenceMs": [6.0193, 5.8548]
+        },
+        {
+          "candidateMs": [1.6879, 1.6112],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "115-albedo-wooden_ladder_diff_1k",
+          "levels": 10,
+          "referenceMs": [7.0081, 8.2595]
+        },
+        {
+          "candidateMs": [1.5973000000000002, 1.5942],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "116-albedo-wooden_military_crate_diff_1k",
+          "levels": 10,
+          "referenceMs": [7.466600000000001, 6.4978]
+        },
+        {
+          "candidateMs": [1.6119999999999999, 1.6518],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "117-albedo-WoodenTable_03_diff_1k",
+          "levels": 10,
+          "referenceMs": [7.3905, 7.8188]
+        },
+        {
+          "candidateMs": [1.3105, 1.1715],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "118-albedo-worn_corrugated_iron_diff_1k",
+          "levels": 10,
+          "referenceMs": [5.9409, 7.7995]
+        },
+        {
+          "candidateMs": [1.5820999999999998, 1.2444000000000002],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "119-albedo-worn_metal_rack_diff_1k",
+          "levels": 10,
+          "referenceMs": [7.0645, 6.9887999999999995]
+        },
+        {
+          "candidateMs": [4.410299999999999, 4.189],
+          "dimensions": [2048, 2048],
+          "generatedPixels": 1398101,
+          "id": "120-albedo-binoculars_diff_2k",
+          "levels": 11,
+          "referenceMs": [27.487399999999997, 27.6173]
+        },
+        {
+          "candidateMs": [4.8419, 4.1815999999999995],
+          "dimensions": [2048, 2048],
+          "generatedPixels": 1398101,
+          "id": "121-albedo-boombox_diff_2k",
+          "levels": 11,
+          "referenceMs": [26.2869, 26.6429]
+        },
+        {
+          "candidateMs": [6.3020000000000005, 5.0145],
+          "dimensions": [2048, 2048],
+          "generatedPixels": 1398101,
+          "id": "122-albedo-boombox_speakers_diff_2k",
+          "levels": 11,
+          "referenceMs": [26.847800000000003, 22.8819]
+        },
+        {
+          "candidateMs": [6.4278, 5.9307],
+          "dimensions": [2048, 2048],
+          "generatedPixels": 1398101,
+          "id": "123-albedo-brass_blowtorch_diff_2k",
+          "levels": 11,
+          "referenceMs": [26.3599, 25.9562]
+        },
+        {
+          "candidateMs": [6.2936, 5.8674],
+          "dimensions": [2048, 2048],
+          "generatedPixels": 1398101,
+          "id": "124-albedo-Camera_01_body_diff_2k",
+          "levels": 11,
+          "referenceMs": [27.0753, 28.781399999999998]
+        },
+        {
+          "candidateMs": [6.285, 6.0455],
+          "dimensions": [2048, 2048],
+          "generatedPixels": 1398101,
+          "id": "125-albedo-Camera_01_lens_body_diff_2k",
+          "levels": 11,
+          "referenceMs": [24.3891, 26.622300000000003]
+        },
+        {
+          "candidateMs": [6.2538, 6.005],
+          "dimensions": [2048, 2048],
+          "generatedPixels": 1398101,
+          "id": "126-albedo-Camera_01_strap_diff_2k",
+          "levels": 11,
+          "referenceMs": [27.2577, 29.8218]
+        },
+        {
+          "candidateMs": [1.1717, 1.5988],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "127-albedo-concrete_floor_02_diff_1k",
+          "levels": 10,
+          "referenceMs": [6.8857, 6.0028]
+        },
+        {
+          "candidateMs": [1.2348999999999999, 1.2049],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "128-albedo-denim_fabric_diff_1k",
+          "levels": 10,
+          "referenceMs": [7.105099999999999, 6.0968]
+        },
+        {
+          "candidateMs": [1.1095, 1.1787],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "129-albedo-fabric_leather_02_diff_1k",
+          "levels": 10,
+          "referenceMs": [5.8584, 6.1299]
+        },
+        {
+          "candidateMs": [6.1217, 5.027],
+          "dimensions": [2048, 2048],
+          "generatedPixels": 1398101,
+          "id": "130-albedo-camera_camera_BaseColor",
+          "levels": 11,
+          "referenceMs": [26.8012, 30.106]
+        },
+        {
+          "candidateMs": [6.3609, 6.0292],
+          "dimensions": [2048, 2048],
+          "generatedPixels": 1398101,
+          "id": "131-albedo-camera_tripod_BaseColor",
+          "levels": 11,
+          "referenceMs": [30.0874, 28.4825]
+        },
+        {
+          "candidateMs": [6.2802999999999995, 5.9648],
+          "dimensions": [2048, 2048],
+          "generatedPixels": 1398101,
+          "id": "132-albedo-FlightHelmet_Materials_GlassPlasticMat_BaseColor",
+          "levels": 11,
+          "referenceMs": [27.1403, 21.2657]
+        },
+        {
+          "candidateMs": [6.0389, 6.3014],
+          "dimensions": [2048, 2048],
+          "generatedPixels": 1398101,
+          "id": "133-albedo-FlightHelmet_Materials_LeatherPartsMat_BaseColor",
+          "levels": 11,
+          "referenceMs": [27.845100000000002, 29.9193]
+        },
+        {
+          "candidateMs": [1.5849, 1.5868],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "134-albedo-FlightHelmet_Materials_LensesMat_BaseColor",
+          "levels": 10,
+          "referenceMs": [6.9122, 7.770700000000001]
+        },
+        {
+          "candidateMs": [6.215199999999999, 6.0278],
+          "dimensions": [2048, 2048],
+          "generatedPixels": 1398101,
+          "id": "135-albedo-FlightHelmet_Materials_MetalPartsMat_BaseColor",
+          "levels": 11,
+          "referenceMs": [30.3612, 23.3712]
+        },
+        {
+          "candidateMs": [6.115200000000001, 4.1764],
+          "dimensions": [2048, 2048],
+          "generatedPixels": 1398101,
+          "id": "136-albedo-FlightHelmet_Materials_RubberWoodMat_BaseColor",
+          "levels": 11,
+          "referenceMs": [29.764300000000002, 29.8253]
+        },
+        {
+          "candidateMs": [5.5262, 5.8126999999999995],
+          "dimensions": [2048, 2048],
+          "generatedPixels": 1398101,
+          "id": "137-albedo-SciFiHelmet_BaseColor",
+          "levels": 11,
+          "referenceMs": [25.8609, 25.838199999999997]
+        },
+        {
+          "candidateMs": [6.3972, 5.1411],
+          "dimensions": [2048, 2048],
+          "generatedPixels": 1398101,
+          "id": "138-albedo-WaterBottle_baseColor",
+          "levels": 11,
+          "referenceMs": [23.820600000000002, 24.7602]
+        },
+        {
+          "candidateMs": [5.4306, 6.041300000000001],
+          "dimensions": [2048, 2048],
+          "generatedPixels": 1398101,
+          "id": "139-albedo-Lantern_01_brass_diff_2k",
+          "levels": 11,
+          "referenceMs": [28.271, 27.1837]
+        },
+        {
+          "candidateMs": [1.3296000000000001, 1.2145000000000001],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "140-albedo-marble_01_diff_1k",
+          "levels": 10,
+          "referenceMs": [6.726, 6.5192000000000005]
+        },
+        {
+          "candidateMs": [1.2346, 1.2113],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "141-albedo-metal_plate_diff_1k",
+          "levels": 10,
+          "referenceMs": [6.026, 6.4178999999999995]
+        },
+        {
+          "candidateMs": [5.0137, 4.325],
+          "dimensions": [2048, 2048],
+          "generatedPixels": 1398101,
+          "id": "142-albedo-old_gas_mask_diff_2k",
+          "levels": 11,
+          "referenceMs": [24.8337, 24.5719]
+        },
+        {
+          "candidateMs": [1.5929, 1.2815],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "143-albedo-rusty_metal_02_diff_1k",
+          "levels": 10,
+          "referenceMs": [6.528, 6.45]
+        },
+        {
+          "candidateMs": [4.813300000000001, 4.7349000000000006],
+          "dimensions": [2048, 2048],
+          "generatedPixels": 1398101,
+          "id": "144-albedo-vintage_radio_transceiver_accessories_diff_2k",
+          "levels": 11,
+          "referenceMs": [26.5766, 24.8834]
+        },
+        {
+          "candidateMs": [5.635000000000001, 5.187200000000001],
+          "dimensions": [2048, 2048],
+          "generatedPixels": 1398101,
+          "id": "145-albedo-vintage_radio_transceiver_diff_2k",
+          "levels": 11,
+          "referenceMs": [29.1465, 20.590600000000002]
+        },
+        {
+          "candidateMs": [1.3558000000000001, 1.0842],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "146-albedo-wood_table_001_diff_1k",
+          "levels": 10,
+          "referenceMs": [6.8125, 6.6368]
+        }
+      ],
+      "optLevel": 1,
+      "productionCorpusMs": 267.82325000000003,
+      "provenance": {
+        "binary": "D:/AraBuild/ara-dev-infra-target/import-speed/mips/production-probe-opt1.exe",
+        "binarySha256": "F9DE89A9B95426F0B49FBE327C32FD5251CC143F976F8DD1930356C41F46B7FF",
+        "optLevel": 1,
+        "probeSha256": "E62F9179F2C6CDC915688C088C756DDAE622390432C346096D59526DE263CD2E",
+        "productionMipsSha256": "D0A031D9F2116E143FEE2E1B7BF26961F854A3416466A50C347D43C787149705",
+        "productionPixelsSha256": "D374F6AE6EF17B446B582B4DA608E8C62303F4BAE2CBDC1162FA1964557C4AF9",
+        "referenceSha256": "2A5E32B013D8C9F9E4AD3D62D6FBE34BC860F3C9BAF6BE5D0F91E2BFFCBAE188",
+        "sourceBase": "07f10c8a104299e4cd116fea30eca505cba7bdef"
+      },
+      "ratio": 4.880227538124492,
+      "referenceCorpusMs": 1307.0384000000006
+    },
+    {
+      "cases": [
+        {
+          "candidateMs": [1.3596000000000001, 1.3821],
+          "dimensions": [499, 500],
+          "generatedPixels": 82839,
+          "id": "000-albedo-outpost-human-0",
+          "levels": 8,
+          "referenceMs": [1.2359, 1.1839000000000002]
+        },
+        {
+          "candidateMs": [2.1957, 1.3821],
+          "dimensions": [499, 500],
+          "generatedPixels": 82839,
+          "id": "001-albedo-showcase-human-0",
+          "levels": 8,
+          "referenceMs": [1.7851, 1.2035]
+        },
+        {
+          "candidateMs": [0.1, 0.0839],
+          "dimensions": [256, 256],
+          "generatedPixels": 21845,
+          "id": "002-albedo-chainlink",
+          "levels": 8,
+          "referenceMs": [0.3396, 0.3103]
+        },
+        {
+          "candidateMs": [1.4028, 1.6717],
+          "dimensions": [499, 500],
+          "generatedPixels": 82839,
+          "id": "003-albedo-human_suit",
+          "levels": 8,
+          "referenceMs": [1.1383999999999999, 1.2254]
+        },
+        {
+          "candidateMs": [0.8761, 0.8404],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "004-albedo-iceplant_cutout",
+          "levels": 10,
+          "referenceMs": [5.3789, 4.8012999999999995]
+        },
+        {
+          "candidateMs": [0.7475999999999999, 0.7448999999999999],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "005-albedo-rooibos_cutout",
+          "levels": 10,
+          "referenceMs": [5.0142, 4.9162]
+        },
+        {
+          "candidateMs": [0.7676999999999999, 0.7353000000000001],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "006-albedo-shrub_03_cutout",
+          "levels": 10,
+          "referenceMs": [4.8138, 4.7213]
+        },
+        {
+          "candidateMs": [1.2329, 1.1000999999999999],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "007-albedo-adjustable_wrench_diff_1k",
+          "levels": 10,
+          "referenceMs": [4.8913, 4.5602]
+        },
+        {
+          "candidateMs": [0.9137000000000001, 0.775],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "008-albedo-Barrel_01_explosive_diff_1k",
+          "levels": 10,
+          "referenceMs": [4.6877, 4.7398]
+        },
+        {
+          "candidateMs": [0.8331999999999999, 0.763],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "009-albedo-Barrel_02_diff_1k",
+          "levels": 10,
+          "referenceMs": [4.8361, 4.879600000000001]
+        },
+        {
+          "candidateMs": [1.2198, 0.8178000000000001],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "010-albedo-barrel_03_diff_1k",
+          "levels": 10,
+          "referenceMs": [4.8458, 4.7173]
+        },
+        {
+          "candidateMs": [0.8675999999999999, 0.7837000000000001],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "011-albedo-barrel_stove_diff_1k",
+          "levels": 10,
+          "referenceMs": [4.631900000000001, 4.7884]
+        },
+        {
+          "candidateMs": [0.785, 0.7806],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "012-albedo-bench_vice_01_diff_1k",
+          "levels": 10,
+          "referenceMs": [4.9216, 4.619]
+        },
+        {
+          "candidateMs": [0.8132, 0.7705000000000001],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "013-albedo-caged_hanging_light_diff_1k",
+          "levels": 10,
+          "referenceMs": [4.81, 4.9361]
+        },
+        {
+          "candidateMs": [0.8243, 0.7799],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "014-albedo-cardboard_box_01_diff_1k",
+          "levels": 10,
+          "referenceMs": [4.6704, 4.7828]
+        },
+        {
+          "candidateMs": [0.7993, 0.7807],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "015-albedo-classic_laptop_diff_1k",
+          "levels": 10,
+          "referenceMs": [4.5360000000000005, 4.4856]
+        },
+        {
+          "candidateMs": [0.7601, 0.7601],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "016-albedo-concrete_block_wall_diff_1k",
+          "levels": 10,
+          "referenceMs": [4.586200000000001, 4.7332]
+        },
+        {
+          "candidateMs": [0.7626, 0.7171000000000001],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "017-albedo-concrete_floor_worn_001_diff_1k",
+          "levels": 10,
+          "referenceMs": [4.6839, 4.6184]
+        },
+        {
+          "candidateMs": [0.9848000000000001, 0.7747],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "018-albedo-concrete_road_barrier_diff_1k",
+          "levels": 10,
+          "referenceMs": [4.6152, 4.508]
+        },
+        {
+          "candidateMs": [0.8220000000000001, 0.7919],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "019-albedo-concrete_road_barrier_02_diff_1k",
+          "levels": 10,
+          "referenceMs": [4.6856, 4.6689]
+        },
+        {
+          "candidateMs": [3.3273, 3.5794],
+          "dimensions": [2048, 2048],
+          "generatedPixels": 1398101,
+          "id": "020-albedo-container_side_diff_2k",
+          "levels": 11,
+          "referenceMs": [18.576700000000002, 18.9573]
+        },
+        {
+          "candidateMs": [0.7915, 0.8733000000000001],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "021-albedo-corrugated_iron_02_diff_1k",
+          "levels": 10,
+          "referenceMs": [4.602, 4.9097]
+        },
+        {
+          "candidateMs": [0.8019000000000001, 0.7853],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "022-albedo-covered_car_diff_1k",
+          "levels": 10,
+          "referenceMs": [4.633, 4.7838]
+        },
+        {
+          "candidateMs": [0.7921999999999999, 0.7618],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "023-albedo-crowbar_01_diff_1k",
+          "levels": 10,
+          "referenceMs": [5.1554, 4.6564]
+        },
+        {
+          "candidateMs": [0.9205, 0.7735],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "024-albedo-crystalline_iceplant_diff_1k",
+          "levels": 10,
+          "referenceMs": [4.6777, 4.8056]
+        },
+        {
+          "candidateMs": [0.9852000000000001, 0.7759],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "025-albedo-dead_quiver_branch_01_diff_1k",
+          "levels": 10,
+          "referenceMs": [4.759099999999999, 4.723]
+        },
+        {
+          "candidateMs": [0.9586, 0.7854],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "026-albedo-dead_quiver_trunk_diff_1k",
+          "levels": 10,
+          "referenceMs": [4.7787999999999995, 4.9139]
+        },
+        {
+          "candidateMs": [0.768, 0.8153],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "027-albedo-dead_tree_trunk_diff_1k",
+          "levels": 10,
+          "referenceMs": [4.8872, 5.0835]
+        },
+        {
+          "candidateMs": [0.7754, 0.7716],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "028-albedo-drill_press_01_diff_1k",
+          "levels": 10,
+          "referenceMs": [4.544099999999999, 4.5091]
+        },
+        {
+          "candidateMs": [0.7775, 0.9493],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "029-albedo-dry_branches_medium_01_diff_1k",
+          "levels": 10,
+          "referenceMs": [4.897600000000001, 8.571900000000001]
+        },
+        {
+          "candidateMs": [0.816, 0.7936],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "030-albedo-exterior_aircon_unit_01_diff_1k",
+          "levels": 10,
+          "referenceMs": [4.6494, 4.669300000000001]
+        },
+        {
+          "candidateMs": [0.8128000000000001, 0.7810999999999999],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "031-albedo-exterior_aircon_unit_01_opacity_1k",
+          "levels": 10,
+          "referenceMs": [4.729900000000001, 5.0273]
+        },
+        {
+          "candidateMs": [0.9758, 0.766],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "032-albedo-exterior_aircon_unit_rusted_01_diff_1k",
+          "levels": 10,
+          "referenceMs": [4.7156, 4.6267000000000005]
+        },
+        {
+          "candidateMs": [0.8297, 0.8339000000000001],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "033-albedo-exterior_aircon_unit_rusted_02_opacity_1k",
+          "levels": 10,
+          "referenceMs": [4.691, 4.737299999999999]
+        },
+        {
+          "candidateMs": [0.7635, 0.8109000000000001],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "034-albedo-green_metal_rust_diff_1k",
+          "levels": 10,
+          "referenceMs": [4.5576, 4.7309]
+        },
+        {
+          "candidateMs": [0.8054, 0.7663],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "035-albedo-hand_truck_diff_1k",
+          "levels": 10,
+          "referenceMs": [4.8473, 4.7267]
+        },
+        {
+          "candidateMs": [3.2957, 3.0166],
+          "dimensions": [2048, 2048],
+          "generatedPixels": 1398101,
+          "id": "036-albedo-hangar_concrete_floor_diff_2k",
+          "levels": 11,
+          "referenceMs": [18.6614, 18.5905]
+        },
+        {
+          "candidateMs": [0.8293, 0.8109000000000001],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "037-albedo-hanging_industrial_lamp_diff_1k",
+          "levels": 10,
+          "referenceMs": [4.991899999999999, 4.589799999999999]
+        },
+        {
+          "candidateMs": [0.8167, 0.8032],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "038-albedo-industrial_caged_sconce_diff_1k",
+          "levels": 10,
+          "referenceMs": [4.706, 4.7238999999999995]
+        },
+        {
+          "candidateMs": [0.9, 0.763],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "039-albedo-industrial_storage_cart_diff_1k",
+          "levels": 10,
+          "referenceMs": [5.6126, 4.7962]
+        },
+        {
+          "candidateMs": [0.7467, 0.7334],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "040-albedo-ladder_sectioned_01_diff_1k",
+          "levels": 10,
+          "referenceMs": [4.6290000000000004, 4.7278]
+        },
+        {
+          "candidateMs": [0.8076, 0.7584],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "041-albedo-metal_jerrycan_diff_1k",
+          "levels": 10,
+          "referenceMs": [4.8233, 4.6682]
+        },
+        {
+          "candidateMs": [0.7876, 0.7523],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "042-albedo-metal_jerrycan_green_diff_1k",
+          "levels": 10,
+          "referenceMs": [4.4986999999999995, 4.8197]
+        },
+        {
+          "candidateMs": [0.8812, 0.9719000000000001],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "043-albedo-metal_office_desk_diff_1k",
+          "levels": 10,
+          "referenceMs": [5.1155, 4.6437]
+        },
+        {
+          "candidateMs": [0.8083, 0.8172],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "044-albedo-metal_stool_01_diff_1k",
+          "levels": 10,
+          "referenceMs": [4.7983, 5.2084]
+        },
+        {
+          "candidateMs": [0.8193, 0.8002],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "045-albedo-metal_tool_chest_diff_1k",
+          "levels": 10,
+          "referenceMs": [4.7422, 4.7146]
+        },
+        {
+          "candidateMs": [0.7812, 0.7709],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "046-albedo-metal_toolbox_diff_1k",
+          "levels": 10,
+          "referenceMs": [4.5201, 5.2707]
+        },
+        {
+          "candidateMs": [0.7496, 0.7795000000000001],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "047-albedo-metal_trash_can_diff_1k",
+          "levels": 10,
+          "referenceMs": [4.8557, 4.745]
+        },
+        {
+          "candidateMs": [0.789, 0.773],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "048-albedo-metal_trash_can_rust_diff_1k",
+          "levels": 10,
+          "referenceMs": [4.8347, 4.4765999999999995]
+        },
+        {
+          "candidateMs": [0.8195, 0.7728],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "049-albedo-modular_airduct_rectangular_01_parts01_diff_1k",
+          "levels": 10,
+          "referenceMs": [5.0777, 4.9118]
+        },
+        {
+          "candidateMs": [0.8019999999999999, 0.8127],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "050-albedo-modular_airduct_rectangular_01_parts02_diff_1k",
+          "levels": 10,
+          "referenceMs": [4.979, 4.6071]
+        },
+        {
+          "candidateMs": [0.8051, 0.7503],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "051-albedo-modular_chainlink_fence_posts_diff_1k",
+          "levels": 10,
+          "referenceMs": [4.8389, 4.7107]
+        },
+        {
+          "candidateMs": [0.8777, 0.8147],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "052-albedo-modular_chainlink_fence_wire_diff_1k",
+          "levels": 10,
+          "referenceMs": [5.0076, 4.8893]
+        },
+        {
+          "candidateMs": [0.8481, 0.789],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "053-albedo-modular_electric_cables_boxes_diff_1k",
+          "levels": 10,
+          "referenceMs": [4.6633000000000004, 4.4839]
+        },
+        {
+          "candidateMs": [0.7987, 0.773],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "054-albedo-modular_electric_cables_diff_1k",
+          "levels": 10,
+          "referenceMs": [4.5438, 4.4844]
+        },
+        {
+          "candidateMs": [1.2155, 0.9589000000000001],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "055-albedo-modular_electricity_poles_diff_1k",
+          "levels": 10,
+          "referenceMs": [5.493600000000001, 5.3557]
+        },
+        {
+          "candidateMs": [0.8172, 0.7825],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "056-albedo-modular_electricity_poles_pieces_diff_1k",
+          "levels": 10,
+          "referenceMs": [4.590999999999999, 4.464799999999999]
+        },
+        {
+          "candidateMs": [0.8991, 0.7829],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "057-albedo-modular_industrial_pipes_01_group01_diff_1k",
+          "levels": 10,
+          "referenceMs": [4.7574000000000005, 4.756200000000001]
+        },
+        {
+          "candidateMs": [0.7732, 0.7736999999999999],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "058-albedo-modular_industrial_pipes_01_group02_diff_1k",
+          "levels": 10,
+          "referenceMs": [4.8770999999999995, 4.7653]
+        },
+        {
+          "candidateMs": [0.7716, 0.8351],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "059-albedo-mounted_fluorescent_lights_diff_1k",
+          "levels": 10,
+          "referenceMs": [4.6775, 4.7645]
+        },
+        {
+          "candidateMs": [0.9259999999999999, 0.9411],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "060-albedo-namaqualand_boulder_02_diff_1k",
+          "levels": 10,
+          "referenceMs": [5.0598, 4.5984]
+        },
+        {
+          "candidateMs": [0.8806, 0.7557],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "061-albedo-namaqualand_boulder_03_diff_1k",
+          "levels": 10,
+          "referenceMs": [4.6036, 4.752]
+        },
+        {
+          "candidateMs": [0.7997, 0.9267000000000001],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "062-albedo-namaqualand_boulder_04_diff_1k",
+          "levels": 10,
+          "referenceMs": [5.1194, 4.6953000000000005]
+        },
+        {
+          "candidateMs": [0.7839, 0.9081],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "063-albedo-namaqualand_boulder_05_diff_1k",
+          "levels": 10,
+          "referenceMs": [4.5579, 4.7988]
+        },
+        {
+          "candidateMs": [0.8701, 0.8245],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "064-albedo-namaqualand_rocks_01_diff_1k",
+          "levels": 10,
+          "referenceMs": [4.7251, 4.9879]
+        },
+        {
+          "candidateMs": [0.7992, 0.7619],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "065-albedo-namaqualand_stones_01_diff_1k",
+          "levels": 10,
+          "referenceMs": [5.0516, 4.719]
+        },
+        {
+          "candidateMs": [0.8474, 0.8417],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "066-albedo-old_drill_press_diff_1k",
+          "levels": 10,
+          "referenceMs": [4.7057, 4.7005]
+        },
+        {
+          "candidateMs": [3.9719000000000007, 3.3684000000000003],
+          "dimensions": [2048, 2048],
+          "generatedPixels": 1398101,
+          "id": "067-albedo-old_gas_mask_diff_2k",
+          "levels": 11,
+          "referenceMs": [19.504, 19.141]
+        },
+        {
+          "candidateMs": [0.9148000000000001, 0.7768999999999999],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "068-albedo-old_military_compressor_diff_1k",
+          "levels": 10,
+          "referenceMs": [4.8071, 4.5757]
+        },
+        {
+          "candidateMs": [0.7964, 0.8044],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "069-albedo-old_military_crate_diff_1k",
+          "levels": 10,
+          "referenceMs": [4.8214, 4.6671000000000005]
+        },
+        {
+          "candidateMs": [0.7995, 0.7952],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "070-albedo-old_tyre_diff_1k",
+          "levels": 10,
+          "referenceMs": [4.8705, 4.6971]
+        },
+        {
+          "candidateMs": [0.8681, 0.8484999999999999],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "071-albedo-overhead_crane_diff_1k",
+          "levels": 10,
+          "referenceMs": [5.1229, 4.5991]
+        },
+        {
+          "candidateMs": [1.0639, 0.8027000000000001],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "072-albedo-overhead_crane_trim_diff_1k",
+          "levels": 10,
+          "referenceMs": [5.0888, 4.615]
+        },
+        {
+          "candidateMs": [0.8059000000000001, 0.7818999999999999],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "073-albedo-painted_metal_shutter_diff_1k",
+          "levels": 10,
+          "referenceMs": [5.005, 7.9755]
+        },
+        {
+          "candidateMs": [0.819, 0.7897],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "074-albedo-pipe_wrench_diff_1k",
+          "levels": 10,
+          "referenceMs": [4.7215, 4.7514]
+        },
+        {
+          "candidateMs": [0.8765999999999999, 0.7955],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "075-albedo-plastic_crate_03_diff_1k",
+          "levels": 10,
+          "referenceMs": [5.3111, 5.069]
+        },
+        {
+          "candidateMs": [0.7603, 0.8622000000000001],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "076-albedo-portable_generator_diff_1k",
+          "levels": 10,
+          "referenceMs": [4.603000000000001, 4.5719]
+        },
+        {
+          "candidateMs": [0.9322, 0.775],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "077-albedo-portable_searchlight_diff_1k",
+          "levels": 10,
+          "referenceMs": [5.1826, 4.9638]
+        },
+        {
+          "candidateMs": [0.7832, 0.8595],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "078-albedo-portable_welding_cart_diff_1k",
+          "levels": 10,
+          "referenceMs": [4.6496, 5.586200000000001]
+        },
+        {
+          "candidateMs": [0.8706, 0.8043],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "079-albedo-power_box_01_diff_1k",
+          "levels": 10,
+          "referenceMs": [4.7753, 4.8699]
+        },
+        {
+          "candidateMs": [0.9137000000000001, 0.7661],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "080-albedo-propane_tank_diff_1k",
+          "levels": 10,
+          "referenceMs": [4.9924, 4.5823]
+        },
+        {
+          "candidateMs": [0.8961, 0.8453999999999999],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "081-albedo-quiver_tree_01_leaf_diff_1k",
+          "levels": 10,
+          "referenceMs": [4.5998, 4.8755]
+        },
+        {
+          "candidateMs": [0.8767999999999999, 0.7864],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "082-albedo-quiver_tree_01_trunk_diff_1k",
+          "levels": 10,
+          "referenceMs": [4.8266, 4.7773]
+        },
+        {
+          "candidateMs": [0.8891, 0.8074],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "083-albedo-quiver_tree_02_diff_1k",
+          "levels": 10,
+          "referenceMs": [4.7908, 4.900200000000001]
+        },
+        {
+          "candidateMs": [0.8455999999999999, 0.7907],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "084-albedo-retro_multimeter_diff_1k",
+          "levels": 10,
+          "referenceMs": [4.9987, 4.4954]
+        },
+        {
+          "candidateMs": [0.7892, 0.8104],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "085-albedo-rock_07_diff_1k",
+          "levels": 10,
+          "referenceMs": [4.6998999999999995, 5.2916]
+        },
+        {
+          "candidateMs": [0.7605, 0.8608],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "086-albedo-rock_09_diff_1k",
+          "levels": 10,
+          "referenceMs": [5.3012, 4.7351]
+        },
+        {
+          "candidateMs": [3.5347, 3.4250000000000003],
+          "dimensions": [2048, 2048],
+          "generatedPixels": 1398101,
+          "id": "087-albedo-rocky_trail_diff_2k",
+          "levels": 11,
+          "referenceMs": [19.2024, 21.931800000000003]
+        },
+        {
+          "candidateMs": [0.794, 0.8295],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "088-albedo-rollershutter_door_diff_1k",
+          "levels": 10,
+          "referenceMs": [4.7865, 4.7192]
+        },
+        {
+          "candidateMs": [0.8046000000000001, 0.7797000000000001],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "089-albedo-rollershutter_door_graffiti_diff_1k",
+          "levels": 10,
+          "referenceMs": [4.5245, 4.4961]
+        },
+        {
+          "candidateMs": [0.7955, 0.7755000000000001],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "090-albedo-rusted_wheel_rim_01_diff_1k",
+          "levels": 10,
+          "referenceMs": [4.8115, 4.498]
+        },
+        {
+          "candidateMs": [0.8201, 0.7696],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "091-albedo-rusty_corrugated_iron_diff_1k",
+          "levels": 10,
+          "referenceMs": [4.7362, 4.4542]
+        },
+        {
+          "candidateMs": [0.8080999999999999, 0.7676999999999999],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "092-albedo-rusty_metal_02_diff_1k",
+          "levels": 10,
+          "referenceMs": [4.6492, 4.7848]
+        },
+        {
+          "candidateMs": [0.8631, 0.8319],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "093-albedo-security_light_diff_1k",
+          "levels": 10,
+          "referenceMs": [4.7987, 4.8667]
+        },
+        {
+          "candidateMs": [0.8094, 0.9558],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "094-albedo-shrub_03_diff_1k",
+          "levels": 10,
+          "referenceMs": [4.7715, 4.5353]
+        },
+        {
+          "candidateMs": [0.7886, 0.7625000000000001],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "095-albedo-sledgehammer_01_diff_1k",
+          "levels": 10,
+          "referenceMs": [4.638599999999999, 4.5074]
+        },
+        {
+          "candidateMs": [0.8046000000000001, 0.7602000000000001],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "096-albedo-small_lpg_tank_diff_1k",
+          "levels": 10,
+          "referenceMs": [4.5164, 4.4459]
+        },
+        {
+          "candidateMs": [0.796, 0.8185],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "097-albedo-small_oil_can_01_diff_1k",
+          "levels": 10,
+          "referenceMs": [4.5148, 5.444100000000001]
+        },
+        {
+          "candidateMs": [0.8859, 0.8203],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "098-albedo-spray_paint_bottles_02_diff_1k",
+          "levels": 10,
+          "referenceMs": [4.901400000000001, 4.652299999999999]
+        },
+        {
+          "candidateMs": [0.8402000000000001, 0.9745],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "099-albedo-steel_frame_shelves_01_diff_1k",
+          "levels": 10,
+          "referenceMs": [4.6892000000000005, 5.1391]
+        },
+        {
+          "candidateMs": [0.8248, 0.7699999999999999],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "100-albedo-steel_frame_shelves_03_diff_1k",
+          "levels": 10,
+          "referenceMs": [4.7623, 4.5795]
+        },
+        {
+          "candidateMs": [0.7866000000000001, 0.7955],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "101-albedo-steel_frame_shelves_03_drawers_diff_1k",
+          "levels": 10,
+          "referenceMs": [4.5283, 4.8635]
+        },
+        {
+          "candidateMs": [0.7982, 0.8350000000000001],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "102-albedo-stone_fire_pit_diff_1k",
+          "levels": 10,
+          "referenceMs": [4.8046, 4.704]
+        },
+        {
+          "candidateMs": [0.7810999999999999, 0.7692],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "103-albedo-street_lamp_01_diff_1k",
+          "levels": 10,
+          "referenceMs": [4.6265, 4.5229]
+        },
+        {
+          "candidateMs": [0.7721, 0.8254],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "104-albedo-street_lamp_02_diff_1k",
+          "levels": 10,
+          "referenceMs": [4.8323, 5.1219]
+        },
+        {
+          "candidateMs": [0.8141999999999999, 0.8787],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "105-albedo-tool_cart_diff_1k",
+          "levels": 10,
+          "referenceMs": [4.6616, 4.9883999999999995]
+        },
+        {
+          "candidateMs": [0.7915, 0.7582],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "106-albedo-trashbag_diff_1k",
+          "levels": 10,
+          "referenceMs": [4.5901, 4.6091999999999995]
+        },
+        {
+          "candidateMs": [0.7725, 0.7928],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "107-albedo-utility_box_01_diff_1k",
+          "levels": 10,
+          "referenceMs": [4.8187999999999995, 4.8719]
+        },
+        {
+          "candidateMs": [0.7914, 0.8813],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "108-albedo-utility_box_02_diff_1k",
+          "levels": 10,
+          "referenceMs": [4.8177, 4.706]
+        },
+        {
+          "candidateMs": [3.4874, 3.2873],
+          "dimensions": [2048, 2048],
+          "generatedPixels": 1398101,
+          "id": "109-albedo-vintage_radio_transceiver_accessories_diff_2k",
+          "levels": 11,
+          "referenceMs": [18.6183, 18.123299999999997]
+        },
+        {
+          "candidateMs": [3.5018, 3.4569],
+          "dimensions": [2048, 2048],
+          "generatedPixels": 1398101,
+          "id": "110-albedo-vintage_radio_transceiver_diff_2k",
+          "levels": 11,
+          "referenceMs": [18.5485, 18.7348]
+        },
+        {
+          "candidateMs": [1.0752, 1.3537],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "111-albedo-wild_rooibos_bush_diff_1k",
+          "levels": 10,
+          "referenceMs": [5.6325, 6.439]
+        },
+        {
+          "candidateMs": [1.0974, 1.2596],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "112-albedo-wooden_crate_01_diff_1k",
+          "levels": 10,
+          "referenceMs": [5.6705000000000005, 5.7454]
+        },
+        {
+          "candidateMs": [1.3922999999999999, 1.2313],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "113-albedo-wooden_crate_02_diff_1k",
+          "levels": 10,
+          "referenceMs": [6.2984, 7.988500000000001]
+        },
+        {
+          "candidateMs": [1.2319, 1.2103000000000002],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "114-albedo-wooden_hammer_01_diff_1k",
+          "levels": 10,
+          "referenceMs": [5.4352, 6.2383999999999995]
+        },
+        {
+          "candidateMs": [1.325, 1.3478999999999999],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "115-albedo-wooden_ladder_diff_1k",
+          "levels": 10,
+          "referenceMs": [5.9192, 6.2123]
+        },
+        {
+          "candidateMs": [1.3899, 1.1208],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "116-albedo-wooden_military_crate_diff_1k",
+          "levels": 10,
+          "referenceMs": [5.1399, 5.6263]
+        },
+        {
+          "candidateMs": [1.1292, 1.1453],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "117-albedo-WoodenTable_03_diff_1k",
+          "levels": 10,
+          "referenceMs": [5.6845, 6.6472]
+        },
+        {
+          "candidateMs": [1.3378, 1.2644],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "118-albedo-worn_corrugated_iron_diff_1k",
+          "levels": 10,
+          "referenceMs": [6.842499999999999, 6.3873999999999995]
+        },
+        {
+          "candidateMs": [1.3657000000000001, 1.2457],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "119-albedo-worn_metal_rack_diff_1k",
+          "levels": 10,
+          "referenceMs": [5.6185, 5.7181999999999995]
+        },
+        {
+          "candidateMs": [5.1398, 4.952500000000001],
+          "dimensions": [2048, 2048],
+          "generatedPixels": 1398101,
+          "id": "120-albedo-binoculars_diff_2k",
+          "levels": 11,
+          "referenceMs": [22.3386, 25.2904]
+        },
+        {
+          "candidateMs": [4.2985999999999995, 4.189],
+          "dimensions": [2048, 2048],
+          "generatedPixels": 1398101,
+          "id": "121-albedo-boombox_diff_2k",
+          "levels": 11,
+          "referenceMs": [22.119400000000002, 21.837]
+        },
+        {
+          "candidateMs": [3.934, 4.1547],
+          "dimensions": [2048, 2048],
+          "generatedPixels": 1398101,
+          "id": "122-albedo-boombox_speakers_diff_2k",
+          "levels": 11,
+          "referenceMs": [24.4464, 24.7107]
+        },
+        {
+          "candidateMs": [7.9764, 4.7124999999999995],
+          "dimensions": [2048, 2048],
+          "generatedPixels": 1398101,
+          "id": "123-albedo-brass_blowtorch_diff_2k",
+          "levels": 11,
+          "referenceMs": [22.139300000000002, 20.7777]
+        },
+        {
+          "candidateMs": [5.0705, 4.7417],
+          "dimensions": [2048, 2048],
+          "generatedPixels": 1398101,
+          "id": "124-albedo-Camera_01_body_diff_2k",
+          "levels": 11,
+          "referenceMs": [22.3177, 22.486900000000002]
+        },
+        {
+          "candidateMs": [5.1544, 4.2905],
+          "dimensions": [2048, 2048],
+          "generatedPixels": 1398101,
+          "id": "125-albedo-Camera_01_lens_body_diff_2k",
+          "levels": 11,
+          "referenceMs": [21.8978, 21.8584]
+        },
+        {
+          "candidateMs": [4.7894, 3.9579999999999997],
+          "dimensions": [2048, 2048],
+          "generatedPixels": 1398101,
+          "id": "126-albedo-Camera_01_strap_diff_2k",
+          "levels": 11,
+          "referenceMs": [22.0881, 24.8137]
+        },
+        {
+          "candidateMs": [1.0816999999999999, 1.2287000000000001],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "127-albedo-concrete_floor_02_diff_1k",
+          "levels": 10,
+          "referenceMs": [5.3389, 5.9532]
+        },
+        {
+          "candidateMs": [1.3468, 1.3201],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "128-albedo-denim_fabric_diff_1k",
+          "levels": 10,
+          "referenceMs": [5.6757, 6.2359]
+        },
+        {
+          "candidateMs": [1.3447, 1.1918],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "129-albedo-fabric_leather_02_diff_1k",
+          "levels": 10,
+          "referenceMs": [5.9111, 6.3801]
+        },
+        {
+          "candidateMs": [5.562, 4.9948],
+          "dimensions": [2048, 2048],
+          "generatedPixels": 1398101,
+          "id": "130-albedo-camera_camera_BaseColor",
+          "levels": 11,
+          "referenceMs": [22.5395, 21.1221]
+        },
+        {
+          "candidateMs": [4.6774, 4.3857],
+          "dimensions": [2048, 2048],
+          "generatedPixels": 1398101,
+          "id": "131-albedo-camera_tripod_BaseColor",
+          "levels": 11,
+          "referenceMs": [26.5202, 23.2378]
+        },
+        {
+          "candidateMs": [3.7165000000000004, 3.9763],
+          "dimensions": [2048, 2048],
+          "generatedPixels": 1398101,
+          "id": "132-albedo-FlightHelmet_Materials_GlassPlasticMat_BaseColor",
+          "levels": 11,
+          "referenceMs": [20.547, 20.577]
+        },
+        {
+          "candidateMs": [4.4041999999999994, 4.3652999999999995],
+          "dimensions": [2048, 2048],
+          "generatedPixels": 1398101,
+          "id": "133-albedo-FlightHelmet_Materials_LeatherPartsMat_BaseColor",
+          "levels": 11,
+          "referenceMs": [24.1628, 20.9193]
+        },
+        {
+          "candidateMs": [1.1461, 1.1207],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "134-albedo-FlightHelmet_Materials_LensesMat_BaseColor",
+          "levels": 10,
+          "referenceMs": [5.9278, 5.9981]
+        },
+        {
+          "candidateMs": [3.765, 4.312],
+          "dimensions": [2048, 2048],
+          "generatedPixels": 1398101,
+          "id": "135-albedo-FlightHelmet_Materials_MetalPartsMat_BaseColor",
+          "levels": 11,
+          "referenceMs": [20.5609, 23.877]
+        },
+        {
+          "candidateMs": [4.646100000000001, 4.523499999999999],
+          "dimensions": [2048, 2048],
+          "generatedPixels": 1398101,
+          "id": "136-albedo-FlightHelmet_Materials_RubberWoodMat_BaseColor",
+          "levels": 11,
+          "referenceMs": [24.0194, 23.2569]
+        },
+        {
+          "candidateMs": [4.590000000000001, 3.7116],
+          "dimensions": [2048, 2048],
+          "generatedPixels": 1398101,
+          "id": "137-albedo-SciFiHelmet_BaseColor",
+          "levels": 11,
+          "referenceMs": [23.834899999999998, 21.1405]
+        },
+        {
+          "candidateMs": [5.6613, 5.1639],
+          "dimensions": [2048, 2048],
+          "generatedPixels": 1398101,
+          "id": "138-albedo-WaterBottle_baseColor",
+          "levels": 11,
+          "referenceMs": [24.0657, 23.2917]
+        },
+        {
+          "candidateMs": [5.718, 5.652500000000001],
+          "dimensions": [2048, 2048],
+          "generatedPixels": 1398101,
+          "id": "139-albedo-Lantern_01_brass_diff_2k",
+          "levels": 11,
+          "referenceMs": [26.3653, 25.5294]
+        },
+        {
+          "candidateMs": [1.3615000000000002, 0.9531999999999999],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "140-albedo-marble_01_diff_1k",
+          "levels": 10,
+          "referenceMs": [5.5624, 5.7282]
+        },
+        {
+          "candidateMs": [1.3647, 1.4058],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "141-albedo-metal_plate_diff_1k",
+          "levels": 10,
+          "referenceMs": [5.156, 6.6534]
+        },
+        {
+          "candidateMs": [5.699, 5.071199999999999],
+          "dimensions": [2048, 2048],
+          "generatedPixels": 1398101,
+          "id": "142-albedo-old_gas_mask_diff_2k",
+          "levels": 11,
+          "referenceMs": [24.551, 25.424200000000003]
+        },
+        {
+          "candidateMs": [1.4478, 1.0247],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "143-albedo-rusty_metal_02_diff_1k",
+          "levels": 10,
+          "referenceMs": [6.1467, 6.673100000000001]
+        },
+        {
+          "candidateMs": [5.8669, 5.2541],
+          "dimensions": [2048, 2048],
+          "generatedPixels": 1398101,
+          "id": "144-albedo-vintage_radio_transceiver_accessories_diff_2k",
+          "levels": 11,
+          "referenceMs": [24.9681, 26.9436]
+        },
+        {
+          "candidateMs": [5.7562999999999995, 5.452],
+          "dimensions": [2048, 2048],
+          "generatedPixels": 1398101,
+          "id": "145-albedo-vintage_radio_transceiver_diff_2k",
+          "levels": 11,
+          "referenceMs": [27.1447, 25.2011]
+        },
+        {
+          "candidateMs": [1.3661, 1.3417999999999999],
+          "dimensions": [1024, 1024],
+          "generatedPixels": 349525,
+          "id": "146-albedo-wood_table_001_diff_1k",
+          "levels": 10,
+          "referenceMs": [5.9037999999999995, 6.563000000000001]
+        }
+      ],
+      "optLevel": 3,
+      "productionCorpusMs": 222.06969999999995,
+      "provenance": {
+        "binary": "D:/AraBuild/ara-dev-infra-target/import-speed/mips/production-probe-opt3.exe",
+        "binarySha256": "2D7BBD4A72D2C1345B6C325797DE3161A12B023A9B85D5F7253D98813E48950C",
+        "optLevel": 3,
+        "probeSha256": "E62F9179F2C6CDC915688C088C756DDAE622390432C346096D59526DE263CD2E",
+        "productionMipsSha256": "D0A031D9F2116E143FEE2E1B7BF26961F854A3416466A50C347D43C787149705",
+        "productionPixelsSha256": "D374F6AE6EF17B446B582B4DA608E8C62303F4BAE2CBDC1162FA1964557C4AF9",
+        "referenceSha256": "2A5E32B013D8C9F9E4AD3D62D6FBE34BC860F3C9BAF6BE5D0F91E2BFFCBAE188",
+        "sourceBase": "07f10c8a104299e4cd116fea30eca505cba7bdef"
+      },
+      "ratio": 5.187600334489579,
+      "referenceCorpusMs": 1152.0088500000002
+    }
+  ],
+  "provenance": {
+    "cargoLockSha256": "12FE5D4504D3A296478C5823DA8E8FFF45990D4360BA0D2BE4F2BEE34387AF1C",
+    "inventorySha256": "66B98218EE7DF1809F2970F0C4F44C65A51AC6F9918FEB91621D2868B003626E",
+    "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)"
+  },
+  "rawEvidence": "C:\\Users\\snowy\\.t3\\worktrees\\snengine\\t3-602598ba/target/ara-dev/import-speed/mips"
+}

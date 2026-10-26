@@ -8,7 +8,9 @@ use ara_asset_format::{TextureFormat, write_ktx2};
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 mod gpu_input;
+mod mips;
 mod pixels;
+use mips::downsample;
 
 // ISPC BC5 is already very fast and retains the qualified normal-map output.
 // The experimental GPU BC5 encoder has larger angular-error outliers, so normals
@@ -612,68 +614,6 @@ pub(crate) fn srgb_to_linear(v: f32) -> f32 {
         ((v + 0.055) / 1.055).powf(2.4)
     }
 }
-fn downsample(
-    pixels: &[[f32; 4]],
-    w: u32,
-    h: u32,
-    nw: u32,
-    nh: u32,
-    usage: TextureUsage,
-) -> Vec<[f32; 4]> {
-    (0..nw * nh)
-        .into_par_iter()
-        .map(|index| {
-            let y = index / nw;
-            let x = index % nw;
-            let x0 = x as f32 * w as f32 / nw as f32;
-            let x1 = (x + 1) as f32 * w as f32 / nw as f32;
-            let y0 = y as f32 * h as f32 / nh as f32;
-            let y1 = (y + 1) as f32 * h as f32 / nh as f32;
-            let mut sum = [0.0; 4];
-            let mut hdr_sum = [0.0f64; 4];
-            let mut weight = 0.0;
-            for sy in y0.floor() as u32..(y1.ceil() as u32).min(h) {
-                for sx in x0.floor() as u32..(x1.ceil() as u32).min(w) {
-                    let area = (x1.min((sx + 1) as f32) - x0.max(sx as f32))
-                        * (y1.min((sy + 1) as f32) - y0.max(sy as f32));
-                    let p = pixels[(sy * w + sx) as usize];
-                    for i in 0..4 {
-                        if usage == TextureUsage::Hdr {
-                            hdr_sum[i] += p[i] as f64 * area as f64;
-                            continue;
-                        }
-                        sum[i] += p[i]
-                            * area
-                            * if usage == TextureUsage::Color && i < 3 {
-                                p[3]
-                            } else {
-                                1.0
-                            };
-                    }
-                    weight += area;
-                }
-            }
-            if usage == TextureUsage::Hdr {
-                sum = hdr_sum.map(|v| (v / weight as f64) as f32);
-            } else if usage == TextureUsage::Color {
-                for i in 0..3 {
-                    sum[i] = if sum[3] > 1e-20 { sum[i] / sum[3] } else { 0.0 };
-                }
-                sum[3] /= weight;
-            } else {
-                for c in &mut sum {
-                    *c /= weight;
-                }
-            }
-            if usage == TextureUsage::Normal {
-                let n = crate::mesh::normalize([sum[0], sum[1], sum[2]]);
-                sum[..3].copy_from_slice(&n);
-            }
-            sum
-        })
-        .collect()
-}
-
 #[cfg(test)]
 mod batch_tests {
     use super::*;

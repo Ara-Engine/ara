@@ -45,6 +45,9 @@ order must stay deterministic; raw HDR inputs use finite positive half codes.
 Color8 expansion uses per-layout tables derived through image's actual float
 conversion; grayscale rounding differs from RGB. Preserve all sample bits, alpha
 and cancellation. Small/16-bit/normal/HDR/data inputs retain the original path.
+Power-of-two color mips specialize the original four unit-weight samples, keeping
+their accumulation order and alpha cutoff. NPOT/one-axis/data/normal/HDR mips keep
+the area filter; do not generate levels independently from LOD0 or reorder sums.
 No other filesystem, clocks,
 unseeded RNG or environment reads. Dependency discovery is also pure and runs in
 the worker: even discovering FBX dependencies must never run in the editor.
