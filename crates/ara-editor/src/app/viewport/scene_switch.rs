@@ -70,6 +70,7 @@ fn outpost_hangar_round_trip() -> anyhow::Result<()> {
                     .render(&mut renderer, &editor, &view, 1)
                     .map_err(|error| anyhow::anyhow!("{error}"))?;
                 renderer.wait_scene_frame()?;
+                assert!(scene.preview_view.is_none(), "outgoing draft is discarded");
                 if scene.raster_scene.as_deref() != Some(editor.state.doc.as_str()) {
                     assert_eq!(
                         renderer.capture_completed(&request)?.image,
@@ -147,7 +148,10 @@ fn outpost_hangar_round_trip() -> anyhow::Result<()> {
             if name == "01-outpost" {
                 // Leave a transient Inspector projection behind: switching must
                 // not use that outgoing document to prepare the Hangar frame.
-                scene.set_preview_view(Some(view.with_records(Default::default())));
+                scene.set_preview_view(
+                    &editor.state.doc,
+                    Some(view.with_records(Default::default())),
+                );
             }
         }
         renderer.gpu().assert_clean()?;

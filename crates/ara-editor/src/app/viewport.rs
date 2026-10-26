@@ -50,6 +50,8 @@ pub(super) struct SceneView {
     lit: bool,
     /// Transient typed drafts, projected through the same native extraction as commits.
     preview_view: Option<crate::world::DocumentView>,
+    /// Owner of the transient projection, independent of content still loading.
+    preview_scene: String,
     /// Pose already incorporated by the native patch path (no repeated extraction).
     patched_pose: Option<u64>,
     /// One CPU-only replacement at a time; newer imports coalesce until it finishes.
@@ -78,9 +80,17 @@ impl SceneView {
         self.patched_pose = None;
     }
     /// Project typed Inspector drafts without authoring documents or baking meshes.
-    pub(super) fn set_preview_view(&mut self, view: Option<crate::world::DocumentView>) {
+    pub(super) fn set_preview_view(
+        &mut self,
+        scene: &str,
+        view: Option<crate::world::DocumentView>,
+    ) {
         self.content_epoch = self.content_epoch.wrapping_add(1);
         self.preview_view = view;
+        self.preview_scene.clear();
+        if self.preview_view.is_some() {
+            self.preview_scene.push_str(scene);
+        }
         self.invalidate();
     }
     /// Update only `patch` on the retained native frame. A typed preview remains
@@ -94,7 +104,10 @@ impl SceneView {
         patch: &crate::world::Patch,
     ) -> ara_ui::Result<bool> {
         ara_gpu::cpu_scope!("SceneView.apply_patch");
-        if !renderer.is_native() || self.failed.is_some() {
+        if !renderer.is_native()
+            || self.failed.is_some()
+            || self.raster_scene.as_deref() != Some(editor.state.doc.as_str())
+        {
             return Ok(false);
         }
         let (Some(frame), Some(raster), Some(content)) =
@@ -152,6 +165,10 @@ impl SceneView {
             renderer.reset_temporal_history();
         }
         self.preview_view = preview;
+        self.preview_scene.clear();
+        if self.preview_view.is_some() {
+            self.preview_scene.push_str(&editor.state.doc);
+        }
         if !patch.is_empty() {
             self.content_epoch = self.content_epoch.wrapping_add(1);
             self.convergence.reset();
@@ -282,7 +299,7 @@ impl SceneView {
             candidate.scene.raster.destroy(renderer)?;
         }
         if self.preview_view.is_some() {
-            self.set_preview_view(None);
+            self.set_preview_view(&editor.state.doc, None);
         }
         if let Some(raster) = self.raster.take() {
             raster.destroy(renderer)?;
@@ -330,15 +347,10 @@ impl SceneView {
         view: &crate::world::DocumentView,
         work: RasterWork,
     ) -> ara_ui::Result<()> {
-        if self
-            .raster_scene
-            .as_ref()
-            .is_some_and(|scene| scene != &editor.state.doc)
-            && self.preview_view.is_some()
-        {
+        if self.preview_view.is_some() && self.preview_scene != editor.state.doc {
             // Drafts belong to the outgoing scene. Clear them before forming
             // the recovery key, which must describe the same extraction input.
-            self.set_preview_view(None);
+            self.set_preview_view(&editor.state.doc, None);
         }
         self.recovery
             .configure(renderer.size(), editor.state.render_quality);
