@@ -7,6 +7,15 @@ use std::{fs, path::Path, process::Command};
 
 /// Package the standalone GUI with an independently versioned bootstrap service.
 pub fn package(root: &Path, version: &str) -> Result<()> {
+    package_inner(root, version, true)
+}
+
+/// Called only after engine packaging built the complete package/feature union.
+pub(crate) fn package_prebuilt(root: &Path, version: &str) -> Result<()> {
+    package_inner(root, version, false)
+}
+
+fn package_inner(root: &Path, version: &str, build_required: bool) -> Result<()> {
     ensure!(
         cfg!(all(windows, target_arch = "x86_64")),
         "Hub packaging requires Windows x64"
@@ -43,24 +52,26 @@ pub fn package(root: &Path, version: &str) -> Result<()> {
     if cfg!(feature = "rehearsal") {
         build.args(["--features", "ara-hub/rehearsal"]);
     }
-    run(&mut build, &dist.join("logs/hub-release-build.log"))?;
+    if build_required {
+        run(&mut build, &dist.join("logs/hub-release-build.log"))?;
+    }
     let stage = dist.join(format!(".stage-{name}-{}", std::process::id()));
     fs::create_dir(&stage)?;
     for binary in ["ara-hub", "ara-hub-updater"] {
         copy(
-            &root.join(format!("target/release/{binary}.exe")),
+            &support::profile(root, "release").join(format!("{binary}.exe")),
             &stage.join(format!("{binary}.exe")),
         )?;
     }
     copy(
-        &root.join("target/release/ara.exe"),
+        &support::profile(root, "release").join("ara.exe"),
         &stage.join("bootstrap/ara.exe"),
     )?;
     support::json(
         &stage.join("bootstrap/service.json"),
         &serde_json::json!({"version":version,"build":ara_update::sha256_file(&stage.join("bootstrap/ara.exe"))?}),
     )?;
-    for entry in fs::read_dir(root.join("target/release"))? {
+    for entry in fs::read_dir(support::profile(root, "release"))? {
         let file = entry?.path();
         if file
             .extension()
@@ -93,7 +104,7 @@ pub fn package(root: &Path, version: &str) -> Result<()> {
     fs::write(
         dist.join(format!("{name}-setup.exe")),
         ara_export_installer::append(
-            &fs::read(root.join("target/release/ara-setup.exe"))?,
+            &fs::read(support::profile(root, "release").join("ara-setup.exe"))?,
             &fs::read(zip)?,
         )?,
     )?;

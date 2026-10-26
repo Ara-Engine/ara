@@ -83,13 +83,12 @@ pub fn package(root: &Path, version: &str) -> Result<()> {
         .chain(hub.then_some("ara-hub"))
         .chain(hub.then_some("ara-hub-updater"));
     for binary in binaries {
-        let source = root.join("target/release").join(format!("{binary}.exe"));
+        let source = support::profile(root, "release").join(format!("{binary}.exe"));
         if binary != "ara-setup" {
             copy(&source, &stage.join(format!("{binary}.exe")))?;
         }
-        let pdb = root
-            .join("target/release")
-            .join(format!("{}.pdb", binary.replace('-', "_")));
+        let pdb =
+            support::profile(root, "release").join(format!("{}.pdb", binary.replace('-', "_")));
         ensure!(
             pdb.is_file(),
             "release PDB missing for {binary}; symbols must match this build"
@@ -101,7 +100,7 @@ pub fn package(root: &Path, version: &str) -> Result<()> {
         )?;
         identities.push(json!({"binary":format!("{binary}.exe"), "blake3":blake3::hash(&fs::read(&source)?).to_string(), "pdb":pdb.file_name().map(|name| name.to_string_lossy())}));
     }
-    for entry in fs::read_dir(root.join("target/release"))? {
+    for entry in fs::read_dir(support::profile(root, "release"))? {
         let path = entry?.path();
         if path
             .extension()
@@ -175,7 +174,7 @@ pub fn package(root: &Path, version: &str) -> Result<()> {
     fs::write(
         &installer,
         ara_export_installer::append(
-            &fs::read(root.join("target/release/ara-setup.exe"))?,
+            &fs::read(support::profile(root, "release").join("ara-setup.exe"))?,
             &fs::read(&portable)?,
         )?,
     )?;
@@ -348,7 +347,7 @@ fn templates(root: &Path, stage: &Path, dist: &Path) -> Result<()> {
                 // Kits are generated and git-ignored: write them into the staged copy
                 // (no document is authored, so the checkout's scenes never drift).
                 run(
-                    Command::new(root.join("target/release/ara-samples.exe"))
+                    Command::new(support::profile(root, "release").join("ara-samples.exe"))
                         .arg("--samples")
                         .arg(&templates)
                         .arg("kits")
@@ -461,7 +460,7 @@ pub fn symbols(root: &Path, directory: &Path) -> Result<()> {
             && file.with_extension("exe").is_file()
         {
             run(
-                Command::new(root.join("target/debug/ara-crash.exe"))
+                Command::new(support::profile(root, "debug").join("ara-crash.exe"))
                     .arg("archive")
                     .arg(&file)
                     .arg(&dump_syms),

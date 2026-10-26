@@ -1,0 +1,153 @@
+//! Preview numbering and a narrowly scoped version commit in an isolated checkout.
+use anyhow::{Context, Result, ensure};
+use semver::Version;
+use std::{fs, path::Path};
+use toml_edit::{DocumentMut, Item};
+
+pub(super) fn workspace_version(root: &Path) -> Result<Version> {
+    let document = fs::read_to_string(root.join("Cargo.toml"))?.parse::<DocumentMut>()?;
+    Version::parse(
+        document["workspace"]["package"]["version"]
+            .as_str()
+            .context("workspace.package.version must be a string")?,
+    )
+    .map_err(Into::into)
+}
+
+/// Numbered alpha previews continue their patch; a shipped unnumbered version
+/// starts the next patch's preview stream. Local prepared versions reserve numbers.
+pub(super) fn next(
+    current: &Version,
+    prepared: impl IntoIterator<Item = String>,
+) -> Result<Version> {
+    let mut base = current.clone();
+    let counter = base
+        .pre
+        .as_str()
+        .strip_prefix("alpha.")
+        .and_then(|n| n.parse::<u64>().ok());
+    if counter.is_none() {
+        base.patch = base
+            .patch
+            .checked_add(1)
+            .context("version patch overflow")?;
+    }
+    base.pre = semver::Prerelease::EMPTY;
+    base.build = semver::BuildMetadata::EMPTY;
+    let mut number = counter.unwrap_or(0);
+    for version in prepared {
+        let Ok(version) = Version::parse(&version) else {
+            continue;
+        };
+        if (version.major, version.minor, version.patch) == (base.major, base.minor, base.patch)
+            && let Some(n) = version
+                .pre
+                .as_str()
+                .strip_prefix("alpha.")
+                .and_then(|n| n.parse::<u64>().ok())
+        {
+            number = number.max(n);
+        }
+    }
+    let number = number.checked_add(1).context("preview number overflow")?;
+    base.pre = semver::Prerelease::new(&format!("alpha.{number}"))?;
+    Ok(base)
+}
+
+pub(super) fn validate(version: &Version, current: &Version) -> Result<()> {
+    ensure!(
+        version > current && version.build.is_empty(),
+        "preview version must be newer than {current} and have no build suffix"
+    );
+    ensure!(
+        version
+            .pre
+            .as_str()
+            .strip_prefix("alpha.")
+            .is_some_and(|n| !n.is_empty() && n.parse::<u64>().is_ok_and(|n| n > 0)),
+        "preview version must use alpha.N, N >= 1"
+    );
+    Ok(())
+}
+
+/// External lockfile resolutions must survive a workspace-only version bump.
+pub(super) fn external_resolutions(lock: &str) -> Result<std::collections::BTreeSet<String>> {
+    let lock = lock.parse::<DocumentMut>()?;
+    Ok(lock["package"]
+        .as_array_of_tables()
+        .context("Cargo.lock packages")?
+        .iter()
+        .filter(|p| p.get("source").is_some())
+        .map(|p| {
+            format!(
+                "{}|{}|{}|{}",
+                p["name"].as_str().unwrap_or(""),
+                p["version"].as_str().unwrap_or(""),
+                p["source"].as_str().unwrap_or(""),
+                p.get("checksum").and_then(Item::as_str).unwrap_or("")
+            )
+        })
+        .collect())
+}
+
+pub(super) fn bump(root: &Path, version: &Version, source: &str) -> Result<()> {
+    let path = root.join("Cargo.toml");
+    let mut document = fs::read_to_string(&path)?.parse::<DocumentMut>()?;
+    document["workspace"]["package"]["version"] = toml_edit::value(version.to_string());
+    fs::write(path, document.to_string())?;
+    let notes = format!(
+        "# Ara {version}\n\nPreview of source commit `{source}`.\n\nThis Preview-channel build includes the changes in that committed source.\nUse Hub's Preview channel to receive it.\n"
+    );
+    fs::write(root.join("RELEASE_NOTES.md"), notes)?;
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn numbering_reserves_prepared_versions_and_advances_only_the_preview_stream() {
+        let first = Version::parse("0.0.1-alpha").unwrap();
+        assert_eq!(next(&first, []).unwrap().to_string(), "0.0.2-alpha.1");
+        assert_eq!(
+            next(&first, ["0.0.2-alpha.4".into(), "bad".into()])
+                .unwrap()
+                .to_string(),
+            "0.0.2-alpha.5"
+        );
+        assert_eq!(
+            next(&Version::parse("0.0.2-alpha.5").unwrap(), [])
+                .unwrap()
+                .to_string(),
+            "0.0.2-alpha.6"
+        );
+        for version in [
+            "0.0.1-alpha.1",
+            "0.0.2",
+            "0.0.2-beta.1",
+            "0.0.2-alpha.0",
+            "0.0.2-alpha.1+other",
+        ] {
+            assert!(
+                validate(
+                    &Version::parse(version).unwrap(),
+                    &Version::parse("0.0.2-alpha").unwrap()
+                )
+                .is_err()
+            );
+        }
+    }
+    #[test]
+    fn lock_resolution_comparison_ignores_only_workspace_packages() {
+        let before = "version = 4\n[[package]]\nname = 'ara'\nversion = '0.0.1-alpha'\n[[package]]\nname = 'serde'\nversion = '1.0.229'\nsource = 'registry+test'\nchecksum = 'original'\n";
+        let bumped = before.replace("0.0.1-alpha", "0.0.2-alpha.1");
+        assert_eq!(
+            external_resolutions(before).unwrap(),
+            external_resolutions(&bumped).unwrap()
+        );
+        assert_ne!(
+            external_resolutions(before).unwrap(),
+            external_resolutions(&before.replace("original", "changed")).unwrap()
+        );
+    }
+}

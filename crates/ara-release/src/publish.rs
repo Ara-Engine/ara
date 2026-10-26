@@ -3,12 +3,6 @@ use anyhow::{Context, Result, ensure};
 use ara_update::{Asset, Channel, Kind, Manifest, canonical_manifest, sha256_file};
 use std::{fs, io::Write, path::Path, process::Command};
 
-#[derive(Clone, Copy, clap::ValueEnum)]
-pub enum ReleaseKind {
-    Hub,
-    Engine,
-}
-
 fn key(path: Option<&Path>) -> Result<String> {
     let path = path
         .map(Path::to_path_buf)
@@ -74,15 +68,26 @@ pub fn sign_file(path: &Path, key_path: Option<&Path>) -> Result<()> {
     Ok(())
 }
 #[allow(clippy::too_many_arguments)]
+/// Local bootstrap signing is separate from trusted preparation and upload.
+pub struct Mode {
+    pub prerelease: bool,
+    pub dry_run: bool,
+    pub require_trusted_key: bool,
+}
+
 pub fn publish(
     root: &Path,
     repo: &str,
     tag: &str,
-    prerelease: bool,
-    dry_run: bool,
+    mode: Mode,
     key_path: Option<&Path>,
     artifacts: Option<&Path>,
 ) -> Result<()> {
+    let Mode {
+        prerelease,
+        dry_run,
+        require_trusted_key,
+    } = mode;
     let mut config = ara_update::FeedConfig::default();
     config.repo = repo.into();
     config.validate()?;
@@ -188,7 +193,7 @@ pub fn publish(
     let (signature, public) = ara_update::sign(&bytes, &key(key_path)?)?;
     // A publisher must be accepted by this build's trust roots; dry runs can bootstrap a new key.
     ara_update::verify(&bytes, signature.as_bytes(), std::slice::from_ref(&public))?;
-    if !dry_run {
+    if !dry_run || require_trusted_key {
         ara_update::verify(&bytes, signature.as_bytes(), &ara_update::trusted_keys()).context(
             "release signing key is not embedded; rebuild Hub/release tool with the public key",
         )?;
