@@ -263,6 +263,9 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
         // The last pointer, key or wheel input: progressive Scene frames wait while the
         // user is working (see below).
         let mut last_input: Option<Instant> = None;
+        // The last frame the Scene camera moved: right after navigation the Scene
+        // converges at once instead.
+        let mut last_navigation: Option<Instant> = None;
         let mut previous = Instant::now();
         loop {
             if let Some(probe) = &mut probe {
@@ -736,16 +739,25 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
             drop(ui_scope);
             dirty |= work.paint_nodes > 0 || work.layout_passes > 0 || work.restyled > 0;
             // Progressive Scene frames (temporal convergence after the camera moves,
-            // arriving content, GI) render whenever the Scene wants them. A native
-            // Scene frame is submitted without waiting for the GPU, so it also renders
-            // right after input (holding it back left the image unconverged between
-            // moves). A ray-traced frame blocks this thread for its GPU time (27-50 ms
-            // on large scenes), so it waits for INTERACTION_PAUSE without input: a click
-            // never queues behind one. Changes made by input always render at once.
+            // arriving content, GI) wait for INTERACTION_PAUSE without input, so a click
+            // or keystroke never queues behind one: a ray-traced frame blocks this
+            // thread for its GPU time (27-50 ms on large scenes), a native frame with
+            // content work (publications, styling, GI delivery) costs it 15-70 ms during
+            // imports, and even a native frame that only converges keeps the GPU busy
+            // when the UI presents. Right after navigation the user is looking at the
+            // Scene, so a native frame that only converges renders at once: holding it
+            // back left the image unconverged between moves. Changes made by input
+            // always render at once.
+            if editor.state.camera != edit_before.2 {
+                last_navigation = Some(Instant::now());
+            }
+            let converging = renderer.scene_frame_async()
+                && !scene_view.preview_needs_frame()
+                && last_navigation.is_some_and(|t| t.elapsed() < INTERACTION_PAUSE);
             if shell.viewport().is_some()
                 && scene_view.needs_frame(editor.state.quality)
                 && (scene_dirty
-                    || renderer.scene_frame_async()
+                    || converging
                     || last_input.is_none_or(|t| t.elapsed() >= INTERACTION_PAUSE))
             {
                 dirty = true;

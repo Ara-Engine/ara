@@ -39,7 +39,8 @@ fn raster_plan(editor: &Editor, renderer: &Renderer) -> ara_ui::Result<bool> {
 
 /// How long a newer model publication must hold still before the ray-traced Scene's
 /// whole re-upload adopts it: imports publish in bursts, and each upload of a large
-/// scene costs most of a second on this thread. A native Scene adopts at once.
+/// scene costs most of a second on this thread. A native Scene follows publications
+/// itself.
 const PUBLICATION_SETTLE: Duration = Duration::from_secs(1);
 /// How long after a failed whole upload the next attempt waits (while idle).
 const STALE_RETRY: Duration = Duration::from_secs(5);
@@ -98,9 +99,9 @@ impl SceneSync {
     }
 
     /// Adopt a newer model publication (placeholders become models): a native Scene
-    /// at once; the ray-traced Scene uploads `view` whole once the publication has
-    /// held still for `PUBLICATION_SETTLE` and the user is `idle`, as does a failed
-    /// upload due a retry. Returns whether it adopted.
+    /// picks it up itself, so it is only recorded; the ray-traced Scene uploads `view`
+    /// whole once the publication has held still for `PUBLICATION_SETTLE` and the user
+    /// is `idle`, as does a failed upload due a retry. Returns whether it uploaded.
     pub fn refresh(
         &mut self,
         view: &DocumentView,
@@ -122,11 +123,13 @@ impl SceneSync {
             return false;
         }
         // A native Scene follows publications itself (its content key carries the
-        // publication revision; snapshots and GPU preparation run on workers), so
-        // adopting one here is bookkeeping and happens at once, also during input.
+        // publication revision; snapshots and GPU preparation run on workers) and
+        // renders them on its own schedule (after input, content work waits), so
+        // this only records the adoption.
         if native(editor, renderer) {
-            self.rebuild(view, editor, renderer, scene_view);
-            return true;
+            self.models = revision;
+            self.publication = None;
+            return false;
         }
         match self.publication {
             Some((seen, since))
