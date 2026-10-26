@@ -1,8 +1,8 @@
 # ara-runtime-render
 
 Raster presentation queues view, particles and post inside one completion scope,
-then waits before publication. Submission checkpoints separate view/feature pass
-timings; deferring helpers must never report their GPU work as zero.
+then waits before publication. The final particle tick shares its draw graph.
+Submission checkpoints preserve view/feature timings; deferred work is never zero-cost.
 
 Presents `ara_runtime::extract::RenderFrame`s through native raster on every GPU
 and preset (D27), with experimental fidelity as an explicit opt-in. Owns the
