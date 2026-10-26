@@ -132,8 +132,8 @@ impl Renderer {
             .as_ref()
             .map_or(0, |local| crate::look::local::capacity(local.settings));
         let patch_slots = local_capacity + 4 + crate::look::local::PATCHES;
-        // Every shadowed frame sizes this camera's rows for them, so an edit's
-        // first patch allocates nothing (edits keep their GPU allocations).
+        // Content and views are created with rows for them (`shadow_slots`); this
+        // grows them only after a quality change, never on an edit's first patch.
         if self.native.is_some() {
             self.ensure_native_shadow_capacity(patch_slots)?;
         }
