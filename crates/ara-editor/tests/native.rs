@@ -68,8 +68,9 @@ fn native_interaction_route_matches_reviewed_dark_and_light_goldens() {
         let comparison = ara_render::capture::compare(&golden, &actual, 0.005).unwrap();
         eprintln!("{theme}: 1-SSIM={}", comparison.score);
         if !comparison.passed {
-            let evidence =
-                PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("evidence/golden-failure");
+            let evidence = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                .join("../../target/docking-native/golden-failure")
+                .join(std::process::id().to_string());
             std::fs::create_dir_all(&evidence).unwrap();
             actual.save(evidence.join(format!("{theme}.png"))).unwrap();
             comparison
@@ -83,4 +84,35 @@ fn native_interaction_route_matches_reviewed_dark_and_light_goldens() {
             comparison.score
         );
     }
+}
+
+/// The focused route drives tabs/titles across hidden native windows at both UI scales.
+#[test]
+#[ignore = "requires Vulkan validation and a compatible GPU; every window stays hidden"]
+fn native_docking_drags_match_drop_previews() {
+    let project = Scratch(
+        std::env::temp_dir().join(format!("ara-editor-golden-docking-{}", std::process::id())),
+    );
+    let output = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../target/docking-native")
+        .join(std::process::id().to_string());
+    let status = Command::new(env!("CARGO_BIN_EXE_ara-editor"))
+        .arg(&project.0)
+        .args(["--verify-docking", "--frames", "2000", "--output"])
+        .arg(&output)
+        .status()
+        .unwrap();
+    assert!(
+        status.success(),
+        "native docking failed: {status}; evidence: {}",
+        output.display()
+    );
+    let report: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(output.join("drags.json")).unwrap()).unwrap();
+    let drags = report["drags"].as_array().unwrap();
+    assert!(drags.len() >= 29);
+    for drag in drags {
+        assert_eq!(drag["ok"], true, "{drag}");
+    }
+    assert!(output.join("dock-04-preview.png").exists());
 }

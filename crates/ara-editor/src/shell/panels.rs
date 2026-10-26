@@ -225,7 +225,7 @@ impl Shell {
                     format!("empty-header-fill-{area}"),
                 ),
             };
-            out.push_str(&format!("<panel id='{host}' class='panel-header'>{}<text id='{title_id}' class='panel-title' text='{}' /><panel id='{fill_id}' class='fill' />",icons::icon(&host,panel_icon(&panel)),escape(title(&panel))));
+            out.push_str(&format!("<panel id='{host}' class='panel-header' cursor='grab'>{}<text id='{title_id}' class='panel-title' text='{}' /><panel id='{fill_id}' class='fill' />",icons::icon(&host,panel_icon(&panel)),escape(title(&panel))));
             host
         } else {
             out.push_str(&format!("<panel id='tabs-{area}' class='tabbar'>"));
@@ -251,7 +251,7 @@ impl Shell {
                     },
                     escape(title(tab))
                 );
-                out.push_str(&format!("<button id='{tab_id}' class='tab{}' label='{}' description='{}: drag to move, right-click for options' action='Dispatch'>{}{label}</button>",if active{" tab-selected"}else{""},escape(title(tab)),escape(title(tab)),if active{icons::icon_in(&tab_id,panel_icon(tab),"fg")}else{icons::icon(&tab_id,panel_icon(tab))}));
+                out.push_str(&format!("<button id='{tab_id}' cursor='grab' class='tab{}' label='{}' description='{}: drag to move, right-click for options' action='Dispatch'>{}{label}</button>",if active{" tab-selected"}else{""},escape(title(tab)),escape(title(tab)),if active{icons::icon_in(&tab_id,panel_icon(tab),"fg")}else{icons::icon(&tab_id,panel_icon(tab))}));
             }
             out.push_str(&format!("<panel id='tabs-fill-{area}' class='fill' />"));
             format!("tabs-{area}")

@@ -829,6 +829,7 @@ impl EditorService {
                     } else {
                         dock.activate(&panel).map_err(ui_error)?;
                     }
+                    dock.expand_panel(&panel);
                 }
                 state.set_dock(&dock);
             }
