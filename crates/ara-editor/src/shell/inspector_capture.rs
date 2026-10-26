@@ -2,6 +2,18 @@
 #![allow(clippy::unwrap_used)]
 use super::*;
 
+#[derive(Default)]
+struct CaptureClipboard(String);
+impl ara_ui_text::Clipboard for CaptureClipboard {
+    fn read(&mut self) -> ara_ui_text::Result<String> {
+        Ok(self.0.clone())
+    }
+    fn write(&mut self, value: &str) -> ara_ui_text::Result<()> {
+        self.0 = value.to_owned();
+        Ok(())
+    }
+}
+
 #[test]
 #[ignore = "offscreen Vulkan evidence; set ARA_INSPECTOR_CAPTURE_DIR under target"]
 fn native_inspector_component_captures() {
@@ -54,6 +66,7 @@ fn native_inspector_component_captures() {
         let start = std::time::Instant::now();
         shell.rebuild(&mut editor).unwrap();
         let rebuild_ms = start.elapsed().as_secs_f64() * 1000.;
+        shell.input.blur(&mut shell.ui);
         shell.settle_transitions();
         shell.frame().unwrap();
         draw.render(
@@ -89,6 +102,27 @@ fn native_inspector_component_captures() {
             ara_json::to_canonical_string(&shell.layout_report()),
         )
         .unwrap();
+        if name == "Light" {
+            let mut clipboard = CaptureClipboard::default();
+            shell.click("swatch-Light-color", &mut clipboard).unwrap();
+            shell.dispatch(&mut editor).unwrap();
+            shell.settle_transitions();
+            shell.frame().unwrap();
+            draw.render(
+                &mut gpu,
+                &shell.ui.display,
+                &shell.text.assets,
+                [500, 1050],
+                ara_ui_render::atlas::TextMode::Raster,
+            )
+            .unwrap();
+            gpu.pixels()
+                .unwrap()
+                .save(output.join("Light-picker.png"))
+                .unwrap();
+            shell.click("entity-name", &mut clipboard).unwrap();
+            shell.dispatch(&mut editor).unwrap();
+        }
     }
     std::fs::write(
         output.join("timings.json"),

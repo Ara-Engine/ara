@@ -650,7 +650,9 @@ impl Shell {
         let rid = row_id(field, row.pointer);
         let target = format!("{}#{}", field.path, row.pointer);
         let compound = crate::inspector::compound(db, inner(row.ty));
-        let optional = matches!(row.ty, ValueType::Option(_)) && !compound;
+        let optional = matches!(row.ty, ValueType::Option(_))
+            && !compound
+            && *inner(row.ty) != ValueType::Entity;
         let inactive = optional && row.value.is_null();
         let collapsed = compound && row.item && self.inspector_sections.collapsed(&target);
         let numeric = inner(row.ty).is_number()
@@ -665,7 +667,10 @@ impl Shell {
                 .desc
                 .map(|desc| crate::inspector::override_default(db, desc))
                 .unwrap_or_else(|| db.zero(inner(row.ty)));
-            let binding = if inactive && let ValueType::Asset(kind) = inner(row.ty) {
+            let binding = if inactive
+                && fallback.is_null()
+                && let ValueType::Asset(kind) = inner(row.ty)
+            {
                 Binding::AssetPicker(target.clone(), kind.clone())
             } else {
                 Binding::Content(
@@ -831,6 +836,7 @@ mod tests {
         // A colour keeps its alpha; empty text clears a nullable value.
         apply_draft(&mut whole, "/tint", "h", "#FF0000").unwrap();
         assert_eq!(whole["tint"], json!([1.0, 0.0, 0.0, 0.5]));
+        assert!(hex_linear("0é000").is_err());
         apply_draft(&mut whole, "/cells/a", "n?", " ").unwrap();
         assert_eq!(whole["cells"]["a"], Value::Null);
         apply_draft(&mut whole, "/cells/a", "n?~m", "150cm").unwrap();

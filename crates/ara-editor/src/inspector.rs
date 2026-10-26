@@ -86,7 +86,7 @@ pub struct Field {
     pub value: Value,
     /// Whether selected entities have differing effective values.
     pub mixed: bool,
-    /// Common vector channels; null marks only the channels that differ in a multi-edit.
+    /// Common vector channels; mixed or unset channels are null.
     pub channels: Vec<Value>,
     /// Origin of the displayed value.
     pub provenance: Provenance,
@@ -399,7 +399,7 @@ pub fn parse_number(input: &str, unit: Option<&str>) -> Result<f64, String> {
     let input = input.trim();
     let end = input
         .char_indices()
-        .find(|(_, c)| c.is_alphabetic() && *c != 'e' && *c != 'E')
+        .find(|(_, c)| (c.is_alphabetic() && *c != 'e' && *c != 'E') || matches!(*c, '%' | '°'))
         .map_or(input.len(), |(i, _)| i);
     let (number, suffix) = input.split_at(end);
     let number: f64 = number
@@ -410,18 +410,24 @@ pub fn parse_number(input: &str, unit: Option<&str>) -> Result<f64, String> {
         return Err("Value must be finite".into());
     }
     let unit = unit.unwrap_or("");
+    let scale = |symbol| match symbol {
+        "m" | "meters" => Some(("length", 1.)),
+        "cm" => Some(("length", 0.01)),
+        "mm" => Some(("length", 0.001)),
+        "km" => Some(("length", 1000.)),
+        "deg" | "degrees" | "°" => Some(("angle", std::f64::consts::PI / 180.)),
+        "rad" => Some(("angle", 1.)),
+        "s" | "seconds" => Some(("time", 1.)),
+        "ms" => Some(("time", 0.001)),
+        _ => None,
+    };
     let factor = match (suffix.trim(), unit) {
         ("", _) => 1.,
-        ("m", "m" | "meters") => 1.,
-        ("cm", "m" | "meters") => 0.01,
-        ("mm", "m" | "meters") => 0.001,
-        ("km", "m" | "meters") => 1000.,
-        ("deg", "deg" | "degrees") => 1.,
-        ("rad", "deg" | "degrees") => 180. / std::f64::consts::PI,
-        ("s", "s" | "seconds") => 1.,
-        ("ms", "s" | "seconds") => 0.001,
-        (s, u) if s == u => 1.,
-        _ => return Err(format!("Unit `{suffix}` is incompatible with `{unit}`")),
+        (source, target) if source == target => 1.,
+        (source, target) => match (scale(source), scale(target)) {
+            (Some((a, from)), Some((b, to))) if a == b => from / to,
+            _ => return Err(format!("Unit `{suffix}` is incompatible with `{unit}`")),
+        },
     };
     let value = number * factor;
     if !value.is_finite() {
@@ -435,8 +441,20 @@ pub fn edit_commands(selection: &[String], path: &str, value: &Value) -> Vec<Val
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)] // Tests assert each unit conversion directly.
 mod tests {
     use super::*;
+
+    #[test]
+    fn unit_entry_converts_both_directions_and_accepts_percent() {
+        assert_eq!(parse_number("1.5m", Some("cm")).unwrap(), 150.);
+        assert_eq!(parse_number("50%", Some("%")).unwrap(), 50.);
+        assert_eq!(parse_number("1e3mm", Some("m")).unwrap(), 1.);
+        assert!(
+            (parse_number("90°", Some("rad")).unwrap() - std::f64::consts::FRAC_PI_2).abs() < 1e-12
+        );
+        assert!(parse_number("1e308km", Some("m")).is_err());
+    }
 
     #[test]
     fn optional_override_examples_preserve_the_null_authoring_default() {

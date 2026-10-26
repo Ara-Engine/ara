@@ -70,6 +70,32 @@ impl Sections {
     }
 }
 impl Shell {
+    /// Compact component navigation keeps the section list usable in narrow docks.
+    pub(super) fn component_jumps(
+        &mut self,
+        editor: &Editor,
+        components: &[String],
+        out: &mut String,
+    ) {
+        out.push_str(&format!("<panel id='component-browser' class='component-browser'><text id='component-browser-title' class='component-browser-title' text='Components' /><text id='component-browser-count' class='component-count' text='{}' /><scroll id='jump-chips' class='component-jumps'>",components.len()));
+        for component in components {
+            let id = format!("jump-{component}");
+            let active = editor
+                .state
+                .focus_field
+                .as_deref()
+                .is_some_and(|path| path.split('.').next() == Some(component.as_str()));
+            self.bindings.insert(
+                ara_ui::source::stable_id(&id),
+                Binding::Protocol(
+                    "editor.focus",
+                    json!({"panel":"inspector","field":component}),
+                ),
+            );
+            out.push_str(&format!("<button id='{id}' class='component-chip{}' label='Jump to {}' action='Dispatch'><text id='{id}-label' text='{}' /></button>",if active{" component-chip-active"}else{""},escape(&super::inspector_panel::sentence(component)),escape(&super::inspector_panel::sentence(component))));
+        }
+        out.push_str("</scroll></panel>");
+    }
     /// Reset through reversible property resets (including prefab inheritance), or
     /// paste through schema-validated sets. Transform never needs to be removed.
     pub(super) fn component_values(

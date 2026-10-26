@@ -133,6 +133,29 @@ fn frame_places_popovers_against_painted_anchors() -> Result<()> {
 /// popover closes all; the top popover's anchor is reported. Focus moves into a new
 /// popover's field and back when it closes.
 #[test]
+fn placed_controls_keep_their_authored_width_when_they_fit() -> Result<()> {
+    let mut text = TextSystem::bundled()?;
+    let mut ui = Ui::editor(
+        "<ui id='r'><popover id='picker' at='20,20' style='width:260px;padding:10px'><field id='hex' text='#FFFFFF' /><slider id='channel' min='0' max='1' /></popover></ui>",
+        EDITOR_CSS,
+        WINDOW,
+    )?;
+    ui.frame(&mut text)?;
+    ui.frame(&mut text)?;
+    let picker = ui.find("picker").expect("picker");
+    assert_eq!(ui.nodes[picker].rect.w, 260.);
+    let channel = ui.find("channel").expect("channel");
+    assert!(ui.nodes[channel].rect.w >= 230.);
+    ui.resize([200., 300.]);
+    ui.frame(&mut text)?;
+    assert!(ui.nodes[picker].rect.w <= 192.);
+    ui.resize(WINDOW);
+    ui.frame(&mut text)?;
+    assert_eq!(ui.nodes[picker].rect.w, 260.);
+    Ok(())
+}
+
+#[test]
 fn popovers_dismiss_on_click_away_and_return_focus() -> Result<()> {
     let mut text = TextSystem::bundled()?;
     let base = "<button id='title' text='File' style='position:absolute;left:10px;top:10px;width:50px;height:20px;padding:0px' /><field id='name' text='Box' style='position:absolute;left:200px;top:200px;width:80px;height:20px' />";

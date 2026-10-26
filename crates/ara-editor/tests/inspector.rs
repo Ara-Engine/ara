@@ -174,6 +174,28 @@ fn press(shell: &mut Shell, editor: &mut Editor, id: &str) {
 }
 
 #[test]
+fn first_selection_uses_the_mounted_inspector_column_width() {
+    let project = Project::new();
+    let mut editor = Editor::open(&project.0).unwrap();
+    let mut shell = Shell::new(&mut editor, [1440., 2100.]).unwrap();
+    editor
+        .action("editor.select", json!({"entities":["e_crate001"]}))
+        .unwrap();
+    shell.rebuild(&mut editor).unwrap();
+    let width = shell.ui.nodes[shell.ui.find("field-Transform-position").unwrap()]
+        .rect
+        .w;
+    shell.rebuild(&mut editor).unwrap();
+    let next = shell.ui.nodes[shell.ui.find("field-Transform-position").unwrap()]
+        .rect
+        .w;
+    assert!(
+        (width - next).abs() < 1.,
+        "column jumped from {width} to {next}"
+    );
+}
+
+#[test]
 fn scalar_scrubs_clamp_preview_and_commit_once_while_units_stay_typed() {
     let project = Project::new();
     let (mut editor, mut shell) = project.open();
@@ -533,6 +555,16 @@ fn entity_fields_pick_from_the_hierarchy() {
     );
     // Picking does not change the selection.
     assert_eq!(editor.state.selection, ["e_camera01"]);
+    shell.click("clear-FollowCamera-target", &mut clip).unwrap();
+    shell.dispatch(&mut editor).unwrap();
+    let resolved = ara_editor::world::resolve(editor.host.store(), &editor.state.doc).unwrap();
+    assert!(resolved["e_camera01"].record["FollowCamera"]["target"].is_null());
+    editor.action("history.undo", json!({})).unwrap();
+    let resolved = ara_editor::world::resolve(editor.host.store(), &editor.state.doc).unwrap();
+    assert_eq!(
+        resolved["e_camera01"].record["FollowCamera"]["target"],
+        "e_crate001"
+    );
 }
 
 #[test]

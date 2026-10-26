@@ -170,7 +170,18 @@ impl Shell {
                         if !source.is_empty()
                             && matches!(
                                 source.rsplit('.').next(),
-                                Some("material" | "graph" | "png" | "jpg" | "jpeg")
+                                Some(
+                                    "material"
+                                        | "graph"
+                                        | "png"
+                                        | "jpg"
+                                        | "jpeg"
+                                        | "hdr"
+                                        | "exr"
+                                        | "glb"
+                                        | "gltf"
+                                        | "fbx"
+                                )
                             )
                         {
                             self.thumbnails.request(source);
@@ -225,6 +236,14 @@ impl Shell {
                         Binding::PickField(target.to_owned()),
                     );
                     out.push_str(&format!("<button id='{id}' class='ghost icon-button' label='Pick from scene' description='Click an entity in the Scene or Hierarchy' action='Dispatch'>{}</button>",icons::icon_in(&id,"crosshair","icon-sm")));
+                    if !value.is_null() {
+                        let id = format!("clear-{rid}");
+                        self.bindings.insert(
+                            ara_ui::source::stable_id(&id),
+                            Binding::Content(set(Value::Null), "Clear entity reference".into()),
+                        );
+                        out.push_str(&format!("<button id='{id}' class='ghost icon-button' label='Clear reference' action='Dispatch'>{}</button>",icons::icon_in(&id,"x","icon-sm")));
+                    }
                 }
             }
         }

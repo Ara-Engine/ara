@@ -797,19 +797,10 @@ impl Shell {
                 crate::inspector::Widget::Vector { color: true, .. }
             ) {
             // `#RRGGBB` sRGB hex becomes linear channels; alpha keeps its value.
-            let hex = text.trim().trim_start_matches('#');
-            if hex.len() != 6 {
-                return Err("Enter a colour as #RRGGBB".into());
-            }
-            let channel = |n: usize| -> ara_ui::Result<f64> {
-                Ok((u8::from_str_radix(&hex[n * 2..n * 2 + 2], 16)? as f64 / 255.).powf(2.2))
-            };
-            let round = |v: f64| (v * 10000.).round() / 10000.;
-            let mut rgb = vec![
-                json!(round(channel(0)?)),
-                json!(round(channel(1)?)),
-                json!(round(channel(2)?)),
-            ];
+            let mut rgb: Vec<Value> = compound::hex_linear(text)?
+                .into_iter()
+                .map(|v| json!(v))
+                .collect();
             // A `color` keeps its alpha; a colour-hinted vec3 has none.
             if let crate::inspector::Widget::Vector { count: 4, .. } = field.widget {
                 rgb.push(field.value.get(3).cloned().unwrap_or(json!(1.)));
@@ -824,6 +815,9 @@ impl Shell {
                 .ok()
                 .filter(Value::is_number)
                 .unwrap_or_else(|| json!(number))
+        } else if matches!(field.widget, crate::inspector::Widget::Entity) && text.trim().is_empty()
+        {
+            Value::Null
         } else if matches!(field.widget, crate::inspector::Widget::Text) && !field.value.is_string()
         {
             serde_json::from_str(text)?

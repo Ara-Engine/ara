@@ -1226,11 +1226,10 @@ impl Shell {
             // Rects are on screen (already scrolled); `scroll_to` takes the absolute
             // offset, so the row's distance from the top adds to the current one.
             let delta = self.ui.nodes[row].rect.y - self.ui.nodes[scroll].rect.y;
-            let key = ara_ui::source::stable_id(&self.ui.nodes[scroll].element.id);
-            let current = match self.ui.widgets.get(&key) {
-                Some(ara_ui::widgets::Widget::Scroll(offset)) => offset[1],
-                _ => 0.,
-            };
+            let current = self
+                .ui
+                .scroll_position(scroll)
+                .map_or(0., |position| position[1]);
             self.ui.scroll_to(scroll, [0., current + delta])?;
             self.stats.work += self.ui.frame(&mut self.text)?;
         }
@@ -1469,7 +1468,7 @@ impl Shell {
             .iter()
             .all(|path| self.thumbnail_slots.contains_key(*path))
     }
-    /// Scripted pointer activation through the actual UI input helper.
+    /// Scripted pointer activation through the shell's normal input route.
     pub fn click(
         &mut self,
         id: &str,
@@ -1479,16 +1478,8 @@ impl Shell {
         let r = self.ui.nodes[index].rect;
         let p = [r.x + r.w * 0.5, r.y + r.h * 0.5];
         self.pointer = p;
-        self.input.event(
-            &mut self.ui,
-            ara_ui::input::InputEvent::PointerDown(p),
-            clipboard,
-        )?;
-        self.input.event(
-            &mut self.ui,
-            ara_ui::input::InputEvent::PointerUp(p),
-            clipboard,
-        )
+        self.event(ara_ui::input::InputEvent::PointerDown(p), clipboard)?;
+        self.event(ara_ui::input::InputEvent::PointerUp(p), clipboard)
     }
     /// Scripted hierarchy selection through its visible virtual row control.
     pub fn click_entity(
@@ -1509,16 +1500,8 @@ impl Shell {
         let r = self.ui.nodes[index].rect;
         let p = [r.x + 64., r.y + r.h * 0.5];
         self.pointer = p;
-        self.input.event(
-            &mut self.ui,
-            ara_ui::input::InputEvent::PointerDown(p),
-            clipboard,
-        )?;
-        self.input.event(
-            &mut self.ui,
-            ara_ui::input::InputEvent::PointerUp(p),
-            clipboard,
-        )
+        self.event(ara_ui::input::InputEvent::PointerDown(p), clipboard)?;
+        self.event(ara_ui::input::InputEvent::PointerUp(p), clipboard)
     }
     pub(crate) fn bind_button(
         &mut self,

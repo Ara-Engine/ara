@@ -57,8 +57,8 @@ impl Shell {
             return Ok(());
         }
         let width = self
-            .ui
-            .find("inspector-scroll")
+            .shown_node("inspector-scroll")
+            .or_else(|| self.shown_node("body-inspector"))
             .map(|i| self.ui.nodes[i].rect.w)
             .unwrap_or(320.);
         let label = self.label_px(width);
@@ -162,8 +162,8 @@ impl Shell {
             })
             .unwrap_or_default();
         self.inspector_sections.order(&mut components);
-        let count = components.len();
-        out.push_str(&format!("<panel id='component-browser' class='component-browser'><text id='component-browser-title' class='component-browser-title' text='Components' /><text id='component-browser-count' class='component-count' text='{count}' /></panel></panel><scroll id='inspector-scroll' style='min-height:0;flex-grow:1;flex-basis:0px'><panel id='inspector-components' class='inspector-components'>"));
+        self.component_jumps(editor, &components, out);
+        out.push_str("</panel><scroll id='inspector-scroll' style='min-height:0;flex-grow:1;flex-basis:0px'><panel id='inspector-components' class='inspector-components'>");
         let query = editor
             .state
             .searches
@@ -227,10 +227,11 @@ impl Shell {
                 .get(&head)
                 .map_or("", |t| t.doc.as_str());
             out.push_str(&format!("<panel id='section-{head}' class='component-section'><panel id='component-{head}' class='component-header'><button id='{collapse_id}' class='component-heading' label='{} {}' description='{}' action='Dispatch'>{}{}<text id='heading-{head}' class='component-title' text='{}' /></button>", if collapsed {"Expand"} else {"Collapse"}, escape(&sentence(&head)), escape(doc), icons::icon_in(&collapse_id, if collapsed {"chevron-right"} else {"chevron-down"}, "icon-sm"), icons::icon(&format!("section-icon-{head}"), icon), escape(&sentence(&head))));
-            if let Some(enabled) = fields
-                .iter()
-                .find(|f| f.path == format!("{head}.enabled") && matches!(f.widget, Widget::Bool))
-            {
+            if let Some(enabled) = fields.iter().find(|f| {
+                f.path == format!("{head}.enabled")
+                    && !f.optional
+                    && matches!(f.widget, Widget::Bool)
+            }) {
                 let id = format!("component-enabled-{head}");
                 self.bindings.insert(
                     ara_ui::source::stable_id(&id),
@@ -247,6 +248,7 @@ impl Shell {
             if !collapsed {
                 for field in matching {
                     if field.path != format!("{head}.enabled")
+                        || field.optional
                         || !matches!(field.widget, Widget::Bool)
                     {
                         self.property_row(editor, field, label, out);

@@ -15,7 +15,8 @@ impl Shell {
     ) {
         let row_start = out.len();
         let id = field.path.replace('.', "-");
-        let optional = field.optional && !matches!(field.widget, Widget::Compound { .. });
+        let optional =
+            field.optional && !matches!(field.widget, Widget::Compound { .. } | Widget::Entity);
         let inactive = optional && field.value.is_null() && !field.mixed;
         let fallback = inactive.then(|| {
             let mut fallback = field.clone();
@@ -44,6 +45,7 @@ impl Shell {
         let label = if optional {
             let id = format!("override-{id}");
             let binding = if original.value.is_null()
+                && field.fallback.is_null()
                 && let Widget::Asset { kind } = &field.widget
             {
                 Binding::AssetPicker(field.path.clone(), kind.clone())
@@ -272,12 +274,27 @@ impl Shell {
                     ara_ui::source::stable_id(&widget),
                     Binding::Field(field.path.clone(), None),
                 );
-                out.push_str(&format!("<field id='{widget}' style='flex-grow:1;flex-basis:0px;min-width:0px' text='{}' action='Dispatch' label='{}' description='{}' />",escape(&if field.mixed {"—".into()} else {display(&field.value)}),escape(&field.path),escape(&field.doc)));
+                out.push_str(&format!("<field id='{widget}' style='flex-grow:1;flex-basis:0px;min-width:0px' text='{}' action='Dispatch' label='{}' description='{}' />",escape(if field.mixed {"—"} else {field.value.as_str().unwrap_or("")}),escape(&field.path),escape(&field.doc)));
                 self.bindings.insert(
                     ara_ui::source::stable_id(&format!("pick-{id}")),
                     Binding::PickField(field.path.clone()),
                 );
                 out.push_str(&format!("<button id='pick-{id}' class='ghost icon-button' label='Pick from scene' description='Click an entity in the Scene' action='Dispatch'>{}</button>",icons::icon(&format!("pick-{id}"),"crosshair")));
+                if !field.value.is_null() || field.mixed {
+                    let button = format!("clear-{id}");
+                    self.bindings.insert(
+                        ara_ui::source::stable_id(&button),
+                        Binding::Content(
+                            crate::inspector::edit_commands(
+                                &editor.state.selection,
+                                &field.path,
+                                &Value::Null,
+                            ),
+                            format!("Clear {}", field.label),
+                        ),
+                    );
+                    out.push_str(&format!("<button id='{button}' class='ghost icon-button' label='Clear reference' action='Dispatch'>{}</button>",icons::icon_in(&button,"x","icon-sm")));
+                }
             }
             _ => {
                 let widget = format!("edit-{id}");
