@@ -42,6 +42,9 @@ ImportServices also supplies an optional integer block encoder. Keep device setu
 and filesystem access in the worker service. GPU/CPU identities never alias; normal
 maps retain ISPC BC5 after measured GPU angular outliers. Packing, preset and mip
 order must stay deterministic; raw HDR inputs use finite positive half codes.
+Color8 expansion uses per-layout tables derived through image's actual float
+conversion; grayscale rounding differs from RGB. Preserve all sample bits, alpha
+and cancellation. Small/16-bit/normal/HDR/data inputs retain the original path.
 No other filesystem, clocks,
 unseeded RNG or environment reads. Dependency discovery is also pure and runs in
 the worker: even discovering FBX dependencies must never run in the editor.
