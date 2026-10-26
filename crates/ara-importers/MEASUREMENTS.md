@@ -722,3 +722,74 @@ Canonical evidence: `measurements/texture-color-lookup-2026-10-26.json`.
 Raw probe inputs, source/library hashes, both failed/successful logs and all timing
 rows stay under `target/ara-dev/import-speed/texture-prepare/`. Fresh-project
 before/after remains a separate measurement; parallel geometry stays disabled.
+
+## Memory/device pressure diagnostic: 2026-10-26
+
+A single unchanged sequential-control Outpost import runs in the owner's idle
+window under the GPU lock. It publishes 115 assets in 28.511 s after open,
+32.173 s including create. All keys and 1,459 artifact references match v4;
+physical verification reads 909,360,516 referenced bytes. This is a diagnostic,
+not another A/B matrix. The owner deletes its scratch project after independent
+reparse checks; all evidence is extracted to C: first.
+
+The counter sampler records 62 samples, 26 during import, before/during/after
+the job. System/disk counters have no invalid samples. Maximum gap is 1.851 s;
+maximum process/system snapshot offset is 55.6 ms. All nine PIDs associated with
+the ten writes over one second are captured. Short-lived processes can be missed,
+so sampled logical process-I/O totals are incomplete. The sampler uses 2.516
+CPU seconds across 64.633 sampled wall seconds (about 0.24% of 16 logical CPUs).
+Its provider initialization happens before the measured import.
+
+| Active-import measurement | Range/result |
+|---|---:|
+| Available physical memory | 5.841–7.378 GiB |
+| Standby cache | 5.827–6.726 GiB |
+| Modified-page list | 125–417 MiB |
+| Commit charge / limit | 52.8–57.1% |
+| Pages Output/sec and Page Writes/sec | zero throughout all 62 samples |
+| Longest cache write | 2.410 s |
+| D:/E: maximum sampled average queue | 10.32 |
+| D:/E: maximum sampled average write latency | 340.4 ms |
+
+During the six counter intervals overlapping slow writes, available RAM is
+6.179–6.545 GiB, modified pages 125–254 MiB, and Pages Output/sec remains zero.
+Mean disk queue is 5.66 in those intervals versus 4.22 outside them. The largest
+average-write-latency spike is outside those slow-write windows, so these figures
+are not proof of a specific causal layer. The previous 8.6-second freeze does not
+reproduce. This quiet run does not support a RAM-shortage/modified-page-writer
+explanation; it does not exclude buffered-file-cache writeback, filters or device
+behavior. No cache throttling or publication policy changes follow from it.
+
+Windows reports D:/E: on one Lexar NS100 2 TB SATA SSD, and C: on a separate
+T-FORCE NVMe SSD. The pagefile is on C:. Process I/O is logical, can include other
+volumes, and may count the same data again in System writeback; it must not be
+equated with physical disk throughput. Missing first/short-process rate samples
+are not evidence of zero I/O. Raw counter JSONL, the sampler source, correlation
+CSV, traces and source/action catalogs are retained under this worktree's
+`target/ara-dev/import-speed/pressure/pressure-diag-01/` and
+`pressure-diag-01-outpost/`. Canonical summary:
+`measurements/cache-pressure-2026-10-26.json`.
+
+The process-counter self-test deliberately launches a new short-lived process.
+An initial `Get-Counter` process-wildcard query misses it because its instance list
+is fixed. The retained sampler instead refreshes `PerformanceCounterCategory`
+data per tick; the self-test then observes the new PID. Static system/disk
+counters retain their continuous query. This instrumentation creates no service
+or watcher after its bounded run.
+
+### Default project/cache placement
+
+The native Hub's `home()` starts at `USERPROFILE/Documents` if that literal
+directory exists, otherwise `USERPROFILE` (`HOME` fallback). The form appends the
+project-name slug and allows a different destination. CLI/MCP `hub.create` require
+an explicit path. On this PC, the Hub default is on C: NVMe; this is not a claim
+about every tester's drive. It is a literal Documents path, not Windows Known
+Folder redirection. The default content cache is `<project>/.ara/cache`, including
+its intermediates, and follows the chosen project volume. `ARA_CONFIG_DIR`
+controls the profile, not this content-cache placement. Hub copies template
+sources while excluding `.ara`, `.git`, `target` and `evidence`.
+
+The earlier D: placement was an explicit benchmark choice. A four-case NVMe
+Outpost A/B/B/A is prepared with the same frozen workers/CLI/player, projects and
+caches on `C:/AraImportBench/projects`, and Cargo/binaries still on D:. It awaits
+the next quiet slot; no NVMe win or adaptive-write policy is established yet.
