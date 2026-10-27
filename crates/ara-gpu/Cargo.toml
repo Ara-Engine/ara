@@ -33,6 +33,7 @@ objc2-metal = { version = "0.3.2", features = ["objc2-io-surface"] }
 objc2-quartz-core = "0.3.2"
 objc2-core-foundation = "0.3"
 objc2-io-surface = "0.3.2"
+objc2-metal-performance-shaders = { version = "0.3.2", default-features = false, features = ["std", "MPSCore", "MPSCoreTypes", "MPSKernel", "MPSImage", "MPSImageKernel", "MPSImageResampling"] }
 dispatch2 = "0.3"
 
 [target.'cfg(target_os = "macos")'.dev-dependencies]
