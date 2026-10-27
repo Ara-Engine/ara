@@ -3,6 +3,7 @@
 //! it raises, so the window only routes `ara_ui` actions back to the model.
 mod agents;
 mod create;
+mod dialogs;
 mod installs;
 mod learn;
 mod projects;
@@ -10,6 +11,7 @@ mod settings;
 mod shell;
 
 use crate::model::{Hub, Intent};
+use ara_ui::select::{Select, SelectOption};
 use ara_ui::source::{escape, stable_id};
 use std::{
     collections::BTreeMap,
@@ -19,6 +21,17 @@ use std::{
 
 /// The stylesheet; colors are theme tokens only (D18).
 pub const CSS: &str = include_str!("hub.css");
+
+/// Hub surfaces include the shared choice styles and let long option rows grow.
+pub fn stylesheet() -> &'static str {
+    static SHEET: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+    SHEET.get_or_init(|| {
+        format!(
+            "{CSS}{}\n.kit-select-option {{height:auto;min-height:32px;flex-shrink:0;}}",
+            ara_ui::select::CSS
+        )
+    })
+}
 
 /// Fonts shared with the editor: Inter, JetBrains Mono and Arabic fallback.
 pub fn text_system() -> ara_ui::Result<ara_ui_text::TextSystem> {
@@ -54,6 +67,8 @@ pub struct Doc {
 
 /// Inputs the views need besides the model.
 pub struct Ctx<'a> {
+    /// Show the close button's non-interactive hint after native hover hit-testing.
+    pub dialog_close_hint: bool,
     /// Wall clock for relative times (fixed in captures).
     pub now_ms: u64,
     /// Logical window size.
@@ -77,9 +92,56 @@ pub struct Page {
     pub wanted: Vec<PathBuf>,
     next: u32,
     scope: String,
+    pub(crate) choices: Vec<Choice>,
+}
+
+#[derive(Clone, PartialEq)]
+pub(crate) struct Choice {
+    pub control: String,
+    pub label: String,
+    pub options: Vec<(String, Intent)>,
+    pub selected: Option<Intent>,
+    pub markup: String,
+}
+
+impl Choice {
+    pub(crate) fn kit_options(&self) -> Vec<SelectOption<Intent>> {
+        self.options
+            .iter()
+            .map(|(label, value)| SelectOption::new(value.clone(), label.clone()))
+            .collect()
+    }
+    pub(crate) fn select(&self) -> Select<Intent> {
+        Select::new(
+            format!("hub-select-{}", self.control),
+            self.label.clone(),
+            self.kit_options(),
+            self.selected.clone(),
+        )
+        .with_control_id(self.control.clone())
+    }
 }
 
 impl Page {
+    /// An enum selector whose options open in a root-level kit popup.
+    pub fn dropdown(
+        &mut self,
+        id: &str,
+        label: &str,
+        options: Vec<(String, Intent)>,
+        selected: Option<Intent>,
+    ) {
+        let mut choice = Choice {
+            control: id.into(),
+            label: label.into(),
+            options,
+            selected,
+            markup: String::new(),
+        };
+        choice.markup = choice.select().control_markup();
+        self.markup.push_str(&choice.markup);
+        self.choices.push(choice);
+    }
     fn auto(&mut self) -> String {
         self.next += 1;
         format!("node-{:x}-{}", stable_id(&self.scope), self.next)
@@ -241,8 +303,10 @@ impl Page {
 pub fn page(hub: &Hub, ctx: &Ctx) -> Page {
     let mut page = Page::default();
     page.markup.push_str("<ui id='hub'>");
-    page.scoped("sidebar", |p| shell::sidebar(p, hub));
-    page.leaf("sidebar-edge");
+    if hub.view != crate::model::View::Create {
+        page.scoped("sidebar", |p| shell::sidebar(p, hub));
+        page.leaf("sidebar-edge");
+    }
     page.panel("main", |p| {
         p.scoped("header", |p| shell::header(p, hub, ctx));
         let scroll = format!("scroll-{:?}", hub.view).to_lowercase();
@@ -264,6 +328,7 @@ pub fn page(hub: &Hub, ctx: &Ctx) -> Page {
     });
     page.scoped("menu", |p| projects::menu(p, hub, ctx));
     page.scoped("toasts", |p| shell::toasts(p, hub));
+    page.scoped("dialog", |p| dialogs::body(p, hub, ctx));
     page.markup.push_str("</ui>");
     page
 }

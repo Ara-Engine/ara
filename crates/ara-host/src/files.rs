@@ -30,6 +30,8 @@ use serde_json::Value;
 use crate::host::State;
 use crate::journal::{self, Entry};
 use crate::params::Keep;
+mod receipts;
+pub use receipts::FileCommitReceipt;
 
 /// The last state a document and its file agreed on.
 #[derive(Debug, Clone)]
@@ -70,6 +72,7 @@ pub(crate) struct Files {
     pub diverged: BTreeMap<AssetId, Diverged>,
     /// The thread that writes and watches the files.
     pub io: FileThread,
+    receipts: receipts::Receipts,
 }
 
 impl Files {
@@ -80,6 +83,7 @@ impl Files {
             changed: BTreeMap::new(),
             diverged: BTreeMap::new(),
             io,
+            receipts: receipts::Receipts::default(),
         }
     }
 }
@@ -148,6 +152,15 @@ impl State {
     /// (all of them with `force`, which also waits until every write has landed).
     /// Diverged documents are skipped.
     pub(crate) fn flush(&mut self, force: bool) {
+        self.queue_writes(force);
+        if force {
+            self.wait_writes();
+        }
+        self.maybe_compact();
+    }
+
+    /// Queues canonical writes without waiting for the file worker.
+    pub(crate) fn queue_writes(&mut self, force: bool) {
         let now = Instant::now();
         let due: Vec<AssetId> = self
             .files
@@ -160,12 +173,16 @@ impl State {
             self.files.changed.remove(&id);
             if !self.files.diverged.contains_key(&id) {
                 self.write_doc(&id, false);
+            } else {
+                let error = Diagnostic::error(
+                    codes::FLUSH_FAILED,
+                    format!(
+                        "cannot persist diverged document {id}; reconcile its file before retrying"
+                    ),
+                );
+                self.files.receipts.error(&error);
             }
         }
-        if force {
-            self.wait_writes();
-        }
-        self.maybe_compact();
     }
 
     /// Queues a write of one document if it differs from its file (always with
@@ -177,6 +194,7 @@ impl State {
             if let Some(path) = self.files.deleted.get(id).cloned() {
                 if let Err(d) = crate::project_settings::check_parent(&self.root, &path) {
                     self.files.changed.insert(id.clone(), Instant::now());
+                    self.files.receipts.error(&d);
                     self.log(d);
                     return;
                 }
@@ -192,10 +210,15 @@ impl State {
             .to_owned();
         if let Err(d) = crate::project_settings::check_parent(&self.root, &path) {
             self.files.changed.insert(id.clone(), Instant::now());
+            self.files.receipts.error(&d);
             self.log(d);
             return;
         }
-        let synced = self.files.synced.get(id).filter(|s| s.doc == *doc);
+        let synced = self
+            .files
+            .synced
+            .get(id)
+            .filter(|s| s.path == path && s.doc == *doc);
         if let Some(synced) = synced.filter(|_| !always) {
             let hash = journal::hash(&synced.text);
             self.journal(Entry::Flush {
@@ -288,15 +311,28 @@ impl State {
                 }
                 Err(d) => {
                     self.files.changed.insert(id, Instant::now());
-                    self.log(d.file(path));
+                    let d = d.file(path);
+                    self.files.receipts.error(&d);
+                    self.log(d);
                 }
             },
             Reply::Compacted { result, .. } => {
                 if let Err(d) = result {
+                    self.files.receipts.error(&d);
                     self.log(d);
                 }
             }
-            Reply::JournalFailed(d) => self.log(d),
+            Reply::JournalFailed(d) => {
+                self.files.receipts.error(&d);
+                self.log(d);
+            }
+            Reply::Materialized { revision, result } => {
+                if let Err(d) = &result {
+                    self.files.receipts.error(d);
+                    self.log(d.clone());
+                }
+                self.file_jobs.materialized.insert(revision, result);
+            }
             Reply::DiagnosticsFailed { seqs, error } => {
                 self.diag_file.retry(seqs);
                 let d = Diagnostic::warning(
@@ -306,6 +342,14 @@ impl State {
                 self.diag.push(d, Meta::default());
             }
             Reply::Done | Reply::Settled => {}
+            Reply::Barrier(receipt) => {
+                if self.files.receipts.barrier(receipt) && self.files.io.barrier(receipt).is_err() {
+                    self.files.receipts.error(&Diagnostic::error(
+                        codes::IO,
+                        "the file worker stopped before its journal barrier",
+                    ));
+                }
+            }
         }
     }
 
@@ -328,6 +372,14 @@ impl State {
         match result {
             Ok(text) => {
                 let hash = journal::hash(&text);
+                if let Some(previous) = self
+                    .files
+                    .synced
+                    .get(&id)
+                    .filter(|previous| previous.path != path)
+                {
+                    self.files.io.untrack(previous.path.clone());
+                }
                 self.files
                     .synced
                     .insert(id.clone(), Synced::new(path, text, doc));
@@ -339,6 +391,7 @@ impl State {
             }
             Err(d) => {
                 self.files.changed.insert(id, Instant::now());
+                self.files.receipts.error(&d);
                 self.log(d);
             }
         }

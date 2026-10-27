@@ -20,7 +20,7 @@ pub(super) fn body(p: &mut Page, hub: &Hub) {
     for release in &hub.releases.available {
         p.panel("panel-card", |p| {
             p.panel("row", |p| {
-                p.icon("package", "accent icon-lg");
+                p.image("brand-engine", "brand-icon-sm");
                 p.text("engine-version fill", &format!("Ara {}", release.version));
                 p.panel("pill", |p| {
                     p.text(
@@ -45,17 +45,17 @@ pub(super) fn body(p: &mut Page, hub: &Hub) {
                 if hub.engines.iter().any(|e| e.version == release.version) {
                     p.text("small muted", "Installed");
                 } else if let Some(job) = hub.releases.running("engine", &release.version) {
-                    let percent = job
-                        .progress
-                        .as_ref()
-                        .map_or(0, |p| p.received.saturating_mul(100) / p.total.max(1));
-                    p.text("small accent", &format!("Installing · {percent}%"));
+                    p.text(
+                        "small accent",
+                        &format!("Installing Ara {}", release.version),
+                    );
                     p.action(
                         &format!("cancel-{}", release.version),
                         "compact",
                         "x",
                         "Cancel",
-                        Some(Intent::CancelDownload(job.id.clone())),
+                        job.cancellable
+                            .then(|| Intent::CancelDownload(job.id.clone())),
                     );
                 } else {
                     p.action(
@@ -63,19 +63,15 @@ pub(super) fn body(p: &mut Page, hub: &Hub) {
                         "primary compact",
                         "download",
                         "Install",
-                        Some(Intent::InstallEngine(release.version.clone())),
+                        Some(Intent::Dialog(crate::model::Dialog::InstallEngine(
+                            release.version.clone(),
+                        ))),
                     );
                 }
             });
             let excerpt: String = release.notes.chars().take(260).collect();
             if let Some(job) = hub.releases.running("engine", &release.version) {
-                let percent = job
-                    .progress
-                    .as_ref()
-                    .map_or(0, |p| p.received.saturating_mul(100) / p.total.max(1));
-                p.panel("download-track", |p| {
-                    p.panel_styled("download-fill", &format!("width:{percent}%;"), |_| {})
-                });
+                super::dialogs::transfer(p, job);
             }
             p.text("small muted wrap", &excerpt);
             // A button, not a full-width bar: rows keep it to its own width.
@@ -85,14 +81,43 @@ pub(super) fn body(p: &mut Page, hub: &Hub) {
                     "compact",
                     "book-open",
                     "Release notes",
-                    Some(Intent::OpenPath(
-                        format!(
-                            "https://github.com/{}/releases/tag/engine-v{}",
-                            hub.releases.repo, release.version
-                        )
-                        .into(),
-                    )),
+                    Some(Intent::Dialog(crate::model::Dialog::InstallEngine(
+                        release.version.clone(),
+                    ))),
                 );
+            });
+        });
+    }
+    for job in
+        hub.releases.jobs.iter().filter(|job| {
+            matches!(job.kind.as_str(), "uninstall" | "repair") && job.state == "running"
+        })
+    {
+        p.panel("panel-card", |p| {
+            p.text(
+                "engine-version",
+                &format!(
+                    "{} Ara {}",
+                    if job.kind == "repair" {
+                        "Repairing"
+                    } else {
+                        "Uninstalling"
+                    },
+                    job.version
+                ),
+            );
+            super::dialogs::transfer(p, job);
+            p.panel("row", |p| {
+                p.leaf("fill");
+                if job.cancellable {
+                    p.action(
+                        &format!("cancel-uninstall-{}", job.id),
+                        "compact",
+                        "x",
+                        "Cancel",
+                        Some(Intent::CancelDownload(job.id.clone())),
+                    );
+                }
             });
         });
     }
@@ -128,7 +153,7 @@ pub(super) fn body(p: &mut Page, hub: &Hub) {
             .collect();
         p.panel("panel-card", |p| {
             p.panel("row", |p| {
-                p.panel("engine-icon", |p| p.icon("package", "icon-lg accent"));
+                p.image("brand-engine", "brand-icon-lg");
                 p.panel("col fill", |p| {
                     p.panel("row", |p| {
                         p.text("engine-version", &format!("Ara {}", engine.version));
@@ -144,10 +169,7 @@ pub(super) fn body(p: &mut Page, hub: &Hub) {
                     });
                     p.text(
                         "small muted",
-                        &text::middle(
-                            &text::path(engine.executable.parent().unwrap_or(&engine.executable)),
-                            90,
-                        ),
+                        &text::middle(&text::executable_directory(&engine.executable), 90),
                     );
                 });
                 if let Some(folder) = engine.executable.parent() {
@@ -160,16 +182,53 @@ pub(super) fn body(p: &mut Page, hub: &Hub) {
                     );
                 }
                 p.action(
-                    &format!("engine-remove-{index}"),
-                    "danger",
-                    "trash",
-                    if engine.managed {
-                        "Uninstall"
+                    &format!("engine-repair-{index}"),
+                    "",
+                    "refresh-cw",
+                    if hub.releases.running("repair", &engine.version).is_some() {
+                        "Repairing…"
                     } else {
-                        "Remove"
+                        "Repair"
                     },
-                    Some(Intent::RemoveEngine(index)),
+                    Some(Intent::Dialog(crate::model::Dialog::RepairEngine(
+                        engine.version.clone(),
+                    ))),
                 );
+                if let Some(job) = hub.releases.running("uninstall", &engine.version) {
+                    p.text("small muted", "Uninstalling...");
+                    if job.cancellable {
+                        p.action(
+                            &format!("engine-cancel-uninstall-{index}"),
+                            "compact",
+                            "x",
+                            "Cancel",
+                            Some(Intent::CancelDownload(job.id.clone())),
+                        );
+                    }
+                } else {
+                    p.action(
+                        &format!("engine-remove-{index}"),
+                        "danger",
+                        "trash",
+                        if engine.managed {
+                            "Uninstall"
+                        } else {
+                            "Remove"
+                        },
+                        Some(Intent::Dialog(if engine.managed {
+                            crate::model::Dialog::UninstallEngine(engine.clone())
+                        } else {
+                            crate::model::Dialog::Confirm {
+                                title: format!("Remove Ara {} from Hub?", engine.version),
+                                detail: "This removes the build from Hub. The files stay on disk."
+                                    .into(),
+                                label: "Remove build".into(),
+                                destructive: false,
+                                action: Box::new(Intent::RemoveEngineBuild(engine.clone())),
+                            }
+                        })),
+                    );
+                }
             });
             let usage = match pinned.len() {
                 0 => "No projects use this build.".to_owned(),
@@ -239,28 +298,29 @@ pub(super) fn body(p: &mut Page, hub: &Hub) {
                     if state != State::Closed {
                         p.text("small muted", "Close to change");
                     }
-                    p.panel("pill", |p| p.text("", &project.engine_version));
+                    p.panel("pill", |p| {
+                        p.text(
+                            "",
+                            hub.busy
+                                .get(&project.id)
+                                .map_or(project.engine_version.as_str(), |busy| busy.label()),
+                        )
+                    });
                     return;
                 }
-                p.panel("segment", |p| {
-                    for engine in &hub.engines {
-                        let class = if engine.version == project.engine_version {
-                            "seg seg-on"
-                        } else {
-                            "seg"
-                        };
-                        p.action(
-                            &format!("pin-{}-{}", project.id, engine.version),
-                            class,
-                            "",
-                            &engine.version,
-                            Some(Intent::Pin {
-                                project: project.id.clone(),
-                                version: engine.version.clone(),
-                            }),
-                        );
-                    }
-                });
+                let choose = |version: &str| Intent::ChooseEngine {
+                    project: project.id.clone(),
+                    version: version.into(),
+                };
+                p.dropdown(
+                    &format!("project-engine-{}", project.id),
+                    "Engine version",
+                    hub.engines
+                        .iter()
+                        .map(|engine| (engine.version.clone(), choose(&engine.version)))
+                        .collect(),
+                    Some(choose(&project.engine_version)),
+                );
                 if !hub
                     .engines
                     .iter()

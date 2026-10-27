@@ -100,6 +100,10 @@ pub struct NativeUi {
     draws: Vec<Draw>,
     /// Time spent waiting for submitted UI work since `take_gpu_wait`.
     gpu_wait: std::cell::Cell<std::time::Duration>,
+    /// Submissions return without waiting (`set_deferred_completion`).
+    deferred: bool,
+    /// The last submission until the next one resolves it.
+    in_flight: std::cell::Cell<Option<ara_gpu::TimelinePoint>>,
     logical: [u32; 2],
     dpi: f32,
     overlays: Vec<Overlay>,
@@ -145,6 +149,8 @@ impl NativeUi {
             masks: Vec::new(),
             draws: Vec::new(),
             gpu_wait: Default::default(),
+            deferred: false,
+            in_flight: Default::default(),
             logical: [1, 1],
             dpi: 1.,
             overlays: Vec::new(),
@@ -272,6 +278,57 @@ impl NativeUi {
     /// Time spent waiting for UI submissions since the last call.
     pub fn take_gpu_wait(&self) -> std::time::Duration {
         self.gpu_wait.take()
+    }
+    /// Lets submissions return without waiting, as on Vulkan: the host calls
+    /// [`Self::wait_previous`] at the start of its next UI frame, and the next
+    /// submission waits the previous one before rewriting its records. Only for hosts
+    /// whose later use of the target is GPU work ordered after it (the window present).
+    /// Off (the default) waits each submission; turning it off waits now.
+    pub fn set_deferred_completion(&mut self, deferred: bool) -> Result<()> {
+        self.deferred = deferred;
+        if !deferred {
+            self.finish_previous()?;
+        }
+        Ok(())
+    }
+    /// `wait_previous`, waiting at most `timeout`; false while it is still running.
+    pub fn wait_previous_for(&self, timeout: std::time::Duration) -> Result<bool> {
+        let Some(point) = self.in_flight.get() else {
+            return Ok(true);
+        };
+        let waited = std::time::Instant::now();
+        let done = self.device.wait_point_for(point, timeout)?;
+        self.gpu_wait.set(self.gpu_wait.get() + waited.elapsed());
+        Ok(done)
+    }
+    /// Waits the last submission if it is still running.
+    pub fn wait_previous(&self) -> Result<()> {
+        if let Some(point) = self.in_flight.get() {
+            let waited = std::time::Instant::now();
+            Device::wait(&self.device, point)?;
+            self.gpu_wait.set(self.gpu_wait.get() + waited.elapsed());
+        }
+        Ok(())
+    }
+    /// Order the next UI submission after all work `gpu` has submitted: the scene a
+    /// frame in flight still renders into the image this UI composites. The adapter
+    /// has its own Metal queues; Vulkan's shares the renderer's, so it needs nothing.
+    pub fn order_after(&mut self, gpu: &ara_gpu::GpuDevice) {
+        self.device.wait_for(gpu);
+    }
+    /// Order `gpu`'s next work after this adapter's submissions: the next frame
+    /// rewrites the scene image this UI may still be compositing.
+    pub fn order_before(&self, gpu: &mut ara_gpu::GpuDevice) {
+        gpu.wait_for(&self.device);
+    }
+    /// Waits and releases the last submission.
+    pub(super) fn finish_previous(&mut self) -> Result<()> {
+        if let Some(point) = self.in_flight.take() {
+            let waited = std::time::Instant::now();
+            self.device.resolve(point)?;
+            self.gpu_wait.set(self.gpu_wait.get() + waited.elapsed());
+        }
+        Ok(())
     }
     fn upload_inner(&mut self, texture: TextureUpload<'_>) -> Result<()> {
         ara_gpu::cpu_scope!("UI.upload");

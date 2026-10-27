@@ -7,6 +7,8 @@ use std::path::Path;
 
 /// Project import policy document, editable through the inspector and typed commands.
 pub const PROJECT_IMPORT_SETTINGS_FILE: &str = "ara.imports";
+/// Optional scoped policy, read without changing the default creation location.
+pub(crate) const SCOPED_PROJECT_IMPORT_SETTINGS_FILE: &str = "settings/ara.imports";
 
 /// Defaults inherited by import sidecars which do not specify a preset.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Schema, Serialize, Deserialize)]
@@ -21,14 +23,19 @@ pub struct ProjectImportSettings {
 impl ProjectImportSettings {
     /// Reads the typed project policy; older projects inherit Balanced when absent.
     pub fn read(root: &Path, db: &SchemaDb) -> Result<Self> {
-        let text = match std::fs::read_to_string(root.join(PROJECT_IMPORT_SETTINGS_FILE)) {
+        let path = if root.join(SCOPED_PROJECT_IMPORT_SETTINGS_FILE).is_file() {
+            SCOPED_PROJECT_IMPORT_SETTINGS_FILE
+        } else {
+            PROJECT_IMPORT_SETTINGS_FILE
+        };
+        let text = match std::fs::read_to_string(root.join(path)) {
             Ok(text) => text,
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
                 return Ok(Self::default());
             }
             Err(error) => return Err(error.into()),
         };
-        let read = ara_doc::read(&text, PROJECT_IMPORT_SETTINGS_FILE, db, None);
+        let read = ara_doc::read(&text, path, db, None);
         if read.diags.iter().any(ara_diag::Diagnostic::is_error) {
             return Err(Error::Invalid(
                 read.diags

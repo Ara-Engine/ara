@@ -16,6 +16,7 @@ serde_json = { workspace = true, features = ["preserve_order", "float_roundtrip"
 ara-importers = { path = "../ara-importers" }
 
 [dev-dependencies]
+ara-asset-host = { path = "../ara-asset-host" }
 ara-asset-format = { path = "../ara-asset-format" }
 ara-doc = { path = "../ara-doc" }
 ara-schema = { path = "../ara-schema" }

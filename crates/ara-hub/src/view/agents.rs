@@ -117,21 +117,7 @@ fn connect(p: &mut Page, hub: &Hub) {
                     "One global MCP server for every project. Install it once per agent client.",
                 );
             });
-            p.panel("segment", |p| {
-                for (option, label) in [
-                    (AgentClient::Claude, "Claude Code"),
-                    (AgentClient::Codex, "Codex"),
-                ] {
-                    let class = if client == option { "seg seg-on" } else { "seg" };
-                    p.action(
-                        &format!("agent-{}", option.id()),
-                        class,
-                        "",
-                        label,
-                        Some(Intent::Agent(option)),
-                    );
-                }
-            });
+            p.dropdown("agent-client", "Agent client", vec![("Claude Code".into(), Intent::Agent(AgentClient::Claude)), ("Codex".into(), Intent::Agent(AgentClient::Codex))], Some(Intent::Agent(client)));
         });
         p.leaf("divider");
         let Some(executable)=hub.cli_executable.as_ref() else {

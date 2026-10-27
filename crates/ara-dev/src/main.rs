@@ -13,6 +13,7 @@ mod git;
 mod gpu;
 mod gpu_guard;
 mod history;
+mod hotpatch;
 mod hygiene;
 mod known;
 mod lab;
@@ -62,6 +63,8 @@ enum Command {
     Perf(perf::Options),
     /// Shared Fidelity Lab: warm players, shader watching and agent controls.
     Lab(lab::Options),
+    /// Run a development player/editor under the optional Rust patch driver.
+    Hotpatch(hotpatch::Options),
     /// Prepare signed local Hub/engine previews; --publish explicitly uploads them.
     Preview(preview::Options),
     /// Measure every D26/D27 release target; writes target/d26/<timestamp>/report.html.
@@ -173,6 +176,7 @@ fn run() -> Result<bool> {
         Command::Cargo { args } => compile_cache::cargo(&root, &args),
         Command::Perf(options) => perf::run(&root, options),
         Command::Lab(options) => lab::run(&root, options),
+        Command::Hotpatch(options) => hotpatch::run(&root, options),
         Command::Preview(options) => preview::run(&root, options),
         Command::D26(options) => d26::run(&root, options),
         Command::Check {
@@ -233,6 +237,9 @@ fn run() -> Result<bool> {
 }
 
 fn main() -> ExitCode {
+    if let Some(status) = hotpatch::forward() {
+        return status;
+    }
     match run() {
         Ok(true) => ExitCode::SUCCESS,
         Ok(false) => ExitCode::FAILURE,

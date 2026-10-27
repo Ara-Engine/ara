@@ -765,9 +765,19 @@ impl World {
                     size,
                     marks_wanted,
                     self.seed,
+                    params.camera.as_deref(),
                 )?
             } else {
                 self.extract_frame(frame);
+                if let Some(camera) = &params.camera {
+                    frame.camera = Some(
+                        ara_runtime::extract::named_camera(
+                            self.runtime.play_mut().session_mut().world_mut(),
+                            camera,
+                        )
+                        .map_err(|error| anyhow!(error))?,
+                    );
+                }
                 presenter.context("no presenter")?.capture_with(
                     frame,
                     &ara_render::capture::CaptureRequest {

@@ -7,7 +7,7 @@ Owns the M1 baseline renderer and agent visual feedback. Gameplay state stays in
 
 ## Public API
 
-- `Graph`: declared accesses, stable topological ordering, barriers, explicit queue release/acquire pairs, timeline dependencies, transient images. Compilation indexes resource uses once; declaration-order versions and queue handoffs stay deterministic.
+- `Graph`: declared accesses, stable topological ordering, barriers, explicit queue release/acquire pairs, timeline dependencies, transient images. Compilation indexes resource uses once; declaration-order versions and queue handoffs stay deterministic. `discard` (the G-buffer) ends a resource's last use undefined, so tile-based GPUs skip storing it.
 - `Renderer::new`, `render`, `render_view` (live debug view mode; `Wireframe`/`LitWireframe` draw native triangle edges, unjittered, into
   the `WIRE` mask and composite them after post), `resize`, `capture`, `set_color_lut` (a 32³ host buffer): cooked Vulkan rendering; read-only
   `gpu()` access for diagnostics/native presentation. Unchanged display resizes retain TAAU targets/history. `resize_upscaled(render, display)` is TAAU:
@@ -83,8 +83,8 @@ Owns the M1 baseline renderer and agent visual feedback. Gameplay state stays in
   completes, cached in world space, drawn under a per-frame budget; `VSM.Project` resolves them into a mask lighting reads, GI relight
   has its own pipeline, and no other shader inlines page lookups, which would cost every preset registers; moved casters re-dirty pages). Look images are allocated lazily; probe GI is gathered at half resolution.
 - `set_deferred_post` + `finish(color, sampled, state)`: temporally resolve and grade
-  an externally composited HDR frame (landscape, particles) with the same look post.
-  TAA reprojects with native motion (Frame.look.w) when present.
+  an externally composited HDR frame (landscape, particles) with the same look post; TAA reprojects with native motion
+  (Frame.look.w). HDR is RGBA16F, pre-exposed (`hdr_exposure`, look.slangh `exposeHdr`): writers multiply, readers divide.
 - `CaptureRequest`, `Capture`: fixed tick/seed, settle frames, modes, PNG, picking,
   numbered marks, visible-pixel boxes, legends, content/compiler/driver provenance.
 - `compare`: local RGB SSIM, explicit tolerance and an amplified diff image.

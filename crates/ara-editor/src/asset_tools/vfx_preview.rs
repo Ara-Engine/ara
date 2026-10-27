@@ -128,7 +128,13 @@ pub(crate) fn framing(effect: &ara_vfx::Effect) -> CameraSpec {
 pub(super) fn capture(root: &Path, effect: &ara_vfx::Effect) -> anyhow::Result<image::RgbaImage> {
     let cooked = cooked(root, effect)?;
     let mut gpu = ara_gpu::GpuDevice::new(&[], root.join(".ara/cache/vfx-preview-gpu"))?;
-    let mut system = ara_vfx_gpu::GpuSystem::new(&mut gpu, effect, &cooked, [MASTER, MASTER])?;
+    let mut system = ara_vfx_gpu::GpuSystem::new(
+        &mut gpu,
+        effect,
+        &cooked,
+        [MASTER, MASTER],
+        ara_vfx_gpu::LINEAR_HDR,
+    )?;
     let request = CaptureRequest {
         camera: framing(effect),
         size: [MASTER, MASTER],

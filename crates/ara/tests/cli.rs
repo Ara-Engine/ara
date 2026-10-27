@@ -37,7 +37,7 @@ fn sample_project_checks_clean_and_is_canonical() {
     let (code, out) = ara("project", &["check"]);
     assert_eq!(
         (code, out.trim()),
-        (0, "checked 3 files: 0 errors, 0 warnings")
+        (0, "checked 4 files: 0 errors, 0 warnings")
     );
 
     let docs = [

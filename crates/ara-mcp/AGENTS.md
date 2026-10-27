@@ -1,6 +1,6 @@
 # ara-mcp
 
-The MCP adapter: thirteen tools generated from the Engine Protocol catalog, served
+The MCP adapter: fourteen tools generated from the Engine Protocol catalog, served
 over stdio (`ara mcp`) and Streamable HTTP (`POST /mcp` on the daemon). It holds no
 engine state; every call goes to an `ara_proto::Endpoint`.
 Depends on ara-proto, ara-diag.
@@ -20,7 +20,7 @@ Depends on ara-proto, ara-diag.
 
 ## Tools (fixed order)
 
-`ara_query`, `ara_inspect`, `ara_schema`, `ara_apply`, `ara_run`, `ara_capture`,
+`ara_query`, `ara_inspect`, `ara_schema`, `ara_apply`, `ara_run`, `ara_fix`, `ara_capture`,
 `ara_play`, `ara_test`, `ara_logs`, `ara_why`, `ara_session`, `ara_docs`, `ara_jobs`.
 
 - `ara_session` carries `who`, optional `branch` and immediate `submit`.
@@ -46,7 +46,7 @@ Depends on ara-proto, ara-diag.
   One method without `action`: the tool's input schema *is* its params schema.
   Several: an `action` enum (in registration order) plus the union of their
   params; a property used by only some actions says so in its description.
-- No methods yet (`ara_run`, `ara_capture`, `ara_play`, `ara_test` today): a
+- Without a registered provider, reserved service families use a
   placeholder schema; calls go to the reserved family (`play.<action>`) and the
   host answers ARA1806. Registering a service with bound methods lights the tool
   up on the next `tools/list` with no adapter change.

@@ -384,7 +384,6 @@ pub(super) struct EditorSettingsView {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(super) struct EditorCommand {
     /// Live protocol session, validated by the host.
-    #[expect(dead_code, reason = "Host validates sessions before dispatch")]
     pub session: String,
     /// Command id from `editor.commands`, e.g. `create.cube`.
     pub id: String,

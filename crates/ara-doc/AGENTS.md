@@ -61,6 +61,9 @@ vocabulary. Depends on ara-schema, ara-json, ara-diag. No ECS, no IO.
   whose asset references name source media; `path_of` remains the save path.
   Existing `insert(path, doc)` uses `path` for both purposes.
 - `IdGen` (seedable SplitMix64): `record_id`, `asset_id`, `token`.
+- `file_state::FileState` / `FileKind`: immutable SHA-256 tokens for files and empty
+  directories. `Edit::File` / `Op::File` change the workspace's observed inventory,
+  never the disk; host adapters materialize them. See `docs/dev/file-history.md`.
 - `OrderKey`, `key_between(a, b)`.
 - `register(&mut SchemaDb)`: the `Entity` record type and `scene`/`prefab` kinds.
 

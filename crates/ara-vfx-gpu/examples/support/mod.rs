@@ -7,11 +7,31 @@ use ara_render::{
 };
 use ara_render_fidelity::{
     FidelityView, FrameInput, ImageInput, Mode, PostSettings, Settings, Tier, Upscaler,
+    probes::BakedProbes,
 };
 use ara_vfx::{Effect, Module};
 use ara_vfx_gpu::{GpuSystem, Lighting, ProbeLighting, SceneColor, SceneDepth, View};
 use glam::Vec3;
 use std::path::Path;
+
+/// Whether this backend's RT-tier fidelity is verified. Metal's is not yet: its
+/// hybrid passes are being ported, and on an M5 the RT gallery renders speckled with
+/// blocky emitter artifacts, so Metal goldens use Raster until that lands.
+const RT_FIDELITY: bool = cfg!(not(target_os = "macos"));
+
+/// The fidelity tier captures render the gallery with: RT where the device has ray
+/// queries and RT-tier fidelity is verified, Raster (unbaked probes) otherwise.
+/// `ARA_VFX_GOLDEN_TIER=rt|raster` forces one, e.g. to record Raster baselines on an
+/// RT host or to check Metal's RT tier.
+pub fn golden_tier(gpu: &GpuDevice) -> Result<Tier> {
+    match std::env::var("ARA_VFX_GOLDEN_TIER").as_deref() {
+        Ok("rt") => Ok(Tier::Rt),
+        Ok("raster") => Ok(Tier::Raster),
+        Ok(other) => anyhow::bail!("ARA_VFX_GOLDEN_TIER is rt or raster, not {other:?}"),
+        Err(_) if RT_FIDELITY && gpu.info().ray_tracing => Ok(Tier::Rt),
+        Err(_) => Ok(Tier::Raster),
+    }
+}
 
 fn box_mesh(id: u64, centre: Vec3, half: Vec3, material: usize) -> Mesh {
     let mut vertices = Vec::new();
@@ -247,19 +267,25 @@ pub fn sequence_strip(frames: &[(Capture, ara_vfx_gpu::Stats)]) -> image::RgbaIm
     }
     strip
 }
-/// Replay independently at every requested tick, then converge the scene with a
-/// fixed 64-frame probe/lighting sequence and draw the frozen VFX before bloom.
+/// Replay independently at every requested tick, then converge the scene at `tier`
+/// with a fixed 64-frame probe/lighting sequence and draw the frozen VFX before bloom.
 pub fn capture_frames(
     gpu: &mut GpuDevice,
     effect: &Effect,
     ticks: &[u32],
     size: [u32; 2],
+    tier: Tier,
 ) -> Result<Vec<(Capture, ara_vfx_gpu::Stats)>> {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let mut captures = Vec::new();
     for &tick in ticks {
-        let mut system =
-            GpuSystem::new(gpu, effect, &root.join("cooked").join(&effect.name), size)?;
+        let mut system = GpuSystem::new(
+            gpu,
+            effect,
+            &root.join("cooked").join(&effect.name),
+            size,
+            ara_vfx_gpu::LINEAR_HDR,
+        )?;
         let camera = camera(effect);
         let request = CaptureRequest {
             camera,
@@ -274,10 +300,14 @@ pub fn capture_frames(
         };
         system.capture(gpu, &request)?;
         let scene = gallery(effect, tick);
+        let baked = match tier {
+            Tier::Rt => None,
+            _ => Some(BakedProbes::unbaked(&scene)?),
+        };
         let settings = Settings {
             render_size: size,
             display_size: size,
-            tier: Tier::Rt,
+            tier,
             mode: Mode::Hybrid,
             upscaler: Upscaler::Taau,
             probe_ray_budget: 38400,
@@ -289,7 +319,7 @@ pub fn capture_frames(
                 ..PostSettings::default()
             },
         };
-        let mut fidelity = FidelityView::new(gpu, &scene, settings, None)?;
+        let mut fidelity = FidelityView::new(gpu, &scene, settings, baked.as_ref())?;
         for frame in 0..64 {
             fidelity.render(
                 gpu,

@@ -87,6 +87,14 @@ fn package(
     }
     let mut types = Vec::new();
     crate::types_files(root, root, &mut types);
+    let inventory = ara_script::project::inventory(root).map_err(|d| d.to_string())?;
+    types.extend(
+        inventory
+            .modules
+            .into_iter()
+            .filter(|m| m.profile == ara_script::ModuleProfile::Gameplay)
+            .filter_map(|m| m.schema),
+    );
     let scripts = if let Some(scripts) = scripts {
         scripts
     } else {

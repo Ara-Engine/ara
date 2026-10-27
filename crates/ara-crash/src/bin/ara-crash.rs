@@ -46,6 +46,7 @@ fn run() -> Result<()> {
             let directory = PathBuf::from(args.next().context("probe directory missing")?);
             let _capture = ara_crash::Capture::start(&directory, "probe")?;
             match mode.as_str() {
+                "ready" => println!("crash monitor ready"),
                 "native" => native_crash_probe(),
                 "panic" => panic!("Ara panic capture probe"),
                 "recovered" => {

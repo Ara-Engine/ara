@@ -9,6 +9,7 @@ pub(crate) mod os;
 mod prefs;
 #[cfg(feature = "rehearsal")]
 mod rehearsal;
+mod selects;
 mod startup;
 mod updates;
 mod wake;
@@ -243,7 +244,10 @@ pub fn run(options: Options) -> anyhow::Result<()> {
         return Ok(());
     }
     #[cfg(feature = "rehearsal")]
-    if std::env::var_os("ARA_RELEASE_TEST_API").is_some() {
+    if options.rehearse_update.is_some()
+        || options.update_health.is_some()
+        || std::env::var_os("ARA_RELEASE_TEST_API").is_some()
+    {
         return rehearsal::run(&options, &exe_dir, &config);
     }
     let prefs = if options.capture.is_some() {
@@ -395,6 +399,14 @@ fn interactive(
                         intents.push(crate::model::Intent::RenameCommit);
                     }
                 }
+                Event::MouseButton {
+                    button: 4,
+                    pressed: true,
+                } => {
+                    if let Some(actions) = input::recover(app.back(hub)) {
+                        intents.extend(actions);
+                    }
+                }
                 Event::MouseButton { .. } => {}
                 Event::Wheel(delta) => {
                     if hub.menu.is_some() {
@@ -408,14 +420,14 @@ fn interactive(
                 }
             }
             intents.extend(app.actions());
-            if !intents.is_empty() {
+            if !intents.is_empty() || app.view_dirty() {
                 for intent in intents.drain(..) {
                     hub.intent(intent);
                 }
                 app.rebuild(hub, now_ms()).map_err(err)?;
             }
         }
-        let _ = input::recover(host.input.pump(&mut app.ui, &mut app.input));
+        let _ = input::recover(host.input.pump(app));
         intents.extend(
             host.input
                 .take_drops()
@@ -423,6 +435,7 @@ fn interactive(
                 .map(crate::model::Intent::Register),
         );
         intents.extend(app.actions());
+        dirty |= app.view_dirty();
         for (pick, path) in picks.try_iter() {
             intents.push(crate::model::Intent::Picked(pick, path));
         }

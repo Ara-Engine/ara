@@ -42,7 +42,7 @@ pub mod method {
 
 /// `play.start` `embed`: render each client into a shared surface for an editor panel
 /// instead of a window.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Schema, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Schema, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct EmbedParams {
     /// Surface width in pixels (the Game view's size; default 1280).
@@ -56,6 +56,10 @@ pub struct EmbedParams {
     /// Most frames each player renders per second (default 60).
     #[ara(range(min = 1, max = 1000))]
     pub max_fps: Option<u32>,
+    /// Surface pixels per game-UI unit: the Game view's UI scale (2 on a Retina
+    /// display), so the game UI keeps its size in the panel. Default 1.
+    #[ara(range(min = 0.25, max = 8))]
+    pub scale: Option<f32>,
 }
 
 fn default_width() -> u32 {
@@ -148,6 +152,7 @@ pub(crate) enum Request {
         world: String,
         player: usize,
         size: [u32; 2],
+        scale: f32,
     },
 }
 
@@ -320,13 +325,15 @@ impl Surfaces {
         }
     }
 
-    /// Resizes one player's surface. A new generation arrives through
-    /// [`Surfaces::poll`]; keep showing the old one until its first frame.
-    pub fn resize(&self, world: &str, player: usize, width: u32, height: u32) {
+    /// Resizes one player's surface to `size` pixels at `scale` pixels per game-UI unit
+    /// (the panel's UI scale). A new generation arrives through [`Surfaces::poll`];
+    /// keep showing the old one until its first frame.
+    pub fn resize(&self, world: &str, player: usize, size: [u32; 2], scale: f32) {
         let _ = self.requests.send(Request::Resize {
             world: world.to_owned(),
             player,
-            size: [width, height],
+            size,
+            scale,
         });
     }
 
@@ -493,11 +500,12 @@ impl PlayService {
                     world,
                     player,
                     size,
+                    scale,
                 } => (
                     world,
                     player,
                     method::RESIZE,
-                    json!({"width": size[0], "height": size[1]}),
+                    json!({"width": size[0], "height": size[1], "scale": scale}),
                 ),
             };
             if let Some((_, p)) = self

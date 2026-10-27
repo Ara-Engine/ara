@@ -48,6 +48,9 @@ use std::{
 /// How long after the last input Scene work that blocks this thread waits: ray-traced
 /// progressive frames, and adopting newly published content (`SceneSync::refresh`).
 const INTERACTION_PAUSE: Duration = Duration::from_millis(250);
+/// Longest a window frame waits for the previous UI frame before skipping (a stalled
+/// present path: minimized, occluded or undisplayed window), so the pump keeps running.
+const UI_STALL_WAIT: Duration = Duration::from_millis(100);
 /// How long `--verify-ux` waits for its idle-frame samples once its captures, camera
 /// samples and drags are done: a scene with live content (effects previewing in the
 /// Scene view) never idles, and the route must still finish.
@@ -261,9 +264,13 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
     } else {
         None
     };
-    let mut probe = options
-        .verify_responsiveness
-        .then(|| responsiveness::Probe::new(&options.output, options.settle));
+    let mut probe = if options.verify_unpresentable {
+        Some(responsiveness::Probe::unpresentable_only(&options.output))
+    } else {
+        options
+            .verify_responsiveness
+            .then(|| responsiveness::Probe::new(&options.output, options.settle))
+    };
     if probe.is_some() {
         // Measure what a release build does: memoized panels are not double-checked.
         shell.memo_check = false;
@@ -337,7 +344,14 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
         // converges at once instead.
         let mut last_navigation: Option<Instant> = None;
         let mut previous = Instant::now();
+        #[cfg(feature = "hotpatch")]
+        let mut rust_patches = ara_hotpatch::Hotpatch::connect();
         loop {
+            #[cfg(feature = "hotpatch")]
+            if rust_patches.frame_boundary() {
+                shell.rust_hotpatched(&mut editor)?;
+                dirty = true;
+            }
             if let Some(probe) = &mut probe {
                 probe.begin(&mut shell);
             }
@@ -560,6 +574,8 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                 if size[0] >= 64 && size[1] >= 64 {
                     shell.game_target = size;
                     editor.game_size = size;
+                    shell.game_scale = scale;
+                    editor.game_scale = scale;
                 }
             }
             let was_live = shell.game_live;
@@ -897,7 +913,23 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                 && (editor.host.store().revision() != edit_before.0
                     || shell.drafts() != &edit_before.1);
             dirty |= scene_dirty;
-            if dirty {
+            // A window that cannot show anything (minimized, occluded; the probe's
+            // unpresentable scenario) renders and presents nothing: a driver's present
+            // path may stall until it shows. Offscreen verification windows render.
+            let showable = !probe
+                .as_ref()
+                .is_some_and(responsiveness::Probe::unpresentable)
+                && (offscreen || window.presentable());
+            // The previous UI frame or window blit still running after the bound (a
+            // stalled present path) skips this one instead of blocking the event pump.
+            // SAFETY: `present` was created on this renderer's device.
+            let ui_ready = showable
+                && gpu.wait_previous_for(UI_STALL_WAIT)?
+                && unsafe { present.settled(renderer.gpu(), UI_STALL_WAIT)? };
+            if !ui_ready {
+                std::thread::sleep(std::time::Duration::from_millis(10));
+            }
+            if dirty && ui_ready {
                 let _render_scope = profile_frame.map(|_| ara_profile::scope("editor.render"));
                 profile_gpu = shell.viewport().is_some() && scene_dirty;
                 let render_start = Instant::now();
@@ -999,7 +1031,8 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                 render_ms = render_at.elapsed().as_secs_f64() * 1000.;
                 let graph_gpu = graph_start.map(|start| start.elapsed().as_secs_f64() * 1000.);
                 let present_at = Instant::now();
-                // SAFETY: UI submission is complete, image is CopySource and all native owners are live.
+                // SAFETY: the UI submission is complete or GPU-ordered before the blit (one
+                // queue), the image is CopySource and all native owners are live.
                 unsafe {
                     gpu.present(crate::gpu::ui_device(renderer.gpu()), &mut present)?;
                 }
@@ -1061,6 +1094,15 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
             for float in &mut floats.windows {
                 let work = shell.frame_surface(&float.id)?;
                 if !(float.dirty || work.paint_nodes > 0 || work.layout_passes > 0) {
+                    continue;
+                }
+                // As the main window: nothing to show, or a stalled UI frame or blit,
+                // waits.
+                let showable = offscreen || float.window.presentable();
+                // SAFETY: each float's presentation was created on this device.
+                let mut settled =
+                    || unsafe { float.present.settled(renderer.gpu(), UI_STALL_WAIT) };
+                if !showable || !gpu.wait_previous_for(UI_STALL_WAIT)? || !settled()? {
                     continue;
                 }
                 let float_dpi = options.dpi.unwrap_or_else(|| float.window.display_scale())

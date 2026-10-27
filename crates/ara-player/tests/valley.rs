@@ -11,7 +11,7 @@ mod support;
 use ara_play_host::ScriptPaths;
 use serde_json::{Value, json};
 use std::{path::Path, time::Instant};
-use support::{Agent, build_dotnet, copy, demo_copy, repo};
+use support::{Agent, build_dotnet, demo_copy, outpost_module, repo};
 
 const SCENE: &str = "levels/valley.scene";
 
@@ -44,10 +44,7 @@ fn position(values: &Value, path: &str) -> [f64; 3] {
 fn valley_plays_networked_with_terrain_streaming_ai_audio_vfx_and_csharp() {
     build_dotnet();
     let dir = demo_copy("valley");
-    copy(
-        &Path::new(env!("CARGO_MANIFEST_DIR")).join("demo-scripts/Outpost"),
-        &dir.join("scripts/Outpost"),
-    );
+    outpost_module(&dir);
     let scripts = ScriptPaths::locate(&repo()).expect("built .NET host");
     let captures =
         Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/runtime-polish/captures");

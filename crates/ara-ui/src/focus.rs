@@ -86,5 +86,5 @@ pub(crate) fn directional_where(
 }
 /// Inspection graph uses actual clipping, enabled states and explicit focus neighbors.
 pub fn focus_graph(ui: &Ui) -> serde_json::Value {
-    serde_json::json!(ui.paint_order.iter().copied().filter(|i|is_focusable(&ui.nodes[*i])).map(|i|{let id=|j:Option<usize>|j.map(|j|ui.nodes[j].element.id.as_str());serde_json::json!({"id":ui.nodes[i].element.id,"tab":id(next_tab(ui,i,false)),"left":id(directional(ui,i,Direction::Left)),"right":id(directional(ui,i,Direction::Right)),"up":id(directional(ui,i,Direction::Up)),"down":id(directional(ui,i,Direction::Down))})}).collect::<Vec<_>>())
+    serde_json::json!(ui.paint_order.iter().copied().filter(|i|is_focusable(&ui.nodes[*i]) && ui.accepts_input(*i)).map(|i|{let id=|j:Option<usize>|j.map(|j|ui.nodes[j].element.id.as_str());serde_json::json!({"id":ui.nodes[i].element.id,"tab":id(next_tab(ui,i,false)),"left":id(directional(ui,i,Direction::Left)),"right":id(directional(ui,i,Direction::Right)),"up":id(directional(ui,i,Direction::Up)),"down":id(directional(ui,i,Direction::Down))})}).collect::<Vec<_>>())
 }

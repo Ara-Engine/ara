@@ -6,12 +6,8 @@ use ara_diag::FixAction;
 pub(super) fn sidebar(p: &mut Page, hub: &Hub) {
     p.panel("sidebar", |p| {
         p.panel("brand", |p| {
-            let mark = if hub.prefs.light {
-                "brand-wordmark-light"
-            } else {
-                "brand-wordmark"
-            };
-            p.image(mark, "wordmark");
+            p.image("brand-hub", "brand-icon");
+            p.text("brand-name", "Ara");
             p.panel("brand-tag", |p| p.text("", "Hub"));
         });
         p.leaf("nav-gap");
@@ -20,7 +16,7 @@ pub(super) fn sidebar(p: &mut Page, hub: &Hub) {
             .iter()
             .map(|a| a.participants.iter().filter(|x| x.kind == "agent").count())
             .sum();
-        for view in View::ALL {
+        for view in View::SIDEBAR {
             let count = match view {
                 View::Projects => Some((hub.projects.len(), false)),
                 View::Installs => Some((hub.engines.len(), false)),
@@ -102,6 +98,16 @@ pub(super) fn sidebar(p: &mut Page, hub: &Hub) {
 
 pub(super) fn header(p: &mut Page, hub: &Hub, ctx: &Ctx) {
     p.panel("header", |p| {
+        if hub.view == View::Create {
+            p.action(
+                "create-back",
+                "ghost",
+                "arrow-left",
+                "Back",
+                Some(Intent::Back),
+            );
+            p.leaf("header-divider");
+        }
         p.panel("col fill", |p| {
             p.text("title", hub.view.title());
             p.text("subtitle", &subtitle(hub));
@@ -131,6 +137,13 @@ pub(super) fn header(p: &mut Page, hub: &Hub, ctx: &Ctx) {
                 Some(Intent::AddEngine),
             ),
             _ => {}
+        }
+        if hub.view == View::Create {
+            p.panel("brand", |p| {
+                p.image("brand-hub", "brand-icon");
+                p.text("brand-name", "Ara");
+                p.text("small muted", "Hub");
+            });
         }
     });
     if hub.view == View::Projects {
@@ -167,92 +180,60 @@ fn subtitle(hub: &Hub) -> String {
     }
 }
 
-/// The Hub update in the sidebar on every page but Settings (which shows it in full):
-/// version, progress and the one action that moves it on. True when shown.
+/// A quiet update indicator opens release notes; it never starts a transfer.
 fn update_card(p: &mut Page, hub: &Hub) -> bool {
     let Some(release) = &hub.releases.hub else {
         return false;
     };
-    let key = format!("update-{}", release.version);
-    if hub.view == View::Settings || !hub.banner_visible(&key) {
+    if hub.prefs.skipped_update.as_deref()
+        == Some(crate::model::updates::identity(release).as_str())
+        || !hub.banner_visible(&format!("update-{}", release.version))
+    {
         return false;
     }
-    p.panel("side-card side-update", |p| {
-        p.panel("row", |p| {
-            p.icon("download", "accent");
-            p.text("side-title fill", &format!("Ara Hub {}", release.version));
-            dismiss_banner(p, "dismiss-update", key);
-        });
-        p.text("side-copy", &update_copy(hub, &release.version));
-        update_action(p, hub, &release.version, "compact");
+    p.panel("row", |p| {
+        let label = if hub.releases.prepared().is_some() {
+            "Update ready to restart"
+        } else if hub.releases.running("hub", &release.version).is_some() {
+            "Downloading update…"
+        } else {
+            "Update available"
+        };
+        p.action(
+            "update-available",
+            "update-indicator fill",
+            "download",
+            label,
+            Some(Intent::Dialog(crate::model::Dialog::Update)),
+        );
+        dismiss_banner(p, "dismiss-update", format!("update-{}", release.version));
     });
     true
 }
 
-/// What an available Hub update is doing, in one line.
-fn update_copy(hub: &Hub, version: &str) -> String {
-    if let Some(job) = hub.releases.running("hub", version) {
-        let progress = job
-            .progress
-            .as_ref()
-            .map_or(0, |p| p.received.saturating_mul(100) / p.total.max(1));
-        format!("Downloading verified update · {progress}%")
-    } else if hub.releases.prepared().is_some() {
-        "Ready. Open projects and the Hub service keep running.".into()
-    } else {
-        "Available to download.".into()
-    }
-}
-
-/// The one action that moves a Hub update on: download, cancel or restart.
-fn update_action(p: &mut Page, hub: &Hub, version: &str, size: &str) {
-    if hub.releases.prepared().is_some() {
-        p.action(
-            "restart-update",
-            &format!("primary {size}"),
-            "refresh-cw",
-            "Restart to update",
-            Some(Intent::RestartUpdate),
-        );
-    } else if let Some(job) = hub.releases.running("hub", version) {
-        p.action(
-            "cancel-hub-update",
-            size,
-            "x",
-            "Cancel",
-            Some(Intent::CancelDownload(job.id.clone())),
-        );
-    } else {
-        p.action(
-            "download-update",
-            size,
-            "download",
-            "Download update",
-            Some(Intent::PrepareUpdate),
-        );
-    }
-}
-
-/// The Hub update in full, on Settings (elsewhere it is the sidebar card).
+/// Settings keeps the available release discoverable after Later or Skip.
 pub(super) fn update(p: &mut Page, hub: &Hub) {
+    if hub.view != View::Settings {
+        return;
+    }
     let Some(release) = &hub.releases.hub else {
         return;
     };
-    let key = format!("update-{}", release.version);
-    if hub.view != View::Settings || !hub.banner_visible(&key) {
-        return;
-    }
-    p.panel("banner banner-info", |p| {
-        p.icon("download", "accent");
-        p.panel("col fill", |p| {
+    p.panel("panel-card", |p| {
+        p.panel("row", |p| {
+            p.icon("sparkles", "accent");
             p.text(
-                "toast-title",
+                "fg fill",
                 &format!("Ara Hub {} is available", release.version),
             );
-            p.text("small muted", &update_copy(hub, &release.version));
+            p.action(
+                "review-update",
+                "compact",
+                "",
+                "View update",
+                Some(Intent::Dialog(crate::model::Dialog::Update)),
+            );
         });
-        update_action(p, hub, &release.version, "compact");
-        dismiss_banner(p, "dismiss-update", key);
     });
 }
 
@@ -296,7 +277,7 @@ pub(super) fn toasts(p: &mut Page, hub: &Hub) {
         return;
     }
     p.panel("toasts", |p| {
-        for notice in &hub.notices {
+        for notice in hub.notices.iter().filter(|notice| !notice.is_error()) {
             let class = if notice.is_error() {
                 "toast toast-error"
             } else {

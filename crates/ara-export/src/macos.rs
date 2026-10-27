@@ -231,7 +231,7 @@ pub(crate) fn verify(app: &Path, work: &Path, output: &Path) -> Result<VerifyRep
     let run = work.join("verify");
     std::fs::create_dir_all(&run)?;
     let capture = output.join("verify.png");
-    let text = tools::run(
+    let text = crate::verify::run_desktop(
         Command::new(app.join("Contents/MacOS").join(EXECUTABLE))
             .arg("--headless")
             .arg("--capture")

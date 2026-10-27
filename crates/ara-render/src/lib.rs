@@ -10,5 +10,6 @@ pub mod look;
 pub mod renderer;
 pub mod scene;
 pub use renderer::{
-    NativeContent, NativeSeed, Renderer, ViewId, ViewOutput, ViewRequest, temporal_phases,
+    HdrExposure, NativeContent, NativeSeed, Renderer, ViewId, ViewOutput, ViewRequest,
+    temporal_phases,
 };

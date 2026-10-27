@@ -71,6 +71,7 @@ impl Ui {
             }
         }
         self.sync_choices()?;
+        self.prepare_popovers()?;
         let layout = self.nodes.iter().any(|n| n.dirty.layout);
         let paint = layout || self.nodes.iter().any(|n| n.dirty.paint);
         if layout {
@@ -79,9 +80,13 @@ impl Ui {
         }
         if paint {
             work.paint_nodes = self.emit_display(text_system)?;
-            // Popovers are placed against painted anchors; one that moved lays out and
-            // paints once more.
-            if self.place_popovers()? {
+            // Width clamps rewrap copy and submenus follow a menu that just flipped.
+            // Settle that dependency in this frame; ordinary popovers need one pass,
+            // idle frames none. Bound the work even for pathological anchor cycles.
+            for _ in 0..4 {
+                if !self.place_popovers()? {
+                    break;
+                }
                 self.compute_layout(text_system)?;
                 work.layout_passes += 1;
                 work.paint_nodes += self.emit_display(text_system)?;

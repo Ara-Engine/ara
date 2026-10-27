@@ -7,6 +7,7 @@ rust-version.workspace = true
 publish.workspace = true
 
 [dependencies]
+sha2.workspace = true
 ara-profile = { path = "../ara-profile" }
 ara-cmd.workspace = true
 ara-collab = { path = "../ara-collab" }

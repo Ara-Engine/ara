@@ -20,6 +20,21 @@ mod upload;
 use packing::{content_hash, pack, texture_hash, validate};
 pub(crate) use upload::{buffer, upload_image};
 
+/// The content hash and world bounds [`GpuScene::new`] gives `scene`, without
+/// uploading it (provenance for probes no view baked).
+pub(crate) fn fingerprint(scene: &Scene) -> Result<(String, [Vec3; 2])> {
+    validate(scene)?;
+    let ids = scene
+        .meshes
+        .iter()
+        .enumerate()
+        .map(|(i, m)| (m.entity, i as u32))
+        .collect();
+    let mut bounds = [Vec3::splat(f32::INFINITY), Vec3::splat(f32::NEG_INFINITY)];
+    let hash = content_hash(scene, &ids, &mut bounds);
+    Ok((hash, bounds))
+}
+
 /// A cached BLAS and the exact input revision used to build it.
 #[derive(Clone, Copy)]
 struct Geometry {

@@ -36,7 +36,7 @@ pub(crate) struct Frame {
     pub clock: [f32; 4],  // dt,exposure,near,unused
     pub inputs: [u32; 4], // config index,depth index,depth enabled,tick
     pub demands: [[u32; 4]; 16],
-    pub visuals: [u32; 4], // atlas, background, flags (linear depth/background), reserved
+    pub visuals: [u32; 4], // atlas, background, flags (linear depth/background), exposure state + 1
     pub ambient: [f32; 4],
     pub sun_direction: [f32; 4],
     pub sun_color: [f32; 4],

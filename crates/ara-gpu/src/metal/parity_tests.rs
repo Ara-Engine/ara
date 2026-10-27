@@ -40,12 +40,18 @@ fn deferred_scope_orders_in_flight_constant_writes_and_polls_without_waiting() {
     copy(&mut gpu, 16);
     assert_eq!(gpu.deferred_submission_count(), 3);
     let mut frame = gpu.end_deferred_completion().expect("end");
+    // The next frame may record while this one is in flight; a third scope refuses.
+    gpu.begin_deferred_completion()
+        .expect("a scope opens with one frame in flight");
+    let mut next = gpu.end_deferred_completion().expect("end");
     assert!(
         gpu.begin_deferred_completion().is_err(),
-        "unpolled frame blocks a new scope"
+        "two unconsumed frames block a new scope"
     );
     gpu.wait_completion(&mut frame).expect("wait");
     assert!(frame.is_resolved());
+    gpu.wait_completion(&mut next)
+        .expect("wait the overlapped frame");
     let values: Vec<u32> = bytemuck::cast_slice(&gpu.read(readback).expect("read")).to_vec();
     assert_eq!(values, [1, 2, 3, 4, 5, 6, 7, 8]);
     assert!(
@@ -215,6 +221,93 @@ fn windowless_presenter_copies_scales_and_converts_completed_frames() {
         presenter.display(&gpu, depth),
         Err(GpuError::Contract(_))
     ));
+}
+
+/// A bounded completion wait never consumes a frame it gave up on (an event pump's
+/// retry finds it pending); once the frame can finish, a later wait consumes it.
+#[test]
+fn bounded_completion_waits_leave_stalled_frames_pending() {
+    let mut gpu = device();
+    // The frame's commit waits on an event nothing has signalled yet.
+    let stall = gpu.device.newSharedEvent().expect("shared event");
+    gpu.wait_event(&stall, 1);
+    gpu.begin_deferred_completion().expect("scope");
+    gpu.submit(gpu.begin(Queue::Graphics).finish(), &[])
+        .expect("submit");
+    let mut frame = gpu.end_deferred_completion().expect("end");
+    let bound = std::time::Duration::from_millis(50);
+    let started = std::time::Instant::now();
+    let done = gpu
+        .wait_completion_for(&mut frame, bound, |_, _| {})
+        .expect("bounded wait");
+    assert!(
+        !done && !frame.is_resolved(),
+        "a timed-out wait consumed the frame"
+    );
+    assert!(
+        started.elapsed() < bound * 10,
+        "waited {:?}",
+        started.elapsed()
+    );
+    stall.setSignaledValue(1);
+    let done = gpu
+        .wait_completion_for(&mut frame, std::time::Duration::from_secs(5), |_, _| {})
+        .expect("wait");
+    assert!(done && frame.is_resolved());
+    gpu.assert_clean().expect("clean");
+}
+
+#[test]
+fn a_stalled_present_path_skips_frames_within_the_bound_and_resumes() {
+    let mut gpu = device();
+    let size = [32, 16];
+    let mut presenter = present::Presenter::new(&gpu, size).expect("presenter");
+    presenter
+        .set_frames_in_flight(true)
+        .expect("frames in flight");
+    // The device's next commit waits on an event nothing signals yet, so the frame and
+    // the copy presenting it stall like work behind a present path that never drains.
+    let stall = gpu.device.newSharedEvent().expect("shared event");
+    gpu.wait_event(&stall, 1);
+    let frame = cleared(
+        &mut gpu,
+        vk::Format::B8G8R8A8_UNORM,
+        size,
+        [0.25, 0.5, 1.0, 1.0],
+    );
+    presenter
+        .display(&gpu, frame)
+        .expect("the first copy commits");
+    let started = std::time::Instant::now();
+    presenter
+        .display(&gpu, frame)
+        .expect("a stalled present skips");
+    let waited = started.elapsed();
+    assert_eq!(presenter.skipped(), 1);
+    assert!(
+        waited >= present::PRESENT_WAIT && waited < present::PRESENT_WAIT * 3,
+        "waited {waited:?}"
+    );
+    stall.setSignaledValue(1);
+    // Once the stalled copy finishes, presents show frames again (a window's drawable
+    // pacing over many presents is covered by the `metal_sdl` hidden-window test).
+    presenter
+        .set_frames_in_flight(false)
+        .expect("the stalled copy finishes");
+    let readback = gpu
+        .create_readback_buffer(u64::from(size[0] * size[1] * 4))
+        .expect("readback");
+    presenter
+        .present(&gpu, frame, Some(readback))
+        .expect("present");
+    let pixels: Vec<u32> = bytemuck::cast_slice(&gpu.read(readback).expect("read")).to_vec();
+    // BGRA bytes of (0.25, 0.5, 1.0, 1.0).
+    assert!(
+        pixels.iter().all(|&p| p == 0xff40_80ff),
+        "{:08x}",
+        pixels[0]
+    );
+    assert_eq!(presenter.skipped(), 1);
 }
 
 #[test]

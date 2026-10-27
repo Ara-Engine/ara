@@ -120,7 +120,9 @@ camera, else framed content; F/Frame All skip terrain and ground unless selected
 bus; editor failures use ARA4500-4504 (`codes.rs`, catalog `editor.md`) and
 `Editor::report_failure` re-logs an engine error's own diagnostics. Prefabs:
 `shell/prefab_ops.rs` (from selection, apply/revert overrides; root placement is
-never an override). C#: `shell/scripts.rs` scaffolds a hot module + IDE .csproj.
+never an override). C#: `shell/scripts.rs` queues reversible `source.replace` authoring
+jobs; the shared inventory compiles sources into `.ara/scripts/`. `extensions.rs`
+publishes C# commands/menus into the native registry; callbacks return typed commands.
 Game view (D19): `app/game.rs` imports the play host's shared surfaces
 (`PlayService::surfaces`, taken in `Editor::open`) and shows texture `game-view`;
 `game_input` forwards keys/mouse to the selected client while captured (Esc releases).
@@ -135,8 +137,8 @@ C# modules ship NativeAOT. `build.run` launches it (offscreen: headless, `run.pn
 windows, UI readback); no capture route shows a window. `--verify-journey` (`app/journey.rs`) writes `journey.json` after
 every step; `--verify-first-hour` (`app/qa.rs`) replays a new user's first hour on a fresh (Hub-created) project into
 `first-hour.json`. `--verify-responsiveness` (`app/responsiveness.rs`, read by `ara-dev d26`) injects SDL-level input into
-the real loop: per-frame costs, clicks, typing, drags, Play, startup. Shell rebuilds reconcile into the retained `Ui` once
-per revision (`rebuild_if_stale`), menubar, status bar, area headers and tab bodies as parts (`Ui::reconcile_parts`);
+the real loop: per-frame costs, clicks, typing, drags, Play, startup, an unpresentable window (alone:
+`--verify-unpresentable`; it must present nothing and never stall the pump). Shell rebuilds reconcile into the retained `Ui` once per revision (`rebuild_if_stale`), menubar, status bar, area headers and tab bodies as parts (`Ui::reconcile_parts`);
 inactive `panels::keep_alive` tabs stay mounted, hidden (geometry via `Shell::shown_node`). Memoized panels
 (`shell/memo.rs`: Assets) reuse markup+bindings while their input digest holds; `cargo test` sets `ARA_EDITOR_MEMO_CHECK=1`,
 which regenerates each reuse and fails on a difference. A commit frame resolves once (`Shell::document_view`; the Shell and

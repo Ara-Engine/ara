@@ -76,6 +76,8 @@ enum Request {
     Diagnostics(DiagWrite),
     /// Answer `Settled` once everything requested before is done.
     Settle,
+    /// A tagged nonblocking physical-completion boundary.
+    Barrier(crate::files::FileCommitReceipt),
     /// Block the thread until `release` sends or closes, after telling `entered`.
     #[cfg(test)]
     Hold {
@@ -99,6 +101,11 @@ enum Request {
 /// What the thread reports; the host applies it on its own thread.
 #[derive(Debug)]
 pub(crate) enum Reply {
+    /// Committed file transitions finished on the file worker.
+    Materialized {
+        revision: u64,
+        result: Result<(), Diagnostic>,
+    },
     /// A watched file's contents changed on disk (possibly back to what the host
     /// last wrote: compare before merging).
     Changed { path: String, text: String },
@@ -138,6 +145,8 @@ pub(crate) enum Reply {
     DiagnosticsFailed { seqs: Vec<u64>, error: String },
     /// Everything requested before the matching `settle` is done.
     Settled,
+    /// Everything before this tagged boundary has completed on the worker.
+    Barrier(crate::files::FileCommitReceipt),
 }
 
 /// The host's handle on its file thread. Dropping it lets queued saves finish, then
@@ -153,6 +162,7 @@ pub(crate) struct FileThread {
     journal_len: usize,
     /// Appends sent since the compaction in progress, if one is.
     compacting: Option<usize>,
+    disconnected: bool,
 }
 
 impl std::fmt::Debug for FileThread {
@@ -217,11 +227,16 @@ impl FileThread {
             pending: 0,
             journal_len,
             compacting: None,
+            disconnected: false,
         })
     }
 
     /// Queue a journal entry; a failure comes back as `JournalFailed`.
     pub(crate) fn append(&mut self, entry: Entry) {
+        if matches!(&entry, Entry::Txn { txn, .. } if txn.ops.iter().any(|op| matches!(op, ara_doc::Op::File { .. })))
+        {
+            self.pending += 1;
+        }
         self.journal_len += 1;
         if let Some(since) = &mut self.compacting {
             *since += 1;
@@ -248,6 +263,19 @@ impl FileThread {
     /// Ask for `Settled` once everything queued so far is done.
     pub(crate) fn settle(&self) {
         self.send(Request::Settle);
+    }
+    /// Queues a tagged acknowledgement, without waiting for the worker.
+    pub(crate) fn barrier(
+        &mut self,
+        receipt: crate::files::FileCommitReceipt,
+    ) -> Result<(), Diagnostic> {
+        self.requests.send(Request::Barrier(receipt)).map_err(|_| {
+            self.disconnected = true;
+            Diagnostic::error(codes::IO, "the project file worker is unavailable")
+        })
+    }
+    pub(crate) fn disconnected(&self) -> bool {
+        self.disconnected
     }
     /// Block the thread until the returned sender sends or drops; returns once the
     /// thread is held (tests: the host must not wait for it).
@@ -291,17 +319,30 @@ impl FileThread {
     }
     /// The next reply, if one is waiting.
     pub(crate) fn try_reply(&mut self) -> Option<Reply> {
-        let reply = self.replies.try_recv().ok()?;
+        let reply = match self.replies.try_recv() {
+            Ok(reply) => reply,
+            Err(mpsc::TryRecvError::Disconnected) => {
+                self.disconnected = true;
+                return None;
+            }
+            Err(mpsc::TryRecvError::Empty) => return None,
+        };
         Some(self.count(reply))
     }
     /// The next reply, waiting for it; None if the thread is gone.
     pub(crate) fn reply(&mut self) -> Option<Reply> {
-        let reply = self.replies.recv().ok()?;
+        let reply = match self.replies.recv() {
+            Ok(reply) => reply,
+            Err(_) => {
+                self.disconnected = true;
+                return None;
+            }
+        };
         Some(self.count(reply))
     }
     fn count(&mut self, reply: Reply) -> Reply {
         match &reply {
-            Reply::Saved { .. } | Reply::Removed { .. } => {
+            Reply::Saved { .. } | Reply::Removed { .. } | Reply::Materialized { .. } => {
                 self.pending = self.pending.saturating_sub(1);
             }
             Reply::Compacted { entries, .. } => {
@@ -380,11 +421,49 @@ impl Worker {
     fn handle(&mut self, request: Request) {
         match request {
             Request::Append(entry) => {
-                if let Err(e) = self.journal.append(&entry) {
-                    self.reply(Reply::JournalFailed(Diagnostic::error(
-                        codes::IO,
-                        format!("cannot append to `.ara/journal`: {e}"),
-                    )));
+                let result = self.journal.append(&entry).map_err(|e| {
+                    Diagnostic::error(codes::IO, format!("cannot append to `.ara/journal`: {e}"))
+                });
+                if let Entry::Txn { txn, .. } = &entry
+                    && txn
+                        .ops
+                        .iter()
+                        .any(|op| matches!(op, ara_doc::Op::File { .. }))
+                {
+                    let result = result.and_then(|()| {
+                        crate::file_state::FileHistory::new(&self.root).materialize(&txn.ops)?;
+                        // A completed flush is distinct from a journaled intent:
+                        // recovery must preserve later external edits, even when
+                        // they restore bytes seen in an older transaction.
+                        let mut final_states = std::collections::BTreeMap::new();
+                        for op in &txn.ops {
+                            if let ara_doc::Op::File { path, state, .. } = op {
+                                final_states
+                                    .insert(ara_doc::file_state::path_key(path), (path, state));
+                            }
+                        }
+                        for (path, state) in final_states.into_values() {
+                            self.journal
+                                .append(&Entry::FileFlush {
+                                    path: path.clone(),
+                                    rev: txn.result,
+                                    state: state.clone(),
+                                })
+                                .map_err(|e| {
+                                    Diagnostic::error(
+                                        codes::IO,
+                                        format!("cannot record file flush: {e}"),
+                                    )
+                                })?;
+                        }
+                        Ok(())
+                    });
+                    self.reply(Reply::Materialized {
+                        revision: txn.result,
+                        result,
+                    });
+                } else if let Err(d) = result {
+                    self.reply(Reply::JournalFailed(d));
                 }
             }
             Request::Compact => {
@@ -405,6 +484,7 @@ impl Worker {
                 }
             }
             Request::Settle => self.reply(Reply::Settled),
+            Request::Barrier(receipt) => self.reply(Reply::Barrier(receipt)),
             #[cfg(test)]
             Request::Hold { entered, release } => {
                 let _ = entered.send(());
@@ -620,6 +700,7 @@ mod tests {
 
     fn txn(n: u64) -> Entry {
         Entry::Txn {
+            untracked: false,
             session: None,
             txn: serde_json::from_value(serde_json::json!({
                 "id": format!("tx_{n}"), "author": "agent:a", "base": n - 1, "result": n, "ops": []

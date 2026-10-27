@@ -117,7 +117,7 @@ impl App {
         let size = [1920, 1080];
         let overlay = {
             let surface = self.surface().context("main menu surface")?;
-            surface.resize(size)?;
+            surface.resize(size, 1.)?;
             surface.screen(Screen::Main)?;
             surface.image()?
         };

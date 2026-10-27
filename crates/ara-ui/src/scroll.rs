@@ -126,7 +126,8 @@ impl Ui {
     pub fn scrollbar_at(&self, p: [f32; 2]) -> Option<(usize, Scrollbar)> {
         let mut i = self.paint_order.iter().copied().rev().find(|i| {
             let n = &self.nodes[*i];
-            n.rect.contains(p[0], p[1])
+            self.accepts_input(*i)
+                && n.rect.contains(p[0], p[1])
                 && n.clip.contains(p[0], p[1])
                 && self.rounded_hit(*i, p[0], p[1])
         });
@@ -205,7 +206,9 @@ impl Ui {
         let mut ancestor = self.nodes[index].element.parent;
         while let Some(i) = ancestor {
             if let Some(position) = self.scroll_position(i) {
-                let r = self.nodes[i].rect;
+                // A scroll view can itself be clipped by a popup, panel or window.
+                // Reveal against what is actually visible, not its offscreen extent.
+                let r = self.nodes[i].rect.intersection(self.nodes[i].clip);
                 let dx = if target.x <= r.x && target.x + target.w >= r.x + r.w {
                     0.
                 } else if target.x < r.x {

@@ -308,6 +308,7 @@ impl Culling {
                     first: cursor as u32,
                     count: entries.len() as u32,
                     vertices: group.counts[lod],
+                    first_index: group.first_indices[lod],
                 };
                 cursor += entries.len();
             }
@@ -359,6 +360,7 @@ impl Culling {
                 first: (first + n) as u32,
                 count: 1,
                 vertices: groups.groups[g].counts[lod],
+                first_index: groups.groups[g].first_indices[lod],
             });
             self.visible[first + n] = [i as u32, groups.groups[g].first + lod as u32];
         }

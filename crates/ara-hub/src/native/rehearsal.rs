@@ -2,7 +2,7 @@
 use super::*;
 use crate::{
     connection::Event,
-    model::{Call, Intent},
+    model::{Call, DownloadPolicy, Intent},
 };
 use anyhow::{Result, ensure};
 use ara_proto::Endpoint;
@@ -28,8 +28,14 @@ pub(super) fn run(options: &Options, directory: &Path, config: &Path) -> Result<
         .call("hub.releases.configure", json!({"channel":"preview"}))
         .map_err(|e| anyhow::anyhow!("{e}"))?;
     let mut hub = Hub::new(Prefs::default(), config.to_path_buf(), None);
+    ensure!(
+        hub.prefs.hub_update_downloads == DownloadPolicy::Ask,
+        "rehearsal starts with Ask first"
+    );
     hub.releases.can_self_update = true;
     let deadline = Instant::now() + Duration::from_secs(300);
+    let mut download_requested = false;
+    let mut metadata_checks = 0_u32;
     loop {
         for method in ["hub.updates", "hub.downloads"] {
             let call = Call::Release {
@@ -46,7 +52,25 @@ pub(super) fn run(options: &Options, directory: &Path, config: &Path) -> Result<
             }
             hub.event(Event::Reply { call, result });
         }
-        for call in hub.take_calls() {
+        metadata_checks += 1;
+        let mut calls = hub.take_calls();
+        ensure!(
+            calls
+                .iter()
+                .all(|call| call.method() != "hub.update.prepare"),
+            "Ask first metadata unexpectedly started an update download"
+        );
+        ensure!(
+            hub.take_effects().is_empty(),
+            "metadata unexpectedly requested an updater or restart"
+        );
+        if hub.releases.hub.is_some() && !download_requested {
+            // The rehearsal deliberately chooses the same action as Update now.
+            hub.intent(Intent::PrepareUpdate);
+            download_requested = true;
+            calls.extend(hub.take_calls());
+        }
+        for call in calls {
             let result = client.call(call.method(), call.params());
             if let Err(error) = &result {
                 anyhow::bail!("rehearsal update call {} failed: {error}", call.method());
@@ -66,10 +90,50 @@ pub(super) fn run(options: &Options, directory: &Path, config: &Path) -> Result<
         );
         thread::sleep(Duration::from_millis(50));
     }
-    ara_update::write_json(
-        report,
-        &json!({"oldBuild":crate::build_identity(),"selected":&hub.releases.hub,"prepared":hub.releases.prepared()}),
-    )?;
+    ensure!(
+        download_requested,
+        "the verified update must follow an explicit PrepareUpdate action"
+    );
+    ensure!(
+        hub.take_effects().is_empty(),
+        "a verified-ready update applied before RestartUpdate"
+    );
+    let gate = restart_gate(config)?;
+    let mut proof = json!({
+        "oldBuild":crate::build_identity(),"oldPid":std::process::id(),"selected":&hub.releases.hub,
+        "prepared":hub.releases.prepared(),"downloadPolicy":"ask","metadataChecks":metadata_checks,
+        "metadataDidNotDownload":true,"downloadIntent":"PrepareUpdate","noApplyBeforeRestart":true,
+        "restartRequested":false,"restartGate":gate
+    });
+    ara_update::write_json(report, &proof)?;
+    if let Some(gate) = &gate {
+        let deadline = Instant::now() + Duration::from_secs(120);
+        loop {
+            match fs::read_to_string(gate) {
+                Ok(action) => {
+                    ensure!(
+                        action.trim() == "restart",
+                        "restart gate must contain the explicit action 'restart'"
+                    );
+                    break;
+                }
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+                Err(error) => return Err(error).context("read rehearsal restart gate"),
+            }
+            ensure!(
+                hub.take_effects().is_empty(),
+                "an update effect appeared while waiting for explicit restart consent"
+            );
+            ensure!(
+                Instant::now() < deadline,
+                "timed out waiting for explicit rehearsal restart action"
+            );
+            thread::sleep(Duration::from_millis(25));
+        }
+    }
+    proof["restartRequested"] = json!(true);
+    proof["restartIntent"] = json!("RestartUpdate");
+    ara_update::write_json(report, &proof)?;
     hub.intent(Intent::RestartUpdate);
     for effect in hub.take_effects() {
         if let Effect::ApplyUpdate {
@@ -83,6 +147,22 @@ pub(super) fn run(options: &Options, directory: &Path, config: &Path) -> Result<
         }
     }
     anyhow::bail!("Restart to update did not produce an updater request")
+}
+
+/// The rehearsal gate may only live under the already-isolated profile.
+fn restart_gate(config: &Path) -> Result<Option<PathBuf>> {
+    let Some(gate) = std::env::var_os("ARA_RELEASE_REHEARSAL_RESTART_GATE") else {
+        return Ok(None);
+    };
+    let gate = PathBuf::from(gate);
+    let parent = gate
+        .parent()
+        .context("rehearsal restart gate has no parent")?;
+    ensure!(
+        gate.is_absolute() && parent.canonicalize()?.starts_with(config.canonicalize()?),
+        "rehearsal restart gate must be inside its isolated config directory"
+    );
+    Ok(Some(gate))
 }
 
 fn health(marker: &Path, directory: &Path, config: &Path) -> Result<()> {

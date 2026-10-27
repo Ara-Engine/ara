@@ -10,9 +10,11 @@ workspace = true
 
 [features]
 fidelity-lab = ["ara-gpu/fidelity-lab"]
+hotpatch = ["dep:ara-hotpatch"]
 profiling = ["dep:ara-profile"]
 
 [dependencies]
+ara-hotpatch = { path = "../ara-hotpatch", optional = true, features = ["runtime"] }
 ara-json.workspace = true
 ara-profile = { path = "../ara-profile", optional = true, features = ["instrumentation"] }
 ara-gpu = { path = "../ara-gpu" }

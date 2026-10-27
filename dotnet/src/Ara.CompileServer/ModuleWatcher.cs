@@ -29,21 +29,22 @@ internal sealed class ModuleWatcher : IDisposable
     /// <summary>Starts watching a module folder.</summary>
     internal void Watch(uint slot, string dir)
     {
-        var w = new FileSystemWatcher(dir, "*.cs")
+        var w = new FileSystemWatcher(dir, "*")
         {
             IncludeSubdirectories = true,
-            NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.FileName | NotifyFilters.Size,
+            NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.FileName | NotifyFilters.DirectoryName | NotifyFilters.Size,
             InternalBufferSize = 64 * 1024,
         };
-        FileSystemEventHandler on = (_, e) => _events.Add((slot, e.FullPath, Stopwatch.GetTimestamp()));
+        static bool Relevant(string path) => path.EndsWith(".cs", StringComparison.OrdinalIgnoreCase) || path.EndsWith(ProjectInventory.ManifestSuffix, StringComparison.OrdinalIgnoreCase) || !Path.HasExtension(path);
+        FileSystemEventHandler on = (_, e) => { if (Relevant(e.FullPath)) _events.Add((slot, e.FullPath, Stopwatch.GetTimestamp())); };
         w.Changed += on;
         w.Created += on;
         w.Deleted += on;
         w.Renamed += (_, e) =>
         {
             var t = Stopwatch.GetTimestamp();
-            _events.Add((slot, e.OldFullPath, t));
-            _events.Add((slot, e.FullPath, t));
+            if (Relevant(e.OldFullPath)) _events.Add((slot, e.OldFullPath, t));
+            if (Relevant(e.FullPath)) _events.Add((slot, e.FullPath, t));
         };
         w.EnableRaisingEvents = true;
         lock (_watchers) _watchers.Add(w);

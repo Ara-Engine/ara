@@ -495,8 +495,9 @@ fn any_scene_opens_with_its_own_camera_and_agents_only_move_their_presence() {
     // File > Open Scene lists every scene, grouped before assets.
     let rows = shell.palette_rows(&mut editor, "#");
     assert!(
-        rows.iter()
-            .any(|r| r.0 == "Scenes" && r.1 == "hangar.scene" && r.2 == Some("file.open_scene")),
+        rows.iter().any(|r| r.0 == "Scenes"
+            && r.1 == "hangar.scene"
+            && r.2.as_deref() == Some("file.open_scene")),
         "{rows:?}"
     );
     let main_camera = editor.state.camera;
@@ -1053,7 +1054,7 @@ fn scene_quality_menu_offers_project_auto_and_presets_from_the_registry() {
         shell
             .palette_rows(&mut editor, "Epic")
             .iter()
-            .any(|r| r.2 == Some("view.quality.epic"))
+            .any(|r| r.2.as_deref() == Some("view.quality.epic"))
     );
     let exported = editor.action("editor.commands", json!({})).unwrap();
     let low = exported["commands"]

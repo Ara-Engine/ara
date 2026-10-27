@@ -1,5 +1,7 @@
 //! The host thread never waits on the disk: journal and diagnostics writes queue on
 //! the file thread, and `Host::flush` is the point that waits for them.
+mod file_jobs;
+mod why_paths;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
@@ -36,6 +38,29 @@ fn project(name: &str) -> PathBuf {
 fn call(host: &mut Host, method: &str, params: Value) -> Value {
     host.call(ConnId::LOCAL, method, params)
         .unwrap_or_else(|e| panic!("{method} failed:\n{e}"))
+}
+
+#[test]
+#[cfg(unix)]
+fn shutdown_releases_project_ownership_even_with_a_retained_os_handle() {
+    let dir = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../target/host-lock-tests")
+        .join(std::process::id().to_string());
+    copy_dir(
+        &Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/project"),
+        &dir,
+    );
+    let host = Host::open(Project::open(&dir).expect("project"), HostConfig::default())
+        .expect("first host");
+    let retained = host.st._lock.0.try_clone().expect("retained OS reference");
+    host.kill();
+    let reopened = Host::open(Project::open(&dir).expect("project"), HostConfig::default());
+    assert!(
+        reopened.is_ok(),
+        "shutdown must release ownership before a retained OS reference disappears: {:?}",
+        reopened.err()
+    );
+    drop(retained);
 }
 
 /// While the file thread is held (a disk stalled by an import), a command and a

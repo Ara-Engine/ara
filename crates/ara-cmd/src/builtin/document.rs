@@ -5,7 +5,7 @@ use ara_schema::{AssetRef, DocKindDesc, FieldPath, Schema, SchemaDb};
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-/// Project marker represented as a record so project changes share history and undo.
+/// Project metadata and policy represented as records so changes share history and undo.
 #[derive(Schema)]
 #[ara(record(prefix = "p"), module = "core")]
 pub struct ProjectSettings {
@@ -18,7 +18,7 @@ pub struct ProjectSettings {
 #[ara(params)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct DocCreateParams {
-    /// Project-relative output path, with the document kind's extension.
+    /// Output path relative to the authored root, with the document kind's extension.
     pub path: String,
     /// Registered kind, or the material template (.graph); inferred from the path when omitted.
     pub kind: Option<String>,
@@ -97,7 +97,7 @@ impl Command for ProjectSetMain {
         vec![json!({"scene":"@levels/arena.scene#sc_arena001"})]
     }
     fn run(ctx: &mut EditCtx<'_, '_>, p: Self::Params) -> Result<Value, Diagnostic> {
-        if ctx.read().doc().kind != "project" {
+        if ctx.read().doc().id.as_str() != "pj_project" {
             return Err(Diagnostic::error(
                 codes::INVALID_PARAMS,
                 "project.setMain targets ara.project.json",
@@ -112,6 +112,7 @@ impl Command for ProjectSetMain {
                 Diagnostic::error(codes::DOC_NOT_FOUND, "main must reference a loaded scene")
             })?;
         let path = ws
+            .index()
             .path_of(scene.id.as_str())
             .expect("loaded document has a path")
             .to_owned();
@@ -131,7 +132,7 @@ pub(super) fn register(registry: &mut Registry, db: &mut SchemaDb) {
     let _ = db.add_kind(DocKindDesc {
         name: "project".into(),
         version: 1,
-        doc: "Project startup and plugin settings; persisted as ara.project.json.".into(),
+        doc: "Project metadata in ara.project.json and policy in settings/project.json.".into(),
         id_prefix: "pj".into(),
         extension: "project.json".into(),
         records: vec!["ProjectSettings".into()],

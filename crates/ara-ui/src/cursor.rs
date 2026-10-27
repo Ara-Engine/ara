@@ -53,6 +53,9 @@ impl Ui {
         if input.scrolling() {
             return Cursor::Arrow;
         }
+        if input.scrubbing() {
+            return Cursor::ResizeEw;
+        }
         let captured = input
             .captured()
             .and_then(|id| self.by_id(id))
@@ -73,6 +76,11 @@ impl Ui {
             let n = &self.nodes[i];
             if n.state.disabled {
                 return Cursor::NotAllowed;
+            }
+            if crate::input::numeric::declared(&n.element)
+                && crate::input::numeric::grip(n.rect, position)
+            {
+                return Cursor::ResizeEw;
             }
             if captured == Some(i) {
                 if let Some(cursor) = n

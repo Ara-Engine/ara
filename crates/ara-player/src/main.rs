@@ -71,6 +71,15 @@ struct Args {
 }
 
 fn main() {
+    #[cfg(feature = "hotpatch")]
+    // SAFETY: No threads or native runtimes have started at process entry.
+    let native_args = match unsafe { ara_hotpatch::args_os() } {
+        Ok(args) => args,
+        Err(error) => {
+            eprintln!("ARA7600: {error:#}");
+            std::process::exit(2);
+        }
+    };
     let launched = Instant::now();
     match ara_crash::monitor_from_args() {
         Ok(true) => return,
@@ -104,11 +113,15 @@ fn main() {
     let _capture = match ara_crash::Capture::start(&directory, &build_id) {
         Ok(capture) => Some(capture),
         Err(error) => {
-            eprintln!("ARA-EXP-CRASH-004: {error:#}");
+            eprintln!("{error:#}");
             None
         }
     };
-    if let Err(error) = run(Args::parse(), launched) {
+    #[cfg(feature = "hotpatch")]
+    let args = Args::parse_from(native_args);
+    #[cfg(not(feature = "hotpatch"))]
+    let args = Args::parse();
+    if let Err(error) = run(args, launched) {
         eprintln!("ara-player: {error:#}");
         std::process::exit(2);
     }
@@ -178,6 +191,10 @@ struct Player {
 
 fn run(args: Args, launched: Instant) -> Result<()> {
     ara_gpu::cpu_scope!("Player.run");
+    // Probes need no pack: they open their own hidden window on this main thread.
+    if let Some(name) = &args.standalone.probe {
+        return standalone::probes::run(name);
+    }
     if args.owner.is_none() {
         if args.game.game || game_app::has_menu(&args)? {
             return game_app::run(args);
@@ -278,7 +295,11 @@ fn run(args: Args, launched: Instant) -> Result<()> {
 
 impl Player {
     fn run(&mut self) -> Result<()> {
+        #[cfg(feature = "hotpatch")]
+        let mut rust_patches = ara_hotpatch::Hotpatch::connect();
         while !self.stop {
+            #[cfg(feature = "hotpatch")]
+            rust_patches.frame_boundary();
             // Idle pool state: block on the link without spinning.
             let idle = self.world.is_none();
             let message = if idle {
@@ -377,11 +398,13 @@ impl Player {
             if let Some(embed) = &mut self.embed {
                 if let Some(source) = &world.ui {
                     let size = [embed.desc().width, embed.desc().height];
+                    let scale = embed.scale();
                     if embed.game_ui.is_none() {
-                        embed.game_ui = Some(game_ui::Surface::new(source, &world.runtime, size)?);
+                        embed.game_ui =
+                            Some(game_ui::Surface::new(source, &world.runtime, size, scale)?);
                     }
                     if let Some(ui) = &mut embed.game_ui {
-                        ui.update(&world.runtime, world.runtime.player().0, size)?;
+                        ui.update(&world.runtime, world.runtime.player().0, size, scale)?;
                     }
                 } else {
                     embed.game_ui = None;
@@ -679,6 +702,7 @@ impl Player {
                 let (Some(embed), Some(presenter)) = (&mut self.embed, &mut self.presenter) else {
                     return Err(not_embedded());
                 };
+                embed.set_scale(params.scale)?;
                 let desc = embed.resize(presenter, [params.width, params.height])?;
                 Ok(serde_json::to_value(desc)?)
             }
@@ -750,7 +774,10 @@ impl Player {
                 .map_err(anyhow::Error::from),
             embed::method::RESIZE => serde_json::from_value::<embed::ResizeParams>(params)
                 .map_err(anyhow::Error::from)
-                .and_then(|p| embed.request_resize([p.width, p.height])),
+                .and_then(|p| {
+                    embed.set_scale(p.scale)?;
+                    embed.request_resize([p.width, p.height])
+                }),
             _ => Ok(()),
         };
         if let Err(error) = applied {
@@ -887,6 +914,9 @@ impl Player {
                 let presenter2d = self
                     .presenter2d
                     .get_or_insert_with(|| Presenter2d::new(&self.args.gpu_cache));
+                if let Some(presenter) = &mut self.presenter {
+                    presenter.set_quality(params.preset.map(Into::into).unwrap_or(self.quality));
+                }
                 serde_json::to_value(world.capture(
                     &params,
                     self.presenter.as_mut(),

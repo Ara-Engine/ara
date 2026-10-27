@@ -67,8 +67,18 @@ impl MetalDevice {
         state: &RenderState,
         threads: Option<[u32; 3]>,
     ) -> Pipeline {
+        self.msl_pipeline_from(SHADERS, entries, state, threads)
+    }
+    /// [`Self::msl_pipeline`] over other shader source, after the same [`ABI`].
+    pub(super) fn msl_pipeline_from(
+        &mut self,
+        shaders: &str,
+        entries: &[(Stage, &str)],
+        state: &RenderState,
+        threads: Option<[u32; 3]>,
+    ) -> Pipeline {
         let native = native::pool(|| {
-            let source = NSString::from_str(&format!("{ABI}{SHADERS}"));
+            let source = NSString::from_str(&format!("{ABI}{shaders}"));
             let library = self
                 .device
                 .newLibraryWithSource_options_error(&source, None)
@@ -572,6 +582,82 @@ fn clear_depth_clears_only_its_tile_and_leaves_color_untouched() {
 }
 
 #[test]
+fn a_transient_depth_is_memoryless_and_lives_within_one_scope() {
+    let mut gpu = device();
+    gpu.msl_clear();
+    let transient =
+        vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT | vk::ImageUsageFlags::TRANSIENT_ATTACHMENT;
+    let depth = gpu
+        .create_image(8, 8, vk::Format::D32_SFLOAT, transient)
+        .expect("transient depth");
+    let storage = gpu
+        .images
+        .get(depth)
+        .expect("depth")
+        .raw
+        .texture
+        .storageMode();
+    assert_eq!(storage, MTLStorageMode::Memoryless);
+    assert!(matches!(
+        gpu.create_image(
+            8,
+            8,
+            vk::Format::D32_SFLOAT,
+            transient | vk::ImageUsageFlags::SAMPLED
+        ),
+        Err(GpuError::Contract(_))
+    ));
+    let color = gpu
+        .create_image(
+            8,
+            8,
+            vk::Format::R8G8B8A8_UNORM,
+            vk::ImageUsageFlags::COLOR_ATTACHMENT | vk::ImageUsageFlags::TRANSFER_SRC,
+        )
+        .expect("color");
+    let colors = gpu.create_readback_buffer(256).expect("color readback");
+    // Two scopes: the transient depth is cleared and written in tile memory each time,
+    // never loaded or stored (Metal rejects either on a memoryless texture).
+    let mut rec = gpu.begin(Queue::Graphics);
+    for clear in [Some([0., 0., 1., 1.]), None] {
+        rec.push(Command::BeginRendering {
+            colors: vec![Attachment {
+                image: color,
+                clear,
+            }],
+            depth: Some(Attachment {
+                image: depth,
+                clear: Some([1.; 4]),
+            }),
+            size: [8, 8],
+        });
+        rec.push(Command::ClearDepth {
+            origin: [2, 4],
+            size: [4, 2],
+            depth: 0.25,
+        });
+        rec.push(Command::EndRendering);
+    }
+    rec.barriers([Barrier {
+        resource: Resource::Image(color),
+        before: Access::Color,
+        after: Access::CopySource,
+        handoff: None,
+    }]);
+    rec.push(Command::ReadImage {
+        source: color,
+        destination: colors,
+    });
+    let point = gpu.submit(rec.finish(), &[]).expect("submit");
+    gpu.resolve(point).expect("resolve");
+    let pixels = words(&gpu.read(colors).expect("read color"));
+    assert!(
+        pixels.iter().all(|&p| p == 0xffff_0000),
+        "color kept across scopes"
+    );
+}
+
+#[test]
 fn the_cooked_clear_pipeline_resolves_and_names_missing_converter_artifacts() {
     let gpu = device();
     // Until the canonical host cooks metallibs, loading names the missing lane;
@@ -655,6 +741,86 @@ fn a_loading_split_is_an_independent_device_on_the_same_gpu() {
     // SAFETY: refused before any native work: `game` has submitted.
     let refused = unsafe { game.split_loading(std::env::temp_dir()) };
     assert!(matches!(refused, Err(GpuError::Contract(_))));
+}
+
+/// A long dependent loop, so work queued behind it stays unfinished for a while.
+const SPIN: &str = r#"
+kernel void spin(constant TopLevel& top [[buffer(2)]], uint id [[thread_position_in_grid]]) {
+    uint x = id;
+    for (uint i = 0; i < top.root[1]; i++) {
+        x = x * 1664525u + 1013904223u;
+    }
+    top.buffers[top.root[0]].data[id] = x;
+}
+"#;
+
+#[test]
+fn wait_for_orders_another_devices_reads_after_unfinished_work() {
+    let mut owner = device();
+    let mut borrower = device();
+    let spin = owner.msl_pipeline_from(
+        SPIN,
+        &[(Stage::Compute, "spin")],
+        &RenderState::default(),
+        Some([64, 1, 1]),
+    );
+    let scratch = storage(&mut owner, 64);
+    let slot = owner.storage_buffer(scratch).expect("slot");
+    let image = owner
+        .create_image(
+            4,
+            2,
+            vk::Format::R8G8B8A8_UNORM,
+            vk::ImageUsageFlags::COLOR_ATTACHMENT | vk::ImageUsageFlags::TRANSFER_SRC,
+        )
+        .expect("image");
+    // The owner clears the image only after a long spin, and nobody waits for it.
+    let mut rec = owner.begin(Queue::Graphics);
+    rec.push(Command::Pipeline(spin));
+    rec.push(Command::Constants(RootConstants {
+        words: [slot.index, 20_000_000, 0, 0, 0, 0, 0, 0],
+    }));
+    rec.push(Command::Dispatch([1, 1, 1]));
+    rec.barriers([Barrier {
+        resource: Resource::Buffer(scratch),
+        before: Access::Storage,
+        after: Access::Storage,
+        handoff: None,
+    }]);
+    rec.push(Command::BeginRendering {
+        colors: vec![Attachment {
+            image,
+            clear: Some([1., 0., 0., 1.]),
+        }],
+        depth: None,
+        size: [4, 2],
+    });
+    rec.push(Command::EndRendering);
+    let point = owner.submit(rec.finish(), &[]).expect("spin and clear");
+    let adopted = borrower
+        .adopt_texture(
+            owner.native_image(image).expect("native texture"),
+            vk::ImageUsageFlags::TRANSFER_SRC | vk::ImageUsageFlags::SAMPLED,
+        )
+        .expect("adopt");
+    let readback = borrower
+        .create_readback_buffer(4 * 2 * 4)
+        .expect("readback");
+    borrower.wait_for(&owner);
+    let mut rec = borrower.begin(Queue::Graphics);
+    rec.push(Command::ReadImage {
+        source: adopted,
+        destination: readback,
+    });
+    let read = borrower.submit(rec.finish(), &[]).expect("read");
+    borrower.resolve(read).expect("resolve");
+    let pixels = words(&borrower.read(readback).expect("pixels"));
+    assert!(
+        pixels.iter().all(|&p| p == 0xff00_00ff),
+        "the read ran before the owner's clear: {:08x}",
+        pixels[0]
+    );
+    owner.resolve(point).expect("owner");
 }
 
 #[test]

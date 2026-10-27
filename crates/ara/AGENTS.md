@@ -23,6 +23,8 @@ it runs (`.ara/daemon.json`), else an in-process `ara_host::Host`.
 | `ara inspect [--doc d] [entities..] [--depth n]` | `inspect` (scene-to-text; IDs or names) | unknown doc/entity |
 | `ara history [--doc] [--by author] [--limit]`, `ara review` | `history.list`, `review.list` | |
 | `ara undo [txn]`, `ara redo` | `history.undo/redo` for `--author` | nothing to undo, conflicts |
+| `ara run [--scene s] [--ticks n\|--duration seconds]` | headless fixed simulation with hash, logs and diagnostics | invalid request or runtime fault |
+| `ara capture [--scene s] [--camera id] [--path png] [--width n] [--height n] [--preset low\|medium\|high\|epic]` | offscreen scene PNG | render failure |
 | `ara accept [txn] [--entity e] [--all]`, `ara revert [txn] [--entity e]` | `review.accept/revert` | nothing to review |
 | `ara logs [--since] [--code].. [--severity] [--entity] [--subject].. [--origin] [--grep] [--all] [--budget] [--limit]` | `logs`: grouped by code (`--all`: one by one) | |
 | `ara why <question..> [--doc d] [--list]` | `why`: ranked causes, evidence, runnable fixes (`name:Crate not visible`, `ARA1302`, `@meshes/x.glb`, `is the frame slow`) | |

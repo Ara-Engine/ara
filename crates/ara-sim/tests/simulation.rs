@@ -186,6 +186,35 @@ fn normal_sessions_do_not_hash_and_sampled_recordings_keep_every_boundary() {
 }
 
 #[test]
+fn rust_patch_headers_survive_transport_and_refuse_deterministic_replay() {
+    let mut play = control(7);
+    play.record().unwrap();
+    play.step(1, &[]).unwrap();
+    let mut replay = play.finish_recording().unwrap();
+    assert!(!replay.rust_hotpatched);
+    replay.rust_hotpatched = true;
+    let replay = ara_sim::Replay::from_bytes(&replay.to_bytes().unwrap()).unwrap();
+    assert!(replay.rust_hotpatched);
+    assert!(
+        control(7)
+            .replay(&replay)
+            .unwrap_err()
+            .to_string()
+            .contains("ARA7603")
+    );
+    let mut snapshot = serde_json::to_value(play.snapshot().unwrap()).unwrap();
+    snapshot["rust_hotpatched"] = json!(true);
+    let snapshot = serde_json::from_value(snapshot).unwrap();
+    assert!(
+        control(7)
+            .restore(&snapshot)
+            .unwrap_err()
+            .to_string()
+            .contains("ARA7603")
+    );
+}
+
+#[test]
 fn projection_round_trip_and_dynamic_storage() {
     let db = schema();
     let source = scene(&db);
