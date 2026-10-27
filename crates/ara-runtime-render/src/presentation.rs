@@ -85,6 +85,13 @@ impl Presenter {
         self.look_override = look;
     }
 
+    /// Overrides the raster plan's render scale per display axis (0 < scale ≤ 1;
+    /// upscaler studies and ground truth at native resolution); `None` keeps the
+    /// preset's `raster_scale`. The ray-traced tiers keep their own scales.
+    pub fn set_render_scale(&mut self, scale: Option<f32>) {
+        self.render_scale = scale.map(|s| s.clamp(0.1, 1.));
+    }
+
     /// Renderer selection: raster everywhere, or the opt-in ray-traced tiers.
     pub fn set_render_options(&mut self, options: RenderOptions) {
         self.options = options;
@@ -191,12 +198,17 @@ impl Presenter {
             .as_mut()
             .context("presentation device initialized")?;
         renderer.gpu_mut().reset_timing_window();
-        let plan = Plan::resolve(
+        let mut plan = Plan::resolve(
             self.choice,
             &Capabilities::of(renderer.gpu()),
             self.size,
             self.options,
         )?;
+        if let (Some(scale), RenderPath::Raster(raster)) = (self.render_scale, &mut plan.path) {
+            raster.render_size = raster
+                .display_size
+                .map(|v| ((v as f32 * scale).round() as u32).clamp(1, v));
+        }
         if self.plan != Some(plan) {
             eprintln!(
                 "Ara presentation: {} (requested {}, {:?})",

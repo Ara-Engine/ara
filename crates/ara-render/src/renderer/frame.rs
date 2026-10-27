@@ -50,13 +50,23 @@ impl Renderer {
         let mut projection = camera.projection;
         let [render, display] = [self.render, self.size].map(|s| s.map(|v| v as f32));
         let mut offset = glam::Vec2::ZERO;
-        // Wireframe modes hold their edges still: no temporal jitter.
-        if !deterministic && !mode.wire() {
+        // Wireframe modes hold their edges still: no temporal jitter. An override
+        // (`set_jitter_override`) applies to every frame.
+        let jitter = if let Some(fixed) = self.jitter_override {
+            Some(glam::Vec2::from_array(fixed))
+        } else if !deterministic && !mode.wire() {
             // Halton(2,3) phases grow with the upscale (eight times the display
             // pixels per render pixel), so samples land near every display pixel.
             let phases = temporal_phases(self.render, self.size);
             let sample = self.frame_number % phases + 1;
-            let jitter = glam::Vec2::new(halton(sample, 2) - 0.5, halton(sample, 3) - 0.5);
+            Some(glam::Vec2::new(
+                halton(sample, 2) - 0.5,
+                halton(sample, 3) - 0.5,
+            ))
+        } else {
+            None
+        };
+        if let Some(jitter) = jitter {
             projection = Mat4::from_translation(Vec3::new(
                 jitter.x * 2. / render[0],
                 jitter.y * 2. / render[1],

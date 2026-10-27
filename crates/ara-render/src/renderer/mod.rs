@@ -108,6 +108,8 @@ pub struct Renderer {
     /// Unjittered view-projection of the last rendered frame (`Frame::previous_vp`).
     previous_vp: Mat4,
     frame_number: u32,
+    /// A fixed sample offset for every frame (`set_jitter_override`).
+    jitter_override: Option<[f32; 2]>,
     artifacts: PathBuf,
     shader_metadata: crate::capture::ShaderMetadata,
     last_timings: Vec<PassTiming>,
@@ -511,6 +513,14 @@ impl Renderer {
     /// The per-preset raster budgets in effect.
     pub fn quality(&self) -> &crate::look::Quality {
         &self.look.quality
+    }
+    /// Fixes every frame's sub-pixel sample offset (render pixels from the pixel
+    /// centre, each axis in [-0.5, 0.5], the temporal Halton jitter's convention),
+    /// deterministic captures included, or restores the Halton sequence (`None`).
+    /// Supersampled ground truth renders one pose at a grid of offsets and averages
+    /// the captures (upscaler studies); live views never set it.
+    pub fn set_jitter_override(&mut self, jitter: Option<[f32; 2]>) {
+        self.jitter_override = jitter;
     }
     /// Render live with TAA jitter and camera reprojection. `exposure` is the linear
     /// multiplier of a manual look; automatic looks meter instead.

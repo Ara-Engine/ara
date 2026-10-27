@@ -30,6 +30,18 @@ use std::{collections::BTreeMap, path::Path};
 
 /// Display resolution of every capture.
 pub const DISPLAY: [u32; 2] = [2560, 1440];
+
+/// The capture display size: `DISPLAY`, or `ARA_CAPTURE_DISPLAY=<w>x<h>` (4K
+/// captures match the cross-engine benchmark's region FLIP).
+fn display() -> [u32; 2] {
+    std::env::var("ARA_CAPTURE_DISPLAY")
+        .ok()
+        .and_then(|v| {
+            let (w, h) = v.split_once('x')?;
+            Some([w.trim().parse().ok()?, h.trim().parse().ok()?])
+        })
+        .unwrap_or(DISPLAY)
+}
 /// Frames composited with VFX before a still.
 const VFX_FRAMES: u32 = 24;
 /// Frames rendered at the reference exposure before scoring.
@@ -239,7 +251,7 @@ pub fn run(
         let plan = Plan::resolve(
             QualityChoice::Preset(preset),
             &capabilities,
-            DISPLAY,
+            display(),
             render_options,
         )?;
         match plan.path {
@@ -592,6 +604,8 @@ fn baseline(
                 before,
             );
         }
+        // `ARA_CAPTURE_STUDY` captures the upscaler study's frames (capture/study.rs).
+        super::study::run(&mut presenter, frame, shot, options, size)?;
         // `ARA_CAPTURE_LIVE=N` saves every fourth of N live frames as Play shows
         // them (TAA, jitter and half-resolution history running, no capture
         // reset); with `ARA_CAPTURE_MOTION` the camera walks while it turns.

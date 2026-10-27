@@ -123,6 +123,8 @@ pub struct Presenter {
     environment: Option<fidelity::EnvironmentMap>,
     /// Host look override (`set_look_override`), replacing the frame's authored look.
     look_override: Option<ara_render_fidelity::environment::FrameEnvironment>,
+    /// Raster render scale per display axis replacing the preset's (`set_render_scale`).
+    render_scale: Option<f32>,
     /// The colour lookup table the baseline renderer holds (`apply_lut`).
     lut: Option<std::sync::Arc<ara_components::post::ColorLut>>,
 }
@@ -218,6 +220,7 @@ impl Presenter {
             options: ara_render_fidelity::presets::RenderOptions::default(),
             environment: None,
             look_override: None,
+            render_scale: None,
             lut: None,
         }
     }

@@ -105,6 +105,7 @@ impl Renderer {
             compute_frame_index,
             previous_vp: Mat4::IDENTITY,
             frame_number: 0,
+            jitter_override: None,
             artifacts: artifacts.to_path_buf(),
             shader_metadata,
             last_timings: Vec::new(),
