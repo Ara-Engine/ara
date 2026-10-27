@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/*"]
+members = ["crates/*", "crates/ara-hotpatch/probe", "crates/ara-hotpatch/editor"]
 # Spikes are throwaway experiments with their own Cargo workspaces.
 exclude = ["spikes"]
 
@@ -111,6 +111,18 @@ debug = "line-tables-only"
 
 [profile.perf.package."*"]
 opt-level = 3
+
+# Subsecond's initial fat build is expensive; body edits prioritize compiler latency.
+# Shipping uses release, which never enables the hotpatch feature.
+[profile.hotpatch]
+inherits = "dev"
+opt-level = 0
+debug = "line-tables-only"
+incremental = true
+codegen-units = 256
+
+[profile.hotpatch.package."*"]
+opt-level = 1
 
 # Deterministic transport clock patches: crates/ara-net/vendor/PATCHES.md.
 [patch.crates-io]

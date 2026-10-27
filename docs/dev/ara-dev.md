@@ -510,6 +510,95 @@ MCP status query passed on that same process. Evidence is
 `target/ara-dev/perf-final-probe-results.json` and its before/after/rejection/
 recovery reports. The final capture was visually inspected.
 
+## Rust hotpatch (development)
+
+`hotpatch` is an opt-in Cargo feature, off by default. The driver requires the
+optional **dioxus-cli 0.8.0-alpha.3** (`dx`); normal builds/tests need no dx installation.
+Install it separately with `cargo install dioxus-cli --version 0.8.0-alpha.3 --locked`,
+or set `ARA_DX` to a downloaded 0.8.0-alpha.3 executable. A missing/mismatched tool reports
+ARA7600 with setup instructions. The engine stays on its pinned Rust toolchain.
+
+```
+cargo run -p ara-dev -- hotpatch --plan -- player
+cargo run -p ara-dev -- hotpatch -- player --root <frozen-pack> --offscreen
+cargo run -p ara-dev -- hotpatch -- editor <scratch-project>
+```
+
+The initial fat build is expensive. Subsequent edits use Subsecond's thin linking
+and hot function table; the `hotpatch` profile favors compiler latency. The driver
+isolates Cargo outputs, config and crash files under `target/ara-hotpatch`, uses
+four BelowNormal build jobs on Windows (two jobs on Mac), and binds dx to loopback.
+It forwards native arguments as data, without shell execution.
+
+Windows uses an MSVC-shaped facade over the pinned rust-lld plus the installed
+MSVC/SDK library environment. This is confined to the hotpatch command; ordinary
+workspace linking is unchanged. A guarded rustc facade also covers dx's direct
+workspace replay, which bypasses Cargo's normal compiler wrappers. The editor is
+launched through a bin-only tip target because dx skips a tip's own library
+when it has both lib and bin targets (upstream #5778).
+
+The CLI prerelease is required for its fix to uncaptured workspace replay (#5903).
+Ara keeps Bevy's Subsecond 0.7.10 runtime; the prerelease's patch-table schema is
+unchanged. On Windows the facade also quotes dx's raw response capture and rewrites
+only the generated `__chkstk` COFF thunk to preserve its RAX stack-size argument.
+Without that workaround, patching a 47,936-byte render recording frame overflows
+the stack. No loaded machine code is modified by Ara's linker workaround.
+
+One host owns publication. The websocket worker checks PID/build identity and
+source compatibility, then queues a patch. Publication happens between frames,
+only after all hot ECS/pass scopes have finished; a busy scope defers the patch.
+GPU work already submitted keeps its existing resources and queue-timeline
+retirement. No GPU idle wait or resource migration is added by code publication.
+The editor invalidates retained panel markup on apply. ARA7601 reports actual
+publication, ARA7602 reports rejection/rebuild, and status retains generation,
+last patch time and the rejection reason.
+DX's `compileMs` covers the tip build, so it is not edit-to-frame latency; the
+measurements below also include dependency replay, linking and delivery.
+
+The initial source contract is deliberately conservative:
+
+| Edit | Action |
+| --- | --- |
+| Synchronous body, unchanged signature/data definitions | Live at its hot entry point |
+| Type/field/enum/signature, static/TLS, build.rs, manifest or dependency change | Needs rebuild |
+| Const/async/generic/trait-implementation or closure-bearing body, impl Trait | Needs rebuild |
+| Resource creation/retirement body or unknown macro-bearing body | Needs rebuild |
+| Shader binding layout | Existing shader cohort compatibility checks apply |
+
+Old closure environments, vtables and futures are not re-instanced. Rebuild and
+restart after ARA7602 to establish a new baseline. Keep source inputs stable while
+a patch is compiling, just as for an ordinary Cargo build. No arbitrary ABI or
+resource-layout change is accepted as a live migration.
+
+Bevy ECS 0.20's experimental hotpatching dispatch is enabled for ara-sim. A patch
+changes `HotPatchChanges` before the next tick so both ordinary and exclusive
+systems refresh their function pointers. The process is explicitly tainted:
+simulation hashes and replay/snapshot headers flag it, and deterministic replay,
+checkpoint restore and network continuation refuse it with ARA7603. Local
+development simulation continues. Release hosts fail compilation with hotpatch
+enabled, and ara-export rejects a marked development executable both when making
+and when unpacking a runtime template.
+
+`ara-dev lab` can call `hotpatch::available` before choosing its Rust reload
+strategy; a missing/incompatible tool selects its existing warm-restart path.
+ARA7602 requires rebuilding/restarting rather than retrying an incompatible patch.
+No lab state or file-control protocol is owned by the hotpatch module.
+
+For a windowless real-renderer proof without game imports:
+
+```
+cargo run -p ara-dev -- hotpatch -- render-probe --output target/hotpatch-proof
+```
+
+The probe acquires the machine GPU queue after its initial build, then runs the
+renderer beneath that guard for correct load attribution. Collect generation
+captures/status and create `<output>/stop` to finish and release the queue.
+`--start-file <path>` optionally defers device creation for measurement coordination.
+The probe uses actual ara-render recording. Captures prove behavior, not D26 performance.
+
+Measured evidence and current limitations: [S11](../../spikes/s11-rust-hotpatch/RESULT.md).
+Its initial 0.39 s Mac result is a minimal loop measurement, not editor latency.
+
 ## Gate usage
 
 ```

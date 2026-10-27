@@ -45,7 +45,35 @@ enum Recipe {
 }
 
 impl Renderer {
+    /// Enter the current recording generation; GPU resources retain their timeline ownership.
+    #[inline]
     pub(super) fn render_frame(
+        &mut self,
+        camera_spec: &CameraSpec,
+        exposure: f32,
+        deterministic: bool,
+        mode: ViewMode,
+        capture: bool,
+    ) -> Result<()> {
+        #[cfg(feature = "hotpatch")]
+        {
+            ara_hotpatch::call!(
+                Self::record_frame,
+                self,
+                camera_spec,
+                exposure,
+                deterministic,
+                mode,
+                capture
+            )
+        }
+        #[cfg(not(feature = "hotpatch"))]
+        {
+            self.record_frame(camera_spec, exposure, deterministic, mode, capture)
+        }
+    }
+
+    fn record_frame(
         &mut self,
         camera_spec: &CameraSpec,
         exposure: f32,

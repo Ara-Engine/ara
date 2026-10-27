@@ -6,6 +6,9 @@ edition.workspace = true
 rust-version.workspace = true
 publish.workspace = true
 
+[features]
+hotpatch = ["ara-runtime/hotpatch", "ara-render/hotpatch", "ara-render-fidelity/hotpatch"]
+
 [dependencies]
 ara-asset = { path = "../ara-asset" }
 anyhow = { workspace = true }

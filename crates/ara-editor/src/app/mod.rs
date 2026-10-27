@@ -337,7 +337,14 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
         // converges at once instead.
         let mut last_navigation: Option<Instant> = None;
         let mut previous = Instant::now();
+        #[cfg(feature = "hotpatch")]
+        let mut rust_patches = ara_hotpatch::Hotpatch::connect();
         loop {
+            #[cfg(feature = "hotpatch")]
+            if rust_patches.frame_boundary() {
+                shell.rust_hotpatched(&mut editor)?;
+                dirty = true;
+            }
             if let Some(probe) = &mut probe {
                 probe.begin(&mut shell);
             }

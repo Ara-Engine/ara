@@ -71,6 +71,15 @@ struct Args {
 }
 
 fn main() {
+    #[cfg(feature = "hotpatch")]
+    // SAFETY: No threads or native runtimes have started at process entry.
+    let native_args = match unsafe { ara_hotpatch::args_os() } {
+        Ok(args) => args,
+        Err(error) => {
+            eprintln!("ARA7600: {error:#}");
+            std::process::exit(2);
+        }
+    };
     let launched = Instant::now();
     match ara_crash::monitor_from_args() {
         Ok(true) => return,
@@ -108,7 +117,11 @@ fn main() {
             None
         }
     };
-    if let Err(error) = run(Args::parse(), launched) {
+    #[cfg(feature = "hotpatch")]
+    let args = Args::parse_from(native_args);
+    #[cfg(not(feature = "hotpatch"))]
+    let args = Args::parse();
+    if let Err(error) = run(args, launched) {
         eprintln!("ara-player: {error:#}");
         std::process::exit(2);
     }
@@ -278,7 +291,11 @@ fn run(args: Args, launched: Instant) -> Result<()> {
 
 impl Player {
     fn run(&mut self) -> Result<()> {
+        #[cfg(feature = "hotpatch")]
+        let mut rust_patches = ara_hotpatch::Hotpatch::connect();
         while !self.stop {
+            #[cfg(feature = "hotpatch")]
+            rust_patches.frame_boundary();
             // Idle pool state: block on the link without spinning.
             let idle = self.world.is_none();
             let message = if idle {

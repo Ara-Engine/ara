@@ -1,19 +1,31 @@
 use std::path::PathBuf;
 fn main() -> ara_ui::Result<()> {
-    if std::env::args().nth(1).as_deref() == Some("--compile-scripts") {
-        let root = PathBuf::from(std::env::args_os().nth(2).ok_or("missing script project")?);
+    #[cfg(feature = "hotpatch")]
+    // SAFETY: This is process entry, before worker threads and native runtimes.
+    let arguments = unsafe { ara_hotpatch::args_os()? };
+    #[cfg(not(feature = "hotpatch"))]
+    let arguments: Vec<_> = std::env::args_os().collect();
+    let arguments = arguments
+        .into_iter()
+        .map(|a| {
+            a.into_string()
+                .map_err(|_| "editor arguments must be UTF-8")
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    if arguments.get(1).map(String::as_str) == Some("--compile-scripts") {
+        let root = PathBuf::from(arguments.get(2).ok_or("missing script project")?);
         return ara_editor::compile_scripts(&root);
     }
     ara_editor::LAUNCHED.get_or_init(std::time::Instant::now);
     if ara_crash::monitor_from_args()? {
         return Ok(());
     }
-    if std::env::args().nth(1).as_deref() == Some("--import-worker") {
+    if arguments.get(1).map(String::as_str) == Some("--import-worker") {
         ara_texture_gpu::serve_worker(&ara_importers::registry()?)?;
         return Ok(());
     }
     let mut options = ara_editor::Options::default();
-    let mut args = std::env::args().skip(1);
+    let mut args = arguments.into_iter().skip(1);
     while let Some(arg) = args.next() {
         match arg.as_str() {
             "--headless" => options.headless = true,

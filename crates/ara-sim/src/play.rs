@@ -310,6 +310,7 @@ impl PlayControl {
             seed: initial.context.seed,
             build_hash: self.build,
             schema_hash: initial.schema_hash,
+            rust_hotpatched: self.session.rust_hotpatched(),
             initial,
             hash_interval: self.session.hash_interval,
             ticks: Vec::new(),
@@ -338,6 +339,7 @@ impl PlayControl {
             .recording
             .take()
             .ok_or_else(|| SimError("not recording".into()))?;
+        replay.rust_hotpatched |= self.session.rust_hotpatched();
         if let Some(last) = replay.ticks.last_mut()
             && last.hash.is_none()
         {
@@ -350,6 +352,11 @@ impl PlayControl {
     /// Recomputes every tick and checks each recorded checkpoint and the final state.
     /// Exogenous future queues are rebuilt from the applied log once.
     pub fn replay(&mut self, replay: &Replay) -> Result<StateHash> {
+        if replay.rust_hotpatched || self.session.rust_hotpatched() {
+            return Err(SimError(
+                "ARA7603: deterministic replay requires an unpatched build and recording".into(),
+            ));
+        }
         if self.recording.is_some() {
             return Err(SimError("finish recording before replay".into()));
         }

@@ -6,7 +6,19 @@ use ara_render::graph::{Graph, State};
 impl FidelityView {
     /// Execute graph-declared passes and publish a completed offscreen output.
     /// No compiler, image readback or wall-clock sampling runs in this method.
+    #[inline]
     pub fn render(&mut self, gpu: &mut GpuDevice, input: &FrameInput<'_>) -> Result<()> {
+        #[cfg(feature = "hotpatch")]
+        {
+            ara_hotpatch::call!(Self::record_frame, self, gpu, input)
+        }
+        #[cfg(not(feature = "hotpatch"))]
+        {
+            self.record_frame(gpu, input)
+        }
+    }
+
+    fn record_frame(&mut self, gpu: &mut GpuDevice, input: &FrameInput<'_>) -> Result<()> {
         if self.shader_epoch != gpu.shader_epoch() {
             self.shader_epoch = gpu.shader_epoch();
             let directory = ara_gpu::cooked::resource_dir(

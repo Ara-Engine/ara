@@ -204,7 +204,11 @@ pub(crate) fn run(args: Args) -> Result<()> {
     }
     let mut previous = Instant::now();
     let mut frames = 0;
+    #[cfg(feature = "hotpatch")]
+    let mut rust_patches = ara_hotpatch::Hotpatch::connect();
     while !app.quit && args.standalone.frames.is_none_or(|limit| frames < limit) {
+        #[cfg(feature = "hotpatch")]
+        rust_patches.frame_boundary();
         let now = Instant::now();
         app.tick(now.duration_since(previous))?;
         previous = now;

@@ -119,6 +119,8 @@ pub struct Session {
     pub(crate) fault: Option<SimError>,
     pub(crate) providers: Vec<Box<dyn crate::StateProvider>>,
     slots: usize,
+    #[cfg(feature = "hotpatch")]
+    rust_hotpatch_generation: u64,
 }
 
 impl Session {
@@ -134,6 +136,8 @@ impl Session {
             std::thread::available_parallelism().unwrap_or(std::num::NonZeroUsize::MIN),
         );
         edit.world.insert_resource(SimContext::new(seed, config.hz));
+        #[cfg(feature = "hotpatch")]
+        edit.world.init_resource::<bevy_ecs::HotPatchChanges>();
         let mut schedule = Schedule::default();
         schedule.set_executor(SingleThreadedExecutor::new());
         schedule.set_build_settings(ScheduleBuildSettings {
@@ -158,6 +162,8 @@ impl Session {
             fault: None,
             providers: Vec::new(),
             slots: 0,
+            #[cfg(feature = "hotpatch")]
+            rust_hotpatch_generation: 0,
         })
     }
 
@@ -447,6 +453,10 @@ impl Session {
         &mut self,
         activate: impl FnOnce(&mut crate::StreamingBoundary<'_>) -> Result<()>,
     ) -> Result<TickRecord> {
+        #[cfg(feature = "hotpatch")]
+        let _hot_work = ara_hotpatch::Lease::enter();
+        #[cfg(feature = "hotpatch")]
+        self.refresh_rust_hotpatch();
         #[cfg(feature = "profiling")]
         ara_profile::scope!("sim.tick");
         if let Some(error) = &self.fault {
@@ -569,11 +579,59 @@ impl Session {
 
     /// Drives the same step through an optional external networking adapter.
     pub fn step_with_adapter(&mut self, adapter: &mut impl SessionAdapter) -> Result<TickRecord> {
+        #[cfg(feature = "hotpatch")]
+        let _hot_work = ara_hotpatch::Lease::enter();
+        #[cfg(feature = "hotpatch")]
+        if self.rust_hotpatched() {
+            return Err(SimError(
+                "ARA7603: network continuation requires a rebuild after a Rust patch".into(),
+            ));
+        }
         self.mode = adapter.mode();
         adapter.before_tick(self)?;
         let record = self.step_with_streaming(|boundary| adapter.stream(boundary))?;
         adapter.after_tick(self.world(), &record)?;
         Ok(record)
+    }
+
+    /// A Rust patch invalidates deterministic replay/network claims for this process.
+    pub fn rust_hotpatched(&self) -> bool {
+        #[cfg(feature = "hotpatch")]
+        {
+            ara_hotpatch::generation() != 0
+        }
+        #[cfg(not(feature = "hotpatch"))]
+        {
+            false
+        }
+    }
+
+    /// Run a host presentation schedule against this session's current code generation.
+    /// Authoritative ticks still go through `step`; this is for replicated mirrors.
+    pub fn run_presentation(&mut self, schedule: &mut Schedule) {
+        #[cfg(feature = "hotpatch")]
+        let _hot_work = ara_hotpatch::Lease::enter();
+        #[cfg(feature = "hotpatch")]
+        self.refresh_rust_hotpatch();
+        schedule.run(&mut self.edit.world);
+    }
+
+    #[cfg(feature = "hotpatch")]
+    fn refresh_rust_hotpatch(&mut self) {
+        use bevy_ecs::change_detection::DetectChangesMut;
+        let generation = ara_hotpatch::generation();
+        if generation != self.rust_hotpatch_generation {
+            self.rust_hotpatch_generation = generation;
+            self.edit
+                .world
+                .resource_mut::<bevy_ecs::HotPatchChanges>()
+                .set_changed();
+            ara_diag::Diagnostic::warning(
+                ara_hotpatch::DETERMINISM,
+                "Rust-patched simulation: deterministic replay and networking require a rebuild",
+            )
+            .emit();
+        }
     }
 
     /// Runs bounded catch-up from an explicitly supplied host duration.

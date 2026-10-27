@@ -788,7 +788,7 @@ impl Runtime {
             );
             schedule
         });
-        mirror.run(self.play.session_mut().world_mut());
+        self.play.session_mut().run_presentation(mirror);
         if let Some(error) = self.fault() {
             return Err(RuntimeError(error));
         }
