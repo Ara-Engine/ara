@@ -59,23 +59,27 @@ impl Transfer {
             scale,
         })
     }
-    /// Encode with `record` after all of `gpu`'s submitted work, commit and wait.
+    /// Encode with `record`, commit and wait. With `after`, the copy follows all of that
+    /// device's submitted work and its wait counts as the device's host wait; without
+    /// it (a producer-written shared slot) nothing on this process orders it.
     pub fn run(
         &mut self,
-        gpu: &MetalDevice,
+        after: Option<&MetalDevice>,
         record: impl FnOnce(&Self, &CommandBuffer) -> Result<()>,
     ) -> Result<()> {
         let cmd = self
             .queue
             .commandBuffer()
             .ok_or_else(|| nil("command buffer"))?;
-        for queue in [Queue::Graphics, Queue::Compute] {
-            let value = gpu.submitted[queue.index()];
-            if value > 0 {
-                cmd.encodeWaitForEvent_value(
-                    ProtocolObject::from_ref(&*gpu.events[queue.index()]),
-                    value,
-                );
+        if let Some(gpu) = after {
+            for queue in [Queue::Graphics, Queue::Compute] {
+                let value = gpu.submitted[queue.index()];
+                if value > 0 {
+                    cmd.encodeWaitForEvent_value(
+                        ProtocolObject::from_ref(&*gpu.events[queue.index()]),
+                        value,
+                    );
+                }
             }
         }
         record(self, &cmd)?;
@@ -83,10 +87,12 @@ impl Transfer {
         let value = self.value;
         cmd.encodeSignalEvent_value(ProtocolObject::from_ref(&*self.event), value);
         cmd.commit();
-        let signalled = gpu.waits.measure(|| {
-            self.event
-                .waitUntilSignaledValue_timeoutMS(value, WAIT_TIMEOUT_MS)
-        });
+        let event = &self.event;
+        let wait = || event.waitUntilSignaledValue_timeoutMS(value, WAIT_TIMEOUT_MS);
+        let signalled = match after {
+            Some(gpu) => gpu.waits.measure(wait),
+            None => wait(),
+        };
         if !signalled {
             return Err(GpuError::Backend(anyhow::anyhow!(
                 "Metal transfer timed out after {WAIT_TIMEOUT_MS} ms"
