@@ -29,7 +29,7 @@ impl Hub {
             validate_managed(&trash, &version)?;
         } else {
             let engine = self.registry.engine(&version)?;
-            if engine.executable != root.join("ara.exe") {
+            if !same_executable(&engine, &root) {
                 return Err(invalid(
                     "only Hub-managed installations can be uninstalled; remove registration for external builds",
                 ));
@@ -91,7 +91,11 @@ impl Hub {
                 "close projects using this engine before uninstalling",
             ));
         }
-        if self.config.engine.executable.starts_with(root) {
+        let executable = dunce::canonicalize(&self.config.engine.executable)
+            .unwrap_or_else(|_| dunce::simplified(&self.config.engine.executable).to_path_buf());
+        let root =
+            dunce::canonicalize(root).unwrap_or_else(|_| dunce::simplified(root).to_path_buf());
+        if executable.starts_with(&root) {
             return Err(invalid(
                 "this engine hosts the running Hub service; restart the service from the standalone Hub before uninstalling",
             ));
