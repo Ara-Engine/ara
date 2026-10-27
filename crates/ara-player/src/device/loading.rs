@@ -49,7 +49,7 @@ impl Loading {
         // SAFETY: No work has been submitted. The caller pauses loading queue
         // access during worker preparation when the adapter has only one queue.
         let loading = unsafe { game.split_loading(cache.join("loading"))? };
-        let parallel = loading.context().graphics != game.context().graphics;
+        let parallel = !game.shares_graphics_queue(&loading);
         Ok((Self::with_device(loading)?, game, parallel))
     }
 
