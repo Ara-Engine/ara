@@ -23,6 +23,8 @@ struct State {
     pid: u32,
     raw: AtomicU32,
     exited: AtomicBool,
+    #[cfg(windows)]
+    handle: std::os::windows::io::OwnedHandle,
 }
 /// A process handle for one logical player. Shared players refer to the same
 /// owned child; stopping a failed member stops that shared process and all members.
@@ -34,10 +36,24 @@ impl From<Child> for ChildHandle {
 }
 impl ChildHandle {
     pub(super) fn share(mut child: Child, count: usize) -> io::Result<Vec<Self>> {
+        #[cfg(windows)]
+        let handle = {
+            use std::os::windows::io::AsHandle;
+            match child.as_handle().try_clone_to_owned() {
+                Ok(handle) => handle,
+                Err(error) => {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    return Err(error);
+                }
+            }
+        };
         let state = Arc::new(State {
             pid: child.id(),
             raw: AtomicU32::new(0),
             exited: AtomicBool::new(false),
+            #[cfg(windows)]
+            handle,
         });
         let (transfer, receive) = mpsc::channel::<Child>();
         let (stop, requests) = mpsc::channel();
@@ -133,6 +149,19 @@ impl ChildHandle {
                 }
                 Ok(status_from_raw(state.raw.load(Ordering::Relaxed)))
             }
+        }
+    }
+}
+impl ara_gpu::shared::SurfaceProducer for ChildHandle {
+    fn process_id(&self) -> u32 {
+        self.id()
+    }
+    #[cfg(windows)]
+    fn process_handle(&self) -> std::os::windows::io::BorrowedHandle<'_> {
+        use std::os::windows::io::AsHandle;
+        match &self.0 {
+            Kind::Separate(child) => child.as_handle(),
+            Kind::Shared { state, .. } => state.handle.as_handle(),
         }
     }
 }

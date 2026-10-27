@@ -23,6 +23,27 @@
 //! and unified memory needs no ownership transfer.
 use serde::{Deserialize, Serialize};
 
+/// An owned producer process identity used to pull its shared surface handles.
+/// Wrappers may keep the child on a reaper thread while retaining a stable native
+/// process handle; importing must never reopen a potentially reused PID on Windows.
+pub trait SurfaceProducer {
+    /// The authenticated producer's OS process identity.
+    fn process_id(&self) -> u32;
+    /// A borrowed handle to that exact producer, retained for the duration of import.
+    #[cfg(windows)]
+    fn process_handle(&self) -> std::os::windows::io::BorrowedHandle<'_>;
+}
+impl SurfaceProducer for std::process::Child {
+    fn process_id(&self) -> u32 {
+        self.id()
+    }
+    #[cfg(windows)]
+    fn process_handle(&self) -> std::os::windows::io::BorrowedHandle<'_> {
+        use std::os::windows::io::AsHandle;
+        self.as_handle()
+    }
+}
+
 /// Images per ring: one shown, one pending and one being written.
 pub const SLOTS: usize = 3;
 
@@ -296,17 +317,17 @@ impl SharedSurface {
     /// `ara-play`); the owner checks the producer's process ID and every slot size.
     /// Unsupported (an error) on other platforms.
     pub fn duplicate_from(
-        child: &std::process::Child,
+        child: &impl SurfaceProducer,
         desc: &SurfaceDesc,
     ) -> std::io::Result<Self> {
         #[cfg(windows)]
         {
             use std::os::windows::io::AsRawHandle;
-            Self::duplicate(child.as_raw_handle(), desc)
+            Self::duplicate(child.process_handle().as_raw_handle(), desc)
         }
         #[cfg(target_os = "macos")]
         {
-            Self::lookup(child.id(), desc)
+            Self::lookup(child.process_id(), desc)
         }
         #[cfg(not(any(windows, target_os = "macos")))]
         {
