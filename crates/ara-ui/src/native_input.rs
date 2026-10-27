@@ -230,6 +230,10 @@ impl Router {
 
     /// Update uncommitted IME text. SDL's character offsets are clamped and
     /// converted to valid UTF-8 byte boundaries before reaching the retained field.
+    #[allow(
+        clippy::too_many_arguments,
+        reason = "native composition offsets and the retained UI owners are independent inputs"
+    )]
     pub fn preedit(
         &mut self,
         ui: &mut Ui,

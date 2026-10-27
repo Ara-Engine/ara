@@ -101,6 +101,16 @@ impl Monkey {
 
     /// Replay the recorded actions verbatim, independent of later UI ordering or RNG choices.
     pub fn from_journal(path: &Path, budget: Duration, output: &Path) -> ara_ui::Result<Self> {
+        let input = std::fs::canonicalize(path)?;
+        if std::fs::canonicalize(output)
+            .ok()
+            .is_some_and(|output| input == output.join("monkey-events.jsonl"))
+        {
+            return Err(
+                "Replay requires a new output directory so the original journal stays intact"
+                    .into(),
+            );
+        }
         let mut actions = VecDeque::new();
         let mut seed = 0;
         for (line, text) in std::fs::read_to_string(path)?.lines().enumerate() {
@@ -232,6 +242,7 @@ impl Monkey {
             && self.panics.is_empty()
             && self.hangs.max(self.watchdog.count()) == 0
             && self.boundary_failures == 0
+            && self.replay.as_ref().is_none_or(VecDeque::is_empty)
     }
 
     /// Persist the final summary even when an enclosing frame limit ended the run.
@@ -287,6 +298,7 @@ impl Monkey {
             "coverageComplete":unvisited.is_empty(),
             "journal":"monkey-events.jsonl",
             "replayedJournal":self.replay.is_some(),
+            "replayRemaining":self.replay.as_ref().map(VecDeque::len),
             "watchdog":"monkey-watchdog.json",
             "replay":format!("--verify-monkey --monkey-seed {} --monkey-seconds {} --monkey-steps {}",self.seed,self.budget.as_secs(),self.actions.max(1)),
             "exactReplay":"--monkey-replay <original-output>/monkey-events.jsonl --output <new-output>",

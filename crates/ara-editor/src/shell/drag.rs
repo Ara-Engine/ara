@@ -13,9 +13,7 @@ pub(crate) enum Drag {
         surface: Option<String>,
     },
     /// Resizing the inspector's label column.
-    Column {
-        start: [f32; 2],
-    },
+    Column,
 }
 impl Shell {
     /// Capture an entity, asset, component section or dock tab as a typed drag payload.
@@ -78,7 +76,7 @@ impl Shell {
             return self.finish_content_drag(editor);
         }
         match self.drag.take() {
-            Some(Drag::Column { .. }) => Ok(true),
+            Some(Drag::Column) => Ok(true),
             Some(Drag::Tab { panel, .. }) => {
                 let Some(preview) = self.drop_preview.take() else {
                     return Ok(false);

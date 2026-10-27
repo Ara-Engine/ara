@@ -305,16 +305,14 @@ impl Shell {
         let r = self.ui.nodes[i].rect;
         let edge = self.label_edge().unwrap_or(r.x + self.label_px(r.w));
         if r.contains(self.pointer[0], self.pointer[1]) && (self.pointer[0] - edge).abs() <= 4. {
-            self.drag = Some(super::Drag::Column {
-                start: self.pointer,
-            });
+            self.drag = Some(super::Drag::Column);
             return true;
         }
         false
     }
     /// Follow the pointer while resizing the label column.
     pub(crate) fn drag_column(&mut self, editor: &mut Editor) -> ara_ui::Result<bool> {
-        let Some(super::Drag::Column { .. }) = &self.drag else {
+        let Some(super::Drag::Column) = &self.drag else {
             return Ok(false);
         };
         let Some(i) = self.shown_node("inspector-scroll") else {
