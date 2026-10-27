@@ -86,6 +86,7 @@ const PLAY: &[Item] = &[
     C("play.restart"),
     C("play.simulate"),
     C("play.eject"),
+    C("play.possess"),
     S,
     Sub(
         "Mode",
@@ -783,6 +784,9 @@ pub(crate) fn context(kind: Context) -> &'static [Item] {
         ],
         Context::Play => &[
             C("play.options"),
+            C("play.simulate"),
+            C("play.eject"),
+            C("play.possess"),
             C("play.mode.local"),
             C("play.mode.host"),
             C("play.mode.dedicated"),

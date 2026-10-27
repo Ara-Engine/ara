@@ -14,7 +14,7 @@ pub struct ViewCamera {
     #[ara(unit=Meters)]
     pub target: [f32; 3],
     /// Vertical field of view, in degrees.
-    #[ara(unit=Degrees,range(min=10,max=120))]
+    #[ara(default=55,unit=Degrees,range(min=10,max=120))]
     pub fov_y_degrees: f32,
 }
 /// A per-player view switch. Null returns to that player's authored gameplay camera.

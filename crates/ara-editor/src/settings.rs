@@ -354,6 +354,18 @@ pub const DEFS: &[Def] = &[
         Lit::S("60"),
     ),
     def(
+        "play.processMode",
+        Project,
+        "Networking & Play",
+        "Play processes",
+        "Run independent player worlds in one process or a separate process per player (D19).",
+        Kind::Choice(&[
+            ("separate", "Separate process per player"),
+            ("shared", "Shared process, independent worlds"),
+        ]),
+        Lit::S("separate"),
+    ),
+    def(
         "play.networkProfiles",
         Project,
         "Networking & Play",

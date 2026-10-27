@@ -71,6 +71,8 @@ pub(crate) struct State {
     pages: BTreeMap<String, usize>,
     message: Option<String>,
     pending: Option<jobs::Pending>,
+    pub simulate: Option<bool>,
+    spectators: std::collections::BTreeSet<usize>,
 }
 impl Shell {
     pub(crate) fn toggle_play_options(&mut self, editor: &mut Editor) -> ara_ui::Result<()> {
@@ -315,6 +317,25 @@ impl Shell {
             .get("play.mode")
             .and_then(Value::as_str)
             .unwrap_or("local");
+        out.push_str("</panel><panel id='play-process-row' class='row' style='gap:8px'><text id='play-process-label' class='caption' text='Processes' />");
+        self.choice_button(
+            "play-process-mode",
+            "Process mode",
+            choices::Select {
+                destination: choices::Destination::Setting("play.processMode".into()),
+                options: vec![
+                    (json!("separate"), "Separate process per player".into()),
+                    (json!("shared"), "Shared process, independent worlds".into()),
+                ],
+                current: editor
+                    .state
+                    .settings
+                    .get("play.processMode")
+                    .cloned()
+                    .unwrap_or_else(|| json!("separate")),
+            },
+            out,
+        );
         out.push_str("</panel><panel id='play-run-options' class='row' style='gap:8px'>");
         if mode != "local" {
             self.bindings.insert(
@@ -345,6 +366,9 @@ impl Shell {
                 ("play-discard", "Discard edits", "play.runtime.discard"),
                 ("play-keep", "Keep selected", "play.keep"),
                 ("play-keep-driven", "Keep transforms", "play.keep_driven"),
+                ("play-simulate", "Simulate", "play.simulate"),
+                ("play-eject", "Eject", "play.eject"),
+                ("play-possess", "Possess selected", "play.possess"),
             ]
             .into_iter()
             .enumerate()

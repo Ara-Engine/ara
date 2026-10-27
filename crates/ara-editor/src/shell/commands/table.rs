@@ -368,6 +368,7 @@ fn play_params(e: &Editor) -> Value {
     let mut params = json!({
         "window": true,
         "mode": mode,
+        "processMode": text("play.processMode"),
         "tickHz": text("play.tickHz").parse::<u32>().unwrap_or(60),
         "startPaused": s.get("play.startPaused").and_then(Value::as_bool).unwrap_or(false),
         "seed": s.get("play.seed").and_then(Value::as_f64).unwrap_or(0.) as u64,
@@ -379,6 +380,27 @@ fn play_params(e: &Editor) -> Value {
         params["conditions"] = json!(crate::shell::play_controls::conditions(s, clients));
     }
     params
+}
+fn simulate(s: &mut Shell, e: &mut Editor) -> R {
+    if e.state.playing.is_some() {
+        return s.control_play(e, None, false);
+    }
+    if s.game_start.is_some() {
+        return Err("Play is still starting".into());
+    }
+    let mut params = play_params(e);
+    let resume = params["startPaused"] != true;
+    params["startPaused"] = json!(true);
+    params["scene"] = json!(e.state.doc);
+    params["background"] = json!(true);
+    e.embed_play(&mut params);
+    if !params["embed"].is_object() {
+        return Err("Enable Play in the Game view to use Simulate".into());
+    }
+    act(e, "editor.layout.show", json!({"panel":"game"}))?;
+    play(e, "play.start", params)?;
+    s.play_controls.simulate = Some(resume);
+    view(e, json!({"play":"paused"}))
 }
 fn undo_label(c: &Ctx, redo: bool) -> String {
     let verb = if redo { "Redo" } else { "Undo" };
@@ -1137,20 +1159,26 @@ fn build() -> Vec<Spec> {
                 Avail::Blocked("Nothing is playing".into())
             }
         }),
-        later(
+        cmd(
             "play.simulate",
             "Simulate",
             "play",
             "Alt+F5",
-            "Simulating without a player needs the in-editor Game view (D19 shared texture).",
+            "Run simulation through a spectator camera without possessing a player actor.",
+            |s,e,_|simulate(s,e),
         ),
-        later(
+        cmd(
             "play.eject",
-            "Eject / Possess",
+            "Eject",
             "",
             "F8",
-            "Eject needs the in-editor Game view (D19 shared texture).",
+            "Release the current actor and navigate through a spectator camera while simulation continues.",
+            |s,e,_|s.control_play(e,None,false),
         ),
+        cmd("play.possess","Possess Selected","user","","Give the controlled player the selected controllable actor and return to its gameplay camera.",|s,e,t|{
+            let entity=t.entity(&e.state).ok_or("Select a controllable entity first")?.to_owned();
+            s.control_play(e,Some(entity),false)
+        }),
         cmd(
             "play.mode.local",
             "Local",

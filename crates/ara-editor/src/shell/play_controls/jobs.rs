@@ -3,11 +3,24 @@ use super::*;
 use std::time::{Duration, Instant};
 
 enum Phase {
-    Inspect { player: usize, entity: String },
+    Inspect {
+        player: usize,
+        entity: String,
+    },
     Fresh,
     Patched,
     Refreshed,
     Keep,
+    Control {
+        player: usize,
+        spectator: bool,
+        resume: bool,
+    },
+    View {
+        player: usize,
+        spectator: bool,
+        resume: bool,
+    },
 }
 pub(super) struct Pending {
     id: String,
@@ -36,7 +49,9 @@ impl Shell {
             .ok_or("Start Play first")?
             .clone();
         params["world"] = json!(world);
-        params["background"] = json!(true);
+        if !matches!(method, "play.view" | "play.control") {
+            params["background"] = json!(true);
+        }
         let reply = editor.action(method, params)?;
         let id = reply["job"]
             .as_str()
@@ -123,12 +138,21 @@ impl Shell {
     }
     /// Poll at a modest cadence; these Host job lookups never wait on player IO.
     pub(crate) fn poll_play_job(&mut self, editor: &mut Editor) -> ara_ui::Result<bool> {
+        if self.play_controls.pending.is_none()
+            && self.game_running
+            && let Some(resume) = self.play_controls.simulate.take()
+        {
+            self.control_play(editor, None, resume)?;
+            return Ok(true);
+        }
         let Some(mut pending) = self.play_controls.pending.take() else {
             return Ok(false);
         };
         if editor.play_world.as_deref() != Some(pending.world.as_str()) {
             let _ = editor.action("jobs.cancel", json!({"job":pending.id}));
             self.play_controls.runtime = None;
+            self.play_controls.spectators.clear();
+            self.play_controls.simulate = None;
             self.play_controls.message =
                 Some("The runtime operation ended because Play stopped or changed".into());
             return Ok(true);
@@ -254,8 +278,79 @@ impl Shell {
                     });
                 }
             }
+            Phase::Control {
+                player,
+                spectator,
+                resume,
+            } => {
+                self.play_job(
+                    editor,
+                    "play.view",
+                    json!({"player":player,"camera":null,"captureCurrent":spectator}),
+                    Phase::View {
+                        player,
+                        spectator,
+                        resume,
+                    },
+                )?;
+            }
+            Phase::View {
+                player,
+                spectator,
+                resume,
+            } => {
+                if spectator {
+                    self.play_controls.spectators.insert(player);
+                } else {
+                    self.play_controls.spectators.remove(&player);
+                }
+                if resume {
+                    editor.action("play.resume", json!({"world":pending.world}))?;
+                    editor.action("editor.view", json!({"play":"playing"}))?;
+                }
+                self.game_captured = false;
+                self.play_controls.message=Some(if spectator {"Spectator camera active. Click this player's view to navigate; simulation continues."}else{"Selected actor possessed. Click the view to control it."}.into());
+            }
         }
         Ok(())
+    }
+    /// Eject/possess through the authority's typed op boundary, then change only this player's view.
+    pub(crate) fn control_play(
+        &mut self,
+        editor: &mut Editor,
+        entity: Option<String>,
+        resume: bool,
+    ) -> ara_ui::Result<()> {
+        self.play_idle()?;
+        if self
+            .play_controls
+            .runtime
+            .as_ref()
+            .is_some_and(|runtime| !runtime.drafts.is_empty())
+        {
+            return Err("Apply or discard runtime drafts before changing control".into());
+        }
+        let player = self.game_client;
+        let spectator = entity.is_none();
+        if let (Some(world), Some(surfaces)) = (&editor.play_world, &editor.play_surfaces) {
+            surfaces.device(
+                world,
+                player,
+                vec![ara_play_host::embed::DeviceEvent::FocusLost],
+            );
+        }
+        self.game_captured = false;
+        self.play_job(
+            editor,
+            "play.control",
+            json!({"player":player,"entity":entity}),
+            Phase::Control {
+                player,
+                spectator,
+                resume,
+            },
+        )?;
+        self.rebuild(editor)
     }
 }
 fn validate_target(editor: &Editor, shell: &Shell, runtime: &Runtime) -> ara_ui::Result<()> {
