@@ -243,6 +243,7 @@ impl Hub {
                 | "hub.engine.preflight"
                 | "hub.engine.repair"
                 | "hub.engine.uninstall"
+                | "hub.engine.uninstall.preflight"
                 | "hub.update.prepare"
         ) {
             return self.update_call(method, value);

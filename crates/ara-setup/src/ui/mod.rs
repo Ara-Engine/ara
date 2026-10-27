@@ -205,7 +205,11 @@ impl View {
             Kind::Hub => format!("Ara Hub {installed}"),
         };
         View::Confirm {
-            title: format!("Replace {}?", plan.kind.product()),
+            title: if installed == VERSION {
+                format!("Replace {}?", plan.kind.product())
+            } else {
+                format!("Update {}?", plan.kind.product())
+            },
             subtitle: if installed == VERSION {
                 "This version is already installed".into()
             } else {
@@ -296,9 +300,17 @@ impl View {
         use Action::*;
         match self {
             View::Busy(_) => Vec::new(),
-            View::Confirm { .. } => vec![
+            View::Confirm { title, .. } => vec![
                 button(Cancel, "Cancel", false),
-                button(Replace, "Replace", true),
+                button(
+                    Replace,
+                    if title.starts_with("Update ") {
+                        "Update now"
+                    } else {
+                        "Replace installation"
+                    },
+                    true,
+                ),
             ],
             View::Blocked { can_stop: true, .. } => vec![
                 button(Cancel, "Cancel", false),

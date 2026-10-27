@@ -15,9 +15,10 @@ fn render(hub: &Hub, size: [f32; 2], light: bool) -> Ui {
         thumbnail: &|_| None,
         anchor: Some([1000., 300., 32., 32.]),
         docs: &[],
+        dialog_close_hint: false,
     };
     let page = view::page(hub, &ctx);
-    let mut ui = Ui::editor(&page.markup, view::CSS, size).expect("markup and stylesheet");
+    let mut ui = Ui::editor(&page.markup, view::stylesheet(), size).expect("markup and stylesheet");
     let theme = if light {
         EditorTheme::Light
     } else {
@@ -44,6 +45,7 @@ fn agent_setup_copy_commands_use_the_verified_path_with_shell_quoting() {
         thumbnail: &|_| None,
         anchor: None,
         docs: &[],
+        dialog_close_hint: false,
     };
     let path = executable.to_string_lossy();
     let quoted = if cfg!(windows) {
@@ -98,6 +100,7 @@ fn first_run_has_no_demo_update_or_missing_art_and_template_titles_are_complete(
                 thumbnail: &|_| None,
                 anchor: None,
                 docs: &[],
+                dialog_close_hint: false,
             },
         );
         assert!(

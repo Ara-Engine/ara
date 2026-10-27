@@ -23,6 +23,7 @@ pub fn catalogue() -> Vec<Story> {
             "text" | "tab" => format!("<{tag} id='sample' test-id='subject' text='loc:example'/>"),
             // A popover is placed beside its anchor (a root child, after layout).
             "popover" => "<button id='anchor' text='loc:example' action='game.open'/><popover id='sample' test-id='subject' class='card' anchor='anchor' placement='bottom-start'><text id='example' text='loc:inventory'/><button id='child-action' text='loc:resume' action='game.resume'/></popover>".into(),
+            "tooltip" => "<button id='anchor' text='loc:resume' action='game.resume'/><tooltip id='sample' test-id='subject' class='card' anchor='anchor' placement='bottom-start'><text id='example' text='loc:example'/></tooltip>".into(),
             _ => format!("<{tag} id='sample' test-id='subject'><text id='example' text='loc:example'/><button id='child-action' text='loc:resume' action='game.resume'/></{tag}>"),
         };
         let mut story = make(&format!("widget-{tag}"), tag, &body);

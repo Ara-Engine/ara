@@ -3,7 +3,7 @@ use crate::style::Color;
 use serde::Serialize;
 use std::ops::Range;
 /// Logical-pixel rectangle in the UI viewport.
-#[derive(Clone, Copy, Debug, Default, Serialize)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Serialize)]
 pub struct Box2 {
     /// Horizontal coordinate in logical pixels.
     pub x: f32,

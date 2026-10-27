@@ -553,6 +553,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "ara-asset-host"
+version = "0.0.1-alpha"
+dependencies = [
+ "ara-asset",
+ "serde_json",
+ "tempfile",
+]
+
+[[package]]
 name = "ara-audio"
 version = "0.0.1-alpha"
 dependencies = [
@@ -1125,6 +1134,7 @@ version = "0.0.1-alpha"
 dependencies = [
  "ara-asset",
  "ara-diag",
+ "ara-doc",
  "ara-host",
  "ara-json",
  "ara-proto",
@@ -1145,6 +1155,7 @@ dependencies = [
  "ara-acoustics",
  "ara-asset",
  "ara-asset-format",
+ "ara-asset-host",
  "ara-audio",
  "ara-doc",
  "ara-import2d",

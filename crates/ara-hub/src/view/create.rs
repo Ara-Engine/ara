@@ -170,24 +170,26 @@ fn settings(p: &mut Page, hub: &Hub) {
         });
         p.panel("form-row", |p| {
             p.text("label", "Engine version");
-            p.panel("row", |p| {
-                p.panel("segment", |p| {
-                    for engine in &hub.engines {
-                        let on = form.engine.as_deref() == Some(engine.version.as_str());
-                        let class = if on { "seg seg-on" } else { "seg" };
-                        p.action(
-                            &format!("create-engine-{}", engine.version),
-                            class,
-                            "",
-                            &engine.version,
-                            Some(Intent::CreateEngine(engine.version.clone())),
-                        );
-                    }
-                    if hub.engines.is_empty() {
-                        p.text("small muted", "No engines installed");
-                    }
-                });
-            });
+            if hub.engines.is_empty() {
+                p.text("small muted", "No engines installed");
+            } else {
+                p.dropdown(
+                    "create-engine",
+                    "Engine version",
+                    hub.engines
+                        .iter()
+                        .map(|engine| {
+                            (
+                                engine.version.clone(),
+                                Intent::CreateEngine(engine.version.clone()),
+                            )
+                        })
+                        .collect(),
+                    form.engine
+                        .as_ref()
+                        .map(|version| Intent::CreateEngine(version.clone())),
+                );
+            }
             problems(p, hub, "engineVersion");
         });
         for diagnostic in form.general() {

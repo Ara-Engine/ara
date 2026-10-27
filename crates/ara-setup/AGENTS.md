@@ -9,11 +9,11 @@ runtime, no .NET, so it runs on a fresh machine.
 
 ## Behaviour
 
-- Double click: a 480 × 200 dark card (Ara Dark tokens from
+- Double click: a 560 × 240 dark dialog (Ara Dark tokens from
   `assets/themes/ara-dark.json`), centred on the pointer's monitor, per-monitor-v2
   DPI aware, DWM-rounded on Windows 11 (painted square border on Windows 10),
   dragged anywhere outside its buttons. States: Busy (verify → extract → swap →
-  register, byte progress), Confirm (replace?), Blocked (programs running from the
+  register, byte progress), Confirm (upgrade or same-version replace), Blocked (programs running from the
   folder), Error (code, message, Copy details, never auto-closes), Done (Launch Ara
   Hub). Close is ignored while busy. Enter = primary button, Esc = Cancel/Close.
 - The window appears at once; `flow::run` works on a worker thread and sends

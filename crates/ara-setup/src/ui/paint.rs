@@ -1,7 +1,7 @@
 //! Draws a [`View`] into a 32-bit DIB section: shapes through [`Canvas`], then
 //! Segoe UI text through GDI on the same pixels. The window blits the result;
 //! [`render`] returns it as RGBA for PNG previews. Layout is in logical pixels
-//! (a 480 × 200 window) times the monitor scale. Colours are the Hub's Ara Dark
+//! (a 560 × 240 dialog) times the monitor scale. Colours are the Hub's Ara Dark
 //! theme tokens (`assets/themes/ara-dark.json`).
 use super::{
     Action, Busy, View,
@@ -22,9 +22,9 @@ use windows_sys::Win32::{
 };
 
 /// Logical window width.
-pub const WIDTH: f32 = 480.0;
+pub const WIDTH: f32 = 560.0;
 /// Logical window height.
-pub const HEIGHT: f32 = 200.0;
+pub const HEIGHT: f32 = 240.0;
 /// Windows 11's window corner radius.
 pub const CORNER: f32 = 8.0;
 const PAD: f32 = 24.0;
@@ -597,7 +597,7 @@ pub fn paint(
             lead,
             destination,
         } => {
-            p.header(Tone::Warning, title, subtitle, Font::Small, colors.muted);
+            p.header(Tone::Brand, title, subtitle, Font::Small, colors.muted);
             p.text(
                 lead,
                 (PAD, 78.0, CONTENT_W, 20.0),
@@ -613,6 +613,13 @@ pub fn paint(
                 Font::Mono,
                 colors.foreground,
                 PATH,
+            );
+            p.text(
+                "Setup verifies the installer before replacing files. The previous installation is restored if replacement fails.",
+                (PAD, 144.0, CONTENT_W, 32.0),
+                Font::Small,
+                colors.muted,
+                WRAP,
             );
             let free = p.footer(view, pointer);
             p.text(
