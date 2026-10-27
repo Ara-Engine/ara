@@ -25,9 +25,9 @@ dependency graph, SDK generators/analyzers, then one NativeAOT `ara_script_init`
 image. `game/scripts.json` carries ABI/layout identity and the linked inventory.
 `ARA_DOTNET_SDK` selects SDK sources; `ARA_DOTNET_ARTIFACTS` selects prebuilt tools.
 `tests/shipping_scripts.rs` exports a behaviour, relocates the pack/image, deletes
-source, executes ticks and restores ECS state; stale ABI/layout must fail `ARA0921`.
+source, exercises all per-host callbacks in two worlds and restores ECS state; stale ABI/layout must fail `ARA0921`.
 `tests/runtime_csharp.rs` runs the full export and relocated standalone executable,
-asserting C# ECS fields through `--read` and a stale-metadata `ARA0921` failure.
+asserting C# ECS fields through `--read`, continuous native UI, and a stale-metadata `ARA0921` failure.
 Run explicitly with prebuilt `ARA_SHIPPING_E2E_PLAYER` and its matching
 `ARA_SHIPPING_E2E_PDB` (README); it retains evidence under target/.
 No implicit emulator/WSL launches. Linux supports static ELF verification here.
