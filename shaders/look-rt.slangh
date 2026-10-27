@@ -13,13 +13,14 @@ BIND(4) RaytracingAccelerationStructure acceleration[16] : register(t0,space4);
 // rtParams[0]: x reflection roughness cut, y longest ray (m), z ray-cone spread per
 //   render pixel (rad), w largest reflection blur sigma (render px).
 // rtParams[1]: x ray-origin bias (m), y bias per metre from the camera, z reflection
-//   intensity (the look's SSR tuning), w 1 where this frame's screen-space ambient
-//   light (look-shading.slangh screenAmbient) may occlude on-screen hits.
+//   intensity (the look's SSR tuning), w the rough-lobe cut (RT.Rough traces
+//   occlusion between the reflection cut and it).
 // rtInfo[0]: x TLAS (acceleration heap), y instance rows, z geometry table, w
 //   materials (buffers). rtInfo[1]: x texture residency table, y instance -> LOD 0
 //   geometry entry (u32 per instance), z this frame's reflections (sampled; 0
-//   none), w RT_ENABLED | RT_HAS_MASKED.
-static const uint RT_ENABLED=1,RT_HAS_MASKED=2;
+//   none), w RT_ENABLED | RT_HAS_MASKED | RT_SCREEN_AMBIENT (on-screen hits may take
+//   this frame's screen-space ambient light, look-shading.slangh screenAmbient).
+static const uint RT_ENABLED=1,RT_HAS_MASKED=2,RT_SCREEN_AMBIENT=4;
 // Instance masks (renderer::native::rays): opaque geometry, alpha-tested cutouts
 // (resolved in a non-opaque query) and blended/transmissive surfaces.
 static const uint RT_OPAQUE=1,RT_MASKED=2,RT_TRANSPARENT=4;
@@ -193,7 +194,7 @@ Surface rtSurface(Look l,RtHit hit,float3 direction,float width,out float3 posit
 // plane (contact darkening the probes are too coarse for). Hits off screen or hidden
 // behind other surfaces keep 1: their probe irradiance is already visibility-weighted.
 float rtScreenVisibility(Frame f,Look l,float3 position,float3 geometric){
-    if(l.rtParams[1].w<0.5)return 1;
+    if((l.rtInfo[1].w&RT_SCREEN_AMBIENT)==0)return 1;
     float4 clip=mul(f.vp,float4(position,1));if(clip.w<=0)return 1;
     float2 uv=float2(clip.x/clip.w*0.5+0.5,0.5-clip.y/clip.w*0.5);if(any(uv<=0)||any(uv>=1))return 1;
     int2 q=min(int2(uv*float2(f.extent.xy)),int2(f.extent.xy)-1);bool covered;float3 seen=gbufferWorld(f,q,covered);

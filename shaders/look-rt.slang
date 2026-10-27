@@ -28,6 +28,12 @@ float rtSigma(Look l,float roughness,float distance,float t){
     if(t<0 || t>=RT_SKY)return 0;
     return 0.7*max(roughness*roughness-0.0064,0)*t/max((distance+t)*l.rtParams[0].z,1e-6);
 }
+// The GGX lobe's dominant direction (Lagarde & de Rousiers 2014) for normal `n`,
+// view `v` and alpha `a`, kept above the surface where a normal map tilts it below.
+float3 rtDominant(float3 n,float3 v,float a){
+    float3 d=normalize(lerp(n,reflect(-v,n),(1-a)*(sqrt(1-a)+a)));
+    float below=dot(d,n);return below<0.01?normalize(d+n*(0.01-below)):d;
+}
 // Root word 1: output (storage): rgb reflected radiance, a the hit distance (above).
 // Render resolution.
 [shader("compute")][numthreads(8,8,1)]
@@ -37,10 +43,7 @@ void rtReflectMain(uint3 tid:SV_DispatchThreadID){
     [branch]if(covered && rtEnabled(l) && roughness<l.rtParams[0].x){
         float3 n=normalize(gbufferNormal(f,p)),v=normalize(f.camera.xyz-world);
         float distance=length(world-f.camera.xyz),alpha=roughness*roughness,spread=l.rtParams[0].z;
-        // The GGX lobe's dominant direction (Lagarde & de Rousiers 2014), kept above
-        // the surface where a normal map tilts it below.
-        float3 d=normalize(lerp(n,reflect(-v,n),(1-alpha)*(sqrt(1-alpha)+alpha)));
-        float below=dot(d,n);if(below<0.01)d=normalize(d+n*(0.01-below));
+        float3 d=rtDominant(n,v,alpha);
         // Biased along the normal by the depth reconstruction's and coarser raster
         // LODs' error, which grows with distance.
         float3 origin=world+n*(l.rtParams[1].x+l.rtParams[1].y*distance);
@@ -57,9 +60,65 @@ void rtReflectMain(uint3 tid:SV_DispatchThreadID){
     }
     images[NonUniformResourceIndex(root.materials)][p]=result;
 }
+// Rough lobes (from where traced mirrors fade out up to the rough cut,
+// rtParams[1].w), half resolution: ray-traced specular occlusion of the probe and
+// sky reflections. The lobe is a cone of half-angle 1.3 alpha around the dominant
+// direction; each half-resolution pixel traces four rays on a ring of it, the ring's
+// rotation and radius set by the pixel's 2x2 phase, so any 2x2 block of results
+// (rtRoughAt) is one fixed sixteen-direction quadrature: deterministic, never noise.
+// A hit blocks its sub-cone by the share of it below the hit surface's plane (half
+// when grazing it, all when facing it), so reflected silhouettes fade over the
+// lobe instead of stepping; blocked shares take the hit's radiance. Root word 1:
+// output (storage): rgb blocked radiance (premultiplied), a the blocked share.
+static const uint RT_ROUGH_RAYS=4;
+[shader("compute")][numthreads(8,8,1)]
+void rtRoughMain(uint3 tid:SV_DispatchThreadID){
+    Frame f=frame();Look l=look(f);uint2 half=(f.extent.xy+1)/2;if(any(tid.xy>=half))return;
+    int2 p=min(int2(tid.xy)*2,int2(f.extent.xy)-1);float4 result=0;
+    bool covered;float3 world=gbufferWorld(f,p,covered);float roughness=gbufferMaterial(f,p).x;
+    [branch]if(covered && rtEnabled(l) && roughness>=0.8*l.rtParams[0].x && roughness<l.rtParams[1].w){
+        float3 n=normalize(gbufferNormal(f,p)),v=normalize(f.camera.xyz-world);
+        float distance=length(world-f.camera.xyz),alpha=roughness*roughness,spread=2*l.rtParams[0].z;
+        float3 d=rtDominant(n,v,alpha),origin=world+n*(l.rtParams[1].x+l.rtParams[1].y*distance);
+        float3 t1=normalize(cross(abs(d.y)<0.99?float3(0,1,0):float3(1,0,0),d)),t2=cross(d,t1);
+        float cone=min(1.3*alpha,1.2),sub=cone/3;uint phase=(tid.x&1)+2*(tid.y&1);
+        float radius=tan(cone*sqrt((float(phase)+0.5)/4)*0.9);
+        float3 blocked=0;float share=0,valid=0;
+        for(uint i=0;i<RT_ROUGH_RAYS;i++){
+            float phi=(float(i)+float(phase)*0.25)*(2*PI/RT_ROUGH_RAYS);
+            float3 dir=normalize(d+radius*(cos(phi)*t1+sin(phi)*t2));
+            // Directions below the surface are its own masking (the split-sum
+            // albedo's), not the scene's.
+            if(dot(dir,n)<0.01)continue;
+            valid+=1;RtHit hit;
+            if(rtTrace(f,l,origin,dir,l.rtParams[0].y,hit,RT_OPAQUE|RT_MASKED,tan(sub))){
+                float width=spread*(distance+hit.distance)+2*tan(sub)*hit.distance;
+                float3 position,geometric;Surface s=rtSurface(l,hit,dir,width,position,geometric);
+                s.ao=min(s.ao,rtScreenVisibility(f,l,position,geometric));
+                float c=0.5+0.5*saturate(asin(saturate(dot(-dir,geometric)))/sub);
+                blocked+=rtShadeHit(f,l,s,position,geometric,-dir)*c;share+=c;
+            }
+        }
+        if(valid>0)result=float4(min(blocked/valid,float3(60000)),share/valid);
+    }
+    images[NonUniformResourceIndex(root.materials)][tid.xy]=result;
+}
+// The rough lobes' occlusion at full-resolution pixel `p` (`image`: RT.Rough's
+// result): the 2x2 half-resolution results around it, equally weighted so their
+// four ring phases form the whole quadrature, rejecting other surfaces by depth.
+float4 rtRoughAt(Frame f,uint image,int2 p){
+    int2 half=int2((f.extent.xy+1)/2),b=int2(floor((float2(p)+0.5)*0.5-0.5));
+    float depth=pixel(f.extra.x,p).x;float4 sum=0,nearest=0;float total=0,best=1e30;
+    for(uint k=0;k<4;k++){
+        int2 q=clamp(b+int2(k&1,k>>1),int2(0),half-1);float dz=abs(pixel(f.extra.x,q*2).x/max(depth,1e-7)-1);
+        float w=exp(-dz*40);float4 r=pixel(image,q);sum+=r*w;total+=w;if(dz<best){best=dz;nearest=r;}
+    }
+    return total>1e-3?sum/total:nearest;
+}
 // One axis of the reflection blur. Root words: 1 input (sampled), 2 output
-// (storage), 3 axis (0 x; 1 y, which also composites the traced reflections over
-// screen-space ones: rgb and a combined confidence, as screenReflection returns).
+// (storage), 3 axis (0 x; 1 y, which also composites the traced reflections and
+// the rough lobes' occlusion, word 4, over screen-space ones: rgb and a combined
+// confidence, as screenReflection returns).
 // Nine taps at half-sigma steps (two sigmas each side), weighted by the Gaussian,
 // the tap's distance from the pixel's tangent plane, normal similarity and the
 // similarity of the reflected hit distances, so reflections never blur across the
@@ -91,8 +150,15 @@ void rtFilterMain(uint3 tid:SV_DispatchThreadID){
         // Traced reflections fade out towards the roughness cut and where the lobe's
         // blur outgrows the filter (probe and environment reflections take over).
         float confidence=c.a<0?0:(1-saturate((roughness/l.rtParams[0].x-0.8)/0.2))*saturate(2-lobe/max(l.rtParams[0].w,1e-3))*l.rtParams[1].z;
-        float4 screen=screenReflection(f,l,p);float a=confidence+screen.a*(1-confidence);
-        o=float4(a>1e-4?(o.rgb*confidence+screen.rgb*screen.a*(1-confidence))/a:float3(0),a);
+        // Rough lobes (root word 4: RT.Rough's result): the share local geometry
+        // blocks, rising as traced mirrors fade and fading out towards the rough
+        // cut; the unblocked share keeps the probe and sky reflections ibl falls back to.
+        float4 rough=rtRoughAt(f,root.cascade,p);
+        float occluded=saturate(rough.a)*saturate((roughness/l.rtParams[0].x-0.8)/0.2)*(1-saturate((roughness/max(l.rtParams[1].w,1e-3)-0.8)/0.2))*l.rtParams[1].z;
+        float traced=confidence+occluded*(1-confidence);
+        float3 tracedColour=traced>1e-4?(o.rgb*confidence+(rough.a>1e-4?rough.rgb/rough.a:float3(0))*occluded*(1-confidence))/traced:float3(0);
+        float4 screen=screenReflection(f,l,p);float a=traced+screen.a*(1-traced);
+        o=float4(a>1e-4?(tracedColour*traced+screen.rgb*screen.a*(1-traced))/a:float3(0),a);
     }
     images[NonUniformResourceIndex(root.material)][p]=o;
 }

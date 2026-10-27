@@ -96,8 +96,13 @@ pub struct Quality {
 pub struct RayQueries {
     /// Surfaces at most this rough trace one reflection ray per pixel (the GGX
     /// lobe's dominant direction, cone-filtered by roughness and hit distance);
-    /// rougher ones keep screen-space, probe and environment reflections.
+    /// rougher ones use `rough_roughness`.
     pub reflection_roughness: f32,
+    /// Rougher surfaces, up to this, trace four rays per 2x2 pixels inside the lobe
+    /// (half resolution): the share of the lobe that local geometry blocks takes
+    /// that geometry's radiance over the probe and sky reflections (ray-traced
+    /// specular occlusion); at least `reflection_roughness`, at most one.
+    pub rough_roughness: f32,
     /// Longest reflection ray in metres; misses see the sky.
     pub distance: f32,
 }
@@ -302,7 +307,8 @@ impl Quality {
                 })
                 && self.ray_queries.is_none_or(|r| {
                     r.reflection_roughness > 0.
-                        && r.reflection_roughness <= 1.
+                        && r.reflection_roughness <= r.rough_roughness
+                        && r.rough_roughness <= 1.
                         && r.distance.is_finite()
                         && r.distance > 0.
                 }),

@@ -48,6 +48,8 @@ pub(super) enum RtPass {
     Accel,
     /// One reflection ray per render pixel (`rtReflectMain`).
     Reflect,
+    /// Rough lobes' occlusion, four rays per 2x2 pixels (`rtRoughMain`).
+    Rough,
     /// Blur axis 0 (x) or 1 (y, composited with screen-space reflections).
     Filter(u32),
 }
@@ -61,6 +63,8 @@ struct Pipelines {
     /// Transmissive forward draws refracting through traced interfaces
     /// (`nativeForwardRefractRtFragment`, shaders/native-refract-rt.slang).
     refract: Pipeline,
+    /// Rough lobes' ray-traced occlusion (`rtRoughMain`).
+    rough: Pipeline,
 }
 
 struct Blas {
@@ -76,14 +80,15 @@ struct Tlas {
     built: bool,
 }
 
-/// The traced (then composited) image and the blur's intermediate, RGBA16F at the
-/// largest render size seen; shared by every camera (no history).
+/// The traced (then composited) image and the blur's intermediate at the largest
+/// render size seen, and the rough lobes' occlusion at half of it; RGBA16F, shared
+/// by every camera (no history).
 struct Images {
     size: [u32; 2],
-    images: [Image; 2],
-    sampled: [u32; 2],
-    storage: [u32; 2],
-    states: [State; 2],
+    images: [Image; 3],
+    sampled: [u32; 3],
+    storage: [u32; 3],
+    states: [State; 3],
 }
 
 /// The published generation the structures describe.
@@ -98,7 +103,7 @@ struct Content {
 /// This frame's graph identities, from `declare` until `finish`.
 struct Ids {
     tlas: ResourceId,
-    images: [ResourceId; 2],
+    images: [ResourceId; 3],
 }
 
 /// Hybrid ray-query state of a renderer: acceleration structures over its native
@@ -130,11 +135,12 @@ pub(super) struct Rays {
 }
 
 /// Cooked recipes, in `Pipelines` field order.
-const RECIPES: [&str; 4] = [
+const RECIPES: [&str; 5] = [
     "look_rt_reflect",
     "look_rt_filter",
     "lighting_high_rt",
     "native_forward_refract_rt",
+    "look_rt_rough",
 ];
 
 /// The ray-query PSOs, compiled off-thread (`GpuDevice::prepare_pipelines`) the
@@ -212,7 +218,7 @@ impl Psos {
         if let Self::Pending(ticket) = *self
             && let Some(handles) = gpu.poll_prepared_pipelines(ticket)?
         {
-            let [reflect, filter, lighting, refract]: [Pipeline; RECIPES.len()] = handles
+            let [reflect, filter, lighting, refract, rough]: [Pipeline; RECIPES.len()] = handles
                 .try_into()
                 .map_err(|_| anyhow::anyhow!("hybrid PSO count differs"))?;
             *self = Self::Ready(Pipelines {
@@ -220,6 +226,7 @@ impl Psos {
                 filter,
                 lighting,
                 refract,
+                rough,
             });
         }
         Ok(match self {
@@ -530,19 +537,21 @@ impl Rays {
                 gpu.retire(Resource::Image(image))?;
             }
         }
-        let mut images = Vec::with_capacity(2);
-        for _ in 0..2 {
+        // The trace and the blur's intermediate at full size, rough occlusion at half.
+        let half = size.map(|v| v.div_ceil(2));
+        let mut images = Vec::with_capacity(3);
+        for extent in [size, size, half] {
             let image = gpu.create_image(
-                size[0],
-                size[1],
+                extent[0],
+                extent[1],
                 vk::Format::R16G16B16A16_SFLOAT,
                 vk::ImageUsageFlags::SAMPLED | vk::ImageUsageFlags::STORAGE,
             )?;
             images.push(image);
         }
-        let images = [images[0], images[1]];
-        let mut sampled = [0; 2];
-        let mut storage = [0; 2];
+        let images = [images[0], images[1], images[2]];
+        let mut sampled = [0; 3];
+        let mut storage = [0; 3];
         for (i, &image) in images.iter().enumerate() {
             sampled[i] = gpu.sampled_image(image, false)?.index;
             storage[i] = gpu.storage_image(image)?.index;
@@ -555,7 +564,7 @@ impl Rays {
             states: [State {
                 access: Access::Undefined,
                 queue: Queue::Graphics,
-            }; 2],
+            }; 3],
         });
         Ok(())
     }
@@ -586,12 +595,11 @@ impl Rays {
         );
         // Radians per render pixel at the image centre.
         let spread = 2. / (projection_y.abs().max(1e-6) * render[1].max(1) as f32);
-        let flags = 1 | if self.masked { 2 } else { 0 };
-        // On-screen hits take this frame's screen-space ambient light: the High/Epic
-        // visibility bitmask (look::gpu bitmask_ao), whose image layout shading reads.
-        let screen_ambient = f32::from(u8::from(
-            quality.high_tier && quality.ambient_occlusion.is_some(),
-        ));
+        // Enabled, alpha-tested instances, and whether on-screen hits take this frame's
+        // screen-space ambient light (the High/Epic visibility bitmask, look::gpu
+        // bitmask_ao, whose image layout shading reads).
+        let screen_ambient = quality.high_tier && quality.ambient_occlusion.is_some();
+        let flags = 1 | u32::from(self.masked) << 1 | u32::from(screen_ambient) << 2;
         frame.rt_params = [
             [
                 settings.reflection_roughness,
@@ -599,7 +607,12 @@ impl Rays {
                 spread,
                 MAX_SIGMA,
             ],
-            [BIAS, BIAS_PIXELS * spread, intensity, screen_ambient],
+            [
+                BIAS,
+                BIAS_PIXELS * spread,
+                intensity,
+                settings.rough_roughness,
+            ],
         ];
         frame.rt_info = [
             [
@@ -644,6 +657,7 @@ impl Rays {
             images: [
                 graph.import(Resource::Image(images.images[0]), images.states[0]),
                 graph.import(Resource::Image(images.images[1]), images.states[1]),
+                graph.import(Resource::Image(images.images[2]), images.states[2]),
             ],
         };
         let mut passes = Vec::new();
@@ -659,13 +673,14 @@ impl Rays {
             graph.after(accel, gbuffer)?;
             passes.push((accel, RtPass::Accel));
         }
-        let [trace, blur] = ids.images;
+        let [trace, blur, rough] = ids.images;
         let stages = [
             (
                 "RT.Reflect",
                 RtPass::Reflect,
                 vec![(trace, Access::Storage)],
             ),
+            ("RT.Rough", RtPass::Rough, vec![(rough, Access::Storage)]),
             (
                 "RT.Filter.X",
                 RtPass::Filter(0),
@@ -674,7 +689,11 @@ impl Rays {
             (
                 "RT.Filter.Y",
                 RtPass::Filter(1),
-                vec![(blur, Access::ShaderRead), (trace, Access::Storage)],
+                vec![
+                    (blur, Access::ShaderRead),
+                    (rough, Access::ShaderRead),
+                    (trace, Access::Storage),
+                ],
             ),
         ];
         for (name, pass, uses) in stages {
@@ -739,6 +758,17 @@ impl Rays {
                 }));
                 recorder.push(Command::Dispatch(groups));
             }
+            RtPass::Rough => {
+                recorder.push(Command::Pipeline(pipelines.rough));
+                recorder.push(Command::Constants(RootConstants {
+                    words: [frame, images.storage[2], 0, 0, 0, 0, 0, 0],
+                }));
+                recorder.push(Command::Dispatch([
+                    render[0].div_ceil(2).div_ceil(8),
+                    render[1].div_ceil(2).div_ceil(8),
+                    1,
+                ]));
+            }
             RtPass::Filter(axis) => {
                 let (input, output) = if axis == 0 { (0, 1) } else { (1, 0) };
                 recorder.push(Command::Pipeline(pipelines.filter));
@@ -748,7 +778,7 @@ impl Rays {
                         images.sampled[input],
                         images.storage[output],
                         axis,
-                        0,
+                        images.sampled[2],
                         0,
                         0,
                         0,

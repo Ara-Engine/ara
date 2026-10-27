@@ -26,12 +26,14 @@ pub enum QualityPreset {
     /// 0.4 scale, rough reflections from the probe field above roughness 0.35.
     Medium,
     /// Raster: four 2048 cascades to 150 m; on RT devices (D29) hardware ray
-    /// queries reflect surfaces below roughness 0.3. Ray traced: ReSTIR at half
-    /// scale, paths ending in the probe field after one traced event.
+    /// queries reflect surfaces below roughness 0.3 and occlude rougher reflections
+    /// up to 0.6. Ray traced: ReSTIR at half scale, paths ending in the probe field
+    /// after one traced event.
     High,
     /// Raster: four cascades to 250 m, the largest GI budget; on RT devices ray
-    /// queries reflect surfaces below roughness 0.5. Ray traced: ReSTIR at
-    /// two-thirds scale with two traced events before the probe field.
+    /// queries reflect surfaces below roughness 0.5 and occlude rougher ones up
+    /// to 0.8. Ray traced: ReSTIR at two-thirds scale with two traced events before
+    /// the probe field.
     Epic,
 }
 
@@ -326,10 +328,12 @@ impl QualityPreset {
             })
         };
         // D29 hybrid ray queries (High/Epic): mirror and glossy reflections below
-        // the roughness cut. `Plan::resolve` drops them on devices without RT.
-        let rays = |reflection_roughness, distance| {
+        // the roughness cut, ray-traced occlusion of rougher ones up to the
+        // second cut. `Plan::resolve` drops them on devices without RT.
+        let rays = |reflection_roughness, rough_roughness, distance| {
             Some(RayQueries {
                 reflection_roughness,
+                rough_roughness,
                 distance,
             })
         };
@@ -405,7 +409,7 @@ impl QualityPreset {
                 }),
                 depth_of_field: dof(32, 0.02),
                 motion_blur: motion(12, 32.),
-                ray_queries: rays(0.3, 1500.),
+                ray_queries: rays(0.3, 0.6, 1500.),
             },
             Self::Epic => Quality {
                 shadows: shadows(4, 2048, 250., (2048, 2000.)),
@@ -433,7 +437,7 @@ impl QualityPreset {
                 }),
                 depth_of_field: dof(48, 0.025),
                 motion_blur: motion(16, 32.),
-                ray_queries: rays(0.5, 2000.),
+                ray_queries: rays(0.5, 0.8, 2000.),
             },
         }
     }

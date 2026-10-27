@@ -471,6 +471,20 @@
       "vertex_stride": 0
     }
   },
+  "look_rt_rough": {
+    "entries": {
+      "rtRoughMain": "compute"
+    },
+    "source": "look-rt.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
   "look_sky_irradiance": {
     "entries": {
       "skyIrradianceMain": "compute"

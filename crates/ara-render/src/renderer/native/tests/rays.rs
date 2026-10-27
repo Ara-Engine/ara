@@ -101,6 +101,7 @@ fn hybrid_reflections_see_what_the_screen_cannot_and_raster_presets_trace_nothin
         high_tier: true,
         ray_queries: Some(RayQueries {
             reflection_roughness: 0.3,
+            rough_roughness: 0.6,
             distance: 100.,
         }),
         ..Quality::default()
