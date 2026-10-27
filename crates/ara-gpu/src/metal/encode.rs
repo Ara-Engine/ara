@@ -15,6 +15,7 @@ use super::abi::{ARGUMENT_BUFFER_BIND_POINT, VERTEX_BUFFER_BIND_POINT};
 use super::native::{level_bytes, nil};
 use super::pipeline::NativePipeline;
 use super::scratch::{Chunk, Scratch};
+use crate::attachments::{self, Load, Ops};
 use crate::commands::{Attachment, Command, CommandList};
 use crate::{Access, GpuError, Pipeline, Queue, Result};
 use ash::vk;
@@ -43,12 +44,31 @@ fn stages(access: Access) -> MTLStages {
     match access {
         Access::Undefined | Access::HostRead | Access::HostWrite => MTLStages::empty(),
         Access::Vertex | Access::Index => MTLStages::Vertex,
-        Access::Indirect | Access::ShaderRead | Access::Storage | Access::AsRead => SHADER_STAGES,
+        Access::Indirect
+        | Access::ShaderRead
+        | Access::Storage
+        | Access::AsRead
+        | Access::Geometry => SHADER_STAGES,
         // Attachment loads, depth tests and stores all run in the fragment stage.
         Access::Color | Access::Depth => MTLStages::Fragment,
         Access::CopySource | Access::CopyDestination => MTLStages::Blit,
         Access::AsBuild | Access::AsInput => MTLStages::AccelerationStructure,
     }
+}
+
+/// Metal load and store actions for one attachment's operations.
+fn actions(ops: Ops) -> (MTLLoadAction, MTLStoreAction) {
+    let load = match ops.load {
+        Load::Clear => MTLLoadAction::Clear,
+        Load::Keep => MTLLoadAction::Load,
+        Load::DontCare => MTLLoadAction::DontCare,
+    };
+    let store = if ops.store {
+        MTLStoreAction::Store
+    } else {
+        MTLStoreAction::DontCare
+    };
+    (load, store)
 }
 
 /// Draw families with different vertex-input rules.
@@ -92,6 +112,8 @@ struct Recording<'a> {
     stamp: Option<usize>,
     /// Slots that reuse an earlier one, as `(slot, written slot)`.
     aliases: Vec<(usize, usize)>,
+    /// Attachment operations of the list's remaining rendering scopes, in order.
+    scopes: std::vec::IntoIter<Vec<Ops>>,
     /// Passes begun so far, and the indices of passes still open.
     passes: usize,
     open: Vec<usize>,
@@ -147,6 +169,10 @@ impl MetalDevice {
             heap,
             stamp: None,
             aliases: Vec::new(),
+            scopes: attachments::ops(&list.commands, |image| {
+                self.images.get(image).is_ok_and(|i| i.raw.memoryless())
+            })
+            .into_iter(),
             passes: 0,
             open: Vec::new(),
             scope: [0; 2],
@@ -172,6 +198,10 @@ impl MetalDevice {
                     return Err(GpuError::Contract(
                         "Barriers must be outside rendering scopes".into(),
                     ));
+                }
+                // A discard orders nothing; `attachments::ops` already consumed it.
+                if barrier.after == Access::Undefined {
+                    return Ok(());
                 }
                 // Order later work in this encoder, and in any encoder opened next.
                 if let Active::Compute(encoder) = &rec.active {
@@ -306,6 +336,38 @@ impl MetalDevice {
                         );
                 }
             }
+            Command::DrawIndexedProcedural {
+                indices,
+                first_index,
+                count,
+                instances,
+            } => {
+                let buffer = &self.buffers.get(*indices)?.raw;
+                let first = u64::from(*first_index) * 4;
+                let end = first + u64::from(*count) * 4;
+                if *count == 0
+                    || *instances == 0
+                    || end > buffer.size
+                    || !buffer.usage.contains(vk::BufferUsageFlags::INDEX_BUFFER)
+                {
+                    return Err(GpuError::Contract("Invalid indexed procedural draw".into()));
+                }
+                let address = buffer.buffer.gpuAddress() + first;
+                self.bind_render(rec, DrawKind::Procedural)?;
+                // SAFETY: the checked index range lies inside the resident index buffer;
+                // the pipeline has no vertex input.
+                unsafe {
+                    rec.render()?
+                        .drawIndexedPrimitives_indexCount_indexType_indexBuffer_indexBufferLength_instanceCount(
+                            MTLPrimitiveType::Triangle,
+                            *count as usize,
+                            MTLIndexType::UInt32,
+                            address,
+                            (end - first) as usize,
+                            *instances as usize,
+                        );
+                }
+            }
             Command::EndRendering => {
                 rec.render()?;
                 rec.end();
@@ -413,9 +475,13 @@ impl MetalDevice {
                 rec.timestamp(2 + 2 * pass);
                 rec.cmd.popDebugGroup();
             }
-            Command::BuildAccelerationStructure(_) | Command::DrawMeshTasksIndirect { .. } => {
+            Command::BuildAccelerationStructure(structure) => {
+                let encoder = rec.compute(self)?;
+                self.encode_as_build(encoder, *structure)?;
+            }
+            Command::DrawMeshTasksIndirect { .. } => {
                 return Err(GpuError::Contract(
-                    "Ray tracing and mesh tiers are not available on the Metal backend yet".into(),
+                    "The mesh tier is not available on the Metal backend yet".into(),
                 ));
             }
         }
@@ -432,7 +498,11 @@ impl MetalDevice {
         let pass = MTL4RenderPassDescriptor::new();
         pass.setRenderTargetWidth(size[0] as usize);
         pass.setRenderTargetHeight(size[1] as usize);
-        for (index, attachment) in colors.iter().enumerate() {
+        let ops = rec
+            .scopes
+            .next()
+            .expect("attachments::ops lists every rendering scope of the list");
+        for (index, (attachment, ops)) in colors.iter().zip(&ops).enumerate() {
             let image = self.images.get(attachment.image)?;
             if image.raw.info.depth || image.raw.size != size {
                 return Err(GpuError::Contract("Color attachment mismatch".into()));
@@ -440,18 +510,16 @@ impl MetalDevice {
             // SAFETY: Metal supports eight color attachments; more fails validation.
             let color = unsafe { pass.colorAttachments().objectAtIndexedSubscript(index) };
             color.setTexture(Some(&image.raw.texture));
-            color.setStoreAction(MTLStoreAction::Store);
-            match attachment.clear {
-                Some([r, g, b, a]) => {
-                    color.setLoadAction(MTLLoadAction::Clear);
-                    color.setClearColor(MTLClearColor {
-                        red: f64::from(r),
-                        green: f64::from(g),
-                        blue: f64::from(b),
-                        alpha: f64::from(a),
-                    });
-                }
-                None => color.setLoadAction(MTLLoadAction::Load),
+            let (load, store) = actions(*ops);
+            color.setLoadAction(load);
+            color.setStoreAction(store);
+            if let Some([r, g, b, a]) = attachment.clear {
+                color.setClearColor(MTLClearColor {
+                    red: f64::from(r),
+                    green: f64::from(g),
+                    blue: f64::from(b),
+                    alpha: f64::from(a),
+                });
             }
         }
         if let Some(attachment) = depth {
@@ -461,13 +529,11 @@ impl MetalDevice {
             }
             let target = pass.depthAttachment();
             target.setTexture(Some(&image.raw.texture));
-            target.setStoreAction(MTLStoreAction::Store);
-            match attachment.clear {
-                Some([value, ..]) => {
-                    target.setLoadAction(MTLLoadAction::Clear);
-                    target.setClearDepth(f64::from(value));
-                }
-                None => target.setLoadAction(MTLLoadAction::Load),
+            let (load, store) = actions(ops[colors.len()]);
+            target.setLoadAction(load);
+            target.setStoreAction(store);
+            if let Some([value, ..]) = attachment.clear {
+                target.setClearDepth(f64::from(value));
             }
         }
         let encoder = rec

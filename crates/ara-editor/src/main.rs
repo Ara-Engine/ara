@@ -1,19 +1,31 @@
 use std::path::PathBuf;
 fn main() -> ara_ui::Result<()> {
-    if std::env::args().nth(1).as_deref() == Some("--compile-scripts") {
-        let root = PathBuf::from(std::env::args_os().nth(2).ok_or("missing script project")?);
+    #[cfg(feature = "hotpatch")]
+    // SAFETY: This is process entry, before worker threads and native runtimes.
+    let arguments = unsafe { ara_hotpatch::args_os()? };
+    #[cfg(not(feature = "hotpatch"))]
+    let arguments: Vec<_> = std::env::args_os().collect();
+    let arguments = arguments
+        .into_iter()
+        .map(|a| {
+            a.into_string()
+                .map_err(|_| "editor arguments must be UTF-8")
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    if arguments.get(1).map(String::as_str) == Some("--compile-scripts") {
+        let root = PathBuf::from(arguments.get(2).ok_or("missing script project")?);
         return ara_editor::compile_scripts(&root);
     }
     ara_editor::LAUNCHED.get_or_init(std::time::Instant::now);
     if ara_crash::monitor_from_args()? {
         return Ok(());
     }
-    if std::env::args().nth(1).as_deref() == Some("--import-worker") {
+    if arguments.get(1).map(String::as_str) == Some("--import-worker") {
         ara_texture_gpu::serve_worker(&ara_importers::registry()?)?;
         return Ok(());
     }
     let mut options = ara_editor::Options::default();
-    let mut args = std::env::args().skip(1);
+    let mut args = arguments.into_iter().skip(1);
     while let Some(arg) = args.next() {
         match arg.as_str() {
             "--headless" => options.headless = true,
@@ -64,6 +76,7 @@ fn main() -> ara_ui::Result<()> {
             "--verify-scene-quality" => options.verify_scene_quality = true,
             "--verify-loading" => options.verify_loading = true,
             "--verify-responsiveness" => options.verify_responsiveness = true,
+            "--verify-unpresentable" => options.verify_unpresentable = true,
             "--settle-imports" => {
                 options.settle = Some(match args.next().as_deref() {
                     Some("before") => ara_editor::Settle::Before,
@@ -110,7 +123,8 @@ fn main() -> ara_ui::Result<()> {
 --verify-docking runs native tab insertion, reorder, split, detach, reattach and Escape routes at UI scales 1 and 1.25, capturing every gesture.
 --verify-behaviours drives content drag/drop, references, component ordering and OS import through the offscreen native loop, capturing before/preview/after states and writing behaviours.json.
 --verify-monkey runs deterministic randomized editor input and command edge cases offscreen; --monkey-seed N selects a replay, --monkey-seconds N sets the soak budget (default 1800), --monkey-steps N limits actions. Writes monkey.json and a durable action journal.
---verify-responsiveness measures clicks, typing, drags, a Scene orbit, Play and startup through the window loop; --settle-imports before|after waits for imports before or after the interactions."
+--verify-responsiveness measures clicks, typing, drags, a Scene orbit, Play and startup through the window loop; --settle-imports before|after waits for imports before or after the interactions.
+--verify-unpresentable holds the window unable to show (minimized or occluded) and checks the loop presents nothing, stays responsive and resumes presenting."
                 );
                 return Ok(());
             }

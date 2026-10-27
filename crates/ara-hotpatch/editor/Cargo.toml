@@ -1,0 +1,29 @@
+[package]
+name = "ara-editor-hotpatch"
+description = "Development-only bin host keeping the editor library in dx's replay graph."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[features]
+default = []
+hotpatch = ["ara-hotpatch/runtime", "ara-editor/hotpatch"]
+tracy = ["ara-editor/tracy", "ara-gpu/tracy"]
+
+[dependencies]
+ara-hotpatch = { path = ".." }
+ara-editor = { path = "../../ara-editor" }
+ara-crash = { path = "../../ara-crash" }
+ara-texture-gpu = { path = "../../ara-texture-gpu" }
+ara-importers = { path = "../../ara-importers" }
+ara-ui = { path = "../../ara-ui" }
+ara-gpu = { path = "../../ara-gpu" }
+
+[[bin]]
+name = "ara-editor-hotpatch"
+path = "main.rs"
+required-features = ["hotpatch"]
+
+[lints]
+workspace = true

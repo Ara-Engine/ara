@@ -182,11 +182,21 @@ fn empty_select_search_hint_is_painted_but_never_value_and_native_preedit_hides_
     let id = stable_id("hint-search");
     let index = ui.find("hint-search").expect("search");
     let layout = ui.tree.layout(ui.nodes[index].layout_id)?;
-    let available_height = layout.size.height - layout.padding.top - layout.padding.bottom
-        - layout.border.top - layout.border.bottom;
-    let hint_height = ui.nodes[index].placeholder.as_ref().expect("hint paragraph").layout.height();
-    assert!(hint_height <= available_height + 0.5,
-        "Search hint must fit inside the field content box: {hint_height} > {available_height}");
+    let available_height = layout.size.height
+        - layout.padding.top
+        - layout.padding.bottom
+        - layout.border.top
+        - layout.border.bottom;
+    let hint_height = ui.nodes[index]
+        .placeholder
+        .as_ref()
+        .expect("hint paragraph")
+        .layout
+        .height();
+    assert!(
+        hint_height <= available_height + 0.5,
+        "Search hint must fit inside the field content box: {hint_height} > {available_height}"
+    );
     assert_eq!(input.focused(), Some(id));
     assert_eq!(select.query(), "");
     assert_eq!(

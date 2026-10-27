@@ -1,0 +1,42 @@
+diff --git a/packages/cli/src/main.rs b/packages/cli/src/main.rs
+index 0c71ad5..7b2bcd8 100644
+--- a/packages/cli/src/main.rs
++++ b/packages/cli/src/main.rs
+@@ -49,0 +50,7 @@ async fn main() -> ExitCode {
++    // Capability probe for Ara's optional native-engine driver.
++    if std::env::args_os().nth(1).as_deref()
++        == Some(std::ffi::OsStr::new("--ara-native-rust-patch-version"))
++    {
++        println!("2");
++        return ExitCode::SUCCESS;
++    }
+diff --git a/packages/cli/src/serve/mod.rs b/packages/cli/src/serve/mod.rs
+index f632956..c66db50 100644
+--- a/packages/cli/src/serve/mod.rs
++++ b/packages/cli/src/serve/mod.rs
+@@ -185,0 +186,9 @@ pub(crate) async fn serve_all(args: ServeArgs, tracer: &TraceController) -> Resu
++                        // A native engine can reject a patch before rustc finishes.
++                        // Preserve the compatible saves queued during that failure,
++                        // just as BuildReady drains saves after a successful build.
++                        if std::env::var_os("ARA_NATIVE_RUST_PATCH").is_some() {
++                            let pending = builder.take_pending_file_changes();
++                            if !pending.is_empty() {
++                                builder.handle_file_change(&pending, &mut devserver).await;
++                            }
++                        }
+diff --git a/packages/cli/src/serve/runner.rs b/packages/cli/src/serve/runner.rs
+index cd6b699..455b6e2 100644
+--- a/packages/cli/src/serve/runner.rs
++++ b/packages/cli/src/serve/runner.rs
+@@ -485,0 +486,11 @@ impl AppServer {
++                // Native engines do not use RSX. Always replay Rust saves, including
++                // queued saves during compilation. The RSX diff exits on the first
++                // body difference, leaving stale snapshots for other changed files;
++                // a subsequent undo/redo can otherwise be silently ignored.
++                if self.hotreload_mode == HotReloadMode::Hotpatch
++                    && std::env::var_os("ARA_NATIVE_RUST_PATCH").is_some()
++                {
++                    needs_rust_rebuild = true;
++                    continue;
++                }
++

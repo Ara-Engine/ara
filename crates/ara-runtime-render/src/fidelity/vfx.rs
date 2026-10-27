@@ -104,6 +104,8 @@ impl Effects {
                 &definition,
                 &cooked_root().join(&definition.name),
                 self.size,
+                // The fidelity view's HDR holds linear radiance.
+                ara_vfx_gpu::LINEAR_HDR,
             )?;
             self.systems
                 .insert(effect.entity, (effect.effect.clone(), system, false));

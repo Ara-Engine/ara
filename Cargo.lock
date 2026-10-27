@@ -774,13 +774,18 @@ name = "ara-dev"
 version = "0.0.1-alpha"
 dependencies = [
  "anyhow",
+ "ara-hotpatch",
+ "blake3",
+ "cc",
  "clap",
  "libc",
+ "object",
  "quote",
  "semver",
  "serde",
  "serde_json",
  "syn 2.0.119",
+ "tempfile",
  "toml_edit",
  "windows-sys 0.61.2",
 ]
@@ -833,6 +838,7 @@ dependencies = [
  "ara-gpu",
  "ara-graph",
  "ara-host",
+ "ara-hotpatch",
  "ara-importers",
  "ara-json",
  "ara-material",
@@ -893,6 +899,19 @@ dependencies = [
  "image",
  "objc2 0.6.5",
  "serde_json",
+]
+
+[[package]]
+name = "ara-editor-hotpatch"
+version = "0.0.1-alpha"
+dependencies = [
+ "ara-crash",
+ "ara-editor",
+ "ara-gpu",
+ "ara-hotpatch",
+ "ara-importers",
+ "ara-texture-gpu",
+ "ara-ui",
 ]
 
 [[package]]
@@ -1054,6 +1073,53 @@ dependencies = [
 ]
 
 [[package]]
+name = "ara-hotpatch"
+version = "0.0.1-alpha"
+dependencies = [
+ "anyhow",
+ "ara-diag",
+ "blake3",
+ "dioxus-cli-config",
+ "proc-macro2",
+ "quote",
+ "serde",
+ "serde_json",
+ "subsecond",
+ "syn 2.0.119",
+ "tempfile",
+ "tungstenite 0.30.0",
+ "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "ara-hotpatch-probe"
+version = "0.0.1-alpha"
+dependencies = [
+ "anyhow",
+ "ara-gpu",
+ "ara-hotpatch",
+ "ara-render",
+ "ara-render-fidelity",
+ "glam 0.30.9",
+ "serde_json",
+]
+
+[[package]]
+name = "ara-hotpatch-sim-probe"
+version = "0.0.1-alpha"
+dependencies = [
+ "anyhow",
+ "ara-components",
+ "ara-doc",
+ "ara-hotpatch",
+ "ara-input",
+ "ara-schema",
+ "ara-sim",
+ "bevy_ecs",
+ "serde_json",
+]
+
+[[package]]
 name = "ara-hub"
 version = "0.0.1-alpha"
 dependencies = [
@@ -1086,6 +1152,7 @@ version = "0.0.1-alpha"
 dependencies = [
  "ara-asset",
  "ara-diag",
+ "ara-doc",
  "ara-host",
  "ara-json",
  "ara-proto",
@@ -1537,6 +1604,7 @@ dependencies = [
  "ara-editor-gpu",
  "ara-gpu",
  "ara-host",
+ "ara-hotpatch",
  "ara-hub-service",
  "ara-import2d",
  "ara-importers",
@@ -1621,6 +1689,7 @@ version = "0.0.1-alpha"
 dependencies = [
  "anyhow",
  "ara-gpu",
+ "ara-hotpatch",
  "ara-json",
  "ara-platform",
  "ara-profile",
@@ -1643,6 +1712,7 @@ dependencies = [
  "ara-asset-format",
  "ara-components",
  "ara-gpu",
+ "ara-hotpatch",
  "ara-render",
  "ara-schema",
  "ara-texture-stream",
@@ -2027,6 +2097,7 @@ dependencies = [
  "ara-components",
  "ara-diag",
  "ara-doc",
+ "ara-hotpatch",
  "ara-input",
  "ara-json",
  "ara-ops",
@@ -3009,6 +3080,7 @@ dependencies = [
  "serde",
  "slotmap",
  "smallvec",
+ "subsecond",
  "thiserror 2.0.21",
  "variadics_please",
 ]
@@ -5153,6 +5225,12 @@ dependencies = [
  "const-oid 0.10.2",
  "crypto-common 0.2.2",
 ]
+
+[[package]]
+name = "dioxus-cli-config"
+version = "0.7.10"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "322d10f47effebd85ee0662a2cb083ff920d40dd6295a4afd8cfa4f9bc2e05c6"
 
 [[package]]
 name = "dirs"
@@ -8325,6 +8403,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cf8baf1c55e62ffcace7a9f06f4bd9cd3f0c4beb022d3b367256b91b87513d98"
 
 [[package]]
+name = "memfd"
+version = "0.6.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "57804b2c9b69967f1536a56f86297e367a33b19e98852ed624b84551cdbc0d90"
+dependencies = [
+ "rustix 1.1.5",
+]
+
+[[package]]
 name = "memmap2"
 version = "0.9.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -9311,6 +9398,20 @@ dependencies = [
  "objc2 0.5.3",
  "objc2-core-location",
  "objc2-foundation 0.2.2",
+]
+
+[[package]]
+name = "object"
+version = "0.37.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ff76201f031d8863c38aa7f905eca4f53abbfa15f609db4277d44cd8938f33fe"
+dependencies = [
+ "crc32fast",
+ "flate2",
+ "hashbrown 0.15.5",
+ "indexmap",
+ "memchr",
+ "ruzstd",
 ]
 
 [[package]]
@@ -11528,6 +11629,34 @@ name = "strsim"
 version = "0.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7da8b5736845d9f2fcb837ea5d9e2628564b3b043a70948a3f0b778838c5fb4f"
+
+[[package]]
+name = "subsecond"
+version = "0.7.10"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d350d5788fa94d560d92269266a50efc77b036bfca6675e420b64df7b3211f37"
+dependencies = [
+ "js-sys",
+ "libc",
+ "libloading 0.8.9",
+ "memfd",
+ "memmap2",
+ "serde",
+ "subsecond-types",
+ "thiserror 2.0.21",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
+]
+
+[[package]]
+name = "subsecond-types"
+version = "0.7.10"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dcf32d66269b5fbb8558334e8d22b657b2f7af0dd2ef56c231541099a862e464"
+dependencies = [
+ "serde",
+]
 
 [[package]]
 name = "subtle"

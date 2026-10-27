@@ -40,6 +40,41 @@ pub struct TriangleRange {
     /// Number of local indices, divisible by three.
     pub index_count: u32,
 }
+impl TriangleRange {
+    /// Check the range against its buffers' `(size, usage)`: aligned, in bounds and
+    /// allocated as address-enabled AS build input. Both backends share these rules.
+    pub(crate) fn validate(
+        &self,
+        vertices: (u64, ash::vk::BufferUsageFlags),
+        indices: (u64, ash::vk::BufferUsageFlags),
+    ) -> crate::Result<()> {
+        use ash::vk::BufferUsageFlags as U;
+        let usage = U::ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_KHR | U::SHADER_DEVICE_ADDRESS;
+        let end = |count: u32, stride: u64, offset: u64| {
+            u64::from(count)
+                .checked_mul(stride)
+                .and_then(|bytes| bytes.checked_add(offset))
+        };
+        if self.vertex_count == 0
+            || self.index_count == 0
+            || !self.index_count.is_multiple_of(3)
+            || self.vertex_stride < 12
+            || !self.vertex_stride.is_multiple_of(4)
+            || !self.vertex_offset.is_multiple_of(4)
+            || !self.index_offset.is_multiple_of(4)
+            || !vertices.1.contains(usage)
+            || !indices.1.contains(usage)
+            || end(self.vertex_count, self.vertex_stride, self.vertex_offset)
+                .is_none_or(|end| end > vertices.0)
+            || end(self.index_count, 4, self.index_offset).is_none_or(|end| end > indices.0)
+        {
+            return Err(crate::GpuError::Contract(
+                "Invalid triangle AS input range".into(),
+            ));
+        }
+        Ok(())
+    }
+}
 /// One top-level instance. Referenced BLAS storage stays alive through TLAS use.
 pub struct AccelerationInstance {
     /// Bottom-level geometry identity.

@@ -98,7 +98,8 @@ impl GpuSystem {
                 } else {
                     0
                 },
-            0,
+            // The scene's exposure state, plus one (0: linear radiance).
+            view.hdr_exposure.map_or(0, |e| e.state + 1),
         ];
         // ambient.w scales particle radiance; sun_direction.w converts world
         // metres (scene depth, probe lattice) into local units.
@@ -108,7 +109,12 @@ impl GpuSystem {
             .sun_direction
             .extend(placement.scale)
             .to_array();
-        frame.sun_color = view.lighting.sun_color.extend(0.).to_array();
+        // w: the scene's manual exposure while its exposure state is unset.
+        frame.sun_color = view
+            .lighting
+            .sun_color
+            .extend(view.hdr_exposure.map_or(1., |e| e.fallback))
+            .to_array();
         frame.probe_counts = [0; 4];
         if let Some(p) = &view.lighting.probes {
             ensure!(

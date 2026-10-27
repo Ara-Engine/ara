@@ -180,6 +180,8 @@ pub struct Shell {
     pub(crate) game_fps: u32,
     pub(crate) game_size: [u32; 2],
     pub(crate) game_target: [u32; 2],
+    /// UI scale of the Game view's window, sent with embedded Play resizes.
+    pub(crate) game_scale: f32,
     pub(crate) game_captured: bool,
     pub(crate) game_aspect: &'static str,
     pub(crate) game_stats: bool,
@@ -549,6 +551,7 @@ impl Shell {
             game_fps: 0,
             game_size: [0, 0],
             game_target: [0, 0],
+            game_scale: 1.,
             game_captured: false,
             game_aspect: "free",
             game_preview: None,
@@ -814,6 +817,13 @@ impl Shell {
         }
         self.rebuild(editor)?;
         Ok(true)
+    }
+
+    /// Invalidate retained panel markup after a body patch, then reconcile the UI.
+    #[cfg(feature = "hotpatch")]
+    pub fn rust_hotpatched(&mut self, editor: &mut Editor) -> ara_ui::Result<()> {
+        self.memos.clear();
+        self.rebuild(editor)
     }
     fn rebuild_all(&mut self, editor: &mut Editor) -> ara_ui::Result<()> {
         self.built = (editor.panels_revision, editor.host.store().revision());

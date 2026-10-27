@@ -97,11 +97,13 @@ pub struct VulkanDevice {
     preparation: Option<preparation::Worker>,
     pipeline_preparation: Option<pipeline_preparation::Worker>,
     deferred: Option<Vec<TimelinePoint>>,
-    completion_pending: bool,
+    /// Ended deferred scopes not yet consumed (at most `FRAMES_IN_FLIGHT`).
+    pending_completions: usize,
     deferred_waits: [u64; 2],
     scene_queue: bool,
     clock: timestamps::Clock,
     timing_window: timestamps::Window,
+    recent_spans: std::collections::VecDeque<(TimelinePoint, crate::commands::TimestampSpan)>,
 }
 
 impl VulkanDevice {
@@ -241,11 +243,12 @@ impl VulkanDevice {
             preparation: None,
             pipeline_preparation: None,
             deferred: None,
-            completion_pending: false,
+            pending_completions: 0,
             deferred_waits: [0; 2],
             scene_queue: false,
             clock,
             timing_window: Default::default(),
+            recent_spans: Default::default(),
         })
     }
 

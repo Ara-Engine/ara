@@ -73,6 +73,9 @@ pub struct Editor {
     pub(crate) play_world: Option<String>,
     /// The Game view's size in physical pixels: the size embedded Play starts at.
     pub(crate) game_size: [u32; 2],
+    /// The Game view's UI scale (physical pixels per point): embedded Play draws its
+    /// game UI at this scale, so it keeps its size in the panel.
+    pub(crate) game_scale: f32,
     /// Model sources already checked on disk, present or reported missing
     /// (`report_missing_sources`); each is checked once per session.
     sources_checked: BTreeSet<String>,
@@ -240,6 +243,7 @@ impl Editor {
             play_surfaces,
             play_world: None,
             game_size: [1280, 720],
+            game_scale: 1.,
             sources_checked: BTreeSet::new(),
             cameras,
         };
@@ -304,7 +308,11 @@ impl Editor {
         if self.plays_in_game_view() {
             let [w, h] = self.game_size;
             params["window"] = false.into();
-            params["embed"] = json!({"width": w.clamp(64, 8192), "height": h.clamp(64, 8192)});
+            params["embed"] = json!({
+                "width": w.clamp(64, 8192),
+                "height": h.clamp(64, 8192),
+                "scale": self.game_scale,
+            });
         }
     }
     /// Commit an atomic list of content commands as the window's human author.

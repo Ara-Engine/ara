@@ -22,6 +22,7 @@ fn gpu_replay_goldens_and_cpu_count_parity() {
             &effect,
             &root.join("cooked").join(&effect.name),
             [960, 540],
+            ara_vfx_gpu::LINEAR_HDR,
         )
         .unwrap();
         let request = CaptureRequest {

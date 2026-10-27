@@ -108,5 +108,6 @@ pub(crate) fn unpack_template(
     }
     let player = destination.join(executable);
     ensure!(player.is_file(), "runtime template lacks {executable}");
+    crate::runtime_template::require_shipping_player(&player)?;
     Ok(player)
 }

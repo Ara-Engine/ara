@@ -33,6 +33,10 @@ pub struct View {
     pub placement: Placement,
     /// Multiplier on emitted and lit particle radiance (not on opacity).
     pub intensity: f32,
+    /// Pre-exposure of the scene HDR this composites into or copies as background
+    /// (the raster scene, `ara_render::HdrExposure`): particles are written
+    /// pre-exposed, and the preview tone map removes it. None is linear radiance.
+    pub hdr_exposure: Option<ara_render::HdrExposure>,
 }
 
 /// An effect instance's world origin and uniform scale (`VisualEffect.scale`):
@@ -178,6 +182,7 @@ impl Default for View {
             scene_color: None,
             placement: Placement::default(),
             intensity: 1.,
+            hdr_exposure: None,
         }
     }
 }

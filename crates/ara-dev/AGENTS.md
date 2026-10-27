@@ -1,6 +1,6 @@
 # ara-dev
 
-Local developer binary. No engine dependencies; uses git and cargo as subprocesses.
+Local developer binary. Uses git/cargo subprocesses; ara-hotpatch is tooling-only here.
 
 - `fmt` / `fmt --check`: workspace formatting in the gate's four-package batches;
   plain fmt writes; check leaves sources unchanged and fails on a formatting difference.
@@ -44,6 +44,10 @@ Local developer binary. No engine dependencies; uses git and cargo as subprocess
   `history-match` finds unique full-message/tree/metadata forks; see `docs/releases.md`.
 - `perf`: optimized incremental build, once-frozen Outpost pack, GPU-locked frame
   windows, JSON/deltas, warm-player file controls and local stdio MCP bridge.
+- `hotpatch`: `--install-dx` prepares optional pinned dx plus its native Rust save fix;
+  ordinary builds never require it. Body-only source contract, guarded compiler/linker,
+  frame-boundary player/editor publication. Windows facade stays inside this command.
+  `render-probe` is a windowless pass proof; acquire the GPU queue before its start file.
 - `preview`: isolate a workspace-version commit, package/smoke/sign both kinds
   locally. Only --publish pushes/uploads; --prepared resumes a reviewed record.
   --target-dir explicitly opts into warm external release outputs. See docs/releases.md.

@@ -12,6 +12,7 @@ use ara_render_fidelity::{environment::FrameEnvironment, presets::RasterPlan};
 use ara_runtime::extract::RenderFrame;
 use std::path::PathBuf;
 mod batch;
+pub(crate) use batch::Submitted;
 mod fade;
 mod prepared;
 mod readiness;

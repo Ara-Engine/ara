@@ -116,6 +116,7 @@ pub(super) fn run(
     settle(host, app, &mut hub)?;
     app.frame().map_err(|e| anyhow::anyhow!("{e}"))?;
     save(host, app, folder, &format!("{theme}-notifications-before"))?;
+    click(app, &mut hub, "dialog-error-dismiss")?;
     let ids: Vec<_> = hub.notices.iter().map(|n| n.id).collect();
     for id in ids {
         click(app, &mut hub, &format!("dismiss-{id}"))?;

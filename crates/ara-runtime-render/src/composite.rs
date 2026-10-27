@@ -37,10 +37,11 @@ impl Composite {
         let cooked = serde_json::from_slice(&std::fs::read(artifacts.join("composite.json"))?)?;
         let pipeline = gpu.create_pipeline(&cooked, &artifacts)?;
         let usage = vk::ImageUsageFlags::STORAGE | vk::ImageUsageFlags::SAMPLED;
+        // Pre-exposed like the raster scene it extends (`ara_render::HdrExposure`).
         let hdr = gpu.create_image(
             size[0],
             size[1],
-            vk::Format::R32G32B32A32_SFLOAT,
+            vk::Format::R16G16B16A16_SFLOAT,
             usage | vk::ImageUsageFlags::COLOR_ATTACHMENT,
         )?;
         let depth = gpu.create_image(size[0], size[1], vk::Format::R32G32B32A32_SFLOAT, usage)?;
@@ -61,6 +62,10 @@ impl Composite {
         })
     }
 
+    /// Merges the landscape over the pre-exposed scene HDR, in the same units: the
+    /// landscape's display colour (encoded at manual `exposure`) is decoded and
+    /// pre-exposed by the scene's exposure `state` (`HdrExposure::state`; None, or
+    /// while unset, the manual exposure).
     pub fn merge(
         &mut self,
         gpu: &mut GpuDevice,
@@ -68,6 +73,7 @@ impl Composite {
         depth: SceneDepth,
         landscape: (Image, Image),
         exposure: f32,
+        state: Option<u32>,
     ) -> Result<(SceneColor, SceneDepth)> {
         let (color, land_depth) = landscape;
         let sampled = [
@@ -91,7 +97,7 @@ impl Composite {
                 self.storage[0],
                 self.storage[1],
                 exposure.to_bits(),
-                0,
+                state.map_or(0, |state| state + 1),
             ],
         }));
         r.push(Command::Dispatch([
@@ -230,8 +236,10 @@ mod tests {
                 },
                 (color, land_depth),
                 exposure,
+                None,
             )?;
-            post.prepare(&gpu, size, exposure, output, true)?;
+            // The merge is pre-exposed (at `exposure`, without a state): grade at 1.
+            post.prepare(&gpu, size, 1., output, true)?;
             let read = gpu.create_buffer(8 * 8 * 4, vk::BufferUsageFlags::TRANSFER_DST, true)?;
             let mut r = gpu.begin(Queue::Graphics);
             r.barriers([

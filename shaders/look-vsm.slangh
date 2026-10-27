@@ -70,15 +70,15 @@ float vsmFilter(Look l,uint level,int2 page,int slot,float2 local,float depth,bo
 // -1 where it has none (no mask this frame, no resident page, or facing away).
 float vsmMask(Look l,int2 p){return l.vsmMask.x==0?-1:textures[NonUniformResourceIndex(l.vsmMask.x)].Load(int3(p,0)).r;}
 // Sun visibility at `world` from the virtual shadow map: its level's page, else one of
-// the next three coarser (marking requests the next one), with a normal offset of one
-// and a half texels and a one-texel depth bias at that level (`coarse`: vsmFilter);
+// the next three coarser (marking requests the next one), with a slope-scaled normal
+// offset (shadowOffset) and a one-texel depth bias at that level (`coarse`: vsmFilter);
 // -1 where none is resident or the map is off.
 float vsmVisibility(Frame f,Look l,float3 world,float3 normal,bool coarse){
     if(l.vsm.y==0)return -1;
     uint first=vsmLevel(f,l,world,vsmLight(l,world));
     for(uint level=first;level<min(first+4,VSM_LEVELS);level++){
         float width=vsmStep(l,level),texel=width/VSM_PAGE;
-        float3 p=vsmLight(l,world+normal*texel*1.5);
+        float3 p=vsmLight(l,world+normal*texel*shadowOffset(saturate(dot(normal,f.sunDirection.xyz))));
         int2 page=int2(floor(p.xy/width));int slot=vsmSlot(l,level,page);
         if(slot<0)continue;
         return vsmFilter(l,level,page,slot,p.xy/width-float2(page),l.vsmDepth.x*(p.z+texel)+l.vsmDepth.y,coarse);

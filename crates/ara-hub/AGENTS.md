@@ -30,14 +30,22 @@ Icons: `build.rs` embeds `assets/brand/icons/hub/ara-hub.rc` into both Hub and
   the verified CLI for native integrations; preparation failures are non-fatal/retried.
 - `view/`: markup per page from the model (`page`), `hub.css` (theme tokens only,
   D18), and `Page::bindings` mapping each control's stable ID to its `Intent`.
+- `view/dialogs.rs`: confirmations, errors, release notes, transfer progress and kit
+  shared searchable Select choices; native input uses the kit layer stack for dialogs.
+  Install/repair dialogs request read-only preflight space summaries; technical source
+  settings stay under Advanced. Repair jobs retain engine pins.
+  Uninstall first inspects destination/size in a cancellable read-only job; only the
+  subsequent explicit confirmation can start removal.
 - `native/`: window/GPU host and loop (`mod.rs`), retained `App` (`app.rs`: rebuild,
   input routing, keys), `input.rs` (SDL text/IME, clipboard, folder drops),
+  `selects.rs` retains typed choices across replies and routes native search/IME;
   `frame.rs` (DWM colors), `images.rs` (icons, wordmark, previews decoded off
   thread, center-cropped to 16:9), `os.rs` (pickers, Explorer, install snippets,
   local docs).
 - `capture.rs`: `ara-hub --capture DIR` seeds a fixed fixture through the model's
   reply paths and writes every page, dark and light, from the real GPU target.
   No window opens: a headless Vulkan device drives the same `NativeUi` adapter.
+  `capture/flows.rs` adds update/install/error states in both themes.
 
 ## Behavior worth knowing
 
@@ -59,8 +67,8 @@ This feature stays off in shipping builds; see ara-release's rehearsal command.
 - `App::frame` consumes a retained presentation request: rebuilding must present
   even if its layout work was already consumed. Pointer activations apply before
   the next queued event. Worker results wake SDL; idle waits follow clock/toast deadlines.
-- Notifications have one place each (docs/design/hub.md): errors are inline banners,
-  a Hub update is the sidebar card (in full on Settings), results are toasts.
+- Notifications have one place each (docs/design/hub.md): errors use focused dialogs,
+  a quiet update indicator opens release notes, and successful results use toasts.
 - Every toast/banner has Dismiss. Informational toasts expire after 8 s (Undo: 20 s);
   errors remain until dismissed. Preference writes are coalesced off the UI thread.
 - Create validation is the service's: every edit sends `hub.create {dryRun:true}`;
@@ -75,9 +83,11 @@ This feature stays off in shipping builds; see ara-release's rehearsal command.
 - Folder drops on the window register the folder (`Intent::Register`).
 - Prefs (theme, sort, layout, agent client) persist to `<config>/hub-ui.json`.
 - `model/updates.rs`: authenticated release metadata and jobs from the service.
-  Installs shows published versions, progress/cancel and managed Uninstall;
+  Installs shows published versions, phased progress/cancel and managed Uninstall;
   Settings configures channel/repository and checks for updates. Native checks
-  at startup and every four hours; standalone Hubs prepare updates automatically.
+  at startup and every four hours. Ask first is the default download policy;
+  Background downloads require opt-in. A prepared archive applies only from Restart and update. Later closes the dialog; Skip persists
+  the exact version/build identity. Settings keeps skipped updates discoverable.
 - Standalone `hub.json` builds bootstrap the immutable service into
   LOCALAPPDATA/Ara/Services/version/content-hash (service.json records the build).
   A build handshake replaces idle services; busy services stay connected with a notice.

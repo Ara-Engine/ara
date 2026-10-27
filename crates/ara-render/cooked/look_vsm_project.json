@@ -1,22 +1,22 @@
 {
   "binding_layout_hash": "f71261afa0d52758f34ca15c916d2da422ee92b118ede6e189c970911a274f1e",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "18b2b4b9f049dde1669d5ac2979968226e9a86e34c0c5ae47aa32c8119236c71",
+  "key": "78833c300e90491d975eb464af9d499ba74835c239d6628a9f1be5b0349dd4ac",
   "stages": [
     {
-      "dxil": "18b2b4b9f049dde1669d5ac2979968226e9a86e34c0c5ae47aa32c8119236c71/vsmProjectMain.dxil",
-      "dxil_hash": "7624895be436b11661d5090e53b0e49eac92e8010c2b0db2720e3f9d7027d09f",
+      "dxil": "78833c300e90491d975eb464af9d499ba74835c239d6628a9f1be5b0349dd4ac/vsmProjectMain.dxil",
+      "dxil_hash": "b02e2fb0ba3f131108124a5c95b94fabbc579facb72dc247d82bf6ef786af6c9",
       "metal": {
         "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
-        "metallib": "18b2b4b9f049dde1669d5ac2979968226e9a86e34c0c5ae47aa32c8119236c71/vsmProjectMain.metallib",
-        "metallib_hash": "f45fbf19342d9de1271ecb69bdd4eee5af48ecfb598de2e33242893b690a546d",
-        "reflection": "18b2b4b9f049dde1669d5ac2979968226e9a86e34c0c5ae47aa32c8119236c71/vsmProjectMain.metal.json",
+        "metallib": "78833c300e90491d975eb464af9d499ba74835c239d6628a9f1be5b0349dd4ac/vsmProjectMain.metallib",
+        "metallib_hash": "65cf056380168370400e6478fae55c8f4a3661fdf2140581d0a44109af935881",
+        "reflection": "78833c300e90491d975eb464af9d499ba74835c239d6628a9f1be5b0349dd4ac/vsmProjectMain.metal.json",
         "root_signature_hash": "1cc11e518b14c2b24e05fc30812bfd2b87e0a9c313ea79a4620a443a723525ef"
       },
       "source_entry": "vsmProjectMain",
-      "spirv": "18b2b4b9f049dde1669d5ac2979968226e9a86e34c0c5ae47aa32c8119236c71/vsmProjectMain.spv",
+      "spirv": "78833c300e90491d975eb464af9d499ba74835c239d6628a9f1be5b0349dd4ac/vsmProjectMain.spv",
       "spirv_entry": "main",
-      "spirv_hash": "52e3a19b440f226dacc64f90751a703e445892b2c84c3b049ee39f016b951940",
+      "spirv_hash": "5159725f7a9e58bfe514f9cf92bb8fb996c84efbc44b85fa24ba5e97cb7748c0",
       "stage": "compute"
     }
   ],

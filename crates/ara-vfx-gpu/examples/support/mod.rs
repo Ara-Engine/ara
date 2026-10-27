@@ -258,8 +258,13 @@ pub fn capture_frames(
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let mut captures = Vec::new();
     for &tick in ticks {
-        let mut system =
-            GpuSystem::new(gpu, effect, &root.join("cooked").join(&effect.name), size)?;
+        let mut system = GpuSystem::new(
+            gpu,
+            effect,
+            &root.join("cooked").join(&effect.name),
+            size,
+            ara_vfx_gpu::LINEAR_HDR,
+        )?;
         let camera = camera(effect);
         let request = CaptureRequest {
             camera,

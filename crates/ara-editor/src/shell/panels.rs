@@ -301,11 +301,20 @@ impl Shell {
         out: &mut String,
     ) -> ara_ui::Result<()> {
         self.with_panel_boundary(panel, editor, out, |shell, editor, out| {
-            shell.panel_body_inner(panel, editor, out)
+            #[cfg(feature = "hotpatch")]
+            {
+                ara_hotpatch::call!(Self::draw_panel, shell, panel, editor, out)
+            }
+            #[cfg(not(feature = "hotpatch"))]
+            {
+                shell.draw_panel(panel, editor, out)
+            }
         });
         Ok(())
     }
-    fn panel_body_inner(
+
+    /// Build one panel through the current Rust generation, retaining its authoring state.
+    fn draw_panel(
         &mut self,
         panel: &str,
         editor: &mut Editor,

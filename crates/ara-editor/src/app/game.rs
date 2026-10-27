@@ -93,7 +93,15 @@ impl GameView {
         let mut changed = false;
         for &player in &shell.game_players {
             let view = self.views.entry(player).or_default();
-            changed |= view.update(world, player, shell.game_target, surfaces, ui, gpu)?;
+            changed |= view.update(
+                world,
+                player,
+                shell.game_target,
+                shell.game_scale,
+                surfaces,
+                ui,
+                gpu,
+            )?;
             let info = view.info();
             let previous = shell.play_controls.players.insert(player, info);
             if previous.is_none_or(|old| old.live != info.live) {

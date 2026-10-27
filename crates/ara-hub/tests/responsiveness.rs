@@ -45,6 +45,44 @@ fn busy_service_update_notice_is_nonfatal_and_dismissible() {
     assert!(!hub.notices.iter().any(|notice| notice.id == id));
 }
 
+#[test]
+fn dialogs_trap_input_and_restore_the_launcher_focus_on_escape() {
+    use ara_hub::model::Dialog;
+    let (mut app, mut hub) = setup();
+    let launcher = ara_ui::source::stable_id("update-available");
+    app.input
+        .focus(&mut app.ui, launcher)
+        .expect("focus update indicator");
+    hub.intent(Intent::Dialog(Dialog::Update));
+    app.rebuild(&mut hub, capture::NOW).expect("dialog");
+    assert_eq!(app.focused(), Some("dialog-later"));
+    let at = center(&app, "new-project");
+    for event in [InputEvent::PointerDown(at), InputEvent::PointerUp(at)] {
+        app.dispatch_pointer(&mut hub, event, capture::NOW)
+            .expect("background input");
+    }
+    assert!(hub.dialog.is_some());
+    assert_eq!(
+        hub.view,
+        ara_hub::model::View::Projects,
+        "background actions are blocked"
+    );
+    for _ in 0..12 {
+        app.key(&hub, 43, true).expect("tab in dialog");
+        let focused = app.focused().expect("focused control");
+        assert!(
+            ["dialog-close", "dialog-later", "restart-update"].contains(&focused),
+            "focus escaped: {focused}"
+        );
+    }
+    for intent in app.key(&hub, 41, true).expect("escape") {
+        hub.intent(intent);
+    }
+    app.rebuild(&mut hub, capture::NOW).expect("close dialog");
+    assert!(hub.dialog.is_none());
+    assert_eq!(app.focused(), Some("update-available"));
+}
+
 fn center(app: &App, id: &str) -> [f32; 2] {
     let r = app.ui.nodes[app.ui.find(id).expect(id)].rect;
     [r.x + r.w / 2., r.y + r.h / 2.]
@@ -76,6 +114,7 @@ fn button_release_after_a_service_refresh_activates_on_first_try() {
 
 #[test]
 fn notification_dismiss_lands_on_first_try() {
+    use ara_hub::model::Dialog;
     let (mut app, mut hub) = setup();
     hub.event(Event::Reply {
         call: Call::Close {
@@ -87,16 +126,35 @@ fn notification_dismiss_lands_on_first_try() {
             data: None,
         }),
     });
-    app.rebuild(&mut hub, capture::NOW).expect("toast");
+    hub.notices.last_mut().expect("notice").detail =
+        Some("The project remains open. Check its log before retrying.".into());
+    app.rebuild(&mut hub, capture::NOW).expect("error dialog");
     let id = hub.notices.last().expect("notice").id;
-    let at = center(&app, &format!("dismiss-{id}"));
+    assert_eq!(hub.dialog, Some(Dialog::Error(id)));
+    assert!(
+        app.ui.find(&format!("dismiss-{id}")).is_none(),
+        "errors use the modal acknowledgement instead of a toast"
+    );
+    let at = center(&app, "dialog-error-dismiss");
     app.pointer(InputEvent::PointerMove(at)).expect("move");
     app.pointer(InputEvent::PointerDown(at)).expect("press");
+    // A late diagnostic detail changes the retained modal between press and release.
+    hub.notices.last_mut().expect("notice").detail =
+        Some("The project remains open. Its log is ready to inspect.".into());
+    app.rebuild(&mut hub, capture::NOW)
+        .expect("detail while pressed");
+    assert_eq!(
+        center(&app, "dialog-error-dismiss"),
+        at,
+        "the acknowledged action stays under the pointer"
+    );
     app.pointer(InputEvent::PointerUp(at)).expect("release");
     assert_eq!(app.actions(), [Intent::Dismiss(id)]);
     hub.intent(Intent::Dismiss(id));
     app.rebuild(&mut hub, capture::NOW).expect("dismiss view");
-    assert!(app.ui.find(&format!("dismiss-{id}")).is_none());
+    assert!(hub.dialog.is_none());
+    assert!(!hub.notices.iter().any(|notice| notice.id == id));
+    assert!(app.ui.find("dialog-error-dismiss").is_none());
     assert!(app.frame().expect("present dismissal"));
 }
 

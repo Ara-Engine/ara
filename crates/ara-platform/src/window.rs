@@ -213,6 +213,14 @@ impl Window {
                 .collect())
         }
     }
+    /// Whether presenting can show anything: false while minimized or occluded. Hosts
+    /// then render and present nothing, since a driver's present path may stall
+    /// until the window shows again, and keep pumping events.
+    pub fn presentable(&self) -> bool {
+        // SAFETY: Live window on its owning thread.
+        let flags = unsafe { SDL_GetWindowFlags(self.handle) };
+        flags & (SDL_WINDOW_MINIMIZED | SDL_WINDOW_OCCLUDED) == SDL_WindowFlags(0)
+    }
     /// Current drawable size in physical pixels.
     pub fn size(&self) -> Result<[u32; 2]> {
         let mut w = 0;
@@ -336,6 +344,13 @@ impl Window {
             );
         }
         Ok(())
+    }
+    /// Physical pixels per window coordinate (2 on a Retina display, 1 where SDL reports
+    /// window coordinates in pixels). Pointer events are in window coordinates and
+    /// [`Self::size`] is in pixels, so UI hit tests divide or multiply by this.
+    pub fn pixel_density(&self) -> f32 {
+        // SAFETY: Live window on its owning thread.
+        unsafe { SDL_GetWindowPixelDensity(self.handle).max(0.25) }
     }
     /// Display scale of the monitor showing this window.
     pub fn display_scale(&self) -> f32 {

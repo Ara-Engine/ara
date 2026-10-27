@@ -228,7 +228,11 @@ pub(super) fn run(args: Args, began: Instant) -> Result<()> {
         };
         let mut previous = Instant::now();
         let mut frames = 0;
+        #[cfg(feature = "hotpatch")]
+        let mut rust_patches = ara_hotpatch::Hotpatch::connect();
         while args.standalone.frames.is_none_or(|limit| frames < limit) {
+            #[cfg(feature = "hotpatch")]
+            rust_patches.frame_boundary();
             ara_gpu::cpu_scope!("Player.standalone_frame");
             if perf.control(&mut *presenter)? {
                 break;

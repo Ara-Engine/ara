@@ -10,28 +10,40 @@ use ara_vfx::Effect;
 use bytemuck::Zeroable;
 use std::path::Path;
 
+/// A system's attachment extent and HDR attachment format.
+#[derive(Clone, Copy)]
+struct Target {
+    size: [u32; 2],
+    hdr: vk::Format,
+}
+
 impl GpuSystem {
     /// Synchronous tools/capture constructor from an offline cook. Live hosts use
     /// `PipelineWarmup` and `new_prepared` to keep driver compilation off-frame.
+    /// `hdr` is the HDR attachment format (`LINEAR_HDR`, or `RASTER_HDR` to composite
+    /// into the raster scene).
     pub fn new(
         gpu: &mut GpuDevice,
         effect: &Effect,
         cooked: &Path,
         size: [u32; 2],
+        hdr: vk::Format,
     ) -> Result<Self> {
-        Self::construct(gpu, effect, cooked, size, None)
+        Self::construct(gpu, effect, cooked, size, hdr, None)
     }
 
     /// Allocate an effect from worker-compiled PSOs. Live callers poll
     /// `PipelineWarmup` first, so no native pipeline is created on this thread.
+    /// `hdr` matches the `PipelineWarmup` that prepared `pipelines`.
     pub fn new_prepared(
         gpu: &mut GpuDevice,
         effect: &Effect,
         cooked: &Path,
         size: [u32; 2],
+        hdr: vk::Format,
         pipelines: crate::PreparedPipelines,
     ) -> Result<Self> {
-        Self::construct(gpu, effect, cooked, size, Some(pipelines))
+        Self::construct(gpu, effect, cooked, size, hdr, Some(pipelines))
     }
 
     fn construct(
@@ -39,6 +51,7 @@ impl GpuSystem {
         effect: &Effect,
         cooked: &Path,
         size: [u32; 2],
+        hdr: vk::Format,
         mut supplied: Option<crate::PreparedPipelines>,
     ) -> Result<Self> {
         let mut resources = Vec::new();
@@ -47,7 +60,7 @@ impl GpuSystem {
             gpu,
             effect,
             cooked,
-            size,
+            Target { size, hdr },
             &mut resources,
             &mut pipelines,
             &mut supplied,
@@ -81,11 +94,15 @@ impl GpuSystem {
         gpu: &mut GpuDevice,
         effect: &Effect,
         cooked: &Path,
-        size: [u32; 2],
+        target: Target,
         resources: &mut Vec<Tracked>,
         created_pipelines: &mut Vec<Pipeline>,
         supplied: &mut Option<crate::PreparedPipelines>,
     ) -> Result<Self> {
+        let Target {
+            size,
+            hdr: hdr_format,
+        } = target;
         ensure!(!size.contains(&0), "zero VFX capture extent");
         let hash = effect
             .content_hash()
@@ -103,6 +120,7 @@ impl GpuSystem {
         let mut load = |name: &str| -> Result<Pipeline> {
             let p: ara_gpu::cooked::CookedPipeline =
                 serde_json::from_slice(&std::fs::read(cooked.join(format!("{name}.json")))?)?;
+            let p = crate::with_hdr_format(name, p, hdr_format);
             if let Some(ref old) = cohort {
                 ensure!(*old == p.key, "mixed VFX shader cohort");
             } else {
@@ -200,7 +218,7 @@ impl GpuSystem {
             Ok(i)
         };
         let attachment = vk::ImageUsageFlags::COLOR_ATTACHMENT | vk::ImageUsageFlags::SAMPLED;
-        let hdr = image(vk::Format::R32G32B32A32_SFLOAT, attachment)?;
+        let hdr = image(hdr_format, attachment)?;
         let depth = image(vk::Format::R32_SFLOAT, attachment)?;
         let output = image(
             vk::Format::R8G8B8A8_UNORM,

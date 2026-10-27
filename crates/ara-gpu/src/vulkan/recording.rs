@@ -28,6 +28,11 @@ pub(super) fn access(
             L::GENERAL,
         ),
         Access::Index => (S::INDEX_INPUT, A::INDEX_READ, L::GENERAL),
+        Access::Geometry => (
+            S::INDEX_INPUT | shader,
+            A::INDEX_READ | A::SHADER_READ,
+            L::GENERAL,
+        ),
         Access::Indirect => (
             S::DRAW_INDIRECT | shader,
             A::INDIRECT_COMMAND_READ | A::SHADER_READ,
@@ -202,8 +207,16 @@ impl VulkanDevice {
         let mut timestamp = 1;
         {
             crate::cpu_scope!("GPU.record_commands");
+            let mut scopes = crate::attachments::ops(&list.commands, |image| {
+                self.images.get(image).is_ok_and(|i| {
+                    i.raw
+                        .usage
+                        .contains(vk::ImageUsageFlags::TRANSIENT_ATTACHMENT)
+                })
+            })
+            .into_iter();
             for command in super::timestamps::commands(&list.commands) {
-                self.encode(cmd, queue, query, &mut timestamp, command)?;
+                self.encode(cmd, queue, query, &mut timestamp, &mut scopes, command)?;
             }
         }
         // SAFETY: Query `required-1` is reserved for the submission's completed
@@ -384,10 +397,9 @@ impl VulkanDevice {
         let valid = self.context.info.timestamp_valid_bits[point.queue.index()];
         let reference = self.clock.reference(point.queue, valid, stamps[0])?;
         let period = self.context.info.timestamp_period_ns;
-        self.timing_window.observe(
-            point,
-            reference.interval(stamps[0], stamps[stamps.len() - 1], period),
-        );
+        let interval = reference.interval(stamps[0], stamps[stamps.len() - 1], period);
+        self.timing_window.observe(point, interval);
+        timestamps::remember(&mut self.recent_spans, point, interval);
         Ok(pending
             .labels
             .into_iter()
@@ -566,6 +578,29 @@ impl VulkanDevice {
                         || bound.is_some_and(|h| self.pipelines.get(h).is_ok_and(|p| p.mesh))
                     {
                         return Err(GpuError::Contract("Draw outside graphics scope".into()));
+                    }
+                }
+                Command::DrawIndexedProcedural {
+                    indices,
+                    first_index,
+                    count,
+                    instances,
+                } => {
+                    self.validate_attachment_formats(bound, &color_formats, depth_format)?;
+                    let native = self
+                        .pipelines
+                        .get(bound.expect("attachment validation requires a bound pipeline"))?;
+                    let i = self.buffers.get(*indices)?;
+                    if !rendering
+                        || pipeline != Some(false)
+                        || native.vertex_stride != 0
+                        || native.mesh
+                        || *count == 0
+                        || *instances == 0
+                        || !i.raw.usage.contains(vk::BufferUsageFlags::INDEX_BUFFER)
+                        || (u64::from(*first_index) + u64::from(*count)) * 4 > i.raw.size
+                    {
+                        return Err(GpuError::Contract("Invalid indexed procedural draw".into()));
                     }
                 }
                 Command::DrawProcedural {

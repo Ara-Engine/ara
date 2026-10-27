@@ -31,19 +31,46 @@ pub(crate) struct Surface {
     values: Vec<Option<Value>>,
     renderer: Renderer,
     gpu: Option<ara_editor_gpu::NativeUi>,
+    /// The composite returns without waiting (`set_frames_in_flight`).
+    frames_in_flight: bool,
     screen: Screen,
     diagnostics: Vec<ara_diag::Diagnostic>,
     reported_images: std::collections::BTreeSet<u32>,
+    /// Physical pixels per UI unit: the window's pixel density (2 on Retina), so UI
+    /// units are window points, where SDL reports the pointer; 1 offscreen.
+    scale: f32,
 }
 
 impl Surface {
-    pub(crate) fn resize(&mut self, size: [u32; 2]) -> Result<()> {
-        if self.ui.size != size.map(|v| v as f32) {
-            self.ui.resize(size.map(|v| v as f32)).map_err(ui_error)?;
+    /// Lets the composite return once submitted and wait at the start of the next
+    /// `render` (NativeUi deferred completion). Only for window presentation, whose
+    /// blit is GPU-ordered after it; embedded publication keeps waiting.
+    pub(crate) fn set_frames_in_flight(&mut self, enabled: bool) -> Result<()> {
+        self.frames_in_flight = enabled;
+        if let Some(gpu) = &mut self.gpu {
+            gpu.set_deferred_completion(enabled)?;
         }
         Ok(())
     }
-    pub(crate) fn new(source: &GameUi, runtime: &Runtime, size: [u32; 2]) -> Result<Self> {
+    /// Lay out for a target of `size` physical pixels at `scale` pixels per UI unit.
+    pub(crate) fn resize(&mut self, size: [u32; 2], scale: f32) -> Result<()> {
+        ensure!(
+            scale.is_finite() && scale > 0.,
+            "invalid game UI scale {scale}"
+        );
+        self.scale = scale;
+        let extent = size.map(|v| v as f32 / scale);
+        if self.ui.size != extent {
+            self.ui.resize(extent).map_err(ui_error)?;
+        }
+        Ok(())
+    }
+    pub(crate) fn new(
+        source: &GameUi,
+        runtime: &Runtime,
+        size: [u32; 2],
+        scale: f32,
+    ) -> Result<Self> {
         for binding in &source.bindings {
             let field = runtime
                 .schema()
@@ -61,12 +88,12 @@ impl Surface {
                 binding.node
             );
         }
-        Self::plain(source, size)
+        Self::plain(source, size, scale)
     }
 
-    pub(crate) fn plain(source: &GameUi, size: [u32; 2]) -> Result<Self> {
-        let ui = Ui::parse(&source.markup, &source.stylesheet, size.map(|v| v as f32))
-            .map_err(ui_error)?;
+    pub(crate) fn plain(source: &GameUi, size: [u32; 2], scale: f32) -> Result<Self> {
+        let extent = size.map(|v| v as f32 / scale);
+        let ui = Ui::parse(&source.markup, &source.stylesheet, extent).map_err(ui_error)?;
         for binding in &source.bindings {
             ensure!(
                 ui.find(&binding.node).is_some(),
@@ -82,10 +109,13 @@ impl Surface {
             values: vec![None; source.bindings.len()],
             renderer,
             gpu: None,
+            frames_in_flight: false,
             screen: Screen::Game,
             diagnostics,
             reported_images: Default::default(),
+            scale: 1.,
         };
+        surface.resize(size, scale)?;
         surface.screen(Screen::Game)?;
         Ok(surface)
     }
@@ -102,10 +132,16 @@ impl Surface {
         }
     }
 
-    pub(crate) fn update(&mut self, runtime: &Runtime, player: u64, size: [u32; 2]) -> Result<()> {
-        if self.ui.size != size.map(|v| v as f32) {
-            self.ui.resize(size.map(|v| v as f32)).map_err(ui_error)?;
-        }
+    /// Pushes C# values and world anchors into a layout for `size` physical pixels.
+    pub(crate) fn update(
+        &mut self,
+        runtime: &Runtime,
+        player: u64,
+        size: [u32; 2],
+        scale: f32,
+    ) -> Result<()> {
+        self.resize(size, scale)?;
+        let extent = self.ui.size.map(|v| v.round() as u32);
         let session = runtime.play().session();
         let owner = runtime.world().iter_entities().find_map(|e| {
             e.get::<PlayerControl>()
@@ -122,7 +158,7 @@ impl Surface {
                 .and_then(|e| ara_runtime_script::read(runtime.world(), e, &binding.component))
                 .and_then(|v| v.get(&binding.field).cloned());
             if binding.world {
-                anchors::update(&mut self.ui, runtime, binding, entity, owner, size)?;
+                anchors::update(&mut self.ui, runtime, binding, entity, owner, extent)?;
             }
             if value == self.values[index] {
                 continue;
@@ -156,10 +192,25 @@ impl Surface {
         Ok(())
     }
 
+    /// Order the renderer's next work after this UI's composites (Metal runs them on
+    /// queues of their own; Vulkan's one queue already orders them).
+    pub(crate) fn order_before(&self, gpu: &mut ara_gpu::GpuDevice) {
+        if let Some(ui) = &self.gpu {
+            ui.order_before(gpu);
+        }
+    }
     /// Composites directly from the completed scene image; no scene readback or CPU upload.
     /// Show the composite with [`Self::present`] or [`Self::publish`].
-    pub(crate) fn render(&mut self, presenter: &Presenter) -> Result<()> {
-        self.resize(presenter.size())?;
+    /// False when the previous composite is still running after
+    /// `Presenter::STALL_WAIT` (a stalled present path): nothing rendered this frame.
+    pub(crate) fn render(&mut self, presenter: &Presenter) -> Result<bool> {
+        // The previous composite reads the UI storage this frame rewrites.
+        if let Some(gpu) = &self.gpu
+            && !gpu.wait_previous_for(Presenter::STALL_WAIT)?
+        {
+            return Ok(false);
+        }
+        self.resize(presenter.size(), self.scale)?;
         self.ui.frame(&mut self.text).map_err(ui_error)?;
         decoration::apply(&mut self.ui, self.screen);
         let renderer = presenter.renderer().context("game UI needs a renderer")?;
@@ -170,14 +221,24 @@ impl Surface {
             self.renderer.device_lost();
             // SAFETY: the window drops this surface before its presenter's device;
             // all UI and scene submissions occur sequentially on this thread.
-            self.gpu = Some(unsafe {
+            let mut gpu = unsafe {
                 ara_editor_gpu::NativeUi::new(ara_editor_gpu::ui_device(renderer.gpu()))?
-            });
+            };
+            gpu.set_deferred_completion(self.frames_in_flight)?;
+            self.gpu = Some(gpu);
         }
         let gpu = self.gpu.as_mut().context("native UI allocated")?;
+        // Lay out in window points; draw and rasterize text at physical pixels.
+        gpu.set_dpi(self.scale)?;
+        self.renderer
+            .set_raster_scale(self.scale)
+            .map_err(ui_error)?;
+        // The scene of a frame in flight may still be rendering into this image.
+        gpu.order_after(renderer.gpu());
         let id = stable_id("game-scene") as u32 & 0x7fff_ffff;
         // SAFETY: scene image/view and NativeUi share this presenter's live device.
-        // The UI submission completes before the presenter can replace this image.
+        // The presenter replaces this image only after an idle wait (resize); its
+        // per-frame publication copies are GPU-ordered after this submission.
         unsafe {
             gpu.external_image(
                 id,
@@ -214,7 +275,7 @@ impl Surface {
         self.ui.display.commands.remove(0);
         rendered?;
         self.report_missing_images();
-        Ok(())
+        Ok(true)
     }
 
     /// Presents the last composite into the window.
@@ -226,7 +287,8 @@ impl Surface {
         present: &mut ara_platform::Present,
     ) -> Result<()> {
         let ui = self.gpu.as_ref().context("game UI has not rendered")?;
-        // SAFETY: forwarded caller contract; the UI submission completed.
+        // SAFETY: forwarded caller contract; the UI submission precedes the blit on
+        // this queue (completed, unless frames are in flight).
         unsafe { ui.present(ara_editor_gpu::ui_device(gpu), present) }
     }
 
@@ -258,11 +320,12 @@ impl crate::device::Windowed {
             return Ok(());
         };
         let size = self.window_size()?;
+        let scale = self.pixel_density();
         if self.game_ui.is_none() {
-            self.game_ui = Some(Surface::new(source, runtime, size)?);
+            self.game_ui = Some(Surface::new(source, runtime, size, scale)?);
         }
         if let Some(surface) = &mut self.game_ui {
-            surface.update(runtime, player, size)?;
+            surface.update(runtime, player, size, scale)?;
         }
         Ok(())
     }
@@ -288,8 +351,8 @@ pub(crate) fn snapshot(
     player: u64,
     size: [u32; 2],
 ) -> Result<image::RgbaImage> {
-    let mut surface = Surface::new(source, runtime, size)?;
-    surface.update(runtime, player, size)?;
+    let mut surface = Surface::new(source, runtime, size, 1.)?;
+    surface.update(runtime, player, size, 1.)?;
     let mut cpu = ara_ui_render::CpuGpu::default();
     surface
         .renderer

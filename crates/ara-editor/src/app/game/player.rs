@@ -7,6 +7,8 @@ pub(super) struct PlayerView {
     shown: Option<PlaySurface>,
     pending: Option<PlaySurface>,
     resized: Option<Instant>,
+    /// UI scale most recently requested for this player's surface.
+    scale: Option<f32>,
     frames: VecDeque<Instant>,
     size: [u32; 2],
     fps: u32,
@@ -30,6 +32,7 @@ impl PlayerView {
         world: &str,
         player: usize,
         wanted: [u32; 2],
+        scale: f32,
         surfaces: &mut Surfaces,
         ui: &mut NativeUi,
         gpu: &Gpu,
@@ -102,12 +105,13 @@ impl PlayerView {
         }
         if wanted[0] >= 16
             && wanted[1] >= 16
-            && wanted != self.size
+            && (wanted != self.size || self.scale != Some(scale))
             && self
                 .resized
                 .is_none_or(|at| at.elapsed() > Duration::from_millis(150))
         {
-            surfaces.resize(world, player, wanted[0], wanted[1]);
+            surfaces.resize(world, player, wanted, scale);
+            self.scale = Some(scale);
             self.resized = Some(Instant::now());
         }
         Ok(changed)

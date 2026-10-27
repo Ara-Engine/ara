@@ -8,12 +8,14 @@ publish.workspace = true
 
 [features]
 default = []
+hotpatch = ["dep:ara-hotpatch", "ara-sim/hotpatch", "ara-runtime-render/hotpatch"]
 tracy = ["ara-gpu/tracy"]
 
 [build-dependencies]
 embed-resource.workspace = true
 
 [dependencies]
+ara-hotpatch = { path = "../ara-hotpatch", optional = true, features = ["runtime"] }
 anyhow = { workspace = true }
 ara-asset = { path = "../ara-asset" }
 ara-audio = { path = "../ara-audio" }

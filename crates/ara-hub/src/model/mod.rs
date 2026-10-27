@@ -130,6 +130,21 @@ pub struct Prefs {
     pub layout: Layout,
     /// Agent client last shown.
     pub agent: AgentClient,
+    /// Signed Hub release identity explicitly skipped by the user.
+    pub skipped_update: Option<String>,
+    /// Whether Hub update downloads require a separate action; restarting always does.
+    pub hub_update_downloads: DownloadPolicy,
+}
+
+/// Update downloads are separate from the always-explicit restart decision.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum DownloadPolicy {
+    /// Show the release and wait for Update now.
+    #[default]
+    Ask,
+    /// Download a new, unskipped release in the background, then wait for Restart.
+    Background,
 }
 
 /// Connection state shown in the sidebar footer.
@@ -176,7 +191,7 @@ impl Busy {
     }
 }
 
-/// A toast: an RPC failure with its diagnostics and fixes, or a confirmation.
+/// A notice: an RPC failure shown in a dialog, or an informational toast.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Notice {
     /// Stable ID for dismissal.
@@ -191,9 +206,11 @@ pub struct Notice {
     pub undo: Option<Call>,
     /// A log the failure points to (`.ara/hub-process.log`).
     pub log: Option<PathBuf>,
+    /// A failed operation that can be deliberately retried from its error dialog.
+    pub retry: Option<Box<Intent>>,
 }
 impl Notice {
-    /// Errors render with the destructive tint; confirmations with the info tint.
+    /// Errors use a dialog; successful results use informational toasts.
     pub fn is_error(&self) -> bool {
         !self.diagnostics.is_empty()
     }
@@ -232,8 +249,20 @@ pub enum Effect {
 /// Everything a person can do in the Hub.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Intent {
+    /// Open a focused dialog without starting its operation.
+    Dialog(Dialog),
+    /// Close a dialog and restore the previous focus.
+    DismissDialog,
+    /// Run the action explicitly confirmed in the current dialog.
+    ConfirmDialog,
+    /// Skip this exact Hub version/build until a newer release is published.
+    SkipUpdate,
     /// Refresh signed release metadata in the background.
     CheckUpdates,
+    /// Persist how Hub updates are downloaded.
+    HubUpdateDownloads(DownloadPolicy),
+    /// Expand or collapse technical release-source settings.
+    ToggleAdvanced,
     /// Refresh release jobs after a progress notification.
     RefreshDownloads,
     /// Stable or preview releases, persisted by the service.
@@ -244,8 +273,14 @@ pub enum Intent {
     SaveReleaseRepo,
     /// Install a published engine version.
     InstallEngine(String),
+    /// Download and repair this engine while retaining project version pins.
+    RepairEngine(String),
+    /// Retry an uninstall job, including cleanup after the engine was unregistered.
+    RetryUninstall(String),
     /// Cancel a release job.
     CancelDownload(String),
+    /// Cancel a transfer request whose background job has not answered yet.
+    CancelPending { kind: String, version: String },
     /// Download the offered Hub update.
     PrepareUpdate,
     /// Restart this Hub through the verified external updater.
@@ -307,10 +342,14 @@ pub enum Intent {
         /// Installed version.
         version: String,
     },
+    /// Choose an installed engine and confirm its effect before changing the pin.
+    ChooseEngine { project: String, version: String },
     /// Installs: register a build from a folder.
     AddEngine,
     /// Installs: remove the build at this index.
     RemoveEngine(usize),
+    /// Remove the exact engine build confirmed by the user, even if the list refreshes.
+    RemoveEngineBuild(Engine),
     /// Agents: pick the client shown.
     Agent(AgentClient),
     /// Copy text (commands, configs).
@@ -328,6 +367,34 @@ pub enum Intent {
         /// Fix index across its diagnostics; `usize::MAX` is the undo.
         fix: usize,
     },
+}
+
+/// A dialog owns the decision, while background transfers continue independently.
+#[derive(Clone, Debug, PartialEq)]
+pub enum Dialog {
+    /// Release notes, download progress and the explicit restart step.
+    Update,
+    /// Confirm a published engine installation.
+    InstallEngine(String),
+    /// Confirm and track repair of an installed engine version.
+    RepairEngine(String),
+    /// Confirm deletion of this exact managed installation with its affected projects.
+    UninstallEngine(Engine),
+    /// Confirmation for an operation with a meaningful consequence.
+    Confirm {
+        /// Concise question naming the affected item.
+        title: String,
+        /// Consequence and recovery information.
+        detail: String,
+        /// The affirmative button label.
+        label: String,
+        /// Destructive actions receive the destructive treatment.
+        destructive: bool,
+        /// The command runs only after confirmation.
+        action: Box<Intent>,
+    },
+    /// A catalogued error, with its fixes and optional retry.
+    Error(u64),
 }
 
 /// Lists refreshed from the service.
@@ -372,6 +439,10 @@ impl List {
 
 /// The Hub's whole UI state.
 pub struct Hub {
+    /// Technical release-source controls are explicitly disclosed.
+    pub advanced: bool,
+    /// Current input-trapping dialog.
+    pub dialog: Option<Dialog>,
     /// Available versions, transfer jobs and update offer.
     pub releases: updates::Releases,
     /// Current page.
@@ -431,6 +502,8 @@ impl Hub {
     /// A disconnected model. `home` seeds the Create destination.
     pub fn new(prefs: Prefs, home: PathBuf, local_engine: Option<Engine>) -> Self {
         Self {
+            advanced: false,
+            dialog: None,
             releases: updates::Releases::default(),
             view: View::Projects,
             prefs,
@@ -538,8 +611,19 @@ impl Hub {
             detail: None,
             undo: None,
             log: None,
+            retry: None,
         });
         self.notice_times.insert(id, std::time::Instant::now());
+        if error.is_some() {
+            self.menu = None;
+            // A background reply must not replace a decision while it is being made.
+            if !matches!(
+                self.dialog,
+                Some(Dialog::Confirm { .. } | Dialog::UninstallEngine(_))
+            ) {
+                self.dialog = Some(Dialog::Error(id));
+            }
+        }
         if self.notices.len() > 4 {
             self.notices.remove(0);
         }
@@ -553,7 +637,48 @@ impl Hub {
     /// Apply one user intent.
     pub fn intent(&mut self, intent: Intent) {
         match intent {
+            Intent::Dialog(dialog) => {
+                match self.dialog.take() {
+                    Some(Dialog::Error(id)) => self.notices.retain(|notice| notice.id != id),
+                    Some(Dialog::UninstallEngine(engine)) if !matches!(&dialog, Dialog::UninstallEngine(next) if next.version == engine.version) => {
+                        self.close_removal(&engine.version)
+                    }
+                    _ => {}
+                }
+                self.menu = None;
+                if let Dialog::InstallEngine(version) | Dialog::RepairEngine(version) = &dialog {
+                    self.preflight_engine(version.clone());
+                }
+                if let Dialog::UninstallEngine(engine) = &dialog {
+                    self.inspect_removal(engine.version.clone());
+                }
+                self.dialog = Some(dialog);
+            }
+            Intent::DismissDialog => match self.dialog.take() {
+                Some(Dialog::Error(id)) => self.notices.retain(|notice| notice.id != id),
+                Some(Dialog::UninstallEngine(engine)) => self.close_removal(&engine.version),
+                _ => {}
+            },
+            Intent::ConfirmDialog => match self.dialog.take() {
+                Some(Dialog::Confirm { action, .. }) => self.intent(*action),
+                Some(Dialog::UninstallEngine(engine))
+                    if self.releases.removal(&engine.version).is_some() =>
+                {
+                    self.intent(Intent::RemoveEngineBuild(engine))
+                }
+                Some(dialog @ Dialog::UninstallEngine(_)) => self.dialog = Some(dialog),
+                _ => {}
+            },
+            Intent::SkipUpdate => {
+                self.prefs.skipped_update = self.releases.hub.as_ref().map(updates::identity);
+                self.dialog = None;
+            }
             Intent::CheckUpdates => self.check_updates(),
+            Intent::HubUpdateDownloads(policy) => {
+                self.prefs.hub_update_downloads = policy;
+                self.prepare_background_update();
+            }
+            Intent::ToggleAdvanced => self.advanced = !self.advanced,
             Intent::RefreshDownloads => self.release_call("hub.downloads", serde_json::json!({})),
             Intent::ReleaseChannel(channel) => {
                 self.releases.channel = channel;
@@ -568,12 +693,31 @@ impl Hub {
                 serde_json::json!({"repo":self.releases.repo}),
             ),
             Intent::InstallEngine(version) => self.install_engine(version),
+            Intent::RepairEngine(version) => {
+                self.start_transfer("repair", version, "hub.engine.repair")
+            }
+            Intent::CancelPending { kind, version } => self.cancel_pending(kind, version),
+            Intent::RetryUninstall(version) => {
+                if let Some(Dialog::Error(id)) = self.dialog.take() {
+                    self.notices.retain(|notice| notice.id != id);
+                }
+                self.start_transfer("uninstall", version, "hub.engine.uninstall");
+            }
             Intent::CancelDownload(job) => {
+                if let Some(version) = self
+                    .releases
+                    .jobs
+                    .iter()
+                    .find(|entry| entry.id == job && entry.kind == "engine")
+                    .map(|entry| entry.version.clone())
+                {
+                    self.releases.open_after.remove(&version);
+                }
                 self.release_call("hub.download.cancel", serde_json::json!({"job":job}))
             }
             Intent::PrepareUpdate => {
                 if let Some(release) = &self.releases.hub {
-                    self.release_call("hub.update.prepare", serde_json::json!({"version":release.version,"hubVersion":env!("CARGO_PKG_VERSION")}));
+                    self.start_transfer("hub", release.version.clone(), "hub.update.prepare");
                 }
             }
             Intent::RestartUpdate => self.restart_update(),
@@ -687,6 +831,19 @@ impl Hub {
                     self.send(call);
                 }
             }
+            Intent::ChooseEngine { project, version } => {
+                if self
+                    .project(&project)
+                    .is_some_and(|entry| entry.engine_version != version)
+                {
+                    self.intent(Intent::Dialog(Dialog::Confirm {
+                        title: format!("Switch {} to Ara {version}?", self.name_of(&project)),
+                        detail: "The project will use this editor version the next time it opens. Check your project's version control before opening it in a newer engine.".into(),
+                        label: "Switch engine".into(), destructive: false,
+                        action: Box::new(Intent::Pin { project, version }),
+                    }));
+                }
+            }
             Intent::Pin { project, version } => {
                 let changed = self
                     .project(&project)
@@ -702,17 +859,17 @@ impl Hub {
             Intent::AddEngine => self.effects.push(Effect::Pick(Pick::Engine)),
             Intent::RemoveEngine(index) => {
                 if let Some(engine) = self.engines.get(index).cloned() {
-                    self.dismissed_banners
-                        .remove(&format!("engine-error-{}", engine.version));
-                    self.engine_errors.remove(&engine.version);
-                    if engine.managed {
-                        self.release_call(
-                            "hub.engine.uninstall",
-                            serde_json::json!({"version":engine.version}),
-                        );
-                    } else {
-                        self.send(Call::EngineRemove(engine));
-                    }
+                    self.intent(Intent::RemoveEngineBuild(engine));
+                }
+            }
+            Intent::RemoveEngineBuild(engine) => {
+                self.dismissed_banners
+                    .remove(&format!("engine-error-{}", engine.version));
+                self.engine_errors.remove(&engine.version);
+                if engine.managed {
+                    self.start_transfer("uninstall", engine.version, "hub.engine.uninstall");
+                } else {
+                    self.send(Call::EngineRemove(engine));
                 }
             }
             Intent::Agent(client) => self.prefs.agent = client,
@@ -721,11 +878,28 @@ impl Hub {
                 self.copied = Some(text);
             }
             Intent::OpenPath(path) => self.effects.push(Effect::Open(path)),
-            Intent::Dismiss(id) => self.notices.retain(|n| n.id != id),
+            Intent::Dismiss(id) => {
+                self.notices.retain(|n| n.id != id);
+                if self.dialog == Some(Dialog::Error(id)) {
+                    self.dialog = None;
+                }
+            }
             Intent::DismissBanner(key) => {
                 self.dismissed_banners.insert(key);
             }
-            Intent::Fix { notice, fix } => self.fix(notice, fix),
+            Intent::Fix { notice, fix } => {
+                self.fix(notice, fix);
+                if !self.notices.iter().any(|entry| entry.id == notice)
+                    && self.dialog == Some(Dialog::Error(notice))
+                {
+                    self.dialog = None;
+                }
+            }
+        }
+        if self.dialog.is_none()
+            && let Some(notice) = self.notices.iter().rev().find(|notice| notice.is_error())
+        {
+            self.dialog = Some(Dialog::Error(notice.id));
         }
     }
 
@@ -829,8 +1003,54 @@ impl Hub {
     }
 
     fn reply(&mut self, call: Call, result: Result<Value, RpcError>) {
-        if let Call::Release { method, .. } = &call {
+        if let Call::Release { method, params } = &call {
+            if *method == "hub.download.cancel"
+                && result.is_err()
+                && params["job"]
+                    .as_str()
+                    .is_some_and(|job| self.removal_cancel(job))
+            {
+                return;
+            }
+            if *method == "hub.engine.preflight"
+                && let Some(version) = params["version"].as_str()
+            {
+                self.preflight_reply(version.into(), result);
+                return;
+            }
+            if *method == "hub.engine.uninstall.preflight"
+                && let Err(error) = &result
+            {
+                if let Some(version) = params["version"].as_str() {
+                    self.transfer_failed(method, version);
+                    self.removal_request_failed(version, error);
+                }
+                return;
+            }
+            if result.is_err()
+                && let Some(version) = params["version"].as_str()
+            {
+                self.transfer_failed(method, version);
+            }
+            let retry = result.as_ref().err().and_then(|_| match *method {
+                "hub.engine.install" => params["version"]
+                    .as_str()
+                    .map(|version| Intent::Dialog(Dialog::InstallEngine(version.into()))),
+                "hub.engine.repair" => params["version"]
+                    .as_str()
+                    .map(|version| Intent::Dialog(Dialog::RepairEngine(version.into()))),
+                "hub.engine.uninstall" => params["version"]
+                    .as_str()
+                    .map(|version| Intent::RetryUninstall(version.into())),
+                "hub.update.prepare" => Some(Intent::Dialog(Dialog::Update)),
+                _ => None,
+            });
             self.release_reply(method, result);
+            if let Some(retry) = retry
+                && let Some(notice) = self.notices.last_mut()
+            {
+                notice.retry = Some(Box::new(retry));
+            }
             return;
         }
         if let Some(list) = List::of(&call) {
@@ -957,6 +1177,7 @@ impl Hub {
                         .first()
                         .map_or_else(|| error.message.clone(), |d| d.message.clone());
                     self.engine_errors.insert(engine.version, reason);
+                    self.notice("Couldn't remove the engine".into(), Some(&error));
                 }
             }
             Call::Projects | Call::Status | Call::Templates | Call::Engines | Call::Activity => {}
