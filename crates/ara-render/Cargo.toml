@@ -9,6 +9,7 @@ publish.workspace = true
 workspace = true
 
 [features]
+fidelity-lab = ["ara-gpu/fidelity-lab"]
 profiling = ["dep:ara-profile"]
 
 [dependencies]

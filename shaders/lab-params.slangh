@@ -1,0 +1,8 @@
+// Dev variants include this after the engine's bindless buffer declaration.
+// Pass the registry's uniform_heap_index through the pass's existing constants;
+// Key<T>::slot() is the uint4 slot. Shipping PSOs do not define ARA_FIDELITY_LAB.
+#ifdef ARA_FIDELITY_LAB
+float araLabFloat(uint block,uint slot){return asfloat(buffers[NonUniformResourceIndex(block)].Load(slot*16));}
+int araLabInt(uint block,uint slot){return asint(buffers[NonUniformResourceIndex(block)].Load(slot*16));}
+float4 araLabVector(uint block,uint slot){return asfloat(buffers[NonUniformResourceIndex(block)].Load4(slot*16));}
+#endif

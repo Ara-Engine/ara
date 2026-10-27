@@ -20,13 +20,43 @@ pub(crate) struct Load {
     pub name: String,
     pub percent: f64,
 }
-#[derive(Clone, Default, Deserialize, Serialize)]
+#[derive(Clone, Default, Deserialize)]
 pub(crate) struct Report {
     pub samples: Vec<Sample>,
     pub intervals: Vec<Interval>,
     pub threshold_percent: f64,
     pub sustained_samples: u32,
     pub errors: Vec<String>,
+}
+impl Serialize for Report {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        use serde::ser::SerializeStruct;
+        let count = self.samples.len();
+        let mean = (!self.samples.is_empty())
+            .then(|| self.samples.iter().map(|s| s.foreign_percent).sum::<f64>() / count as f64);
+        let peak = self
+            .samples
+            .iter()
+            .map(|s| s.foreign_percent)
+            .reduce(f64::max);
+        let deviation = mean.map(|mean| {
+            (self
+                .samples
+                .iter()
+                .map(|s| (s.foreign_percent - mean).powi(2))
+                .sum::<f64>()
+                / count as f64)
+                .sqrt()
+        });
+        let mut out = serializer.serialize_struct("CpuLoad", 6)?;
+        out.serialize_field("samples", &self.samples)?;
+        out.serialize_field("intervals", &self.intervals)?;
+        out.serialize_field("threshold_percent", &self.threshold_percent)?;
+        out.serialize_field("sustained_samples", &self.sustained_samples)?;
+        out.serialize_field("errors", &self.errors)?;
+        out.serialize_field("summary",&serde_json::json!({"status":if count==0{"not_measured"}else if self.invalid(){"invalid"}else{"within_configured_threshold"},"samples":count,"foreign_mean_percent":mean,"foreign_peak_percent":peak,"foreign_standard_deviation_percent":deviation,"above_default_10_percent":peak.is_some_and(|p|p>10.),"priority_independent":true}))?;
+        out.end()
+    }
 }
 impl Report {
     pub fn observe(&mut self, sample: Sample, threshold: f64, sustained: u32) {

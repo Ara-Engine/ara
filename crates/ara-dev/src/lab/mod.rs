@@ -1,11 +1,15 @@
 //! One checkout-owned iteration daemon. Clients never invoke Cargo or own a player.
+mod ab;
 pub(crate) mod build;
 mod claims;
 mod daemon;
+mod generations;
 mod protocol;
+mod references;
 mod scenes;
 mod session;
 mod track;
+mod variants;
 mod watch;
 pub(crate) use daemon::run_with_strategy;
 
@@ -71,6 +75,9 @@ enum Action {
     Session {
         #[arg(long, default_value = "default")]
         session: String,
+        /// Retire this track and free its resident-player slot.
+        #[arg(long)]
+        close: bool,
         #[arg(long, default_value = "showcase", value_parser = ["showcase", "outpost", "hangar"])]
         scene: String,
         #[arg(long)]
@@ -86,6 +93,9 @@ enum Action {
     Capture {
         #[arg(long, default_value = "default")]
         session: String,
+        /// One sweep without temporal/repeatability gates for the shortest visual loop.
+        #[arg(long)]
+        quick: bool,
     },
     /// Exclusive, guarded steady-state frame window.
     Measure {
@@ -99,6 +109,60 @@ enum Action {
         no_wait: bool,
         #[command(flatten)]
         guard: crate::gpu_guard::Policy,
+    },
+    /// Register/select a compile-time shader variant; baseline is always available.
+    Variant {
+        #[arg(long, default_value = "default")]
+        session: String,
+        #[arg(long)]
+        name: String,
+        /// JSON {packages:{"shaders/pipelines.json":{pipelines:{...}}}}.
+        #[arg(long)]
+        recipe: Option<PathBuf>,
+        /// Promote a successfully cooked recipe into baseline manifests.
+        #[arg(long)]
+        promote: bool,
+        /// Forget an unused recipe; retain its cached artifacts for inspection.
+        #[arg(long,conflicts_with_all=["recipe","promote"])]
+        remove: bool,
+    },
+    /// Interleave baseline and experiment windows in the same warm player.
+    Ab {
+        #[arg(long, default_value = "default")]
+        session: String,
+        #[arg(long)]
+        variant: String,
+        #[arg(long, default_value_t = 4)]
+        windows: u32,
+        #[arg(long, default_value_t = 120)]
+        frames: u32,
+        #[arg(long, default_value = "high")]
+        preset: String,
+        #[arg(long)]
+        no_wait: bool,
+        #[command(flatten)]
+        guard: crate::gpu_guard::Policy,
+    },
+    /// Discover or change typed live tunables (JSON name -> {type,value}).
+    Set {
+        #[arg(long, default_value = "default")]
+        session: String,
+        #[arg(long)]
+        values: Option<String>,
+        /// Select one of the scene's fixed cameras without restarting the track.
+        #[arg(long)]
+        camera: Option<String>,
+    },
+    /// Render optional Blender 5.1 scene-linear EXR references under the lab cache.
+    Reference {
+        #[arg(long, default_value = "showcase")]
+        scene: String,
+        #[arg(long)]
+        blender: Option<PathBuf>,
+        #[arg(long)]
+        bench_root: Option<PathBuf>,
+        #[arg(long, default_value_t = 128)]
+        samples: u32,
     },
     Logs {
         #[arg(long, default_value_t = 50)]
@@ -150,7 +214,7 @@ pub(crate) fn run(root: &Path, options: Options) -> Result<bool> {
                 .stdin(Stdio::null())
                 .stdout(fs::File::create(base.join("daemon.log"))?)
                 .stderr(fs::File::create(base.join("daemon.stderr.log"))?);
-            build::background(&mut command);
+            build::daemon(&mut command)?;
             let mut child = command.spawn()?;
             let started = std::time::Instant::now();
             loop {
@@ -182,6 +246,7 @@ pub(crate) fn run(root: &Path, options: Options) -> Result<bool> {
         Action::Rebuild => ("lab_rebuild", json!({})),
         Action::Session {
             session,
+            close,
             scene,
             pack,
             preset,
@@ -189,9 +254,12 @@ pub(crate) fn run(root: &Path, options: Options) -> Result<bool> {
             height,
         } => (
             "lab_session",
-            json!({"session":session,"scene":scene,"pack":pack,"preset":preset,"width":width,"height":height}),
+            json!({"session":session,"close":close,"scene":scene,"pack":pack,"preset":preset,"width":width,"height":height}),
         ),
-        Action::Capture { session } => ("lab_capture", json!({"session":session})),
+        Action::Capture { session, quick } => (
+            "lab_capture",
+            json!({"session":session,"runs":if quick{1}else{3},"temporal":!quick}),
+        ),
         Action::Measure {
             session,
             frames,
@@ -201,6 +269,50 @@ pub(crate) fn run(root: &Path, options: Options) -> Result<bool> {
         } => (
             "lab_measure",
             json!({"session":session,"frames":frames,"preset":preset,"no_wait":no_wait,"guard":guard}),
+        ),
+        Action::Variant {
+            session,
+            name,
+            recipe,
+            promote,
+            remove,
+        } => {
+            let recipe = recipe
+                .map(|path| -> Result<Value> { Ok(serde_json::from_slice(&fs::read(path)?)?) })
+                .transpose()?;
+            (
+                "lab_variant",
+                json!({"session":session,"name":name,"recipe":recipe,"promote":promote,"remove":remove}),
+            )
+        }
+        Action::Ab {
+            session,
+            variant,
+            windows,
+            frames,
+            preset,
+            no_wait,
+            guard,
+        } => (
+            "lab_ab",
+            json!({"session":session,"b":variant,"windows":windows,"frames":frames,"preset":preset,"no_wait":no_wait,"guard":guard}),
+        ),
+        Action::Set {
+            session,
+            values,
+            camera,
+        } => (
+            "lab_set",
+            json!({"session":session,"camera":camera,"values":values.map(|s|serde_json::from_str::<Value>(&s)).transpose()?.unwrap_or_else(||json!({}))}),
+        ),
+        Action::Reference {
+            scene,
+            blender,
+            bench_root,
+            samples,
+        } => (
+            "lab_reference",
+            json!({"scene":scene,"blender":blender,"bench_root":bench_root,"samples":samples}),
         ),
         Action::Logs { lines } => ("lab_logs", json!({"lines":lines})),
         Action::Stop => ("lab_stop", json!({})),

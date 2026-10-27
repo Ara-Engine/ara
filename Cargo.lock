@@ -1522,6 +1522,7 @@ dependencies = [
  "ara-play",
  "ara-play-host",
  "ara-render",
+ "ara-render-fidelity",
  "ara-runtime",
  "ara-runtime-audio",
  "ara-runtime-net",

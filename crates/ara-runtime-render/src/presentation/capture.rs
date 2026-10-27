@@ -2,6 +2,47 @@
 use super::*;
 
 impl Presenter {
+    /// Read the current display without rerendering or resetting temporal history.
+    #[cfg(feature = "fidelity-lab")]
+    pub fn lab_display(&mut self, frame: &RenderFrame) -> Result<image::RgbaImage> {
+        let renderer = self
+            .renderer
+            .as_mut()
+            .context("warm renderer is not ready")?;
+        if let Some(live) = &mut self.live {
+            live.view.capture(renderer.gpu_mut())
+        } else {
+            Ok(renderer
+                .capture_completed(&CaptureRequest {
+                    camera: camera(frame)?,
+                    size: self.size,
+                    mode: ViewMode::Lit,
+                    deterministic: false,
+                    exposure: frame.environment.exposure,
+                    settle_frames: 0,
+                    tick: frame.tick,
+                    seed: 0,
+                    marks: None,
+                })?
+                .image)
+        }
+    }
+    /// Explicit dev readback of live scene-linear radiance, preserving accumulation.
+    #[cfg(feature = "fidelity-lab")]
+    pub fn lab_radiance(&mut self) -> Result<([u32; 2], Vec<[f32; 4]>)> {
+        let renderer = self
+            .renderer
+            .as_mut()
+            .context("warm renderer is not ready")?;
+        if let Some(live) = &mut self.live {
+            Ok((
+                live.plan.render_size,
+                live.view.capture_radiance(renderer.gpu_mut())?,
+            ))
+        } else {
+            renderer.lab_radiance()
+        }
+    }
     /// Captures the selected native presentation used by windows and embedded Game.
     /// Resolves content only when required, with stable GPU-derived entity marks.
     pub fn capture_with(

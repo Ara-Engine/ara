@@ -266,6 +266,8 @@ pub(super) fn run(args: Args, began: Instant) -> Result<()> {
                 world.runtime.extract(&mut frame);
             }
             perf.apply_camera(&mut frame);
+            #[cfg(feature = "fidelity-lab")]
+            perf.apply_params(&mut *presenter, &frame);
             if perf.capture(&mut *presenter, &mut frame)? {
                 continue;
             }

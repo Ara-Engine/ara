@@ -2,6 +2,7 @@
 #![cfg_attr(test, allow(clippy::unwrap_used))]
 //! Offline Slang compiler orchestration. The engine never links this crate.
 mod metal;
+pub mod variant;
 use anyhow::{Context, Result, ensure};
 use ara_gpu::cooked::{CookedPipeline, CookedStage, RenderState, Stage, binding_layout_hash};
 use serde::Deserialize;
@@ -21,6 +22,9 @@ pub struct PipelineSource {
     pub entries: BTreeMap<String, Stage>,
     /// Formats and graphics state.
     pub state: RenderState,
+    /// Offline PSO definitions; absent from the baseline unless explicitly promoted.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub defines: BTreeMap<String, String>,
 }
 /// A manifest maps pipeline names to independent offline cooks.
 pub type CookManifest = BTreeMap<String, PipelineSource>;
@@ -76,30 +80,34 @@ fn hash(bytes: impl AsRef<[u8]>) -> String {
 }
 
 /// Cook all reachable pipelines; unchanged, intact artifacts are reused.
-/// Source directories are hashed recursively so changes to includes invalidate cooks.
+/// Reachable includes invalidate their pipelines; ambiguous imports use a conservative tree hash.
 pub fn cook(manifest: &Path, output: &Path, tools: &Toolchain) -> Result<usize> {
+    cook_with_variant(manifest, output, tools, None)
+}
+
+/// Cook an experimental recipe into a separate output, preserving the baseline source.
+pub fn cook_with_variant(
+    manifest: &Path,
+    output: &Path,
+    tools: &Toolchain,
+    variant: Option<&variant::Variant>,
+) -> Result<usize> {
     let source_root = manifest.parent().context("Manifest has no parent")?;
-    let manifest_bytes = std::fs::read(manifest)?;
-    let pipelines: CookManifest = serde_json::from_slice(&manifest_bytes)?;
+    let mut manifest_bytes = std::fs::read(manifest)?;
+    let mut pipelines: CookManifest = serde_json::from_slice(&manifest_bytes)?;
+    if let Some(variant) = variant {
+        variant.apply(&mut pipelines, source_root)?;
+        manifest_bytes = serde_json::to_vec(&pipelines)?;
+    }
     let compiler = String::from_utf8(run(Command::new(&tools.slangc).arg("-version"))?)?;
     let converter = metal::Converter::discover()?;
     if converter.is_none() {
         metal::report_skipped();
     }
-    let mut source_hash = Sha256::new();
-    let mut files = Vec::new();
-    collect_sources(source_root, &mut files)?;
-    files.sort();
-    for file in files {
-        source_hash.update(file.strip_prefix(source_root)?.to_string_lossy().as_bytes());
-        source_hash.update(std::fs::read(file)?);
-    }
     let mut compiler_hash = Sha256::new();
     let recipe = b"ara-cook-3|sm_6_6+spirv_1_6|sm_6_6|-O2|column-major|VULKAN|invert-y-vertex-mesh|vulkan1.3-validation";
-    source_hash.update(recipe);
     compiler_hash.update(recipe);
     let executable = std::fs::read(&tools.slangc)?;
-    source_hash.update(&executable);
     compiler_hash.update(&executable);
     if let Some(bin) = tools.slangc.parent() {
         for name in [
@@ -111,24 +119,34 @@ pub fn cook(manifest: &Path, output: &Path, tools: &Toolchain) -> Result<usize> 
             "dxcompiler.dll",
         ] {
             if let Ok(bytes) = std::fs::read(bin.join(name)) {
-                source_hash.update(name.as_bytes());
-                source_hash.update(&bytes);
                 compiler_hash.update(name.as_bytes());
                 compiler_hash.update(&bytes);
             }
         }
     }
-    source_hash.update(compiler.as_bytes());
-    source_hash.update(binding_layout_hash());
-    source_hash.update(manifest_bytes);
     compiler_hash.update(compiler.as_bytes());
     compiler_hash.update(binding_layout_hash());
     let compiler_key = hash(compiler_hash.finalize());
+    // Unreferenced experimental siblings must not alter baseline provenance.
+    // Each input still falls back to the full tree for unresolved module/includes.
+    let fingerprints = pipelines
+        .iter()
+        .map(|(name, pipeline)| {
+            Ok((
+                name.clone(),
+                pipeline_input_key(source_root, pipeline, &compiler_key)?,
+            ))
+        })
+        .collect::<Result<BTreeMap<_, _>>>()?;
+    let mut source_hash = Sha256::new();
+    source_hash.update(&compiler_key);
+    source_hash.update(manifest_bytes);
+    for (name, input) in &fingerprints {
+        source_hash.update(name.as_bytes());
+        source_hash.update(input.as_bytes());
+    }
     let key = hash(source_hash.finalize());
     std::fs::create_dir_all(output)?;
-    let artifacts = output.join(&key);
-    std::fs::create_dir_all(&artifacts)?;
-    let mut rebuilt = 0;
     let cache_path = output.join(".ara-pipeline-inputs.json");
     let previous: BTreeMap<String, String> = std::fs::read(&cache_path)
         .ok()
@@ -136,13 +154,18 @@ pub fn cook(manifest: &Path, output: &Path, tools: &Toolchain) -> Result<usize> 
         .unwrap_or_default();
     let mut inputs = BTreeMap::new();
     let mut publication = Vec::new();
+    let mut pending = Vec::new();
     for (name, pipeline) in pipelines {
+        variant::validate_defines(&pipeline.defines)?;
         ensure!(
             name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_'),
             "Invalid pipeline name"
         );
         let path = output.join(format!("{name}.json"));
-        let input_key = pipeline_input_key(source_root, &pipeline, &compiler_key)?;
+        let input_key = fingerprints
+            .get(&name)
+            .context("pipeline input fingerprint")?
+            .clone();
         inputs.insert(name.clone(), input_key.clone());
         if let Ok(bytes) = std::fs::read(&path)
             && let Ok(mut old) = serde_json::from_slice::<CookedPipeline>(&bytes)
@@ -165,68 +188,40 @@ pub fn cook(manifest: &Path, output: &Path, tools: &Toolchain) -> Result<usize> 
             }
             continue;
         }
-        let mut stages = Vec::new();
-        for (entry, stage) in pipeline.entries {
-            ensure!(
-                entry.chars().all(|c| c.is_ascii_alphanumeric() || c == '_'),
-                "Invalid shader entry"
-            );
-            for (target, suffix, profile) in [
-                ("spirv", "spv", "sm_6_6+spirv_1_6"),
-                ("dxil", "dxil", "sm_6_6"),
-            ] {
-                let mut cmd = Command::new(&tools.slangc);
-                cmd.arg(source_root.join(&pipeline.source)).args([
-                    "-entry",
-                    &entry,
-                    "-stage",
-                    stage.slang_name(),
-                    "-target",
-                    target,
-                    "-profile",
-                    profile,
-                    "-O2",
-                    "-matrix-layout-column-major",
-                ]);
-                if target == "spirv" {
-                    cmd.args(["-D", "VULKAN=1"]);
-                    if matches!(stage, Stage::Vertex | Stage::Mesh) {
-                        cmd.arg("-fvk-invert-y");
-                    }
-                }
-                cmd.arg("-reflection-json")
-                    .arg(artifacts.join(format!("{entry}.{target}.json")))
-                    .arg("-o")
-                    .arg(artifacts.join(format!("{entry}.{suffix}")));
-                run(&mut cmd)?;
-                if target == "spirv" {
-                    run(Command::new(&tools.spirv_val)
-                        .args(["--target-env", "vulkan1.3"])
-                        .arg(artifacts.join(format!("{entry}.spv"))))?;
-                }
-            }
-            stages.push(CookedStage {
-                source_entry: entry.clone(),
-                spirv_entry: "main".into(),
-                stage,
-                spirv: format!("{key}/{entry}.spv"),
-                dxil: format!("{key}/{entry}.dxil"),
-                spirv_hash: hash(std::fs::read(artifacts.join(format!("{entry}.spv")))?),
-                dxil_hash: hash(std::fs::read(artifacts.join(format!("{entry}.dxil")))?),
-                metal: None,
-            });
-        }
-        convert_stages(converter.as_ref(), output, &mut stages)?;
-        let cooked = CookedPipeline {
-            version: 1,
-            key: key.clone(),
-            binding_layout_hash: binding_layout_hash(),
-            compiler: compiler.trim().into(),
-            stages,
-            state: pipeline.state,
-        };
-        publication.push((path, cooked));
-        rebuilt += 1;
+        pending.push((name, pipeline, path));
+    }
+    // Bound the expensive compiler lane to four BelowNormal-inherited workers.
+    // All artifacts complete before publishing any metadata from the cohort.
+    let rebuilt = pending.len();
+    let compiler = Compiler {
+        source_root,
+        output,
+        tools,
+        key: &key,
+        version: &compiler,
+        converter: converter.as_ref(),
+    };
+    for batch in pending.chunks(4) {
+        let compiled = std::thread::scope(|scope| -> Result<Vec<_>> {
+            let jobs = batch
+                .iter()
+                .map(|(name, pipeline, path)| {
+                    let compiler = &compiler;
+                    scope.spawn(move || {
+                        compiler
+                            .pipeline(name, pipeline)
+                            .map(|cooked| (path.clone(), cooked))
+                    })
+                })
+                .collect::<Vec<_>>();
+            jobs.into_iter()
+                .map(|job| {
+                    job.join()
+                        .map_err(|_| anyhow::anyhow!("shader compiler worker panicked"))?
+                })
+                .collect()
+        })?;
+        publication.extend(compiled);
     }
     // A failed compiler invocation never publishes any part of the new cohort.
     let changed = !publication.is_empty();
@@ -249,6 +244,94 @@ pub fn cook(manifest: &Path, output: &Path, tools: &Toolchain) -> Result<usize> 
         std::fs::rename(temporary, signal)?;
     }
     Ok(rebuilt)
+}
+
+struct Compiler<'a> {
+    source_root: &'a Path,
+    output: &'a Path,
+    tools: &'a Toolchain,
+    key: &'a str,
+    version: &'a str,
+    converter: Option<&'a metal::Converter>,
+}
+impl Compiler<'_> {
+    fn pipeline(&self, name: &str, pipeline: &PipelineSource) -> Result<CookedPipeline> {
+        let Self {
+            source_root,
+            output,
+            tools,
+            key,
+            version,
+            converter,
+        } = self;
+        // Two permutations may use the same entry name. Their artifacts must not alias.
+        let prefix = format!("{key}/{name}");
+        let artifacts = output.join(&prefix);
+        std::fs::create_dir_all(&artifacts)?;
+        let mut stages = Vec::new();
+        for (entry, stage) in &pipeline.entries {
+            ensure!(
+                entry.chars().all(|c| c.is_ascii_alphanumeric() || c == '_'),
+                "Invalid shader entry"
+            );
+            for (target, suffix, profile) in [
+                ("spirv", "spv", "sm_6_6+spirv_1_6"),
+                ("dxil", "dxil", "sm_6_6"),
+            ] {
+                let mut cmd = Command::new(&tools.slangc);
+                cmd.arg(source_root.join(&pipeline.source)).args([
+                    "-entry",
+                    entry,
+                    "-stage",
+                    stage.slang_name(),
+                    "-target",
+                    target,
+                    "-profile",
+                    profile,
+                    "-O2",
+                    "-matrix-layout-column-major",
+                ]);
+                for (name, value) in &pipeline.defines {
+                    cmd.arg("-D").arg(format!("{name}={value}"));
+                }
+                if target == "spirv" {
+                    cmd.args(["-D", "VULKAN=1"]);
+                    if matches!(stage, Stage::Vertex | Stage::Mesh) {
+                        cmd.arg("-fvk-invert-y");
+                    }
+                }
+                cmd.arg("-reflection-json")
+                    .arg(artifacts.join(format!("{entry}.{target}.json")))
+                    .arg("-o")
+                    .arg(artifacts.join(format!("{entry}.{suffix}")));
+                run(&mut cmd)?;
+                if target == "spirv" {
+                    run(Command::new(&tools.spirv_val)
+                        .args(["--target-env", "vulkan1.3"])
+                        .arg(artifacts.join(format!("{entry}.spv"))))?;
+                }
+            }
+            stages.push(CookedStage {
+                source_entry: entry.clone(),
+                spirv_entry: "main".into(),
+                stage: *stage,
+                spirv: format!("{prefix}/{entry}.spv"),
+                dxil: format!("{prefix}/{entry}.dxil"),
+                spirv_hash: hash(std::fs::read(artifacts.join(format!("{entry}.spv")))?),
+                dxil_hash: hash(std::fs::read(artifacts.join(format!("{entry}.dxil")))?),
+                metal: None,
+            });
+        }
+        convert_stages(*converter, output, &mut stages)?;
+        Ok(CookedPipeline {
+            version: 1,
+            key: (*key).to_owned(),
+            binding_layout_hash: binding_layout_hash(),
+            compiler: version.trim().into(),
+            stages,
+            state: pipeline.state.clone(),
+        })
+    }
 }
 
 /// Fill missing or outdated Metal artifacts when the converter is installed; returns

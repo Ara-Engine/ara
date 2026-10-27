@@ -170,6 +170,8 @@ pub struct MetalDevice {
     clear: Option<clear::Clear>,
     /// Shader reload provenance (no hot reload on Metal yet, see `reload`).
     shader_status: vulkan::ShaderStatus,
+    #[cfg(feature = "fidelity-lab")]
+    pub(crate) lab_params: crate::tunables::Registry,
     submission_stats: vulkan::SubmissionStats,
     /// Last: released after the workers joined, so the archive flush races no compile.
     _cache: cache::Lease,
@@ -275,6 +277,8 @@ impl MetalDevice {
             waits: Default::default(),
             clear: None,
             shader_status: Default::default(),
+            #[cfg(feature = "fidelity-lab")]
+            lab_params: Default::default(),
             submission_stats: Default::default(),
             _cache: cache,
         })

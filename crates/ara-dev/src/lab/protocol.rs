@@ -24,13 +24,17 @@ pub(super) struct Request {
 }
 
 pub(super) fn read(stream: &TcpStream) -> Result<Request> {
+    // Accepted Windows sockets can inherit the listener's nonblocking mode.
+    stream.set_nonblocking(false)?;
     stream.set_read_timeout(Some(Duration::from_secs(5)))?;
+    stream.set_write_timeout(Some(Duration::from_secs(10)))?;
     let mut line = String::new();
     BufReader::new(stream)
         .take(1_048_576)
         .read_line(&mut line)?;
     Ok(serde_json::from_str(&line)?)
 }
+
 pub(super) fn reply(mut stream: TcpStream, result: Result<Value>) -> Result<()> {
     let value = match result {
         Ok(value) => json!({"result":value}),
@@ -103,20 +107,55 @@ fn tools() -> Value {
             "lab_session",
             "Select a frozen scene and create a hidden warm track.",
             schema(
-                json!({"session":session,"scene":{"type":"string","enum":["showcase","outpost","hangar"]},"pack":string,"preset":string,"width":{"type":"integer","minimum":16},"height":{"type":"integer","minimum":16}}),
+                json!({"session":session,"close":{"type":"boolean"},"scene":{"type":"string","enum":["showcase","outpost","hangar"]},"pack":string,"preset":string,"width":{"type":"integer","minimum":16},"height":{"type":"integer","minimum":16}}),
                 &[],
             ),
         ),
         (
             "lab_capture",
-            "Capture fixed cameras, reference FLIP/SSIM, regions and crops.",
-            schema(json!({"session":session}), &[]),
+            "E0 fixed-camera captures: matched EXR display transform, region gates, three-run repeatability and static/pan block RMS; LDR FLIP/SSIM are secondary. runs:1,temporal:false selects a quick sweep.",
+            schema(
+                json!({"session":session,"runs":{"type":"integer","minimum":1,"maximum":3,"default":3},"temporal":{"type":"boolean","default":true}}),
+                &[],
+            ),
         ),
         (
             "lab_measure",
             "Measure an exclusive GPU-queue window in the same player.",
             schema(
                 json!({"session":session,"preset":{"type":"string","enum":["low","medium","high","epic"]},"frames":{"type":"integer","minimum":1,"maximum":100000},"no_wait":{"type":"boolean"},"guard":{"type":"object","properties":{"cpu_threshold_percent":{"type":"number","minimum":0,"maximum":100},"cpu_sustained_samples":{"type":"integer","minimum":1},"threshold_percent":{"type":"number","minimum":0},"sustained_samples":{"type":"integer","minimum":1},"dwm_allowance_percent":{"type":"number","minimum":0}},"additionalProperties":false}}),
+                &[],
+            ),
+        ),
+        (
+            "lab_variant",
+            "Register/select an isolated offline PSO variant. New recipes cook before automatic selection.",
+            schema(
+                json!({"session":session,"name":string,"promote":{"type":"boolean"},"remove":{"type":"boolean"},"recipe":{"type":"object","properties":{"packages":{"type":"object"}},"required":["packages"]}}),
+                &["name"],
+            ),
+        ),
+        (
+            "lab_ab",
+            "Counterbalanced baseline A versus experimental B in one warm process, under one guarded GPU lease; returns paired deltas and noise.",
+            schema(
+                json!({"session":session,"a":{"type":"string","enum":["baseline"]},"b":string,"windows":{"type":"integer","minimum":2,"maximum":100},"frames":{"type":"integer","minimum":1,"maximum":100000},"preset":{"type":"string","enum":["low","medium","high","epic"]},"no_wait":{"type":"boolean"},"guard":{"type":"object"}}),
+                &["b"],
+            ),
+        ),
+        (
+            "lab_set",
+            "Discover typed dev tunables, or atomically push name -> {type:f32|int|bool|vec,value} updates. Types and ranges are validated before one uniform upload.",
+            schema(
+                json!({"session":session,"camera":string,"values":{"type":"object"}}),
+                &[],
+            ),
+        ),
+        (
+            "lab_reference",
+            "Render optional Blender 5.1 Cycles EXR references under target; missing scene sources/tools are diagnosed.",
+            schema(
+                json!({"scene":{"type":"string","enum":["showcase","outpost","hangar"]},"blender":string,"bench_root":string,"samples":{"type":"integer","minimum":1,"maximum":8192}}),
                 &[],
             ),
         ),
@@ -174,4 +213,33 @@ pub(super) fn mcp(root: &Path) -> Result<bool> {
         output.flush()?;
     }
     Ok(true)
+}
+
+#[cfg(test)]
+mod transport_tests {
+    use super::*;
+    #[test]
+    fn accepted_clients_wait_for_the_first_payload() -> Result<()> {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0")?;
+        listener.set_nonblocking(true)?;
+        let mut client = TcpStream::connect(listener.local_addr()?)?;
+        let (stream, _) = listener.accept()?;
+        stream.set_nonblocking(true)?;
+        let (ready, waiting) = std::sync::mpsc::channel();
+        let reader = std::thread::spawn(move || {
+            let _ = ready.send(());
+            read(&stream)
+        });
+        waiting.recv()?;
+        std::thread::sleep(Duration::from_millis(10));
+        writeln!(
+            client,
+            "{{\"token\":\"test\",\"tool\":\"lab_status\",\"arguments\":{{}}}}"
+        )?;
+        let request = reader
+            .join()
+            .map_err(|_| anyhow::anyhow!("reader panicked"))??;
+        ensure!(request.tool == "lab_status", "request changed");
+        Ok(())
+    }
 }

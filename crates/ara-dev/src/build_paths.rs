@@ -259,13 +259,14 @@ mod tests {
                 .is_some(),
             "a sibling cache inside the outer checkout's target is still foreign"
         );
-        assert!(
-            foreign_checkout(
-                &own,
-                &std::env::temp_dir().join("ara-dev-independent-cache")
-            )
+        // This is a read-only candidate, never created. TMP may itself be routed
+        // under a checkout's target, as it is in isolated agent test runs.
+        let canonical = own.canonicalize().unwrap();
+        let independent = canonical
+            .ancestors()
+            .last()
             .unwrap()
-            .is_none()
-        );
+            .join(format!("ara-dev-independent-cache-{}", std::process::id()));
+        assert!(foreign_checkout(&own, &independent).unwrap().is_none());
     }
 }

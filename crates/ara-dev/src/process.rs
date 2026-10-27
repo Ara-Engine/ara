@@ -47,10 +47,8 @@ impl Tree {
     pub(crate) fn try_wait(&mut self) -> std::io::Result<Option<ExitStatus>> {
         self.child.try_wait()
     }
-}
-
-impl Drop for Tree {
-    fn drop(&mut self) {
+    /// Stop this exact owned tree before a resource lease is released on timeout.
+    pub(crate) fn stop(&mut self) {
         #[cfg(windows)]
         drop(self.job.take());
         if self.child.try_wait().ok().flatten().is_none() {
@@ -62,6 +60,12 @@ impl Drop for Tree {
             let _ = self.child.kill();
             let _ = self.child.wait();
         }
+    }
+}
+
+impl Drop for Tree {
+    fn drop(&mut self) {
+        self.stop();
     }
 }
 

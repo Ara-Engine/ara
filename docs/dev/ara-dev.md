@@ -330,7 +330,8 @@ ara-dev lab stop
 
 `ara-dev lab mcp` is a stdio MCP endpoint for the same daemon: `lab_status`,
 `lab_claim`, `lab_release`, `lab_session`, `lab_reload`, `lab_rebuild`,
-`lab_capture`, `lab_measure`, `lab_logs`, `lab_stop`. MCP stdout contains only
+`lab_capture`, `lab_measure`, `lab_variant`, `lab_ab`, `lab_set`, `lab_reference`,
+`lab_logs`, `lab_stop`. MCP stdout contains only
 JSON-RPC. All CLI results are JSON. Track names are independent of agent claims;
 claim overlaps warn and retain both owners. Claims never prevent an edit.
 
@@ -347,7 +348,7 @@ Idle tracks retain their GPU resources and submit no frames.
 Track work runs on independent workers. Visual jobs share the machine GPU lock;
 queued timing tickets block new visual jobs and wait for active ones to finish.
 Status and claims remain responsive during capture/restart work. Players use normal
-CPU priority; Cargo, cooks and the daemon use BelowNormal. Scene simulation is frozen
+CPU priority, as does the control service; Cargo and cooks use BelowNormal. Scene simulation is frozen
 for reproducible rendering. Startup waits for renderer/GI readiness before idling.
 
 Showcase uses the benchmark export when present at
@@ -358,11 +359,89 @@ matching transforms. Captures and comparisons go under `target/ara-dev/lab/captu
 `ARA_LAB_REFERENCES` overrides the reference root (default `D:/AraBench/report/images`);
 each scene has a `cycles/<camera>.png` reference. Missing references are reported.
 The seven Showcase regions are normalized in `crates/ara-dev/src/lab/quality/showcase.json`
-with their original 4K pixels and legacy LDR baselines. M1 reports crop FLIP and
-8x8-window RGB SSIM as secondary numbers. Its matched-transform gates explicitly
-remain unmeasured until the E0 reference/calibration path is present.
+with their original 4K pixels and legacy LDR baselines. Crop LDR FLIP and
+8x8-window RGB SSIM are secondary numbers; they never satisfy the E0 gate.
 The resident-session limit defaults to three; Windows also requires 2 GiB free
 VRAM before admitting a new player. Use fewer tracks for large scenes.
+`lab session --session NAME --close` retires that player's exact process tree.
+
+E0 captures use unexposed scene-linear Rec.709 Cycles EXRs, scaled by the reference
+policy and passed through the active Ara manual exposure, grading, vignette,
+tone mapper, lift/gamma/gain, sRGB transfer and colour LUT. This is the
+matched-display-transform route; it is labelled separately from HDR-FLIP. EXRs,
+display-transform caches and image crops live under `target/`. `lab reference`
+optionally invokes Blender 5.1 in background mode, with an isolated Blender profile,
+to render Showcase's three cameras using the benchmark script. Missing Blender or
+Blender sources are diagnosed runtime requirements, never build prerequisites.
+`ARA_LAB_LINEAR_REFERENCES` overrides the root (default the lab's `references/`),
+with `<scene>/cycles/<camera>.exr` and `linear-reference.json`. The policy must state
+`colour_space: "scene_linear_rec709"`, `exposure_baked: false` and its radiance scale.
+The existing benchmark uses 683 lm/W. Reference reports also record samples,
+denoising and the source-manifest hash; this rendering is not claimed to be an
+independently converged ground truth.
+
+`lab capture` runs three sweeps and reports every region's run scores, mean,
+maximum deviation and the ±0.002 repeatability gate. Static and 2 degree/s slow-pan
+sequences report successive scene-linear luminance RMS and actual display-frame
+FLIP in every 16x16 block, with the simulation frozen, at every preset. The static
+FLIP gate is mean ≤0.01 and every block ≤0.03; RMS remains a separate noise
+diagnostic. The slow pan is informational motion evidence. Region baseline limits
+are calibrated per preset and resolution; other profiles retain scores and report
+uncalibrated limits. Missing EXRs,
+automatic exposure, missing calibration, fewer than three repeats, and stale or
+failed source builds cannot produce a passing E0 result. `--quick` selects one
+sweep without temporal sampling for the visual inner loop. MCP exposes the same
+choice as `runs: 1, temporal: false`. `capture.json` retains exact selection, PID,
+executable and published shader cohorts.
+
+Shader experiments are offline PSO permutations, never hot-shader runtime branches.
+Register a JSON recipe under `target/`, for example:
+
+```json
+{"packages":{"shaders/pipelines.json":{"pipelines":{"look_post":{"source":"experimental-post.slang","defines":{"EXPERIMENT":"1"}}}}}}
+```
+
+```powershell
+ara-dev lab variant --session reflections --name reflection-v2 --recipe target/recipe.json
+ara-dev lab status
+ara-dev lab ab --session reflections --variant reflection-v2 --windows 4 --frames 120 --no-wait
+ara-dev lab variant --session reflections --name baseline
+# Explicitly promote only after reviewing captures and A/B evidence:
+ara-dev lab variant --session reflections --name reflection-v2 --promote
+```
+
+Sibling sources stay inside the package's source directory; unchanged baseline
+pipelines use reachable source fingerprints, so an unfinished unused sibling does
+not change their cook keys. Each recipe has a private cook cache, a last-good
+published snapshot, and a separate view per player. Failed recipes publish nothing.
+Promotion uses the cook's canonical manifest writer after successful compilation.
+`--remove` forgets an unused recipe and keeps its artifacts for audit.
+
+A/B alternates AB, BA pairs in one PID, always baseline A against experimental B.
+It records each window and paired B−A deltas, standard deviation, standard error
+and a 95% Student-t interval, including per-pass results. The previous variant is
+restored even on failure. CPU/GPU background samples and partial windows survive
+a refused or contaminated run. Uniform background load is visible even when the
+paired result is stable; changing thresholds is recorded and is not a clean result
+under the default policy. Temporal sequences run after timing windows under the
+same exclusive GPU lease.
+Their temporal evidence is reused only for the same Rust generation, native
+content generation, camera, preset, parameters and published shader cohorts. The
+report marks reuse and retains the original timestamp and per-block artifacts.
+A changed generation or missing artifact triggers a fresh temporal sequence;
+`lab capture` always performs its requested fresh quality checks.
+
+`lab set` discovers typed parameters; `--values` accepts a JSON object of
+`name: {"type":"f32"|"int"|"bool"|"vec", "value":...}` entries. Updates validate
+the whole batch before applying anything. `--camera stage|materials|props` changes
+the fixed Showcase view. Parameters and the camera survive Rust warm restarts.
+The `ara-player/fidelity-lab` feature supplies the registry and render hooks;
+shipping builds contain neither. Render code declares typed keys once and reads
+owned slots without locks, clones, allocation or string lookup per frame. Changes
+upload a bounded uniform table once; `shaders/lab-params.slangh` documents optional
+compile-time access for experimental passes. `post.exposure_stops`, `post.curve`,
+`post.bloom_enabled`, `post.gain_scale`, `post.saturation_scale`, `post.manual_exposure`,
+`post.ev100`, `ao.intensity_scale` and `ssr.intensity_scale` are available initially.
 
 Timing uses the existing machine GPU FIFO, with GPU **and CPU** foreign-load
 monitoring. CPU occupancy is normalized over all logical processors and subtracts
@@ -386,8 +465,8 @@ The build measurements include concurrent machine load; a separate pre-lab
 incremental relink measured 23.02 s with 82% total CPU before launch. The existing
 perf profile already uses incremental compilation, rust-lld and 256 codegen units.
 Capture render/readback totalled 1.12 s; parallel CPU analysis dominated the rest.
-The shader cook compiled four pipelines sequentially; offline cook parallelism is
-the next latency improvement. These are turnaround measurements, not accepted GPU
+The M1 shader cook compiled four pipelines sequentially; M2 uses four offline
+compiler workers. These are turnaround measurements, not accepted GPU
 performance readings. A native `lab measure --no-wait` correctly refused 85.24%
 foreign CPU, preserving its raw samples and process list under `gpu-load/` and
 `lab/measurements/`. Compile-error injection retained the same running player and
@@ -397,7 +476,30 @@ The native crop evaluator was checked against the benchmark's installed
 `flip_evaluator` on the exact same seven crop pairs: maximum mean difference
 0.00000781 at 67 ppd. Three repeated LDR sweeps differed by at most 0.000000425
 from their region means. This verifies the secondary evaluator and frozen rig;
-matched-transform repeatability remains a separate E0 gate.
+M2 also checks matched-transform repeatability as a separate E0 gate.
+
+Measured M2 on the same PC, 2026-10-27: three-camera quick sweeps took 3.64–5.84 s
+(4.00 s in the final native run). A fresh three-run E0 sweep with static/pan FLIP
+took 55.93 s under shared load. All seven matched regions passed their calibrated
+High 1440p limits and had zero deviation across the three deterministic captures.
+The stability gate correctly failed: static mean FLIP was 0.00493–0.00688, but the
+worst 16x16 blocks reached 0.098–0.199, above the 0.03 limit. This is exposed as a
+renderer issue; the lab does not relax the gate to accept its baseline.
+
+Live gain changed the native image in 0.347 s including a BelowNormal test client
+under load; discovery does not render, and a live update repaints one frame rather
+than running the perf warmup. Wrong-type batches leave the previous values active.
+The same player PID survived an invalid experimental shader, baseline tracks kept
+their original cohort key, and the error was attributed to the shader claimant.
+
+Two A/B pairs of 30 frames took 47.64 s with fresh temporal sequences and 12.13 s
+with matching temporal evidence cached. The default four pairs of 120 frames took
+23.32 s with cached evidence. That run had 45.4% mean foreign CPU (80.5% peak),
+used an explicitly relaxed guard, and reported an inconclusive GPU-span delta
+with a ±0.399 ms 95% interval. These are functional/turnaround results, not a clean
+performance baseline; the normal CPU policy refused the loaded machine. The
+sampler runs at Normal-equivalent thread priority so BelowNormal builds cannot
+starve monitoring into accepting an unobserved interval.
 
 The hotpatch integration seam is `lab::run_with_strategy` and
 `lab::build::ReloadStrategy`: `command` supplies the build, `stage` reads its artifacts

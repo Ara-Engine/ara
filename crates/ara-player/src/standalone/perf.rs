@@ -55,6 +55,10 @@ struct Control {
     frames: Option<u32>,
     camera: Option<lab::Camera>,
     capture: Option<lab::Capture>,
+    #[cfg(feature = "fidelity-lab")]
+    params: Option<Value>,
+    #[cfg(feature = "fidelity-lab")]
+    temporal: Option<lab::TemporalRequest>,
     quality: Option<String>,
     #[serde(default)]
     reload_shaders: bool,
@@ -187,7 +191,12 @@ impl Window {
         if self.options.perf_output.is_none() || Instant::now() < self.next_control {
             return Ok(false);
         }
-        self.next_control = Instant::now() + Duration::from_millis(100);
+        self.next_control = Instant::now()
+            + Duration::from_millis(if self.options.lab_idle && !self.collecting {
+                10
+            } else {
+                100
+            });
         let shaders = presenter.shader_status();
         if !shaders.pending && shaders.last_error.is_none() {
             let changed = self
@@ -241,23 +250,72 @@ impl Window {
                 ensure!((1..=100000).contains(&frames), "invalid measurement frames");
                 self.options.perf_frames = frames;
             }
+            if let Some(capture) = command.capture {
+                self.lab.capture = Some(capture);
+            }
+            #[cfg(feature = "fidelity-lab")]
+            if let Some(request) = command.temporal {
+                self.lab.temporal = Some(request);
+            }
+            #[cfg(not(feature = "fidelity-lab"))]
+            let changing_params = false;
+            #[cfg(feature = "fidelity-lab")]
+            let changing_params = command.params.is_some();
+            #[cfg(feature = "fidelity-lab")]
+            let live_params = changing_params
+                && self.options.lab_idle
+                && !self.collecting
+                && !command.measure
+                && !command.reload_shaders
+                && command.quality.is_none()
+                && self.lab.capture.is_none()
+                && self.lab.temporal.is_none();
+            #[cfg(feature = "fidelity-lab")]
+            let repaint = command.camera.is_some()
+                || command
+                    .params
+                    .as_ref()
+                    .is_some_and(|v| v.as_object().is_none_or(|o| !o.is_empty()));
+            #[cfg(feature = "fidelity-lab")]
+            if let Some(params) = command.params {
+                let applied = self.lab.set_params(presenter, params);
+                match applied {
+                    Ok(report) => self.lab.param_report = Some(report),
+                    Err(error) => {
+                        self.lab.respond(&json!({"error":format!("{error:#}")}))?;
+                        std::fs::rename(&request, request.with_extension("done"))?;
+                        continue;
+                    }
+                }
+                self.options.perf_frames = 1;
+            }
             if let Some(camera) = command.camera {
                 self.lab.camera = Some(camera.view()?);
             }
-            if let Some(capture) = command.capture {
-                self.lab.capture = Some(capture);
+            #[cfg(feature = "fidelity-lab")]
+            if live_params {
+                self.lab.repaint = repaint;
+                if !repaint {
+                    let params = self.lab.param_report.take();
+                    self.lab.respond(&json!({"applied":true,"params":params}))?;
+                }
+                std::fs::rename(&request, request.with_extension("done"))?;
+                continue;
             }
             if command.reload_shaders {
                 self.waiting_for_shader_epoch = Some(presenter.shader_status().epoch);
                 presenter.reload_shaders();
             }
             if command.measure
+                || changing_params
                 || command.reload_shaders
                 || (!self.options.lab_idle && command.quality.is_some())
             {
                 self.reset();
             }
-            if !self.collecting && self.lab.capture.is_none() {
+            if self.idle()
+                || (!self.options.lab_idle && !self.collecting && self.lab.capture.is_none())
+            {
                 self.lab.respond(&json!({"applied":true}))?;
             }
             std::fs::rename(&request, request.with_extension("done"))?;
@@ -272,6 +330,11 @@ impl Window {
         camera: Value,
         frame: CpuFrame,
     ) -> Result<bool> {
+        #[cfg(feature = "fidelity-lab")]
+        if std::mem::take(&mut self.lab.repaint) {
+            let params = self.lab.param_report.take();
+            self.lab.respond(&json!({"applied":true,"repainted":true,"params":params,"shaders":presenter.shader_status()}))?;
+        }
         if self.enabled() {
             self.run_cpu
                 .record(frame.total_ms, frame.wait_ms, frame.first_presented);
@@ -400,6 +463,12 @@ impl Window {
         }
         self.publish(presenter, phases, camera, report::Outcome::Ready)?;
         if let Some(report) = &self.last_report {
+            #[cfg(feature = "fidelity-lab")]
+            let params = self.lab.param_report.take();
+            #[cfg(feature = "fidelity-lab")]
+            self.lab
+                .respond(&json!({"player":report,"params":params}))?;
+            #[cfg(not(feature = "fidelity-lab"))]
             self.lab.respond(&json!({"player":report}))?;
         }
         self.collecting = false;

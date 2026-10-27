@@ -6,6 +6,9 @@ edition.workspace = true
 rust-version.workspace = true
 publish.workspace = true
 
+[features]
+fidelity-lab = ["ara-render/fidelity-lab"]
+
 [dependencies]
 ara-asset = { path = "../ara-asset" }
 anyhow = { workspace = true }

@@ -82,6 +82,31 @@ impl Guard {
         let worker = thread::spawn(move || {
             let outcome = (|| -> Result<()> {
                 let mut sampler = Sampler::new()?;
+                #[cfg(windows)]
+                if sampler.name() != "test_fixture" {
+                    use windows_sys::Win32::System::Threading::*;
+                    // SAFETY: query-only pseudo handle for this process. A
+                    // BelowNormal caller needs +2 for a Normal-equivalent sampler.
+                    let below = unsafe {
+                        GetPriorityClass(GetCurrentProcess()) == BELOW_NORMAL_PRIORITY_CLASS
+                    };
+                    // SAFETY: only this sampler thread changes, never Cargo's class.
+                    let adjusted = unsafe {
+                        SetThreadPriority(
+                            GetCurrentThread(),
+                            if below {
+                                THREAD_PRIORITY_HIGHEST
+                            } else {
+                                THREAD_PRIORITY_NORMAL
+                            },
+                        )
+                    };
+                    anyhow::ensure!(
+                        adjusted != 0,
+                        "load sampler thread priority: {}",
+                        std::io::Error::last_os_error()
+                    );
+                }
                 let mut cpu_sampler = if sampler.name() == "test_fixture" {
                     None
                 } else {

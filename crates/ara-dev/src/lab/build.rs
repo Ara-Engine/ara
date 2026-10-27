@@ -22,6 +22,11 @@ pub(super) fn default_directory(root: &Path) -> PathBuf {
 /// Hotpatch integrations can replace this strategy; sessions and transport stay private.
 pub(crate) trait ReloadStrategy {
     fn name(&self) -> &'static str;
+    /// Complete executables may advance last-good players while newer edits queue.
+    /// Patch strategies default to waiting for their source revision to settle.
+    fn publish_superseded(&self) -> bool {
+        false
+    }
     fn command(&self, root: &Path, target: &Path) -> Command;
     /// Patch-only builders can return artifacts without producing a new player executable.
     fn stage(&self, directory: &Path, cache: &Path) -> Result<crate::binaries::Binaries> {
@@ -47,6 +52,9 @@ pub(crate) struct ReloadTarget {
 }
 pub(crate) struct WarmRestart;
 impl ReloadStrategy for WarmRestart {
+    fn publish_superseded(&self) -> bool {
+        true
+    }
     fn name(&self) -> &'static str {
         "rebuild_warm_restart"
     }
@@ -93,6 +101,43 @@ pub(super) fn background(command: &mut Command) {
     {
         let _ = command;
     }
+}
+
+/// Detach the idle service; only its Cargo/cook children run BelowNormal.
+pub(super) fn daemon(command: &mut Command) -> Result<()> {
+    #[cfg(windows)]
+    {
+        use std::os::windows::io::AsRawHandle;
+        use std::os::windows::process::CommandExt;
+        use windows_sys::Win32::Foundation::{
+            HANDLE_FLAG_INHERIT, INVALID_HANDLE_VALUE, SetHandleInformation,
+        };
+        use windows_sys::Win32::System::Threading::{DETACHED_PROCESS, NORMAL_PRIORITY_CLASS};
+        for raw in [
+            std::io::stdin().as_raw_handle(),
+            std::io::stdout().as_raw_handle(),
+            std::io::stderr().as_raw_handle(),
+        ] {
+            if !raw.is_null() && raw != INVALID_HANDLE_VALUE {
+                // SAFETY: these borrowed handles stay open; only this process's
+                // inheritance flags change. Leaking the CLI pipes to a daemon
+                // prevents PowerShell/SSH readers from ever observing EOF.
+                let changed = unsafe { SetHandleInformation(raw, HANDLE_FLAG_INHERIT, 0) };
+                ensure!(
+                    changed != 0,
+                    "detach standard handle: {}",
+                    std::io::Error::last_os_error()
+                );
+            }
+        }
+        command.creation_flags(DETACHED_PROCESS | NORMAL_PRIORITY_CLASS);
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::CommandExt;
+        command.process_group(0);
+    }
+    Ok(())
 }
 
 pub(super) struct Build {

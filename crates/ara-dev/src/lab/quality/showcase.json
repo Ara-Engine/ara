@@ -37,7 +37,10 @@
       ],
       "threshold": {
         "kind": "matched_baseline_plus",
-        "tolerance": 0.002
+        "tolerance": 0.002,
+        "baseline_by_profile": {
+          "high@2560x1440": 0.3866020919836457
+        }
       },
       "legacy_ldr": {
         "ara": 0.3692,
@@ -62,7 +65,10 @@
       ],
       "threshold": {
         "kind": "matched_baseline_plus",
-        "tolerance": 0.002
+        "tolerance": 0.002,
+        "baseline_by_profile": {
+          "high@2560x1440": 0.2704228029997194
+        }
       },
       "legacy_ldr": {
         "ara": 0.2749,
@@ -87,7 +93,10 @@
       ],
       "threshold": {
         "kind": "matched_baseline_plus",
-        "tolerance": 0.002
+        "tolerance": 0.002,
+        "baseline_by_profile": {
+          "high@2560x1440": 0.22097317622208545
+        }
       },
       "legacy_ldr": {
         "ara": 0.2265,
@@ -112,7 +121,10 @@
       ],
       "threshold": {
         "kind": "matched_baseline_plus",
-        "tolerance": 0.002
+        "tolerance": 0.002,
+        "baseline_by_profile": {
+          "high@2560x1440": 0.30848208068399324
+        }
       },
       "legacy_ldr": {
         "ara": 0.3077,
@@ -137,7 +149,10 @@
       ],
       "threshold": {
         "kind": "matched_baseline_plus",
-        "tolerance": 0.002
+        "tolerance": 0.002,
+        "baseline_by_profile": {
+          "high@2560x1440": 0.22690977704799845
+        }
       },
       "legacy_ldr": {
         "ara": 0.2811,
@@ -162,7 +177,10 @@
       ],
       "threshold": {
         "kind": "matched_baseline_plus",
-        "tolerance": 0.002
+        "tolerance": 0.002,
+        "baseline_by_profile": {
+          "high@2560x1440": 0.14147710958189189
+        }
       },
       "legacy_ldr": {
         "ara": 0.1618,
@@ -187,7 +205,10 @@
       ],
       "threshold": {
         "kind": "matched_baseline_plus",
-        "tolerance": 0.002
+        "tolerance": 0.002,
+        "baseline_by_profile": {
+          "high@2560x1440": 0.1417294422526167
+        }
       },
       "legacy_ldr": {
         "ara": 0.2146,
@@ -195,5 +216,18 @@
         "unity": 0.1966
       }
     }
-  ]
+  ],
+  "calibration": {
+    "high@2560x1440": {
+      "platform": "pc",
+      "domain": "Cycles EXR through Ara display, LDR FLIP at 67 ppd",
+      "repeat_runs": 3,
+      "source_manifest_sha256": "e7820aa16a340440a0d70f3bf0c5cdf7a4d7e9f1c7676386fea6368109613147",
+      "shader_cohorts": [
+        "78cfa0a2ed00936a86a4703bb9e16f93960c76b4f2c69e63bb69b4102a81541c"
+      ],
+      "capture_report": "target/ara-dev/lab/captures/1793128076369064100-41280/capture.json",
+      "date": "2026-10-27"
+    }
+  }
 }

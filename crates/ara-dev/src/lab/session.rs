@@ -45,6 +45,9 @@ pub(super) struct Session {
     pub child: crate::process::Tree,
     pub directory: PathBuf,
     cancel: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    pub last_trace: Option<PathBuf>,
+    root: PathBuf,
+    _generation: Option<fs::File>,
 }
 impl Session {
     pub fn launch(
@@ -56,11 +59,14 @@ impl Session {
         cancel: std::sync::Arc<std::sync::atomic::AtomicBool>,
     ) -> Result<Self> {
         self::name(name)?;
+        let generation = super::generations::pin(base, executable)?;
         let directory = base.join("sessions").join(name).join(id());
         let control = directory.join("control");
         fs::create_dir_all(&control)?;
         fs::create_dir_all(directory.join("empty-layers"))?;
         let mut command = Command::new(executable);
+        let view = super::variants::view(base, name);
+        super::variants::publish_tree(&super::variants::profile(base, &selection.variant), &view)?;
         command
             .current_dir(root)
             .arg("--root")
@@ -85,7 +91,7 @@ impl Session {
             .arg(&control)
             .arg("--gpu-cache")
             .arg(base.join("gpu-cache").join(name))
-            .env("ARA_SHADER_DIR", base.join("shaders"))
+            .env("ARA_SHADER_DIR", &view)
             .env("ARA_CONFIG_DIR", directory.join("profile"))
             .env("ARA_CRASH_DIR", directory.join("crashes"))
             .env("VK_INSTANCE_LAYERS", "")
@@ -107,13 +113,16 @@ impl Session {
             child,
             directory,
             cancel,
+            last_trace: None,
+            root: root.to_owned(),
+            _generation: generation,
         };
         session.control(
-            json!({"camera":session.selection.camera,"measure":false}),
+            json!({"camera":session.selection.camera,"params":session.selection.params,"measure":false}),
             Duration::from_secs(180),
         )?;
         let preset = session.selection.preset.clone();
-        session.measure(1, &preset)?;
+        session.measure_window(1, &preset)?;
         Ok(session)
     }
     pub fn status(&mut self) -> Result<Value> {
@@ -131,10 +140,10 @@ impl Session {
         let deadline = Instant::now() + timeout;
         let response = self.directory.join("control").join(format!("{id}.reply"));
         loop {
-            ensure!(
-                !self.cancel.load(std::sync::atomic::Ordering::Acquire),
-                "lab track stopped"
-            );
+            if self.cancel.load(std::sync::atomic::Ordering::Acquire) {
+                self.child.stop();
+                bail!("lab track stopped");
+            }
             if let Some(value) = read(&response) {
                 if let Some(error) = value["error"].as_str() {
                     bail!("{error}");
@@ -146,15 +155,18 @@ impl Session {
                 "warm player exited; {}",
                 self.directory.join("player.stderr.log").display()
             );
-            ensure!(
-                Instant::now() < deadline,
-                "player control timed out: {}",
-                self.directory.display()
-            );
+            if Instant::now() >= deadline {
+                self.child.stop();
+                bail!(
+                    "player control timed out; stopped owned player {} before releasing the GPU lease: {}",
+                    self.child.id(),
+                    self.directory.display()
+                );
+            }
             std::thread::sleep(Duration::from_millis(10));
         }
     }
-    pub fn measure(&mut self, frames: u32, preset: &str) -> Result<Value> {
+    pub fn measure_window(&mut self, frames: u32, preset: &str) -> Result<Value> {
         ensure!((1..=100000).contains(&frames), "invalid frame count");
         ensure!(
             ["low", "medium", "high", "epic"].contains(&preset),
@@ -167,18 +179,135 @@ impl Session {
         self.selection.preset = preset.into();
         Ok(result)
     }
-    pub fn capture(&mut self, root: &Path, output: &Path) -> Result<Value> {
+    pub fn measure(&mut self, frames: u32, preset: &str) -> Result<Value> {
+        let mut measured = self.measure_window(frames, preset)?;
+        measured["temporal"] = self.temporal()?["temporal"].clone();
+        Ok(measured)
+    }
+    pub fn temporal(&mut self) -> Result<Value> {
+        use std::hash::{Hash, Hasher};
+        let base = self.directory.ancestors().nth(3).context("lab base")?;
+        let quality = self.quality()?;
+        let status = read(&self.directory.join("status.json")).context("player status")?;
+        let identity = json!({"format":"ara.lab.temporal-cache/2","generation":read(&base.join("generation.json")),"selection":self.selection,"shaders":status["shaders"]["cohorts"],"content_generation":status["readiness"]["generation"],"config":quality["temporal"]});
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        identity.to_string().hash(&mut hasher);
+        let cache = base
+            .join("measurements/temporal-cache")
+            .join(format!("{:016x}.json", hasher.finish()));
+        if let Some(mut value) = read(&cache)
+            && ["static", "pan"].iter().all(|mode| {
+                [
+                    &value["temporal"][mode]["blocks"],
+                    &value["temporal"][mode]["frame_flip"]["blocks"],
+                ]
+                .iter()
+                .all(|p| p.as_str().is_some_and(|p| Path::new(p).is_file()))
+            })
+        {
+            value["temporal"]["cache"]["status"] = json!("reused");
+            return Ok(value);
+        }
+        let directory = base.join("measurements").join(format!("{}-temporal", id()));
+        let mut value=self.control(json!({"temporal":{"directory":directory,"config":quality["temporal"]},"measure":false}),Duration::from_secs(180))?;
+        value["temporal"]["cache"] = json!({"status":"fresh","identity":identity,"report":cache,"computed_unix_ms":crate::d26::validity::unix_ms()?});
+        fs::create_dir_all(cache.parent().context("temporal cache parent")?)?;
+        write(&cache, &value)?;
+        Ok(value)
+    }
+    pub fn capture(&mut self, root: &Path, output: &Path, options: &Value) -> Result<Value> {
         fs::create_dir_all(output)?;
         let shots = super::scenes::shots(root, &self.selection.scene)?;
         let reference = std::env::var_os("ARA_LAB_REFERENCES")
             .map(PathBuf::from)
             .unwrap_or_else(|| PathBuf::from("D:/AraBench/report/images"));
-        let quality: Value = if self.selection.scene == "showcase" {
-            serde_json::from_str(include_str!("quality/showcase.json"))?
-        } else {
-            json!({"regions":[]})
-        };
-        self.control(json!({"capture":{"directory":output,"shots":shots,"size":self.selection.size,"references":reference.join(&self.selection.scene).join("cycles"),"quality":quality}}), Duration::from_secs(180))
+        let mut quality = self.quality()?;
+        quality["capture_profile"] = json!(format!(
+            "{}@{}x{}",
+            self.selection.preset, self.selection.size[0], self.selection.size[1]
+        ));
+        if self.selection.scene != "showcase" {
+            quality["regions"] = json!([]);
+        }
+        let linear = std::env::var_os("ARA_LAB_LINEAR_REFERENCES")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| super::directory(root).join("references"));
+        let linear = linear.join(&self.selection.scene).join("cycles");
+        let policy = read(&linear.join("linear-reference.json")).unwrap_or(Value::Null);
+        if let Some(scale) = policy["radiance_scale"].as_f64() {
+            quality["reference_radiance_scale"] = json!(scale);
+        }
+        self.control(json!({"capture":{"directory":output,"shots":shots,"size":self.selection.size,"references":reference.join(&self.selection.scene).join("cycles"),"linear_references":linear,"linear_policy":policy,"quality":quality,"runs":options["runs"].as_u64().unwrap_or(3),"temporal":options["temporal"].as_bool().unwrap_or(true)}}), Duration::from_secs(300))
+    }
+    fn quality(&self) -> Result<Value> {
+        Ok(serde_json::from_slice(&fs::read(
+            self.root
+                .join("crates/ara-dev/src/lab/quality/showcase.json"),
+        )?)?)
+    }
+    pub fn variant(&mut self, base: &Path, name: &str) -> Result<Value> {
+        self::name(name)?;
+        super::variants::Variants::load(base).ready(name)?;
+        let track = self
+            .directory
+            .parent()
+            .and_then(Path::file_name)
+            .context("track name")?
+            .to_string_lossy();
+        let view = super::variants::view(base, &track);
+        let previous = self.selection.variant.clone();
+        super::variants::publish_tree(&super::variants::profile(base, name), &view)?;
+        match self.control(
+            json!({"reload_shaders":true,"measure":false,"frames":1}),
+            Duration::from_secs(60),
+        ) {
+            Ok(result) => {
+                self.selection.variant = name.into();
+                Ok(json!({"variant":name,"reload":result}))
+            }
+            Err(error) => {
+                super::variants::publish_tree(&super::variants::profile(base, &previous), &view)?;
+                let _ = self.control(
+                    json!({"reload_shaders":true,"measure":false,"frames":1}),
+                    Duration::from_secs(60),
+                );
+                Err(error)
+            }
+        }
+    }
+    pub fn set(&mut self, root: &Path, changes: Value, camera: Option<&str>) -> Result<Value> {
+        let entries = changes
+            .as_object()
+            .context("parameter values must be an object")?;
+        let camera = camera
+            .map(|name| {
+                super::scenes::shots(root, &self.selection.scene)?
+                    .into_iter()
+                    .find(|s| s["name"] == name)
+                    .map(|s| s["camera"].clone())
+                    .with_context(|| format!("unknown camera {name}"))
+            })
+            .transpose()?;
+        let result = self.control(
+            json!({"params":changes,"camera":camera,"measure":false}),
+            Duration::from_secs(60),
+        )?;
+        ensure!(
+            result.get("params").is_some(),
+            "this last-good player predates live parameters; wait for the current lab build"
+        );
+        if camera.is_some() {
+            self.selection.camera = camera;
+        }
+        let selection = self
+            .selection
+            .params
+            .as_object_mut()
+            .context("parameter selection")?;
+        for (key, value) in entries {
+            selection.insert(key.clone(), value.clone());
+        }
+        Ok(result)
     }
     pub fn executable(binaries: &crate::binaries::Binaries) -> Result<&Path> {
         Ok(binaries

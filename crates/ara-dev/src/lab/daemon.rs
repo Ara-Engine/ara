@@ -18,6 +18,9 @@ use std::{
     time::{Duration, Instant},
 };
 
+mod dispatch;
+mod shaders;
+
 struct Cook {
     child: crate::process::Tree,
     manifest: PathBuf,
@@ -25,6 +28,7 @@ struct Cook {
     started: Instant,
     output: PathBuf,
     previous: String,
+    variant: String,
 }
 struct Lab {
     root: PathBuf,
@@ -36,7 +40,7 @@ struct Lab {
     rebuild: bool,
     last_build: Value,
     cook: Option<Cook>,
-    cooks: BTreeSet<PathBuf>,
+    cooks: BTreeSet<(String, PathBuf)>,
     shader_results: BTreeMap<PathBuf, Value>,
     watch: Watch,
     claims: Claims,
@@ -45,6 +49,9 @@ struct Lab {
     stopping: bool,
     strategy: Box<dyn ReloadStrategy>,
     activity: std::sync::Arc<Activity>,
+    variants: super::variants::Variants,
+    pending_variants: BTreeMap<String, String>,
+    promotions: BTreeSet<(String, PathBuf)>,
 }
 impl Lab {
     fn event(&mut self, kind: &str, value: Value) {
@@ -71,7 +78,7 @@ impl Lab {
             .map(|(name, s)| Ok((name.clone(), s.status()?)))
             .collect::<Result<BTreeMap<_, _>>>()?;
         Ok(
-            json!({"format":"ara.lab/1","pid":std::process::id(),"root":self.root,"build_dir":self.target,"strategy":self.strategy.name(),"building":self.build.is_some(),"rebuild_queued":self.rebuild,"last_build":self.last_build,"shader_packages":self.watch.manifests().len(),"shader_queue":self.cooks,"shader_results":self.shader_results,"claims":self.claims,"sessions":sessions,"max_sessions":self.max_sessions}),
+            json!({"format":"ara.lab/1","pid":std::process::id(),"root":self.root,"build_dir":self.target,"strategy":self.strategy.name(),"building":self.build.is_some(),"rebuild_queued":self.rebuild,"last_build":self.last_build,"shader_packages":self.watch.manifests().len(),"shader_queue":self.cooks,"shader_results":self.shader_results,"claims":self.claims,"sessions":sessions,"max_sessions":self.max_sessions,"variants":self.variants.status(),"pending_variants":self.pending_variants}),
         )
     }
     fn tick(&mut self) -> Result<()> {
@@ -87,19 +94,34 @@ impl Lab {
             self.build.is_some() || self.cook.is_some() || !self.cooks.is_empty() || self.rebuild,
             std::sync::atomic::Ordering::Release,
         );
-        let changes = self.watch.poll(&self.root)?;
+        // Filesystem scanning is background CPU work too. Pause it while timing
+        // the immutable player generation under the exclusive GPU lease.
+        let changes = if let Ok(_observation) = self.activity.gpu.try_read() {
+            self.watch.poll(&self.root)?
+        } else {
+            Vec::new()
+        };
         for path in &changes {
             let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
             if ["rs", "toml", "lock"].contains(&ext) {
                 self.rebuild = true;
+                self.activity
+                    .rust_latest
+                    .store(false, std::sync::atomic::Ordering::Release);
             }
             for manifest in self.watch.manifests() {
                 if path.starts_with(manifest.parent().context("shader source parent")?) {
-                    self.cooks.insert(manifest);
+                    self.cooks.insert(("baseline".into(), manifest.clone()));
+                    let relative = manifest.strip_prefix(&self.root)?;
+                    for name in self.variants.affected(relative) {
+                        self.variants.queued(&name, relative);
+                        self.cooks.insert((name, manifest.clone()));
+                    }
                 }
             }
         }
         if !changes.is_empty() {
+            self.variants.save(&self.base)?;
             self.event("source_changes", json!(changes));
         }
         if let Some(build) = &mut self.build
@@ -107,7 +129,10 @@ impl Lab {
         {
             let build = self.build.take().context("completed build")?;
             self.last_build = build.outcome(status.success(), &self.root, &self.claims)?;
-            if status.success() && self.rebuild {
+            if self.rebuild {
+                self.last_build["superseded"] = json!(true);
+            }
+            if status.success() && self.rebuild && !self.strategy.publish_superseded() {
                 self.last_build["superseded"] = json!(true);
                 self.event("newer_sources_queued", self.last_build.clone());
             } else if status.success() {
@@ -116,7 +141,12 @@ impl Lab {
                     .stage(&build.directory, &self.base)
                     .and_then(|binaries| self.adopt(binaries))
                 {
-                    Ok(()) => self.event("build_published", self.last_build.clone()),
+                    Ok(()) => {
+                        self.activity
+                            .rust_latest
+                            .store(!self.rebuild, std::sync::atomic::Ordering::Release);
+                        self.event("build_published", self.last_build.clone())
+                    }
                     Err(error) => {
                         self.last_build["restart_error"] = json!(format!("{error:#}"));
                         self.event("last_good_retained", self.last_build.clone());
@@ -144,87 +174,10 @@ impl Lab {
                 .compiling
                 .store(true, std::sync::atomic::Ordering::Release);
         }
-        if let Some(cook) = &mut self.cook
-            && let Some(status) = cook.child.try_wait()?
-        {
-            let cook = self.cook.take().context("completed cook")?;
-            let relative = cook.manifest.strip_prefix(&self.root)?;
-            let error = if status.success() {
-                None
-            } else {
-                fs::read_to_string(&cook.log).ok()
-            };
-            let mut owners = self
-                .claims
-                .owners(relative)
-                .into_iter()
-                .map(str::to_owned)
-                .collect::<BTreeSet<_>>();
-            if let Some(error) = &error {
-                let error = error.replace('\\', "/").replace("//", "/");
-                for (owner, paths) in &self.claims.0 {
-                    if paths
-                        .iter()
-                        .any(|path| error.contains(&path.to_string_lossy().replace('\\', "/")))
-                    {
-                        owners.insert(owner.clone());
-                    }
-                }
-            }
-            let value = json!({"success":status.success(),"seconds":cook.started.elapsed().as_secs_f64(),"owners":owners,"log":cook.log,"error":error});
-            self.shader_results
-                .insert(relative.to_owned(), value.clone());
-            self.event("shader_cook", value);
-            let changed = fs::read_to_string(cook.output.join(".ara-shader-reload"))
-                .unwrap_or_default()
-                != cook.previous;
-            if status.success() && changed {
-                for session in self.sessions.values_mut() {
-                    session.control(
-                        json!({"reload_shaders":true,"measure":false}),
-                        Duration::from_secs(30),
-                    )?;
-                }
-            }
-        }
-        if self.cook.is_none()
-            && admission.is_ok()
-            && let Some(manifest) = self.cooks.pop_first()
-        {
-            if let Some(executable) = self.binaries.get("ara-shader-cook") {
-                let output = super::watch::output(&self.root, &self.base, &manifest)?;
-                fs::create_dir_all(&output)?;
-                let log = self
-                    .base
-                    .join("cooks")
-                    .join(format!("{}.log", session::id()));
-                fs::create_dir_all(log.parent().context("cook log parent")?)?;
-                let mut command = Command::new(executable);
-                command
-                    .current_dir(&self.root)
-                    .arg(&manifest)
-                    .arg(&output)
-                    .stdout(File::options().create(true).append(true).open(&log)?)
-                    .stderr(File::options().append(true).open(&log)?);
-                super::build::background(&mut command);
-                self.cook = Some(Cook {
-                    child: crate::process::Tree::spawn(&mut command)?,
-                    manifest,
-                    log,
-                    started: Instant::now(),
-                    previous: fs::read_to_string(output.join(".ara-shader-reload"))
-                        .unwrap_or_default(),
-                    output,
-                });
-                self.activity
-                    .compiling
-                    .store(true, std::sync::atomic::Ordering::Release);
-            } else {
-                self.cooks.insert(manifest);
-            }
-        }
-        Ok(())
+        drop(admission);
+        self.tick_shaders()
     }
+
     fn adopt(&mut self, binaries: crate::binaries::Binaries) -> Result<()> {
         let executable = super::session::Session::executable(&binaries)?;
         // Never retire a last-good player until its replacement has answered a control.
@@ -242,6 +195,10 @@ impl Lab {
         }
         self.binaries = binaries;
         session::write(&self.base.join("binaries.json"), &self.binaries)?;
+        session::write(
+            &self.base.join("generation.json"),
+            &json!({"id":session::id()}),
+        )?;
         if self.sessions.is_empty() {
             let saved: BTreeMap<String, super::scenes::Selection> =
                 fs::read(self.base.join("selections.json"))
@@ -275,72 +232,14 @@ impl Lab {
             }
         }
         self.persist()?;
-        Ok(())
-    }
-    fn dispatch(&mut self, request: Request) -> Result<Value> {
-        let args = request.arguments;
-        let name = args["session"].as_str().unwrap_or("default");
-        match request.tool.as_str() {
-            "lab_status" => self.status(),
-            "lab_claim" => {
-                let agent = args["agent"].as_str().context("agent required")?;
-                let paths: Vec<String> = serde_json::from_value(args["paths"].clone())?;
-                let warnings = self.claims.claim(agent, &paths)?;
-                self.persist()?;
-                Ok(json!({"agent":agent,"warnings":warnings}))
+        match super::generations::prune(&self.base) {
+            Ok(removed) if removed > 0 => {
+                self.event("player_cache_pruned", json!({"generations":removed}))
             }
-            "lab_release" => {
-                self.claims
-                    .0
-                    .remove(args["agent"].as_str().context("agent required")?);
-                self.persist()?;
-                Ok(json!({"released":true}))
-            }
-            "lab_rebuild" => {
-                self.rebuild = true;
-                Ok(json!({"queued":true,"strategy":self.strategy.name()}))
-            }
-            "lab_reload" => {
-                let result = self
-                    .sessions
-                    .get_mut(name)
-                    .context("open a track with lab_session first")?
-                    .control(json!({"reload_shaders":true}), Duration::from_secs(60))?;
-                Ok(
-                    json!({"reload":result,"cooks_pending":self.cooks,"cook_errors":self.shader_results.values().filter(|result|result["success"]==false).collect::<Vec<_>>()}),
-                )
-            }
-            "lab_session" => {
-                session::name(name)?;
-                ensure!(
-                    self.sessions.contains_key(name)
-                        || self.sessions.len() < self.max_sessions as usize,
-                    "resident player limit reached; stop or reuse a track"
-                );
-                vram()?;
-                let selection =
-                    super::scenes::select(&self.root, &self.base, &args, &self.binaries)?;
-                let player = Session::launch(
-                    &self.root,
-                    &self.base,
-                    super::session::Session::executable(&self.binaries)?,
-                    name,
-                    selection,
-                    std::sync::Arc::clone(&self.activity),
-                )?;
-                self.sessions.insert(name.into(), player);
-                self.persist()?;
-                self.sessions.get_mut(name).context("new session")?.status()
-            }
-            "lab_logs" => Ok(
-                json!({"events":self.events.iter().rev().take(args["lines"].as_u64().unwrap_or(50).min(1000) as usize).collect::<Vec<_>>()}),
-            ),
-            "lab_stop" => {
-                self.stopping = true;
-                Ok(json!({"stopping":true}))
-            }
-            _ => bail!("unknown lab tool {}", request.tool),
+            Err(error) => self.event("player_cache_cleanup_error", json!(error.to_string())),
+            _ => {}
         }
+        Ok(())
     }
 }
 
@@ -446,7 +345,9 @@ pub(crate) fn run_with_strategy(
         last_build: Value::Null,
         cook: None,
         cooks: Default::default(),
-        shader_results: Default::default(),
+        shader_results: session::read(&base.join("shader-results.json"))
+            .and_then(|v| serde_json::from_value(v).ok())
+            .unwrap_or_default(),
         watch: Watch::default(),
         claims,
         sessions: Default::default(),
@@ -454,6 +355,9 @@ pub(crate) fn run_with_strategy(
         stopping: false,
         strategy,
         activity: std::sync::Arc::new(Activity::default()),
+        variants: super::variants::Variants::load(&base),
+        pending_variants: Default::default(),
+        promotions: Default::default(),
     };
     lab.watch.poll(root)?;
     for manifest in lab.watch.manifests() {
@@ -472,7 +376,63 @@ pub(crate) fn run_with_strategy(
             }
         }
         if !source.is_dir() {
-            lab.cooks.insert(manifest);
+            lab.cooks.insert(("baseline".into(), manifest));
+        }
+    }
+    for (name, relative) in lab.variants.outstanding() {
+        lab.cooks.insert((name, root.join(relative)));
+    }
+    for (path, value) in &lab.shader_results {
+        if value["variant"] == "baseline"
+            && value["success"] == false
+            && let Ok(relative) = path.strip_prefix("baseline")
+        {
+            lab.cooks.insert(("baseline".into(), root.join(relative)));
+        }
+    }
+    // Start a cached last-good generation before the incremental build. A bad edit
+    // or a tool upgrade must not turn a warm restart into an empty lab.
+    if let Some(binaries) = session::read(&base.join("binaries.json"))
+        .and_then(|v| serde_json::from_value::<crate::binaries::Binaries>(v).ok())
+        && binaries
+            .get("ara-player")
+            .is_some_and(|path| path.is_file())
+    {
+        lab.adopt(binaries)?;
+    }
+    let mut dirty = crate::git::text(
+        root,
+        ["diff", "--name-only", "HEAD", "--", "crates", "shaders"],
+    )?;
+    dirty.push_str(&format!(
+        "\n{}",
+        crate::git::text(
+            root,
+            [
+                "ls-files",
+                "--others",
+                "--exclude-standard",
+                "--",
+                "crates",
+                "shaders"
+            ]
+        )?
+    ));
+    for path in dirty.lines().map(|p| root.join(p)) {
+        if path
+            .extension()
+            .is_some_and(|e| e == "slang" || e == "slangh" || e == "h")
+            || path.file_name().is_some_and(|n| n == "pipelines.json")
+        {
+            for manifest in lab.watch.manifests() {
+                if path.starts_with(manifest.parent().context("shader parent")?) {
+                    lab.cooks.insert(("baseline".into(), manifest.clone()));
+                    for name in lab.variants.affected(manifest.strip_prefix(root)?) {
+                        lab.variants.queued(&name, manifest.strip_prefix(root)?);
+                        lab.cooks.insert((name, manifest.clone()));
+                    }
+                }
+            }
         }
     }
     let (send, receive) = std::sync::mpsc::channel::<(TcpStream, Result<Request>)>();
@@ -491,7 +451,22 @@ pub(crate) fn run_with_strategy(
         while let Ok((stream, request)) = receive.try_recv() {
             if let Ok(request) = &request
                 && request.token == endpoint.token
-                && ["lab_measure", "lab_capture"].contains(&request.tool.as_str())
+                && request.tool == "lab_reference"
+            {
+                let root = lab.root.clone();
+                let base = lab.base.clone();
+                let args = request.arguments.clone();
+                let activity = std::sync::Arc::clone(&lab.activity);
+                std::thread::spawn(move || {
+                    let result = super::references::render(&root, &base, &args, &activity);
+                    let _ = super::protocol::reply(stream, result);
+                });
+                continue;
+            }
+            if let Ok(request) = &request
+                && request.token == endpoint.token
+                && ["lab_measure", "lab_capture", "lab_ab", "lab_set"]
+                    .contains(&request.tool.as_str())
             {
                 let name = request.arguments["session"].as_str().unwrap_or("default");
                 if let Some(track) = lab.sessions.get(name) {
