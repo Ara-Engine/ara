@@ -268,6 +268,25 @@ impl MetalDevice {
     pub fn info(&self) -> &vulkan::DeviceInfo {
         &self.info
     }
+    /// Like [`crate::vulkan::VulkanDevice::split_loading`]: a device for the loading
+    /// screen. On Metal it is a second `MetalDevice` over the same `MTLDevice`, as the
+    /// presentation-only devices of the Hub and splash are, with its own queues, arenas
+    /// and descriptor tables, so it never aliases this device's queues.
+    /// # Safety
+    /// The Vulkan contract (call before submitting work); Metal adds no requirement.
+    pub unsafe fn split_loading(&mut self, cache: impl Into<std::path::PathBuf>) -> Result<Self> {
+        if self.submitted != [0; 2] {
+            return Err(GpuError::Contract(
+                "Loading split requires an unused device".into(),
+            ));
+        }
+        Self::new_raster(&[], cache)
+    }
+    /// Whether `other` submits graphics work on this device's graphics queue; Metal
+    /// devices never share queues.
+    pub fn shares_graphics_queue(&self, other: &Self) -> bool {
+        std::ptr::eq(&*self.queues[0], &*other.queues[0])
+    }
     /// Wait until both queues finished every submission.
     pub fn wait_idle(&self) -> Result<()> {
         for queue in [Queue::Graphics, Queue::Compute] {

@@ -466,3 +466,33 @@ fn ui_pixel_readback_returns_one_id_texel_and_rejects_bad_requests() {
     let wrong = unsafe { gpu.read_ui_pixel(color, [0, 0]) };
     assert!(matches!(wrong, Err(GpuError::Contract(_))));
 }
+
+#[test]
+fn a_loading_split_is_an_independent_device_on_the_same_gpu() {
+    let mut game = device();
+    // SAFETY: nothing was submitted on `game`.
+    let mut loading = unsafe { game.split_loading(std::env::temp_dir()) }.expect("split");
+    assert!(!game.shares_graphics_queue(&loading));
+    assert!(game.shares_graphics_queue(&game));
+    assert_eq!(
+        game.info().identity,
+        loading.info().identity,
+        "same physical GPU"
+    );
+    let buffer = storage(&mut loading, 4);
+    loading
+        .upload(
+            buffer,
+            &[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16],
+        )
+        .expect("upload");
+    assert_eq!(loading.read(buffer).expect("read")[..4], [1, 2, 3, 4]);
+    let mut rec = game.begin(Queue::Graphics);
+    rec.push(Command::BeginPass("used".into()));
+    rec.push(Command::EndPass);
+    let point = game.submit(rec.finish(), &[]).expect("submit");
+    game.resolve(point).expect("resolve");
+    // SAFETY: refused before any native work: `game` has submitted.
+    let refused = unsafe { game.split_loading(std::env::temp_dir()) };
+    assert!(matches!(refused, Err(GpuError::Contract(_))));
+}

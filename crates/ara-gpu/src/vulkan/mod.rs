@@ -123,6 +123,11 @@ impl VulkanDevice {
     pub fn info(&self) -> &DeviceInfo {
         &self.context.info
     }
+    /// Whether `other` (a loading split of this device) submits graphics work on this
+    /// device's graphics queue, so the two owners must serialize submission.
+    pub fn shares_graphics_queue(&self, other: &Self) -> bool {
+        self.context.graphics == other.context.graphics
+    }
     /// Wait until every queue is idle, e.g. before presentation objects are destroyed.
     pub fn wait_idle(&self) -> Result<()> {
         // SAFETY: the device lives as long as `self`; an idle wait has no other
