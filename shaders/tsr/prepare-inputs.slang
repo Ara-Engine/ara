@@ -25,7 +25,6 @@
 // depth and writes this frame's luma. Ara folds in more:
 // - FSR's luma pyramid, whose only consumed output is the half-size farthest depth:
 //   each 8x8 group averages its 2x2 blocks through group memory (SPD's mip 0);
-// - FSR's prepared colour (YCoCg, pre-exposed) for accumulate's nine taps;
 // - Ara's reactive and composition masks (tsr-signals.slangh).
 // tsrPrepareInputsMain reads the native motion target; prepare-inputs-reproject.slang
 // defines TSR_REPROJECT for frames without one (motion from depth and last frame's
@@ -44,7 +43,6 @@
 void TSR_PREPARE_INPUTS(int2 iDispatchThreadId:SV_DispatchThreadID){
     tsrBegin();
     PrepareInputs(iDispatchThreadId);
-    tsrStorePrepared(iDispatchThreadId);
     tsrPrepareMasks(iDispatchThreadId);
     GroupMemoryBarrierWithGroupSync();
     int2 local=iDispatchThreadId&7;

@@ -37,6 +37,8 @@ pub(crate) struct Tuning {
     pub factors: [f32; 3],
     /// `ARA_TSR_LUMA_INSTABILITY` (0 skips the pass).
     pub luma_instability: bool,
+    /// `ARA_TSR_IDS` (0 drops the entity-ID signal and its scratch traffic).
+    pub ids: bool,
     /// `ARA_TSR_PREEXPOSED`: the HDR input already holds radiance × the applied
     /// exposure (the pre-exposure contract); otherwise TSR applies it.
     pub pre_exposed: bool,
@@ -53,10 +55,12 @@ impl Default for Tuning {
             // FSR's autogen as AMD's sample dispatches it; full reactivity at one
             // render pixel of parallax.
             autogen: [1., 0.2, 0.9, 1.],
-            // FSR 3.1's context defaults.
+            // FSR 3.1's context defaults, except the shading change pyramid: off
+            // gave equal fidelity and steadier frames in the Showcase sweep.
             accumulation: [1. / 3., -1. / 3.],
-            factors: [1., 1., 1.],
+            factors: [1., 1., 0.],
             luma_instability: true,
+            ids: true,
             pre_exposed: false,
         }
     }
@@ -114,6 +118,7 @@ impl Tuning {
                 number("ARA_TSR_SHADING_CHANGE", d.factors[2]).max(0.),
             ],
             luma_instability: number("ARA_TSR_LUMA_INSTABILITY", 1.) > 0.,
+            ids: number("ARA_TSR_IDS", 1.) > 0.,
             pre_exposed: number("ARA_TSR_PREEXPOSED", 0.) > 0.,
         }
     }

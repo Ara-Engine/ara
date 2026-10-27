@@ -28,6 +28,7 @@
 // TSR_FSR_PATH for FSR's (its own history pair, Lanczos, RCAS after).
 // Ara: it also clears the reconstructed previous depth after prepare reactivity,
 // its only reader (render pixels under display threads), for the next frame's splat.
+#define TSR_PREPARED_TILE 1
 #ifdef TSR_FSR_PATH
 #define TSR_ACCUMULATE tsrAccumulateFsrMain
 #else
@@ -43,8 +44,9 @@
 #include "ffx/fsr3upscaler/ffx_fsr3upscaler_accumulate.h"
 [shader("compute")]
 [numthreads(8,8,1)]
-void TSR_ACCUMULATE(int2 iDispatchThreadId:SV_DispatchThreadID){
+void TSR_ACCUMULATE(int2 iDispatchThreadId:SV_DispatchThreadID,uint3 group:SV_GroupID,uint index:SV_GroupIndex){
     tsrBegin();
+    tsrLoadPreparedTile(group.xy,index);
     Accumulate(iDispatchThreadId);
     SetReconstructedDepth(iDispatchThreadId,0);
 }

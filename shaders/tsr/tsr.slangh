@@ -97,7 +97,7 @@ struct TsrConstants {
     uint4 rcas;             // FsrRcasCon constants
     uint4 inputs;           // x colour, y depth, z motion (sampled; u32 max without), w the display frame record (buffer)
     uint4 resources;        // x exposure state (buffer), y scratch (buffer), z output (storage), w this frame's pair slot (0 or 1)
-    uint4 sampled0;         // intermediate (luma instability), luma pair, pyramid atlas, prepared colour
+    uint4 sampled0;         // intermediate (luma instability), luma pair, pyramid atlas, unused
     uint4 sampled1;         // accumulation pair, dilated reactive masks, new locks, luma history pair
     uint4 sampled2;         // x upscaled colour pair (FSR path)
     uint4 storage0;         // as sampled0
@@ -113,8 +113,9 @@ struct TsrConstants {
     uint4 options;          // x TSR_OPTION_* flags, y last frame's display history (sampled; Ara path)
 };
 // TsrConstants.options.x: prepare inputs computes masks; accumulate reads luma
-// instability; prepare reactivity reads the shading change pyramid.
-static const uint TSR_OPTION_MASKS=1,TSR_OPTION_LUMA_INSTABILITY=2,TSR_OPTION_SHADING_CHANGE=4;
+// instability; prepare reactivity reads the shading change pyramid; the entity-ID
+// signal runs (tsr-signals.slangh TsrIdDisocclusion).
+static const uint TSR_OPTION_MASKS=1,TSR_OPTION_LUMA_INSTABILITY=2,TSR_OPTION_SHADING_CHANGE=4,TSR_OPTION_IDS=8;
 static TsrConstants gTsr;
 bool tsrOption(uint option){return (gTsr.options.x&option)!=0;}
 // The record and the exposure state, loaded once by `tsrBegin` (the first line of
@@ -184,15 +185,20 @@ float4 tsrPreviousBilinear(uint image,float2 uv,int2 size){
     float4 c=pair[tsrClamp(base+int2(0,1),size)+offset],d=pair[tsrClamp(base+int2(1,1),size)+offset];
     return lerp(lerp(a,b,t.x),lerp(c,d,t.x),t.y);
 }
-// Scratch buffer regions, in units of n words for n render pixels (tsr/mod.rs
-// SCRATCH_WORDS): 0 and 1 dilated depth (f32; this and last frame by pair slot),
-// 2 dilated motion (two halves, FSR's RG16F), 3 reconstructed previous nearest
-// depth (u32 atomics), 4 and 5 dilated entity ID (u32; by pair slot), 6 masks.
-uint tsrPixels(){int2 r=MaxRenderSize();return uint(r.x*r.y);}
-uint tsrIndex(int2 p){return uint(p.y*MaxRenderSize().x+p.x);}
+// Scratch buffer regions, in units of n words for n render pixels padded to whole
+// 8x8 tiles (tsr/mod.rs SCRATCH_WORDS, scratch_pixels): 0 dilated motion (two
+// halves, FSR's RG16F), 1 reconstructed previous nearest depth (u32 atomics),
+// 2 masks, 3-4 and 5-6 the dilated surface (entity ID, depth) of this and last
+// frame by pair slot. Pixels are stored tile by tile (8x8, row-major within), so a
+// neighbourhood read touches one or two cache lines instead of one per row.
+uint tsrTilesX(){return uint(MaxRenderSize().x+7)>>3;}
+uint tsrPixels(){return tsrTilesX()*(uint(MaxRenderSize().y+7)>>3)*64;}
+uint tsrIndex(int2 p){uint2 q=uint2(p);return ((q.y>>3)*tsrTilesX()+(q.x>>3))*64+(q.y&7)*8+(q.x&7);}
 uint tsrSlot(bool current){uint slot=tsr().resources.w;return current?slot:1-slot;}
 // Byte address of pixel p's word in region `region`.
 uint tsrScratch(uint region,int2 p){return (region*tsrPixels()+tsrIndex(p))*4;}
+// Byte address of pixel p's dilated surface (ID, depth) in this or last frame's slot.
+uint tsrSurfaceAddress(int2 p,bool current){return ((3+2*tsrSlot(current))*tsrPixels()+tsrIndex(p)*2)*4;}
 // IEEE half conversions by bit math (Slang's f32tof16 needs the Float16 capability
 // the device does not enable): round to nearest even, denormals kept.
 uint tsrHalfBits(float value){
@@ -247,11 +253,11 @@ FfxFloat32x2 LoadInputMotionVector(FfxUInt32x2 p){
 // signals (tsr-signals.slangh tsrPrepareMasks, stored by prepare inputs) as unorm
 // bit fields: reactive (11 low bits), composition (11), still transparency (10);
 // zero where nothing applies, or without any signal this frame.
-float tsrMask(int2 p,uint shift,uint bits){
+uint tsrMaskWord(int2 p){
     if(!tsrOption(TSR_OPTION_MASKS) || !tsrInside(p,RenderSize()))return 0;
-    uint masks=buffers[NonUniformResourceIndex(tsr().resources.y)].Load(tsrScratch(6,p));
-    uint one=(1u<<bits)-1;return float((masks>>shift)&one)/float(one);
+    return buffers[NonUniformResourceIndex(tsr().resources.y)].Load(tsrScratch(2,p));
 }
+float tsrMask(int2 p,uint shift,uint bits){uint one=(1u<<bits)-1;return float((tsrMaskWord(p)>>shift)&one)/float(one);}
 FfxFloat32 LoadReactiveMask(FfxUInt32x2 p){return tsrMask(int2(p),0,11)*tsr().frame.z;}
 FfxFloat32 SampleReactiveMask(FfxFloat32x2 uv){return LoadReactiveMask(FfxUInt32x2(tsrClamp(int2(uv*float2(RenderSize())),RenderSize())));}
 FfxInt32x2 GetReactiveMaskResourceDimensions(){return MaxRenderSize();}
@@ -263,44 +269,44 @@ FfxFloat32 SampleTransparencyAndCompositionMask(FfxFloat32x2 uv){
 FfxInt32x2 GetTransparencyAndCompositionMaskResourceDimensions(){return MaxRenderSize();}
 FfxFloat32 SampleLanczos2Weight(FfxFloat32 x){return 0.f;}
 
-// --- Scratch buffer: dilated depth, motion and ID, reconstructed previous depth ---
-void StoreDilatedDepth(FfxUInt32x2 p,FfxFloat32 depth){
-    if(tsrInside(int2(p),RenderSize()))buffers[NonUniformResourceIndex(tsr().resources.y)].Store(tsrScratch(tsrSlot(true),int2(p)),asuint(depth));
-}
+// --- Scratch buffer: dilated surface and motion, reconstructed previous depth ---
+// Ara: the dilated depth is stored with its entity ID (StoreDilatedSurface).
+void StoreDilatedDepth(FfxUInt32x2 p,FfxFloat32 depth){}
 FfxFloat32 LoadDilatedDepth(FfxUInt32x2 p){
-    return tsrInside(int2(p),RenderSize())?asfloat(buffers[NonUniformResourceIndex(tsr().resources.y)].Load(tsrScratch(tsrSlot(true),int2(p)))):0;
-}
-// Ara: last frame's dilated depth (zero off-screen).
-float tsrPreviousDilatedDepth(int2 p){
-    return tsrInside(p,PreviousFrameRenderSize())?asfloat(buffers[NonUniformResourceIndex(tsr().resources.y)].Load(tsrScratch(tsrSlot(false),p))):0;
+    return tsrInside(int2(p),RenderSize())?asfloat(buffers[NonUniformResourceIndex(tsr().resources.y)].Load(tsrSurfaceAddress(int2(p),true)+4)):0;
 }
 void StoreDilatedMotionVector(FfxUInt32x2 p,FfxFloat32x2 motion){
-    if(tsrInside(int2(p),RenderSize()))buffers[NonUniformResourceIndex(tsr().resources.y)].Store(tsrScratch(2,int2(p)),tsrHalfBits(motion.x)|(tsrHalfBits(motion.y)<<16));
+    if(tsrInside(int2(p),RenderSize()))buffers[NonUniformResourceIndex(tsr().resources.y)].Store(tsrScratch(0,int2(p)),tsrHalfBits(motion.x)|(tsrHalfBits(motion.y)<<16));
 }
 FfxFloat32x2 LoadDilatedMotionVector(FfxUInt32x2 p){
     if(!tsrInside(int2(p),RenderSize()))return FfxFloat32x2(0,0);
-    uint packed=buffers[NonUniformResourceIndex(tsr().resources.y)].Load(tsrScratch(2,int2(p)));
+    uint packed=buffers[NonUniformResourceIndex(tsr().resources.y)].Load(tsrScratch(0,int2(p)));
     return FfxFloat32x2(tsrHalfValue(packed&0xffffu),tsrHalfValue(packed>>16));
 }
 // Reversed-Z: the nearest depth is the largest (FFX_FSR3UPSCALER_OPTION_INVERTED_DEPTH).
 void StoreReconstructedDepth(FfxUInt32x2 p,FfxFloat32 depth){
-    if(tsrInside(int2(p),RenderSize()))buffers[NonUniformResourceIndex(tsr().resources.y)].InterlockedMax(tsrScratch(3,int2(p)),asuint(depth));
+    if(tsrInside(int2(p),RenderSize()))buffers[NonUniformResourceIndex(tsr().resources.y)].InterlockedMax(tsrScratch(1,int2(p)),asuint(depth));
 }
 void SetReconstructedDepth(FfxUInt32x2 p,FfxUInt32 value){
-    if(tsrInside(int2(p),RenderSize()))buffers[NonUniformResourceIndex(tsr().resources.y)].Store(tsrScratch(3,int2(p)),value);
+    if(tsrInside(int2(p),RenderSize()))buffers[NonUniformResourceIndex(tsr().resources.y)].Store(tsrScratch(1,int2(p)),value);
 }
 FfxFloat32 LoadReconstructedPrevDepth(FfxUInt32x2 p){
-    return tsrInside(int2(p),RenderSize())?asfloat(buffers[NonUniformResourceIndex(tsr().resources.y)].Load(tsrScratch(3,int2(p)))):0;
+    return tsrInside(int2(p),RenderSize())?asfloat(buffers[NonUniformResourceIndex(tsr().resources.y)].Load(tsrScratch(1,int2(p)))):0;
 }
-// Ara: the entity ID at the nearest-depth sample FSR dilates depth and motion from
-// (prepare inputs), kept for this and last frame (tsr-signals.slangh).
-void StoreDilatedId(FfxInt32x2 p,FfxInt32x2 nearest){
+// Ara: the dilated surface, the entity ID at the nearest-depth sample FSR dilates
+// depth and motion from and that depth, kept for this and last frame
+// (tsr-signals.slangh).
+// Without the ID signal only the depth is stored (no ID read).
+void StoreDilatedSurface(FfxInt32x2 p,FfxInt32x2 nearest,FfxFloat32 depth){
     TsrConstants c=tsr();if(!tsrInside(p,c.renderSize.xy))return;
-    uint id=c.signalInputs.x!=0xffffffffu?uint(textures[NonUniformResourceIndex(c.signalInputs.x)].Load(int3(tsrClamp(nearest,c.renderSize.xy),0)).x):0;
-    buffers[NonUniformResourceIndex(c.resources.y)].Store(tsrScratch(4+tsrSlot(true),p),id);
+    uint address=tsrSurfaceAddress(p,true);
+    if(!tsrOption(TSR_OPTION_IDS)){buffers[NonUniformResourceIndex(c.resources.y)].Store(address+4,asuint(depth));return;}
+    uint id=uint(textures[NonUniformResourceIndex(c.signalInputs.x)].Load(int3(tsrClamp(nearest,c.renderSize.xy),0)).x);
+    buffers[NonUniformResourceIndex(c.resources.y)].Store2(address,uint2(id,asuint(depth)));
 }
-uint tsrDilatedId(int2 p,bool current){
-    return buffers[NonUniformResourceIndex(tsr().resources.y)].Load(tsrScratch(4+tsrSlot(current),p));
+// x entity ID, y reversed-Z depth bits; last frame's reads are clamped on-screen.
+uint2 tsrSurface(int2 p,bool current){
+    return buffers[NonUniformResourceIndex(tsr().resources.y)].Load2(tsrSurfaceAddress(p,current));
 }
 
 // --- Farthest depth: prepare inputs averages it into the half-size mip (the luma
@@ -316,12 +322,6 @@ FfxFloat32 SampleLumaInstability(FfxFloat32x2 uv){
     return tsrOption(TSR_OPTION_LUMA_INSTABILITY)?textures[NonUniformResourceIndex(tsr().sampled0.x)].SampleLevel(samplers[2],uv,0).x:0;
 }
 
-// --- Prepared colour (render size): FSR's LoadPreparedColor, once per pixel ---
-// Ara: prepare inputs stores YCoCg of the pre-exposed colour (RGBA16F) for the
-// accumulate pass' nine taps (tsr-signals.slangh tsrStorePrepared).
-FfxFloat32x3 TsrLoadPreparedColor(FfxInt32x2 p){
-    return textures[NonUniformResourceIndex(tsr().sampled0.w)].Load(int3(tsrClamp(p,RenderSize()),0)).rgb;
-}
 
 // --- Luma pair (FSR LUMA_1/LUMA_2): current and previous ---
 void StoreCurrentLuma(FfxUInt32x2 p,FfxFloat32 luma){

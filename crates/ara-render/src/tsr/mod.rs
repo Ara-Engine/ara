@@ -37,15 +37,17 @@
 //!   `ARA_TSR_PARALLAX` (1 render px): reactive autogen;
 //! - `ARA_TSR_ACCUMULATION` (1/3), `ARA_TSR_MIN_DISOCCLUSION` (-1/3),
 //!   `ARA_TSR_VELOCITY` (1), `ARA_TSR_REACTIVENESS` (1): FSR's context values;
-//! - `ARA_TSR_SHADING_CHANGE` (1; 0 skips the shading change pyramid),
-//!   `ARA_TSR_LUMA_INSTABILITY` (1; 0 skips the luma instability pass);
+//! - `ARA_TSR_SHADING_CHANGE` (0: the pyramid pass skipped, equal fidelity and
+//!   steadier in the Showcase sweep; 1 re-enables FSR's), `ARA_TSR_LUMA_INSTABILITY`
+//!   (1; 0 skips the luma instability pass, clearly less stable);
+//! - `ARA_TSR_IDS` (1; 0 drops the entity-ID signal and its scratch traffic);
 //! - `ARA_TSR_PREEXPOSED` (0): the HDR input already holds radiance × the applied
 //!   exposure (the pre-exposure contract); otherwise TSR applies it.
 //!
 //! Images are allocated on first use at the view's render and display sizes,
 //! reallocated (with a history reset) when either size or the path changes, and
-//! released when TAAU is selected again: eight bindless storage-image slots on the
-//! Ara path, nine on FSR's.
+//! released when TAAU is selected again: seven bindless storage-image slots on the
+//! Ara path, eight on FSR's.
 mod constants;
 mod tuning;
 
@@ -93,8 +95,8 @@ const LUMA: usize = 1;
 /// RG16F atlas: shading change mips 0 to 2 and the half-size farthest depth
 /// (`pyramid_extent`).
 const PYRAMID: usize = 2;
-/// RGBA16F render size: FSR's prepared colour (YCoCg, pre-exposed) for accumulate.
-const PREPARED: usize = 3;
+/// Unused row slot (accumulate prepares colour in group memory).
+const UNUSED: usize = 3;
 /// R8, two render widths: the accumulation counter, this frame's and last frame's.
 const ACCUMULATION: usize = 4;
 /// RGBA8 render size: reactive, disocclusion, shading change and accumulation.
@@ -106,10 +108,16 @@ const LUMA_HISTORY: usize = 7;
 /// RGBA16F, two display widths: FSR's accumulated colour and lock (FSR path only).
 const UPSCALED: usize = 8;
 const IMAGES: usize = 9;
-/// Scratch words per render pixel (tsr.slangh `tsrScratch` regions): dilated depth
-/// (this and last frame), dilated motion (two halves), reconstructed previous depth,
-/// dilated entity ID (this and last frame), masks.
+/// Scratch words per render pixel (tsr.slangh `tsrScratch` regions): dilated motion
+/// (two halves), reconstructed previous depth, masks, and the dilated surface (entity
+/// ID and depth) of this and last frame.
 const SCRATCH_WORDS: u64 = 7;
+
+/// Render pixels the scratch regions hold: whole 8x8 tiles (tsr.slangh `tsrIndex`
+/// stores them tile by tile).
+fn scratch_pixels(render: [u32; 2]) -> u32 {
+    render[0].div_ceil(8) * render[1].div_ceil(8) * 64
+}
 
 /// Format and extent of each image for `render` and `display` sizes.
 fn image_desc(image: usize, render: [u32; 2], display: [u32; 2]) -> (vk::Format, [u32; 2]) {
@@ -118,7 +126,6 @@ fn image_desc(image: usize, render: [u32; 2], display: [u32; 2]) -> (vk::Format,
         INTERMEDIATE => (vk::Format::R16_SFLOAT, render),
         LUMA => (vk::Format::R16_SFLOAT, pair(render)),
         PYRAMID => (vk::Format::R16G16_SFLOAT, pyramid_extent(render)),
-        PREPARED => (vk::Format::R16G16B16A16_SFLOAT, render),
         ACCUMULATION => (vk::Format::R8_UNORM, pair(render)),
         MASKS => (vk::Format::R8G8B8A8_UNORM, render),
         LOCKS => (vk::Format::R8_UNORM, display),
@@ -183,9 +190,9 @@ struct Resources {
     sampled: [u32; IMAGES],
     storage: [u32; IMAGES],
     states: [State; IMAGES],
-    /// Per render pixel (`SCRATCH_WORDS`): dilated depth and entity ID (this and
-    /// last frame), dilated motion, the reconstructed previous nearest depth (u32
-    /// atomics) and the packed masks.
+    /// Per render pixel in 8x8 tiles (`SCRATCH_WORDS`, `scratch_pixels`): dilated
+    /// motion, the reconstructed previous nearest depth (u32 atomics), the packed
+    /// masks and the dilated surface (entity ID, depth) of this and last frame.
     scratch: Buffer,
     scratch_index: u32,
     scratch_state: State,
@@ -477,6 +484,9 @@ impl Tsr {
         if shading_change {
             options |= constants::OPTION_SHADING_CHANGE;
         }
+        if t.ids {
+            options |= constants::OPTION_IDS;
+        }
         let constants = TsrConstants {
             render_size: [r[0], r[1], pr[0], pr[1]],
             upscale_size: [d[0], d[1], pd[0], pd[1]],
@@ -583,8 +593,9 @@ impl Tsr {
             c.signal_inputs[3] = u32::MAX;
         }
         c.external[0] = bindings.reactive.unwrap_or(u32::MAX);
+        // Reflections count only with a weight.
         if c.signal_inputs[1] != u32::MAX
-            || c.signal_inputs[3] != u32::MAX
+            || (c.signal_inputs[3] != u32::MAX && c.signals[2] > 0.)
             || c.external[0] != u32::MAX
         {
             c.options[0] |= constants::OPTION_MASKS;
@@ -636,7 +647,6 @@ impl Tsr {
             (scratch, write),
             (image(LUMA)?, write),
             (image(PYRAMID)?, write),
-            (image(PREPARED)?, write),
         ];
         prepare.extend(io.motion.map(|motion| (motion, read)));
         prepare.extend(io.signals.iter().map(|&signal| (signal, read)));
@@ -683,7 +693,7 @@ impl Tsr {
             (scratch, write),
             (image(PYRAMID)?, read),
             (image(MASKS)?, read),
-            (image(PREPARED)?, read),
+            (io.colour, read),
             (image(LOCKS)?, write),
         ];
         if frame.luma_instability {
@@ -752,13 +762,13 @@ impl Tsr {
                     recorder.push(Command::Constants(RootConstants { words }));
                     recorder.push(Command::Dispatch(groups([width, height], 8)));
                 }
-                // The reconstructed previous depth (scratch region 3): 64 words a
+                // The reconstructed previous depth (scratch region 1): 64 words a
                 // group, rows of 1024 groups.
-                let pixels = render[0] * render[1];
+                let pixels = scratch_pixels(render);
                 let rows = pixels.div_ceil(64).div_ceil(1024);
                 let mut words = [0; 8];
                 (words[1], words[2], words[3], words[5], words[6]) =
-                    (resources.scratch_index, pixels, 1024, 1, pixels * 3);
+                    (resources.scratch_index, pixels, 1024, 1, pixels);
                 recorder.push(Command::Constants(RootConstants { words }));
                 recorder.push(Command::Dispatch([1024, rows, 1]));
                 return;
@@ -841,7 +851,7 @@ fn allocate(
     let mut sampled = [0; IMAGES];
     let mut storage = [0; IMAGES];
     for (i, slot) in images.iter_mut().enumerate() {
-        if i == UPSCALED && !fsr {
+        if i == UNUSED || (i == UPSCALED && !fsr) {
             continue;
         }
         let (format, [width, height]) = image_desc(i, render, display);
@@ -855,7 +865,7 @@ fn allocate(
         sampled[i] = gpu.sampled_image(image, false)?.index;
         storage[i] = gpu.storage_image(image)?.index;
     }
-    let pixels = u64::from(render[0]) * u64::from(render[1]);
+    let pixels = u64::from(scratch_pixels(render));
     let scratch = gpu.create_buffer(
         pixels * SCRATCH_WORDS * 4,
         vk::BufferUsageFlags::STORAGE_BUFFER,

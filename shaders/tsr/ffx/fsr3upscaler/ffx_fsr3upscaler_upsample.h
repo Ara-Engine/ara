@@ -78,7 +78,7 @@ FfxFloat32 ComputeMaxKernelWeight(const AccumulationPassCommonParams params, FFX
 
 FfxFloat32x3 LoadPreparedColor(FfxInt32x2 iSamplePos)
 {
-    // Ara: this value, prepared once per render pixel by prepare inputs (RGBA16F).
+    // Ara: this value, prepared once per render pixel of the group (tsr-signals.slangh).
     return TsrLoadPreparedColor(iSamplePos);
 }
 

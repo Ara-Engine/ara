@@ -144,7 +144,7 @@ void PrepareInputs(FfxInt32x2 iPxPos)
 
     StoreDilatedMotionVector(iPxPos, fDilatedMotionVector);
     StoreDilatedDepth(iPxPos, depthExtents.fNearest);
-    StoreDilatedId(iPxPos, depthExtents.fNearestCoord); // Ara: entity ID at the same sample (tsr-signals.slangh)
+    StoreDilatedSurface(iPxPos, depthExtents.fNearestCoord, depthExtents.fNearest); // Ara: with the entity ID at that sample (tsr.slangh)
 
     const FfxFloat32 fFarthestDepthInMeters = ffxMin(GetViewSpaceDepthInMeters(depthExtents.fFarthest), FSR3UPSCALER_FP16_MAX);
     StoreFarthestDepth(iPxPos, fFarthestDepthInMeters);

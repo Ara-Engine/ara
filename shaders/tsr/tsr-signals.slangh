@@ -75,16 +75,28 @@ void tsrPrepareMasks(int2 p){
     }
     if(c.external.x!=none)reactive=max(reactive,saturate(textures[NonUniformResourceIndex(c.external.x)].Load(int3(p,0)).x));
     uint packed=uint(saturate(reactive)*2047+0.5)|(uint(saturate(composition)*2047+0.5)<<11)|(uint(saturate(still)*1023+0.5)<<22);
-    buffers[NonUniformResourceIndex(c.resources.y)].Store(tsrScratch(6,p),packed);
+    buffers[NonUniformResourceIndex(c.resources.y)].Store(tsrScratch(2,p),packed);
 }
 
-// FSR's LoadPreparedColor (YCoCg of the pre-exposed colour), stored once per render
-// pixel by prepare inputs for the accumulate pass' nine taps (sampled0.w).
-void tsrStorePrepared(int2 p){
-    if(!tsrInside(p,RenderSize()))return;
-    float3 rgb=ffxMax(FfxFloat32x3(0,0,0),LoadInputColor(FfxUInt32x2(p)))*Exposure();
-    images[NonUniformResourceIndex(tsr().storage0.w)][p]=float4(RGBToYCoCg(rgb),1);
+#ifdef TSR_PREPARED_TILE
+// FSR's LoadPreparedColor (YCoCg of the pre-exposed colour) for accumulate's nine
+// taps, from group memory: an 8x8 display group reads at most 12x12 render pixels
+// (offsets -2..+1 around floor(display centre x render/display), render/display
+// <= 1), so each is fetched and converted once instead of up to nine times.
+groupshared float3 gsTsrPrepared[12][12];
+static int2 gTsrTileOrigin;
+void tsrLoadPreparedTile(uint2 group,uint index){
+    int2 size=RenderSize();gTsrTileOrigin=int2(floor((float2(group*8)+0.5)*DownscaleFactor()))-2;
+    for(uint i=index;i<144;i+=64){
+        int2 t=int2(i%12,i/12);
+        float3 rgb=ffxMax(FfxFloat32x3(0,0,0),LoadInputColor(FfxUInt32x2(tsrClamp(gTsrTileOrigin+t,size))))*Exposure();
+        gsTsrPrepared[t.y][t.x]=RGBToYCoCg(rgb);
+    }
+    GroupMemoryBarrierWithGroupSync();
 }
+// FSR clamps the coordinate on-screen first; it always lies in the tile.
+FfxFloat32x3 TsrLoadPreparedColor(FfxInt32x2 p){int2 q=p-gTsrTileOrigin;return gsTsrPrepared[q.y][q.x];}
+#endif
 
 // FSR's shading change pass evaluated where prepare reactivity samples it (that
 // pass' formula over the pyramid's mips 0 to 2, ffx_fsr3upscaler_shading_change.h),
@@ -161,29 +173,34 @@ FfxFloat32x4 TsrReprojectHistory(FfxFloat32x2 uv){
 //   their ID is the transparent layer's over an opaque depth.
 float TsrIdDisocclusion(int2 p,float2 uv,float2 motion,float deviceDepth,float depthDisocclusion){
     TsrConstants c=tsr();
-    if(FrameIndex()==0 || c.signalInputs.x==0xffffffffu || !tsrInside(p,c.renderSize.xy))return depthDisocclusion;
+    if(FrameIndex()==0 || !tsrOption(TSR_OPTION_IDS) || !tsrInside(p,c.renderSize.xy))return depthDisocclusion;
     float2 reprojected=uv+motion;if(!IsUvInside(reprojected))return depthDisocclusion;
-    int2 size=PreviousFrameRenderSize();uint id=tsrDilatedId(p,true);
-    BilinearSamplingData footprint=GetBilinearSamplingData(reprojected,size);
+    int2 size=PreviousFrameRenderSize();uint id=tsrSurface(p,true).x;
     float z=GetViewSpaceDepth(deviceDepth);
     float separation=c.signals.y*1.37e-05f*length(float2(c.renderSize.xy)*0.5);
+    // Fast path (most pixels): the texel the reprojection lands in shows this surface.
+    int2 centre=tsrClamp(int2(floor(reprojected*float2(size))),size);
+    uint2 surface=tsrSurface(centre,false);
+    float previous=GetViewSpaceDepth(asfloat(surface.y));
+    if(surface.x==id && abs(z-previous)<=separation*max(z,previous))return 0;
+    BilinearSamplingData footprint=GetBilinearSamplingData(reprojected,size);
     bool matched=false,consistent=false;
     FFX_UNROLL
     for(int i=0;i<4;i++){
         int2 q=ClampLoad(footprint.iBasePos,footprint.iOffsets[i],size);
-        if(footprint.fWeights[i]>fReconstructedDepthBilinearWeightThreshold && tsrDilatedId(q,false)==id){
-            matched=true;float previous=GetViewSpaceDepth(tsrPreviousDilatedDepth(q));
+        surface=tsrSurface(q,false);
+        if(footprint.fWeights[i]>fReconstructedDepthBilinearWeightThreshold && surface.x==id){
+            matched=true;previous=GetViewSpaceDepth(asfloat(surface.y));
             consistent=consistent || abs(z-previous)<=separation*max(z,previous);
         }
     }
     if(consistent)return 0;
-    if(matched || tsrMask(p,11,11)>0 || tsrMask(p,22,10)>0)return depthDisocclusion;
-    int2 centre=int2(floor(reprojected*float2(size)));
+    if(matched || (tsrMaskWord(p)>>11)!=0)return depthDisocclusion;
     FFX_UNROLL
     for(int y=-1;y<=1;y++){
         FFX_UNROLL
         for(int x=-1;x<=1;x++){
-            if(tsrDilatedId(ClampLoad(centre,int2(x,y),size),false)==id)return depthDisocclusion;
+            if(tsrSurface(ClampLoad(centre,int2(x,y),size),false).x==id)return depthDisocclusion;
         }
     }
     return max(depthDisocclusion,c.signals.x);

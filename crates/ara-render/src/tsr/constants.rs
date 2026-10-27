@@ -68,10 +68,12 @@ pub(crate) struct TsrConstants {
 
 /// `TsrConstants::options` flags (tsr.slangh TSR_OPTION_*): prepare inputs computes
 /// masks (a signal exists this frame), accumulate reads luma instability, prepare
-/// reactivity reads the shading change pyramid.
+/// reactivity reads the shading change pyramid, the entity-ID signal runs.
 pub(crate) const OPTION_MASKS: u32 = 1;
 pub(crate) const OPTION_LUMA_INSTABILITY: u32 = 2;
 pub(crate) const OPTION_SHADING_CHANGE: u32 = 4;
+/// The entity-ID signal runs (prepare inputs stores IDs, prepare reactivity tests them).
+pub(crate) const OPTION_IDS: u32 = 8;
 
 /// Only FSR's own auto exposure reads the frame time; Ara never feeds it a wall
 /// clock (deterministic simulation), so it is a nominal 60 Hz.
