@@ -628,7 +628,7 @@ fn home(panel: &str) -> &'static str {
     match panel {
         "hierarchy" => "outline",
         "inspector" => "right",
-        "assets" | "console" | "problems" | "agents" => "bottom",
+        "assets" | "console" | "problems" | "agents" | "history" => "bottom",
         _ => "view",
     }
 }

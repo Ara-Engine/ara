@@ -589,7 +589,11 @@ fn build() -> Vec<Spec> {
             e.finish_gesture(true)?;
             if e.state.focus == "settings" { act(e, "editor.settings.undo", json!({"redo": true})) } else { act(e, "history.redo", json!({})) }
         }).when(|c| can_undo(c, true)).labelled(|c| undo_label(c, true)),
-        later("edit.history", "History…", "clock", "Ctrl+H", "The History panel (typed command stack) arrives with the Phase 2 tool rebuilds; `ara history` lists it now."),
+        cmd("edit.history", "History…", "clock", "Ctrl+H", "Inspect attributed transactions and use the current author's Undo and Redo stack.", |_,e,_|focus(e,"history")),
+        cmd("history.inspect", "Inspect Transaction", "search", "", "Inspect the selected transaction without changing authored content.", |s,e,t|s.inspect_history(e,match t {Target::Text(id)=>id,_=>""})),
+        cmd("history.copy", "Copy Full Transaction", "copy", "", "Copy the complete canonical transaction and all of its operations.", |s,e,t|s.copy_history_transaction(e,match t {Target::Text(id)=>id,_=>""})),
+        cmd("history.older", "Older Transactions", "chevron-left", "", "Read older matching transactions in the bounded History list.", |s,e,_|s.page_history(e,true)),
+        cmd("history.newer", "Newer Transactions", "chevron-right", "", "Read newer matching transactions in the bounded History list.", |s,e,_|s.page_history(e,false)),
         cmd("edit.cut", "Cut", "scissors", "Ctrl+X", "Copy the selected entities, then delete them.", |s, e, t| {
             s.copy_entities(e, t)?;
             let entities = t.entities(&e.state);
@@ -1352,11 +1356,14 @@ fn build() -> Vec<Spec> {
         ),
         cmd(
             "play.review",
-            "Review Kept Changes…",
-            "bot",
+            "Kept Changes History…",
+            "clock",
             "",
-            "Open the review queue.",
-            |_, e, _| focus(e, "agents"),
+            "Inspect the attributed Keep transactions in History.",
+            |_, e, _| {
+                focus(e, "history")?;
+                act(e, "editor.search", json!({"panel":"history","query":"Keep"}))
+            },
         ),
         cmd(
             "play.settings",
@@ -1945,12 +1952,13 @@ fn build() -> Vec<Spec> {
                 Ok(())
             },
         ),
-        later(
+        cmd(
             "window.history",
             "History",
             "clock",
             "Alt+7",
-            "The History panel arrives with the Phase 2 tool rebuilds.",
+            "Inspect the attributed content transaction log.",
+            |_, e, _| focus(e, "history"),
         ),
         cmd(
             "window.float",

@@ -61,6 +61,7 @@ pub(super) fn title(panel: &str) -> &str {
         "problems" => "Problems",
         "agents" => "Agents",
         "settings" => "Settings",
+        "history" => "History",
         _ => panel,
     }
 }
@@ -71,7 +72,14 @@ pub(super) fn title(panel: &str) -> &str {
 pub(super) fn keep_alive(panel: &str) -> bool {
     matches!(
         panel,
-        "hierarchy" | "inspector" | "assets" | "console" | "problems" | "agents" | "settings"
+        "hierarchy"
+            | "inspector"
+            | "assets"
+            | "console"
+            | "problems"
+            | "agents"
+            | "settings"
+            | "history"
     )
 }
 /// One icon per concept (Appendix B).
@@ -90,6 +98,7 @@ pub(super) fn panel_icon(panel: &str) -> &'static str {
         "problems" => "triangle-alert",
         "agents" => "bot",
         "settings" => "settings-2",
+        "history" => "clock",
         _ => "square",
     }
 }
@@ -322,6 +331,7 @@ impl Shell {
             "problems" => self.problems_panel(editor, out),
             "agents" => self.agents_panel(editor, out),
             "settings" => self.settings_panel(editor, out),
+            "history" => self.history_panel(editor, out),
             other => self.empty(
                 out,
                 &format!("unknown-{other}"),

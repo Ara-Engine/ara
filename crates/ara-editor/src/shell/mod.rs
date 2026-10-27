@@ -49,6 +49,7 @@ mod graph_annotations;
 mod graph_input;
 mod graph_panel;
 mod hierarchy;
+mod history_panel;
 mod import_panel;
 #[cfg(test)]
 mod inspector_capture;
@@ -110,6 +111,7 @@ pub(crate) enum ViewportRequest {
 }
 /// Native shell and its retained widget state; no authoring document is mirrored here.
 pub struct Shell {
+    history_view: history_panel::View,
     panel_probe: Option<panel_boundary::Probe>,
     pub(crate) viewport_request: Option<ViewportRequest>,
     pub(crate) play_controls: play_controls::State,
@@ -476,6 +478,7 @@ impl Shell {
         let text = text_system()?;
         let ui = Ui::editor("<ui id='editor' />", include_str!("editor.css"), size)?;
         let mut shell = Self {
+            history_view: Default::default(),
             viewport_request: None,
             panel_probe: None,
             play_controls: Default::default(),
@@ -864,6 +867,7 @@ impl Shell {
         );
         css.push_str(ara_ui::dialogs::CSS);
         css.push_str(ara_ui::select::CSS);
+        css.push_str(history_panel::CSS);
         if self.toolkit_verify.is_some() {
             css.push_str(toolkit_verify::CSS);
         }

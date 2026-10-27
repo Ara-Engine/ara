@@ -126,6 +126,7 @@ fn run_sweep(project: &Project, capture: &mut impl FnMut(&mut Shell, &str)) -> S
             "console",
             "problems",
             "agents",
+            "history",
         ] {
             editor
                 .action("editor.workspace", json!({"asset":""}))
@@ -224,6 +225,7 @@ fn run_sweep(project: &Project, capture: &mut impl FnMut(&mut Shell, &str)) -> S
             Context::Node,
             Context::Canvas,
             Context::Console,
+            Context::History,
             Context::Profiler,
             Context::Status,
             Context::Play,

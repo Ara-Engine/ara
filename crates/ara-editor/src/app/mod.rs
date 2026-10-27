@@ -11,6 +11,7 @@ mod drags;
 mod eyedropper;
 mod game;
 mod game_preview;
+mod history_verify;
 mod input_verify;
 mod journey;
 mod monkey;
@@ -349,6 +350,7 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
     let mut snapping_check = None;
     let mut input_check = None;
     let mut boundary_check = None;
+    let mut history_check = None;
     let mut prefab_check = None;
     let mut diagnostics_check = None;
     let mut play_check = None;
@@ -557,6 +559,20 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
             if boundary_check
                 .as_ref()
                 .is_some_and(boundary_verify::BoundaryCheck::finished)
+                && history_check.is_none()
+            {
+                history_check = Some(history_verify::HistoryCheck::new(
+                    &mut editor,
+                    &options.output,
+                )?);
+            }
+            if let Some(check) = &mut history_check {
+                let scale = crate::native::points_to_logical(window.raw(), main_dpi);
+                check.inject(&mut editor, &mut shell, &window, scale, &mut events)?;
+            }
+            if history_check
+                .as_ref()
+                .is_some_and(history_verify::HistoryCheck::finished)
                 && prefab_check.is_none()
             {
                 prefab_check = Some(prefab_verify::PrefabCheck::new(
@@ -630,6 +646,9 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
             for (sdl, event) in events {
                 let event_clipboard: &mut dyn ara_ui_text::Clipboard = if let Some(check) =
                     diagnostics_check.as_mut().filter(|check| !check.finished())
+                {
+                    check.clipboard()
+                } else if let Some(check) = history_check.as_mut().filter(|check| !check.finished())
                 {
                     check.clipboard()
                 } else if let Some(check) = input_check.as_mut().filter(|check| !check.finished()) {
@@ -790,6 +809,9 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
                 use ara_ui_text::Clipboard;
                 let destination: &mut dyn Clipboard = if let Some(check) =
                     diagnostics_check.as_mut().filter(|check| !check.finished())
+                {
+                    check.clipboard()
+                } else if let Some(check) = history_check.as_mut().filter(|check| !check.finished())
                 {
                     check.clipboard()
                 } else if let Some(check) = input_check.as_mut().filter(|check| !check.finished()) {
@@ -1651,6 +1673,9 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
             if let Some(check) = &mut boundary_check {
                 check.end(&editor, &mut shell, &mut gpu)?;
             }
+            if let Some(check) = &mut history_check {
+                check.end(&editor, &mut shell, &mut gpu)?;
+            }
             if let Some(check) = &mut diagnostics_check {
                 check.end(
                     &editor,
@@ -1778,6 +1803,17 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
             if !check.finished() || !check.failures().is_empty() {
                 return Err(format!(
                     "Native input journey failed: {}",
+                    check.failures().join(", ")
+                )
+                .into());
+            }
+            let check = history_check
+                .as_ref()
+                .ok_or("The History journey did not start")?;
+            check.write()?;
+            if !check.finished() || !check.failures().is_empty() {
+                return Err(format!(
+                    "Native History journey failed: {}",
                     check.failures().join(", ")
                 )
                 .into());

@@ -705,6 +705,9 @@ impl Shell {
             let id = n.element.id.as_str();
             if let Some(binding) = self.bindings.get(&ara_ui::source::stable_id(id)) {
                 match binding {
+                    Binding::Command("history.inspect", target) => {
+                        return Some((Context::History, target.clone()));
+                    }
                     Binding::AssetFolder(path, _) => {
                         return Some((Context::Folder, Target::Folder(path.clone())));
                     }
@@ -793,6 +796,9 @@ impl Shell {
                 }
                 "profiler-body" => return Some((Context::Profiler, Target::None)),
                 "console-scroll" => return Some((Context::Console, Target::None)),
+                "history-transactions" | "history-detail" => {
+                    return Some((Context::History, Target::None));
+                }
                 _ => {}
             }
         }

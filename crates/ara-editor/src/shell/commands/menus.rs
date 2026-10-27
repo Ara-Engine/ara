@@ -177,6 +177,16 @@ pub(crate) const MENUS: &[Menu] = &[
             C("edit.undo"),
             C("edit.redo"),
             C("edit.history"),
+            Sub(
+                "History",
+                &[
+                    C("history.inspect"),
+                    C("history.copy"),
+                    S,
+                    C("history.older"),
+                    C("history.newer"),
+                ],
+            ),
             S,
             C("edit.cut"),
             C("edit.copy"),
@@ -486,6 +496,8 @@ pub(crate) enum Context {
     Canvas,
     /// A console row.
     Console,
+    /// A real immutable transaction in History.
+    History,
     /// A profiler span or frame.
     Profiler,
     /// A status bar chip.
@@ -512,6 +524,16 @@ pub(crate) enum Context {
 /// Context-menu layout for a target kind.
 pub(crate) fn context(kind: Context) -> &'static [Item] {
     match kind {
+        Context::History => &[
+            C("history.inspect"),
+            C("history.copy"),
+            S,
+            C("edit.undo"),
+            C("edit.redo"),
+            S,
+            C("history.older"),
+            C("history.newer"),
+        ],
         Context::Entity => &[
             Sub(
                 "Create Child",
