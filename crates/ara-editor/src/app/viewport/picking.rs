@@ -102,7 +102,7 @@ fn pick(scene: &Scene, origin: Vec3, direction: Vec3) -> Option<Pick> {
         let Some(lod) = geometry.lods.first() else {
             continue;
         };
-        for triangle in lod.indices.chunks_exact(3) {
+        for triangle in lod.indices.as_chunks::<3>().0 {
             let Some(a) = geometry.vertices.get(triangle[0] as usize) else {
                 continue;
             };
