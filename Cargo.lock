@@ -393,7 +393,7 @@ dependencies = [
 
 [[package]]
 name = "ara"
-version = "0.0.1-alpha"
+version = "0.0.2-alpha.3"
 dependencies = [
  "ara-ai",
  "ara-asset",
@@ -421,7 +421,7 @@ dependencies = [
 
 [[package]]
 name = "ara-2d"
-version = "0.0.1-alpha"
+version = "0.0.2-alpha.3"
 dependencies = [
  "anyhow",
  "ara-cmd",
@@ -439,7 +439,7 @@ dependencies = [
 
 [[package]]
 name = "ara-acoustics"
-version = "0.0.1-alpha"
+version = "0.0.2-alpha.3"
 dependencies = [
  "ara-audio",
  "ara-diag",
@@ -456,7 +456,7 @@ dependencies = [
 
 [[package]]
 name = "ara-ai"
-version = "0.0.1-alpha"
+version = "0.0.2-alpha.3"
 dependencies = [
  "ara-cmd",
  "ara-diag",
@@ -478,7 +478,7 @@ dependencies = [
 
 [[package]]
 name = "ara-anim"
-version = "0.0.1-alpha"
+version = "0.0.2-alpha.3"
 dependencies = [
  "ara-cmd",
  "ara-diag",
@@ -498,7 +498,7 @@ dependencies = [
 
 [[package]]
 name = "ara-anim-capture"
-version = "0.0.1-alpha"
+version = "0.0.2-alpha.3"
 dependencies = [
  "ara-anim",
  "ara-anim-physics",
@@ -511,7 +511,7 @@ dependencies = [
 
 [[package]]
 name = "ara-anim-physics"
-version = "0.0.1-alpha"
+version = "0.0.2-alpha.3"
 dependencies = [
  "ara-anim",
  "ara-physics",
@@ -522,7 +522,7 @@ dependencies = [
 
 [[package]]
 name = "ara-asset"
-version = "0.0.1-alpha"
+version = "0.0.2-alpha.3"
 dependencies = [
  "ara-asset-format",
  "ara-diag",
@@ -546,7 +546,7 @@ dependencies = [
 
 [[package]]
 name = "ara-asset-format"
-version = "0.0.1-alpha"
+version = "0.0.2-alpha.3"
 dependencies = [
  "bytemuck",
  "ktx2",
@@ -554,7 +554,7 @@ dependencies = [
 
 [[package]]
 name = "ara-audio"
-version = "0.0.1-alpha"
+version = "0.0.2-alpha.3"
 dependencies = [
  "ara-diag",
  "ara-json",
@@ -579,7 +579,7 @@ dependencies = [
 
 [[package]]
 name = "ara-audio-graph"
-version = "0.0.1-alpha"
+version = "0.0.2-alpha.3"
 dependencies = [
  "ara-audio",
  "ara-cmd",
@@ -597,7 +597,7 @@ dependencies = [
 
 [[package]]
 name = "ara-audio-mix"
-version = "0.0.1-alpha"
+version = "0.0.2-alpha.3"
 dependencies = [
  "ara-audio",
  "ara-cmd",
@@ -612,7 +612,7 @@ dependencies = [
 
 [[package]]
 name = "ara-audio-why"
-version = "0.0.1-alpha"
+version = "0.0.2-alpha.3"
 dependencies = [
  "ara-audio",
  "ara-diag",
@@ -622,7 +622,7 @@ dependencies = [
 
 [[package]]
 name = "ara-bench"
-version = "0.0.1-alpha"
+version = "0.0.2-alpha.3"
 dependencies = [
  "ara-components",
  "ara-doc",
@@ -642,7 +642,7 @@ dependencies = [
 
 [[package]]
 name = "ara-brand"
-version = "0.0.1-alpha"
+version = "0.0.2-alpha.3"
 dependencies = [
  "anyhow",
  "clap",
@@ -652,7 +652,7 @@ dependencies = [
 
 [[package]]
 name = "ara-bridge"
-version = "0.0.1-alpha"
+version = "0.0.2-alpha.3"
 dependencies = [
  "base64 0.22.1",
  "serde",
@@ -663,7 +663,7 @@ dependencies = [
 
 [[package]]
 name = "ara-cmd"
-version = "0.0.1-alpha"
+version = "0.0.2-alpha.3"
 dependencies = [
  "ara-components",
  "ara-diag",
@@ -679,7 +679,7 @@ dependencies = [
 
 [[package]]
 name = "ara-collab"
-version = "0.0.1-alpha"
+version = "0.0.2-alpha.3"
 dependencies = [
  "ara-components",
  "ara-diag",
@@ -698,7 +698,7 @@ dependencies = [
 
 [[package]]
 name = "ara-color"
-version = "0.0.1-alpha"
+version = "0.0.2-alpha.3"
 dependencies = [
  "ara-schema",
  "serde",
@@ -706,7 +706,7 @@ dependencies = [
 
 [[package]]
 name = "ara-components"
-version = "0.0.1-alpha"
+version = "0.0.2-alpha.3"
 dependencies = [
  "ara-schema",
  "bevy_ecs",
@@ -717,7 +717,7 @@ dependencies = [
 
 [[package]]
 name = "ara-crash"
-version = "0.0.1-alpha"
+version = "0.0.2-alpha.3"
 dependencies = [
  "anyhow",
  "ara-diag",
@@ -742,14 +742,14 @@ dependencies = [
 
 [[package]]
 name = "ara-crowd"
-version = "0.0.1-alpha"
+version = "0.0.2-alpha.3"
 dependencies = [
  "rayon",
 ]
 
 [[package]]
 name = "ara-dev"
-version = "0.0.1-alpha"
+version = "0.0.2-alpha.3"
 dependencies = [
  "anyhow",
  "clap",
@@ -765,7 +765,7 @@ dependencies = [
 
 [[package]]
 name = "ara-diag"
-version = "0.0.1-alpha"
+version = "0.0.2-alpha.3"
 dependencies = [
  "serde",
  "serde_json",
@@ -773,7 +773,7 @@ dependencies = [
 
 [[package]]
 name = "ara-doc"
-version = "0.0.1-alpha"
+version = "0.0.2-alpha.3"
 dependencies = [
  "ara-components",
  "ara-diag",
@@ -787,7 +787,7 @@ dependencies = [
 
 [[package]]
 name = "ara-editor"
-version = "0.0.1-alpha"
+version = "0.0.2-alpha.3"
 dependencies = [
  "accesskit 0.25.1",
  "accesskit_windows 0.35.1",
@@ -852,7 +852,7 @@ dependencies = [
 
 [[package]]
 name = "ara-editor-gpu"
-version = "0.0.1-alpha"
+version = "0.0.2-alpha.3"
 dependencies = [
  "anyhow",
  "ara-gpu",
@@ -870,7 +870,7 @@ dependencies = [
 
 [[package]]
 name = "ara-export"
-version = "0.0.1-alpha"
+version = "0.0.2-alpha.3"
 dependencies = [
  "anyhow",
  "ara-asset",
@@ -904,7 +904,7 @@ dependencies = [
 
 [[package]]
 name = "ara-export-installer"
-version = "0.0.1-alpha"
+version = "0.0.2-alpha.3"
 dependencies = [
  "anyhow",
  "blake3",
@@ -914,7 +914,7 @@ dependencies = [
 
 [[package]]
 name = "ara-export-player"
-version = "0.0.1-alpha"
+version = "0.0.2-alpha.3"
 dependencies = [
  "ara-bridge",
  "ara-crash",
@@ -929,7 +929,7 @@ dependencies = [
 
 [[package]]
 name = "ara-foliage"
-version = "0.0.1-alpha"
+version = "0.0.2-alpha.3"
 dependencies = [
  "ara-cmd",
  "ara-diag",
@@ -945,7 +945,7 @@ dependencies = [
 
 [[package]]
 name = "ara-geo"
-version = "0.0.1-alpha"
+version = "0.0.2-alpha.3"
 dependencies = [
  "anyhow",
  "ara-asset",
@@ -960,7 +960,7 @@ dependencies = [
 
 [[package]]
 name = "ara-gpu"
-version = "0.0.1-alpha"
+version = "0.0.2-alpha.3"
 dependencies = [
  "anyhow",
  "ara-diag",
@@ -986,7 +986,7 @@ dependencies = [
 
 [[package]]
 name = "ara-graph"
-version = "0.0.1-alpha"
+version = "0.0.2-alpha.3"
 dependencies = [
  "ara-cmd",
  "ara-diag",
@@ -1001,7 +1001,7 @@ dependencies = [
 
 [[package]]
 name = "ara-host"
-version = "0.0.1-alpha"
+version = "0.0.2-alpha.3"
 dependencies = [
  "ara-cmd",
  "ara-collab",
@@ -1026,7 +1026,7 @@ dependencies = [
 
 [[package]]
 name = "ara-hub"
-version = "0.0.1-alpha"
+version = "0.0.2-alpha.3"
 dependencies = [
  "anyhow",
  "ara-crash",
@@ -1053,7 +1053,7 @@ dependencies = [
 
 [[package]]
 name = "ara-hub-service"
-version = "0.0.1-alpha"
+version = "0.0.2-alpha.3"
 dependencies = [
  "ara-asset",
  "ara-diag",
@@ -1072,7 +1072,7 @@ dependencies = [
 
 [[package]]
 name = "ara-import-worker"
-version = "0.0.1-alpha"
+version = "0.0.2-alpha.3"
 dependencies = [
  "ara-acoustics",
  "ara-asset",
@@ -1093,7 +1093,7 @@ dependencies = [
 
 [[package]]
 name = "ara-import2d"
-version = "0.0.1-alpha"
+version = "0.0.2-alpha.3"
 dependencies = [
  "ara-2d",
  "ara-asset",
@@ -1105,7 +1105,7 @@ dependencies = [
 
 [[package]]
 name = "ara-importers"
-version = "0.0.1-alpha"
+version = "0.0.2-alpha.3"
 dependencies = [
  "ara-asset",
  "ara-asset-format",
@@ -1139,21 +1139,21 @@ dependencies = [
 
 [[package]]
 name = "ara-input"
-version = "0.0.1-alpha"
+version = "0.0.2-alpha.3"
 dependencies = [
  "serde",
 ]
 
 [[package]]
 name = "ara-jolt-sys"
-version = "0.0.1-alpha"
+version = "0.0.2-alpha.3"
 dependencies = [
  "cc",
 ]
 
 [[package]]
 name = "ara-json"
-version = "0.0.1-alpha"
+version = "0.0.2-alpha.3"
 dependencies = [
  "proptest",
  "ryu",
@@ -1163,7 +1163,7 @@ dependencies = [
 
 [[package]]
 name = "ara-l10n"
-version = "0.0.1-alpha"
+version = "0.0.2-alpha.3"
 dependencies = [
  "ara-cmd",
  "ara-diag",
@@ -1190,7 +1190,7 @@ dependencies = [
 
 [[package]]
 name = "ara-landscape"
-version = "0.0.1-alpha"
+version = "0.0.2-alpha.3"
 dependencies = [
  "anyhow",
  "ara-asset-format",
@@ -1215,7 +1215,7 @@ dependencies = [
 
 [[package]]
 name = "ara-material"
-version = "0.0.1-alpha"
+version = "0.0.2-alpha.3"
 dependencies = [
  "ara-cmd",
  "ara-diag",
@@ -1231,7 +1231,7 @@ dependencies = [
 
 [[package]]
 name = "ara-mcp"
-version = "0.0.1-alpha"
+version = "0.0.2-alpha.3"
 dependencies = [
  "ara-diag",
  "ara-host",
@@ -1242,7 +1242,7 @@ dependencies = [
 
 [[package]]
 name = "ara-merge"
-version = "0.0.1-alpha"
+version = "0.0.2-alpha.3"
 dependencies = [
  "ara-components",
  "ara-diag",
@@ -1256,7 +1256,7 @@ dependencies = [
 
 [[package]]
 name = "ara-meshopt-sys"
-version = "0.0.1-alpha"
+version = "0.0.2-alpha.3"
 dependencies = [
  "bytemuck",
  "cc",
@@ -1266,7 +1266,7 @@ dependencies = [
 
 [[package]]
 name = "ara-music"
-version = "0.0.1-alpha"
+version = "0.0.2-alpha.3"
 dependencies = [
  "ara-audio",
  "ara-cmd",
@@ -1281,7 +1281,7 @@ dependencies = [
 
 [[package]]
 name = "ara-nav"
-version = "0.0.1-alpha"
+version = "0.0.2-alpha.3"
 dependencies = [
  "ara-crowd",
  "ara-diag",
@@ -1299,14 +1299,14 @@ dependencies = [
 
 [[package]]
 name = "ara-nav-sys"
-version = "0.0.1-alpha"
+version = "0.0.2-alpha.3"
 dependencies = [
  "cc",
 ]
 
 [[package]]
 name = "ara-net"
-version = "0.0.1-alpha"
+version = "0.0.2-alpha.3"
 dependencies = [
  "ara-diag",
  "ara-doc",
@@ -1332,7 +1332,7 @@ dependencies = [
 
 [[package]]
 name = "ara-ops"
-version = "0.0.1-alpha"
+version = "0.0.2-alpha.3"
 dependencies = [
  "ara-components",
  "ara-diag",
@@ -1346,14 +1346,14 @@ dependencies = [
 
 [[package]]
 name = "ara-opus-sys"
-version = "0.0.1-alpha"
+version = "0.0.2-alpha.3"
 dependencies = [
  "cc",
 ]
 
 [[package]]
 name = "ara-pack"
-version = "0.0.1-alpha"
+version = "0.0.2-alpha.3"
 dependencies = [
  "ara-diag",
  "ara-json",
@@ -1370,7 +1370,7 @@ dependencies = [
 
 [[package]]
 name = "ara-pathtrace"
-version = "0.0.1-alpha"
+version = "0.0.2-alpha.3"
 dependencies = [
  "anyhow",
  "ara-gpu",
@@ -1386,7 +1386,7 @@ dependencies = [
 
 [[package]]
 name = "ara-perception"
-version = "0.0.1-alpha"
+version = "0.0.2-alpha.3"
 dependencies = [
  "ara-physics",
  "ara-schema",
@@ -1398,7 +1398,7 @@ dependencies = [
 
 [[package]]
 name = "ara-physics"
-version = "0.0.1-alpha"
+version = "0.0.2-alpha.3"
 dependencies = [
  "ara-diag",
  "ara-profile",
@@ -1410,7 +1410,7 @@ dependencies = [
 
 [[package]]
 name = "ara-physics-jolt"
-version = "0.0.1-alpha"
+version = "0.0.2-alpha.3"
 dependencies = [
  "ara-jolt-sys",
  "ara-json",
@@ -1424,7 +1424,7 @@ dependencies = [
 
 [[package]]
 name = "ara-physics2d"
-version = "0.0.1-alpha"
+version = "0.0.2-alpha.3"
 dependencies = [
  "anyhow",
  "ara-2d",
@@ -1444,7 +1444,7 @@ dependencies = [
 
 [[package]]
 name = "ara-platform"
-version = "0.0.1-alpha"
+version = "0.0.2-alpha.3"
 dependencies = [
  "anyhow",
  "ara-audio",
@@ -1457,7 +1457,7 @@ dependencies = [
 
 [[package]]
 name = "ara-play"
-version = "0.0.1-alpha"
+version = "0.0.2-alpha.3"
 dependencies = [
  "ara-components",
  "ara-doc",
@@ -1471,7 +1471,7 @@ dependencies = [
 
 [[package]]
 name = "ara-play-host"
-version = "0.0.1-alpha"
+version = "0.0.2-alpha.3"
 dependencies = [
  "ara-asset",
  "ara-diag",
@@ -1492,7 +1492,7 @@ dependencies = [
 
 [[package]]
 name = "ara-player"
-version = "0.0.1-alpha"
+version = "0.0.2-alpha.3"
 dependencies = [
  "anyhow",
  "ara-anim",
@@ -1542,7 +1542,7 @@ dependencies = [
 
 [[package]]
 name = "ara-profile"
-version = "0.0.1-alpha"
+version = "0.0.2-alpha.3"
 dependencies = [
  "ara-gpu",
  "ara-json",
@@ -1556,7 +1556,7 @@ dependencies = [
 
 [[package]]
 name = "ara-proto"
-version = "0.0.1-alpha"
+version = "0.0.2-alpha.3"
 dependencies = [
  "ara-diag",
  "serde",
@@ -1565,7 +1565,7 @@ dependencies = [
 
 [[package]]
 name = "ara-release"
-version = "0.0.1-alpha"
+version = "0.0.2-alpha.3"
 dependencies = [
  "anyhow",
  "ara-export-installer",
@@ -1585,7 +1585,7 @@ dependencies = [
 
 [[package]]
 name = "ara-render"
-version = "0.0.1-alpha"
+version = "0.0.2-alpha.3"
 dependencies = [
  "anyhow",
  "ara-gpu",
@@ -1605,7 +1605,7 @@ dependencies = [
 
 [[package]]
 name = "ara-render-fidelity"
-version = "0.0.1-alpha"
+version = "0.0.2-alpha.3"
 dependencies = [
  "anyhow",
  "ara-asset-format",
@@ -1624,7 +1624,7 @@ dependencies = [
 
 [[package]]
 name = "ara-render-geo"
-version = "0.0.1-alpha"
+version = "0.0.2-alpha.3"
 dependencies = [
  "anyhow",
  "ara-asset",
@@ -1649,7 +1649,7 @@ dependencies = [
 
 [[package]]
 name = "ara-render2d"
-version = "0.0.1-alpha"
+version = "0.0.2-alpha.3"
 dependencies = [
  "anyhow",
  "ara-2d",
@@ -1675,7 +1675,7 @@ dependencies = [
 
 [[package]]
 name = "ara-rpc"
-version = "0.0.1-alpha"
+version = "0.0.2-alpha.3"
 dependencies = [
  "ara-diag",
  "ara-proto",
@@ -1687,7 +1687,7 @@ dependencies = [
 
 [[package]]
 name = "ara-runtime"
-version = "0.0.1-alpha"
+version = "0.0.2-alpha.3"
 dependencies = [
  "ara-2d",
  "ara-acoustics",
@@ -1731,7 +1731,7 @@ dependencies = [
 
 [[package]]
 name = "ara-runtime-audio"
-version = "0.0.1-alpha"
+version = "0.0.2-alpha.3"
 dependencies = [
  "ara-acoustics",
  "ara-audio",
@@ -1752,7 +1752,7 @@ dependencies = [
 
 [[package]]
 name = "ara-runtime-net"
-version = "0.0.1-alpha"
+version = "0.0.2-alpha.3"
 dependencies = [
  "ara-components",
  "ara-doc",
@@ -1770,7 +1770,7 @@ dependencies = [
 
 [[package]]
 name = "ara-runtime-render"
-version = "0.0.1-alpha"
+version = "0.0.2-alpha.3"
 dependencies = [
  "anyhow",
  "ara-2d",
@@ -1807,7 +1807,7 @@ dependencies = [
 
 [[package]]
 name = "ara-runtime-script"
-version = "0.0.1-alpha"
+version = "0.0.2-alpha.3"
 dependencies = [
  "ara-anim",
  "ara-components",
@@ -1826,7 +1826,7 @@ dependencies = [
 
 [[package]]
 name = "ara-runtime-world"
-version = "0.0.1-alpha"
+version = "0.0.2-alpha.3"
 dependencies = [
  "ara-acoustics",
  "ara-ai",
@@ -1852,7 +1852,7 @@ dependencies = [
 
 [[package]]
 name = "ara-samples"
-version = "0.0.1-alpha"
+version = "0.0.2-alpha.3"
 dependencies = [
  "anyhow",
  "ara-anim",
@@ -1889,7 +1889,7 @@ dependencies = [
 
 [[package]]
 name = "ara-save"
-version = "0.0.1-alpha"
+version = "0.0.2-alpha.3"
 dependencies = [
  "ara-diag",
  "ara-doc",
@@ -1906,7 +1906,7 @@ dependencies = [
 
 [[package]]
 name = "ara-schema"
-version = "0.0.1-alpha"
+version = "0.0.2-alpha.3"
 dependencies = [
  "ara-diag",
  "ara-json",
@@ -1919,7 +1919,7 @@ dependencies = [
 
 [[package]]
 name = "ara-schema-derive"
-version = "0.0.1-alpha"
+version = "0.0.2-alpha.3"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1928,7 +1928,7 @@ dependencies = [
 
 [[package]]
 name = "ara-script"
-version = "0.0.1-alpha"
+version = "0.0.2-alpha.3"
 dependencies = [
  "ara-cmd",
  "ara-components",
@@ -1952,7 +1952,7 @@ dependencies = [
 
 [[package]]
 name = "ara-sdl3-src"
-version = "0.0.1-alpha"
+version = "0.0.2-alpha.3"
 dependencies = [
  "cc",
  "sdl3-sys",
@@ -1960,7 +1960,7 @@ dependencies = [
 
 [[package]]
 name = "ara-setup"
-version = "0.0.1-alpha"
+version = "0.0.2-alpha.3"
 dependencies = [
  "anyhow",
  "ara-export-installer",
@@ -1975,7 +1975,7 @@ dependencies = [
 
 [[package]]
 name = "ara-shader-cook"
-version = "0.0.1-alpha"
+version = "0.0.2-alpha.3"
 dependencies = [
  "anyhow",
  "ara-diag",
@@ -1988,7 +1988,7 @@ dependencies = [
 
 [[package]]
 name = "ara-sim"
-version = "0.0.1-alpha"
+version = "0.0.2-alpha.3"
 dependencies = [
  "ara-components",
  "ara-diag",
@@ -2011,7 +2011,7 @@ dependencies = [
 
 [[package]]
 name = "ara-terrain"
-version = "0.0.1-alpha"
+version = "0.0.2-alpha.3"
 dependencies = [
  "ara-cmd",
  "ara-diag",
@@ -2029,7 +2029,7 @@ dependencies = [
 
 [[package]]
 name = "ara-texture-gpu"
-version = "0.0.1-alpha"
+version = "0.0.2-alpha.3"
 dependencies = [
  "ara-asset",
  "ara-asset-format",
@@ -2048,7 +2048,7 @@ dependencies = [
 
 [[package]]
 name = "ara-texture-stream"
-version = "0.0.1-alpha"
+version = "0.0.2-alpha.3"
 dependencies = [
  "anyhow",
  "ara-asset-format",
@@ -2065,7 +2065,7 @@ dependencies = [
 
 [[package]]
 name = "ara-ui"
-version = "0.0.1-alpha"
+version = "0.0.2-alpha.3"
 dependencies = [
  "accesskit 0.25.1",
  "ara-json",
@@ -2079,7 +2079,7 @@ dependencies = [
 
 [[package]]
 name = "ara-ui-document"
-version = "0.0.1-alpha"
+version = "0.0.2-alpha.3"
 dependencies = [
  "roxmltree 0.21.1",
  "serde",
@@ -2087,7 +2087,7 @@ dependencies = [
 
 [[package]]
 name = "ara-ui-render"
-version = "0.0.1-alpha"
+version = "0.0.2-alpha.3"
 dependencies = [
  "ara-json",
  "ara-ui",
@@ -2100,7 +2100,7 @@ dependencies = [
 
 [[package]]
 name = "ara-ui-stories"
-version = "0.0.1-alpha"
+version = "0.0.2-alpha.3"
 dependencies = [
  "ara-doc",
  "ara-json",
@@ -2112,7 +2112,7 @@ dependencies = [
 
 [[package]]
 name = "ara-ui-test"
-version = "0.0.1-alpha"
+version = "0.0.2-alpha.3"
 dependencies = [
  "accesskit 0.25.1",
  "ara-doc",
@@ -2129,7 +2129,7 @@ dependencies = [
 
 [[package]]
 name = "ara-ui-text"
-version = "0.0.1-alpha"
+version = "0.0.2-alpha.3"
 dependencies = [
  "parley 0.12.0",
  "serde",
@@ -2138,7 +2138,7 @@ dependencies = [
 
 [[package]]
 name = "ara-update"
-version = "0.0.1-alpha"
+version = "0.0.2-alpha.3"
 dependencies = [
  "ara-diag",
  "ara-json",
@@ -2158,7 +2158,7 @@ dependencies = [
 
 [[package]]
 name = "ara-vfx"
-version = "0.0.1-alpha"
+version = "0.0.2-alpha.3"
 dependencies = [
  "ara-cmd",
  "ara-diag",
@@ -2177,7 +2177,7 @@ dependencies = [
 
 [[package]]
 name = "ara-vfx-gpu"
-version = "0.0.1-alpha"
+version = "0.0.2-alpha.3"
 dependencies = [
  "anyhow",
  "ara-gpu",
@@ -2197,7 +2197,7 @@ dependencies = [
 
 [[package]]
 name = "ara-vsm"
-version = "0.0.1-alpha"
+version = "0.0.2-alpha.3"
 dependencies = [
  "anyhow",
  "bytemuck",
@@ -2207,7 +2207,7 @@ dependencies = [
 
 [[package]]
 name = "ara-why"
-version = "0.0.1-alpha"
+version = "0.0.2-alpha.3"
 dependencies = [
  "ara-diag",
  "ara-material",
@@ -2217,7 +2217,7 @@ dependencies = [
 
 [[package]]
 name = "ara-world"
-version = "0.0.1-alpha"
+version = "0.0.2-alpha.3"
 dependencies = [
  "ara-asset",
  "ara-components",
@@ -2242,7 +2242,7 @@ dependencies = [
 
 [[package]]
 name = "arabench"
-version = "0.0.1-alpha"
+version = "0.0.2-alpha.3"
 dependencies = [
  "ara-collab",
  "ara-diag",
