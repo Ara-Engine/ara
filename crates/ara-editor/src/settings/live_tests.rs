@@ -1,3 +1,5 @@
+#![allow(clippy::unwrap_used)] // Tests assert each fixture operation at its call site.
+
 use crate::{Editor, shell::Shell};
 use ara_host::project_policy::{PREFERENCES, PREFERENCES_ID};
 use ara_proto::Endpoint;

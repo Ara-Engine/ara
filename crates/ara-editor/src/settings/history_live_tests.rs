@@ -1,3 +1,5 @@
+#![allow(clippy::unwrap_used)] // Tests assert each fixture operation at its call site.
+
 use super::{
     Settings,
     live_tests::{Project, agent, apply, ticks},
