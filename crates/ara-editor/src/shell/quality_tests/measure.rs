@@ -1,5 +1,14 @@
 use super::*;
 
+// Hover discovery starts on the shell's monotonic clock. A whole-editor sweep can
+// outlive a fixed synthetic timestamp, which correctly restarts HoverDelay.
+fn finish_hover_delay(shell: &mut Shell) {
+    let now = u64::try_from(shell.tooltip_clock.elapsed().as_millis())
+        .unwrap_or(u64::MAX)
+        .saturating_add(ara_ui::popover::SHOW_DELAY_MS + 1);
+    shell.advance_tooltip_at(now).unwrap();
+}
+
 #[derive(Default)]
 pub(super) struct Sweep {
     pub measurements: Vec<Value>,
@@ -98,9 +107,7 @@ impl Sweep {
                 self.not_hoverable.push(json!({"context":name,"id":id,"reason":"description shadowed by a child control"}));
                 continue;
             }
-            shell
-                .advance_tooltip_at(ara_ui::popover::SHOW_DELAY_MS + 10_000)
-                .unwrap();
+            finish_hover_delay(shell);
             shell.frame().unwrap();
             if shell.tooltip_text.is_none() {
                 self.violations.push(format!(
@@ -129,9 +136,7 @@ impl Sweep {
                     node.rect.y + node.rect.h * 0.5,
                 ];
                 shell.hover_tooltip().unwrap();
-                shell
-                    .advance_tooltip_at(ara_ui::popover::SHOW_DELAY_MS + 20_000)
-                    .unwrap();
+                finish_hover_delay(shell);
                 shell.frame().unwrap();
                 capture(shell, &format!("{name}-tooltip"));
             }
