@@ -195,7 +195,11 @@ pub fn repo() -> PathBuf {
 }
 
 /// Builds `dotnet/Ara.slnx` (Release): the JIT host, compile server and analyzers.
+/// Builds the .NET solution unless the gate already did (`ARA_DOTNET_PREBUILT`).
 pub fn build_dotnet() {
+    if std::env::var_os("ARA_DOTNET_PREBUILT").is_some() {
+        return;
+    }
     let out = std::process::Command::new("dotnet")
         .args(["build", "Ara.slnx", "-c", "Release", "--nologo", "-v", "q"])
         .current_dir(repo().join("dotnet"))

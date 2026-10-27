@@ -142,6 +142,8 @@ pub(crate) fn run(
             rule: rule(&tiers, &package.name, &target.name).cloned(),
         });
     }
+    let dotnet_prebuilt =
+        DOTNET_PACKAGES.iter().any(|p| selected.contains(*p)) && prebuild_dotnet(root, logs)?;
     let jobs = std::env::var("ARA_TEST_JOBS")
         .ok()
         .and_then(|s| s.parse::<usize>().ok())
@@ -183,7 +185,7 @@ pub(crate) fn run(
                 active.push((suite_id, suite.clone()));
                 scope.spawn(move || {
                     let started = Instant::now();
-                    let outcome = execute(root, &suite, &log, &peers, deadline);
+                    let outcome = execute(root, &suite, &log, &peers, deadline, dotnet_prebuilt);
                     let _ = tx.send((
                         suite_id,
                         suite,
@@ -275,12 +277,38 @@ pub(crate) fn run(
     Ok(execution)
 }
 
+/// Packages whose harnesses build the shared `dotnet/Ara.slnx`.
+const DOTNET_PACKAGES: [&str; 5] = [
+    "ara",
+    "ara-export",
+    "ara-player",
+    "ara-runtime-script",
+    "ara-script",
+];
+
+/// Builds `dotnet/Ara.slnx` once before any harness runs. Harnesses that each built it
+/// raced on MSBuild nodes and `artifacts/bin` when two ran at once (MSB4166 in gate b52).
+/// Returns whether harnesses may skip their own build (`ARA_DOTNET_PREBUILT`); a missing
+/// SDK or a failed build leaves them to build, and report, as before.
+fn prebuild_dotnet(root: &Path, logs: &Path) -> Result<bool> {
+    let log = File::create(logs.join("dotnet-prebuild.log"))?;
+    let status = Command::new("dotnet")
+        .args(["build", "Ara.slnx", "-c", "Release", "--nologo", "-v", "q"])
+        .current_dir(root.join("dotnet"))
+        .env("MSBUILDDISABLENODEREUSE", "1")
+        .stdout(Stdio::from(log.try_clone()?))
+        .stderr(Stdio::from(log))
+        .status();
+    Ok(status.is_ok_and(|s| s.success()))
+}
+
 fn execute(
     root: &Path,
     suite: &Suite,
     log: &Path,
     peers: &binaries::Binaries,
     deadline: Option<Instant>,
+    dotnet_prebuilt: bool,
 ) -> Result<process::Outcome> {
     let file = File::create(log)?;
     let mut command = Command::new(&suite.path);
@@ -333,6 +361,11 @@ fn execute(
         .stderr(Stdio::from(file));
     for (name, path) in peers {
         command.env(format!("CARGO_BIN_EXE_{name}"), path);
+    }
+    // Any dotnet a harness still runs must not share MSBuild nodes with another.
+    command.env("MSBUILDDISABLENODEREUSE", "1");
+    if dotnet_prebuilt {
+        command.env("ARA_DOTNET_PREBUILT", "1");
     }
     let timeout = std::env::var("ARA_TEST_TIMEOUT_SECONDS")
         .ok()

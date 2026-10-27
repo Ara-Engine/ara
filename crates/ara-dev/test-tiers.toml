@@ -22,6 +22,14 @@ memory_mib = 1024
 timeout_seconds = 180
 
 [[slow]]
+# NativeAOT publish builds the runtime projects; never alongside another .NET build.
+package = "ara-export"
+target = "shipping_scripts"
+group = "dotnet"
+memory_mib = 2048
+timeout_seconds = 300
+
+[[slow]]
 package = "ara-runtime-script"
 target = "*"
 group = "dotnet"
