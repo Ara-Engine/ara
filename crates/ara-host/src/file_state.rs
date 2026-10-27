@@ -3,7 +3,7 @@
 use ara_diag::{Diagnostic, codes};
 use ara_doc::{
     Op,
-    file_state::{FileKind, FileState, PreparedInventory, check_path, path_key},
+    file_state::{FileKind, FileState, PreparedInventory, check_path, path_key, same_path},
 };
 use sha2::{Digest, Sha256};
 use std::{
@@ -15,6 +15,29 @@ use std::{
 };
 
 static NEXT: AtomicU64 = AtomicU64::new(0);
+
+fn reject_link(path: &std::path::Path) -> Result<Option<fs::Metadata>, Diagnostic> {
+    let metadata = match fs::symlink_metadata(path) {
+        Ok(metadata) => metadata,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(error) => return Err(io(error)),
+    };
+    #[cfg(windows)]
+    let reparse = {
+        use std::os::windows::fs::MetadataExt;
+        const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x400;
+        metadata.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0
+    };
+    #[cfg(not(windows))]
+    let reparse = false;
+    if reparse || metadata.file_type().is_symlink() {
+        return Err(io(format!(
+            "file history refuses symbolic links and reparse points: `{}`",
+            path.display()
+        )));
+    }
+    Ok(Some(metadata))
+}
 
 fn io(error: impl std::fmt::Display) -> Diagnostic {
     Diagnostic::error(codes::IO, error.to_string())
@@ -67,7 +90,7 @@ impl FileHistory {
     /// Complete direct-child storage paths, excluding the protected engine/Git trees.
     pub fn directory_entries(&self, relative: &str) -> Result<Vec<String>, Diagnostic> {
         let directory = if relative.is_empty() {
-            self.root.clone()
+            self.checked_path("")?
         } else {
             self.path(relative)?
         };
@@ -78,7 +101,7 @@ impl FileHistory {
                 .file_name()
                 .into_string()
                 .map_err(|_| io("file names must be UTF-8"))?;
-            if name.eq_ignore_ascii_case(".ara") || name.eq_ignore_ascii_case(".git") {
+            if same_path(&name, ".ara") || same_path(&name, ".git") {
                 continue;
             }
             entries.push(if relative.is_empty() {
@@ -126,21 +149,51 @@ impl FileHistory {
 
     fn path(&self, relative: &str) -> Result<PathBuf, Diagnostic> {
         check_path(relative)?;
+        self.checked_path(relative)
+    }
+
+    // Used for protected snapshot paths too: a substituted .ara junction must not
+    // redirect the content store. Check again at each worker read/write boundary.
+    fn checked_path(&self, relative: &str) -> Result<PathBuf, Diagnostic> {
+        #[cfg(windows)]
+        for ancestor in self.root.ancestors().filter(|p| !p.as_os_str().is_empty()) {
+            reject_link(ancestor)?;
+        }
+        let root = reject_link(&self.root)?;
+        #[cfg(unix)]
+        let device = {
+            use std::os::unix::fs::MetadataExt;
+            root.as_ref().map(MetadataExt::dev)
+        };
+        #[cfg(not(unix))]
+        let _ = root;
         let mut path = self.root.clone();
-        for part in relative.split('/') {
+        for part in relative.split('/').filter(|p| !p.is_empty()) {
             path.push(part);
-            if fs::symlink_metadata(&path).is_ok_and(|m| m.file_type().is_symlink()) {
-                return Err(io(format!(
-                    "file history refuses symbolic link `{relative}`"
-                )));
+            let metadata = reject_link(&path)?;
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::MetadataExt;
+                if metadata
+                    .as_ref()
+                    .zip(device)
+                    .is_some_and(|(m, dev)| m.dev() != dev)
+                {
+                    return Err(
+                        io(format!("file history refuses mount crossing `{relative}`"))
+                            .file(relative),
+                    );
+                }
             }
+            #[cfg(not(unix))]
+            let _ = metadata;
         }
         Ok(path)
     }
 
     fn blob(&self, state: &FileState) -> Result<PathBuf, Diagnostic> {
         state.validate()?;
-        Ok(self.root.join(".ara/file-history").join(&state.hash))
+        self.checked_path(&format!(".ara/file-history/{}", state.hash))
     }
 
     /// Store exact bytes durably; equal bytes share one immutable token.
@@ -149,8 +202,9 @@ impl FileHistory {
     }
 
     fn put_reader(&self, mut input: impl Read) -> Result<FileState, Diagnostic> {
-        let dir = self.root.join(".ara/file-history");
+        let dir = self.checked_path(".ara/file-history")?;
         fs::create_dir_all(&dir).map_err(io)?;
+        self.checked_path(".ara/file-history")?;
         let temp = dir.join(format!(
             ".pending-{}-{}",
             std::process::id(),
@@ -276,6 +330,7 @@ impl FileHistory {
                 let mut input = fs::File::open(source).map_err(io)?;
                 let parent = path.parent().ok_or_else(|| io("file path has no parent"))?;
                 fs::create_dir_all(parent).map_err(io)?;
+                self.path(relative)?;
                 let temp = parent.join(format!(
                     ".ara-restore-{}-{}",
                     std::process::id(),
@@ -293,6 +348,7 @@ impl FileHistory {
                     }
                     output.sync_all().map_err(io)?;
                     drop(output);
+                    self.path(relative)?;
                     if path.is_dir() {
                         fs::remove_dir(&path).map_err(io)?;
                     }
@@ -318,6 +374,7 @@ impl FileHistory {
                 path, state, prev, ..
             } = op
             {
+                self.path(path)?;
                 let key = path_key(path);
                 let current = match staged.get(&key) {
                     Some(s) => s,

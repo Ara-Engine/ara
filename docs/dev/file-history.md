@@ -43,7 +43,20 @@ File undo/redo preparation uses the same snapshots and runs as a standard job.
 directory-child listings, and an opaque `metadata` JSON value. `ReadCtx::prepared_files`
 and `prepared_metadata` expose this immutable handle; `EditCtx::prepared_metadata`
 exposes the same owner slot. A command cannot `set_file` outside the checked inventory.
-Windows aliases share state/conflict keys, while ops retain the requested path casing.
+Filesystem aliases share state/conflict keys, while ops retain the requested spelling.
+Every adapter must use `ara_doc::file_state::{same_path, path_key}` rather than its
+own case conversion. Windows conservatively combines Unicode simple uppercase and
+simple case folding, without locale, expansions or normalization. This includes
+ordinal aliases such as dotless i/I and sigma/final sigma; ASCII keys remain compatible
+with existing history. macOS conservatively uses Unicode 9 full case folding and canonical
+decomposition for APFS aliases (also on case-sensitive volumes). Other Unix platforms
+preserve case. Contradictory alias states and duplicate directory aliases are refused.
+
+Every observation, snapshot and restore rechecks the path, including the target.
+Windows refuses all `FILE_ATTRIBUTE_REPARSE_POINT` entries, including junctions;
+Unix refuses symlinks and device changes below the project root. The protected
+snapshot-store path is checked too. Unsafe paths return ARA1003 (I/O); the file
+worker checks again after parent creation and before publishing restored bytes.
 
 `FileHistory::prepare_tree` builds a complete subtree on a worker. Before authority
 commit, call `revalidate` for byte/existence/directory checks, or `revalidate_with`

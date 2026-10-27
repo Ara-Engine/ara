@@ -2,7 +2,9 @@
 use ara_diag::{Diagnostic, codes};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
+
+mod case;
 
 /// Worker-prepared facts for a file-bearing command batch. The authority revalidates
 /// these facts before commit. The opaque metadata belongs to the preparing subsystem.
@@ -21,23 +23,42 @@ pub struct PreparedInventory {
 impl PreparedInventory {
     /// Validate the pure shape before publishing an inventory to commands.
     pub fn validate(&self) -> Result<(), Diagnostic> {
+        let mut aliases = BTreeMap::new();
         for (path, state) in &self.entries {
             check_path(path)?;
             if let Some(state) = state {
                 state.validate()?;
+            }
+            if aliases
+                .insert(path_key(path), state)
+                .is_some_and(|previous| previous != state)
+            {
+                return Err(Diagnostic::error(
+                    codes::INVALID_PARAMS,
+                    "filesystem aliases must have the same prepared state",
+                )
+                .file(path));
             }
         }
         for (directory, children) in &self.directories {
             if !directory.is_empty() {
                 check_path(directory)?;
             }
+            let mut aliases = BTreeSet::new();
             for child in children {
                 check_path(child)?;
-                if child.rsplit_once('/').map_or("", |(p, _)| p) != directory {
+                if !same_path(child.rsplit_once('/').map_or("", |(p, _)| p), directory) {
                     return Err(Diagnostic::error(
                         codes::INVALID_PARAMS,
                         "directory inventory must contain direct children only",
                     ));
+                }
+                if !aliases.insert(path_key(child)) {
+                    return Err(Diagnostic::error(
+                        codes::INVALID_PARAMS,
+                        "directory inventory contains filesystem aliases",
+                    )
+                    .file(child));
                 }
             }
             if children.windows(2).any(|pair| pair[0] >= pair[1]) {
@@ -52,27 +73,18 @@ impl PreparedInventory {
 
     /// Whether an initial state (including absence) was prepared for this path.
     pub fn contains(&self, path: &str) -> bool {
-        self.entries.contains_key(path)
-            || (cfg!(windows) && self.entries.keys().any(|p| same_path(p, path)))
+        self.entries.contains_key(path) || self.entries.keys().any(|p| same_path(p, path))
     }
 }
 
 /// Storage-path equality used by file state transitions on this platform.
 pub fn same_path(a: &str, b: &str) -> bool {
-    if cfg!(windows) {
-        a.eq_ignore_ascii_case(b)
-    } else {
-        a == b
-    }
+    a == b || path_key(a) == path_key(b)
 }
 
 /// Stable conflict/preflight key; op paths retain their original casing.
 pub fn path_key(path: &str) -> String {
-    if cfg!(windows) {
-        path.to_ascii_lowercase()
-    } else {
-        path.to_owned()
-    }
+    case::key(path)
 }
 
 /// The kind of a filesystem entry; directories retain empty folders and path casing.
@@ -146,7 +158,7 @@ pub fn check_path(path: &str) -> Result<(), Diagnostic> {
         || path
             .split('/')
             .next()
-            .is_some_and(|p| p.eq_ignore_ascii_case(".ara") || p.eq_ignore_ascii_case(".git"))
+            .is_some_and(|p| same_path(p, ".ara") || same_path(p, ".git"))
     {
         return Err(Diagnostic::error(
             codes::INVALID_PARAMS,

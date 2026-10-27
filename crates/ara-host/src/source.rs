@@ -92,7 +92,8 @@ impl State {
                     let mut staged = BTreeMap::new();
                     for source in sources {
                         let state = store.snapshot(&source.path).map_err(|d| vec![d])?;
-                        let current = staged.get(&source.path).unwrap_or(&state);
+                        let key = ara_doc::file_state::path_key(&source.path);
+                        let current = staged.get(&key).unwrap_or(&state);
                         if current.as_ref().is_none_or(|s| s.hash != source.base_hash) {
                             return Err(vec![
                                 Diagnostic::error(
@@ -103,7 +104,7 @@ impl State {
                             ]);
                         }
                         let next = store.put(source.text.as_bytes()).map_err(|d| vec![d])?;
-                        staged.insert(source.path.clone(), Some(next));
+                        staged.insert(key, Some(next));
                         inventory.entries.entry(source.path).or_insert(state);
                     }
                     store.preflight_ops(&inverse).map_err(|d| vec![d])?;

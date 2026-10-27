@@ -95,13 +95,9 @@ impl Workspace {
                 }
                 if self.doc(doc.as_str()).is_some()
                     || self.index.path_of(doc.as_str()).is_some()
-                    || self.docs().any(|(p, _)| {
-                        if cfg!(windows) {
-                            p.eq_ignore_ascii_case(&path)
-                        } else {
-                            p == path
-                        }
-                    })
+                    || self
+                        .docs()
+                        .any(|(p, _)| crate::file_state::same_path(p, &path))
                     || self.index.id_of(&path).is_some()
                 {
                     return Err(Diagnostic::error(
