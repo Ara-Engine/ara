@@ -359,7 +359,9 @@ fn copy_project(from: &Path, to: &Path) -> Result<()> {
     Ok(())
 }
 
-fn copy_tree(from: &Path, to: &Path) -> Result<()> {
+/// Recursively copies `from` into `to` (created if missing). Also seeds the
+/// preview checkout's sample cache.
+pub(crate) fn copy_tree(from: &Path, to: &Path) -> Result<()> {
     fs::create_dir_all(to)?;
     for entry in fs::read_dir(from)? {
         let entry = entry?;

@@ -254,6 +254,20 @@ fn prepare<R: Runner>(
             .join(tool.file_name().context("tool filename")?),
         &tool,
     )?;
+    // Sample content is fetched, not tracked (samples/.gitignore), and packaging
+    // builds the sample kits from it. Seed the clone from the caller's blob cache so
+    // fetch stays offline when it can, then fetch and verify against assets.lock.json.
+    let blobs = root.join("samples/.cache/blobs");
+    if blobs.is_dir() {
+        crate::d26::copy_tree(&blobs, &context.source.join("samples/.cache/blobs"))?;
+    }
+    for step in ["fetch", "verify"] {
+        context.command(
+            &format!("samples-{step}"),
+            Command::new("cargo").args(["run", "--release", "-p", "ara-samples", "--", step]),
+            false,
+        )?;
+    }
     let artifacts = context.source.join("target/release-dist");
     let mut prepared = Prepared {
         format: "ara.preview/1".into(),

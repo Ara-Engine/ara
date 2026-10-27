@@ -139,15 +139,17 @@ fn default_prepares_signed_artifacts_and_preserves_callers_workspace_and_refs() 
         [
             "lockfile",
             "release-tool",
+            "samples-fetch",
+            "samples-verify",
             "package",
             "smoke",
             "sign-hub",
             "sign-engine"
         ]
     );
-    assert!(calls[3].2);
+    assert!(calls[5].2);
     assert!(
-        calls[4..]
+        calls[6..]
             .iter()
             .all(|c| c.1.iter().any(|arg| arg == "--dry-run"))
     );
