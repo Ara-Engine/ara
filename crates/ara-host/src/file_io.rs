@@ -99,6 +99,8 @@ enum Request {
 /// What the thread reports; the host applies it on its own thread.
 #[derive(Debug)]
 pub(crate) enum Reply {
+    /// Committed file transitions finished on the file worker.
+    Materialized(Result<(), Diagnostic>),
     /// A watched file's contents changed on disk (possibly back to what the host
     /// last wrote: compare before merging).
     Changed { path: String, text: String },
@@ -222,6 +224,10 @@ impl FileThread {
 
     /// Queue a journal entry; a failure comes back as `JournalFailed`.
     pub(crate) fn append(&mut self, entry: Entry) {
+        if matches!(&entry, Entry::Txn { txn, .. } if txn.ops.iter().any(|op| matches!(op, ara_doc::Op::File { .. })))
+        {
+            self.pending += 1;
+        }
         self.journal_len += 1;
         if let Some(since) = &mut self.compacting {
             *since += 1;
@@ -301,7 +307,7 @@ impl FileThread {
     }
     fn count(&mut self, reply: Reply) -> Reply {
         match &reply {
-            Reply::Saved { .. } | Reply::Removed { .. } => {
+            Reply::Saved { .. } | Reply::Removed { .. } | Reply::Materialized(_) => {
                 self.pending = self.pending.saturating_sub(1);
             }
             Reply::Compacted { entries, .. } => {
@@ -380,11 +386,20 @@ impl Worker {
     fn handle(&mut self, request: Request) {
         match request {
             Request::Append(entry) => {
-                if let Err(e) = self.journal.append(&entry) {
-                    self.reply(Reply::JournalFailed(Diagnostic::error(
-                        codes::IO,
-                        format!("cannot append to `.ara/journal`: {e}"),
-                    )));
+                let result = self.journal.append(&entry).map_err(|e| {
+                    Diagnostic::error(codes::IO, format!("cannot append to `.ara/journal`: {e}"))
+                });
+                if let Entry::Txn { txn, .. } = &entry
+                    && txn
+                        .ops
+                        .iter()
+                        .any(|op| matches!(op, ara_doc::Op::File { .. }))
+                {
+                    self.reply(Reply::Materialized(result.and_then(|()| {
+                        crate::file_state::FileHistory::new(&self.root).materialize(&txn.ops)
+                    })));
+                } else if let Err(d) = result {
+                    self.reply(Reply::JournalFailed(d));
                 }
             }
             Request::Compact => {

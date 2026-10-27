@@ -48,6 +48,37 @@ fn json_of(text: &str) -> Value {
 }
 
 #[test]
+fn offline_file_preparation_finishes_before_the_cli_exits_including_undo_and_redo() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../target/authoring-tests")
+        .join(format!("cli-source-{}", std::process::id()));
+    let _ = fs::remove_dir_all(&root);
+    fs::create_dir_all(&root).expect("scratch");
+    assert_eq!(ara_in(&root, &["init"]).0, 0);
+    fs::create_dir_all(root.join("scripts/Game")).expect("scripts");
+    fs::write(root.join("scripts/Game/Door.cs"), "before\n").expect("source");
+    let args = r#"{"path":"scripts/Game/Door.cs","baseHash":"9160d4be34c8695bd172a76c7c7966587ea5a4d991ad22c87b2b91af54aa9ebb","text":"after\n"}"#;
+    let (code, stdout, stderr) = ara_in(&root, &["do", "source.replace", "--args", args, "--json"]);
+    assert_eq!(code, 0, "{stdout}{stderr}");
+    assert!(
+        json_of(&stdout)["txn"].is_string(),
+        "CLI must return the final transaction: {stdout}"
+    );
+    assert_eq!(
+        fs::read_to_string(root.join("scripts/Game/Door.cs")).expect("replaced"),
+        "after\n"
+    );
+    for (command, text) in [("undo", "before\n"), ("redo", "after\n")] {
+        let (code, stdout, stderr) = ara_in(&root, &[command, "--json"]);
+        assert_eq!(code, 0, "{stdout}{stderr}");
+        assert_eq!(
+            fs::read_to_string(root.join("scripts/Game/Door.cs")).expect("file"),
+            text
+        );
+    }
+}
+
+#[test]
 fn authoring_creates_documents_sets_main_and_configures_sidecars_across_runs() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../target/authoring-tests")

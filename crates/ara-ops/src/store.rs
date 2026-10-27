@@ -107,6 +107,12 @@ impl Store {
         &self.ws
     }
 
+    /// Publish a worker's observed file state before typed commands or history preflight.
+    /// This changes no files and records no transaction.
+    pub fn observe_file(&mut self, path: String, state: Option<ara_doc::file_state::FileState>) {
+        self.ws.observe_file(path, state);
+    }
+
     /// Loads a document that appeared on disk (or replaces one by ID). This is not an
     /// edit: no op is recorded. Record changes always go through transactions.
     pub fn load_doc(&mut self, path: impl Into<String>, doc: Document) {
@@ -261,7 +267,9 @@ impl Store {
         txn: Transaction,
         documents: &BTreeSet<AssetId>,
     ) -> Result<(), Vec<Diagnostic>> {
-        self.restore_selected(txn, |op| documents.contains(op.doc()))
+        self.restore_selected(txn, |op| {
+            !matches!(op, Op::File { .. }) && documents.contains(op.doc())
+        })
     }
 
     fn restore_selected(

@@ -109,6 +109,7 @@ pub(crate) struct State {
     /// Collaboration: participants, presence, claims, branch sessions (D21).
     pub(crate) collab: crate::collab::Collab,
     pub(crate) jobs: Jobs,
+    pub(crate) file_jobs: crate::source::FileJobs,
     pub(crate) gestures: crate::gesture::Gestures,
     pub(crate) subs: BTreeMap<ConnId, BTreeSet<Topic>>,
     pub(crate) outbox: Vec<(ConnId, Value)>,
@@ -279,6 +280,7 @@ impl Host {
             diag_file,
             collab: crate::collab::Collab::new(state_dir.clone()),
             jobs: Jobs::default(),
+            file_jobs: crate::source::FileJobs::default(),
             gestures: crate::gesture::Gestures::default(),
             subs: BTreeMap::new(),
             outbox: Vec::new(),
@@ -488,6 +490,7 @@ impl Host {
             self.st.persist_diag(false);
             self.st.release_gestures();
             self.st.watch();
+            self.st.poll_file_jobs();
             self.st.drain();
             self.st.flush(false);
             for service in &mut self.services {
@@ -567,6 +570,9 @@ impl Drop for Host {
 }
 
 impl Endpoint for Host {
+    fn tick(&mut self) {
+        Host::tick(self);
+    }
     fn call(&mut self, method: &str, params: Value) -> Result<Value, RpcError> {
         Host::call(self, ConnId::LOCAL, method, params)
     }
@@ -811,6 +817,7 @@ impl State {
     /// Rebuilds history, sessions and review from the journal, re-applying
     /// transactions newer than each document's file.
     fn recover(&mut self, entries: &[Entry]) {
+        self.recover_file_states(entries);
         let mut base = 0;
         let mut flushes: BTreeMap<&str, Vec<(u64, &str)>> = BTreeMap::new();
         for e in entries {

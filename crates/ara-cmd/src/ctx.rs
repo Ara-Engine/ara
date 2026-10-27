@@ -95,6 +95,15 @@ pub struct ReadCtx<'a> {
 }
 
 impl<'a> ReadCtx<'a> {
+    /// Host-prepared filesystem entries in path order; no filesystem access occurs here.
+    pub fn file_entries(&self) -> impl Iterator<Item = (&str, &ara_doc::file_state::FileState)> {
+        self.store.workspace().file_entries()
+    }
+
+    /// Host-prepared or staged state at a canonical relative path.
+    pub fn file_state(&self, path: &str) -> Option<&ara_doc::file_state::FileState> {
+        self.store.workspace().file_state(path)
+    }
     pub(crate) fn new(
         store: &'a Store,
         doc: &AssetId,
@@ -339,6 +348,32 @@ pub struct EditCtx<'a, 's> {
 }
 
 impl EditCtx<'_, '_> {
+    /// Prepared filesystem entries, including directories, in path order.
+    pub fn file_entries(&self) -> impl Iterator<Item = (&str, &ara_doc::file_state::FileState)> {
+        self.staged.store().workspace().file_entries()
+    }
+
+    /// Prepared or staged filesystem state, with absence represented by None.
+    pub fn file_state(&self, path: &str) -> Option<&ara_doc::file_state::FileState> {
+        self.staged.store().workspace().file_state(path)
+    }
+
+    /// Emit a reversible file transition. The host prepares bytes before the batch
+    /// and materializes committed ops through its file thread.
+    pub fn set_file(
+        &mut self,
+        path: &str,
+        state: Option<ara_doc::file_state::FileState>,
+    ) -> Result<(), Diagnostic> {
+        let base = self.file_state(path).cloned();
+        self.staged.apply(Edit::File {
+            doc: self.doc.clone(),
+            path: path.to_owned(),
+            base,
+            state,
+        })?;
+        Ok(())
+    }
     /// Creates a registered format's skeleton, falling back to an empty JSON document.
     pub fn create_from_template(
         &mut self,

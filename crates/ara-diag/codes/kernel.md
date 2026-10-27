@@ -544,6 +544,8 @@ owner: ara-ops
 
 The transaction cannot commit against its stated revision. A later transaction touched an overlapping path, or the supplied base revision is ahead of the store. Journal restoration also rejects a transaction whose result revision is not newer than the store. A rejected transaction leaves no committed changes.
 
+File transitions and `source.replace` also use this code when the current file snapshot differs from the expected base hash. Re-analyze the source or refresh the asset inventory before retrying; undo refuses to overwrite external bytes.
+
 Causes:
 - A client edited a field using a revision from before another edit to that field or record.
 - A revision from another store was reused, or journal transactions arrived out of order.

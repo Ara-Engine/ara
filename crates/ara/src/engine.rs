@@ -71,7 +71,47 @@ impl Engine {
         if let Some(o) = params.as_object_mut() {
             o.insert("session".into(), self.session.clone().into());
         }
-        self.ep.call(method, params)
+        let mut result = self.ep.call(method, params)?;
+        let deadline = Instant::now() + Duration::from_secs(120);
+        while result["preparing"] == true {
+            let Some(job) = result["job"].as_str().map(str::to_owned) else {
+                break;
+            };
+            loop {
+                self.ep.tick();
+                let status = self
+                    .ep
+                    .call("jobs.status", json!({"session":self.session,"job":job}))?;
+                match status["status"].as_str() {
+                    Some("done") => {
+                        result = status["result"].clone();
+                        break;
+                    }
+                    Some("failed" | "cancelled") => {
+                        let diagnostics = serde_json::from_value::<Vec<Diagnostic>>(
+                            status["diagnostics"].clone(),
+                        )
+                        .ok()
+                        .filter(|d| !d.is_empty())
+                        .unwrap_or_else(|| {
+                            vec![Diagnostic::error(
+                                codes::IO,
+                                format!("preparation job `{job}` was cancelled"),
+                            )]
+                        });
+                        return Err(RpcError::from_diagnostics(diagnostics));
+                    }
+                    _ if Instant::now() >= deadline => {
+                        return Err(RpcError::from_diagnostics(vec![Diagnostic::error(
+                            codes::IO,
+                            format!("timed out waiting for preparation job `{job}`"),
+                        )]));
+                    }
+                    _ => thread::sleep(Duration::from_millis(5)),
+                }
+            }
+        }
+        Ok(result)
     }
 }
 

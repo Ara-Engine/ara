@@ -170,6 +170,18 @@ pub(super) fn diff(st: &mut State, sid: &str, p: SessionDiffParams) -> R {
             let key = (op.doc().to_string(), op.id().to_string());
             let c = changes.entry(key.clone()).or_default();
             match op {
+                Op::File {
+                    path, state, prev, ..
+                } => {
+                    c.created = prev.is_none();
+                    c.deleted = state.is_none();
+                    note(
+                        &mut c.fields,
+                        format!("file:{path}"),
+                        serde_json::to_value(prev).ok(),
+                        serde_json::to_value(state).ok(),
+                    );
+                }
                 Op::Document { kind, prev, .. } => {
                     c.created = kind.is_some();
                     c.deleted = kind.is_none();

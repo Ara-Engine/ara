@@ -116,7 +116,7 @@ CLI/daemon register `run`/`capture`/`play`/`test` through ara-play-host; bare Ho
   `review`, `base` lines. On open, each file's revision is its newest flush entry
   with a matching hash; newer transactions are re-applied. Compaction (past 4096
   entries, nothing unsaved or being written) keeps the newest 1024 transactions.
-- File I/O runs on the file thread (`file_io.rs`) in request order, never on the host
+- File I/O runs on the file thread (`file_io.rs`) in request order; source/asset snapshot API: [`file-history.md`](../../docs/dev/file-history.md).
   thread: journal lines and compaction, `diagnostics.jsonl`, writes after `debounce`
   (temp + rename; `flush` journaled when it lands), removals, `notify` events (30 s
   rescan); `flush()` waits for it all. `watch_every` zero checks per tick (tests). An

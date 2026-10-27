@@ -17,6 +17,7 @@ use crate::{AssetId, Edit, Op, RecordId};
 pub struct Workspace {
     docs: BTreeMap<AssetId, (String, Document)>,
     index: AssetIndex,
+    files: BTreeMap<String, crate::file_state::FileState>,
     /// Bumped whenever a document is loaded, replaced or unloaded (see
     /// [`Workspace::generation`]).
     generation: u64,
@@ -25,7 +26,7 @@ pub struct Workspace {
 impl Workspace {
     /// Reverse a staged op during rollback or optimistic rebase.
     pub fn revert(&mut self, op: &Op, db: &SchemaDb) {
-        if matches!(op, Op::Document { .. }) {
+        if matches!(op, Op::Document { .. } | Op::File { .. }) {
             self.apply(op.inverse().to_edit(), db)
                 .expect("staged lifecycle inverse applies");
         } else if let Some(doc) = self.doc_mut(op.doc().as_str()) {
@@ -34,6 +35,30 @@ impl Workspace {
     }
     /// Apply an edit, including an empty document's lifecycle, inside a transaction.
     pub fn apply(&mut self, edit: Edit, db: &SchemaDb) -> Result<Op, Diagnostic> {
+        if let Edit::File {
+            doc,
+            path,
+            base,
+            state,
+        } = edit
+        {
+            crate::file_state::check_path(&path)?;
+            for token in base.iter().chain(state.iter()) {
+                token.validate()?;
+            }
+            let prev = self.files.get(&path).cloned();
+            if prev != base {
+                return Err(Diagnostic::error(codes::STALE_BASE, format!("file `{path}` changed since its base snapshot; read it again before applying")).file(&path));
+            }
+            self.observe_file(path.clone(), state.clone());
+            return Ok(Op::File {
+                doc,
+                id: crate::file_state::record_id(&path),
+                path,
+                state,
+                prev,
+            });
+        }
         if let Edit::Document { doc, path, kind } = edit {
             let relative = std::path::Path::new(&path);
             if path.is_empty()
@@ -133,8 +158,28 @@ impl Workspace {
         Workspace {
             docs: BTreeMap::new(),
             index,
+            files: BTreeMap::new(),
             generation: 0,
         }
+    }
+
+    /// Observed filesystem state supplied by the host, never a disk write.
+    pub fn observe_file(&mut self, path: String, state: Option<crate::file_state::FileState>) {
+        if let Some(state) = state {
+            self.files.insert(path, state);
+        } else {
+            self.files.remove(&path);
+        }
+    }
+
+    /// Last host-observed or staged state of an entry.
+    pub fn file_state(&self, path: &str) -> Option<&crate::file_state::FileState> {
+        self.files.get(path)
+    }
+
+    /// Prepared entries, including empty directories, in canonical path order.
+    pub fn file_entries(&self) -> impl Iterator<Item = (&str, &crate::file_state::FileState)> {
+        self.files.iter().map(|(p, s)| (p.as_str(), s))
     }
 
     /// Adds or replaces a document at `path` and indexes it.

@@ -71,6 +71,90 @@ fn begin(h: &mut Host, author: &str) -> String {
 }
 
 #[test]
+fn source_replace_has_offline_undo_redo_and_rejects_external_changes() {
+    fn complete(h: &mut Host, method: &str, params: Value) -> Result<Value, Vec<Diagnostic>> {
+        let session = params["session"].clone();
+        let result = h
+            .call(ConnId::LOCAL, method, params)
+            .map_err(|e| e.diagnostics())?;
+        let Some(job) = result["job"].as_str() else {
+            return Ok(result);
+        };
+        let deadline = std::time::Instant::now() + Duration::from_secs(10);
+        loop {
+            h.tick();
+            let status = call(h, "jobs.status", json!({"session":session,"job":job}));
+            if status["status"] == "done" {
+                return Ok(status["result"].clone());
+            }
+            if status["status"] == "failed" {
+                return Err(
+                    serde_json::from_value(status["diagnostics"].clone()).expect("diagnostics")
+                );
+            }
+            assert!(
+                std::time::Instant::now() < deadline,
+                "source job timed out: {status}"
+            );
+            std::thread::yield_now();
+        }
+    }
+    let dir = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../target/authoring-tests")
+        .join(format!("source-replace-{}", std::process::id()));
+    let _ = fs::remove_dir_all(&dir);
+    copy_dir(&fixtures(), &dir);
+    fs::create_dir_all(dir.join("scripts/Game")).expect("module directory");
+    let path = "scripts/Game/Door.cs";
+    fs::write(dir.join(path), "before\n").expect("source");
+    let mut h = open(&dir, 2041);
+    let session = begin(&mut h, "agent:fixer");
+    let base = "9160d4be34c8695bd172a76c7c7966587ea5a4d991ad22c87b2b91af54aa9ebb";
+    let request = json!({"session":session,"why":"Fix the script","commands":[
+        {"cmd":"source.replace","args":{"path":path,"baseHash":base,"text":"after\n"}}
+    ]});
+    let result = complete(&mut h, "cmd.apply", request).expect("source applied");
+    assert!(result["txn"].is_string(), "{result}");
+    h.flush();
+    assert_eq!(
+        fs::read_to_string(dir.join(path)).expect("replaced"),
+        "after\n"
+    );
+    drop(h);
+    // A crash after the journal entry but before the byte write leaves this state.
+    fs::write(dir.join(path), "before\n").expect("simulate interrupted materialization");
+    let mut h = open(&dir, 2042);
+    assert_eq!(
+        fs::read_to_string(dir.join(path)).expect("recovered bytes"),
+        "after\n"
+    );
+    let session = begin(&mut h, "agent:fixer");
+    complete(&mut h, "history.undo", json!({"session":session})).expect("undo");
+    h.flush();
+    assert_eq!(
+        fs::read_to_string(dir.join(path)).expect("undone"),
+        "before\n"
+    );
+    drop(h);
+    let mut h = open(&dir, 2043);
+    let session = begin(&mut h, "agent:fixer");
+    complete(&mut h, "history.redo", json!({"session":session})).expect("redo");
+    h.flush();
+    assert_eq!(
+        fs::read_to_string(dir.join(path)).expect("redone"),
+        "after\n"
+    );
+    fs::write(dir.join(path), "external\n").expect("external editor");
+    let errors =
+        complete(&mut h, "history.undo", json!({"session":session})).expect_err("stale file");
+    assert_eq!(errors[0].code, codes::STALE_BASE);
+    assert_eq!(
+        fs::read_to_string(dir.join(path)).expect("preserved"),
+        "external\n"
+    );
+}
+
+#[test]
 fn native_ui_creation_and_source_ops_preserve_xml_across_restart_and_undo() {
     let dir = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../target/authoring-tests")

@@ -158,6 +158,16 @@ pub struct Cx<'a> {
 }
 
 impl Cx<'_> {
+    /// Publish a worker's prepared file inventory before applying typed source/asset
+    /// commands. Tokens contain no mutable bytes and this never writes to disk.
+    pub fn observe_files(
+        &mut self,
+        entries: impl IntoIterator<Item = (String, Option<ara_doc::file_state::FileState>)>,
+    ) {
+        for (path, state) in entries {
+            self.st.store.observe_file(path, state);
+        }
+    }
     /// Complete background work under its initiating live session, retaining author
     /// attribution and permissions rather than borrowing the editor's human session.
     pub fn resume_session<R>(

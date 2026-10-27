@@ -285,7 +285,7 @@ pub struct InspectParams {
 }
 
 /// One call in an `ara_apply` / `cmd.apply` batch.
-#[derive(Debug, Clone, Schema, Deserialize)]
+#[derive(Debug, Clone, Schema, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct CallSpec {
     /// Command name (`entity.create`); find them with `schema.search`.
@@ -303,7 +303,7 @@ pub struct CallSpec {
 }
 
 /// Params of `cmd.apply`.
-#[derive(Debug, Schema, Deserialize)]
+#[derive(Debug, Schema, Deserialize, Serialize)]
 #[ara(params)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ApplyParams {
