@@ -169,9 +169,11 @@ void aoBitmaskMain(uint3 tid:SV_DispatchThreadID){
                 if(count>most){most=count;source=at;towards=delta;span=len;}
             }
             if(bounce&&sideBits>0){
-                // Half-resolution colour (the finest level: least background mixed in), as
-                // much as a diffuse surface of the occluder's albedo sends; metals send none.
-                bool found;float3 radiance=min(aoRadiance(f,l,P+towards,1,found),gbufferAlbedo(f,source).rgb*cap)*(1-gbufferMaterial(f,source).y);
+                // Half-resolution colour (the finest level: least background mixed in), at
+                // most what a diffuse surface of the occluder's albedo sends. Metals keep
+                // their (capped) colour: a sphere's reflected floor and sky do light its
+                // contact shadow, as in the path-traced reference.
+                bool found;float3 radiance=min(aoRadiance(f,l,P+towards,1,found),gbufferAlbedo(f,source).rgb*cap);
                 // A diffuse sample sends its (view-independent) radiance where its front (the
                 // side the camera sees) faces the pixel.
                 float3 front=gbufferNormal(f,source);if(dot(front,f.camera.xyz-P-towards)<0)front=-front;
