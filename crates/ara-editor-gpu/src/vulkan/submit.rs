@@ -63,6 +63,12 @@ impl NativeUi {
         }
         Ok(())
     }
+    /// Metal's adapter has its own queues and orders its next submission after the
+    /// renderer's; this one shares the renderer's queue, so nothing is needed.
+    pub fn order_after(&mut self, _gpu: &ara_gpu::GpuDevice) {}
+    /// Metal's counterpart orders the renderer's next work after this adapter's;
+    /// one shared queue already does here.
+    pub fn order_before(&self, _gpu: &mut ara_gpu::GpuDevice) {}
     /// Waits the last submission's fence if it has not been waited.
     pub fn wait_previous(&self) -> Result<()> {
         if !self.in_flight.get() {

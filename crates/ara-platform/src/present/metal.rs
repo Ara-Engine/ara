@@ -24,12 +24,24 @@ pub struct Present {
 }
 
 impl Present {
-    /// The Vulkan presentation's opt-in overlap (no queue idle after each blit);
-    /// every Metal `present_image` still waits its own work, so it has no effect.
+    /// Opt-in overlap, as on Vulkan: `present_image` returns once its copy is
+    /// committed (GPU-ordered after the device's submitted work), and the next present
+    /// waits for it first. Turning it off waits now.
     /// # Safety
     /// `gpu` created this presentation and is live.
-    pub unsafe fn set_frames_in_flight(&mut self, _gpu: &GpuDevice, _enabled: bool) -> Result<()> {
+    pub unsafe fn set_frames_in_flight(&mut self, _gpu: &GpuDevice, enabled: bool) -> Result<()> {
+        self.presenter
+            .as_mut()
+            .context("presentation retired")?
+            .set_frames_in_flight(enabled)?;
         Ok(())
+    }
+    /// Order `gpu`'s next work after this presentation's copies, which run on a
+    /// queue of their own and may still read the image a frame in flight rewrites.
+    pub fn order_before(&self, gpu: &mut GpuDevice) {
+        if let Some(presenter) = &self.presenter {
+            presenter.order_before(gpu);
+        }
     }
     /// Present into `window` with SDR output.
     /// # Safety

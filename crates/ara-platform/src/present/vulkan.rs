@@ -542,6 +542,9 @@ impl Present {
         // SAFETY: forwarded caller contract.
         unsafe { Self::new_with_output(gpu.context(), window, output) }
     }
+    /// Metal's presentation copies run on a queue of their own, so the next frame's
+    /// work waits for them there; this blit shares the renderer's queue already.
+    pub fn order_before(&self, _gpu: &mut GpuDevice) {}
     /// Blit a completed engine image of `size` ([`Self::display`]).
     /// # Safety
     /// `image` is a completed CopySource image on `gpu`; both owners are live.

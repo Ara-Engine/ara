@@ -189,6 +189,17 @@ impl Windowed {
         // simulation and extraction overlap the GPU. Everything after the scene here
         // is GPU work on the same queue.
         presenter.set_frames_in_flight(true)?;
+        // The UI composite and the window copy of the frame in flight may still read
+        // the image this frame's scene rewrites; on Metal they run on queues of their
+        // own, so the scene waits for them on the GPU.
+        if let Some(renderer) = presenter.renderer_mut() {
+            if let Some(surface) = &self.game_ui {
+                surface.order_before(renderer.gpu_mut());
+            }
+            if let Some(present) = &self.present {
+                present.order_before(renderer.gpu_mut());
+            }
+        }
         presenter.present_with(frame, resolve)?;
         let cpu = started.elapsed() - presenter.stats().render;
         let renderer = presenter
