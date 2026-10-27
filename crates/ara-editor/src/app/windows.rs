@@ -70,7 +70,7 @@ impl Floats {
             // SAFETY: Wait for presentation before destroying its swapchain and surface.
             unsafe {
                 renderer.gpu().wait_idle()?;
-                float.present.destroy(renderer.gpu().context());
+                gpu.retire_present(crate::gpu::ui_device(renderer.gpu()), &mut float.present);
             }
             gpu.release_target(float.key);
             changed = true;
@@ -96,7 +96,8 @@ impl Floats {
             };
             crate::native::frame::style(window.raw(), editor.state.light);
             // SAFETY: The shared device and the new window outlive this presentation.
-            let present = unsafe { Present::new(renderer.gpu().context(), &window)? };
+            let present =
+                unsafe { gpu.create_present(crate::gpu::ui_device(renderer.gpu()), &window)? };
             self.next_key += 1;
             let physical = window.size()?;
             let scale = window.display_scale().max(0.25) * ui_scale(editor);
@@ -167,11 +168,11 @@ impl Floats {
         Ok(())
     }
     /// Destroy every window's presentation after the device is idle.
-    pub fn destroy(&mut self, renderer: &Renderer) {
+    pub fn destroy(&mut self, renderer: &Renderer, gpu: &NativeUi) {
         for float in &mut self.windows {
             // SAFETY: Called after device idle, before the windows are dropped.
             unsafe {
-                float.present.destroy(renderer.gpu().context());
+                gpu.retire_present(crate::gpu::ui_device(renderer.gpu()), &mut float.present);
             }
         }
         self.windows.clear();

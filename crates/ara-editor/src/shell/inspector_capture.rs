@@ -50,7 +50,7 @@ fn native_inspector_component_captures() {
     shell.offscreen = true;
     let device = ara_gpu::GpuDevice::new_raster(&[], output.join("gpu-cache")).unwrap();
     // SAFETY: this headless device outlives the UI adapter, and this thread owns its queue.
-    let mut gpu = unsafe { crate::gpu::NativeUi::new(device.context()) }.unwrap();
+    let mut gpu = unsafe { crate::gpu::NativeUi::new(crate::gpu::ui_device(&device)) }.unwrap();
     let mut draw = ara_ui_render::gpu::Renderer::default();
     icons::install(&mut draw, 1.).unwrap();
     let mut timings = Vec::new();

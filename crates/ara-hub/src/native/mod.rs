@@ -21,7 +21,7 @@ use crate::{
 use anyhow::Context as _;
 pub use app::App;
 use ara_editor_gpu::NativeUi;
-use ara_gpu::vulkan::Context as Gpu;
+use ara_editor_gpu::UiDevice as Gpu;
 use ara_platform::{Event, Present, Window};
 use ara_ui::input::InputEvent;
 use ara_ui_render::{atlas::TextMode, gpu::Renderer};
@@ -91,12 +91,12 @@ impl Host {
         let window = Window::new("Ara Hub", options.size)?;
         frame::style(window.raw(), light);
         let input = NativeInput::attach(window.raw())?;
-        let gpu = Gpu::new(&window.extensions()?)?;
+        let gpu = ara_editor_gpu::open_presentation(&window.extensions()?)?;
         // SAFETY: `gpu` is declared after `ui_gpu` and `present` in Host, so it outlives
         // both; all queue access stays on this thread.
         let ui_gpu = unsafe { NativeUi::new(&gpu)? };
         // SAFETY: Host::drop waits for the device and destroys this before the window/device.
-        let present = unsafe { Present::new(&gpu, &window)? };
+        let present = unsafe { ui_gpu.create_present(&gpu, &window)? };
         let dpi = options.dpi.unwrap_or_else(|| input.dpi());
         let mut host = Self {
             input,
@@ -126,9 +126,9 @@ impl Host {
         }
         // SAFETY: Wait before destroying a swapchain the presentation queue references.
         unsafe {
-            self.gpu.device.device_wait_idle()?;
-            self.present.destroy(&self.gpu);
-            self.present = Present::new(&self.gpu, &self.window)?;
+            self.ui_gpu.wait_idle(&self.gpu)?;
+            self.ui_gpu.retire_present(&self.gpu, &mut self.present);
+            self.present = self.ui_gpu.create_present(&self.gpu, &self.window)?;
         }
         if dpi != self.dpi {
             self.builtins = images::Builtins::new(dpi);
@@ -145,9 +145,8 @@ impl Host {
             &mut self.builtins,
             app,
         )?;
-        let (image, size) = self.ui_gpu.output()?;
         // SAFETY: The UI submission completed; the image is CopySource; owners are live.
-        unsafe { self.present.display(&self.gpu, image, size) }
+        unsafe { self.ui_gpu.present(&self.gpu, &mut self.present) }
     }
 }
 impl Drop for Host {
@@ -155,8 +154,8 @@ impl Drop for Host {
         // SAFETY: Complete all submissions before destroying the swapchain; the UI adapter
         // and device then drop in field order (adapter first).
         unsafe {
-            let _ = self.gpu.device.device_wait_idle();
-            self.present.destroy(&self.gpu);
+            let _ = self.ui_gpu.wait_idle(&self.gpu);
+            self.ui_gpu.retire_present(&self.gpu, &mut self.present);
         }
     }
 }
@@ -289,7 +288,7 @@ pub struct Offscreen {
 }
 impl Offscreen {
     fn new(physical: [u32; 2], dpi: f32) -> anyhow::Result<Self> {
-        let gpu = Gpu::new(&[])?;
+        let gpu = ara_editor_gpu::open_presentation(&[])?;
         // SAFETY: `_gpu` is a later field, so it outlives the adapter; single-threaded use.
         let mut ui_gpu = unsafe { NativeUi::new(&gpu)? };
         ui_gpu.set_dpi(dpi)?;

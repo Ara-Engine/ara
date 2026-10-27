@@ -529,7 +529,7 @@ fn gpu_cpu(output: &std::path::Path, renderer: &Renderer) -> ara_ui::Result<()> 
         draw.render(&mut cpu, &ui.display, &text.assets, [300, 140], mode)?;
         draw.device_lost();
         // SAFETY: The borrowed renderer/device outlives this local adapter; queue use remains serialized.
-        let mut gpu = unsafe { NativeUi::new(renderer.gpu().context())? };
+        let mut gpu = unsafe { NativeUi::new(crate::gpu::ui_device(renderer.gpu()))? };
         draw.render(&mut gpu, &ui.display, &text.assets, [300, 140], mode)?;
         let image = gpu.pixels()?;
         let name = match mode {

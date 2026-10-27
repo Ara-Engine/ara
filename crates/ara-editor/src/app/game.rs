@@ -8,8 +8,8 @@
 //! that failed, or a faulted world, instead of a bare "Starting Play…".
 use std::time::{Duration, Instant};
 
+use crate::gpu::UiDevice as Gpu;
 use ara_editor_gpu::{NativeUi, PlaySurface};
-use ara_gpu::vulkan::Context as Gpu;
 
 use crate::{Editor, shell::Shell};
 

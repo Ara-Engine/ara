@@ -15,10 +15,10 @@
 mod captures;
 mod view;
 
+use crate::gpu::UiDevice as Gpu;
 use crate::{Editor, transport::Server};
 use anyhow::Context as _;
 use ara_editor_gpu::NativeUi;
-use ara_gpu::vulkan::Context as Gpu;
 use ara_platform::{Event, Present, Window};
 use ara_play_host::{ImportProgress, PublishedAssets};
 use ara_ui::{Ui, input::InputState, source::stable_id, theme::EditorTheme};
@@ -298,7 +298,7 @@ impl Splash {
         let window = Window::hidden(&title, [view::WIDTH as u32, view::BASE_HEIGHT as u32])?;
         let dpi = capture.map_or_else(|| window.display_scale(), |(_, dpi)| dpi);
         let size = [view::WIDTH, view::BASE_HEIGHT];
-        let gpu = Gpu::new(&window.extensions()?)?;
+        let gpu = crate::gpu::open_presentation(&window.extensions()?)?;
         // SAFETY: `gpu` is a later field than `ui_gpu`, so it outlives the adapter; the
         // swapchain is destroyed in Drop before the device. All use stays on this thread.
         let mut ui_gpu = unsafe { NativeUi::new(&gpu)? };
@@ -326,7 +326,8 @@ impl Splash {
         if !offscreen {
             frame(&splash.window, light, &splash.button);
             // SAFETY: Destroyed in Drop before the device.
-            splash.present = Some(unsafe { Present::new(&splash.gpu, &splash.window)? });
+            splash.present =
+                Some(unsafe { splash.ui_gpu.create_present(&splash.gpu, &splash.window)? });
             // SAFETY: Live window on its owning (main) thread.
             unsafe {
                 sdl3_sys::video::SDL_ShowWindow(splash.window.raw());
@@ -366,9 +367,9 @@ impl Splash {
             if let Some(present) = &mut self.present {
                 // SAFETY: Wait before destroying a swapchain the queue may reference.
                 unsafe {
-                    self.gpu.device.device_wait_idle()?;
-                    present.destroy(&self.gpu);
-                    *present = Present::new(&self.gpu, &self.window)?;
+                    self.ui_gpu.wait_idle(&self.gpu)?;
+                    self.ui_gpu.retire_present(&self.gpu, present);
+                    *present = self.ui_gpu.create_present(&self.gpu, &self.window)?;
                 }
             }
         }
@@ -444,9 +445,8 @@ impl Splash {
             )
             .map_err(|e| anyhow::anyhow!("{e}"))?;
         if let Some(present) = &mut self.present {
-            let (image, size) = self.ui_gpu.output()?;
             // SAFETY: The UI submission completed; the image is CopySource; owners are live.
-            unsafe { present.display(&self.gpu, image, size)? };
+            unsafe { self.ui_gpu.present(&self.gpu, present)? };
         }
         Ok(())
     }
@@ -467,9 +467,9 @@ impl Drop for Splash {
         // swapchain goes before the device (adapter, then device, drop in field order).
         unsafe {
             sdl3_sys::video::SDL_SetWindowHitTest(self.window.raw(), None, std::ptr::null_mut());
-            let _ = self.gpu.device.device_wait_idle();
+            let _ = self.ui_gpu.wait_idle(&self.gpu);
             if let Some(present) = &mut self.present {
-                present.destroy(&self.gpu);
+                self.ui_gpu.retire_present(&self.gpu, present);
             }
         }
     }

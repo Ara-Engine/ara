@@ -187,7 +187,7 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
     view = editor.view()?;
     detect_quality(&mut editor, &renderer);
     // SAFETY: Renderer/device are declared before the UI adapter, and survive its destruction.
-    let mut gpu = unsafe { NativeUi::new(renderer.gpu().context())? };
+    let mut gpu = unsafe { NativeUi::new(crate::gpu::ui_device(renderer.gpu()))? };
     shell.device_info = serde_json::to_string_pretty(renderer.gpu().info()).unwrap_or_default();
     let mut floats = windows::Floats::default();
     floats.hidden = offscreen;
@@ -217,7 +217,8 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
         )?;
     }
     // SAFETY: Both native owners are retained until explicit idle/destroy after the loop, including errors.
-    let mut present = unsafe { Present::new(renderer.gpu().context(), &window)? };
+    let mut present =
+        unsafe { gpu.create_present(crate::gpu::ui_device(renderer.gpu()), &window)? };
     let mut scene_view = viewport::SceneView::default();
     let mut verification = options
         .verify
@@ -409,6 +410,7 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                     &mut editor,
                     &mut shell,
                     &mut renderer,
+                    &gpu,
                     &view,
                     &mut clipboard,
                 );
@@ -559,8 +561,12 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
             let was_live = shell.game_live;
             let was_fault = shell.game_fault.clone();
             let was_start = shell.game_start.clone();
-            let game_frame =
-                game.update(&mut editor, &mut shell, &mut gpu, renderer.gpu().context())?;
+            let game_frame = game.update(
+                &mut editor,
+                &mut shell,
+                &mut gpu,
+                crate::gpu::ui_device(renderer.gpu()),
+            )?;
             dirty |= game_frame;
             if shell.game_live != was_live
                 || shell.game_fault != was_fault
@@ -801,8 +807,8 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                 // SAFETY: Wait before destroying a swapchain referenced by the presentation queue.
                 unsafe {
                     renderer.gpu().wait_idle()?;
-                    present.destroy(renderer.gpu().context());
-                    present = Present::new(renderer.gpu().context(), &window)?;
+                    gpu.retire_present(crate::gpu::ui_device(renderer.gpu()), &mut present);
+                    present = gpu.create_present(crate::gpu::ui_device(renderer.gpu()), &window)?;
                 }
                 last_physical = physical;
                 last_dpi = dpi;
@@ -988,11 +994,10 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                 }
                 render_ms = render_at.elapsed().as_secs_f64() * 1000.;
                 let graph_gpu = graph_start.map(|start| start.elapsed().as_secs_f64() * 1000.);
-                let (image, size) = gpu.output()?;
                 let present_at = Instant::now();
                 // SAFETY: UI submission is complete, image is CopySource and all native owners are live.
                 unsafe {
-                    present.display(renderer.gpu().context(), image, size)?;
+                    gpu.present(crate::gpu::ui_device(renderer.gpu()), &mut present)?;
                 }
                 present_ms = present_at.elapsed().as_secs_f64() * 1000.;
                 presented = true;
@@ -1068,12 +1073,9 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                     surface.ui.size.map(|v| v.round() as u32),
                     TextMode::Raster,
                 )?;
-                let (image, size) = gpu.output()?;
                 // SAFETY: UI submission is complete, image is CopySource and both native owners are live.
                 unsafe {
-                    float
-                        .present
-                        .display(renderer.gpu().context(), image, size)?;
+                    gpu.present(crate::gpu::ui_device(renderer.gpu()), &mut float.present)?;
                 }
                 if focused_float.as_deref() == Some(float.id.as_str()) {
                     native.text_input(
@@ -1288,9 +1290,9 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
     // SAFETY: Complete all presentation/UI submissions before native swapchain/surface destruction.
     unsafe {
         renderer.gpu().wait_idle()?;
-        present.destroy(renderer.gpu().context());
+        gpu.retire_present(crate::gpu::ui_device(renderer.gpu()), &mut present);
     }
-    floats.destroy(&renderer);
+    floats.destroy(&renderer, &gpu);
     result
 }
 /// Exercise the editor's document extraction and production renderer without SDL.
@@ -1428,6 +1430,7 @@ fn route_event(
     editor: &mut Editor,
     shell: &mut Shell,
     renderer: &mut Renderer,
+    gpu: &NativeUi,
     view: &crate::world::DocumentView,
     clipboard: &mut OsClipboard,
 ) -> ara_ui::Result<(bool, bool, bool)> {
@@ -1532,8 +1535,9 @@ fn route_event(
             // SAFETY: Wait before replacing a swapchain referenced by presentation.
             unsafe {
                 renderer.gpu().wait_idle()?;
-                float.present.destroy(renderer.gpu().context());
-                float.present = Present::new(renderer.gpu().context(), &float.window)?;
+                gpu.retire_present(crate::gpu::ui_device(renderer.gpu()), &mut float.present);
+                float.present =
+                    gpu.create_present(crate::gpu::ui_device(renderer.gpu()), &float.window)?;
             }
             shell.resize_surface(&id, size.map(|v| v as f32 / float_dpi))?;
             shell.rebuild(editor)?;

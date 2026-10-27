@@ -1075,7 +1075,7 @@ mod tests {
         let result = (|| -> anyhow::Result<()> {
             // SAFETY: The renderer outlives this adapter, which is dropped before
             // leaving this closure; one thread serializes all queue submissions.
-            let mut ui = unsafe { NativeUi::new(renderer.gpu().context())? };
+            let mut ui = unsafe { NativeUi::new(crate::gpu::ui_device(renderer.gpu()))? };
             assert!(!renderer.presentation_ready());
             submit_ui(&scene, &renderer, &mut ui)?;
             scene
