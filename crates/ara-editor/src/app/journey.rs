@@ -8,7 +8,7 @@
 //! shipped (NativeAOT) and run that game too.
 //! Offscreen only (hidden window). Writes `NN-step.png` per step and, after every
 //! step, `journey.json` (what each step did, whether it worked and how long it took).
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 use ara_editor_gpu::NativeUi;
