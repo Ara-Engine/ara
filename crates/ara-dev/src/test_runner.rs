@@ -92,6 +92,14 @@ fn eligible(suite: &Suite, active: &[Suite], budget: u64) -> bool {
         })
 }
 
+/// Two test threads per ordinary harness; reserve 512 MiB/worker before allowing
+/// more concurrency. Suite weights and exclusive groups still control admission.
+fn worker_count(requested: Option<usize>, cpus: usize, ram_mib: u64) -> usize {
+    requested
+        .unwrap_or_else(|| (cpus / 2).min((ram_mib / 512) as usize))
+        .clamp(1, 4)
+}
+
 pub(crate) fn run(
     root: &Path,
     logs: &Path,
@@ -144,11 +152,9 @@ pub(crate) fn run(
     }
     let dotnet_prebuilt =
         DOTNET_PACKAGES.iter().any(|p| selected.contains(*p)) && prebuild_dotnet(root, logs)?;
-    let jobs = std::env::var("ARA_TEST_JOBS")
+    let requested_jobs = std::env::var("ARA_TEST_JOBS")
         .ok()
-        .and_then(|s| s.parse::<usize>().ok())
-        .unwrap_or(2)
-        .clamp(1, 4);
+        .and_then(|s| s.parse::<usize>().ok());
     let requested_ram = std::env::var("ARA_TEST_RAM_MIB")
         .ok()
         .and_then(|s| s.parse::<u64>().ok())
@@ -157,6 +163,11 @@ pub(crate) fn run(
     let memory_mib = requested_ram
         .min(crate::platform::available_memory_mib().unwrap_or(requested_ram) / 2)
         .max(256);
+    let jobs = worker_count(
+        requested_jobs,
+        std::thread::available_parallelism().map_or(2, usize::from),
+        memory_mib,
+    );
     eprintln!(
         "tests: {} prepared harnesses, {jobs} workers, {memory_mib} MiB admission budget; 120s fast / per-rule slow deadlines",
         pending.len()
@@ -389,6 +400,22 @@ fn suite_deadline(now: Instant, gate: Option<Instant>, timeout: u64) -> Result<I
 mod tests {
     use super::*;
     #[test]
+    fn default_test_workers_adapt_to_ram_and_cpu_and_explicit_jobs_still_win() {
+        for (cpus, ram, expected) in [
+            (16, 4096, 4),
+            (16, 2048, 4),
+            (16, 1536, 3),
+            (16, 1024, 2),
+            (16, 256, 1),
+            (4, 4096, 2),
+            (1, 4096, 1),
+        ] {
+            assert_eq!(worker_count(None, cpus, ram), expected);
+        }
+        assert_eq!(worker_count(Some(2), 16, 4096), 2);
+        assert_eq!(worker_count(Some(9), 16, 4096), 4);
+    }
+    #[test]
     fn suite_timeouts_are_bounded_without_panicking_a_worker() {
         let now = Instant::now();
         let gate = now + Duration::from_secs(1);
@@ -435,5 +462,24 @@ mod tests {
         assert!(eligible(&gpu, &[], 512));
         assert!(rule(&tiers, "ara-render-fidelity", "headless").is_some());
         assert!(rule(&tiers, "ara-schema", "ara_schema").is_none());
+        for group in ["gpu", "dotnet", "process"] {
+            let exclusive = Suite {
+                rule: Some(Rule {
+                    package: "fixture".into(),
+                    target: "fixture".into(),
+                    group: group.into(),
+                    memory_mib: 256,
+                    timeout_seconds: 120,
+                    gpu_packages_only: false,
+                }),
+                ..cpu.clone()
+            };
+            assert!(!eligible(
+                &exclusive,
+                std::slice::from_ref(&exclusive),
+                4096
+            ));
+            assert!(eligible(&cpu, std::slice::from_ref(&exclusive), 4096));
+        }
     }
 }

@@ -29,7 +29,12 @@ struct Report {
     passed: bool,
     elapsed_seconds: f64,
     compiler_cache_bypassed: bool,
+    compilation: crate::compile_cache::GatePolicy,
+    head: String,
     base: String,
+    base_reason: String,
+    full: bool,
+    green_checkpoint_updated: bool,
     #[serde(flatten)]
     selection: Selection,
     known_failures: Vec<known::KnownFailure>,
@@ -40,7 +45,7 @@ pub(crate) struct Logs {
     pub(crate) directory: PathBuf,
     rows: Vec<Row>,
     deadline: Option<Instant>,
-    no_compiler_cache: bool,
+    compilation: crate::compile_cache::GatePolicy,
     test_binaries: crate::binaries::Binaries,
     cargo_directories: crate::build_paths::Directories,
 }
@@ -65,7 +70,7 @@ impl Logs {
             directory,
             rows: Vec::new(),
             deadline: None,
-            no_compiler_cache,
+            compilation: crate::compile_cache::GatePolicy::from_env(no_compiler_cache),
             test_binaries: Default::default(),
             cargo_directories,
         })
@@ -174,14 +179,11 @@ impl Logs {
         let mut command = Command::new("cargo");
         self.cargo_directories.apply(&mut command);
         crate::compile_cache::configure(&mut command);
+        self.compilation.apply(&mut command);
         command
             .current_dir(root)
             .args(args)
             .env("CARGO_TERM_COLOR", "never");
-        if self.no_compiler_cache {
-            // An empty wrapper overrides Cargo config; clippy's workspace wrapper stays active.
-            command.env("RUSTC_WRAPPER", "");
-        }
         if name == "tests" {
             for (binary, path) in &self.test_binaries {
                 command.env(format!("CARGO_BIN_EXE_{binary}"), path);
@@ -296,7 +298,7 @@ pub(crate) fn selection(
 }
 
 pub(crate) struct Options<'a> {
-    pub(crate) base: &'a str,
+    pub(crate) base: Option<&'a str>,
     pub(crate) json: bool,
     pub(crate) full: bool,
     pub(crate) known_path: Option<&'a Path>,
@@ -316,17 +318,23 @@ pub(crate) fn run(root: &Path, options: Options<'_>) -> Result<bool> {
         timeout_seconds,
         no_compiler_cache,
     } = options;
-    let budget = timeout_seconds
-        .or(if full { None } else { Some(2400) })
-        .filter(|s| *s != 0);
     let allowed = known::read(root, known_path)?;
     let mut known_failures = Vec::new();
     // Capture before metadata, too: Cargo itself must not silently rewrite Cargo.lock.
     let before = git::TreeState::read(root)?;
-    let base = git::text(root, ["merge-base", "HEAD", base])
-        .context("resolve --base (use an existing local ref)")?;
+    let resolved = crate::gate_base::resolve(root, base)?;
+    let full = full || resolved.bootstrap;
+    let budget = timeout_seconds
+        .or(if full { None } else { Some(2400) })
+        .filter(|s| *s != 0);
+    eprintln!("Base: {} ({})", resolved.commit, resolved.reason);
+    let base = resolved.commit;
     let changed = git::changed(root, &base)?;
     let mut logs = Logs::new(root, no_compiler_cache)?;
+    eprintln!(
+        "Compilation: {}; CARGO_INCREMENTAL={}",
+        logs.compilation.cache, logs.compilation.incremental
+    );
     if no_compiler_cache {
         eprintln!("Compiler cache bypass: RUSTC_WRAPPER disabled for Cargo gates.");
     }
@@ -343,9 +351,11 @@ pub(crate) fn run(root: &Path, options: Options<'_>) -> Result<bool> {
     if full {
         scope.affected = metadata.packages.iter().map(|p| p.name.clone()).collect();
         scope.test_packages = scope.affected.clone();
-        scope
-            .reasons
-            .push("--full requested the whole workspace".into());
+        scope.reasons.push(if resolved.bootstrap {
+            "automatic base requires a full bootstrap".into()
+        } else {
+            "--full requested the whole workspace".into()
+        });
     }
     if plan {
         before.verify(&git::TreeState::read(root)?)?;
@@ -354,6 +364,8 @@ pub(crate) fn run(root: &Path, options: Options<'_>) -> Result<bool> {
             struct Plan<'a> {
                 planned: bool,
                 base: &'a str,
+                base_reason: &'a str,
+                full: bool,
                 #[serde(flatten)]
                 selection: &'a Selection,
             }
@@ -362,6 +374,8 @@ pub(crate) fn run(root: &Path, options: Options<'_>) -> Result<bool> {
                 serde_json::to_string_pretty(&Plan {
                     planned: true,
                     base: &base,
+                    base_reason: &resolved.reason,
+                    full,
                     selection: &scope
                 })?
             );
@@ -582,15 +596,28 @@ pub(crate) fn run(root: &Path, options: Options<'_>) -> Result<bool> {
     snapshots.sort();
     snapshots.dedup();
     logs.findings("pending snapshots", snapshots);
-    let report = Report {
+    let mut report = Report {
         passed: logs.rows.iter().all(|r| r.passed),
         elapsed_seconds: started.elapsed().as_secs_f64(),
-        compiler_cache_bypassed: no_compiler_cache,
+        compiler_cache_bypassed: logs.compilation.bypassed(),
+        compilation: logs.compilation,
+        head: resolved.head.clone(),
         base,
+        base_reason: resolved.reason,
+        full,
+        green_checkpoint_updated: false,
         selection: scope,
         known_failures,
         checks: logs.rows,
     };
+    // Persist evidence even when stdout was redirected, and before publishing a receipt.
+    let report_path = logs.directory.join("report.json");
+    fs::write(&report_path, serde_json::to_vec_pretty(&report)?)?;
+    if report.passed && report.known_failures.is_empty() && before.status.is_empty() {
+        report.green_checkpoint_updated =
+            crate::gate_base::record(root, &resolved.head, &report.base, full, &report_path)?;
+        fs::write(&report_path, serde_json::to_vec_pretty(&report)?)?;
+    }
     if json {
         println!("{}", serde_json::to_string_pretty(&report)?);
     } else {
