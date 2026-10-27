@@ -11,6 +11,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value, json};
 use std::path::{Path, PathBuf};
 
+mod project_live;
+
 /// Where a setting is stored and who shares it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -498,6 +500,10 @@ pub struct Settings {
     pub user: Map<String, Value>,
     /// Non-default project values.
     pub project: Map<String, Value>,
+    /// Last validated Host policy, separate from local settings history.
+    observed_project: Map<String, Value>,
+    /// Content revision consumed by the live projection; idle ticks do no work.
+    observed_host_revision: Option<u64>,
     failures: Vec<String>,
     /// Writes the preferences file off the UI thread; `None` keeps them in memory.
     user_writer: Option<crate::persist::BackgroundWriter<Value>>,
@@ -579,6 +585,8 @@ impl Settings {
             project_path,
             preferences_path,
             user,
+            observed_project: project.clone(),
+            observed_host_revision: None,
             project,
             failures: Vec::new(),
             user_writer,
@@ -618,23 +626,15 @@ impl Settings {
         author: Author,
     ) -> Result<String, Vec<ara_diag::Diagnostic>> {
         let d = def_of(key).ok_or_else(|| vec![crate::invalid(format!("no setting `{key}`"))])?;
-        let mut values = self.scope_values(d.scope).clone();
-        let label = match value {
+        let (value, label) = match value {
             Some(v) => {
                 valid(d, &v).map_err(|e| vec![crate::invalid(e)])?;
-                if v == d.default.value() {
-                    values.remove(key);
-                } else {
-                    values.insert(key.into(), v);
-                }
-                format!("Set {}", d.label)
+                let value = (v != d.default.value()).then_some(v);
+                (value, format!("Set {}", d.label))
             }
-            None => {
-                values.remove(key);
-                format!("Reset {}", d.label)
-            }
+            None => (None, format!("Reset {}", d.label)),
         };
-        if &values == self.scope_values(d.scope) {
+        if value.as_ref() == self.scope_values(d.scope).get(key) {
             return Ok(label);
         }
         let mut meta = TxnMeta::by(author);
@@ -644,10 +644,8 @@ impl Settings {
             doc: self.doc.clone(),
             id: RecordId::parse(if d.scope == User { USER } else { PROJECT })
                 .map_err(|e| vec![crate::invalid(e)])?,
-            path: "EditorSettings.values"
-                .parse::<FieldPath>()
-                .map_err(|e| vec![crate::invalid(e)])?,
-            value: Some(Value::Object(values)),
+            path: FieldPath::field("EditorSettings").child("values").key(key),
+            value,
         };
         self.store.transact(meta, [edit])?;
         self.reload(Some(d.scope));
@@ -660,6 +658,7 @@ impl Settings {
         redo: bool,
     ) -> Result<String, Vec<ara_diag::Diagnostic>> {
         let label = self.next_label(author, redo).unwrap_or_default();
+        self.check_history_values(author, redo)?;
         if redo {
             self.store.redo_last(author)?;
         } else {
@@ -954,6 +953,14 @@ fn os_config_dir() -> Option<PathBuf> {
     }?;
     Some(base.join("Ara"))
 }
+
+#[cfg(test)]
+#[path = "settings/live_tests.rs"]
+mod live_tests;
+
+#[cfg(test)]
+#[path = "settings/history_live_tests.rs"]
+mod history_live_tests;
 
 #[cfg(test)]
 mod tests {

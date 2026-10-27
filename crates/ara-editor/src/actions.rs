@@ -258,6 +258,7 @@ impl Service for EditorService {
             .collect()
     }
     fn call(&mut self, cx: &mut Cx<'_>, method: &str, params: Value) -> R {
+        self.reconcile_project_settings(cx);
         let result = self.dispatch(cx, method, params);
         self.report_layout_notice(cx);
         // Preferences and layouts that could not be written are warnings on the bus,
@@ -273,11 +274,20 @@ impl Service for EditorService {
         result
     }
     fn tick(&mut self, cx: &mut Cx<'_>) {
+        self.reconcile_project_settings(cx);
         self.report_layout_notice(cx);
         self.poll_bounds(cx);
     }
 }
 impl EditorService {
+    /// Publish canonical project policy without navigating or producing a new op.
+    fn reconcile_project_settings(&mut self, cx: &Cx<'_>) {
+        if self.settings.reconcile_project(cx.store()) {
+            sync_settings(&mut self.navigation.state, &self.settings);
+            let _ = self.changes.send(self.navigation.state.clone());
+        }
+    }
+
     /// A migration is informational and must be visible even before the first UI command.
     fn report_layout_notice(&mut self, cx: &mut Cx<'_>) {
         if self.navigation.take_layout_notice() {
