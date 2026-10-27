@@ -1,10 +1,13 @@
-//! Bounded asynchronous frame ownership, with the Vulkan backend's contract:
-//! one scope at a time, its previous frame complete before it starts, and callers
-//! poll before reusing frame data. Scene and UI share the graphics queue on Metal,
-//! so publishing a completed frame to the UI needs no extra GPU dependency.
+//! Bounded asynchronous frame ownership, with the Vulkan backend's contract: one
+//! scope at a time, at most `FRAMES_IN_FLIGHT` ended scopes unconsumed (the next
+//! frame records while the last one runs), and callers poll or wait, boundedly when
+//! an event pump must not stall, before reusing frame data. Scene and UI share the
+//! graphics queue on Metal, so publishing a completed frame to the UI needs no extra
+//! GPU dependency.
 use super::MetalDevice;
 use crate::commands::{Command, PassTiming};
 use crate::{Buffer, Device, GpuError, Queue, Result, TimelinePoint};
+use objc2_metal::MTLSharedEvent;
 
 /// All submissions made in one deferred-completion scope. Keep this until it
 /// completes before rewriting frame resources or publishing its images to a UI.
