@@ -258,6 +258,13 @@ impl Editor {
             )]))
         })?;
         object.insert("session".into(), self.session.clone().into());
+        let stopping_current = method == "play.stop"
+            && self.play_world.as_deref().is_some_and(|world| {
+                object
+                    .get("world")
+                    .and_then(Value::as_str)
+                    .is_none_or(|target| target == world)
+            });
         let result = self.call_for(ConnId::LOCAL, method, params)?;
         if method == "editor.play" {
             // Multi-player Play (palette): the service resolved the `play.start` params.
@@ -270,8 +277,9 @@ impl Editor {
             && let Some(world) = result["world"].as_str()
         {
             self.play_world = Some(world.to_owned());
-        } else if method == "play.stop" {
+        } else if stopping_current {
             self.play_world = None;
+            self.action("editor.view", json!({"play":"stopped"}))?;
         }
         Ok(result)
     }

@@ -226,6 +226,10 @@ impl Shell {
                     committed_numeric = true;
                 }
                 match binding {
+                    Binding::Play(intent) => {
+                        self.dispatch_play(editor, intent, action.value)?;
+                        rebuild = true;
+                    }
                     Binding::Collection(action) => {
                         self.collection_action(editor, action)?;
                         rebuild = true;
@@ -786,6 +790,10 @@ impl Shell {
     }
     /// Commit pending inspector text and slider values as one transaction.
     pub fn commit_fields(&mut self, editor: &mut Editor) -> ara_ui::Result<bool> {
+        if self.commit_play_fields(editor)? {
+            self.rebuild(editor)?;
+            return Ok(true);
+        }
         if self.commit_picker_text(editor)? && self.drafts.keys().all(|k| k.starts_with("@picker|"))
         {
             self.rebuild(editor)?;

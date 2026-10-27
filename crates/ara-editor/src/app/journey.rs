@@ -759,7 +759,9 @@ impl Journey {
     fn after(&mut self, editor: &mut Editor, shell: &mut Shell) -> ara_ui::Result<()> {
         let name = STEPS[self.step].0;
         let capture = self.output.join(format!("{:02}-{name}.png", self.step + 1));
-        let frame = shell.ui.find("game-frame").map(|i| shell.ui.nodes[i].rect);
+        let frame = shell
+            .game_input_rect()
+            .or_else(|| shell.ui.find("game-frame").map(|i| shell.ui.nodes[i].rect));
         if name == "game-preview" {
             self.preview_frame = frame.map(|rect| (capture.clone(), rect));
         }

@@ -1,7 +1,7 @@
-//! The Game view (D19): Play inside the editor. The selected client's frames arrive
+//! The Game view (D19): Play inside the editor. Every rendering client's frames arrive
 //! through a shared GPU surface (`app/game.rs`), letterboxed to the aspect preset.
 //! Click the view to give it the keyboard and mouse; Esc (or clicking outside)
-//! gives them back. Host + clients and Dedicated + clients show a client selector.
+//! gives them back. Host and Dedicated modes display simultaneous client tiles.
 //! Outside Play it previews the scene through its gameplay camera, the view Play
 //! starts with (`app/game_preview.rs`), or says the scene has none. While Play starts
 //! the preview stays, under the start's progress, until Play's first frame.
@@ -23,21 +23,34 @@ impl Shell {
         let playing = editor.state.playing.is_some();
         out.push_str("<panel id='game-toolbar' class='viewport-bar'>");
         if self.game_players.len() > 1 {
-            out.push_str("<panel id='game-clients' class='segment'>");
-            for (n, player) in self.game_players.clone().into_iter().enumerate() {
-                let id = format!("game-client-{player}");
-                let label = match player {
-                    0 if self.game_players.len() > 1 => "Host".to_owned(),
-                    0 => "Local".to_owned(),
-                    p => format!("Client {p}"),
-                };
-                let on = self.game_client == player
-                    || (n == 0 && !self.game_players.contains(&self.game_client));
-                self.bind_command(&id, "game.client", Target::Text(player.to_string()));
-                out.push_str(&format!("<button id='{id}' class='segment-button{}' label='{label}' description='Show and control {label}' action='Dispatch'><text id='{id}-label' text='{label}' /></button>",if on{" selected"}else{""}));
-            }
-            out.push_str("</panel>");
+            self.choice_button(
+                "game-client",
+                "Controlled player",
+                choices::Select {
+                    destination: choices::Destination::PlayClient,
+                    options: self
+                        .game_players
+                        .iter()
+                        .map(|&player| {
+                            (
+                                json!(player),
+                                play_controls::player_label(player, self.game_players.len()),
+                            )
+                        })
+                        .collect(),
+                    current: json!(self.game_client),
+                },
+                out,
+            );
         }
+        self.tool_icon(
+            out,
+            "game-options",
+            "play.options",
+            "settings-2",
+            editor,
+            self.play_controls.options,
+        );
         let aspect = ASPECTS
             .iter()
             .find(|a| a.0 == self.game_aspect)
@@ -60,6 +73,7 @@ impl Shell {
             self.game_stats,
         );
         out.push_str("</panel>");
+        self.play_controls_markup(editor, out);
         out.push_str("<panel id='game-surface' class='game-surface'>");
         if let Some(fault) = self.game_fault.clone() {
             let text = format!("{fault} · Details and fixes are in the Console.");
@@ -85,19 +99,8 @@ impl Shell {
                     ],
                 );
             }
-        } else if self.game_live {
-            // Letterbox inside the surface using last frame's layout.
-            let [w, h] = self.game_frame().unwrap_or([640., 360.]);
-            self.bind_command("game-frame", "game.capture", Target::None);
-            out.push_str(&format!("<button id='game-frame' class='game-frame' style='width:{w:.0}px;height:{h:.0}px' label='Game view' description='Click to play: keyboard and mouse go to the game until Esc' action='Dispatch'><image id='game-image' src='game-view' style='width:100%;height:100%' /></button>"));
-            if self.game_stats {
-                out.push_str(&format!("<panel id='game-stats-overlay' class='game-stats'><text id='game-stats-text' class='mono' text='{}' /></panel>",game_stats_text(self.game_fps,self.game_size)));
-            }
-            if self.game_captured {
-                out.push_str("<panel id='game-capture' class='game-hint'><text id='game-capture-text' text='Playing · Esc releases the keyboard and mouse' /></panel>");
-            } else {
-                out.push_str("<panel id='game-capture' class='game-hint'><text id='game-capture-text' text='Click the view to play' /></panel>");
-            }
+        } else if !self.game_players.is_empty() {
+            self.game_tiles(out);
         } else if playing && self.game_preview.is_some() {
             self.preview_frame(out, "The view Play is starting with");
             self.starting_hint(out);
@@ -126,7 +129,7 @@ impl Shell {
                 "gamepad-2",
                 "Game view",
                 if in_view {
-                    "Press Play (F5) to run the scene here. Host and Dedicated modes add a client selector."
+                    "Press Play (F5) to run the scene here. Host and Dedicated modes show every client together."
                 } else {
                     "Play opens a separate player window (Preferences > Viewport > Play in the Game view)."
                 },
@@ -163,6 +166,19 @@ impl Shell {
             .find("game-surface")
             .map(|i| ui.nodes[i].rect)
             .filter(|r| r.w > 1. && r.h > 1.)?;
+        let (columns, rows) = play_controls::grid_shape(self.game_players.len().max(1));
+        let r = Box2 {
+            x: r.x,
+            y: r.y,
+            w: ((r.w - (columns - 1) as f32 * 6.) / columns as f32).max(1.),
+            h: ((r.h - (rows - 1) as f32 * 6.) / rows as f32
+                - if self.game_players.is_empty() {
+                    0.
+                } else {
+                    24.
+                })
+            .max(1.),
+        };
         let ratio = ASPECTS
             .iter()
             .find(|a| a.0 == self.game_aspect)

@@ -78,6 +78,7 @@ const ASSETS: &[Item] = &[
 ];
 /// Play commands, under Edit › Play (the title bar has Play, Pause and Step too).
 const PLAY: &[Item] = &[
+    C("play.options"),
     C("play.start"),
     C("play.pause"),
     C("play.step"),
@@ -99,6 +100,12 @@ const PLAY: &[Item] = &[
     ),
     C("play.start_paused"),
     C("play.network_profile"),
+    S,
+    C("play.inspect"),
+    C("play.runtime.patch"),
+    C("play.runtime.discard"),
+    C("play.keep"),
+    C("play.keep_driven"),
     S,
     C("play.review"),
     C("play.settings"),
@@ -775,6 +782,7 @@ pub(crate) fn context(kind: Context) -> &'static [Item] {
             C("view.hide_overlays"),
         ],
         Context::Play => &[
+            C("play.options"),
             C("play.mode.local"),
             C("play.mode.host"),
             C("play.mode.dedicated"),
@@ -784,6 +792,13 @@ pub(crate) fn context(kind: Context) -> &'static [Item] {
             C("play.start_paused"),
             S,
             C("play.settings"),
+            C("play.network_profile"),
+            S,
+            C("play.inspect"),
+            C("play.runtime.patch"),
+            C("play.runtime.discard"),
+            C("play.keep"),
+            C("play.keep_driven"),
         ],
     }
 }

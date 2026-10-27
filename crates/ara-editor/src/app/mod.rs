@@ -13,8 +13,10 @@ mod game_preview;
 mod input_verify;
 mod journey;
 mod monkey;
+mod monkey_route;
 mod navigation_verify;
 mod panels_verify;
+mod play_verify;
 mod prefab_verify;
 mod qa;
 mod responsiveness;
@@ -122,6 +124,7 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
         || options.verify_panels
         || options.verify_ux
         || options.verify_docking
+        || options.verify_behaviours
         || options.screenshot
     {
         native.verification_extent(options.size)?;
@@ -134,7 +137,12 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
     let dpi = options.dpi.unwrap_or_else(|| native.dpi()) * windows::ui_scale(&editor);
     let physical = window.size()?;
     let logical = physical.map(|v| v as f32 / dpi);
-    if options.verify || options.verify_panels || options.verify_ux || options.verify_docking {
+    if options.verify
+        || options.verify_panels
+        || options.verify_ux
+        || options.verify_docking
+        || options.verify_behaviours
+    {
         eprintln!("Verification extent {physical:?}; logical {logical:?}; DPI {dpi}");
     }
     let mut shell = Shell::new(&mut editor, logical)?;
@@ -223,6 +231,16 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
     ] {
         ui_renderer.image(
             id,
+            Image {
+                width: 1,
+                height: 1,
+                rgba: vec![0, 0, 0, 255],
+            },
+        )?;
+    }
+    for player in 0..=16 {
+        ui_renderer.image(
+            game::player_texture(player),
             Image {
                 width: 1,
                 height: 1,
@@ -329,6 +347,8 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
     let mut input_check = None;
     let mut prefab_check = None;
     let mut diagnostics_check = None;
+    let mut play_check = None;
+    let mut monkey_input = monkey::native::Adapter::default();
     if panel_verification.is_some()
         || ux_verification.is_some()
         || journey.is_some()
@@ -513,6 +533,38 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
             if let Some(check) = &mut diagnostics_check {
                 let scale = crate::native::points_to_logical(window.raw(), main_dpi);
                 check.inject(&mut editor, &mut shell, &window, scale, &mut events)?;
+            }
+            if diagnostics_check
+                .as_ref()
+                .is_some_and(diagnostics_verify::DiagnosticsCheck::finished)
+                && play_check.is_none()
+            {
+                play_check = Some(play_verify::PlayCheck::new(&mut editor, &options.output)?);
+            }
+            if let Some(check) = &mut play_check {
+                let scale = crate::native::points_to_logical(window.raw(), main_dpi);
+                check.inject(&mut editor, &mut shell, &window, scale, &mut events)?;
+            }
+            if let Some(runner) = &mut monkey {
+                let changed = monkey_route::step(
+                    runner,
+                    &mut monkey_input,
+                    main_dpi,
+                    &window,
+                    &mut floats,
+                    &mut controller,
+                    &mut editor,
+                    &mut shell,
+                    &mut renderer,
+                    &gpu,
+                    &view,
+                    &scene_view,
+                )?;
+                dirty |= changed;
+                scene_dirty |= changed;
+                if changed {
+                    last_input = Some(Instant::now());
+                }
             }
             let interaction_start = (!events.is_empty()).then(Instant::now);
             if events.iter().any(|(_, event)| {
@@ -721,9 +773,6 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
                 scene_dirty = true;
             }
             let authority_scope = profile_frame.map(|_| ara_profile::scope("editor.authority"));
-            if let Some(runner) = &mut monkey {
-                dirty |= runner.step(&mut editor, &mut shell)?;
-            }
             let tick_at = Instant::now();
             server.pump(&mut editor);
             editor.tick();
@@ -750,6 +799,7 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
             let was_live = shell.game_live;
             let was_fault = shell.game_fault.clone();
             let was_start = shell.game_start.clone();
+            let was_play_views = shell.play_controls.revision;
             let game_frame = game.update(
                 &mut editor,
                 &mut shell,
@@ -757,7 +807,8 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
                 crate::gpu::ui_device(renderer.gpu()),
             )?;
             dirty |= game_frame;
-            if shell.game_live != was_live
+            if shell.play_controls.revision != was_play_views
+                || shell.game_live != was_live
                 || shell.game_fault != was_fault
                 || shell.game_start != was_start
             {
@@ -766,7 +817,9 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
                 }
                 // Start progress alone (the phase, bar, count, elapsed time) updates
                 // the starting screen in place; anything else changes the Game view.
-                let progress_only = shell.game_live == was_live && shell.game_fault == was_fault;
+                let progress_only = shell.play_controls.revision == was_play_views
+                    && shell.game_live == was_live
+                    && shell.game_fault == was_fault;
                 if !(progress_only && shell.patch_start_progress(was_start.as_ref())?) {
                     shell.rebuild(&mut editor)?;
                 }
@@ -1433,6 +1486,9 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
                     &mut gpu,
                     frame_start.elapsed().as_secs_f64() * 1000.,
                 )?;
+            }
+            if let Some(check) = &mut play_check {
+                check.end(&editor, &shell, &mut gpu)?;
                 if check.finished() {
                     game.close(&mut editor, &mut gpu)?;
                     break;
@@ -1563,6 +1619,17 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
             if !check.finished() || !check.failures().is_empty() {
                 return Err(format!(
                     "Native diagnostics journey failed: {}",
+                    check.failures().join(", ")
+                )
+                .into());
+            }
+            let check = play_check
+                .as_ref()
+                .ok_or("The Play journey did not start")?;
+            check.write()?;
+            if !check.finished() || !check.failures().is_empty() {
+                return Err(format!(
+                    "Native Play journey failed: {}",
                     check.failures().join(", ")
                 )
                 .into());
@@ -2192,11 +2259,9 @@ fn game_input(event: &Event, editor: &mut Editor, shell: &mut Shell, dpi: f32) -
             down: pressed,
         }],
         Event::MouseButton { button, pressed } => {
-            let inside = shell.ui.find("game-frame").is_some_and(|i| {
-                shell.ui.nodes[i]
-                    .rect
-                    .contains(shell.pointer[0], shell.pointer[1])
-            });
+            let inside = shell
+                .game_input_rect()
+                .is_some_and(|rect| rect.contains(shell.pointer[0], shell.pointer[1]));
             if pressed && !inside {
                 release(editor, shell);
                 return None;

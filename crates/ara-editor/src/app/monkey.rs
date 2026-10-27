@@ -3,6 +3,8 @@
 //! Every action is flushed before it runs. If the process stops responding, the last
 //! `begin` without an `end` identifies the exact action, seed and sequence to replay.
 mod actions;
+pub(super) mod native;
+mod play;
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
 mod tests;
@@ -12,10 +14,12 @@ use crate::{
     Editor,
     shell::{Shell, commands},
 };
-use actions::{Action, Generator, MemoryClipboard};
+pub(super) use actions::Action;
+use actions::{Generator, MemoryClipboard};
+use ara_ui_text::Clipboard;
 use serde_json::{Value, json};
 use std::{
-    collections::{BTreeMap, VecDeque},
+    collections::{BTreeMap, BTreeSet, VecDeque},
     fs::File,
     io::{BufWriter, Write},
     panic::{AssertUnwindSafe, catch_unwind},
@@ -25,8 +29,14 @@ use std::{
 
 const SPIKE: Duration = Duration::from_millis(100);
 const HANG: Duration = Duration::from_secs(10);
+const DRAIN: Duration = Duration::from_secs(30);
 
-/// One production-loop runner. No platform windows or global input are synthesized.
+struct Recorded {
+    action: Action,
+    cleanup: bool,
+}
+
+/// One production-loop runner with durable actions and an injectable input router.
 pub(super) struct Monkey {
     seed: u64,
     budget: Duration,
@@ -35,9 +45,17 @@ pub(super) struct Monkey {
     output: PathBuf,
     journal: BufWriter<File>,
     generator: Generator,
-    replay: Option<VecDeque<Action>>,
+    replay: Option<VecDeque<Recorded>>,
     clipboard: MemoryClipboard,
+    play: play::State,
     actions: u64,
+    workload_actions: u64,
+    cleanup_actions: u64,
+    drain_actions: u64,
+    draining_since: Option<Instant>,
+    cleanup_incomplete: bool,
+    held_buttons: BTreeSet<u8>,
+    held_keys: BTreeSet<i32>,
     frames: u64,
     rejected: u64,
     panics: Vec<Value>,
@@ -47,6 +65,7 @@ pub(super) struct Monkey {
     slowest: Vec<Value>,
     commands: BTreeMap<String, u64>,
     methods: BTreeMap<String, u64>,
+    ui_actions: BTreeMap<String, u64>,
     diagnostics: BTreeMap<String, u64>,
     baseline_diagnostics: BTreeMap<String, u64>,
     diagnostic_counts: BTreeMap<u64, u64>,
@@ -79,7 +98,15 @@ impl Monkey {
             generator: Generator::new(seed),
             replay: None,
             clipboard: MemoryClipboard::default(),
+            play: play::State::default(),
             actions: 0,
+            workload_actions: 0,
+            cleanup_actions: 0,
+            drain_actions: 0,
+            draining_since: None,
+            cleanup_incomplete: false,
+            held_buttons: BTreeSet::new(),
+            held_keys: BTreeSet::new(),
             frames: 0,
             rejected: 0,
             panics: Vec::new(),
@@ -89,6 +116,7 @@ impl Monkey {
             slowest: Vec::new(),
             commands: BTreeMap::new(),
             methods: BTreeMap::new(),
+            ui_actions: BTreeMap::new(),
             diagnostics: BTreeMap::new(),
             baseline_diagnostics: BTreeMap::new(),
             diagnostic_counts: BTreeMap::new(),
@@ -126,7 +154,10 @@ impl Monkey {
             seed = record["seed"].as_u64().unwrap_or(seed);
             let action = serde_json::from_value(record["action"].clone())
                 .map_err(|error| format!("Replay action on line {}: {error}", line + 1))?;
-            actions.push_back(action);
+            actions.push_back(Recorded {
+                action,
+                cleanup: record["cleanup"].as_bool().unwrap_or(false),
+            });
         }
         if actions.is_empty() {
             return Err("The monkey journal contains no recorded actions".into());
@@ -137,7 +168,22 @@ impl Monkey {
     }
 
     /// Execute one action at a frame boundary and dispatch ordinary widget actions.
+    #[allow(
+        dead_code,
+        reason = "Retained-input consumers share the same durable runner without a platform router"
+    )]
     pub fn step(&mut self, editor: &mut Editor, shell: &mut Shell) -> ara_ui::Result<bool> {
+        self.step_with(editor, shell, Action::run)
+    }
+
+    /// Run the recorded action through the production input owner. The journal,
+    /// watchdog, panic boundary and counts include the callback's complete work.
+    pub fn step_with(
+        &mut self,
+        editor: &mut Editor,
+        shell: &mut Shell,
+        mut run: impl FnMut(&Action, &mut Editor, &mut Shell, &mut dyn Clipboard) -> ara_ui::Result<()>,
+    ) -> ara_ui::Result<bool> {
         if self.finished() {
             return Ok(false);
         }
@@ -149,28 +195,67 @@ impl Monkey {
             self.read_diagnostics(editor)?;
             self.baseline_diagnostics = std::mem::take(&mut self.diagnostics);
         }
-        let action = if let Some(replay) = &mut self.replay {
+        let Recorded { action, cleanup } = if let Some(replay) = &mut self.replay {
             let Some(action) = replay.pop_front() else {
                 self.stopped = true;
                 return Ok(false);
             };
             action
+        } else if self.budget_reached() {
+            let since = self.draining_since.get_or_insert_with(Instant::now);
+            if since.elapsed() >= DRAIN {
+                self.cleanup_incomplete = true;
+                self.stopped = true;
+                self.write_event(json!({"phase":"cleanupIncomplete","step":self.actions,"playResources":self.play.report(),"heldKeys":self.held_keys,"heldButtons":self.held_buttons}))?;
+                self.write_report()?;
+                return Ok(false);
+            }
+            let action = if !self.held_buttons.is_empty() || !self.held_keys.is_empty() {
+                Action::FocusLost
+            } else if let Some(action) = self.play.drain() {
+                action
+            } else {
+                return Ok(false);
+            };
+            self.drain_actions += 1;
+            Recorded {
+                action,
+                cleanup: true,
+            }
         } else {
-            self.generator.initialize(editor);
-            self.generator.next(shell)
+            let generator = &mut self.generator;
+            let before = self.play.cleanup_actions();
+            let action = self.play.next(|| {
+                generator.initialize(editor);
+                generator.next(shell)
+            });
+            Recorded {
+                action,
+                cleanup: self.play.cleanup_actions() != before,
+            }
         };
         let action_json = serde_json::to_value(&action)?;
         self.last_action = Some(action_json.clone());
         self.watchdog
             .progress(self.actions, Some(action_json.clone()));
         self.write_event(
-            json!({"phase":"begin","seed":self.seed,"step":self.actions,"action":action_json}),
+            json!({"phase":"begin","seed":self.seed,"step":self.actions,"cleanup":cleanup,"action":action_json}),
         )?;
         let at = Instant::now();
+        let mut play_event = None;
         let result = catch_unwind(AssertUnwindSafe(|| {
-            action.run(editor, shell, &mut self.clipboard)
+            let before = self.play.before(editor)?;
+            let result = run(&action, editor, shell, &mut self.clipboard);
+            play_event = self.play.after(editor, &before)?;
+            result
         }));
         self.actions += 1;
+        if cleanup {
+            self.cleanup_actions += 1;
+        } else {
+            self.workload_actions += 1;
+        }
+        self.track_held(&action);
         let outcome = match result {
             Ok(Ok(())) => "accepted".to_owned(),
             Ok(Err(error)) => {
@@ -192,7 +277,11 @@ impl Monkey {
             Action::Protocol { method, .. } => {
                 *self.methods.entry(method.clone()).or_default() += 1
             }
-            _ => {}
+            _ => {
+                if let Some(kind) = action_json["kind"].as_str() {
+                    *self.ui_actions.entry(kind.into()).or_default() += 1;
+                }
+            }
         }
         // Window commands are exercised through the real shell, but their platform
         // request must never display a file dialog or terminate the soak process.
@@ -200,6 +289,11 @@ impl Monkey {
             self.write_event(json!({"phase":"platformRequest","step":self.actions-1,"request":format!("{request:?}")}))?;
         }
         self.boundary_failures = self.boundary_failures.max(shell.panel_failure_count());
+        if let Some(inventory) = play_event {
+            self.write_event(
+                json!({"phase":"playInventory","step":self.actions-1,"inventory":inventory}),
+            )?;
+        }
         self.write_event(json!({"phase":"end","step":self.actions-1,"outcome":outcome,"actionMs":at.elapsed().as_secs_f64()*1000.}))?;
         if self.actions.is_multiple_of(64) || self.finished() {
             self.read_diagnostics(editor)?;
@@ -230,11 +324,57 @@ impl Monkey {
         }
     }
 
-    /// A time/action budget ends a run; a panic ends it immediately with failure.
+    /// Generated budgets finish after their bounded recorded resource drain;
+    /// replay exhaustion and panics stop immediately without inferred actions.
     pub fn finished(&self) -> bool {
         self.stopped
-            || self.started.elapsed() >= self.budget
-            || self.max_steps.is_some_and(|n| self.actions >= n)
+            || if let Some(replay) = &self.replay {
+                self.started.elapsed() >= self.budget || replay.is_empty()
+            } else {
+                self.budget_reached() && self.resources_drained()
+            }
+    }
+
+    fn budget_reached(&self) -> bool {
+        self.started.elapsed() >= self.budget
+            || self.max_steps.is_some_and(|n| self.workload_actions >= n)
+    }
+    fn resources_drained(&self) -> bool {
+        self.play.drained() && self.held_buttons.is_empty() && self.held_keys.is_empty()
+    }
+    fn track_held(&mut self, action: &Action) {
+        match action {
+            Action::Press { .. } => {
+                self.held_buttons.insert(1);
+            }
+            Action::Click { .. } | Action::Release { .. } => {
+                self.held_buttons.remove(&1);
+            }
+            Action::PointerButton {
+                button, pressed, ..
+            } => {
+                if *pressed {
+                    self.held_buttons.insert(*button);
+                } else {
+                    self.held_buttons.remove(button);
+                }
+            }
+            Action::KeyState { scancode, pressed } => {
+                if *pressed {
+                    self.held_keys.insert(*scancode);
+                } else {
+                    self.held_keys.remove(scancode);
+                }
+            }
+            Action::Key { scancode } => {
+                self.held_keys.remove(scancode);
+            }
+            Action::FocusLost => {
+                self.held_buttons.clear();
+                self.held_keys.clear();
+            }
+            _ => {}
+        }
     }
 
     /// Acceptance concerns crashes, unresponsive frames and quarantined panels.
@@ -243,6 +383,8 @@ impl Monkey {
             && self.panics.is_empty()
             && self.hangs.max(self.watchdog.count()) == 0
             && self.boundary_failures == 0
+            && !self.cleanup_incomplete
+            && self.resources_drained()
             && self.replay.as_ref().is_none_or(VecDeque::is_empty)
     }
 
@@ -293,17 +435,23 @@ impl Monkey {
             "seed":self.seed,"finished":self.finished(),"accepted":self.succeeded(),
             "seconds":self.started.elapsed().as_secs_f64(),"requestedSeconds":self.budget.as_secs_f64(),
             "actions":self.actions,"frames":self.frames,"rejectedInputs":self.rejected,
+            "requestedSteps":self.max_steps,"workloadActions":self.workload_actions,"cleanupActions":self.cleanup_actions,
+            "cleanupIncomplete":self.cleanup_incomplete||!self.resources_drained(),
+            "endDrain":{"actions":self.drain_actions,"limitSeconds":DRAIN.as_secs(),"seconds":self.draining_since.map(|since|since.elapsed().as_secs_f64()),
+                "cleanupIncomplete":self.cleanup_incomplete||!self.resources_drained(),"heldKeys":self.held_keys,"heldButtons":self.held_buttons},
             "panics":self.panics,"hangs":self.hangs.max(self.watchdog.count()),"hangThresholdMs":HANG.as_millis(),
             "frameSpikes":self.spikes,"spikeThresholdMs":SPIKE.as_millis(),"maxFrameMs":self.max_frame_ms,
             "slowestFrames":self.slowest,"panelFailures":self.boundary_failures,
             "errorDiagnosticsBefore":self.baseline_diagnostics,"errorDiagnosticsDuring":self.diagnostics,"registryCommands":self.commands,
             "protocolMethods":self.methods,"unvisitedCommands":unvisited,
+            "uiActions":self.ui_actions,
             "coverageComplete":unvisited.is_empty(),
             "journal":"monkey-events.jsonl",
             "replayedJournal":self.replay.is_some(),
             "replayRemaining":self.replay.as_ref().map(VecDeque::len),
+            "playResources":self.play.report(),
             "watchdog":"monkey-watchdog.json",
-            "replay":format!("--verify-monkey --monkey-seed {} --monkey-seconds {} --monkey-steps {}",self.seed,self.budget.as_secs(),self.actions.max(1)),
+            "replay":format!("--verify-monkey --monkey-seed {} --monkey-seconds {} --monkey-steps {}",self.seed,self.budget.as_secs(),self.workload_actions.max(1)),
             "exactReplay":"--monkey-replay <original-output>/monkey-events.jsonl --output <new-output>",
             "limits":["The watchdog persists permanent stalls independently; an external process timeout is required to end a permanently stalled editor.","NaN and infinity reach numeric controls as text because JSON cannot represent non-finite numbers."]
         });

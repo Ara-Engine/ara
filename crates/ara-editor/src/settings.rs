@@ -354,6 +354,15 @@ pub const DEFS: &[Def] = &[
         Lit::S("60"),
     ),
     def(
+        "play.networkProfiles",
+        Project,
+        "Networking & Play",
+        "Client network profiles",
+        "Choose per-client network conditions in Game Play options.",
+        Kind::Map,
+        Lit::Empty,
+    ),
+    def(
         "play.startPaused",
         Project,
         "Time & simulation",

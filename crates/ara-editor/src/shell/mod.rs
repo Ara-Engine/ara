@@ -68,6 +68,7 @@ pub mod overlay;
 mod palette;
 mod panel_boundary;
 mod panels;
+pub(crate) mod play_controls;
 pub mod prefab_ops;
 mod profiler_panel;
 mod vfx_panel;
@@ -103,6 +104,7 @@ pub struct Surface {
 }
 /// Native shell and its retained widget state; no authoring document is mirrored here.
 pub struct Shell {
+    pub(crate) play_controls: play_controls::State,
     pub(crate) toolkit_verify: Option<toolkit_verify::Host>,
     styles: live_styles::LiveStyles,
     /// Native runtime tree and renderer-neutral display list of the current surface.
@@ -438,6 +440,7 @@ pub(crate) enum Binding {
     AddComponentFilter,
     ContextMenu(commands::menus::Context, commands::Target),
     Collection(collection_adapter::Action),
+    Play(play_controls::Action),
     PanelRetry(String),
     Setting(String),
     SettingChoice(String, Value),
@@ -465,6 +468,7 @@ impl Shell {
         let text = text_system()?;
         let ui = Ui::editor("<ui id='editor' />", include_str!("editor.css"), size)?;
         let mut shell = Self {
+            play_controls: Default::default(),
             toolkit_verify: None,
             styles: live_styles::LiveStyles::new()?,
             ui,
@@ -1371,6 +1375,10 @@ impl Shell {
             }
         }
         let mut work = self.ui.frame(&mut self.text)?;
+        if self.fit_game_frames()? {
+            work.layout_passes += 1;
+            work.paint_nodes = work.paint_nodes.max(1);
+        }
         self.stats.work += work;
         if work.paint_nodes > 0 {
             self.paint_decorations();

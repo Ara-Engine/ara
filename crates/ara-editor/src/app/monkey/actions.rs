@@ -29,7 +29,7 @@ impl Clipboard for MemoryClipboard {
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "camelCase")]
-pub(super) enum Action {
+pub(in crate::app) enum Action {
     Command {
         id: String,
         target: Target,
@@ -62,6 +62,16 @@ pub(super) enum Action {
     Key {
         scancode: i32,
     },
+    PointerButton {
+        point: [f32; 2],
+        button: u8,
+        pressed: bool,
+    },
+    KeyState {
+        scancode: i32,
+        pressed: bool,
+    },
+    FocusLost,
     Text {
         id: Option<String>,
         value: String,
@@ -148,6 +158,38 @@ impl Action {
                 shell.dispatch(editor)?;
                 Ok(())
             }
+            Self::KeyState { scancode, pressed } => {
+                shell.key(editor, *scancode, *pressed, clipboard)?;
+                shell.dispatch(editor)
+            }
+            Self::PointerButton {
+                point,
+                button: 1,
+                pressed,
+            } => {
+                if *pressed {
+                    Self::Press { point: *point }.run(editor, shell, clipboard)
+                } else {
+                    Self::Release {
+                        point: *point,
+                        cancel: false,
+                    }
+                    .run(editor, shell, clipboard)
+                }
+            }
+            Self::PointerButton { .. } => {
+                Err("Secondary pointer gestures require the production Controller router".into())
+            }
+            Self::FocusLost => {
+                shell.native_focus_lost(clipboard)?;
+                shell.modifiers = [false; 3];
+                shell.drag = None;
+                shell.drop_preview = None;
+                shell.finish_scrub(editor, true)?;
+                editor.finish_gesture(true)?;
+                editor.end_field_gestures()?;
+                Ok(())
+            }
             Self::Text { id, value } => {
                 if let Some(id) = id {
                     shell.click(id, clipboard)?;
@@ -213,6 +255,11 @@ impl Generator {
         }
     }
 
+    #[cfg(test)]
+    pub(super) fn enqueue(&mut self, actions: impl IntoIterator<Item = Action>) {
+        self.pending.extend(actions);
+    }
+
     /// SplitMix64 has a defined stream for every seed, including zero.
     fn random(&mut self) -> u64 {
         self.rng = self.rng.wrapping_add(0x9e3779b97f4a7c15);
@@ -257,7 +304,7 @@ impl Generator {
             self.index(width.max(1.) as usize) as f32,
             self.index(height.max(1.) as usize) as f32,
         ];
-        match self.index(14) {
+        match self.index(16) {
             0 => Action::Click { point },
             1 => Action::Move {
                 point: [point[0] - width * 0.2, point[1] - height * 0.2],
@@ -367,6 +414,43 @@ impl Generator {
                 }
                 registry_action(id, Target::None)
             }
+            14 => {
+                let point = shell
+                    .viewport()
+                    .map_or(point, |rect| [rect.x + rect.w * 0.6, rect.y + rect.h * 0.6]);
+                let end = [
+                    point[0] + self.index(81) as f32 - 40.,
+                    point[1] + self.index(61) as f32 - 30.,
+                ];
+                self.pending.extend([
+                    Action::Key { scancode: 41 },
+                    Action::PointerButton {
+                        point,
+                        button: 3,
+                        pressed: true,
+                    },
+                    Action::Move { point: end },
+                    Action::KeyState {
+                        scancode: 26,
+                        pressed: true,
+                    },
+                    Action::Move {
+                        point: [end[0] + 12., end[1] - 8.],
+                    },
+                    Action::KeyState {
+                        scancode: 26,
+                        pressed: false,
+                    },
+                    Action::PointerButton {
+                        point: end,
+                        button: 3,
+                        pressed: false,
+                    },
+                    Action::FocusLost,
+                ]);
+                Action::FocusLost
+            }
+            15 => Action::FocusLost,
             _ => Action::Key { scancode: 41 },
         }
     }

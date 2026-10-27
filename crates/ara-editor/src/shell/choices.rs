@@ -11,6 +11,9 @@ pub(crate) enum Destination {
     Import { doc: String, key: String },
     Field(String),
     Append { field: String, pointer: String },
+    PlayNetwork(usize),
+    PlayClient,
+    PlayField(play_controls::FieldTarget),
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -84,6 +87,17 @@ impl Shell {
         value: Value,
     ) -> ara_ui::Result<()> {
         match target {
+            Destination::PlayNetwork(player) => {
+                return self.set_play_network_profile(editor, *player, value);
+            }
+            Destination::PlayClient => {
+                let player = value
+                    .as_u64()
+                    .and_then(|value| usize::try_from(value).ok())
+                    .ok_or("Choose a Play client")?;
+                return self.focus_play_client(editor, player, false);
+            }
+            Destination::PlayField(field) => return self.choose_play_field(editor, field, value),
             Destination::Setting(key) => {
                 editor.action("editor.settings.set", json!({"key":key,"value":value}))?;
             }

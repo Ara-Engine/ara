@@ -353,7 +353,12 @@ fn resolved(e: &Editor) -> ara_ui::Result<ara_doc::prefab::Resolved> {
 fn select(e: &mut Editor, entities: Vec<String>) -> R {
     act(e, "editor.select", json!({"entities": entities}))
 }
-fn play(e: &mut Editor, method: &str, params: Value) -> R {
+fn play(e: &mut Editor, method: &str, mut params: Value) -> R {
+    if method != "play.start"
+        && let Some(world) = &e.play_world
+    {
+        params["world"] = json!(world);
+    }
     act(e, method, params)
 }
 fn play_params(e: &Editor) -> Value {
@@ -369,8 +374,9 @@ fn play_params(e: &Editor) -> Value {
         "hotReload": s.get("play.hotReload").and_then(Value::as_bool).unwrap_or(true),
     });
     if mode != "local" {
-        params["clients"] =
-            json!(s.get("play.clients").and_then(Value::as_f64).unwrap_or(1.) as u32);
+        let clients = s.get("play.clients").and_then(Value::as_f64).unwrap_or(1.) as u32;
+        params["clients"] = json!(clients);
+        params["conditions"] = json!(crate::shell::play_controls::conditions(s, clients));
     }
     params
 }
@@ -1057,6 +1063,13 @@ fn build() -> Vec<Spec> {
             } else {
                 "Play".into()
             }
+        })
+        .when(|c| {
+            if c.starting || c.state.playing == Some(true) {
+                Avail::Blocked("Play is already running or starting".into())
+            } else {
+                Avail::Ready
+            }
         }),
         cmd(
             "play.pause",
@@ -1212,12 +1225,68 @@ fn build() -> Vec<Spec> {
             |_, e, _| toggle(e, "play.startPaused"),
         )
         .when(|c| flag(c, "play.startPaused")),
-        later(
+        cmd(
             "play.network_profile",
-            "Network Profile",
+            "Network Profiles…",
             "wifi",
             "",
-            "Per-client network conditions need ara-net link shaping exposed through play.start.",
+            "Configure per-client network conditions for the next Play start.",
+            |s, e, _| {
+                focus(e, "game")?;
+                s.play_controls.options = true;
+                Ok(())
+            },
+        ),
+        cmd(
+            "play.options",
+            "Play Options…",
+            "settings-2",
+            "",
+            "Configure mode, client count and per-client network conditions.",
+            |s, e, _| {
+                focus(e, "game")?;
+                s.toggle_play_options(e)
+            },
+        ),
+        cmd(
+            "play.inspect",
+            "Inspect Runtime Selection",
+            "search",
+            "",
+            "Read the selected entity from the controlled running player.",
+            |s, e, _| s.inspect_play_selection(e),
+        ),
+        cmd(
+            "play.runtime.patch",
+            "Apply Runtime Edits",
+            "check",
+            "",
+            "Apply pending runtime field edits to a local Play world.",
+            |s, e, _| s.commit_play_fields(e).map(|_| ()),
+        ),
+        cmd(
+            "play.runtime.discard",
+            "Discard Runtime Edits",
+            "undo-2",
+            "",
+            "Discard pending runtime field drafts.",
+            |s, e, _| s.discard_play_fields(e),
+        ),
+        cmd(
+            "play.keep",
+            "Keep Runtime Changes",
+            "save",
+            "",
+            "Commit eligible runtime changes as one typed authoring transaction.",
+            |s, e, _| s.keep_play_changes(e, false),
+        ),
+        cmd(
+            "play.keep_driven",
+            "Keep Including Driven Values",
+            "save",
+            "",
+            "Explicitly include simulation-driven values in the typed Keep transaction.",
+            |s, e, _| s.keep_play_changes(e, true),
         ),
         cmd(
             "play.review",
@@ -1618,14 +1687,24 @@ fn build() -> Vec<Spec> {
             "users",
             "",
             "Show and control this Play client in the Game view.",
-            |s, _, t| {
-                if let Target::Text(n) = t
-                    && let Ok(n) = n.parse()
-                {
-                    s.game_client = n;
-                    s.game_captured = false;
-                }
-                Ok(())
+            |s, e, t| {
+                let Target::Text(n) = t else {
+                    return Err("Choose a Play client".into());
+                };
+                s.focus_play_client(e, n.parse()?, false)
+            },
+        ),
+        cmd(
+            "game.capture_client",
+            "Control Play Client",
+            "gamepad-2",
+            "",
+            "Capture input for the chosen Play view; Esc releases it.",
+            |s, e, t| {
+                let Target::Text(n) = t else {
+                    return Err("Choose a Play client".into());
+                };
+                s.focus_play_client(e, n.parse()?, true)
             },
         ),
         cmd(

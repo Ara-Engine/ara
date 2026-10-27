@@ -81,7 +81,7 @@ impl Shell {
                 .iter()
                 .filter(|d| matches(d) && (category.is_empty() || d.category == category))
             {
-                if matches!(d.kind, Kind::Map) {
+                if matches!(d.kind, Kind::Map) && d.key != "play.networkProfiles" {
                     continue;
                 }
                 if heading != d.category {
@@ -181,6 +181,10 @@ impl Shell {
                     "<text id='set-{id}' class='caption' text='{}' />",
                     escape(&text)
                 ));
+            }
+            Kind::Map if key == "play.networkProfiles" => {
+                self.bind_command(&format!("set-{id}"), "play.options", commands::Target::None);
+                out.push_str(&format!("<button id='set-{id}' text='Play options…' label='Client network profiles' action='Dispatch' />"));
             }
             Kind::Text | Kind::Map => {
                 self.bindings.insert(
