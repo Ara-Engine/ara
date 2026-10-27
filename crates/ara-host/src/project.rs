@@ -13,7 +13,7 @@ use ara_doc::{AssetIndex, Document, ReadResult, Workspace};
 use ara_schema::SchemaDb;
 use serde_json::Value;
 mod files;
-pub use files::{AuthoredFile, AuthoredRole, AuthoredScope, authored_files};
+pub use files::{AuthoredFile, AuthoredRole, AuthoredScope, authored_files, authored_root};
 
 /// Parses a frozen native document without reading the filesystem. `path` is its
 /// storage path; the supplied index resolves authored references and identities.
