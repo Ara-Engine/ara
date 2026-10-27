@@ -10,6 +10,7 @@
 #include "raster.slangh"
 #include "look.slangh"
 #include "look-vsm.slangh"
+#include "look-translucent.slangh"
 
 // Widest tent (half-width, texels at the pixel's level) the contact-hardening filter
 // uses; wider penumbrae clamp to it (about four to eight render pixels).
@@ -191,7 +192,10 @@ void vsmProjectMain(uint3 tid:SV_DispatchThreadID){
     if(any(p>=int2(f.extent.xy)))return;
     float visible=-1,tent=1,depth=gbufferDepth(f,p);
     float3 normal=gbufferNormal(f,p);
-    if(depth>0&&dot(normal,f.sunDirection.xyz)>0)
-        visible=vsmSoftVisibility(f,l,worldAtDepth(f,float2(p)+0.5,depth),normal,tent);
+    if(depth>0&&dot(normal,f.sunDirection.xyz)>0){
+        float3 world=worldAtDepth(f,float2(p)+0.5,depth);visible=vsmSoftVisibility(f,l,world,normal,tent);
+        // Sun through blended casters (look-translucent.slangh); -1 stays unresolved.
+        if(visible>0)visible*=translucentSun(l,world);
+    }
     images[NonUniformResourceIndex(l.vsmMask.y)][p]=float4(visible,tent,0,0);
 }

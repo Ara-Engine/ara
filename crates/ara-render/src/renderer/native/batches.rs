@@ -6,6 +6,11 @@ pub(super) fn is_transparent(material: &crate::instanced::Material) -> bool {
     material.pbr.flags[0] == 2 || is_refractive(material)
 }
 
+/// Blended (alpha-film) materials cast translucent sun shadows (`look::translucent`).
+pub(super) fn is_translucent(material: &crate::instanced::Material) -> bool {
+    material.pbr.flags[0] == 2
+}
+
 /// Transmissive materials draw in the forward pass through the refractive PSOs
 /// (`NativePipelines::refract`), over a copy of the lit opaque scene.
 pub(super) fn is_refractive(material: &crate::instanced::Material) -> bool {
@@ -33,6 +38,8 @@ pub(super) struct Group {
     pub transparent: bool,
     /// A transmissive group (`is_refractive`), drawn by the refractive forward PSOs.
     pub refract: bool,
+    /// A blended group (`is_translucent`), drawn into the translucent sun map.
+    pub translucent: bool,
     pub offset: usize,
     pub slot: usize,
 }
@@ -92,6 +99,7 @@ impl Groups {
                     instances,
                     transparent: is_transparent(&scene.materials[material]),
                     refract: is_refractive(&scene.materials[material]),
+                    translucent: is_translucent(&scene.materials[material]),
                 }
             })
             .collect();

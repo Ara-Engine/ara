@@ -50,11 +50,16 @@ impl LookGpu {
     /// Prepares this frame's refraction of render-pixel rect `rect`: allocates the
     /// atlas (or reallocates it after a resize) and writes the look record's
     /// `refract_*` rows (shaders/look-refract.slangh).
-    pub(crate) fn refraction(&mut self, gpu: &mut GpuDevice, frame: &mut LookFrame, rect: [u32; 4]) -> Result<()> {
-        if self.refract.as_ref().is_some_and(|r| r.size != self.render) {
-            if let Some(old) = self.refract.take() {
-                gpu.retire(Resource::Image(old.image))?;
-            }
+    pub(crate) fn refraction(
+        &mut self,
+        gpu: &mut GpuDevice,
+        frame: &mut LookFrame,
+        rect: [u32; 4],
+    ) -> Result<()> {
+        if self.refract.as_ref().is_some_and(|r| r.size != self.render)
+            && let Some(old) = self.refract.take()
+        {
+            gpu.retire(Resource::Image(old.image))?;
         }
         if self.refract.is_none() {
             let [width, height] = extent(self.render);

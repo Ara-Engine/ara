@@ -18,9 +18,9 @@ Owns the M1 baseline renderer and agent visual feedback. Gameplay state stays in
 - `Scene`, `Mesh`, `Material`, `Light`, `CameraSpec`: extracted world data and camera pose/bounds requests. Materials use bindless texture indices.
 - `instanced::Scene`: native model-space content contract for shared geometry,
   current/previous instance transforms, deforming revisions, 64-byte UV0/UV1
-  vertices and 320-byte materials with six independent map transforms, AO,
-  transmission and authored terrain layer IDs. Texture IDs address the native
-  residency table; u32::MAX means neutral texels (separate from the legacy `Scene` ABI).
+  vertices and 320-byte materials with six map transforms, AO, transmission (+ IOR/volume packed by `instanced::Volume`:
+  refractive forward PSOs over `look::refract`'s copy of the lit scene; blended films draw back then front faces and cast
+  `look::translucent` sun shadows on High/Epic) and terrain layer IDs. Texture IDs address the residency table; u32::MAX is neutral.
   Validate only at content publication; do not hash/traverse static vertices
   when moving instances. Culling bounds handle mirrored/nonuniform transforms.
 - `Renderer::new_native` consumes this scene and an owned `instanced::Textures`

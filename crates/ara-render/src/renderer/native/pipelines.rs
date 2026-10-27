@@ -1,4 +1,4 @@
-//! Nine native PSOs are retained by the renderer across content generations.
+//! Twelve native PSOs are retained by the renderer across content generations.
 use super::*;
 use ara_gpu::vulkan::{PipelinePreparation, PipelinePreparationId};
 
@@ -13,7 +13,8 @@ pub(in crate::renderer) struct NativePipelines {
     /// which read the G-buffer it blends into.
     pub forward: Pipeline,
     /// The forward pass of lit frames: colour, ids and motion only, since nothing
-    /// reads the G-buffer after it.
+    /// reads the G-buffer after it. Front faces only: `forward_lit_back` draws an
+    /// instance's back faces first, so closed films composite far side under near.
     pub forward_lit: Pipeline,
     /// The G-buffer fill for presets without terrain detail
     /// (`Quality::terrain_detail` zero): terrain keeps its top projection, and
@@ -30,6 +31,12 @@ pub(in crate::renderer) struct NativePipelines {
     pub refract: Pipeline,
     /// The refractive forward pass with the High/Epic tier's code.
     pub refract_high: Pipeline,
+    /// The back faces of lit frames' blended draws, before `forward_lit`.
+    pub forward_lit_back: Pipeline,
+    /// The back faces of blended draws with the High/Epic tier's code.
+    pub forward_high_back: Pipeline,
+    /// Blended casters' film opacity into the translucent sun map (`look::translucent`).
+    pub translucent: Pipeline,
 }
 
 impl NativePipelines {
@@ -45,7 +52,7 @@ impl NativePipelines {
 }
 
 /// Cooked recipe names, in `NativePipelines` field order.
-const RECIPES: [&str; 9] = [
+const RECIPES: [&str; 12] = [
     "native_shadow",
     "native_gbuffer",
     "native_forward",
@@ -55,6 +62,9 @@ const RECIPES: [&str; 9] = [
     "native_forward_high",
     "native_forward_refract",
     "native_forward_refract_high",
+    "native_forward_lit_back",
+    "native_forward_high_back",
+    "native_shadow_translucent",
 ];
 
 #[derive(Default)]
@@ -62,7 +72,7 @@ pub(in crate::renderer) enum Pipelines {
     #[default]
     Empty,
     Pending(PipelinePreparationId),
-    Ready(NativePipelines),
+    Ready(Box<NativePipelines>),
 }
 impl Renderer {
     /// Poll the native PSOs without compiling or waiting on this thread. Content
@@ -103,10 +113,13 @@ impl Renderer {
                     forward_high,
                     refract,
                     refract_high,
+                    forward_lit_back,
+                    forward_high_back,
+                    translucent,
                 ]: [Pipeline; RECIPES.len()] = handles
                     .try_into()
                     .map_err(|_| anyhow::anyhow!("native PSO count differs"))?;
-                self.native_pipelines = Pipelines::Ready(NativePipelines {
+                self.native_pipelines = Pipelines::Ready(Box::new(NativePipelines {
                     shadow,
                     gbuffer,
                     forward,
@@ -116,7 +129,10 @@ impl Renderer {
                     forward_high,
                     refract,
                     refract_high,
-                });
+                    forward_lit_back,
+                    forward_high_back,
+                    translucent,
+                }));
             }
         }
         Ok(matches!(self.native_pipelines, Pipelines::Ready(_)))
@@ -131,9 +147,9 @@ impl Renderer {
             // content calls preallocate and retains its last completed image.
             std::thread::sleep(std::time::Duration::from_millis(1));
         }
-        let Pipelines::Ready(handles) = self.native_pipelines else {
+        let Pipelines::Ready(handles) = &self.native_pipelines else {
             unreachable!("PSOs ready")
         };
-        Ok(handles)
+        Ok(**handles)
     }
 }

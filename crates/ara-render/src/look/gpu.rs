@@ -176,6 +176,9 @@ pub(crate) struct LookGpu {
     /// The copied opaque scene transmissive forward draws refract (`look::refract`),
     /// allocated by the first frame that draws one.
     pub refract: Option<super::refract::Refraction>,
+    /// Sun shadows of blended casters (`look::translucent`), allocated by the first
+    /// High/Epic frame that has one.
+    pub translucent: Option<super::translucent::TranslucentSun>,
 }
 
 /// Graph identities of the look's persistent resources for one frame.
@@ -317,6 +320,7 @@ impl LookGpu {
             probe_staging: Vec::new(),
             probe_writes: Vec::new(),
             refract: None,
+            translucent: None,
         })
     }
 

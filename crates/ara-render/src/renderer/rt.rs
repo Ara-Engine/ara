@@ -56,6 +56,9 @@ struct Pipelines {
     filter: Pipeline,
     /// Deferred lighting reading the traced reflections (`lightingHighRtFragment`).
     lighting: Pipeline,
+    /// Transmissive forward draws refracting through traced interfaces
+    /// (`nativeForwardRefractRtFragment`, shaders/native-refract-rt.slang).
+    refract: Pipeline,
 }
 
 struct Blas {
@@ -125,7 +128,12 @@ pub(super) struct Rays {
 }
 
 /// Cooked recipes, in `Pipelines` field order.
-const RECIPES: [&str; 3] = ["look_rt_reflect", "look_rt_filter", "lighting_high_rt"];
+const RECIPES: [&str; 4] = [
+    "look_rt_reflect",
+    "look_rt_filter",
+    "lighting_high_rt",
+    "native_forward_refract_rt",
+];
 
 /// The ray-query PSOs, compiled off-thread (`GpuDevice::prepare_pipelines`) the
 /// first time a frame wants them; frames trace once they are ready.
@@ -202,13 +210,14 @@ impl Psos {
         if let Self::Pending(ticket) = *self
             && let Some(handles) = gpu.poll_prepared_pipelines(ticket)?
         {
-            let [reflect, filter, lighting]: [Pipeline; RECIPES.len()] = handles
+            let [reflect, filter, lighting, refract]: [Pipeline; RECIPES.len()] = handles
                 .try_into()
                 .map_err(|_| anyhow::anyhow!("hybrid PSO count differs"))?;
             *self = Self::Ready(Pipelines {
                 reflect,
                 filter,
                 lighting,
+                refract,
             });
         }
         Ok(match self {
@@ -687,6 +696,12 @@ impl Rays {
     /// look-rt.slangh, e.g. ray-traced refraction); declare it after `declare`.
     pub(super) fn tlas_read(&self) -> Option<(ResourceId, Access)> {
         self.ids.as_ref().map(|ids| (ids.tlas, Access::AsRead))
+    }
+
+    /// The refractive forward PSO tracing its interfaces, on frames that trace.
+    pub(super) fn refract(&self) -> Option<Pipeline> {
+        self.ids.as_ref()?;
+        self.pipelines.map(|p| p.refract)
     }
 
     /// The deferred lighting PSO reading traced reflections, on frames that trace.

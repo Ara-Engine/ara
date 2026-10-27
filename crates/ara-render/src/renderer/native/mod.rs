@@ -376,6 +376,42 @@ impl Renderer {
             .reduce(|[lo, hi], [a, b]| [lo.min(a), hi.max(b)])
     }
 
+    /// World bounds of the blended casters (`look::translucent`); `None` without any.
+    pub(crate) fn native_translucent_bounds(&self) -> Option<[Vec3; 2]> {
+        let native = self.native.as_ref()?;
+        native
+            .groups
+            .groups
+            .iter()
+            .filter(|group| group.translucent)
+            .flat_map(|group| &group.instances)
+            .map(|&i| native.bounds[i])
+            .reduce(|[lo, hi], [a, b]| [lo.min(a), hi.max(b)])
+    }
+
+    /// Culls the blended casters seen from the sun through the translucent sun map's
+    /// `matrix` into native pass `culling::TRANSLUCENT_PASS`.
+    pub(crate) fn cull_native_translucent(&mut self, matrix: Mat4) -> Result<()> {
+        let view = culling::View::shadow(
+            matrix,
+            crate::look::translucent::RESOLUTION,
+            self.look.quality.min_pixels,
+        );
+        let native = self
+            .native
+            .as_mut()
+            .ok_or_else(|| anyhow::anyhow!("Native raster content required"))?;
+        native.culling.opaque(
+            &mut self.gpu,
+            native.visible,
+            &native.groups,
+            &native.bounds,
+            culling::TRANSLUCENT_PASS,
+            view,
+            &mut native.changes.work,
+        )
+    }
+
     /// Cull the landforms of a heightfield capture (look::horizon) into reserved
     /// slot `slot`: opaque casters with bound radii of at least `min_radius` metres
     /// at the view's texel density, with the LODs a shadow view of `resolution`
@@ -841,6 +877,22 @@ impl Native {
         self.record_with(recorder, root, pass, pipeline);
     }
 
+    /// Records the translucent sun casters (`look::translucent`): their nearest depth
+    /// through the shadow PSO, or (`transmittance`) their films' opacity.
+    pub(super) fn record_translucent(
+        &self,
+        recorder: &mut Recorder,
+        root: RootConstants,
+        transmittance: bool,
+    ) {
+        let pipeline = if transmittance {
+            self.pipelines.translucent
+        } else {
+            self.pipelines.shadow
+        };
+        self.record_with(recorder, root, culling::TRANSLUCENT_PASS, pipeline);
+    }
+
     /// Records the camera's opaque and forward draws (passes 4 and 5) again through
     /// the wire PSO: the wireframe view modes' edge mask.
     pub(super) fn record_wire(&self, recorder: &mut Recorder, root: RootConstants) {
@@ -852,28 +904,48 @@ impl Native {
     /// Records the sorted forward draws (pass 5). Lit frames write colour, ids and
     /// motion only (nothing reads the G-buffer after them) and switch to the
     /// refractive PSOs for transmissive draws (`Culling::refract`); `high` selects
-    /// the High/Epic tier's. Debug views blend every draw into the G-buffer they
-    /// display through the full forward PSO.
+    /// the High/Epic tier's, and `traced` (hybrid frames: rt.rs `refract`) replaces
+    /// its refractive PSO. Blended draws draw back faces, then front faces. Debug
+    /// views blend every draw into the G-buffer they display through the full
+    /// forward PSO.
     pub(super) fn record_forward(
         &self,
         recorder: &mut Recorder,
         root: RootConstants,
         lit: bool,
         high: bool,
+        traced: Option<Pipeline>,
     ) {
-        let [plain, refract] = match (lit, high) {
-            (false, _) => [self.pipelines.forward; 2],
-            (true, false) => [self.pipelines.forward_lit, self.pipelines.refract],
-            (true, true) => [self.pipelines.forward_high, self.pipelines.refract_high],
+        let p = &self.pipelines;
+        // Blended draws: back faces, then front faces (none: the debug views' single
+        // pass shades both); refractive draws composite in one.
+        let [back, front, refract] = match (lit, high) {
+            (false, _) => [None, Some(p.forward), Some(p.forward)],
+            (true, false) => [
+                Some(p.forward_lit_back),
+                Some(p.forward_lit),
+                Some(p.refract),
+            ],
+            (true, true) => [
+                Some(p.forward_high_back),
+                Some(p.forward_high),
+                Some(traced.unwrap_or(p.refract_high)),
+            ],
         };
         let mut bound = None;
         for (batch, &refractive) in self.culling.draws[5].iter().zip(&self.culling.refract) {
-            let pipeline = if refractive { refract } else { plain };
-            if bound != Some(pipeline) {
-                recorder.push(Command::Pipeline(pipeline));
-                bound = Some(pipeline);
+            let passes = if refractive {
+                [None, refract]
+            } else {
+                [back, front]
+            };
+            for pipeline in passes.into_iter().flatten() {
+                if bound != Some(pipeline) {
+                    recorder.push(Command::Pipeline(pipeline));
+                    bound = Some(pipeline);
+                }
+                self.record_batch(recorder, root, batch, pipeline);
             }
-            self.record_batch(recorder, root, batch, pipeline);
         }
     }
 

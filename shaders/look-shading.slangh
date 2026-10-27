@@ -4,6 +4,7 @@
 #include "look-horizon.slangh"
 #include "look-vsm.slangh"
 #include "look-captures.slangh"
+#include "look-translucent.slangh"
 // Cascaded sun shadows (renderer/frame.rs): f.look.y texels per cascade side in a
 // 2x2 D32 atlas, f.look.z active cascades, far distances in f.splits.
 uint cascadeIndex(Frame f,float3 world){float d=dot(world-f.camera.xyz,f.forward.xyz);return d<f.splits.x?0:d<f.splits.y?1:d<f.splits.z?2:3;}
@@ -311,7 +312,13 @@ float3 ibl(Frame f,Look l,Surface s,float3 world,float3 v,int2 p,bool gathered,b
 float3 shade(Frame f,Look l,Surface s,float3 world,int2 p,bool gathered,bool high=false,bool rays=false) {
     float3 v=normalize(f.camera.xyz-world),scattering=specularScattering(s,v);float3 result=s.emissive+ibl(f,l,s,world,v,p,gathered,high,rays);
     // The sun lights front faces only (brdf ends in N.L): back faces skip its shadows.
-    if(dot(s.normal,f.sunDirection.xyz)>0)result+=brdf(s,v,f.sunDirection.xyz,scattering)*sunAt(f,l,world)*visibility(f,l,world,s.normal,gathered?vsmMask(l,p):-1);
+    // The High tier passes the sun through blended casters (look-translucent.slangh);
+    // virtual pages already hold it where they resolved this pixel.
+    if(dot(s.normal,f.sunDirection.xyz)>0){
+        float pages=gathered?vsmMask(l,p):-1,lit=visibility(f,l,world,s.normal,pages);
+        if(high && pages<0 && lit>0)lit*=translucentSun(l,world);
+        result+=brdf(s,v,f.sunDirection.xyz,scattering)*sunAt(f,l,world)*lit;
+    }
     uint tilesX=(f.extent.x+15)/16;uint tile=(uint(p.y)/16*tilesX+uint(p.x)/16)*TILE_STRIDE;
     uint count=buffers[NonUniformResourceIndex(f.lighting.z)].Load(tile*4);
     for(uint i=0;i<count;i++) {

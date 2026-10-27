@@ -204,6 +204,9 @@ impl ViewState {
         if let Some(refract) = self.look.refract {
             refract.destroy(gpu)?;
         }
+        if let Some(translucent) = self.look.translucent {
+            translucent.destroy(gpu)?;
+        }
         if let Some(native) = self.native {
             native.destroy(gpu)?;
         }
@@ -272,5 +275,6 @@ fn fork_look(
         probe_staging: Vec::new(),
         probe_writes: Vec::new(),
         refract: None,
+        translucent: None,
     })
 }

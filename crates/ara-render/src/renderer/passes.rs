@@ -48,6 +48,8 @@ enum Recipe {
     Rays(super::rt::RtPass),
     /// The refraction copy (0) or a blurred level (1..4) of `look::refract`.
     Refract(u32),
+    /// Blended casters' depth and film opacity from the sun (`look::translucent`).
+    TranslucentSun,
     /// Ownership/synchronization only.
     Empty,
 }
@@ -104,10 +106,11 @@ impl Renderer {
         if self.look.cascades.is_none() {
             self.ensure_cascades()?;
         }
-        let (mut far, mut cascades, mut local) = (
+        let (mut far, mut cascades, mut local, mut translucent) = (
             self.look.far.take(),
             self.look.cascades.take(),
             self.look.local.take(),
+            self.look.translucent.take(),
         );
         let (all, bounds) = match self.native_caster_changes() {
             Some(changes) => (changes.all, changes.bounds),
@@ -122,7 +125,15 @@ impl Renderer {
         if let Some(local) = &mut local {
             local.cache.observe(all, bounds);
         }
-        (self.look.far, self.look.cascades, self.look.local) = (far, cascades, local);
+        if let Some(translucent) = &mut translucent {
+            translucent.observe(all, bounds);
+        }
+        (
+            self.look.far,
+            self.look.cascades,
+            self.look.local,
+            self.look.translucent,
+        ) = (far, cascades, local, translucent);
         if all && let Some(horizon) = &mut self.look.horizon {
             horizon.invalidate();
         }
@@ -474,6 +485,29 @@ impl Renderer {
         if let Some(rect) = refract_rect {
             self.look.refraction(&mut self.gpu, &mut look_frame, rect)?;
         }
+        // Blended casters' sun shadows (look::translucent) on High/Epic, whose shading
+        // and virtual page projection alone compile the lookup.
+        let translucent_bounds = self
+            .native_translucent_bounds()
+            .filter(|_| self.look.quality.high_tier);
+        let mut translucent_draw = None;
+        if let Some(bounds) = translucent_bounds {
+            let (matrix, record) = self.look.translucent_sun(
+                &mut self.gpu,
+                &mut look_frame,
+                std::mem::size_of_val(&frame) as u64,
+                bounds,
+                self.content.sun_direction,
+            )?;
+            if let Some(record) = record {
+                let mut translucent_frame = frame;
+                translucent_frame.shadows[0] = matrix;
+                self.gpu
+                    .upload_queued(record, bytemuck::bytes_of(&translucent_frame))?;
+                self.cull_native_translucent(matrix)?;
+                translucent_draw = Some(matrix);
+            }
+        }
         // Every camera reads the baked reflection captures (look::captures).
         let captures = self.look.quality.reflection_captures.is_some();
         self.views
@@ -670,6 +704,21 @@ impl Renderer {
             .local
             .filter(|_| local_written)
             .map(|local| (local, Access::ShaderRead));
+        let translucent = translucent_bounds.and_then(|_| self.look.translucent_ids(&mut graph));
+        if let (Some([depth, transmittance]), Some(_)) = (translucent, translucent_draw) {
+            let pass = graph.pass(
+                "TranslucentSun",
+                Queue::Graphics,
+                [(depth, Access::Depth), (transmittance, Access::Color)],
+            );
+            declare(pass, Recipe::TranslucentSun);
+            shadow_passes.push(pass);
+        }
+        let translucent_reads: Vec<_> = translucent
+            .into_iter()
+            .flatten()
+            .map(|id| (id, Access::ShaderRead))
+            .collect();
         let gbuffer = graph.pass(
             "GBuffer",
             Queue::Graphics,
@@ -725,6 +774,7 @@ impl Renderer {
                 ]
                 .into_iter()
                 .chain(vsm_sampled.then_some((atlas, Access::ShaderRead)))
+                .chain(translucent_reads.iter().copied())
                 .chain(graphics.iter().copied()),
             );
             declare(project, Recipe::Look(LookPass::VsmProject));
@@ -826,13 +876,14 @@ impl Renderer {
             .chain(vsm_mask)
             .chain(look_reads.iter().copied())
             .chain(capture_reads.iter().copied())
+            .chain(translucent_reads.iter().copied())
             .chain(self.rays.lighting_reads()),
         );
         declare(lighting, Recipe::Lighting);
         let refract_atlas = refract_rect.and_then(|_| {
-            let (atlas, passes) =
-                self.look
-                    .refract_passes(&mut graph, look.frame, ids[HDR], ids[DEPTH], &graphics)?;
+            let (atlas, passes) = self
+                .look
+                .refract_passes(&mut graph, look.frame, ids[HDR], ids[DEPTH], &graphics)?;
             for (id, level) in passes {
                 declare(id, Recipe::Refract(level));
             }
@@ -864,6 +915,7 @@ impl Renderer {
             .chain(self.native.as_ref().map(|_| (ids[MOTION], Access::Color)))
             .chain(capture_reads.iter().copied())
             .chain(refract_atlas.map(|atlas| (atlas, Access::ShaderRead)))
+            .chain(translucent_reads.iter().copied())
             // Hybrid frames' TLAS, for forward variants that trace (look-rt.slangh).
             .chain(self.rays.tlas_read()),
         );
@@ -1417,6 +1469,7 @@ impl Renderer {
                                 footprint,
                                 lit,
                                 self.look.quality.high_tier,
+                                self.rays.refract(),
                             );
                         }
                         let mut transparent = self
@@ -1497,6 +1550,45 @@ impl Renderer {
                         },
                         true,
                     ),
+                    Recipe::TranslucentSun => {
+                        let map = self
+                            .look
+                            .translucent
+                            .as_ref()
+                            .expect("declared only with a translucent sun map");
+                        let size = [crate::look::translucent::RESOLUTION; 2];
+                        let mut constants = root;
+                        constants.words[0] = map.frame_index;
+                        constants.words[4] = 0;
+                        // Nearest film depth, then every film's opacity over a clear of one.
+                        for (transmittance, colors, depth) in [
+                            (false, Vec::new(), Some(map.depth)),
+                            (true, vec![map.transmittance], None),
+                        ] {
+                            recorder.push(Command::BeginRendering {
+                                colors: colors
+                                    .into_iter()
+                                    .map(|image| Attachment {
+                                        image,
+                                        clear: Some([1.; 4]),
+                                    })
+                                    .collect(),
+                                depth: depth.map(|image| Attachment {
+                                    image,
+                                    clear: Some([0.; 4]),
+                                }),
+                                size,
+                            });
+                            recorder.push(Command::Viewport {
+                                origin: [0, 0],
+                                size,
+                            });
+                            if let Some(native) = &self.native {
+                                native.record_translucent(&mut recorder, constants, transmittance);
+                            }
+                            recorder.push(Command::EndRendering);
+                        }
+                    }
                     Recipe::Refract(level) => self.look.record_refract(
                         &mut recorder,
                         level,
@@ -1540,6 +1632,12 @@ impl Renderer {
         }
         if let Some(atlas) = refract_atlas {
             self.look.refract_finish(atlas, &compiled.final_states);
+        }
+        if let Some(ids) = translucent {
+            self.look.translucent_finish(ids, &compiled.final_states);
+        }
+        if let Some(matrix) = translucent_draw {
+            self.look.translucent_drawn(matrix);
         }
         if let (Some(far), Some((matrix, view))) = (&mut self.look.far, far_draw) {
             far.cache.drawn(matrix, view);

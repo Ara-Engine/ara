@@ -8,8 +8,11 @@ mod patches;
 mod projection;
 pub(crate) use pages::PageView;
 
-/// Cascades, opaque/forward camera lists and the existing far-shadow list.
-pub(super) const BASE_PASSES: usize = 7;
+/// Cascades, opaque/forward camera lists, the existing far-shadow list and the
+/// translucent sun casters.
+pub(super) const BASE_PASSES: usize = 8;
+/// Blended casters seen from the sun (`look::translucent`); every other pass skips them.
+pub(super) const TRANSLUCENT_PASS: usize = 7;
 
 #[derive(Clone, Copy, PartialEq)]
 pub(super) struct View {
@@ -167,9 +170,13 @@ impl Culling {
     ) {
         let transparent = batches::is_transparent(value);
         let refract = batches::is_refractive(value);
+        let translucent = batches::is_translucent(value);
         for &g in &groups.material_groups[material] {
-            if groups.groups[g].transparent != transparent {
+            if groups.groups[g].transparent != transparent
+                || groups.groups[g].translucent != translucent
+            {
                 groups.groups[g].transparent = transparent;
+                groups.groups[g].translucent = translucent;
                 self.group(g);
                 self.transparent_dirty = true;
             }
@@ -294,7 +301,12 @@ impl Culling {
                 self.draws[pass][group.slot + lod].count = 0;
                 self.scratch[lod].clear();
             }
-            if group.transparent {
+            let drawn = if pass == TRANSLUCENT_PASS {
+                group.translucent
+            } else {
+                !group.transparent
+            };
+            if !drawn {
                 continue;
             }
             for &i in &group.instances {
@@ -413,9 +425,21 @@ fn refract_rect(matrix: Mat4, bounds: [Vec3; 2]) -> [f32; 4] {
     let (mut lo, mut hi) = (glam::Vec2::splat(f32::MAX), glam::Vec2::splat(f32::MIN));
     for corner in 0..8 {
         let p = Vec3::new(
-            if corner & 1 == 0 { bounds[0].x } else { bounds[1].x },
-            if corner & 2 == 0 { bounds[0].y } else { bounds[1].y },
-            if corner & 4 == 0 { bounds[0].z } else { bounds[1].z },
+            if corner & 1 == 0 {
+                bounds[0].x
+            } else {
+                bounds[1].x
+            },
+            if corner & 2 == 0 {
+                bounds[0].y
+            } else {
+                bounds[1].y
+            },
+            if corner & 4 == 0 {
+                bounds[0].z
+            } else {
+                bounds[1].z
+            },
         );
         let clip = matrix * p.extend(1.);
         if clip.w <= 1e-4 {
@@ -426,7 +450,10 @@ fn refract_rect(matrix: Mat4, bounds: [Vec3; 2]) -> [f32; 4] {
         hi = hi.max(uv);
     }
     let size = hi - lo;
-    let (lo, hi) = ((lo - size).max(glam::Vec2::ZERO), (hi + size).min(glam::Vec2::ONE));
+    let (lo, hi) = (
+        (lo - size).max(glam::Vec2::ZERO),
+        (hi + size).min(glam::Vec2::ONE),
+    );
     [lo.x, lo.y, hi.x, hi.y]
 }
 

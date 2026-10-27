@@ -611,9 +611,47 @@
       "vertex_stride": 0
     }
   },
+  "native_forward_high_back": {
+    "entries": {
+      "nativeForwardHighBackFragment": "fragment",
+      "nativeGeometryVertex": "vertex"
+    },
+    "source": "native-raster.slang",
+    "state": {
+      "blend": true,
+      "color_formats": [
+        109,
+        100,
+        83
+      ],
+      "depth_format": 126,
+      "depth_test": true,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
   "native_forward_lit": {
     "entries": {
       "nativeForwardLitFragment": "fragment",
+      "nativeGeometryVertex": "vertex"
+    },
+    "source": "native-raster.slang",
+    "state": {
+      "blend": true,
+      "color_formats": [
+        109,
+        100,
+        83
+      ],
+      "depth_format": 126,
+      "depth_test": true,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
+  "native_forward_lit_back": {
+    "entries": {
+      "nativeForwardLitBackFragment": "fragment",
       "nativeGeometryVertex": "vertex"
     },
     "source": "native-raster.slang",
@@ -655,6 +693,25 @@
       "nativeForwardRefractHighFragment": "fragment"
     },
     "source": "native-raster.slang",
+    "state": {
+      "blend": true,
+      "color_formats": [
+        109,
+        100,
+        83
+      ],
+      "depth_format": 126,
+      "depth_test": true,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
+  "native_forward_refract_rt": {
+    "entries": {
+      "nativeForwardRefractRtFragment": "fragment",
+      "nativeGeometryVertex": "vertex"
+    },
+    "source": "native-refract-rt.slang",
     "state": {
       "blend": true,
       "color_formats": [
@@ -724,6 +781,23 @@
       "depth_format": 126,
       "depth_test": true,
       "depth_write": true,
+      "vertex_stride": 0
+    }
+  },
+  "native_shadow_translucent": {
+    "entries": {
+      "nativeShadowTranslucentFragment": "fragment",
+      "nativeShadowVertex": "vertex"
+    },
+    "source": "native-raster.slang",
+    "state": {
+      "blend": true,
+      "color_formats": [
+        76
+      ],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
       "vertex_stride": 0
     }
   },

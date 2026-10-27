@@ -129,7 +129,10 @@ fn volume_packs_ior_thickness_and_absorption_for_the_refraction_shader() {
     assert!((thickness - 0.6).abs() < 1e-3);
     for (got, colour) in absorption.into_iter().zip(volume.attenuation_color) {
         let expected = -colour.ln();
-        assert!((got - expected).abs() < expected * 0.01, "{got} vs {expected}");
+        assert!(
+            (got - expected).abs() < expected * 0.01,
+            "{got} vs {expected}"
+        );
     }
     let mut scene = triangle();
     scene.materials[0].extras.volume = volume.pack();

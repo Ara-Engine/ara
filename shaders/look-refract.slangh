@@ -9,6 +9,12 @@
 // (m; zero where no opaque surface was drawn).
 // refractInfo[0]: x atlas (sampled), y atlas (storage), z blurred levels.
 // refractParams[0]: x march steps.
+//
+// Exposure: refraction composes in the HDR target's space, which the copy holds;
+// absolute radiance (shading, the environment) is scaled into it by this one factor.
+// Today the HDR target is linear radiance (1); with the pre-exposed HDR contract it
+// is the exposure the target stores, E = hdrExposure(f, l).
+float refractExposure(Frame f,Look l){return 1;}
 uint2 refractLevelSize(Frame f,uint level){return max(f.extent.xy>>level,uint2(1));}
 uint2 refractLevelOrigin(Frame f,uint level){
     if(level==0)return uint2(0,0);
@@ -56,7 +62,8 @@ RefractVolume refractVolume(uint2 words){
 // depth over `reach` metres (quadratic steps, then a binary refinement), read at the
 // blur level of the rough lobe's footprint there (`spread` radians per metre past
 // the surface, `travelled` metres already crossed inside). Rays that leave the rect
-// or meet nothing read the sky or environment, prefiltered by `roughness`.
+// or meet nothing read the sky or environment, prefiltered by `roughness`. In the HDR
+// target's space (refractExposure), as the copy is.
 float3 refractTrace(Frame f,Look l,float3 o,float3 d,float reach,float spread,float travelled,float roughness,float2 uv){
     // End in front of the near plane, as the reflection march does.
     float ahead=refractViewDepth(f,o),toward=dot(d,f.forward.xyz);
@@ -81,9 +88,10 @@ float3 refractTrace(Frame f,Look l,float3 o,float3 d,float reach,float spread,fl
     }
     uint prefilter=physicalSky(l)?l.sampled1.y:f.lighting.y;float2 e=environmentUv(d);float level=roughness*4,low=floor(level),high=min(low+1,4);
     float3 sky=lerp(envTex(prefilter,float2(e.x,(e.y*127+0.5+low*128)/640)).rgb,envTex(prefilter,float2(e.x,(e.y*127+0.5+high*128)/640)).rgb,frac(level));
-    return physicalSky(l)?sky:applyFog(f,l,sky,f.camera.xyz+d*FOG_RANGE,uv);
+    return (physicalSky(l)?sky:applyFog(f,l,sky,f.camera.xyz+d*FOG_RANGE,uv))*refractExposure(f,l);
 }
-// Final colour of a transmissive forward surface, premultiplied by its coverage
+// Final colour of a transmissive forward surface in the HDR target's space
+// (refractExposure), premultiplied by its coverage
 // (the forward pass's ONE, ONE_MINUS_SRC_ALPHA blending composites it over the
 // scene). One `shade` gives its reflection (the dielectric layer reflects with the
 // IOR's F0 where it transmits: Surface.metal 1 makes F0 the albedo), any remaining
@@ -96,18 +104,33 @@ float3 refractTrace(Frame f,Look l,float3 o,float3 d,float reach,float spread,fl
 // KHR_materials_transmission); roughness widens the lobe at each, read as blur.
 // `geometric`: the interpolated normal facing the viewer; `scale`: the instance's
 // scale (the thickness is in mesh units); `high`: the High/Epic tier's shading.
+// The F0 of a dielectric with index of refraction `ior` (in air).
+float refractF0(float ior){float r=(ior-1)/(ior+1);return r*r;}
+// A transmissive surface's own light in the HDR target's space: one `shade` gives its
+// reflection (the dielectric layer reflects with F0 `f0` where it transmits:
+// Surface.metal 1 makes F0 the albedo), any remaining diffuse or metal layer and
+// emission. `through`: the share of transmitted light the specular lobe leaves (the
+// split-sum fit `ibl` uses).
+float3 refractSurface(Frame f,Look l,Surface s,float f0,float3 world,int2 p,bool high,out float through){
+    float tau=s.transmission;float3 v=normalize(f.camera.xyz-world);float2 uv=(float2(p)+0.5)/float2(f.extent.xy);
+    Surface r=s;r.albedo=lerp(s.albedo,float3(f0),tau);r.metal=lerp(s.metal,1.,tau);r.transmission=0;
+    float nv=saturate(dot(s.normal,v));float4 c=s.roughness*float4(-1,-0.0275,-0.572,0.022)+float4(1,0.0425,1.04,-0.04);
+    float a004=min(c.x*c.x,exp2(-9.28*nv))*c.x+c.y;float2 ab=float2(-1.04,1.04)*a004+c.zw;
+    through=saturate(1-(f0*ab.x+ab.y));
+    return applyFog(f,l,shade(f,l,r,world,p,false,high),world,uv)*refractExposure(f,l);
+}
+// The angular spread (radians per metre travelled, about) a rough interface adds:
+// GGX's lobe width (roughness squared) bent by (1 - 1/IOR), twice that for the tails
+// a single width would miss.
+float refractSpread(float roughness,float ior){return 2*roughness*roughness*(1-1/ior);}
+// Light leaving a medium along `out` through a surface with outward normal `n`
+// (Schlick at the outside angle).
+float refractLeave(float f0,float3 out,float3 n){float x=1-saturate(dot(out,n));return 1-(f0+(1-f0)*x*x*x*x*x);}
 float4 refractColour(Frame f,Look l,Surface s,uint2 volume,float scale,float3 world,float3 geometric,int2 p,bool high){
     RefractVolume m=refractVolume(volume);float tau=s.transmission;
     float3 v=normalize(f.camera.xyz-world),n=s.normal;float2 uv=(float2(p)+0.5)/float2(f.extent.xy);
-    float f0=(m.ior-1)/(m.ior+1);f0*=f0;
-    Surface r=s;r.albedo=lerp(s.albedo,float3(f0),tau);r.metal=lerp(s.metal,1.,tau);r.transmission=0;
-    float3 reflected=applyFog(f,l,shade(f,l,r,world,p,false,high),world,uv);
-    float nv=saturate(dot(n,v));float4 c=s.roughness*float4(-1,-0.0275,-0.572,0.022)+float4(1,0.0425,1.04,-0.04);
-    float a004=min(c.x*c.x,exp2(-9.28*nv))*c.x+c.y;float2 ab=float2(-1.04,1.04)*a004+c.zw;
-    float through=saturate(1-(f0*ab.x+ab.y));
-    // GGX's lobe width (roughness squared) bent by (1 - 1/IOR) at an interface; twice
-    // that for the tails a single width would miss.
-    float spread=2*s.roughness*s.roughness*(1-1/m.ior);
+    float f0=refractF0(m.ior),through;float3 reflected=refractSurface(f,l,s,f0,world,p,high,through);
+    float spread=refractSpread(s.roughness,m.ior);
     // Surface curvature from the screen derivatives of the geometric normal.
     float3 dn=ddx(geometric),en=ddy(geometric),dp=ddx(world),ep=ddy(world);
     float curvature=sqrt(max(dot(dn,dn)/max(dot(dp,dp),1e-12),dot(en,en)/max(dot(ep,ep),1e-12)));
@@ -125,7 +148,7 @@ float4 refractColour(Frame f,Look l,Surface s,uint2 volume,float scale,float3 wo
         float3 t2=refract(t1,-n2,m.ior);float leave;
         // Total internal reflection where the far side's estimate is too steep: keep
         // the ray, at the normal-incidence loss.
-        if(dot(t2,t2)<1e-6){t2=t1;leave=1-f0;}else{float x=1-saturate(dot(t2,n2));leave=1-(f0+(1-f0)*x*x*x*x*x);}
+        if(dot(t2,t2)<1e-6){t2=t1;leave=1-f0;}else leave=refractLeave(f0,t2,n2);
         float reach=behind>0?2.5*max(behind-refractViewDepth(f,exit),thickness):FOG_RANGE*0.01;
         float3 traced=refractTrace(f,l,exit,t2,reach,spread,chord,s.roughness,uv);
         transmitted=traced*exp(-m.absorption*chord)*s.albedo*s.albedo*leave;

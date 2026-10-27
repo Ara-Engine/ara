@@ -17,6 +17,7 @@ mod lens;
 pub(crate) mod local;
 pub(crate) mod passes;
 pub(crate) mod refract;
+pub(crate) mod translucent;
 pub(crate) mod vsm;
 
 pub use crate::renderer::post::ToneCurve;

@@ -243,28 +243,56 @@ GBuffer nativeGeometryFragment(Varying v){return geometry<1>(v);}
 GBuffer nativeGeometryTopFragment(Varying v){return geometry<0>(v);}
 [shader("fragment")]
 void nativeShadowFragment(ShadowVarying shadow){Varying v=(Varying)0;v.uv=shadow.uv;v.uv1=shadow.uv1;NativeMaterial m=material(shadow.material);if(m.pbr.flags.x==1 && sampleMap(m,0,v).a*m.pbr.color.a<m.pbr.surface.w)discard;}
+// Translucent sun casters' film opacity (look-translucent.slangh): coverage times the
+// share the film stops, blended ONE, ONE_MINUS_SRC_ALPHA from a zero colour over a
+// map cleared to one, so the map keeps the product of (1 - opacity) over every film.
+[shader("fragment")]
+float4 nativeShadowTranslucentFragment(ShadowVarying shadow):SV_Target0{
+    Varying v=(Varying)0;v.uv=shadow.uv;v.uv1=shadow.uv1;NativeMaterial m=material(shadow.material);
+    float alpha=saturate(sampleMap(m,0,v).a*m.pbr.color.a)*(1-saturate(m.factors.y*sampleMap(m,5,v).r));
+    return float4(0,0,0,alpha);
+}
 struct Forward {float4 color:SV_Target0;float id:SV_Target1;float4 albedo:SV_Target2;float4 normal:SV_Target3;float4 material:SV_Target4;float4 emissive:SV_Target5;float4 velocity:SV_Target6;};
+// Whether a forward fragment faces the viewer, by its interpolated normal rather than
+// the rasterizer's winding: the back- and front-face passes classify every fragment
+// alike, so each draws exactly once.
+bool facesViewer(Varying v){return dot(v.normal,frame().camera.xyz-v.world)>=0;}
+// A forward fragment's surface. Double-sided transparency lights each side as seen
+// (glTF: back faces reverse their normals before lighting), as a path tracer does;
+// lit from outside, a film's far side caught sunlight its near side never sees.
+// FACES is a compile-time pass choice: 0 both sides (debug views), 1 back faces only,
+// 2 front faces only. Lit frames draw each transparent instance's back faces before
+// its front faces (NativePipelines::forward_lit_back), so a closed film composites
+// far over near side instead of in triangle order (blocks along the tessellation).
+Surface forwardSurface<let FACES:int>(Varying v){
+    bool front=facesViewer(v);if((FACES==1 && front)||(FACES==2 && !front))discard;
+    Surface s=surface<1>(v);if(!front)s.normal=-s.normal;return s;
+}
 // The forward pass; `high` selects the High/Epic tier's code at compile time.
-Forward nativeForward(Varying v,bool high){Surface s=surface<1>(v);Frame f=frame();Look l=look(f);Forward o;o.color=forwardColour(f,l,s,v.world,int2(v.clip.xy),high);o.id=float(v.id);o.albedo=float4(s.albedo,s.alpha);o.normal=gbufferEncodeNormal(s.normal,s.alpha);o.material=gbufferEncodeMaterial(s.roughness,s.metal,1,s.alpha);o.emissive=gbufferEncodeEmissive(s.emissive,s.alpha);o.velocity=float4(motion(v),0,1);return o;}
+Forward nativeForward(Varying v,bool high){Surface s=forwardSurface<0>(v);Frame f=frame();Look l=look(f);Forward o;o.color=forwardColour(f,l,s,v.world,int2(v.clip.xy),high);o.id=float(v.id);o.albedo=float4(s.albedo,s.alpha);o.normal=gbufferEncodeNormal(s.normal,s.alpha);o.material=gbufferEncodeMaterial(s.roughness,s.metal,1,s.alpha);o.emissive=gbufferEncodeEmissive(s.emissive,s.alpha);o.velocity=float4(motion(v),0,1);return o;}
 [shader("fragment")]
 Forward nativeForwardFragment(Varying v){return nativeForward(v,false);}
 // Lit frames' forward pass: nothing reads the G-buffer after it (only the debug
 // views do, through nativeForwardFragment), so it writes colour, id and motion only;
 // `high` selects the High/Epic tier's code at compile time.
 struct ForwardLit {float4 color:SV_Target0;float id:SV_Target1;float4 velocity:SV_Target2;};
-ForwardLit nativeForwardLit(Varying v,bool high){Surface s=surface<1>(v);Frame f=frame();Look l=look(f);ForwardLit o;o.color=forwardColour(f,l,s,v.world,int2(v.clip.xy),high);o.id=float(v.id);o.velocity=float4(motion(v),0,1);return o;}
+ForwardLit nativeForwardLit<let FACES:int>(Varying v,bool high){Surface s=forwardSurface<FACES>(v);Frame f=frame();Look l=look(f);ForwardLit o;o.color=forwardColour(f,l,s,v.world,int2(v.clip.xy),high);o.id=float(v.id);o.velocity=float4(motion(v),0,1);return o;}
 [shader("fragment")]
-ForwardLit nativeForwardLitFragment(Varying v){return nativeForwardLit(v,false);}
+ForwardLit nativeForwardLitFragment(Varying v){return nativeForwardLit<2>(v,false);}
 [shader("fragment")]
-ForwardLit nativeForwardHighFragment(Varying v){return nativeForwardLit(v,true);}
+ForwardLit nativeForwardLitBackFragment(Varying v){return nativeForwardLit<1>(v,false);}
+[shader("fragment")]
+ForwardLit nativeForwardHighFragment(Varying v){return nativeForwardLit<2>(v,true);}
+[shader("fragment")]
+ForwardLit nativeForwardHighBackFragment(Varying v){return nativeForwardLit<1>(v,true);}
 // Transmissive forward draws (NativePipelines::refract): the surface composites the
 // opaque scene it refracts (look-refract.slangh) instead of blending a film. A
 // volume's back faces are its far side, which its front faces already refract
 // through; a thin wall shades both sides, facing the viewer.
-ForwardLit nativeRefract(Varying v,bool front,bool high){
-    Surface s=surface<1>(v);NativeMaterial m=material(v.material);uint2 volume=uint2(asuint(m.factors.z),asuint(m.factors.w));
-    float3 geometric=safeNormalize(v.normal,float3(0,1,0));
-    if(!front){if((volume.x&0xffff)!=0)discard;s.normal=-s.normal;geometric=-geometric;}
+ForwardLit nativeRefract(Varying v,bool high){
+    NativeMaterial m=material(v.material);uint2 volume=uint2(asuint(m.factors.z),asuint(m.factors.w));
+    bool front=facesViewer(v);if(!front && (volume.x&0xffff)!=0)discard;
+    Surface s=forwardSurface<0>(v);float3 geometric=safeNormalize(v.normal,float3(0,1,0))*(front?1:-1);
     // The instance's scale (the cube root of its determinant) for the mesh-space thickness.
     float4x4 world=buffers[NonUniformResourceIndex(root.material)].Load<float4x4>(128+(v.id-1)*192+16);
     float scale=pow(abs(determinant((float3x3)world)),1./3.);
@@ -272,6 +300,6 @@ ForwardLit nativeRefract(Varying v,bool front,bool high){
     o.id=float(v.id);o.velocity=float4(motion(v),0,1);return o;
 }
 [shader("fragment")]
-ForwardLit nativeForwardRefractFragment(Varying v,bool front:SV_IsFrontFace){return nativeRefract(v,front,false);}
+ForwardLit nativeForwardRefractFragment(Varying v){return nativeRefract(v,false);}
 [shader("fragment")]
-ForwardLit nativeForwardRefractHighFragment(Varying v,bool front:SV_IsFrontFace){return nativeRefract(v,front,true);}
+ForwardLit nativeForwardRefractHighFragment(Varying v){return nativeRefract(v,true);}
