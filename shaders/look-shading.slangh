@@ -239,10 +239,11 @@ float3 shade(Frame f,Look l,Surface s,float3 world,int2 p,bool gathered) {
 }
 // Premultiplied forward colour of a transparent or transmissive surface: alpha is
 // coverage times the share of light it stops; reflections keep full strength
-// over what it transmits (blending ONE, ONE_MINUS_SRC_ALPHA).
-float4 forwardColour(Frame f,Look l,Surface s,float3 world,int2 p){
+// over what it transmits (blending ONE, ONE_MINUS_SRC_ALPHA). `exposure`: the HDR
+// target's pre-exposure (hdrExposure; native draws load it per vertex).
+float4 forwardColour(Frame f,Look l,Surface s,float3 world,int2 p,float exposure){
     float2 uv=(float2(p)+0.5)/float2(f.extent.xy);
-    return float4(exposeHdr(f,l,applyFog(f,l,shade(f,l,s,world,p,false),world,uv))*s.alpha,s.alpha*(1-s.transmission));
+    return float4(min(applyFog(f,l,shade(f,l,s,world,p,false),world,uv)*exposure,60000)*s.alpha,s.alpha*(1-s.transmission));
 }
 // World-space view ray through pixel centre `p`.
 float3 viewRay(Frame f,float2 p){

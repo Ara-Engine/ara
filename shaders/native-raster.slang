@@ -19,6 +19,9 @@ struct Varying {
     float4 previousClip:TEXCOORD7;
     nointerpolation uint material:TEXCOORD8;
     nointerpolation uint id:TEXCOORD9;
+    // Forward draws (nativeForwardVertex): this frame's HDR exposure (hdrExposure),
+    // loaded per vertex rather than per fragment; 1 elsewhere.
+    nointerpolation float exposure:TEXCOORD10;
 };
 // Shadow draws' light matrix: cascades 0-3 from the frame record, 4+ the
 // local-shadow tiles' matrices in the look's table (look::local::FACES), and
@@ -32,7 +35,7 @@ float4x4 shadowMatrix(Frame f,uint cascade){
 // `vertex` is the index itself in indexed draws (Command::DrawIndexedProcedural,
 // so the post-transform cache shades shared vertices once); non-indexed draws (the
 // wire PSO, which needs each triangle's own corners) pass the corner and load it.
-Varying nativeVertex(uint vertex,uint instance,bool shadow,bool indexed) {
+Varying nativeVertex(uint vertex,uint instance,bool shadow,bool indexed,bool forward=false) {
     uint2 draw=buffers[NonUniformResourceIndex(root.flags)].Load2((root.entity+instance)*8);
     Instance i=buffers[NonUniformResourceIndex(root.material)].Load<Instance>(128+draw.x*192);
     uint4 g=buffers[NonUniformResourceIndex(root.mode)].Load4(draw.y*32);
@@ -52,10 +55,13 @@ Varying nativeVertex(uint vertex,uint instance,bool shadow,bool indexed) {
     float4x4 vp=buffers[NonUniformResourceIndex(root.material)].Load<float4x4>(0);
     float4x4 previousVp=buffers[NonUniformResourceIndex(root.material)].Load<float4x4>(64);
     o.currentClip=mul(vp,world);o.previousClip=mul(previousVp,mul(i.previous,float4(p.position,1)));
-    o.material=i.meta.x;o.id=draw.x+1;return o;
+    o.material=i.meta.x;o.id=draw.x+1;o.exposure=forward?hdrExposure(f,look(f)):1;return o;
 }
 [shader("vertex")]
 Varying nativeGeometryVertex(uint vertex:SV_VertexID,uint instance:SV_InstanceID){return nativeVertex(vertex,instance,false,true);}
+// The forward pipelines' vertices also carry the exposure their fragments apply.
+[shader("vertex")]
+Varying nativeForwardVertex(uint vertex:SV_VertexID,uint instance:SV_InstanceID){return nativeVertex(vertex,instance,false,true,true);}
 // Wireframe view modes (Renderer `Wire.Draw`): the camera's draws again, with the same
 // clip position as the G-buffer (so the depth test against it passes on visible
 // surfaces). Draws are procedural over each triangle's corners in order, so a vertex's
@@ -244,9 +250,9 @@ GBuffer nativeGeometryTopFragment(Varying v){return geometry<0>(v);}
 void nativeShadowFragment(ShadowVarying shadow){Varying v=(Varying)0;v.uv=shadow.uv;v.uv1=shadow.uv1;NativeMaterial m=material(shadow.material);if(m.pbr.flags.x==1 && sampleMap(m,0,v).a*m.pbr.color.a<m.pbr.surface.w)discard;}
 struct Forward {float4 color:SV_Target0;float id:SV_Target1;float4 albedo:SV_Target2;float4 normal:SV_Target3;float4 material:SV_Target4;float4 emissive:SV_Target5;float4 velocity:SV_Target6;};
 [shader("fragment")]
-Forward nativeForwardFragment(Varying v){Surface s=surface<1>(v);Frame f=frame();Look l=look(f);Forward o;o.color=forwardColour(f,l,s,v.world,int2(v.clip.xy));o.id=float(v.id);o.albedo=float4(s.albedo,s.alpha);o.normal=gbufferEncodeNormal(s.normal,s.alpha);o.material=gbufferEncodeMaterial(s.roughness,s.metal,1,s.alpha);o.emissive=gbufferEncodeEmissive(s.emissive,s.alpha);o.velocity=float4(motion(v),0,1);return o;}
+Forward nativeForwardFragment(Varying v){Surface s=surface<1>(v);Frame f=frame();Look l=look(f);Forward o;o.color=forwardColour(f,l,s,v.world,int2(v.clip.xy),v.exposure);o.id=float(v.id);o.albedo=float4(s.albedo,s.alpha);o.normal=gbufferEncodeNormal(s.normal,s.alpha);o.material=gbufferEncodeMaterial(s.roughness,s.metal,1,s.alpha);o.emissive=gbufferEncodeEmissive(s.emissive,s.alpha);o.velocity=float4(motion(v),0,1);return o;}
 // Lit frames' forward pass: nothing reads the G-buffer after it (only the debug
 // views do, through nativeForwardFragment), so it writes colour, id and motion only.
 struct ForwardLit {float4 color:SV_Target0;float id:SV_Target1;float4 velocity:SV_Target2;};
 [shader("fragment")]
-ForwardLit nativeForwardLitFragment(Varying v){Surface s=surface<1>(v);Frame f=frame();Look l=look(f);ForwardLit o;o.color=forwardColour(f,l,s,v.world,int2(v.clip.xy));o.id=float(v.id);o.velocity=float4(motion(v),0,1);return o;}
+ForwardLit nativeForwardLitFragment(Varying v){Surface s=surface<1>(v);Frame f=frame();Look l=look(f);ForwardLit o;o.color=forwardColour(f,l,s,v.world,int2(v.clip.xy),v.exposure);o.id=float(v.id);o.velocity=float4(motion(v),0,1);return o;}

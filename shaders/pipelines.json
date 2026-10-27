@@ -412,7 +412,7 @@
   "native_forward": {
     "entries": {
       "nativeForwardFragment": "fragment",
-      "nativeGeometryVertex": "vertex"
+      "nativeForwardVertex": "vertex"
     },
     "source": "native-raster.slang",
     "state": {
@@ -435,7 +435,7 @@
   "native_forward_lit": {
     "entries": {
       "nativeForwardLitFragment": "fragment",
-      "nativeGeometryVertex": "vertex"
+      "nativeForwardVertex": "vertex"
     },
     "source": "native-raster.slang",
     "state": {
