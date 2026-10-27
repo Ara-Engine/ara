@@ -170,9 +170,11 @@ pub fn smoke(dist: &Path, version: &str) -> Result<()> {
             (|| {
                 let source = env.directory.join("shader-source");
                 fs::create_dir(&source)?;
+                // Bound inside Ara's root signature (UAVs in space 2), so a machine with
+                // Metal Shader Converter installed also cooks the optional metallib lane.
                 fs::write(
                     source.join("test.slang"),
-                    "RWStructuredBuffer<float> result : register(u0); [shader(\"compute\")] [numthreads(1,1,1)] void computeMain(uint3 t:SV_DispatchThreadID) { result[t.x]=1.; }",
+                    "[[vk::binding(1, 0)]] RWStructuredBuffer<float> result : register(u0, space2); [shader(\"compute\")] [numthreads(1,1,1)] void computeMain(uint3 t:SV_DispatchThreadID) { result[t.x]=1.; }",
                 )?;
                 support::json(
                     &source.join("pipelines.json"),
