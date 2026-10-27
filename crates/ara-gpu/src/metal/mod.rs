@@ -552,8 +552,9 @@ impl MetalDevice {
                 _ => None,
             })
             .collect();
-        let timing = self.timestamp_pool.take(&self.device, labels)?;
-        let encoded = self.encode(&cmd, &list, &mut scratch, &mut created, &timing.heap.heap);
+        let timing = self.timestamp_pool.take(&self.device, labels);
+        let heap = timing.as_ref().map(|timing| (&*timing.heap, timing.base));
+        let encoded = self.encode(&cmd, &list, &mut scratch, &mut created, heap);
         cmd.endCommandBuffer();
         for chunk in &created {
             self.residency
@@ -565,7 +566,9 @@ impl MetalDevice {
             allocator.reset();
             self.allocators.push(allocator);
             self.scratch.recycle(scratch.chunks);
-            self.timestamp_pool.recycle(timing.heap);
+            if let Some(timing) = &timing {
+                self.timestamp_pool.recycle(timing);
+            }
             return Err(error);
         }
         if std::mem::take(&mut self.residency_dirty) {
@@ -599,7 +602,7 @@ impl MetalDevice {
             point,
             allocator,
             chunks: scratch.chunks,
-            timing: Some(timing),
+            timing,
         });
         if let Some(points) = &mut self.deferred {
             points.push(point);
@@ -685,8 +688,9 @@ impl MetalDevice {
             self.allocators.push(pending.allocator);
             self.scratch.recycle(pending.chunks);
             if let Some(timing) = pending.timing {
-                let (passes, span) = timestamps::resolve(&self.device, &timing, point.queue)?;
-                self.timestamp_pool.recycle(timing.heap);
+                let resolved = timestamps::resolve(&self.device, &timing, point.queue);
+                self.timestamp_pool.recycle(&timing);
+                let (passes, span) = resolved?;
                 self.timing_window.observe(point, span);
                 if self.timings.len() == RESOLVED_TIMINGS {
                     self.timings.pop_front();

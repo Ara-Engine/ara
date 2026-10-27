@@ -61,8 +61,9 @@ struct Recording<'a> {
     root: [u32; 8],
     /// Color and depth formats of the open rendering scope.
     formats: (Vec<MTLPixelFormat>, Option<MTLPixelFormat>),
-    /// Timestamp heap laid out as in [`super::timestamps`].
-    heap: &'a ProtocolObject<dyn MTL4CounterHeap>,
+    /// Timestamp heap and the list's first slot, laid out as in [`super::timestamps`];
+    /// none for an untimed list.
+    heap: Option<(&'a ProtocolObject<dyn MTL4CounterHeap>, usize)>,
     /// Passes begun so far, and the indices of passes still open.
     passes: usize,
     open: Vec<usize>,
@@ -92,7 +93,8 @@ fn view(origin: [u32; 2], size: [u32; 2]) -> (MTLViewport, MTLScissorRect) {
 }
 
 impl MetalDevice {
-    /// Encode `list` into `cmd`, writing its timestamps into `heap`. Errors leave
+    /// Encode `list` into `cmd`, writing its timestamps into `heap` from the given
+    /// slot, if any. Errors leave
     /// `cmd` uncommitted; partially recorded commands are discarded with it.
     pub(super) fn encode(
         &mut self,
@@ -100,7 +102,7 @@ impl MetalDevice {
         list: &CommandList,
         scratch: &mut Scratch,
         created: &mut Vec<Chunk>,
-        heap: &ProtocolObject<dyn MTL4CounterHeap>,
+        heap: Option<(&ProtocolObject<dyn MTL4CounterHeap>, usize)>,
     ) -> Result<()> {
         let mut rec = Recording {
             cmd,
@@ -688,14 +690,18 @@ impl Recording<'_> {
     /// in-encoder timestamps gave end < begin under load). Splitting the encoder
     /// orders nothing that the barrier lowering does not already order.
     fn timestamp(&mut self, index: usize) {
+        let Some((heap, base)) = self.heap else {
+            return;
+        };
+        let index = base + index;
         if let Active::Render(encoder) = &self.active {
-            // SAFETY: the heap was sized by `submit` for this list's 2 * passes + 2
-            // slots, and `index` stays below that.
+            // SAFETY: the pool reserved this list's 2 * passes + 2 slots from `base`
+            // inside the heap, and `index` stays inside that range.
             unsafe {
                 encoder.writeTimestampWithGranularity_afterStage_intoHeap_atIndex(
                     MTL4TimestampGranularity::Precise,
                     MTLRenderStages::Fragment,
-                    self.heap,
+                    heap,
                     index,
                 );
             }
@@ -703,7 +709,7 @@ impl Recording<'_> {
         }
         self.end();
         // SAFETY: as above; no encoder is open on the command buffer.
-        unsafe { self.cmd.writeTimestampIntoHeap_atIndex(self.heap, index) };
+        unsafe { self.cmd.writeTimestampIntoHeap_atIndex(heap, index) };
     }
     /// Apply and remember the viewport and scissor of the open rendering scope.
     fn set_view(&mut self, (viewport, scissor): (MTLViewport, MTLScissorRect)) -> Result<()> {

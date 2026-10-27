@@ -158,6 +158,20 @@ fn a_pipeline_is_rebound_on_each_encoder_a_pass_timestamp_opens() {
 }
 
 #[test]
+fn submissions_share_one_timestamp_heap_as_ranges_and_reuse_freed_ones() {
+    let gpu = device();
+    let mut pool = timestamps::Pool::default();
+    // 511 passes take 1024 slots: four ranges fill the heap, a fifth runs untimed.
+    let labels = || vec![String::from("pass"); 511];
+    let taken: Vec<_> = std::iter::from_fn(|| pool.take(&gpu.device, labels())).collect();
+    let bases = taken.iter().map(|timing| timing.base).collect::<Vec<_>>();
+    assert_eq!(bases, [0, 1024, 2048, 3072]);
+    assert_eq!(timestamps::SLOTS, 4096);
+    pool.recycle(&taken[1]);
+    assert_eq!(pool.take(&gpu.device, labels()).map(|t| t.base), Some(1024));
+}
+
+#[test]
 fn graphics_waits_on_the_compute_timeline_and_encoder_barriers_order_dispatches() {
     let mut gpu = device();
     let fill = gpu.msl_pipeline(
