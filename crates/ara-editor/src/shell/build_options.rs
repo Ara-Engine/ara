@@ -214,7 +214,7 @@ impl Shell {
         let current = selected
             .as_ref()
             .map_or(Value::Null, |profile| json!(profile));
-        out.push_str(&format!("<modal id='{ROOT}' class='kit-dialog-layer' label='Build options' default-action='build-options-build'><panel id='build-options-backdrop' class='kit-dialog-backdrop' /><panel id='build-options-body' class='kit-dialog' style='width:{width}px;max-height:{height}px'><text id='build-options-title' class='kit-dialog-title' text='Build options' /><scroll id='build-options-scroll' class='kit-dialog-body' style='min-height:0px;gap:8px'><text id='build-profile-label' text='Build profile' />"));
+        out.push_str(&format!("<modal id='{ROOT}' class='kit-dialog-layer' label='Build options' default-action='build-options-build'><panel id='build-options-backdrop' class='kit-dialog-backdrop' /><panel id='build-options-body' class='kit-dialog' style='width:{width}px;max-width:100%;max-height:{height}px;min-height:0px'><text id='build-options-title' class='kit-dialog-title' style='flex-shrink:0' text='Build options' /><scroll id='build-options-scroll' class='kit-dialog-body' style='min-height:0px;flex-basis:auto;flex-shrink:1;gap:8px'><panel id='build-options-profile' style='min-width:0px;flex-shrink:0;gap:4px'><text id='build-profile-label' text='Build profile' />"));
         self.choice_button(
             CONTROL,
             "Build profile",
@@ -228,8 +228,9 @@ impl Shell {
             },
             out,
         );
+        out.push_str("</panel>");
         if let Err(error) = &selected {
-            out.push_str(&format!("<text id='build-profile-problem' class='caption' style='white-space:normal' text='{}' />", escape(&error.to_string())));
+            out.push_str(&format!("<text id='build-profile-problem' class='caption' style='white-space:normal;flex-shrink:0' text='{}' />", escape(&error.to_string())));
         }
         if names.is_empty() {
             self.bind_command(
@@ -237,9 +238,9 @@ impl Shell {
                 "build.profile.create",
                 commands::Target::None,
             );
-            out.push_str("<button id='build-profile-create' class='ghost' text='Create default profile' action='Dispatch' />");
+            out.push_str("<button id='build-profile-create' class='kit-dialog-button ghost' text='Create default profile' action='Dispatch' />");
         }
-        out.push_str("<text id='build-options-output-note' class='caption' style='white-space:normal' text='Build creates a new output folder for this profile. Choose output to provide a new destination instead.' /></scroll><panel id='build-options-actions' class='kit-dialog-actions' style='flex-wrap:wrap'>");
+        out.push_str("<text id='build-options-output-note' class='caption' style='white-space:normal;flex-shrink:0' text='Build creates a new output folder for this profile. Choose output to provide a new destination instead.' /></scroll><panel id='build-options-actions' class='kit-dialog-actions' style='flex-wrap:wrap;flex-shrink:0;min-width:0px'>");
         for (id, command, label, primary) in [
             ("build-options-close", "build.options.close", "Close", false),
             (
@@ -298,37 +299,4 @@ fn selected_profile<'a>(names: &'a [String], selected: &str) -> ara_ui::Result<&
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    #[test]
-    fn only_declared_canonical_and_indexed_legacy_profile_paths_are_accepted() {
-        assert_eq!(
-            profile_name("settings/builds/Windows shipping.export.json"),
-            Some(("Windows shipping", true))
-        );
-        assert_eq!(
-            profile_name("presets/mobile.export.json"),
-            Some(("mobile", false))
-        );
-        for path in [
-            "game/settings/builds/game.export.json",
-            "settings/builds/.export.json",
-            "settings/builds/nested/a.export.json",
-            "settings/builds/export.json",
-            "other/a.export.json",
-        ] {
-            assert!(profile_name(path).is_none(), "{path}");
-        }
-    }
-    #[test]
-    fn a_removed_explicit_profile_never_builds_a_different_first_profile() {
-        let names = vec!["mobile".into(), build::DEFAULT_PROFILE.into()];
-        assert_eq!(
-            selected_profile(&names, "").ok(),
-            Some(build::DEFAULT_PROFILE)
-        );
-        assert_eq!(selected_profile(&names, "mobile").ok(), Some("mobile"));
-        assert!(selected_profile(&names, "deleted").is_err());
-        assert!(selected_profile(&[], "").is_err());
-    }
-}
+mod tests;

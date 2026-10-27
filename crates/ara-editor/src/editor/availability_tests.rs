@@ -312,6 +312,14 @@ fn old_history_with_missing_animation_initializer_recovers_on_redo_without_quara
     editor
         .action("editor.focus", json!({"panel":"animation"}))
         .unwrap();
+    // Tool pages initially open on a floating surface. This fixture inspects the
+    // main Ui, so dock the real page there through the production layout command.
+    editor
+        .action(
+            "editor.layout.move",
+            json!({"panel":"animation","slot":"view"}),
+        )
+        .unwrap();
     let mut shell = Shell::new(&mut editor, [1200., 800.]).unwrap();
     present(&mut editor, &mut shell);
     assert!(shell.ui.find("animation-canvas").is_some());
