@@ -35,9 +35,14 @@ fn done(editor: &mut Editor, job: &str) -> ara_ui::Result<bool> {
 }
 impl Fixture {
     pub fn new(editor: &mut Editor, output: &Path) -> ara_ui::Result<Self> {
-        let output = std::path::absolute(output)?;
-        let root = std::path::absolute(editor.host.root())?;
-        if !root.starts_with(&output) || !root.join(".ara-behaviour-fixture").is_file() {
+        // Resolve both real paths with the same Windows prefix policy before
+        // comparing: the host may retain a verbatim path while CLI output uses D:.
+        let output = dunce::canonicalize(output)?;
+        let root = dunce::canonicalize(editor.host.root())?;
+        if root == output
+            || !root.starts_with(&output)
+            || !root.join(".ara-behaviour-fixture").is_file()
+        {
             return Err(
                 "Assets proof may initialize only the offscreen output's scratch project".into(),
             );

@@ -988,33 +988,30 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
             let tick_at = Instant::now();
             server.pump(&mut editor);
             editor.tick();
-            match shell.poll_reachability(&mut editor) {
-                Ok(changed) => dirty |= changed,
-                Err(error) => {
-                    editor.report_failure(&*error);
-                    dirty = true;
-                }
-            }
-            match shell.poll_hierarchy_filters(&mut editor) {
-                Ok(changed) => dirty |= changed,
-                Err(error) => {
-                    editor.report_failure(&*error);
-                    dirty = true;
-                }
-            }
-            for result in [
-                shell.poll_asset_imports(&mut editor),
-                shell.poll_asset_operations(&mut editor),
-                shell.poll_build_options(&mut editor),
-            ] {
-                match result {
-                    Ok(changed) => dirty |= changed,
-                    Err(error) => {
-                        editor.report_failure(&*error);
-                        dirty = true;
+            dirty |= shell.coalesce_rebuilds(&mut editor, |shell, editor| {
+                let mut changed = false;
+                for result in [
+                    shell.poll_reachability(editor),
+                    shell.poll_hierarchy_filters(editor),
+                    shell.poll_asset_imports(editor),
+                    shell.poll_asset_operations(editor),
+                    shell.poll_build_options(editor),
+                ] {
+                    match result {
+                        Ok(updated) => changed |= updated,
+                        Err(error) => {
+                            editor.report_failure(&*error);
+                            changed = true;
+                        }
                     }
                 }
-            }
+                if changed {
+                    // Async presentation can change without an authoring/view revision.
+                    // Reconcile once so progress and newly opened dialogs are reachable.
+                    shell.rebuild(editor)?;
+                }
+                Ok(changed)
+            })?;
             match shell.poll_play_job(&mut editor) {
                 Ok(true) => {
                     shell.rebuild(&mut editor)?;

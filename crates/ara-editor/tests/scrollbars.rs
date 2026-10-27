@@ -60,7 +60,7 @@ struct HierarchyPool {
 /// child order. Selection legitimately replaces other panels, such as Inspector.
 fn hierarchy_pool(shell: &Shell) -> HierarchyPool {
     let root = shell.ui.find("hierarchy-rows").expect("hierarchy");
-    let belongs = |mut index| {
+    let belongs = |mut index: usize| {
         for _ in 0..shell.ui.nodes.len() {
             if index == root {
                 return true;
@@ -153,8 +153,18 @@ fn hierarchy_thumb_drag_home_end_and_arrows_keep_the_pool_bounded() -> Result<()
     shell.frame()?;
     assert_eq!(shell.hierarchy_offset, 0.);
     assert_eq!(editor.state.selection, ["e_00000000"]);
-    assert!(shell.shown_node("inspector-empty").is_none());
-    assert!(shell.shown_node("inspector-components").is_some());
+    assert!(
+        !shell
+            .ui
+            .find("inspector-empty")
+            .is_some_and(|index| shell.ui.shown(index))
+    );
+    assert!(
+        shell
+            .ui
+            .find("inspector-components")
+            .is_some_and(|index| shell.ui.shown(index))
+    );
     assert_eq!(hierarchy_pool(&shell), pool);
     let selected_count = shell.ui.nodes.len();
     eprintln!(
