@@ -407,8 +407,9 @@ impl Presenter {
             }
             let composite = self.composite.as_mut().context("compositor initialized")?;
             if let Some(terrain) = terrain {
+                let state = Some(renderer.hdr_exposure().state);
                 (color, depth) =
-                    composite.merge(renderer.gpu_mut(), color, depth, terrain, exposure)?;
+                    composite.merge(renderer.gpu_mut(), color, depth, terrain, exposure, state)?;
             }
             color = self
                 .effects

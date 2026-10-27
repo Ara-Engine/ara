@@ -17,7 +17,9 @@ events. Shader compilers are never runtime dependencies.
   Native pipeline compilation and its private cache I/O never run on the frame thread.
 - `View`: camera/frame inputs; optional scene HDR and depth for world composition.
   `placement` (world origin + uniform scale) maps the world camera, scene depth and
-  probe lattice into effect space; `intensity` scales particle radiance.
+  probe lattice into effect space; `intensity` scales particle radiance; `hdr_exposure`
+  pre-exposes particles for the raster scene (systems built with `RASTER_HDR`; previews,
+  captures and the fidelity view use `LINEAR_HDR`).
 - Lit soft/smoke sprites shade as thin media (HG phase g=0.35 + probe mean
   radiance), not Lambert surfaces; spark sheets, meshes and ribbons keep surface light.
 - `GpuSystem::capture_over(gpu, request, scene)`: `capture` composited over a scene

@@ -37,7 +37,13 @@ fn deferred_vfx_initialization_and_failed_retries_release_their_heap_slots() -> 
             vk::Fence::null(),
         )?;
     }
-    let mut system = GpuSystem::new(&mut gpu, &effect, &cooked, [64, 48]);
+    let mut system = GpuSystem::new(
+        &mut gpu,
+        &effect,
+        &cooked,
+        [64, 48],
+        ara_vfx_gpu::LINEAR_HDR,
+    );
     let advanced = match &mut system {
         Ok(system) => system.advance(&mut gpu, &Default::default()),
         Err(_) => Ok(()),
@@ -67,7 +73,16 @@ fn deferred_vfx_initialization_and_failed_retries_release_their_heap_slots() -> 
     }
     let occupied = gpu.descriptor_usage();
     for _ in 0..8 {
-        assert!(GpuSystem::new(&mut gpu, &effect, &cooked, [64, 48]).is_err());
+        assert!(
+            GpuSystem::new(
+                &mut gpu,
+                &effect,
+                &cooked,
+                [64, 48],
+                ara_vfx_gpu::LINEAR_HDR
+            )
+            .is_err()
+        );
         gpu.collect()?;
         assert_eq!(gpu.descriptor_usage(), occupied);
     }
@@ -76,7 +91,14 @@ fn deferred_vfx_initialization_and_failed_retries_release_their_heap_slots() -> 
     }
     gpu.collect()?;
     assert_eq!(gpu.descriptor_usage(), baseline);
-    GpuSystem::new(&mut gpu, &effect, &cooked, [64, 48])?.retire(&mut gpu)?;
+    GpuSystem::new(
+        &mut gpu,
+        &effect,
+        &cooked,
+        [64, 48],
+        ara_vfx_gpu::LINEAR_HDR,
+    )?
+    .retire(&mut gpu)?;
     gpu.assert_clean()?;
     // Keep the dedicated compute path available to ordinary synchronous clients.
     let point = gpu.submit(gpu.begin(Queue::Compute).finish(), &[])?;

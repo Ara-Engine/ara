@@ -73,6 +73,12 @@ float4 exposureState(Look l){return buffers[NonUniformResourceIndex(l.state.x)].
 float exposureScale(Frame f,float s){
     float fallback=f.sunColorExposure.w;return s>0 && s<1e30?s:fallback>0 && fallback<1e30?fallback:1;
 }
+// The raster HDR target (RGBA16F) holds radiance pre-exposed by the multiplier this
+// frame applies (exposureState x, as the TAA history): writers store exposeHdr, and
+// readers that need radiance divide by hdrExposure. External writers (VFX) apply the
+// same multiplier (ara_render::HdrExposure).
+float hdrExposure(Frame f,Look l){return exposureScale(f,exposureState(l).x);}
+float3 exposeHdr(Frame f,Look l,float3 radiance){return min(radiance*hdrExposure(f,l),60000);}
 bool physicalSky(Look l){return (l.flags.y&LOOK_PHYSICAL_SKY)!=0;}
 float4 lut(uint index,float2 uv){return textures[NonUniformResourceIndex(index)].SampleLevel(samplers[2],uv,0);}
 float luminance(float3 c){return dot(c,float3(0.2126,0.7152,0.0722));}
