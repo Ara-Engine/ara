@@ -328,13 +328,13 @@ impl Shell {
                         self.status_note = Some(
                             "The active scene changed; choose its camera bookmark again.".into(),
                         );
-                    } else if let Some(name) = names.get(index) {
-                        if let Err(error) = editor.action(
+                    } else if let Some(name) = names.get(index)
+                        && let Err(error) = editor.action(
                             "editor.camera.bookmark",
                             json!({"action":action,"scene":scene,"name":name}),
-                        ) {
-                            self.alert_error(editor, &error);
-                        }
+                        )
+                    {
+                        self.alert_error(editor, &error);
                     }
                 }
                 Pending::Command { id, target, .. } if accepted => {
