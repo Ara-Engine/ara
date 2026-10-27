@@ -45,6 +45,12 @@ impl Ui {
         node.rect = visual;
         node.clip = clip;
         let id = stable_id(&node.element.id);
+        let numeric = crate::input::numeric::declared(&node.element);
+        let grip_width = if numeric {
+            crate::input::numeric::GRIP
+        } else {
+            0.
+        };
         let c = &node.computed;
         let transformed = local != [0.0, 0.0];
         let clipped = c.clip;
@@ -126,7 +132,8 @@ impl Ui {
                             - l.padding.left
                             - l.padding.right
                             - l.border.left
-                            - l.border.right)
+                            - l.border.right
+                            - grip_width)
                             .max(1.0),
                     );
                 }
@@ -136,6 +143,7 @@ impl Ui {
                         - l.padding.right
                         - l.border.left
                         - l.border.right
+                        - grip_width
                         - text.layout.width())
                     .max(0.);
                 }
@@ -166,6 +174,7 @@ impl Ui {
                     self.widgets.get(&id),
                     Some(text),
                     node.state.focus,
+                    numeric,
                     rect,
                     origin,
                     id,
@@ -179,6 +188,7 @@ impl Ui {
                 self.widgets.get(&id),
                 None,
                 node.state.focus,
+                numeric,
                 rect,
                 [rect.x, rect.y],
                 id,

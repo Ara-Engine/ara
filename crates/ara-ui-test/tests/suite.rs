@@ -8,7 +8,10 @@ fn complete_story_suite_goldens_and_semantics() -> Result<()> {
     ara_ui_stories::register(&mut db)?;
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
     let golden_dir = root.join("goldens");
-    let output = root.join("evidence");
+    let output = std::env::var_os("CARGO_TARGET_DIR")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| root.join("../../target"))
+        .join("ui-story-suite");
     let update = std::env::var("ARA_UI_UPDATE_STORY_GOLDENS").is_ok_and(|v| v == "1");
     std::fs::create_dir_all(&golden_dir)?;
     let stories = catalogue();
@@ -44,13 +47,13 @@ fn complete_story_suite_goldens_and_semantics() -> Result<()> {
                             "Missing golden {name}: {e}; explicitly rebaseline and inspect captures"
                         )
                     })?;
+                capture.write(&output, &name)?;
                 capture.compare(
                     &expected,
                     Tolerance::default(),
                     &output.join("failures"),
                     &name,
                 )?;
-                capture.write(&output, &name)?;
                 harness.run()?;
                 if story.steps.iter().any(|step| {
                     matches!(
@@ -94,10 +97,9 @@ fn complete_story_suite_goldens_and_semantics() -> Result<()> {
         std::fs::create_dir_all(path.parent().ok_or("example directory")?)?;
         std::fs::write(&path, &source)?;
     }
-    assert_eq!(
-        std::fs::read_to_string(&path)?,
-        source,
-        "persisted catalogue is stale"
+    assert!(
+        std::fs::read_to_string(&path)? == source,
+        "persisted catalogue is stale; regenerate only with ARA_UI_UPDATE_STORY_GOLDENS=1"
     );
     assert_eq!(
         StoryBook::read(&source, &db)?.stories()?.len(),

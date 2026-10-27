@@ -6,6 +6,7 @@ mod download;
 mod feed;
 mod manifest;
 mod redirect;
+mod storage;
 #[cfg(any(test, feature = "test-support"))]
 #[allow(clippy::unwrap_used)]
 #[path = "../tests/support/mod.rs"]
@@ -13,12 +14,15 @@ pub mod testing;
 mod transfer;
 pub mod updater;
 
-pub use download::{Cancel, Progress, download, extract, sha256_file};
+pub use download::{
+    Cancel, DownloadPhase, Progress, download, download_with_phase, extract, sha256_file,
+};
 pub use feed::{Feed, FeedConfig, FeedSnapshot, FeedStatus};
 pub use manifest::{
     Asset, Channel, Kind, Manifest, VerifiedRelease, canonical_manifest, sign, trusted_keys,
     verify, version,
 };
+pub use storage::{DiskSpace, check_space};
 
 /// GitHub repository used when neither saved settings nor an override selects one.
 pub const DEFAULT_REPOSITORY: &str = "Ara-Engine/ara";

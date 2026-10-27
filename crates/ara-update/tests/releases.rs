@@ -7,6 +7,33 @@ use ara_update::{
 use std::{fs, io::Write};
 
 #[test]
+fn download_exposes_verification_after_received_bytes() {
+    let server = Server::new();
+    let root = testing::scratch("download-phases");
+    let data = vec![0x42; 4096];
+    let listing = server.release(Kind::Hub, "1.0.0", Channel::Stable, data);
+    server.releases(vec![listing]);
+    let feed = Feed::new(server.config(), &root.join("cache")).unwrap();
+    let release = feed.check().unwrap().releases.remove(0);
+    let mut phases = Vec::new();
+    let mut received = 0;
+    download_with_phase(
+        &feed,
+        &release,
+        &root.join("download"),
+        &Cancel::default(),
+        |progress| received = progress.received,
+        |phase| phases.push(phase),
+    )
+    .unwrap();
+    assert_eq!(received, 4096);
+    assert!(matches!(
+        phases.as_slice(),
+        [DownloadPhase::Downloading, DownloadPhase::Verifying]
+    ));
+}
+
+#[test]
 fn feed_pagination_channels_etags_offline_and_rate_limit() {
     let server = Server::new();
     let root = testing::scratch("feed");
