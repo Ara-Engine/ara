@@ -242,3 +242,8 @@ void nativeShadowFragment(ShadowVarying shadow){Varying v=(Varying)0;v.uv=shadow
 struct Forward {float4 color:SV_Target0;float id:SV_Target1;float4 albedo:SV_Target2;float4 normal:SV_Target3;float4 material:SV_Target4;float4 emissive:SV_Target5;float4 velocity:SV_Target6;};
 [shader("fragment")]
 Forward nativeForwardFragment(Varying v){Surface s=surface<1>(v);Frame f=frame();Look l=look(f);Forward o;o.color=forwardColour(f,l,s,v.world,int2(v.clip.xy));o.id=float(v.id);o.albedo=float4(s.albedo,s.alpha);o.normal=gbufferEncodeNormal(s.normal,s.alpha);o.material=gbufferEncodeMaterial(s.roughness,s.metal,1,s.alpha);o.emissive=gbufferEncodeEmissive(s.emissive,s.alpha);o.velocity=float4(motion(v),0,1);return o;}
+// Lit frames' forward pass: nothing reads the G-buffer after it (only the debug
+// views do, through nativeForwardFragment), so it writes colour, id and motion only.
+struct ForwardLit {float4 color:SV_Target0;float id:SV_Target1;float4 velocity:SV_Target2;};
+[shader("fragment")]
+ForwardLit nativeForwardLitFragment(Varying v){Surface s=surface<1>(v);Frame f=frame();Look l=look(f);ForwardLit o;o.color=forwardColour(f,l,s,v.world,int2(v.clip.xy));o.id=float(v.id);o.velocity=float4(motion(v),0,1);return o;}

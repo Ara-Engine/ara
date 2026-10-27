@@ -1,0 +1,52 @@
+{
+  "binding_layout_hash": "f71261afa0d52758f34ca15c916d2da422ee92b118ede6e189c970911a274f1e",
+  "compiler": "2026.17-25-gc7954ebd1",
+  "key": "ae71ae67a036cba7794d999c8a7db1b7cb640c94c865e3b99b49e189764d1317",
+  "stages": [
+    {
+      "dxil": "ae71ae67a036cba7794d999c8a7db1b7cb640c94c865e3b99b49e189764d1317/nativeForwardLitFragment.dxil",
+      "dxil_hash": "53133cabc6ae1947fda3d273500bf6e0d8ae48d290dee2df100ff0728e741389",
+      "metal": {
+        "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
+        "metallib": "ae71ae67a036cba7794d999c8a7db1b7cb640c94c865e3b99b49e189764d1317/nativeForwardLitFragment.metallib",
+        "metallib_hash": "fc4b2a3804f4688eccc76e03554c28d5db6dfeb305be12c38c32c9e481ac23a0",
+        "reflection": "ae71ae67a036cba7794d999c8a7db1b7cb640c94c865e3b99b49e189764d1317/nativeForwardLitFragment.metal.json",
+        "root_signature_hash": "1cc11e518b14c2b24e05fc30812bfd2b87e0a9c313ea79a4620a443a723525ef"
+      },
+      "source_entry": "nativeForwardLitFragment",
+      "spirv": "ae71ae67a036cba7794d999c8a7db1b7cb640c94c865e3b99b49e189764d1317/nativeForwardLitFragment.spv",
+      "spirv_entry": "main",
+      "spirv_hash": "1e4425611825f4177edfeba0a9fb25329066f83f9af3a557c8177763d6bfd23c",
+      "stage": "fragment"
+    },
+    {
+      "dxil": "ae71ae67a036cba7794d999c8a7db1b7cb640c94c865e3b99b49e189764d1317/nativeGeometryVertex.dxil",
+      "dxil_hash": "9ef34a9c0edecde9bbd5cd4ab6b778c36f18ce27ccf5158cd65dc2396421cabb",
+      "metal": {
+        "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
+        "metallib": "ae71ae67a036cba7794d999c8a7db1b7cb640c94c865e3b99b49e189764d1317/nativeGeometryVertex.metallib",
+        "metallib_hash": "c716e4bc6cff80b58099d576b86a30247a4d6fe51e5bef050800e8f8e74497f9",
+        "reflection": "ae71ae67a036cba7794d999c8a7db1b7cb640c94c865e3b99b49e189764d1317/nativeGeometryVertex.metal.json",
+        "root_signature_hash": "1cc11e518b14c2b24e05fc30812bfd2b87e0a9c313ea79a4620a443a723525ef"
+      },
+      "source_entry": "nativeGeometryVertex",
+      "spirv": "ae71ae67a036cba7794d999c8a7db1b7cb640c94c865e3b99b49e189764d1317/nativeGeometryVertex.spv",
+      "spirv_entry": "main",
+      "spirv_hash": "2ae2db5f915802b88c3b5095a70f2c23b814e2ea519092610ad7d8c6cf7e1104",
+      "stage": "vertex"
+    }
+  ],
+  "state": {
+    "blend": true,
+    "color_formats": [
+      109,
+      100,
+      83
+    ],
+    "depth_format": 126,
+    "depth_test": true,
+    "depth_write": false,
+    "vertex_stride": 0
+  },
+  "version": 1
+}

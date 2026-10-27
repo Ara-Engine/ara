@@ -848,6 +848,17 @@ impl Native {
         }
     }
 
+    /// Records the forward draws (pass 5): through the lit PSO (colour, ids and
+    /// motion) unless the frame's debug view reads the G-buffer they blend into.
+    pub(super) fn record_forward(&self, recorder: &mut Recorder, root: RootConstants, lit: bool) {
+        let pipeline = if lit {
+            self.pipelines.forward_lit
+        } else {
+            self.pipelines.forward
+        };
+        self.record_with(recorder, root, 5, pipeline);
+    }
+
     /// Records the G-buffer draws (pass 4) through the PSO for the preset's
     /// `terrain_detail` (`NativePipelines::gbuffer_for`).
     pub(super) fn record_gbuffer(

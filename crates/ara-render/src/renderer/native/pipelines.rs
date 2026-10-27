@@ -1,4 +1,4 @@
-//! Five native PSOs are retained by the renderer across content generations.
+//! Six native PSOs are retained by the renderer across content generations.
 use super::*;
 use ara_gpu::vulkan::{PipelinePreparation, PipelinePreparationId};
 
@@ -9,8 +9,12 @@ pub(in crate::renderer) struct NativePipelines {
     pub shadow: Pipeline,
     /// The G-buffer fill, terrain with steep-slope side projections.
     pub gbuffer: Pipeline,
-    /// The forward pass (blended and transmissive materials).
+    /// The forward pass (blended and transmissive materials) of the debug views,
+    /// which read the G-buffer it blends into.
     pub forward: Pipeline,
+    /// The forward pass of lit frames: colour, ids and motion only, since nothing
+    /// reads the G-buffer after it.
+    pub forward_lit: Pipeline,
     /// The G-buffer fill for presets without terrain detail
     /// (`Quality::terrain_detail` zero): terrain keeps its top projection, and
     /// compiled without the side projections, every pixel saves their registers.
@@ -33,10 +37,11 @@ impl NativePipelines {
 }
 
 /// Cooked recipe names, in `NativePipelines` field order.
-const RECIPES: [&str; 5] = [
+const RECIPES: [&str; 6] = [
     "native_shadow",
     "native_gbuffer",
     "native_forward",
+    "native_forward_lit",
     "native_gbuffer_top",
     "native_wire",
 ];
@@ -77,14 +82,15 @@ impl Renderer {
                 self.native_pipelines = Pipelines::Empty;
             }
             if let Some(handles) = result? {
-                let [shadow, gbuffer, forward, gbuffer_top, wire]: [Pipeline; RECIPES.len()] =
-                    handles
-                        .try_into()
-                        .map_err(|_| anyhow::anyhow!("native PSO count differs"))?;
+                let [shadow, gbuffer, forward, forward_lit, gbuffer_top, wire]: [Pipeline;
+                    RECIPES.len()] = handles
+                    .try_into()
+                    .map_err(|_| anyhow::anyhow!("native PSO count differs"))?;
                 self.native_pipelines = Pipelines::Ready(NativePipelines {
                     shadow,
                     gbuffer,
                     forward,
+                    forward_lit,
                     gbuffer_top,
                     wire,
                 });
