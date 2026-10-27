@@ -146,7 +146,10 @@ impl Ui {
                             let measured =
                                 text_system.measure(text, width, node.computed.font_size);
                             Size {
-                                width: known.width.unwrap_or(measured.width),
+                                // Taffy rounds the final box to pixels. Rounding a
+                                // fractional intrinsic width down would rebreak a
+                                // naturally single-line label onto an extra line.
+                                width: known.width.unwrap_or(measured.width.ceil()),
                                 height: known.height.unwrap_or(measured.height),
                             }
                         },

@@ -1,14 +1,11 @@
 //! Navigation tests call the production controller's integration step without a GPU/window.
 #![allow(clippy::unwrap_used)]
 use super::*;
-use std::{
-    path::PathBuf,
-    sync::atomic::{AtomicU64, Ordering},
-};
+use std::sync::atomic::{AtomicU64, Ordering};
 static NEXT: AtomicU64 = AtomicU64::new(0);
 fn open() -> (Editor, Shell) {
-    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../../target/ux-navigation-tests")
+    let root = crate::test_target()
+        .join("ux-navigation-tests")
         .join(format!(
             "{}-{}",
             std::process::id(),

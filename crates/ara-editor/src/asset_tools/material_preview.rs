@@ -485,8 +485,8 @@ mod tests {
     /// one source at the same time: both get the one published folder, whole.
     #[test]
     fn concurrent_cooks_of_one_source_publish_one_valid_folder() {
-        let root = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../target/ara-editor/preview-cook")
+        let root = crate::test_target()
+            .join("ara-editor/preview-cook")
             .join(std::process::id().to_string());
         let _ = std::fs::remove_dir_all(&root);
         let material = ara_material::dsl::parse(

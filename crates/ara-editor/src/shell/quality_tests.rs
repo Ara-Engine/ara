@@ -80,12 +80,14 @@ fn retained_main_tooltips_fit_their_final_shaped_text() {
             .expect("visible tooltip copy")];
         let outer = shell.ui.tree.layout(tip.layout_id).unwrap();
         let text = copy.text.as_ref().expect("shaped copy");
+        let mut unbroken = text.layout.clone();
+        unbroken.break_all_lines(None);
         let required = text.layout.width()
             + outer.padding.left
             + outer.padding.right
             + outer.border.left
             + outer.border.right;
-        measurements.push(json!({"target":id,"text":text.value,"textFontSize":text.size,"computedFontSize":copy.computed.font_size,"fontFamily":text.family,"textWidth":text.layout.width(),"requiredWidth":required,"box":tip.rect,"textBox":copy.rect,"padding":[outer.padding.left,outer.padding.right],"border":[outer.border.left,outer.border.right],"layout":format!("{:?}",shell.ui.tree.style(tip.layout_id).unwrap()),"fits":tip.rect.w<=required.max(ara_ui::popover::MIN_WIDTH)+16.}));
+        measurements.push(json!({"target":id,"text":text.value,"textFontSize":text.size,"computedFontSize":copy.computed.font_size,"fontFamily":text.family,"textWidth":text.layout.width(),"unbrokenWidth":unbroken.width(),"lines":text.layout.len(),"requiredWidth":required,"box":tip.rect,"textBox":copy.rect,"padding":[outer.padding.left,outer.padding.right],"border":[outer.border.left,outer.border.right],"layout":format!("{:?}",shell.ui.tree.style(tip.layout_id).unwrap()),"fits":tip.rect.w<=required.max(ara_ui::popover::MIN_WIDTH)+16.}));
     }
     assert!(
         measurements

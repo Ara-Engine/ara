@@ -2,10 +2,7 @@
 #![allow(clippy::unwrap_used)]
 use super::*;
 use ara_ui::input::InputEvent;
-use std::{
-    path::PathBuf,
-    sync::atomic::{AtomicU64, Ordering},
-};
+use std::sync::atomic::{AtomicU64, Ordering};
 
 static NEXT: AtomicU64 = AtomicU64::new(0);
 const IDS: [&str; 5] = [
@@ -27,13 +24,11 @@ impl ara_ui_text::Clipboard for Clipboard {
     }
 }
 fn open() -> (Editor, Shell) {
-    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../../target/ux-drag-tests")
-        .join(format!(
-            "{}-{}",
-            std::process::id(),
-            NEXT.fetch_add(1, Ordering::Relaxed)
-        ));
+    let root = crate::test_target().join("ux-drag-tests").join(format!(
+        "{}-{}",
+        std::process::id(),
+        NEXT.fetch_add(1, Ordering::Relaxed)
+    ));
     std::fs::create_dir_all(root.join("levels")).unwrap();
     std::fs::create_dir_all(root.join("assets")).unwrap();
     for (path, value) in [

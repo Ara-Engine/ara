@@ -28,6 +28,12 @@ pub mod world;
 
 pub use app::{LAUNCHED, Options, Settle, run};
 pub use editor::{Editor, EditorError};
+#[cfg(test)]
+pub(crate) fn test_target() -> std::path::PathBuf {
+    std::env::var_os("CARGO_TARGET_DIR")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target"))
+}
 #[doc(hidden)]
 pub use script_assets::worker::compile_scripts;
 

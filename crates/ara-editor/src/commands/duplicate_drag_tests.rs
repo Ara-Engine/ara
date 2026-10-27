@@ -2,14 +2,11 @@
 #![allow(clippy::unwrap_used)]
 use crate::Editor;
 use serde_json::json;
-use std::{
-    path::PathBuf,
-    sync::atomic::{AtomicU64, Ordering},
-};
+use std::sync::atomic::{AtomicU64, Ordering};
 static NEXT: AtomicU64 = AtomicU64::new(0);
 fn open() -> Editor {
-    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../../target/ux-duplicate-tests")
+    let root = crate::test_target()
+        .join("ux-duplicate-tests")
         .join(format!(
             "{}-{}",
             std::process::id(),

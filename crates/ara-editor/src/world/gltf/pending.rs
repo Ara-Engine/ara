@@ -134,8 +134,8 @@ mod tests {
     use crate::world::EditWorldView;
     #[test]
     fn progress_changes_placeholder_factors_without_a_model_publication() -> anyhow::Result<()> {
-        let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("../../target/renderer-unification/pending-status")
+        let root = crate::test_target()
+            .join("renderer-unification/pending-status")
             .join(std::process::id().to_string());
         std::fs::create_dir_all(root.join("levels"))?;
         std::fs::create_dir_all(root.join("models"))?;

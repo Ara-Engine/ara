@@ -1037,8 +1037,8 @@ mod tests {
     }
 
     fn exercise_scene_view(ray_tracing: bool) -> anyhow::Result<()> {
-        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("../../target/renderer-unification/scene-view")
+        let root = crate::test_target()
+            .join("renderer-unification/scene-view")
             .join(format!("{}-{ray_tracing}", std::process::id()));
         std::fs::create_dir_all(root.join("levels"))?;
         std::fs::write(

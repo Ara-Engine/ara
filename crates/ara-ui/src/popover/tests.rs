@@ -315,6 +315,47 @@ fn transient_width_limits_wrap_long_copy_and_fit_short_copy() -> Result<()> {
 }
 
 #[test]
+fn retained_tooltip_intrinsic_width_does_not_round_down_and_wrap_short_copy() -> Result<()> {
+    let mut text = TextSystem::bundled()?;
+    let mut ui = Ui::editor(
+        "<ui id='root'><tooltip id='tip' at='20,20' style='padding:8px;border-width:1px;max-width:360px'><text id='copy' text='' style='font-size:12px;white-space:normal' /></tooltip></ui>",
+        EDITOR_CSS,
+        WINDOW,
+    )?;
+    for value in [
+        "Play · F5",
+        "Project · scenes/main.scene",
+        "Collapse Hierarchy",
+        "إعدادات العرض · éclairage",
+        "Play · F5",
+    ] {
+        let mut reference = ara_ui_text::Text::new(value.into());
+        let natural = text.measure(&mut reference, None, 12.);
+        assert!(natural.width + 18. < MAX_WIDTH);
+        let copy = ui.find("copy").expect("copy");
+        ui.set_text(copy, value)?;
+        ui.frame(&mut text)?;
+        let copy = &ui.nodes[copy];
+        let tip = &ui.nodes[ui.find("tip").expect("tip")];
+        let paragraph = copy.text.as_ref().expect("paragraph");
+        assert_eq!(
+            paragraph.layout.len(),
+            reference.layout.len(),
+            "intrinsic width must keep short copy on its natural line: {value:?}, natural={natural:?}, copy={:?}",
+            copy.rect
+        );
+        assert!(
+            tip.rect.w >= natural.width + 18. - 0.5 && tip.rect.w <= natural.width + 19.,
+            "tooltip fits its unbroken text plus padding and borders: {value:?}, natural={natural:?}, tip={:?}",
+            tip.rect
+        );
+        assert!(copy.rect.h + 0.5 >= natural.height);
+        assert_eq!(ui.frame(&mut text)?.layout_passes, 0);
+    }
+    Ok(())
+}
+
+#[test]
 fn explicit_large_surface_override_still_clamps_to_the_viewport() -> Result<()> {
     let mut text = TextSystem::bundled()?;
     let mut ui = Ui::editor(
