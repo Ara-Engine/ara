@@ -57,6 +57,12 @@ struct Look {
     // Motion blur (look-motion.slangh): gathered by the post pass's motion variant.
     float4 motion;     // x shutter fraction of a frame (0 off), y samples, z longest blur (display px)
     uint4 motionImages; // tile max, neighbour max (sampled), tile max, neighbour max (storage); display / 16
+    // Preview-4 fidelity blocks, one owner each (look/frame.rs): reflection captures,
+    // hybrid ray queries, refraction, soft shadows and bitmask ambient light.
+    float4 captureParams[2]; uint4 captureInfo[2];
+    float4 rtParams[2];      uint4 rtInfo[2];
+    float4 refractParams[2]; uint4 refractInfo[2];
+    float4 shadowParams[2];  uint4 shadowInfo[2];
 };
 static const uint LOOK_PHYSICAL_SKY=1,LOOK_FOG=2,LOOK_RESET=4,LOOK_AMBIENT_OCCLUSION=8,LOOK_REFLECTIONS=16,LOOK_SNAP=32,LOOK_LOCAL_INDIRECT=64;
 Look look(Frame f){return buffers[NonUniformResourceIndex(f.look.x)].Load<Look>(0);}
