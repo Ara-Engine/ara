@@ -419,11 +419,10 @@ pub(crate) fn run_with_strategy(
             .strip_prefix(r"\\?\")
             .unwrap_or(&target.to_string_lossy()),
     );
-    #[cfg(windows)]
-    ensure!(
-        target.to_string_lossy().to_ascii_lowercase().contains("c:"),
-        "lab build directory must be on C: NVMe"
-    );
+    session::write(
+        &base.join("build-directory.json"),
+        &json!({"directory":target}),
+    )?;
     let listener = TcpListener::bind("127.0.0.1:0")?;
     listener.set_nonblocking(true)?;
     let endpoint = Endpoint {

@@ -31,7 +31,7 @@ enum Action {
         /// Run attached to this terminal (the default detaches with hidden children).
         #[arg(long)]
         foreground: bool,
-        /// All Cargo outputs, on NVMe. Defaults to this checkout's target.
+        /// Shared Cargo outputs; overrides ARA_LAB_BUILD_DIR and the saved workspace choice.
         #[arg(long)]
         build_dir: Option<PathBuf>,
         /// Maximum resident track players; admission also checks available VRAM.
@@ -119,7 +119,7 @@ pub(crate) fn run(root: &Path, options: Options) -> Result<bool> {
             build_dir,
             max_sessions,
         } => {
-            let build_dir = build_dir.unwrap_or_else(|| root.join("target"));
+            let build_dir = build_dir.unwrap_or_else(|| build::default_directory(root));
             if foreground {
                 return daemon::run(root, &build_dir, max_sessions);
             }

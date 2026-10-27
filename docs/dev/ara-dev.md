@@ -305,8 +305,12 @@ The inherited fidelity shader cohort was re-cooked after the main merge: all 48 
 
 ## Fidelity Lab
 
-`ara-dev lab start` starts one checkout-owned daemon. Its incremental perf build
-uses this checkout's `target/` on C: NVMe, four Cargo jobs, direct rustc, rust-lld
+`ara-dev lab start` starts one checkout-owned daemon. Its shared build directory is
+selected by `--build-dir PATH`, then `ARA_LAB_BUILD_DIR`, then the saved workspace
+choice, then the checkout's `target/`. No drive is baked into the code. On the shared
+PC use the NVMe directory `C:\AraBuild\lab-target`; set `CARGO_TARGET_DIR` and
+`CARGO_BUILD_BUILD_DIR` to the same directory for focused checks. The lab remembers
+the directory after startup. It uses four Cargo jobs on PC, direct rustc, rust-lld
 and BelowNormal priority. The CLI returns its endpoint while the initial build
 runs; `lab status` reports build progress and owner-attributed compiler errors.
 Every child is hidden/offscreen and uses a fresh profile under `target/ara-dev/lab`.

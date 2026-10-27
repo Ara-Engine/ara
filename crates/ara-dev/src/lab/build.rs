@@ -8,6 +8,16 @@ use std::{
     time::Instant,
 };
 
+pub(super) fn default_directory(root: &Path) -> PathBuf {
+    std::env::var_os("ARA_LAB_BUILD_DIR")
+        .map(PathBuf::from)
+        .or_else(|| {
+            super::session::read(&super::directory(root).join("build-directory.json"))
+                .and_then(|v| v["directory"].as_str().map(PathBuf::from))
+        })
+        .unwrap_or_else(|| root.join("target"))
+}
+
 /// A successful build is staged before the lab touches its last-good processes.
 /// Hotpatch integrations can replace this strategy; sessions and transport stay private.
 pub(crate) trait ReloadStrategy {
