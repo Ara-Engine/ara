@@ -155,7 +155,26 @@ pub struct MetalDevice {
     _cache: cache::Lease,
 }
 
+// SAFETY: Metal devices, queues, shared events, buffers, textures and pipeline states
+// may be retained, released and used from any thread. The objects that are not
+// thread-safe (command allocators, argument tables, residency sets, encoders) are only
+// touched through `&mut self`. `&self` methods read capabilities, query or wait on
+// shared events, update atomic wait counters and copy host-visible buffer contents,
+// the same shared access `VulkanDevice` gives its mapped memory.
+unsafe impl Send for MetalDevice {}
+// SAFETY: see `Send` above; no `&self` method mutates non-atomic state.
+unsafe impl Sync for MetalDevice {}
+
 impl MetalDevice {
+    /// Like [`crate::vulkan::VulkanDevice::new`], which adds the optional RT tier when
+    /// available. Metal has no acceleration structures yet, so this is the raster
+    /// device with `info().ray_tracing` false, and RT consumers take their fallback.
+    pub fn new(
+        window_extensions: &[std::ffi::CString],
+        cache_dir: impl Into<std::path::PathBuf>,
+    ) -> Result<Self> {
+        Self::new_raster(window_extensions, cache_dir)
+    }
     /// Create the system default Metal 4 device. `_window_extensions` keeps the Vulkan
     /// constructor's signature for backend-neutral callers; Metal needs none.
     /// Raster-only like [`crate::vulkan::VulkanDevice::new_raster`]. `cache_dir` holds
