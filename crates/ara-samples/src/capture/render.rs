@@ -556,6 +556,13 @@ fn baseline(
     let created = std::time::Instant::now();
     let mut presenter = Presenter::new(size, Vec::new(), options.pipeline_cache);
     presenter.set_render_options(RenderOptions::default());
+    // `ARA_RENDER_SCALE=<0..1>` overrides the preset's raster render scale (timing and
+    // capture A/Bs of upscaler modes).
+    presenter.set_render_scale(
+        std::env::var("ARA_RENDER_SCALE")
+            .ok()
+            .and_then(|v| v.parse::<f32>().ok()),
+    );
     presenter.set_quality(QualityChoice::Preset(preset));
     // The same resolved look (scene components plus look-file overrides) as the
     // fidelity modes and references.
