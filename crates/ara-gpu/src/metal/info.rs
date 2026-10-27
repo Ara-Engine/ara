@@ -37,6 +37,10 @@ pub(super) fn device_info(device: &ProtocolObject<dyn MTLDevice>) -> DeviceInfo 
         shader_integer_dot_product: false,
         packed_integer_dot_accelerated: false,
         max_image_dimension: MAX_IMAGE_DIMENSION,
+        max_storage_buffer_range: u32::try_from(device.maxBufferLength()).unwrap_or(u32::MAX),
+        // Every Metal 4 GPU has SIMD-group functions in compute and fragment shaders,
+        // which Metal Shader Converter maps wave operations onto.
+        wave_ops: true,
         api_version: format!(
             "Metal 4 ({})",
             NSProcessInfo::processInfo().operatingSystemVersionString()

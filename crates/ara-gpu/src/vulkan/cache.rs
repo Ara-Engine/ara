@@ -76,6 +76,8 @@ mod tests {
             sampled_image_capacity: 65_536,
             storage_buffer_capacity: 128,
             max_image_dimension: 16384,
+            max_storage_buffer_range: 1 << 27,
+            wave_ops: true,
             api_version: String::new(),
             driver_version: 3,
             graphics_family: 0,
