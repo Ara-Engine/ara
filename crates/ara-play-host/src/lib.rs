@@ -1494,6 +1494,8 @@ impl Service for PlayService {
 /// `.world`…) load, project types build on engine types, and the host (CLI, daemon,
 /// editor) validates documents exactly as its players do. Clashes become diagnostics.
 pub fn open_project(root: &Path) -> Result<ara_host::Project, Diagnostic> {
+    let root = &std::fs::canonicalize(root)
+        .map_err(|error| Diagnostic::error(ara_diag::codes::IO, error.to_string()))?;
     let published = ara_script::project::publish(root, ara_script::ModuleProfile::Gameplay);
     let mut generated_paths = Vec::new();
     let mut project = ara_host::Project::open_with(root, |db, registry| {
@@ -1512,7 +1514,11 @@ pub fn open_project(root: &Path) -> Result<ara_host::Project, Diagnostic> {
                 {
                     if let Some(schema) = &module.schema {
                         problems.extend(db.add_json_types(schema));
-                        generated_paths.push(root.join(&module.schema_path));
+                        match std::fs::canonicalize(root.join(&module.schema_path)) {
+                            Ok(path) => generated_paths.push(path),
+                            Err(error) => problems
+                                .push(Diagnostic::error(ara_diag::codes::IO, error.to_string())),
+                        }
                     }
                 }
             }

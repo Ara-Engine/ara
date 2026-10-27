@@ -77,6 +77,8 @@ pub fn prepare(
     job: &Path,
     tools: &Toolchain,
 ) -> Result<Option<ShippingProject>> {
+    let canonical_project = dunce::canonicalize(project)?;
+    let project = canonical_project.as_path();
     let specs = modules(project)?;
     if specs.is_empty() {
         return Ok(None);

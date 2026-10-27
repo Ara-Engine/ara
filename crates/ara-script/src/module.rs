@@ -104,6 +104,8 @@ impl ModuleSpec {
     pub fn from_dir(dir: &Path) -> Result<Self, Diagnostic> {
         let inputs = dir.join("module.inputs.json");
         if inputs.is_file() {
+            let canonical = std::fs::canonicalize(dir)
+                .map_err(|error| Diagnostic::error(codes::IO, error.to_string()))?;
             let text = std::fs::read_to_string(&inputs)
                 .map_err(|e| Diagnostic::error(codes::IO, e.to_string()))?;
             let descriptor: crate::project::ModuleInputs =
@@ -113,7 +115,7 @@ impl ModuleSpec {
                 })?;
             return Ok(Self {
                 name: descriptor.name,
-                dir: dir.to_owned(),
+                dir: canonical,
                 assembly: Some(Path::new(&descriptor.project).join(descriptor.assembly_path)),
                 watch: true,
                 hot: descriptor.hot,

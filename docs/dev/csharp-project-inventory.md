@@ -6,6 +6,12 @@ points. Each takes the project root; the authored root is
 `dotnet/src/Ara.CompileServer/ProjectInventory.cs`; the warm compile sessions use
 that same implementation. Migration and export consume the returned inventory.
 
+Relative roots are canonicalized once at each API boundary before any child
+working directory is selected. Generated module directories and tracked schema
+files are absolute canonical paths, so reloads remain valid after a cwd change.
+The project-root `packages/` directory stays outside the authored root; folders
+named `packages` inside authored content are ordinary source folders.
+
 Every source has an authored-relative `path` and project-relative `storage_path`.
 Every module returns its sources, references, folder-derived domain, hot setting,
 and explicit `state_path`, `assembly_path`, `schema_path`, schema JSON, result and
