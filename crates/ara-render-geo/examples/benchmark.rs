@@ -1,6 +1,6 @@
 use anyhow::{Result, ensure};
 use ara_geo::{Geometry, Settings, cook, sample};
-use ara_gpu::{cooked::write_json, vulkan::VulkanDevice};
+use ara_gpu::{GpuDevice, cooked::write_json};
 use ara_render::scene::CameraSpec;
 use ara_render_geo::shadows::VirtualShadows;
 use ara_render_geo::upscale::SpatialUpscaler;
@@ -68,7 +68,7 @@ fn main() -> Result<()> {
         target: Vec3::ZERO,
         vertical_fov: 55.0f32.to_radians(),
     };
-    let mut gpu = VulkanDevice::new(&[], output.join("gpu-cache"))?;
+    let mut gpu = GpuDevice::new(&[], output.join("gpu-cache"))?;
     let mut view = GeometryView::new(
         &mut gpu,
         &geometry,
@@ -232,7 +232,7 @@ fn main() -> Result<()> {
     frame_times.sort_by(f64::total_cmp);
     write_json(
         &output.join("benchmark.json"),
-        &serde_json::json!({"device":gpu.context().info,"size":size,"display_size":display_size,"requested_resource_bytes":resource_bytes,"system_vram_mib_after_allocation":process_vram,"reconstruction":if upscaled{"linear-light bilinear"}else{"native"},"hardware_only":hardware_only,"mesh_shaders":mesh&&gpu.context().info.mesh_shading,"stats":stats,"geometry_warnings":geometry.warnings(),"vsm_cold":cold_shadow,"vsm_warm":shadow_stats,"cold_passes_ms":cold_passes,"cold_total_ms":cold_passes.values().sum::<f64>(),"passes":passes,"total_p50_ms":frame_times[frame_times.len()/2],"instances":instances.iter().enumerate().map(|(index,i)|serde_json::json!({"render_index":index+1,"entity_low":i.identity[0],"entity_high":i.identity[1]})).collect::<Vec<_>>(),"license":"Original procedural geometry; no external media","background_load":"Shared workstation, CARGO_BUILD_JOBS=2; no claim of exclusive GPU access","limitations":["Preview lighting is not fidelity integration","Frozen camera and static casters for warm numbers","Whole-level residency fallback when a page budget is insufficient","All cluster pages resident in this benchmark"]}),
+        &serde_json::json!({"device":gpu.info(),"size":size,"display_size":display_size,"requested_resource_bytes":resource_bytes,"system_vram_mib_after_allocation":process_vram,"reconstruction":if upscaled{"linear-light bilinear"}else{"native"},"hardware_only":hardware_only,"mesh_shaders":mesh&&gpu.info().mesh_shading,"stats":stats,"geometry_warnings":geometry.warnings(),"vsm_cold":cold_shadow,"vsm_warm":shadow_stats,"cold_passes_ms":cold_passes,"cold_total_ms":cold_passes.values().sum::<f64>(),"passes":passes,"total_p50_ms":frame_times[frame_times.len()/2],"instances":instances.iter().enumerate().map(|(index,i)|serde_json::json!({"render_index":index+1,"entity_low":i.identity[0],"entity_high":i.identity[1]})).collect::<Vec<_>>(),"license":"Original procedural geometry; no external media","background_load":"Shared workstation, CARGO_BUILD_JOBS=2; no claim of exclusive GPU access","limitations":["Preview lighting is not fidelity integration","Frozen camera and static casters for warm numbers","Whole-level residency fallback when a page budget is insufficient","All cluster pages resident in this benchmark"]}),
     )?;
     gpu.assert_clean()?;
     if let Some(upscale) = reconstruction {

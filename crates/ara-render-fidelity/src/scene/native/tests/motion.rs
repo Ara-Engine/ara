@@ -2,7 +2,7 @@ use super::*;
 use crate::{FidelityView, FrameInput};
 
 pub(super) fn check(
-    gpu: &mut VulkanDevice,
+    gpu: &mut GpuDevice,
     view: &mut FidelityView,
     scene: &mut NativeScene,
     camera: &ara_render::scene::CameraSpec,

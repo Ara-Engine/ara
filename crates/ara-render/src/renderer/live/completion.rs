@@ -4,7 +4,7 @@ use super::*;
 impl Live {
     pub(in crate::renderer) fn replace_preallocated(
         &mut self,
-        gpu: &mut VulkanDevice,
+        gpu: &mut GpuDevice,
         images: Vec<Image>,
         size: [u32; 2],
         id_size: [u32; 2],
@@ -34,7 +34,7 @@ impl Live {
     }
     pub(in crate::renderer) fn acquire(
         &mut self,
-        gpu: &mut VulkanDevice,
+        gpu: &mut GpuDevice,
         size: [u32; 2],
         id_size: [u32; 2],
     ) -> Result<Output> {
@@ -60,7 +60,7 @@ impl Live {
         });
     }
 
-    pub(in crate::renderer) fn poll(&mut self, gpu: &mut VulkanDevice) -> Result<bool> {
+    pub(in crate::renderer) fn poll(&mut self, gpu: &mut GpuDevice) -> Result<bool> {
         if let Some(pending) = &mut self.pending {
             let timings = match gpu.poll_completion(&mut pending.completion) {
                 Ok(Some(timings)) => timings,
@@ -81,7 +81,7 @@ impl Live {
         Ok(true)
     }
 
-    pub(in crate::renderer) fn wait(&mut self, gpu: &mut VulkanDevice) -> Result<()> {
+    pub(in crate::renderer) fn wait(&mut self, gpu: &mut GpuDevice) -> Result<()> {
         if let Some(pending) = &mut self.pending {
             let timings = gpu.wait_completion(&mut pending.completion)?;
             self.completed(gpu, timings)?;
@@ -89,7 +89,7 @@ impl Live {
         Ok(())
     }
 
-    fn completed(&mut self, gpu: &mut VulkanDevice, timings: Vec<PassTiming>) -> Result<()> {
+    fn completed(&mut self, gpu: &mut GpuDevice, timings: Vec<PassTiming>) -> Result<()> {
         let pending = self.pending.take().expect("completed pending frame");
         if pending.publish {
             self.completed_timings = Some(timings);
@@ -100,7 +100,7 @@ impl Live {
         Ok(())
     }
 
-    pub(in crate::renderer) fn destroy(self, gpu: &mut VulkanDevice) -> Result<()> {
+    pub(in crate::renderer) fn destroy(self, gpu: &mut GpuDevice) -> Result<()> {
         ensure!(!self.pending(), "Retained camera is still in flight");
         for output in [self.shown, self.spare, self.reserved]
             .into_iter()

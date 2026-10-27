@@ -2,7 +2,7 @@ use super::*;
 use ara_pathtrace::metrics;
 
 /// Enforce RMSE and reference-convergence limits on the original views.
-pub fn run(gpu: &mut VulkanDevice, root: &Path) -> Result<()> {
+pub fn run(gpu: &mut GpuDevice, root: &Path) -> Result<()> {
     let camera = scenes::camera();
     let mut passed = true;
     let mut report = Vec::new();
@@ -80,6 +80,6 @@ pub fn run(gpu: &mut VulkanDevice, root: &Path) -> Result<()> {
 #[test]
 fn quality_targets_against_independent_4096_sample_reference() -> Result<()> {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let mut gpu = VulkanDevice::new(&[], root.join(".sn/quality-test-cache"))?;
+    let mut gpu = GpuDevice::new(&[], root.join(".sn/quality-test-cache"))?;
     run(&mut gpu, root)
 }

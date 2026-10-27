@@ -35,7 +35,7 @@ impl Buffers {
                 data: data.into(),
             });
     }
-    pub(super) fn poll(&mut self, gpu: &mut VulkanDevice) -> Result<bool> {
+    pub(super) fn poll(&mut self, gpu: &mut GpuDevice) -> Result<bool> {
         if self.ready || self.roles.is_empty() {
             self.ready = true;
             return Ok(true);
@@ -69,7 +69,7 @@ impl Buffers {
         self.ready = true;
         Ok(true)
     }
-    pub(super) fn destroy(self, gpu: &mut VulkanDevice) -> Result<()> {
+    pub(super) fn destroy(self, gpu: &mut GpuDevice) -> Result<()> {
         if let Some(ticket) = self.ticket {
             gpu.cancel_prepared_resources(ticket)?;
         }
@@ -81,7 +81,7 @@ impl Buffers {
 }
 
 pub(in crate::instanced::geometry_gpu) fn take_or_allocate(
-    gpu: &mut VulkanDevice,
+    gpu: &mut GpuDevice,
     role: usize,
     bytes: u64,
     usage: vk::BufferUsageFlags,

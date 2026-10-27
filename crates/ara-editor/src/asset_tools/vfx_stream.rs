@@ -46,7 +46,7 @@ impl VfxStream {
         let (send, requests) = mpsc::channel::<Request>();
         let (frames, receive) = mpsc::sync_channel(2);
         std::thread::spawn(move || {
-            let mut gpu = None::<ara_gpu::vulkan::VulkanDevice>;
+            let mut gpu = None::<ara_gpu::GpuDevice>;
             let mut system = None::<ara_vfx_gpu::GpuSystem>;
             let mut effect = None::<ara_vfx::Effect>;
             let mut playing = false;
@@ -84,7 +84,7 @@ impl VfxStream {
                         let loaded = (|| -> anyhow::Result<()> {
                             let cooked = super::vfx_preview::cooked(&root, &new)?;
                             if gpu.is_none() {
-                                gpu = Some(ara_gpu::vulkan::VulkanDevice::new(
+                                gpu = Some(ara_gpu::GpuDevice::new(
                                     &[],
                                     root.join(".ara/cache/vfx-live-gpu"),
                                 )?);
@@ -143,7 +143,7 @@ impl VfxStream {
                             ),
                             Err(_) => (0, 0, Vec::new()),
                         };
-                        device.context().assert_clean()?;
+                        device.assert_clean()?;
                         Ok(Frame {
                             image,
                             tick,

@@ -1,6 +1,6 @@
 //! Deterministic landscape captures and serialized diagnostic GPU measurements.
 use anyhow::Result;
-use ara_gpu::vulkan::VulkanDevice;
+use ara_gpu::GpuDevice;
 use ara_landscape::{Landscape, View, sample, timing_report};
 use std::{path::Path, time::Instant};
 fn main() -> Result<()> {
@@ -16,7 +16,7 @@ fn main() -> Result<()> {
         data.samples.len(),
         start.elapsed().as_secs_f64()
     );
-    let mut gpu = VulkanDevice::new(&[], root.join("cache/gpu"))?;
+    let mut gpu = GpuDevice::new(&[], root.join("cache/gpu"))?;
     let mut renderer = Landscape::new(&mut gpu, &data, [2560, 1440], &root.join("cooked"))?;
     let content = blake3::hash(bytemuck::cast_slice(&data.samples))
         .to_hex()
@@ -99,7 +99,7 @@ fn main() -> Result<()> {
     loader
         .join()
         .map_err(|_| anyhow::anyhow!("tile loader panicked"))??;
-    let report = serde_json::json!({"device":gpu.context().info,"resolution":[2560,1440],"terrain_m":[4096,4096],"instances":renderer.instance_count(),"height_content":content,"instance_content":instance_content,"tick":120,"seed":42,"warmup_frames":8,"measured_frames":32,"frames_in_flight":1,"detail_page_capacity":renderer.detail_page_capacity(),"tiles_streamed":streamed,"max_tile_upload_bytes_per_frame":13084,"capture_mode":"serialized diagnostics with asynchronous cache reads and bounded page publication","states":states});
+    let report = serde_json::json!({"device":gpu.info(),"resolution":[2560,1440],"terrain_m":[4096,4096],"instances":renderer.instance_count(),"height_content":content,"instance_content":instance_content,"tick":120,"seed":42,"warmup_frames":8,"measured_frames":32,"frames_in_flight":1,"detail_page_capacity":renderer.detail_page_capacity(),"tiles_streamed":streamed,"max_tile_upload_bytes_per_frame":13084,"capture_mode":"serialized diagnostics with asynchronous cache reads and bounded page publication","states":states});
     ara_gpu::cooked::write_json(&root.join("measurements/gpu-timings.json"), &report)?;
     println!("{}", serde_json::to_string_pretty(&report)?);
     gpu.assert_clean()?;

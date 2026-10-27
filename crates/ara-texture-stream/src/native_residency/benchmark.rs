@@ -54,7 +54,7 @@ fn native_publication_preallocation_measurement() -> Result<()> {
     let mut samples = Vec::new();
     for repeat in 0..2 {
         for asynchronous in [false, true] {
-            let mut gpu = VulkanDevice::new_raster(&[], root.join("gpu"))?;
+            let mut gpu = GpuDevice::new_raster(&[], root.join("gpu"))?;
             let mut set = NativeResidency::new(NativeConfig {
                 resident_bytes: 128 << 20,
                 upload_bytes: 4 << 20,

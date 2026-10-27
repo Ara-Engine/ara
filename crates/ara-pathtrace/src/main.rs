@@ -1,5 +1,5 @@
 use anyhow::Result;
-use ara_gpu::vulkan::VulkanDevice;
+use ara_gpu::GpuDevice;
 #[cfg(not(test))]
 use ara_pathtrace::artifacts::output_path;
 #[cfg(test)]
@@ -23,7 +23,7 @@ mod verification;
 
 fn main() -> Result<()> {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let mut gpu = VulkanDevice::new(&[], root.join(".sn/pipeline-cache"))?;
+    let mut gpu = GpuDevice::new(&[], root.join(".sn/pipeline-cache"))?;
     let command = std::env::args().nth(1).unwrap_or_else(|| "smoke".into());
     match command.as_str() {
         "night-components" => night_components::run(&mut gpu, root)?,

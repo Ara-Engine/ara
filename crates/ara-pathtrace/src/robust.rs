@@ -5,7 +5,7 @@ use ara_pathtrace::{metrics, robust_scenes};
 use std::collections::BTreeMap;
 
 const SIZE: [u32; 2] = [480, 270];
-fn configure(gpu: &mut VulkanDevice, view: &mut FidelityView, name: &str) -> Result<()> {
+fn configure(gpu: &mut GpuDevice, view: &mut FidelityView, name: &str) -> Result<()> {
     robust_scenes::configure_view(gpu, view, name == "outdoor_day")
 }
 
@@ -34,7 +34,7 @@ fn cases() -> Result<
 }
 
 /// Record independently converged references and compare deterministic display goldens.
-pub fn quality(gpu: &mut VulkanDevice, root: &Path) -> Result<()> {
+pub fn quality(gpu: &mut GpuDevice, root: &Path) -> Result<()> {
     let mut report = Vec::new();
     let mut passed = true;
     let update = std::env::var("ARA_UPDATE_FIDELITY_GOLDENS").as_deref() == Ok("1");
@@ -130,7 +130,7 @@ pub fn quality(gpu: &mut VulkanDevice, root: &Path) -> Result<()> {
 }
 
 /// Measure complete native/upscaled frames; new fixtures have no historical baseline.
-pub fn timings(gpu: &mut VulkanDevice, root: &Path, night_only: bool) -> Result<()> {
+pub fn timings(gpu: &mut GpuDevice, root: &Path, night_only: bool) -> Result<()> {
     let mut report = Vec::new();
     let mut budgets_passed = true;
     for (name, scene, camera, ev) in cases()? {

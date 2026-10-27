@@ -16,7 +16,7 @@ pub struct SpatialUpscaler {
 impl SpatialUpscaler {
     /// Creates a display-sized diagnostic target for a completed preview image.
     pub fn new(
-        gpu: &mut VulkanDevice,
+        gpu: &mut GpuDevice,
         input: Image,
         input_size: [u32; 2],
         size: [u32; 2],
@@ -51,7 +51,7 @@ impl SpatialUpscaler {
         })
     }
     /// Records reconstruction; the caller submits on Graphics after visibility/VSM.
-    pub fn record(&mut self, gpu: &VulkanDevice) -> Result<CommandList> {
+    pub fn record(&mut self, gpu: &GpuDevice) -> Result<CommandList> {
         let mut g = Graph::default();
         let source = g.import(
             Resource::Image(self.input),
@@ -108,7 +108,7 @@ impl SpatialUpscaler {
         Ok(r.finish())
     }
     /// Saves the completed display image through a diagnostic-only readback.
-    pub fn capture(&self, gpu: &mut VulkanDevice, path: &Path) -> Result<()> {
+    pub fn capture(&self, gpu: &mut GpuDevice, path: &Path) -> Result<()> {
         let read = gpu.create_buffer(
             u64::from(self.size[0]) * u64::from(self.size[1]) * 4,
             vk::BufferUsageFlags::TRANSFER_DST,
@@ -153,7 +153,7 @@ impl SpatialUpscaler {
         Ok(())
     }
     /// Retires owned display resources after the host's last completed use.
-    pub fn retire(self, gpu: &mut VulkanDevice) -> Result<()> {
+    pub fn retire(self, gpu: &mut GpuDevice) -> Result<()> {
         gpu.retire(Resource::Image(self.output))?;
         gpu.retire_pipeline(self.pipeline)?;
         gpu.collect()?;

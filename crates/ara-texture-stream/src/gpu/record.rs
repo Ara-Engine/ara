@@ -1,6 +1,6 @@
 use super::*;
 impl Residency {
-    pub(super) fn record(&mut self, gpu: &VulkanDevice, end: bool) -> Result<CommandList> {
+    pub(super) fn record(&mut self, gpu: &GpuDevice, end: bool) -> Result<CommandList> {
         let mut graph = Graph::default();
         let ids: Vec<_> = self
             .buffers

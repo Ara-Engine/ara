@@ -23,7 +23,7 @@ impl Renderer2d {
             !size.contains(&0) && size.iter().all(|v| *v <= 8192),
             "invalid 2D target extent"
         );
-        let mut gpu = VulkanDevice::new(extensions, cache)?;
+        let mut gpu = GpuDevice::new(extensions, cache)?;
         let artifacts = ara_gpu::cooked::resource_dir(
             env!("CARGO_PKG_NAME"),
             concat!(env!("CARGO_MANIFEST_DIR"), "/cooked"),
@@ -239,7 +239,7 @@ fn barrier(buffer: Buffer, before: Access, after: Access) -> Barrier {
     }
 }
 /// Device-local instance storage plus its persistent host-visible staging buffer.
-fn instance_buffers(gpu: &mut VulkanDevice, capacity: u64) -> Result<(Buffer, Buffer, u32)> {
+fn instance_buffers(gpu: &mut GpuDevice, capacity: u64) -> Result<(Buffer, Buffer, u32)> {
     let staging = gpu.create_buffer(capacity, vk::BufferUsageFlags::TRANSFER_SRC, true)?;
     let instances = gpu.create_buffer(
         capacity,
@@ -249,7 +249,7 @@ fn instance_buffers(gpu: &mut VulkanDevice, capacity: u64) -> Result<(Buffer, Bu
     let index = gpu.storage_buffer(instances)?.index;
     Ok((instances, staging, index))
 }
-fn frame_buffer(gpu: &mut VulkanDevice, capacity: u64) -> Result<Buffer> {
+fn frame_buffer(gpu: &mut GpuDevice, capacity: u64) -> Result<Buffer> {
     Ok(gpu.create_buffer(capacity, vk::BufferUsageFlags::STORAGE_BUFFER, true)?)
 }
 /// What an `update` may not change without a new renderer.
@@ -262,7 +262,7 @@ fn atlas_key(scene: &Scene2d) -> Vec<(String, ara_2d::Atlas, bool)> {
 }
 /// Validates and uploads every atlas plus a flat normal; returns bindless indices by ref.
 fn upload_atlases(
-    gpu: &mut VulkanDevice,
+    gpu: &mut GpuDevice,
     scene: &Scene2d,
 ) -> Result<(Vec<Image>, BTreeMap<String, u32>)> {
     let mut indices = BTreeMap::new();
@@ -329,7 +329,7 @@ fn ara_schema_ref(s: &str) -> bool {
     ara_schema::grammar::parse_ref(s).is_ok_and(|r| r.id.is_some())
 }
 fn upload_image(
-    gpu: &mut VulkanDevice,
+    gpu: &mut GpuDevice,
     size: [u32; 2],
     format: vk::Format,
     bytes: &[u8],

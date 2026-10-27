@@ -68,7 +68,7 @@ fn effective_view_policy_participates_in_residency_identity() {
 #[test]
 fn native_color_views_preserve_gltf_and_graph_filtering_contracts() {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
-    let mut gpu = VulkanDevice::new(
+    let mut gpu = GpuDevice::new(
         &[],
         root.join("../../target/ara-texture-stream/native-views"),
     )

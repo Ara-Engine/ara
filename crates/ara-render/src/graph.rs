@@ -2,7 +2,7 @@
 //! Independent passes are stably topologically sorted; explicit edges may reorder
 //! them. Reads before a first producer are legal and move after that producer.
 use anyhow::{Result, bail, ensure};
-use ara_gpu::{Access, Barrier, Handoff, Queue, Resource, vk, vulkan::VulkanDevice};
+use ara_gpu::{Access, Barrier, GpuDevice, Handoff, Queue, Resource, vk};
 use std::collections::BTreeSet;
 mod usage;
 
@@ -78,7 +78,7 @@ impl Graph {
     /// The caller retires the returned image after its graph submission.
     pub fn transient(
         &mut self,
-        gpu: &mut VulkanDevice,
+        gpu: &mut GpuDevice,
         desc: TransientImage,
         queue: Queue,
     ) -> Result<(ResourceId, ara_gpu::Image)> {

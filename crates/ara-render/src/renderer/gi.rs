@@ -307,7 +307,7 @@ impl Renderer {
         allocated.push(Resource::Buffer(meta));
         // Capture boundaries zero the irradiance with a copy (`reset_capture_history`);
         // tests read it back.
-        let mut image = |gpu: &mut VulkanDevice, size: u32, format| {
+        let mut image = |gpu: &mut GpuDevice, size: u32, format| {
             let image = gpu.create_image(
                 atlas * size,
                 rows * size,

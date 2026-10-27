@@ -52,9 +52,9 @@ fn resolved_timestamp_import_preserves_submission_frame_and_queue() {
 #[ignore = "requires Vulkan 1.3 and validation layers; run with --ignored"]
 fn real_vulkan_pass_timestamp_correlates_after_next_cpu_frame()
 -> Result<(), Box<dyn std::error::Error>> {
-    use ara_gpu::{Queue, commands::Command, vulkan::VulkanDevice};
+    use ara_gpu::{GpuDevice, Queue, commands::Command};
     let cache = std::env::temp_dir().join(format!("ara-profile-gpu-{}", std::process::id()));
-    let mut gpu = VulkanDevice::new(&[], &cache)?;
+    let mut gpu = GpuDevice::new(&[], &cache)?;
     let mut p = Profiler::new(Config {
         history: 2,
         ..Config::default()

@@ -9,7 +9,7 @@ use super::{
     reference::{Truth, score, transport},
 };
 use anyhow::{Context, Result};
-use ara_gpu::vulkan::VulkanDevice;
+use ara_gpu::GpuDevice;
 use ara_render::{
     capture::{CaptureRequest, ViewMode},
     scene::CameraSpec,
@@ -209,7 +209,7 @@ impl Window {
 /// (`<name>-<preset>-<shot>.png`) and `<name>-timings.json`. Returns the report.
 /// Fidelity presets run first; Low then consumes the scene for the baseline device.
 pub fn run(
-    gpu: &mut VulkanDevice,
+    gpu: &mut GpuDevice,
     scene: Scene,
     frame: &mut RenderFrame,
     stats: &Stats,
@@ -331,7 +331,7 @@ fn save(image: &RgbaImage, options: &Options<'_>, label: &str, shot: &str) -> Re
 }
 
 fn fidelity(
-    gpu: &mut VulkanDevice,
+    gpu: &mut GpuDevice,
     scene: &Scene,
     look: &Look,
     options: &Options<'_>,
@@ -483,7 +483,7 @@ fn fidelity(
 /// demodulated incident (indirect) light and filtered radiance, each exposed with
 /// the view's current exposure and a simple Reinhard curve, at render size.
 fn signals(
-    gpu: &mut VulkanDevice,
+    gpu: &mut GpuDevice,
     view: &FidelityView,
     options: &Options<'_>,
     label: &str,
@@ -710,7 +710,7 @@ fn moving(shot: &Shot, seconds: f32) -> CameraView {
 /// A camera move from one shot to another, captured into a horizontal strip.
 #[allow(clippy::too_many_arguments)]
 fn strip(
-    gpu: &mut VulkanDevice,
+    gpu: &mut GpuDevice,
     view: &mut FidelityView,
     effects: &mut ara_runtime_render::fidelity::vfx::Effects,
     look: &Look,

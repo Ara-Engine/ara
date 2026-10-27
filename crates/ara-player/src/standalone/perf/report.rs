@@ -52,7 +52,7 @@ impl Window {
                 "backend":renderer.gpu().submission_stats()})
         });
         report["gpu_queue_priority"] = presenter.renderer().map_or(Value::Null, |renderer| {
-            let info = &renderer.gpu().context().info;
+            let info = renderer.gpu().info();
             json!({"extension":info.global_priority_extension,"graphics":info.graphics_global_priority})
         });
         report
@@ -60,7 +60,7 @@ impl Window {
             .context("performance report object")?
             .extend(self.span.report());
         report["gpu_timestamp_clock"] = presenter.renderer().map_or(Value::Null, |renderer| {
-            let info = &renderer.gpu().context().info;
+            let info = renderer.gpu().info();
             json!({"extension":info.timestamp_clock,"period_ns":info.timestamp_period_ns,"valid_bits":info.timestamp_valid_bits})
         });
         report["completed"] = json!(state == Outcome::Ready);

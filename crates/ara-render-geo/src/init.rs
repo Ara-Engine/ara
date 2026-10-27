@@ -9,7 +9,7 @@ impl GeometryView {
     /// Prepares immutable device-local geometry and warms offline pipelines.
     /// Preparation is synchronous and belongs on an extraction worker.
     pub fn new(
-        gpu: &mut VulkanDevice,
+        gpu: &mut GpuDevice,
         geometry: &Geometry,
         instances: &[Instance],
         size: [u32; 2],
@@ -33,7 +33,7 @@ impl GeometryView {
     /// Prepares a bounded resident page pool. Budget misses render a complete
     /// coarser DAG cut and report its residency floor rather than leaving holes.
     pub fn new_with_pool(
-        gpu: &mut VulkanDevice,
+        gpu: &mut GpuDevice,
         geometry: &Geometry,
         instances: &[Instance],
         config: GeometryConfig,
@@ -61,7 +61,7 @@ impl GeometryView {
             "invalid geometry view capacities"
         );
         ensure!(
-            gpu.context().info.buffer_int64_atomics,
+            gpu.info().buffer_int64_atomics,
             "ARA_GEO_CAPABILITY: shaderBufferInt64Atomics required for atomic visibility"
         );
         ensure!(
@@ -74,10 +74,9 @@ impl GeometryView {
                 && f32::from_bits(i.identity[3]).is_finite()),
             "invalid instance transform/material"
         );
-        let mesh =
-            mesh_shaders && gpu.context().info.mesh_shading && gpu.context().info.geometry_shader;
+        let mesh = mesh_shaders && gpu.info().mesh_shading && gpu.info().geometry_shader;
         if mesh {
-            let limits = gpu.context().info.mesh_dispatch;
+            let limits = gpu.info().mesh_dispatch;
             let x = capacity.min(65535);
             let y = capacity.div_ceil(65535);
             ensure!(
@@ -253,7 +252,7 @@ impl GeometryView {
 }
 use ara_gpu::vk;
 pub(super) fn upload(
-    gpu: &mut VulkanDevice,
+    gpu: &mut GpuDevice,
     bytes: &[u8],
     extra: vk::BufferUsageFlags,
 ) -> Result<Buffer> {

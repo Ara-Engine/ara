@@ -1,8 +1,8 @@
 //! GPU-only landscape/scene depth composition; `Renderer::finish` grades the result.
 use anyhow::Result;
 use ara_gpu::{
-    Access, Barrier, Device, Image, Pipeline, Queue, Resource, RootConstants, commands::Command,
-    vk, vulkan::VulkanDevice,
+    Access, Barrier, Device, GpuDevice, Image, Pipeline, Queue, Resource, RootConstants,
+    commands::Command, vk,
 };
 use ara_render::graph::State;
 use ara_vfx_gpu::{SceneColor, SceneDepth};
@@ -29,7 +29,7 @@ fn barrier(image: Image, before: Access, after: Access) -> Barrier {
 }
 
 impl Composite {
-    pub fn new(gpu: &mut VulkanDevice, size: [u32; 2]) -> Result<Self> {
+    pub fn new(gpu: &mut GpuDevice, size: [u32; 2]) -> Result<Self> {
         let artifacts = ara_gpu::cooked::resource_dir(
             env!("CARGO_PKG_NAME"),
             concat!(env!("CARGO_MANIFEST_DIR"), "/cooked"),
@@ -63,7 +63,7 @@ impl Composite {
 
     pub fn merge(
         &mut self,
-        gpu: &mut VulkanDevice,
+        gpu: &mut GpuDevice,
         scene: SceneColor,
         depth: SceneDepth,
         landscape: (Image, Image),
@@ -126,7 +126,7 @@ impl Composite {
         ))
     }
 
-    pub fn retire(self, gpu: &mut VulkanDevice) -> Result<()> {
+    pub fn retire(self, gpu: &mut GpuDevice) -> Result<()> {
         gpu.retire_pipeline(self.pipeline)?;
         for image in [self.hdr, self.depth] {
             gpu.retire(Resource::Image(image))?;
@@ -144,7 +144,7 @@ mod tests {
     fn landscape_display_color_survives_hdr_composition() -> Result<()> {
         let root = Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("../../target/runtime-polish/composite-test");
-        let mut gpu = VulkanDevice::new(&[], root)?;
+        let mut gpu = GpuDevice::new(&[], root)?;
         let size = [8, 8];
         let mut upload = |format, bytes: &[u8], after| -> Result<(Image, u32)> {
             let usage = vk::ImageUsageFlags::SAMPLED

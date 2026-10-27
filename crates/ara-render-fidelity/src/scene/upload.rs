@@ -1,7 +1,7 @@
 //! Device-local startup/change uploads; staging retires after completion.
 use super::*;
 pub(crate) fn buffer(
-    gpu: &mut VulkanDevice,
+    gpu: &mut GpuDevice,
     bytes: &[u8],
     usage: vk::BufferUsageFlags,
 ) -> Result<Buffer> {
@@ -45,7 +45,7 @@ pub(crate) fn buffer(
     Ok(b)
 }
 pub(crate) fn upload_image(
-    gpu: &mut VulkanDevice,
+    gpu: &mut GpuDevice,
     size: [u32; 2],
     format: vk::Format,
     bytes: &[u8],

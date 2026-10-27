@@ -37,7 +37,7 @@ fn shaderless_loading_progress_uploads_exactly_without_scene_or_descriptor_alloc
             + before.acceleration_structures,
         0
     );
-    assert!(!loading.gpu.context().info.ray_tracing);
+    assert!(!loading.gpu.info().ray_tracing);
     loading.draw(0.2)?;
     assert_eq!(loading.read_pixels()?, loading.pixels);
     let initial_blue = loading

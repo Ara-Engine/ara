@@ -1,9 +1,9 @@
 //! Live effects skip drawing until their cooked PSOs finish off-thread.
 use anyhow::{Result, ensure};
 use ara_gpu::{
-    Pipeline,
+    GpuDevice, Pipeline,
     cooked::CookedPipeline,
-    vulkan::{PipelinePreparation, PipelinePreparationId, VulkanDevice},
+    vulkan::{PipelinePreparation, PipelinePreparationId},
 };
 use std::{collections::VecDeque, path::Path};
 
@@ -25,7 +25,7 @@ pub struct PreparedPipelines {
 }
 impl PreparedPipelines {
     /// Retire an unused batch without changing a live effect.
-    pub fn retire(self, gpu: &mut VulkanDevice) -> Result<()> {
+    pub fn retire(self, gpu: &mut GpuDevice) -> Result<()> {
         for pipeline in self.handles {
             gpu.retire_pipeline(pipeline)?;
         }
@@ -63,7 +63,7 @@ impl PipelineWarmup {
     }
     /// Submit when the bounded worker has room, then poll without waiting. While
     /// None, the host keeps the current scene image and omits this effect.
-    pub fn poll(&mut self, gpu: &mut VulkanDevice) -> Result<Option<PreparedPipelines>> {
+    pub fn poll(&mut self, gpu: &mut GpuDevice) -> Result<Option<PreparedPipelines>> {
         if self.ticket.is_none() {
             self.ticket = gpu.prepare_pipelines(|| std::mem::take(&mut self.recipes))?;
         }
@@ -84,7 +84,7 @@ impl PipelineWarmup {
         }))
     }
     /// Cancel a request, including one compiling now, without a host join.
-    pub fn cancel(self, gpu: &mut VulkanDevice) -> Result<()> {
+    pub fn cancel(self, gpu: &mut GpuDevice) -> Result<()> {
         if let Some(ticket) = self.ticket {
             gpu.cancel_prepared_pipelines(ticket)?;
         }

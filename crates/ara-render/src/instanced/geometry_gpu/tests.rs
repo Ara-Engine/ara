@@ -74,13 +74,13 @@ fn pooling_preserves_local_lod_indices_and_separates_skin_vertices() {
 #[test]
 fn uploaded_pool_builds_shared_lods_and_traces_transformed_instances() -> anyhow::Result<()> {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
-    let mut gpu = VulkanDevice::new(&[], root.join("../../target/ara-render/native-geometry"))?;
+    let mut gpu = GpuDevice::new(&[], root.join("../../target/ara-render/native-geometry"))?;
     let scene = fixture();
     let raster = GeometryGpu::new(&mut gpu, &scene, false)?;
     assert!(raster.table_index().is_some() && raster.blas(0).is_none());
     assert_eq!(raster.resources().count(), 5);
     raster.destroy(&mut gpu)?;
-    if !gpu.context().info.ray_tracing {
+    if !gpu.info().ray_tracing {
         return Ok(());
     }
     let mut pool = GeometryGpu::new(&mut gpu, &scene, true)?;

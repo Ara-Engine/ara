@@ -69,7 +69,7 @@ impl Floats {
             let mut float = self.windows.remove(index);
             // SAFETY: Wait for presentation before destroying its swapchain and surface.
             unsafe {
-                renderer.gpu().context().device.device_wait_idle()?;
+                renderer.gpu().wait_idle()?;
                 float.present.destroy(renderer.gpu().context());
             }
             gpu.release_target(float.key);

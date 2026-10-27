@@ -4,7 +4,7 @@ use super::*;
 impl Live {
     pub(super) fn render(
         &mut self,
-        gpu: &mut VulkanDevice,
+        gpu: &mut GpuDevice,
         frame: &RenderFrame,
     ) -> Result<GpuFrameCosts> {
         let look = crate::environment(frame);
@@ -66,7 +66,7 @@ impl Live {
             ..Default::default()
         })
     }
-    pub(super) fn destroy(self, gpu: &mut VulkanDevice) -> Result<()> {
+    pub(super) fn destroy(self, gpu: &mut GpuDevice) -> Result<()> {
         self.effects.destroy(gpu)?;
         self.view.destroy(gpu)
     }

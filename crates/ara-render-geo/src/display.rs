@@ -18,7 +18,7 @@ impl DisplayOutput {
     /// Prepares a display target. Input must rest in Graphics/ShaderRead and
     /// contain exposed linear BT.709 (1 = diffuse white), with no SDR transfer.
     pub fn new(
-        gpu: &mut VulkanDevice,
+        gpu: &mut GpuDevice,
         input: Image,
         size: [u32; 2],
         settings: OutputSettings,
@@ -59,7 +59,7 @@ impl DisplayOutput {
     }
     /// Records highlight tone mapping and matching output encoding. HDR10
     /// converts primaries to BT.2020 before absolute PQ; scRGB retains negatives.
-    pub fn record(&mut self, gpu: &VulkanDevice) -> Result<CommandList> {
+    pub fn record(&mut self, gpu: &GpuDevice) -> Result<CommandList> {
         let mut g = Graph::default();
         let source = g.import(
             Resource::Image(self.input),
@@ -124,7 +124,7 @@ impl DisplayOutput {
         self.settings
     }
     /// Diagnostic readback of encoded values, preserving half-float HDR ranges.
-    pub fn encoded_pixels(&self, gpu: &mut VulkanDevice) -> Result<Vec<[f32; 4]>> {
+    pub fn encoded_pixels(&self, gpu: &mut GpuDevice) -> Result<Vec<[f32; 4]>> {
         ensure!(
             self.state == Access::CopySource,
             "display output has not been recorded"
@@ -177,7 +177,7 @@ impl DisplayOutput {
         Ok(pixels)
     }
     /// Retires this pass; the borrowed linear scene image stays host-owned.
-    pub fn retire(self, gpu: &mut VulkanDevice) -> Result<()> {
+    pub fn retire(self, gpu: &mut GpuDevice) -> Result<()> {
         gpu.retire(Resource::Image(self.output))?;
         gpu.retire_pipeline(self.pipeline)?;
         gpu.collect()?;

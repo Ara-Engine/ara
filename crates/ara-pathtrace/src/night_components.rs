@@ -2,7 +2,7 @@
 use super::*;
 use ara_gpu::cooked::write_json;
 
-pub fn run(gpu: &mut VulkanDevice, root: &Path) -> Result<()> {
+pub fn run(gpu: &mut GpuDevice, root: &Path) -> Result<()> {
     let size = [480, 270];
     let scene = ara_pathtrace::robust_scenes::night();
     let camera = ara_pathtrace::robust_scenes::camera(false);

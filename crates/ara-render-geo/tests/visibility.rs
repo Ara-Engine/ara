@@ -1,6 +1,6 @@
 use anyhow::{Result, ensure};
 use ara_geo::{Settings, cook, sample};
-use ara_gpu::vulkan::VulkanDevice;
+use ara_gpu::GpuDevice;
 use ara_render::scene::CameraSpec;
 use ara_render_geo::shadows::{ShadowReference, VirtualShadows};
 use ara_render_geo::{
@@ -22,7 +22,7 @@ fn lru_pins_roots_and_protects_the_current_feedback_batch() -> Result<()> {
 }
 
 fn draw(
-    gpu: &mut VulkanDevice,
+    gpu: &mut GpuDevice,
     view: &mut GeometryView,
     camera: &CameraSpec,
     hardware: bool,
@@ -95,7 +95,7 @@ fn hybrid_mesh_and_indirect_goldens_and_full_resolution_error() -> Result<()> {
         target: Vec3::ZERO,
         vertical_fov: 55.0f32.to_radians(),
     };
-    let mut gpu = VulkanDevice::new(&[], capture.join("gpu"))?;
+    let mut gpu = GpuDevice::new(&[], capture.join("gpu"))?;
     let mut mesh = GeometryView::new(
         &mut gpu,
         &geometry,

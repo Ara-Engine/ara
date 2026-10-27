@@ -3,10 +3,7 @@ use super::*;
 
 /// The backend currently exposes single-level images. Pack decreasing rectangles
 /// vertically; shader sampling wraps within each rectangle, including bilinear taps.
-pub(super) fn texture(
-    gpu: &mut VulkanDevice,
-    texture: &ara_render::scene::Texture,
-) -> Result<Image> {
+pub(super) fn texture(gpu: &mut GpuDevice, texture: &ara_render::scene::Texture) -> Result<Image> {
     let [width, height] = texture.size;
     let mut atlas = vec![0_u8; (width * height * 2 * 4) as usize];
     let mut level = texture.rgba.to_vec();

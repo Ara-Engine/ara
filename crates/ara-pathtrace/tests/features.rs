@@ -1,12 +1,12 @@
 use anyhow::{Result, ensure};
-use ara_gpu::vulkan::VulkanDevice;
+use ara_gpu::GpuDevice;
 use ara_pathtrace::scenes;
 use ara_render_fidelity::{FidelityView, FrameInput, Mode, PostSettings, Settings, Tier, Upscaler};
 
 #[test]
 fn feature_hdr_binds_filter_slot_and_reuses_bloom_post() -> Result<()> {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
-    let mut gpu = VulkanDevice::new(&[], root.join(".sn/feature-contract-cache"))?;
+    let mut gpu = GpuDevice::new(&[], root.join(".sn/feature-contract-cache"))?;
     let scene = scenes::scene("glossy_interior", 0);
     let settings = Settings {
         render_size: [65, 37],

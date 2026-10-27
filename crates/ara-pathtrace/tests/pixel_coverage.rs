@@ -1,5 +1,5 @@
 use anyhow::{Result, ensure};
-use ara_gpu::vulkan::VulkanDevice;
+use ara_gpu::GpuDevice;
 use ara_render::scene::{CameraSpec, Mesh, Vertex};
 use ara_render_fidelity::{FidelityView, FrameInput, Mode, PostSettings, Settings, Tier, Upscaler};
 use glam::Vec3;
@@ -7,7 +7,7 @@ use glam::Vec3;
 #[test]
 fn shared_diffuse_specular_path_preserves_furnace_energy() -> Result<()> {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
-    let mut gpu = VulkanDevice::new(&[], root.join(".sn/shared-furnace-cache"))?;
+    let mut gpu = GpuDevice::new(&[], root.join(".sn/shared-furnace-cache"))?;
     let mut scene = ara_pathtrace::scenes::scene("furnace", 0);
     scene.sun_lux = Vec3::ZERO;
     scene.lights.clear();
@@ -91,7 +91,7 @@ fn shared_diffuse_specular_path_preserves_furnace_energy() -> Result<()> {
 #[test]
 fn mixed_rate_specular_preserves_subpixel_material_coverage() -> Result<()> {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
-    let mut gpu = VulkanDevice::new(&[], root.join(".sn/pixel-coverage-cache"))?;
+    let mut gpu = GpuDevice::new(&[], root.join(".sn/pixel-coverage-cache"))?;
     let mut scene = ara_pathtrace::scenes::scene("furnace", 0);
     scene.sun_lux = Vec3::ZERO;
     scene.lights.clear();

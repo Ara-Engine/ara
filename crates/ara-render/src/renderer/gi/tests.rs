@@ -79,11 +79,11 @@ fn initial_probe_resources_clear_in_slices_and_delivery_allocates_no_descriptors
     let mut renderer = renderer("slices")?;
     assert!(!renderer.preallocate_probe_volume(layout(), 4)?);
     let usage = renderer.gpu.descriptor_usage();
-    let waits = renderer.gpu.context().host_wait_stats().calls;
+    let waits = renderer.gpu.host_wait_stats().calls;
     for _ in 0..4 {
         assert!(!renderer.preallocate_probe_volume(layout(), 4)?);
     }
-    assert_eq!(renderer.gpu.context().host_wait_stats().calls, waits);
+    assert_eq!(renderer.gpu.host_wait_stats().calls, waits);
     assert_eq!(renderer.gpu.descriptor_usage(), usage);
     for cursor in [4, 8] {
         renderer.render_view(&camera(), 1., ViewMode::Lit)?;
@@ -97,15 +97,15 @@ fn initial_probe_resources_clear_in_slices_and_delivery_allocates_no_descriptors
     assert!(renderer.preallocate_probe_volume(layout(), 4)?);
     // Gather targets are lazily allocated by the loading renders as well.
     let usage = renderer.gpu.descriptor_usage();
-    let waits = renderer.gpu.context().host_wait_stats().calls;
+    let waits = renderer.gpu.host_wait_stats().calls;
     let update = update()?;
     renderer.update_probe_records(&update, 0..4)?;
-    assert_eq!(renderer.gpu.context().host_wait_stats().calls, waits);
+    assert_eq!(renderer.gpu.host_wait_stats().calls, waits);
     assert_eq!(renderer.gpu.descriptor_usage(), usage);
     renderer.render_view(&camera(), 1., ViewMode::Lit)?;
-    let waits = renderer.gpu.context().host_wait_stats().calls;
+    let waits = renderer.gpu.host_wait_stats().calls;
     renderer.update_probe_records(&update, 4..8)?;
-    assert_eq!(renderer.gpu.context().host_wait_stats().calls, waits);
+    assert_eq!(renderer.gpu.host_wait_stats().calls, waits);
     assert_eq!(renderer.gpu.descriptor_usage(), usage);
     for frame in 0..8 {
         renderer.render_view(&camera(), 1., ViewMode::Lit)?;
@@ -279,9 +279,9 @@ fn a_two_lattice_pool_reserves_before_delivery_and_accepts_packets_across_its_bo
     // The whole pool clears in bounded slices behind loading; polling the
     // reservation allocates and waits for nothing more.
     loop {
-        let waits = renderer.gpu.context().host_wait_stats().calls;
+        let waits = renderer.gpu.host_wait_stats().calls;
         let ready = renderer.preallocate_probe_volume(layout, 6)?;
-        assert_eq!(renderer.gpu.context().host_wait_stats().calls, waits);
+        assert_eq!(renderer.gpu.host_wait_stats().calls, waits);
         assert_eq!(
             renderer.gpu.descriptor_usage().storage_buffers,
             usage.storage_buffers
@@ -309,9 +309,9 @@ fn a_two_lattice_pool_reserves_before_delivery_and_accepts_packets_across_its_bo
     // the second spans probe 8, where the coarse lattice begins. Delivery
     // allocates and waits for nothing.
     for packet in [0..5, 5..11, 11..17, 17..20] {
-        let waits = renderer.gpu.context().host_wait_stats().calls;
+        let waits = renderer.gpu.host_wait_stats().calls;
         renderer.update_probe_records(&update, packet)?;
-        assert_eq!(renderer.gpu.context().host_wait_stats().calls, waits);
+        assert_eq!(renderer.gpu.host_wait_stats().calls, waits);
         assert_eq!(renderer.gpu.descriptor_usage(), usage_after_clear);
         assert!(!renderer.probe_gi_ready());
         renderer.render_view(&camera(), 1., ViewMode::Lit)?;

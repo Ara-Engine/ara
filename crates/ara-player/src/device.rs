@@ -267,7 +267,7 @@ impl Windowed {
         if let (Some(mut present), Some(renderer)) = (self.present2d.take(), presenter.renderer()) {
             // SAFETY: the native device is idle before its presentation objects retire.
             unsafe {
-                renderer.gpu().context().device.device_wait_idle()?;
+                renderer.gpu().wait_idle()?;
                 present.destroy(renderer.gpu().context());
             }
         }
@@ -283,7 +283,7 @@ impl Windowed {
         if let (Some(mut present), Some(renderer)) = (self.present.take(), presenter.renderer()) {
             // SAFETY: waiting for device idle before destroying presentation objects.
             unsafe {
-                renderer.gpu().context().device.device_wait_idle()?;
+                renderer.gpu().wait_idle()?;
                 present.destroy(renderer.gpu().context());
             }
         }

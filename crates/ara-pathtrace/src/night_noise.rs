@@ -22,7 +22,7 @@ fn blocks(data: &[[f32; 4]]) -> Vec<f64> {
     out
 }
 /// Measure an independent-sampling ablation and reservoir reuse with the same rig.
-pub fn run(gpu: &mut VulkanDevice, root: &Path, many: bool) -> Result<()> {
+pub fn run(gpu: &mut GpuDevice, root: &Path, many: bool) -> Result<()> {
     let scene = if many {
         ara_pathtrace::many_lights::scene()
     } else {

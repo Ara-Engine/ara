@@ -16,7 +16,7 @@
 //! [`Quality::horizon`]: super::Quality::horizon
 use crate::graph::State;
 use anyhow::Result;
-use ara_gpu::{Access, Buffer, Device, Image, Queue, Resource, vk, vulkan::VulkanDevice};
+use ara_gpu::{Access, Buffer, Device, GpuDevice, Image, Queue, Resource, vk};
 use glam::{Mat4, Vec3};
 
 /// Casters with bound radii under this many metres stay out of the heightfield
@@ -106,7 +106,7 @@ pub(crate) struct Horizon {
 }
 
 impl Horizon {
-    pub(crate) fn new(gpu: &mut VulkanDevice, resolution: u32, frame_bytes: u64) -> Result<Self> {
+    pub(crate) fn new(gpu: &mut GpuDevice, resolution: u32, frame_bytes: u64) -> Result<Self> {
         let sky_resolution = sky_resolution(resolution);
         let mut owned: Vec<Resource> = Vec::new();
         let result = (|| {
@@ -204,7 +204,7 @@ impl Horizon {
         })
     }
 
-    pub(crate) fn destroy(self, gpu: &mut VulkanDevice) -> Result<()> {
+    pub(crate) fn destroy(self, gpu: &mut GpuDevice) -> Result<()> {
         for image in [self.depth, self.sun, self.sky] {
             gpu.retire(Resource::Image(image))?;
         }

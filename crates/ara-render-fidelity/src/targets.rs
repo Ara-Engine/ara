@@ -1,5 +1,5 @@
 use anyhow::Result;
-use ara_gpu::{Access, Device, Image, Queue, Resource, vk, vulkan::VulkanDevice};
+use ara_gpu::{Access, Device, GpuDevice, Image, Queue, Resource, vk};
 use ara_render::graph::State;
 
 pub(crate) const WORLD0: usize = 0;
@@ -112,7 +112,7 @@ impl Targets {
         }
     }
     pub fn new(
-        gpu: &mut VulkanDevice,
+        gpu: &mut GpuDevice,
         render: [u32; 2],
         display: [u32; 2],
         reference: bool,
@@ -167,7 +167,7 @@ impl Targets {
     }
     /// Preserve the classic view's descriptor/memory footprint until split signals
     /// are requested. Public G-buffer and feature slots remain the first 28 images.
-    pub fn enable_split(&mut self, gpu: &mut VulkanDevice, size: [u32; 2]) -> Result<()> {
+    pub fn enable_split(&mut self, gpu: &mut GpuDevice, size: [u32; 2]) -> Result<()> {
         if self.images.len() == COUNT {
             return Ok(());
         }
@@ -195,7 +195,7 @@ impl Targets {
         }
         Ok(())
     }
-    pub fn destroy(self, gpu: &mut VulkanDevice) -> Result<()> {
+    pub fn destroy(self, gpu: &mut GpuDevice) -> Result<()> {
         for i in self.images {
             gpu.retire(Resource::Image(i))?;
         }

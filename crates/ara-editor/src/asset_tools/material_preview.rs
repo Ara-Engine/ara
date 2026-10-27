@@ -3,10 +3,9 @@
 //! or raw (in-node previews of intermediate values).
 use super::studio::MASTER;
 use ara_gpu::{
-    Access, Barrier, Queue, Resource, RootConstants,
+    Access, Barrier, GpuDevice, Queue, Resource, RootConstants,
     commands::{Attachment, Command},
     vk,
-    vulkan::VulkanDevice,
 };
 use ara_render::capture::{Capture, CaptureRequest, FeatureCapture, ShaderMetadata, ViewMode};
 use std::{collections::BTreeMap, path::Path};
@@ -239,7 +238,7 @@ pub(super) fn capture(
     let base = root.join(".ara/cache/material-previews");
     let pipeline: ara_gpu::cooked::CookedPipeline =
         serde_json::from_slice(&std::fs::read(cooked.join("preview.json"))?)?;
-    let mut gpu = VulkanDevice::new(&[], base.join("gpu"))?;
+    let mut gpu = GpuDevice::new(&[], base.join("gpu"))?;
     let program = gpu.create_pipeline(&pipeline, &cooked)?;
     let mut recorder = gpu.begin(Queue::Graphics);
     let mut textures = BTreeMap::new();
@@ -386,13 +385,13 @@ pub(super) fn capture(
             ids,
             names: &names,
             hash: &hash,
-            device: &gpu.context().info,
+            device: gpu.info(),
             timings: &timings,
             shaders: &metadata,
         },
         &request,
     )?;
-    gpu.context().assert_clean()?;
+    gpu.assert_clean()?;
     Ok(capture.image)
 }
 fn barrier(
@@ -411,7 +410,7 @@ fn barrier(
 fn texture(
     root: &Path,
     source: &ara_material::TextureSource,
-    gpu: &mut VulkanDevice,
+    gpu: &mut GpuDevice,
     recorder: &mut ara_gpu::commands::Recorder,
 ) -> anyhow::Result<ara_gpu::Image> {
     let image = match source {

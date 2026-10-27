@@ -47,7 +47,7 @@ impl GeometryGpu {
     /// presented pose and the published pose even if a candidate is rejected.
     pub fn prepare_pose(
         &mut self,
-        gpu: &mut VulkanDevice,
+        gpu: &mut GpuDevice,
         scene: &Scene,
     ) -> Result<Option<PreparedPose>> {
         ensure!(
@@ -226,7 +226,7 @@ impl GeometryGpu {
     }
 
     /// Publishes a completed pose after dependent old TLAS retirement.
-    pub fn commit_pose(&mut self, gpu: &mut VulkanDevice, pose: PreparedPose) -> Result<()> {
+    pub fn commit_pose(&mut self, gpu: &mut GpuDevice, pose: PreparedPose) -> Result<()> {
         ensure!(
             self.table.map(|v| v.0) == Some(pose.owner),
             "stale native pose candidate"
@@ -253,7 +253,7 @@ impl GeometryGpu {
     }
 
     /// Retires unpublished resources, preserving current/presented pose buffers.
-    pub fn cancel_pose(&mut self, gpu: &mut VulkanDevice, pose: PreparedPose) -> Result<()> {
+    pub fn cancel_pose(&mut self, gpu: &mut GpuDevice, pose: PreparedPose) -> Result<()> {
         ensure!(
             self.table.map(|v| v.0) == Some(pose.owner),
             "stale native pose candidate"

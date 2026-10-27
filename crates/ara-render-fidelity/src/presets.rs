@@ -6,7 +6,7 @@
 //! the ray-traced fidelity renderer is an opt-in ([`RenderOptions::ray_tracing`]).
 use crate::{FidelityView, Mode, PostSettings, Settings, Tier, Upscaler};
 use anyhow::{Result, bail};
-use ara_gpu::vulkan::VulkanDevice;
+use ara_gpu::GpuDevice;
 use ara_render::look::{
     AmbientOcclusion, DepthOfFieldQuality, FarShadows, LocalShadows, MotionBlurQuality, Quality,
     Reflections, Shadows, VirtualShadows,
@@ -149,14 +149,14 @@ pub struct Capabilities {
 
 impl Capabilities {
     /// Reads the capabilities of an opened device.
-    pub fn of(gpu: &VulkanDevice) -> Self {
+    pub fn of(gpu: &GpuDevice) -> Self {
         Self {
-            ray_tracing: gpu.context().info.ray_tracing,
+            ray_tracing: gpu.info().ray_tracing,
             device_local_mib: gpu
                 .context()
                 .info
                 .discrete
-                .then_some(gpu.context().info.device_local_mib),
+                .then_some(gpu.info().device_local_mib),
         }
     }
 }
@@ -215,7 +215,7 @@ impl FidelityPlan {
 
     /// Applies the per-view budgets at a frame boundary. ReSTIR under `ManyLights`
     /// follows the view's current scene, so call again after replacing content.
-    pub fn configure(&self, gpu: &mut VulkanDevice, view: &mut FidelityView) -> Result<()> {
+    pub fn configure(&self, gpu: &mut GpuDevice, view: &mut FidelityView) -> Result<()> {
         view.set_lighting_budget(self.probe_ray_budget, self.reflection_cutoff)?;
         view.set_gather_events(self.gather_events)?;
         view.set_transport_stride(self.transport_stride)?;

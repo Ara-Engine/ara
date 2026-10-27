@@ -9,12 +9,12 @@ use ara_gpu::{
 impl GeometryGpu {
     /// Uploads shared geometry and builds every requested BLAS in one submission.
     /// No instance duplicates, texture pixels or CPU-generated mip levels are packed.
-    pub fn new(gpu: &mut VulkanDevice, scene: &Scene, rt: bool) -> Result<Self> {
+    pub fn new(gpu: &mut GpuDevice, scene: &Scene, rt: bool) -> Result<Self> {
         Self::new_validated(gpu, scene.validated()?, rt, None)
     }
 
     pub(crate) fn new_validated(
-        gpu: &mut VulkanDevice,
+        gpu: &mut GpuDevice,
         validated: super::super::ValidatedScene<'_>,
         rt: bool,
         previous: Option<&Self>,
@@ -22,25 +22,15 @@ impl GeometryGpu {
         ara_gpu::cpu_scope!("NativeGeometry.create");
         let scene = validated.scene();
         ensure!(
-            !rt || gpu.context().info.ray_tracing,
+            !rt || gpu.info().ray_tracing,
             "native geometry RT tier unavailable"
         );
-        // SAFETY: Read-only property query on this live device's physical-device handle.
-        let limits = unsafe {
-            gpu.context()
-                .instance
-                .get_physical_device_properties(gpu.context().physical)
-        }
-        .limits;
+        let storage_range = gpu.info().max_storage_buffer_range;
         let previous = previous.filter(|_| !rt);
         let reuse = previous.map(Self::preparation_seed);
         let packed = match previous {
-            Some(_) => pack::Packed::new_reusing(
-                scene,
-                u64::from(limits.max_storage_buffer_range),
-                reuse.as_ref(),
-            )?,
-            None => pack::Packed::new(scene, u64::from(limits.max_storage_buffer_range))?,
+            Some(_) => pack::Packed::new_reusing(scene, u64::from(storage_range), reuse.as_ref())?,
+            None => pack::Packed::new(scene, u64::from(storage_range))?,
         };
         let layout = scene
             .geometry
@@ -84,7 +74,7 @@ impl GeometryGpu {
     }
 
     pub(super) fn upload(
-        gpu: &mut VulkanDevice,
+        gpu: &mut GpuDevice,
         packed: pack::Packed,
         rt: bool,
         resident: Option<Buffer>,
@@ -353,7 +343,7 @@ impl GeometryGpu {
 }
 
 pub(super) fn allocate(
-    gpu: &mut VulkanDevice,
+    gpu: &mut GpuDevice,
     bytes: u64,
     usage: vk::BufferUsageFlags,
     host: bool,

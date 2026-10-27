@@ -7,7 +7,7 @@ struct Gate {
 }
 
 impl Gate {
-    fn new(gpu: &VulkanDevice) -> Result<Self> {
+    fn new(gpu: &GpuDevice) -> Result<Self> {
         let device = gpu.context().device.clone();
         // SAFETY: The timeline lives until the queue has drained in Drop; the
         // creating device is retained by the test and outlives this guard.
@@ -69,7 +69,7 @@ impl Drop for Gate {
 fn preallocated_table_is_gpu_ordered_after_an_earlier_inflight_submission() -> Result<()> {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../target/ara-texture-stream/prepared-table-ordering");
-    let mut gpu = VulkanDevice::new_raster(&[], root)?;
+    let mut gpu = GpuDevice::new_raster(&[], root)?;
     let mut set = bank(1024, 1024);
     set.register([1; 32], source([4, 4], 1, 200))?;
     let start = Instant::now();
@@ -90,10 +90,10 @@ fn preallocated_table_is_gpu_ordered_after_an_earlier_inflight_submission() -> R
         gpu.completed()?[point.queue.index()] < point.value,
         "physical GPU gate holds the earlier submission"
     );
-    let waits = gpu.context().host_wait_stats().calls;
+    let waits = gpu.host_wait_stats().calls;
     assert_eq!(set.initialize(&mut gpu)?.textures, 1);
     assert_eq!(
-        gpu.context().host_wait_stats().calls,
+        gpu.host_wait_stats().calls,
         waits,
         "publication must not host-wait"
     );

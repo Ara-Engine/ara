@@ -1,11 +1,10 @@
 //! Scene-initialization uploads; never called by frame recording.
 use anyhow::{Result, ensure};
 use ara_gpu::{
-    Access, Barrier, Buffer, Device, Image, Queue, Resource, commands::Command, vk,
-    vulkan::VulkanDevice,
+    Access, Barrier, Buffer, Device, GpuDevice, Image, Queue, Resource, commands::Command, vk,
 };
 
-pub(crate) fn buffer(gpu: &mut VulkanDevice, bytes: &[u8]) -> Result<Buffer> {
+pub(crate) fn buffer(gpu: &mut GpuDevice, bytes: &[u8]) -> Result<Buffer> {
     let target = gpu.create_buffer(
         bytes.len() as u64,
         vk::BufferUsageFlags::STORAGE_BUFFER | vk::BufferUsageFlags::TRANSFER_DST,
@@ -33,7 +32,7 @@ pub(crate) fn buffer(gpu: &mut VulkanDevice, bytes: &[u8]) -> Result<Buffer> {
     Ok(target)
 }
 pub(crate) fn texture(
-    gpu: &mut VulkanDevice,
+    gpu: &mut GpuDevice,
     texture: &ara_render::scene::Texture,
 ) -> Result<(Image, u32)> {
     let [w, h] = texture.size;

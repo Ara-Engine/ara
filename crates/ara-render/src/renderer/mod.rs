@@ -21,8 +21,7 @@ use crate::{
 };
 use anyhow::{Result, ensure};
 use ara_gpu::{
-    Access, Buffer, Device, Image, Pipeline, Queue, Resource, vk,
-    vulkan::{PassTiming, VulkanDevice},
+    Access, Buffer, Device, GpuDevice, Image, Pipeline, Queue, Resource, vk, vulkan::PassTiming,
 };
 pub use frame::temporal_phases;
 use glam::{Mat4, Vec3};
@@ -87,7 +86,7 @@ struct Pipelines {
 /// Calls are serialized for v0 diagnostics; logical queue transfers remain explicit.
 pub struct Renderer {
     /// GPU ownership and native window integration surface.
-    gpu: VulkanDevice,
+    gpu: GpuDevice,
     /// Display size: TAA history, output and captures.
     size: [u32; 2],
     /// Render size of the scene passes (G-buffer, depth, HDR, IDs, motion); smaller
@@ -122,7 +121,7 @@ pub struct Renderer {
 
 impl Renderer {
     /// Read-only GPU diagnostics and native presentation integration.
-    pub fn gpu(&self) -> &VulkanDevice {
+    pub fn gpu(&self) -> &GpuDevice {
         &self.gpu
     }
     /// Opaque reversed-Z depth, sampled index and actual state for feature graphs.
@@ -145,7 +144,7 @@ impl Renderer {
     }
     /// Borrow the device between completed frames to record independent graph extensions.
     /// Extensions own their targets and must preserve this renderer's resource states.
-    pub fn gpu_mut(&mut self) -> &mut VulkanDevice {
+    pub fn gpu_mut(&mut self) -> &mut GpuDevice {
         &mut self.gpu
     }
     /// Upload an extraction snapshot and prewarm its complete cooked pipeline set.
@@ -178,15 +177,15 @@ impl Renderer {
         ensure!(!size.contains(&0), "Render extent is zero");
         ensure!(raster || !scene.meshes.is_empty(), "Scene has no geometry");
         let gpu = if raster {
-            VulkanDevice::new_raster(extensions, cache)?
+            GpuDevice::new_raster(extensions, cache)?
         } else {
-            VulkanDevice::new(extensions, cache)?
+            GpuDevice::new(extensions, cache)?
         };
         Self::with_device(scene, size, gpu)
     }
     /// Prepare targets and pipelines on an existing exclusive GPU owner. Native
     /// window integrations can retain their swapchain while this runs on a worker.
-    pub fn with_device(scene: Scene, size: [u32; 2], mut gpu: VulkanDevice) -> Result<Self> {
+    pub fn with_device(scene: Scene, size: [u32; 2], mut gpu: GpuDevice) -> Result<Self> {
         ensure!(!size.contains(&0), "Render extent is zero");
         let artifacts = ara_gpu::cooked::resource_dir(
             env!("CARGO_PKG_NAME"),
@@ -646,7 +645,7 @@ impl Renderer {
             crate::capture::CaptureContext {
                 names: &self.content.entity_names,
                 hash: &hash,
-                device: &self.gpu.context().info,
+                device: self.gpu.info(),
                 timings: &self.last_timings,
                 shaders: &self.shader_metadata,
             },

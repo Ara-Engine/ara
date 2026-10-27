@@ -1,13 +1,13 @@
 //! Deterministic fidelity gallery, mid-life images and four-frame sequence strips.
 mod support;
 use anyhow::Result;
-use ara_gpu::vulkan::VulkanDevice;
+use ara_gpu::GpuDevice;
 use std::path::Path;
 fn main() -> Result<()> {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let output = root.join("captures");
     std::fs::create_dir_all(output.join("sequences"))?;
-    let mut gpu = VulkanDevice::new(&[], root.join(".cache/gallery"))?;
+    let mut gpu = GpuDevice::new(&[], root.join(".cache/gallery"))?;
     let selected = std::env::args().nth(1);
     for (effect, tick) in ara_vfx::samples::all() {
         if selected.as_ref().is_some_and(|name| name != &effect.name) {
@@ -39,6 +39,6 @@ fn main() -> Result<()> {
         )?;
         println!("{}: four fidelity frames captured", effect.name);
     }
-    gpu.context().assert_clean()?;
+    gpu.assert_clean()?;
     Ok(())
 }

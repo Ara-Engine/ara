@@ -1,5 +1,5 @@
 use anyhow::{Result, ensure};
-use ara_gpu::{cooked::write_json, vulkan::VulkanDevice};
+use ara_gpu::{GpuDevice, cooked::write_json};
 use ara_landscape::{Landscape, View, sample};
 use ara_texture_stream::{Catalog, Residency, Source};
 use std::path::Path;
@@ -11,7 +11,7 @@ fn triplanar_materials_share_gpu_texture_feedback_and_budget() -> Result<()> {
     std::fs::create_dir_all(&output)?;
     let mut data = sample::landscape(None)?;
     data.instances.truncate(512);
-    let mut gpu = VulkanDevice::new(&[], root.join("cache/virtual-textures"))?;
+    let mut gpu = GpuDevice::new(&[], root.join("cache/virtual-textures"))?;
     let size = [640, 360];
     let mut landscape = Landscape::new(&mut gpu, &data, size, &root.join("cooked"))?;
     let mut before = Vec::new();

@@ -91,7 +91,7 @@ pub struct Presenter {
     published_quality: Option<QualityPreset>,
     failure: Option<String>,
     renderer: Option<Renderer>,
-    initial_device: Option<ara_gpu::vulkan::VulkanDevice>,
+    initial_device: Option<ara_gpu::GpuDevice>,
     effects: vfx::Effects,
     landscapes: landscape::Landscapes,
     terrain: terrain_mesh::TerrainMeshes,
@@ -224,11 +224,7 @@ impl Presenter {
 
     /// Adopt an unused GPU owner before preparation. It may share its native
     /// lifetime with a shaderless loading owner; it retains its own arenas/queues.
-    pub fn with_device(
-        size: [u32; 2],
-        cache: impl Into<PathBuf>,
-        gpu: ara_gpu::vulkan::VulkanDevice,
-    ) -> Self {
+    pub fn with_device(size: [u32; 2], cache: impl Into<PathBuf>, gpu: ara_gpu::GpuDevice) -> Self {
         let mut presenter = Self::new(size, Vec::new(), cache);
         presenter.initial_device = Some(gpu);
         presenter
@@ -263,9 +259,7 @@ impl Presenter {
     /// Snapshot around a whole windowed frame, including swapchain presentation.
     /// No counter exists until the renderer's device has been created.
     pub fn host_wait_stats(&self) -> Option<ara_gpu::vulkan::HostWaitStats> {
-        self.renderer
-            .as_ref()
-            .map(|r| r.gpu().context().host_wait_stats())
+        self.renderer.as_ref().map(|r| r.gpu().host_wait_stats())
     }
 
     /// Resizes the output (history resets).

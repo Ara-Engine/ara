@@ -9,7 +9,7 @@ pub(super) struct Graphics {
 impl Graphics {
     pub fn start(
         size: [u32; 2],
-        gpu: ara_gpu::vulkan::VulkanDevice,
+        gpu: ara_gpu::GpuDevice,
         cache: PathBuf,
         quality: QualityChoice,
         options: RenderOptions,

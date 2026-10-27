@@ -2,11 +2,7 @@ use super::*;
 impl VirtualShadows {
     /// Records page feedback/cache allocation and only dirty geometry through the
     /// same compressed-cluster fetch as camera visibility. No page-count readback.
-    pub fn record(
-        &mut self,
-        gpu: &mut VulkanDevice,
-        geometry: &GeometryView,
-    ) -> Result<CommandList> {
+    pub fn record(&mut self, gpu: &mut GpuDevice, geometry: &GeometryView) -> Result<CommandList> {
         let mut graph = Graph::default();
         let mut resources: Vec<_> = self.buffers.iter().map(|&b| Resource::Buffer(b)).collect();
         resources.push(Resource::Buffer(self.frame));

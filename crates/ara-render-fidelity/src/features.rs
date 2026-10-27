@@ -2,7 +2,7 @@
 use crate::{FidelityView, FrameInput, probes::ProbeVolume, targets::*};
 use anyhow::{Result, ensure};
 use ara_gpu::{
-    Access, Buffer, Image, Queue, Resource, RootConstants, commands::Command, vulkan::VulkanDevice,
+    Access, Buffer, GpuDevice, Image, Queue, Resource, RootConstants, commands::Command,
 };
 use ara_render::graph::{Graph, State};
 
@@ -58,7 +58,7 @@ impl FidelityView {
     /// same frame. The colour must match render_size and returns Graphics/ShaderRead.
     pub fn post_process(
         &mut self,
-        gpu: &mut VulkanDevice,
+        gpu: &mut GpuDevice,
         input: &FrameInput<'_>,
         colour: ImageInput,
     ) -> Result<()> {

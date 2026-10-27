@@ -22,7 +22,7 @@ impl Native {
     /// Allocate camera-local rows and visible ranges (sized like the primary's,
     /// shadow slots included), sharing every static GPU allocation, material,
     /// texture and pipeline with the primary camera.
-    pub(in crate::renderer) fn new_view(&self, gpu: &mut VulkanDevice) -> Result<NativeView> {
+    pub(in crate::renderer) fn new_view(&self, gpu: &mut GpuDevice) -> Result<NativeView> {
         ara_gpu::cpu_scope!("Raster.secondary_rows");
         let mut allocated = Vec::new();
         let result = (|| {
@@ -98,7 +98,7 @@ impl NativeView {
         deformed
     }
 
-    pub(in crate::renderer) fn destroy(self, gpu: &mut VulkanDevice) -> Result<()> {
+    pub(in crate::renderer) fn destroy(self, gpu: &mut GpuDevice) -> Result<()> {
         gpu.retire(Resource::Buffer(self.instances))?;
         gpu.retire(Resource::Buffer(self.visible))?;
         Ok(())

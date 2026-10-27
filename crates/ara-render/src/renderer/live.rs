@@ -1,9 +1,6 @@
 //! One submitted Scene frame and two retained color/ID pairs. UI reads only shown.
 use super::*;
-use ara_gpu::{
-    Barrier,
-    vulkan::{Command, Completion},
-};
+use ara_gpu::{Barrier, GpuCompletion as Completion, vulkan::Command};
 mod completion;
 #[cfg(test)]
 mod tests;
@@ -33,7 +30,7 @@ pub(super) struct Output {
     written: bool,
 }
 impl Output {
-    fn new(gpu: &mut VulkanDevice, size: [u32; 2], id_size: [u32; 2]) -> Result<Self> {
+    fn new(gpu: &mut GpuDevice, size: [u32; 2], id_size: [u32; 2]) -> Result<Self> {
         let usage = vk::ImageUsageFlags::SAMPLED
             | vk::ImageUsageFlags::TRANSFER_SRC
             | vk::ImageUsageFlags::TRANSFER_DST;
@@ -55,7 +52,7 @@ impl Output {
             written: false,
         })
     }
-    fn retire(self, gpu: &mut VulkanDevice) -> Result<()> {
+    fn retire(self, gpu: &mut GpuDevice) -> Result<()> {
         gpu.retire(Resource::Image(self.color))?;
         gpu.retire(Resource::Image(self.ids))?;
         Ok(())

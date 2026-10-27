@@ -1,7 +1,7 @@
 //! Scene capabilities select only the cooked pipelines needed by the current view.
 use crate::{FidelityView, Tier};
 use anyhow::{Result, ensure};
-use ara_gpu::vulkan::VulkanDevice;
+use ara_gpu::GpuDevice;
 
 pub(crate) enum Transport {
     Primary,
@@ -13,7 +13,7 @@ impl FidelityView {
     /// Prewarms the selected transport at a content/settings boundary. Unchanged
     /// frames perform map lookups only; unused reference and material variants
     /// never enter the driver's expensive pipeline compiler.
-    pub fn prepare_transport(&mut self, gpu: &mut VulkanDevice) -> Result<()> {
+    pub fn prepare_transport(&mut self, gpu: &mut GpuDevice) -> Result<()> {
         self.ensure_pipeline(gpu, self.transport_pipeline(Transport::Primary))?;
         if matches!(self.settings.mode, crate::Mode::Reference { .. }) {
             return self.ensure_pipeline(gpu, self.transport_pipeline(Transport::Reference));
@@ -55,7 +55,7 @@ impl FidelityView {
 
     pub(crate) fn ensure_pipeline(
         &mut self,
-        gpu: &mut VulkanDevice,
+        gpu: &mut GpuDevice,
         name: &'static str,
     ) -> Result<()> {
         if self.pipelines.contains_key(name) {

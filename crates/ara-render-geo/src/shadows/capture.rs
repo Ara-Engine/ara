@@ -1,11 +1,7 @@
 use super::*;
 impl VirtualShadows {
     /// Completed scalar visibility/residency channels for reference comparisons.
-    pub fn samples(
-        &self,
-        gpu: &mut VulkanDevice,
-        geometry: &GeometryView,
-    ) -> Result<Vec<[f32; 4]>> {
+    pub fn samples(&self, gpu: &mut GpuDevice, geometry: &GeometryView) -> Result<Vec<[f32; 4]>> {
         Ok(geometry
             .read_image(gpu, self.mask, 16)?
             .as_chunks::<16>()
@@ -15,7 +11,7 @@ impl VirtualShadows {
             .collect())
     }
     /// Reads actual GPU cache/raster counters after completed rendering.
-    pub fn stats(&self, gpu: &mut VulkanDevice, geometry: &GeometryView) -> Result<ShadowStats> {
+    pub fn stats(&self, gpu: &mut GpuDevice, geometry: &GeometryView) -> Result<ShadowStats> {
         let a = geometry.read_buffer(gpu, self.buffers[4], self.previous[4].access, 128)?;
         let b = geometry.read_buffer(gpu, self.buffers[7], self.previous[7].access, 128)?;
         let a: Vec<u32> = a
@@ -40,12 +36,7 @@ impl VirtualShadows {
         })
     }
     /// Saves scalar PCF visibility as an inspectable diagnostic PNG.
-    pub fn capture(
-        &self,
-        gpu: &mut VulkanDevice,
-        geometry: &GeometryView,
-        path: &Path,
-    ) -> Result<()> {
+    pub fn capture(&self, gpu: &mut GpuDevice, geometry: &GeometryView, path: &Path) -> Result<()> {
         let bytes = geometry.read_image(gpu, self.mask, 16)?;
         let pixels: Vec<u8> = bytes
             .as_chunks::<16>()
@@ -67,7 +58,7 @@ impl VirtualShadows {
         Ok(())
     }
     /// Retires persistent resources after the host has completed their last use.
-    pub fn retire(self, gpu: &mut VulkanDevice) -> Result<()> {
+    pub fn retire(self, gpu: &mut GpuDevice) -> Result<()> {
         for b in self.buffers.into_iter().chain([self.frame]) {
             gpu.retire(Resource::Buffer(b))?;
         }

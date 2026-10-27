@@ -11,7 +11,7 @@ pub mod robust_scenes;
 pub mod scenes;
 mod vegetation;
 use anyhow::Result;
-use ara_gpu::vulkan::VulkanDevice;
+use ara_gpu::GpuDevice;
 use ara_render::scene::{CameraSpec, Scene};
 use ara_render_fidelity::{FidelityView, FrameInput, Mode, PostSettings, Settings, Tier, Upscaler};
 
@@ -31,7 +31,7 @@ impl Reference {
     }
     /// Use the exact scene/material/light extraction used by the hybrid view.
     pub fn new(
-        gpu: &mut VulkanDevice,
+        gpu: &mut GpuDevice,
         scene: &Scene,
         size: [u32; 2],
         samples: u32,
@@ -54,12 +54,7 @@ impl Reference {
         })
     }
     /// Render one bounded batch (at most eight samples/pixel) to avoid long kernels.
-    pub fn step(
-        &mut self,
-        gpu: &mut VulkanDevice,
-        camera: &CameraSpec,
-        reset: bool,
-    ) -> Result<bool> {
+    pub fn step(&mut self, gpu: &mut GpuDevice, camera: &CameraSpec, reset: bool) -> Result<bool> {
         self.view.render(
             gpu,
             &FrameInput {
@@ -74,16 +69,16 @@ impl Reference {
         Ok(self.view.reference_samples() >= self.target)
     }
     /// Converge to the configured finite budget without denoising the reference.
-    pub fn converge(&mut self, gpu: &mut VulkanDevice, camera: &CameraSpec) -> Result<()> {
+    pub fn converge(&mut self, gpu: &mut GpuDevice, camera: &CameraSpec) -> Result<()> {
         while !self.step(gpu, camera, false)? {}
         Ok(())
     }
     /// Shared display transform applied to the undenoised reference.
-    pub fn capture(&self, gpu: &mut VulkanDevice) -> Result<image::RgbaImage> {
+    pub fn capture(&self, gpu: &mut GpuDevice) -> Result<image::RgbaImage> {
         self.view.capture(gpu)
     }
     /// Accumulated linear radiance before any post processing.
-    pub fn radiance(&self, gpu: &mut VulkanDevice) -> Result<Vec<[f32; 4]>> {
+    pub fn radiance(&self, gpu: &mut GpuDevice) -> Result<Vec<[f32; 4]>> {
         self.view.capture_radiance(gpu)
     }
     /// Address-independent fingerprint of the shared scene/material/light extraction.
@@ -95,7 +90,7 @@ impl Reference {
         self.view.shader_revision()
     }
     /// Release resources before the device owner is dropped.
-    pub fn destroy(self, gpu: &mut VulkanDevice) -> Result<()> {
+    pub fn destroy(self, gpu: &mut GpuDevice) -> Result<()> {
         self.view.destroy(gpu)
     }
 }

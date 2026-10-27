@@ -3,11 +3,7 @@ use ara_gpu::vulkan::{BufferPreparation, InitialData, ResourcePreparation};
 use ara_render::instanced::Textures;
 use std::{sync::mpsc, time::Duration};
 
-fn wait(
-    gpu: &mut VulkanDevice,
-    next: &mut NativeResidency,
-    old: Option<&dyn Textures>,
-) -> Result<()> {
+fn wait(gpu: &mut GpuDevice, next: &mut NativeResidency, old: Option<&dyn Textures>) -> Result<()> {
     let started = Instant::now();
     while !next.preallocate(gpu, old)? {
         ensure!(
@@ -23,7 +19,7 @@ fn wait(
 fn prepared_residency_preserves_mips_view_policy_and_rejected_generation_ownership() -> Result<()> {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../target/ara-texture-stream/native-preparation");
-    let mut gpu = VulkanDevice::new_raster(&[], root)?;
+    let mut gpu = GpuDevice::new_raster(&[], root)?;
     let mut old = bank(1024, 1024);
     old.register([1; 32], source([8, 8], 4, 64))?;
     let color = Arc::new(NativeSource::from_cooked(
@@ -88,7 +84,7 @@ impl Drop for Release {
 fn prepared_borrow_rebases_when_the_presented_generation_refines_its_images() -> Result<()> {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../target/ara-texture-stream/native-preparation-rebase");
-    let mut gpu = VulkanDevice::new_raster(&[], root)?;
+    let mut gpu = GpuDevice::new_raster(&[], root)?;
     let mut old = bank(1024, 1024);
     let id = old.register([1; 32], source([8, 8], 4, 64))?;
     old.initialize(&mut gpu)?;
@@ -117,7 +113,7 @@ fn prepared_borrow_rebases_when_the_presented_generation_refines_its_images() ->
 fn pending_texture_allocations_poll_and_cancel_without_waiting_or_binding() -> Result<()> {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../target/ara-texture-stream/native-preparation-cancel");
-    let mut gpu = VulkanDevice::new_raster(&[], root)?;
+    let mut gpu = GpuDevice::new_raster(&[], root)?;
     let (send, receive) = mpsc::channel();
     let release = Release(Some(send));
     let (entered, started) = mpsc::channel();
@@ -138,7 +134,7 @@ fn pending_texture_allocations_poll_and_cancel_without_waiting_or_binding() -> R
         .expect("first job admitted");
     started.recv_timeout(Duration::from_secs(5))?;
     let baseline = gpu.descriptor_usage();
-    let waits = gpu.context().host_wait_stats().calls;
+    let waits = gpu.host_wait_stats().calls;
     let mut cancelled = bank(1024, 1024);
     cancelled.register([1; 32], source([8, 8], 4, 64))?;
     for _ in 0..8 {
@@ -152,7 +148,7 @@ fn pending_texture_allocations_poll_and_cancel_without_waiting_or_binding() -> R
         !next.preallocate(&mut gpu, None)?,
         "cancelled work still bounds admission"
     );
-    assert_eq!(gpu.context().host_wait_stats().calls, waits);
+    assert_eq!(gpu.host_wait_stats().calls, waits);
     assert_eq!(gpu.descriptor_usage(), baseline);
     gpu.cancel_prepared_resources(blocker)?;
     drop(release);

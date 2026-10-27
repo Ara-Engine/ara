@@ -6,7 +6,7 @@ use std::any::Any;
 impl NativeResidency {
     pub(super) fn prepare_reusing(
         &mut self,
-        gpu: &mut VulkanDevice,
+        gpu: &mut GpuDevice,
         previous: &dyn Textures,
     ) -> Result<NativeStats> {
         if self.initial.is_none() {
@@ -22,7 +22,7 @@ impl NativeResidency {
 
     pub(super) fn borrow_reusing(
         &mut self,
-        gpu: &VulkanDevice,
+        gpu: &GpuDevice,
         previous: Option<&dyn Textures>,
     ) -> Result<()> {
         ensure!(

@@ -13,7 +13,7 @@
 use crate::fidelity::native::{self, Content, NativeConfig};
 use crate::gi_cpu::{self, Tracer};
 use anyhow::{Context, Result, ensure};
-use ara_gpu::vulkan::VulkanDevice;
+use ara_gpu::GpuDevice;
 use ara_render::instanced::Scene;
 use ara_render::look::gi::{
     ProbeLattice, ProbeLayout, ProbeSurfaces, ProbeUpdate, STATIC_VECTORS, SURFACE_TEXELS,
@@ -595,9 +595,9 @@ fn acquire(
         );
     }
     let traced = (!cpu)
-        .then(|| VulkanDevice::new(&[], cache.join("device")).ok())
+        .then(|| GpuDevice::new(&[], cache.join("device")).ok())
         .flatten()
-        .filter(|gpu| gpu.context().info.ray_tracing);
+        .filter(|gpu| gpu.info().ray_tracing);
     let surfaces = match traced {
         Some(mut gpu) => {
             // Only static rigid instances enter the ray-traced bake.
@@ -853,7 +853,7 @@ fn shade(prepared: &native::Prepared, surface: bool) -> Vec<crate::gi_cpu::Shadi
 /// (`gi_cpu::layout`) bakes on `tracer`. The final pool is published before
 /// either traces.
 fn bake(
-    gpu: &mut VulkanDevice,
+    gpu: &mut GpuDevice,
     frame: &RenderFrame,
     prepared: &native::Prepared,
     tracer: &Tracer,

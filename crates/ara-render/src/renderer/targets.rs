@@ -66,7 +66,7 @@ pub(super) fn request(render: [u32; 2], display: [u32; 2]) -> ResourcePreparatio
 
 /// Synchronous constructors/captures use the same descriptions as a prepared view.
 pub(super) fn allocate(
-    gpu: &mut VulkanDevice,
+    gpu: &mut GpuDevice,
     request: ResourcePreparation,
 ) -> Result<PreparedResources> {
     let mut resources = PreparedResources {
@@ -93,7 +93,7 @@ pub(super) fn allocate(
     Ok(resources)
 }
 
-pub(super) fn retire(gpu: &mut VulkanDevice, resources: PreparedResources) -> Result<()> {
+pub(super) fn retire(gpu: &mut GpuDevice, resources: PreparedResources) -> Result<()> {
     for buffer in resources.buffers {
         gpu.retire(Resource::Buffer(buffer))?;
     }
@@ -107,7 +107,7 @@ pub(super) fn retire(gpu: &mut VulkanDevice, resources: PreparedResources) -> Re
 }
 
 /// Bind adopted resources; the caller retires the whole batch on failure.
-pub(super) fn bind(gpu: &mut VulkanDevice, resources: PreparedResources) -> Result<Targets> {
+pub(super) fn bind(gpu: &mut GpuDevice, resources: PreparedResources) -> Result<Targets> {
     ensure!(
         resources.images.len() == TARGET_COUNT && resources.buffers.len() == 3,
         "Invalid target batch"
@@ -147,7 +147,7 @@ pub(super) fn bind(gpu: &mut VulkanDevice, resources: PreparedResources) -> Resu
 
 impl Renderer {
     pub(super) fn targets(
-        gpu: &mut VulkanDevice,
+        gpu: &mut GpuDevice,
         render: [u32; 2],
         display: [u32; 2],
     ) -> Result<Targets> {

@@ -35,7 +35,7 @@ impl Native {
             )
             .chain(self.textures.resources())
     }
-    pub(super) fn destroy(self, gpu: &mut VulkanDevice) -> Result<()> {
+    pub(super) fn destroy(self, gpu: &mut GpuDevice) -> Result<()> {
         if let Some(pool) = self.pool {
             pool.destroy(gpu)?;
         }
@@ -49,7 +49,7 @@ impl Native {
 impl GpuScene {
     /// Refines already registered compressed textures at a completed boundary.
     /// Uploads obey the resident set's budget and retain previous bindings on failure.
-    pub fn refine_native_textures(&mut self, gpu: &mut VulkanDevice) -> Result<NativeStats> {
+    pub fn refine_native_textures(&mut self, gpu: &mut GpuDevice) -> Result<NativeStats> {
         self.native
             .as_mut()
             .context("native texture residency required")?
@@ -59,7 +59,7 @@ impl GpuScene {
     /// Upload local shared geometry, real transformed instances and compressed maps.
     /// The resident set moves into the view, keeping every indirect image/table alive.
     pub fn new_native(
-        gpu: &mut VulkanDevice,
+        gpu: &mut GpuDevice,
         scene: &NativeScene,
         textures: NativeResidency,
         rt: bool,
@@ -201,20 +201,9 @@ impl GpuScene {
     }
 }
 
-fn host_buffer(
-    gpu: &mut VulkanDevice,
-    bytes: &[u8],
-    allocated: &mut Vec<Resource>,
-) -> Result<Buffer> {
+fn host_buffer(gpu: &mut GpuDevice, bytes: &[u8], allocated: &mut Vec<Resource>) -> Result<Buffer> {
     ara_gpu::cpu_scope!("Native.allocate_host_buffer");
-    // SAFETY: Read-only limits query for this live device's physical-device handle.
-    let limit = unsafe {
-        gpu.context()
-            .instance
-            .get_physical_device_properties(gpu.context().physical)
-    }
-    .limits
-    .max_storage_buffer_range;
+    let limit = gpu.info().max_storage_buffer_range;
     ensure!(
         bytes.len().max(16) as u64 <= u64::from(limit),
         "native shading table exceeds the device storage-buffer limit"

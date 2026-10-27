@@ -88,7 +88,7 @@ impl Updates {
 impl Native {
     pub(super) fn update(
         &mut self,
-        gpu: &mut VulkanDevice,
+        gpu: &mut GpuDevice,
         scene: &NativeScene,
         changes: Option<&Changes>,
     ) -> Result<()> {
@@ -215,7 +215,7 @@ impl Native {
 
     pub(in crate::renderer) fn prepare(
         &mut self,
-        gpu: &mut VulkanDevice,
+        gpu: &mut GpuDevice,
         frame: &frame::Frame,
         camera: &crate::scene::Camera,
         quality: &crate::look::Quality,

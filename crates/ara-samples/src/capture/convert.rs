@@ -5,7 +5,7 @@ use super::{
 };
 use crate::lock::Lock;
 use anyhow::{Context, Result};
-use ara_gpu::vulkan::VulkanDevice;
+use ara_gpu::GpuDevice;
 use ara_render_fidelity::{FidelityView, Settings};
 use ara_runtime::extract::{Geometry, RenderFrame};
 use ara_runtime_render::fidelity::{
@@ -151,11 +151,7 @@ pub fn scene(
 
 /// Creates one view and finishes its compressed residency before AA/reference
 /// accumulation. Reference and preset views run serially on the shared GPU heap.
-pub fn view(
-    gpu: &mut VulkanDevice,
-    prepared: &Prepared,
-    settings: Settings,
-) -> Result<FidelityView> {
+pub fn view(gpu: &mut GpuDevice, prepared: &Prepared, settings: Settings) -> Result<FidelityView> {
     let mut view = FidelityView::new_native(
         gpu,
         &prepared.scene,

@@ -1,5 +1,5 @@
 use anyhow::{Result, ensure};
-use ara_gpu::vulkan::VulkanDevice;
+use ara_gpu::GpuDevice;
 use ara_pathtrace::scenes;
 use ara_render::scene::{CameraSpec, Mesh, Vertex};
 use ara_render_fidelity::{FidelityView, FrameInput, Mode, PostSettings, Settings, Tier, Upscaler};
@@ -8,7 +8,7 @@ use glam::Vec3;
 #[test]
 fn deformation_motion_uses_previous_surface_depth_for_one_frame() -> Result<()> {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
-    let mut gpu = VulkanDevice::new(&[], root.join(".sn/motion-test-cache"))?;
+    let mut gpu = GpuDevice::new(&[], root.join(".sn/motion-test-cache"))?;
     let mut scene = scenes::scene("furnace", 0);
     scene.meshes = vec![Mesh {
         entity: 1,

@@ -6,8 +6,7 @@ use crate::{
 };
 use anyhow::{Result, ensure};
 use ara_gpu::{
-    Access, Buffer, Device, Image, Pipeline, Queue, Resource, vk,
-    vulkan::{PassTiming, VulkanDevice},
+    Access, Buffer, Device, GpuDevice, Image, Pipeline, Queue, Resource, vk, vulkan::PassTiming,
 };
 use ara_render::graph::State;
 use glam::{Mat4, Vec3};
@@ -66,14 +65,14 @@ impl FidelityView {
     /// Upload immutable extraction, prewarm cooked pipelines and allocate view storage.
     /// Raster/Mobile require a bake with matching scene hash; no RT extensions execute.
     pub fn new(
-        gpu: &mut VulkanDevice,
+        gpu: &mut GpuDevice,
         scene: &ara_render::scene::Scene,
         settings: Settings,
         baked: Option<&BakedProbes>,
     ) -> Result<Self> {
         settings.validate()?;
         ensure!(
-            settings.tier != Tier::Rt || gpu.context().info.ray_tracing,
+            settings.tier != Tier::Rt || gpu.info().ray_tracing,
             "RT tier unavailable"
         );
         ensure!(
@@ -86,7 +85,7 @@ impl FidelityView {
     /// Present a native compressed, instanced scene through the same fidelity
     /// transport, post processing and temporal reconstruction as legacy captures.
     pub fn new_native(
-        gpu: &mut VulkanDevice,
+        gpu: &mut GpuDevice,
         scene: &ara_render::instanced::Scene,
         textures: ara_texture_stream::NativeResidency,
         settings: Settings,
@@ -94,7 +93,7 @@ impl FidelityView {
     ) -> Result<Self> {
         settings.validate()?;
         ensure!(
-            settings.tier != Tier::Rt || gpu.context().info.ray_tracing,
+            settings.tier != Tier::Rt || gpu.info().ray_tracing,
             "RT tier unavailable"
         );
         ensure!(
@@ -106,7 +105,7 @@ impl FidelityView {
     }
 
     fn from_scene(
-        gpu: &mut VulkanDevice,
+        gpu: &mut GpuDevice,
         scene: GpuScene,
         settings: Settings,
         baked: Option<&BakedProbes>,
@@ -304,7 +303,7 @@ impl FidelityView {
     /// FrameInput lighting_changed flag to reject accumulated radiance.
     pub fn update_scene(
         &mut self,
-        gpu: &mut VulkanDevice,
+        gpu: &mut GpuDevice,
         scene: &ara_render::scene::Scene,
     ) -> Result<()> {
         self.scene.update(gpu, scene)
@@ -314,7 +313,7 @@ impl FidelityView {
     /// New geometry or texture generations require a prepared replacement view.
     pub fn update_native_scene(
         &mut self,
-        gpu: &mut VulkanDevice,
+        gpu: &mut GpuDevice,
         scene: &ara_render::instanced::Scene,
     ) -> Result<crate::scene::NativeUpdate> {
         let update = self.scene.update_native(gpu, scene)?;
@@ -328,11 +327,7 @@ impl FidelityView {
         Ok(update)
     }
     /// Change ray-query visibility while retaining cached mesh acceleration.
-    pub fn set_instance_masks(
-        &mut self,
-        gpu: &mut VulkanDevice,
-        masks: &[(u64, u8)],
-    ) -> Result<()> {
+    pub fn set_instance_masks(&mut self, gpu: &mut GpuDevice, masks: &[(u64, u8)]) -> Result<()> {
         self.scene.set_instance_masks(gpu, masks)?;
         self.history = false;
         Ok(())
@@ -364,7 +359,7 @@ impl FidelityView {
     /// New storage is allocated before old images retire, and every history resets.
     pub fn resize(
         &mut self,
-        gpu: &mut VulkanDevice,
+        gpu: &mut GpuDevice,
         render_size: [u32; 2],
         display_size: [u32; 2],
     ) -> Result<()> {
@@ -428,7 +423,7 @@ impl FidelityView {
         Ok(())
     }
     /// Set a linear 16x16x16 LUT, packed as rows G, columns B*16+R.
-    pub fn set_lut(&mut self, gpu: &mut VulkanDevice, data: &[[f32; 4]]) -> Result<()> {
+    pub fn set_lut(&mut self, gpu: &mut GpuDevice, data: &[[f32; 4]]) -> Result<()> {
         ensure!(
             data.len() == 4096 && data.iter().flatten().all(|v| v.is_finite()),
             "Invalid grading LUT"
@@ -446,7 +441,7 @@ impl FidelityView {
         Ok(())
     }
     /// Explicit GPU readback for offline baking; normal frames never map probe data.
-    pub fn bake_snapshot(&mut self, gpu: &mut VulkanDevice) -> Result<BakedProbes> {
+    pub fn bake_snapshot(&mut self, gpu: &mut GpuDevice) -> Result<BakedProbes> {
         let index = 1 - self.probe_slot;
         let bytes = self.read_buffer(
             gpu,
@@ -477,7 +472,7 @@ impl FidelityView {
     }
     pub(crate) fn read_buffer(
         &self,
-        gpu: &mut VulkanDevice,
+        gpu: &mut GpuDevice,
         source: Buffer,
         bytes: usize,
         state: State,
@@ -510,7 +505,7 @@ impl FidelityView {
         Ok(data)
     }
     /// Release view-owned resources after its last completed frame.
-    pub fn destroy(self, gpu: &mut VulkanDevice) -> Result<()> {
+    pub fn destroy(self, gpu: &mut GpuDevice) -> Result<()> {
         if let Some(r) = self.reservoirs {
             r.destroy(gpu)?;
         }

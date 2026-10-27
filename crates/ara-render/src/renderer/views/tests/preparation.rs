@@ -63,12 +63,12 @@ fn blocked_view_allocation_preserves_primary_and_first_frames_use_prepared_exten
         quality: *renderer.quality(),
         exposure: 1.,
     };
-    let waits = renderer.gpu.context().host_wait_stats().calls;
+    let waits = renderer.gpu.host_wait_stats().calls;
     for _ in 0..8 {
         assert!(!renderer.preallocate_view(&mut view, &request)?);
         assert!(view.state.is_none());
         assert_eq!(renderer.gpu.descriptor_usage(), baseline);
-        assert_eq!(renderer.gpu.context().host_wait_stats().calls, waits);
+        assert_eq!(renderer.gpu.host_wait_stats().calls, waits);
         assert_eq!(
             (
                 renderer.targets.images.to_vec(),

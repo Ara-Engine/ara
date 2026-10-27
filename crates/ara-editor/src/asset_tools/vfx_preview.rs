@@ -127,7 +127,7 @@ pub(crate) fn framing(effect: &ara_vfx::Effect) -> CameraSpec {
 
 pub(super) fn capture(root: &Path, effect: &ara_vfx::Effect) -> anyhow::Result<image::RgbaImage> {
     let cooked = cooked(root, effect)?;
-    let mut gpu = ara_gpu::vulkan::VulkanDevice::new(&[], root.join(".ara/cache/vfx-preview-gpu"))?;
+    let mut gpu = ara_gpu::GpuDevice::new(&[], root.join(".ara/cache/vfx-preview-gpu"))?;
     let mut system = ara_vfx_gpu::GpuSystem::new(&mut gpu, effect, &cooked, [MASTER, MASTER])?;
     let request = CaptureRequest {
         camera: framing(effect),
@@ -142,6 +142,6 @@ pub(super) fn capture(root: &Path, effect: &ara_vfx::Effect) -> anyhow::Result<i
     };
     let result = system.capture(&mut gpu, &request);
     system.retire(&mut gpu)?;
-    gpu.context().assert_clean()?;
+    gpu.assert_clean()?;
     Ok(result?.image)
 }

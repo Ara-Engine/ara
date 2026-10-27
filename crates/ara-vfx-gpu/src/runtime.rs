@@ -1,7 +1,7 @@
 use crate::layout::*;
 use crate::passes::FrameOutput;
 use anyhow::{Result, ensure};
-use ara_gpu::{Access, Buffer, Device, Image, Pipeline, Queue, Resource, vulkan::VulkanDevice};
+use ara_gpu::{Access, Buffer, Device, GpuDevice, Image, Pipeline, Queue, Resource};
 use ara_render::{
     capture::{Capture, CaptureRequest, FeatureCapture, ShaderMetadata},
     graph::State,
@@ -228,18 +228,18 @@ impl GpuSystem {
     }
 
     /// Advance one fixed tick and render it through declared graph passes.
-    pub fn step(&mut self, gpu: &mut VulkanDevice, view: &View) -> Result<()> {
+    pub fn step(&mut self, gpu: &mut GpuDevice, view: &View) -> Result<()> {
         self.run_frame(gpu, view, false, true, FrameOutput::Display)
     }
     /// Advance one fixed tick without drawing it (no backdrop copy, draw or
     /// tonemap). Live composition advances by the elapsed ticks, then calls
     /// [`GpuSystem::render`] once per presented frame.
-    pub fn advance(&mut self, gpu: &mut VulkanDevice, view: &View) -> Result<()> {
+    pub fn advance(&mut self, gpu: &mut GpuDevice, view: &View) -> Result<()> {
         self.run_frame(gpu, view, false, true, FrameOutput::Simulation)
     }
     /// Blend into `view.scene_color` for the scene's shared post stack. Optionally
     /// advance one fixed tick; omit the preview background and display tonemap.
-    pub fn composite(&mut self, gpu: &mut VulkanDevice, view: &View, advance: bool) -> Result<()> {
+    pub fn composite(&mut self, gpu: &mut GpuDevice, view: &View, advance: bool) -> Result<()> {
         ensure!(
             view.scene_color.is_some(),
             "HDR composition needs scene_color"
@@ -252,7 +252,7 @@ impl GpuSystem {
     }
     /// Replay from tick zero and assemble a standard ara-render capture at time T.
     /// Capture tick is completed fixed ticks; settle frames are bounded and do not advance time.
-    pub fn capture(&mut self, gpu: &mut VulkanDevice, request: &CaptureRequest) -> Result<Capture> {
+    pub fn capture(&mut self, gpu: &mut GpuDevice, request: &CaptureRequest) -> Result<Capture> {
         self.capture_over(gpu, request, View::default())
     }
     /// [`GpuSystem::capture`] composited over a scene: `scene` supplies the background,
@@ -260,7 +260,7 @@ impl GpuSystem {
     /// `request`). The scene inputs must stay valid and unchanged for the whole replay.
     pub fn capture_over(
         &mut self,
-        gpu: &mut VulkanDevice,
+        gpu: &mut GpuDevice,
         request: &CaptureRequest,
         scene: View,
     ) -> Result<Capture> {
@@ -309,7 +309,7 @@ impl GpuSystem {
                 ids,
                 names: &names,
                 hash: &self.hash,
-                device: &gpu.context().info,
+                device: gpu.info(),
                 timings: &self.timings,
                 shaders: &self.metadata,
             },
@@ -345,7 +345,7 @@ impl GpuSystem {
         }
     }
     /// Redraw a completed tick with new view inputs, without advancing simulation.
-    pub fn render(&mut self, gpu: &mut VulkanDevice, view: &View) -> Result<()> {
+    pub fn render(&mut self, gpu: &mut GpuDevice, view: &View) -> Result<()> {
         ensure!(self.tick > 0, "step before rendering a completed tick");
         self.run_frame(gpu, view, false, false, FrameOutput::Display)
     }
@@ -354,7 +354,7 @@ impl GpuSystem {
     /// Packed rows must use the layouts of the materials supplied to cook_source.
     pub fn bind_materials(
         &mut self,
-        gpu: &mut VulkanDevice,
+        gpu: &mut GpuDevice,
         parameters: &[ara_material::PackedParameters],
         textures: &[(Image, State)],
     ) -> Result<()> {
@@ -380,7 +380,7 @@ impl GpuSystem {
         Ok(())
     }
     /// Explicitly retire feature-owned resources after their submitted work completes.
-    pub fn retire(self, gpu: &mut VulkanDevice) -> Result<()> {
+    pub fn retire(self, gpu: &mut GpuDevice) -> Result<()> {
         for r in self.resources {
             gpu.retire(r.resource)?;
         }

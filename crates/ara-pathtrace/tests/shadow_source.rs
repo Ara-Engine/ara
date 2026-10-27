@@ -1,8 +1,5 @@
 use anyhow::{Result, ensure};
-use ara_gpu::{
-    Access, Barrier, Device, Queue, Resource, vk,
-    vulkan::{Command, VulkanDevice},
-};
+use ara_gpu::{Access, Barrier, Device, GpuDevice, Queue, Resource, vk, vulkan::Command};
 use ara_render::graph::State;
 use ara_render::scene::{CameraSpec, Mesh, Vertex};
 use ara_render_fidelity::{
@@ -11,7 +8,7 @@ use ara_render_fidelity::{
 };
 use glam::Vec3;
 
-fn mask(gpu: &mut VulkanDevice, value: [f32; 4]) -> Result<ImageInput> {
+fn mask(gpu: &mut GpuDevice, value: [f32; 4]) -> Result<ImageInput> {
     let bytes = (0..65 * 37)
         .flat_map(|_| value.into_iter().flat_map(f32::to_le_bytes))
         .collect::<Vec<_>>();
@@ -64,7 +61,7 @@ fn mask(gpu: &mut VulkanDevice, value: [f32; 4]) -> Result<ImageInput> {
 #[test]
 fn resident_vsm_masks_sun_and_missing_pages_use_ray_visibility() -> Result<()> {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
-    let mut gpu = VulkanDevice::new(&[], root.join(".sn/shadow-source-cache"))?;
+    let mut gpu = GpuDevice::new(&[], root.join(".sn/shadow-source-cache"))?;
     let mut scene = ara_pathtrace::scenes::scene("furnace", 0);
     scene.environment.fill([0., 0., 0., 1.]);
     scene.lights.clear();

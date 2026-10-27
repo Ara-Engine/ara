@@ -7,7 +7,7 @@
 //! and LDR ꟻLIP at 67 pixels per degree.
 use super::{look::Shot, render::Options};
 use anyhow::Result;
-use ara_gpu::vulkan::VulkanDevice;
+use ara_gpu::GpuDevice;
 use ara_render_fidelity::{
     FrameInput, Mode, PostSettings, Settings, Tier, Upscaler, environment::ev100_from_exposure,
 };
@@ -35,7 +35,7 @@ pub struct Truth {
 
 /// Path-traces `shots` with `samples` samples per pixel, one view at a time.
 pub fn render(
-    gpu: &mut VulkanDevice,
+    gpu: &mut GpuDevice,
     scene: &Scene,
     shots: &[&Shot],
     samples: u32,

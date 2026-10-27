@@ -1,9 +1,7 @@
 //! Manual display ramp: --mode=sdr|hdr10|scrgb --paper-white=203 --frames=120.
 use anyhow::{Context, Result};
 use ara_color::{OutputMode, OutputSettings};
-use ara_gpu::{
-    Access, Barrier, Device, Queue, Resource, commands::Command, vk, vulkan::VulkanDevice,
-};
+use ara_gpu::{Access, Barrier, Device, GpuDevice, Queue, Resource, commands::Command, vk};
 use ara_platform::{Present, Window};
 use ara_render_geo::display::DisplayOutput;
 use std::path::Path;
@@ -33,7 +31,7 @@ fn main() -> Result<()> {
         "Ara HDR ramp | diffuse white left, highlights right",
         [1024, 384],
     )?;
-    let mut gpu = VulkanDevice::new(&window.extensions()?, dir.join("cache"))?;
+    let mut gpu = GpuDevice::new(&window.extensions()?, dir.join("cache"))?;
     // SAFETY: Window/device are retained until explicit idle swapchain teardown.
     let mut present = match unsafe { Present::new_with_output(gpu.context(), &window, settings) } {
         Ok(p) => p,
@@ -150,7 +148,7 @@ fn main() -> Result<()> {
     })();
     // SAFETY: All portable submissions completed; this wait also retires presentation.
     unsafe {
-        gpu.context().device.device_wait_idle()?;
+        gpu.wait_idle()?;
         present.destroy(gpu.context());
     }
     output.retire(&mut gpu)?;

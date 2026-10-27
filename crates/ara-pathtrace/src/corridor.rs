@@ -9,7 +9,7 @@ pub(crate) fn roi(data: &[[f32; 4]]) -> Vec<[f32; 4]> {
         .collect()
 }
 
-pub(crate) fn run(gpu: &mut VulkanDevice, root: &Path) -> Result<()> {
+pub(crate) fn run(gpu: &mut GpuDevice, root: &Path) -> Result<()> {
     let scene = content::load(&root.join(".sn/assets/sponza"))?;
     let camera = content::camera();
     let ground = large::load_hdr(&root.join(".sn/sponza-reference.f32"))?;

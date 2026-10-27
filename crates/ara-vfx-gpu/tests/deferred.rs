@@ -1,15 +1,14 @@
 //! First-use VFX construction inside an asynchronous Scene frame.
 use anyhow::Result;
 use ara_gpu::vk::TaggedStructure;
-use ara_gpu::{Device, Queue, Resource, vk, vulkan::VulkanDevice};
+use ara_gpu::{Device, GpuDevice, Queue, Resource, vk};
 use ara_vfx_gpu::GpuSystem;
 use std::path::Path;
 
 #[test]
 fn deferred_vfx_initialization_and_failed_retries_release_their_heap_slots() -> Result<()> {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let mut gpu =
-        VulkanDevice::new_raster(&[], root.join("../../target/ara-vfx-gpu/deferred-cache"))?;
+    let mut gpu = GpuDevice::new_raster(&[], root.join("../../target/ara-vfx-gpu/deferred-cache"))?;
     let effect = ara_vfx::samples::campfire();
     let cooked = root.join("cooked/campfire");
     let baseline = gpu.descriptor_usage();
@@ -58,7 +57,7 @@ fn deferred_vfx_initialization_and_failed_retries_release_their_heap_slots() -> 
     assert_eq!(gpu.descriptor_usage(), baseline);
 
     let mut pressure = Vec::new();
-    let capacity = gpu.context().info.storage_buffer_capacity as usize;
+    let capacity = gpu.info().storage_buffer_capacity as usize;
     while gpu.descriptor_usage().storage_buffers < capacity - 2 {
         let buffer = gpu.create_buffer(16, vk::BufferUsageFlags::STORAGE_BUFFER, true)?;
         gpu.storage_buffer(buffer)?;

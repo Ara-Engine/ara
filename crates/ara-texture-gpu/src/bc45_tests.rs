@@ -214,17 +214,15 @@ fn edge(
 #[ignore = "requires Vulkan, cooked bc4/bc5 manifests, and ara-dev gpu lock"]
 fn gpu_matches_reference() -> Result<(), Box<dyn std::error::Error>> {
     use ara_gpu::{
-        Access, Device, Queue, Resource, RootConstants,
-        cooked::CookedPipeline,
-        vk,
-        vulkan::{Command, VulkanDevice},
+        Access, Device, GpuDevice, Queue, Resource, RootConstants, cooked::CookedPipeline, vk,
+        vulkan::Command,
     };
     let cooked =
         std::path::PathBuf::from(std::env::var_os("ARA_BC45_COOKED").ok_or("set ARA_BC45_COOKED")?);
     let profile = std::path::PathBuf::from(
         std::env::var_os("ARA_BC45_PROFILE").ok_or("set a fresh ARA_BC45_PROFILE")?,
     );
-    let mut gpu = VulkanDevice::new_raster(&[], profile)?;
+    let mut gpu = GpuDevice::new_raster(&[], profile)?;
     let cases = fixtures();
     let input_bytes: Vec<u8> = cases
         .iter()

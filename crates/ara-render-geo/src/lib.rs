@@ -11,10 +11,9 @@ pub mod upscale;
 use anyhow::{Result, ensure};
 use ara_geo::Geometry;
 use ara_gpu::{
-    Access, Buffer, Device, Image, Pipeline, Queue, Resource, RootConstants,
+    Access, Buffer, Device, GpuDevice, Image, Pipeline, Queue, Resource, RootConstants,
     commands::{Attachment, Command, CommandList},
     cooked::CookedPipeline,
-    vulkan::VulkanDevice,
 };
 use ara_render::{
     graph::{Graph, State},
@@ -160,7 +159,7 @@ pub struct GeometryConfig {
 }
 impl GeometryView {
     /// Uploads a view record after the prior use of this frame slot completes.
-    pub fn update(&mut self, gpu: &mut VulkanDevice, view: &View<'_>) -> Result<()> {
+    pub fn update(&mut self, gpu: &mut GpuDevice, view: &View<'_>) -> Result<()> {
         ensure!(
             view.error_pixels.is_finite() && view.error_pixels > 0.0,
             "invalid pixel error"

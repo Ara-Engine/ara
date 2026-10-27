@@ -1,6 +1,6 @@
 //! Device-owned compressed residency without a dependency on its asset loader.
 use anyhow::Result;
-use ara_gpu::{Access, Resource, vulkan::VulkanDevice};
+use ara_gpu::{Access, GpuDevice, Resource};
 
 /// Stable native texture table, whose rows identify the currently resident mip tails.
 #[derive(Debug, Clone, Copy)]
@@ -38,19 +38,19 @@ pub trait Textures: Send + std::any::Any {
     /// An abandoned candidate must cancel/retire preparation in `destroy`.
     fn preallocate(
         &mut self,
-        _gpu: &mut VulkanDevice,
+        _gpu: &mut GpuDevice,
         _previous: Option<&dyn Textures>,
     ) -> Result<bool> {
         Ok(true)
     }
     /// Initialize every registered map before the first draw.
-    fn initialize(&mut self, gpu: &mut VulkanDevice) -> Result<TextureStats>;
+    fn initialize(&mut self, gpu: &mut GpuDevice) -> Result<TextureStats>;
     /// Prepare a replacement against the completed resident set. Borrowed images
     /// must remain owned by `previous` until `publish_reuse`; destroying a rejected
     /// candidate must leave that previous set fully usable.
     fn initialize_reusing(
         &mut self,
-        gpu: &mut VulkanDevice,
+        gpu: &mut GpuDevice,
         _previous: &dyn Textures,
     ) -> Result<TextureStats> {
         self.initialize(gpu)
@@ -62,11 +62,11 @@ pub trait Textures: Send + std::any::Any {
         Ok(())
     }
     /// Refine mip tails at a completed frame boundary.
-    fn refine(&mut self, gpu: &mut VulkanDevice) -> Result<TextureStats>;
+    fn refine(&mut self, gpu: &mut GpuDevice) -> Result<TextureStats>;
     /// Last completed table, or none when no textures are registered.
     fn binding(&self) -> Option<TextureBinding>;
     /// Declare bindless reachability without allocating a resource list per frame.
     fn visit_resources(&self, visit: &mut dyn FnMut(Resource, Access));
     /// Retire the resident set after its final sampling submission completes.
-    fn destroy(self: Box<Self>, gpu: &mut VulkanDevice) -> Result<()>;
+    fn destroy(self: Box<Self>, gpu: &mut GpuDevice) -> Result<()>;
 }

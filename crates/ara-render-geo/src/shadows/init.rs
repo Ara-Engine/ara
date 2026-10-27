@@ -3,7 +3,7 @@ impl VirtualShadows {
     /// Allocates a fixed depth page pool and prewarms all offline shadow passes.
     /// Call during scene preparation, not on the interactive render thread.
     pub fn new(
-        gpu: &mut VulkanDevice,
+        gpu: &mut GpuDevice,
         geometry: &GeometryView,
         page_capacity: u32,
         cluster_capacity: u32,

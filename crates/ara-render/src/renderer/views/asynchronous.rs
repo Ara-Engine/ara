@@ -21,7 +21,7 @@ impl Views {
         self.requested = None;
     }
 
-    pub(in crate::renderer) fn poll(&mut self, gpu: &mut VulkanDevice) -> Result<bool> {
+    pub(in crate::renderer) fn poll(&mut self, gpu: &mut GpuDevice) -> Result<bool> {
         if let Some(completion) = &mut self.preparing {
             let result = gpu.poll_completion(completion);
             if completion.is_resolved() {
@@ -48,7 +48,7 @@ impl Views {
         Ok(true)
     }
 
-    pub(in crate::renderer) fn wait(&mut self, gpu: &mut VulkanDevice) -> Result<()> {
+    pub(in crate::renderer) fn wait(&mut self, gpu: &mut GpuDevice) -> Result<()> {
         if let Some(completion) = &mut self.preparing {
             gpu.wait_completion(completion)?;
             self.preparing = None;

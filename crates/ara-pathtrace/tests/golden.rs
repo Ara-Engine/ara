@@ -1,6 +1,6 @@
 #![allow(clippy::unwrap_used)]
 use anyhow::{Result, ensure};
-use ara_gpu::vulkan::VulkanDevice;
+use ara_gpu::GpuDevice;
 use ara_pathtrace::scenes;
 use ara_render::capture::compare;
 use ara_render_fidelity::{FidelityView, FrameInput, Mode, PostSettings, Settings, Tier, Upscaler};
@@ -27,7 +27,7 @@ fn settings() -> Settings {
 #[test]
 fn landscape_and_emissive_only_room_match_fixed_exposure_goldens() -> Result<()> {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let mut gpu = VulkanDevice::new(&[], root.join(".sn/robust-test-cache"))?;
+    let mut gpu = GpuDevice::new(&[], root.join(".sn/robust-test-cache"))?;
     for outdoor in [true, false] {
         let name = if outdoor {
             "outdoor_day"
@@ -83,7 +83,7 @@ fn landscape_and_emissive_only_room_match_fixed_exposure_goldens() -> Result<()>
 #[test]
 fn goldens_reproduce_and_scene_updates_preserve_identity_and_lifetimes() -> Result<()> {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let mut gpu = VulkanDevice::new(&[], root.join(".sn/test-cache"))?;
+    let mut gpu = GpuDevice::new(&[], root.join(".sn/test-cache"))?;
     let camera = scenes::camera();
     let mut request = FrameInput {
         camera: &camera,

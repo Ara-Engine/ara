@@ -1,12 +1,12 @@
 use anyhow::{Result, ensure};
-use ara_gpu::vulkan::VulkanDevice;
+use ara_gpu::GpuDevice;
 use ara_pathtrace::{Reference, scenes};
 use ara_render_fidelity::{PostSettings, material::MaterialDetail};
 
 #[test]
 fn layered_white_furnace_has_no_energy_gain() -> Result<()> {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
-    let mut gpu = VulkanDevice::new(&[], root.join(".sn/material-test-cache"))?;
+    let mut gpu = GpuDevice::new(&[], root.join(".sn/material-test-cache"))?;
     for detail in [
         MaterialDetail {
             clearcoat: 1.,

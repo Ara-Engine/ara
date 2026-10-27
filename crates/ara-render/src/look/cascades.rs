@@ -8,7 +8,7 @@
 //! frame never pays for every cascade at once.
 use crate::graph::State;
 use anyhow::Result;
-use ara_gpu::{Access, Buffer, Device, Image, Queue, Resource, vk, vulkan::VulkanDevice};
+use ara_gpu::{Access, Buffer, Device, GpuDevice, Image, Queue, Resource, vk};
 use glam::{Mat4, Vec2, Vec3, Vec4};
 
 /// A patch covers at most 1/`PATCH_AREA` of a map's texels; larger changes
@@ -99,7 +99,7 @@ pub(crate) struct Cascades {
 
 impl Cascades {
     pub(crate) fn new(
-        gpu: &mut VulkanDevice,
+        gpu: &mut GpuDevice,
         count: u32,
         resolution: u32,
         frame_bytes: u64,
@@ -257,7 +257,7 @@ impl Cascades {
         }
     }
 
-    pub(crate) fn destroy(self, gpu: &mut VulkanDevice) -> Result<()> {
+    pub(crate) fn destroy(self, gpu: &mut GpuDevice) -> Result<()> {
         for image in self.images {
             gpu.retire(Resource::Image(image))?;
         }

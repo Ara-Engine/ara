@@ -1,14 +1,11 @@
 //! Explicit offline readbacks, outside the normal render loop.
 use crate::{targets::FILTER0, view::FidelityView};
 use anyhow::Result;
-use ara_gpu::{
-    Access, Barrier, Device, Queue, Resource, vk,
-    vulkan::{Command, VulkanDevice},
-};
+use ara_gpu::{Access, Barrier, Device, GpuDevice, Queue, Resource, vk, vulkan::Command};
 impl FidelityView {
     /// Read compact one-based instance IDs at transport resolution for picking
     /// and capture legends. Zero is background; this never runs during presentation.
-    pub fn capture_entity_ids(&self, gpu: &mut VulkanDevice) -> Result<Vec<u32>> {
+    pub fn capture_entity_ids(&self, gpu: &mut GpuDevice) -> Result<Vec<u32>> {
         Ok(self
             .read_hdr(gpu, crate::targets::WORLD0 + 1 - self.slot)?
             .into_iter()
@@ -16,7 +13,7 @@ impl FidelityView {
             .collect())
     }
     /// Read histogram exposure diagnostics explicitly; ordinary frames do no readback.
-    pub fn capture_exposure(&self, gpu: &mut VulkanDevice) -> Result<crate::ExposureState> {
+    pub fn capture_exposure(&self, gpu: &mut GpuDevice) -> Result<crate::ExposureState> {
         anyhow::ensure!(self.history, "Render before capture");
         let b = gpu.create_buffer(16, vk::BufferUsageFlags::TRANSFER_DST, true)?;
         let mut c = gpu.begin(Queue::Graphics);
@@ -71,24 +68,24 @@ impl FidelityView {
     }
     /// Read full-precision filtered linear radiance before exposure and display mapping.
     /// Reference mode copies its undenoised accumulation into the same channel.
-    pub fn capture_radiance(&self, gpu: &mut VulkanDevice) -> Result<Vec<[f32; 4]>> {
+    pub fn capture_radiance(&self, gpu: &mut GpuDevice) -> Result<Vec<[f32; 4]>> {
         self.read_hdr(gpu, FILTER0)
     }
     /// Read current-to-previous UV motion, previous radial depth and reactive mask.
     /// Explicit diagnostics only; ordinary rendering never reads back motion.
-    pub fn capture_motion(&self, gpu: &mut VulkanDevice) -> Result<Vec<[f32; 4]>> {
+    pub fn capture_motion(&self, gpu: &mut GpuDevice) -> Result<Vec<[f32; 4]>> {
         self.read_hdr(gpu, crate::targets::MOTION)
     }
     /// Read the separately accumulated direct/emissive signal for lighting diagnostics.
     /// Subtract it from `capture_radiance` to inspect filtered indirect transport.
-    pub fn capture_direct_radiance(&self, gpu: &mut VulkanDevice) -> Result<Vec<[f32; 4]>> {
+    pub fn capture_direct_radiance(&self, gpu: &mut GpuDevice) -> Result<Vec<[f32; 4]>> {
         self.capture_signal(gpu, crate::targets::DIRECT_HISTORY0 + 1 - self.slot)
     }
     /// Read demodulated indirect history for offline temporal diagnostics.
-    pub fn capture_incident_radiance(&self, gpu: &mut VulkanDevice) -> Result<Vec<[f32; 4]>> {
+    pub fn capture_incident_radiance(&self, gpu: &mut GpuDevice) -> Result<Vec<[f32; 4]>> {
         self.capture_signal(gpu, crate::targets::HISTORY0 + 1 - self.slot)
     }
-    fn capture_signal(&self, gpu: &mut VulkanDevice, source: usize) -> Result<Vec<[f32; 4]>> {
+    fn capture_signal(&self, gpu: &mut GpuDevice, source: usize) -> Result<Vec<[f32; 4]>> {
         anyhow::ensure!(self.history, "Render before capture");
         use ara_gpu::RootConstants;
         let size = self.settings.render_size;
@@ -145,7 +142,7 @@ impl FidelityView {
         gpu.collect()?;
         Ok(data)
     }
-    fn read_hdr(&self, gpu: &mut VulkanDevice, target: usize) -> Result<Vec<[f32; 4]>> {
+    fn read_hdr(&self, gpu: &mut GpuDevice, target: usize) -> Result<Vec<[f32; 4]>> {
         self.read_hdr_image(
             gpu,
             self.targets.images[target],
@@ -154,7 +151,7 @@ impl FidelityView {
     }
     fn read_hdr_image(
         &self,
-        gpu: &mut VulkanDevice,
+        gpu: &mut GpuDevice,
         image: ara_gpu::Image,
         before: Access,
     ) -> Result<Vec<[f32; 4]>> {
@@ -214,7 +211,7 @@ impl FidelityView {
             .collect())
     }
     /// Explicit SDR readback used by the existing SSIM/golden infrastructure.
-    pub fn capture(&self, gpu: &mut VulkanDevice) -> Result<image::RgbaImage> {
+    pub fn capture(&self, gpu: &mut GpuDevice) -> Result<image::RgbaImage> {
         anyhow::ensure!(self.history, "Render before capture");
         let size = self.settings.display_size;
         let b = gpu.create_buffer(

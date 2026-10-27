@@ -184,7 +184,7 @@ impl GpuScene {
     /// previous scene handles live; the host continues presenting its last output.
     pub fn update_native(
         &mut self,
-        gpu: &mut VulkanDevice,
+        gpu: &mut GpuDevice,
         scene: &NativeScene,
     ) -> Result<NativeUpdate> {
         ara_gpu::cpu_scope!("Native.upload_instances_and_acceleration");

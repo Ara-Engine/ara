@@ -27,7 +27,7 @@ fn display_luminance(image: &image::RgbaImage) -> Vec<f64> {
         })
         .collect()
 }
-pub(crate) fn run(gpu: &mut VulkanDevice, root: &Path) -> Result<()> {
+pub(crate) fn run(gpu: &mut GpuDevice, root: &Path) -> Result<()> {
     let mut scene = content::load(&root.join(".sn/assets/sponza"))?;
     scene.lights.push(ara_render::scene::Light {
         position_range: [-1., 2.4, 0., 20.],
@@ -42,15 +42,14 @@ pub(crate) fn run(gpu: &mut VulkanDevice, root: &Path) -> Result<()> {
     view.set_gather_events(1)?;
     view.set_transport_stride(4)?;
     let mut tick = 0;
-    let mut render =
-        |view: &mut FidelityView, gpu: &mut VulkanDevice, changed: bool| -> Result<()> {
-            let mut f = input(&camera, tick, false);
-            f.deterministic = false;
-            f.lighting_changed = changed;
-            view.render(gpu, &f)?;
-            tick += 1;
-            Ok(())
-        };
+    let mut render = |view: &mut FidelityView, gpu: &mut GpuDevice, changed: bool| -> Result<()> {
+        let mut f = input(&camera, tick, false);
+        f.deterministic = false;
+        f.lighting_changed = changed;
+        view.render(gpu, &f)?;
+        tick += 1;
+        Ok(())
+    };
     for _ in 0..256 {
         render(&mut view, gpu, false)?;
     }

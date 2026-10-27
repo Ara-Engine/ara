@@ -1,8 +1,6 @@
 //! Deterministic offline sprite-sheet generation; no texture synthesis at runtime.
 use anyhow::{Result, ensure};
-use ara_gpu::{
-    Access, Barrier, Device, Image, Queue, Resource, commands::Command, vk, vulkan::VulkanDevice,
-};
+use ara_gpu::{Access, Barrier, Device, GpuDevice, Image, Queue, Resource, commands::Command, vk};
 
 /// One padded tile is 128 pixels; four by four frames per texture family.
 pub const ATLAS_SIZE: [u32; 2] = [512, 2560];
@@ -125,7 +123,7 @@ pub fn cook_atlas() -> Vec<u8> {
     }
     pixels
 }
-pub(crate) fn upload(gpu: &mut VulkanDevice, bytes: &[u8]) -> Result<Image> {
+pub(crate) fn upload(gpu: &mut GpuDevice, bytes: &[u8]) -> Result<Image> {
     ensure!(
         bytes.len() == (ATLAS_SIZE[0] * ATLAS_SIZE[1] * 4) as usize,
         "invalid cooked sprite atlas"

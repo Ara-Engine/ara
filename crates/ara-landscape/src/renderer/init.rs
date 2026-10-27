@@ -2,7 +2,7 @@ use super::*;
 impl Landscape {
     /// Creates static device-local scene inputs and prewarmed offline pipelines.
     pub fn new(
-        gpu: &mut VulkanDevice,
+        gpu: &mut GpuDevice,
         data: &LandscapeData,
         size: [u32; 2],
         cooked: &Path,
@@ -324,7 +324,7 @@ impl Landscape {
     /// extraction. Textures/geometry are retired with this landscape snapshot.
     pub fn install_geometry(
         &mut self,
-        gpu: &mut VulkanDevice,
+        gpu: &mut GpuDevice,
         geometry: &crate::FoliageGeometry,
     ) -> Result<()> {
         ensure!(

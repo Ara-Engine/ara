@@ -15,7 +15,7 @@ use crate::{
     scene::{Light, MAX_LOCAL_LIGHTS},
 };
 use anyhow::Result;
-use ara_gpu::{Access, Buffer, Device, Image, Queue, Resource, vk, vulkan::VulkanDevice};
+use ara_gpu::{Access, Buffer, Device, GpuDevice, Image, Queue, Resource, vk};
 use glam::{Mat4, Vec2, Vec3, Vec4};
 use std::collections::BTreeSet;
 
@@ -403,7 +403,7 @@ pub(crate) struct LocalMap {
 }
 
 impl LocalMap {
-    pub(crate) fn new(gpu: &mut VulkanDevice, settings: LocalShadows) -> Result<Self> {
+    pub(crate) fn new(gpu: &mut GpuDevice, settings: LocalShadows) -> Result<Self> {
         let size = atlas_size(settings);
         let atlas = gpu.create_image(
             size[0],
@@ -451,7 +451,7 @@ impl LocalMap {
         })
     }
 
-    pub(crate) fn destroy(self, gpu: &mut VulkanDevice) -> Result<()> {
+    pub(crate) fn destroy(self, gpu: &mut GpuDevice) -> Result<()> {
         gpu.retire(Resource::Image(self.atlas))?;
         gpu.retire(Resource::Buffer(self.table))?;
         gpu.collect()?;

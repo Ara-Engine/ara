@@ -34,27 +34,9 @@ pub fn native_shader_source() -> &'static str {
 }
 /// Checks subgroup operations used to combine feedback without atomic contention.
 /// Called at extraction preparation, before creating consumer pipelines.
-pub fn validate_device(gpu: &ara_gpu::vulkan::VulkanDevice) -> anyhow::Result<()> {
-    use ara_gpu::vk;
-    use ara_gpu::vk::TaggedStructure;
-    let mut properties = vk::PhysicalDeviceSubgroupProperties::default();
-    // SAFETY: Read-only physical-device query; chained output lives through call.
-    unsafe {
-        gpu.context().instance.get_physical_device_properties2(
-            gpu.context().physical,
-            &mut vk::PhysicalDeviceProperties2::default().push(&mut properties),
-        );
-    }
+pub fn validate_device(gpu: &ara_gpu::GpuDevice) -> anyhow::Result<()> {
     anyhow::ensure!(
-        properties
-            .supported_stages
-            .contains(vk::ShaderStageFlags::COMPUTE | vk::ShaderStageFlags::FRAGMENT)
-            && properties.supported_operations.contains(
-                vk::SubgroupFeatureFlags::BASIC
-                    | vk::SubgroupFeatureFlags::VOTE
-                    | vk::SubgroupFeatureFlags::BALLOT
-                    | vk::SubgroupFeatureFlags::ARITHMETIC
-            ),
+        gpu.info().wave_ops,
         "ARA_TEXTURE_SUBGROUP: compute/fragment subgroup vote, ballot and arithmetic required"
     );
     Ok(())

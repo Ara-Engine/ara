@@ -4,7 +4,7 @@ use crate::{
     runtime::{GpuSystem, Pipelines, Tracked},
 };
 use anyhow::{Result, ensure};
-use ara_gpu::{Access, Buffer, Device, Image, Pipeline, Queue, Resource, vk, vulkan::VulkanDevice};
+use ara_gpu::{Access, Buffer, Device, GpuDevice, Image, Pipeline, Queue, Resource, vk};
 use ara_render::{capture::ShaderMetadata, graph::State};
 use ara_vfx::Effect;
 use bytemuck::Zeroable;
@@ -14,7 +14,7 @@ impl GpuSystem {
     /// Synchronous tools/capture constructor from an offline cook. Live hosts use
     /// `PipelineWarmup` and `new_prepared` to keep driver compilation off-frame.
     pub fn new(
-        gpu: &mut VulkanDevice,
+        gpu: &mut GpuDevice,
         effect: &Effect,
         cooked: &Path,
         size: [u32; 2],
@@ -25,7 +25,7 @@ impl GpuSystem {
     /// Allocate an effect from worker-compiled PSOs. Live callers poll
     /// `PipelineWarmup` first, so no native pipeline is created on this thread.
     pub fn new_prepared(
-        gpu: &mut VulkanDevice,
+        gpu: &mut GpuDevice,
         effect: &Effect,
         cooked: &Path,
         size: [u32; 2],
@@ -35,7 +35,7 @@ impl GpuSystem {
     }
 
     fn construct(
-        gpu: &mut VulkanDevice,
+        gpu: &mut GpuDevice,
         effect: &Effect,
         cooked: &Path,
         size: [u32; 2],
@@ -78,7 +78,7 @@ impl GpuSystem {
 
     /// Transactional construction: the caller retires every allocation on error.
     fn allocate(
-        gpu: &mut VulkanDevice,
+        gpu: &mut GpuDevice,
         effect: &Effect,
         cooked: &Path,
         size: [u32; 2],
@@ -143,7 +143,7 @@ impl GpuSystem {
             binding_layout_hash: p.binding_layout_hash,
         };
         let layout = Layout::new(&effect)?;
-        let mut buffer = |gpu: &mut VulkanDevice,
+        let mut buffer = |gpu: &mut GpuDevice,
                           size: u64,
                           host: bool,
                           usage: vk::BufferUsageFlags|
@@ -294,7 +294,7 @@ impl GpuSystem {
         })
     }
     /// Reset deterministic replay state without changing compiled programs.
-    pub fn reset(&mut self, gpu: &mut VulkanDevice) -> Result<()> {
+    pub fn reset(&mut self, gpu: &mut GpuDevice) -> Result<()> {
         let mut particle_data = vec![0u32; self.layout.total as usize * 16];
         for slot in 0..self.layout.total as usize {
             particle_data[slot * 4 + 3] = (-1f32).to_bits();
@@ -317,12 +317,7 @@ impl GpuSystem {
         self.timings.clear();
         Ok(())
     }
-    fn initialize_buffer(
-        &mut self,
-        gpu: &mut VulkanDevice,
-        index: usize,
-        bytes: &[u8],
-    ) -> Result<()> {
+    fn initialize_buffer(&mut self, gpu: &mut GpuDevice, index: usize, bytes: &[u8]) -> Result<()> {
         use ara_gpu::{Barrier, commands::Command};
         let Resource::Buffer(destination) = self.resources[index].resource else {
             anyhow::bail!("initialization expects buffer");

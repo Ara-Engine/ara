@@ -93,7 +93,7 @@ impl Culling {
     #[allow(clippy::too_many_arguments)]
     pub(in crate::renderer::native) fn patch(
         &mut self,
-        gpu: &mut VulkanDevice,
+        gpu: &mut GpuDevice,
         buffer: Buffer,
         groups: &Groups,
         bounds: &[[Vec3; 2]],

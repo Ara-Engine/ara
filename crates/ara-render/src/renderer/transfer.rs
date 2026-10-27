@@ -3,14 +3,14 @@ use super::*;
 use ara_gpu::vulkan::Command;
 
 pub(super) fn upload_buffer(
-    gpu: &mut VulkanDevice,
+    gpu: &mut GpuDevice,
     bytes: &[u8],
     usage: vk::BufferUsageFlags,
 ) -> Result<Buffer> {
     upload_buffer_on(gpu, bytes, usage, Queue::Graphics)
 }
 pub(super) fn upload_buffer_on(
-    gpu: &mut VulkanDevice,
+    gpu: &mut GpuDevice,
     bytes: &[u8],
     usage: vk::BufferUsageFlags,
     queue: Queue,
@@ -66,7 +66,7 @@ pub(super) fn upload_buffer_on(
     result
 }
 pub(super) fn upload_image(
-    gpu: &mut VulkanDevice,
+    gpu: &mut GpuDevice,
     size: [u32; 2],
     format: vk::Format,
     bytes: &[u8],

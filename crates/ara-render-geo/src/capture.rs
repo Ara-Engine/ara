@@ -50,11 +50,11 @@ impl GeometryView {
             + 16 * 516 * 4
     }
     /// Completed diagnostic SDR pixels, useful for deterministic golden checks.
-    pub fn preview_bytes(&self, gpu: &mut VulkanDevice) -> Result<Vec<u8>> {
+    pub fn preview_bytes(&self, gpu: &mut GpuDevice) -> Result<Vec<u8>> {
         self.read_image(gpu, self.images[3], 4)
     }
     /// Completed world positions and geometric displacement bounds, one per pixel.
-    pub fn surface(&self, gpu: &mut VulkanDevice) -> Result<Vec<[f32; 4]>> {
+    pub fn surface(&self, gpu: &mut GpuDevice) -> Result<Vec<[f32; 4]>> {
         Ok(self
             .read_image(gpu, self.images[2], 16)?
             .as_chunks::<16>()
@@ -64,7 +64,7 @@ impl GeometryView {
             .collect())
     }
     /// Diagnostic readback of the final preview. Production callers sample outputs.
-    pub fn capture(&self, gpu: &mut VulkanDevice, path: &Path) -> Result<()> {
+    pub fn capture(&self, gpu: &mut GpuDevice, path: &Path) -> Result<()> {
         let bytes = self.read_image(gpu, self.images[3], 4)?;
         image::save_buffer(
             path,
@@ -76,7 +76,7 @@ impl GeometryView {
         Ok(())
     }
     /// Diagnostic U64 visibility identities; zero marks background.
-    pub fn identities(&self, gpu: &mut VulkanDevice) -> Result<Vec<[u32; 2]>> {
+    pub fn identities(&self, gpu: &mut GpuDevice) -> Result<Vec<[u32; 2]>> {
         Ok(self
             .read_buffer(
                 gpu,
@@ -91,7 +91,7 @@ impl GeometryView {
             .collect())
     }
     /// Reads counters without making them part of runtime submission.
-    pub fn stats(&self, gpu: &mut VulkanDevice) -> Result<Stats> {
+    pub fn stats(&self, gpu: &mut GpuDevice) -> Result<Stats> {
         let a = self.read_buffer(gpu, self.buffers[6], Access::ShaderRead, 128)?;
         let args: Vec<u32> = a
             .as_chunks::<4>()
@@ -128,7 +128,7 @@ impl GeometryView {
     }
     pub(super) fn read_image(
         &self,
-        gpu: &mut VulkanDevice,
+        gpu: &mut GpuDevice,
         image: Image,
         stride: u64,
     ) -> Result<Vec<u8>> {
@@ -168,7 +168,7 @@ impl GeometryView {
     }
     pub(super) fn read_buffer(
         &self,
-        gpu: &mut VulkanDevice,
+        gpu: &mut GpuDevice,
         source: Buffer,
         state: Access,
         size: usize,
@@ -197,7 +197,7 @@ impl GeometryView {
         Ok(data)
     }
     /// Retires view resources after the host has completed its last use.
-    pub fn retire(self, gpu: &mut VulkanDevice) -> Result<()> {
+    pub fn retire(self, gpu: &mut GpuDevice) -> Result<()> {
         for b in self.buffers.into_iter().chain([
             self.frame,
             self.residency.table,

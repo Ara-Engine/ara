@@ -3,11 +3,10 @@ mod record;
 use crate::*;
 use anyhow::{Result, ensure};
 use ara_gpu::{
-    Access, Buffer, Device, Pipeline, Queue, Resource, RootConstants, TimelinePoint,
+    Access, Buffer, Device, GpuDevice, Pipeline, Queue, Resource, RootConstants, TimelinePoint,
     commands::{Command, CommandList},
     cooked::CookedPipeline,
     vk,
-    vulkan::VulkanDevice,
 };
 use ara_render::graph::{Graph, State};
 use std::path::Path;
@@ -31,7 +30,7 @@ impl Residency {
     /// Creates a byte-budgeted physical pool and diagnostic surface. The source
     /// catalog is owned; cooks must already exist at `cooked` (offline only).
     pub fn new(
-        gpu: &mut VulkanDevice,
+        gpu: &mut GpuDevice,
         catalog: Catalog,
         budget: u64,
         upload_pages: usize,
@@ -105,7 +104,7 @@ impl Residency {
     }
     /// Consumes completed GPU feedback and prepares bounded decoded uploads.
     /// May run on an extraction worker; never call before prior submission completes.
-    pub fn prepare(&mut self, gpu: &VulkanDevice) -> Result<()> {
+    pub fn prepare(&mut self, gpu: &GpuDevice) -> Result<()> {
         if let Some(point) = self.last {
             ensure!(
                 gpu.completed()?[point.queue.index()] >= point.value,
@@ -171,15 +170,15 @@ impl Residency {
         self.last = Some(point);
     }
     /// Records uploads, publication and counter reset. Sampling follows this list.
-    pub fn begin_frame(&mut self, gpu: &VulkanDevice) -> Result<CommandList> {
+    pub fn begin_frame(&mut self, gpu: &GpuDevice) -> Result<CommandList> {
         self.record(gpu, false)
     }
     /// Records feedback readback after every sampling pass has completed on Graphics.
-    pub fn end_frame(&mut self, gpu: &VulkanDevice) -> Result<CommandList> {
+    pub fn end_frame(&mut self, gpu: &GpuDevice) -> Result<CommandList> {
         self.record(gpu, true)
     }
 }
-fn upload(gpu: &mut VulkanDevice, bytes: &[u8]) -> Result<Buffer> {
+fn upload(gpu: &mut GpuDevice, bytes: &[u8]) -> Result<Buffer> {
     let buffer = gpu.create_buffer(
         bytes.len() as u64,
         vk::BufferUsageFlags::STORAGE_BUFFER

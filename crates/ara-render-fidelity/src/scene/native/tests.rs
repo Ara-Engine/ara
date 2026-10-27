@@ -24,8 +24,8 @@ fn native_fidelity_traces_shared_transforms_and_independent_emissive_uv1() -> Re
     use ara_render::instanced::{Geometry, Instance, Lod, Material, Vertex};
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
     let output = root.join("../../target/renderer-unification/native-instancing");
-    let mut gpu = VulkanDevice::new(&[], output.join("cache"))?;
-    if !gpu.context().info.ray_tracing {
+    let mut gpu = GpuDevice::new(&[], output.join("cache"))?;
+    if !gpu.info().ray_tracing {
         return Ok(());
     }
     let vertices = [

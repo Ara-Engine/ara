@@ -6,10 +6,7 @@
 #![allow(clippy::unwrap_used)]
 mod support;
 
-use ara_gpu::{
-    shared::Frame,
-    vulkan::{VulkanDevice, external::ImportedSurface},
-};
+use ara_gpu::{GpuDevice, shared::Frame, vulkan::external::ImportedSurface};
 use ara_play_host::embed::{DeviceEvent, Surfaces};
 use serde_json::{Value, json};
 use std::{
@@ -32,7 +29,7 @@ impl View {
         agent: &mut Agent,
         surfaces: &mut Surfaces,
         world: &str,
-        gpu: &VulkanDevice,
+        gpu: &GpuDevice,
     ) -> Option<Frame> {
         agent.host.tick();
         assert!(surfaces.poll(), "the play service is gone");
@@ -125,7 +122,7 @@ fn embedded_play_shares_frames_with_the_owner_device() {
     );
     let mut surfaces = surfaces.unwrap();
     let cache = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../.sn/test-gpu");
-    let gpu = VulkanDevice::new(&[], cache).unwrap();
+    let gpu = GpuDevice::new(&[], cache).unwrap();
     agent.until("a warm pool", |a| {
         a.play("status", json!({}))["pool"]["headless"]
             .as_u64()

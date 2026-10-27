@@ -1,7 +1,7 @@
 //! A bounded transfer-only loading view. It never opens cooked shaders, creates
 //! a pipeline, or waits for the game presenter's device to finish warming.
 use super::*;
-use ara_gpu::vulkan::VulkanDevice;
+use ara_gpu::GpuDevice;
 use ara_gpu::{Access, Barrier, Buffer, Device, Image, Queue, Resource, commands::Command, vk};
 
 const SIZE: [u32; 2] = [320, 180];
@@ -11,7 +11,7 @@ mod tests;
 /// One 225 KiB image and staging buffer with independent loading queue/pools.
 /// The logical device and swapchain survive the transition to game presentation.
 pub(crate) struct Loading {
-    gpu: VulkanDevice,
+    gpu: GpuDevice,
     image: Image,
     staging: Buffer,
     pixels: Vec<u8>,
@@ -33,18 +33,18 @@ impl Loading {
     #[cfg(test)]
     pub(crate) fn new(extensions: &[std::ffi::CString], cache: &Path) -> Result<Self> {
         ara_gpu::cpu_scope!("Player.loading_device");
-        Self::with_device(VulkanDevice::new_raster(extensions, cache.join("loading"))?)
+        Self::with_device(GpuDevice::new_raster(extensions, cache.join("loading"))?)
     }
 
     pub(crate) fn for_game(
         extensions: &[std::ffi::CString],
         cache: &Path,
         ray_tracing: bool,
-    ) -> Result<(Self, VulkanDevice, bool)> {
+    ) -> Result<(Self, GpuDevice, bool)> {
         let mut game = if ray_tracing {
-            VulkanDevice::new(extensions, cache)?
+            GpuDevice::new(extensions, cache)?
         } else {
-            VulkanDevice::new_raster(extensions, cache)?
+            GpuDevice::new_raster(extensions, cache)?
         };
         // SAFETY: No work has been submitted. The caller pauses loading queue
         // access during worker preparation when the adapter has only one queue.
@@ -53,7 +53,7 @@ impl Loading {
         Ok((Self::with_device(loading)?, game, parallel))
     }
 
-    fn with_device(mut gpu: VulkanDevice) -> Result<Self> {
+    fn with_device(mut gpu: GpuDevice) -> Result<Self> {
         let bytes = u64::from(SIZE[0]) * u64::from(SIZE[1]) * 4;
         let image = gpu.create_image(
             SIZE[0],

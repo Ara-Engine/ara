@@ -1,7 +1,7 @@
 #![allow(clippy::unwrap_used)]
 #[path = "../examples/support/mod.rs"]
 mod support;
-use ara_gpu::vulkan::VulkanDevice;
+use ara_gpu::GpuDevice;
 use ara_render::capture::{CaptureRequest, ViewMode, compare};
 use ara_vfx::{CpuSystem, Effect};
 use ara_vfx_gpu::{GpuSystem, View};
@@ -15,7 +15,7 @@ fn gpu_replay_goldens_and_cpu_count_parity() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let captures = root.join("../../target/ara-vfx-gpu/goldens");
     std::fs::create_dir_all(&captures).unwrap();
-    let mut gpu = VulkanDevice::new(&[], root.join(".cache/tests")).unwrap();
+    let mut gpu = GpuDevice::new(&[], root.join(".cache/tests")).unwrap();
     for (effect, tick) in ara_vfx::samples::all() {
         let mut system = GpuSystem::new(
             &mut gpu,
@@ -144,7 +144,7 @@ fn gpu_replay_goldens_and_cpu_count_parity() {
         )
         .unwrap();
     }
-    gpu.context().assert_clean().unwrap();
+    gpu.assert_clean().unwrap();
 }
 #[test]
 fn all_generated_sources_use_material_evaluation_and_fixed_seed_inputs() {

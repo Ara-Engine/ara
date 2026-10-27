@@ -607,7 +607,7 @@ impl Renderer {
 }
 
 impl Native {
-    fn reserve_shadow_passes(&mut self, gpu: &mut VulkanDevice, count: usize) -> Result<()> {
+    fn reserve_shadow_passes(&mut self, gpu: &mut GpuDevice, count: usize) -> Result<()> {
         let passes = culling::BASE_PASSES
             .checked_add(count)
             .context("Native shadow count overflow")?;
@@ -621,7 +621,7 @@ impl Native {
 
     /// Grows `visible` to hold rows for `count` shadow slots (the reserved lists'
     /// rows carry over), leaving the reserved lists as they are.
-    fn ensure_shadow_capacity(&mut self, gpu: &mut VulkanDevice, count: usize) -> Result<()> {
+    fn ensure_shadow_capacity(&mut self, gpu: &mut GpuDevice, count: usize) -> Result<()> {
         let passes = culling::BASE_PASSES
             .checked_add(count)
             .context("Native shadow count overflow")?;
@@ -666,7 +666,7 @@ impl Native {
     /// (`Renderer::shadow_slots`) or, when larger, the previous generation's, so
     /// its frames never grow them (a growth retires a buffer mid-session).
     fn new(
-        gpu: &mut VulkanDevice,
+        gpu: &mut GpuDevice,
         validated: ValidatedScene<'_>,
         mut textures: Box<dyn Textures>,
         pipelines: pipelines::NativePipelines,
@@ -928,7 +928,7 @@ impl Native {
         hash.update(self.texture_digest);
     }
 
-    fn destroy(self, gpu: &mut VulkanDevice) -> Result<()> {
+    fn destroy(self, gpu: &mut GpuDevice) -> Result<()> {
         ara_gpu::cpu_scope!("RasterNative.retire_content");
         self.pool.destroy(gpu)?;
         self.textures.destroy(gpu)?;
@@ -940,7 +940,7 @@ impl Native {
     }
 }
 
-fn host_buffer(gpu: &mut VulkanDevice, size: usize, owned: &mut Vec<Resource>) -> Result<Buffer> {
+fn host_buffer(gpu: &mut GpuDevice, size: usize, owned: &mut Vec<Resource>) -> Result<Buffer> {
     let buffer = gpu.create_buffer(size as u64, vk::BufferUsageFlags::STORAGE_BUFFER, true)?;
     owned.push(Resource::Buffer(buffer));
     Ok(buffer)

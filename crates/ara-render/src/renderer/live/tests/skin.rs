@@ -60,7 +60,7 @@ fn raster_skin_updates_reach_the_first_draw_without_a_separate_submission() -> R
         bound.x += 0.1;
     }
     scene.geometry[0].revision += 1;
-    let waits = renderer.gpu.context().host_wait_stats().calls;
+    let waits = renderer.gpu.host_wait_stats().calls;
     renderer.update_native_changed(
         &scene,
         &instanced::Changes {
@@ -69,7 +69,7 @@ fn raster_skin_updates_reach_the_first_draw_without_a_separate_submission() -> R
         },
     )?;
     assert_eq!(
-        renderer.gpu.context().host_wait_stats().calls,
+        renderer.gpu.host_wait_stats().calls,
         waits,
         "synchronous raster preparation must not wait for a barrier-only submission"
     );

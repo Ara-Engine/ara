@@ -1,19 +1,19 @@
 use crate::GpuSystem;
 use anyhow::{Result, ensure};
-use ara_gpu::{Access, Barrier, Device, Resource, commands::Command, vk, vulkan::VulkanDevice};
+use ara_gpu::{Access, Barrier, Device, GpuDevice, Resource, commands::Command, vk};
 use ara_vfx::Particle;
 use glam::{Vec3, Vec4};
 
 impl GpuSystem {
     /// Read the current SDR view without advancing simulation or resetting replay.
     /// Intended for editor thumbnails/captures; it waits for the copy to complete.
-    pub fn read_output(&self, gpu: &mut VulkanDevice) -> Result<Vec<u8>> {
+    pub fn read_output(&self, gpu: &mut GpuDevice) -> Result<Vec<u8>> {
         ensure!(self.tick > 0, "render before reading output");
         read_image(gpu, self.output, self.resources[9].state, self.size)
     }
     /// Read actual post-depth particle coverage for composed capture legends.
     /// This explicit diagnostic readback waits for completion and restores access.
-    pub fn read_coverage(&self, gpu: &mut VulkanDevice) -> Result<Vec<u32>> {
+    pub fn read_coverage(&self, gpu: &mut GpuDevice) -> Result<Vec<u32>> {
         ensure!(self.tick > 0, "render before reading particle coverage");
         let bytes = read_image(gpu, self.feature_ids, self.resources[10].state, self.size)?;
         Ok(bytes
@@ -25,7 +25,7 @@ impl GpuSystem {
     }
 }
 fn read_image(
-    gpu: &mut VulkanDevice,
+    gpu: &mut GpuDevice,
     image: ara_gpu::Image,
     state: ara_render::graph::State,
     size: [u32; 2],
@@ -80,7 +80,7 @@ fn read_image(
 impl GpuSystem {
     /// Diagnostic SoA readback, including dead slots. This stalls for completion;
     /// gameplay must consume CpuSystem instead of cosmetic GPU particle state.
-    pub fn read_particles(&mut self, gpu: &mut VulkanDevice) -> Result<Vec<Vec<Particle>>> {
+    pub fn read_particles(&mut self, gpu: &mut GpuDevice) -> Result<Vec<Vec<Particle>>> {
         ensure!(self.tick > 0, "step before reading particle state");
         let size = u64::from(self.layout.total) * 64;
         let staging = gpu.create_buffer(size, vk::BufferUsageFlags::TRANSFER_DST, true)?;

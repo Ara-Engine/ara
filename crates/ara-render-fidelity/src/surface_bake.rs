@@ -3,8 +3,7 @@
 use crate::{FidelityView, Tier};
 use anyhow::{Result, ensure};
 use ara_gpu::{
-    Access, Barrier, Device, Queue, Resource, RootConstants, vk,
-    vulkan::{Command, VulkanDevice},
+    Access, Barrier, Device, GpuDevice, Queue, Resource, RootConstants, vk, vulkan::Command,
 };
 use ara_render::graph::State;
 use ara_render::look::gi::{ProbeSurfaces, STATIC_VECTORS, SURFACE_TEXELS};
@@ -16,7 +15,7 @@ impl FidelityView {
     /// Ray-traces what every probe of this view's lattice sees: relocation and
     /// classification, distance moments and averaged surface caches. Requires the
     /// RT tier and one rendered frame (the frame record supplies scene and lattice).
-    pub fn bake_probe_surfaces(&mut self, gpu: &mut VulkanDevice) -> Result<ProbeSurfaces> {
+    pub fn bake_probe_surfaces(&mut self, gpu: &mut GpuDevice) -> Result<ProbeSurfaces> {
         ensure!(
             self.settings.tier == Tier::Rt && self.last_frame.is_some(),
             "Probe surface bakes need a rendered ray-traced view"

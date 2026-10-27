@@ -48,7 +48,7 @@ fn main() -> Result<()> {
             if size != renderer.size() {
                 // SAFETY: Resize destroys the old presentation objects only after every queue is idle.
                 unsafe {
-                    renderer.gpu().context().device.device_wait_idle()?;
+                    renderer.gpu().wait_idle()?;
                 }
                 // SAFETY: Device idle was established immediately above; the creating device remains live.
                 unsafe {
@@ -76,7 +76,7 @@ fn main() -> Result<()> {
                 {
                     // SAFETY: No pending work may refer to the replaced swapchain.
                     unsafe {
-                        renderer.gpu().context().device.device_wait_idle()?;
+                        renderer.gpu().wait_idle()?;
                     }
                     // SAFETY: Device idle was established immediately above; the creating device remains live.
                     unsafe {
@@ -106,7 +106,7 @@ fn main() -> Result<()> {
     })();
     // SAFETY: Device idle includes all native presentation work before swapchain/surface teardown.
     unsafe {
-        renderer.gpu().context().device.device_wait_idle()?;
+        renderer.gpu().wait_idle()?;
     }
     // SAFETY: Device idle was established immediately above; the creating device remains live.
     unsafe {

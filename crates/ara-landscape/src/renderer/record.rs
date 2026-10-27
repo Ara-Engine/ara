@@ -2,7 +2,7 @@ use super::*;
 impl Landscape {
     /// Records graph passes with complete bindless reachability. The host submits
     /// asynchronously; diagnostic examples explicitly resolve for timestamps/readback.
-    pub fn record(&mut self, gpu: &VulkanDevice) -> Result<CommandList> {
+    pub fn record(&mut self, gpu: &GpuDevice) -> Result<CommandList> {
         let mut g = Graph::default();
         let mut i = 0;
         let mut import = |resource, initial| {

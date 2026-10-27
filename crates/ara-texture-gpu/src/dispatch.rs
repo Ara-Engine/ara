@@ -1,10 +1,7 @@
 //! Reuse one bounded transfer set and record separate upload/encode/readback passes.
 use crate::split::Pipelines;
 use ara_asset::{Cancellation, Error, Result};
-use ara_gpu::{
-    Access, Barrier, Buffer, Device, Queue, Resource, vk,
-    vulkan::{Command, VulkanDevice},
-};
+use ara_gpu::{Access, Barrier, Buffer, Device, GpuDevice, Queue, Resource, vk, vulkan::Command};
 
 pub(super) const MAX_BLOCKS: usize = 65_535;
 
@@ -43,7 +40,7 @@ pub(super) struct Transfers {
 }
 impl Transfers {
     pub(super) fn new(
-        gpu: &mut VulkanDevice,
+        gpu: &mut GpuDevice,
         input_capacity: usize,
         output_capacity: usize,
         scratch_capacity: usize,
@@ -108,7 +105,7 @@ impl Transfers {
             && output <= self.output_capacity
             && scratch <= self.scratch_capacity
     }
-    pub(super) fn retire(self, gpu: &mut VulkanDevice) -> Result<()> {
+    pub(super) fn retire(self, gpu: &mut GpuDevice) -> Result<()> {
         if let Some((buffer, _)) = self.scratch {
             gpu.retire(Resource::Buffer(buffer)).map_err(unavailable)?;
         }
@@ -120,7 +117,7 @@ impl Transfers {
     }
     pub(super) fn run(
         &mut self,
-        gpu: &mut VulkanDevice,
+        gpu: &mut GpuDevice,
         encoding: Encoding<'_>,
         cancel: &Cancellation,
     ) -> Result<(Vec<u8>, std::collections::BTreeMap<String, f64>)> {

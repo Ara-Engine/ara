@@ -2,8 +2,8 @@
 use super::frame::Frame;
 use anyhow::{Result, ensure};
 use ara_gpu::{
-    Buffer, Device, Pipeline, Resource, RootConstants, vk,
-    vulkan::{Command, Recorder, VulkanDevice},
+    Buffer, Device, GpuDevice, Pipeline, Resource, RootConstants, vk,
+    vulkan::{Command, Recorder},
 };
 use bytemuck::Zeroable;
 
@@ -33,7 +33,7 @@ pub struct ToneMap {
 }
 impl ToneMap {
     /// Loads the main renderer's cooked tonemap; never compiles at runtime.
-    pub fn new(gpu: &mut VulkanDevice) -> Result<Self> {
+    pub fn new(gpu: &mut GpuDevice) -> Result<Self> {
         let artifacts = ara_gpu::cooked::resource_dir(
             env!("CARGO_PKG_NAME"),
             concat!(env!("CARGO_MANIFEST_DIR"), "/cooked"),
@@ -60,7 +60,7 @@ impl ToneMap {
     /// Disable tone mapping for display-space diagnostic colors; sRGB remains applied.
     pub fn prepare(
         &self,
-        gpu: &VulkanDevice,
+        gpu: &GpuDevice,
         size: [u32; 2],
         exposure: f32,
         output: u32,
@@ -91,7 +91,7 @@ impl ToneMap {
         ]));
     }
     /// Retires resources after their last submitted use when replacing a render path.
-    pub fn retire(self, gpu: &mut VulkanDevice) -> Result<()> {
+    pub fn retire(self, gpu: &mut GpuDevice) -> Result<()> {
         gpu.retire_pipeline(self.pipeline)?;
         gpu.retire(Resource::Buffer(self.frame))?;
         Ok(())

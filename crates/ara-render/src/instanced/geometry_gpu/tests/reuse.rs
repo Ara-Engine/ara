@@ -1,10 +1,6 @@
 use super::*;
 
-pub(super) fn verify_static(
-    gpu: &mut VulkanDevice,
-    pool: &GeometryGpu,
-    scene: &Scene,
-) -> Result<()> {
+pub(super) fn verify_static(gpu: &mut GpuDevice, pool: &GeometryGpu, scene: &Scene) -> Result<()> {
     let size = scene
         .geometry
         .iter()
@@ -81,7 +77,7 @@ fn reordered_publications_copy_resident_sources_and_rejected_candidates_leave_th
 -> Result<()> {
     let cache = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../target/ara-render/reused-geometry");
-    let mut gpu = VulkanDevice::new_raster(&[], cache)?;
+    let mut gpu = GpuDevice::new_raster(&[], cache)?;
     let original = fixture();
     let pool = GeometryGpu::new(&mut gpu, &original, false)?;
     let usage = gpu.descriptor_usage();

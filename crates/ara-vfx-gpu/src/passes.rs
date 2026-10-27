@@ -19,7 +19,7 @@ pub(crate) enum FrameOutput {
 impl GpuSystem {
     pub(crate) fn run_frame(
         &mut self,
-        gpu: &mut ara_gpu::vulkan::VulkanDevice,
+        gpu: &mut ara_gpu::GpuDevice,
         view: &View,
         readback: bool,
         advance: bool,
@@ -379,7 +379,7 @@ impl GpuSystem {
         if advance {
             self.tick += 1;
         }
-        gpu.context().assert_clean()?;
+        gpu.assert_clean()?;
         Ok(())
     }
     fn constants(&self, emitter: usize, k: u32, j: u32) -> Command {

@@ -1,7 +1,7 @@
 use super::*;
 impl Landscape {
     /// Diagnostic-only readback after a completed frame; production draws use GPU counts.
-    pub fn visibility_stats(&self, gpu: &mut VulkanDevice) -> Result<VisibilityStats> {
+    pub fn visibility_stats(&self, gpu: &mut GpuDevice) -> Result<VisibilityStats> {
         let mut counts = Vec::new();
         for (source, count) in [(self.args, 6), (self.foliage_args, 9)] {
             let read = gpu.create_buffer(count * 16, vk::BufferUsageFlags::TRANSFER_DST, true)?;
@@ -46,7 +46,7 @@ impl Landscape {
         })
     }
     /// Diagnostic-only synchronous capture. Production callers use `record`.
-    pub fn capture(&mut self, gpu: &mut VulkanDevice, path: &Path) -> Result<()> {
+    pub fn capture(&mut self, gpu: &mut GpuDevice, path: &Path) -> Result<()> {
         let read = gpu.create_buffer(
             u64::from(self.size[0]) * u64::from(self.size[1]) * 4,
             vk::BufferUsageFlags::TRANSFER_DST,
@@ -92,7 +92,7 @@ impl Landscape {
     }
     /// Synchronous readback of the last resolved frame for host composition: display
     /// colour (RGBA8, row-major) and reversed-Z depth (0 = sky). Waits for the GPU.
-    pub fn read_color_depth(&mut self, gpu: &mut VulkanDevice) -> Result<(Vec<u8>, Vec<f32>)> {
+    pub fn read_color_depth(&mut self, gpu: &mut GpuDevice) -> Result<(Vec<u8>, Vec<f32>)> {
         let pixels = u64::from(self.size[0]) * u64::from(self.size[1]);
         let color_read = gpu.create_buffer(pixels * 4, vk::BufferUsageFlags::TRANSFER_DST, true)?;
         let depth_read = gpu.create_buffer(pixels * 4, vk::BufferUsageFlags::TRANSFER_DST, true)?;
@@ -165,7 +165,7 @@ impl Landscape {
         Ok((color, depth))
     }
     /// Retire all scene resources after the host has finished its last submission.
-    pub fn retire(self, gpu: &mut VulkanDevice) -> Result<()> {
+    pub fn retire(self, gpu: &mut GpuDevice) -> Result<()> {
         for b in [
             self.frame,
             self.samples,

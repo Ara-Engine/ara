@@ -1,7 +1,7 @@
 //! Shared native geometry allocations; instance transforms live in separate frame data.
 use super::{Scene, Vertex};
 use anyhow::{Result, ensure};
-use ara_gpu::{AccelerationStructure, Access, Buffer, Device, Resource, vulkan::VulkanDevice};
+use ara_gpu::{AccelerationStructure, Access, Buffer, Device, GpuDevice, Resource};
 
 mod pack;
 mod pose;
@@ -138,7 +138,7 @@ impl GeometryGpu {
     }
 
     /// Retires content after every dependent TLAS has been retired.
-    pub fn destroy(self, gpu: &mut VulkanDevice) -> Result<()> {
+    pub fn destroy(self, gpu: &mut GpuDevice) -> Result<()> {
         for structure in self.structures {
             gpu.retire(Resource::AccelerationStructure(structure))?;
         }

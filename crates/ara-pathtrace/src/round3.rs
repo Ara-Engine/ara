@@ -5,7 +5,7 @@ use ara_pathtrace::metrics;
 const SIZE: [u32; 2] = [480, 270];
 
 pub(crate) fn configure(
-    gpu: &mut VulkanDevice,
+    gpu: &mut GpuDevice,
     view: &mut FidelityView,
     reservoirs: bool,
 ) -> Result<()> {
@@ -43,7 +43,7 @@ pub(crate) fn case(
         )
     })
 }
-pub fn quality(gpu: &mut VulkanDevice, root: &Path, many: bool) -> Result<()> {
+pub fn quality(gpu: &mut GpuDevice, root: &Path, many: bool) -> Result<()> {
     let (name, scene, camera, ev) = case(root, many)?;
     let size = if many { SIZE } else { [640, 360] };
     let mut s = settings(size, size);

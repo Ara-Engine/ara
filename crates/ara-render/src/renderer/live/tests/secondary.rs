@@ -38,7 +38,7 @@ fn blocked_secondary_retains_images_and_defers_shared_writes_and_release() -> Re
         .expect("completed first Game frame");
     let mut gate = Gate::new(renderer.gpu(), Queue::Graphics)?;
     scene.instances[0].world = Mat4::from_translation(Vec3::new(0.4, 0., 0.));
-    let waits = renderer.gpu().context().host_wait_stats().calls;
+    let waits = renderer.gpu().host_wait_stats().calls;
     let output = renderer
         .submit_secondary(&mut view, &request, |r, _| {
             r.update_native_changed(
@@ -52,7 +52,7 @@ fn blocked_secondary_retains_images_and_defers_shared_writes_and_release() -> Re
         })?
         .expect("retained Game frame");
     assert_eq!(
-        renderer.gpu().context().host_wait_stats().calls,
+        renderer.gpu().host_wait_stats().calls,
         waits,
         "Game submission must not host-wait"
     );

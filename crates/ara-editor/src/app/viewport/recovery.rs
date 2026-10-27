@@ -116,7 +116,7 @@ pub(super) fn exercise_pressure(
     renderer.wait_scene_frame()?;
     renderer.gpu_mut().collect()?;
     let output = renderer.output();
-    let capacity = renderer.gpu().context().info.storage_buffer_capacity as usize;
+    let capacity = renderer.gpu().info().storage_buffer_capacity as usize;
     let mut pressure = Vec::new();
     while renderer.gpu().descriptor_usage().storage_buffers < capacity {
         let gpu = renderer.gpu_mut();

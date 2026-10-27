@@ -15,7 +15,7 @@ struct CaseError {
     radiance: metrics::RadianceError,
     convergence_error: metrics::RadianceError,
 }
-pub fn captures(gpu: &mut VulkanDevice, root: &Path) -> Result<()> {
+pub fn captures(gpu: &mut GpuDevice, root: &Path) -> Result<()> {
     let size = [320, 180];
     let camera = scenes::camera();
     let mut report = Vec::new();
@@ -111,10 +111,7 @@ pub fn captures(gpu: &mut VulkanDevice, root: &Path) -> Result<()> {
 
     sequences(gpu, root)?;
     lag::capture(gpu, root)?;
-    write_json(
-        &output_path(root, "measurements/device.json")?,
-        &gpu.context().info,
-    )?;
+    write_json(&output_path(root, "measurements/device.json")?, gpu.info())?;
     gpu.assert_clean()?;
     Ok(())
 }
@@ -129,7 +126,7 @@ struct SequenceError {
     reset_residual: f64,
 }
 /// Record every fourth simulated frame and bound history rejection residuals.
-pub fn sequences(gpu: &mut VulkanDevice, root: &Path) -> Result<()> {
+pub fn sequences(gpu: &mut GpuDevice, root: &Path) -> Result<()> {
     let camera = scenes::camera();
     let size = [240, 135];
     let mut reports = Vec::new();
@@ -239,7 +236,7 @@ struct Performance {
     budget_ms: f64,
     budget_passed: bool,
 }
-pub fn timings(gpu: &mut VulkanDevice, root: &Path) -> Result<()> {
+pub fn timings(gpu: &mut GpuDevice, root: &Path) -> Result<()> {
     let scene = scenes::scene("glossy_interior", 0);
     let camera = scenes::camera();
     let mut results = Vec::new();
@@ -307,10 +304,7 @@ pub fn timings(gpu: &mut VulkanDevice, root: &Path) -> Result<()> {
         results.iter().all(|result| result.budget_passed),
         "Native or upscaled p95 GPU budget exceeded"
     );
-    write_json(
-        &output_path(root, "measurements/device.json")?,
-        &gpu.context().info,
-    )?;
+    write_json(&output_path(root, "measurements/device.json")?, gpu.info())?;
     gpu.assert_clean()?;
     Ok(())
 }

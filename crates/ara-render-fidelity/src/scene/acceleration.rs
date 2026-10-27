@@ -3,11 +3,7 @@ use super::*;
 impl GpuScene {
     /// Rebuild TLAS masks while retaining every BLAS and stable scene ID.
     /// Mask zero hides an instance from all ray queries; nonzero bits are visible.
-    pub fn set_instance_masks(
-        &mut self,
-        gpu: &mut VulkanDevice,
-        masks: &[(u64, u8)],
-    ) -> Result<()> {
+    pub fn set_instance_masks(&mut self, gpu: &mut GpuDevice, masks: &[(u64, u8)]) -> Result<()> {
         ensure!(
             self.native.is_none(),
             "native masks require a native instance update"
@@ -53,12 +49,8 @@ impl GpuScene {
     }
     /// Update only changed BLASes, then atomically publish a replacement TLAS after
     /// its build completes. All masks are 0xff in the base scene extraction ABI.
-    pub(super) fn update_acceleration(
-        &mut self,
-        gpu: &mut VulkanDevice,
-        scene: &Scene,
-    ) -> Result<()> {
-        ensure!(gpu.context().info.ray_tracing, "RT tier is unavailable");
+    pub(super) fn update_acceleration(&mut self, gpu: &mut GpuDevice, scene: &Scene) -> Result<()> {
+        ensure!(gpu.info().ray_tracing, "RT tier is unavailable");
         let mut next = Vec::new();
         let mut stats = AccelerationUpdate::default();
         for mesh in &scene.meshes {

@@ -1,5 +1,5 @@
 use anyhow::{Result, ensure};
-use ara_gpu::vulkan::VulkanDevice;
+use ara_gpu::GpuDevice;
 use ara_pathtrace::scenes;
 use ara_render_fidelity::{
     AutoExposure, FidelityView, FrameInput, Mode, PostSettings, Settings, Tier, ToneMapper,
@@ -9,7 +9,7 @@ use ara_render_fidelity::{
 #[test]
 fn histogram_ev_limits_manual_compensation_and_simulation_time_adaptation() -> Result<()> {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
-    let mut gpu = VulkanDevice::new(&[], root.join(".sn/exposure-test-cache"))?;
+    let mut gpu = GpuDevice::new(&[], root.join(".sn/exposure-test-cache"))?;
     let camera = scenes::camera();
     let settings = Settings {
         render_size: [160, 90],

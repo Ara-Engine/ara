@@ -2,7 +2,7 @@ use super::*;
 impl GeometryView {
     /// Records both occlusion phases and material resolve. GPU-generated counts
     /// feed both raster backends without any host visibility readback.
-    pub fn record(&mut self, gpu: &VulkanDevice) -> Result<CommandList> {
+    pub fn record(&mut self, gpu: &GpuDevice) -> Result<CommandList> {
         let mut g = Graph::default();
         let mut resources: Vec<_> = self.buffers.iter().map(|&b| Resource::Buffer(b)).collect();
         resources.push(Resource::Buffer(self.frame));

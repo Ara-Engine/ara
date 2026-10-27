@@ -35,7 +35,7 @@ impl Initial {
         }
     }
 
-    pub fn destroy(self, gpu: &mut VulkanDevice) -> Result<()> {
+    pub fn destroy(self, gpu: &mut GpuDevice) -> Result<()> {
         match self {
             Self::Waiting { ticket, .. } => {
                 if let Some(ticket) = ticket {
@@ -63,7 +63,7 @@ impl NativeResidency {
     /// Registrations and mip demand are frozen until initialization or destruction.
     pub fn preallocate(
         &mut self,
-        gpu: &mut VulkanDevice,
+        gpu: &mut GpuDevice,
         previous: Option<&dyn ara_render::instanced::Textures>,
     ) -> Result<bool> {
         ensure!(
@@ -127,7 +127,7 @@ impl NativeResidency {
 
 impl Ready {
     fn new(
-        gpu: &mut VulkanDevice,
+        gpu: &mut GpuDevice,
         entries: usize,
         selected: &[usize],
         mut resources: PreparedResources,

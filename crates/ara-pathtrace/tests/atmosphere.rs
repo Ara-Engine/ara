@@ -1,5 +1,5 @@
 use anyhow::{Result, ensure};
-use ara_gpu::vulkan::VulkanDevice;
+use ara_gpu::GpuDevice;
 use ara_pathtrace::scenes;
 use ara_render::scene::{CameraSpec, Mesh, Vertex};
 use ara_render_fidelity::{
@@ -11,7 +11,7 @@ use glam::Vec3;
 #[test]
 fn froxel_slice_end_sampling_matches_beer_lambert() -> Result<()> {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
-    let mut gpu = VulkanDevice::new(&[], root.join(".sn/atmosphere-test-cache"))?;
+    let mut gpu = GpuDevice::new(&[], root.join(".sn/atmosphere-test-cache"))?;
     let mut scene = scenes::scene("furnace", 0);
     // An intentionally different extracted environment catches a fallback that
     // fails to use the selected physical sky, or fails to restore that environment.

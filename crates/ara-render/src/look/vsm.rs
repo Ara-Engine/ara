@@ -23,9 +23,7 @@
 //! [`Quality::virtual_shadows`]: super::Quality::virtual_shadows
 use crate::graph::State;
 use anyhow::{Context, Result};
-use ara_gpu::{
-    Access, Buffer, Device, Image, Queue, Resource, TimelinePoint, vk, vulkan::VulkanDevice,
-};
+use ara_gpu::{Access, Buffer, Device, GpuDevice, Image, Queue, Resource, TimelinePoint, vk};
 use ara_vsm::{DirtyPage, PAGE_SIDE, PAGE_SIZE, PageKey, Projection};
 use glam::{IVec2, Mat4, Vec2, Vec3};
 use std::collections::{BTreeSet, VecDeque};
@@ -253,7 +251,7 @@ pub(crate) struct VirtualShadowMap {
 }
 
 impl VirtualShadowMap {
-    pub(crate) fn new(gpu: &mut VulkanDevice, settings: super::VirtualShadows) -> Result<Self> {
+    pub(crate) fn new(gpu: &mut GpuDevice, settings: super::VirtualShadows) -> Result<Self> {
         let rows = settings.pages.div_ceil(COLUMNS);
         let mut owned: Vec<Resource> = Vec::new();
         let result = (|| {
@@ -264,7 +262,7 @@ impl VirtualShadowMap {
                 vk::ImageUsageFlags::SAMPLED | vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT,
             )?;
             owned.push(Resource::Image(atlas));
-            let mut buffer = |gpu: &mut VulkanDevice, bytes: usize| -> Result<(Buffer, u32)> {
+            let mut buffer = |gpu: &mut GpuDevice, bytes: usize| -> Result<(Buffer, u32)> {
                 let buffer = gpu.create_buffer(
                     bytes.max(16) as u64,
                     vk::BufferUsageFlags::STORAGE_BUFFER,
@@ -324,7 +322,7 @@ impl VirtualShadowMap {
         result
     }
 
-    fn set_entry(&mut self, gpu: &mut VulkanDevice, index: usize, entry: [u32; 2]) -> Result<()> {
+    fn set_entry(&mut self, gpu: &mut GpuDevice, index: usize, entry: [u32; 2]) -> Result<()> {
         if self.table_mirror[index] != entry {
             self.table_mirror[index] = entry;
             gpu.upload_queued_range(
@@ -338,7 +336,7 @@ impl VirtualShadowMap {
 
     /// Gives `page`'s slot to its key: the slot's previous page leaves the table
     /// (unless another page has taken its entry since).
-    fn assign(&mut self, gpu: &mut VulkanDevice, page: DirtyPage) -> Result<()> {
+    fn assign(&mut self, gpu: &mut GpuDevice, page: DirtyPage) -> Result<()> {
         let slot = page.slot as usize;
         if let Some(old) = self.slot_keys[slot]
             && old != page.key
@@ -354,7 +352,7 @@ impl VirtualShadowMap {
     }
 
     /// Queues dirty `page` unless it already waits.
-    fn enqueue(&mut self, gpu: &mut VulkanDevice, page: DirtyPage) -> Result<()> {
+    fn enqueue(&mut self, gpu: &mut GpuDevice, page: DirtyPage) -> Result<()> {
         if self.queued.insert(page.key) {
             self.assign(gpu, page)?;
             self.queue.push_back(page);
@@ -370,7 +368,7 @@ impl VirtualShadowMap {
     /// levels before finer. Cull them, then `drawn` those that fit.
     pub(crate) fn plan(
         &mut self,
-        gpu: &mut VulkanDevice,
+        gpu: &mut GpuDevice,
         sun: Vec3,
         bounds: [Vec3; 2],
         (all, moved): (bool, &[[Vec3; 2]]),
@@ -487,7 +485,7 @@ impl VirtualShadowMap {
     /// their light views are uploaded and the page table points at them.
     pub(crate) fn drawn(
         &mut self,
-        gpu: &mut VulkanDevice,
+        gpu: &mut GpuDevice,
         draws: &[PageDraw],
         rest: &[PageDraw],
     ) -> Result<()> {
@@ -536,7 +534,7 @@ impl VirtualShadowMap {
     /// Arms this frame's request buffer for a camera at `camera` (the frame record's):
     /// cleared (GPU-ordered) and remembered; `None` while its last marks are unread
     /// (no marks this frame).
-    pub(crate) fn arm(&mut self, gpu: &mut VulkanDevice, camera: Vec3) -> Result<Option<usize>> {
+    pub(crate) fn arm(&mut self, gpu: &mut GpuDevice, camera: Vec3) -> Result<Option<usize>> {
         let i = (self.frame % self.requests.len() as u64) as usize;
         let Some(space) = self.space else {
             return Ok(None);
@@ -596,7 +594,7 @@ impl VirtualShadowMap {
         })
     }
 
-    pub(crate) fn destroy(self, gpu: &mut VulkanDevice) -> Result<()> {
+    pub(crate) fn destroy(self, gpu: &mut GpuDevice) -> Result<()> {
         gpu.retire(Resource::Image(self.atlas))?;
         for buffer in [self.table, self.matrices, self.page_rows]
             .into_iter()

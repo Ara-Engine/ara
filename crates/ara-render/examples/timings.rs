@@ -22,7 +22,7 @@ fn main() -> Result<()> {
         times.sort_by(f64::total_cmp);
         results.insert(name,serde_json::json!({"p50_ms":times[times.len()/2],"p95_ms":times[times.len()*95/100],"samples":times.len()}));
     }
-    let report = serde_json::json!({"device":renderer.gpu().context().info,"size":request.size,"taa":true,"frames_in_flight":1,"passes":results});
+    let report = serde_json::json!({"device":renderer.gpu().info(),"size":request.size,"taa":true,"frames_in_flight":1,"passes":results});
     let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("captures/timings.json");
     std::fs::create_dir_all(path.parent().expect("Artifact filename has a parent"))?;
     ara_gpu::cooked::write_json(&path, &report)?;

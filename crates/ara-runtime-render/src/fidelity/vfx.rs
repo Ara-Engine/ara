@@ -5,7 +5,7 @@
 //! Uses the view's `feature_inputs`/`post_process` seam so particles share its
 //! exposure, tone mapper and temporal reconstruction.
 use anyhow::{Context, Result};
-use ara_gpu::vulkan::VulkanDevice;
+use ara_gpu::GpuDevice;
 use ara_render::scene::CameraSpec;
 use ara_render_fidelity::{FidelityView, FrameInput, ImageInput};
 use ara_runtime::extract::EffectView;
@@ -38,7 +38,7 @@ impl Effects {
     /// Systems for `effects` at the view's transport size. `sun` is the direction
     /// toward the sun and the illuminance reaching the effects (after atmosphere).
     pub fn new(
-        gpu: &mut VulkanDevice,
+        gpu: &mut GpuDevice,
         effects: &[EffectView],
         size: [u32; 2],
         sun: (glam30::Vec3, glam30::Vec3),
@@ -59,7 +59,7 @@ impl Effects {
     /// composite); removed entities retire theirs, as does an entity whose effect changed.
     pub fn update(
         &mut self,
-        gpu: &mut VulkanDevice,
+        gpu: &mut GpuDevice,
         effects: &[EffectView],
         sun: (glam30::Vec3, glam30::Vec3),
     ) -> Result<()> {
@@ -126,7 +126,7 @@ impl Effects {
 
     /// Changes working targets at a view boundary. Definitions and placements stay
     /// intact; particle systems warm again at the new transport resolution.
-    pub fn resize(&mut self, gpu: &mut VulkanDevice, size: [u32; 2]) -> Result<()> {
+    pub fn resize(&mut self, gpu: &mut GpuDevice, size: [u32; 2]) -> Result<()> {
         if self.size != size {
             for (_, (_, system, _)) in std::mem::take(&mut self.systems) {
                 system.retire(gpu)?;
@@ -140,7 +140,7 @@ impl Effects {
 
     /// Restarts explicit captures from the same particle simulation state. Live
     /// presentation keeps its systems; only a reproducible readback calls this.
-    pub fn reset(&mut self, gpu: &mut VulkanDevice) -> Result<()> {
+    pub fn reset(&mut self, gpu: &mut GpuDevice) -> Result<()> {
         for (_, (_, system, _)) in std::mem::take(&mut self.systems) {
             system.retire(gpu)?;
         }
@@ -152,7 +152,7 @@ impl Effects {
     /// simulation tick (captures), and runs post on it.
     pub fn composite(
         &mut self,
-        gpu: &mut VulkanDevice,
+        gpu: &mut GpuDevice,
         view: &mut FidelityView,
         camera: &CameraSpec,
         tick: u32,
@@ -166,7 +166,7 @@ impl Effects {
     /// Call once per presented frame for live views.
     pub fn composite_ticks(
         &mut self,
-        gpu: &mut VulkanDevice,
+        gpu: &mut GpuDevice,
         view: &mut FidelityView,
         camera: &CameraSpec,
         tick: u32,
@@ -254,7 +254,7 @@ impl Effects {
     }
 
     /// Releases the systems before the device.
-    pub fn destroy(self, gpu: &mut VulkanDevice) -> Result<()> {
+    pub fn destroy(self, gpu: &mut GpuDevice) -> Result<()> {
         for (_, (_, system, _)) in self.systems {
             system.retire(gpu)?;
         }

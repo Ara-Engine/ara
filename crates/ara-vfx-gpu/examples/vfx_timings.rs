@@ -1,6 +1,6 @@
 //! Identical 1M-sprite workloads at two world diameters, with measured coverage.
 use anyhow::{Result, ensure};
-use ara_gpu::vulkan::VulkanDevice;
+use ara_gpu::GpuDevice;
 use ara_render::scene::CameraSpec;
 use ara_vfx_gpu::{GpuSystem, View};
 use glam::Vec3;
@@ -29,7 +29,7 @@ struct BenchmarkReport {
 }
 fn main() -> Result<()> {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let mut gpu = VulkanDevice::new(&[], root.join(".cache"))?;
+    let mut gpu = GpuDevice::new(&[], root.join(".cache"))?;
     let mut results = Vec::new();
     for (effect, diameter) in [
         (ara_vfx::samples::million(), 0.003_f32),
@@ -105,6 +105,6 @@ fn main() -> Result<()> {
         root.join("captures/timings.json"),
         ara_json::to_canonical_string(&ara_json::to_value(&results)?),
     )?;
-    gpu.context().assert_clean()?;
+    gpu.assert_clean()?;
     Ok(())
 }

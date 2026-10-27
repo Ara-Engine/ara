@@ -1,8 +1,6 @@
 use anyhow::{Result, ensure};
 use ara_color::{OutputMode, OutputSettings};
-use ara_gpu::{
-    Access, Barrier, Device, Queue, Resource, commands::Command, vk, vulkan::VulkanDevice,
-};
+use ara_gpu::{Access, Barrier, Device, GpuDevice, Queue, Resource, commands::Command, vk};
 use ara_render_geo::{display::DisplayOutput, settings};
 use std::path::Path;
 
@@ -21,7 +19,7 @@ fn reflected_viewport_settings_are_complete() {
 #[test]
 fn gpu_hdr_encoding_matches_absolute_color_reference() -> Result<()> {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let mut gpu = VulkanDevice::new(&[], root.join("captures/display/cache"))?;
+    let mut gpu = GpuDevice::new(&[], root.join("captures/display/cache"))?;
     let colors = [
         [0., 0., 0., 1.],
         [1., 1., 1., 1.],

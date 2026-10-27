@@ -8,17 +8,17 @@ impl instanced::Textures for Textures {
     fn content_digest(&self) -> [u8; 32] {
         [0; 32]
     }
-    fn initialize(&mut self, _: &mut VulkanDevice) -> Result<instanced::TextureStats> {
+    fn initialize(&mut self, _: &mut GpuDevice) -> Result<instanced::TextureStats> {
         Ok(Default::default())
     }
-    fn refine(&mut self, _: &mut VulkanDevice) -> Result<instanced::TextureStats> {
+    fn refine(&mut self, _: &mut GpuDevice) -> Result<instanced::TextureStats> {
         Ok(Default::default())
     }
     fn binding(&self) -> Option<instanced::TextureBinding> {
         None
     }
     fn visit_resources(&self, _: &mut dyn FnMut(Resource, Access)) {}
-    fn destroy(self: Box<Self>, _: &mut VulkanDevice) -> Result<()> {
+    fn destroy(self: Box<Self>, _: &mut GpuDevice) -> Result<()> {
         Ok(())
     }
 }
@@ -33,7 +33,7 @@ mod secondary;
 mod skin;
 
 impl Gate {
-    fn new(gpu: &VulkanDevice, queue: Queue) -> Result<Self> {
+    fn new(gpu: &GpuDevice, queue: Queue) -> Result<Self> {
         // SAFETY: New test-owned semaphore. Only this thread submits or signals it.
         unsafe {
             let device = gpu.context().device.clone();
@@ -165,7 +165,7 @@ fn failed_probe_and_content_allocations_preserve_heap_and_last_good_volume() -> 
     // Leave one descriptor: the new cache binds, then meta binding fails. Every
     // partially allocated buffer/image must retire and the previous GI survive.
     let mut pressure = Vec::new();
-    let capacity = renderer.gpu.context().info.storage_buffer_capacity as usize;
+    let capacity = renderer.gpu.info().storage_buffer_capacity as usize;
     while renderer.gpu.descriptor_usage().storage_buffers < capacity - 1 {
         let buffer = renderer
             .gpu

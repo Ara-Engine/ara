@@ -1,6 +1,6 @@
 use anyhow::{Result, ensure};
+use ara_gpu::GpuDevice;
 use ara_gpu::commands::PassTiming;
-use ara_gpu::vulkan::VulkanDevice;
 use serde::Serialize;
 
 /// Live statistics for one emitter, directly read from GPU counters.
@@ -52,7 +52,7 @@ pub struct Stats {
 
 impl crate::GpuSystem {
     /// Read GPU counters and quality diagnostics after the most recent completed frame.
-    pub fn stats(&self, gpu: &VulkanDevice) -> Result<Stats> {
+    pub fn stats(&self, gpu: &GpuDevice) -> Result<Stats> {
         ensure!(self.tick > 0, "step before querying GPU stats");
         let bytes = gpu.read(self.read_control)?;
         let words = bytes
@@ -123,7 +123,7 @@ impl crate::GpuSystem {
                 .iter()
                 .filter(|c| c.light_color[3] > 0.)
                 .count() as u32,
-            device: ara_json::to_value(&gpu.context().info)?,
+            device: ara_json::to_value(gpu.info())?,
             effect_hash: self.hash.clone(),
             shader_key: self.metadata.content_key.clone(),
             async_compute: self.async_compute,

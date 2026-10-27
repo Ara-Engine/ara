@@ -5,7 +5,7 @@
 use super::{Look, Quality, frame::LookFrame, gi::GiGpu};
 use crate::graph::{Graph, ResourceId, State};
 use anyhow::{Result, ensure};
-use ara_gpu::{Access, Buffer, Device, Image, Pipeline, Queue, Resource, vk, vulkan::VulkanDevice};
+use ara_gpu::{Access, Buffer, Device, GpuDevice, Image, Pipeline, Queue, Resource, vk};
 use std::path::Path;
 
 pub(crate) const TRANSMITTANCE: usize = 0;
@@ -193,7 +193,7 @@ impl LookIds {
 impl LookGpu {
     /// Loads the cooked look pipelines (same source cohort as the renderer).
     pub(crate) fn new(
-        gpu: &mut VulkanDevice,
+        gpu: &mut GpuDevice,
         artifacts: &Path,
         content_key: &str,
         size: [u32; 2],
@@ -309,7 +309,7 @@ impl LookGpu {
     /// Drops the view-sized images; the next frame reallocates them.
     pub(crate) fn resize(
         &mut self,
-        gpu: &mut VulkanDevice,
+        gpu: &mut GpuDevice,
         render: [u32; 2],
         display: [u32; 2],
     ) -> Result<()> {
@@ -346,7 +346,7 @@ impl LookGpu {
     /// (AO, SSR, depth of field, motion blur: a volume enabling those never allocates
     /// mid-session). Never frees: looks rarely change, and a later frame would only
     /// allocate them again.
-    pub(crate) fn ensure(&mut self, gpu: &mut VulkanDevice) -> Result<()> {
+    pub(crate) fn ensure(&mut self, gpu: &mut GpuDevice) -> Result<()> {
         ara_gpu::cpu_scope!("Look.ensure");
         let look = self.effective();
         let sky = look.sky.is_some();
@@ -478,7 +478,7 @@ impl LookGpu {
     /// Zeroes the exposure state so a capture converges exactly as from a fresh
     /// view (history then pre-exposes by the frame's exposure argument). An
     /// enclosing deferred Scene scope orders this reset behind earlier work.
-    pub(crate) fn reset_exposure(&mut self, gpu: &mut VulkanDevice) -> Result<()> {
+    pub(crate) fn reset_exposure(&mut self, gpu: &mut GpuDevice) -> Result<()> {
         gpu.upload_queued(self.state, &[0; STATE_BYTES])?;
         self.state_access = Access::HostWrite;
         self.seeded = false;
@@ -487,7 +487,7 @@ impl LookGpu {
 
     /// Writes `multiplier` as the applied and previous exposure (EV100 as manual
     /// exposure computes it), with empty metering bins; the next frame adapts from it.
-    pub(crate) fn seed_exposure(&mut self, gpu: &mut VulkanDevice, multiplier: f32) -> Result<()> {
+    pub(crate) fn seed_exposure(&mut self, gpu: &mut GpuDevice, multiplier: f32) -> Result<()> {
         let ev100 = (1. / (1.2 * multiplier)).log2();
         let mut bytes = [0u8; STATE_BYTES];
         for (i, value) in [multiplier, multiplier, ev100, 0.].into_iter().enumerate() {

@@ -30,7 +30,7 @@ impl PresentationImage {
     /// intact; hosts can resize or replace working views without losing this image.
     pub fn publish(
         slot: &mut Option<Self>,
-        gpu: &mut VulkanDevice,
+        gpu: &mut GpuDevice,
         source: Image,
         size: [u32; 2],
     ) -> Result<f64> {
@@ -63,12 +63,12 @@ impl PresentationImage {
     }
 
     /// Releases the retained image before its owning device is destroyed.
-    pub fn destroy(self, gpu: &mut VulkanDevice) -> Result<()> {
+    pub fn destroy(self, gpu: &mut GpuDevice) -> Result<()> {
         gpu.retire(Resource::Image(self.image))?;
         Ok(())
     }
 
-    pub(super) fn copy(&self, gpu: &mut VulkanDevice, source: Image, fresh: bool) -> Result<f64> {
+    pub(super) fn copy(&self, gpu: &mut GpuDevice, source: Image, fresh: bool) -> Result<f64> {
         let mut commands = gpu.begin(Queue::Graphics);
         commands.push(Command::BeginPass("Presentation.Publish".into()));
         commands.barriers([Barrier {

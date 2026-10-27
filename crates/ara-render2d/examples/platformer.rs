@@ -56,13 +56,13 @@ fn main() -> Result<()> {
                     updates.push(at.elapsed().as_secs_f64() * 1000.);
                 }
                 updates.sort_by(f64::total_cmp);
-                runs.push(serde_json::json!({"workload":format!("100k unlit sprites, {label}"),"instances":renderer.instance_count(),"passes":measure(&mut renderer, &camera)?,"device":renderer.gpu().context().info.name,"cpu_update_p50_ms":updates[10]}));
+                runs.push(serde_json::json!({"workload":format!("100k unlit sprites, {label}"),"instances":renderer.instance_count(),"passes":measure(&mut renderer, &camera)?,"device":renderer.gpu().info().name,"cpu_update_p50_ms":updates[10]}));
             }
             // The lit path: the platformer sample with three shadowed lights, same framing.
             let (scene, mut sample_camera) = common::scene(root, None)?;
             sample_camera.zoom *= 2.;
             let mut renderer = Renderer2d::new(&scene, [1280, 720], root.join("../../.sn/gpu2d"))?;
-            runs.push(serde_json::json!({"workload":format!("platformer sample, {} lights, {} shadow edges", scene.lights.len(), scene.occluders.len()),"instances":renderer.instance_count(),"passes":measure(&mut renderer, &sample_camera)?,"device":renderer.gpu().context().info.name}));
+            runs.push(serde_json::json!({"workload":format!("platformer sample, {} lights, {} shadow edges", scene.lights.len(), scene.occluders.len()),"instances":renderer.instance_count(),"passes":measure(&mut renderer, &sample_camera)?,"device":renderer.gpu().info().name}));
             let profile = if cfg!(debug_assertions) {
                 "dev opt-level=1, dependencies=3"
             } else {

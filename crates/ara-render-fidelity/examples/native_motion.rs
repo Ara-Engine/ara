@@ -1,7 +1,7 @@
 //! Repeated shared-GPU motion measurements: no argument uses the legacy path;
 //! `native` moves an instance, and `native-skin` updates one independent skin.
 use ara_gpu::Device;
-use ara_gpu::vulkan::VulkanDevice;
+use ara_gpu::GpuDevice;
 use ara_render::scene::{CameraSpec, Material, Mesh, Scene, Texture, Vertex};
 use ara_render_fidelity::{FidelityView, FrameInput, Mode, PostSettings, Settings, Tier, Upscaler};
 use std::{path::Path, time::Instant};
@@ -121,7 +121,7 @@ fn native(skin: bool) -> ara_render::instanced::Scene {
 }
 fn main() -> anyhow::Result<()> {
     let output = Path::new("target/renderer-unification/checks");
-    let mut gpu = VulkanDevice::new(&[], "target/renderer-unification/native-instancing/cache")?;
+    let mut gpu = GpuDevice::new(&[], "target/renderer-unification/native-instancing/cache")?;
     let mut scene = legacy();
     let mode = std::env::args().nth(1);
     let is_skin = mode.as_deref() == Some("native-skin");

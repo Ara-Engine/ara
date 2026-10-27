@@ -124,7 +124,7 @@ impl Presenter {
                 ids,
                 names: &names,
                 hash: live.view.scene_hash(),
-                device: &gpu.context().info,
+                device: gpu.info(),
                 timings: live.view.timings(),
                 shaders: &shaders,
             },

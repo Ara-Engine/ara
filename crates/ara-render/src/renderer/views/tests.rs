@@ -13,18 +13,18 @@ impl instanced::Textures for Textures {
     fn content_digest(&self) -> [u8; 32] {
         [0; 32]
     }
-    fn initialize(&mut self, _: &mut VulkanDevice) -> Result<instanced::TextureStats> {
+    fn initialize(&mut self, _: &mut GpuDevice) -> Result<instanced::TextureStats> {
         self.0.fetch_add(1, Ordering::Relaxed);
         Ok(Default::default())
     }
-    fn refine(&mut self, _: &mut VulkanDevice) -> Result<instanced::TextureStats> {
+    fn refine(&mut self, _: &mut GpuDevice) -> Result<instanced::TextureStats> {
         Ok(Default::default())
     }
     fn binding(&self) -> Option<instanced::TextureBinding> {
         None
     }
     fn visit_resources(&self, _: &mut dyn FnMut(Resource, Access)) {}
-    fn destroy(self: Box<Self>, _: &mut VulkanDevice) -> Result<()> {
+    fn destroy(self: Box<Self>, _: &mut GpuDevice) -> Result<()> {
         Ok(())
     }
 }
@@ -385,7 +385,7 @@ fn gi_resources(renderer: &Renderer) -> Option<(Buffer, Buffer, Image, [Image; 2
 }
 
 fn pixels(
-    gpu: &mut VulkanDevice,
+    gpu: &mut GpuDevice,
     image: Image,
     state: State,
     size: [u32; 2],

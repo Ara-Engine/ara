@@ -31,17 +31,8 @@ impl GeometryGpu {
     }
 }
 
-pub(crate) fn storage_limit(gpu: &VulkanDevice) -> u64 {
-    // SAFETY: Read-only properties query on this live device's physical handle.
-    u64::from(
-        unsafe {
-            gpu.context()
-                .instance
-                .get_physical_device_properties(gpu.context().physical)
-        }
-        .limits
-        .max_storage_buffer_range,
-    )
+pub(crate) fn storage_limit(gpu: &GpuDevice) -> u64 {
+    u64::from(gpu.info().max_storage_buffer_range)
 }
 
 impl GeometryPreparation {
@@ -109,7 +100,7 @@ impl GeometryPreparation {
         })
     }
 
-    pub(crate) fn preallocate(&mut self, gpu: &mut VulkanDevice) -> Result<bool> {
+    pub(crate) fn preallocate(&mut self, gpu: &mut GpuDevice) -> Result<bool> {
         let limit = storage_limit(gpu);
         ensure!(
             self.packed.static_size <= limit
@@ -120,7 +111,7 @@ impl GeometryPreparation {
         self.buffers.poll(gpu)
     }
 
-    pub(crate) fn publish(self, gpu: &mut VulkanDevice) -> Result<GeometryGpu> {
+    pub(crate) fn publish(self, gpu: &mut GpuDevice) -> Result<GeometryGpu> {
         let Self {
             packed,
             layout,
@@ -159,7 +150,7 @@ impl GeometryPreparation {
         }
     }
 
-    pub(crate) fn destroy(self, gpu: &mut VulkanDevice) -> Result<()> {
+    pub(crate) fn destroy(self, gpu: &mut GpuDevice) -> Result<()> {
         self.buffers.destroy(gpu)
     }
 

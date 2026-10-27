@@ -1,15 +1,12 @@
 use crate::{pipeline_variants::Transport, settings::*, targets::*, view::FidelityView};
 use anyhow::Result;
-use ara_gpu::{
-    Access, Queue, Resource, RootConstants,
-    vulkan::{Command, VulkanDevice},
-};
+use ara_gpu::{Access, GpuDevice, Queue, Resource, RootConstants, vulkan::Command};
 use ara_render::graph::{Graph, State};
 
 impl FidelityView {
     /// Execute graph-declared passes and publish a completed offscreen output.
     /// No compiler, image readback or wall-clock sampling runs in this method.
-    pub fn render(&mut self, gpu: &mut VulkanDevice, input: &FrameInput<'_>) -> Result<()> {
+    pub fn render(&mut self, gpu: &mut GpuDevice, input: &FrameInput<'_>) -> Result<()> {
         if self.shader_epoch != gpu.shader_epoch() {
             self.shader_epoch = gpu.shader_epoch();
             let directory = ara_gpu::cooked::resource_dir(

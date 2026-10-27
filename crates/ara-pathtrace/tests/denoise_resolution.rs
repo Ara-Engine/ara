@@ -1,12 +1,12 @@
 use anyhow::{Result, ensure};
-use ara_gpu::vulkan::VulkanDevice;
+use ara_gpu::GpuDevice;
 use ara_pathtrace::{Reference, metrics, robust_scenes};
 use ara_render_fidelity::{FidelityView, FrameInput, Mode, PostSettings, Settings, Tier, Upscaler};
 
 #[test]
 fn night_denoising_preserves_angular_footprint_at_higher_resolution() -> Result<()> {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
-    let mut gpu = VulkanDevice::new(&[], root.join(".sn/resolution-test-cache"))?;
+    let mut gpu = GpuDevice::new(&[], root.join(".sn/resolution-test-cache"))?;
     let scene = robust_scenes::night();
     let camera = robust_scenes::camera(false);
     let post = PostSettings {

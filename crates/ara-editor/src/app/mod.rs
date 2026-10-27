@@ -188,8 +188,7 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
     detect_quality(&mut editor, &renderer);
     // SAFETY: Renderer/device are declared before the UI adapter, and survive its destruction.
     let mut gpu = unsafe { NativeUi::new(renderer.gpu().context())? };
-    shell.device_info =
-        serde_json::to_string_pretty(&renderer.gpu().context().info).unwrap_or_default();
+    shell.device_info = serde_json::to_string_pretty(renderer.gpu().info()).unwrap_or_default();
     let mut floats = windows::Floats::default();
     floats.hidden = offscreen;
     let mut game = game::GameView::default();
@@ -350,7 +349,7 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
             let frame_start = Instant::now();
             // Host waits on the renderer's device so far (timeline, upload idle,
             // present): the probe subtracts this frame's share from its wall time.
-            let waits_before = renderer.gpu().context().host_wait_stats();
+            let waits_before = renderer.gpu().host_wait_stats();
             let interval = frame_start.duration_since(previous).as_secs_f64() * 1000.;
             let mut camera_start = None;
             let mut graph_start = None;
@@ -801,7 +800,7 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
             if physical != last_physical || dpi != last_dpi {
                 // SAFETY: Wait before destroying a swapchain referenced by the presentation queue.
                 unsafe {
-                    renderer.gpu().context().device.device_wait_idle()?;
+                    renderer.gpu().wait_idle()?;
                     present.destroy(renderer.gpu().context());
                     present = Present::new(renderer.gpu().context(), &window)?;
                 }
@@ -1199,14 +1198,14 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                     presented,
                 )?;
                 if route.finished() {
-                    route.write(&serde_json::to_value(&renderer.gpu().context().info)?)?;
+                    route.write(&serde_json::to_value(renderer.gpu().info())?)?;
                     game.close(&mut editor, &mut gpu)?;
                     break;
                 }
             }
             frames += 1;
             if probe.as_ref().is_some_and(responsiveness::Probe::finished) {
-                let device = serde_json::to_value(&renderer.gpu().context().info)?;
+                let device = serde_json::to_value(renderer.gpu().info())?;
                 if let Some(probe) = &probe {
                     probe.write(&device)?;
                 }
@@ -1277,7 +1276,7 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
         renderer.gpu().assert_clean()?;
         if options.verify || options.verify_panels || options.verify_ux {
             std::fs::create_dir_all(&options.output)?;
-            let timings = json!({"targetHz":144,"requestedPixels":options.size,"logicalSize":shell.ui.size,"dpi":last_dpi,"graph500PanZoomInputToPresentMs":panel_verification.as_ref().map(|v|statistics(&v.samples)),"warmCameraToPresentMs":statistics(&camera_samples),"idleFrameIntervalMs":statistics(&wall_samples),"idleCpuMs":statistics(&idle_samples),"dirtyRenderAndPresentMs":statistics(&render_samples),"nativeInputToPresentMs":statistics(&interaction_samples),"idleSamplesMs":idle_samples,"renderSamplesMs":render_samples,"warmCameraSamplesMs":camera_samples,"idleIntervalSamplesMs":wall_samples,"interactionSamplesMs":interaction_samples,"device":renderer.gpu().context().info,"note":"CPU active time excludes idle sleep; native presentation and current renderer serialize. Scripted timings are recorded separately."});
+            let timings = json!({"targetHz":144,"requestedPixels":options.size,"logicalSize":shell.ui.size,"dpi":last_dpi,"graph500PanZoomInputToPresentMs":panel_verification.as_ref().map(|v|statistics(&v.samples)),"warmCameraToPresentMs":statistics(&camera_samples),"idleFrameIntervalMs":statistics(&wall_samples),"idleCpuMs":statistics(&idle_samples),"dirtyRenderAndPresentMs":statistics(&render_samples),"nativeInputToPresentMs":statistics(&interaction_samples),"idleSamplesMs":idle_samples,"renderSamplesMs":render_samples,"warmCameraSamplesMs":camera_samples,"idleIntervalSamplesMs":wall_samples,"interactionSamplesMs":interaction_samples,"device":renderer.gpu().info(),"note":"CPU active time excludes idle sleep; native presentation and current renderer serialize. Scripted timings are recorded separately."});
             std::fs::write(
                 options.output.join("timings.json"),
                 ara_json::to_canonical_string(&timings),
@@ -1289,7 +1288,7 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
     scene_view.destroy(&mut renderer)?;
     // SAFETY: Complete all presentation/UI submissions before native swapchain/surface destruction.
     unsafe {
-        renderer.gpu().context().device.device_wait_idle()?;
+        renderer.gpu().wait_idle()?;
         present.destroy(renderer.gpu().context());
     }
     floats.destroy(&renderer);
@@ -1533,7 +1532,7 @@ fn route_event(
             float.physical = size;
             // SAFETY: Wait before replacing a swapchain referenced by presentation.
             unsafe {
-                renderer.gpu().context().device.device_wait_idle()?;
+                renderer.gpu().wait_idle()?;
                 float.present.destroy(renderer.gpu().context());
                 float.present = Present::new(renderer.gpu().context(), &float.window)?;
             }

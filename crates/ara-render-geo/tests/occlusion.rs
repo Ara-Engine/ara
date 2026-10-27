@@ -1,13 +1,13 @@
 use anyhow::{Result, ensure};
 use ara_geo::{Settings, cook, sample};
-use ara_gpu::vulkan::VulkanDevice;
+use ara_gpu::GpuDevice;
 use ara_render::scene::CameraSpec;
 use ara_render_geo::{DebugView, GeometryView, Instance, View};
 use glam::Vec3;
 use std::path::Path;
 
 fn frame(
-    gpu: &mut VulkanDevice,
+    gpu: &mut GpuDevice,
     view: &mut GeometryView,
     camera: &CameraSpec,
     reset: bool,
@@ -47,7 +47,7 @@ fn previous_hzb_defers_and_current_hzb_recovers_disoccluded_geometry() -> Result
             identity: [2, 0, 0, 0],
         },
     ];
-    let mut gpu = VulkanDevice::new(&[], capture.join("gpu"))?;
+    let mut gpu = GpuDevice::new(&[], capture.join("gpu"))?;
     let mut view = GeometryView::new(
         &mut gpu,
         &g,

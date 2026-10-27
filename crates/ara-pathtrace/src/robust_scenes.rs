@@ -7,7 +7,7 @@ use glam::Vec3;
 /// Apply the bounded gather preset and the landscape's explicit local probe field.
 /// Shared by capture commands and golden tests so fixture settings cannot drift.
 pub fn configure_view(
-    gpu: &mut ara_gpu::vulkan::VulkanDevice,
+    gpu: &mut ara_gpu::GpuDevice,
     view: &mut ara_render_fidelity::FidelityView,
     outdoor: bool,
 ) -> Result<()> {

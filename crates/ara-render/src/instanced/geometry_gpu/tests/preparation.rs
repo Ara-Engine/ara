@@ -2,7 +2,7 @@ use super::*;
 use crate::instanced::GeometryPreparation;
 use std::time::{Duration, Instant};
 
-fn wait(gpu: &mut VulkanDevice, plan: &mut GeometryPreparation) -> Result<()> {
+fn wait(gpu: &mut GpuDevice, plan: &mut GeometryPreparation) -> Result<()> {
     let start = Instant::now();
     while !plan.preallocate(gpu)? {
         ensure!(
@@ -18,7 +18,7 @@ fn wait(gpu: &mut VulkanDevice, plan: &mut GeometryPreparation) -> Result<()> {
 fn worker_prepared_geometry_reuses_static_sources_and_adopts_current_skin_bytes() -> Result<()> {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../target/ara-render/prepared-geometry");
-    let mut gpu = VulkanDevice::new_raster(&[], root)?;
+    let mut gpu = GpuDevice::new_raster(&[], root)?;
     let original = fixture();
     let pool = GeometryGpu::new(&mut gpu, &original, false)?;
     let baseline = gpu.descriptor_usage();
@@ -54,9 +54,9 @@ fn worker_prepared_geometry_reuses_static_sources_and_adopts_current_skin_bytes(
     let (scene, mut plan) = worker.join().expect("CPU geometry worker")?;
     assert!(plan.source_matches(Some(&pool)));
     assert!(!plan.source_matches(None));
-    let waits = gpu.context().host_wait_stats().calls;
+    let waits = gpu.host_wait_stats().calls;
     wait(&mut gpu, &mut plan)?;
-    assert_eq!(gpu.context().host_wait_stats().calls, waits);
+    assert_eq!(gpu.host_wait_stats().calls, waits);
     assert_eq!(
         gpu.descriptor_usage(),
         baseline,
@@ -91,7 +91,7 @@ fn measure_worker_prepared_geometry_publication() -> Result<()> {
     let mut samples = Vec::new();
     for repeat in 0..2 {
         for asynchronous in [false, true] {
-            let mut gpu = VulkanDevice::new_raster(&[], root.join("gpu"))?;
+            let mut gpu = GpuDevice::new_raster(&[], root.join("gpu"))?;
             let mut scene = fixture();
             scene.geometry.truncate(1);
             scene.geometry[0].vertices = vec![scene.geometry[0].vertices[0]; 1 << 20];

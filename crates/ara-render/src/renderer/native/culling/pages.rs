@@ -132,7 +132,7 @@ impl Culling {
     #[allow(clippy::too_many_arguments)]
     pub(in crate::renderer::native) fn cull_pages(
         &mut self,
-        gpu: &mut VulkanDevice,
+        gpu: &mut GpuDevice,
         groups: &Groups,
         bounds: &[[Vec3; 2]],
         rotation: Mat4,

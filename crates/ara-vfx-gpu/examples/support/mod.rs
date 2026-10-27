@@ -1,6 +1,6 @@
 //! Deterministic gallery scene shared by the capture tool and golden tests.
 use anyhow::Result;
-use ara_gpu::vulkan::VulkanDevice;
+use ara_gpu::GpuDevice;
 use ara_render::{
     capture::{Capture, CaptureRequest, FeatureCapture, ShaderMetadata, ViewMode},
     scene::{CameraSpec, Light, Material, Mesh, Scene, Texture, Vertex, sphere},
@@ -250,7 +250,7 @@ pub fn sequence_strip(frames: &[(Capture, ara_vfx_gpu::Stats)]) -> image::RgbaIm
 /// Replay independently at every requested tick, then converge the scene with a
 /// fixed 64-frame probe/lighting sequence and draw the frozen VFX before bloom.
 pub fn capture_frames(
-    gpu: &mut VulkanDevice,
+    gpu: &mut GpuDevice,
     effect: &Effect,
     ticks: &[u32],
     size: [u32; 2],
@@ -395,7 +395,7 @@ pub fn capture_frames(
                 ids: system.read_coverage(gpu)?,
                 names: &names,
                 hash: &hash,
-                device: &gpu.context().info,
+                device: gpu.info(),
                 timings: &timings,
                 shaders: &shaders,
             },
@@ -407,6 +407,6 @@ pub fn capture_frames(
         fidelity.destroy(gpu)?;
         system.retire(gpu)?;
     }
-    gpu.context().assert_clean()?;
+    gpu.assert_clean()?;
     Ok(captures)
 }

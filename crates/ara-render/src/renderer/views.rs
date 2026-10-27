@@ -79,7 +79,7 @@ pub(super) struct Views {
     outputs: std::collections::BTreeMap<u64, asynchronous::Retained>,
     pending: Option<u64>,
     requested: Option<u64>,
-    preparing: Option<ara_gpu::vulkan::Completion>,
+    preparing: Option<ara_gpu::GpuCompletion>,
 }
 impl Default for Views {
     fn default() -> Self {
@@ -97,7 +97,7 @@ impl Default for Views {
     }
 }
 impl Views {
-    pub(super) fn collect(&mut self, gpu: &mut VulkanDevice) -> Result<()> {
+    pub(super) fn collect(&mut self, gpu: &mut GpuDevice) -> Result<()> {
         let mut retired = false;
         while let Ok((id, state)) = self.retired.try_recv() {
             if let Some(state) = state {

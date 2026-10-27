@@ -16,17 +16,17 @@ impl Textures for EmptyTextures {
     fn content_digest(&self) -> [u8; 32] {
         [0; 32]
     }
-    fn initialize(&mut self, _: &mut VulkanDevice) -> Result<TextureStats> {
+    fn initialize(&mut self, _: &mut GpuDevice) -> Result<TextureStats> {
         Ok(TextureStats::default())
     }
-    fn refine(&mut self, _: &mut VulkanDevice) -> Result<TextureStats> {
+    fn refine(&mut self, _: &mut GpuDevice) -> Result<TextureStats> {
         Ok(TextureStats::default())
     }
     fn binding(&self) -> Option<instanced::TextureBinding> {
         None
     }
     fn visit_resources(&self, _: &mut dyn FnMut(Resource, Access)) {}
-    fn destroy(self: Box<Self>, _: &mut VulkanDevice) -> Result<()> {
+    fn destroy(self: Box<Self>, _: &mut GpuDevice) -> Result<()> {
         Ok(())
     }
 }
@@ -36,10 +36,10 @@ impl Textures for RejectPublication {
     fn content_digest(&self) -> [u8; 32] {
         [0; 32]
     }
-    fn initialize(&mut self, gpu: &mut VulkanDevice) -> Result<TextureStats> {
+    fn initialize(&mut self, gpu: &mut GpuDevice) -> Result<TextureStats> {
         EmptyTextures.initialize(gpu)
     }
-    fn refine(&mut self, gpu: &mut VulkanDevice) -> Result<TextureStats> {
+    fn refine(&mut self, gpu: &mut GpuDevice) -> Result<TextureStats> {
         EmptyTextures.refine(gpu)
     }
     fn binding(&self) -> Option<instanced::TextureBinding> {
@@ -49,7 +49,7 @@ impl Textures for RejectPublication {
     fn publish_reuse(&mut self, _: &mut dyn Textures) -> Result<()> {
         anyhow::bail!("injected publication rejection")
     }
-    fn destroy(self: Box<Self>, _: &mut VulkanDevice) -> Result<()> {
+    fn destroy(self: Box<Self>, _: &mut GpuDevice) -> Result<()> {
         Ok(())
     }
 }
@@ -185,7 +185,7 @@ fn native_raster_keeps_instances_local_and_tracks_moving_and_skinned_poses_witho
         );
     }
     renderer.gpu().assert_clean()?;
-    assert!(!renderer.gpu().context().info.ray_tracing);
+    assert!(!renderer.gpu().info().ray_tracing);
     let stats = renderer.native_geometry_stats().unwrap();
     assert_eq!((stats.geometries, stats.blas), (1, 0));
     let request = CaptureRequest {

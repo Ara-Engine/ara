@@ -1,9 +1,9 @@
 use super::*;
-use ara_gpu::{Barrier, Buffer, Device, Resource, vk, vulkan::VulkanDevice};
+use ara_gpu::{Barrier, Buffer, Device, GpuDevice, Resource, vk};
 use std::path::Path;
 
 fn read_buffer(
-    gpu: &mut VulkanDevice,
+    gpu: &mut GpuDevice,
     buffer: Buffer,
     state: ara_render::graph::State,
     size: u64,
@@ -62,7 +62,7 @@ fn read_buffer(
 fn indirect_sort_uses_the_compacted_live_prefix_and_matches_depth_order() -> Result<()> {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let effect = ara_vfx::samples::smoke();
-    let mut gpu = VulkanDevice::new_raster(&[], root.join("../../target/ara-vfx-gpu/live-sort"))?;
+    let mut gpu = GpuDevice::new_raster(&[], root.join("../../target/ara-vfx-gpu/live-sort"))?;
     let mut system = GpuSystem::new(&mut gpu, &effect, &root.join("cooked/smoke"), [64, 48])?;
     let view = View::default();
     let c = system.layout.configs[0];
@@ -143,7 +143,7 @@ fn indirect_sort_uses_the_compacted_live_prefix_and_matches_depth_order() -> Res
 
 // Apply the existing display curve only for comparison; production HDR composition
 // leaves this to the renderer's look stack.
-fn display_hdr(system: &mut GpuSystem, gpu: &mut VulkanDevice) -> Result<Vec<u8>> {
+fn display_hdr(system: &mut GpuSystem, gpu: &mut GpuDevice) -> Result<Vec<u8>> {
     let mut recorder = gpu.begin(Queue::Graphics);
     recorder.push(Command::Barrier(Barrier {
         resource: Resource::Image(system.output),
@@ -163,7 +163,7 @@ fn direct_hdr_matches_the_background_copy_without_backdrop_or_tonemap() -> Resul
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let size = [256, 144];
     let effect = ara_vfx::samples::campfire();
-    let mut gpu = VulkanDevice::new_raster(&[], root.join("../../target/ara-vfx-gpu/direct-hdr"))?;
+    let mut gpu = GpuDevice::new_raster(&[], root.join("../../target/ara-vfx-gpu/direct-hdr"))?;
     let cooked = root.join("cooked/campfire");
     let mut copied = GpuSystem::new(&mut gpu, &effect, &cooked, size)?;
     let mut direct = GpuSystem::new(&mut gpu, &effect, &cooked, size)?;

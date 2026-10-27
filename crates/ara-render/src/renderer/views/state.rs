@@ -95,7 +95,7 @@ impl ViewState {
     pub(super) fn inherit(
         &mut self,
         old: &mut Self,
-        gpu: &mut VulkanDevice,
+        gpu: &mut GpuDevice,
         render: [u32; 2],
         display: [u32; 2],
     ) -> Result<()> {
@@ -167,7 +167,7 @@ impl ViewState {
         }
     }
 
-    pub fn destroy(self, gpu: &mut VulkanDevice) -> Result<()> {
+    pub fn destroy(self, gpu: &mut GpuDevice) -> Result<()> {
         retire_targets(gpu, self.targets)?;
         for buffer in [
             self.frame,
@@ -204,7 +204,7 @@ impl ViewState {
     }
 }
 
-fn retire_targets(gpu: &mut VulkanDevice, targets: Targets) -> Result<()> {
+fn retire_targets(gpu: &mut GpuDevice, targets: Targets) -> Result<()> {
     for image in targets.images {
         gpu.retire(Resource::Image(image))?;
     }
@@ -215,7 +215,7 @@ fn retire_targets(gpu: &mut VulkanDevice, targets: Targets) -> Result<()> {
 }
 
 fn fork_look(
-    gpu: &mut VulkanDevice,
+    gpu: &mut GpuDevice,
     source: &LookGpu,
     render: [u32; 2],
     size: [u32; 2],

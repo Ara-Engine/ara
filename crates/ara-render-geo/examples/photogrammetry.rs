@@ -4,7 +4,7 @@ mod motion;
 #[path = "benchmark/scene.rs"]
 mod scene;
 use ara_geo::{Geometry, Settings, cook};
-use ara_gpu::{cooked::write_json, vulkan::VulkanDevice};
+use ara_gpu::{GpuDevice, cooked::write_json};
 use ara_render::scene::CameraSpec;
 use ara_render_geo::shadows::VirtualShadows;
 use ara_render_geo::upscale::SpatialUpscaler;
@@ -56,7 +56,7 @@ fn main() -> Result<()> {
         target: Vec3::ZERO,
         vertical_fov: 55.0f32.to_radians(),
     };
-    let mut gpu = VulkanDevice::new(&[], output.join("gpu-cache"))?;
+    let mut gpu = GpuDevice::new(&[], output.join("gpu-cache"))?;
     let albedo = image::open(
         root.join("captures/assets/coast_rocks_01/textures/coast_rocks_01_diff_8k.jpg"),
     )?
@@ -261,7 +261,7 @@ fn main() -> Result<()> {
     frame_times.sort_by(f64::total_cmp);
     write_json(
         &output.join("benchmark.json"),
-        &serde_json::json!({"settings":ara_render_geo::settings::RenderSettings::default(),"device":gpu.context().info,"size":size,"display_size":display_size,"requested_resource_bytes":resource_bytes,"texture_memory":texture_stats,"system_vram_mib_after_allocation":process_vram,"reconstruction":if upscaled{"linear-light bilinear"}else{"native"},"hardware_only":hardware_only,"mesh_shaders":mesh&&gpu.context().info.mesh_shading,"stats":stats,"geometry_warnings":geometry.warnings(),"vsm_cold":cold_shadow,"vsm_warm":shadow_stats,"cold_passes_ms":cold_passes,"cold_total_ms":cold_passes.values().sum::<f64>(),"passes":passes,"total_p50_ms":frame_times[frame_times.len()/2],"instance_count":instances.len(),"license":"Poly Haven Coast Rocks 01 CC0; ASSET-LICENSES.md","background_load":"Shared workstation, CARGO_BUILD_JOBS=2; no claim of exclusive GPU access","limitations":["Preview lighting is not fidelity integration","Frozen camera and static casters for warm numbers","Whole-level geometry fallback when a cluster page budget is insufficient","All cluster pages resident; texture pool limited to 64 MiB","679936 photographic triangles and two ground triangles per instance"]}),
+        &serde_json::json!({"settings":ara_render_geo::settings::RenderSettings::default(),"device":gpu.info(),"size":size,"display_size":display_size,"requested_resource_bytes":resource_bytes,"texture_memory":texture_stats,"system_vram_mib_after_allocation":process_vram,"reconstruction":if upscaled{"linear-light bilinear"}else{"native"},"hardware_only":hardware_only,"mesh_shaders":mesh&&gpu.info().mesh_shading,"stats":stats,"geometry_warnings":geometry.warnings(),"vsm_cold":cold_shadow,"vsm_warm":shadow_stats,"cold_passes_ms":cold_passes,"cold_total_ms":cold_passes.values().sum::<f64>(),"passes":passes,"total_p50_ms":frame_times[frame_times.len()/2],"instance_count":instances.len(),"license":"Poly Haven Coast Rocks 01 CC0; ASSET-LICENSES.md","background_load":"Shared workstation, CARGO_BUILD_JOBS=2; no claim of exclusive GPU access","limitations":["Preview lighting is not fidelity integration","Frozen camera and static casters for warm numbers","Whole-level geometry fallback when a cluster page budget is insufficient","All cluster pages resident; texture pool limited to 64 MiB","679936 photographic triangles and two ground triangles per instance"]}),
     )?;
     if args.iter().any(|arg| arg == "--motion") {
         motion::measure(&mut gpu, &mut view, &mut textures, &output, hardware_only)?;

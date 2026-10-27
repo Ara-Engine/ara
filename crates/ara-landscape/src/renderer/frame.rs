@@ -41,7 +41,7 @@ impl Landscape {
     /// Caller must first reject stale revisions and finish this frame slot's GPU use.
     pub fn queue_tile(
         &mut self,
-        gpu: &VulkanDevice,
+        gpu: &GpuDevice,
         coord: ara_terrain::TileCoord,
         tile: &ara_terrain::Tile,
         allowed: bool,
@@ -74,7 +74,7 @@ impl Landscape {
         Ok(true)
     }
     /// Upload explicit frame state after this frame slot's previous submission completes.
-    pub fn update(&self, gpu: &VulkanDevice, view: &View) -> Result<()> {
+    pub fn update(&self, gpu: &GpuDevice, view: &View) -> Result<()> {
         ensure!(
             view.eye.is_finite()
                 && view.target.is_finite()

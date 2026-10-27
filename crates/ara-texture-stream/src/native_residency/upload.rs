@@ -8,11 +8,7 @@ struct Pending {
 }
 
 impl NativeResidency {
-    pub(super) fn prepare(
-        &mut self,
-        gpu: &mut VulkanDevice,
-        initialize: bool,
-    ) -> Result<NativeStats> {
+    pub(super) fn prepare(&mut self, gpu: &mut GpuDevice, initialize: bool) -> Result<NativeStats> {
         ensure!(
             self.initial.as_ref().is_none_or(initial::Initial::is_ready),
             "native texture allocation is still pending"
@@ -131,7 +127,7 @@ impl NativeResidency {
 
     fn upload(
         &mut self,
-        gpu: &mut VulkanDevice,
+        gpu: &mut GpuDevice,
         selected: &[usize],
         allocated: &mut Vec<Resource>,
     ) -> Result<(Vec<Pending>, Table, TimelinePoint, f64)> {

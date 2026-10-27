@@ -1,5 +1,5 @@
 use anyhow::{Result, ensure};
-use ara_gpu::vulkan::VulkanDevice;
+use ara_gpu::GpuDevice;
 use ara_render::scene::{CameraSpec, Light, Mesh, Vertex};
 use ara_render_fidelity::{FidelityView, FrameInput, Mode, PostSettings, Settings, Tier, Upscaler};
 use glam::Vec3;
@@ -8,7 +8,7 @@ use glam::Vec3;
 /// many-light direct light is denoised with the demodulated indirect signal (unit
 /// albedo here, so modulation is one), so energy checks read the temporal
 /// accumulation; the wavelet filter's blur of falloff gradients is not transport.
-fn transported(gpu: &mut VulkanDevice, view: &FidelityView, mode: Mode, i: usize) -> Result<f32> {
+fn transported(gpu: &mut GpuDevice, view: &FidelityView, mode: Mode, i: usize) -> Result<f32> {
     if mode != Mode::Hybrid {
         return Ok(view.capture_radiance(gpu)?[i][0]);
     }
@@ -18,7 +18,7 @@ fn transported(gpu: &mut VulkanDevice, view: &FidelityView, mode: Mode, i: usize
 #[test]
 fn area_light_occlusion_matches_independent_quad_integral() -> Result<()> {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
-    let mut gpu = VulkanDevice::new(&[], root.join(".sn/area-energy-test-cache"))?;
+    let mut gpu = GpuDevice::new(&[], root.join(".sn/area-energy-test-cache"))?;
     let mut scene = ara_pathtrace::scenes::scene("furnace", 0);
     scene.lights.clear();
     scene.sun_lux = Vec3::ZERO;
@@ -163,7 +163,7 @@ fn area_light_occlusion_matches_independent_quad_integral() -> Result<()> {
 #[test]
 fn thousand_identical_lights_preserve_analytic_energy_through_reuse() -> Result<()> {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
-    let mut gpu = VulkanDevice::new(&[], root.join(".sn/reservoir-test-cache"))?;
+    let mut gpu = GpuDevice::new(&[], root.join(".sn/reservoir-test-cache"))?;
     let mut scene = ara_pathtrace::scenes::scene("furnace", 0);
     scene.environment.fill([0., 0., 0., 1.]);
     scene.sun_lux = Vec3::ZERO;

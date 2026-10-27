@@ -2,7 +2,7 @@
 use crate::NativeSource;
 use anyhow::{Result, ensure};
 use ara_asset_format::TextureFormat;
-use ara_gpu::{Access, Buffer, Device, Image, Resource, TimelinePoint, vulkan::VulkanDevice};
+use ara_gpu::{Access, Buffer, Device, GpuDevice, Image, Resource, TimelinePoint};
 use std::{collections::BTreeMap, sync::Arc};
 
 #[cfg(test)]
@@ -100,19 +100,19 @@ impl ara_render::instanced::Textures for NativeResidency {
         }
         digest.finalize().into()
     }
-    fn initialize(&mut self, gpu: &mut VulkanDevice) -> Result<NativeStats> {
+    fn initialize(&mut self, gpu: &mut GpuDevice) -> Result<NativeStats> {
         Self::initialize(self, gpu)
     }
     fn preallocate(
         &mut self,
-        gpu: &mut VulkanDevice,
+        gpu: &mut GpuDevice,
         previous: Option<&dyn ara_render::instanced::Textures>,
     ) -> Result<bool> {
         Self::preallocate(self, gpu, previous)
     }
     fn initialize_reusing(
         &mut self,
-        gpu: &mut VulkanDevice,
+        gpu: &mut GpuDevice,
         previous: &dyn ara_render::instanced::Textures,
     ) -> Result<NativeStats> {
         self.prepare_reusing(gpu, previous)
@@ -120,7 +120,7 @@ impl ara_render::instanced::Textures for NativeResidency {
     fn publish_reuse(&mut self, previous: &mut dyn ara_render::instanced::Textures) -> Result<()> {
         self.commit_reuse(previous)
     }
-    fn refine(&mut self, gpu: &mut VulkanDevice) -> Result<NativeStats> {
+    fn refine(&mut self, gpu: &mut GpuDevice) -> Result<NativeStats> {
         Self::refine(self, gpu)
     }
     fn binding(&self) -> Option<NativeBinding> {
@@ -131,7 +131,7 @@ impl ara_render::instanced::Textures for NativeResidency {
             visit(resource, access);
         }
     }
-    fn destroy(self: Box<Self>, gpu: &mut VulkanDevice) -> Result<()> {
+    fn destroy(self: Box<Self>, gpu: &mut GpuDevice) -> Result<()> {
         (*self).destroy(gpu)
     }
 }
@@ -328,13 +328,13 @@ impl NativeResidency {
 
     /// Publishes complete budgeted tails for new content. This upload boundary may
     /// exceed the refinement target so no new material observes an uninitialized map.
-    pub fn initialize(&mut self, gpu: &mut VulkanDevice) -> Result<NativeStats> {
+    pub fn initialize(&mut self, gpu: &mut GpuDevice) -> Result<NativeStats> {
         self.prepare(gpu, true)
     }
 
     /// Refines existing images within the upload target, preserving old bindings on
     /// failure. No I/O, decompression, mip synthesis or per-frame source hashing occurs.
-    pub fn refine(&mut self, gpu: &mut VulkanDevice) -> Result<NativeStats> {
+    pub fn refine(&mut self, gpu: &mut GpuDevice) -> Result<NativeStats> {
         ensure!(
             self.entries.len()
                 == self
@@ -381,7 +381,7 @@ impl NativeResidency {
     }
 
     /// Retires native images and the binding table before the device is destroyed.
-    pub fn destroy(mut self, gpu: &mut VulkanDevice) -> Result<()> {
+    pub fn destroy(mut self, gpu: &mut GpuDevice) -> Result<()> {
         if let Some(initial) = self.initial.take() {
             initial.destroy(gpu)?;
         }

@@ -11,7 +11,7 @@ struct Response {
     normalized_response: Vec<f64>,
     frames_to_90_percent: Option<usize>,
 }
-fn irradiance(view: &mut FidelityView, gpu: &mut VulkanDevice) -> Result<f64> {
+fn irradiance(view: &mut FidelityView, gpu: &mut GpuDevice) -> Result<f64> {
     let snapshot = view.bake_snapshot(gpu)?;
     let mut sum = 0.;
     let mut count = 0;
@@ -33,7 +33,7 @@ fn irradiance(view: &mut FidelityView, gpu: &mut VulkanDevice) -> Result<f64> {
     anyhow::ensure!(count > 0, "No classified probes in lag test");
     Ok(sum / f64::from(count))
 }
-pub fn capture(gpu: &mut VulkanDevice, root: &Path) -> Result<()> {
+pub fn capture(gpu: &mut GpuDevice, root: &Path) -> Result<()> {
     let mut scene = scenes::scene("glossy_interior", 0);
     let camera = scenes::camera();
     let mut view = FidelityView::new(gpu, &scene, settings([160, 90], [160, 90]), None)?;

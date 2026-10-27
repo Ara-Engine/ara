@@ -49,7 +49,7 @@ pub(crate) fn load_hdr(path: &Path) -> Result<Vec<[f32; 4]>> {
 }
 
 /// Accumulate 32768 samples and check regional/full-frame residual against 16384.
-pub fn reference(gpu: &mut VulkanDevice, root: &Path) -> Result<()> {
+pub fn reference(gpu: &mut GpuDevice, root: &Path) -> Result<()> {
     let scene = scene(root)?;
     let camera = content::camera();
     let mut s = settings(SIZE, SIZE);
@@ -88,7 +88,7 @@ pub fn reference(gpu: &mut VulkanDevice, root: &Path) -> Result<()> {
 }
 
 /// Compare a current hybrid extraction with the cached, unfiltered ground truth.
-pub fn quality(gpu: &mut VulkanDevice, root: &Path) -> Result<()> {
+pub fn quality(gpu: &mut GpuDevice, root: &Path) -> Result<()> {
     let scene = scene(root)?;
     let camera = content::camera();
     let mut s = settings(SIZE, SIZE);

@@ -1,7 +1,7 @@
 //! Cached local-light shadows (look::local) on the native path: an occluder
 //! between a point light and the ground darkens the ground under it.
 use anyhow::{Result, ensure};
-use ara_gpu::{Access, Resource, vulkan::VulkanDevice};
+use ara_gpu::{Access, GpuDevice, Resource};
 use ara_render::{
     Renderer,
     capture::{CaptureRequest, ViewMode},
@@ -18,17 +18,17 @@ impl Textures for NoTextures {
     fn content_digest(&self) -> [u8; 32] {
         [0; 32]
     }
-    fn initialize(&mut self, _: &mut VulkanDevice) -> Result<TextureStats> {
+    fn initialize(&mut self, _: &mut GpuDevice) -> Result<TextureStats> {
         Ok(TextureStats::default())
     }
-    fn refine(&mut self, _: &mut VulkanDevice) -> Result<TextureStats> {
+    fn refine(&mut self, _: &mut GpuDevice) -> Result<TextureStats> {
         Ok(TextureStats::default())
     }
     fn binding(&self) -> Option<TextureBinding> {
         None
     }
     fn visit_resources(&self, _: &mut dyn FnMut(Resource, Access)) {}
-    fn destroy(self: Box<Self>, _: &mut VulkanDevice) -> Result<()> {
+    fn destroy(self: Box<Self>, _: &mut GpuDevice) -> Result<()> {
         Ok(())
     }
 }

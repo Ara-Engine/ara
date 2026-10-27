@@ -50,7 +50,7 @@ pub(super) struct Content {
 
 impl Renderer {
     pub(super) fn upload_scene(
-        mut gpu: VulkanDevice,
+        mut gpu: GpuDevice,
         pipelines: Pipelines,
         targets: Targets,
         scene: Scene,
@@ -270,7 +270,7 @@ impl Renderer {
 }
 
 /// Writes `lights` (or one zeroed placeholder) into both host-visible light lists.
-fn write_lights(gpu: &mut VulkanDevice, buffers: [Buffer; 2], lights: &[Light]) -> Result<()> {
+fn write_lights(gpu: &mut GpuDevice, buffers: [Buffer; 2], lights: &[Light]) -> Result<()> {
     let mut padded = lights.to_vec();
     if padded.is_empty() {
         padded.push(Light::zeroed());
@@ -300,7 +300,7 @@ pub(super) struct Geometry {
 /// Validates and uploads materials, meshes and host-visible light lists. Material
 /// texture indices address `texture_indices`. Partial uploads are retired on error.
 pub(super) fn upload_geometry(
-    gpu: &mut VulkanDevice,
+    gpu: &mut GpuDevice,
     materials: Vec<crate::scene::Material>,
     meshes: Vec<crate::scene::Mesh>,
     lights: Vec<Light>,
@@ -455,7 +455,7 @@ pub(super) fn prepare_materials(
 }
 
 pub(super) fn upload_content(
-    gpu: &mut VulkanDevice,
+    gpu: &mut GpuDevice,
     scene: Scene,
     artifacts: &Path,
     shader_metadata: &crate::capture::ShaderMetadata,
@@ -494,7 +494,7 @@ struct Ibl<'a> {
     cached: Option<[Pipeline; 2]>,
 }
 fn upload_content_inner(
-    gpu: &mut VulkanDevice,
+    gpu: &mut GpuDevice,
     scene: Scene,
     ibl: Ibl<'_>,
     compute_frame: Buffer,
@@ -649,7 +649,7 @@ fn upload_content_inner(
             (sp, Access::ShaderRead),
         ],
     );
-    let load = |gpu: &mut VulkanDevice, name: &str| -> Result<_> {
+    let load = |gpu: &mut GpuDevice, name: &str| -> Result<_> {
         let cooked: ara_gpu::cooked::CookedPipeline =
             serde_json::from_slice(&std::fs::read(ibl.artifacts.join(format!("{name}.json")))?)?;
         ensure!(

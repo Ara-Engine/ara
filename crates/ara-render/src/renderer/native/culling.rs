@@ -170,7 +170,7 @@ impl Culling {
     #[allow(clippy::too_many_arguments)]
     pub fn prepare(
         &mut self,
-        gpu: &mut VulkanDevice,
+        gpu: &mut GpuDevice,
         buffer: Buffer,
         groups: &Groups,
         bounds: &[[Vec3; 2]],
@@ -254,7 +254,7 @@ impl Culling {
     #[allow(clippy::too_many_arguments)]
     pub(super) fn opaque(
         &mut self,
-        gpu: &mut VulkanDevice,
+        gpu: &mut GpuDevice,
         buffer: Buffer,
         groups: &Groups,
         bounds: &[[Vec3; 2]],
@@ -327,7 +327,7 @@ impl Culling {
 
     fn transparency(
         &mut self,
-        gpu: &mut VulkanDevice,
+        gpu: &mut GpuDevice,
         buffer: Buffer,
         groups: &Groups,
         bounds: &[[Vec3; 2]],

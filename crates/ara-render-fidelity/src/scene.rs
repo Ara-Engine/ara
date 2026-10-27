@@ -1,10 +1,10 @@
 //! Immutable scene upload and incremental, stable-ID acceleration snapshots.
 use anyhow::{Result, ensure};
 use ara_gpu::{
-    AccelerationStructure, Access, Barrier, Buffer, Device, Image, Queue, Resource,
+    AccelerationStructure, Access, Barrier, Buffer, Device, GpuDevice, Image, Queue, Resource,
     acceleration::{AccelerationDesc, AccelerationInstance},
     vk,
-    vulkan::{Command, VulkanDevice},
+    vulkan::Command,
 };
 use ara_render::scene::{Material, Scene};
 use glam::Vec3;
@@ -71,7 +71,7 @@ pub struct GpuScene {
 }
 impl GpuScene {
     /// Upload shared material/mesh/light semantics; RT is optional for fallback views.
-    pub fn new(gpu: &mut VulkanDevice, scene: &Scene, rt: bool) -> Result<Self> {
+    pub fn new(gpu: &mut GpuDevice, scene: &Scene, rt: bool) -> Result<Self> {
         validate(scene)?;
         let ids = scene
             .meshes
@@ -142,7 +142,7 @@ impl GpuScene {
     /// Apply a validated extraction at a completed frame boundary. Texture/environment
     /// replacement needs a new view; geometry, material parameters and lights update here.
     /// Shading tables retain the prior vertex positions for deformation motion vectors.
-    pub fn update(&mut self, gpu: &mut VulkanDevice, scene: &Scene) -> Result<()> {
+    pub fn update(&mut self, gpu: &mut GpuDevice, scene: &Scene) -> Result<()> {
         ensure!(
             self.native.is_none(),
             "native views require native scene updates"
@@ -240,7 +240,7 @@ impl GpuScene {
         }
         r
     }
-    pub(crate) fn destroy(self, gpu: &mut VulkanDevice) -> Result<()> {
+    pub(crate) fn destroy(self, gpu: &mut GpuDevice) -> Result<()> {
         if let Some(t) = self.tlas {
             gpu.retire(Resource::AccelerationStructure(t))?;
         }

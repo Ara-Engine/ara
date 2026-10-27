@@ -5,8 +5,9 @@ use crate::{
 use anyhow::{Result, ensure};
 use ara_2d::Camera2d;
 use ara_gpu::{
-    Access, Barrier, Buffer, Device, Image, Pipeline, Queue, Resource, RootConstants, vk,
-    vulkan::{Attachment, Command, PassTiming, VulkanDevice},
+    Access, Barrier, Buffer, Device, GpuDevice, Image, Pipeline, Queue, Resource, RootConstants,
+    vk,
+    vulkan::{Attachment, Command, PassTiming},
 };
 use ara_render::{
     capture::{Capture, CaptureRequest, FeatureCapture, ShaderMetadata, ViewMode},
@@ -21,7 +22,7 @@ mod upload;
 /// Resident 2D extraction and per-view GPU targets on one device. `update` replaces the
 /// extraction between frames; no gameplay state lives here.
 pub struct Renderer2d {
-    gpu: VulkanDevice,
+    gpu: GpuDevice,
     pipeline: Pipeline,
     post: ToneMap,
     instances: Buffer,
@@ -52,7 +53,7 @@ pub struct Renderer2d {
 }
 impl Renderer2d {
     /// Device diagnostics and native texture presentation integration.
-    pub fn gpu(&self) -> &VulkanDevice {
+    pub fn gpu(&self) -> &GpuDevice {
         &self.gpu
     }
     /// Final sRGB-encoded SDR image, in CopySource state after render.
@@ -112,7 +113,7 @@ impl Renderer2d {
                 ids,
                 names: &self.names,
                 hash: hash.finalize().to_hex().as_ref(),
-                device: &self.gpu.context().info,
+                device: self.gpu.info(),
                 timings: &self.timings,
                 shaders: &self.shaders,
             },

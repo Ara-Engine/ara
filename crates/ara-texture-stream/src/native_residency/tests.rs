@@ -16,7 +16,7 @@ enum Probe {
 }
 
 fn sample(
-    gpu: &mut VulkanDevice,
+    gpu: &mut GpuDevice,
     set: &mut NativeResidency,
     pipeline: ara_gpu::Pipeline,
     range: std::ops::Range<u32>,
@@ -142,7 +142,7 @@ fn cooked_identity_deduplicates_at_the_content_boundary() {
     assert!(set.register([1; 32], source([4, 4], 1, 64)).is_err());
 }
 
-fn blocks(gpu: &mut VulkanDevice, resident: Resident) -> Vec<u8> {
+fn blocks(gpu: &mut GpuDevice, resident: Resident) -> Vec<u8> {
     let read = gpu
         .create_buffer(resident.bytes, vk::BufferUsageFlags::TRANSFER_DST, true)
         .unwrap();
@@ -183,7 +183,7 @@ fn blocks(gpu: &mut VulkanDevice, resident: Resident) -> Vec<u8> {
 fn native_gpu_residency_exceeds_128_and_refines_without_losing_material_maps() {
     let cache = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../target/ara-texture-stream/native-residency");
-    let mut gpu = VulkanDevice::new(&[], cache).unwrap();
+    let mut gpu = GpuDevice::new(&[], cache).unwrap();
     let cooked = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("cooked");
     let manifest =
         serde_json::from_slice(&std::fs::read(cooked.join("texture_native_probe.json")).unwrap())
@@ -235,7 +235,7 @@ fn native_gpu_residency_exceeds_128_and_refines_without_losing_material_maps() {
         started.elapsed().as_secs_f64() * 1e9 / 10_000.0
     );
     let old_binding = many.binding().unwrap().buffer_index;
-    let oversized = gpu.context().info.max_image_dimension + 1;
+    let oversized = gpu.info().max_image_dimension + 1;
     many.register([254; 32], source([4, 4], 1, 254)).unwrap();
     many.register([255; 32], source([oversized, 1], 1, 255))
         .unwrap();

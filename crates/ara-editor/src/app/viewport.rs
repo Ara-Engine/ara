@@ -1288,7 +1288,7 @@ mod tests {
                 assert!(renderer.is_native());
                 assert!(scene.raster.is_some());
                 assert!(scene.fidelity.is_none());
-                assert!(!renderer.gpu().context().info.ray_tracing);
+                assert!(!renderer.gpu().info().ray_tracing);
                 assert_eq!(
                     renderer.native_geometry_stats().expect("native pool").blas,
                     0

@@ -1,7 +1,7 @@
 //! Frame-boundary environment, material filtering and probe-volume controls.
 use crate::{probes::ProbeVolume, scene::buffer, view::FidelityView};
 use anyhow::{Result, ensure};
-use ara_gpu::{Access, Device, Queue, Resource, vk, vulkan::VulkanDevice};
+use ara_gpu::{Access, Device, GpuDevice, Queue, Resource, vk};
 use ara_render::graph::State;
 impl FidelityView {
     /// Enable physical sky illumination and frustum fog, or restore the extracted
@@ -35,7 +35,7 @@ impl FidelityView {
     }
     /// Replace the automatic probe bounds with a camera-local or authored volume.
     /// Geometry outside this volume still participates in hardware visibility.
-    pub fn set_probe_volume(&mut self, gpu: &mut VulkanDevice, volume: ProbeVolume) -> Result<()> {
+    pub fn set_probe_volume(&mut self, gpu: &mut GpuDevice, volume: ProbeVolume) -> Result<()> {
         volume.validate()?;
         let data = volume.empty_data();
         for i in 0..2 {

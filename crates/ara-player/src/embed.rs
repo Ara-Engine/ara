@@ -476,7 +476,7 @@ mod tests {
             };
             let presenter = &mut session.presenter;
             let renderer = presenter.renderer().context("warmed embedded renderer")?;
-            let rt = renderer.gpu().context().info.ray_tracing;
+            let rt = renderer.gpu().info().ray_tracing;
             if !options.ray_tracing {
                 assert!(!rt, "default embedding must open a raster-only device");
                 assert!(

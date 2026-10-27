@@ -3,7 +3,7 @@ use super::*;
 use ara_gpu::cooked::write_json;
 use std::collections::BTreeMap;
 
-pub fn run(gpu: &mut VulkanDevice, root: &Path, many: bool) -> Result<()> {
+pub fn run(gpu: &mut GpuDevice, root: &Path, many: bool) -> Result<()> {
     let (name, scene, camera, ev) = round3::case(root, many)?;
     let mut report = Vec::new();
     for render in [[2560, 1440], [1707, 960]] {

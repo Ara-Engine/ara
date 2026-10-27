@@ -1,6 +1,6 @@
 use anyhow::{Result, ensure};
 use ara_geo::{SourceMesh, Vertex};
-use ara_gpu::{cooked::write_json, vulkan::VulkanDevice};
+use ara_gpu::{GpuDevice, cooked::write_json};
 use ara_render::scene::CameraSpec;
 use ara_render_geo::{DebugView, GeometryView, Instance, View};
 use ara_texture_stream::{Catalog, Residency, Source};
@@ -12,7 +12,7 @@ fn moving_camera_measures_resident_mip_lag_and_same_uv_transitions() -> Result<(
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let output = root.join("captures/texture-motion");
     std::fs::create_dir_all(&output)?;
-    let mut gpu = VulkanDevice::new(&[], output.join("cache"))?;
+    let mut gpu = GpuDevice::new(&[], output.join("cache"))?;
     let source = SourceMesh {
         vertices: [
             [-16., 0., -16.],

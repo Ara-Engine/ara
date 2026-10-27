@@ -101,7 +101,7 @@ pub fn run(samples: &Path, lock: &Lock, request: &Request<'_>) -> Result<()> {
     let cache =
         Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/ara-samples/pipeline-cache");
     std::fs::create_dir_all(&cache)?;
-    let mut gpu = ara_gpu::vulkan::VulkanDevice::new(&[], cache.clone())?;
+    let mut gpu = ara_gpu::GpuDevice::new(&[], cache.clone())?;
     let output = std::env::var_os("ARA_CAPTURE_OUTPUT_DIR")
         .map(std::path::PathBuf::from)
         .unwrap_or_else(|| {

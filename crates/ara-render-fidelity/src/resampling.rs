@@ -1,6 +1,6 @@
 //! Per-view direct and diffuse-path reservoirs; allocated only when selected.
 use anyhow::Result;
-use ara_gpu::{Access, Buffer, Device, Queue, Resource, vk, vulkan::VulkanDevice};
+use ara_gpu::{Access, Buffer, Device, GpuDevice, Queue, Resource, vk};
 use ara_render::graph::State;
 
 pub(crate) struct Reservoirs {
@@ -9,7 +9,7 @@ pub(crate) struct Reservoirs {
     pub states: [State; 6],
 }
 impl Reservoirs {
-    pub fn new(gpu: &mut VulkanDevice, size: [u32; 2]) -> Result<Self> {
+    pub fn new(gpu: &mut GpuDevice, size: [u32; 2]) -> Result<Self> {
         let pixels = u64::from(size[0]) * u64::from(size[1]);
         let mut allocated = Vec::new();
         for i in 0..6 {
@@ -45,7 +45,7 @@ impl Reservoirs {
             }; 6],
         })
     }
-    pub fn destroy(self, gpu: &mut VulkanDevice) -> Result<()> {
+    pub fn destroy(self, gpu: &mut GpuDevice) -> Result<()> {
         for b in self.buffers {
             gpu.retire(Resource::Buffer(b))?;
         }
@@ -59,7 +59,7 @@ impl crate::FidelityView {
     }
     /// Enable direct-light reservoir reuse and diffuse path reconnection at a frame
     /// boundary. Reference mode remains independently sampled. This resets history.
-    pub fn set_reservoir_sampling(&mut self, gpu: &mut VulkanDevice, enabled: bool) -> Result<()> {
+    pub fn set_reservoir_sampling(&mut self, gpu: &mut GpuDevice, enabled: bool) -> Result<()> {
         anyhow::ensure!(
             !enabled || self.settings.tier == crate::Tier::Rt,
             "Reservoirs require hardware ray queries"

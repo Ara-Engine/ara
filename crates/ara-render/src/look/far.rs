@@ -5,7 +5,7 @@
 use super::FarShadows;
 use crate::graph::State;
 use anyhow::Result;
-use ara_gpu::{Access, Buffer, Device, Image, Queue, Resource, vk, vulkan::VulkanDevice};
+use ara_gpu::{Access, Buffer, Device, GpuDevice, Image, Queue, Resource, vk};
 use glam::{Mat4, Vec3};
 
 /// Frames a far map waits before redrawing for moved casters (distant moving
@@ -77,11 +77,7 @@ pub(crate) struct FarMap {
 }
 
 impl FarMap {
-    pub(crate) fn new(
-        gpu: &mut VulkanDevice,
-        settings: FarShadows,
-        frame_bytes: u64,
-    ) -> Result<Self> {
+    pub(crate) fn new(gpu: &mut GpuDevice, settings: FarShadows, frame_bytes: u64) -> Result<Self> {
         let image = gpu.create_image(
             settings.resolution,
             settings.resolution,
@@ -154,7 +150,7 @@ impl FarMap {
         )
     }
 
-    pub(crate) fn destroy(self, gpu: &mut VulkanDevice) -> Result<()> {
+    pub(crate) fn destroy(self, gpu: &mut GpuDevice) -> Result<()> {
         gpu.retire(Resource::Image(self.image))?;
         gpu.retire(Resource::Buffer(self.frame))?;
         gpu.collect()?;

@@ -6,9 +6,7 @@ use crate::{
     targets::Targets,
 };
 use anyhow::Result;
-use ara_gpu::{
-    Access, Barrier, Buffer, Device, Queue, Resource, commands::Command, vk, vulkan::VulkanDevice,
-};
+use ara_gpu::{Access, Barrier, Buffer, Device, GpuDevice, Queue, Resource, commands::Command, vk};
 use ara_render::graph::State;
 
 impl FidelityView {
@@ -16,7 +14,7 @@ impl FidelityView {
     /// pipelines or targets. Hosts supply a fixed jitter/RNG sequence afterward;
     /// temporal AA remains enabled. This explicit readback boundary clears DDGI,
     /// exposure and temporal accumulation rather than borrowing live lighting history.
-    pub fn reset_accumulation(&mut self, gpu: &mut VulkanDevice) -> Result<()> {
+    pub fn reset_accumulation(&mut self, gpu: &mut GpuDevice) -> Result<()> {
         let empty = self.volume.empty_data();
         for (probe, state) in self.probes.into_iter().zip(self.probe_states) {
             overwrite(gpu, probe, bytemuck::cast_slice(&empty), state.access)?;
@@ -62,7 +60,7 @@ impl FidelityView {
     /// Advances compressed texture residency within the configured upload budget.
     pub fn refine_native_textures(
         &mut self,
-        gpu: &mut VulkanDevice,
+        gpu: &mut GpuDevice,
     ) -> Result<ara_texture_stream::NativeStats> {
         self.scene.refine_native_textures(gpu)
     }
@@ -71,7 +69,7 @@ impl FidelityView {
     /// output until the first successful render of the new generation.
     pub fn replace_native_scene(
         &mut self,
-        gpu: &mut VulkanDevice,
+        gpu: &mut GpuDevice,
         scene: &ara_render::instanced::Scene,
         textures: ara_texture_stream::NativeResidency,
     ) -> Result<()> {
@@ -135,7 +133,7 @@ impl FidelityView {
     /// published image remains valid. No gameplay or simulation state is touched.
     pub fn resize_unpublished(
         &mut self,
-        gpu: &mut VulkanDevice,
+        gpu: &mut GpuDevice,
         render_size: [u32; 2],
         display_size: [u32; 2],
     ) -> Result<()> {
@@ -173,12 +171,7 @@ impl FidelityView {
 }
 
 /// Explicit capture reset of completed device-local storage, preserving GPU memory placement.
-fn overwrite(
-    gpu: &mut VulkanDevice,
-    destination: Buffer,
-    bytes: &[u8],
-    before: Access,
-) -> Result<()> {
+fn overwrite(gpu: &mut GpuDevice, destination: Buffer, bytes: &[u8], before: Access) -> Result<()> {
     let stage = gpu.create_buffer(bytes.len() as u64, vk::BufferUsageFlags::TRANSFER_SRC, true)?;
     let result = (|| {
         gpu.upload(stage, bytes)?;

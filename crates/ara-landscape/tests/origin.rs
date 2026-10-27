@@ -1,7 +1,7 @@
 //! GPU regression for authored origins, signed tile bounds and empty foliage.
 use anyhow::{Result, ensure};
 use ara_foliage::Instance;
-use ara_gpu::{Device, vulkan::VulkanDevice};
+use ara_gpu::{Device, GpuDevice};
 use ara_landscape::{Landscape, View, sample::LandscapeData};
 use ara_terrain::{Header, Tile, TileCoord};
 use glam::Vec3;
@@ -9,7 +9,7 @@ use image::RgbaImage;
 use std::path::Path;
 
 fn frame(
-    gpu: &mut VulkanDevice,
+    gpu: &mut GpuDevice,
     landscape: &mut Landscape,
     view: &View,
     path: &Path,
@@ -28,7 +28,7 @@ fn translated_landscape_matches_origin_view_and_accepts_authored_stream_coordina
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let output = root.join("../../target/authoring-tests/landscape-origin");
     std::fs::create_dir_all(&output)?;
-    let mut gpu = VulkanDevice::new(&[], output.join("gpu-cache"))?;
+    let mut gpu = GpuDevice::new(&[], output.join("gpu-cache"))?;
     let header = Header {
         origin: [0.; 2],
         spacing: 2.,

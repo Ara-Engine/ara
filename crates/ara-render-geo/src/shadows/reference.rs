@@ -23,16 +23,13 @@ pub struct ShadowReference {
 impl ShadowReference {
     /// Builds one shared full-resolution BLAS and an instanced TLAS off-thread.
     pub fn new(
-        gpu: &mut VulkanDevice,
+        gpu: &mut GpuDevice,
         source: &ara_geo::SourceMesh,
         instances: &[Instance],
         geometry: &GeometryView,
         cooked: &Path,
     ) -> Result<Self> {
-        ensure!(
-            gpu.context().info.ray_tracing,
-            "RT shadow reference unavailable"
-        );
+        ensure!(gpu.info().ray_tracing, "RT shadow reference unavailable");
         ensure!(
             !source.vertices.is_empty()
                 && !source.indices.is_empty()
@@ -149,7 +146,7 @@ impl ShadowReference {
     /// This diagnostic reference resolves synchronously and is timed separately.
     pub fn render(
         &mut self,
-        gpu: &mut VulkanDevice,
+        gpu: &mut GpuDevice,
         geometry: &GeometryView,
         toward_light: Vec3,
     ) -> Result<Vec<ara_gpu::commands::PassTiming>> {
@@ -242,11 +239,7 @@ impl ShadowReference {
         Ok(timings)
     }
     /// Reads completed shadow visibility for numerical/image comparisons.
-    pub fn samples(
-        &self,
-        gpu: &mut VulkanDevice,
-        geometry: &GeometryView,
-    ) -> Result<Vec<[f32; 4]>> {
+    pub fn samples(&self, gpu: &mut GpuDevice, geometry: &GeometryView) -> Result<Vec<[f32; 4]>> {
         Ok(geometry
             .read_image(gpu, self.output, 16)?
             .as_chunks::<16>()
@@ -256,7 +249,7 @@ impl ShadowReference {
             .collect())
     }
     /// Retires TLAS before its BLAS and source buffers.
-    pub fn retire(self, gpu: &mut VulkanDevice) -> Result<()> {
+    pub fn retire(self, gpu: &mut GpuDevice) -> Result<()> {
         gpu.retire(Resource::AccelerationStructure(self.tlas))?;
         gpu.retire(Resource::AccelerationStructure(self.blas))?;
         for b in [self.vertices, self.indices, self.parameters] {

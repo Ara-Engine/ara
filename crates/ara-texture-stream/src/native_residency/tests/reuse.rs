@@ -5,7 +5,7 @@ use ara_render::instanced::Textures;
 fn replacement_reuses_images_across_reordered_ids_and_keeps_rejected_content_live() -> Result<()> {
     let cache = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../target/ara-texture-stream/native-reuse");
-    let mut gpu = VulkanDevice::new_raster(&[], cache)?;
+    let mut gpu = GpuDevice::new_raster(&[], cache)?;
     let mut old = bank(1024, 1024);
     let a = old.register([1; 32], source([4, 4], 1, 64))?;
     let b = old.register([2; 32], source([4, 4], 1, 128))?;

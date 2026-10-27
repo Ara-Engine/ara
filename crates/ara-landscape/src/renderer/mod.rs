@@ -6,11 +6,10 @@ use crate::pages::{PAGE_CAPACITY, Pages, UPLOAD_BUDGET};
 use crate::sample::LandscapeData;
 use anyhow::{Result, ensure};
 use ara_gpu::{
-    Access, Buffer, Device, Image, Pipeline, Queue, Resource, RootConstants,
+    Access, Buffer, Device, GpuDevice, Image, Pipeline, Queue, Resource, RootConstants,
     commands::{Attachment, Command, CommandList, PassTiming},
     cooked::CookedPipeline,
     vk,
-    vulkan::VulkanDevice,
 };
 use ara_render::graph::{Graph, ResourceId, State};
 use glam::{Mat4, Vec3};

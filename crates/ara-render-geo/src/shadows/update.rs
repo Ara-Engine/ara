@@ -4,7 +4,7 @@ impl VirtualShadows {
     /// caster/light revision invalidates cached pages before they can be sampled.
     pub fn update(
         &mut self,
-        gpu: &mut VulkanDevice,
+        gpu: &mut GpuDevice,
         geometry: &GeometryView,
         lights: &[Light],
         light_position: Vec3,

@@ -1,8 +1,5 @@
 //! Compare cached readback with the existing allocation policy on identical bytes.
-use ara_gpu::{
-    Access, Barrier, Device, Queue, Resource, vk,
-    vulkan::{Command, VulkanDevice},
-};
+use ara_gpu::{Access, Barrier, Device, GpuDevice, Queue, Resource, vk, vulkan::Command};
 
 #[test]
 #[ignore = "requires Vulkan; measurement must run through ara-dev gpu"]
@@ -12,7 +9,7 @@ fn cached_readback_preserves_bytes_and_measures_cpu_copy_cost()
         .join("../../target/ara-texture-gpu/readback-probe");
     std::fs::create_dir_all(&root)?;
     let cache = tempfile::tempdir_in(root)?;
-    let mut gpu = VulkanDevice::new_raster(&[], cache.path())?;
+    let mut gpu = GpuDevice::new_raster(&[], cache.path())?;
     let bytes: Vec<_> = (0..4 * 1024 * 1024)
         .map(|index| (index * 137 + index / 17) as u8)
         .collect();

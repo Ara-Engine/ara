@@ -160,9 +160,10 @@ mod tests {
     #![allow(clippy::unwrap_used)]
     use super::*;
     use ara_gpu::{
+        GpuDevice,
         shared::Mailbox,
         vk,
-        vulkan::{VulkanDevice, external::ExportRing, image_barrier},
+        vulkan::{external::ExportRing, image_barrier},
     };
     use ara_ui_render::gpu::UiGpu;
 
@@ -232,8 +233,8 @@ mod tests {
     #[ignore = "needs a Vulkan GPU with VK_KHR_external_memory_win32 and validation layers"]
     fn play_surfaces_show_through_the_external_image_path() {
         let cache = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../.sn/test-gpu");
-        let mut player = VulkanDevice::new(&[], &cache).unwrap();
-        let editor = VulkanDevice::new(&[], &cache).unwrap();
+        let mut player = GpuDevice::new(&[], &cache).unwrap();
+        let editor = GpuDevice::new(&[], &cache).unwrap();
         let size = [32, 16];
         let source = player
             .create_image(

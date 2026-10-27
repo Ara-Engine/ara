@@ -3,7 +3,7 @@ use crate::dispatch::{Encoding, MAX_BLOCKS, Transfers, unavailable};
 use crate::split::Pipelines;
 use ara_asset::{BlockEncoder, Cancellation, CookPreset, Digest, Error, Result};
 use ara_asset_format::TextureFormat;
-use ara_gpu::{Pipeline, cooked::CookedPipeline, vulkan::VulkanDevice};
+use ara_gpu::{GpuDevice, Pipeline, cooked::CookedPipeline};
 use std::{
     path::{Path, PathBuf},
     sync::Mutex,
@@ -15,7 +15,7 @@ struct Kernel {
     pipeline: Option<Pipeline>,
 }
 struct State {
-    gpu: Option<VulkanDevice>,
+    gpu: Option<GpuDevice>,
     kernels: Vec<Kernel>,
     transfers: Option<Transfers>,
     timings: std::collections::BTreeMap<String, f64>,
@@ -210,13 +210,13 @@ impl BlockEncoder for Encoder {
             .map_err(|_| unavailable("GPU codec state poisoned"))?;
         if state.gpu.is_none() {
             let start = std::time::Instant::now();
-            let gpu = VulkanDevice::new_raster(&[], &self.cache).map_err(unavailable)?;
-            if !gpu.context().info.buffer_int64_atomics {
+            let gpu = GpuDevice::new_raster(&[], &self.cache).map_err(unavailable)?;
+            if !gpu.info().buffer_int64_atomics {
                 return Err(unavailable(
                     "integer BC6H/BC7 shaders require shaderInt64 on this device",
                 ));
             }
-            state.dot = self.allow_dot && gpu.context().info.packed_integer_dot_accelerated;
+            state.dot = self.allow_dot && gpu.info().packed_integer_dot_accelerated;
             state.gpu = Some(gpu);
             state.timings.insert(
                 "initialize.wall_ms".into(),
@@ -325,7 +325,7 @@ impl BlockEncoder for Encoder {
     }
 }
 
-fn pipeline(gpu: &mut VulkanDevice, kernel: &mut Kernel) -> Result<Pipeline> {
+fn pipeline(gpu: &mut GpuDevice, kernel: &mut Kernel) -> Result<Pipeline> {
     if let Some(pipeline) = kernel.pipeline {
         return Ok(pipeline);
     }

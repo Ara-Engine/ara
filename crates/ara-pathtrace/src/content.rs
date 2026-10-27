@@ -160,7 +160,7 @@ pub(crate) fn camera() -> CameraSpec {
 }
 
 /// Measure locally fetched Sponza content with the complete RT-tier frame.
-pub fn run(gpu: &mut VulkanDevice, root: &Path) -> Result<()> {
+pub fn run(gpu: &mut GpuDevice, root: &Path) -> Result<()> {
     let path = root.join(".sn/assets/sponza");
     let scene =
         load(&path).context("Fetch the local Sponza benchmark with fetch-sponza.ps1 first")?;

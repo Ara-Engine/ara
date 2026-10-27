@@ -1,5 +1,5 @@
 #![allow(clippy::unwrap_used)]
-use ara_gpu::vulkan::VulkanDevice;
+use ara_gpu::GpuDevice;
 use ara_render::{
     Renderer,
     capture::{CaptureRequest, ViewMode},
@@ -17,7 +17,7 @@ fn ribbon_mesh_surface_and_depth_collision_execute_on_gpu() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let captures = root.join("../../target/ara-vfx-gpu/features");
     std::fs::create_dir_all(&captures).unwrap();
-    let mut gpu = VulkanDevice::new(&[], root.join(".cache/features")).unwrap();
+    let mut gpu = GpuDevice::new(&[], root.join(".cache/features")).unwrap();
     for (effect, tick) in ara_vfx::samples::additional() {
         let mut system = GpuSystem::new(
             &mut gpu,
@@ -57,7 +57,7 @@ fn ribbon_mesh_surface_and_depth_collision_execute_on_gpu() {
             .unwrap();
         system.retire(&mut gpu).unwrap();
     }
-    gpu.context().assert_clean().unwrap();
+    gpu.assert_clean().unwrap();
 }
 
 #[test]
@@ -122,5 +122,5 @@ fn composites_into_renderer_hdr_and_preserves_imported_states() {
     assert!(system.stats(renderer.gpu()).unwrap().particles_alive > 0);
     system.retire(renderer.gpu_mut()).unwrap();
     renderer.render(&view.camera, 1.).unwrap();
-    renderer.gpu().context().assert_clean().unwrap();
+    renderer.gpu().assert_clean().unwrap();
 }

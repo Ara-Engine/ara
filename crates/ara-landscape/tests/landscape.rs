@@ -1,9 +1,8 @@
 use anyhow::{Result, ensure};
 use ara_gpu::{
-    Device, Queue, Resource,
+    Device, GpuDevice, Queue, Resource,
     commands::{Attachment, Command},
     cooked::CookedPipeline,
-    vulkan::VulkanDevice,
 };
 use ara_landscape::{Landscape, View, sample};
 use std::path::Path;
@@ -24,7 +23,7 @@ fn noon_dusk_goldens_streamed_pages_and_indirect_contracts() -> Result<()> {
     let instance_hash = blake3::hash(bytemuck::cast_slice(&data.instances))
         .to_hex()
         .to_string();
-    let mut gpu = VulkanDevice::new(&[], root.join("cache/test-gpu"))?;
+    let mut gpu = GpuDevice::new(&[], root.join("cache/test-gpu"))?;
     let mut landscape = Landscape::new(&mut gpu, &data, [2560, 1440], &root.join("cooked"))?;
     ensure!(
         landscape.detail_page_capacity() == 256,
@@ -71,7 +70,7 @@ fn noon_dusk_goldens_streamed_pages_and_indirect_contracts() -> Result<()> {
     if update {
         ara_gpu::cooked::write_json(
             &goldens.join("provenance.json"),
-            &serde_json::json!({"device":gpu.context().info,"height_hash":height_hash,"instance_hash":instance_hash,"tick":120,"seed":42,"size":[2560,1440],"instances":data.instances.len(),"tolerance_1_ssim":0.005}),
+            &serde_json::json!({"device":gpu.info(),"height_hash":height_hash,"instance_hash":instance_hash,"tick":120,"seed":42,"size":[2560,1440],"instances":data.instances.len(),"tolerance_1_ssim":0.005}),
         )?;
     }
     // Stream a worker-produced changed tile and prove its pixels reach the draw.

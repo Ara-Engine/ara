@@ -42,11 +42,7 @@ pub(crate) struct Residency {
     identity: [u8; 32],
 }
 impl Residency {
-    pub fn new(
-        gpu: &mut VulkanDevice,
-        geometry: &Geometry,
-        capacity: u32,
-    ) -> Result<(Self, Vec<u8>)> {
+    pub fn new(gpu: &mut GpuDevice, geometry: &Geometry, capacity: u32) -> Result<(Self, Vec<u8>)> {
         let capacity = capacity.min(u32::try_from(geometry.clusters.len())?);
         let roots: Vec<_> = geometry
             .clusters
@@ -128,11 +124,7 @@ impl GeometryView {
     /// Services prior-frame GPU feedback after its frame slot completes. Decode
     /// on a background extraction worker; record uploads before publishing the
     /// next view. Transfers are bounded to 16 independently compressed pages.
-    pub fn prepare_streaming(
-        &mut self,
-        gpu: &mut VulkanDevice,
-        geometry: &Geometry,
-    ) -> Result<u32> {
+    pub fn prepare_streaming(&mut self, gpu: &mut GpuDevice, geometry: &Geometry) -> Result<u32> {
         ensure!(
             geometry.identity()? == self.residency.identity,
             "stream source content identity differs"
