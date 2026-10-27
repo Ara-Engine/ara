@@ -195,9 +195,14 @@ fn deferred_frame_polls_without_waiting_and_orders_constant_writes() -> anyhow::
     assert!(gpu.resolve(point)?.is_empty());
     let mut completion = gpu.end_deferred_completion()?;
     assert!(gpu.poll_completion(&mut completion)?.is_none());
+    // The next frame records while this one runs; one more is refused until the
+    // oldest is consumed: FRAMES_IN_FLIGHT bounded frames, no queue growth.
+    gpu.begin_deferred_completion()?;
+    let mut next = gpu.end_deferred_completion()?;
+    assert_eq!(ara_gpu::FRAMES_IN_FLIGHT, 2);
     assert!(
         gpu.begin_deferred_completion().is_err(),
-        "one bounded frame, no queue growth"
+        "bounded frames in flight, no queue growth"
     );
     if gpu.context().scene_graphics != gpu.context().graphics {
         // SAFETY: This empty native UI submit uses its independent queue. The
@@ -232,6 +237,11 @@ fn deferred_frame_polls_without_waiting_and_orders_constant_writes() -> anyhow::
     assert!(
         gpu.poll_completion(&mut completion).is_err(),
         "resolved tokens cannot release a newer frame"
+    );
+    assert!(
+        gpu.poll_completion(&mut next)?
+            .expect("empty frame")
+            .is_empty()
     );
     assert!(timings.iter().any(|p| p.pass == "Deferred.Before"));
     assert!(timings.iter().any(|p| p.pass == "Deferred.After"));
