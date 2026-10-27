@@ -8,24 +8,52 @@ namespace Ara.Hosting;
 /// </summary>
 public static unsafe class Host
 {
-    static HostInit s_init;
-    static volatile bool s_detached;
+    [ThreadStatic] static HostContext? t_context;
     [ThreadStatic] static bool t_exclusive;
 
-    internal static void Attach(in HostInit init)
+    static HostContext Current => t_context ?? throw new InvalidOperationException("no script host is active on this thread");
+
+    /// <summary>Restores the previous callback context when a host entry point returns.</summary>
+    public readonly struct Binding : IDisposable
     {
-        s_init = init;
-        s_detached = false;
+        readonly HostContext? _previous;
+        readonly bool _exclusive;
+        readonly bool _changed;
+        readonly List<EngineAccess.IEntry>? _cache;
+
+        internal Binding(HostContext context)
+        {
+            _previous = t_context;
+            _exclusive = t_exclusive;
+            _changed = !ReferenceEquals(context, _previous);
+            _cache = _changed ? EngineAccess.Swap(null) : null;
+            t_context = context;
+            if (_changed) t_exclusive = false;
+        }
+
+        /// <inheritdoc/>
+        public void Dispose()
+        {
+            if (_changed)
+            {
+                EngineAccess.Discard();
+                EngineAccess.Swap(_cache);
+            }
+            t_context = _previous;
+            t_exclusive = _exclusive;
+        }
     }
 
-    /// <summary>
-    /// Called by <see cref="ScriptRuntime.Shutdown"/>: later logs, diagnostics and compile
-    /// notifications become no-ops (the host leaks its context, so a call racing this is safe).
-    /// </summary>
-    internal static void Detach() => s_detached = true;
+    internal static Binding Bind(HostContext context) => new(context);
 
-    /// <summary>True while a host is attached (after <see cref="ScriptRuntime.Init"/>, before shutdown).</summary>
-    public static bool Attached => !s_detached && s_init.Api.Log != null;
+    /// <summary>Resolves a generated module type's index in the current host.</summary>
+    public static uint TypeIndex(string name) => Current.Indexes.GetValueOrDefault(name, uint.MaxValue);
+
+    /// <summary>Registers a generated module type's index for the current host.</summary>
+    public static void SetTypeIndex(string name, uint index) => Current.Indexes[name] = index;
+
+    /// <summary>True while this thread is bound to a live host with callbacks.</summary>
+    public static bool Attached => t_context is { Detached: false } context && context.Init.Api.Log != null;
 
     /// <summary>
     /// Marks the current thread as running an exclusive phase (behaviours, commands),
@@ -46,11 +74,13 @@ public static unsafe class Host
         finally { t_exclusive = previous; }
     }
 
-    static void RequireExclusive()
+    static HostContext RequireExclusive()
     {
-        if (!t_exclusive)
+        var context = Current;
+        if (!t_exclusive || context.Detached)
             throw new InvalidOperationException(
                 "World access is only available in behaviours and commands; systems take components as parameters");
+        return context;
     }
 
     /// <summary>Logs a message. Level: 0 info, 1 warning, 2 error.</summary>
@@ -58,26 +88,26 @@ public static unsafe class Host
     {
         if (!Attached) return;
         var bytes = Encoding.UTF8.GetBytes(message);
-        fixed (byte* p = bytes) s_init.Api.Log(s_init.Ctx, level, p, (uint)bytes.Length);
+        fixed (byte* p = bytes) Current.Init.Api.Log(Current.Init.Ctx, level, p, (uint)bytes.Length);
     }
 
     /// <summary>Reports a structured diagnostic (JSON in the ara-diag shape).</summary>
     public static void Diagnostic(ReadOnlySpan<byte> json)
     {
         if (!Attached) return;
-        fixed (byte* p = json) s_init.Api.Diagnostic(s_init.Ctx, p, (uint)json.Length);
+        fixed (byte* p = json) Current.Init.Api.Diagnostic(Current.Init.Ctx, p, (uint)json.Length);
     }
 
     /// <summary>Host monotonic clock in nanoseconds (diagnostics only, never simulation).</summary>
-    public static ulong Now() => Attached ? s_init.Api.NowNs(s_init.Ctx) : 0;
+    public static ulong Now() => Attached ? Current.Init.Api.NowNs(Current.Init.Ctx) : 0;
 
     /// <summary>The <c>HostInit</c> flags (<c>AbiConst.Init*</c>).</summary>
-    public static uint Flags => s_init.Flags;
+    public static uint Flags => Current.Init.Flags;
 
     internal static void ReportReload(in ReloadReport report)
     {
         if (!Attached) return;
-        fixed (ReloadReport* p = &report) s_init.Api.ReportReload(s_init.Ctx, p);
+        fixed (ReloadReport* p = &report) Current.Init.Api.ReportReload(Current.Init.Ctx, p);
     }
 
     /// <summary>
@@ -93,7 +123,7 @@ public static unsafe class Host
             int n;
             fixed (byte* d = descriptor)
             fixed (byte* o = buf)
-                n = s_init.Api.RegisterModules(s_init.Ctx, d, (uint)descriptor.Length, o, (uint)buf.Length);
+                n = Current.Init.Api.RegisterModules(Current.Init.Ctx, d, (uint)descriptor.Length, o, (uint)buf.Length);
             if (n >= 0) return buf.AsSpan(0, n).ToArray();
             buf = new byte[-n];
         }
@@ -101,19 +131,19 @@ public static unsafe class Host
 
     internal static byte* ComponentPtr(ulong entity, uint component, bool write)
     {
-        RequireExclusive();
-        return s_init.Api.ComponentPtr(s_init.Ctx, entity, component, write ? 1u : 0u);
+        var context = RequireExclusive();
+        return context.Init.Api.ComponentPtr(context.Init.Ctx, entity, component, write ? 1u : 0u);
     }
 
     internal static byte[]? ComponentJson(ulong entity, uint component)
     {
-        RequireExclusive();
+        var context = RequireExclusive();
         var buffer = new byte[1024];
         while (true)
         {
             int n;
             fixed (byte* output = buffer)
-                n = s_init.Api.ComponentJson(s_init.Ctx, entity, component, AbiConst.ComponentRead, null, 0, output, (uint)buffer.Length);
+                n = context.Init.Api.ComponentJson(context.Init.Ctx, entity, component, AbiConst.ComponentRead, null, 0, output, (uint)buffer.Length);
             if (n == 0) return null;
             if (n > 0) return buffer.AsSpan(0, n).ToArray();
             buffer = new byte[-n];
@@ -122,45 +152,45 @@ public static unsafe class Host
 
     internal static bool ComponentHas(ulong entity, uint component)
     {
-        RequireExclusive();
-        return s_init.Api.ComponentJson(s_init.Ctx, entity, component, AbiConst.ComponentHas, null, 0, null, 0) != 0;
+        var context = RequireExclusive();
+        return context.Init.Api.ComponentJson(context.Init.Ctx, entity, component, AbiConst.ComponentHas, null, 0, null, 0) != 0;
     }
 
     internal static void ComponentWrite(ulong entity, uint component, ReadOnlySpan<byte> json)
     {
-        RequireExclusive();
+        var context = RequireExclusive();
         fixed (byte* data = json)
-            if (s_init.Api.ComponentJson(s_init.Ctx, entity, component, AbiConst.ComponentWrite, data, (uint)json.Length, null, 0) != 1)
+            if (context.Init.Api.ComponentJson(context.Init.Ctx, entity, component, AbiConst.ComponentWrite, data, (uint)json.Length, null, 0) != 1)
                 throw new InvalidOperationException($"component #{component} on {new Entity(entity)} rejected the value");
     }
 
     internal static byte* ResourcePtr(uint resource, bool write)
     {
-        RequireExclusive();
-        return s_init.Api.ResourcePtr(s_init.Ctx, resource, write ? 1u : 0u);
+        var context = RequireExclusive();
+        return context.Init.Api.ResourcePtr(context.Init.Ctx, resource, write ? 1u : 0u);
     }
 
     internal static bool EntityAlive(ulong entity)
     {
-        RequireExclusive();
-        return s_init.Api.EntityAlive(s_init.Ctx, entity) != 0;
+        var context = RequireExclusive();
+        return context.Init.Api.EntityAlive(context.Init.Ctx, entity) != 0;
     }
 
     internal static ulong ReserveEntity(void* buf)
     {
         if (buf == null) throw new InvalidOperationException("no command buffer in this context");
-        return s_init.Api.ReserveEntity(s_init.Ctx, buf);
+        return Current.Init.Api.ReserveEntity(Current.Init.Ctx, buf);
     }
 
     internal static void CmdPush(void* buf, uint op, uint typeIndex, ulong entity, void* data, uint len)
     {
         if (buf == null) throw new InvalidOperationException("no command buffer in this context");
-        s_init.Api.CmdPush(s_init.Ctx, buf, op, typeIndex, entity, (byte*)data, len);
+        Current.Init.Api.CmdPush(Current.Init.Ctx, buf, op, typeIndex, entity, (byte*)data, len);
     }
 
     /// <summary>Tells the host a compile started (true) or finished (false), for tick-thread priority.</summary>
     public static void CompileState(bool active)
     {
-        if (Attached) s_init.Api.CompileState(s_init.Ctx, active ? 1u : 0u);
+        if (Attached) Current.Init.Api.CompileState(Current.Init.Ctx, active ? 1u : 0u);
     }
 }

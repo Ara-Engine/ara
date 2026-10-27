@@ -9,14 +9,24 @@ namespace Ara.Hosting;
 /// tick boundaries. Every host-facing entry point is in <see cref="Exports"/>; this
 /// class does the work.
 /// </summary>
-public static unsafe class ScriptRuntime
+public sealed unsafe class ScriptRuntime
 {
-    static IModuleLoader? s_loader;
-    static volatile ModuleSlot[] s_slots = [];
-    static readonly ConcurrentQueue<PendingUpdate> s_pending = new();
-    static int s_faults;
-    static int s_threadsSeen;
-    [ThreadStatic] static bool t_seen;
+    readonly IModuleLoader _loader;
+    volatile ModuleSlot[] _slots = [];
+    readonly ConcurrentQueue<PendingUpdate> _pending = new();
+    readonly ConcurrentDictionary<int, byte> _threads = new();
+    int _faults;
+    volatile bool _stopped;
+    internal HostContext Context { get; }
+
+    ScriptRuntime(in HostInit init, IModuleLoader loader)
+    {
+        Context = new HostContext(init);
+        _loader = loader;
+    }
+
+    /// <summary>Binds callbacks to this host for synchronous work on the calling thread.</summary>
+    public Host.Binding Activate() => Host.Bind(Context);
 
     /// <summary>
     /// Checks the ABI identity, captures the host table, fills <paramref name="api"/> and
@@ -38,18 +48,17 @@ public static unsafe class ScriptRuntime
             {
                 return 2;
             }
-            Host.Attach(*host);
+            if (host->Ctx == null) return 1;
+            var runtime = new ScriptRuntime(*host, loader);
+            using var binding = runtime.Activate();
             if (AbiInfo.VerifySizes() is { } err)
             {
                 Diag.Report(AraCodes.StaleBindings, "error", "layout mismatch: " + err);
                 return 3;
             }
             GCSettings.LatencyMode = GCLatencyMode.SustainedLowLatency;
-            // A process may start several hosts in turn (tests, editor restarts): start clean.
-            s_loader?.Shutdown();
-            s_slots = [];
-            s_pending.Clear();
-            s_loader = loader;
+            loader.Attach(runtime);
+            if (!Exports.Register(host->Ctx, runtime)) return 99;
             Exports.Fill(api);
             return 0;
         }
@@ -61,29 +70,28 @@ public static unsafe class ScriptRuntime
     }
 
     /// <summary>Queues an update for the next tick boundary. Safe from any thread.</summary>
-    public static void Enqueue(PendingUpdate update) => s_pending.Enqueue(update);
+    public void Enqueue(PendingUpdate update) { if (!_stopped) _pending.Enqueue(update); }
 
-    internal static bool HasPending => !s_pending.IsEmpty;
+    internal bool HasPending => !_pending.IsEmpty;
 
-    internal static IModuleLoader? Loader => s_loader;
+    internal IModuleLoader Loader => _loader;
 
-    internal static int Faults => s_faults;
+    internal int Faults => _faults;
 
-    internal static int ThreadsSeen => s_threadsSeen;
+    internal int ThreadsSeen => _threads.Count;
 
-    internal static int LoadModules(string json)
+    internal int LoadModules(string json)
     {
-        if (s_loader is null) return 1;
-        var rc = s_loader.Load(json);
+        var rc = _loader.Load(json);
         ApplyPending();
         return rc;
     }
 
     /// <summary>Applies every queued update in order. Runs on the tick thread with no C# code running.</summary>
-    internal static uint ApplyPending()
+    internal uint ApplyPending()
     {
         uint flags = 0;
-        while (s_pending.TryDequeue(out var u))
+        while (_pending.TryDequeue(out var u))
         {
             flags |= u switch
             {
@@ -96,13 +104,13 @@ public static unsafe class ScriptRuntime
         return flags;
     }
 
-    static ModuleSlot? SlotOf(uint index)
+    ModuleSlot? SlotOf(uint index)
     {
-        var slots = s_slots;
+        var slots = _slots;
         return index < slots.Length ? slots[index] : null;
     }
 
-    static uint Finish(ref ReloadReport report, uint slotIndex, ModuleSlot? slot, ulong applyStart)
+    uint Finish(ref ReloadReport report, uint slotIndex, ModuleSlot? slot, ulong applyStart)
     {
         report.Module = slotIndex;
         if (slot is not null)
@@ -118,7 +126,7 @@ public static unsafe class ScriptRuntime
     }
 
     /// <summary>Registers every module of the swap with the host in one call (all or none), then installs their tables.</summary>
-    static uint ApplySwap(SwapUpdate u)
+    uint ApplySwap(SwapUpdate u)
     {
         var t0 = Host.Now();
         var mods = u.Modules;
@@ -167,7 +175,7 @@ public static unsafe class ScriptRuntime
         return AbiConst.BoundaryReloaded | AbiConst.BoundarySchemaChanged;
     }
 
-    static uint Reject(SwapUpdate u, string? why, ulong t0)
+    uint Reject(SwapUpdate u, string? why, ulong t0)
     {
         var names = string.Join(", ", u.Modules.Select(m => $"`{m.Name}`"));
         if (why is not null) Diag.Report(AraCodes.LoadFailed, "error", $"module {names}: {why} (the last good code keeps running)");
@@ -181,7 +189,7 @@ public static unsafe class ScriptRuntime
         return 0;
     }
 
-    static uint ApplyDelta(DeltaUpdate d)
+    uint ApplyDelta(DeltaUpdate d)
     {
         var t0 = Host.Now();
         var slot = SlotOf(d.Slot);
@@ -207,13 +215,13 @@ public static unsafe class ScriptRuntime
         return AbiConst.BoundaryReloaded;
     }
 
-    static ModuleSlot AddSlot(uint index, string name)
+    ModuleSlot AddSlot(uint index, string name)
     {
-        var slots = s_slots;
+        var slots = _slots;
         var next = new ModuleSlot[Math.Max(slots.Length, (int)index + 1)];
         slots.CopyTo(next, 0);
         for (int i = slots.Length; i < next.Length; i++) next[i] = new ModuleSlot((uint)i, i == index ? name : "");
-        s_slots = next;
+        _slots = next;
         return next[index];
     }
 
@@ -240,9 +248,9 @@ public static unsafe class ScriptRuntime
     }
 
     /// <summary>Runs one system over one chunk. Called concurrently from task-pool threads.</summary>
-    internal static int RunSystem(SystemCall* call)
+    internal int RunSystem(SystemCall* call)
     {
-        if (!t_seen) { t_seen = true; Interlocked.Increment(ref s_threadsSeen); }
+        _threads.GetOrAdd(System.Environment.CurrentManagedThreadId, 0);
         var id = call->System;
         if (SlotOf(id >> 16)?.Tables.Systems is not { } systems || (id & 0xFFFF) >= systems.Length) return AbiConst.RunBadId;
         var e = systems[id & 0xFFFF];
@@ -256,7 +264,7 @@ public static unsafe class ScriptRuntime
         {
             if (Interlocked.Exchange(ref e.Faulted, 1) == 0)
             {
-                Interlocked.Increment(ref s_faults);
+                Interlocked.Increment(ref _faults);
                 Diag.Fault(AraCodes.SystemFault, $"system `{e.Name}`", ex);
             }
             return AbiConst.RunFaulted;
@@ -264,7 +272,7 @@ public static unsafe class ScriptRuntime
     }
 
     /// <summary>Runs one behaviour type over one chunk, serially, with exclusive world access.</summary>
-    internal static int RunBehaviours(BehaviourCall* call)
+    internal int RunBehaviours(BehaviourCall* call)
     {
         var id = call->Behaviour;
         if (SlotOf(id >> 16)?.Tables.Behaviours is not { } all || (id & 0xFFFF) >= all.Length) return AbiConst.RunBadId;
@@ -317,7 +325,7 @@ public static unsafe class ScriptRuntime
         {
             if (Interlocked.Exchange(ref entry.Faulted, 1) == 0)
             {
-                Interlocked.Increment(ref s_faults);
+                Interlocked.Increment(ref _faults);
                 Diag.Fault(AraCodes.BehaviourFault, $"behaviour `{entry.Name}`", ex);
             }
             return AbiConst.RunFaulted;
@@ -329,7 +337,7 @@ public static unsafe class ScriptRuntime
     }
 
     /// <summary>Runs one command with exclusive world access.</summary>
-    internal static int RunCommand(CommandCall* call)
+    internal int RunCommand(CommandCall* call)
     {
         var id = call->Command;
         if (SlotOf(id >> 16)?.Tables.Commands is not { } all || (id & 0xFFFF) >= all.Length) return AbiConst.RunBadId;
@@ -346,7 +354,7 @@ public static unsafe class ScriptRuntime
         {
             if (Interlocked.Exchange(ref entry.Faulted, 1) == 0)
             {
-                Interlocked.Increment(ref s_faults);
+                Interlocked.Increment(ref _faults);
                 Diag.Fault(AraCodes.CommandFault, $"command `{entry.Name}`", ex);
             }
             return AbiConst.RunFaulted;
@@ -357,13 +365,13 @@ public static unsafe class ScriptRuntime
         }
     }
 
-    internal static int Shutdown()
+    internal int Shutdown()
     {
+        _stopped = true;
         // Drop the tables (delegates, behaviour objects) first: they keep module ALCs alive.
-        s_slots = [];
-        s_pending.Clear();
-        var leaked = s_loader?.Shutdown() ?? 0;
-        Host.Detach();
-        return leaked;
+        _slots = [];
+        _pending.Clear();
+        try { return _loader.Shutdown(); }
+        finally { Context.Detached = true; _pending.Clear(); Context.Indexes.Clear(); }
     }
 }

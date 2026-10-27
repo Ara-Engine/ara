@@ -7,7 +7,7 @@ namespace Ara;
 // Callback-local copies only. The ECS remains authoritative; no value survives Flush.
 internal static class EngineAccess
 {
-    interface IEntry { uint Index { get; } ulong Entity { get; } void Flush(); }
+    internal interface IEntry { uint Index { get; } ulong Entity { get; } void Flush(); }
     sealed class Entry<T>(Entity entity, uint index, T value, Action<Utf8JsonWriter, T> write) : IEntry
     {
         public T Value = value;
@@ -21,6 +21,13 @@ internal static class EngineAccess
     }
 
     [ThreadStatic] static List<IEntry>? t_entries;
+
+    internal static List<IEntry>? Swap(List<IEntry>? next)
+    {
+        var previous = t_entries;
+        t_entries = next;
+        return previous;
+    }
 
     internal static ref T Get<T>(Entity entity, uint index, bool write,
         Func<JsonElement, T> read, Action<Utf8JsonWriter, T> encode)

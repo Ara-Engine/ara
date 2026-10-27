@@ -10,6 +10,92 @@ use serde_json::json;
 use support::EcsTransform;
 
 #[test]
+fn native_aot_worlds_share_the_image_but_keep_dispatch_and_shutdown_separate() {
+    let _clr = support::clr_lock();
+    let library = support::publish_aot();
+    let (db, engine) = support::engine();
+    let mut first_world = World::new();
+    let mut first = ScriptHost::start(
+        ScriptConfig::native_aot(&library),
+        db.clone(),
+        &engine,
+        &mut first_world,
+    )
+    .expect("first host");
+    first
+        .load_modules(&mut first_world, &[])
+        .expect("first modules");
+    let mut second_world = World::new();
+    let mut second = ScriptHost::start(
+        ScriptConfig::native_aot(&library),
+        db,
+        &engine,
+        &mut second_world,
+    )
+    .expect("second host");
+    second
+        .load_modules(&mut second_world, &[])
+        .expect("second modules");
+    let a = first_world.spawn(EcsTransform::default()).id();
+    let b = second_world.spawn(EcsTransform::default()).id();
+    for (host, world, door, angle) in [
+        (&mut first, &mut first_world, a, 3),
+        (&mut second, &mut second_world, b, 90),
+    ] {
+        host.insert_component(
+            world,
+            door,
+            "Door",
+            &json!({"openAngle":angle,"isOpen":true}),
+        )
+        .expect("door");
+        host.run_tick(
+            world,
+            Tick {
+                frame: 0,
+                seed: 1,
+                elapsed: 0.0,
+                dt: 0.1,
+                reserved: 0,
+            },
+        );
+    }
+    assert_eq!(
+        first_world
+            .get::<EcsTransform>(a)
+            .expect("first transform")
+            .rotation[1],
+        3.0
+    );
+    assert_eq!(
+        second_world
+            .get::<EcsTransform>(b)
+            .expect("second transform")
+            .rotation[1],
+        9.0
+    );
+    assert_eq!(first.shutdown(), 0);
+    second.run_tick(
+        &mut second_world,
+        Tick {
+            frame: 1,
+            seed: 1,
+            elapsed: 0.1,
+            dt: 0.1,
+            reserved: 0,
+        },
+    );
+    assert_eq!(
+        second_world
+            .get::<EcsTransform>(b)
+            .expect("survivor transform")
+            .rotation[1],
+        18.0
+    );
+    assert_eq!(second.shutdown(), 0);
+}
+
+#[test]
 fn native_aot_sample_runs_against_the_host() {
     let _clr = support::clr_lock();
     let library = support::publish_aot();

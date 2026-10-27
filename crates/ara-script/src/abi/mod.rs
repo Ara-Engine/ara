@@ -296,29 +296,30 @@ abi_table! {
 }
 
 abi_table! {
-    /// Functions the C# runtime fills in for the host. Exceptions never cross them.
+    /// Functions the C# runtime fills in for the host. Every call takes the unique
+    /// host handle (`HostInit.ctx`); exceptions never cross them.
     pub struct ScriptApi as SCRIPT_API {
         /// Loads modules described by UTF-8 JSON (dev: starts the compile server; AOT: the linked modules).
-        fn load_modules(json: *const u8, len: u32) -> i32;
+        fn load_modules(host: *mut c_void, json: *const u8, len: u32) -> i32;
         /// Applies staged reloads at a tick boundary. Returns `BOUNDARY_*` bits.
-        fn tick_boundary(tick: *const Tick) -> u32;
+        fn tick_boundary(host: *mut c_void, tick: *const Tick) -> u32;
         /// Non-zero if a staged reload is waiting for the next boundary.
-        fn has_pending() -> u32;
+        fn has_pending(host: *mut c_void) -> u32;
         /// Runs one system over one chunk. Returns `RUN_*`.
-        fn run_system(call: *const SystemCall) -> i32;
+        fn run_system(host: *mut c_void, call: *const SystemCall) -> i32;
         /// Runs one behaviour type over one chunk for one phase. Returns `RUN_*`.
-        fn run_behaviours(call: *const BehaviourCall) -> i32;
+        fn run_behaviours(host: *mut c_void, call: *const BehaviourCall) -> i32;
         /// Runs one command. Returns `RUN_*`.
-        fn run_command(call: *mut CommandCall) -> i32;
+        fn run_command(host: *mut c_void, call: *mut CommandCall) -> i32;
         /// Recompiles a module hot (1: Debug IL, EnC) or cold (0: optimized).
-        fn set_heat(module: u32, hot: u32) -> i32;
+        fn set_heat(host: *mut c_void, module: u32, hot: u32) -> i32;
         /// Asks for a compile of changed files (UTF-8 JSON `{"module", "paths", "origin"}`). Agent edits
         /// are coalesced and run behind human ones. Never blocks: the result arrives as a staged reload.
-        fn request_compile(json: *const u8, len: u32) -> i32;
+        fn request_compile(host: *mut c_void, json: *const u8, len: u32) -> i32;
         /// Diagnostics counters (`DIAG_*`).
-        fn diag(key: u32) -> u64;
+        fn diag(host: *mut c_void, key: u32) -> u64;
         /// Stops the compile client, unloads every module and returns the leaked-ALC count.
-        fn shutdown() -> i32;
+        fn shutdown(host: *mut c_void) -> i32;
     }
 }
 

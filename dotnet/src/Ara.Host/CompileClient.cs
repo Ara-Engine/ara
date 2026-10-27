@@ -88,6 +88,7 @@ internal sealed class CompileClient : IDisposable
 
     void ReadLoop()
     {
+        using var binding = _loader.Activate();
         try
         {
             while (Protocol.Receive(_pipe) is { } msg)
@@ -116,9 +117,9 @@ internal sealed class CompileClient : IDisposable
                 }
             }
         }
-        catch (Exception e) when (!_closing)
+        catch (Exception e)
         {
-            Diag.Report(AraCodes.CompileServer, "error", $"compile server connection failed: {e.Message}");
+            if (!_closing) Diag.Report(AraCodes.CompileServer, "error", $"compile server connection failed: {e.Message}");
         }
         finally
         {
@@ -134,7 +135,7 @@ internal sealed class CompileClient : IDisposable
         try { Protocol.Send(_pipe, MessageKind.Shutdown, []); } catch (IOException) { }
         if (!_server.WaitForExit(2000))
         {
-            try { _server.Kill(entireProcessTree: true); } catch (InvalidOperationException) { }
+            try { _server.Kill(); } catch (InvalidOperationException) { }
         }
         _pipe.Dispose();
         _reader.Join(2000);

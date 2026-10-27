@@ -10,14 +10,13 @@ Depends on ara-schema, ara-diag, ara-components, ara-runtime, ara-sim, bevy_ecs,
 - `engine_bindings()`: the canonical ordered engine columns exposed to C# (currently
   checked native `Transform`), shared by the runtime, export hash and checked-in binding generation.
   A direct pointer view requires an explicit checked binding; other components use codecs.
-
 - `abi` (ABI v3): `HostInit` (+ `HostApi`, Rust → C#) and `ScriptApi` (C# → Rust), `Tick`,
   `Frame`, `SystemCall`, `BehaviourCall`, `CommandCall`, `ReloadReport` (kind, escalation,
   origin, cascade size, per-phase µs), the `ABI_CONSTS` (`RELOAD_*`, `ESC_*`, `ORIGIN_*`) and
   `layout_hash(engine_layouts)`. Entry point: `ara_script_init(*const HostInit, *mut ScriptApi)`.
 - `csgen`: Rust → C# (`csharp(db, engine)`, `write`, `stale`, `blittable_components`):
   `Abi.g.cs`, `Components.g.cs`, `Units.g.cs`, `Codes.g.cs`.
-- `ScriptHost` (per process; one .NET runtime):
+- `ScriptHost` (per world; simultaneous hosts share one process-level CLR):
   - `start(ScriptConfig, SchemaDb, &EngineBindings, &mut World)`;
     `ScriptConfig::jit(ara_host_dir)` (+ `compile_server`) or `::native_aot(lib)`.
   - `shipping::ScriptManifest`: portable NativeAOT library, ABI/layout identity and
@@ -80,8 +79,9 @@ Depends on ara-schema, ara-diag, ara-components, ara-runtime, ara-sim, bevy_ecs,
 - Behaviours and commands run with exclusive world access published to C# as a `Scope`
   (`host/ctx.rs`). Commands journal first-seen bytes; rejection or a fault restores them;
   `undo` is all or nothing and converts saved bytes across layout migrations.
-- Rust never holds pointers into module code: ids (`slot << 16 | index`) into C# tables
-  swapped at tick boundaries.
+- Every `ScriptApi` call carries `HostInit.ctx` as a host handle. C# owns per-host
+  loaders, slots, pending queues, faults and type indexes; scoped thread bindings route
+  callbacks (including compiler-reader threads). Shutdown removes only that handle.
 
 ## Integration (ara-runtime-script)
 
@@ -130,7 +130,7 @@ Depends on ara-schema, ara-diag, ara-components, ara-runtime, ara-sim, bevy_ecs,
   relink of the same bytes: ~1 ms). Loading from a file pays Defender's on-access scan
   instead (same cost). Only smaller modules, L1/L2, or a Defender exclusion (the user's call) avoid it.
 - NativeAOT publish needs `vswhere.exe` on PATH (`tests/support::publish_aot` adds it).
-- `HostCtx` is leaked (one per process): C# threads may call back after `shutdown`.
+- `HostCtx` is leaked per host for late callback safety; CLR/images remain mapped.
 - Tags are 1 byte in C#. Native chunk loops stay allocation-free; variable-value access
   allocates callback-local copies. Keep bulk hot loops in native views.
 ## Measurements (`reload_bench`, 7800X3D shared with other agents' builds)

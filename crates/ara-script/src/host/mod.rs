@@ -150,7 +150,7 @@ struct PhaseScratch(Vec<(*const u64, *mut u8, usize)>);
 // and are cleared before it ends; between phases the vector holds no live pointers.
 unsafe impl Send for PhaseScratch {}
 
-/// The C# runtime attached to a world. One per process (one .NET runtime).
+/// One world's C# dispatch and callbacks; several hosts share the process's CLR.
 pub struct ScriptHost {
     ctx: &'static HostCtx,
     api: ScriptApi,
@@ -353,10 +353,12 @@ impl ScriptHost {
             })).collect::<Vec<_>>(),
         })
         .to_string();
+        let handle = self.ctx.handle();
         let rc = self.exclusive(world, true, None, |api, _| {
             // SAFETY: the JSON span is valid for the call; world access is published.
             unsafe {
                 (api.load_modules)(
+                    handle,
                     config.as_ptr(),
                     u32::try_from(config.len()).unwrap_or(u32::MAX),
                 )
@@ -399,26 +401,30 @@ impl ScriptHost {
         .to_string();
         // SAFETY: the JSON span is valid for the call; the runtime only enqueues it.
         unsafe {
-            (self.api.request_compile)(json.as_ptr(), u32::try_from(json.len()).unwrap_or(u32::MAX))
-                == 0
+            (self.api.request_compile)(
+                self.ctx.handle(),
+                json.as_ptr(),
+                u32::try_from(json.len()).unwrap_or(u32::MAX),
+            ) == 0
         }
     }
 
     /// True if a staged reload is waiting for the next [`ScriptHost::tick_boundary`].
     pub fn pending(&self) -> bool {
         // SAFETY: plain call into the runtime.
-        unsafe { (self.api.has_pending)() != 0 }
+        unsafe { (self.api.has_pending)(self.ctx.handle()) != 0 }
     }
     /// Applies staged reloads (call between ticks). Cheap when nothing is pending.
     pub fn tick_boundary(&mut self, world: &mut World) -> Boundary {
         // SAFETY: plain call into the runtime.
-        let pending = unsafe { (self.api.has_pending)() } != 0;
+        let pending = unsafe { (self.api.has_pending)(self.ctx.handle()) } != 0;
         let mut out = Boundary::default();
         if pending {
             let tick = self.tick;
+            let handle = self.ctx.handle();
             let flags = self.exclusive(world, true, None, |api, _| {
                 // SAFETY: no C# code is running; world access is published for registration.
-                unsafe { (api.tick_boundary)(&tick) }
+                unsafe { (api.tick_boundary)(handle, &tick) }
             });
             out.reloaded = flags & abi::BOUNDARY_RELOADED != 0;
             self.rebuild(world);
@@ -491,6 +497,7 @@ impl ScriptHost {
             };
             let serial = s.structural || s.resources.iter().any(|(_, w)| *w);
             let plan = SystemPlan {
+                host: self.ctx.handle() as usize,
                 id: s.id,
                 columns,
                 resources,
@@ -592,6 +599,7 @@ impl ScriptHost {
         );
         self.ctx.with_scope(&mut scope, || {
             let p = behaviour::Phase {
+                host: self.ctx.handle(),
                 api,
                 phase,
                 tick: &tick,
@@ -837,13 +845,13 @@ impl ScriptHost {
     /// Recompiles a module hot (Debug IL, EnC) or cold (optimized), at L3 cost.
     pub fn set_heat(&self, slot: u32, hot: bool) -> bool {
         // SAFETY: plain call into the runtime.
-        unsafe { (self.api.set_heat)(slot, u32::from(hot)) == 0 }
+        unsafe { (self.api.set_heat)(self.ctx.handle(), slot, u32::from(hot)) == 0 }
     }
 
     /// A runtime counter (`abi::DIAG_*`).
     pub fn diag(&self, key: u32) -> u64 {
         // SAFETY: plain call into the runtime.
-        unsafe { (self.api.diag)(key) }
+        unsafe { (self.api.diag)(self.ctx.handle(), key) }
     }
 
     /// True while the compile server is compiling (tick threads are boosted).
@@ -863,7 +871,7 @@ impl ScriptHost {
         }
         self.shut_down = true;
         // SAFETY: plain call into the runtime; it stops every C# thread that could call back.
-        let leaked = unsafe { (self.api.shutdown)() };
+        let leaked = unsafe { (self.api.shutdown)(self.ctx.handle()) };
         usize::try_from(leaked).unwrap_or(0)
     }
 }

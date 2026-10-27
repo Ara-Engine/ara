@@ -72,6 +72,9 @@ public sealed class ErrorUpdate : PendingUpdate
 /// </summary>
 public interface IModuleLoader
 {
+    /// <summary>Captures the host that owns this loader and its asynchronous updates.</summary>
+    void Attach(ScriptRuntime runtime);
+
     /// <summary>
     /// Loads the modules described by <paramref name="configJson"/> (already in dependency
     /// order). Initial generations must be enqueued (<see cref="ScriptRuntime.Enqueue"/>)
@@ -104,6 +107,10 @@ public interface IModuleLoader
 /// <summary>The NativeAOT loader: modules are linked into the image; nothing reloads.</summary>
 public sealed class StaticModuleLoader(params (string Name, Action<ModuleBuilder> Register)[] modules) : IModuleLoader
 {
+    ScriptRuntime? _runtime;
+    /// <inheritdoc/>
+    public void Attach(ScriptRuntime runtime) => _runtime = runtime;
+
     /// <inheritdoc/>
     public int Load(string configJson)
     {
@@ -120,7 +127,7 @@ public sealed class StaticModuleLoader(params (string Name, Action<ModuleBuilder
             swaps.Add(new ModuleSwap { Slot = (uint)i, Name = modules[i].Name, Module = builder, Hot = false });
         }
         // Linked modules come in reference order (the generator emits them that way).
-        ScriptRuntime.Enqueue(new SwapUpdate { Modules = swaps });
+        (_runtime ?? throw new InvalidOperationException("loader is not attached")).Enqueue(new SwapUpdate { Modules = swaps });
         return 0;
     }
 

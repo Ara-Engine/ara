@@ -51,7 +51,7 @@ public sealed class ComponentTests(ITestOutputHelper output)
         var before = Values.ToDictionary(p => p.Key, p => JsonNode.Parse(p.Value));
         var transform = new Transform { Scale = System.Numerics.Vector3.One };
         s_transform = &transform;
-        Host.Attach(new HostInit { Api = new HostApi { ComponentPtr = &ComponentPtr, ComponentJson = &ComponentJson } });
+        using var binding = Host.Bind(new HostContext(new HostInit { Api = new HostApi { ComponentPtr = &ComponentPtr, ComponentJson = &ComponentJson } }));
         var previous = Host.EnterExclusive();
         try
         {
@@ -59,7 +59,7 @@ public sealed class ComponentTests(ITestOutputHelper output)
             ComponentExamples.RunAll(new Entity(~0u), in tick);
             EngineAccess.Flush();
         }
-        finally { Host.ExitExclusive(previous); Host.Detach(); s_transform = null; }
+        finally { Host.ExitExclusive(previous); s_transform = null; }
         Assert.Equal(EngineComponents.Names.Length - 1, Written.Count);
         Assert.True(transform.Position.Y > 0);
         foreach (var (index, value) in Values)
@@ -84,7 +84,6 @@ public sealed class ComponentTests(ITestOutputHelper output)
         init.AbiVersion = AbiInfo.Version;
         init.LayoutHash ^= 1;
         Assert.Equal(2, ScriptRuntime.Init(&init, &api, loader));
-        Host.Detach();
     }
 
     [Fact]
@@ -117,7 +116,7 @@ public sealed class ComponentTests(ITestOutputHelper output)
         const int iterations = 1_000_000;
         var transform = new Transform();
         s_transform = &transform;
-        Host.Attach(new HostInit { Api = new HostApi { ComponentPtr = &ComponentPtr } });
+        using var binding = Host.Bind(new HostContext(new HostInit { Api = new HostApi { ComponentPtr = &ComponentPtr } }));
         var previous = Host.EnterExclusive();
         static long Measure(bool native, int count)
         {
@@ -140,7 +139,7 @@ public sealed class ComponentTests(ITestOutputHelper output)
             }
             Assert.Equal(0, GC.GetAllocatedBytesForCurrentThread() - allocated);
         }
-        finally { Host.ExitExclusive(previous); Host.Detach(); s_transform = null; }
+        finally { Host.ExitExclusive(previous); s_transform = null; }
         double Nanoseconds(long ticks) => ticks * 1e9 / System.Diagnostics.Stopwatch.Frequency / iterations;
         output.WriteLine($"Transform native baseline {Nanoseconds(baseline.Order().ElementAt(2)):F2} ns/op; generated dispatch {Nanoseconds(dispatch.Order().ElementAt(2)):F2} ns/op; zero allocated bytes");
     }

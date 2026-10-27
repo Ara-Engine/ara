@@ -7,8 +7,8 @@
 //!   `ara_script_init`.
 //!
 //! A process hosts one .NET runtime. The JIT runtime is started once and reused by
-//! later hosts in the same process; each host calls `ara_script_init` again, which
-//! resets the C# runtime state.
+//! simultaneous and later hosts in the same process. Each `ara_script_init` creates
+//! independently owned C# dispatch, loader and callback state under its host handle.
 
 use std::path::{Path, PathBuf};
 use std::str::FromStr;

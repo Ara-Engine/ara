@@ -393,7 +393,8 @@ namespace Ara.Hosting
     }
 
     /// <summary>
-    /// Functions the C# runtime fills in for the host. Exceptions never cross them.
+    /// Functions the C# runtime fills in for the host. Every call takes the unique
+    /// host handle (<c>HostInit.ctx</c>); exceptions never cross them.
     /// </summary>
     [StructLayout(LayoutKind.Explicit, Size = 80)]
     public unsafe partial struct ScriptApi
@@ -401,54 +402,54 @@ namespace Ara.Hosting
         /// <summary>
         /// Loads modules described by UTF-8 JSON (dev: starts the compile server; AOT: the linked modules).
         /// </summary>
-        // (byte* json, uint len)
-        [FieldOffset(0)] public delegate* unmanaged<byte*, uint, int> LoadModules;
+        // (void* host, byte* json, uint len)
+        [FieldOffset(0)] public delegate* unmanaged<void*, byte*, uint, int> LoadModules;
         /// <summary>
         /// Applies staged reloads at a tick boundary. Returns <c>BOUNDARY_*</c> bits.
         /// </summary>
-        // (global::Ara.Tick* tick)
-        [FieldOffset(8)] public delegate* unmanaged<global::Ara.Tick*, uint> TickBoundary;
+        // (void* host, global::Ara.Tick* tick)
+        [FieldOffset(8)] public delegate* unmanaged<void*, global::Ara.Tick*, uint> TickBoundary;
         /// <summary>
         /// Non-zero if a staged reload is waiting for the next boundary.
         /// </summary>
-        // ()
-        [FieldOffset(16)] public delegate* unmanaged<uint> HasPending;
+        // (void* host)
+        [FieldOffset(16)] public delegate* unmanaged<void*, uint> HasPending;
         /// <summary>
         /// Runs one system over one chunk. Returns <c>RUN_*</c>.
         /// </summary>
-        // (global::Ara.Hosting.SystemCall* call)
-        [FieldOffset(24)] public delegate* unmanaged<global::Ara.Hosting.SystemCall*, int> RunSystem;
+        // (void* host, global::Ara.Hosting.SystemCall* call)
+        [FieldOffset(24)] public delegate* unmanaged<void*, global::Ara.Hosting.SystemCall*, int> RunSystem;
         /// <summary>
         /// Runs one behaviour type over one chunk for one phase. Returns <c>RUN_*</c>.
         /// </summary>
-        // (global::Ara.Hosting.BehaviourCall* call)
-        [FieldOffset(32)] public delegate* unmanaged<global::Ara.Hosting.BehaviourCall*, int> RunBehaviours;
+        // (void* host, global::Ara.Hosting.BehaviourCall* call)
+        [FieldOffset(32)] public delegate* unmanaged<void*, global::Ara.Hosting.BehaviourCall*, int> RunBehaviours;
         /// <summary>
         /// Runs one command. Returns <c>RUN_*</c>.
         /// </summary>
-        // (global::Ara.Hosting.CommandCall* call)
-        [FieldOffset(40)] public delegate* unmanaged<global::Ara.Hosting.CommandCall*, int> RunCommand;
+        // (void* host, global::Ara.Hosting.CommandCall* call)
+        [FieldOffset(40)] public delegate* unmanaged<void*, global::Ara.Hosting.CommandCall*, int> RunCommand;
         /// <summary>
         /// Recompiles a module hot (1: Debug IL, EnC) or cold (0: optimized).
         /// </summary>
-        // (uint module, uint hot)
-        [FieldOffset(48)] public delegate* unmanaged<uint, uint, int> SetHeat;
+        // (void* host, uint module, uint hot)
+        [FieldOffset(48)] public delegate* unmanaged<void*, uint, uint, int> SetHeat;
         /// <summary>
         /// Asks for a compile of changed files (UTF-8 JSON <c>{"module", "paths", "origin"}</c>). Agent edits
         /// are coalesced and run behind human ones. Never blocks: the result arrives as a staged reload.
         /// </summary>
-        // (byte* json, uint len)
-        [FieldOffset(56)] public delegate* unmanaged<byte*, uint, int> RequestCompile;
+        // (void* host, byte* json, uint len)
+        [FieldOffset(56)] public delegate* unmanaged<void*, byte*, uint, int> RequestCompile;
         /// <summary>
         /// Diagnostics counters (<c>DIAG_*</c>).
         /// </summary>
-        // (uint key)
-        [FieldOffset(64)] public delegate* unmanaged<uint, ulong> Diag;
+        // (void* host, uint key)
+        [FieldOffset(64)] public delegate* unmanaged<void*, uint, ulong> Diag;
         /// <summary>
         /// Stops the compile client, unloads every module and returns the leaked-ALC count.
         /// </summary>
-        // ()
-        [FieldOffset(72)] public delegate* unmanaged<int> Shutdown;
+        // (void* host)
+        [FieldOffset(72)] public delegate* unmanaged<void*, int> Shutdown;
     }
 
     /// <summary>Constants shared with the Rust host (`ara_script::abi`).</summary>
@@ -655,7 +656,7 @@ namespace Ara.Hosting
         /// <summary>Must equal the host's <c>ABI_VERSION</c>.</summary>
         public const uint Version = 3;
         /// <summary>Hash of every ABI layout and the engine components this file was generated from.</summary>
-        public const ulong LayoutHash = 0xFB90B3AE57A1C140UL;
+        public const ulong LayoutHash = 0xDE60461FAED8564EUL;
 
         /// <summary>Checks that the C# layouts agree with the generated sizes; returns an error or null.</summary>
         public static string? VerifySizes()

@@ -25,6 +25,11 @@ linked into the NativeAOT image (shipping). AOT-safe: `IsAotCompatible`, no refl
   through `Host.RegisterModules`, all or none), `DeltaUpdate` (L1/L2), `ErrorUpdate` (errors,
   L4), `ModuleBuilder`, `AraModuleAttribute`, `Host`, `Diag`.
 
+- `ScriptRuntime` is an instance per Rust host. `Init` registers it by `HostInit.ctx`;
+  every `ScriptApi` entry takes that handle. `Activate()` binds callbacks on one thread
+  and restores its previous binding. No current host flows implicitly to async work.
+  Loaders capture their owner with `Attach(runtime)` and enqueue directly to it.
+
 ## Gotchas
 
 - `Generated/` is written by `cargo test -p ara-script --test generated` with
@@ -35,6 +40,10 @@ linked into the NativeAOT image (shipping). AOT-safe: `IsAotCompatible`, no refl
   concurrently on task-pool threads and must stay lock-free.
 - A fault disables the system/behaviour/command until the next reload (ARA0910–0912).
   A re-enabled behaviour keeps its objects (`BehaviourEntry.Resume`): no second `OnSpawn`.
+
+- NativeAOT module types are shared: generated type indexes resolve through the active
+  host's registration map. Engine indexes remain constant. Accessor scratch is scoped
+  to each host entry, including nested bindings; shutdown never clears another host.
 
 ## Testing
 

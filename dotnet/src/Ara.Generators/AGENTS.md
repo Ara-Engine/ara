@@ -5,7 +5,8 @@ The Roslyn incremental generator every gameplay module uses (netstandard2.0, Ros
 ## What it emits
 
 - `[Component]`/`[Resource]`/`[Cue]` structs: `IComponent<T>` (etc.) with a script index set
-  at registration, and `__AraOffsets()` (measured field offsets).
+  at registration in the active host's map (also safe for shared NativeAOT types),
+  and `__AraLayout()` (measured field offsets).
 - `[Query]` methods: `__AraRun_<Method>(SystemCall*)`, one loop over a chunk with
   `Unsafe.Add` over column base pointers (no bounds checks, no per-entity host calls).
 - `Behaviour` subclasses: a nested `Data` component (one field per `[Property]`) and the

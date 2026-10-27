@@ -8,6 +8,15 @@ public sealed class SessionTests : IDisposable
 
     public void Dispose() => _m.Dispose();
 
+    [Fact]
+    public void Source_reads_allow_an_editor_to_keep_its_write_handle_open()
+    {
+        var path = Path.Combine(_m.Root, "Shared.cs");
+        File.WriteAllText(path, "// shared source\n");
+        using var editor = new FileStream(path, FileMode.Open, FileAccess.ReadWrite, FileShare.ReadWrite | FileShare.Delete);
+        Assert.Equal("// shared source\n", ModuleSession.ReadWithRetry(path));
+    }
+
     const string Game = """
         namespace Game;
 

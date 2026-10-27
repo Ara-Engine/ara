@@ -176,12 +176,13 @@ impl ScriptHost {
         };
         self.sequence += 1;
         let reported = self.ctx.diagnostic_count();
+        let handle = self.ctx.handle();
         let rc = self.exclusive(world, false, Some(&mut journal), |api, cell| {
             // The allocator comes from the published cell, which stays valid for the call.
             buf.reset(cell.entity_allocator());
             call.commands = std::ptr::from_mut(&mut buf).cast();
             // SAFETY: `call` and everything it points at live for the call; world access is published.
-            unsafe { (api.run_command)(&mut call) }
+            unsafe { (api.run_command)(handle, &mut call) }
         });
         if rc != RUN_OK {
             self.restore(world, &journal);

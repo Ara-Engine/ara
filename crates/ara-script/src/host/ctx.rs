@@ -60,6 +60,11 @@ pub(crate) struct HostCtx {
 }
 
 impl HostCtx {
+    /// Stable host identity used by both directions of the ABI.
+    pub fn handle(&self) -> *mut c_void {
+        std::ptr::from_ref(self).cast_mut().cast()
+    }
+
     pub fn new(log: LogSink) -> Self {
         HostCtx {
             start: Instant::now(),

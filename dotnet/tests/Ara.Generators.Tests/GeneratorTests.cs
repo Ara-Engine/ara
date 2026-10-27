@@ -142,6 +142,7 @@ public class GeneratorTests
     {
         var (output, _, sources) = Run(Module, native: true);
         Assert.Contains("UnmanagedCallersOnly(EntryPoint = \"ara_script_init\")", sources["AraModule.g.cs"]);
+        Assert.Contains(sources.Values, source => source.Contains("Host.TypeIndex("));
         Assert.Empty(output.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error));
     }
 
