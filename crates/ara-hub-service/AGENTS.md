@@ -1,7 +1,6 @@
 # ara-hub-service
 
-User-level Ara Hub backend (D25), shared by the native Hub and global MCP.
-One service per config directory, enforced by an OS lock; projects run separately.
+User-level Ara Hub backend (D25), shared by the native Hub and global MCP. An OS lock enforces one service per config directory; projects run separately.
 
 ## Public API
 
@@ -33,9 +32,8 @@ One service per config directory, enforced by an OS lock; projects run separatel
 
 ## Wire contract for the Hub UI
 
-Connect using `ara_rpc::Client::for_project(config_dir.join("hub"))` (the reused
-transport discovery is `hub/.ara/daemon.json`; do not render its token). All
-params/results use camelCase. No engine session is needed for `hub.*`.
+Connect using `ara_rpc::Client::for_project(config_dir.join("hub"))`; discovery is
+`hub/.ara/daemon.json` (never render its token). Params/results use camelCase; `hub.*` needs no engine session.
 
 | Method | Params | Result / what to render |
 | --- | --- | --- |
@@ -53,7 +51,9 @@ params/results use camelCase. No engine session is needed for `hub.*`.
 | `hub.engine.remove` | `{engine:{version,executable,editor}}` | Remove only that exact build; reject while pinned projects are open |
 | `hub.engines.available` | `{channel?:"stable"|"preview"}` | `{releases:[signed manifest],status,checking,repo,channel}`; first call starts a background check; preview includes stable |
 | `hub.engine.install` | `{version,hubVersion?}` | Job `{id,kind,version,state,progress:{received,total},result,error}` immediately; verification/extraction run off the authority thread |
-| `hub.engine.uninstall` | `{version}` | `{removed:version}`; Hub-managed files only, rejects open pins |
+| `hub.engine.preflight` | `{version}` | Read-only destination, channel, download bytes and estimated required/available space; exact expansion checked before extraction |
+| `hub.engine.repair` | `{version,hubVersion?}` | Signed same-version reinstall job (`kind:repair`); close pinned projects first; stage, swap and register with rollback |
+| `hub.engine.uninstall` | `{version}` | Job (`kind:uninstall`); prepares off-thread, commits removal, cleans off-thread; Hub-managed files only, rejects open pins |
 | `hub.downloads` | `{}` | `{jobs:[job]}`; state is `running|complete|failed|cancelled`, error is a catalogued diagnostic |
 | `hub.download.cancel` | `{job:id}` | `{cancelling:id}`; removes partial data before commit |
 | `hub.releases.check` | `{}` | `{checking:true}`; refresh per-page ETags and signed cache |
@@ -82,6 +82,9 @@ Activity uses persistent connections at 2 s intervals while subscribed/open;
 unchanged snapshots emit nothing. GUI clients run all calls off their input thread.
 
 `hub.changed` kinds `releases` and `progress` invalidate release/job snapshots.
+Jobs include `phase`, `cancellable` and optional `disk {availableBytes,requiredBytes}`.
+Uninstall cancels before commit; `removing` has committed and cannot be cancelled.
+Retry the same uninstall to clean a retained managed tombstone after cleanup fails.
 `hub.engines` adds `managed:bool` (external registrations are unregister-only).
 Offline/rate-limited feeds carry a clear status; signatures are reverified on cache
 reads. Install roots: LOCALAPPDATA/Ara/Engines/version. Cancelled/tampered extraction
@@ -121,11 +124,8 @@ A failed custom template can leave its newly created destination for inspection.
 
 ## One-time global MCP installation
 
-`ara hub install-mcp --client claude|codex` prints Claude JSON / Codex TOML with
-the current executable's absolute path and `args:["mcp"]`; PATH is unnecessary.
-Hub displays/copies these instructions; it never edits the agent's config files.
-Register existing projects first with `ara hub add <absolute-path>`; create with
-`ara hub create <absolute-path> --name Name --template blank`.
+`ara hub install-mcp --client claude|codex` prints Claude JSON / Codex TOML using the current executable's absolute path and `args:["mcp"]`; PATH is unnecessary. Hub displays/copies it without editing client config files.
+Register with `ara hub add <absolute-path>`; create with `ara hub create <absolute-path> --name Name --template blank`.
 Use `ara_projects {action:"list"}` then `ara_session {action:"open",project:"Name"}`
 or give `project` on any existing tool. Sessions never cross projects.
 Per-project compatibility: `ara mcp --root <project>` and optional `.mcp.json`

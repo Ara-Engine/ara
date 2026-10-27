@@ -29,6 +29,11 @@ impl Hub {
         let version = marker["engineVersion"]
             .as_str()
             .ok_or_else(|| invalid("project is missing its engineVersion pin"))?;
+        if self.engine_removal_running(version) {
+            return Err(invalid(
+                "this engine is being uninstalled; cancel or finish the uninstall before opening the project",
+            ));
+        }
         let engine = self.registry.engine(version)?.clone();
         let executable = if headless {
             engine.executable
