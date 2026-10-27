@@ -117,12 +117,11 @@ impl Renderer {
             }
             None => ViewState::new(self, size, size)?,
         };
-        // The surroundings as shaded, without effects that need history or several
-        // frames to land (screen-space reflections, virtual shadow pages), screen-space
-        // occlusion, the horizon or ray queries: probes and cascades light the bake,
-        // which is the raster path's own reflection source.
+        // The surroundings as shaded (with screen-space occlusion, without its bounce),
+        // minus effects that need history or several frames to land (screen-space
+        // reflections, virtual shadow pages), the horizon or ray queries: probes and
+        // cascades light the bake, which is the raster path's own reflection source.
         let quality = crate::look::Quality {
-            ambient_occlusion: None,
             reflections: None,
             ray_queries: None,
             horizon: None,

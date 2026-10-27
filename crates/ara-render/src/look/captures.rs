@@ -34,7 +34,8 @@ const TILE_CAPACITY: usize = 512 * 512;
 /// Dev-only shading modes from `ARA_CAPTURE_DEBUG` (read once; look-captures.slangh
 /// `CAPTURE_DEBUG_*`): `mirror` shows every surface as a mirror of the captures alone
 /// (roughness zero, no probe, sky or screen-space reflection); `only` keeps normal
-/// shading but drops screen-space reflections where captures cover.
+/// shading but drops screen-space reflections where captures cover; `infinite` drops
+/// the box parallax (orientation checks). Combine with commas.
 fn debug_modes() -> u32 {
     static MODES: std::sync::OnceLock<u32> = std::sync::OnceLock::new();
     *MODES.get_or_init(|| {
@@ -42,6 +43,7 @@ fn debug_modes() -> u32 {
         value.split(',').fold(0, |modes, mode| match mode.trim() {
             "mirror" => modes | 1,
             "only" => modes | 2,
+            "infinite" => modes | 4,
             _ => modes,
         })
     })
@@ -750,9 +752,10 @@ impl Captures {
         ];
     }
 
-    /// Records whose bake landed since the last relight (the relight's root word 2).
-    pub(crate) fn rebaseline(&self) -> u32 {
-        self.rebaseline
+    /// The relight's root word 2: records whose bake landed since the last relight
+    /// (low half; their baseline is measured) and whose baseline it clears (high half).
+    pub(crate) fn refit_masks(&self) -> u32 {
+        (self.rebaseline & 0xffff) | (self.reset & 0xffff) << 16
     }
 
     /// Imports what shading reads, when it reads captures this frame.
@@ -776,6 +779,7 @@ impl Captures {
             gpu.atlas_state = final_states[ids.atlas.0];
             gpu.frame_access = final_states[ids.frame.0].access;
             self.rebaseline = 0;
+            self.reset = 0;
         }
     }
 
@@ -958,7 +962,7 @@ mod tests {
         assert!(matches!(finish[..], [Work::Finish { capture: 0, .. }]));
         assert_eq!(captures.progress, Some((1, 0)));
         captures.finished(0);
-        assert_eq!(captures.rebaseline(), 1);
+        assert_eq!(captures.refit_masks() & 0xffff, 1);
         let all = captures.schedule(true);
         assert_eq!(all.len(), FACES as usize + 1);
         assert!(matches!(all.last(), Some(Work::Finish { capture: 1, .. })));

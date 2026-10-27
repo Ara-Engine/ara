@@ -36,6 +36,10 @@ float3 captureScratchAlong(uint k,float3 d){
     float3 c00=captureScratch(k,b),c10=captureScratch(k,b+int2(1,0)),c01=captureScratch(k,b+int2(0,1)),c11=captureScratch(k,b+int2(1,1));
     return lerp(lerp(c00,c10,w.x),lerp(c01,c11,w.x),w.y);
 }
+// The exposure the HDR target stores (look-refract.slangh refractExposure): 1 while
+// it holds linear radiance; with the pre-exposed HDR contract, hdrExposure(f, l).
+// Faces are divided by it, so the atlas stays absolute radiance.
+float captureHdrExposure(Frame f,Look l){return 1;}
 // Projects the rendered face `root.entity` (0..5: +x, -x, +y, -y, +z, -z) into
 // the scratch column's level 0 with four samples per texel; faces after the first
 // add to what earlier faces wrote. Open sky is re-evaluated without the sun disk:
@@ -50,7 +54,7 @@ void captureFaceMain(uint3 tid:SV_DispatchThreadID){
         if(major!=root.entity)continue;
         float4 h=mul(f.vp,float4(f.camera.xyz+d,1));if(h.w<=0)continue;
         float2 uv=saturate(float2(h.x/h.w*0.5+0.5,0.5-h.y/h.w*0.5));
-        float3 c=textures[NonUniformResourceIndex(root.materials)].SampleLevel(samplers[2],uv,0).rgb;
+        float3 c=textures[NonUniformResourceIndex(root.materials)].SampleLevel(samplers[2],uv,0).rgb/captureHdrExposure(f,l);
         if(physicalSky(l)&&all(textures[NonUniformResourceIndex(f.extra.x)].GatherRed(samplers[2],uv)==0))c=skyRadiance(f,l,d,false);
         // Half floats: keep finite, bounded radiance (four samples sum below 65504 after the quarter).
         c=all(c==c)?clamp(c,0,60000):0;

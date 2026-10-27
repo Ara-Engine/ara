@@ -233,6 +233,20 @@
       "vertex_stride": 0
     }
   },
+  "look_capture_tiles": {
+    "entries": {
+      "captureTilesMain": "compute"
+    },
+    "source": "look-captures.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
   "look_dof": {
     "entries": {
       "dofMain": "compute"

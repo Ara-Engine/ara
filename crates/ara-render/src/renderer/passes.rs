@@ -849,13 +849,22 @@ impl Renderer {
                     .chain(cascade_reads.iter().copied())
                     .chain(graphics.iter().copied()),
             );
-            let rebaseline = self.views.captures.rebaseline();
-            declare(refit, Recipe::Look(LookPass::CaptureRefit(rebaseline)));
-            capture_reads = vec![
-                (c.atlas, Access::ShaderRead),
-                (c.records, Access::ShaderRead),
-                (c.frame, Access::ShaderRead),
-            ];
+            let masks = self.views.captures.refit_masks();
+            declare(refit, Recipe::Look(LookPass::CaptureRefit(masks)));
+            // Each 16x16 tile's captures, from the G-buffer depth.
+            let tiles = graph.pass(
+                "Captures.Tiles",
+                Queue::Graphics,
+                [
+                    (c.frame, Access::Storage),
+                    (ids[DEPTH], Access::ShaderRead),
+                    (look.frame, Access::ShaderRead),
+                ]
+                .into_iter()
+                .chain(graphics.iter().copied()),
+            );
+            declare(tiles, Recipe::Look(LookPass::CaptureTiles));
+            capture_reads = vec![(c.atlas, Access::ShaderRead), (c.frame, Access::ShaderRead)];
         }
         let lighting = graph.pass(
             "DeferredLighting",

@@ -45,6 +45,8 @@ pub(crate) enum LookPass {
     /// Measures the ambient light at each reflection capture against its bake
     /// (`look::captures`); the mask marks bakes that landed since the last one.
     CaptureRefit(u32),
+    /// Lists the captures each 16x16 render tile can need (`look::captures`).
+    CaptureTiles,
     /// The horizon's sun visibility (`look::horizon`).
     HorizonSun,
     /// The horizon's sky visibility (`look::horizon`).
@@ -594,7 +596,12 @@ impl LookGpu {
             ),
             LookPass::SsrTrace => (p.ssr_trace, 0, groups(size.map(|v| v.div_ceil(2)))),
             // One thread per capture (look::captures::MAX_CAPTURES).
-            LookPass::CaptureRefit(rebaseline) => (p.capture_refit, rebaseline, [1, 1, 1]),
+            LookPass::CaptureRefit(masks) => (p.capture_refit, masks, [1, 1, 1]),
+            LookPass::CaptureTiles => (
+                p.capture_tiles,
+                0,
+                [size[0].div_ceil(16), size[1].div_ceil(16), 1],
+            ),
             // With virtual shadow maps, hits compare against their pages first.
             LookPass::GiRelight => (
                 if self.vsm.is_some() {

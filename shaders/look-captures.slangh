@@ -16,8 +16,9 @@
 // Shading reads them only in the High/Epic tier's PSOs (`ibl`'s `high`).
 static const uint CAPTURE_LEVELS=5,CAPTURE_RECORD=128,CAPTURE_SLOT=160,CAPTURE_MAX=16;
 static const uint CAPTURE_TILES=CAPTURE_MAX*CAPTURE_SLOT,CAPTURE_TILE_CAPACITY=512*512;
-// Debug modes: every surface a mirror of the captures alone; captures under no SSR.
-static const uint CAPTURE_DEBUG_MIRROR=1,CAPTURE_DEBUG_ONLY=2;
+// Debug modes: every surface a mirror of the captures alone; captures under no SSR;
+// no parallax (each capture an infinitely distant environment from its capture point).
+static const uint CAPTURE_DEBUG_MIRROR=1,CAPTURE_DEBUG_ONLY=2,CAPTURE_DEBUG_INFINITE=4;
 // One capture (look/captures.rs `CaptureSpec::record`), in two halves so pixels
 // outside its influence load only the first: a rigid local frame (metres) and its
 // influence box (fading over `influence.w` inside it); then the projection box rays
@@ -64,9 +65,10 @@ float3 captureLevel(Look l,CaptureShade c,float3 d,uint k){
 // uniform across a tile, so the loop is too (usually one or two bits); captures
 // blend front to back by influence in record order (priority, then smaller first).
 // Each looks up the lobe's dominant direction where it leaves the projection box,
-// as seen from the capture point, sharpening the lobe when that hit is nearer the
-// surface than the capture point (Lagarde & Zanuttini 2012): one pair of
-// roughness-level fetches per contributing capture.
+// as seen from the capture point (Lagarde & Zanuttini 2012), at the surface's own
+// roughness: one pair of roughness-level fetches per contributing capture. (No
+// distance-based sharpening: where the capture's sight line to that hit is blocked,
+// as under objects inside the box, sharpening turns their smear into streaks.)
 float4 captureReflection(Look l,float3 world,float3 n,float3 v,float roughness,uint mask){
     float4 sum=0;
     if(mask==0)return sum;
@@ -82,8 +84,9 @@ float4 captureReflection(Look l,float3 world,float3 n,float3 v,float roughness,u
             // Slab exit: the nearest of the three far planes along `dir`.
             float3 safe=float3(abs(dir.x)>1e-5?dir.x:1e-5,abs(dir.y)>1e-5?dir.y:1e-5,abs(dir.z)>1e-5?dir.z:1e-5);
             float3 exits=(d.extent.xyz*sign(safe)-q)/safe;float t=max(min(exits.x,min(exits.y,exits.z)),0);
+            if((l.captureInfo[1].w&CAPTURE_DEBUG_INFINITE)!=0)t=1e6;
             float3 toHit=world+r*t-d.origin.xyz;float far=length(toHit);float3 along=far>1e-4?toHit/far:r;
-            float level=min(roughness,roughness*t/max(far,1e-4))*(CAPTURE_LEVELS-1);
+            float level=roughness*(CAPTURE_LEVELS-1);
             uint low=min(uint(level),CAPTURE_LEVELS-1),high=min(low+1,CAPTURE_LEVELS-1);
             float3 radiance=lerp(captureLevel(l,d,along,low),captureLevel(l,d,along,high),level-float(low))*ratio.rgb;
             float share=w*w*(3-2*w)*(1-sum.a)*ratio.w;sum+=float4(radiance*share,share);
