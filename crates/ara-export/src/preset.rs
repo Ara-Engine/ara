@@ -168,7 +168,8 @@ pub struct TemplatePin {
     pub hash: String,
     /// Local file or HTTPS URL; read only when the content-addressed cache misses.
     pub source: String,
-    /// Matching native PDB for Windows templates; Linux templates contain DWARF.
+    /// Matching native PDB for Windows templates, or the player's dSYM DWARF file for
+    /// macOS templates; Linux templates contain DWARF.
     #[serde(default)]
     pub symbols: Option<ArtifactPin>,
 }
@@ -236,7 +237,7 @@ pub struct ExportPreset {
     /// Explicit native plugins compiled in the native lane.
     #[serde(default)]
     pub plugins: Vec<NativePlugin>,
-    /// Android application ID.
+    /// Application ID: the Android package and the macOS bundle identifier.
     #[serde(default = "default_package")]
     #[ara(default = "dev.ara.game")]
     pub package: String,
@@ -248,7 +249,7 @@ pub struct ExportPreset {
     #[serde(default = "default_target")]
     #[ara(default = 36)]
     pub target_api: u32,
-    /// Android version code, monotonically increasing for store uploads.
+    /// Version code (Android and the macOS bundle version), increasing for store uploads.
     #[serde(default = "default_version")]
     #[ara(default = 1)]
     pub version_code: u32,
@@ -261,7 +262,8 @@ pub struct ExportPreset {
     /// Environment variable containing a 64-character pack key (optional deterrent).
     #[serde(default)]
     pub encryption_key_env: Option<String>,
-    /// Optional Mac-agent SSH destination; Apple builds require this seam.
+    /// Mac-agent SSH destination for Apple builds a Mac does not run itself (iOS, or
+    /// macOS exported from another host).
     #[serde(default)]
     pub mac_agent: Option<String>,
     /// Generic delivery format, in addition to the plain build folder.
@@ -445,6 +447,8 @@ impl ExportPreset {
                     && self.version_code > 0,
                 "ARA-EXP-AND-013: Android requires min >=29, target >=36 and version_code >0"
             );
+        }
+        if matches!(self.platform, Platform::Android | Platform::Macos) {
             ensure!(
                 self.package.split('.').count() >= 2
                     && self
@@ -473,9 +477,7 @@ impl ExportPreset {
                 "ARA-EXP-TPL-002: invalid template hash"
             );
         }
-        if pinned
-            && !matches!(self.platform, Platform::Macos | Platform::Ios)
-            && arches.len() != self.platform.arches().len()
+        if pinned && self.platform != Platform::Ios && arches.len() != self.platform.arches().len()
         {
             bail!("ARA-EXP-TPL-003: one pinned template per architecture is required");
         }

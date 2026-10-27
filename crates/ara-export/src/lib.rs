@@ -12,6 +12,7 @@ pub mod doctor;
 /// Versioned NDJSON progress/artifact/diagnostic stream.
 pub mod event;
 mod files;
+mod macos;
 mod native;
 mod pipeline;
 /// Schema-registered project export documents.

@@ -359,9 +359,37 @@ Android dev fixtures optionally read app-private `ara-bridge.json` with token/po
 written through `adb shell run-as PACKAGE`. Forward using `Adb::forward`, then use
 the same DeviceClient API. Never package credentials or enable this in release.
 
+## macOS on a Mac
+
+On an Apple silicon Mac, `platform: macos` exports run locally (`src/macos.rs`):
+
+1. Build the player with symbols: `CARGO_PROFILE_<P>_DEBUG=line-tables-only` and
+   `CARGO_PROFILE_<P>_SPLIT_DEBUGINFO=packed` give `ara-player` and `ara-player.dSYM`.
+2. `ara-export runtime-template --player <ara-player> --engine <checkout> --output
+   template.zip`. A Mach-O player gets each stage's Metal artifacts (metallib and
+   converter reflection) instead of SPIR-V/DXIL, the packages only Metal reads from
+   disk (`ara-gpu`, `ara-editor-gpu`, `ara-texture-gpu`), and `AppIcon.icns` built
+   from `assets/brand/icons/game`. Windows and Linux templates are unchanged.
+3. `ara-export pin --platform macos --arch arm64 --config <c> --file template.zip
+   --symbols ara-player.dSYM/Contents/Resources/DWARF/<file>`.
+4. Export with that pin; `package` is the bundle identifier and `versionCode` the
+   bundle version.
+
+The result is `build/<project name>.app`: `Contents/MacOS/ara-player`, and in
+`Contents/Resources` (the player's install root) the launch file, pack, cooked
+resources, `game/<Assembly>.dylib` with `scripts.json` (osx-arm64 NativeAOT, symbols
+split to a dSYM) and the icon, plus `Info.plist` (minimum macOS 26, Metal 4). It is
+signed ad-hoc (gameplay images first, then the bundle) and verified by launching the
+player headless with its capture and profile outside the bundle, then rechecking the
+seal. `ARA-EXP-APL-007` warns that Developer ID signing and notarization are not
+configured; they arrive as an explicit opt-in. Symbols archive the dSYM's functions
+and lines merged with the image's unwind tables. Native plugins are not built for
+macOS yet (`ARA-EXP-APL-009`).
+
 ## Apple handoff
 
-`Platform::Macos` / `Ios` and arm64 template tuples exist; iOS rejects ReadyToRun.
+iOS, and macOS from a Windows or Linux host, use the Mac-agent seam below; iOS
+rejects ReadyToRun.
 `apple::probe` calls `ssh -o BatchMode=yes -o ConnectTimeout=10 HOST
 ara-export-agent --capabilities` and requires `ara.export.agent/1` plus `arch: arm64`.
 `AgentRequest` carries protocol, preset, pack hash and source archive hash; no

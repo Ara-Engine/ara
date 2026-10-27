@@ -173,18 +173,34 @@ fn run(r: &ExportRequest, d: &mut Driver<'_>, started: Instant) -> Result<Export
         );
         Ok(())
     })?;
-    if matches!(p.platform, Platform::Macos | Platform::Ios) {
+    // A Mac exports macOS itself; iOS, and macOS from other hosts, use the agent seam.
+    if p.platform == Platform::Ios || (p.platform == Platform::Macos && !cfg!(target_os = "macos"))
+    {
         return apple::require_agent(p).and_then(|()| {
             Err(anyhow::anyhow!(
                 "ARA-EXP-APL-002: Mac agent not implemented"
             ))
         });
     }
+    let macos = p.platform == Platform::Macos;
+    ensure!(
+        !macos || p.plugins.is_empty(),
+        "ARA-EXP-APL-009: native plugins are not built for macOS exports yet"
+    );
+    // Desktop platforms have one architecture.
+    let arch = p.platform.arches()[0];
     let project = dunce::canonicalize(&r.project)?;
     let toolchain = Toolchain::discover();
     let output = d.work.join("dist");
     let dist = output.join("build");
     std::fs::create_dir_all(&dist)?;
+    // macOS assembles the desktop layout first, then bundles it as `<Game>.app`.
+    let staged = if macos {
+        d.work.join("staged")
+    } else {
+        dist.clone()
+    };
+    std::fs::create_dir_all(&staged)?;
     let templates = d.stage("template", |d| {
         p.templates
             .iter()
@@ -192,7 +208,10 @@ fn run(r: &ExportRequest, d: &mut Driver<'_>, started: Instant) -> Result<Export
                 let resolved = template::resolve(pin, &project, &std::path::absolute(&r.cache)?)?;
                 let executable = if p.player_template == PlayerTemplate::Runtime {
                     ensure!(
-                        matches!(p.platform, Platform::Windows | Platform::Linux),
+                        matches!(
+                            p.platform,
+                            Platform::Windows | Platform::Linux | Platform::Macos
+                        ),
                         "the real game runtime template currently requires a desktop platform"
                     );
                     crate::runtime::unpack_template(
@@ -242,14 +261,7 @@ fn run(r: &ExportRequest, d: &mut Driver<'_>, started: Instant) -> Result<Export
         let targets: Vec<_> = if p.platform == Platform::Android {
             android::ABIS.iter().map(|(a, _, rid)| (*a, *rid)).collect()
         } else {
-            vec![(
-                "x64",
-                if p.platform == Platform::Windows {
-                    "win-x64"
-                } else {
-                    "linux-x64"
-                },
-            )]
+            vec![(arch, crate::scripts::desktop_rid(p.platform))]
         };
         for (arch, rid) in targets {
             let out = d.work.join("script").join(arch);
@@ -300,15 +312,7 @@ fn run(r: &ExportRequest, d: &mut Driver<'_>, started: Instant) -> Result<Export
                 Duration::from_secs(300),
             )?;
             if let Some(shipping) = &shipping {
-                let library = format!(
-                    "{}.{}",
-                    p.assembly,
-                    if p.platform == Platform::Windows {
-                        "dll"
-                    } else {
-                        "so"
-                    }
-                );
+                let library = crate::scripts::library_name(&p.assembly, rid);
                 crate::scripts::write_manifest(&out, &library, &shipping.modules)?;
             }
             scripts.insert(arch.to_owned(), out);
@@ -334,7 +338,7 @@ fn run(r: &ExportRequest, d: &mut Driver<'_>, started: Instant) -> Result<Export
             arch: if p.platform == Platform::Android {
                 "universal"
             } else {
-                "x64"
+                arch
             }
             .into(),
             config: p.config.name().into(),
@@ -373,15 +377,16 @@ fn run(r: &ExportRequest, d: &mut Driver<'_>, started: Instant) -> Result<Export
             )?
         };
         ara_pack::Pack::open(&built.bytes)?.validate_all(encryption.as_ref())?;
-        std::fs::write(dist.join("game.arapack"), &built.bytes)?;
+        std::fs::write(staged.join("game.arapack"), &built.bytes)?;
         Ok(built)
     })?;
     d.stage("assemble",|_| {
         if p.player_template == PlayerTemplate::Runtime {
-            copy_all(templates["x64"].parent().context("runtime template directory")?, &dist)?;
+            copy_all(templates[arch].parent().context("runtime template directory")?, &staged)?;
         }
-        let launch=json!({"contract":p.player_template.contract(),"pack":"game.arapack","lane":if p.lane==ScriptLane::NativeAot {"nativeaot"} else {"r2r-coreclr"},"script":if p.platform==Platform::Windows {if p.lane==ScriptLane::NativeAot {format!("game/{}.dll",p.assembly)} else {"dotnet".into()}} else if p.lane==ScriptLane::NativeAot {format!("game/{}.so",p.assembly)} else {"dotnet".into()},"assembly":p.assembly,"config":p.config.name(),"encryption_key_env":p.encryption_key_env});
-        tools::write_json(&dist.join("ara-launch.json"),&launch)?;
+        let library = crate::scripts::library_name(&p.assembly, crate::scripts::desktop_rid(p.platform));
+        let launch=json!({"contract":p.player_template.contract(),"pack":"game.arapack","lane":if p.lane==ScriptLane::NativeAot {"nativeaot"} else {"r2r-coreclr"},"script":if p.lane==ScriptLane::NativeAot {format!("game/{library}")} else {"dotnet".into()},"assembly":p.assembly,"config":p.config.name(),"encryption_key_env":p.encryption_key_env});
+        tools::write_json(&staged.join("ara-launch.json"),&launch)?;
         if p.platform==Platform::Android {
             for (abi,_,_) in android::ABIS {
                 tools::copy(&templates[abi],&dist.join("lib").join(abi).join("libara_export_player.so"))?;
@@ -391,14 +396,13 @@ fn run(r: &ExportRequest, d: &mut Driver<'_>, started: Instant) -> Result<Export
                 }
             }
         } else {
-            tools::copy(&templates["x64"],&dist.join(if p.platform==Platform::Windows {"ara-player.exe"} else {"ara-player"}))?;
+            tools::copy(&templates[arch],&staged.join(if p.platform==Platform::Windows {"ara-player.exe"} else {"ara-player"}))?;
             if !scripts.is_empty() && p.lane==ScriptLane::NativeAot {
-                let name=format!("{}.{}",p.assembly,if p.platform==Platform::Windows {"dll"} else {"so"});
-                tools::copy(&scripts["x64"].join(&name),&dist.join("game").join(name))?;
-                if shipping.is_some() { tools::copy(&scripts["x64"].join("scripts.json"), &dist.join("game/scripts.json"))?; }
-            } else if !scripts.is_empty() { copy_scripts(&scripts["x64"],&dist.join("dotnet"),&p.assembly)?; }
+                tools::copy(&scripts[arch].join(&library),&staged.join("game").join(&library))?;
+                if shipping.is_some() { tools::copy(&scripts[arch].join("scripts.json"), &staged.join("game/scripts.json"))?; }
+            } else if !scripts.is_empty() { copy_scripts(&scripts[arch],&staged.join("dotnet"),&p.assembly)?; }
         }
-        for (arch,path) in &plugins {let name=path.file_name().context("plugin has no filename")?; tools::copy(path,&if p.platform==Platform::Android {dist.join("lib").join(arch).join(name)} else {dist.join("plugins").join(name)})?;}
+        for (arch,path) in &plugins {let name=path.file_name().context("plugin has no filename")?; tools::copy(path,&if p.platform==Platform::Android {staged.join("lib").join(arch).join(name)} else {staged.join("plugins").join(name)})?;}
         Ok(())
     })?;
     let build_id = d.stage("symbols", |d| {
@@ -413,10 +417,20 @@ fn run(r: &ExportRequest, d: &mut Driver<'_>, started: Instant) -> Result<Export
                 work: &d.work,
                 tools: &toolchain,
             },
-            &dist,
+            &staged,
             &output,
         )
     })?;
+    let app = if macos {
+        let name = crate::macos::app_name(&project);
+        let app = d.stage("bundle", |_| crate::macos::bundle(&staged, &dist, &name, p))?;
+        d.stage("code-sign", |d| {
+            crate::macos::sign(&app, &d.work.join("logs"))
+        })?;
+        Some(app)
+    } else {
+        None
+    };
     if p.platform == Platform::Windows {
         d.stage("code-sign", |d| {
             for (name, path) in crate::distribution::files(&dist)? {
@@ -436,8 +450,11 @@ fn run(r: &ExportRequest, d: &mut Driver<'_>, started: Instant) -> Result<Export
             android::package(&project, p, &toolchain, &dist, &d.work, &output)
         })?;
     }
-    let verify = d.stage("verify", |_| match p.platform {
+    let verify = d.stage("verify", |d| match p.platform {
         Platform::Windows => verify::desktop(&dist),
+        Platform::Macos => {
+            crate::macos::verify(app.as_ref().context("macOS app bundle")?, &d.work, &output)
+        }
         Platform::Linux => verify::linux(&dist),
         Platform::Android => verify::android(
             &output,
@@ -446,7 +463,7 @@ fn run(r: &ExportRequest, d: &mut Driver<'_>, started: Instant) -> Result<Export
             r.device.as_deref(),
             r.allow_emulator,
         ),
-        _ => unreachable!("Apple lanes returned before compilation"),
+        Platform::Ios => unreachable!("iOS returned to the Mac-agent seam before compilation"),
     })?;
     // Verification logs and crash artifacts are private job evidence, never payload.
     if dist.join("verify.log").exists() {
@@ -473,6 +490,14 @@ fn run(r: &ExportRequest, d: &mut Driver<'_>, started: Instant) -> Result<Export
             ],
         }))?;
     }
+    if macos {
+        d.emit(EventKind::Warning(Diagnostic {
+            code: "ARA-EXP-APL-007".into(),
+            message: "macOS app is ad-hoc signed: it runs on this Mac; Developer ID signing and notarization are not configured".into(),
+            context: json!({"release_ready":false}),
+            fixes: vec!["keep this build on this Mac until the Developer ID and notarization lane is configured".into()],
+        }))?;
+    }
     if p.platform == Platform::Android && p.signing.is_none() {
         d.emit(EventKind::Warning(Diagnostic {
             code: "ARA-EXP-AND-007".into(),
@@ -491,10 +516,24 @@ fn run(r: &ExportRequest, d: &mut Driver<'_>, started: Instant) -> Result<Export
         }
     } else if p.windows_signing.is_some() {
         "authenticode"
+    } else if macos {
+        "adhoc"
     } else {
         "unsigned"
     };
-    crate::distribution::manifest(p, &build_id, &output, &packages, signing)?;
+    let entry_point = match (&app, p.platform) {
+        (Some(app), _) => format!(
+            "{}/Contents/MacOS/{}",
+            app.file_name()
+                .context("app bundle name")?
+                .to_string_lossy(),
+            crate::macos::EXECUTABLE
+        ),
+        (None, Platform::Windows) => "ara-player.exe".into(),
+        (None, Platform::Linux) => "ara-player".into(),
+        _ => "android.app.NativeActivity".into(),
+    };
+    crate::distribution::manifest(p, &build_id, &output, &packages, signing, &entry_point)?;
     let mut artifacts = BTreeMap::new();
     collect_sizes(&output, &output, &mut artifacts)?;
     let summary = ExportSummary {

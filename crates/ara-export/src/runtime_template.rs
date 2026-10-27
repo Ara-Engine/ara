@@ -9,6 +9,8 @@ use std::{
 /// Builds a deterministic runtime-template ZIP for a subsequent hash pin. `engine`
 /// is an installed engine folder or an explicit checkout; Rust is never compiled.
 /// Only current cooked cohorts are included, so stale cooks cannot enter the player.
+/// A macOS (Mach-O) player gets the Metal artifacts instead of SPIR-V and DXIL, the
+/// packages only Metal loads from disk, and the game icon as `AppIcon.icns`.
 pub fn build_runtime_template(player: &Path, engine: &Path, output: &Path) -> Result<()> {
     let player_name = player
         .file_name()
@@ -19,16 +21,32 @@ pub fn build_runtime_template(player: &Path, engine: &Path, output: &Path) -> Re
         matches!(player_name, "ara-player" | "ara-player.exe"),
         "expected a prebuilt ara-player executable"
     );
+    let metal = mach_o(player)?;
     let mut files = BTreeMap::new();
     files.insert(player_name.to_owned(), player.to_owned());
-    for package in [
-        "ara-render",
-        "ara-render-fidelity",
-        "ara-runtime-render",
-        "ara-render2d",
-        "ara-landscape",
-        "ara-vfx-gpu",
-    ] {
+    let packages: &[&str] = if metal {
+        &[
+            "ara-render",
+            "ara-render-fidelity",
+            "ara-runtime-render",
+            "ara-render2d",
+            "ara-landscape",
+            "ara-vfx-gpu",
+            "ara-texture-gpu",
+            "ara-gpu",
+            "ara-editor-gpu",
+        ]
+    } else {
+        &[
+            "ara-render",
+            "ara-render-fidelity",
+            "ara-runtime-render",
+            "ara-render2d",
+            "ara-landscape",
+            "ara-vfx-gpu",
+        ]
+    };
+    for package in packages {
         let installed = engine.join("resources").join(package);
         let root = if installed.is_dir() {
             installed
@@ -36,8 +54,22 @@ pub fn build_runtime_template(player: &Path, engine: &Path, output: &Path) -> Re
             engine.join("crates").join(package).join("cooked")
         };
         ensure!(root.is_dir(), "missing cooked {package} resources");
-        resources(&root, &root, &format!("resources/{package}"), &mut files)?;
+        resources(
+            &root,
+            &root,
+            &format!("resources/{package}"),
+            metal,
+            &mut files,
+        )?;
     }
+    let icon = if metal {
+        Some(crate::macos::icns(
+            &engine.join("assets/brand/icons/game"),
+            "ara-game",
+        )?)
+    } else {
+        None
+    };
     if let Some(parent) = output.parent() {
         std::fs::create_dir_all(parent)?;
     }
@@ -53,6 +85,10 @@ pub fn build_runtime_template(player: &Path, engine: &Path, output: &Path) -> Re
         zip.start_file(name, options)?;
         std::io::copy(&mut std::fs::File::open(path)?, &mut zip)?;
     }
+    if let Some(icon) = icon {
+        zip.start_file(crate::macos::ICON, options)?;
+        zip.write_all(&icon)?;
+    }
     zip.start_file("engine.json", options)?;
     let marker = serde_json::json!({"format":"ara.player.runtime-template/1"});
     zip.write_all(ara_json::to_canonical_string(&ara_json::sort_keys(&marker)).as_bytes())?;
@@ -60,10 +96,24 @@ pub fn build_runtime_template(player: &Path, engine: &Path, output: &Path) -> Re
     Ok(())
 }
 
+/// Whether `player` is a Mach-O executable, the macOS player.
+fn mach_o(player: &Path) -> Result<bool> {
+    use std::io::Read;
+    let mut magic = [0; 4];
+    std::fs::File::open(player)?.read_exact(&mut magic)?;
+    Ok(matches!(
+        magic,
+        [0xcf, 0xfa, 0xed, 0xfe] | [0xca, 0xfe, 0xba, 0xbe]
+    ))
+}
+
+/// Adds a package's manifests and the artifacts their stages name: SPIR-V and DXIL
+/// with reflection, or with `metal` the metallib and its converter reflection.
 fn resources(
     root: &Path,
     directory: &Path,
     prefix: &str,
+    metal: bool,
     files: &mut BTreeMap<String, PathBuf>,
 ) -> Result<()> {
     for entry in std::fs::read_dir(directory)? {
@@ -72,7 +122,7 @@ fn resources(
         let name = entry.file_name().to_string_lossy().into_owned();
         if entry.file_type()?.is_dir() {
             if name.len() != 64 || !name.bytes().all(|b| b.is_ascii_hexdigit()) {
-                resources(root, &path, prefix, files)?;
+                resources(root, &path, prefix, metal, files)?;
             }
             continue;
         }
@@ -90,6 +140,33 @@ fn resources(
             continue;
         };
         for stage in stages {
+            if metal {
+                let cooked = stage.get("metal").with_context(|| {
+                    format!(
+                        "ARA-EXP-APL-008: {} has a stage without Metal artifacts; cook it with Metal Shader Converter",
+                        path.display()
+                    )
+                })?;
+                for field in ["metallib", "reflection"] {
+                    let name = cooked
+                        .get(field)
+                        .and_then(serde_json::Value::as_str)
+                        .context("cooked Metal stage field")?;
+                    ara_pack::validate_path(name)?;
+                    let artifact = path.parent().context("pipeline directory")?.join(name);
+                    ensure!(
+                        artifact.is_file(),
+                        "missing cooked artifact {}",
+                        artifact.display()
+                    );
+                    let relative = artifact
+                        .strip_prefix(root)?
+                        .to_string_lossy()
+                        .replace('\\', "/");
+                    files.insert(format!("{prefix}/{relative}"), artifact);
+                }
+                continue;
+            }
             for (field, reflection) in [("spirv", "spirv.json"), ("dxil", "dxil.json")] {
                 let Some(name) = stage.get(field).and_then(serde_json::Value::as_str) else {
                     continue;
@@ -172,5 +249,63 @@ mod tests {
         let executable =
             crate::runtime::unpack_template(&first, &unpacked, "ara-player.exe").unwrap();
         assert_eq!(std::fs::read(executable).unwrap(), b"prebuilt player");
+    }
+
+    #[test]
+    fn a_macos_player_takes_metal_artifacts_metal_only_packages_and_the_game_icon() {
+        let scratch = tempfile::tempdir().unwrap();
+        let player = scratch.path().join("ara-player");
+        std::fs::write(&player, [0xcf, 0xfa, 0xed, 0xfe, 1, 2, 3, 4]).unwrap();
+        let key = "a".repeat(64);
+        for package in [
+            "ara-render",
+            "ara-render-fidelity",
+            "ara-runtime-render",
+            "ara-render2d",
+            "ara-landscape",
+            "ara-vfx-gpu",
+            "ara-texture-gpu",
+            "ara-gpu",
+            "ara-editor-gpu",
+        ] {
+            let root = scratch.path().join("crates").join(package).join("cooked");
+            std::fs::create_dir_all(root.join(&key)).unwrap();
+            for file in ["main.spv", "main.metallib", "main.metal.json"] {
+                std::fs::write(root.join(&key).join(file), b"cooked").unwrap();
+            }
+            let value = serde_json::json!({"stages":[{"spirv":format!("{key}/main.spv"),"metal":{"metallib":format!("{key}/main.metallib"),"reflection":format!("{key}/main.metal.json")}}]});
+            std::fs::write(
+                root.join("main.json"),
+                ara_json::to_canonical_string(&ara_json::sort_keys(&value)),
+            )
+            .unwrap();
+        }
+        let icons = scratch.path().join("assets/brand/icons/game");
+        std::fs::create_dir_all(&icons).unwrap();
+        for pixels in [16u32, 32, 64, 128, 256, 512, 1024] {
+            let mut png = b"\x89PNG\r\n\x1a\n\0\0\0\x0dIHDR".to_vec();
+            png.extend_from_slice(&pixels.to_be_bytes());
+            png.extend_from_slice(&pixels.to_be_bytes());
+            png.extend_from_slice(&[8, 6, 0, 0, 0]);
+            std::fs::write(icons.join(format!("ara-game-{pixels}.png")), png).unwrap();
+        }
+        let zip = scratch.path().join("macos.zip");
+        build_runtime_template(&player, scratch.path(), &zip).unwrap();
+        let mut archive = zip::ZipArchive::new(std::fs::File::open(&zip).unwrap()).unwrap();
+        for name in [
+            format!("resources/ara-editor-gpu/{key}/main.metallib"),
+            format!("resources/ara-gpu/{key}/main.metal.json"),
+            "AppIcon.icns".into(),
+        ] {
+            assert!(archive.by_name(&name).is_ok(), "{name} missing");
+        }
+        assert!(
+            archive
+                .by_name(&format!("resources/ara-render/{key}/main.spv"))
+                .is_err()
+        );
+        let unpacked = scratch.path().join("game");
+        crate::runtime::unpack_template(&zip, &unpacked, "ara-player").unwrap();
+        assert!(unpacked.join("AppIcon.icns").is_file());
     }
 }

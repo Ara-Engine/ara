@@ -344,7 +344,25 @@ pub fn doctor(opts: &DoctorOptions, t: &Toolchain) -> Vec<Check> {
             );
         }
     }
-    if opts
+    if opts.platform == Some(Platform::Macos) && cfg!(target_os = "macos") {
+        // A Mac exports macOS itself: an ad-hoc signed app bundle.
+        add(
+            "ARA-EXP-APL-006",
+            tools::which("codesign").is_some(),
+            false,
+            "codesign for the macOS app bundle",
+            "xcode-select --install".into(),
+            json!({}),
+        );
+        add(
+            "ARA-EXP-APL-007",
+            false,
+            true,
+            "Developer ID signing and notarization are not configured; exports are ad-hoc signed",
+            "keep macOS exports on this Mac until the Developer ID lane is configured".into(),
+            json!({"signing":"adhoc"}),
+        );
+    } else if opts
         .platform
         .is_some_and(|p| matches!(p, Platform::Macos | Platform::Ios))
     {

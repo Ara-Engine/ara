@@ -33,7 +33,8 @@ asserting C# ECS fields through `--read`, continuous native UI, and a stale-meta
 Run explicitly with prebuilt `ARA_SHIPPING_E2E_PLAYER` and its matching
 `ARA_SHIPPING_E2E_PDB` (README); it retains evidence under target/.
 No implicit emulator/WSL launches. Linux supports static ELF verification here.
-Apple uses the documented versioned SSH agent seam; no fake successful builds.
+A Mac exports macOS itself: an ad-hoc signed `.app` (`src/macos.rs`; README "macOS
+on a Mac"); iOS and other hosts use the documented SSH agent seam; no fake builds.
 See README.md for template bootstrapping, integration and Apple handoff.
 
 V2 outputs `build/`, `distribution.json`, packages and private `symbols/<build-id>`.

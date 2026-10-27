@@ -913,10 +913,10 @@ Fixes:
 owner: ara-export
 shown as: ARA-EXP-APL-001
 
-An Apple export preset has no `macAgent`. Apple builds require Xcode on an Apple silicon Mac; the exporter stops before compilation.
+An Apple export that this host cannot build itself (iOS, or macOS from a Windows or Linux host) has no `macAgent`. Apple builds require Xcode on an Apple silicon Mac; the exporter stops before compilation. A Mac exports macOS itself without an agent.
 
 Causes:
-- The macOS/iOS preset omits its Mac-agent SSH destination.
+- The iOS preset, or a macOS preset exported off a Mac, omits its Mac-agent SSH destination.
 
 Fixes:
 - Set `macAgent` to the intended Mac's SSH destination; this supplies configuration only, and the current build/sign/verify integration still reports `ARA-EXP-APL-002`.
@@ -925,7 +925,7 @@ Fixes:
 owner: ara-export
 shown as: ARA-EXP-APL-002
 
-The Mac-agent build/sign/verify path is an explicit implementation stub. Doctor reports a warning, but actual macOS/iOS exports fail even when `macAgent` is configured.
+The Mac-agent build/sign/verify path is an explicit implementation stub. Doctor reports a warning, and iOS exports, or macOS exports from a non-Mac host, fail even when `macAgent` is configured. Run macOS exports on an Apple silicon Mac instead.
 
 Causes:
 - The Mac session has not supplied and integrated `ara-export-agent` build, signing and verification support.
@@ -969,6 +969,59 @@ Causes:
 
 Fixes:
 - On Windows, run `Add-WindowsCapability -Online -Name OpenSSH.Client~~~~0.0.1.0` with the required system privileges, then run `ara-export doctor --platform macos` or `--platform ios`.
+
+## ARA8120 export::APL_006: codesign unavailable or failed
+owner: ara-export
+shown as: ARA-EXP-APL-006
+
+Signing or checking the macOS app bundle with `codesign` failed, or doctor could not find `codesign`. The export stops; nothing is published.
+
+Causes:
+- The Xcode command-line tools are not installed, so `codesign` is missing from `PATH`.
+- A nested gameplay image or the bundle could not be signed, or a later check found the bundle's contents changed after signing.
+
+Fixes:
+- Run `xcode-select --install`, then `ara-export doctor --platform macos`.
+- Read the `codesign-*.log` files in the job's `logs` folder; export again to a new directory rather than editing the bundle.
+
+## ARA8121 export::APL_007: macOS app bundle is ad-hoc signed
+owner: ara-export
+shown as: ARA-EXP-APL-007
+
+The macOS app is signed ad-hoc (`codesign --sign -`): it launches on the Mac that exported it, but Gatekeeper on other Macs rejects it. Developer ID signing and notarization are not configured yet. This is a warning; the export succeeds.
+
+Causes:
+- No Developer ID identity or notarization step is configured for macOS exports; ad-hoc signing is the default.
+
+Fixes:
+- Keep the build on the exporting Mac (local play and testing); Developer ID signing and notarization arrive as an explicit opt-in.
+
+## ARA8122 export::APL_008: macOS runtime template incomplete
+owner: ara-export
+shown as: ARA-EXP-APL-008
+
+A macOS runtime template or app bundle lacks what the Metal player needs: cooked Metal artifacts for a pipeline stage, or the game icon (`AppIcon.icns`, from the engine's `assets/brand/icons/game` PNGs).
+
+Causes:
+- A pipeline was cooked without Metal Shader Converter, so its stages have no `metal` artifacts.
+- The template was built from an engine folder without the game icon PNGs, or one has the wrong size.
+- The pinned template was not built from a macOS (Mach-O) player.
+
+Fixes:
+- Cook the engine's pipelines on the canonical cook host with Metal Shader Converter installed.
+- Rebuild the template with `ara-export runtime-template --player <macOS ara-player> --engine <checkout> --output <zip>` and pin it again.
+
+## ARA8123 export::APL_009: Native plugins unsupported on macOS
+owner: ara-export
+shown as: ARA-EXP-APL-009
+
+The macOS export lane does not build native Rust plugins yet; the export stops before compiling anything.
+
+Causes:
+- The macOS preset lists `plugins`.
+
+Fixes:
+- Remove the plugins from the macOS preset, or export them for Windows, Linux or Android.
 
 ## ARA8079 export::APL_100: Apple export stage failed
 owner: ara-export

@@ -221,7 +221,8 @@ pub fn crash_targets(work: &Path, entry_only: bool) -> Result<PathBuf> {
 
 /// `dotnet publish` of a script project for `rid` into `output` with the shipping
 /// properties: a NativeAOT shared library, or a self-contained ReadyToRun build.
-/// Callers add their platform's toolchain properties.
+/// Symbols stay in the image (ELF/PE builds archive and strip them), except on macOS,
+/// where they go to a `.dSYM` beside it. Callers add platform toolchain properties.
 pub fn publish_command(
     project: &Path,
     rid: &str,
@@ -251,7 +252,7 @@ pub fn publish_command(
         .arg("-p:InvariantGlobalization=true")
         .arg("-p:UseSharedCompilation=false")
         .arg("-p:DebugSymbols=true")
-        .arg("-p:StripSymbols=false")
+        .arg(format!("-p:StripSymbols={}", rid.starts_with("osx")))
         .arg(format!(
             "-p:CustomBeforeMicrosoftCommonTargets={}",
             crash_targets.display()
@@ -269,6 +270,15 @@ pub fn publish_command(
         ]);
     }
     Ok(cmd)
+}
+
+/// The runtime identifier of a desktop platform's one architecture.
+pub(crate) fn desktop_rid(platform: crate::Platform) -> &'static str {
+    match platform {
+        crate::Platform::Windows => "win-x64",
+        crate::Platform::Macos => "osx-arm64",
+        _ => "linux-x64",
+    }
 }
 
 /// File name of `assembly`'s NativeAOT shared library on `rid`.

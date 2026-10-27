@@ -12,9 +12,10 @@ Capture uses crash-handler + minidumper on Windows (MiniDumpWriteDump), Linux
 task and thread go to the monitor over a Mach port). No SDK download or build tool.
 macOS panic snapshots dump through a second short-lived client named after the panic
 record (a dump request ends its client), and the hook waits for the callback.
-macOS symbols: build with line tables and `split-debuginfo = packed`, archive the
-DWARF file inside the `.dSYM`; minidump-writer may leave the main executable unnamed,
-so symbolization also matches an unnamed module by debug ID.
+macOS symbols: build with line tables and `split-debuginfo = packed`; `archive_macho`
+checks the image and dSYM share an LC_UUID and merges the dSYM's functions and lines
+with the image's unwind tables. Symbolization falls back to the debug ID when names
+differ (minidump-writer may leave the main executable unnamed).
 
 `monitor_from_args` must run before any application initialization. `Capture`
 owns the child process and native handler; drop detaches and reaps it. The crash
