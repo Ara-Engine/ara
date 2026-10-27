@@ -1127,7 +1127,6 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
                         frame.paint_nodes > 0 || frame.layout_passes > 0 || frame.restyled > 0;
                 }
             }
-            let scene_host = windows::resolve_scene_host(&editor, &shell, &floats, dpi);
             if let Some(button) = shell.update_chrome(&mut window, dpi) {
                 caption.update(button);
             }
@@ -1139,6 +1138,7 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
                     controller.gizmo_state(),
                 )?;
             }
+            let scene_host = windows::resolve_scene_host(&editor, &shell, &floats, dpi);
             let ui_ms = ui_at.elapsed().as_secs_f64() * 1000.;
             let (mut render_ms, mut present_ms, mut presented) = (0., 0., false);
             let (mut scene_ms, mut icons_ms) = (0., 0.);
