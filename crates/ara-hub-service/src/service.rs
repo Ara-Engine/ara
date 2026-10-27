@@ -240,6 +240,8 @@ impl Hub {
                 | "hub.downloads"
                 | "hub.download.cancel"
                 | "hub.engine.install"
+                | "hub.engine.preflight"
+                | "hub.engine.repair"
                 | "hub.engine.uninstall"
                 | "hub.update.prepare"
         ) {
