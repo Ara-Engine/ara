@@ -1,7 +1,7 @@
 {
   "binding_layout_hash": "f71261afa0d52758f34ca15c916d2da422ee92b118ede6e189c970911a274f1e",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "efdc0e58cc665ef1c0c810f16378a03ac9625102cade1d0631407f8c3eebc401",
+  "key": "336b3938461bd7472b69a4ba557a802d12f26e9cceb8b34ba33b6a0ec3ede569",
   "stages": [
     {
       "dxil": "efdc0e58cc665ef1c0c810f16378a03ac9625102cade1d0631407f8c3eebc401/nativeGeometryFragment.dxil",
