@@ -1401,9 +1401,12 @@ fn camera_menu_and_toolbar_field_set_the_scene_field_of_view() {
 /// canonical export preset, runtime player, no machine paths, script modules found
 /// by the export), and a project with a C# module can build.
 #[test]
-fn build_profile_comes_from_a_command_and_csharp_projects_can_build() {
+fn build_profile_creation_commits_once_and_keeps_csharp_build_available() {
     use ara_editor::shell::commands::Target;
     let project = Project::new();
+    let module = ara_host::project::authored_root(&project.0).join("features/gameplay");
+    std::fs::create_dir_all(&module).unwrap();
+    std::fs::write(module.join("ara.module.toml"), "name = \"Game\"\n").unwrap();
     let mut editor = Editor::open(&project.0).unwrap();
     let mut shell = Shell::new(&mut editor, [1440., 900.]).unwrap();
     let run = shell
@@ -1411,12 +1414,57 @@ fn build_profile_comes_from_a_command_and_csharp_projects_can_build() {
         .unwrap_err();
     assert!(run.to_string().contains("Build the project first"), "{run}");
 
+    let before = editor.host.store().history().len();
     shell
         .run_command(&mut editor, "build.profile.create", &Target::None)
         .unwrap();
-    let text = std::fs::read_to_string(project.0.join("presets/windows.export.json")).unwrap();
+    let jobs = editor.action("jobs.list", json!({})).unwrap();
+    let job = jobs["jobs"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|job| job["name"] == "build_profile.create")
+        .unwrap()["job"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    let path = project.0.join("settings/builds/windows.export.json");
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    loop {
+        editor.tick();
+        let status = editor.action("jobs.status", json!({"job":job})).unwrap();
+        assert!(
+            status["status"] == "running" || status["status"] == "done",
+            "profile preparation failed: {status}"
+        );
+        if status["status"] == "done" && path.is_file() {
+            assert_eq!(status["result"]["ok"], true);
+            assert_eq!(editor.host.store().history().len(), before + 1);
+            assert_eq!(
+                status["result"]["txn"],
+                editor.host.store().history().last().unwrap().id.0
+            );
+            break;
+        }
+        assert!(
+            std::time::Instant::now() < deadline,
+            "profile did not commit: {status}"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(2));
+    }
+    let text = std::fs::read_to_string(&path).unwrap();
     let preset = ara_export::ExportPreset::from_unpinned_text(&text).unwrap();
     assert_eq!(preset.platform, ara_export::Platform::Windows);
+    let authored = ara_host::project::authored_root(editor.host.root());
+    let content = authored.strip_prefix(editor.host.root()).unwrap();
+    assert_eq!(
+        preset.content,
+        if content.as_os_str().is_empty() {
+            ".".into()
+        } else {
+            content.to_string_lossy().replace('\\', "/")
+        }
+    );
     assert_eq!(
         preset.player_template,
         ara_export::preset::PlayerTemplate::Runtime
@@ -1426,19 +1474,26 @@ fn build_profile_comes_from_a_command_and_csharp_projects_can_build() {
         "pinned at build time, not here"
     );
     assert!(preset.script_project.is_empty());
+    // Reopening the UI consumes the committed index, rather than treating the
+    // initial asynchronous acknowledgement as a successful filesystem mutation.
+    drop(shell);
+    let mut shell = Shell::new(&mut editor, [1440., 900.]).unwrap();
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    while !shell.poll_assets_for_test(&mut editor) {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "profile index did not arrive"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(2));
+    }
     assert!(
         shell
             .run_command(&mut editor, "build.profile.create", &Target::None)
             .is_err(),
         "an existing profile is never overwritten"
     );
-
-    std::fs::create_dir_all(project.0.join("scripts/Game")).unwrap();
-    std::fs::write(
-        project.0.join("scripts/Game/ara.module.toml"),
-        "name = \"Game\"\n",
-    )
-    .unwrap();
+    assert_eq!(std::fs::read_to_string(path).unwrap(), text);
+    assert_eq!(editor.host.store().history().len(), before + 1);
     let commands = editor.action("editor.commands", json!({})).unwrap();
     let current = commands["commands"]
         .as_array()
