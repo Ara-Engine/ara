@@ -67,8 +67,18 @@ impl MetalDevice {
         state: &RenderState,
         threads: Option<[u32; 3]>,
     ) -> Pipeline {
+        self.msl_pipeline_from(SHADERS, entries, state, threads)
+    }
+    /// [`Self::msl_pipeline`] over other shader source, after the same [`ABI`].
+    pub(super) fn msl_pipeline_from(
+        &mut self,
+        shaders: &str,
+        entries: &[(Stage, &str)],
+        state: &RenderState,
+        threads: Option<[u32; 3]>,
+    ) -> Pipeline {
         let native = native::pool(|| {
-            let source = NSString::from_str(&format!("{ABI}{SHADERS}"));
+            let source = NSString::from_str(&format!("{ABI}{shaders}"));
             let library = self
                 .device
                 .newLibraryWithSource_options_error(&source, None)

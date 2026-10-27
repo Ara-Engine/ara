@@ -1,35 +1,29 @@
-//! Two pooled geometries and three real transformed instances share one upload.
+//! Two pooled geometries and three real transformed instances share one upload; the
+//! cooked `rangeProbe` ray query (SPIR-V on Vulkan, Metal Shader Converter on Metal)
+//! reads each instance's ID back. Skips on devices without the RT tier.
 use anyhow::Result;
 use ara_gpu::{
-    Access, Barrier, Device, Queue, Resource, RootConstants,
+    Access, Barrier, Device, GpuDevice, Queue, Resource, RootConstants,
     acceleration::{AccelerationDesc, AccelerationInstance, TriangleRange},
+    commands::Command,
     cooked::CookedPipeline,
     vk,
-    vulkan::{Command, VulkanDevice},
 };
 
 #[test]
-#[cfg_attr(
-    target_os = "macos",
-    ignore = "Vulkan GPU test; macOS runs the Metal backend"
-)]
 fn pooled_triangle_ranges_keep_local_indices_and_instance_transforms() -> Result<()> {
     transfer_uploaded_ranges(Queue::Graphics)
 }
 
 #[test]
-#[cfg_attr(
-    target_os = "macos",
-    ignore = "Vulkan GPU test; macOS runs the Metal backend"
-)]
 fn pooled_triangle_ranges_build_on_compute_after_transfer() -> Result<()> {
     transfer_uploaded_ranges(Queue::Compute)
 }
 
 fn transfer_uploaded_ranges(queue: Queue) -> Result<()> {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
-    let mut gpu = VulkanDevice::new(&[], root.join("../../target/ara-gpu/triangle-ranges"))?;
-    if !gpu.context().info.ray_tracing {
+    let mut gpu = GpuDevice::new(&[], root.join("../../target/ara-gpu/triangle-ranges"))?;
+    if !gpu.info().ray_tracing {
         return Ok(());
     }
     let mut bytes = vec![0; 64];
