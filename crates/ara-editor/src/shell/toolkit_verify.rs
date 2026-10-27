@@ -200,10 +200,10 @@ impl Host {
     }
 
     fn open_note(&mut self) {
-        self.alert = Some(
-            self.dialogs
-                .alert(DialogOptions::new("A second native dialog", NOTE.repeat(4))),
-        );
+        self.alert = Some(self.dialogs.alert(DialogOptions::new(
+            "A second native dialog",
+            NOTE.repeat(16),
+        )));
     }
 
     pub fn close(&mut self, ui: &mut Ui, input: &mut InputState) -> ara_ui::Result<()> {

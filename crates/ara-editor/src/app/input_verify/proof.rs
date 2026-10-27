@@ -208,6 +208,10 @@ pub(super) fn checks(
                 "long wrapping prompt fits the viewport",
                 dialog_bounded(shell, "kit-dialog-1-body"),
             );
+            check(
+                "prompt notes have a visible scroll area",
+                dialog_notes_visible(shell, "kit-dialog-1"),
+            );
         }
         Act::Stack => {
             check(
@@ -217,6 +221,10 @@ pub(super) fn checks(
             check(
                 "stacked long notes fit the viewport",
                 dialog_bounded(shell, "kit-dialog-2-body"),
+            );
+            check(
+                "stacked notes have a visible scroll area",
+                dialog_notes_visible(shell, "kit-dialog-2"),
             );
             check(
                 "stacking preserves the underlying typed prompt",
@@ -256,6 +264,14 @@ pub(super) fn checks(
                         .find("kit-dialog-3-message")
                         .is_some_and(|i| shell.ui.nodes[i].rect.h > 100.),
             );
+            check(
+                "long notes have a visible scroll area",
+                dialog_notes_visible(shell, "kit-dialog-3"),
+            );
+            check(
+                "native wheel reveals the last line of the overflowing note",
+                dialog_notes_end_reached(shell, "kit-dialog-3"),
+            );
         }
         Act::NoteClose => {
             check(
@@ -290,6 +306,32 @@ fn scope_only(shell: &Shell, prefix: &str) -> bool {
                 .iter()
                 .all(|node| node["id"].as_str().is_some_and(|id| id.starts_with(prefix)))
     })
+}
+
+fn dialog_notes_visible(shell: &Shell, id: &str) -> bool {
+    shell.shown_node(&format!("{id}-scroll")).is_some_and(|i| {
+        let clip = shell.ui.nodes[i].rect.intersection(shell.ui.nodes[i].clip);
+        clip.w > 0.5 && clip.h > 0.5
+    })
+}
+fn dialog_notes_end_reached(shell: &Shell, id: &str) -> bool {
+    let Some(scroll) = shell.shown_node(&format!("{id}-scroll")) else {
+        return false;
+    };
+    let Some(message) = shell.shown_node(&format!("{id}-message")) else {
+        return false;
+    };
+    let clip = shell.ui.nodes[scroll]
+        .rect
+        .intersection(shell.ui.nodes[scroll].clip);
+    let bottom = shell.ui.nodes[message].rect.y + shell.ui.nodes[message].rect.h;
+    shell
+        .ui
+        .scroll_position(scroll)
+        .is_some_and(|position| position[1] > 0.)
+        && clip.h > 0.5
+        && bottom <= clip.y + clip.h + 0.5
+        && bottom >= clip.y
 }
 fn inside(rect: Box2, clip: Box2) -> bool {
     [

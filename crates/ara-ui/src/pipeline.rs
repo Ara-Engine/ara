@@ -6,6 +6,8 @@ use crate::{
 };
 use ara_ui_text::TextSystem;
 use taffy::prelude::*;
+#[path = "text_fit.rs"]
+mod text_fit;
 impl Ui {
     /// Run restyle, cached Taffy/Parley layout and retained display-list emission.
     pub fn frame(&mut self, text_system: &mut TextSystem) -> Result<Work> {
@@ -84,7 +86,9 @@ impl Ui {
             // Settle that dependency in this frame; ordinary popovers need one pass,
             // idle frames none. Bound the work even for pathological anchor cycles.
             for _ in 0..4 {
-                if !self.place_popovers()? {
+                let text_changed = work.layout_passes > 0 && self.fit_auto_text()?;
+                let overlays_changed = self.place_popovers()?;
+                if !text_changed && !overlays_changed {
                     break;
                 }
                 self.compute_layout(text_system)?;

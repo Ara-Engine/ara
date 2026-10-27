@@ -174,3 +174,21 @@ pub(in crate::app) fn focus_lost(
         events,
     )
 }
+
+pub(in crate::app) fn wheel(
+    window: &Window,
+    y: f32,
+    events: &mut Vec<(u32, Event)>,
+) -> ara_ui::Result<()> {
+    push(
+        SDL_Event {
+            wheel: SDL_MouseWheelEvent {
+                r#type: SDL_EVENT_MOUSE_WHEEL,
+                windowID: SDL_WindowID(window.id()),
+                y,
+                ..Default::default()
+            },
+        },
+        events,
+    )
+}

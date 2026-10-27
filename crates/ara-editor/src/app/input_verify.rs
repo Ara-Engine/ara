@@ -238,6 +238,10 @@ impl InputCheck {
             (Act::PromptAccept, 2) => replace(window, "Saved prompt ✓", events)?,
             (Act::PromptAccept, 3) => native::tap(window, 40, events)?,
             (Act::LongNote, 1) => click(shell, window, scale, "kit-open-note", events)?,
+            (Act::LongNote, 2) => {
+                native::motion(window, point(shell, "kit-dialog-3-scroll")?, scale, events)?
+            }
+            (Act::LongNote, 3) => native::wheel(window, -10_000., events)?,
             (Act::NoteClose, 1) => native::tap(window, 41, events)?,
             (Act::Cleanup, 1) => {
                 if let Some(mut host) = shell.toolkit_verify.take() {
