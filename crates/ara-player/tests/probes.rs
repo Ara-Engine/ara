@@ -40,6 +40,12 @@ fn an_unpresentable_window_never_blocks_the_event_pump() {
 }
 
 #[test]
+#[ignore = "hidden SDL GPU pump probe (2D path); run explicitly (one test thread) on the GPU host"]
+fn an_unpresentable_2d_window_never_blocks_the_event_pump() {
+    probe("unpresentable-pump-2d");
+}
+
+#[test]
 fn an_unknown_probe_names_the_known_ones() {
     let output = Command::new(env!("CARGO_BIN_EXE_ara-player"))
         .args(["--probe", "nope"])

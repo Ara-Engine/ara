@@ -35,6 +35,9 @@ pub struct Windowed {
     hidden: bool,
     /// Probe override of `Window::presentable` (None: ask the window).
     presentable_override: Option<bool>,
+    /// This frame's 2D prepare found the window unable to show it, or its last copy
+    /// still running: its present skips too (`ready_2d`).
+    skip_2d: bool,
 }
 
 /// A one-box frame that creates the renderer and warms its pipelines before Play.
@@ -294,14 +297,38 @@ impl Windowed {
         if size.contains(&0) {
             return Ok(());
         }
+        self.skip_2d = !self.ready_2d(presenter)?;
+        if self.skip_2d {
+            return Ok(());
+        }
         if presenter.renderer().is_some_and(|r| r.size() != size) {
             self.recreate_2d(presenter)?;
         }
         presenter.prepare(world, tick, size, &self.window.extensions()?)
     }
 
-    /// Renders and blits the native 2D target; no pixel data crosses the CPU.
+    /// Whether a 2D frame may upload and render now. The 2D renderer waits for its
+    /// own submissions, so it must never queue them behind a stalled presentation:
+    /// nothing while the window cannot show (as `present`), and nothing until its
+    /// last copy has finished, waiting at most `Presenter::STALL_WAIT`.
+    fn ready_2d(&mut self, presenter: &Presenter2d) -> Result<bool> {
+        if !self.presentable() {
+            std::thread::sleep(Duration::from_millis(10));
+            return Ok(false);
+        }
+        let (Some(present), Some(renderer)) = (&mut self.present2d, presenter.renderer()) else {
+            return Ok(true);
+        };
+        // SAFETY: created on this 2D renderer's live device.
+        unsafe { present.settled(renderer.gpu(), Presenter::STALL_WAIT) }
+    }
+
+    /// Renders and blits the native 2D target; no pixel data crosses the CPU. Skips
+    /// the frame its prepare skipped (`ready_2d`).
     pub fn present_2d(&mut self, presenter: &mut Presenter2d) -> Result<()> {
+        if std::mem::take(&mut self.skip_2d) {
+            return Ok(());
+        }
         if self.window.size()?.contains(&0) {
             std::thread::sleep(Duration::from_millis(5));
             return Ok(());

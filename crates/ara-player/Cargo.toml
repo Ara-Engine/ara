@@ -15,6 +15,7 @@ embed-resource.workspace = true
 
 [dependencies]
 anyhow = { workspace = true }
+ara-2d = { path = "../ara-2d" }
 ara-asset = { path = "../ara-asset" }
 ara-audio = { path = "../ara-audio" }
 ara-components.workspace = true
