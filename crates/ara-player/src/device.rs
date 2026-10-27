@@ -208,10 +208,16 @@ impl Windowed {
         if self.present_enabled && self.present.is_none() {
             // SAFETY: the window and device both outlive `present`, which is destroyed
             // after device idle in `recreate`/`Drop` ordering below.
-            let mut present = unsafe { Present::create(renderer.gpu(), &self.window)? };
-            // SAFETY: created on this renderer's live device.
+            self.present = Some(unsafe { Present::create(renderer.gpu(), &self.window)? });
+        }
+        // The window copy returns once submitted, like the scene and its UI composite.
+        // Set every frame: a presentation adopted from the loading view
+        // (`finish_loading`) starts synchronous, and its copy would wait for this
+        // frame's GPU work before the next frame could record.
+        if let Some(present) = &mut self.present {
+            // SAFETY: created on this renderer's device, or on the loading device that
+            // shares its native device; both are live.
             unsafe { present.set_frames_in_flight(renderer.gpu(), true)? };
-            self.present = Some(present);
         }
         // The game UI (if any) composites the scene into its own target and presents it.
         if let Some(surface) = &mut self.game_ui {

@@ -40,12 +40,18 @@ fn deferred_scope_orders_in_flight_constant_writes_and_polls_without_waiting() {
     copy(&mut gpu, 16);
     assert_eq!(gpu.deferred_submission_count(), 3);
     let mut frame = gpu.end_deferred_completion().expect("end");
+    // The next frame may record while this one is in flight; a third scope refuses.
+    gpu.begin_deferred_completion()
+        .expect("a scope opens with one frame in flight");
+    let mut next = gpu.end_deferred_completion().expect("end");
     assert!(
         gpu.begin_deferred_completion().is_err(),
-        "unpolled frame blocks a new scope"
+        "two unconsumed frames block a new scope"
     );
     gpu.wait_completion(&mut frame).expect("wait");
     assert!(frame.is_resolved());
+    gpu.wait_completion(&mut next)
+        .expect("wait the overlapped frame");
     let values: Vec<u32> = bytemuck::cast_slice(&gpu.read(readback).expect("read")).to_vec();
     assert_eq!(values, [1, 2, 3, 4, 5, 6, 7, 8]);
     assert!(
