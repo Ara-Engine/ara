@@ -109,6 +109,24 @@ macro_rules! abi_table {
         pub struct $name {
             $( $(#[doc = $fdoc])* pub $f: unsafe extern "C" fn($($pty),*) $(-> $ret)?, )*
         }
+        impl $name {
+            /// Reads a foreign table, rejecting null slots before constructing Rust function pointers.
+            /// # Safety
+            /// `raw` points to a readable, fully initialized table. Each non-null slot
+            /// has its declared signature and remains executable for the table's lifetime.
+            pub unsafe fn read_checked(raw: *const Self) -> Result<Self, &'static str> {
+                $(
+                    // SAFETY: the caller supplies initialized table bytes. Option<extern fn>
+                    // has the nullable function-pointer representation, so zero is valid here.
+                    let $f = unsafe {
+                        core::ptr::addr_of!((*raw).$f)
+                            .cast::<Option<unsafe extern "C" fn($($pty),*) $(-> $ret)?>>()
+                            .read()
+                    }.ok_or(concat!(stringify!($name), ".", stringify!($f)))?;
+                )*
+                Ok(Self { $($f),* })
+            }
+        }
         /// Descriptor of the table declared alongside it.
         pub const $desc: $crate::abi::AbiTable = $crate::abi::AbiTable {
             name: stringify!($name),

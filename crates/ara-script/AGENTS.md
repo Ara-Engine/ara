@@ -13,7 +13,7 @@ Depends on ara-schema, ara-diag, ara-components, ara-runtime, ara-sim, bevy_ecs,
 - `abi` (ABI v3): `HostInit` (+ `HostApi`, Rust → C#) and `ScriptApi` (C# → Rust), `Tick`,
   `Frame`, `SystemCall`, `BehaviourCall`, `CommandCall`, `ReloadReport` (kind, escalation,
   origin, cascade size, per-phase µs), the `ABI_CONSTS` (`RELOAD_*`, `ESC_*`, `ORIGIN_*`) and
-  `layout_hash(engine_layouts)`. Entry point: `ara_script_init(*const HostInit, *mut ScriptApi)`.
+  `layout_hash(engine_layouts)`. Entry: `ara_script_init(*const HostInit, *mut ScriptApi)`; Rust rejects null slots with ARA0922 before dispatch.
 - `ScriptInputs`, `ScriptNavigation`, `ScriptControls`: exclusive fixed-tick host
   seams for sorted entity queries, replayable input, nav destinations, character
   stops and boolean animator parameters, supplied/drained by the embedding runtime.
