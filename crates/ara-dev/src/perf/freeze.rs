@@ -126,7 +126,8 @@ pub(crate) fn pack(
         &preset,
         serde_json::to_vec_pretty(&serde_json::json!({
             "$schema": "ara://schema/export/1", "platform": "windows", "config": "profile",
-            "scriptProject": "", "assembly": "", "content": "levels", "playerTemplate": "runtime", "templates": [pin]
+            "scriptProject": "", "assembly": assembly_stem(project), "content": "levels",
+            "playerTemplate": "runtime", "templates": [pin]
         }))?,
     )?;
     let mut command = Command::new(exporter);
@@ -166,4 +167,50 @@ pub(crate) fn pack(
     }
     fs::rename(dist, frozen)?;
     Ok(frozen.to_owned())
+}
+
+/// The shipping C# assembly stem for a frozen sample: its project name reduced to
+/// `[A-Za-z0-9_]`, as the exporter requires once a project has script modules
+/// (Outpost's C# gameplay); `Game` when the name leaves nothing usable.
+fn assembly_stem(project: &Path) -> String {
+    let name = fs::read(project.join("ara.project.json"))
+        .ok()
+        .and_then(|bytes| serde_json::from_slice::<serde_json::Value>(&bytes).ok())
+        .and_then(|json| json["name"].as_str().map(str::to_owned))
+        .unwrap_or_default();
+    let stem: String = name
+        .chars()
+        .filter(|c| c.is_ascii_alphanumeric() || *c == '_')
+        .collect();
+    if stem.is_empty() || stem.starts_with(|c: char| c.is_ascii_digit()) {
+        "Game".into()
+    } else {
+        stem
+    }
+}
+
+#[cfg(test)]
+mod assembly_tests {
+    use super::*;
+
+    #[test]
+    fn assembly_stem_comes_from_the_project_name_and_is_export_safe() {
+        let dir = std::env::temp_dir().join(format!("ara-dev-stem-{}", std::process::id()));
+        fs::create_dir_all(&dir).unwrap();
+        for (name, stem) in [
+            ("Outpost", "Outpost"),
+            ("My Game-2", "MyGame2"),
+            ("3d", "Game"),
+            ("", "Game"),
+        ] {
+            fs::write(
+                dir.join("ara.project.json"),
+                serde_json::json!({ "name": name }).to_string(),
+            )
+            .unwrap();
+            assert_eq!(assembly_stem(&dir), stem);
+        }
+        fs::remove_dir_all(&dir).unwrap();
+        assert_eq!(assembly_stem(&dir), "Game");
+    }
 }
