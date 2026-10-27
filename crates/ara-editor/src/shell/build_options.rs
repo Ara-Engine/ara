@@ -121,7 +121,22 @@ impl Shell {
 
     /// Build the chosen profile into the backend's fresh, uniquely named envelope.
     pub(crate) fn build_selected(&mut self, editor: &mut Editor) -> ara_ui::Result<()> {
-        let profile = self.selected_build_profile(editor)?;
+        let profile = match self.selected_build_profile(editor) {
+            Ok(profile) => profile,
+            Err(_)
+                if self.build_profiles().is_empty()
+                    && editor
+                        .state
+                        .settings
+                        .get(PROFILE_SETTING)
+                        .and_then(Value::as_str)
+                        .unwrap_or("")
+                        .is_empty() =>
+            {
+                return self.build_current(editor);
+            }
+            Err(_) => return self.open_build_options(editor),
+        };
         self.build_profile(editor, &profile, None)?;
         self.build_options.open = false;
         self.rebuild(editor)

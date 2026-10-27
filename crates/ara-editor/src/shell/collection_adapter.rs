@@ -3,6 +3,9 @@ use super::*;
 use crate::commands::nested::{self, Operation};
 use ara_ui::collection::{ItemKey, Viewport};
 use std::ops::Range;
+#[cfg(test)]
+#[path = "collection_adapter/append_tests.rs"]
+mod append_tests;
 
 /// Only the primary object's presentation; mutations resolve every object afresh.
 pub(crate) struct Values {
@@ -16,6 +19,8 @@ pub(crate) struct View {
     count: usize,
     viewport: Viewport,
     surface: Option<String>,
+    /// A successful explicit local Add, consumed after its new rows are mounted.
+    reveal: Option<(String, String, usize)>,
 }
 
 /// One collection control's typed intent.
@@ -116,7 +121,7 @@ impl Shell {
     pub(crate) fn sync_collections(&mut self) -> bool {
         let mut changed = false;
         for (id, view) in &mut self.collections {
-            if view.surface != self.current {
+            if view.surface != self.current || view.reveal.is_some() {
                 continue;
             }
             let Some(index) = self.ui.find(id).filter(|index| self.ui.shown(*index)) else {
@@ -181,6 +186,9 @@ impl Shell {
                     *index,
                 )?;
                 let result = editor.apply(calls, "Edit collection", None)?;
+                if *operation == Operation::Append {
+                    self.reveal_appended_collection(editor, &action.field, &action.pointer)?;
+                }
                 let skipped = count_skipped(&result);
                 if skipped > 0 {
                     self.status_note = Some(format!(
@@ -299,19 +307,184 @@ impl Shell {
             .find(&id)
             .and_then(|index| self.ui.scroll_position(index))
             .map_or(0., |position| position[1]);
-        let window = viewport.window(count, offset);
+        if let Some(view) = self.collections.get_mut(&id)
+            && view.reveal.as_ref().is_some_and(|(doc, entity, _)| {
+                doc != &editor.state.doc || editor.state.selection.first() != Some(entity)
+            })
+        {
+            view.reveal = None;
+        }
+        let requested = self
+            .collections
+            .get(&id)
+            .and_then(|view| view.reveal.as_ref().map(|(_, _, index)| *index))
+            .and_then(|index| viewport.reveal(index, count, offset));
+        let window = viewport.window(count, requested.unwrap_or(offset));
         let view = self.collections.entry(id.clone()).or_insert_with(|| View {
             range: window.range.clone(),
             selected: (count > 0).then_some(ItemKey::Index(0)),
             count,
             viewport,
             surface: self.current.clone(),
+            reveal: None,
         });
         view.range = window.range.clone();
         view.count = count;
         view.viewport = viewport;
         view.surface = self.current.clone();
         (id, window, view.selected.clone(), height)
+    }
+
+    /// Reveal only the item created by an explicit successful Add. Generic model
+    /// notifications never call this path or change the collection's selection.
+    pub(super) fn reveal_appended_collection(
+        &mut self,
+        editor: &Editor,
+        field: &str,
+        pointer: &str,
+    ) -> ara_ui::Result<bool> {
+        let resolved = self.resolved(editor)?;
+        let Some(primary) = editor
+            .state
+            .selection
+            .first()
+            .and_then(|entity| resolved.get(entity))
+        else {
+            return Ok(false);
+        };
+        let db = editor.host.store().schema();
+        let path = field.parse::<ara_schema::FieldPath>()?;
+        let path = db
+            .resolve_path(db.get("Entity").ok_or("Entity schema missing")?, &path)
+            .map_err(|error| error.to_string())?;
+        let value =
+            ara_schema::path::get_effective(&primary.record, &path.steps).unwrap_or_else(|| {
+                path.field
+                    .map_or(Value::Null, |field| db.field_default(field))
+            });
+        let Some(collection) = value.pointer(pointer) else {
+            return Ok(false);
+        };
+        let found = match collection {
+            Value::Array(items) => items.last().map(|item| {
+                let index = items.len() - 1;
+                let key = if matches!(
+                    compound::nested_type(db, &path.ty, pointer),
+                    Some(ara_schema::ValueType::Keyed(_))
+                ) {
+                    item.get("id")
+                        .and_then(Value::as_str)
+                        .map(|key| ItemKey::Key(key.into()))
+                        .unwrap_or(ItemKey::Index(index))
+                } else {
+                    ItemKey::Index(index)
+                };
+                (index, key, items.len())
+            }),
+            Value::Object(items) => {
+                let before = self
+                    .compound_values
+                    .get(field)
+                    .and_then(|values| values.value.pointer(pointer))
+                    .and_then(Value::as_object);
+                let mut added = items
+                    .keys()
+                    .enumerate()
+                    .filter(|(_, key)| before.is_none_or(|before| !before.contains_key(*key)));
+                let first = added.next();
+                if added.next().is_some() {
+                    None
+                } else {
+                    first.map(|(index, key)| (index, ItemKey::Key(key.clone()), items.len()))
+                }
+            }
+            _ => None,
+        };
+        let Some((index, key, count)) = found else {
+            return Ok(false);
+        };
+        let Some(view) = self.collections.get_mut(&id(field, pointer)) else {
+            return Ok(false);
+        };
+        view.selected = Some(key);
+        view.count = count;
+        view.reveal = editor
+            .state
+            .selection
+            .first()
+            .map(|entity| (editor.state.doc.clone(), entity.clone(), index));
+        Ok(true)
+    }
+
+    /// Run after mounting and popup-scope synchronization on each surface. The
+    /// requested pool is already bounded; native scroll now has the new extent.
+    pub(super) fn reveal_collection_appends(&mut self, editor: &Editor) -> ara_ui::Result<()> {
+        for view in self.collections.values_mut() {
+            if view.reveal.as_ref().is_some_and(|(doc, entity, _)| {
+                doc != &editor.state.doc || editor.state.selection.first() != Some(entity)
+            }) {
+                view.reveal = None;
+            }
+        }
+        let pending: Vec<_> = self
+            .collections
+            .iter()
+            .filter(|(_, view)| view.surface == self.current && view.reveal.is_some())
+            .map(|(id, _)| id.clone())
+            .collect();
+        for id in pending {
+            let Some(container) = self.shown_node(&id) else {
+                if let Some(view) = self.collections.get_mut(&id) {
+                    view.reveal = None;
+                }
+                continue;
+            };
+            let view = &self.collections[&id];
+            let offset = self
+                .ui
+                .scroll_position(container)
+                .map_or(0., |offset| offset[1]);
+            let Some(target) = view
+                .reveal
+                .as_ref()
+                .and_then(|(_, _, index)| view.viewport.reveal(*index, view.count, offset))
+            else {
+                continue;
+            };
+            self.ui.scroll_to(container, [0., target])?;
+            self.collections
+                .get_mut(&id)
+                .expect("pending collection exists")
+                .reveal = None;
+            let Some(detail) = self.shown_node(&format!("{id}-detail")) else {
+                continue;
+            };
+            let editable = self.ui.nodes.iter().enumerate().find_map(|(index, node)| {
+                if node.state.disabled
+                    || !matches!(
+                        node.element.tag.as_str(),
+                        "field" | "input" | "dropdown" | "toggle"
+                    )
+                {
+                    return None;
+                }
+                let mut ancestor = node.element.parent;
+                while let Some(parent) = ancestor {
+                    if parent == detail {
+                        return Some(index);
+                    }
+                    ancestor = self.ui.nodes[parent].element.parent;
+                }
+                None
+            });
+            if let Some(editable) = editable {
+                self.ui.scroll_into_view(editable)?;
+                self.stats.work += self.ui.frame(&mut self.text)?;
+                let focus = ara_ui::source::stable_id(&self.ui.nodes[editable].element.id);
+                self.input.focus(&mut self.ui, focus)?;
+            }
+        }
+        Ok(())
     }
 }
 

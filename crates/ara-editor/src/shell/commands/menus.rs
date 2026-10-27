@@ -23,6 +23,8 @@ pub(crate) enum Dynamic {
     SavedLayouts,
     /// Nearest prefab, variant and base destinations for a context's overrides.
     PrefabSources,
+    /// Cached canonical and legacy build profiles, selected through typed preferences.
+    BuildProfiles,
 }
 impl Dynamic {
     /// The registry command dynamic entries run.
@@ -32,6 +34,7 @@ impl Dynamic {
             Self::Windows => "window.focus_window",
             Self::SavedLayouts => "layout.load",
             Self::PrefabSources => "prefab.apply_to",
+            Self::BuildProfiles => "build.profile.select",
         }
     }
 }
@@ -157,11 +160,13 @@ pub(crate) const MENUS: &[Menu] = &[
                 "Build & Export",
                 &[
                     C("build.current"),
+                    C("build.destination"),
                     C("build.run"),
                     C("build.open_folder"),
                     S,
                     C("build.profile.create"),
                     C("build.profiles"),
+                    Sub("Selected Profile", &[Item::Dynamic(Dynamic::BuildProfiles)]),
                     C("build.package"),
                 ],
             ),

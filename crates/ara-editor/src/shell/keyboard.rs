@@ -64,7 +64,33 @@ impl Shell {
         if self.confirmations.is_open() {
             return self.confirmation_key(editor, scancode, pressed, clipboard);
         }
+        if self.modal_root == Some("build-options") && self.current.is_some() {
+            return Ok(true);
+        }
         if self.choice_key(editor, scancode, pressed, clipboard)? {
+            return Ok(true);
+        }
+        if self.modal_root == Some("build-options") {
+            self.alt_tap = false;
+            if !pressed {
+                return Ok(true);
+            }
+            editor.input_active();
+            if scancode == 41 {
+                self.close_build_options(editor)?;
+                return Ok(true);
+            }
+            // Selects have already had first refusal. Keep the remaining native
+            // navigation inside the modal and swallow editor/global shortcuts.
+            self.native_input.key(
+                &mut self.ui,
+                &mut self.input,
+                scancode,
+                true,
+                false,
+                clipboard,
+            )?;
+            self.dispatch(editor)?;
             return Ok(true);
         }
         if scancode == 226 || scancode == 230 {
@@ -449,6 +475,127 @@ mod dialog_tests {
         fn write(&mut self, _: &str) -> ara_ui_text::Result<()> {
             Ok(())
         }
+    }
+
+    #[test]
+    fn build_options_traps_keys_stacks_select_and_dialog_then_restores_focus() -> ara_ui::Result<()>
+    {
+        let project = Project::new()?;
+        let mut editor = Editor::open(&project.0)?;
+        let mut shell = Shell::new(&mut editor, [900., 600.])?;
+        // Drain the initial worker handoff before installing this modal's cached
+        // index fixture. No export/profile creation or native file chooser runs.
+        let limit = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        while shell.browser.revision == 0
+            && shell.browser.files.is_empty()
+            && shell.browser.error.is_none()
+            && std::time::Instant::now() < limit
+        {
+            shell.browser.poll();
+            std::thread::sleep(std::time::Duration::from_millis(2));
+        }
+        assert!(shell.browser.revision > 0 || !shell.browser.files.is_empty());
+        shell.browser.files = ["Windows shipping", "Mobile development"]
+            .into_iter()
+            .map(|name| {
+                let path = format!("settings/builds/{name}.export.json");
+                ara_host::project::AuthoredFile {
+                    storage_path: path.clone(),
+                    path,
+                    scope: ara_host::project::AuthoredScope::Project,
+                    role: ara_host::project::AuthoredRole::BuildPreset,
+                }
+            })
+            .collect();
+        shell.browser.revision += 1;
+        let outside = ara_ui::source::stable_id("search-hierarchy");
+        shell.input.focus(&mut shell.ui, outside)?;
+        let revision = editor.host.store().revision();
+
+        shell.dialog = Some(Dialog::save_layout());
+        shell.rebuild(&mut editor)?;
+        let decision_focus = shell.input.focused();
+        assert!(shell.open_build_options(&mut editor).is_err());
+        assert!(shell.dialog.is_some());
+        assert_eq!(shell.modal_root, Some("dialog"));
+        assert_eq!(shell.input.focused(), decision_focus);
+        assert!(!shell.build_options_open());
+        shell.key(&mut editor, 41, true, &mut Clip)?;
+        assert_eq!(shell.input.focused(), Some(outside));
+        editor.action("editor.palette", json!({"open":true}))?;
+        shell.rebuild(&mut editor)?;
+        shell.open_build_options(&mut editor)?;
+        assert!(
+            !editor.state.palette,
+            "Opening Build closes the palette through navigation"
+        );
+        assert_eq!(shell.modal_root, Some("build-options"));
+        assert_eq!(
+            shell.input.focused(),
+            Some(ara_ui::source::stable_id("build-profile-select"))
+        );
+        assert!(shell.input.focus(&mut shell.ui, outside).is_err());
+        shell.key(&mut editor, 81, true, &mut Clip)?;
+        assert!(shell.choice_open());
+        let search = shell.input.focused();
+        assert_eq!(
+            search,
+            Some(ara_ui::source::stable_id(
+                "choice-build-profile-select-search"
+            ))
+        );
+
+        let mut alert = shell
+            .confirmations
+            .alert(ara_ui::dialogs::DialogOptions::new(
+                "Profile refresh",
+                "A stacked notice keeps the build form and its Select intact.",
+            ));
+        shell.rebuild(&mut editor)?;
+        let stacked_focus = shell.input.focused();
+        assert!(shell.open_build_options(&mut editor).is_err());
+        assert_eq!(shell.input.focused(), stacked_focus);
+        assert!(shell.confirmations.is_open());
+        shell.key(&mut editor, 41, true, &mut Clip)?;
+        assert_eq!(alert.try_take(), Some(()));
+        assert!(shell.build_options_open());
+        assert!(shell.choice_open());
+        assert_eq!(shell.input.focused(), search);
+        shell.key(&mut editor, 41, true, &mut Clip)?;
+        assert!(!shell.choice_open());
+        assert!(shell.build_options_open());
+
+        shell.key(&mut editor, 43, true, &mut Clip)?;
+        assert!(shell.input.focused().is_some());
+        assert!(shell.input.focus(&mut shell.ui, outside).is_err());
+        shell.key(&mut editor, 67, true, &mut Clip)?;
+        assert!(shell.menu.is_none(), "F10 stays inside build options");
+        shell.key(&mut editor, 41, true, &mut Clip)?;
+        assert!(!shell.build_options_open());
+        assert_eq!(shell.modal_root, None);
+        assert_eq!(shell.input.focused(), Some(outside));
+
+        shell.open_build_options(&mut editor)?;
+        shell.key(&mut editor, 81, true, &mut Clip)?;
+        assert!(shell.choice_open());
+        for event in [
+            InputEvent::PointerDown([0., 0.]),
+            InputEvent::PointerUp([0., 0.]),
+        ] {
+            shell.event(event, &mut Clip)?;
+            shell.dispatch(&mut editor)?;
+        }
+        assert!(!shell.choice_open());
+        assert!(
+            shell.build_options_open(),
+            "The first backdrop click dismisses only the Select"
+        );
+        shell.event(InputEvent::PointerDown([0., 0.]), &mut Clip)?;
+        shell.dispatch(&mut editor)?;
+        assert!(!shell.build_options_open());
+        assert_eq!(shell.input.focused(), Some(outside));
+        assert_eq!(editor.host.store().revision(), revision);
+        Ok(())
     }
 
     #[test]

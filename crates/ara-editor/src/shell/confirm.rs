@@ -86,7 +86,10 @@ impl Shell {
     /// Whether native viewport, context-menu and drag handlers must yield input
     /// to a modal before interpreting it as an editor gesture.
     pub(crate) fn modal_active(&self) -> bool {
-        self.toolkit_verify.is_some() || self.confirmations.is_open() || self.modal_root.is_some()
+        self.toolkit_verify.is_some()
+            || self.confirmations.is_open()
+            || self.build_options_open()
+            || self.modal_root.is_some()
     }
 
     pub(super) fn confirmation_key(
@@ -394,6 +397,8 @@ impl Shell {
     pub(super) fn sync_modal_scopes(&mut self, editor: &Editor) -> ara_ui::Result<()> {
         let desired = if self.dialog.is_some() {
             Some(("dialog", self.dialog.as_ref().and_then(Dialog::field)))
+        } else if self.build_options_open() {
+            Some(("build-options", Some("build-profile-select")))
         } else if editor.state.palette {
             Some(("palette", Some("palette-search")))
         } else if editor.state.canvas_add && self.ui.find("node-palette").is_some() {
@@ -407,6 +412,11 @@ impl Shell {
                 self.modal_return_focus = self.input.focused();
             }
             self.confirmations.suspend(&mut self.ui, &mut self.input);
+            if self.modal_root == Some("build-options") {
+                // Closing/replacing the form also removes a now-unmounted Select
+                // scope before the replacement modal receives keyboard focus.
+                self.sync_choice_controls()?;
+            }
             if let Some(previous) = self.modal_root {
                 self.input
                     .remove_scope(&mut self.ui, ara_ui::source::stable_id(previous));
@@ -421,6 +431,11 @@ impl Shell {
                 )?;
             }
             self.modal_root = root;
+        }
+        if root == Some("build-options") {
+            // The form owns the base scope; its Select sits above it and shared
+            // confirmation/output prompts are synchronized last, at the top.
+            self.sync_choice_controls()?;
         }
         self.confirmations.sync(&mut self.ui, &mut self.input)?;
         if root.is_none()

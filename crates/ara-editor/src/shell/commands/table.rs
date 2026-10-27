@@ -585,10 +585,16 @@ fn build() -> Vec<Spec> {
             Ok(())
         }),
         later("file.export_selection", "Export Selection…", "file", "", "Selection export lands with ara-export presets in the editor."),
-        later("build.profiles", "Build Profiles…", "package", "", "Export presets run from `ara export`; the in-editor Build window is not built yet."),
-        cmd("build.profile.create", "Create Build Profile", "file-plus", "", "Write the default Windows profile (presets/windows.export.json): the real game runtime in a plain folder.", |s, e, _| s.create_build_profile(e).map(drop))
-            .when(|c| if c.build.profile { Avail::Blocked("The project already has a build profile in presets/".into()) } else { Avail::Ready }),
-        cmd("build.current", "Build Current Profile", "package", "Ctrl+Shift+B", "Export the game with the project's first profile (creating presets/windows.export.json when there is none) into builds/; progress shows in the status bar, problems in Problems.", |s, e, _| s.build_current(e)).when(|c| match &c.build {
+        cmd("build.profiles", "Build Profiles…", "package", "", "Choose an indexed build profile and its output folder.", |s, e, _| s.open_build_options(e)),
+        cmd("build.options.close", "Close Build Options", "x", "", "Close the build profile form.", |s, e, _| s.close_build_options(e)),
+        cmd("build.destination", "Build to Folder…", "folder", "", "Choose a fresh output folder for the selected build profile.", |s, e, _| s.prompt_build_destination(e)),
+        cmd("build.profile.select", "Select Build Profile", "package", "", "Select a profile by name from the cached project index.", |s, e, t| {
+            let Target::Text(profile) = t else { return Err("Choose an indexed build profile".into()) };
+            s.select_build_profile(e, profile)
+        }),
+        cmd("build.profile.create", "Create Build Profile", "file-plus", "", "Create settings/builds/windows.export.json through one undoable background transaction.", |s, e, _| s.create_build_profile(e).map(drop))
+            .when(|c| if c.build.profile { Avail::Blocked("The project already has a build profile in settings/builds or legacy presets".into()) } else { Avail::Ready }),
+        cmd("build.current", "Build Current Profile", "package", "Ctrl+Shift+B", "Build the selected settings/builds profile into a fresh builds/ envelope; progress appears in the status bar.", |s, e, _| s.build_selected(e)).when(|c| match &c.build {
             BuildState { running: true, .. } => Avail::Blocked("A build is running; see the status bar".into()),
             _ => Avail::Ready,
         }),

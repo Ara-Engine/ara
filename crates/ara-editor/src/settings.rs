@@ -344,6 +344,15 @@ pub const DEFS: &[Def] = &[
         Lit::S(""),
     ),
     def(
+        "build.profile",
+        Project,
+        "Build & export",
+        "Build profile",
+        "Selected export profile. Empty uses the default profile, or the first indexed profile when no default exists.",
+        Kind::Text,
+        Lit::S(""),
+    ),
+    def(
         "rendering.quality",
         Project,
         "Rendering",

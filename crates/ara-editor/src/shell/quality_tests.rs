@@ -140,6 +140,14 @@ fn run_sweep(project: &Project, capture: &mut impl FnMut(&mut Shell, &str)) -> S
                 capture,
             );
         }
+        shell.open_build_options(&mut editor).unwrap();
+        sweep.context(
+            &mut shell,
+            &mut editor,
+            &format!("{scale}-build-options"),
+            capture,
+        );
+        shell.close_build_options(&mut editor).unwrap();
         show(&mut editor, &mut shell, "settings");
         for (scope, key) in [
             (crate::settings::Scope::User, "user"),

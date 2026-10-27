@@ -170,6 +170,14 @@ fn panels_detach_into_floating_windows_and_redock() {
     editor
         .action("editor.select", json!({"entities":["e_crate001"]}))
         .unwrap();
+    let camera = editor.state.camera;
+    let selection = editor.state.selection.clone();
+    let doc = editor.state.doc.clone();
+    let content = ara_doc::write(
+        editor.host.store().workspace().doc(&doc).unwrap(),
+        editor.host.store().schema(),
+    );
+    let content_revision = editor.host.store().revision();
     let mut shell = Shell::new(&mut editor, [1440., 900.]).unwrap();
     editor
         .action(
@@ -187,6 +195,17 @@ fn panels_detach_into_floating_windows_and_redock() {
     assert!(shell.ui.find("inspector-scroll").is_some());
     assert!(shell.ui.find("edit-Transform-position-0").is_some());
     shell.leave();
+    assert_eq!(editor.state.camera, camera);
+    assert_eq!(editor.state.selection, selection);
+    assert_eq!(editor.state.doc, doc);
+    assert_eq!(editor.host.store().revision(), content_revision);
+    assert_eq!(
+        ara_doc::write(
+            editor.host.store().workspace().doc(&doc).unwrap(),
+            editor.host.store().schema()
+        ),
+        content
+    );
     // Window rects persist with the layout and survive a reopen.
     editor
         .action("editor.window", json!({"id":window,"rect":[40,60,500,640]}))
@@ -201,14 +220,97 @@ fn panels_detach_into_floating_windows_and_redock() {
     shell.drag_tab_to(&mut editor, "inspector", "view").unwrap();
     assert!(editor.state.floating.is_empty());
     assert!(ara_editor::state::panel_visible(&editor.state, "inspector"));
-    // The Scene viewport stays in the main window.
+    // Scene can detach into its own retained surface while a separate Inspector
+    // stays open. Redocking either panel must not discard the other's window.
+    editor
+        .action("editor.select", json!({"entities":selection}))
+        .unwrap();
+    editor
+        .action("editor.layout", json!({"panel":"scene"}))
+        .unwrap();
+    shell.rebuild(&mut editor).unwrap();
+    assert!(shell.viewport().is_some());
+    let camera = editor.state.camera;
+    let content_revision = editor.host.store().revision();
+    let content_history = editor.host.store().history().len();
+    editor
+        .action(
+            "editor.layout.move",
+            json!({"panel":"scene","slot":"float","rect":[160,120,900,640]}),
+        )
+        .unwrap();
+    let scene_window = editor
+        .state
+        .floating
+        .iter()
+        .find(|window| {
+            ara_ui::docking::DockLayout::new(window.root.clone())
+                .unwrap()
+                .contains("scene")
+        })
+        .unwrap()
+        .id
+        .clone();
+    editor
+        .action(
+            "editor.layout.move",
+            json!({"panel":"inspector","slot":"float","rect":[1080,120,340,640]}),
+        )
+        .unwrap();
+    let inspector_window = editor
+        .state
+        .floating
+        .iter()
+        .find(|window| {
+            ara_ui::docking::DockLayout::new(window.root.clone())
+                .unwrap()
+                .contains("inspector")
+        })
+        .unwrap()
+        .clone();
+    assert_ne!(scene_window, inspector_window.id);
+    assert_eq!(editor.state.floating.len(), 2);
+    shell.rebuild(&mut editor).unwrap();
     assert!(
-        editor
-            .action(
-                "editor.layout.move",
-                json!({"panel":"scene","slot":"float"})
-            )
-            .is_err()
+        shell.viewport().is_none(),
+        "main must not retain the detached Scene's picking rectangle"
+    );
+    assert!(shell.enter(&scene_window));
+    let viewport = shell
+        .viewport()
+        .expect("floating Scene owns a real visible viewport");
+    assert!(viewport.w > 1. && viewport.h > 1.);
+    assert!(shell.ui.find("inspector-scroll").is_none());
+    shell.leave();
+    assert!(shell.enter(&inspector_window.id));
+    assert!(shell.ui.find("inspector-scroll").is_some());
+    assert!(shell.viewport().is_none());
+    shell.leave();
+    shell.drag_tab_to(&mut editor, "scene", "view").unwrap();
+    assert_eq!(editor.state.floating, vec![inspector_window.clone()]);
+    assert!(
+        shell.viewport().is_some(),
+        "redocked Scene becomes the main viewport again"
+    );
+    assert!(
+        !shell.enter(&scene_window),
+        "the emptied Scene window is removed"
+    );
+    shell.drag_tab_to(&mut editor, "inspector", "view").unwrap();
+    assert!(editor.state.floating.is_empty());
+    let dock = ara_ui::docking::DockLayout::new(editor.state.layout.clone()).unwrap();
+    assert!(dock.contains("scene") && dock.contains("inspector"));
+    assert_eq!(editor.state.camera, camera);
+    assert_eq!(editor.state.selection, selection);
+    assert_eq!(editor.state.doc, doc);
+    assert_eq!(editor.host.store().revision(), content_revision);
+    assert_eq!(editor.host.store().history().len(), content_history);
+    assert_eq!(
+        ara_doc::write(
+            editor.host.store().workspace().doc(&doc).unwrap(),
+            editor.host.store().schema()
+        ),
+        content
     );
     // Built-in layouts apply and Save as round-trips through .ara/layouts.
     editor
@@ -224,6 +326,16 @@ fn panels_detach_into_floating_windows_and_redock() {
     assert_eq!(
         editor.state.layout,
         ara_editor::state::preset_layout("levelDesign").unwrap()
+    );
+    assert_eq!(editor.state.camera, camera);
+    assert_eq!(editor.state.selection, selection);
+    assert_eq!(editor.host.store().history().len(), content_history);
+    assert_eq!(
+        ara_doc::write(
+            editor.host.store().workspace().doc(&doc).unwrap(),
+            editor.host.store().schema()
+        ),
+        content
     );
 }
 
@@ -646,6 +758,24 @@ fn prefab_from_selection_overrides_apply_revert_and_open() {
     editor
         .action("editor.select", json!({"entities":["e_crate001"]}))
         .unwrap();
+    let snapshot = |editor: &Editor| {
+        editor
+            .host
+            .store()
+            .workspace()
+            .docs()
+            .map(|(path, document)| {
+                (
+                    path.to_owned(),
+                    ara_doc::write(document, editor.host.store().schema()),
+                )
+            })
+            .collect::<Vec<_>>()
+    };
+    let before_create = snapshot(&editor);
+    let before_history = editor.host.store().history().len();
+    let before_view = editor.view().unwrap();
+    let before_poses = ara_editor::world::world_transforms(before_view.entities());
     let mut shell = Shell::new(&mut editor, [1440., 900.]).unwrap();
     shell
         .run_command(&mut editor, "create.prefab", &Default::default())
@@ -663,10 +793,79 @@ fn prefab_from_selection_overrides_apply_revert_and_open() {
     );
     let instance = editor.state.selection[0].clone();
     let scene = workspace.doc("sc_test0001").unwrap();
-    assert!(scene.record("e_crate001").is_none());
-    assert!(ara_doc::prefab_of(scene.record(&instance).unwrap()).is_some());
+    assert_eq!(
+        instance, "e_crate001",
+        "conversion preserves the selected root identity"
+    );
+    assert_eq!(scene.records().len(), 1);
+    assert!(
+        scene.record("e_child001").is_none(),
+        "the child now belongs to the prefab source"
+    );
+    let reference = format!("@prefabs/salvage_crate.prefab#{prefab}");
+    assert_eq!(
+        ara_doc::prefab_of(scene.record(&instance).unwrap()),
+        Some(reference.as_str())
+    );
+    let source = workspace.doc(&prefab).unwrap();
+    let source_root = source.children(None)[0].to_string();
+    let source_child = source.children(Some(&source_root))[0].to_string();
+    assert_ne!(source_root, instance);
+    assert_ne!(source_child, "e_child001");
+    let child = format!("{instance}/{source_child}");
     let view = editor.view().unwrap();
     assert_eq!(view.entities().len(), 2, "instance root and its child");
+    assert!(view.entities().contains_key(&child));
+    let poses = ara_editor::world::world_transforms(view.entities());
+    for (old, current) in [
+        ("e_crate001", instance.as_str()),
+        ("e_child001", child.as_str()),
+    ] {
+        assert!(
+            before_poses[old]
+                .to_cols_array()
+                .into_iter()
+                .zip(poses[current].to_cols_array())
+                .all(|(before, after)| (before - after).abs() < 0.00001),
+            "conversion preserves world pose of {old}"
+        );
+    }
+    assert_eq!(
+        editor.host.store().history().len(),
+        before_history + 1,
+        "document creation, population and scene replacement are one transaction"
+    );
+    let create_txn = editor.host.store().history().last().unwrap().id.clone();
+    let after_create = snapshot(&editor);
+    shell
+        .run_command(&mut editor, "edit.undo", &Default::default())
+        .unwrap();
+    assert_eq!(
+        snapshot(&editor),
+        before_create,
+        "one Undo restores all authored documents"
+    );
+    assert!(editor.host.store().workspace().doc(&prefab).is_none());
+    assert_eq!(
+        editor
+            .host
+            .store()
+            .history()
+            .last()
+            .unwrap()
+            .reverts
+            .as_ref(),
+        Some(&create_txn)
+    );
+    shell
+        .run_command(&mut editor, "edit.redo", &Default::default())
+        .unwrap();
+    assert_eq!(
+        snapshot(&editor),
+        after_create,
+        "Redo restores the same prefab and instance identities"
+    );
+    assert_eq!(editor.state.selection, vec![instance.clone()]);
     // Override a field on the instance, then apply it to the prefab.
     editor
         .apply(
@@ -681,6 +880,8 @@ fn prefab_from_selection_overrides_apply_revert_and_open() {
         shell.ui.nodes[overrides].text.as_ref().unwrap().value,
         "1 override"
     );
+    let before_apply = snapshot(&editor);
+    let before_apply_history = editor.host.store().history().len();
     shell
         .run_command(&mut editor, "prefab.apply_all", &Default::default())
         .unwrap();
@@ -701,6 +902,42 @@ fn prefab_from_selection_overrides_apply_revert_and_open() {
             .overrides
             .is_empty()
     );
+    assert_eq!(
+        store.history().len(),
+        before_apply_history + 1,
+        "source edit and instance cleanup are one transaction"
+    );
+    let apply_txn = store.history().last().unwrap().id.clone();
+    let after_apply = snapshot(&editor);
+    shell
+        .run_command(&mut editor, "edit.undo", &Default::default())
+        .unwrap();
+    assert_eq!(
+        snapshot(&editor),
+        before_apply,
+        "one Undo restores both source and instance overrides"
+    );
+    assert_eq!(
+        editor
+            .host
+            .store()
+            .history()
+            .last()
+            .unwrap()
+            .reverts
+            .as_ref(),
+        Some(&apply_txn)
+    );
+    assert_eq!(
+        ara_editor::shell::prefab_ops::instance(editor.host.store(), "sc_test0001", &instance)
+            .unwrap()
+            .overrides,
+        vec!["Transform.scale"]
+    );
+    shell
+        .run_command(&mut editor, "edit.redo", &Default::default())
+        .unwrap();
+    assert_eq!(snapshot(&editor), after_apply);
     // A new override can be reverted; Open edits the prefab in the Scene view.
     editor
         .apply(

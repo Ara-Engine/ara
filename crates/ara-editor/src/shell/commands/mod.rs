@@ -86,7 +86,7 @@ pub struct BuildState {
     pub running: bool,
     /// A finished build exists (Run Build, Open Build Folder).
     pub built: bool,
-    /// The project has an export profile (`presets/*.export.json`).
+    /// The project has an export profile (`settings/builds/`, or legacy `presets/`).
     pub profile: bool,
 }
 /// Whether a command can run now.
@@ -239,11 +239,10 @@ impl Shell {
             build: BuildState {
                 running: self.build.is_some() || self.run.is_some(),
                 built: self.last_build.is_some(),
-                profile: self
-                    .browser
-                    .items
-                    .iter()
-                    .any(|a| a.path.starts_with("presets/") && a.path.ends_with(".export.json")),
+                profile: self.browser.items.iter().any(|a| {
+                    (a.path.starts_with("settings/builds/") || a.path.starts_with("presets/"))
+                        && a.path.ends_with(".export.json")
+                }),
             },
         }
     }

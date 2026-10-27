@@ -150,6 +150,18 @@ impl Shell {
     }
     fn dynamic(&self, editor: &Editor, kind: Dynamic, out: &mut Vec<Row>) {
         match kind {
+            Dynamic::BuildProfiles => {
+                let selected = self.selected_build_profile(editor).ok();
+                for name in self.build_profiles() {
+                    out.push(Row::Command {
+                        id: kind.command(),
+                        label: Some(name.clone()),
+                        checked: Some(selected.as_deref() == Some(name.as_str())),
+                        target: Target::Text(name),
+                        path: String::new(),
+                    });
+                }
+            }
             Dynamic::PrefabSources => {
                 let target = self.menu_target();
                 let Some(entity) = target.entity(&editor.state) else {

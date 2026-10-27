@@ -881,6 +881,17 @@ fn material_overrides_add_slots_by_picking_a_material() {
             .find("asset-field-MeshRenderer-materialOverrides-0-material")
             .is_some()
     );
+    let primitive = shell
+        .ui
+        .find("nest-edit-MeshRenderer-materialOverrides-0-primitive")
+        .expect("new slot detail");
+    assert_eq!(
+        shell.input.focused(),
+        Some(ara_ui::source::stable_id(
+            &shell.ui.nodes[primitive].element.id
+        )),
+        "Add should reveal and focus its new item without a second row click"
+    );
     // The slot's primitive is a number field.
     type_into(
         &mut shell,

@@ -9,6 +9,7 @@ mod asset_ops;
 mod assets;
 mod axis;
 pub(crate) mod build;
+mod build_options;
 mod choices;
 mod chrome;
 pub(crate) mod collection_adapter;
@@ -122,6 +123,7 @@ pub struct Shell {
     history_view: history_panel::View,
     asset_import: asset_import::State,
     asset_ops: asset_ops::State,
+    build_options: build_options::State,
     file_drag: file_drag::State,
     pub(crate) import_picker_folder: Option<String>,
     panel_probe: Option<panel_boundary::Probe>,
@@ -499,6 +501,7 @@ impl Shell {
             history_view: Default::default(),
             asset_import: Default::default(),
             asset_ops: Default::default(),
+            build_options: Default::default(),
             hierarchy_filters: Default::default(),
             file_drag: Default::default(),
             import_picker_folder: None,
@@ -1127,6 +1130,7 @@ impl Shell {
         self.color_picker_markup(editor, &mut markup);
         self.add_component_markup(editor, &mut markup)?;
         self.overlays(editor, &mut markup)?;
+        self.build_options_markup(editor, &mut markup);
         self.choice_overlays(&mut markup);
         self.asset_rename_markup(&mut markup);
         self.asset_file_name_markup(&mut markup);
@@ -1185,6 +1189,7 @@ impl Shell {
         self.color_picker_markup(editor, &mut markup);
         self.add_component_markup(editor, &mut markup)?;
         self.overlays(editor, &mut markup)?;
+        self.build_options_markup(editor, &mut markup);
         self.choice_overlays(&mut markup);
         if editor.state.palette {
             self.palette(editor, &mut markup)?;
@@ -1349,6 +1354,7 @@ impl Shell {
                 .set_virtual_extent(grid, [width, self.asset_grid_extent])?;
             self.ui.scroll_to(grid, [0., self.asset_offset])?;
         }
+        self.reveal_collection_appends(editor)?;
         self.paint_decorations();
         if self.field_request != editor.state.focus_field
             && self.shown_node("inspector-scroll").is_some()

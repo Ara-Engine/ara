@@ -164,8 +164,19 @@ impl Shell {
                 .sync_focus(&mut self.ui, &self.input, clipboard)?;
             return Ok(());
         }
+        if self.modal_root == Some("build-options") && self.current.is_some() {
+            return Ok(());
+        }
+        let choice_was_open = self.choice_open();
         if let Some(event) = self.choice_event(event, clipboard)? {
-            self.input.event(&mut self.ui, event, clipboard)?;
+            // A backdrop click first closes its top Select. A later click may
+            // dismiss the underlying build form through its registry action.
+            if choice_was_open
+                || self.modal_root != Some("build-options")
+                || !self.build_options_event(&event)?
+            {
+                self.input.event(&mut self.ui, event, clipboard)?;
+            }
         } else {
             self.choice_input_dirty = true;
         }
@@ -339,6 +350,16 @@ impl Shell {
                     }
                     Binding::Command(id, target) => {
                         let (id, target) = (*id, target.clone());
+                        let appended = if id == "field.set" {
+                            match &target {
+                                commands::Target::Text(target) => target
+                                    .split_once('=')
+                                    .and_then(|(path, _)| self.append_collection_target(path)),
+                                _ => None,
+                            }
+                        } else {
+                            None
+                        };
                         let close_palette = editor.state.palette;
                         self.remember(id);
                         self.menu = None;
@@ -348,6 +369,9 @@ impl Shell {
                             editor.action("editor.palette", json!({"open":false}))?;
                         }
                         self.execute(editor, id, &target)?;
+                        if let Some((field, pointer)) = appended {
+                            self.reveal_appended_collection(editor, &field, &pointer)?;
+                        }
                         rebuild = true;
                     }
                     Binding::MenuBar(index) => {

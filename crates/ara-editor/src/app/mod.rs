@@ -1005,6 +1005,7 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
             for result in [
                 shell.poll_asset_imports(&mut editor),
                 shell.poll_asset_operations(&mut editor),
+                shell.poll_build_options(&mut editor),
             ] {
                 match result {
                     Ok(changed) => dirty |= changed,
