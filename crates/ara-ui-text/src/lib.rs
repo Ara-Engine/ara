@@ -140,6 +140,10 @@ impl TextSystem {
                     text.family.as_deref().unwrap_or(self.families.as_str()),
                 ));
                 builder.push_default(LineHeight::FontSizeRelative(1.5));
+                // Prefer normal word boundaries, then break an overlong word at
+                // Parley's grapheme/shape-atom boundaries. An unconstrained width
+                // (nowrap and single-line fields) still remains unbroken.
+                builder.push_default(StyleProperty::OverflowWrap(parley::OverflowWrap::Anywhere));
                 builder.build_into(&mut text.layout, &text.value);
                 self.shapes += 1;
                 if self.shaped.len() >= SHAPE_CACHE {
