@@ -258,6 +258,59 @@ fn bounded_completion_waits_leave_stalled_frames_pending() {
 }
 
 #[test]
+fn a_stalled_present_path_skips_frames_within_the_bound_and_resumes() {
+    let mut gpu = device();
+    let size = [32, 16];
+    let mut presenter = present::Presenter::new(&gpu, size).expect("presenter");
+    presenter
+        .set_frames_in_flight(true)
+        .expect("frames in flight");
+    // The device's next commit waits on an event nothing signals yet, so the frame and
+    // the copy presenting it stall like work behind a present path that never drains.
+    let stall = gpu.device.newSharedEvent().expect("shared event");
+    gpu.wait_event(&stall, 1);
+    let frame = cleared(
+        &mut gpu,
+        vk::Format::B8G8R8A8_UNORM,
+        size,
+        [0.25, 0.5, 1.0, 1.0],
+    );
+    presenter
+        .display(&gpu, frame)
+        .expect("the first copy commits");
+    let started = std::time::Instant::now();
+    presenter
+        .display(&gpu, frame)
+        .expect("a stalled present skips");
+    let waited = started.elapsed();
+    assert_eq!(presenter.skipped(), 1);
+    assert!(
+        waited >= present::PRESENT_WAIT && waited < present::PRESENT_WAIT * 3,
+        "waited {waited:?}"
+    );
+    stall.setSignaledValue(1);
+    // Once the stalled copy finishes, presents show frames again (a window's drawable
+    // pacing over many presents is covered by the `metal_sdl` hidden-window test).
+    presenter
+        .set_frames_in_flight(false)
+        .expect("the stalled copy finishes");
+    let readback = gpu
+        .create_readback_buffer(u64::from(size[0] * size[1] * 4))
+        .expect("readback");
+    presenter
+        .present(&gpu, frame, Some(readback))
+        .expect("present");
+    let pixels: Vec<u32> = bytemuck::cast_slice(&gpu.read(readback).expect("read")).to_vec();
+    // BGRA bytes of (0.25, 0.5, 1.0, 1.0).
+    assert!(
+        pixels.iter().all(|&p| p == 0xff40_80ff),
+        "{:08x}",
+        pixels[0]
+    );
+    assert_eq!(presenter.skipped(), 1);
+}
+
+#[test]
 fn labelled_passes_resolve_to_ordered_timings_and_a_mixed_queue_window() {
     let mut gpu = device();
     let source = gpu

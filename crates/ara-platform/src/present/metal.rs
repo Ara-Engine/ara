@@ -37,9 +37,10 @@ impl Present {
             .set_frames_in_flight(enabled)?;
         Ok(())
     }
-    /// As on Vulkan, but always true: Metal's copies never wait on the display
-    /// (`nextDrawable` is where a hidden window blocks, and a nil drawable skips the
-    /// frame), and with frames in flight `order_before` orders the next writes.
+    /// As on Vulkan, but always true: Metal's copies never wait on the display (a
+    /// drawable is writable once acquired, and `present_image` bounds that wait and
+    /// skips the frame), a synchronous present waits its own copy, and with frames in
+    /// flight `order_before` orders the next writes.
     /// # Safety
     /// `gpu` created this presentation and is live.
     pub unsafe fn settled(&mut self, _gpu: &GpuDevice, _timeout: Duration) -> Result<bool> {
@@ -95,7 +96,8 @@ impl Present {
         present.presenter = Some(presenter);
         Ok(present)
     }
-    /// Present a completed engine image, scaled to the drawable.
+    /// Present a completed engine image, scaled to the drawable. A stalled present path
+    /// skips the frame after `PRESENT_WAIT` (100 ms), as Vulkan's acquire bound does.
     /// # Safety
     /// `image` is a completed transfer source on `gpu`; both owners are live.
     pub unsafe fn present_image(
@@ -127,8 +129,8 @@ impl Present {
         // SAFETY: forwarded caller contract.
         unsafe { self.present_image(gpu, image, size) }
     }
-    /// Release the presenter and view. Every `present_image` waited for its own work,
-    /// so nothing is in flight; callers that need a device-wide idle wait first.
+    /// Release the presenter and view; dropping it waits for a copy still in flight.
+    /// Callers that need a device-wide idle wait first.
     /// # Safety
     /// Created on `gpu`; not presented with afterwards.
     pub unsafe fn retire(&mut self, _gpu: &GpuDevice) {
