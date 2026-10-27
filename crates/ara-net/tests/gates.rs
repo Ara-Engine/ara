@@ -469,16 +469,25 @@ fn datagram_conditions_duplicate_reorder_drop_and_shape() -> Result<()> {
     )?;
     assert_eq!(link.seed(), 21668);
     link.set_server(receiver.local_addr()?);
+    // Loopback UDP delivery is asynchronous on macOS. The link runs on the simulated
+    // `now`, so waiting for real delivery changes nothing it measures, and a late
+    // datagram still fails the "not yet delivered" checks.
+    let settle = || std::thread::sleep(Duration::from_millis(20));
     sender.send_to(&[1; 100], link.address()?)?;
+    settle();
     let now = Instant::now();
     let mut buffer = [0; 128];
     link.pump(now, true)?;
+    settle();
     assert!(receiver.recv_from(&mut buffer).is_err());
     link.pump(now + Duration::from_millis(31), true)?;
+    settle();
     assert_eq!(receiver.recv_from(&mut buffer)?.0, 100);
     link.pump(now + Duration::from_millis(100), true)?;
+    settle();
     assert!(receiver.recv_from(&mut buffer).is_err());
     link.pump(now + Duration::from_millis(131), true)?;
+    settle();
     assert_eq!(receiver.recv_from(&mut buffer)?.0, 100);
     assert_eq!(link.up.duplicated, 1);
     assert_eq!(link.up.offered_bytes, 100);
@@ -491,6 +500,7 @@ fn datagram_conditions_duplicate_reorder_drop_and_shape() -> Result<()> {
         Conditions::default(),
     )?;
     sender.send_to(&[2; 100], link.address()?)?;
+    settle();
     link.pump(now + Duration::from_millis(200), true)?;
     assert_eq!(link.up.dropped, 1);
     Ok(())
