@@ -101,11 +101,12 @@ impl Runner for Fake {
         );
         let root = command.get_current_dir().unwrap();
         if label == "lockfile" {
-            let metadata = Command::new("cargo")
+            // Run the real lockfile command: the version commit must carry its result.
+            let update = Command::new("cargo")
                 .current_dir(root)
-                .args(["metadata", "--offline", "--no-deps", "--format-version=1"])
+                .args(command.get_args())
                 .output()?;
-            ensure!(metadata.status.success(), "fixture Cargo metadata failed");
+            ensure!(update.status.success(), "fixture lockfile update failed");
         }
         if label == "release-tool" {
             let target = command
@@ -178,6 +179,14 @@ fn default_prepares_signed_artifacts_and_preserves_callers_workspace_and_refs() 
     assert_eq!(
         crate::git::text(&prepared.source, ["rev-parse", "HEAD^"]).unwrap(),
         head
+    );
+    // The bumped lockfile is in the version commit, so a later build leaves it clean.
+    let committed_lock = crate::git::text(&prepared.source, ["show", "HEAD:Cargo.lock"]).unwrap();
+    assert!(committed_lock.contains("version = \"0.0.2-alpha.1\""));
+    assert!(
+        crate::git::text(&prepared.source, ["status", "--porcelain"])
+            .unwrap()
+            .is_empty()
     );
 }
 

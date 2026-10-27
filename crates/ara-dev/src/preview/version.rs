@@ -90,6 +90,21 @@ pub(super) fn external_resolutions(lock: &str) -> Result<std::collections::BTree
         .collect())
 }
 
+/// Local (source-less) lockfile entries still at `old`: a bump that left any behind
+/// would make the next cargo build rewrite Cargo.lock and dirty the version commit.
+/// Path crates with their own versions (vendored forks) never match `old`.
+pub(super) fn stale_local_entries(lock: &str, old: &Version) -> Result<Vec<String>> {
+    let lock = lock.parse::<DocumentMut>()?;
+    let old = old.to_string();
+    Ok(lock["package"]
+        .as_array_of_tables()
+        .context("Cargo.lock packages")?
+        .iter()
+        .filter(|p| p.get("source").is_none() && p["version"].as_str() == Some(old.as_str()))
+        .map(|p| p["name"].as_str().unwrap_or("").to_owned())
+        .collect())
+}
+
 pub(super) fn bump(root: &Path, version: &Version, source: &str) -> Result<()> {
     let path = root.join("Cargo.toml");
     let mut document = fs::read_to_string(&path)?.parse::<DocumentMut>()?;
@@ -149,5 +164,13 @@ mod tests {
             external_resolutions(before).unwrap(),
             external_resolutions(&before.replace("original", "changed")).unwrap()
         );
+    }
+    #[test]
+    fn stale_local_entries_name_unbumped_workspace_packages_only() {
+        let old = Version::parse("0.0.1-alpha").unwrap();
+        let lock = "version = 4\n[[package]]\nname = 'ara'\nversion = '0.0.1-alpha'\n[[package]]\nname = 'lightyear_sync'\nversion = '0.31.0'\n[[package]]\nname = 'serde'\nversion = '0.0.1-alpha'\nsource = 'registry+test'\n";
+        assert_eq!(stale_local_entries(lock, &old).unwrap(), ["ara"]);
+        let bumped = lock.replacen("0.0.1-alpha", "0.0.2-alpha.1", 1);
+        assert!(stale_local_entries(&bumped, &old).unwrap().is_empty());
     }
 }
