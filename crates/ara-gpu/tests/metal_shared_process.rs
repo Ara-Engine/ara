@@ -29,16 +29,20 @@ fn main() {
         "slots belong to the producer process"
     );
     let shared = ara_gpu::shared::SharedSurface::duplicate_from(&child, &desc).expect("lookup");
-    let mut gpu =
+    let gpu =
         ara_gpu::metal::MetalDevice::new_raster(&[], std::env::temp_dir()).expect("owner device");
-    let mut imported =
-        ara_gpu::metal::external::ImportedSurface::new(&mut gpu, &shared).expect("import");
-    imported.exchange(Some(frame.slot), None).expect("acquire");
-    let pixels = imported.read(&mut gpu, frame.slot).expect("read");
+    // SAFETY: the device outlives the import, this thread owns its queue, and the
+    // producer published `frame` before printing it.
+    let mut imported = unsafe { ara_gpu::metal::external::ImportedSurface::create(&gpu, &shared) }
+        .expect("import");
+    // SAFETY: as above.
+    unsafe { imported.exchange(Some(frame.slot), None) }.expect("acquire");
+    // SAFETY: as above.
+    let pixels = unsafe { imported.read_pixels(&gpu, frame.slot) }.expect("read");
     let words: &[u32] = bytemuck::cast_slice(&pixels);
     assert!(words.iter().all(|&p| p == 0xff00_ff00), "{:08x}", words[0]);
-    imported.exchange(None, Some(frame.slot)).expect("release");
-    imported.close(&mut gpu).expect("close");
+    // SAFETY: the readback completed.
+    unsafe { imported.exchange(None, Some(frame.slot)) }.expect("release");
     let mut stdin = child.stdin.take().expect("producer stdin");
     writeln!(stdin, "done").expect("signal producer");
     assert!(child.wait().expect("producer exit").success());
@@ -55,7 +59,9 @@ fn producer() {
     let mut gpu = ara_gpu::metal::MetalDevice::new_raster(&[], std::env::temp_dir())
         .expect("producer device");
     let size = [24, 12];
-    let mut ring = ara_gpu::metal::external::ExportRing::new(&mut gpu, size).expect("ring");
+    // SAFETY: the device outlives the ring; this thread owns its queue.
+    let mut ring =
+        unsafe { ara_gpu::metal::external::ExportRing::create(&gpu, size) }.expect("ring");
     let source = gpu
         .create_image(
             size[0],
@@ -75,17 +81,17 @@ fn producer() {
     });
     rec.push(Command::EndRendering);
     gpu.submit(rec.finish(), &[]).expect("clear");
-    let frame = ring
-        .publish(&mut gpu, source, 1)
+    // SAFETY: `source` was cleared and submitted above on this device.
+    let frame = unsafe { ring.publish_image(&gpu, source, size, 1) }
         .expect("publish")
         .expect("free slot");
     println!(
         "{}",
-        serde_json::to_string(&ring.desc(&gpu)).expect("desc json")
+        serde_json::to_string(&ring.desc()).expect("desc json")
     );
     println!("{}", serde_json::to_string(&frame).expect("frame json"));
     // Keep the surfaces alive until the owner has imported and read them.
     let mut line = String::new();
     std::io::stdin().read_line(&mut line).expect("owner signal");
-    ring.close(&mut gpu).expect("close ring");
+    drop(ring);
 }
