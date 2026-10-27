@@ -26,11 +26,15 @@ fn mount(
 }
 
 fn surface() -> Result<(Ui, InputState, TextSystem)> {
+    surface_with_styles([320., 300.], "")
+}
+
+fn surface_with_styles(size: [f32; 2], host_styles: &str) -> Result<(Ui, InputState, TextSystem)> {
     let mut text = TextSystem::bundled()?;
     let mut ui = Ui::editor(
         "<ui id='root'><button id='outside' text='Outside' /></ui>",
-        &format!("{EDITOR_CSS}{CSS}"),
-        [320., 300.],
+        &format!("{EDITOR_CSS}{host_styles}{CSS}"),
+        size,
     )?;
     ui.frame(&mut text)?;
     let mut input = InputState::default();
@@ -41,6 +45,127 @@ fn surface() -> Result<(Ui, InputState, TextSystem)> {
         false,
     )?;
     Ok((ui, input, text))
+}
+
+// Host panel styles must not replace a select's intrinsic list basis or wrapped row height.
+const HOST_RESETS: &str = "button { height:22px; } dropdown { height:22px; } scroll { flex-basis:0px; min-height:0px; min-width:0px; }";
+
+#[test]
+fn short_select_reopens_with_a_visible_list_and_accepts_a_real_pointer_choice_under_host_resets()
+-> Result<()> {
+    let (mut ui, mut input, mut text) = surface_with_styles([1100., 760.], HOST_RESETS)?;
+    let options = ["Ara", "Unreal", "Unity", "Blender"]
+        .iter()
+        .enumerate()
+        .map(|(value, label)| SelectOption::new(value, *label))
+        .collect();
+    let mut select = Select::new("preset", "Keymap preset", options, Some(0));
+    mount(&mut select, &mut ui, &mut input, &mut text)?;
+    input.focus(&mut ui, stable_id(select.control_id()))?;
+    select.key(&mut ui, &mut input, Key::Enter)?;
+    mount(&mut select, &mut ui, &mut input, &mut text)?;
+    select.key(&mut ui, &mut input, Key::Down)?;
+    select.key(&mut ui, &mut input, Key::Enter)?;
+    assert_eq!(select.take_changed(), Some(1));
+    mount(&mut select, &mut ui, &mut input, &mut text)?;
+    let control = ui.nodes[ui.find(select.control_id()).expect("select control")].rect;
+    let point = [control.x + control.w * 0.5, control.y + control.h * 0.5];
+    for event in [InputEvent::PointerDown(point), InputEvent::PointerUp(point)] {
+        route(&mut select, &mut ui, &mut input, &mut text, event)?;
+    }
+    assert!(select.is_open());
+    let list = &ui.nodes[ui.find("preset-popover-options").expect("option list")];
+    assert!(
+        list.rect.h > 0. && list.clip.h > 0.,
+        "{:?} clipped by {:?}",
+        list.rect,
+        list.clip
+    );
+    let option = ui.find("preset-option-0-2").expect("Unity option");
+    let row = &ui.nodes[option];
+    assert!(
+        row.rect.y >= row.clip.y - 0.5 && row.rect.y + row.rect.h <= row.clip.y + row.clip.h + 0.5,
+        "{:?} clipped by {:?}",
+        row.rect,
+        row.clip
+    );
+    let point = [row.rect.x + row.rect.w * 0.5, row.rect.y + row.rect.h * 0.5];
+    assert_eq!(ui.hit_test(point[0], point[1]), Some(option));
+    route(
+        &mut select,
+        &mut ui,
+        &mut input,
+        &mut text,
+        InputEvent::PointerDown(point),
+    )?;
+    assert_eq!(input.captured(), Some(stable_id("preset-option-0-2")));
+    route(
+        &mut select,
+        &mut ui,
+        &mut input,
+        &mut text,
+        InputEvent::PointerUp(point),
+    )?;
+    assert_eq!(select.take_changed(), Some(2));
+    assert_eq!(select.selected(), Some(&2));
+    assert!(!select.is_open());
+    assert_eq!(input.focused(), Some(stable_id(select.control_id())));
+    Ok(())
+}
+
+#[test]
+fn hundred_wrapped_options_use_content_height_and_scroll_inside_the_popup_under_host_resets()
+-> Result<()> {
+    let (mut ui, mut input, mut text) = surface_with_styles([480., 480.], HOST_RESETS)?;
+    let options=(0..100).map(|value|SelectOption::new(value,format!("Localized choice {value:03}: éclairage et matériaux, إعدادات العرض والتفاصيل, and a long explanation that wraps inside the native Select"))).collect();
+    let mut select = Select::new("long", "Localized choice", options, Some(0));
+    select.open("");
+    mount(&mut select, &mut ui, &mut input, &mut text)?;
+    select.key(&mut ui, &mut input, Key::End)?;
+    mount(&mut select, &mut ui, &mut input, &mut text)?;
+    let popup = &ui.nodes[ui.find("long-popover").expect("popup")];
+    assert!(
+        popup.rect.w <= crate::popover::MAX_WIDTH + 0.5
+            && popup.rect.x >= 0.
+            && popup.rect.y >= 0.
+            && popup.rect.x + popup.rect.w <= 480.5
+            && popup.rect.y + popup.rect.h <= 480.5,
+        "{:?}",
+        popup.rect
+    );
+    let list = ui.find("long-popover-options").expect("list");
+    assert!(ui.nodes[list].rect.h > 0. && ui.nodes[list].clip.h > 0.);
+    assert!(ui.scroll_position(list).expect("scroll view")[1] > 0.);
+    for id in ["long-control", "long-option-0-99"] {
+        let node = &ui.nodes[ui.find(id).expect("wrapping select text")];
+        let paragraph = node.text.as_ref().expect("text");
+        let layout = ui.tree.layout(node.layout_id)?;
+        let available = layout.size.height
+            - layout.padding.top
+            - layout.padding.bottom
+            - layout.border.top
+            - layout.border.bottom;
+        assert!(paragraph.layout.height() > 26., "long labels must wrap");
+        assert!(
+            paragraph.layout.height() <= available + 0.5,
+            "{id}: {} > {available}",
+            paragraph.layout.height()
+        );
+    }
+    let option = &ui.nodes[ui.find("long-option-0-99").expect("final option")];
+    assert!(
+        option.rect.y >= option.clip.y - 0.5
+            && option.rect.y + option.rect.h <= option.clip.y + option.clip.h + 0.5,
+        "{:?} clipped by {:?}",
+        option.rect,
+        option.clip
+    );
+    assert_eq!(
+        ui.frame(&mut text)?.layout_passes,
+        0,
+        "content fitting must settle before idle"
+    );
+    Ok(())
 }
 
 fn route(
