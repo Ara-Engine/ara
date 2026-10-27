@@ -1,0 +1,32 @@
+{
+  "binding_layout_hash": "f71261afa0d52758f34ca15c916d2da422ee92b118ede6e189c970911a274f1e",
+  "compiler": "2026.17-25-gc7954ebd1",
+  "key": "aa8e4382c60a59dc7dc9089578a113283887ee1228039341f9dec9f66d635ad1",
+  "stages": [
+    {
+      "dxil": "aa8e4382c60a59dc7dc9089578a113283887ee1228039341f9dec9f66d635ad1/aoBitmaskMain.dxil",
+      "dxil_hash": "27a0a509f3afd06f4ca9d50410b67b50ae12b002ad92e2d92dfca7044fecb124",
+      "metal": {
+        "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
+        "metallib": "aa8e4382c60a59dc7dc9089578a113283887ee1228039341f9dec9f66d635ad1/aoBitmaskMain.metallib",
+        "metallib_hash": "337a2771ab89f9ea2d724a2c27f1e97f33ecdff84cbc81451a9212d1e816fd98",
+        "reflection": "aa8e4382c60a59dc7dc9089578a113283887ee1228039341f9dec9f66d635ad1/aoBitmaskMain.metal.json",
+        "root_signature_hash": "1cc11e518b14c2b24e05fc30812bfd2b87e0a9c313ea79a4620a443a723525ef"
+      },
+      "source_entry": "aoBitmaskMain",
+      "spirv": "aa8e4382c60a59dc7dc9089578a113283887ee1228039341f9dec9f66d635ad1/aoBitmaskMain.spv",
+      "spirv_entry": "main",
+      "spirv_hash": "e5cc5ebd0a95bb3b166de139099184e7a4fdc6e7c6a70b899fffc3178fad54b6",
+      "stage": "compute"
+    }
+  ],
+  "state": {
+    "blend": false,
+    "color_formats": [],
+    "depth_format": null,
+    "depth_test": false,
+    "depth_write": false,
+    "vertex_stride": 0
+  },
+  "version": 1
+}

@@ -1,0 +1,32 @@
+{
+  "binding_layout_hash": "f71261afa0d52758f34ca15c916d2da422ee92b118ede6e189c970911a274f1e",
+  "compiler": "2026.17-25-gc7954ebd1",
+  "key": "aa8e4382c60a59dc7dc9089578a113283887ee1228039341f9dec9f66d635ad1",
+  "stages": [
+    {
+      "dxil": "aa8e4382c60a59dc7dc9089578a113283887ee1228039341f9dec9f66d635ad1/captureTilesMain.dxil",
+      "dxil_hash": "367fe5da6ae66a20f6cf8329f7555f6178de45ab441b3331b20bb67820818ed0",
+      "metal": {
+        "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
+        "metallib": "aa8e4382c60a59dc7dc9089578a113283887ee1228039341f9dec9f66d635ad1/captureTilesMain.metallib",
+        "metallib_hash": "6f2efda5802eb4450b148dca21702ad09488146d4469f41bfbe3ea333872fa38",
+        "reflection": "aa8e4382c60a59dc7dc9089578a113283887ee1228039341f9dec9f66d635ad1/captureTilesMain.metal.json",
+        "root_signature_hash": "1cc11e518b14c2b24e05fc30812bfd2b87e0a9c313ea79a4620a443a723525ef"
+      },
+      "source_entry": "captureTilesMain",
+      "spirv": "aa8e4382c60a59dc7dc9089578a113283887ee1228039341f9dec9f66d635ad1/captureTilesMain.spv",
+      "spirv_entry": "main",
+      "spirv_hash": "9f39c63e42a982ef3e7a44023afe21b073540762ea85edbeb43f4e6293e2226d",
+      "stage": "compute"
+    }
+  ],
+  "state": {
+    "blend": false,
+    "color_formats": [],
+    "depth_format": null,
+    "depth_test": false,
+    "depth_write": false,
+    "vertex_stride": 0
+  },
+  "version": 1
+}

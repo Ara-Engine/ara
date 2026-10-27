@@ -1,0 +1,32 @@
+{
+  "binding_layout_hash": "f71261afa0d52758f34ca15c916d2da422ee92b118ede6e189c970911a274f1e",
+  "compiler": "2026.17-25-gc7954ebd1",
+  "key": "aa8e4382c60a59dc7dc9089578a113283887ee1228039341f9dec9f66d635ad1",
+  "stages": [
+    {
+      "dxil": "aa8e4382c60a59dc7dc9089578a113283887ee1228039341f9dec9f66d635ad1/tsrPrepareReactivityMain.dxil",
+      "dxil_hash": "28e257f093cdd038ef0ed2c0187d822631954ab303dab7446952006f7723242c",
+      "metal": {
+        "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
+        "metallib": "aa8e4382c60a59dc7dc9089578a113283887ee1228039341f9dec9f66d635ad1/tsrPrepareReactivityMain.metallib",
+        "metallib_hash": "b7e60ceb525d1f11c73da667b1f9c7807f892aa7cdf4d117740e92ef7bc7706b",
+        "reflection": "aa8e4382c60a59dc7dc9089578a113283887ee1228039341f9dec9f66d635ad1/tsrPrepareReactivityMain.metal.json",
+        "root_signature_hash": "1cc11e518b14c2b24e05fc30812bfd2b87e0a9c313ea79a4620a443a723525ef"
+      },
+      "source_entry": "tsrPrepareReactivityMain",
+      "spirv": "aa8e4382c60a59dc7dc9089578a113283887ee1228039341f9dec9f66d635ad1/tsrPrepareReactivityMain.spv",
+      "spirv_entry": "main",
+      "spirv_hash": "cb642b558a3d305640882bd1111ce6d3770f4bd905b16b1137d469819f7b78f8",
+      "stage": "compute"
+    }
+  ],
+  "state": {
+    "blend": false,
+    "color_formats": [],
+    "depth_format": null,
+    "depth_test": false,
+    "depth_write": false,
+    "vertex_stride": 0
+  },
+  "version": 1
+}

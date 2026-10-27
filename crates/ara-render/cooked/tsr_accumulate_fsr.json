@@ -1,0 +1,32 @@
+{
+  "binding_layout_hash": "f71261afa0d52758f34ca15c916d2da422ee92b118ede6e189c970911a274f1e",
+  "compiler": "2026.17-25-gc7954ebd1",
+  "key": "aa8e4382c60a59dc7dc9089578a113283887ee1228039341f9dec9f66d635ad1",
+  "stages": [
+    {
+      "dxil": "aa8e4382c60a59dc7dc9089578a113283887ee1228039341f9dec9f66d635ad1/tsrAccumulateFsrMain.dxil",
+      "dxil_hash": "5deeb9d133aab30947800bbe61245ef4c4e6cc1d344f3a3980a555541da2b9f9",
+      "metal": {
+        "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
+        "metallib": "aa8e4382c60a59dc7dc9089578a113283887ee1228039341f9dec9f66d635ad1/tsrAccumulateFsrMain.metallib",
+        "metallib_hash": "dbe60cb789d290f15f485e144ae20b8337a8387f0e30a01502e5c23eef13ff7a",
+        "reflection": "aa8e4382c60a59dc7dc9089578a113283887ee1228039341f9dec9f66d635ad1/tsrAccumulateFsrMain.metal.json",
+        "root_signature_hash": "1cc11e518b14c2b24e05fc30812bfd2b87e0a9c313ea79a4620a443a723525ef"
+      },
+      "source_entry": "tsrAccumulateFsrMain",
+      "spirv": "aa8e4382c60a59dc7dc9089578a113283887ee1228039341f9dec9f66d635ad1/tsrAccumulateFsrMain.spv",
+      "spirv_entry": "main",
+      "spirv_hash": "e12b21aaa96bd391e0ecc7618287be386ef26d72d28cde2cb5bcc3629e2113b7",
+      "stage": "compute"
+    }
+  ],
+  "state": {
+    "blend": false,
+    "color_formats": [],
+    "depth_format": null,
+    "depth_test": false,
+    "depth_write": false,
+    "vertex_stride": 0
+  },
+  "version": 1
+}

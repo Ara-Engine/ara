@@ -1,20 +1,20 @@
 {
   "binding_layout_hash": "f71261afa0d52758f34ca15c916d2da422ee92b118ede6e189c970911a274f1e",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "d2dea5981ce625a9e55c9fe40c483a8247f2102b575d84cc0486a579eee127c3",
+  "key": "c6088e63a0c96dc8e8b3e5519ac66bd4e0e7cd6452f733ccf72e1e0ef0a8a7d1",
   "stages": [
     {
-      "dxil": "d2dea5981ce625a9e55c9fe40c483a8247f2102b575d84cc0486a579eee127c3/reservoirSpatial.dxil",
+      "dxil": "c6088e63a0c96dc8e8b3e5519ac66bd4e0e7cd6452f733ccf72e1e0ef0a8a7d1/reservoirSpatial.dxil",
       "dxil_hash": "71acc8ee327f89501cda4f9187a1dbf57a38ad4436376b915f22b45278f842ea",
       "metal": {
         "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
-        "metallib": "d2dea5981ce625a9e55c9fe40c483a8247f2102b575d84cc0486a579eee127c3/reservoirSpatial.metallib",
+        "metallib": "c6088e63a0c96dc8e8b3e5519ac66bd4e0e7cd6452f733ccf72e1e0ef0a8a7d1/reservoirSpatial.metallib",
         "metallib_hash": "72eaa7cb93541d6b31b6410e4e4e8680f9430469dda03ed2d7b5f8199de5a079",
-        "reflection": "d2dea5981ce625a9e55c9fe40c483a8247f2102b575d84cc0486a579eee127c3/reservoirSpatial.metal.json",
+        "reflection": "c6088e63a0c96dc8e8b3e5519ac66bd4e0e7cd6452f733ccf72e1e0ef0a8a7d1/reservoirSpatial.metal.json",
         "root_signature_hash": "1cc11e518b14c2b24e05fc30812bfd2b87e0a9c313ea79a4620a443a723525ef"
       },
       "source_entry": "reservoirSpatial",
-      "spirv": "d2dea5981ce625a9e55c9fe40c483a8247f2102b575d84cc0486a579eee127c3/reservoirSpatial.spv",
+      "spirv": "c6088e63a0c96dc8e8b3e5519ac66bd4e0e7cd6452f733ccf72e1e0ef0a8a7d1/reservoirSpatial.spv",
       "spirv_entry": "main",
       "spirv_hash": "8cec29efdbec3753b614c385c11ec9efb34197c9181e68ecf8dfaaf7978dd02a",
       "stage": "compute"

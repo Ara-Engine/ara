@@ -1,20 +1,20 @@
 {
   "binding_layout_hash": "f71261afa0d52758f34ca15c916d2da422ee92b118ede6e189c970911a274f1e",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "d2dea5981ce625a9e55c9fe40c483a8247f2102b575d84cc0486a579eee127c3",
+  "key": "c6088e63a0c96dc8e8b3e5519ac66bd4e0e7cd6452f733ccf72e1e0ef0a8a7d1",
   "stages": [
     {
-      "dxil": "d2dea5981ce625a9e55c9fe40c483a8247f2102b575d84cc0486a579eee127c3/specularTraceLayers.dxil",
+      "dxil": "c6088e63a0c96dc8e8b3e5519ac66bd4e0e7cd6452f733ccf72e1e0ef0a8a7d1/specularTraceLayers.dxil",
       "dxil_hash": "6a9a5760067e8748211049b607931370e7d57da45af711921827d838d89f892a",
       "metal": {
         "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
-        "metallib": "d2dea5981ce625a9e55c9fe40c483a8247f2102b575d84cc0486a579eee127c3/specularTraceLayers.metallib",
+        "metallib": "c6088e63a0c96dc8e8b3e5519ac66bd4e0e7cd6452f733ccf72e1e0ef0a8a7d1/specularTraceLayers.metallib",
         "metallib_hash": "752645e19d78342322802efe1fdd033be83c43e287a73937bfd6360a3694b577",
-        "reflection": "d2dea5981ce625a9e55c9fe40c483a8247f2102b575d84cc0486a579eee127c3/specularTraceLayers.metal.json",
+        "reflection": "c6088e63a0c96dc8e8b3e5519ac66bd4e0e7cd6452f733ccf72e1e0ef0a8a7d1/specularTraceLayers.metal.json",
         "root_signature_hash": "1cc11e518b14c2b24e05fc30812bfd2b87e0a9c313ea79a4620a443a723525ef"
       },
       "source_entry": "specularTraceLayers",
-      "spirv": "d2dea5981ce625a9e55c9fe40c483a8247f2102b575d84cc0486a579eee127c3/specularTraceLayers.spv",
+      "spirv": "c6088e63a0c96dc8e8b3e5519ac66bd4e0e7cd6452f733ccf72e1e0ef0a8a7d1/specularTraceLayers.spv",
       "spirv_entry": "main",
       "spirv_hash": "8f235f4f9b5a66d6d3dc46de578c939601ec90ce3b378df6eb8dcf9b91cbb583",
       "stage": "compute"
