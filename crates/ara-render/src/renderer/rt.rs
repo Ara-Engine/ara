@@ -8,8 +8,9 @@
 //! over the shared native pool (`GeometryGpu::triangles`, no copies) when first
 //! needed and again after a committed skin pose; one TLAS over every instance
 //! (finest LOD, world transform, `custom_index` = instance row), rebuilt as a
-//! fresh structure only when an instance moved or a BLAS changed (ara-gpu
-//! acceleration structures are static: no refit). Builds are recorded in the frame
+//! fresh structure at once for a new BLAS, and for motion (moved instances, skin
+//! refreshes) at most every `TLAS_INTERVAL` frames (ara-gpu acceleration
+//! structures are static: no refit). Builds are recorded in the frame
 //! graph (`RT.Accel`, after the G-buffer), so frames never wait on them.
 //!
 //! Reflections: `RT.Reflect` traces one ray per render pixel below the roughness
@@ -38,8 +39,13 @@ const MAX_SIGMA: f32 = 12.;
 /// Ray-origin bias: metres, plus this many render pixels' footprint per metre.
 const BIAS: f32 = 0.002;
 const BIAS_PIXELS: f32 = 2.;
-/// Skin BLAS rebuilds per frame after committed poses (the rest wait their turn).
+/// Skin BLAS rebuilds per refresh after committed poses (the rest wait their turn).
 const SKIN_BUILDS: usize = 2;
+/// Frames between TLAS refreshes for motion alone (moved instances, refreshed skin
+/// BLASes): reflections of moving content lag at most this many frames minus one,
+/// deterministically, instead of paying a fresh TLAS every frame (Outpost: 0.36 ms).
+/// New or replaced BLASes and a missing TLAS still rebuild at once.
+const TLAS_INTERVAL: u32 = 4;
 
 /// One declared hybrid pass.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -132,6 +138,10 @@ pub(super) struct Rays {
     tlas: Option<Tlas>,
     /// Frames passed without a sync: compare every instance next time.
     stale: bool,
+    /// Frames since the TLAS was last rebuilt (`TLAS_INTERVAL`).
+    since_rebuild: u32,
+    /// Motion is waiting for the next interval refresh.
+    pending: bool,
     images: Option<Images>,
     /// Bindless tables of this frame's content (`Some`: this frame traces).
     tables: Option<super::native::rays::RayTables>,
@@ -362,14 +372,17 @@ impl Rays {
         // checked; otherwise only the rows and skins this frame changed.
         let all = self.tlas.is_none() || self.stale;
         let (rows, skins) = native.ray_changes();
-        let mut rebuild = self.tlas.is_none();
+        // Structural changes (no TLAS yet, a new BLAS) rebuild at once; motion waits
+        // for the interval refresh.
+        let mut structural = self.tlas.is_none();
+        let mut moved = false;
         let mut check = |rays: &mut Self, gpu: &mut GpuDevice, i: usize| -> Result<()> {
             let (world, entry, _) = native.ray_instance(i);
-            rebuild |= rays.ensure_blas(gpu, native, entry)?;
+            structural |= rays.ensure_blas(gpu, native, entry)?;
             let transform = affine(world);
             if rays.transforms[i] != transform {
                 rays.transforms[i] = transform;
-                rebuild = true;
+                moved = true;
             }
             Ok(())
         };
@@ -383,16 +396,25 @@ impl Rays {
             }
         }
         self.stale = false;
-        // Skin BLAS builds stay off the per-frame path: a few per frame, oldest
+        self.since_rebuild = self.since_rebuild.saturating_add(1);
+        let due = structural || self.since_rebuild >= TLAS_INTERVAL;
+        // Skin BLAS builds stay off the per-frame path: a few per refresh, oldest
         // first, each over the latest committed pose.
-        for _ in 0..SKIN_BUILDS {
-            let Some(entry) = self.skins.pop_front() else {
-                break;
-            };
-            rebuild |= self.build_blas(gpu, native, entry)?;
+        let mut refreshed = false;
+        if due {
+            for _ in 0..SKIN_BUILDS {
+                let Some(entry) = self.skins.pop_front() else {
+                    break;
+                };
+                self.build_blas(gpu, native, entry)?;
+                refreshed = true;
+            }
         }
-        if rebuild {
+        self.pending |= moved;
+        if structural || (due && (self.pending || refreshed)) {
             self.rebuild_tlas(gpu, native)?;
+            self.since_rebuild = 0;
+            self.pending = false;
         }
         Ok(true)
     }
