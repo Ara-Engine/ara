@@ -8,6 +8,84 @@ use ara_ui_render::{
     atlas::TextMode,
     gpu::{Image, Pipeline, Renderer},
 };
+
+#[test]
+fn missing_image_does_not_abort_the_remaining_controls() -> Result<()> {
+    let list = DisplayList {
+        commands: vec![
+            Draw::Image {
+                node: 1,
+                rect: Box2 {
+                    x: 0.,
+                    y: 0.,
+                    w: 8.,
+                    h: 8.,
+                },
+                image: 7,
+                tint: Color(255, 255, 255, 255),
+            },
+            Draw::Rect {
+                node: 2,
+                rect: Box2 {
+                    x: 8.,
+                    y: 0.,
+                    w: 8.,
+                    h: 8.,
+                },
+                color: Color(0, 255, 0, 255),
+            },
+        ],
+        glyphs: vec![],
+    };
+    let mut renderer = Renderer::default();
+    let mut cpu = CpuGpu::default();
+    renderer.render(&mut cpu, &list, &[], [16, 8], TextMode::Raster)?;
+    assert_eq!(renderer.missing_images, [7]);
+    assert_eq!(&cpu.pixmap()?.data()[..4], &[0, 0, 0, 0]);
+    assert_eq!(&cpu.pixmap()?.data()[8 * 4..9 * 4], &[0, 255, 0, 255]);
+    Ok(())
+}
+
+#[test]
+fn borrowed_image_keeps_adapter_pixels_without_an_owned_upload() -> Result<()> {
+    use ara_ui_render::gpu::{TextureUpload, UiGpu};
+    let list = DisplayList {
+        commands: vec![Draw::Image {
+            node: 1,
+            rect: Box2 {
+                x: 0.,
+                y: 0.,
+                w: 8.,
+                h: 8.,
+            },
+            image: 7,
+            tint: Color(255, 255, 255, 255),
+        }],
+        glyphs: vec![],
+    };
+    let mut cpu = CpuGpu::default();
+    cpu.upload(TextureUpload {
+        id: 7,
+        width: 1,
+        height: 1,
+        rgba: &[0, 0, 255, 255],
+    })?;
+    let mut renderer = Renderer::default();
+    renderer.external_image(7)?;
+    renderer.render(&mut cpu, &list, &[], [8, 8], TextMode::Raster)?;
+    assert!(renderer.missing_images.is_empty());
+    assert_eq!(&cpu.pixmap()?.data()[..4], &[0, 0, 255, 255]);
+    renderer.device_lost();
+    renderer.prepare(&list, &[], [8, 8], TextMode::Raster)?;
+    assert_eq!(renderer.missing_images, [7]);
+    renderer.external_image(7)?;
+    renderer.render(&mut cpu, &list, &[], [8, 8], TextMode::Raster)?;
+    assert_eq!(&cpu.pixmap()?.data()[..4], &[0, 0, 255, 255]);
+    renderer.forget_image(7);
+    renderer.prepare(&list, &[], [8, 8], TextMode::Raster)?;
+    assert_eq!(renderer.missing_images, [7]);
+    Ok(())
+}
 #[test]
 fn image_resources_nested_rounded_clips_batches_and_alpha() -> Result<()> {
     let list = DisplayList {

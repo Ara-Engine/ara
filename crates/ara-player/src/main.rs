@@ -509,6 +509,24 @@ impl Player {
 
     /// Forwards C# host events (reloads, diagnostics, L4 restart requests).
     fn events(&mut self) -> Result<()> {
+        for surface in [
+            self.window
+                .as_mut()
+                .and_then(|window| window.game_ui.as_mut()),
+            self.embed.as_mut().and_then(|embed| embed.game_ui.as_mut()),
+        ]
+        .into_iter()
+        .flatten()
+        {
+            for diagnostic in surface.diagnostics() {
+                self.link.notify(
+                    ara_play::EVENT,
+                    &ara_play::Event::Diagnostic {
+                        diagnostic: serde_json::to_value(diagnostic)?,
+                    },
+                )?;
+            }
+        }
         if let Some(world) = &self.world {
             for event in world.events() {
                 self.link.notify(ara_play::EVENT, &event)?;

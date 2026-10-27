@@ -146,5 +146,10 @@ Both build .NET. Valley fixtures come from `ara-runtime-world`'s `valley` test.
 (not black, close to a presented capture), W via `play.device` walks the Fox, typed
 and JSON resizes (new generations), stop; prints latency and per-frame cost.
 `cargo clippy -p ara-player --all-targets -- -D warnings`.
+`tests/embed.rs::outpost::hub_outpost_embedded_hud_survives_thirty_seconds_and_missing_images`
+creates the real Hub Outpost template under `target/`, renders its native HUD through
+the shared GPU surface for 30 seconds, then tests missing/corrupt reticles and
+path-bearing diagnostics. Run explicitly with `--ignored`, isolated Vulkan layers,
+`SDL_AUDIODRIVER=dummy`, and a fresh `ARA_CONFIG_DIR`/`ARA_CRASH_DIR` under `target/`.
 `tests/prerequisites.rs` probes missing Vulkan/.NET startup diagnostics and doctor
 hints. Missing model sources stay playable with ARA7310 placeholders (`tests/pins.rs`).

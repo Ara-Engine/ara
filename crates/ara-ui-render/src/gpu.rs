@@ -7,7 +7,10 @@ use ara_ui::{
 };
 use ara_ui_text::FontAsset;
 use serde::Serialize;
-use std::{collections::BTreeMap, ops::Range};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    ops::Range,
+};
 /// Shader entry mode; all modes preserve premultiplied-alpha painter order.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 #[repr(u32)]
@@ -109,7 +112,11 @@ pub struct Renderer {
     pub instances: Vec<Instance>,
     /// Clip arena referenced by submitted batches.
     pub clips: Vec<Clip>,
+    /// Image IDs skipped in the most recent frame because neither an upload nor
+    /// a borrowed adapter image was registered. Hosts report their source paths.
+    pub missing_images: Vec<u32>,
     images: BTreeMap<u32, Image>,
+    external_images: BTreeSet<u32>,
     raster_scale: f32,
     dirty_images: Vec<u32>,
 }
@@ -126,6 +133,24 @@ impl Renderer {
     pub fn device_lost(&mut self) {
         self.atlas.reset();
         self.dirty_images = self.images.keys().copied().collect();
+        self.external_images.clear();
+    }
+    /// Registers an image already attached by the adapter, without uploading CPU
+    /// pixels. Reattach and register it after device loss; the adapter owns its lifetime.
+    pub fn external_image(&mut self, id: u32) -> Result<()> {
+        if id & 0x8000_0000 != 0 {
+            return Err("ARA4051: external image uses the glyph-atlas high bit".into());
+        }
+        self.images.remove(&id);
+        self.dirty_images.retain(|&dirty| dirty != id);
+        self.external_images.insert(id);
+        Ok(())
+    }
+    /// Stops drawing an uploaded or borrowed image until it is registered again.
+    pub fn forget_image(&mut self, id: u32) {
+        self.images.remove(&id);
+        self.external_images.remove(&id);
+        self.dirty_images.retain(|&dirty| dirty != id);
     }
     /// Register/hot-reload a decoded image. Image handles cannot use the glyph-atlas high bit.
     pub fn image(&mut self, id: u32, image: Image) -> Result<()> {
@@ -142,6 +167,7 @@ impl Renderer {
             return Err("ARA4051: invalid image resource".into());
         }
         self.images.insert(id, image);
+        self.external_images.remove(&id);
         if !self.dirty_images.contains(&id) {
             self.dirty_images.push(id);
         }
@@ -189,6 +215,7 @@ impl Renderer {
         self.batches.clear();
         self.instances.clear();
         self.clips.clear();
+        self.missing_images.clear();
         self.clips.push(Clip {
             rect: Box2 {
                 x: 0.0,
@@ -320,8 +347,11 @@ impl Renderer {
                     tint,
                     ..
                 } => {
-                    if !self.images.contains_key(image) {
-                        return Err(format!("ARA4051: missing image resource {image}").into());
+                    if !self.images.contains_key(image) && !self.external_images.contains(image) {
+                        if !self.missing_images.contains(image) {
+                            self.missing_images.push(*image);
+                        }
+                        continue;
                     }
                     instance.rect = array(rect(*r));
                     instance.color = color_array(*tint);
