@@ -154,6 +154,7 @@ pub struct MetalDevice {
     clear: Option<clear::Clear>,
     /// Shader reload provenance (no hot reload on Metal yet, see `reload`).
     shader_status: vulkan::ShaderStatus,
+    submission_stats: vulkan::SubmissionStats,
     /// Last: released after the workers joined, so the archive flush races no compile.
     _cache: cache::Lease,
 }
@@ -256,6 +257,7 @@ impl MetalDevice {
             waits: Default::default(),
             clear: None,
             shader_status: Default::default(),
+            submission_stats: Default::default(),
             _cache: cache,
         })
     }
@@ -452,6 +454,15 @@ impl MetalDevice {
     pub fn assert_clean(&self) -> Result<()> {
         Ok(())
     }
+    /// Always empty, for the same reason as [`Self::assert_clean`].
+    pub fn diagnostics(&self) -> Vec<vulkan::Diagnostic> {
+        Vec::new()
+    }
+    /// Cumulative queue submissions; on Metal every command list is one commit, and
+    /// presentation copies are excluded like Vulkan's native integrations.
+    pub fn submission_stats(&self) -> vulkan::SubmissionStats {
+        self.submission_stats
+    }
 
     /// Submit one list with timeline dependencies. Returns a monotonic signal point.
     /// Bindless reachability is conservative: all published resources are retained.
@@ -548,6 +559,8 @@ impl MetalDevice {
             point.value,
         );
         self.submitted[queue.index()] = point.value;
+        self.submission_stats.queue_submissions += 1;
+        self.submission_stats.command_lists += 1;
         for value in self.buffers.values_mut() {
             value.last[queue.index()] = point.value;
         }

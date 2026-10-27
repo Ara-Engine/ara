@@ -118,6 +118,8 @@ fn compute_writes_through_the_converter_tables_and_top_level_buffer() {
     }
     let point = gpu.submit(rec.finish(), &[]).expect("submit");
     gpu.resolve(point).expect("resolve");
+    let stats = gpu.submission_stats();
+    assert_eq!((stats.queue_submissions, stats.command_lists), (1, 1));
     for (buffer, base) in buffers.iter().zip([1000u32, 5000]) {
         let data = words(&gpu.read(*buffer).expect("read"));
         assert_eq!(data, (0..100).map(|i| base + i).collect::<Vec<_>>());
