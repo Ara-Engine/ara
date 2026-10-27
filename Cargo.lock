@@ -854,11 +854,14 @@ version = "0.0.1-alpha"
 dependencies = [
  "anyhow",
  "ara-gpu",
+ "ara-platform",
  "ara-ui",
  "ara-ui-render",
  "ash 0.38.0+1.4.352",
  "bytemuck",
  "image",
+ "objc2 0.6.5",
+ "serde_json",
 ]
 
 [[package]]
