@@ -38,6 +38,19 @@ fn exported_game_ticks_csharp_after_relocation_without_author_files() {
     let module = author.join("scripts/Gameplay");
     std::fs::create_dir_all(&module).unwrap();
     std::fs::create_dir_all(author.join("assets")).unwrap();
+    std::fs::create_dir_all(author.join("ui")).unwrap();
+    std::fs::write(
+        author.join("ui/game.ui"),
+        "<ui id=\"game\"><text id=\"ticks\" text=\"Ticks\"/></ui>",
+    )
+    .unwrap();
+    std::fs::write(author.join("ui/game.css"), "").unwrap();
+    write(
+        &author.join("ui/bindings.json"),
+        json!([
+            {"node":"ticks","entity":"e_spinner","component":"Spinner","field":"ticks"}
+        ]),
+    );
     write(
         &author.join("ara.project.json"),
         json!({"name":"Native CSharp Export","main":"main.scene"}),
@@ -56,11 +69,21 @@ public sealed partial class Spinner : Behaviour
 {
     /// <summary>Completed fixed ticks.</summary>
     [Property] public partial int Ticks { get; set; }
+    /// <summary>Owner sampled through the shipping callback table.</summary>
+    [Property] public partial ulong Owner { get; set; }
+    /// <summary>Number of renderable targets found through the shipping query.</summary>
+    [Property] public partial int Targets { get; set; }
     /// <inheritdoc/>
     protected override void OnTick(in Tick tick)
     {
         Ticks++;
         Get<Transform>().Rotation.Y += 2;
+        Owner = Input.Player(Entity);
+        Span<Entity> scratch = stackalloc Entity[4];
+        Targets = World.Query<MeshRenderer>(scratch).Length;
+        Navigation.GoTo(Entity, new Vector3(Input.Axis2(Owner, "Move").X, 0, 0));
+        Movement.Stop(Entity);
+        Animation.SetBool(Entity, "Moving", true);
     }
 }
 "#,
@@ -70,12 +93,14 @@ public sealed partial class Spinner : Behaviour
         &module.join("Gameplay.types.json"),
         json!({"$schema":"ara://schema/types/1","types":{
         "Spinner":{"kind":"component","module":"Gameplay","doc":"Counts fixed ticks and rotates its object.",
-        "fields":{"ticks":{"type":"i32","doc":"Completed fixed ticks.","default":0}}}}}),
+        "fields":{"ticks":{"type":"i32","doc":"Completed fixed ticks.","default":0},
+        "owner":{"type":"u64","doc":"Owner sampled through the shipping callback table.","default":0},
+        "targets":{"type":"i32","doc":"Number of renderable targets found through the shipping query.","default":0}}}}}),
     );
     write(
         &author.join("main.scene"),
         json!({"$schema":"ara://schema/scene/1","id":"sc_shipping1","records":{
-            "e_spinner":{"name":"Spinner","order":"a0","Transform":{},"Spinner":{"ticks":0},
+            "e_spinner":{"name":"Spinner","order":"a0","Transform":{},"PlayerControl":{"player":7},"Spinner":{"ticks":0},
                 "MeshRenderer":{"color":[0.2,0.7,0.9,1]}},
             "e_camera":{"name":"Camera","order":"a1","Transform":{"position":[0,1,5],"rotation":[-8,0,0]},"Camera":{}},
             "e_sun":{"name":"Sun","order":"a2","Transform":{"rotation":[-35,-30,0]},"Light":{"kind":"directional","intensity":10000}}
@@ -133,6 +158,10 @@ public sealed partial class Spinner : Behaviour
                 "e_spinner.Spinner.ticks",
                 "--read",
                 "e_spinner.Transform.rotation.y",
+                "--read",
+                "e_spinner.Spinner.owner",
+                "--read",
+                "e_spinner.Spinner.targets",
             ])
             .current_dir(&moved),
         &log,
@@ -142,11 +171,41 @@ public sealed partial class Spinner : Behaviour
     let result = verify::runtime_result(&result).unwrap();
     assert_eq!(result["tick"], json!(6));
     assert_eq!(result["reads"]["e_spinner.Spinner.ticks"], json!(6));
+    assert_eq!(result["reads"]["e_spinner.Spinner.owner"], json!(7));
+    assert_eq!(result["reads"]["e_spinner.Spinner.targets"], json!(1));
     assert_eq!(
         result["reads"]["e_spinner.Transform.rotation.y"],
         json!(12.0)
     );
     write(&scratch.join("result.json"), result);
+    // Shipping verification used to exercise only headless captures, missing the
+    // adapter-owned scene image and error teardown in continuous native UI.
+    let windowed = tools::run(
+        Command::new(moved.join("ara-player.exe"))
+            .args([
+                "--offscreen",
+                "--frames",
+                "240",
+                "--quality",
+                "low",
+                "--size",
+                "320x180",
+                "--read",
+                "e_spinner.Spinner.owner",
+                "--read",
+                "e_spinner.Spinner.targets",
+            ])
+            .current_dir(&moved),
+        &scratch.join("continuous-ui.log"),
+        Duration::from_secs(120),
+    )
+    .unwrap();
+    let windowed = verify::runtime_result(&windowed).unwrap();
+    assert_eq!(windowed["frames_after_first"], json!(239));
+    assert!(windowed["tick"].as_u64().unwrap() > 0);
+    assert_eq!(windowed["reads"]["e_spinner.Spinner.owner"], json!(7));
+    assert_eq!(windowed["reads"]["e_spinner.Spinner.targets"], json!(1));
+    write(&scratch.join("continuous-ui.json"), windowed);
     let manifest_path = moved.join("game/scripts.json");
     let manifest: Value = serde_json::from_slice(&std::fs::read(&manifest_path).unwrap()).unwrap();
     let mut stale = manifest.clone();
