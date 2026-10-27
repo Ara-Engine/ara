@@ -229,6 +229,8 @@ pub(super) struct Generator {
     methods: Vec<String>,
     initialized: bool,
     pending: VecDeque<Action>,
+    interleaved_at: usize,
+    interleave_cursor: usize,
 }
 
 impl Generator {
@@ -240,6 +242,8 @@ impl Generator {
             methods: Vec::new(),
             initialized: false,
             pending: VecDeque::new(),
+            interleaved_at: 0,
+            interleave_cursor: 0,
         }
     }
 
@@ -281,8 +285,19 @@ impl Generator {
         if let Some(action) = self.pending.pop_front() {
             return action;
         }
-        // Complete deterministic command coverage before the unbounded random soak.
+        // Native input must already run during coverage, even when expensive
+        // commands consume most of the budget. Pending gestures stay contiguous.
         let specs = commands::all();
+        let covered = self.command_cursor + self.method_cursor;
+        if (self.command_cursor < specs.len() * TARGET_CASES
+            || self.method_cursor < self.methods.len() * PARAM_CASES)
+            && covered > 0
+            && covered.is_multiple_of(32)
+            && self.interleaved_at != covered
+        {
+            self.interleaved_at = covered;
+            return self.interleave(shell);
+        }
         if self.command_cursor < specs.len() * TARGET_CASES {
             let spec = &specs[self.command_cursor / TARGET_CASES];
             let target = edge_target(self.command_cursor % TARGET_CASES);
@@ -454,6 +469,90 @@ impl Generator {
             _ => Action::Key { scancode: 41 },
         }
     }
+
+    fn interleave(&mut self, shell: &Shell) -> Action {
+        let mode = self.interleave_cursor % 5;
+        self.interleave_cursor += 1;
+        let point = shell
+            .viewport()
+            .map_or([shell.ui.size[0] * 0.5, shell.ui.size[1] * 0.5], |rect| {
+                [rect.x + rect.w * 0.6, rect.y + rect.h * 0.6]
+            });
+        match mode {
+            0 => Action::Tab {
+                reverse: self.index(2) == 0,
+            },
+            1 => Action::Wheel {
+                point,
+                delta: [0., 96.],
+            },
+            2 => {
+                let id = shell
+                    .ui
+                    .nodes
+                    .iter()
+                    .enumerate()
+                    .find(|(index, node)| {
+                        shell.ui.shown(*index)
+                            && matches!(node.element.tag.as_str(), "field" | "input")
+                    })
+                    .map(|(_, node)| node.element.id.clone());
+                Action::Text {
+                    id,
+                    value: ["NaN", "1e308", ""][self.index(3)].into(),
+                }
+            }
+            3 => {
+                let end = [point[0] + 32., point[1] + 24.];
+                self.pending.extend([
+                    Action::Move { point: end },
+                    registry_action("edit.undo", Target::None),
+                    Action::Release {
+                        point: end,
+                        cancel: true,
+                    },
+                ]);
+                Action::Press { point }
+            }
+            _ => {
+                let end = [point[0] + 24., point[1] + 12.];
+                self.pending.extend([
+                    Action::Key { scancode: 41 },
+                    Action::PointerButton {
+                        point,
+                        button: 3,
+                        pressed: true,
+                    },
+                    Action::Move { point: end },
+                    Action::KeyState {
+                        scancode: 26,
+                        pressed: true,
+                    },
+                    Action::Move {
+                        point: [end[0] + 8., end[1]],
+                    },
+                    Action::KeyState {
+                        scancode: 26,
+                        pressed: false,
+                    },
+                    Action::PointerButton {
+                        point: end,
+                        button: 3,
+                        pressed: false,
+                    },
+                    Action::FocusLost,
+                ]);
+                Action::FocusLost
+            }
+        }
+    }
+}
+
+pub(super) fn edge_case_count() -> usize {
+    TARGET_CASES
+}
+pub(super) fn edge_case(target: &Target) -> Option<usize> {
+    (0..TARGET_CASES).find(|index| edge_target(*index) == *target)
 }
 
 fn registry_action(id: &str, target: Target) -> Action {

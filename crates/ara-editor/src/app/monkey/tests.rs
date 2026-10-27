@@ -7,16 +7,13 @@ static NEXT: AtomicU64 = AtomicU64::new(0);
 struct Project(PathBuf);
 impl Project {
     fn new() -> Self {
-        let root = std::env::var_os("CARGO_TARGET_DIR")
-            .map(PathBuf::from)
-            .unwrap_or_else(|| PathBuf::from("target"))
-            .join("monkey-tests")
-            .join(format!(
-                "{}-{}",
-                std::process::id(),
-                NEXT.fetch_add(1, Ordering::Relaxed)
-            ));
+        let root = crate::test_target().join("monkey-tests").join(format!(
+            "{}-{}",
+            std::process::id(),
+            NEXT.fetch_add(1, Ordering::Relaxed)
+        ));
         std::fs::create_dir_all(root.join("levels")).unwrap();
+        std::fs::write(root.join(".ara-monkey-fixture"), b"fresh test scratch\n").unwrap();
         for (path, value) in [
             (
                 "ara.project.json",
@@ -32,7 +29,8 @@ impl Project {
         Self(root)
     }
     fn open(&self) -> (Editor, Shell) {
-        let mut editor = Editor::open(&self.0).unwrap();
+        let mut editor =
+            Editor::open_with(&self.0, Some(self.0.join(".ara/test-user.json"))).unwrap();
         let mut shell = Shell::new(&mut editor, [900., 600.]).unwrap();
         shell.offscreen = true;
         (editor, shell)
@@ -56,7 +54,7 @@ fn short_real_editor_run_writes_replay_and_preserves_window_isolation() {
         monkey.record_frame(Duration::from_millis(2));
         assert!(shell.window_request.is_none());
     }
-    monkey.finish().unwrap();
+    monkey.finish_with(&mut editor).unwrap();
     assert!(monkey.succeeded());
     let report: Value =
         serde_json::from_str(&std::fs::read_to_string(output.join("monkey.json")).unwrap())
@@ -65,6 +63,12 @@ fn short_real_editor_run_writes_replay_and_preserves_window_isolation() {
     assert_eq!(report["actions"], 8);
     assert_eq!(report["panics"], json!([]));
     assert_eq!(report["frames"], 8);
+    assert_eq!(report["accepted"], true);
+    assert_eq!(report["soakRequested"], false);
+    assert_eq!(report["soakAccepted"], false);
+    assert_eq!(report["coverageComplete"], false);
+    assert_eq!(report["termination"], "workload-step-limit");
+    assert_eq!(report["finalDiagnosticsCollected"], true);
     let journal = std::fs::read_to_string(output.join("monkey-events.jsonl")).unwrap();
     let events: Vec<Value> = journal
         .lines()
@@ -116,6 +120,174 @@ fn bounded_options_force_hidden_windows_and_default_to_a_long_soak() {
 }
 
 #[test]
+fn an_unmarked_project_is_rejected_before_the_first_action() {
+    let project = Project::new();
+    let (mut editor, mut shell) = project.open();
+    std::fs::remove_file(project.0.join(".ara-monkey-fixture")).unwrap();
+    let before = editor.host.store().revision();
+    let output = project.0.join("unmarked");
+    let mut runner = Monkey::new(1, Duration::from_secs(30), Some(1), &output).unwrap();
+    assert!(runner.step(&mut editor, &mut shell).is_err());
+    assert_eq!(runner.actions, 0);
+    assert_eq!(editor.host.store().revision(), before);
+    assert_eq!(
+        std::fs::read(output.join("monkey-events.jsonl")).unwrap(),
+        b""
+    );
+    std::fs::write(
+        project.0.join(".ara-behaviour-fixture"),
+        b"fresh test scratch\n",
+    )
+    .unwrap();
+    assert!(runner.step(&mut editor, &mut shell).unwrap());
+    runner.finish_with(&mut editor).unwrap();
+    assert!(runner.succeeded());
+}
+
+#[test]
+fn shutdown_collects_diagnostics_emitted_after_the_final_action() {
+    let project = Project::new();
+    let (mut editor, mut shell) = project.open();
+    let output = project.0.join("final-tail");
+    let mut runner = Monkey::new(1, Duration::from_secs(30), Some(1), &output).unwrap();
+    runner.generator.enqueue([Action::Tab { reverse: false }]);
+    runner.step(&mut editor, &mut shell).unwrap();
+    assert!(runner.finished());
+    assert!(
+        !runner.succeeded(),
+        "the final diagnostic tail is still pending"
+    );
+    editor.report_error("controlled error after the last monkey action");
+    runner.finish_with(&mut editor).unwrap();
+    let report: Value =
+        serde_json::from_str(&std::fs::read_to_string(output.join("monkey.json")).unwrap())
+            .unwrap();
+    assert_eq!(
+        report["errorDiagnosticsDuring"][crate::codes::ACTION.to_string()],
+        1
+    );
+    assert_eq!(report["finalDiagnosticsCollected"], true);
+    let journal = std::fs::read_to_string(output.join("monkey-events.jsonl")).unwrap();
+    assert!(
+        journal
+            .lines()
+            .map(|line| serde_json::from_str::<Value>(line).unwrap())
+            .any(|row| {
+                row["phase"] == "diagnostic"
+                    && row["entry"]["diagnostic"]["message"]
+                        == "controlled error after the last monkey action"
+            })
+    );
+}
+
+#[test]
+fn diagnostic_bus_loss_prevents_an_exact_count_acceptance_claim() {
+    let project = Project::new();
+    let (mut editor, mut shell) = project.open();
+    let mut runner =
+        Monkey::new(1, Duration::from_secs(30), Some(1), &project.0.join("lost")).unwrap();
+    runner.generator.enqueue([Action::Tab { reverse: false }]);
+    runner.step(&mut editor, &mut shell).unwrap();
+    let dropped =
+        ara_diag::Diagnostic::warning(ara_diag::codes::DIAG_DROPPED, "controlled bus loss report");
+    editor
+        .action(
+            "diag.report",
+            json!({"engine":true,"diagnostics":[dropped]}),
+        )
+        .unwrap();
+    runner.finish_with(&mut editor).unwrap();
+    assert!(runner.diagnostic_bus_loss);
+    assert!(!runner.succeeded());
+}
+
+#[test]
+fn an_elapsed_duration_without_coverage_or_native_input_is_not_a_soak_pass() {
+    let project = Project::new();
+    let (mut editor, mut shell) = project.open();
+    let output = project.0.join("incomplete-soak");
+    let mut runner = Monkey::new(1, Duration::from_secs(1800), None, &output).unwrap();
+    runner.generator.enqueue([Action::Tab { reverse: false }]);
+    runner.step(&mut editor, &mut shell).unwrap();
+    assert!(runner.is_soak());
+    assert!(!runner.finished());
+    // Exercise the acceptance predicate without waiting thirty minutes in a unit test.
+    runner.started = Instant::now() - Duration::from_secs(1800);
+    runner.finish_with(&mut editor).unwrap();
+    assert!(runner.finished());
+    assert!(
+        runner.succeeded(),
+        "bounded crash/resource checks are independent of soak coverage"
+    );
+    assert!(!runner.soak_succeeded());
+    let report: Value =
+        serde_json::from_str(&std::fs::read_to_string(output.join("monkey.json")).unwrap())
+            .unwrap();
+    assert_eq!(report["accepted"], false);
+    assert_eq!(report["soakAccepted"], false);
+    assert_eq!(report["soakRequested"], true);
+    assert_eq!(report["durationCompleted"], true);
+}
+
+#[test]
+fn native_inputs_interleave_the_complete_command_edge_sweep() {
+    let project = Project::new();
+    let (editor, shell) = project.open();
+    let mut generator = Generator::new(42);
+    generator.initialize(&editor);
+    let mut cases_seen: BTreeMap<String, BTreeSet<usize>> = BTreeMap::new();
+    let mut native_seen = BTreeSet::new();
+    let required = commands::all().len() * actions::edge_case_count();
+    let mut reached_protocol = false;
+    for _ in 0..required * 2 + 128 {
+        let action = generator.next(&shell);
+        if let Action::Command { id, target } = &action {
+            cases_seen
+                .entry(id.clone())
+                .or_default()
+                .insert(actions::edge_case(target).unwrap());
+        } else if matches!(action, Action::Protocol { .. }) {
+            reached_protocol = true;
+            break;
+        } else {
+            native_seen.insert(
+                serde_json::to_value(action).unwrap()["kind"]
+                    .as_str()
+                    .unwrap()
+                    .to_owned(),
+            );
+        }
+    }
+    assert!(
+        reached_protocol,
+        "command sweep must eventually reach protocol probes"
+    );
+    for spec in commands::all() {
+        assert_eq!(
+            cases_seen[spec.id].len(),
+            actions::edge_case_count(),
+            "missing cases for {}",
+            spec.id
+        );
+    }
+    for kind in [
+        "tab",
+        "wheel",
+        "text",
+        "press",
+        "release",
+        "pointerButton",
+        "keyState",
+        "focusLost",
+    ] {
+        assert!(
+            native_seen.contains(kind),
+            "missing early native input {kind}"
+        );
+    }
+}
+
+#[test]
 fn exact_replay_preserves_recorded_actions_and_multilingual_text() {
     let project = Project::new();
     let (mut editor, mut shell) = project.open();
@@ -144,7 +316,7 @@ fn exact_replay_preserves_recorded_actions_and_multilingual_text() {
         runner.step(&mut editor, &mut shell).unwrap();
         shell.frame().unwrap();
     }
-    runner.finish().unwrap();
+    runner.finish_with(&mut editor).unwrap();
     assert!(runner.succeeded());
     let actual: Vec<Value> = std::fs::read_to_string(output.join("monkey-events.jsonl"))
         .unwrap()
@@ -197,7 +369,7 @@ fn custom_input_callback_is_inside_the_durable_journal_and_panic_boundary() {
             })
             .unwrap();
     }
-    runner.finish().unwrap();
+    runner.finish_with(&mut editor).unwrap();
     assert_eq!(called, 3);
     assert!(!runner.succeeded());
     assert_eq!(runner.actions, 3);
@@ -540,7 +712,7 @@ fn generated_budget_records_focus_loss_drain_separately_from_workload() {
     while !runner.finished() {
         runner.step(&mut editor, &mut shell).unwrap();
     }
-    runner.finish().unwrap();
+    runner.finish_with(&mut editor).unwrap();
     assert!(runner.succeeded());
     assert_eq!(runner.workload_actions, 1);
     assert_eq!(runner.cleanup_actions, 1);

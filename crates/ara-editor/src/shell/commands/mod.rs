@@ -265,6 +265,21 @@ impl Shell {
         id: &str,
         target: &Target,
     ) -> ara_ui::Result<()> {
+        if self.offscreen
+            && matches!(
+                id,
+                "assets.reveal"
+                    | "assets.open_ide"
+                    | "build.open_folder"
+                    | "tools.terminal"
+                    | "help.docs"
+                    | "help.logs"
+            )
+        {
+            return Err(
+                "Opening desktop applications is unavailable during offscreen verification".into(),
+            );
+        }
         let spec = get(id).ok_or_else(|| format!("unknown command `{id}`"))?;
         let avail = {
             let cx = self.ctx(editor, target);

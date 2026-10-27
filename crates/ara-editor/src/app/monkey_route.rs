@@ -38,32 +38,44 @@ pub(super) fn step(
             }
         })
         .collect::<Vec<_>>();
-    runner.step_with(editor, shell, |action, editor, shell, clipboard| {
-        let Some(input) = adapter.events(action, shell, &main, &surfaces)? else {
-            return action.run(editor, shell, clipboard);
-        };
-        shell.desktop_pointer = input.desktop_pointer;
-        for (sdl, event) in input.events {
-            // Quit is deliberately ignored during the bounded runner; its cleanup
-            // owns termination and must drain only resources created by this run.
-            let _ = route_event(
-                sdl,
-                event,
-                window.id(),
-                dpi,
-                window,
-                floats,
-                controller,
-                editor,
-                shell,
-                renderer,
-                gpu,
-                view,
-                scene_view,
-                clipboard,
-            )?;
-        }
+    let mut routed_events = 0;
+    let result = runner.step_with(editor, shell, |action, editor, shell, clipboard| {
+        let result = (|| {
+            let Some(input) = adapter.events(action, shell, &main, &surfaces)? else {
+                return action.run(editor, shell, clipboard);
+            };
+            shell.desktop_pointer = input.desktop_pointer;
+            for (sdl, event) in input.events {
+                // Count only events actually offered to the production owner.
+                routed_events += 1;
+                // Cleanup owns termination and drains only this run's resources.
+                let _ = route_event(
+                    sdl,
+                    event,
+                    window.id(),
+                    dpi,
+                    window,
+                    floats,
+                    controller,
+                    editor,
+                    shell,
+                    renderer,
+                    gpu,
+                    view,
+                    scene_view,
+                    clipboard,
+                )?;
+            }
+            Ok(())
+        })();
+        // A rejected floating event must not strand the next action's surface.
         shell.leave();
-        Ok(())
-    })
+        // Registered Copy and native Paste must use the same isolated buffer.
+        let copied = shell
+            .take_clipboard()
+            .map_or(Ok(()), |text| clipboard.write(&text));
+        result.and(copied)
+    });
+    runner.record_native_events(routed_events);
+    result
 }

@@ -1832,8 +1832,13 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
         Ok(())
     })();
     let monkey_result = if let Some(runner) = &mut monkey {
-        runner.finish()?;
-        if runner.succeeded() {
+        runner.finish_with(&mut editor)?;
+        let accepted = if runner.is_soak() {
+            runner.soak_succeeded()
+        } else {
+            runner.succeeded()
+        };
+        if accepted {
             Ok(())
         } else {
             Err("Editor monkey did not pass; see monkey.json and monkey-events.jsonl".into())
