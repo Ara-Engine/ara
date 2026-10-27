@@ -18,6 +18,7 @@ use image::{
 };
 use resvg::{tiny_skia, usvg};
 use std::path::{Path, PathBuf};
+mod icons;
 
 /// PNG ladder exported for every brand symbol.
 const PNG_SIZES: [u32; 9] = [16, 24, 32, 48, 64, 128, 256, 512, 1024];
@@ -37,6 +38,15 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
+    /// Regenerate the three program icons, or check their committed pixels.
+    Icons {
+        /// Brand directory containing icons/{engine,game,hub} SVGs and outputs.
+        #[arg(long, default_value = "assets/brand")]
+        dir: PathBuf,
+        /// Verify PNG and ICO pixels without modifying committed outputs.
+        #[arg(long)]
+        check: bool,
+    },
     /// Render the PNG ladder, ara.ico and favicon.ico from the brand SVGs.
     Export {
         /// Brand directory holding the SVG masters.
@@ -66,6 +76,7 @@ enum Command {
 
 fn main() -> Result<()> {
     match Cli::parse().command {
+        Command::Icons { dir, check } => icons::export(&dir, check),
         Command::Export { dir } => export(&dir),
         Command::Render {
             svg,
@@ -159,6 +170,7 @@ fn export(dir: &Path) -> Result<()> {
     };
     write_ico(&dir.join("ara.ico"), &icon(&ICO_SIZES)?)?;
     write_ico(&dir.join("favicon.ico"), &icon(&FAVICON_SIZES)?)?;
+    icons::export(dir, false)?;
     println!(
         "exported {} PNGs, ara.ico, favicon.ico into {}",
         PNG_SIZES.len() * 2,

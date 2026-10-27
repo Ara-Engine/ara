@@ -83,7 +83,10 @@ It also compresses README media (`media <in> <out.jpg> --width 1920`).
 
 ## Where the icon is wired in
 
-- **Window icon:** `ara_platform::Window::new` sets the 64 px app icon on every SDL window (the editor, floating panels, `ara-player`) through `SDL_SetWindowIcon`. Games replace it with `Window::set_icon`.
-- **Executable icon:** the `build.rs` files of `ara-editor` and `ara-player` embed `ara.ico` with `embed-resource`. That uses `rc.exe` from the Windows SDK, which MSVC linking already requires, so there is no new prerequisite. It is a no-op on other platforms.
+- **Program designs:** `assets/brand/icons/{engine,game,hub}/` contain Islam's full and small SVGs, the committed PNG ladder (16?1024 px) and ICOs (16/24/32/48/64/128/256). The small drawing is used at 32 px and below.
+- **Windows executables:** editor and setup use engine; Hub and Hub updater use hub; player and exported games use game. Each design has its own `.rc`, embedded by the owning crate's `build.rs` through `embed-resource`. The CLI currently embeds no icon.
+- **Window icons:** editor main/loading/floating windows, Hub and player explicitly set their corresponding 64 px PNG with `Window::set_icon_png`. `ara-platform` keeps the legacy generic default. Games can override through `Window::set_icon`; no export-preset icon path currently exists.
+- **AppImage:** `ara-game.svg` and `.DirIcon` use the game SVG.
+- **Regeneration:** `cargo run -p ara-brand -- icons` regenerates program outputs in Rust. `icons --check` compares decoded PNG/ICO pixels to the committed originals (encoder compression may differ). No Node build prerequisite. `export` also regenerates the legacy brand outputs; old `ara.ico`, `ara.rc`, `favicon.ico` and `png/ara-icon-*.png` paths remain supported.
 - **Evidence:** zoomed title bars of the [editor](brand-evidence/editor-titlebar.png) and the [player](brand-evidence/player-titlebar.png), and the [whole player window](brand-evidence/player-window.jpg) (captured from `cargo test -p ara-player --test scenario -- --ignored`).
 - **Still to do:** the editor's menu-bar brand tile still shows a text "a". Swapping it for the mark changes the editor's native goldens, so it is left for the next editor-chrome pass.

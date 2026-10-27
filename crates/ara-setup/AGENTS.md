@@ -47,7 +47,8 @@ registration. A newer installed version/source generation is retained, never dow
   `Host`/`Quiet`, `summarize`; `processes.rs`; `register.rs`.
 - `ui/mod.rs` `View`, `Action`, buttons; `ui/canvas.rs` SDF shapes on DIB pixels;
   `ui/paint.rs` layout, GDI text, `render` (offscreen RGBA); `ui/window.rs` Win32.
-- `build.rs` embeds the Ara icon and links with `/DEPENDENTLOADFLAG:0x800`
+- `build.rs` embeds `assets/brand/icons/engine/ara-engine.rc` (engine icon,
+  including the shared Hub setup stub) and links with `/DEPENDENTLOADFLAG:0x800`
   (imports from System32 only: no DLL planting beside a downloaded setup).
 
 ## Tests

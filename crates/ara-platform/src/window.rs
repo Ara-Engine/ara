@@ -110,7 +110,7 @@ impl Window {
                 _main_thread: PhantomData,
             };
             // The icon is cosmetic: drivers without window icons (Wayland) still get a window.
-            let _ = decode_icon(ARA_ICON_PNG).and_then(|(rgba, size)| window.set_icon(&rgba, size));
+            let _ = window.set_icon_png(ARA_ICON_PNG);
             Ok(window)
         }
     }
@@ -121,6 +121,13 @@ impl Window {
         let updated = unsafe { SDL_SetWindowTitle(self.handle, title.as_ptr()) };
         ensure!(updated, "SDL title: {}", error());
         Ok(())
+    }
+
+    /// Set a program's native icon from an 8-bit RGBA PNG (embedded or project supplied).
+    /// Platforms without native window icons may reject this cosmetic operation.
+    pub fn set_icon_png(&self, png: &[u8]) -> Result<()> {
+        let (rgba, size) = decode_icon(png)?;
+        self.set_icon(&rgba, size)
     }
 
     /// Set the title-bar and taskbar icon from straight-alpha RGBA8 pixels (`size` = width, height).
@@ -439,6 +446,38 @@ impl Drop for Window {
 }
 #[cfg(test)]
 mod tests {
+    const PROGRAM_ICONS: [&[u8]; 3] = [
+        include_bytes!("../../../assets/brand/icons/engine/ara-engine-64.png"),
+        include_bytes!("../../../assets/brand/icons/game/ara-game-64.png"),
+        include_bytes!("../../../assets/brand/icons/hub/ara-hub-64.png"),
+    ];
+
+    #[test]
+    fn program_icons_decode_to_distinct_64px_rgba() {
+        let icons = PROGRAM_ICONS.map(|png| super::decode_icon(png).expect("program icon decodes"));
+        for (rgba, size) in &icons {
+            assert_eq!(*size, [64, 64]);
+            assert_eq!(rgba.len(), 64 * 64 * 4);
+        }
+        assert_ne!(icons[0], icons[1]);
+        assert_ne!(icons[0], icons[2]);
+        assert_ne!(icons[1], icons[2]);
+    }
+
+    #[test]
+    #[ignore = "hidden SDL window; run explicitly on the desktop host"]
+    fn hidden_window_accepts_program_icons_and_custom_override() -> anyhow::Result<()> {
+        let window = super::Window::hidden("Program icon verification", [64, 64])?;
+        for png in PROGRAM_ICONS {
+            window.set_icon_png(png)?;
+        }
+        window.set_icon(&[255; 16 * 16 * 4], [16, 16])?;
+        // SAFETY: This test owns the live window on its creating thread.
+        let flags = unsafe { sdl3_sys::video::SDL_GetWindowFlags(window.handle) };
+        assert_ne!((flags & sdl3_sys::video::SDL_WINDOW_HIDDEN).0, 0);
+        Ok(())
+    }
+
     #[test]
     fn ara_icon_decodes_to_64px_rgba() {
         let (rgba, size) = super::decode_icon(super::ARA_ICON_PNG).expect("embedded icon decodes");

@@ -21,8 +21,7 @@ files. The same World, input mapper, animation/physics and presenters run both m
 `--read entity.Component.field` adds a value to `ARA_RESULT.reads` after simulation;
 repeat it to inspect shipped C# or Rust component fields. Shipping hosts resolve their
 NativeAOT metadata against the export folder; development host paths are rejected.
-Only pooled Play requires the owner token. `build.rs` embeds the Ara
-exe icon (`assets/brand/ara.ico`); ara-platform sets the window icon.
+Only pooled Play requires the owner token. `build.rs` embeds `assets/brand/icons/game/ara-game.rc`; window creation sets the game 64 px PNG. Exported players retain this default; projects can override with `Window::set_icon`.
 
 Build with `--features tracy` to record literal CPU zones across Play world build, extraction, native instance updates, GPU recording/timeline waits, presentation
 and audio. The optional client starts in the executable; normal builds erase zones.

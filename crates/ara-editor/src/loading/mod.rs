@@ -296,6 +296,10 @@ impl Splash {
         // Its own title: the main window is found by its title (`Native::attach`).
         let title = format!("Opening {project} | Ara");
         let window = Window::hidden(&title, [view::WIDTH as u32, view::BASE_HEIGHT as u32])?;
+        // Native icons are cosmetic; Wayland may not support them.
+        let _ = window.set_icon_png(include_bytes!(
+            "../../../../assets/brand/icons/engine/ara-engine-64.png"
+        ));
         let dpi = capture.map_or_else(|| window.display_scale(), |(_, dpi)| dpi);
         let size = [view::WIDTH, view::BASE_HEIGHT];
         let gpu = crate::gpu::open_presentation(&window.extensions()?)?;

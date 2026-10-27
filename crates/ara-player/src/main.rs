@@ -10,6 +10,8 @@ mod device;
 mod embed;
 mod game_app;
 mod game_ui;
+#[cfg(all(test, windows))]
+mod icon_tests;
 mod input;
 mod net;
 mod packed;

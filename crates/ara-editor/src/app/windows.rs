@@ -94,6 +94,10 @@ impl Floats {
             } else {
                 Window::floating(&title, rect, main)?
             };
+            // Native icons are cosmetic; Wayland may not support them.
+            let _ = window.set_icon_png(include_bytes!(
+                "../../../../assets/brand/icons/engine/ara-engine-64.png"
+            ));
             crate::native::frame::style(window.raw(), editor.state.light);
             // SAFETY: The shared device and the new window outlive this presentation.
             let present =

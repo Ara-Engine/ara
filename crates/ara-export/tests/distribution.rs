@@ -75,8 +75,32 @@ fn appimage_embeds_and_verifies_nested_payloads_on_the_build_host() {
     std::fs::write(&runtime, &header).unwrap();
     let image = root.path().join("game.AppImage");
     distribution::appimage(&build, &runtime, &image).unwrap();
-    let bytes = std::fs::read(image).unwrap();
+    let bytes = std::fs::read(&image).unwrap();
     assert_eq!(&bytes[..4096], header);
     assert_eq!(&bytes[4096..4100], b"hsqs");
     assert!(bytes.len() > 4096);
+    let fs = backhand::FilesystemReader::from_reader_with_offset(
+        std::io::BufReader::new(std::fs::File::open(image).unwrap()),
+        4096,
+    )
+    .unwrap();
+    for name in ["ara-game.svg", ".DirIcon"] {
+        let node = fs
+            .files()
+            .find(|node| node.fullpath == std::path::Path::new("/").join(name))
+            .unwrap();
+        let backhand::InnerNode::File(file) = &node.inner else {
+            panic!("{name} must be a file");
+        };
+        let mut icon = Vec::new();
+        fs.file(file)
+            .reader_checked()
+            .unwrap()
+            .read_to_end(&mut icon)
+            .unwrap();
+        assert_eq!(
+            icon,
+            include_bytes!("../../../assets/brand/icons/game/ara-game.svg")
+        );
+    }
 }
