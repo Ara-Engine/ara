@@ -1,4 +1,5 @@
 //! SDL event loop and same-device native UI/scene composition.
+mod asset_ops_verify;
 mod assets_verify;
 mod boundary_verify;
 mod capture;
@@ -9,9 +10,12 @@ mod cursors;
 mod diagnostics_verify;
 mod drags;
 mod eyedropper;
+mod file_picker;
 mod game;
 mod game_preview;
 mod history_verify;
+mod import_drops;
+mod import_verify;
 mod input_verify;
 mod journey;
 mod monkey;
@@ -21,6 +25,7 @@ mod panels_verify;
 mod play_verify;
 mod prefab_verify;
 mod qa;
+mod reachability_verify;
 mod responsiveness;
 mod scene_quality;
 mod scene_sync;
@@ -346,6 +351,8 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
         None
     };
     let mut navigation_check = None;
+    let mut import_check = None;
+    let mut asset_ops_check = None;
     let mut selection_check = None;
     let mut snapping_check = None;
     let mut input_check = None;
@@ -353,6 +360,7 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
     let mut history_check = None;
     let mut prefab_check = None;
     let mut diagnostics_check = None;
+    let mut reachability_check = None;
     let mut play_check = None;
     let mut monkey_input = monkey::native::Adapter::default();
     if panel_verification.is_some()
@@ -365,10 +373,8 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
         shell.rebuild(&mut editor)?;
     }
 
-    let (import_send, imports) = std::sync::mpsc::channel::<PathBuf>();
-    if let Ok(mut guard) = IMPORTS.lock() {
-        *guard = Some(import_send);
-    }
+    let (import_send, imports) = std::sync::mpsc::channel::<file_picker::Selection>();
+    let mut import_drops = import_drops::ImportDrops::default();
     let result = (|| -> ara_ui::Result<()> {
         let mut last_revision = editor.host.store().revision();
         let mut last_view = editor.view_revision;
@@ -470,6 +476,41 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
             if content_drags
                 .as_ref()
                 .is_some_and(content_drags::ContentDrags::finished)
+                && import_check.is_none()
+            {
+                import_check = Some(import_verify::ImportCheck::new(
+                    &mut editor,
+                    &options.output,
+                )?);
+            }
+            if let Some(check) = &mut import_check {
+                let scale = crate::native::points_to_logical(window.raw(), main_dpi);
+                check.inject(
+                    &mut editor,
+                    &mut shell,
+                    &window,
+                    scale,
+                    &floats,
+                    &mut events,
+                )?;
+            }
+            if import_check
+                .as_ref()
+                .is_some_and(import_verify::ImportCheck::finished)
+                && asset_ops_check.is_none()
+            {
+                asset_ops_check = Some(asset_ops_verify::AssetOpsCheck::new(
+                    &mut editor,
+                    &options.output,
+                )?);
+            }
+            if let Some(check) = &mut asset_ops_check {
+                let scale = crate::native::points_to_logical(window.raw(), main_dpi);
+                check.inject(&mut editor, &mut shell, &window, scale, &mut events)?;
+            }
+            if asset_ops_check
+                .as_ref()
+                .is_some_and(asset_ops_verify::AssetOpsCheck::finished)
                 && navigation_check.is_none()
             {
                 navigation_check = Some(navigation_verify::NavigationCheck::new(
@@ -600,6 +641,20 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
             if diagnostics_check
                 .as_ref()
                 .is_some_and(diagnostics_verify::DiagnosticsCheck::finished)
+                && reachability_check.is_none()
+            {
+                reachability_check = Some(reachability_verify::ReachabilityCheck::new(
+                    &mut editor,
+                    &options.output,
+                )?);
+            }
+            if let Some(check) = &mut reachability_check {
+                let scale = crate::native::points_to_logical(window.raw(), main_dpi);
+                check.inject(&mut editor, &mut shell, &window, scale, &mut events)?;
+            }
+            if reachability_check
+                .as_ref()
+                .is_some_and(reachability_verify::ReachabilityCheck::finished)
                 && play_check.is_none()
             {
                 play_check = Some(play_verify::PlayCheck::new(&mut editor, &options.output)?);
@@ -622,6 +677,7 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
                     &gpu,
                     &view,
                     &scene_view,
+                    &mut import_drops,
                 )?;
                 dirty |= changed;
                 scene_dirty |= changed;
@@ -672,6 +728,7 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
                     &view,
                     &scene_view,
                     event_clipboard,
+                    &mut import_drops,
                 );
                 match routed {
                     Ok((ui, scene, close)) => {
@@ -786,8 +843,17 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
                         }
                         crate::shell::WindowRequest::Gather => floats.gather(&window)?,
                         crate::shell::WindowRequest::Import => {
+                            let folder = shell
+                                .import_picker_folder
+                                .take()
+                                .unwrap_or_else(|| editor.state.asset_folder.clone());
                             if !offscreen {
-                                import_dialog(&window, &editor);
+                                file_picker::show(
+                                    &window,
+                                    editor.host.root(),
+                                    folder,
+                                    import_send.clone(),
+                                );
                             }
                         }
                         crate::shell::WindowRequest::Quit => {
@@ -799,11 +865,42 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
                 }
                 dirty = true;
             }
-            for path in imports.try_iter() {
-                if let Err(error) = import_file(&mut editor, &path) {
-                    editor.report_failure(&*error);
+            for selection in imports.try_iter() {
+                match selection {
+                    file_picker::Selection::Files {
+                        sources,
+                        destination,
+                    } => {
+                        for source in sources {
+                            import_drops.push(source, destination.clone());
+                        }
+                    }
+                    file_picker::Selection::Cancelled => {}
+                    file_picker::Selection::Failed(message) => {
+                        let error: Box<dyn std::error::Error> = message.into();
+                        editor.report_failure(&*error);
+                    }
                 }
                 dirty = true;
+            }
+            match import_drops.frame(&editor, &mut shell, &window, main_dpi, &floats, dt) {
+                Ok(changed) => {
+                    dirty |= changed;
+                    for float in &mut floats.windows {
+                        float.dirty |= changed;
+                    }
+                }
+                Err(error) => {
+                    editor.report_failure(&*error);
+                    dirty = true;
+                }
+            }
+            match import_drops.flush_authored(&mut shell) {
+                Ok(count) => dirty |= count > 0,
+                Err(error) => {
+                    editor.report_failure(&*error);
+                    dirty = true;
+                }
             }
             dirty |= shell.poll_dialogs(&mut editor)?;
             if let Some(text) = shell.take_clipboard() {
@@ -860,6 +957,32 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
             let tick_at = Instant::now();
             server.pump(&mut editor);
             editor.tick();
+            match shell.poll_reachability(&mut editor) {
+                Ok(changed) => dirty |= changed,
+                Err(error) => {
+                    editor.report_failure(&*error);
+                    dirty = true;
+                }
+            }
+            match shell.poll_hierarchy_filters(&mut editor) {
+                Ok(changed) => dirty |= changed,
+                Err(error) => {
+                    editor.report_failure(&*error);
+                    dirty = true;
+                }
+            }
+            for result in [
+                shell.poll_asset_imports(&mut editor),
+                shell.poll_asset_operations(&mut editor),
+            ] {
+                match result {
+                    Ok(changed) => dirty |= changed,
+                    Err(error) => {
+                        editor.report_failure(&*error);
+                        dirty = true;
+                    }
+                }
+            }
             match shell.poll_play_job(&mut editor) {
                 Ok(true) => {
                     shell.rebuild(&mut editor)?;
@@ -1183,11 +1306,16 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
                 shell.rebuild(&mut editor)?;
             }
             let mut work = shell.frame()?;
+            if shell.file_drag_pending() {
+                shell.refresh_file_drag_feedback(&editor);
+                work += shell.frame()?;
+            }
             // Resolve Scene geometry only after every native surface has settled.
             // A detached Scene shares the existing scene/render authority.
             for float in &mut floats.windows {
                 if shell.enter(&float.id) {
                     let frame = shell.frame()?;
+                    shell.refresh_file_drag_feedback(&editor);
                     shell.orient_axis(editor.state.camera);
                     work += frame;
                     work += shell.frame()?;
@@ -1642,6 +1770,12 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
                     verification_scene_ready(&renderer, &scene_view, &editor, last_revision),
                 )?;
             }
+            if let Some(check) = &mut import_check {
+                check.end(&editor, &mut shell, &mut gpu)?;
+            }
+            if let Some(check) = &mut asset_ops_check {
+                check.end(&editor, &mut shell, &mut gpu)?;
+            }
             if let Some(check) = &mut navigation_check {
                 let scene_ready =
                     verification_scene_ready(&renderer, &scene_view, &editor, last_revision);
@@ -1684,6 +1818,9 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
                     &mut gpu,
                     frame_start.elapsed().as_secs_f64() * 1000.,
                 )?;
+            }
+            if let Some(check) = &mut reachability_check {
+                check.end(&editor, &shell, &mut gpu)?;
             }
             if let Some(check) = &mut play_check {
                 check.end(&editor, &shell, &mut gpu)?;
@@ -1764,6 +1901,28 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
             }
         }
         if options.verify_behaviours {
+            let check = import_check
+                .as_ref()
+                .ok_or("The OS import journey did not start")?;
+            check.write()?;
+            if !check.finished() || !check.failures().is_empty() {
+                return Err(format!(
+                    "Native OS import journey failed: {}",
+                    check.failures().join(", ")
+                )
+                .into());
+            }
+            let check = asset_ops_check
+                .as_ref()
+                .ok_or("The Assets operation journey did not start")?;
+            check.write()?;
+            if !check.finished() || !check.failures().is_empty() {
+                return Err(format!(
+                    "Native Assets operation journey failed: {}",
+                    check.failures().join(", ")
+                )
+                .into());
+            }
             let check = snapping_check
                 .as_ref()
                 .ok_or("The snapping journey did not start")?;
@@ -1808,17 +1967,6 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
                 )
                 .into());
             }
-            let check = history_check
-                .as_ref()
-                .ok_or("The History journey did not start")?;
-            check.write()?;
-            if !check.finished() || !check.failures().is_empty() {
-                return Err(format!(
-                    "Native History journey failed: {}",
-                    check.failures().join(", ")
-                )
-                .into());
-            }
             let check = prefab_check
                 .as_ref()
                 .ok_or("The prefab journey did not start")?;
@@ -1841,6 +1989,17 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
                 )
                 .into());
             }
+            let check = history_check
+                .as_ref()
+                .ok_or("The History journey did not start")?;
+            check.write()?;
+            if !check.finished() || !check.failures().is_empty() {
+                return Err(format!(
+                    "Native History journey failed: {}",
+                    check.failures().join(", ")
+                )
+                .into());
+            }
         }
         if options.verify_behaviours {
             let check = diagnostics_check
@@ -1850,6 +2009,17 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
             if !check.finished() || !check.failures().is_empty() {
                 return Err(format!(
                     "Native diagnostics journey failed: {}",
+                    check.failures().join(", ")
+                )
+                .into());
+            }
+            let check = reachability_check
+                .as_ref()
+                .ok_or("The reachability journey did not start")?;
+            check.write()?;
+            if !check.finished() || !check.failures().is_empty() {
+                return Err(format!(
+                    "Native reachability journey failed: {}",
                     check.failures().join(", ")
                 )
                 .into());
@@ -2061,6 +2231,7 @@ fn route_event(
     view: &crate::world::DocumentView,
     scene_view: &viewport::SceneView,
     clipboard: &mut dyn ara_ui_text::Clipboard,
+    import_drops: &mut import_drops::ImportDrops,
 ) -> ara_ui::Result<(bool, bool, bool)> {
     if matches!(
         event,
@@ -2071,9 +2242,14 @@ fn route_event(
     if shell.game_captured && (shell.modal_active() || shell.choice_open()) {
         game_input(&Event::FocusLost, editor, shell, dpi);
     }
-    if let Event::FileDrop { path, .. } = &event {
-        import_file(editor, path)?;
-        return Ok((true, true, false));
+    if matches!(event, Event::FileDropBegin) && shell.game_captured {
+        game_input(&Event::FocusLost, editor, shell, dpi);
+    }
+    if import_drops.event(&event, sdl, editor, shell, window, dpi, floats)? {
+        for float in &mut floats.windows {
+            float.dirty = true;
+        }
+        return Ok((true, false, false));
     }
     if !shell.tab_pending()
         && !shell.content_pending()
@@ -2399,72 +2575,6 @@ fn panels_of(node: &ara_ui::docking::DockNode) -> Vec<String> {
             out
         }
     }
-}
-/// Files chosen in the OS import dialog; SDL may call back on another thread.
-static IMPORTS: std::sync::Mutex<Option<std::sync::mpsc::Sender<PathBuf>>> =
-    std::sync::Mutex::new(None);
-/// Show the OS open-file dialog; chosen files arrive on the import channel.
-fn import_dialog(window: &Window, editor: &Editor) {
-    unsafe extern "C" fn chosen(
-        _: *mut std::ffi::c_void,
-        files: *const *const std::ffi::c_char,
-        _: std::ffi::c_int,
-    ) {
-        if files.is_null() {
-            return;
-        }
-        // SAFETY: SDL passes a null-terminated array of UTF-8 paths valid for this call.
-        unsafe {
-            let mut at = files;
-            while !(*at).is_null() {
-                let path =
-                    PathBuf::from(std::ffi::CStr::from_ptr(*at).to_string_lossy().into_owned());
-                if let Ok(guard) = IMPORTS.lock()
-                    && let Some(send) = guard.as_ref()
-                {
-                    let _ = send.send(path);
-                }
-                at = at.add(1);
-            }
-        }
-    }
-    let folder = std::ffi::CString::new(
-        editor
-            .host
-            .root()
-            .join(&editor.state.asset_folder)
-            .to_string_lossy()
-            .into_owned(),
-    )
-    .ok();
-    // SAFETY: The window is live; SDL copies the location and calls back on the main thread.
-    unsafe {
-        sdl3_sys::dialog::SDL_ShowOpenFileDialog(
-            Some(chosen),
-            std::ptr::null_mut(),
-            window.raw(),
-            std::ptr::null(),
-            0,
-            folder.as_ref().map_or(std::ptr::null(), |f| f.as_ptr()),
-            true,
-        );
-    }
-}
-/// Copy an external file into the current asset folder and import it.
-fn import_file(editor: &mut Editor, source: &std::path::Path) -> ara_ui::Result<()> {
-    let name = source.file_name().ok_or("import path has no file name")?;
-    let folder = editor.state.asset_folder.clone();
-    let relative = if folder.is_empty() {
-        name.to_string_lossy().into_owned()
-    } else {
-        format!("{folder}/{}", name.to_string_lossy())
-    };
-    let destination = editor.host.root().join(&relative);
-    if destination != source {
-        std::fs::copy(source, &destination)?;
-    }
-    editor.action("editor.asset.import", json!({"path": relative}))?;
-    Ok(())
 }
 /// While the Game view holds the keyboard and mouse, raw input goes to the shown Play
 /// client (the player maps it exactly like its own window). Esc, or pressing outside

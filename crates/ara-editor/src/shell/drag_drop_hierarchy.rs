@@ -1,7 +1,8 @@
 //! Validate hierarchy gestures and lower selection roots to one ordered command batch.
+use crate::shell::hierarchy_actions::{preserved_transform, selection_roots};
 use ara_doc::prefab::Resolved;
 use ara_ui::drag_drop::Placement;
-use glam::{EulerRot, Mat4};
+use glam::Mat4;
 use serde_json::{Value, json};
 use std::collections::BTreeSet;
 
@@ -64,41 +65,7 @@ pub(super) fn commands(
     if selected.iter().any(|id| locked.contains(*id)) {
         return Err("Unlock the selected entities before moving them".into());
     }
-    // Sort only the selected paths, not the entire scene. Their ancestor order keys
-    // establish tree display order without rescanning every sibling group per pointer move.
-    let mut roots = Vec::new();
-    for &id in &selected {
-        if id.contains('/') {
-            return Err("Move the prefab instance instead of an entity inside it".into());
-        }
-        let mut ancestor = Some(id);
-        let mut seen = BTreeSet::new();
-        let mut path = Vec::new();
-        let mut covered = false;
-        while let Some(current) = ancestor {
-            if !seen.insert(current) {
-                return Err("The hierarchy contains a parent cycle".into());
-            }
-            if current != id && selected.contains(current) {
-                covered = true;
-                break;
-            }
-            let entity = resolved
-                .get(current)
-                .ok_or("A selected entity has a missing parent")?;
-            path.push((&entity.order, current));
-            ancestor = entity.parent.as_deref();
-        }
-        if !covered {
-            path.reverse();
-            roots.push((path, id));
-        }
-    }
-    roots.sort_by(|(a, _), (b, _)| a.cmp(b));
-    let roots: Vec<_> = roots.into_iter().map(|(_, id)| id).collect();
-    if roots.is_empty() {
-        return Err("No movable entities are selected".into());
-    }
+    let roots = selection_roots(resolved, &selected)?;
     let (parent, index) = destination(resolved, target, placement)?;
     if target.is_some_and(|target| selected.contains(target)) {
         return Err("Drop beside an unselected row or inside another entity".into());
@@ -137,31 +104,7 @@ pub(super) fn commands(
         {
             None
         } else {
-            if !parent_world.is_finite() || parent_world.determinant().abs() < 1e-20 {
-                return Err("The destination has a singular transform; restore a nonzero scale before reparenting".into());
-            }
-            let world = crate::world::world_transform(resolved, source)
-                .ok_or("The dragged entity was deleted")?;
-            let local = parent_world.inverse() * world;
-            if !local.is_finite() || local.determinant().abs() < 1e-20 {
-                return Err("The dragged transform cannot be preserved; restore a nonzero scale before reparenting".into());
-            }
-            let (scale, rotation, position) = local.to_scale_rotation_translation();
-            let rebuilt = Mat4::from_scale_rotation_translation(scale, rotation, position);
-            let error = local
-                .to_cols_array()
-                .into_iter()
-                .zip(rebuilt.to_cols_array())
-                .map(|(a, b)| (a - b).abs() / a.abs().max(1.))
-                .fold(0_f32, f32::max);
-            if !scale.is_finite() || !rotation.is_finite() || !position.is_finite() || error > 0.001
-            {
-                return Err("This parent would shear the object; use a parent with uniform scale to preserve its world pose".into());
-            }
-            let (x, y, z) = rotation.to_euler(EulerRot::XYZ);
-            Some(
-                json!({"cmd":"transform.set","args":{"entities":[source],"position":position.to_array(),"rotation":[x.to_degrees(),y.to_degrees(),z.to_degrees()],"scale":scale.to_array()}}),
-            )
+            Some(preserved_transform(resolved, source, parent_world)?)
         };
         if let Some(old) = destination.iter().position(|id| *id == source) {
             destination.remove(old);

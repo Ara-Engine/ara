@@ -33,6 +33,7 @@ pub const ATTRIBUTES: &[&str] = &[
     "id",
     "class",
     "text",
+    "placeholder",
     "style",
     "bind",
     "action",

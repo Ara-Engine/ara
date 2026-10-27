@@ -62,6 +62,18 @@ pub enum Event {
     },
     /// Mouse wheel motion.
     Wheel([f32; 2]),
+    /// Begin one native file-drop batch. Files and completion may arrive in later polls.
+    /// SDL does not provide a valid pointer position on this event.
+    FileDropBegin,
+    /// Native drag position while files hover over an application window.
+    FileDropPosition {
+        /// Pointer position in window coordinates, converted by the host like mouse input.
+        position: [f32; 2],
+    },
+    /// Finish one native file-drop batch at its last tagged Position/FileDrop.
+    /// SDL's completion coordinates are global cached values, not a fresh position.
+    /// A batch without files represents a leave or cancelled native operation.
+    FileDropComplete,
     /// An OS file released onto a native window. Import policy belongs to the host.
     FileDrop {
         /// Owned file-system path; SDL's temporary event string is copied during polling.
@@ -438,6 +450,17 @@ impl Window {
                             pressed: ty == SDL_EVENT_MOUSE_BUTTON_DOWN.0,
                         },
                     ));
+                } else if ty == SDL_EVENT_DROP_BEGIN.0 {
+                    events.push((e.drop.windowID.0, Event::FileDropBegin));
+                } else if ty == SDL_EVENT_DROP_POSITION.0 {
+                    events.push((
+                        e.drop.windowID.0,
+                        Event::FileDropPosition {
+                            position: [e.drop.x, e.drop.y],
+                        },
+                    ));
+                } else if ty == SDL_EVENT_DROP_COMPLETE.0 {
+                    events.push((e.drop.windowID.0, Event::FileDropComplete));
                 } else if ty == SDL_EVENT_DROP_FILE.0 && !e.drop.data.is_null() {
                     // SDL3 owns temporary drop strings until the next event pump. Copy now;
                     // unlike SDL2, freeing this pointer would double-free SDL's storage.

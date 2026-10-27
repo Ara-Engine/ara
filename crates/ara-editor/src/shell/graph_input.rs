@@ -23,22 +23,28 @@ impl Shell {
         editor: &mut Editor,
         domain: &str,
     ) -> ara_ui::Result<()> {
-        let folder = &editor.state.asset_folder;
+        let folder = self
+            .browser
+            .authored_folder_ref(&editor.state.asset_folder)?;
         let extension = if domain == "animation" {
             "animation"
         } else {
             "graph"
         };
-        let path = format!(
-            "{}{domain}-{}.{}",
-            if folder.is_empty() {
-                String::new()
-            } else {
-                format!("{folder}/")
-            },
-            editor.host.store().revision(),
-            extension
-        );
+        let first = editor.host.store().revision();
+        let path = (first..first.saturating_add(10_000))
+            .map(|number| {
+                let leaf = format!("{domain}-{number}.{extension}");
+                if folder.is_empty() {
+                    leaf
+                } else {
+                    format!("{folder}/{leaf}")
+                }
+            })
+            .find(|path| {
+                ops::authored::available(&self.browser.files, editor.host.store().workspace(), path)
+            })
+            .ok_or("No unused resource name in this authored folder")?;
         let result = editor.action(
             "editor.resource.create",
             json!({"path":path,"domain":domain}),

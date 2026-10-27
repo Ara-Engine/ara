@@ -23,6 +23,25 @@ fn accepted() -> Feedback<&'static str> {
         label: "Move inside".into(),
     }
 }
+#[test]
+fn external_drag_is_active_without_synthetic_motion_and_rejects_nonfinite_pointers() {
+    let at = pointer(2, [12., 20.], [312., 220.]);
+    let mut external = DragSession::external("native files", at).expect("finite native pointer");
+    assert!(external.active());
+    external.preview(accepted());
+    assert_eq!(
+        external.finish().expect("accepted native release").pointer,
+        at
+    );
+    let mut invalid = at;
+    invalid.local[0] = f32::NAN;
+    assert!(DragSession::<(), ()>::external((), invalid).is_none());
+    invalid = at;
+    invalid.desktop[1] = f32::INFINITY;
+    assert!(DragSession::<(), ()>::external((), invalid).is_none());
+    let regular = DragSession::<(), ()>::begin((), at).expect("finite press");
+    assert!(!regular.active());
+}
 
 #[test]
 fn press_is_a_click_until_threshold_and_once_active_stays_active() {

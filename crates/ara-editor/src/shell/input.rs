@@ -247,6 +247,10 @@ impl Shell {
                             rename.name = action.value.as_str().unwrap_or("").into();
                         }
                     }
+                    Binding::AssetFile(action_kind) => {
+                        self.asset_file_action(editor, action_kind, action.value)?;
+                        rebuild = true;
+                    }
                     Binding::AssetFolder(path, arrow) => {
                         self.asset_folder_action(editor, path, *arrow)?;
                         rebuild = true;

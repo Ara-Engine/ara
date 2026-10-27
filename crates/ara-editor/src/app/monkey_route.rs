@@ -18,6 +18,7 @@ pub(super) fn step(
     gpu: &NativeUi,
     view: &crate::world::DocumentView,
     scene_view: &viewport::SceneView,
+    import_drops: &mut import_drops::ImportDrops,
 ) -> ara_ui::Result<bool> {
     let main = monkey::native::Surface {
         id: None,
@@ -64,6 +65,7 @@ pub(super) fn step(
                     view,
                     scene_view,
                     clipboard,
+                    import_drops,
                 )?;
             }
             Ok(())

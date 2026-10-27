@@ -5,7 +5,10 @@ mod proof;
 use crate::{
     Editor,
     gpu::NativeUi,
-    shell::{Shell, toolkit_verify::Host},
+    shell::{
+        Shell,
+        toolkit_verify::{DialogKind, Host},
+    },
 };
 use ara_platform::{Event, Window};
 use ara_ui::paint::Box2;
@@ -234,12 +237,19 @@ impl InputCheck {
             }
             (Act::Stack, 1) => native::tap(window, 59, events)?,
             (Act::Unstack, 1) => native::tap(window, 41, events)?,
-            (Act::PromptAccept, 1) => click(shell, window, scale, "kit-dialog-1-field", events)?,
+            (Act::PromptAccept, 1) => click(
+                shell,
+                window,
+                scale,
+                &proof::dialog_control(shell, DialogKind::Prompt, "field")?,
+                events,
+            )?,
             (Act::PromptAccept, 2) => replace(window, "Saved prompt ✓", events)?,
             (Act::PromptAccept, 3) => native::tap(window, 40, events)?,
             (Act::LongNote, 1) => click(shell, window, scale, "kit-open-note", events)?,
             (Act::LongNote, 2) => {
-                native::motion(window, point(shell, "kit-dialog-3-scroll")?, scale, events)?
+                let scroll = proof::dialog_control(shell, DialogKind::Note, "scroll")?;
+                native::motion(window, point(shell, &scroll)?, scale, events)?
             }
             (Act::LongNote, 3) => native::wheel(window, -10_000., events)?,
             (Act::NoteClose, 1) => native::tap(window, 41, events)?,

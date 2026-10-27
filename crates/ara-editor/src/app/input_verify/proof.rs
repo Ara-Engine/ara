@@ -1,4 +1,4 @@
-use super::{Act, PREEDIT, UNICODE};
+use super::{Act, DialogKind, PREEDIT, UNICODE};
 use crate::shell::Shell;
 use ara_ui::{paint::Box2, source::stable_id, widgets::Widget};
 use serde_json::{Value, json};
@@ -16,7 +16,21 @@ fn host(shell: &Shell) -> Value {
     shell
         .toolkit_verify
         .as_ref()
-        .map_or(Value::Null, |host| host.snapshot())
+        .map_or(Value::Null, |host| host.snapshot(&shell.ui))
+}
+
+fn dialog(shell: &Shell, kind: DialogKind) -> Option<&str> {
+    shell.toolkit_verify.as_ref()?.dialog_id(&shell.ui, kind)
+}
+
+pub(super) fn dialog_control(
+    shell: &Shell,
+    kind: DialogKind,
+    suffix: &str,
+) -> ara_ui::Result<String> {
+    let id = dialog(shell, kind)
+        .ok_or("J14 requested dialog is not mounted; inspect the recorded host/model state")?;
+    Ok(format!("{id}-{suffix}"))
 }
 
 pub(super) fn snapshot(shell: &Shell) -> Value {
@@ -74,6 +88,8 @@ pub(super) fn checks(
     initial_focus: Option<u64>,
 ) -> Vec<Value> {
     let state = host(shell);
+    let prompt = dialog(shell, DialogKind::Prompt);
+    let note = dialog(shell, DialogKind::Note);
     let mut checks = Vec::new();
     let mut check = |label: &str, ok: bool| checks.push(json!({"check":label,"ok":ok}));
     match act {
@@ -194,47 +210,52 @@ pub(super) fn checks(
         Act::Prompt => {
             check(
                 "prompt holds typed Unicode",
-                text(shell, "kit-dialog-1-field") == Some("Prompt ✓"),
+                prompt.is_some_and(|id| text(shell, &format!("{id}-field")) == Some("Prompt ✓")),
             );
             check(
                 "repeated Tab remains trapped in the real prompt scope",
-                state["dialogCount"] == 1 && scope_only(shell, "kit-dialog-1-"),
+                state["dialogCount"] == 1
+                    && prompt.is_some_and(|id| scope_only(shell, &format!("{id}-"))),
             );
             check(
                 "Tab cycles all three prompt controls in document order",
-                shell.input.focused() == Some(stable_id("kit-dialog-1-cancel")),
+                prompt.is_some_and(|id| {
+                    shell.input.focused() == Some(stable_id(&format!("{id}-cancel")))
+                }),
             );
             check(
                 "long wrapping prompt fits the viewport",
-                dialog_bounded(shell, "kit-dialog-1-body"),
+                prompt.is_some_and(|id| dialog_bounded(shell, &format!("{id}-body"))),
             );
             check(
                 "prompt notes have a visible scroll area",
-                dialog_notes_visible(shell, "kit-dialog-1"),
+                prompt.is_some_and(|id| dialog_notes_visible(shell, id)),
             );
         }
         Act::Stack => {
             check(
                 "a second shared modal traps all focus above the prompt",
-                state["dialogCount"] == 2 && scope_only(shell, "kit-dialog-2-"),
+                state["dialogCount"] == 2
+                    && note.is_some_and(|id| scope_only(shell, &format!("{id}-"))),
             );
             check(
                 "stacked long notes fit the viewport",
-                dialog_bounded(shell, "kit-dialog-2-body"),
+                note.is_some_and(|id| dialog_bounded(shell, &format!("{id}-body"))),
             );
             check(
                 "stacked notes have a visible scroll area",
-                dialog_notes_visible(shell, "kit-dialog-2"),
+                note.is_some_and(|id| dialog_notes_visible(shell, id)),
             );
             check(
                 "stacking preserves the underlying typed prompt",
-                text(shell, "kit-dialog-1-field") == Some("Prompt ✓"),
+                prompt.is_some_and(|id| text(shell, &format!("{id}-field")) == Some("Prompt ✓")),
             );
         }
         Act::Unstack => {
             check(
                 "Escape closes exactly one modal",
-                state["dialogCount"] == 1 && scope_only(shell, "kit-dialog-1-"),
+                state["dialogCount"] == 1
+                    && prompt.is_some_and(|id| scope_only(shell, &format!("{id}-"))),
             );
             check(
                 "underlying prompt restores its previous control focus",
@@ -254,23 +275,26 @@ pub(super) fn checks(
         Act::LongNote => {
             check(
                 "standalone long note owns the scope",
-                state["dialogCount"] == 1 && scope_only(shell, "kit-dialog-3-"),
+                state["dialogCount"] == 1
+                    && note.is_some_and(|id| scope_only(shell, &format!("{id}-"))),
             );
             check(
                 "long note is viewport bounded and wraps",
-                dialog_bounded(shell, "kit-dialog-3-body")
-                    && shell
-                        .ui
-                        .find("kit-dialog-3-message")
-                        .is_some_and(|i| shell.ui.nodes[i].rect.h > 100.),
+                note.is_some_and(|id| {
+                    dialog_bounded(shell, &format!("{id}-body"))
+                        && shell
+                            .ui
+                            .find(&format!("{id}-message"))
+                            .is_some_and(|i| shell.ui.nodes[i].rect.h > 100.)
+                }),
             );
             check(
                 "long notes have a visible scroll area",
-                dialog_notes_visible(shell, "kit-dialog-3"),
+                note.is_some_and(|id| dialog_notes_visible(shell, id)),
             );
             check(
                 "native wheel reveals the last line of the overflowing note",
-                dialog_notes_end_reached(shell, "kit-dialog-3"),
+                note.is_some_and(|id| dialog_notes_end_reached(shell, id)),
             );
         }
         Act::NoteClose => {

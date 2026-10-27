@@ -140,4 +140,16 @@ mod tests {
         expanded.insert("Assets".into());
         assert!(visible("Assets/Art/Models", &expanded));
     }
+    #[test]
+    fn semantic_folder_projection_keeps_authored_build_target_and_project_settings_branches() {
+        let items = vec![
+            assets::Asset::folder("game/target/builds".into(), Some("target/builds".into())),
+            assets::Asset::folder("game/packages/Art".into(), Some("packages/Art".into())),
+            assets::Asset::folder("settings/builds".into(), None),
+        ];
+        let folders = folders(&items);
+        for path in ["game/target/builds", "game/packages/Art", "settings/builds"] {
+            assert!(folders.contains(path), "{path}");
+        }
+    }
 }

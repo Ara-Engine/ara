@@ -18,6 +18,7 @@ embed-resource.workspace = true
 ara-texture-gpu = { path = "../ara-texture-gpu" }
 ara-crash = { path = "../ara-crash" }
 ara-asset = { path = "../ara-asset" }
+ara-asset-host = { path = "../ara-asset-host" }
 ara-asset-format = { path = "../ara-asset-format" }
 ara-importers = { path = "../ara-importers" }
 ara-graph = { path = "../ara-graph" }
@@ -59,6 +60,7 @@ bevy_ecs.workspace = true
 ara-ui = { path = "../ara-ui" }
 ara-ui-render = { path = "../ara-ui-render" }
 ara-ui-text = { path = "../ara-ui-text" }
+ara-update = { path = "../ara-update" }
 anyhow = { workspace = true }
 bytemuck = { workspace = true }
 glam = { workspace = true, features = ["serde", "bytemuck"] }

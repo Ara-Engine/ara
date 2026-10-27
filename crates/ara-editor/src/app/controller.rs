@@ -371,7 +371,10 @@ impl Controller {
             Event::Quit => quit = true,
             Event::Resize(_) => dirty = true,
             Event::FocusLost => {} // Lifecycle cancellation is handled before modal/viewport routing.
-            Event::FileDrop { .. } => {} // The window owner dispatches the typed import.
+            Event::FileDrop { .. }
+            | Event::FileDropBegin
+            | Event::FileDropPosition { .. }
+            | Event::FileDropComplete => {} // The window owner dispatches the typed import.
             Event::TextInput { .. } | Event::TextEditing { .. } => {}
             Event::Key {
                 scancode,

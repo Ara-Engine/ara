@@ -4,6 +4,8 @@
 //! ("surfaces"). Panel code always works on `self.ui`; [`Shell::enter`] swaps a
 //! floating surface in and [`Shell::leave`] swaps it back, so panels need not
 //! know which OS window hosts them.
+pub(crate) mod asset_import;
+mod asset_ops;
 mod assets;
 mod axis;
 pub(crate) mod build;
@@ -44,11 +46,14 @@ mod agents_panel;
 mod animation_panel;
 mod assets_panel;
 mod assets_tree;
+mod file_drag;
 mod game_panel;
 mod graph_annotations;
 mod graph_input;
 mod graph_panel;
 mod hierarchy;
+mod hierarchy_actions;
+mod hierarchy_filters;
 mod history_panel;
 mod import_panel;
 #[cfg(test)]
@@ -73,6 +78,7 @@ mod panels;
 pub(crate) mod play_controls;
 pub mod prefab_ops;
 mod profiler_panel;
+pub(crate) mod reachability;
 mod vfx_panel;
 use crate::{Editor, inspector::Field};
 use ara_ui::{
@@ -111,7 +117,13 @@ pub(crate) enum ViewportRequest {
 }
 /// Native shell and its retained widget state; no authoring document is mirrored here.
 pub struct Shell {
+    hierarchy_filters: hierarchy_filters::View,
+    reachability: reachability::State,
     history_view: history_panel::View,
+    asset_import: asset_import::State,
+    asset_ops: asset_ops::State,
+    file_drag: file_drag::State,
+    pub(crate) import_picker_folder: Option<String>,
     panel_probe: Option<panel_boundary::Probe>,
     pub(crate) viewport_request: Option<ViewportRequest>,
     pub(crate) play_controls: play_controls::State,
@@ -290,6 +302,7 @@ pub struct Shell {
     /// The picker's slider units, kept between openings.
     color_mode: color::Mode,
     modal_root: Option<&'static str>,
+    modal_return_focus: Option<u64>,
     confirmations: ara_ui::dialogs::Dialogs,
     pending_dialogs: Vec<confirm::Pending>,
     pub(crate) confirmation_bypass: bool,
@@ -452,6 +465,7 @@ pub(crate) enum Binding {
     ContextMenu(commands::menus::Context, commands::Target),
     Collection(collection_adapter::Action),
     Play(play_controls::Action),
+    AssetFile(asset_ops::Action),
     PanelRetry(String),
     Setting(String),
     SettingChoice(String, Value),
@@ -479,7 +493,13 @@ impl Shell {
         let text = text_system()?;
         let ui = Ui::editor("<ui id='editor' />", include_str!("editor.css"), size)?;
         let mut shell = Self {
+            reachability: Default::default(),
             history_view: Default::default(),
+            asset_import: Default::default(),
+            asset_ops: Default::default(),
+            hierarchy_filters: Default::default(),
+            file_drag: Default::default(),
+            import_picker_folder: None,
             viewport_request: None,
             panel_probe: None,
             play_controls: Default::default(),
@@ -550,7 +570,11 @@ impl Shell {
             explained_problems: std::collections::BTreeSet::new(),
             hierarchy_view: None,
             hierarchy_surface: None,
-            browser: assets::Browser::new(editor.host.root()),
+            browser: assets::Browser::new(
+                editor.host.root(),
+                editor.host.store().schema(),
+                editor.host.store().workspace().reference_root(),
+            ),
             imports: imports::Imports::new(editor.host.root()),
             asset_rows: names::AssetRows::default(),
             name_fit: names::NameFit::default(),
@@ -595,6 +619,7 @@ impl Shell {
             color_picker: None,
             color_mode: Default::default(),
             modal_root: None,
+            modal_return_focus: None,
             confirmations: ara_ui::dialogs::Dialogs::new("editor-confirm"),
             pending_dialogs: Vec::new(),
             confirmation_bypass: false,
@@ -1094,11 +1119,13 @@ impl Shell {
         self.overlays(editor, &mut markup)?;
         self.choice_overlays(&mut markup);
         self.asset_rename_markup(&mut markup);
+        self.asset_file_name_markup(&mut markup);
         markup.push_str(POPUP_TAIL);
         markup.push_str("</ui>");
         self.mount(editor, &markup)?;
         self.stats.work += self.ui.frame(&mut self.text)?;
         self.sync_choice_controls()?;
+        self.position_asset_file_name()?;
         if self.frame_new_graphs(editor)? {
             self.stats.work += self.ui.frame(&mut self.text)?;
         }
@@ -1176,6 +1203,7 @@ impl Shell {
             markup.push_str(&format!("<field id='entity-rename-value' style='position:absolute;left:0px;top:0px;width:180px;height:22px' text='{}' label='Entity name' action='Dispatch' />",escape(name)));
         }
         self.asset_rename_markup(&mut markup);
+        self.asset_file_name_markup(&mut markup);
         markup.push_str(POPUP_TAIL);
         markup.push_str("</ui>");
         self.mount(editor, &markup)?;
@@ -1223,6 +1251,7 @@ impl Shell {
             self.sync_choice_controls()?;
         }
         self.sync_modal_scopes(editor)?;
+        self.position_asset_file_name()?;
         if let Some(host) = &mut self.toolkit_verify {
             host.sync(&mut self.ui, &mut self.input)?;
         }
@@ -1391,6 +1420,7 @@ impl Shell {
         self.advance_tooltip()?;
         self.sync_scroll_views()?;
         self.sync_tab_ghost()?;
+        self.sync_file_drag()?;
         if let Some(start) = self.panel_opened {
             let p = (start.elapsed().as_secs_f32() / 0.14).clamp(0., 1.);
             if let Some(i) = self
@@ -1595,7 +1625,11 @@ impl Shell {
     }
     /// Compact agent layout report; glyph shaping internals stay out of capture jobs.
     pub fn layout_report(&self) -> Value {
-        json!({"size":self.ui.size,"focus":self.input.focused(),"graph":self.ui.find(&graph_panel::canvas_id(self.graph_page)).and_then(|i|self.active_graph().map(|g|g.canvas.report(self.ui.nodes[i].rect))),"nodes":self.ui.paint_order.iter().map(|i|{let n=&self.ui.nodes[*i];json!({"id":n.element.id,"stableId":ara_ui::source::stable_id(&n.element.id),"tag":n.element.tag,"box":n.rect,"clip":n.clip,"text":n.text.as_ref().map(|t|t.value.as_str()),"disabled":n.state.disabled})}).collect::<Vec<_>>()})
+        json!({"nativeFileDrag":self.file_drag_report(),"assetImports":self.asset_import_report(),"assetOperations":self.asset_operation_report(),"size":self.ui.size,"focus":self.input.focused(),"graph":self.ui.find(&graph_panel::canvas_id(self.graph_page)).and_then(|i|self.active_graph().map(|g|g.canvas.report(self.ui.nodes[i].rect))),"nodes":self.ui.paint_order.iter().map(|i|{let n=&self.ui.nodes[*i];json!({"id":n.element.id,"stableId":ara_ui::source::stable_id(&n.element.id),"tag":n.element.tag,"box":n.rect,"clip":n.clip,"text":n.text.as_ref().map(|t|t.value.as_str()),"disabled":n.state.disabled})}).collect::<Vec<_>>()})
+    }
+    /// Cached authoring prefix; empty identifies a still-readable legacy project.
+    pub(crate) fn asset_reference_root(&self) -> &str {
+        self.browser.reference_root()
     }
     /// Visible asset payload centre for scripted drags through the production drop route.
     pub fn asset_point(&self, path: &str) -> Option<[f32; 2]> {

@@ -142,7 +142,7 @@ impl Shell {
                     format!("prefabs/{slug}_{index}.prefab")
                 }
             })
-            .find(|path| !editor.host.root().join(path).exists() && workspace.find(path).is_none())
+            .find(|path| ops::authored::available(&self.browser.files, workspace, path))
             .ok_or("No unused prefab path")?;
         let variant = instance(editor.host.store(), &editor.state.doc, &root).is_some();
         let result = editor.apply(vec![json!({"cmd": if variant {"prefab.variant"} else {"prefab.create"}, "args": {"entity": root, "path": path}})], "Create prefab from selection", None)?;

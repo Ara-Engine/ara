@@ -4,6 +4,7 @@
 pub(crate) mod cooked_mesh;
 pub(crate) mod material_preview;
 pub(crate) mod node_preview;
+pub(crate) mod paths;
 mod studio;
 pub(crate) mod thumbnails;
 mod vfx_preview;
@@ -88,7 +89,7 @@ fn import_files(dir: &Path, out: &mut Vec<std::path::PathBuf>) -> std::io::Resul
 struct AssetParams {
     /// Calling editor or agent session.
     session: String,
-    /// Source media path, relative to the project.
+    /// Project-relative storage path of the source media, including its content prefix.
     path: String,
 }
 enum Event {
@@ -140,34 +141,18 @@ impl Service for AssetService {
     ) -> Result<Value, Vec<ara_diag::Diagnostic>> {
         let p: AssetParams = parse(params)?;
         let _ = &p.session;
-        let relative = Path::new(&p.path);
-        if p.path.contains(':')
-            || p.path.contains('\\')
-            || relative
-                .components()
-                .any(|c| !matches!(c, std::path::Component::Normal(_)))
-        {
-            return Err(vec![crate::invalid("source path must stay in the project")]);
-        }
-        let sidecar = format!("{}.import.json", p.path);
+        let logical = paths::source(cx.store().workspace(), &p.path)
+            .map_err(|message| vec![crate::invalid(message)])?;
         if method == "editor.asset.import"
-            && !cx
-                .store()
-                .workspace()
-                .docs()
-                .any(|(path, _)| path == sidecar)
+            && paths::import_document(cx.store().workspace(), logical).is_none()
         {
             // The shared command picks the importer and its installed version.
             let batch = parse(
-                json!({"session":p.session,"why":"Import source media","commands":[{"cmd":"import.initialize","args":{"source":p.path,"preset":"fast"}}]}),
+                json!({"session":p.session,"why":"Import source media","commands":[{"cmd":"import.initialize","args":{"source":logical,"preset":"fast"}}]}),
             )?;
             cx.apply(batch)?;
         }
-        let doc = cx
-            .store()
-            .workspace()
-            .docs()
-            .find_map(|(path, doc)| (path == sidecar).then_some(doc));
+        let doc = paths::import_document(cx.store().workspace(), logical);
         let settings = doc
             .and_then(|d| d.record("i_settings"))
             .map(|r| serde_json::from_value::<ImportSettings>(Value::Object(r.clone())))

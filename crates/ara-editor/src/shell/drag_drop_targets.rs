@@ -16,6 +16,30 @@ impl Shell {
                 continue;
             };
             let indicator = Indicator::Inside(node.rect.intersection(node.clip));
+            if let Payload::Asset(asset) = payload {
+                let folder = match binding {
+                    Binding::AssetFolder(path, false) => Some(path.as_str()),
+                    Binding::Asset(folder) if folder.kind == "folder" => Some(folder.path.as_str()),
+                    Binding::Protocol("editor.workspace", params) => {
+                        params.get("folder").and_then(Value::as_str)
+                    }
+                    _ => None,
+                };
+                if let Some(folder) = folder {
+                    return Ok(match self.asset_move_preflight(asset, folder) {
+                        Ok(()) => accept(
+                            Target::AssetFolder(folder.into()),
+                            indicator,
+                            if folder.is_empty() {
+                                "Move to authored root".into()
+                            } else {
+                                format!("Move into {}", names::file_name(folder))
+                            },
+                        ),
+                        Err(reason) => reject(reason, Some(indicator)),
+                    });
+                }
+            }
             if let Payload::Entity(entity) = payload
                 && let Some(path) = self.entity_drop_field(binding)
             {
@@ -75,6 +99,26 @@ impl Shell {
                     });
                 }
                 _ => {}
+            }
+        }
+        if let Payload::Asset(asset) = payload {
+            for id in ["asset-grid", "asset-rows", "assets-empty"] {
+                if let Some(index) = self.shown_node(id) {
+                    let node = &self.ui.nodes[index];
+                    if node.rect.contains(x, y) && node.clip.contains(x, y) {
+                        let indicator = Indicator::Inside(node.rect.intersection(node.clip));
+                        return Ok(
+                            match self.asset_move_preflight(asset, &editor.state.asset_folder) {
+                                Ok(()) => accept(
+                                    Target::AssetFolder(editor.state.asset_folder.clone()),
+                                    indicator,
+                                    "Move into this folder",
+                                ),
+                                Err(reason) => reject(reason, Some(indicator)),
+                            },
+                        );
+                    }
+                }
             }
         }
         if let Payload::Collection(source) = payload {

@@ -81,7 +81,9 @@ impl Shell {
                 .iter()
                 .filter(|d| matches(d) && (category.is_empty() || d.category == category))
             {
-                if matches!(d.kind, Kind::Map) && d.key != "play.networkProfiles" {
+                if matches!(d.kind, Kind::Map)
+                    && !matches!(d.key, "play.networkProfiles" | "hierarchy.filters")
+                {
                     continue;
                 }
                 if heading != d.category {
@@ -185,6 +187,15 @@ impl Shell {
             Kind::Map if key == "play.networkProfiles" => {
                 self.bind_command(&format!("set-{id}"), "play.options", commands::Target::None);
                 out.push_str(&format!("<button id='set-{id}' text='Play options…' label='Client network profiles' action='Dispatch' />"));
+            }
+            Kind::Map if key == "hierarchy.filters" => {
+                let count = value.as_object().map_or(0, serde_json::Map::len);
+                self.bind_command(
+                    &format!("set-{id}"),
+                    "hierarchy.filter.apply",
+                    commands::Target::None,
+                );
+                out.push_str(&format!("<text id='set-{id}-count' class='caption' text='{count} saved' /><button id='set-{id}' text='Manage saved filters…' label='Apply a saved hierarchy filter' description='Choose a named query; save and delete filters from the Hierarchy filter menu' action='Dispatch' />"));
             }
             Kind::Text | Kind::Map => {
                 self.bindings.insert(

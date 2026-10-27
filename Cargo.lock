@@ -821,6 +821,7 @@ dependencies = [
  "ara-anim",
  "ara-asset",
  "ara-asset-format",
+ "ara-asset-host",
  "ara-audio-why",
  "ara-cmd",
  "ara-components",
@@ -854,6 +855,7 @@ dependencies = [
  "ara-ui",
  "ara-ui-render",
  "ara-ui-text",
+ "ara-update",
  "ara-vfx",
  "ara-vfx-gpu",
  "ara-world",
@@ -2148,6 +2150,7 @@ version = "0.0.1-alpha"
 dependencies = [
  "accesskit 0.25.1",
  "ara-doc",
+ "ara-editor-gpu",
  "ara-json",
  "ara-schema",
  "ara-ui",

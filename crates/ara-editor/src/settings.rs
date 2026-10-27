@@ -288,6 +288,15 @@ pub const DEFS: &[Def] = &[
         Lit::Empty,
     ),
     def(
+        "hierarchy.filters",
+        User,
+        "Hierarchy",
+        "Saved hierarchy filters",
+        "Named name, ID and component queries, managed from the Hierarchy toolbar.",
+        Kind::Map,
+        Lit::Empty,
+    ),
+    def(
         "color.swatches",
         Project,
         "Colours",

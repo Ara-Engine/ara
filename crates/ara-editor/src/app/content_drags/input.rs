@@ -21,13 +21,16 @@ fn bounds(shell: &Shell, find: Find<'_>) -> Option<Box2> {
             let i = shell.ui.by_id(*id)?;
             shell.ui.shown(i).then_some(shell.ui.nodes[i].rect)
         }),
-        Find::Asset(path) => shell.bindings.iter().find_map(|(id, binding)| {
-            if !matches!(binding, Binding::Asset(asset) if asset.path == path) {
-                return None;
-            }
-            let i = shell.ui.by_id(*id)?;
-            shell.ui.shown(i).then_some(shell.ui.nodes[i].rect)
-        }),
+        Find::Asset(path) => {
+            let storage = fixture::storage(shell, path)?;
+            shell.bindings.iter().find_map(|(id, binding)| {
+                if !matches!(binding, Binding::Asset(asset) if asset.path == storage) {
+                    return None;
+                }
+                let i = shell.ui.by_id(*id)?;
+                shell.ui.shown(i).then_some(shell.ui.nodes[i].rect)
+            })
+        }
     }
 }
 fn motion(point: Point) -> (u32, Event) {
@@ -45,10 +48,13 @@ fn button(sdl: u32, pressed: bool) -> (u32, Event) {
 
 impl ContentDrags {
     fn setup(&mut self, act: Act, editor: &mut Editor, shell: &mut Shell) -> ara_ui::Result<()> {
+        let Some(folder) = fixture::storage(shell, "assets").map(str::to_owned) else {
+            return self.wait_for_control();
+        };
         shell.leave();
         editor.action("editor.layout.reset", json!({}))?;
         editor.action("editor.layout.show", json!({"panel":"assets"}))?;
-        editor.action("editor.workspace", json!({"folder":"assets"}))?;
+        editor.action("editor.workspace", json!({"folder":folder}))?;
         let mut commands: Vec<_> = IDS
             .iter()
             .enumerate()
@@ -197,13 +203,14 @@ impl ContentDrags {
                     },
                 ));
             } else if self.age == FINISH
-                && editor
-                    .host
-                    .store()
-                    .workspace()
-                    .index()
-                    .id_of("assets/os-source.png")
-                    .is_none()
+                && (fixture::storage(shell, "assets/os-source.png").is_none()
+                    || editor
+                        .host
+                        .store()
+                        .workspace()
+                        .index()
+                        .id_of("assets/os-source.png")
+                        .is_none())
             {
                 self.wait_for_control()?;
             }

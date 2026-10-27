@@ -105,6 +105,14 @@ impl<P, T> DragSession<P, T> {
             feedback: None,
         })
     }
+    /// Adopt a drag already confirmed by the operating system. Its native source
+    /// owns the threshold and ghost; the shared session still validates coordinates,
+    /// target feedback, cancellation and the accepted release.
+    pub fn external(payload: P, pointer: Pointer) -> Option<Self> {
+        let mut session = Self::begin(payload, pointer)?;
+        session.active = true;
+        Some(session)
+    }
     /// Source identity and data, borrowed until the gesture ends.
     pub fn payload(&self) -> &P {
         &self.payload

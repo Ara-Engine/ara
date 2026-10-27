@@ -199,6 +199,8 @@ impl Shell {
             };
             let asset = assets::Asset {
                 path: image,
+                authored_path: None,
+                document_kind: None,
                 reference: Some(format!("@{path}#{doc}")),
                 kind: "graph".into(),
                 uses: Vec::new(),

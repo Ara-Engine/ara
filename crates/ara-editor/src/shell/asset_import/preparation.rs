@@ -20,7 +20,7 @@ impl Shell {
         editor: &mut Editor,
         request: Request,
     ) -> ara_ui::Result<()> {
-        let selection = Selection::read(editor);
+        let selection = Selection::read(self, editor);
         match backend::preflight(editor, &request)? {
             backend::Preflight::Ready(plan) => self
                 .asset_import
@@ -65,10 +65,13 @@ impl Shell {
             sources.len(),
             if sources.len() == 1 { "" } else { "s" }
         );
-        // The ordinary session's default marker anchors imports without an open scene.
-        let accepted = editor.action("cmd.apply",json!({"why":why,"commands":[{
+        // Imports belong to the project marker, even when a scene is open.
+        let accepted = editor.action("cmd.apply",json!({"doc":"ara.project.json","why":why,"commands":[{
             "cmd":"asset.import","args":{"sources":sources,"destination":request.destination,"conflict":conflict}
         }]}))?;
+        if accepted["ok"] == false {
+            return Err("Import was not accepted by the authority".into());
+        }
         let job = backend::accepted_job(&accepted)
             .ok_or("asset.import did not return its background job")?;
         self.asset_import.jobs.push(Job {

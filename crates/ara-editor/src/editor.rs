@@ -117,6 +117,7 @@ impl Editor {
         }
         let mut host = Host::open(project, HostConfig::default())
             .map_err(|d| anyhow::anyhow!(d.to_string()))?;
+        crate::asset_service::register(&mut host).map_err(|d| anyhow::anyhow!(d.to_string()))?;
         let (asset_changed, asset_updates) = mpsc::channel();
         host.register(Box::new(crate::asset_tools::AssetService::new(
             asset_changed,
@@ -188,6 +189,10 @@ impl Editor {
         let (completed, results) = mpsc::channel();
         host.register(Box::new(CaptureService::new(tasks, results)))
             .map_err(|d| anyhow::anyhow!(d.to_string()))?;
+        host.register(Box::new(
+            crate::shell::reachability::ValidationService::default(),
+        ))
+        .map_err(|d| anyhow::anyhow!(d.to_string()))?;
         let session = host
             .call(
                 ConnId::LOCAL,

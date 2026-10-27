@@ -50,7 +50,7 @@ impl Shell {
                 ("assets.import.dismiss", "Dismiss")
             };
             out.push_str(&format!("<button id='{key}-action' class='ghost' action='Dispatch' label='{label}'{}><text id='{key}-action-label' text='{label}' /></button></panel>",
-                if running&&!can_cancel {" disabled='true' description='Finishing the import transaction; cancellation is no longer available'"} else {""}));
+                if running&&!can_cancel {" disabled='true' description='Cancellation is unavailable at this stage'"} else {""}));
             out.push_str(&format!(
                 "<text id='{key}-message' class='caption' style='white-space:normal' text='{}' />",
                 escape(&summary)

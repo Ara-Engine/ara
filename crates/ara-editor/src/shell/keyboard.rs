@@ -244,6 +244,19 @@ impl Shell {
             self.rebuild(editor)?;
             return Ok(true);
         }
+        if matches!(scancode, 40 | 88) && self.asset_ops.rename_path().is_some() {
+            // Apply the field's latest native text before lowering its rename to
+            // the authority-owned file command; other Enter handlers must yield.
+            self.dispatch(editor)?;
+            if self.commit_asset_file_name(editor)? {
+                self.rebuild(editor)?;
+                return Ok(true);
+            }
+        }
+        if scancode == 41 && self.cancel_asset_file_name() {
+            self.rebuild(editor)?;
+            return Ok(true);
+        }
         if scancode == 41
             && !editor.state.palette
             && self.dialog.is_none()

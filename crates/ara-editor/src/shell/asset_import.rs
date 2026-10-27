@@ -27,6 +27,27 @@ pub(crate) enum Action {
     Dismiss(String),
 }
 
+/// Read the same authority preparation/commit boundary used by native Cancel controls.
+pub(crate) fn preparation_cancellable(status: &Value) -> bool {
+    backend::Status::read(status.clone()).can_cancel()
+}
+
+/// The import's final inventory, preserving the ordinary cmd.apply batch wrapper.
+pub(crate) fn completed_output(status: &Value) -> &Value {
+    let result = &status["result"];
+    if ["created", "replaced", "skipped", "renamed"]
+        .iter()
+        .any(|key| result.get(*key).is_some())
+    {
+        result
+    } else {
+        result["outputs"]
+            .as_array()
+            .and_then(|outputs| outputs.first())
+            .unwrap_or(result)
+    }
+}
+
 struct Prepared {
     request: Request,
     selection: Selection,
@@ -53,21 +74,33 @@ struct Selection {
     entities: Vec<String>,
     asset: Option<String>,
     folder: String,
+    browser_keys: Vec<u64>,
+    browser_primary: Option<String>,
 }
 impl Selection {
-    fn read(editor: &Editor) -> Self {
+    fn read(shell: &Shell, editor: &Editor) -> Self {
         Self {
             doc: editor.state.doc.clone(),
             entities: editor.state.selection.clone(),
             asset: editor.state.asset_path.clone(),
             folder: editor.state.asset_folder.clone(),
+            browser_keys: shell.asset_selection.selected().iter().copied().collect(),
+            browser_primary: shell.asset_selection_path.clone(),
         }
     }
-    fn unchanged(&self, editor: &Editor) -> bool {
+    fn unchanged(
+        &self,
+        editor: &Editor,
+        keys: &std::collections::BTreeSet<u64>,
+        primary: Option<&str>,
+    ) -> bool {
         self.doc == editor.state.doc
             && self.entities == editor.state.selection
             && self.asset == editor.state.asset_path
             && self.folder == editor.state.asset_folder
+            && self.browser_primary.as_deref() == primary
+            && self.browser_keys.len() == keys.len()
+            && self.browser_keys.iter().all(|key| keys.contains(key))
     }
 }
 /// Pending choices and authority-owned jobs; no asset files or browser rows are copied here.
@@ -81,6 +114,13 @@ pub(crate) struct State {
     pub revision: u64,
 }
 impl Shell {
+    /// Native proof and job followers compare the complete browser selection as
+    /// well as the document/entity selection, including a changed multi-select.
+    pub(crate) fn asset_import_selection(&self, editor: &Editor) -> Value {
+        let selection = Selection::read(self, editor);
+        json!({"doc":selection.doc,"entities":selection.entities,"asset":selection.asset,"folder":selection.folder,
+            "browserKeys":selection.browser_keys,"browserPrimary":selection.browser_primary})
+    }
     /// Queue one batch after its target has been resolved to an authored folder.
     /// No selection or authoring state changes until the authority completes it.
     pub(crate) fn queue_asset_import(&mut self, request: Request) -> ara_ui::Result<()> {

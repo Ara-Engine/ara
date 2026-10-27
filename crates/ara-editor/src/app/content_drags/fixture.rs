@@ -1,5 +1,18 @@
 use super::*;
 
+/// Native pointers and file observations use the last semantic index, not a
+/// guessed prefix; references and typed authoring inputs keep their logical path.
+pub(super) fn storage<'a>(shell: &'a Shell, logical: &str) -> Option<&'a str> {
+    shell
+        .asset_authored_files()
+        .iter()
+        .find(|file| {
+            matches!(&file.scope, ara_host::project::AuthoredScope::Authored)
+                && file.path == logical
+        })
+        .map(|file| file.storage_path.as_str())
+}
+
 /// Build the fixture before opening the host, so verification never mutates the supplied project.
 pub(in crate::app) fn fixture(options: &mut Options) -> ara_ui::Result<()> {
     let output = std::path::absolute(&options.output)?;
@@ -7,13 +20,14 @@ pub(in crate::app) fn fixture(options: &mut Options) -> ara_ui::Result<()> {
     std::fs::create_dir_all(&output)?;
     // Refuse stale fixtures instead of letting prior imports make a later journey pass.
     std::fs::create_dir(&root)?;
-    std::fs::create_dir_all(root.join("levels"))?;
-    std::fs::create_dir_all(root.join("assets"))?;
+    let content = root.join(ara_doc::AUTHORING_ROOT);
+    std::fs::create_dir_all(content.join("levels"))?;
+    std::fs::create_dir_all(content.join("assets"))?;
     std::fs::create_dir_all(output.join("sources"))?;
     for (path, value) in [
         (
             "ara.project.json",
-            json!({"name":"Editor behaviours","main":"levels/main.scene"}),
+            json!({"name":"Editor behaviours","main":"levels/main.scene","layoutVersion":3}),
         ),
         (
             "levels/main.scene",
@@ -24,7 +38,12 @@ pub(in crate::app) fn fixture(options: &mut Options) -> ara_ui::Result<()> {
             json!({"$schema":"ara://schema/prefab/1","id":"pf_behave01","records":{"e_prefab01":{"name":"Box","Transform":{},"MeshRenderer":{}}}}),
         ),
     ] {
-        std::fs::write(root.join(path), ara_json::to_canonical_string(&value))?;
+        let physical = if path == "ara.project.json" {
+            root.join(path)
+        } else {
+            content.join(path)
+        };
+        std::fs::write(physical, ara_json::to_canonical_string(&value))?;
     }
     std::fs::write(
         root.join(".ara-behaviour-fixture"),
@@ -35,7 +54,7 @@ pub(in crate::app) fn fixture(options: &mut Options) -> ara_ui::Result<()> {
             env!("CARGO_MANIFEST_DIR"),
             "/../ara-player/demo/assets/props/rock.glb"
         ),
-        root.join("assets/rock.glb"),
+        content.join("assets/rock.glb"),
     )?;
     std::fs::write(
         output.join("sources/os-source.png"),

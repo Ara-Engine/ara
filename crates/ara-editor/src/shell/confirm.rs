@@ -403,9 +403,13 @@ impl Shell {
         };
         let root = desired.map(|(root, _)| root);
         if root != self.modal_root {
+            if self.modal_root.is_none() && self.modal_return_focus.is_none() {
+                self.modal_return_focus = self.input.focused();
+            }
             self.confirmations.suspend(&mut self.ui, &mut self.input);
-            if self.modal_root.is_some() {
-                self.input.pop(&mut self.ui);
+            if let Some(previous) = self.modal_root {
+                self.input
+                    .remove_scope(&mut self.ui, ara_ui::source::stable_id(previous));
             }
             if let Some((root, field)) = desired {
                 self.panel_opened = (!self.reduce_motion).then(std::time::Instant::now);
@@ -418,6 +422,15 @@ impl Shell {
             }
             self.modal_root = root;
         }
-        self.confirmations.sync(&mut self.ui, &mut self.input)
+        self.confirmations.sync(&mut self.ui, &mut self.input)?;
+        if root.is_none()
+            && !self.confirmations.is_open()
+            && let Some(focus) = self.modal_return_focus.take()
+        {
+            // The old control may have been deleted/hidden while a prompt was
+            // open; a failed restore keeps the input stack's valid fallback.
+            let _ = self.input.focus(&mut self.ui, focus);
+        }
+        Ok(())
     }
 }

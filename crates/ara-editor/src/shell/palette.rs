@@ -185,7 +185,8 @@ impl Shell {
                 let Some(s) = score(&asset.path) else {
                     continue;
                 };
-                let scene = workspace.find(&asset.path).and_then(|id| {
+                let logical = asset.authored_path.as_deref().unwrap_or(&asset.path);
+                let scene = workspace.find(logical).and_then(|id| {
                     workspace
                         .doc(id.as_str())
                         .filter(|d| d.kind == "scene")

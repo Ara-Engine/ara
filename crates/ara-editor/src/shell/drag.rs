@@ -56,6 +56,13 @@ impl Shell {
         let payload = match self.bindings.get(&stable_id(id)) {
             Some(Binding::Select(entity)) => Some(content::Payload::Entity(entity.clone())),
             Some(Binding::Asset(asset)) => Some(content::Payload::Asset(asset.clone())),
+            Some(Binding::AssetFolder(path, false)) => self
+                .browser
+                .items
+                .iter()
+                .find(|asset| asset.kind == "folder" && &asset.path == path)
+                .cloned()
+                .map(content::Payload::Asset),
             Some(Binding::ComponentCollapse(component)) => {
                 Some(content::Payload::Component(component.clone()))
             }

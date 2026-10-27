@@ -21,7 +21,7 @@ impl Shell {
             return Ok(true);
         };
         if let Payload::Asset(asset) = &drop.payload
-            && !editor.host.root().join(&asset.path).is_file()
+            && !editor.host.root().join(&asset.path).exists()
         {
             self.status_note =
                 Some("The dragged asset was removed; choose an existing asset".into());
@@ -30,6 +30,9 @@ impl Shell {
             return Ok(true);
         }
         match (drop.payload, drop.target) {
+            (Payload::Asset(asset), Target::AssetFolder(folder)) => {
+                self.move_asset_files_to(editor, &asset, &folder)?
+            }
             (Payload::Entity(source), Target::Hierarchy { entity, placement }) => {
                 let resolved = self.resolved(editor)?;
                 let calls = hierarchy::commands(

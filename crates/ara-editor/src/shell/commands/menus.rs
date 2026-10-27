@@ -68,6 +68,7 @@ const ASSETS: &[Item] = &[
     C("assets.references"),
     S,
     C("assets.rename"),
+    C("assets.move"),
     C("assets.duplicate"),
     C("assets.delete"),
     S,
@@ -197,6 +198,21 @@ pub(crate) const MENUS: &[Menu] = &[
             C("edit.rename"),
             C("edit.copy_reference"),
             S,
+            C("hierarchy.reveal"),
+            Sub(
+                "Visibility and Picking",
+                &[
+                    C("edit.hide"),
+                    C("edit.unhide_selected"),
+                    C("edit.lock"),
+                    S,
+                    C("edit.hide_descendants"),
+                    C("edit.unhide_descendants"),
+                    C("edit.lock_descendants"),
+                    C("edit.unlock_descendants"),
+                ],
+            ),
+            S,
             C("edit.select_all"),
             C("edit.deselect"),
             C("edit.invert_selection"),
@@ -254,6 +270,16 @@ pub(crate) const MENUS: &[Menu] = &[
         title: "View",
         mnemonic: 'V',
         items: &[
+            Sub(
+                "Hierarchy",
+                &[
+                    C("hierarchy.reveal"),
+                    S,
+                    C("hierarchy.filter.save"),
+                    C("hierarchy.filter.apply"),
+                    C("hierarchy.filter.remove"),
+                ],
+            ),
             Sub(
                 "Camera",
                 &[
@@ -535,6 +561,8 @@ pub(crate) fn context(kind: Context) -> &'static [Item] {
             C("history.newer"),
         ],
         Context::Entity => &[
+            C("create.group"),
+            C("hierarchy.reveal"),
             Sub(
                 "Create Child",
                 &[
@@ -554,6 +582,15 @@ pub(crate) fn context(kind: Context) -> &'static [Item] {
             C("select.children"),
             C("edit.hide"),
             C("edit.lock"),
+            Sub(
+                "Selected Branches",
+                &[
+                    C("edit.hide_descendants"),
+                    C("edit.unhide_descendants"),
+                    C("edit.lock_descendants"),
+                    C("edit.unlock_descendants"),
+                ],
+            ),
             S,
             C("create.prefab"),
             Sub(
@@ -571,6 +608,8 @@ pub(crate) fn context(kind: Context) -> &'static [Item] {
         ],
         Context::Hierarchy => &[
             C("create.empty"),
+            C("create.group"),
+            C("hierarchy.reveal"),
             Sub(
                 "Create",
                 &[
@@ -587,6 +626,8 @@ pub(crate) fn context(kind: Context) -> &'static [Item] {
             C("edit.unhide_all"),
         ],
         Context::Viewport => &[
+            C("create.group"),
+            C("hierarchy.reveal"),
             Sub(
                 "Create",
                 &[
@@ -621,11 +662,17 @@ pub(crate) fn context(kind: Context) -> &'static [Item] {
             S,
             C("assets.reimport"),
             C("assets.rename"),
+            C("assets.move"),
+            C("assets.duplicate"),
             C("assets.delete"),
         ],
         Context::Folder => &[
             C("assets.open"),
             C("assets.reveal"),
+            C("assets.rename"),
+            C("assets.move"),
+            C("assets.duplicate"),
+            C("assets.delete"),
             S,
             Sub("Create", ASSET_CREATE),
             C("assets.import"),
@@ -775,6 +822,10 @@ pub(crate) fn context(kind: Context) -> &'static [Item] {
             C("view.quality.epic"),
         ],
         Context::HierarchyFilter => &[
+            C("hierarchy.filter.save"),
+            C("hierarchy.filter.apply"),
+            C("hierarchy.filter.remove"),
+            S,
             C("hierarchy.filter.all"),
             S,
             C("hierarchy.filter.lights"),

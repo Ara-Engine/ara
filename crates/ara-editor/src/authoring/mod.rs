@@ -13,7 +13,7 @@ use serde_json::{Value, json};
 struct CreateParams {
     /// Calling editor or agent session.
     session: String,
-    /// New project-relative asset document path.
+    /// New authored-relative document path; physical storage is under the content root.
     path: String,
     /// material, vfx, graph, animation or scene (an empty scene document).
     domain: String,

@@ -96,10 +96,43 @@ fn has_entity(c: &Ctx) -> Avail {
         Avail::Blocked("Select an entity first".into())
     }
 }
+/// Reflect the clicked object or selected set without allocating in menu checks.
+fn hierarchy_flag(c: &Ctx, locked: bool) -> Avail {
+    let flags = if locked {
+        &c.state.locked
+    } else {
+        &c.state.hidden
+    };
+    if let Target::Entity(entity) = c.target
+        && !c.state.selection.contains(entity)
+    {
+        Avail::Checked(flags.contains(entity))
+    } else if c.state.selection.is_empty() {
+        has_entity(c)
+    } else {
+        Avail::Checked(
+            c.state
+                .selection
+                .iter()
+                .all(|entity| flags.contains(entity)),
+        )
+    }
+}
 fn has_asset(c: &Ctx) -> Avail {
     match (c.target, &c.state.asset_path) {
         (Target::Asset(_) | Target::Folder(_), _) | (_, Some(_)) => Avail::Ready,
         _ => Avail::Blocked("Select an asset in the Assets panel first".into()),
+    }
+}
+fn asset_context(state: &crate::state::EditorState, target: &Target) -> bool {
+    matches!(target, Target::Asset(_) | Target::Folder(_))
+        || matches!(target, Target::None) && state.focus == "assets"
+}
+fn has_selection(c: &Ctx) -> Avail {
+    if asset_context(c.state, c.target) {
+        has_asset(c)
+    } else {
+        has_entity(c)
     }
 }
 fn scene_doc(c: &Ctx) -> Avail {
@@ -519,7 +552,7 @@ fn build() -> Vec<Spec> {
     ]);
     // File
     c.extend([
-        cmd("file.new_scene", "New Scene…", "file", "Ctrl+N", "Create an empty scene under levels/ and open it.", |s, e, t| {s.select_asset_folder(e,t)?;s.new_scene(e)}),
+        cmd("file.new_scene", "New Scene…", "file", "Ctrl+N", "Create an empty scene in the selected authored folder and open it.", |s, e, t| {s.select_asset_folder(e,t)?;s.new_scene(e)}),
         later("file.new_project", "New Project…", "folder", "", "Create projects with `ara init <dir>`; the in-editor project wizard comes with the launcher."),
         cmd("file.open", "Open Scene…", "clapperboard", "Ctrl+O", "Pick a scene to open (recent first), or type to find any scene or asset.", |s, e, _| s.open_palette(e, "#")),
         later("file.open_project", "Open Project…", "folder", "", "One editor process owns one project; start `ara-editor <project>` for another."),
@@ -540,7 +573,14 @@ fn build() -> Vec<Spec> {
             Ok(())
         }),
         later("file.revert", "Revert to Saved", "undo-2", "", "Use Undo or `ara revert`; reloading from disk needs a host revert-to-file command."),
-        cmd("assets.import", "Import…", "plus", "Ctrl+Shift+I", "Copy files into the current asset folder and import them.", |s, _, _| {
+        cmd("assets.import", "Import…", "plus", "Ctrl+Shift+I", "Import external files into an authored folder through a cancellable background transaction.", |s, e, t| {
+            let folder = match t {
+                Target::Folder(path) => path.clone(),
+                Target::Asset(path) => path.rsplit_once('/').map_or(String::new(), |(parent, _)| parent.to_owned()),
+                _ => e.state.asset_folder.clone(),
+            };
+            s.browser.authored_folder(&folder)?;
+            s.import_picker_folder = Some(folder);
             s.window_request = Some(super::super::WindowRequest::Import);
             Ok(())
         }),
@@ -606,22 +646,25 @@ fn build() -> Vec<Spec> {
             let parent = t.entity(&e.state).map(str::to_owned);
             s.paste_entities(e, parent)
         }).when(|c| if !c.clipboard_entities { Avail::Blocked("Copy an entity first".into()) } else { has_entity(c) }),
-        cmd("edit.duplicate", "Duplicate", "copy", "Ctrl+D", "Duplicate selected subtrees together and preserve references between their copies.", |_, e, t| {
+        cmd("edit.duplicate", "Duplicate", "copy", "Ctrl+D", "Duplicate selected entities or authored files in one undoable transaction.", |s, e, t| {
+            if asset_context(&e.state, t) { return s.duplicate_asset_files(e, t); }
             let result=e.apply(vec![json!({"cmd":"editor.entities.duplicate","args":{"entities":t.entities(&e.state)}})],"Duplicate selection",None)?;
             if let Some(roots)=result["outputs"][0]["roots"].as_array() {act(e,"editor.select",json!({"entities":roots}))?;}
             Ok(())
-        }).when(has_entity),
-        cmd("edit.delete", "Delete", "trash", "Del", "Delete the selected entities.", |_, e, t| {
+        }).when(has_selection),
+        cmd("edit.delete", "Delete", "trash", "Del", "Delete selected entities or safely delete authored files.", |s, e, t| {
+            if asset_context(&e.state, t) { return s.request_delete_asset_files(e, t); }
             let entities = t.entities(&e.state);
             apply(e, vec![json!({"cmd": "entity.delete", "args": {"entities": entities}})], "Delete selection")
-        }).when(has_entity),
+        }).when(has_selection),
         cmd("edit.rename", "Rename", "pencil", "F2", "Rename the selected entity inline.", |s, e, t| {
+            if asset_context(&e.state, t) { return s.begin_asset_file_rename(e, t); }
             if let Target::Entity(id) = t && !e.state.selection.contains(id) {
                 select(e, vec![id.clone()])?;
             }
             s.rename = true;
             Ok(())
-        }).when(has_entity),
+        }).when(has_selection),
         cmd("edit.copy_reference", "Copy Reference", "link", "Ctrl+Shift+C", "Copy `@path#id` for the selected entity.", |s, e, t| {
             let entity = t.entity(&e.state).ok_or("select an entity")?.to_owned();
             s.copy_text(reference(e, &entity));
@@ -712,22 +755,23 @@ fn build() -> Vec<Spec> {
         cmd("edit.preferences", "Preferences…", "settings-2", "Ctrl+,", "Open your editor preferences.", |s, e, _| s.open_settings(e, "user", "")),
         cmd("edit.project_settings", "Project Settings…", "settings-2", "Ctrl+Alt+,", "Open settings shared by the project.", |s, e, _| s.open_settings(e, "project", "")),
         cmd("edit.shortcuts", "Keyboard Shortcuts…", "command", "Ctrl+Alt+K", "Search, rebind and choose keymap presets.", |s, e, _| s.open_settings(e, "user", "Keyboard shortcuts")),
-        cmd("edit.hide", "Hide", "eye-off", "H", "Hide the entity in the viewport only.", |_, e, t| {
-            let entity = t.entity(&e.state).ok_or("select an entity")?.to_owned();
-            let hidden = e.state.hidden.contains(&entity);
-            act(e, "editor.visibility", json!({"entity": entity, "enabled": !hidden}))
-        }).when(|c| match c.target.entity(c.state) { Some(id) => Avail::Checked(c.state.hidden.contains(id)), None => has_entity(c) }),
+        cmd("edit.hide", "Hide Selection", "eye-off", "H", "Toggle viewport visibility for the clicked or selected entities.", |s, e, t| s.set_hierarchy_hidden(e,t,false,None)).when(|c|hierarchy_flag(c,false)),
+        cmd("edit.unhide_selected", "Show Selection", "eye", "", "Show exactly the clicked or selected entities.", |s,e,t|s.set_hierarchy_hidden(e,t,false,Some(false))).when(has_entity),
+        cmd("edit.hide_descendants", "Hide Selection and Descendants", "eye-off", "", "Hide the clicked or selected branches in the viewport.",|s,e,t|s.set_hierarchy_hidden(e,t,true,Some(true))).when(has_entity),
+        cmd("edit.unhide_descendants", "Show Selection and Descendants", "eye", "", "Show the clicked or selected branches in the viewport.",|s,e,t|s.set_hierarchy_hidden(e,t,true,Some(false))).when(has_entity),
         cmd("edit.unhide_all", "Show All", "eye", "Alt+H", "Show every hidden entity.", |_, e, _| {
             for entity in e.state.hidden.clone() {
                 act(e, "editor.visibility", json!({"entity": entity, "enabled": false}))?;
             }
             Ok(())
         }).when(|c| if c.state.hidden.is_empty() { Avail::Blocked("Nothing is hidden".into()) } else { Avail::Ready }),
-        cmd("edit.lock", "Lock", "lock", "", "Prevent picking the entity in the viewport.", |_, e, t| {
-            let entity = t.entity(&e.state).ok_or("select an entity")?.to_owned();
-            let locked = e.state.locked.contains(&entity);
-            act(e, "editor.lock", json!({"entity": entity, "enabled": !locked}))
-        }).when(|c| match c.target.entity(c.state) { Some(id) => Avail::Checked(c.state.locked.contains(id)), None => has_entity(c) }),
+        cmd("edit.lock", "Lock Selection", "lock", "", "Toggle picking protection for the clicked or selected entities.",|s,e,t|s.set_hierarchy_locked(e,t,false,None)).when(|c|hierarchy_flag(c,true)),
+        cmd("edit.lock_descendants", "Lock Selection and Descendants", "lock", "", "Protect the clicked or selected branches from viewport picking.",|s,e,t|s.set_hierarchy_locked(e,t,true,Some(true))).when(has_entity),
+        cmd("edit.unlock_descendants", "Unlock Selection and Descendants", "unlock", "", "Allow viewport picking of the clicked or selected branches.",|s,e,t|s.set_hierarchy_locked(e,t,true,Some(false))).when(has_entity),
+        cmd("hierarchy.reveal", "Reveal in Hierarchy", "list-tree", "", "Expand and reveal the clicked or selected entities while retaining selection.",|s,e,t|s.reveal_hierarchy_entities(e,t)).when(has_entity),
+        cmd("hierarchy.filter.save", "Save Hierarchy Search", "save", "", "Name the current hierarchy query and retain it in your preferences.",|s,e,t|s.save_hierarchy_filter(e,t)),
+        cmd("hierarchy.filter.apply", "Apply Saved Hierarchy Filter", "funnel", "", "Choose a saved hierarchy query.",|s,e,t|s.use_hierarchy_filter(e,t,false)),
+        cmd("hierarchy.filter.remove", "Delete Saved Hierarchy Filter", "trash", "", "Remove a saved hierarchy query from your preferences.",|s,e,t|s.use_hierarchy_filter(e,t,true)),
         cmd("prefab.open", "Open Prefab", "package-open", "", "Edit the prefab itself in the Scene view; every instance follows.", |_, e, t| {
             let entity = t.entity(&e.state).ok_or("select a prefab instance")?.to_owned();
             let found = crate::shell::prefab_ops::instance(e.host.store(), &e.state.doc, &entity).ok_or("not a prefab instance")?;
@@ -981,7 +1025,7 @@ fn build() -> Vec<Spec> {
     c.extend([
         cmd("create.empty", "Empty Entity", "layers", "Ctrl+Shift+N", "Create an entity with only a Transform.", |_, e, _| create(e, &Target::None, "Entity", json!({}), false)).when(scene_doc),
         cmd("create.empty_child", "Empty Child", "layers", "Alt+Shift+N", "Create an empty entity under the selection.", |_, e, t| create(e, t, "Entity", json!({}), true)).when(has_entity),
-        later("create.group", "Group Selection", "layers", "Ctrl+G", "Grouping needs an atomic reparent-under-new-parent command; reparent by dragging for now."),
+        cmd("create.group", "Group Selection", "layers", "Ctrl+G", "Create a parent for the selected roots in one undoable action, preserving world transforms.",|s,e,t|s.group_selection(e,t)).when(has_entity),
         cmd("create.at_cursor", "Create…", "plus", "Shift+A", "Search every Create command.", |s, e, _| s.open_palette(e, ">Create ")).when(scene_doc),
         cmd("create.cube", "Cube", "box", "", "Box mesh, 1 m.", |_, e, t| shape(e, t, "Cube", "box")).when(|c| with_components(c, &["MeshRenderer"])),
         cmd("create.sphere", "Sphere", "circle", "", "Sphere mesh, 1 m diameter.", |_, e, t| shape(e, t, "Sphere", "sphere")).when(|c| with_components(c, &["MeshRenderer"])),
@@ -1001,7 +1045,7 @@ fn build() -> Vec<Spec> {
         cmd("create.physics.body", "Rigid Body", "box", "", "Box with a dynamic body and collider.", |_, e, t| create(e, t, "Rigid body", json!({"MeshRenderer": {}, "RigidBody": {}, "Collider": {}}), false)).when(|c| with_components(c, &["RigidBody", "Collider", "MeshRenderer"])),
         cmd("create.physics.collider", "Collider", "box", "", "Static collision shape.", |_, e, t| create(e, t, "Collider", json!({"Collider": {}}), false)).when(|c| with_components(c, &["Collider"])),
         cmd("create.physics.character", "Character Controller", "user", "", "Kinematic character capsule.", |_, e, t| create(e, t, "Character", json!({"CharacterController": {}, "MeshRenderer": {"shape": "capsule", "size": [0.6, 1.8, 0.6]}}), false)).when(|c| with_components(c, &["CharacterController", "MeshRenderer"])),
-        later("create.physics.trigger", "Trigger Volume", "", "", "Trigger volumes need a sensor flag on Collider; it is not in the schema yet."),
+        cmd("create.physics.trigger", "Trigger Volume", "box", "", "Create a sensor volume using the reflected Collider component.", |_,e,t|create(e,t,"Trigger",json!({"Collider":{"sensor":true}}),false)).when(|c|with_components(c,&["Collider"])),
         cmd("create.audio.source", "Audio Source", "volume-2", "", "Positional sound emitter.", |_, e, t| create(e, t, "Audio source", json!({"AudioSource": {}}), false)).when(|c| with_components(c, &["AudioSource"])),
         cmd("create.audio.listener", "Listener", "ear", "", "Where the mix is heard from.", |_, e, t| create(e, t, "Listener", json!({"AudioListener": {}}), false)).when(|c| with_components(c, &["AudioListener"])),
         cmd("create.nav.volume", "Nav Mesh Surface", "map", "", "Bakes a navigation mesh.", |_, e, t| create(e, t, "Nav surface", json!({"NavMeshSurface": {}}), false)).when(|c| with_components(c, &["NavMeshSurface"])),
@@ -1018,7 +1062,7 @@ fn build() -> Vec<Spec> {
     ]);
     // Assets
     c.extend([
-        cmd("assets.create.folder", "Folder", "folder", "", "Create a folder in the current asset folder.", |s, e, t| {s.select_asset_folder(e,t)?;s.new_folder(e)}),
+        cmd("assets.create.folder", "Folder", "folder", "", "Create an empty authored folder as one undoable transaction.", |s, e, t| s.create_asset_folder(e,t)),
         cmd("assets.create.scene", "Scene", "box", "", "Create an empty scene.", |s, e, t| {s.select_asset_folder(e,t)?;s.new_scene(e)}),
         cmd("assets.create.material", "Material", "circle", "", "Create a material graph and open it.", |s, e, t| {s.select_asset_folder(e,t)?;s.create_resource(e, "material")}),
         cmd("assets.create.vfx", "VFX System", "sparkles", "", "Create a VFX graph and open it.", |s, e, t| {s.select_asset_folder(e,t)?;s.create_resource(e, "vfx")}),
@@ -1041,19 +1085,34 @@ fn build() -> Vec<Spec> {
         }),
         cmd("assets.copy_reference", "Copy Reference", "link", "", "Copy the asset's `@path#id`.", |s, e, t| {
             let path = s.asset_target(e, t).ok_or("select an asset")?;
-            let text = s.asset_reference(e, &path).unwrap_or_else(|| format!("@{path}"));
+            let text = match s.asset_reference(e, &path) {
+                Some(reference) => reference,
+                None => s.browser.items.iter().find(|asset| asset.path == path)
+                    .and_then(|asset| asset.authored_path.as_deref())
+                    .map(|logical| format!("@{logical}"))
+                    .ok_or("Select an authored asset to copy a reference")?,
+            };
             s.copy_text(text);
             Ok(())
         }).when(has_asset),
         cmd("assets.references", "Find References", "search", "", "Show what uses the asset and what it uses.", |s, e, t| {
-            let path = s.asset_target(e, t).ok_or("select an asset")?;
-            act(e, "editor.workspace", json!({"asset": path}))?;
-            focus(e, "inspector")
+            s.show_asset_references(e,t)
         }).when(has_asset),
-        later("assets.rename", "Rename", "pencil", "F2", "Asset renames must rewrite every `@path#id` reference; the typed move command is not built yet."),
-        later("assets.duplicate", "Duplicate", "copy", "", "Asset duplication needs new stable IDs from a typed asset.copy command."),
-        later("assets.delete", "Delete", "trash", "", "Deleting assets needs the reference-count warning from asset.delete; not built yet."),
-        later("assets.validate", "Validate Project", "circle-check", "", "Run `ara check` for now; the in-editor validation report arrives with Problems."),
+        cmd("assets.rename", "Rename", "pencil", "F2", "Rename an authored file or folder and update its references atomically.", |s,e,t|s.begin_asset_file_rename(e,t)).when(has_asset),
+        cmd("assets.move", "Move to Folder…", "folder", "", "Move selected authored files and folders together, preserving asset identities and references.", |s,e,t|s.request_move_asset_files(e,t)).when(has_asset),
+        cmd("assets.duplicate", "Duplicate", "copy", "", "Duplicate selected authored files and folders with fresh identities and remapped internal references.", |s,e,t|s.duplicate_asset_files(e,t)).when(has_asset),
+        cmd("assets.delete", "Delete", "trash", "", "Confirm safe deletion of selected authored files and folders; referenced files are protected.", |s,e,t|s.request_delete_asset_files(e,t)).when(has_asset),
+        cmd("assets.operation.cancel", "Cancel Asset Preparation", "x", "", "Cancel preparation before the authored transaction commits.", |s,e,_|s.cancel_asset_operation(e)),
+        cmd("assets.operation.dismiss", "Dismiss Asset Result", "x", "", "Dismiss the completed asset operation.", |s,_,_|{s.dismiss_asset_operation();Ok(())}),
+        cmd("assets.import.cancel", "Cancel Import Preparation", "x", "", "Cancel an import job before its commit boundary.", |s,e,t| {
+            let Target::Text(job)=t else {return Err("Choose an import job".into())};
+            s.asset_import_action(e, super::super::asset_import::Action::Cancel(job.clone()))
+        }),
+        cmd("assets.import.dismiss", "Dismiss Import Result", "x", "", "Dismiss a completed import job.", |s,e,t| {
+            let Target::Text(job)=t else {return Err("Choose an import job".into())};
+            s.asset_import_action(e, super::super::asset_import::Action::Dismiss(job.clone()))
+        }),
+        cmd("assets.validate", "Validate Loaded Authoring Documents", "circle-check", "", "Check loaded schema, structure, references and prefabs in a read-only background job; disk parse failures stay visible in Problems.", |s,e,_|s.validate_authoring(e)),
         cmd("assets.show_all", "Show All Files", "file", "", "List every file, including glTF buffers, notes and project files.", |s, _, _| {
             s.assets_show_all = !s.assets_show_all;
             Ok(())
@@ -1378,8 +1437,8 @@ fn build() -> Vec<Spec> {
     c.extend([
         cmd("window.profiler", "Profiler", "gauge", "Alt+8", "Record and compare editor frames.", |_, e, _| act(e, "editor.layout.show", json!({"panel": "profiler"}))).when(|c| panel_open(c, "profiler")),
         later("tools.gpu_capture", "GPU Frame Capture", "camera", "", "GPU captures run through RenderDoc for now; the integrated capture viewer is not built."),
-        later("tools.why", "Diagnostics: Why?", "search", "", "Run `ara why` (MCP: ara_why); the in-editor Why panel arrives with Problems."),
-        later("tools.references", "Reference Viewer", "link", "", "The reference graph view arrives with Asset browser v2."),
+        cmd("tools.why", "Diagnostics: Why?", "search", "", "Explain a diagnostic, reference or entity using the project's diagnostic service.", |s,e,t|s.explain_problem(e,t)),
+        cmd("tools.references", "Reference Viewer", "link", "", "Inspect the real Uses and Used by links of an authored asset.", |s,e,t|s.show_asset_references(e,t)),
         later("tools.table", "Table View…", "grid-2x2", "", "Spreadsheet bulk editing is backlog item 26."),
         later("tools.localization", "Localization", "", "", "ara-l10n tables are edited as files; the editor panel is not built."),
         later("tools.input_actions", "Input Actions", "", "", "Input action maps are edited as files; the editor panel is not built."),

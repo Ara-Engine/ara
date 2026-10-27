@@ -4,6 +4,7 @@
 //! Layout: a header (preview beside name, path and importer), then 24 px property
 //! rows (label left, typed control right), the actions, and Uses / Used by.
 use super::*;
+mod namespace;
 impl Shell {
     pub(super) fn import_panel(&mut self, editor: &Editor, out: &mut String) -> ara_ui::Result<()> {
         let path = editor
@@ -19,12 +20,16 @@ impl Shell {
             .cloned()
             .unwrap_or(assets::Asset {
                 path: path.into(),
+                authored_path: None,
+                document_kind: None,
                 reference: None,
                 kind: path.rsplit('.').next().unwrap_or("file").into(),
                 uses: Vec::new(),
                 stamp: 0,
                 domain: None,
             });
+        let workspace = editor.host.store().workspace();
+        let logical = asset.authored_path.as_deref();
         let width = self
             .ui
             .find("import-inspector")
@@ -35,12 +40,7 @@ impl Shell {
         out.push_str("<scroll id='import-inspector' style='flex-grow:1;flex-basis:0px;min-height:0px;padding-bottom:12px'>");
         // The preview renders at 2× its 96 px logical size, separately from grid tiles.
         let mut preview_asset = asset.clone();
-        if let Some(doc) = editor
-            .host
-            .store()
-            .workspace()
-            .find(path)
-            .and_then(|id| editor.host.store().workspace().doc(id.as_str()))
+        if let Some(doc) = namespace::document(workspace, &asset)
             && doc.kind == "graph"
         {
             let source = ara_doc::write(doc, editor.host.store().schema());
@@ -61,19 +61,15 @@ impl Shell {
         }
         out.push_str("<panel id='import-header' class='row' style='flex-shrink:0;align-items:start;gap:10px;padding:8px'>");
         self.asset_thumbnail(&preview_asset, out, "import-preview", 96.);
-        let sidecar = format!("{path}.import.json");
-        let doc = editor
-            .host
-            .store()
-            .workspace()
-            .docs()
-            .find_map(|(path, doc)| (path == sidecar).then_some(doc));
         // Undoing an import leaves the sidecar without its settings record: that reads
         // as "not imported", like a missing sidecar.
-        let imported = doc.and_then(|doc| doc.record("i_settings").map(|record| (doc, record)));
+        let imported = logical.and_then(|source| {
+            crate::asset_tools::paths::import_document(workspace, source)
+                .and_then(|doc| doc.record("i_settings").map(|record| (doc, record, source)))
+        });
         let importer = imported
             .as_ref()
-            .and_then(|(_, record)| record.get("importer"))
+            .and_then(|(_, record, _)| record.get("importer"))
             .and_then(Value::as_str)
             .unwrap_or("");
         out.push_str(&format!("<panel id='import-copy' style='flex-grow:1;flex-basis:0px;min-width:0px;gap:4px'><text id='import-title' class='heading' style='font-size:13px;overflow:hidden' text='{}' /><text id='import-path' class='caption' text='{}' style='white-space:normal' />",escape(path.rsplit('/').next().unwrap_or(path)),escape(path)));
@@ -84,7 +80,7 @@ impl Shell {
             ));
         }
         out.push_str("</panel></panel>");
-        if let Some((doc, record)) = imported {
+        if let Some((doc, record, source)) = imported {
             let settings: ara_asset::ImportSettings =
                 serde_json::from_value(Value::Object(record.clone()))?;
             out.push_str("<panel id='import-settings-header' class='component-header'><text id='import-settings-title' class='component-title' style='padding-left:8px' text='Import settings' /></panel>");
@@ -179,7 +175,7 @@ impl Shell {
                 (ara_asset::CookPreset::Balanced, "Balanced"),
                 (ara_asset::CookPreset::HighQuality, "High"),
             ] {
-                out.push_str(&self.bind_button(&format!("import-quality-{preset:?}"),name,Binding::ResourceContent(doc.id.to_string(),vec![json!({"cmd":"import.configure","args":{"source":path,"preset":preset}})],"Change import quality".into()),if Some(preset)==settings.preset{"segment-button selected"}else{"segment-button"}));
+                out.push_str(&self.bind_button(&format!("import-quality-{preset:?}"),name,Binding::ResourceContent(doc.id.to_string(),vec![json!({"cmd":"import.configure","args":{"source":source,"preset":preset}})],"Change import quality".into()),if Some(preset)==settings.preset{"segment-button selected"}else{"segment-button"}));
             }
             out.push_str("</panel></panel></panel><panel id='import-actions' class='row' style='flex-shrink:0;padding:8px;padding-left:12px'>");
             out.push_str(&self.bind_button(
@@ -189,7 +185,7 @@ impl Shell {
                 "",
             ));
             out.push_str("</panel>");
-        } else if ara_importers::commands::importer_for_source(path).is_ok() {
+        } else if logical.is_some() && ara_importers::commands::importer_for_source(path).is_ok() {
             out.push_str("<panel id='import-new' style='flex-shrink:0;gap:8px;padding:8px;padding-left:12px'><text id='import-new-help' class='muted' text='Create settings and cook this source in an isolated worker.' style='white-space:normal' />");
             // Not `asset-import`: element ids (and their binding hashes) stay unique
             // across the separately reconciled parts.
@@ -202,13 +198,13 @@ impl Shell {
             out.push_str("</panel>");
         }
         if matches!(asset.kind.as_str(), "graph" | "animation")
-            && let Some(id) = editor.host.store().workspace().find(path)
+            && let Some(doc) = namespace::document(workspace, &asset)
         {
             out.push_str("<panel id='import-open-row' class='row' style='flex-shrink:0;padding:8px;padding-left:12px'>");
             out.push_str(&self.bind_button(
                 "asset-open",
                 "Open editor",
-                Binding::Protocol("editor.workspace", json!({"resource":id})),
+                Binding::Protocol("editor.workspace", json!({"resource":doc.id})),
                 "primary",
             ));
             out.push_str("</panel>");
@@ -217,22 +213,30 @@ impl Shell {
         for item in &self.browser.items {
             graph.replace(
                 item.path.clone(),
-                item.uses.iter().map(|s| {
-                    s.trim_start_matches('@')
-                        .split('#')
-                        .next()
-                        .unwrap_or(s)
-                        .to_owned()
+                item.uses.iter().filter_map(|reference| {
+                    namespace::dependency(&self.browser.files, workspace, reference)
                 }),
             );
         }
         // Live authoring ops take precedence over a background filesystem snapshot.
-        for (doc_path, doc) in editor.host.store().workspace().docs() {
+        for (doc_path, doc) in workspace.docs() {
             let mut refs = Vec::new();
             for record in doc.records().values() {
-                collect_refs(&Value::Object(record.clone()), &mut refs);
+                for value in record.values() {
+                    collect_refs(value, &mut refs);
+                }
             }
-            graph.replace(doc_path.to_owned(), refs);
+            let source = if doc.kind == "import" {
+                doc_path.strip_suffix(".import.json").unwrap_or(doc_path)
+            } else {
+                doc_path
+            };
+            graph.replace(
+                source.to_owned(),
+                refs.iter().filter_map(|reference| {
+                    namespace::dependency(&self.browser.files, workspace, reference)
+                }),
+            );
         }
         for (label, links) in [
             (
@@ -286,6 +290,7 @@ impl Shell {
                 let workspace = editor.host.store().workspace();
                 let source = workspace
                     .path_of(doc)
+                    .map(|path| workspace.reference_path(path))
                     .and_then(|p| p.strip_suffix(".import.json"))
                     .ok_or("import document disappeared")?
                     .to_owned();
@@ -319,13 +324,7 @@ impl Shell {
 }
 fn collect_refs(v: &Value, out: &mut Vec<String>) {
     match v {
-        Value::String(s) if s.starts_with('@') => out.push(
-            s.trim_start_matches('@')
-                .split('#')
-                .next()
-                .unwrap_or(s)
-                .into(),
-        ),
+        Value::String(s) if s.starts_with('@') => out.push(s.clone()),
         Value::Array(a) => {
             for v in a {
                 collect_refs(v, out)

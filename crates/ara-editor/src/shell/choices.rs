@@ -1,4 +1,5 @@
 //! Shared native searchable selects for Inspector, Settings and importer fields.
+use super::commands::Target;
 use super::*;
 use ara_ui::{
     input::InputEvent,
@@ -8,12 +9,25 @@ use ara_ui::{
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) enum Destination {
     Setting(String),
-    Import { doc: String, key: String },
+    Import {
+        doc: String,
+        key: String,
+    },
     Field(String),
-    Append { field: String, pointer: String },
+    Append {
+        field: String,
+        pointer: String,
+    },
     PlayNetwork(usize),
     PlayClient,
     PlayField(play_controls::FieldTarget),
+    AssetType,
+    HierarchySavedFilter,
+    AnimationOperation {
+        doc: String,
+        record: String,
+        key: String,
+    },
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -87,6 +101,14 @@ impl Shell {
         value: Value,
     ) -> ara_ui::Result<()> {
         match target {
+            Destination::HierarchySavedFilter => {
+                let name = value.as_str().ok_or("Choose a saved hierarchy filter")?;
+                self.use_hierarchy_filter(editor, &Target::Text(name.into()), false)?;
+            }
+            Destination::AssetType => self.choose_asset_types(editor, value)?,
+            Destination::AnimationOperation { doc, record, key } => {
+                self.choose_pose_operation(editor, doc, record, key, value)?
+            }
             Destination::PlayNetwork(player) => {
                 return self.set_play_network_profile(editor, *player, value);
             }

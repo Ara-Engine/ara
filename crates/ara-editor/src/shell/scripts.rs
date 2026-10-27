@@ -168,35 +168,55 @@ impl Shell {
     ) -> ara_ui::Result<()> {
         let folder = match target {
             commands::Target::Folder(p) => p.clone(),
+            commands::Target::Asset(p)
+                if self
+                    .browser
+                    .items
+                    .iter()
+                    .any(|asset| asset.path == *p && asset.kind == "folder") =>
+            {
+                p.clone()
+            }
             commands::Target::Asset(p) => p.rsplit_once('/').map_or("", |(p, _)| p).to_owned(),
             _ => editor.state.asset_folder.clone(),
         };
+        let logical_folder = self.browser.authored_folder_ref(&folder)?;
+        let folder = ops::authored::storage(
+            &self.browser.files,
+            editor.host.store().workspace(),
+            logical_folder,
+        )?;
         let stem = if template == "system" {
             "NewSystem"
         } else {
             "NewBehaviour"
         };
+        let path = (1..=10_000)
+            .map(|n| {
+                let name = if n == 1 {
+                    stem.to_owned()
+                } else {
+                    format!("{stem}{n}")
+                };
+                if logical_folder.is_empty() {
+                    format!("{name}.cs")
+                } else {
+                    format!("{logical_folder}/{name}.cs")
+                }
+            })
+            .find(|p| {
+                ops::authored::available(&self.browser.files, editor.host.store().workspace(), p)
+                    && !self
+                        .browser
+                        .items
+                        .iter()
+                        .any(|a| a.kind == "cs" && names::file_name(&a.path) == names::file_name(p))
+            })
+            .ok_or("No unused script name")?;
+        // ScriptService emits project-relative source file operations. Its path is
+        // physical storage, while document/reference commands use logical paths.
         let path =
-            (1..)
-                .map(|n| {
-                    let name = if n == 1 {
-                        stem.to_owned()
-                    } else {
-                        format!("{stem}{n}")
-                    };
-                    if folder.is_empty() {
-                        format!("{name}.cs")
-                    } else {
-                        format!("{folder}/{name}.cs")
-                    }
-                })
-                .find(|p| {
-                    !editor.host.root().join(p).exists()
-                        && !self.browser.items.iter().any(|a| {
-                            a.kind == "cs" && names::file_name(&a.path) == names::file_name(p)
-                        })
-                })
-                .ok_or("No unused script name")?;
+            ops::authored::storage(&self.browser.files, editor.host.store().workspace(), &path)?;
         editor.action(
             "script.create",
             json!({"path":path,"template":template,"compile":false}),

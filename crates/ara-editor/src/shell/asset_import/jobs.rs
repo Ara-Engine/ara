@@ -10,7 +10,20 @@ impl Shell {
                 index += 1;
                 continue;
             }
-            let result = editor.action("jobs.status", json!({"job":job.id}))?;
+            let result = match editor.action("jobs.status", json!({"job":job.id})) {
+                Ok(result) => result,
+                Err(error) => {
+                    let job = &mut self.asset_import.jobs[index];
+                    job.error = Some(error.to_string());
+                    job.status = backend::Status::read(
+                        json!({"status":"failed","message":error.to_string(),"frontend":true}),
+                    );
+                    self.alert_error(editor, &error);
+                    changed = true;
+                    index += 1;
+                    continue;
+                }
+            };
             let status = backend::Status::read(result);
             let job = &mut self.asset_import.jobs[index];
             job.last = Instant::now();
@@ -42,8 +55,11 @@ impl Shell {
                 self.status_note = Some(job.status.summary());
                 // Only an explicit storage path can navigate the browser. Preserve
                 // a selection the user changed while planning/importing proceeded.
-                if job.selection.unchanged(editor)
-                    && let Some(path) = job.status.selection_path()
+                if job.selection.unchanged(
+                    editor,
+                    self.asset_selection.selected(),
+                    self.asset_selection_path.as_deref(),
+                ) && let Some(path) = job.status.selection_path()
                 {
                     editor.action("editor.workspace", json!({"asset":path}))?;
                 }

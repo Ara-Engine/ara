@@ -174,6 +174,7 @@ impl Shell {
     }
 
     pub(super) fn asset_selection_order(&mut self, editor: &Editor) -> Vec<u64> {
+        self.observe_asset_history(editor);
         if self.asset_selection_path != editor.state.asset_path {
             self.asset_selection.set_selected(
                 editor
@@ -190,6 +191,7 @@ impl Shell {
             .items
             .iter()
             .map(|asset| ara_ui::source::stable_id(&asset.path))
+            .chain(self.asset_ops.preserved_keys())
             .collect();
         let order: Vec<_> = self
             .asset_rows
@@ -210,6 +212,21 @@ impl Shell {
         editor: &mut Editor,
         asset: &assets::Asset,
     ) -> ara_ui::Result<()> {
+        if asset.kind == "folder" {
+            let now = std::time::Instant::now();
+            let double = self
+                .asset_folder_click
+                .as_ref()
+                .is_some_and(|(previous, at)| {
+                    previous == &asset.path && now.duration_since(*at).as_millis() < 400
+                });
+            self.asset_folder_click = Some((asset.path.clone(), now));
+            if double {
+                self.asset_folder_click = None;
+                editor.action("editor.workspace", json!({"folder":asset.path}))?;
+                return Ok(());
+            }
+        }
         let order = self.asset_selection_order(editor);
         self.asset_selection.select(
             &order,
@@ -332,7 +349,11 @@ impl Shell {
         Some((columns, card.h + gap))
     }
 
-    fn reveal_asset_selection(&mut self, editor: &mut Editor, target: u64) -> ara_ui::Result<()> {
+    pub(super) fn reveal_asset_selection(
+        &mut self,
+        editor: &mut Editor,
+        target: u64,
+    ) -> ara_ui::Result<()> {
         let Some(next) = self
             .asset_rows
             .items

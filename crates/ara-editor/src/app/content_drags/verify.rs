@@ -139,9 +139,12 @@ impl ContentDrags {
                     .workspace()
                     .index()
                     .id_of("assets/os-source.png");
+                let storage = fixture::storage(shell, "assets/os-source.png");
+                let copied =
+                    storage.is_some_and(|storage| editor.host.root().join(storage).is_file());
                 (
-                    id.is_some() && editor.host.root().join("assets/os-source.png").is_file(),
-                    json!({"asset":id,"sourceCopied":editor.host.root().join("assets/os-source.png").is_file()}),
+                    id.is_some() && copied,
+                    json!({"asset":id,"storagePath":storage,"sourceCopied":copied}),
                 )
             }
         };

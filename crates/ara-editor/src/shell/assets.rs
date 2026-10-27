@@ -1,3 +1,4 @@
+use ara_host::project::{AuthoredFile, AuthoredRole, AuthoredScope, authored_files};
 use serde_json::Value;
 use std::{
     path::{Path, PathBuf},
@@ -5,7 +6,12 @@ use std::{
 };
 #[derive(Clone, PartialEq, Eq)]
 pub(crate) struct Asset {
+    /// Project-relative storage path: browser identity, selection and physical IO.
     pub path: String,
+    /// Logical authored path for typed asset commands and references; absent for project files.
+    pub authored_path: Option<String>,
+    /// Registered document kind, independent of the file's extension.
+    pub document_kind: Option<String>,
     pub reference: Option<String>,
     pub kind: String,
     pub domain: Option<String>,
@@ -39,6 +45,24 @@ pub(crate) fn field_accepts(
     }
 }
 impl Asset {
+    pub(super) fn unindexed(path: String, kind: String) -> Self {
+        Self {
+            path,
+            authored_path: None,
+            document_kind: None,
+            reference: None,
+            kind,
+            domain: None,
+            uses: Vec::new(),
+            stamp: 0,
+        }
+    }
+    pub(super) fn folder(path: String, authored_path: Option<String>) -> Self {
+        Self {
+            authored_path,
+            ..Self::unindexed(path, "folder".into())
+        }
+    }
     /// Whether this file can fill an asset field of declared `kind` at `field`
     /// ([`field_accepts`]); folders never do.
     pub fn fits(&self, kind: Option<&str>, field: &str) -> bool {
@@ -51,204 +75,259 @@ impl Asset {
     }
     /// Prefer the authority's current index when a recent import predates the browser scan.
     pub fn current_reference(&self, workspace: &ara_doc::Workspace) -> Option<String> {
+        let path = self.authored_path.as_deref()?;
         workspace
             .index()
-            .id_of(&self.path)
-            .map(|id| format!("@{}#{id}", self.path))
+            .id_of(path)
+            .map(|id| format!("@{path}#{id}"))
             .or_else(|| self.reference.clone())
     }
 }
+struct Snapshot {
+    files: Vec<AuthoredFile>,
+    items: Vec<Asset>,
+}
 pub(super) struct Browser {
     pub items: Vec<Asset>,
-    /// Bumped whenever `items` changes (memoized panels list them).
+    /// Last successful semantic index, also used to resolve OS-drop destinations.
+    pub files: Vec<AuthoredFile>,
+    /// Workspace reference prefix, empty for legacy projects.
+    reference_root: String,
+    /// Bumped whenever rows or their diagnostic change.
     pub revision: u64,
-    pending: Receiver<Vec<Asset>>,
+    pub error: Option<String>,
+    pub(super) diagnostic: Option<ara_diag::Diagnostic>,
+    pending: Receiver<Result<Snapshot, ara_diag::Diagnostic>>,
+    refresh: mpsc::SyncSender<()>,
     optimistic: std::collections::BTreeMap<String, Option<Asset>>,
 }
 impl Browser {
-    /// Publish command outputs immediately; the next filesystem scan reconciles stamps.
+    /// Physical reference prefix configured by the loaded workspace.
+    pub(super) fn reference_root(&self) -> &str {
+        &self.reference_root
+    }
+    /// Legacy source creation publishes only its already-completed command output.
+    /// File reorganization never uses these optimistic rows.
     pub(super) fn insert_path(&mut self, path: &str, kind: &str) {
         self.remove_path(path);
-        self.items.push(Asset {
-            path: path.into(),
-            kind: kind.into(),
-            reference: None,
-            domain: None,
-            uses: Vec::new(),
-            stamp: 0,
-        });
+        let mut asset = Asset::unindexed(path.into(), kind.into());
+        // This legacy seam is used only after a typed source-creation command
+        // succeeded (and by its focused fixtures), never for file operations.
+        asset.authored_path = Some(
+            self.files
+                .iter()
+                .find(|entry| {
+                    entry.storage_path == path && matches!(&entry.scope, AuthoredScope::Authored)
+                })
+                .map(|entry| entry.path.clone())
+                .unwrap_or_else(|| {
+                    path.strip_prefix(&self.reference_root)
+                        .and_then(|tail| tail.strip_prefix('/'))
+                        .unwrap_or(path)
+                        .to_owned()
+                }),
+        );
+        self.items.push(asset);
         if let Some(asset) = self.items.last() {
             self.optimistic.insert(path.into(), Some(asset.clone()));
         }
         self.items.sort_by(|a, b| a.path.cmp(&b.path));
         self.revision += 1;
+        self.refresh();
     }
     pub(super) fn remove_path(&mut self, path: &str) {
-        self.items.retain(|a| a.path != path);
+        self.items.retain(|asset| asset.path != path);
         self.optimistic.insert(path.into(), None);
         self.revision += 1;
     }
-    pub fn new(root: &Path) -> Self {
+    pub fn new(root: &Path, schema: &ara_schema::SchemaDb, reference_root: &str) -> Self {
         let root = root.to_owned();
-        let (tx, pending) = mpsc::channel();
+        let schema = schema.clone();
+        let (tx, pending) = mpsc::sync_channel(1);
+        let (refresh, wake) = mpsc::sync_channel(1);
         std::thread::spawn(move || {
-            // Parsed documents are reused while a file's stamp is unchanged, so a rescan
-            // only stats binary media instead of reading it.
             let mut cache = std::collections::HashMap::new();
             loop {
-                let mut files = Vec::new();
-                walk(&root, &root, &mut files, &mut cache);
-                cache.retain(|path: &String, _| files.iter().any(|a| a.path == *path));
-                if tx.send(files).is_err() {
+                let snapshot = scan(&root, &schema, &mut cache);
+                if tx.send(snapshot).is_err() {
                     break;
                 }
-                std::thread::sleep(std::time::Duration::from_secs(2));
+                match wake.recv_timeout(std::time::Duration::from_secs(2)) {
+                    Ok(()) | Err(mpsc::RecvTimeoutError::Timeout) => {}
+                    Err(mpsc::RecvTimeoutError::Disconnected) => break,
+                }
             }
         });
         Self {
             items: Vec::new(),
+            files: Vec::new(),
+            reference_root: reference_root.into(),
             revision: 0,
+            error: None,
+            diagnostic: None,
             pending,
+            refresh,
             optimistic: Default::default(),
         }
     }
+    /// Request a fresh semantic projection after a completed authority job.
+    pub(super) fn refresh(&self) {
+        let _ = self.refresh.try_send(());
+    }
     pub fn poll(&mut self) -> bool {
-        if let Ok(mut items) = self.pending.try_recv() {
-            self.optimistic.retain(|path, asset| {
-                let found = items.iter().position(|a| a.path == *path);
-                match (asset.as_ref(), found) {
-                    (Some(_), Some(_)) | (None, None) => false,
-                    (Some(asset), None) => {
-                        items.push(asset.clone());
-                        true
-                    }
-                    (None, Some(at)) => {
-                        items.remove(at);
-                        true
-                    }
+        let result = match self.pending.try_recv() {
+            Ok(result) => result,
+            Err(_) => return false,
+        };
+        let mut snapshot = match result {
+            Ok(snapshot) => snapshot,
+            Err(problem) => {
+                let message = problem.message.clone();
+                let changed = self.error.as_deref() != Some(message.as_str());
+                self.error = Some(message);
+                if changed {
+                    self.diagnostic = Some(problem);
                 }
-            });
-            items.sort_by(|a, b| a.path.cmp(&b.path));
-            let changed = self.items != items;
-            self.items = items;
-            self.revision += u64::from(changed);
-            changed
-        } else {
-            false
-        }
+                self.revision += u64::from(changed);
+                return changed;
+            }
+        };
+        self.optimistic.retain(|path, asset| {
+            let found = snapshot.items.iter().position(|asset| asset.path == *path);
+            match (asset.as_ref(), found) {
+                (Some(_), Some(_)) | (None, None) => false,
+                (Some(asset), None) => {
+                    snapshot.items.push(asset.clone());
+                    true
+                }
+                (None, Some(index)) => {
+                    snapshot.items.remove(index);
+                    true
+                }
+            }
+        });
+        snapshot.items.sort_by(|a, b| a.path.cmp(&b.path));
+        let changed = self.items != snapshot.items || self.error.take().is_some();
+        self.items = snapshot.items;
+        self.files = snapshot.files;
+        self.revision += u64::from(changed);
+        changed
+    }
+    /// A cached storage folder resolves to an authored command path only through
+    /// the authority index; project settings folders cannot become content targets.
+    pub(super) fn authored_folder(&self, storage: &str) -> Result<String, String> {
+        self.authored_folder_ref(storage).map(str::to_owned)
+    }
+    pub(super) fn authored_folder_ref(&self, storage: &str) -> Result<&str, String> {
+        cached_authored_folder(&self.files, &self.reference_root, storage)
     }
 }
-/// JSON documents whose ID, domain and references the browser reads.
-const DOCUMENTS: &[&str] = &[
-    "scene",
-    "prefab",
-    "graph",
-    "animation",
-    "materialinstance",
-    "material",
-    "terrain",
-    "foliage",
-    "world",
-    "music",
-];
-fn walk(
-    root: &Path,
-    dir: &Path,
-    out: &mut Vec<Asset>,
-    cache: &mut std::collections::HashMap<String, Asset>,
-) {
-    let Ok(entries) = std::fs::read_dir(dir) else {
-        return;
-    };
-    let mut entries: Vec<_> = entries.flatten().collect();
-    entries.sort_by_key(|e| e.file_name());
-    for entry in entries {
-        let path = entry.path();
-        let name = entry.file_name();
-        let name = name.to_string_lossy();
-        if name.starts_with('.') || matches!(name.as_ref(), "target" | "node_modules" | "spikes") {
-            continue;
-        }
-        let Ok(ty) = entry.file_type() else {
-            continue;
-        };
-        if ty.is_symlink() {
-            continue;
-        }
-        if ty.is_dir() {
-            if path != root && path.join("ara.project.json").exists() {
-                continue;
-            }
-            out.push(Asset {
-                path: path
-                    .strip_prefix(root)
-                    .unwrap_or(&path)
-                    .to_string_lossy()
-                    .replace('\\', "/"),
-                reference: None,
-                kind: "folder".into(),
-                domain: None,
-                uses: Vec::new(),
-                stamp: 0,
-            });
-            walk(root, &path, out, cache);
-        } else {
-            let relative = path
-                .strip_prefix(root)
-                .unwrap_or(&path)
-                .to_string_lossy()
-                .replace('\\', "/");
-            let kind = path
-                .extension()
-                .and_then(|e| e.to_str())
-                .unwrap_or("file")
-                .to_owned();
-            if relative.ends_with(".import.json") {
-                continue;
-            }
-            let stamp = stamp(&path);
-            if let Some(known) = cache.get(&relative).filter(|a| a.stamp == stamp) {
-                out.push(known.clone());
-                continue;
-            }
-            let document = DOCUMENTS
-                .contains(&kind.as_str())
-                .then(|| std::fs::read_to_string(&path).ok())
-                .flatten()
-                .and_then(|text| ara_json::parse(&text).ok());
-            let domain = document
-                .as_ref()
-                .and_then(|v| v["records"]["g_meta"]["domain"].as_str())
-                .map(str::to_owned);
-            let id = if DOCUMENTS.contains(&kind.as_str()) {
-                document
-                    .as_ref()
-                    .and_then(|v| v["id"].as_str().map(str::to_owned))
-            } else {
-                let sidecar = PathBuf::from(format!("{}.import.json", path.display()));
-                std::fs::read_to_string(sidecar)
-                    .ok()
-                    .and_then(|s| serde_json::from_str::<Value>(&s).ok())
-                    .and_then(|v| v["id"].as_str().map(str::to_owned))
-            };
-            let asset = Asset {
-                reference: id.map(|id| format!("@{relative}#{id}")),
-                stamp,
-                path: relative.clone(),
-                kind,
-                domain,
-                uses: document
-                    .map(|v| {
-                        let mut refs = Vec::new();
-                        references(&v, &mut refs);
-                        refs
-                    })
-                    .unwrap_or_default(),
-            };
-            cache.insert(relative, asset.clone());
-            out.push(asset);
-        }
+fn cached_authored_folder<'a>(
+    files: &'a [AuthoredFile],
+    reference_root: &str,
+    storage: &str,
+) -> Result<&'a str, String> {
+    if storage.is_empty() {
+        return Ok("");
     }
+    if let Some(entry) = files.iter().find(|entry| entry.storage_path == storage) {
+        if !matches!(&entry.scope, AuthoredScope::Authored)
+            || !matches!(&entry.role, AuthoredRole::Folder)
+        {
+            return Err("Choose a folder inside authored content; project settings are not asset destinations".into());
+        }
+        return Ok(entry.path.as_str());
+    }
+    if !reference_root.is_empty() && storage == reference_root {
+        return Ok("");
+    }
+    Err("This folder is not in the current authored index".into())
+}
+impl super::Shell {
+    /// The last successful semantic index is immutable during a UI/drop dispatch.
+    pub(crate) fn asset_authored_files(&self) -> &[AuthoredFile] {
+        &self.browser.files
+    }
+}
+fn scan(
+    root: &Path,
+    schema: &ara_schema::SchemaDb,
+    cache: &mut std::collections::HashMap<String, Asset>,
+) -> Result<Snapshot, ara_diag::Diagnostic> {
+    let files = authored_files(root, schema)?;
+    let mut items = Vec::with_capacity(files.len());
+    for entry in &files {
+        if entry.storage_path.ends_with(".import.json") {
+            continue;
+        }
+        let authored_path =
+            matches!(&entry.scope, AuthoredScope::Authored).then(|| entry.path.clone());
+        if matches!(&entry.role, AuthoredRole::Folder) {
+            items.push(Asset::folder(entry.storage_path.clone(), authored_path));
+            continue;
+        }
+        let document_kind = match &entry.role {
+            AuthoredRole::Document { name } => Some(name.clone()),
+            _ => None,
+        };
+        let path = root.join(&entry.storage_path);
+        let stamp = stamp(&path);
+        if let Some(known) = cache.get(&entry.storage_path).filter(|asset| {
+            asset.stamp == stamp
+                && asset.authored_path == authored_path
+                && asset.document_kind == document_kind
+        }) {
+            items.push(known.clone());
+            continue;
+        }
+        let kind = document_kind.clone().unwrap_or_else(|| {
+            path.extension()
+                .and_then(|ext| ext.to_str())
+                .unwrap_or("file")
+                .to_ascii_lowercase()
+        });
+        let document = document_kind
+            .as_ref()
+            .and_then(|_| std::fs::read_to_string(&path).ok())
+            .and_then(|text| ara_json::parse(&text).ok());
+        let id = if document_kind.is_some() {
+            document
+                .as_ref()
+                .and_then(|value| value["id"].as_str())
+                .map(str::to_owned)
+        } else {
+            std::fs::read_to_string(PathBuf::from(format!("{}.import.json", path.display())))
+                .ok()
+                .and_then(|text| ara_json::parse(&text).ok())
+                .and_then(|value| value["id"].as_str().map(str::to_owned))
+        };
+        let mut uses = Vec::new();
+        if let Some(document) = &document {
+            references(document, &mut uses);
+        }
+        let asset = Asset {
+            path: entry.storage_path.clone(),
+            reference: authored_path
+                .as_ref()
+                .zip(id)
+                .map(|(path, id)| format!("@{path}#{id}")),
+            domain: document
+                .as_ref()
+                .and_then(|value| value["records"]["g_meta"]["domain"].as_str())
+                .map(str::to_owned),
+            authored_path,
+            document_kind,
+            kind,
+            stamp,
+            uses,
+        };
+        cache.insert(entry.storage_path.clone(), asset.clone());
+        items.push(asset);
+    }
+    let live: std::collections::HashSet<_> =
+        items.iter().map(|asset| asset.path.as_str()).collect();
+    cache.retain(|path, _| live.contains(path.as_str()));
+    Ok(Snapshot { files, items })
 }
 fn references(value: &Value, out: &mut Vec<String>) {
     match value {
@@ -280,4 +359,50 @@ fn stamp(path: &Path) -> u64 {
         }
     }
     hash.finish()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn storage_identity_distinguishes_authored_and_project_files_with_the_same_logical_name() {
+        let mut authored =
+            Asset::unindexed("game/settings/builds/demo.json".into(), "export".into());
+        authored.authored_path = Some("settings/builds/demo.json".into());
+        authored.document_kind = Some("export".into());
+        authored.reference = Some("@settings/builds/demo.json#ex_authored".into());
+        let mut project = Asset::unindexed("settings/builds/demo.json".into(), "export".into());
+        project.document_kind = Some("export".into());
+        assert_ne!(
+            ara_ui::source::stable_id(&authored.path),
+            ara_ui::source::stable_id(&project.path)
+        );
+        let workspace = ara_doc::Workspace::default();
+        assert_eq!(
+            authored.current_reference(&workspace).as_deref(),
+            Some("@settings/builds/demo.json#ex_authored")
+        );
+        assert!(project.current_reference(&workspace).is_none());
+    }
+    #[test]
+    fn an_actual_legacy_game_folder_wins_over_the_modern_root_name() {
+        let mut file = AuthoredFile {
+            path: "game".into(),
+            storage_path: "game".into(),
+            scope: AuthoredScope::Authored,
+            role: AuthoredRole::Folder,
+        };
+        assert_eq!(
+            cached_authored_folder(std::slice::from_ref(&file), "", "game").as_deref(),
+            Ok("game")
+        );
+        assert!(cached_authored_folder(&[], "", "game").is_err());
+        assert_eq!(
+            cached_authored_folder(&[], ara_doc::AUTHORING_ROOT, ara_doc::AUTHORING_ROOT)
+                .as_deref(),
+            Ok("")
+        );
+        file.scope = AuthoredScope::Project;
+        assert!(cached_authored_folder(&[file], ara_doc::AUTHORING_ROOT, "game").is_err());
+    }
 }

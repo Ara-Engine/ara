@@ -31,6 +31,7 @@ pub(crate) enum Target {
         placement: Placement,
     },
     AssetField(String),
+    AssetFolder(String),
     EntityField(String),
     Animation {
         doc: String,
@@ -146,6 +147,9 @@ impl Shell {
                     Target::AssetField(field) | Target::EntityField(field) => {
                         json!({"kind":"reference","field":field})
                     }
+                    Target::AssetFolder(folder) => {
+                        json!({"kind":"assetFolder","storagePath":folder})
+                    }
                     Target::Animation { doc, item, key } => {
                         json!({"kind":"animation","doc":doc,"item":item,"key":key})
                     }
@@ -241,6 +245,7 @@ impl Shell {
                 "hierarchy-rows",
                 "asset-rows",
                 "asset-grid",
+                "asset-folders",
                 "inspector-scroll",
             ] {
                 let Some(i) = self.shown_node(id) else {

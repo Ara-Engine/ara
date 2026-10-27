@@ -385,6 +385,7 @@ impl Shell {
     pub(super) fn paint_drop_preview(&mut self) {
         self.paint_marquee();
         self.paint_content_drag();
+        self.paint_file_drag();
         let Some(preview) = self
             .drop_preview
             .as_ref()

@@ -20,12 +20,12 @@ pub(super) struct AssetsVerification {
     output: PathBuf,
     entity: String,
     attach_job: Option<String>,
+    folder: Option<String>,
 }
 impl AssetsVerification {
     pub(super) fn new(editor: &mut Editor, output: &Path) -> ara_ui::Result<Self> {
         std::fs::create_dir_all(output)?;
         editor.action("editor.layout.show", json!({"panel":"assets"}))?;
-        editor.action("editor.workspace", json!({"folder":"Assets/Gameplay"}))?;
         let resolved = crate::world::resolve(editor.host.store(), &editor.state.doc)
             .map_err(|d| format!("{d:?}"))?;
         let entity = resolved
@@ -40,10 +40,18 @@ impl AssetsVerification {
             output: output.into(),
             entity,
             attach_job: None,
+            folder: None,
         })
     }
     pub(super) fn finished(&self) -> bool {
         self.step >= 9
+    }
+    fn source_path(&self, name: &str) -> ara_ui::Result<String> {
+        let folder = self
+            .folder
+            .as_deref()
+            .ok_or("The script fixture's authored folder is not indexed")?;
+        Ok(format!("{folder}/{name}"))
     }
     #[allow(clippy::too_many_arguments)]
     pub(super) fn step(
@@ -80,9 +88,22 @@ impl AssetsVerification {
         }
         match self.step {
             0 => {
-                if !shell.poll_assets_for_test(editor) {
+                shell.poll_assets_for_test(editor);
+                let Some(folder) = shell
+                    .asset_authored_files()
+                    .iter()
+                    .find(|file| {
+                        matches!(&file.scope, ara_host::project::AuthoredScope::Authored)
+                            && matches!(&file.role, ara_host::project::AuthoredRole::Folder)
+                            && file.path == "Assets/Gameplay"
+                    })
+                    .map(|file| file.storage_path.clone())
+                else {
                     return Ok(false);
-                }
+                };
+                editor.action("editor.workspace", json!({"folder":folder}))?;
+                self.folder = Some(folder);
+                shell.rebuild(editor)?;
                 capture.screenshot(
                     "01-folders-collapsed",
                     editor,
@@ -120,7 +141,7 @@ impl AssetsVerification {
                 if !editor
                     .host
                     .root()
-                    .join("Assets/Gameplay/NewBehaviour.cs")
+                    .join(self.source_path("NewBehaviour.cs")?)
                     .exists()
                 {
                     return Err("Script creation did not write its selected folder".into());
@@ -138,7 +159,7 @@ impl AssetsVerification {
                     editor
                         .host
                         .root()
-                        .join("Assets/Gameplay/PlayerController.cs"),
+                        .join(self.source_path("PlayerController.cs")?),
                 )?;
                 if !source.contains("class PlayerController : Behaviour") {
                     return Err("Class name did not follow inline file rename".into());
@@ -156,8 +177,8 @@ impl AssetsVerification {
                 }
                 editor.apply(vec![json!({"cmd":"component.add","args":{"entity":self.entity,"component":"PlayerController"}})],"Attach compiled menu-created script",None)?;
                 // Exercise the exact MCP command used by Add Component → New Script.
-                editor.action("script.create",json!({"path":"Assets/Gameplay/MovementSystem.cs","template":"system","compile":false}))?;
-                let result=editor.action("component.new_script",json!({"path":"Assets/Gameplay/AttachedBehaviour.cs","template":"behaviour","attachTo":[self.entity],"doc":editor.state.doc}))?;
+                editor.action("script.create",json!({"path":self.source_path("MovementSystem.cs")?,"template":"system","compile":false}))?;
+                let result=editor.action("component.new_script",json!({"path":self.source_path("AttachedBehaviour.cs")?,"template":"behaviour","attachTo":[self.entity],"doc":editor.state.doc}))?;
                 self.attach_job = result["job"].as_str().map(str::to_owned);
             }
             5 => {
@@ -201,8 +222,8 @@ impl AssetsVerification {
                 )?;
             }
             6 => {
-                let path = "Assets/Gameplay/PlayerController.cs";
-                let source = std::fs::read_to_string(editor.host.root().join(path))?;
+                let path = self.source_path("PlayerController.cs")?;
+                let source = std::fs::read_to_string(editor.host.root().join(&path))?;
                 let text=source.replace("    /// <inheritdoc/>","    /// <summary>Hit points stored in ECS.</summary>\n    [Property] public partial int Health { get; set; }\n\n    /// <inheritdoc/>");
                 editor.action("script.write", json!({"path":path,"text":text}))?;
             }
@@ -237,7 +258,7 @@ impl AssetsVerification {
                 std::fs::write(
                     self.output.join("assets-scripts.json"),
                     ara_json::to_canonical_string(
-                        &json!({"compiled":true,"attached":true,"hotCompiled":true,"entity":self.entity,"path":"Assets/Gameplay/PlayerController.cs","createAndAttachJob":self.attach_job,"sidebarWidth":editor.state.asset_sidebar_width}),
+                        &json!({"compiled":true,"attached":true,"hotCompiled":true,"entity":self.entity,"path":self.source_path("PlayerController.cs")?,"createAndAttachJob":self.attach_job,"sidebarWidth":editor.state.asset_sidebar_width}),
                     ),
                 )?;
             }

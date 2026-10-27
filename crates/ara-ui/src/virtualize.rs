@@ -451,6 +451,7 @@ impl Ui {
             state: State::default(),
             layout_id,
             text,
+            placeholder: None,
             dirty: crate::runtime::Dirty {
                 style: false,
                 layout: true,
