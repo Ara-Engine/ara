@@ -288,6 +288,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::unwrap_used)]
     fn presentation_recovers_unloaded_documents_without_relaxing_strict_resolution() {
         let mut store = store();
         let mut resolver = SceneResolver::default();
