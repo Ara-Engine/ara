@@ -1,7 +1,13 @@
 # ara-editor-gpu
 
-Editor-only Vulkan UiGpu adapter over the renderer's existing ara-gpu device.
+Editor-only UiGpu adapter: Vulkan (`src/vulkan/`) over the renderer's ara-gpu device
+everywhere except macOS, where `src/metal/` draws through the portable ara-gpu API on
+a MetalDevice it owns (same GPU; renderer images and Play slots adopted by texture).
 No project, scene-authority, widget or input state belongs here.
+
+Backend-neutral calls for hosts (editor, splash, Hub): `UiDevice` (Vulkan context, a
+marker on Metal), `ui_device(&GpuDevice)`, `open_presentation`, and
+`NativeUi::{create_present, present, retire_present, wait_idle}` over ara-platform.
 
 API: `NativeUi`, `Overlay`. The constructor/native image import are unsafe:
 the caller retains the creating renderer/device until this adapter is dropped.
@@ -19,6 +25,13 @@ External images enter and leave CopySource; never retain a destroyed resize view
 Resources clean partial construction and are destroyed after queue completion.
 
 Cook offline with `shaders/compile.ps1`; checked-in SPIR-V is runtime input.
+The shader logic is `shaders/ui_body.slang`: `ui.slang` (Vulkan layout above) and
+`ui_bindless.slang` (engine bindless ABI: root words instances/masks slots, first,
+texture|mode<<16, maskOffset|count<<24, clip origin/size u16 pairs, dpi; the draw's
+viewport is its clip) include it. Metal needs the latter cooked on the canonical host:
+`ara-shader-cook crates/ara-editor-gpu/shaders/pipelines.json crates/ara-editor-gpu/cooked`
+with Metal Shader Converter installed. Keep `ui.slang`'s SPIR-V byte-identical when
+refactoring the body (compile both entries before and after with the same slangc).
 Do not enable runtime descriptor arrays: ara-gpu's device uses a fixed-size heap.
 `ara-editor --verify` compares actual GPU output against CpuGpu for raster/MSDF,
 nested clips, alpha, and complete editor screenshots with both semantic themes.

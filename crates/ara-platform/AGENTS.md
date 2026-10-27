@@ -1,6 +1,7 @@
 # ara-platform
 
-Minimal SDL3 native window/input and Vulkan presentation. Uses `sdl3-sys` 0.7.2
+Minimal SDL3 native window/input and native presentation: Vulkan, or on macOS an SDL
+Metal view presented through `ara_gpu::metal::present` (`src/present/metal.rs`). Uses `sdl3-sys` 0.7.2
 (SDL 3.4.18) with a raw SDL/Vulkan handle bridge compatible with git ash.
 
 ## Public API
@@ -30,7 +31,11 @@ Minimal SDL3 native window/input and Vulkan presentation. Uses `sdl3-sys` 0.7.2
 - Icon: `Window::new` applies the Ara app icon (`assets/brand/png/ara-icon-64.png`,
   embedded; failures are ignored because Wayland has no window icons). Games call
   `set_icon(rgba, [w, h])`. Regenerate the PNG with `cargo run -p ara-brand -- export`.
-- `Present`: unsafe native integration over an existing GPU context. Retain both
+- `Present`: backend-selected (`src/present/{vulkan,metal}.rs`). Portable surface:
+  `create`, `create_with_output`, `present_image`, `present_encoded`, `retire` (no
+  wait; callers wait for idle where they need it), `output_settings`, `surface_format`.
+  Metal accepts SDR only and scales/converts like the Vulkan blit.
+- Vulkan `Present`: unsafe native integration over an existing GPU context. Retain both
   native owners, present only completed CopySource images, and destroy after idle.
   Leaf acquire/present/queue-idle waits contribute to `Context::host_wait_stats`.
   Loading/game may transfer the same Present between owners of one native device;
