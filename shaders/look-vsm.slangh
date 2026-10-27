@@ -60,7 +60,7 @@ float vsmFilter(Look l,uint level,int2 page,int slot,float2 local,float depth,bo
         return lerp(lerp(lit.w,lit.z,t.x),lerp(lit.x,lit.y,t.x),t.y);
     }
     float4 wx=float4(1-t.x,1,1,t.x)/3,wy=float4(1-t.y,1,1,t.y)/3;float sum=0;
-    for(uint j=0;j<2;j++)for(uint i=0;i<2;i++){
+    [unroll]for(uint j=0;j<2;j++)[unroll]for(uint i=0;i<2;i++){
         float4 lit=vsmGather(l,level,page,slot,int2(base)+int2(2*i,2*j),depth);
         sum+=wx[2*i]*wy[2*j]*lit.w+wx[2*i+1]*wy[2*j]*lit.z+wx[2*i]*wy[2*j+1]*lit.x+wx[2*i+1]*wy[2*j+1]*lit.y;
     }

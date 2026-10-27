@@ -55,6 +55,14 @@ static const uint TILE_LIGHTS=128,TILE_STRIDE=TILE_LIGHTS+1;
 // The frame record (root word 0: uniform across the draw or dispatch, so no
 // NonUniformResourceIndex: the load can stay scalar).
 Frame frame() {return buffers[root.frame].Load<Frame>(0);}
+// Cascade `c`'s light view-projection (Frame.shadows, after the three float4x4s),
+// loaded alone: a runtime index into a copy of the frame record puts all four
+// matrices in a per-lane local array (spilled to memory).
+float4x4 frameShadow(uint c){return buffers[root.frame].Load<float4x4>(192+c*64);}
+// Component `i` of `v` by selects: a runtime vector index lowers to a per-lane local
+// array in DXIL (and in Metal through it).
+uint component(uint4 v,uint i){return i==0?v.x:i==1?v.y:i==2?v.z:v.w;}
+float component(float4 v,uint i){return i==0?v.x:i==1?v.y:i==2?v.z:v.w;}
 float4 tex(uint index,float2 uv) {return textures[NonUniformResourceIndex(index)].SampleLevel(samplers[0],uv,0);}
 float4 envTex(uint index,float2 uv) {return textures[NonUniformResourceIndex(index)].SampleLevel(samplers[1],uv,0);}
 float4 historyTex(uint index,float2 uv) {return textures[NonUniformResourceIndex(index)].SampleLevel(samplers[2],uv,0);}

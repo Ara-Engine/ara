@@ -10,7 +10,7 @@ Varying geometryVertex(Vertex v) {
 }
 [shader("vertex")]
 Varying shadowVertex(Vertex v) {
-    Varying o;Frame f=frame();o.clip=mul(f.shadows[root.cascade],float4(v.position,1));o.world=v.position;o.normal=v.normal;o.uv=v.uv;o.tangent=v.tangent;return o;
+    Varying o;Frame f=frame();o.clip=mul(frameShadow(root.cascade),float4(v.position,1));o.world=v.position;o.normal=v.normal;o.uv=v.uv;o.tangent=v.tangent;return o;
 }
 // ara_render::scene::{BASE_COLOR_DECODE_SRGB,EMISSIVE_DECODE_SRGB}.
 // Native graph sampleColor filters raw UNORM, then decodes; glTF views decode in hardware.

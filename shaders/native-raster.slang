@@ -29,7 +29,7 @@ struct ForwardVarying {Varying v;nointerpolation float exposure:TEXCOORD10;};
 // VSM_PAGE_DRAWS+ this frame's virtual shadow pages (look::vsm PAGE_DRAWS).
 static const uint VSM_PAGE_DRAWS=1024;
 float4x4 shadowMatrix(Frame f,uint cascade){
-    if(cascade<4)return f.shadows[cascade];
+    if(cascade<4)return frameShadow(cascade);
     if(cascade>=VSM_PAGE_DRAWS)return buffers[NonUniformResourceIndex(look(f).vsm.z)].Load<float4x4>((cascade-VSM_PAGE_DRAWS)*64);
     return buffers[NonUniformResourceIndex(look(f).localShadows.x)].Load<float4x4>(LOCAL_FACES+(cascade-4)*64);
 }
@@ -184,7 +184,8 @@ float terrainBreakup(float3 world){
 // distance (blended over a quarter more, decided per quad so derivatives stay
 // valid) layers keep colour maps and factors only.
 Surface terrainSurface<let SIDES:int>(NativeMaterial m,Varying v){
-    float4 weights=v.weights;for(uint i=m.slots.z;i<4;i++)weights[i]=0;
+    // Layers past the count weigh nothing (a mask, not a runtime index: see component).
+    uint layers=m.slots.z;float4 weights=v.weights*float4(layers>0,layers>1,layers>2,layers>3);
     float sum=dot(weights,float4(1));weights=sum>1e-8?weights/sum:float4(1,0,0,0);
     // The layers share the splat geometry; the frame follows the first layer's
     // normal-map coordinates (layers differ in tiling scale only).
@@ -202,9 +203,9 @@ Surface terrainSurface<let SIDES:int>(NativeMaterial m,Varying v){
     float3 projection=terrainProjection(normal);float side=projection.x+projection.z;
     bool sides=SIDES!=0 && max(max(side,QuadReadAcrossX(side)),max(QuadReadAcrossY(side),QuadReadAcrossDiagonal(side)))>0;
     for(uint i=0;i<m.slots.z;i++){
-        float w=weights[i];
+        float w=component(weights,i);
         [branch]if(max(max(w,QuadReadAcrossX(w)),max(QuadReadAcrossY(w),QuadReadAcrossDiagonal(w)))<=0)continue;
-        NativeMaterial layer=material(m.layers[i]);
+        NativeMaterial layer=material(component(m.layers,i));
         float4 base=terrainColor(layer,v,projection,sides)*layer.pbr.color;
         // Far away, the metal/roughness map's coarsest mip (its mean) scales the
         // factors: glTF factors are often one, with the map holding the values.

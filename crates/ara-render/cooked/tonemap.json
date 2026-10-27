@@ -1,22 +1,22 @@
 {
   "binding_layout_hash": "f71261afa0d52758f34ca15c916d2da422ee92b118ede6e189c970911a274f1e",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "a41e520a0ea3b42084ff0f2e7f34466c15f9c2054366dd89c836d79bc40301ae",
+  "key": "7f2c574eba189620bdfab77e4385df7a508c1a06cd16b3ea4495bcb837c5a7eb",
   "stages": [
     {
-      "dxil": "a41e520a0ea3b42084ff0f2e7f34466c15f9c2054366dd89c836d79bc40301ae/tonemapMain.dxil",
-      "dxil_hash": "dd20064a360bc7e1c4d3a1158b4b327f9192b5b2c40ec14006b6adf4c09f2a24",
+      "dxil": "688ea9288056f53ef66598c9f377a9ad5f43771495716f19fe315b2de9204c25/tonemapMain.dxil",
+      "dxil_hash": "1d1de35a8edc701fd09813627077254e48fba7ba1609a6cf86372a8e10b42c1f",
       "metal": {
         "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
-        "metallib": "a41e520a0ea3b42084ff0f2e7f34466c15f9c2054366dd89c836d79bc40301ae/tonemapMain.metallib",
-        "metallib_hash": "b8fc297175a2f3d697dba5d0d4a0812eac5c3f2edbbfaa623d6850d2c0ab0d44",
-        "reflection": "a41e520a0ea3b42084ff0f2e7f34466c15f9c2054366dd89c836d79bc40301ae/tonemapMain.metal.json",
+        "metallib": "688ea9288056f53ef66598c9f377a9ad5f43771495716f19fe315b2de9204c25/tonemapMain.metallib",
+        "metallib_hash": "a1dd7b0de377c666599cbff941b39d6dc3e229d9435875219f472488d15b6a97",
+        "reflection": "688ea9288056f53ef66598c9f377a9ad5f43771495716f19fe315b2de9204c25/tonemapMain.metal.json",
         "root_signature_hash": "1cc11e518b14c2b24e05fc30812bfd2b87e0a9c313ea79a4620a443a723525ef"
       },
       "source_entry": "tonemapMain",
-      "spirv": "a41e520a0ea3b42084ff0f2e7f34466c15f9c2054366dd89c836d79bc40301ae/tonemapMain.spv",
+      "spirv": "688ea9288056f53ef66598c9f377a9ad5f43771495716f19fe315b2de9204c25/tonemapMain.spv",
       "spirv_entry": "main",
-      "spirv_hash": "ce2dc03e205c4e47c8ecf704811f03f9e9ed6d026dc34587be84a26f2baff0a0",
+      "spirv_hash": "d3e5f6fa25206640ddae7ce0a198e1a5b9874390f4dd4c347678f927d6ded7eb",
       "stage": "compute"
     }
   ],
