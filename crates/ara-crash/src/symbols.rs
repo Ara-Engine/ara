@@ -58,6 +58,74 @@ pub fn archive_pe(image: &Path, pdb: &Path, raw: &Path, store: &Path) -> Result<
     Ok(())
 }
 
+/// Archives a macOS image's symbols, after checking it and its dSYM DWARF file carry the
+/// same LC_UUID (the debug ID its minidumps record). The dSYM holds functions, files and
+/// lines but no unwind tables; the image holds those (`__unwind_info`), so the store
+/// gets one Breakpad file named after the image with both.
+pub fn archive_macho(image: &Path, dwarf: &Path, store: &Path) -> Result<()> {
+    let uuid = |path: &Path| -> Result<[u8; 16]> {
+        let bytes = std::fs::read(path)?;
+        goblin::mach::MachO::parse(&bytes, 0)?
+            .load_commands
+            .iter()
+            .find_map(|command| match command.command {
+                goblin::mach::load_command::CommandVariant::Uuid(uuid) => Some(uuid.uuid),
+                _ => None,
+            })
+            .with_context(|| format!("ARA-EXP-CRASH-005: {} has no LC_UUID", path.display()))
+    };
+    anyhow::ensure!(
+        uuid(image)? == uuid(dwarf)?,
+        "ARA-EXP-CRASH-005: the dSYM does not match {}; pin the dSYM built with it",
+        image.display()
+    );
+    let scratch = store.join(format!(".macho-{}", std::process::id()));
+    std::fs::create_dir_all(&scratch)?;
+    let dump = |input: &Path, check_cfi: bool, name: &str| -> Result<String> {
+        let output = scratch.join(name);
+        let mut config = dump_syms::dumper::Config::with_output(dump_syms::dumper::Output::File(
+            dump_syms::dumper::FileOutput::Path(output.clone()),
+        ));
+        config.num_jobs = 2;
+        config.check_cfi = check_cfi;
+        dump_syms::dumper::single_file(&config, input.to_str().context("non-UTF8 symbol path")?)
+            .context("ARA-EXP-CRASH-005: converting debug symbols")?;
+        Ok(std::fs::read_to_string(output)?)
+    };
+    let symbols = dump(dwarf, false, "dsym.sym")
+        .and_then(|functions| Ok((functions, dump(image, true, "image.sym")?)));
+    let _ = std::fs::remove_dir_all(&scratch);
+    let (functions, unwind) = symbols?;
+    let header = |line: &&str| line.starts_with("MODULE ") || line.starts_with("INFO ");
+    let module = unwind
+        .lines()
+        .next()
+        .and_then(|line| line.strip_prefix("MODULE "))
+        .context("ARA-EXP-CRASH-005: image symbols have no MODULE record")?;
+    let fields: Vec<_> = module.splitn(4, ' ').collect();
+    let [_, _, id, name] = fields[..] else {
+        anyhow::bail!("ARA-EXP-CRASH-005: malformed MODULE record {module}");
+    };
+    let mut merged = String::with_capacity(functions.len() + unwind.len());
+    for line in unwind
+        .lines()
+        .filter(header)
+        .chain(
+            functions
+                .lines()
+                .filter(|l| !header(l) && !l.starts_with("STACK ")),
+        )
+        .chain(unwind.lines().filter(|l| l.starts_with("STACK ")))
+    {
+        merged.push_str(line);
+        merged.push('\n');
+    }
+    let directory = store.join(name).join(id);
+    std::fs::create_dir_all(&directory)?;
+    std::fs::write(directory.join(format!("{name}.sym")), merged)?;
+    Ok(())
+}
+
 /// Archives an unstripped ELF, rejecting runtime pins without DWARF.
 pub fn archive_elf(image: &Path, store: &Path) -> Result<()> {
     let bytes = std::fs::read(image)?;
@@ -158,8 +226,9 @@ pub fn symbolize(dump: &Path, store: &Path) -> Result<crate::CrashReport> {
 }
 
 /// Symbols from a local store: the standard `<name>/<id>/<name>.sym` layout, plus a
-/// debug-ID-only match for a module the dump left unnamed (minidump-writer cannot
-/// always read a macOS main executable's path; its LC_UUID is still recorded).
+/// debug-ID-only match when the names differ. minidump-writer cannot always read a
+/// macOS main executable's path (only its LC_UUID), and a dSYM's DWARF file can be
+/// named after the build artifact rather than the shipped executable; IDs are UUIDs.
 struct StoreSupplier {
     store: std::path::PathBuf,
     simple: breakpad_symbols::SimpleSymbolSupplier,
@@ -172,14 +241,11 @@ impl StoreSupplier {
             simple: breakpad_symbols::SimpleSymbolSupplier::new(vec![store.to_path_buf()]),
         }
     }
-    /// The one `<any name>/<debug id>/*.sym` in the store for an unnamed module.
+    /// The one `<any name>/<debug id>/*.sym` in the store for `module`.
     fn by_debug_id(
         &self,
         module: &(dyn breakpad_symbols::Module + Sync),
     ) -> Option<std::path::PathBuf> {
-        if !module.code_file().is_empty() {
-            return None;
-        }
         let id = breakpad_symbols::breakpad_sym_lookup(module)?.debug_id;
         std::fs::read_dir(&self.store)
             .ok()?
@@ -231,35 +297,33 @@ mod tests {
     use breakpad_symbols::{SimpleModule, SymbolError, SymbolSupplier};
 
     #[test]
-    fn an_unnamed_module_finds_its_symbols_by_debug_id_alone() {
+    fn modules_find_their_symbols_by_debug_id_when_names_differ() {
         let store = tempfile::tempdir().unwrap();
         let id = debugid::DebugId::from_breakpad("90DD4992B59E3FEE93FFF8F1A2D32F210").unwrap();
+        // dump_syms names the store entry after the dSYM's DWARF file.
         let dir = store
             .path()
-            .join("ara-player")
+            .join("ara_player-2c91d1081f7e3a4f")
             .join(id.breakpad().to_string());
         std::fs::create_dir_all(&dir).unwrap();
-        std::fs::write(
-            dir.join("ara-player.sym"),
-            format!(
-                "MODULE mac arm64 {} ara-player
+        let module = format!(
+            "MODULE mac arm64 {} ara_player-2c91d1081f7e3a4f
 ",
-                id.breakpad()
-            ),
-        )
-        .unwrap();
+            id.breakpad()
+        );
+        std::fs::write(dir.join("ara_player-2c91d1081f7e3a4f.sym"), module).unwrap();
         let supplier = StoreSupplier::new(store.path());
         // minidump-writer names a macOS main executable it cannot read `<Unknown>`.
-        let unnamed = SimpleModule::new("<Unknown>", id);
-        let found = futures_executor::block_on(supplier.locate_symbols(&unnamed)).unwrap();
-        assert_eq!(found.symbols.module_id, id.breakpad().to_string());
-        // A named module is matched by name and ID only, as before.
-        let named = SimpleModule {
-            code_file: Some("libother.dylib".into()),
-            ..SimpleModule::new("libother.dylib", id)
-        };
+        for name in ["<Unknown>", "ara-player"] {
+            let module = SimpleModule::new(name, id);
+            let found = futures_executor::block_on(supplier.locate_symbols(&module)).unwrap();
+            assert_eq!(found.symbols.module_id, id.breakpad().to_string());
+        }
+        let other = debugid::DebugId::from_breakpad("11111111111111111111111111111111A").unwrap();
         assert!(matches!(
-            futures_executor::block_on(supplier.locate_symbols(&named)),
+            futures_executor::block_on(
+                supplier.locate_symbols(&SimpleModule::new("ara-player", other))
+            ),
             Err(SymbolError::NotFound)
         ));
     }
