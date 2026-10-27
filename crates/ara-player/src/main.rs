@@ -113,7 +113,7 @@ fn main() {
     let _capture = match ara_crash::Capture::start(&directory, &build_id) {
         Ok(capture) => Some(capture),
         Err(error) => {
-            eprintln!("ARA-EXP-CRASH-004: {error:#}");
+            eprintln!("{error:#}");
             None
         }
     };

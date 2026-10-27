@@ -1286,11 +1286,13 @@ Native capture could not install its handler or start the out-of-process monitor
 Causes:
 - A crash handler is already installed in the process.
 - The executable could not launch its monitor, or the monitor did not become ready within five seconds.
+- The IPC socket path exceeds the 103-byte UTF-8 budget, or its private directory cannot be created or accessed. The diagnostic includes the byte count or the monitor's startup error.
 - Native capture was requested on an unsupported platform.
 
 Fixes:
 - Install capture once and retain its guard for the player lifetime; release the previous guard before reinstalling.
 - Keep monitor argument dispatch in the shipped executable and inspect process-launch permissions and the reported startup error.
+- Leave the short IPC fallback enabled, or set `ARA_CRASH_IPC_DIR` to a writable short directory. Export verification preserves this diagnostic and fails if native capture is unavailable.
 - Use the native capture implementation on Windows, Linux or macOS.
 
 ## ARA8100 crash::CRASH_005: Matching debug symbols unavailable
