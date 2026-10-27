@@ -861,6 +861,84 @@ expression: out
         }
       }
     },
+    "AssetDeleteParams": {
+      "kind": "params",
+      "doc": "Parameters of `asset.delete`.",
+      "module": "core",
+      "fields": {
+        "source": {
+          "type": "string",
+          "doc": "Authored-root-relative path; document references and local source URIs block deletion.",
+          "required": true
+        }
+      }
+    },
+    "AssetDestinationParams": {
+      "kind": "params",
+      "doc": "Parameters of `asset.move` and `asset.duplicate`.",
+      "module": "core",
+      "fields": {
+        "source": {
+          "type": "string",
+          "doc": "Existing authored-root-relative file or folder; source media includes its sidecar.",
+          "required": true
+        },
+        "destination": {
+          "type": "string",
+          "doc": "Complete authored-root-relative destination, including the filename.",
+          "required": true
+        }
+      }
+    },
+    "AssetImportParams": {
+      "kind": "params",
+      "doc": "Parameters of the asynchronous `asset.import` typed job.",
+      "module": "core",
+      "fields": {
+        "sources": {
+          "type": "list<string>",
+          "doc": "Explicit absolute OS files or folder roots authorizing external reads.",
+          "required": true
+        },
+        "destination": {
+          "type": "string",
+          "doc": "Authored-relative destination folder; empty means the authored root.",
+          "required": true
+        },
+        "conflict": {
+          "type": "ImportConflict",
+          "doc": "Rename by default; Replace and Skip are explicit conflict policies.",
+          "default": "rename",
+          "options": [
+            "rename",
+            "replace",
+            "skip"
+          ]
+        },
+        "dryRun": {
+          "type": "bool",
+          "doc": "Read-only conflict/source preflight; no staging, cooking or file changes.",
+          "default": false
+        }
+      }
+    },
+    "AssetRenameParams": {
+      "kind": "params",
+      "doc": "Parameters of `asset.rename`.",
+      "module": "core",
+      "fields": {
+        "source": {
+          "type": "string",
+          "doc": "Existing authored-root-relative file or folder.",
+          "required": true
+        },
+        "name": {
+          "type": "string",
+          "doc": "New basename, including the file extension; never a path.",
+          "required": true
+        }
+      }
+    },
     "Atlas": {
       "kind": "struct",
       "doc": "Canonical atlas metadata; the immutable pixel payload lives in the asset cache.",
@@ -1581,6 +1659,22 @@ expression: out
           "type": "bool",
           "doc": "Whether the brain thinks.",
           "default": true
+        }
+      }
+    },
+    "BuildProfileCreateParams": {
+      "kind": "params",
+      "doc": "Parameters of build_profile.create.",
+      "fields": {
+        "name": {
+          "type": "string",
+          "doc": "Portable profile name; its filename is normalized to lowercase.",
+          "required": true
+        },
+        "preset": {
+          "type": "json",
+          "doc": "Complete export preset, written with the canonical JSON writer.",
+          "required": true
         }
       }
     },
@@ -2451,7 +2545,7 @@ expression: out
       "fields": {
         "path": {
           "type": "string",
-          "doc": "Project-relative output path, with the document kind's extension.",
+          "doc": "Output path relative to the authored root, with the document kind's extension.",
           "required": true
         },
         "kind": {
@@ -2690,6 +2784,23 @@ expression: out
           "type": "Flipbook",
           "doc": "Complete typed component; omitted fields use schema defaults.",
           "required": true
+        }
+      }
+    },
+    "FolderCreateParams": {
+      "kind": "params",
+      "doc": "Parameters of `folder.create`.",
+      "module": "core",
+      "fields": {
+        "path": {
+          "type": "string",
+          "doc": "New folder path relative to the authored root.",
+          "required": true
+        },
+        "parents": {
+          "type": "bool",
+          "doc": "Also create missing intermediate empty directories; false requires an existing parent.",
+          "default": false
         }
       }
     },
@@ -3324,6 +3435,21 @@ expression: out
         }
       }
     },
+    "ImportConflict": {
+      "kind": "enum",
+      "doc": "Conflict resolution chosen before the background import preparation begins.",
+      "variants": {
+        "rename": {
+          "doc": "Keep existing data and allocate deterministic, compound-extension-safe names."
+        },
+        "replace": {
+          "doc": "Replace matching files while preserving existing asset IDs/sidecar settings; merge directories additively without deleting unmentioned children."
+        },
+        "skip": {
+          "doc": "Keep colliding destination entries; a directory collision skips its subtree."
+        }
+      }
+    },
     "ImportInitializeParams": {
       "kind": "params",
       "doc": "Parameters of `import.initialize`.",
@@ -3331,7 +3457,7 @@ expression: out
       "fields": {
         "source": {
           "type": "string",
-          "doc": "Existing source media path, relative to the project.",
+          "doc": "Existing source media path, relative to the authored root.",
           "required": true
         },
         "id": {
@@ -3411,7 +3537,7 @@ expression: out
         },
         "dependencies": {
           "type": "list<asset>",
-          "doc": "Referenced authoring assets, using project-relative `@path#id` syntax.",
+          "doc": "Referenced authoring assets, using authored-root-relative `@path#id` syntax.",
           "default": []
         }
       }
@@ -8837,6 +8963,95 @@ expression: out
         }
       ]
     },
+    "asset.delete": {
+      "kind": "command",
+      "summary": "Safely delete an authored file or folder; report every inbound reference before changing anything.",
+      "params": "AssetDeleteParams",
+      "hints": {
+        "idempotent": false,
+        "destructive": true
+      },
+      "scope": "edit:assets",
+      "examples": [
+        {
+          "source": "unused/crate.prefab"
+        }
+      ]
+    },
+    "asset.duplicate": {
+      "kind": "command",
+      "summary": "Duplicate authored assets with new IDs and remapped internal references, with undo.",
+      "params": "AssetDestinationParams",
+      "hints": {
+        "idempotent": false,
+        "destructive": false
+      },
+      "scope": "edit:assets",
+      "examples": [
+        {
+          "source": "props/crate.prefab",
+          "destination": "props/crate-copy.prefab"
+        }
+      ]
+    },
+    "asset.import": {
+      "kind": "job",
+      "summary": "Import OS files/folders asynchronously with progress, cancellation, explicit conflicts and one undo step.",
+      "params": "AssetImportParams",
+      "hints": {
+        "idempotent": false,
+        "destructive": true
+      },
+      "scope": "edit:assets",
+      "examples": [
+        {
+          "sources": [
+            "C:/Art/crate"
+          ],
+          "destination": "props",
+          "conflict": "rename"
+        },
+        {
+          "sources": [
+            "C:/Art/crate"
+          ],
+          "destination": "props",
+          "dryRun": true
+        }
+      ]
+    },
+    "asset.move": {
+      "kind": "command",
+      "summary": "Move an authored file or folder, fixing references in the same undoable transaction.",
+      "params": "AssetDestinationParams",
+      "hints": {
+        "idempotent": false,
+        "destructive": false
+      },
+      "scope": "edit:assets",
+      "examples": [
+        {
+          "source": "props/crate.prefab",
+          "destination": "warehouse/crate.prefab"
+        }
+      ]
+    },
+    "asset.rename": {
+      "kind": "command",
+      "summary": "Rename an authored file or folder and repair its references, with undo.",
+      "params": "AssetRenameParams",
+      "hints": {
+        "idempotent": false,
+        "destructive": false
+      },
+      "scope": "edit:assets",
+      "examples": [
+        {
+          "source": "props/crate.prefab",
+          "name": "supply-crate.prefab"
+        }
+      ]
+    },
     "audiograph.input.set": {
       "kind": "command",
       "summary": "Wire or set one audio graph input (or graph output) to a literal or another node.",
@@ -9033,6 +9248,30 @@ expression: out
         }
       ]
     },
+    "build_profile.create": {
+      "kind": "command",
+      "summary": "Create a portable export profile with reversible file history.",
+      "params": "BuildProfileCreateParams",
+      "hints": {
+        "idempotent": false,
+        "destructive": false
+      },
+      "scope": "edit:assets",
+      "examples": [
+        {
+          "name": "windows",
+          "preset": {
+            "platform": "windows",
+            "config": "dev",
+            "lane": "nativeAot",
+            "playerTemplate": "runtime",
+            "assembly": "Game",
+            "content": "game",
+            "templates": []
+          }
+        }
+      ]
+    },
     "camera2d.set": {
       "kind": "command",
       "summary": "Set Camera2d through validated ops.",
@@ -9206,6 +9445,22 @@ expression: out
         {
           "entity": "e_map1",
           "value": {}
+        }
+      ]
+    },
+    "folder.create": {
+      "kind": "command",
+      "summary": "Create an authored folder, optionally adding missing parents, in one undoable transaction.",
+      "params": "FolderCreateParams",
+      "hints": {
+        "idempotent": false,
+        "destructive": false
+      },
+      "scope": "edit:assets",
+      "examples": [
+        {
+          "path": "props/warehouse",
+          "parents": true
         }
       ]
     },

@@ -47,8 +47,13 @@ fn authored_chunks_cover_the_outpost_world_grid() -> Result<()> {
     let project = ara_play_host::open_project(&root).map_err(|d| anyhow::anyhow!("{d}"))?;
     let (workspace, diagnostics) = project.load(&[]);
     ensure!(
-        !diagnostics.values().flatten().any(|d| d.is_error()),
-        "sample documents must load: {diagnostics:?}"
+        !project
+            .diags
+            .iter()
+            .chain(diagnostics.values().flatten())
+            .any(|d| d.is_error()),
+        "sample documents must load: {:?}; {diagnostics:?}",
+        project.diags
     );
     let id = workspace.find(super::SCENE.0).context("Outpost scene")?;
     let mut problems = Vec::new();

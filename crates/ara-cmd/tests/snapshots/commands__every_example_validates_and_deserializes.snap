@@ -3,6 +3,119 @@ source: crates/ara-cmd/tests/commands.rs
 expression: "ara_json::to_canonical_string(&reg.catalog())"
 ---
 {
+  "asset.delete": {
+    "kind": "command",
+    "summary": "Safely delete an authored file or folder; report every inbound reference before changing anything.",
+    "params": "AssetDeleteParams",
+    "hints": {
+      "idempotent": false,
+      "destructive": true
+    },
+    "scope": "edit:assets",
+    "examples": [
+      {
+        "source": "unused/crate.prefab"
+      }
+    ]
+  },
+  "asset.duplicate": {
+    "kind": "command",
+    "summary": "Duplicate authored assets with new IDs and remapped internal references, with undo.",
+    "params": "AssetDestinationParams",
+    "hints": {
+      "idempotent": false,
+      "destructive": false
+    },
+    "scope": "edit:assets",
+    "examples": [
+      {
+        "source": "props/crate.prefab",
+        "destination": "props/crate-copy.prefab"
+      }
+    ]
+  },
+  "asset.import": {
+    "kind": "job",
+    "summary": "Import OS files/folders asynchronously with progress, cancellation, explicit conflicts and one undo step.",
+    "params": "AssetImportParams",
+    "hints": {
+      "idempotent": false,
+      "destructive": true
+    },
+    "scope": "edit:assets",
+    "examples": [
+      {
+        "sources": [
+          "C:/Art/crate"
+        ],
+        "destination": "props",
+        "conflict": "rename"
+      },
+      {
+        "sources": [
+          "C:/Art/crate"
+        ],
+        "destination": "props",
+        "dryRun": true
+      }
+    ]
+  },
+  "asset.move": {
+    "kind": "command",
+    "summary": "Move an authored file or folder, fixing references in the same undoable transaction.",
+    "params": "AssetDestinationParams",
+    "hints": {
+      "idempotent": false,
+      "destructive": false
+    },
+    "scope": "edit:assets",
+    "examples": [
+      {
+        "source": "props/crate.prefab",
+        "destination": "warehouse/crate.prefab"
+      }
+    ]
+  },
+  "asset.rename": {
+    "kind": "command",
+    "summary": "Rename an authored file or folder and repair its references, with undo.",
+    "params": "AssetRenameParams",
+    "hints": {
+      "idempotent": false,
+      "destructive": false
+    },
+    "scope": "edit:assets",
+    "examples": [
+      {
+        "source": "props/crate.prefab",
+        "name": "supply-crate.prefab"
+      }
+    ]
+  },
+  "build_profile.create": {
+    "kind": "command",
+    "summary": "Create a portable export profile with reversible file history.",
+    "params": "BuildProfileCreateParams",
+    "hints": {
+      "idempotent": false,
+      "destructive": false
+    },
+    "scope": "edit:assets",
+    "examples": [
+      {
+        "name": "windows",
+        "preset": {
+          "platform": "windows",
+          "config": "dev",
+          "lane": "nativeAot",
+          "playerTemplate": "runtime",
+          "assembly": "Game",
+          "content": "game",
+          "templates": []
+        }
+      }
+    ]
+  },
   "component.add": {
     "kind": "command",
     "summary": "Add a component to an entity, with optional initial values.",
@@ -144,6 +257,22 @@ expression: "ara_json::to_canonical_string(&reg.catalog())"
       },
       {
         "entity": "e_8b21"
+      }
+    ]
+  },
+  "folder.create": {
+    "kind": "command",
+    "summary": "Create an authored folder, optionally adding missing parents, in one undoable transaction.",
+    "params": "FolderCreateParams",
+    "hints": {
+      "idempotent": false,
+      "destructive": false
+    },
+    "scope": "edit:assets",
+    "examples": [
+      {
+        "path": "props/warehouse",
+        "parents": true
       }
     ]
   },

@@ -15,6 +15,22 @@ use serde_json::Value;
 mod files;
 pub use files::{AuthoredFile, AuthoredRole, AuthoredScope, authored_files};
 
+/// Parses a frozen native document without reading the filesystem. `path` is its
+/// storage path; the supplied index resolves authored references and identities.
+pub fn read_document(
+    text: &str,
+    path: &str,
+    db: &SchemaDb,
+    index: Option<&AssetIndex>,
+) -> ReadResult {
+    read(text, path, db, index)
+}
+
+/// Serializes a frozen document in its native format without writing any files.
+pub fn write_document(doc: &Document, db: &SchemaDb) -> Result<String, Diagnostic> {
+    crate::project_settings::write(doc, db)
+}
+
 /// The file that marks a project root. Its contents are reserved for project settings.
 pub const MARKER: &str = "ara.project.json";
 /// Local, uncommitted state: journal, token, daemon file, lock, generated docs.

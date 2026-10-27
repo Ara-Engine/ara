@@ -708,3 +708,145 @@ fn outpost_native_ui_preserves_its_pristine_legacy_identity() {
             .is_empty()
     );
 }
+
+#[test]
+fn migration_repairs_known_paths_and_references_without_renaming_labels() {
+    let root = scratch("reference-owners");
+    for folder in ["levels", "assets", "ui"] {
+        fs::create_dir_all(root.join(folder)).expect("folder");
+    }
+    fs::write(root.join("ara.project.json"), r#"{"name":"assets/Display","main":"levels/main.scene","look":{"default":"assets/day.look.json"},"ui":{"main":"ui/menu.ui","resources":"ui/resources.json"}}"#).expect("marker");
+    fs::write(root.join("levels/main.scene"), r#"{"id":"sc_main","records":{"e_label":{"name":"assets/Display","description":"See assets/Display","target":"@assets/logo.png#as_logo"}}}"#).expect("scene");
+    fs::write(
+        root.join("ui/menu.ui"),
+        r#"<ui id="ui_menu"><text id="label" text="assets/Display"/></ui>"#,
+    )
+    .expect("UI");
+    fs::write(root.join("ui/resources.json"), r#"{"fonts":["assets/font.ttf"],"images":{"logo":"assets/logo.png"},"name":"assets/Display"}"#).expect("resources");
+    for file in ["font.ttf", "logo.png"] {
+        fs::write(root.join("assets").join(file), b"source").expect("media");
+    }
+    fs::write(root.join("assets/day.look.json"), "{}").expect("look");
+    Migration::plan(&root, None)
+        .expect("plan")
+        .apply()
+        .expect("migrate");
+    let authored = root.join(ara_doc::AUTHORING_ROOT);
+    let scene: serde_json::Value =
+        serde_json::from_slice(&fs::read(authored.join("levels/main.scene")).expect("scene"))
+            .expect("JSON");
+    assert_eq!(scene["records"]["e_label"]["name"], "assets/Display");
+    assert_eq!(
+        scene["records"]["e_label"]["description"],
+        "See assets/Display"
+    );
+    assert_eq!(scene["records"]["e_label"]["target"], "@logo.png#as_logo");
+    let resources: serde_json::Value =
+        serde_json::from_slice(&fs::read(authored.join("ui/resources.json")).expect("resources"))
+            .expect("JSON");
+    assert_eq!(resources["fonts"][0], "font.ttf");
+    assert_eq!(resources["images"]["logo"], "logo.png");
+    assert_eq!(resources["name"], "assets/Display");
+    assert!(
+        fs::read_to_string(authored.join("ui/menu.ui"))
+            .expect("UI")
+            .contains("text=\"assets/Display\"")
+    );
+    assert_eq!(
+        ara_host::project_layout::preferences(&root).expect("policy")["look"]["default"],
+        "day.look.json"
+    );
+    let marker: serde_json::Value =
+        serde_json::from_slice(&fs::read(root.join("ara.project.json")).expect("marker"))
+            .expect("JSON");
+    assert_eq!(marker["name"], "assets/Display");
+}
+
+#[test]
+fn migration_relocates_file_history_storage_paths_and_keeps_blob_tokens() {
+    let root = scratch("file-history-paths");
+    fs::create_dir_all(root.join("assets")).expect("authored folder");
+    fs::write(root.join("ara.project.json"), "{}").expect("marker");
+    let bytes = b"class History {}";
+    fs::write(root.join("assets/History.cs"), bytes).expect("source");
+    let history = ara_host::file_state::FileHistory::new(&root);
+    let state = history.put(bytes).expect("immutable history");
+    let entries = [
+        serde_json::json!({"t":"txn","txn":{"ops":[{"op":"file","path":"assets/History.cs","state":state,"prev":null}]}}),
+        serde_json::json!({"t":"fileFlush","path":"assets/History.cs","rev":1,"state":state}),
+    ];
+    fs::write(
+        root.join(".ara/journal"),
+        entries
+            .iter()
+            .map(|entry| serde_json::to_string(entry).expect("journal entry") + "\n")
+            .collect::<String>(),
+    )
+    .expect("journal");
+    Migration::plan(&root, None)
+        .expect("plan")
+        .apply()
+        .expect("migrate");
+    let journal = fs::read_to_string(root.join(".ara/journal")).expect("journal");
+    let entries: Vec<serde_json::Value> = journal
+        .lines()
+        .map(|line| serde_json::from_str(line).expect("journal entry"))
+        .collect();
+    let expected = format!("{}/History.cs", ara_doc::AUTHORING_ROOT);
+    assert_eq!(entries[0]["txn"]["ops"][0]["path"], expected);
+    assert_eq!(entries[1]["path"], expected);
+    assert_eq!(
+        entries[0]["txn"]["ops"][0]["id"],
+        ara_doc::file_state::record_id(&expected).to_string()
+    );
+    assert_eq!(
+        entries[0]["txn"]["ops"][0]["state"],
+        serde_json::to_value(&state).expect("state")
+    );
+    assert_eq!(history.read(&state).expect("retained history bytes"), bytes);
+}
+
+#[test]
+fn modern_authored_folders_named_like_legacy_roots_keep_their_references() {
+    let root = scratch("modern-root-names");
+    fs::write(
+        root.join("ara.project.json"),
+        r#"{"layoutVersion":3,"main":"game/level.scene"}"#,
+    )
+    .expect("marker");
+    ara_host::project_layout::write_support_files(&root, "Names").expect("support");
+    let authored = root.join(ara_doc::AUTHORING_ROOT);
+    for folder in ["game", "assets", "content"] {
+        fs::create_dir_all(authored.join(folder)).expect("feature");
+    }
+    let scene = r#"{"id":"sc_main","records":{"e_reference":{"prefab":"@game/box.prefab#pf_nested","asset":"@assets/mesh.prefab#pf_mesh","panel":"@content/panel.prefab#pf_panel"}}}"#;
+    fs::write(authored.join("game/level.scene"), scene).expect("scene");
+    for (path, id) in [
+        ("game/box.prefab", "pf_nested"),
+        ("box.prefab", "pf_root"),
+        ("assets/mesh.prefab", "pf_mesh"),
+        ("content/panel.prefab", "pf_panel"),
+    ] {
+        fs::write(
+            authored.join(path),
+            ara_json::to_canonical_string(&serde_json::json!({"id":id,"records":{}})),
+        )
+        .expect("prefab");
+    }
+    let plan = Migration::plan(&root, None).expect("modern plan");
+    plan.apply().expect("idempotent migration");
+    assert_eq!(
+        fs::read_to_string(authored.join("game/level.scene")).expect("scene"),
+        scene
+    );
+    let marker: serde_json::Value =
+        serde_json::from_slice(&fs::read(root.join("ara.project.json")).expect("marker"))
+            .expect("JSON");
+    assert_eq!(marker["main"], "game/level.scene");
+    assert!(
+        Migration::plan(&root, None)
+            .expect("round trip")
+            .operations
+            .is_empty()
+    );
+}

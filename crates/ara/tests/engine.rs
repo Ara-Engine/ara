@@ -110,8 +110,9 @@ fn authoring_creates_documents_sets_main_and_configures_sidecars_across_runs() {
     let marker =
         json_of(&fs::read_to_string(root.join("ara.project.json")).expect("project marker"));
     assert_eq!(marker["main"], "levels/second.scene");
-    fs::create_dir_all(root.join("assets")).expect("assets directory");
-    fs::write(root.join("assets/model.gltf"), "{}")
+    let authored = root.join(ara_doc::AUTHORING_ROOT);
+    fs::create_dir_all(authored.join("assets")).expect("assets directory");
+    fs::write(authored.join("assets/model.gltf"), "{}")
         .expect("source bytes; cooking is a separate operation");
     let created = apply(
         "import.initialize",
@@ -127,8 +128,9 @@ fn authoring_creates_documents_sets_main_and_configures_sidecars_across_runs() {
         "import.configure",
         r#"{"source":"assets/model.gltf","settings":{"lodCount":2},"preset":"fast"}"#,
     );
-    let settings =
-        json_of(&fs::read_to_string(root.join("assets/model.gltf.import.json")).expect("sidecar"));
+    let settings = json_of(
+        &fs::read_to_string(authored.join("assets/model.gltf.import.json")).expect("sidecar"),
+    );
     assert_eq!(settings["records"]["i_settings"]["settings"]["lodCount"], 2);
     assert_eq!(
         settings["records"]["i_settings"]["version"],
@@ -137,7 +139,8 @@ fn authoring_creates_documents_sets_main_and_configures_sidecars_across_runs() {
     let (code, output, error) = ara_in(&root, &["undo", "--json"]);
     assert_eq!(code, 0, "{output}{error}");
     let settings = json_of(
-        &fs::read_to_string(root.join("assets/model.gltf.import.json")).expect("restored sidecar"),
+        &fs::read_to_string(authored.join("assets/model.gltf.import.json"))
+            .expect("restored sidecar"),
     );
     assert!(
         settings["records"]["i_settings"]["settings"]
@@ -146,7 +149,7 @@ fn authoring_creates_documents_sets_main_and_configures_sidecars_across_runs() {
     );
     let (code, output, error) = ara_in(&root, &["undo", "--json"]);
     assert_eq!(code, 0, "{output}{error}");
-    assert!(!root.join("assets/model.gltf.import.json").exists());
+    assert!(!authored.join("assets/model.gltf.import.json").exists());
 }
 
 fn copy_dir(from: &Path, to: &Path) {
@@ -190,7 +193,7 @@ fn commands_need_a_project_marker_and_skip_nested_projects() {
     let report = json_of(&out);
     assert_eq!(
         (code, report["files"].clone(), report["errors"].clone()),
-        (0, json!(3), json!(0)),
+        (0, json!(4), json!(0)),
         "{out}"
     );
 }
@@ -703,20 +706,25 @@ fn native_ui_and_material_documents_are_created_and_formatted_through_the_cli() 
         );
         assert_eq!(code, 0, "{out}{err}");
     }
-    let source = fs::read_to_string(root.join("ui/hud.ui")).expect("UI source");
+    let authored = root.join(ara_doc::AUTHORING_ROOT);
+    let ui = authored.join("ui/hud.ui");
+    let graph = authored.join("materials/plain.graph");
+    let source = fs::read_to_string(&ui).expect("UI source");
     assert!(source.starts_with("<!-- ara:asset ui_hud -->"));
     assert!(source.contains("<ui id=\"ui_hud\" />"));
     let (code, out, err) = ara_in(
         &root,
-        &["fmt", "--check", "ui/hud.ui", "materials/plain.graph"],
+        &[
+            "fmt",
+            "--check",
+            ui.to_str().expect("UI path"),
+            graph.to_str().expect("graph path"),
+        ],
     );
     assert_eq!(code, 0, "{out}{err}");
     let (code, out, err) = ara_in(&root, &["check"]);
     assert_eq!(code, 0, "{out}{err}");
-    assert_eq!(
-        fs::read_to_string(root.join("ui/hud.ui")).expect("source unchanged"),
-        source
-    );
+    assert_eq!(fs::read_to_string(&ui).expect("source unchanged"), source);
 }
 
 #[test]

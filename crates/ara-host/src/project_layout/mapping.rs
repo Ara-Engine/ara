@@ -147,8 +147,15 @@ pub(super) fn plan(migration: &mut Migration) -> Result<Vec<(String, String)>, D
             }
             migration.add_move(source.clone(), target.clone())?;
         }
-        if relative != authored {
-            mappings.push((relative, authored.clone()));
+        let old_reference = if modern {
+            relative
+                .strip_prefix(&format!("{}/", super::AUTHORING_ROOT))
+                .unwrap_or(&relative)
+        } else {
+            &relative
+        };
+        if old_reference != authored {
+            mappings.push((old_reference.to_owned(), authored.clone()));
         }
         if let Some((_, _, _, value)) =
             module.filter(|_| source.file_name().is_some_and(|n| n == "ara.module.toml"))
@@ -171,7 +178,9 @@ pub(super) fn plan(migration: &mut Migration) -> Result<Vec<(String, String)>, D
         ("assets", ""),
         (super::AUTHORING_ROOT, ""),
     ] {
-        mappings.push((from.to_owned(), to.to_owned()));
+        if !modern || migration.root.join(from).is_dir() && from != super::AUTHORING_ROOT {
+            mappings.push((from.to_owned(), to.to_owned()));
+        }
     }
     mappings.sort_by_key(|(from, _)| std::cmp::Reverse(from.len()));
     // Empty legacy folders are removed only after all files have moved successfully.

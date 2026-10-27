@@ -45,12 +45,19 @@ pub(crate) struct Built {
 /// A running export.
 pub(crate) struct BuildJob {
     events: Receiver<BuildEvent>,
+    profile_creation: Option<ProfileCreation>,
     /// Profile name, for the status bar.
     pub preset: String,
     /// Current stage.
     pub stage: String,
     /// Cooking progress (completed, requested), while content cooks.
     pub cooking: Option<(usize, usize)>,
+}
+
+struct ProfileCreation {
+    job: String,
+    build_after: bool,
+    destination: Option<PathBuf>,
 }
 
 /// A launched build: what it printed, or why it did not start.
@@ -166,8 +173,7 @@ fn launch(game: &Path) -> anyhow::Result<Launch> {
             .to_path_buf();
         ara_export::tools::project_path(&game, &relative.to_string_lossy().replace('\\', "/"))?
     } else {
-        let data = ara_gpu::cooked::player_data_root(&game);
-        data
+        ara_gpu::cooked::player_data_root(&game)
     };
     ensure!(
         data.is_dir() && data.join("ara-launch.json").is_file(),
@@ -340,32 +346,39 @@ fn publish_build(staged: &Path, parent: &Path, build_id: &str) -> anyhow::Result
 }
 
 impl Shell {
-    /// Build > Create Build Profile: write the portable default profile
-    /// (`settings/builds/windows.export.json`) with the canonical writer. Returns its name.
+    /// Create the default profile through one undoable command and asynchronous file job.
     pub(crate) fn create_build_profile(&mut self, editor: &mut Editor) -> ara_ui::Result<String> {
-        let root = editor.host.root().to_owned();
-        let path = root
-            .join("settings/builds")
-            .join(format!("{DEFAULT_PROFILE}.export.json"));
-        if path.exists() {
-            return Err(
-                format!("settings/builds/{DEFAULT_PROFILE}.export.json already exists").into(),
-            );
+        if self.build.is_some() {
+            return Err("a build or profile creation is already running".into());
         }
         let text = default_profile()
             .and_then(|p| p.to_unpinned_text())
             .map_err(|e| format!("{e:#}"))?;
-        std::fs::create_dir_all(root.join("settings/builds"))?;
-        std::fs::write(&path, text)?;
-        log(
-            editor,
-            ara_diag::Diagnostic::info(
-                crate::codes::BUILD,
-                format!(
-                    "Created the build profile settings/builds/{DEFAULT_PROFILE}.export.json (Windows, the real game runtime, a plain folder)"
-                ),
-            ),
-        );
+        let preset: Value = ara_json::parse(&text).map_err(|error| error.to_string())?;
+        let result = editor.apply_to(
+            ara_host::project::MARKER,
+            vec![json!({"cmd":"build_profile.create","args":{"name":DEFAULT_PROFILE,"preset":preset}})],
+            "Create the default build profile",
+        )?;
+        if result["preparing"] == true {
+            let job = result["job"]
+                .as_str()
+                .ok_or("profile preparation returned no job")?
+                .to_owned();
+            let (_, events) = channel();
+            self.build = Some(BuildJob {
+                events,
+                profile_creation: Some(ProfileCreation {
+                    job,
+                    build_after: false,
+                    destination: None,
+                }),
+                preset: DEFAULT_PROFILE.into(),
+                stage: "creating profile".into(),
+                cooking: None,
+            });
+            self.status_note = Some("Creating the build profile…".into());
+        }
         Ok(DEFAULT_PROFILE.into())
     }
 
@@ -378,7 +391,16 @@ impl Shell {
         let root = dunce::simplified(editor.host.root());
         let preset = match presets(root).into_iter().next() {
             Some(preset) => preset,
-            None => self.create_build_profile(editor)?,
+            None => {
+                let preset = self.create_build_profile(editor)?;
+                if let Some(job) = &mut self.build
+                    && let Some(creation) = &mut job.profile_creation
+                {
+                    creation.build_after = true;
+                    return Ok(());
+                }
+                preset
+            }
         };
         self.build_profile(editor, &preset, None)
     }
@@ -391,7 +413,14 @@ impl Shell {
         profile: &str,
         destination: Option<PathBuf>,
     ) -> ara_ui::Result<()> {
-        if self.build.is_some() {
+        if let Some(job) = &mut self.build {
+            if job.preset == profile
+                && let Some(creation) = &mut job.profile_creation
+            {
+                creation.build_after = true;
+                creation.destination = destination;
+                return Ok(());
+            }
             return Err("an export is already running".into());
         }
         // The host's root is canonical (`\\?\C:\…` on Windows); build tools such as
@@ -439,6 +468,7 @@ impl Shell {
         });
         self.build = Some(BuildJob {
             events,
+            profile_creation: None,
             preset: preset.clone(),
             stage: "starting".into(),
             cooking: None,
@@ -546,6 +576,71 @@ impl Shell {
                     );
                 }
             }
+        }
+        let profile_status = self
+            .build
+            .as_ref()
+            .and_then(|job| job.profile_creation.as_ref())
+            .map(|creation| editor.action("jobs.status", json!({"job":creation.job})));
+        if let Some(status) = profile_status {
+            match status {
+                Ok(status) if status["status"] == "running" => {
+                    if let Some(message) = status["message"]
+                        .as_str()
+                        .filter(|message| !message.is_empty())
+                        && let Some(job) = &mut self.build
+                        && job.stage != message
+                    {
+                        job.stage = message.to_owned();
+                        changed = true;
+                    }
+                }
+                Ok(status) if status["status"] == "done" => {
+                    let job = self
+                        .build
+                        .take()
+                        .expect("profile completion has a pending build job");
+                    let creation = job
+                        .profile_creation
+                        .expect("profile completion owns its job");
+                    self.status_note = Some(format!("Created the {} build profile", job.preset));
+                    if creation.build_after
+                        && let Err(error) =
+                            self.build_profile(editor, &job.preset, creation.destination)
+                    {
+                        log(
+                            editor,
+                            ara_diag::Diagnostic::error(crate::codes::BUILD, error.to_string()),
+                        );
+                        self.status_note = Some("The build did not start: see Problems".into());
+                    }
+                    return true;
+                }
+                result => {
+                    let message = match result {
+                        Err(error) => error.to_string(),
+                        Ok(status) => status["diagnostics"]
+                            .as_array()
+                            .map(|diagnostics| {
+                                diagnostics
+                                    .iter()
+                                    .filter_map(|diagnostic| diagnostic["message"].as_str())
+                                    .collect::<Vec<_>>()
+                                    .join("; ")
+                            })
+                            .filter(|message| !message.is_empty())
+                            .unwrap_or_else(|| "Profile creation was cancelled".into()),
+                    };
+                    self.build = None;
+                    self.status_note = Some("The profile was not created: see Problems".into());
+                    log(
+                        editor,
+                        ara_diag::Diagnostic::error(crate::codes::BUILD, message),
+                    );
+                    return true;
+                }
+            }
+            return changed;
         }
         let Some(job) = &mut self.build else {
             return changed;

@@ -397,6 +397,7 @@ version = "0.0.1-alpha"
 dependencies = [
  "ara-ai",
  "ara-asset",
+ "ara-asset-host",
  "ara-audio-why",
  "ara-crash",
  "ara-diag",
@@ -413,6 +414,7 @@ dependencies = [
  "ara-rpc",
  "ara-schema",
  "ara-shader-cook",
+ "ara-update",
  "ara-world",
  "clap",
  "insta",
@@ -557,6 +559,15 @@ name = "ara-asset-host"
 version = "0.0.1-alpha"
 dependencies = [
  "ara-asset",
+ "ara-cmd",
+ "ara-diag",
+ "ara-doc",
+ "ara-host",
+ "ara-importers",
+ "ara-json",
+ "ara-proto",
+ "ara-schema",
+ "serde",
  "serde_json",
  "tempfile",
 ]

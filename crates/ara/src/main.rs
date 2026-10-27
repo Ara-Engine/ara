@@ -23,6 +23,7 @@ mod project;
 #[global_allocator]
 static ALLOCATOR: ara_profile::CountingAllocator<std::alloc::System> =
     ara_profile::CountingAllocator(std::alloc::System);
+mod assets;
 mod relaxed;
 
 use std::path::PathBuf;

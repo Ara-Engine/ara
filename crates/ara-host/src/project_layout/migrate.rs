@@ -5,9 +5,12 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use super::references::{self, Owner};
 use ara_diag::{Diagnostic, codes};
 use serde::Serialize;
 use serde_json::Value;
+#[path = "history.rs"]
+mod history;
 
 pub(super) const CONTENT_DIRS: &[&str] = &[
     "anim",
@@ -60,6 +63,8 @@ pub struct Migration {
     pub root: PathBuf,
     /// Legacy evidence, tests and machine-specific export helpers are retained here.
     pub support: PathBuf,
+    #[serde(skip)]
+    modern: bool,
     /// Ordered operations, also returned by `ara project migrate --dry-run --json`.
     pub operations: Vec<MigrationOp>,
     #[serde(skip)]
@@ -111,6 +116,9 @@ impl Migration {
         let mut migration = Self {
             root,
             support,
+            modern: marker["layoutVersion"]
+                .as_u64()
+                .is_some_and(|version| version >= super::VERSION),
             operations: Vec::new(),
             moves: Vec::new(),
             cleanup: Vec::new(),
@@ -156,6 +164,19 @@ impl Migration {
         mappings.push(("presets".into(), "settings/builds".into()));
         let mut files = Vec::new();
         collect(&migration.root, &migration.root, &mut files)?;
+        let policy = super::preferences(&migration.root)?;
+        let resources = policy
+            .pointer("/ui/resources")
+            .and_then(Value::as_str)
+            .map(|path| {
+                references::path(
+                    path.trim_start_matches('@')
+                        .split('#')
+                        .next()
+                        .unwrap_or(path),
+                    &mappings,
+                )
+            });
         for source in files {
             if source == migration.root.join(super::PREFERENCES)
                 || source
@@ -224,7 +245,27 @@ impl Migration {
                 continue;
             };
             let after = if let Ok(mut value) = ara_json::parse(text) {
-                rewrite_value(&mut value, &mappings);
+                let relative = source
+                    .strip_prefix(&migration.root)
+                    .map_err(|error| problem(error.to_string()))?
+                    .to_string_lossy()
+                    .replace('\\', "/");
+                let logical = relative
+                    .strip_prefix(&format!("{}/", super::AUTHORING_ROOT))
+                    .map(str::to_owned)
+                    .unwrap_or_else(|| references::path(&relative, &mappings));
+                let owner = if source == migration.root.join(crate::project::MARKER) {
+                    Owner::Project
+                } else if relative.ends_with(".export.json") {
+                    Owner::Export
+                } else if logical == "ui/resources.json"
+                    || resources.as_deref() == Some(logical.as_str())
+                {
+                    Owner::Resources
+                } else {
+                    Owner::Document
+                };
+                references::document(&mut value, &mappings, owner);
                 if target.parent() == Some(migration.root.join("settings/builds").as_path())
                     && target.to_string_lossy().ends_with(".export.json")
                 {
@@ -250,7 +291,7 @@ impl Migration {
                     .replace('\\', "/");
                 let (_,id)=crate::ui_document::header(text,&relative).ok_or_else(||problem(format!("cannot preserve UI identity in {relative}; repair its markup before migrating")))?;
                 let pinned = crate::ui_document::with_identity(text, &id)?;
-                let rewritten = rewrite_text(&pinned, &mappings);
+                let rewritten = references::text(&pinned, &mappings, true);
                 let canonical = ara_ui_document::SourceDocument::parse(
                     &rewritten,
                     ara_ui_document::DocumentKind::Markup,
@@ -258,7 +299,7 @@ impl Migration {
                 .map_err(|error| problem(error.to_string()))?;
                 canonical.serialize().as_bytes().to_vec()
             } else {
-                rewrite_text(text, &mappings).into_bytes()
+                references::text(text, &mappings, false).into_bytes()
             };
             if after != before {
                 migration.rewrites.push(Rewrite {
@@ -273,7 +314,7 @@ impl Migration {
         migration.update_ignore()?;
         let preferences_path = migration.root.join(super::PREFERENCES);
         let mut preferences = super::preferences(&migration.root)?;
-        rewrite_value(&mut preferences, &mappings);
+        references::document(&mut preferences, &mappings, Owner::Project);
         materialize_ui(&migration, &mut preferences)?;
         let after = ara_json::to_canonical_string(&ara_json::sort_keys(&preferences)).into_bytes();
         let existed = preferences_path.exists();
@@ -421,6 +462,7 @@ impl Migration {
         }
         let before = fs::read(&path).map_err(io_error)?;
         let text = std::str::from_utf8(&before).map_err(|_| problem("journal must be UTF-8"))?;
+        let mut snapshots = history::Planner::new(self, mappings, text)?;
         let hashes: BTreeMap<_, _> = self
             .rewrites
             .iter()
@@ -448,30 +490,40 @@ impl Migration {
         for line in text.lines() {
             let mut value: Value = serde_json::from_str(line)
                 .map_err(|e| problem(format!("repair the journal before migrating: {e}")))?;
+            snapshots.rewrite_entry(&mut value)?;
             if legacy_policy {
                 if value["t"] == "flush" && value["doc"] == "pj_project" {
                     let matches = marker_before
                         .is_some_and(|before| value["hash"] == crate::journal::hash(before));
                     marker_flush = Some((value["rev"].clone(), matches, value["hash"].clone()));
                 }
-                rewrite_policy_history(&mut value);
+                rewrite_policy_history(&mut value, mappings);
             }
-            rewrite_value(&mut value, mappings);
+            references::references(&mut value, mappings);
             if let Some(ops) = value
                 .get_mut("txn")
                 .and_then(|txn| txn.get_mut("ops"))
                 .and_then(Value::as_array_mut)
             {
                 for op in ops {
-                    if op["op"] == "document"
+                    if matches!(op["op"].as_str(), Some("document" | "file"))
                         && let Some(path) =
                             op.get("path").and_then(Value::as_str).map(str::to_owned)
                         && !path.starts_with("settings/")
                         && path != crate::project::MARKER
                     {
-                        op["path"] = format!("{}/{}", super::AUTHORING_ROOT, path).into();
+                        let storage = self.history_storage_path(&path, mappings)?;
+                        if op["op"] == "file" {
+                            op["id"] = ara_doc::file_state::record_id(&storage).to_string().into();
+                        }
+                        op["path"] = storage.into();
                     }
                 }
+            }
+            if value["t"] == "fileFlush"
+                && let Some(path) = value["path"].as_str().map(str::to_owned)
+            {
+                value["path"] = self.history_storage_path(&path, mappings)?.into();
             }
             if value["t"] == "flush"
                 && let Some(new) = value["hash"].as_str().and_then(|hash| hashes.get(hash))
@@ -485,6 +537,7 @@ impl Migration {
             );
             after.push('\n');
         }
+        let history_writes = snapshots.finish();
         if legacy_policy {
             let preferences = self
                 .rewrites
@@ -507,6 +560,7 @@ impl Migration {
                 after.push('\n');
             }
         }
+        self.rewrites.extend(history_writes);
         if after.as_bytes() != before {
             self.rewrites.push(Rewrite {
                 source: path.clone(),
@@ -517,6 +571,31 @@ impl Migration {
             });
         }
         Ok(())
+    }
+
+    fn history_storage_path(
+        &self,
+        path: &str,
+        mappings: &[(String, String)],
+    ) -> Result<String, Diagnostic> {
+        let moved = moved_path(&self.root.join(path), &self.moves);
+        let original = self.root.join(path);
+        if moved != original {
+            return moved.strip_prefix(&self.root).map(|path| path.to_string_lossy().replace('\\', "/"))
+                .map_err(|_| problem(format!("history refers to support file `{path}` outside the migrated project; archive that history before migrating")));
+        }
+        if self.modern && path.starts_with(&format!("{}/", super::AUTHORING_ROOT)) {
+            return Ok(path.to_owned());
+        }
+        let logical = references::path(path, mappings);
+        if logical.starts_with("settings/")
+            || logical.starts_with(".ara/")
+            || logical == crate::project::MARKER
+        {
+            Ok(logical)
+        } else {
+            Ok(format!("{}/{logical}", super::AUTHORING_ROOT))
+        }
     }
 
     /// Applies the planned operations under the same lock used by the project authority.
@@ -615,7 +694,7 @@ impl Migration {
 }
 
 /// Policy history follows its document, so undo cannot put migrated policy back in the marker.
-fn rewrite_policy_history(entry: &mut Value) {
+fn rewrite_policy_history(entry: &mut Value, mappings: &[(String, String)]) {
     let Some(ops) = entry
         .get_mut("txn")
         .and_then(|txn| txn.get_mut("ops"))
@@ -625,6 +704,19 @@ fn rewrite_policy_history(entry: &mut Value) {
     };
     let mut rewritten = Vec::with_capacity(ops.len());
     for mut operation in std::mem::take(ops) {
+        if operation["op"] == "set"
+            && matches!(
+                operation["doc"].as_str(),
+                Some("pj_project" | super::PREFERENCES_ID)
+            )
+            && let Some(field) = operation["path"].as_str().map(str::to_owned)
+        {
+            for key in ["value", "prev"] {
+                if let Some(value) = operation.get_mut(key) {
+                    references::policy_history(value, &field, mappings);
+                }
+            }
+        }
         if operation["op"] == "set"
             && operation["doc"] == "pj_project"
             && operation["id"] == "p_settings"
@@ -751,69 +843,6 @@ fn moved_path(path: &Path, moves: &[(PathBuf, PathBuf)]) -> PathBuf {
         })
         .unwrap_or_else(|| path.to_owned())
 }
-fn rewrite_path(text: &str, mappings: &[(String, String)]) -> String {
-    let (prefix, path) = text
-        .strip_prefix('@')
-        .map_or(("", text), |path| ("@", path));
-    for (from, to) in mappings {
-        if (path == from && !to.is_empty())
-            || path
-                .strip_prefix(from)
-                .is_some_and(|tail| tail.starts_with('/') || tail.starts_with('#'))
-        {
-            let tail = &path[from.len()..];
-            return format!(
-                "{prefix}{to}{}",
-                if to.is_empty() {
-                    tail.strip_prefix('/').unwrap_or(tail)
-                } else {
-                    tail
-                }
-            );
-        }
-    }
-    text.to_owned()
-}
-fn rewrite_value(value: &mut Value, mappings: &[(String, String)]) {
-    match value {
-        Value::String(text) => {
-            let direct = rewrite_path(text, mappings);
-            *text = if direct == *text {
-                rewrite_text(text, mappings)
-            } else {
-                direct
-            };
-        }
-        Value::Array(items) => {
-            for item in items {
-                rewrite_value(item, mappings);
-            }
-        }
-        Value::Object(fields) => {
-            for item in fields.values_mut() {
-                rewrite_value(item, mappings);
-            }
-        }
-        _ => {}
-    }
-}
-fn rewrite_text(text: &str, mappings: &[(String, String)]) -> String {
-    let mut output = String::with_capacity(text.len());
-    let mut start = 0;
-    for (index, character) in text.char_indices() {
-        if matches!(
-            character,
-            '"' | '\'' | '`' | '<' | '>' | '\n' | '\r' | '\t' | ' ' | '(' | ')'
-        ) {
-            output.push_str(&rewrite_path(&text[start..index], mappings));
-            output.push(character);
-            start = index + character.len_utf8();
-        }
-    }
-    output.push_str(&rewrite_path(&text[start..], mappings));
-    output
-}
-
 /// Read the old sample helper's literal preset without executing any script.
 fn legacy_build_preset(root: &Path) -> Result<Option<Value>, Diagnostic> {
     let path = root.join("export.ps1");

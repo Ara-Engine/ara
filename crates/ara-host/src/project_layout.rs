@@ -1,6 +1,7 @@
 //! Shared project scaffold and offline layout migration, used by the CLI and Hub.
 mod mapping;
 mod migrate;
+mod references;
 
 pub use ara_doc::AUTHORING_ROOT;
 pub use migrate::{Migration, MigrationOp};

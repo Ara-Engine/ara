@@ -39,6 +39,7 @@ pub mod tree;
 mod ui_document;
 pub mod why;
 
+pub use files::FileCommitReceipt;
 pub use host::{Host, HostConfig, RESERVED};
 pub use project::Project;
 pub use service::{Cx, Method, Service, parse};

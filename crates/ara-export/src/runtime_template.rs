@@ -129,8 +129,8 @@ fn mach_o(player: &Path) -> Result<bool> {
     ))
 }
 
-/// Adds a package's manifests and the artifacts their stages name: SPIR-V and DXIL
-/// with reflection, or with `metal` the metallib and its converter reflection.
+/// Adds runtime artifacts named by manifests: SPIR-V/DXIL, or Metal libraries and
+/// their required converter reflection. Slang reflection is an offline cook cache.
 fn resources(
     root: &Path,
     directory: &Path,
@@ -143,18 +143,15 @@ fn resources(
         let entry = entry?;
         let path = entry.path();
         let name = entry.file_name().to_string_lossy().into_owned();
+        if name.starts_with('.') {
+            continue;
+        }
         if entry.file_type()?.is_dir() {
             if name.len() != 64 || !name.bytes().all(|b| b.is_ascii_hexdigit()) {
                 manifests += resources(root, &path, prefix, metal, files)?;
             }
             continue;
         }
-        let relative = path
-            .strip_prefix(root)?
-            .to_string_lossy()
-            .replace('\\', "/");
-        ara_pack::validate_path(&relative)?;
-        files.insert(format!("{prefix}/{relative}"), path.to_owned());
         if path.extension().is_none_or(|extension| extension != "json") {
             continue;
         }
@@ -167,6 +164,12 @@ fn resources(
             "empty cooked pipeline {}",
             path.display()
         );
+        let relative = path
+            .strip_prefix(root)?
+            .to_string_lossy()
+            .replace('\\', "/");
+        ara_pack::validate_path(&relative)?;
+        files.insert(format!("{prefix}/{relative}"), path.to_owned());
         manifests += 1;
         for stage in stages {
             if metal {
@@ -205,7 +208,7 @@ fn resources(
                 "{} has a stage without SPIR-V",
                 path.display()
             );
-            for (field, reflection) in [("spirv", "spirv.json"), ("dxil", "dxil.json")] {
+            for field in ["spirv", "dxil"] {
                 let Some(name) = stage.get(field).and_then(serde_json::Value::as_str) else {
                     continue;
                 };
@@ -217,14 +220,11 @@ fn resources(
                         .get(format!("{field}_hash"))
                         .and_then(serde_json::Value::as_str),
                 )?;
-                for file in [artifact.to_owned(), artifact.with_extension(reflection)] {
-                    ensure!(file.is_file(), "missing cooked artifact {}", file.display());
-                    let relative = file
-                        .strip_prefix(root)?
-                        .to_string_lossy()
-                        .replace('\\', "/");
-                    files.insert(format!("{prefix}/{relative}"), file);
-                }
+                let relative = artifact
+                    .strip_prefix(root)?
+                    .to_string_lossy()
+                    .replace('\\', "/");
+                files.insert(format!("{prefix}/{relative}"), artifact);
             }
         }
     }
@@ -251,7 +251,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn runtime_bundle_is_stable_and_excludes_unused_cooked_cohorts() {
+    fn clean_runtime_bundle_needs_no_slang_reflection_and_excludes_unused_cohorts() {
         let scratch = tempfile::tempdir().unwrap();
         let player = scratch.path().join("ara-player.exe");
         std::fs::write(&player, b"prebuilt player").unwrap();
@@ -270,8 +270,18 @@ mod tests {
                 std::fs::create_dir_all(root.join(cohort)).unwrap();
             }
             std::fs::write(root.join(&key).join("main.spv"), b"current shader").unwrap();
-            std::fs::write(root.join(&key).join("main.spirv.json"), b"{}").unwrap();
             std::fs::write(root.join(&stale).join("main.spv"), b"obsolete shader").unwrap();
+            for (file, bytes) in [
+                (".gitignore", "/*/*.json"),
+                (
+                    ".ara-pipeline-inputs.json",
+                    "offline cache, deliberately not JSON",
+                ),
+                ("cook-notes.txt", "offline compiler notes"),
+                ("cook-settings.json", "{\"offline\":true}"),
+            ] {
+                std::fs::write(root.join(file), bytes).unwrap();
+            }
             let value = serde_json::json!({"stages":[{"spirv":format!("{key}/main.spv")} ]});
             std::fs::write(
                 root.join("main.json"),
@@ -298,6 +308,24 @@ mod tests {
                 .by_name(&format!("resources/ara-render/{stale}/main.spv"))
                 .is_err()
         );
+        assert!(
+            archive
+                .file_names()
+                .all(|name| !name.ends_with(".spirv.json") && !name.ends_with(".dxil.json"))
+        );
+        for file in [
+            ".gitignore",
+            ".ara-pipeline-inputs.json",
+            "cook-notes.txt",
+            "cook-settings.json",
+        ] {
+            assert!(
+                archive
+                    .by_name(&format!("resources/ara-render/{file}"))
+                    .is_err(),
+                "offline {file} must stay outside the runtime payload"
+            );
+        }
         let unpacked = scratch.path().join("game");
         let executable =
             crate::runtime::unpack_template(&first, &unpacked, "ara-player.exe").unwrap();

@@ -13,7 +13,7 @@ pub struct RuntimeCohort {
     pub engine: PathBuf,
     /// Windows companion whose GUID/age matches the player, if applicable.
     pub symbols: Option<PathBuf>,
-    /// Number of shader manifests, binaries and reflection files in the cohort.
+    /// Number of shader manifests/binaries and required Metal converter reflections.
     pub resource_files: usize,
 }
 
@@ -136,7 +136,6 @@ mod tests {
             let cooked = root.path().join("resources").join(package);
             std::fs::create_dir_all(cooked.join(&key))?;
             std::fs::write(cooked.join(&key).join("main.spv"), b"shader")?;
-            std::fs::write(cooked.join(&key).join("main.spirv.json"), b"{}")?;
             crate::tools::write_json(
                 &cooked.join("main.json"),
                 &serde_json::json!({"stages":[{
@@ -154,11 +153,9 @@ mod tests {
         let error = runtime(&player, root.path(), None).expect_err("corrupt cohort");
         assert!(format!("{error:#}").contains("checksum differs"));
         std::fs::write(&artifact, b"shader")?;
-        std::fs::remove_file(artifact.with_extension("spirv.json"))?;
-        assert!(
-            runtime(&player, root.path(), None).is_err(),
-            "missing reflection"
-        );
+        std::fs::remove_file(&artifact)?;
+        let error = runtime(&player, root.path(), None).expect_err("missing runtime binary");
+        assert!(format!("{error:#}").contains("missing cooked artifact"));
         assert!(!root.path().join("output.zip").exists());
         Ok(())
     }

@@ -471,6 +471,14 @@ impl Host {
             conn,
             session,
         };
+        if method == "cmd.apply" && !cx.st.file_jobs.applying {
+            let batch = crate::parse(params.clone())?;
+            for service in &mut self.services {
+                if let Some(result) = service.prepare_apply(&mut cx, &batch) {
+                    return result;
+                }
+            }
+        }
         self.services[index].call(&mut cx, method, params)
     }
 
