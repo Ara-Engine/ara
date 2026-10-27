@@ -258,7 +258,7 @@ impl Shell {
         out.push_str(&format!("<panel id='palette-search-wrap' style='height:32px;flex-shrink:0'><field id='palette-search' class='search-input' style='height:32px;padding-top:6px;padding-left:30px;font-size:13px' label='Search commands' text='{}' action='Dispatch' /><image id='palette-search-icon' class='search-icon' style='top:8px;left:8px' src='icon-search' tint='true' />{}</panel>",escape(&query),if query.is_empty(){"<text id='palette-placeholder' class='placeholder' style='top:6px;left:30px;font-size:13px' text='Run a command  ·  @ entities  ·  # assets  ·  ? help' />"}else{""}));
         if let Some(name) = self.palette_command.clone() {
             self.palette_form(editor, out, &name)?;
-            out.push_str("</panel>");
+            out.push_str("</popover>");
             return Ok(());
         }
         let items = self.palette_items(editor, &query);
@@ -446,6 +446,10 @@ pub(super) fn fuzzy(value: &str, query: &str) -> Option<(usize, Vec<usize>)> {
     let score = spread + positions.first().copied().unwrap_or(0);
     Some((score, positions))
 }
+#[cfg(test)]
+#[path = "palette/form_tests.rs"]
+mod form_tests;
+
 #[cfg(test)]
 mod tests {
     #[test]
