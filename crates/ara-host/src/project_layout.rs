@@ -50,22 +50,7 @@ pub fn create_directories(root: &Path) -> io::Result<()> {
 
 /// Physical authored root; legacy projects remain readable until migrated.
 /// Cache this result when opening a project rather than calling it in frame code.
-pub fn authored_root(root: &Path) -> std::path::PathBuf {
-    let modern = fs::read(root.join(crate::project::MARKER))
-        .ok()
-        .and_then(|bytes| serde_json::from_slice::<serde_json::Value>(&bytes).ok())
-        .and_then(|marker| {
-            marker
-                .get("layoutVersion")
-                .and_then(serde_json::Value::as_u64)
-        })
-        .is_some_and(|version| version >= VERSION);
-    if modern {
-        root.join(AUTHORING_ROOT)
-    } else {
-        root.to_owned()
-    }
-}
+pub use crate::project::authored_root;
 
 /// Root support files shared by CLI creation and Hub templates; existing files stay intact.
 pub fn write_support_files(root: &Path, name: &str) -> io::Result<()> {

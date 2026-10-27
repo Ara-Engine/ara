@@ -113,16 +113,37 @@ impl State {
                             inventory.entries.entry(path).or_insert(prev);
                         }
                     }
-                    let parents: Vec<_> = inventory
-                        .entries
-                        .keys()
-                        .map(|path| {
-                            path.rsplit_once('/')
-                                .map_or("", |(parent, _)| parent)
-                                .to_owned()
-                        })
-                        .collect();
+                    let mut parents = std::collections::BTreeSet::new();
+                    for path in inventory.entries.keys() {
+                        let mut path = path.as_str();
+                        while let Some((parent, _)) = path.rsplit_once('/') {
+                            parents.insert(parent.to_owned());
+                            path = parent;
+                        }
+                        parents.insert(String::new());
+                    }
                     for parent in parents {
+                        if !parent.is_empty() {
+                            let state = store.observe(&parent).map_err(|d| vec![d])?;
+                            inventory
+                                .entries
+                                .entry(parent.clone())
+                                .or_insert(state.clone());
+                            match state {
+                                None => continue,
+                                Some(state)
+                                    if state.kind == ara_doc::file_state::FileKind::Directory => {}
+                                Some(_) => {
+                                    return Err(vec![
+                                        Diagnostic::error(
+                                            codes::STALE_BASE,
+                                            "file operation parent is no longer a directory",
+                                        )
+                                        .file(&parent),
+                                    ]);
+                                }
+                            }
+                        }
                         inventory.directories.insert(
                             parent.clone(),
                             store.directory_entries(&parent).map_err(|d| vec![d])?,
