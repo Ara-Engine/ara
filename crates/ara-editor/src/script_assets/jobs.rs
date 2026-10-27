@@ -146,44 +146,28 @@ impl ScriptService {
 
 fn source_signature(root: &Path) -> u64 {
     use std::hash::{Hash, Hasher};
-    fn walk(dir: &Path, hash: &mut std::hash::DefaultHasher) {
-        let Ok(entries) = std::fs::read_dir(dir) else {
-            return;
-        };
-        let mut entries = entries.flatten().collect::<Vec<_>>();
-        entries.sort_by_key(|e| e.file_name());
-        for entry in entries {
-            let path = entry.path();
-            let name = entry.file_name();
-            let name = name.to_string_lossy();
-            if name.starts_with('.')
-                || matches!(
-                    name.as_ref(),
-                    "bin" | "obj" | "target" | "artifacts" | "node_modules" | "spikes"
-                )
-            {
-                continue;
+    let mut hash = std::hash::DefaultHasher::new();
+    match ara_script::project::inventory(root) {
+        Ok(inventory) => {
+            for diagnostic in inventory.diagnostics {
+                diagnostic.to_string().hash(&mut hash);
             }
-            let Ok(kind) = entry.file_type() else {
-                continue;
-            };
-            if kind.is_symlink() {
-                continue;
+            for module in inventory.modules {
+                module.name.hash(&mut hash);
+                module.references.hash(&mut hash);
+                module.hot.hash(&mut hash);
+                module.profile.as_str().hash(&mut hash);
             }
-            if kind.is_dir() {
-                walk(&path, hash);
-            } else if path.extension().is_some_and(|e| e == "cs") {
-                path.hash(hash);
-                if let Ok(meta) = entry.metadata() {
-                    meta.len().hash(hash);
-                    meta.modified().ok().hash(hash);
+            for source in inventory.sources {
+                source.storage_path.hash(&mut hash);
+                source.module.hash(&mut hash);
+                if let Ok(metadata) = std::fs::metadata(root.join(source.storage_path)) {
+                    metadata.len().hash(&mut hash);
+                    metadata.modified().ok().hash(&mut hash);
                 }
             }
         }
-    }
-    let mut hash = std::hash::DefaultHasher::new();
-    for module in crate::shell::scripts::modules(root) {
-        walk(&module, &mut hash);
+        Err(diagnostic) => diagnostic.to_string().hash(&mut hash),
     }
     hash.finish()
 }

@@ -1240,7 +1240,7 @@ fn build() -> Vec<Spec> {
         later("tools.terrain", "Terrain Tools", "", "", "Terrain sculpting and painting tools are not built yet."),
         later("tools.ui_designer", "UI Designer", "", "", "The UI designer over ara-ui-document ops is not built yet."),
         cmd("tools.cs.solution", "Open Scripts in IDE", "file-code", "", "Open the project's C# module in VS Code (or the OS default editor).", |s, e, _| {
-            let dir = crate::shell::scripts::modules(e.host.root()).into_iter().next().ok_or("This project has no C# module yet; use Assets > Create > C# Script")?;
+            let dir = s.script_modules(e).into_iter().next().ok_or("This project has no usable C# module; see Problems, or use Assets > Create > C# Script")?;
             let path=dir.strip_prefix(e.host.root()).unwrap_or(&dir).to_string_lossy().replace('\\',"/");
             s.open_script_ide(e,&path)
         }).when(|_| Avail::Ready),
