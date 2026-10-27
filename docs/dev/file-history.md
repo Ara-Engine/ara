@@ -51,6 +51,9 @@ ordinal aliases such as dotless i/I and sigma/final sigma; ASCII keys remain com
 with existing history. macOS conservatively uses Unicode 9 full case folding and canonical
 decomposition for APFS aliases (also on case-sensitive volumes). Other Unix platforms
 preserve case. Contradictory alias states and duplicate directory aliases are refused.
+Planners simulating a target volume use `path_key_with_case(path, case_insensitive)`:
+false keeps exact spelling; true uses the Windows policy on all non-macOS platforms
+(including Linux) and APFS on macOS. Native `path_key` retains platform behavior.
 
 Every observation, snapshot and restore rechecks the path, including the target.
 Windows refuses all `FILE_ATTRIBUTE_REPARSE_POINT` entries, including junctions;
