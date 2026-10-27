@@ -8,14 +8,14 @@ lockstep copies. Depends on ara-net, ara-runtime, ara-sim, ara-physics.
 
 - `NetMotor` + `Locomotion` (`SimulationFeature`): the predicted unit. Ground X/Z in
   mm, facing/orbit in millidegrees, speed in mm/tick; `Move`, `Look`, `Sprint` and
-  `Jump` share one native history entry. Steering follows camera yaw, using integer
+  `Jump`, `Interact` and `Inventory` share one native history entry. Steering follows camera yaw, using integer
   rotation math; vertical motion is predicted and corrected from Jolt. Corrections are
   reported in millimetres.
 - `NetPlugin` (`RuntimePlugin`): registers `NetMotor` (every peer: the schema hash
   covers it); `net.motors` (Gameplay) steps motors from each player's movement actions
-  and asks the physics character for the same velocity; `net.pin` (Late) writes motor
-  X/Z and yaw into `Transform`/`PlayerControl` (height stays physical; the next
-  `physics.push` teleports the body to match).
+  and asks the physics character for the same velocity; `net.pin` (Late) reconciles
+  motor X/Z against Jolt contacts and writes facing to `Transform`/`PlayerControl`.
+  Actors without a character retain contact-free motor positioning.
 - `avatars(workspace, scene, players)`: copies the player-1 record as `e_player<NN>`
   for players 2..=N (1.5 m apart, fresh `PhysicsId`, no camera). Every peer applies it
   to the same snapshot before building, so identities match across processes.
@@ -48,13 +48,14 @@ player link only; never logged), status heartbeats carry `HostStats`/`MirrorStat
 ## Gotchas
 
 - Networked worlds run on the authority's timeline: step/until/pause/patch/replay
-  are local-only. The server starts ticking 120 ticks after the last client is ready.
+  are local-only. Listen hosts start without remote clients; dedicated worlds start
+  after their first client. Reserved slots can join after simulation has started.
 - `JoinToken` is private launch data; never put it in results, logs or replays.
 - C# commands run on the authority only. Reflected C# columns pass through the same
   Relevant/Owner/quantization policies as Rust columns; mirrors merge partial values.
   Policies and mirror component names are fixed at connection; schema-changing
   C# reloads require restarting the network session.
-- The feature compatibility version is 2; old movement peers are rejected.
+- The feature compatibility version is 3; old movement peers are rejected.
   Scene contacts still come from authoritative Jolt corrections.
 - The mirror still builds the full world (physics, navmesh, C# host for the schema
   hash); only the session never steps.

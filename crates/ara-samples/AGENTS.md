@@ -16,6 +16,7 @@ pins them, `fetch` restores them.
 | `fetch [projects]` / `verify [projects]` | resumable, verified download into `<project>/assets/third_party/` (hard links from `samples/.cache/blobs`) / check only |
 | `credits` | regenerate `samples/THIRD_PARTY_ASSETS.md` from the lock |
 | `build outpost\|showcase` | author the project through `ara` (typed command batches via `ara do`), then `ara check` |
+| `game` | publish Outpost C# types through headless Play, then author its salvage loop, character, caches, doors, drones, animation and audio through typed commands |
 | `kits <project>` | write only the generated, git-ignored `assets/kit/` files (glTF + bin, suit palette); no document is authored. Release packaging runs it on the staged template copy (`--samples <stage>/templates`) |
 | `capture <project> <look> [--quick] [--quality low\|medium\|high\|epic] [--reference spp]` | captures, per-pass timings and optional path-tracer errors → `target/ara-samples/captures/<project>/<look>/` |
 | `play <project> <scene> <name> [--walk ticks]` | windowed `ara-player` through `ara mcp` (`ara_play`), presented + full captures |
@@ -42,6 +43,8 @@ an empty dir, `VK_LAYER_PATH` = the SDK `Bin`).
   lock/look assets, then calls ara-runtime-render's engine-owned fidelity adapter),
   `render` (shots, upscaled pass, strip, timings), `look` (the per-scene look file).
 - `play`: MCP client over `ara mcp`.
+- `game/`: repeatable co-op game authoring; `samples/outpost/tests/coop.ps1` drives
+  four real bot players, late join, private inventories, captures and authority replay.
 - `editor`: switches the project's `main` scene for the run (the editor opens only
   `main`), then frames the view from a navigation-only `human` session, because an
   agent session's `editor.camera` moves only its presence marker.
@@ -79,6 +82,9 @@ captures leave tracked sample evidence unchanged.
   world-space heights): one Terrain row in the Hierarchy, which starts large groups collapsed.
 
 ## Testing
+
+`ara-samples game` also authors Outpost's native `levels/menu.scene` through entity
+and prefab commands; it shares the compound art but contains no gameplay components.
 
 `cargo test -p ara-samples` (lock validation, kit geometry, source-pivot bounds, fold-in maths).
 `ARA_AUDIT_GEOMETRY=1` also audits fetched source-model bounds in the Outpost layout test;

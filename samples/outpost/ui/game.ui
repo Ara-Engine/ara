@@ -1,0 +1,63 @@
+<ui id="outpost">
+  <panel id="hud">
+  <panel id="aim"><image id="reticle" src="reticle"/></panel>
+  <text id="crew-one" class="teammate" text="Crew 1"/><text id="crew-two" class="teammate" text="Crew 2"/>
+  <text id="crew-three" class="teammate" text="Crew 3"/><text id="crew-four" class="teammate" text="Crew 4"/><text id="crew-five" class="teammate" text="Crew 5"/>
+  <panel id="top">
+    <panel id="ui_001" class="mission"><text id="ui_002" class="eyebrow" text="Dusk shift / Signal recovery"/>
+      <panel id="objective-count" class="row"><text id="salvaged" text="0"/><text id="ui_005" text=" / "/><text id="goal" text="8"/><text id="ui_006" text=" caches recovered"/></panel>
+      <text id="ui_007" text="Recover the caches, then regroup at the blue beacon."/><text id="extraction-progress" text="Extraction 0:00 / 0:03"/>
+    </panel>
+    <panel id="ui_008" class="status"><text id="health" text="100 HP"/><text id="clock" text="18000 ticks until nightfall"/><text id="crew" text="1 scavenger online"/><text id="alert" text="0 drones chasing"/></panel>
+  </panel>
+  <panel id="help"><panel id="control-hints"><text id="ui_009" text="WASD  Move     Shift  Sprint     Space  Jump     RMB  Orbit"/><text id="ui_010" text="E  Use / EMP     Hold E  Revive     Tab  Inventory     Esc  Pause"/></panel><text id="prompt" text="Explore the outpost"/></panel>
+  <panel id="inventory" class="overlay"><panel id="inventory-dialog" class="modal"><text id="ui_011" class="eyebrow" text="Private satchel"/><text id="ui_012" class="title" text="Your share of the haul"/>
+    <text id="ui_013" text="Your satchel. The crew shares the extraction quota."/>
+    <text id="circuits" text="Circuit boards: 0"/><text id="cells" text="Battery cells: 0"/><text id="radios" text="Radio parts: 0"/>
+    <text id="ui_014" text="TAB to close. Every cache contributes to the team's extraction quota."/>
+  </panel></panel>
+  <panel id="win" class="overlay"><panel id="win-dialog" class="modal"><text id="ui_015" class="eyebrow" text="Run complete"/><text id="ui_016" class="title" text="Signal recovered."/>
+    <text id="ui_017" text="The team extracted before nightfall."/><text id="win-salvage" text="Salvage recovered: 0"/><text id="win-time" text="Elapsed ticks: 0"/><text id="win-revives" text="Teammates revived: 0"/><button id="back" action="leave" text="Return to menu"/>
+  </panel></panel>
+  <panel id="lose" class="overlay"><panel id="lose-dialog" class="modal"><text id="ui_018" class="eyebrow" text="Signal lost"/><text id="ui_019" class="title" text="Night owns the outpost."/>
+    <text id="lose-salvage" text="Salvage recovered: 0"/><text id="lose-time" text="Run time: 0:00"/><text id="lose-revives" text="Teammates revived: 0"/>
+    <text id="ui_020" text="Stay together, stun drones with E, and hold E beside a downed teammate."/><button id="retry" action="leave" text="Return to menu"/>
+  </panel></panel>
+  </panel>
+  <panel id="main-menu" class="screen"><panel id="menu-content">
+    <text id="ui_021" class="eyebrow" text="Field operation 01   /   1-4 scavengers"/>
+    <panel id="title-lockup"><text id="ui_022" class="logo" text="OUTPOST"/><panel id="title-rule"/><text id="ui_023" class="subtitle" text="DUSK SHIFT"/></panel>
+    <text id="ui_024" class="menu-description" text="The signal is fading. Recover the lost equipment, watch each other's backs, and make it home before dark."/>
+    <panel id="ui_025" class="menu-buttons"><panel id="play-row" class="row"><button id="host" action="host" text="Host a crew"/><button id="solo" action="solo" text="Play solo"/></panel>
+      <panel id="join-group"><text id="join-caption" class="eyebrow" text="Already have a crew?"/><panel id="ui_026" class="row"><input id="address" text="127.0.0.1:41090"/><button id="join" action="join" text="Join"/></panel></panel>
+      <panel id="menu-options" class="row"><button id="open-settings" action="settings" text="Settings"/><button id="quit" action="quit" text="Quit game"/></panel></panel>
+    <text id="connection-error" text="A shared objective. Your own share of the haul."/>
+    </panel><text id="menu-footer" text="OUTPOST v0     /     Recover. Regroup. Extract."/>
+  </panel>
+  <panel id="lobby" class="screen"><text id="ui_027" class="eyebrow" text="Crew channel / Outpost"/><text id="ui_028" class="title" text="Check your kit."/>
+    <text id="lobby-address" text="127.0.0.1:41090"/><text id="lobby-players" text="Connecting crew..."/>
+    <text id="ui_029" text="Everyone enters at the extraction beacon. E opens doors, grabs salvage and stuns drones."/>
+    <button id="ready" action="ready" text="Ready - enter the outpost"/><button id="lobby-leave" action="leave" text="Back to menu"/>
+  </panel>
+  <panel id="loading" class="screen"><text id="ui_030" class="eyebrow" text="Outpost / Preparing the run"/><text id="ui_031" class="title" text="Checking the signal..."/><text id="loading-progress" text="Loading the compound, physics, navmesh and gameplay."/></panel>
+  <panel id="settings" class="screen"><text id="ui_032" class="eyebrow" text="Settings"/><text id="ui_033" class="title" text="Make yourself comfortable."/>
+    <panel id="ui_034" class="settings-columns"><panel id="ui_035" class="settings-column">
+    <button class="setting-button" id="quality" action="quality" text="Graphics: High"/><button class="setting-button" id="resolution" action="resolution" text="Resolution: 1280 × 720"/><button class="setting-button" id="window-mode" action="window-mode" text="Window: Windowed"/>
+    <text id="ui_036" text="Master volume"/><slider id="master" action="master" min="0" max="1" step="0.05" value="0.8"/>
+    <text id="ui_037" text="Music volume"/><slider id="music" action="music" min="0" max="1" step="0.05" value="0.45"/>
+    <text id="ui_038" text="SFX volume"/><slider id="sfx" action="sfx" min="0" max="1" step="0.05" value="0.8"/>
+    <text id="ui_039" text="Mouse sensitivity"/><slider id="sensitivity" action="sensitivity" min="0.1" max="3" step="0.1" value="1"/>
+    <toggle id="invert" action="invert" text="Invert vertical look"/>
+    </panel><panel id="ui_040" class="settings-column">
+    <text id="ui_041" class="eyebrow" text="Key bindings"/><text id="binding-help" text="Choose a control to rebind."/>
+    <button class="setting-button" id="rebind-Forward" action="rebind-Forward" text="Forward: W"/><button class="setting-button" id="rebind-Backward" action="rebind-Backward" text="Backward: S"/>
+    <button class="setting-button" id="rebind-Left" action="rebind-Left" text="Left: A"/><button class="setting-button" id="rebind-Right" action="rebind-Right" text="Right: D"/>
+    <button class="setting-button" id="rebind-Jump" action="rebind-Jump" text="Jump: Space"/><button class="setting-button" id="rebind-Sprint" action="rebind-Sprint" text="Sprint: Left Shift"/>
+    <button class="setting-button" id="rebind-Interact" action="rebind-Interact" text="Interact: E"/><button class="setting-button" id="rebind-Inventory" action="rebind-Inventory" text="Inventory: Tab"/>
+    </panel></panel>
+    <button class="setting-button" id="apply" action="apply" text="Save and return"/>
+  </panel>
+  <panel id="pause" class="overlay"><panel id="pause-dialog" class="modal"><text id="ui_042" class="eyebrow" text="Crew channel open"/><text id="ui_043" class="title" text="Take a breath."/>
+    <text id="ui_044" text="A co-op run keeps ticking while you are in the menu."/><button id="resume" action="resume" text="Resume"/><button id="pause-settings" action="settings" text="Settings"/><button id="leave" action="leave" text="Leave run"/>
+  </panel></panel>
+</ui>

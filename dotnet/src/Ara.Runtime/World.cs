@@ -52,6 +52,10 @@ public sealed class MissingComponentException(Entity entity, string component)
 /// </summary>
 public static unsafe class World
 {
+    /// <summary>Copies entities carrying T into caller-owned scratch storage, in ascending handle order.
+    /// Throws if the span is too small; no silently truncated gameplay queries.</summary>
+    public static Span<Entity> Query<T>(Span<Entity> scratch) where T : IComponent<T> =>
+        scratch[..Host.QueryEntities(T.TypeIndex, scratch)];
     /// <summary>The entity's component, for reading and writing. Throws if it is missing.</summary>
     public static ref T Get<T>(Entity entity) where T : IComponent<T> => ref T.Access(entity, true);
 

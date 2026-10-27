@@ -145,6 +145,47 @@ fn move_input(offset: u32, hold_ticks: u32) -> StepInput {
 }
 
 #[test]
+fn normal_sessions_do_not_hash_and_sampled_recordings_keep_every_boundary() {
+    let mut play = control(7);
+    assert!(
+        play.session_mut().step().unwrap().hash.is_none(),
+        "ordinary live sessions must not hash by default"
+    );
+    play.session_mut()
+        .set_hash_interval(std::num::NonZeroU32::new(3).unwrap())
+        .unwrap();
+    play.record().unwrap();
+    play.step(6, &[move_input(0, 6)]).unwrap();
+    let expected = play.session().state_hash().unwrap();
+    let replay = play.finish_recording().unwrap();
+    let replay = ara_sim::Replay::from_bytes(&replay.to_bytes().unwrap()).unwrap();
+    assert_eq!(replay.ticks.len(), 6);
+    assert_eq!(replay.hash_interval.get(), 3);
+    assert_eq!(
+        replay
+            .ticks
+            .iter()
+            .filter(|r| r.hash.is_some())
+            .map(|r| r.tick)
+            .collect::<Vec<_>>(),
+        vec![3, 6, 7]
+    );
+    assert!(replay.ticks[0].inputs.iter().any(|i| i.action == "Move"));
+    let mut verify = control(7);
+    assert_eq!(verify.replay(&replay).unwrap(), expected);
+    assert_eq!(verify.replay(&replay).unwrap(), expected);
+    let mut corrupt = replay.clone();
+    corrupt.ticks[1].hash = None;
+    assert!(
+        verify
+            .replay(&corrupt)
+            .unwrap_err()
+            .0
+            .contains("missing tick hash")
+    );
+}
+
+#[test]
 fn projection_round_trip_and_dynamic_storage() {
     let db = schema();
     let source = scene(&db);

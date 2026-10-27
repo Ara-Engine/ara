@@ -4,8 +4,8 @@
 //!   millidegrees) is its complete rollback unit and `step` is integer math, so owner
 //!   prediction and Lightyear rollback replay it bit-exactly. [`NetPlugin`] steps every
 //!   player's motor from its `Move` action at `Stage::Gameplay` (the physics character
-//!   is asked for the same velocity, which keeps ground height and pushes), then pins
-//!   the character to the motor at `Stage::Late`.
+//!   is asked for the same velocity), then reconciles the motor with authoritative
+//!   character contacts at `Stage::Late`.
 //! - [`NetHost`]: the play world's [`Runtime`] as an `ara_net::Authoritative` inside a
 //!   Lightyear server. The server's timeline is the clock; each boundary runs the
 //!   runtime's plugins (C#, ...) around the session step; every `Identity` entity
@@ -129,8 +129,8 @@ type PinnedPlayer = (
     Option<&'static Velocity>,
 );
 
-/// Pins players to their motors after physics: ground X/Z and facing come from the
-/// motor, height from the character. The next push teleports the body to match.
+/// Reconciles motors with authoritative character contacts. Prediction remains
+/// contact-free between snapshots; it must never teleport the server through walls.
 fn pin(ctx: Res<SimContext>, mut players: Query<PinnedPlayer>) {
     for (mut motor, mut control, mut transform, motion, velocity) in &mut players {
         motor.y = (transform.position[1] * 1000.0).round() as i32;
@@ -146,7 +146,10 @@ fn pin(ctx: Res<SimContext>, mut players: Query<PinnedPlayer>) {
         }
         let [x, z] = motor.ground();
         let yaw = motor.yaw();
-        if transform.position[0] != x || transform.position[2] != z {
+        if motion.is_some() {
+            motor.x = (transform.position[0] * 1000.0).round() as i32;
+            motor.z = (transform.position[2] * 1000.0).round() as i32;
+        } else if transform.position[0] != x || transform.position[2] != z {
             transform.position[0] = x;
             transform.position[2] = z;
         }

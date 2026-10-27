@@ -18,6 +18,9 @@ public static class Docs
     /// <summary>The symbol's <c>&lt;summary&gt;</c>, or "".</summary>
     public static string Summary(ISymbol symbol) => Tag(Xml(symbol), "summary", null);
 
+    /// <summary>Reads one declaration's summary without Roslyn merging partial-type comments.</summary>
+    public static string Summary(SyntaxNode declaration) => Tag(Xml(declaration), "summary", null);
+
     /// <summary>The method's <c>&lt;param name="..."&gt;</c> text, or "".</summary>
     public static string Param(IMethodSymbol method, string name) => Tag(Xml(method), "param", name);
 
@@ -26,6 +29,11 @@ public static class Docs
         var xml = symbol.GetDocumentationCommentXml(expandIncludes: false);
         if (!string.IsNullOrWhiteSpace(xml)) return xml;
         var node = symbol.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax();
+        return node is null ? null : Xml(node);
+    }
+
+    static string? Xml(SyntaxNode? node)
+    {
         if (node is VariableDeclaratorSyntax) node = node.Parent?.Parent; // field: the FieldDeclaration holds the trivia
         if (node is null) return null;
         var sb = new StringBuilder();

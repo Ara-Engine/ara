@@ -9,6 +9,86 @@ file (URL, BLAKE3, size, license, authors, source page) and `fetch` restores the
 | `outpost/` | `levels/outpost.scene`: Outpost at dusk (a derelict compound on 384 m of terrain with foliage, a campfire, floodlights, wind and music). `levels/hangar.scene`: the hangar interior at night, lit by emissive panels, a festoon and a few lamps. |
 | `showcase/` | `levels/showcase.scene`: a turntable stage with an animated mannequin, a jogger, 11 hero props on plinths and 18 material balls under a studio HDRI. |
 
+## How to play Outpost
+
+Recover eight glowing signal caches, then bring every active scavenger to the blue
+extraction beacon for three seconds. Nightfall ends the run after five minutes.
+Security drones chase and damage you; **E** stuns a nearby drone. Hold **E** beside a
+downed teammate to revive them. The crew has three emergency rescues.
+
+**WASD** moves, **Shift** sprints, **Space** jumps, **right mouse drag** orbits the
+camera, **E** opens a shared hatch or takes salvage, **Tab** opens your private
+satchel, and **Escape** opens the pause menu. Settings includes graphics quality,
+resolution, window mode, volume, mouse sensitivity/invert and key bindings.
+
+From a Windows checkout, prepare the assets and tools once (PowerShell):
+
+```powershell
+$env:CARGO_BUILD_JOBS = '4'
+$env:CARGO_TARGET_DIR = 'D:\AraBuild\outpost-game-target'
+.\crates\ara-dev\run.ps1 cargo -- -- build -j 4 --config samples/outpost/windows-build.toml -p ara -p ara-player -p ara-import-worker -p ara-samples -p ara-export -p ara-shader-cook
+$bin = Join-Path $env:CARGO_TARGET_DIR 'debug'
+& "$bin\ara-samples.exe" fetch outpost
+& "$bin\ara-samples.exe" verify outpost
+& "$bin\ara-samples.exe" kits outpost
+dotnet build dotnet/Ara.slnx -c Release
+# Repeat only when deliberately reauthoring the sample:
+& "$bin\ara-samples.exe" game
+& "$bin\ara-player.exe" --game --project samples/outpost
+```
+
+Choose **Play solo**, or **Host a crew** and then **Ready**. On the same PC launch
+another player with the last command, enter `127.0.0.1:41090` in **Join**, and ready
+up. Up to three clients can join the listen host, including after a hatch or cache
+has changed. For a dedicated authority and up to four clients:
+
+```powershell
+& "$bin\ara-player.exe" --game --project samples/outpost --dedicated --headless --port 41090
+& "$bin\ara-player.exe" --game --project samples/outpost --connect 127.0.0.1:41090
+```
+
+In the editor, open `samples/outpost`, select `levels/outpost.scene`, and choose
+**Host + N** or **Dedicated + N** in Play's multiplayer configuration. Each view uses
+its own input owner and native HUD. Source launches cook missing assets on the
+loading screen; an exported build loads its pinned cooked pack.
+
+To export a playable Windows folder with NativeAOT gameplay:
+
+```powershell
+.\samples\outpost\export.ps1 -Bin $bin -Output D:\AraBuild\Outpost-Windows
+```
+
+Open `D:\AraBuild\Outpost-Windows\build\ara-player.exe` to reach the main menu. Run it a second time and use
+**Join** to play co-op on this PC. For dedicated play, run `ara-player.exe --game
+--dedicated --headless`, then open client instances normally. `--windowed` overrides
+the saved startup window mode. Leave the existing output folder intact; choose a
+new output path for another export.
+
+For two visible windows on one PC, launch from the exported folder twice:
+
+```powershell
+Start-Process .\ara-player.exe -ArgumentList '--windowed'
+Start-Process .\ara-player.exe -ArgumentList '--windowed'
+```
+
+Choose **Host a crew** in the first, then **Join** `127.0.0.1:41090` in the second.
+Ready each scavenger, then switch windows with Alt+Tab to control that player.
+
+The offscreen gate uses fresh profiles and only its own child processes:
+
+```powershell
+.\samples\outpost\tests\coop.ps1 -Bin $bin
+```
+
+It tests solo, then drives four players in listen and dedicated modes, joins the last player after a
+shared hatch opens, checks private inventories, captures each client's HUD/satchel/
+door/result view, and verifies two authority replays against live checkpoints.
+The scout tests real drone damage and the crew must revive it; every capture is 1080p.
+Live recordings hash tick multiples of 30 and the final tick; offline replays hash
+every tick. Normal play leaves state hashing off. To test the exported build, add
+`-ExportRoot D:\AraBuild\Outpost-Windows\build`. Art, fonts and sounds are
+listed in [THIRD_PARTY_ASSETS.md](THIRD_PARTY_ASSETS.md).
+
 ```sh
 cargo build --release -p ara -p ara-player -p ara-import-worker -p ara-editor -p ara-samples
 target/release/ara-samples fetch                        # ~510 MB, resumable, hash-checked

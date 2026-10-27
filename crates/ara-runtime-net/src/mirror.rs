@@ -125,7 +125,11 @@ impl NetMirror {
         let tick = self.client.status().predicted_tick + 1 + after;
         for mut input in inputs {
             input.player = self.player;
-            self.client.inject(tick, input)?;
+            if after == 0 {
+                self.client.inject_next(input)?;
+            } else {
+                self.client.inject(tick, input)?;
+            }
         }
         Ok(())
     }
@@ -155,9 +159,12 @@ impl NetMirror {
             self.join_ms = Some(self.created.elapsed().as_secs_f64() * 1000.0);
         }
         let ticks = status.predicted_tick.saturating_sub(self.presented);
-        if ticks == 0 {
+        if ticks == 0 && status.predicted_tick == self.presented && status.tick == runtime.tick() {
             return Ok(());
         }
+        // A sync correction can move the input clock backwards, and a bounded
+        // prediction window can pause it while new field baselines still arrive.
+        let ticks = ticks.max(1);
         self.presented = status.predicted_tick;
         self.apply(runtime, ticks)?;
         for _ in 0..ticks.min(4) {

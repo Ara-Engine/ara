@@ -140,6 +140,12 @@ impl HostCtx {
             cmd_push: host_cmd_push,
             compile_state: host_compile_state,
             component_json: host_component_json,
+            query_entities: host_query_entities,
+            input_axis: host_input_axis,
+            input_player: host_input_player,
+            navigate: host_navigate,
+            character_stop: host_character_stop,
+            animation_bool: host_animation_bool,
         }
     }
 }
@@ -445,4 +451,136 @@ unsafe extern "C" fn host_component_json(
             i32::from(catalog.insert(world, entity_id, component, &encoded))
         },
     )
+}
+
+unsafe extern "C" fn host_query_entities(
+    c: *mut c_void,
+    component: u32,
+    out: *mut u64,
+    cap: u32,
+) -> u32 {
+    // SAFETY: the caller returns its live host context.
+    let Some(scope) = (unsafe { ctx(c) }).current() else {
+        return 0;
+    };
+    // SAFETY: registry metadata remains live and unchanged throughout this callback.
+    let Some(component) = (unsafe { &*scope.registry })
+        .components
+        .get(component as usize)
+    else {
+        return 0;
+    };
+    let mut entities: Vec<_> = scope
+        .world
+        .archetypes()
+        .iter()
+        .filter(|a| a.contains(component.id))
+        .flat_map(|a| a.entities().iter().map(|e| e.id().to_bits()))
+        .collect();
+    entities.sort_unstable();
+    if entities.len() <= cap as usize && !out.is_null() {
+        // SAFETY: C# supplies cap writable u64s, disjoint from engine storage.
+        unsafe {
+            std::ptr::copy_nonoverlapping(entities.as_ptr(), out, entities.len());
+        }
+    }
+    entities.len() as u32
+}
+
+unsafe extern "C" fn host_input_axis(
+    c: *mut c_void,
+    player: u64,
+    name: *const u8,
+    len: u32,
+    axis: u32,
+) -> f32 {
+    // SAFETY: the caller supplies its live context and a readable UTF-8 span.
+    let (context, name) = unsafe { (ctx(c), bytes(name, len)) };
+    let Some(scope) = context.current() else {
+        return 0.0;
+    };
+    let Ok(name) = std::str::from_utf8(name) else {
+        return 0.0;
+    };
+    // SAFETY: ScriptInputs is immutable for the entire exclusive C# phase and is
+    // not exposed as a writable C# component/resource.
+    let inputs = unsafe { scope.world.get_resource::<super::ScriptInputs>() };
+    inputs
+        .and_then(|i| i.actions.get(&(player, name.to_owned())))
+        .and_then(|v| v.get(axis as usize))
+        .copied()
+        .unwrap_or(0.0)
+}
+
+unsafe extern "C" fn host_input_player(c: *mut c_void, entity: u64) -> u64 {
+    // SAFETY: the caller returns its live context; the input snapshot is immutable during callbacks.
+    let Some(scope) = (unsafe { ctx(c) }).current() else {
+        return 0;
+    };
+    // SAFETY: the snapshot is not accessible for mutation from C#.
+    unsafe { scope.world.get_resource::<super::ScriptInputs>() }
+        .and_then(|i| i.players.get(&entity))
+        .copied()
+        .unwrap_or(0)
+}
+
+unsafe extern "C" fn host_navigate(
+    c: *mut c_void,
+    entity: u64,
+    x: f32,
+    y: f32,
+    z: f32,
+    enabled: u32,
+) {
+    if ![x, y, z].iter().all(|v| v.is_finite()) {
+        return;
+    }
+    // SAFETY: the caller returns its live context, on the exclusive callback thread.
+    let Some(scope) = (unsafe { ctx(c) }).current() else {
+        return;
+    };
+    // SAFETY: only this exclusive callback can access this unbound resource.
+    if let Some(mut requests) = unsafe { scope.world.get_resource_mut::<super::ScriptNavigation>() }
+    {
+        requests
+            .0
+            .push((entity, (enabled != 0).then_some([x, y, z])));
+    }
+}
+
+unsafe extern "C" fn host_character_stop(c: *mut c_void, entity: u64) {
+    // SAFETY: the caller returns its live host context on the exclusive callback thread.
+    let Some(scope) = (unsafe { ctx(c) }).current() else {
+        return;
+    };
+    // SAFETY: this unbound resource is accessible only by the exclusive callback.
+    if let Some(mut controls) = unsafe { scope.world.get_resource_mut::<super::ScriptControls>() } {
+        controls.stopped.push(entity);
+    }
+}
+
+unsafe extern "C" fn host_animation_bool(
+    c: *mut c_void,
+    entity: u64,
+    name: *const u8,
+    len: u32,
+    value: u32,
+) {
+    if len > 128 {
+        return;
+    }
+    // SAFETY: the caller supplies its live context and a readable UTF-8 span.
+    let (context, name) = unsafe { (ctx(c), bytes(name, len)) };
+    let Some(scope) = context.current() else {
+        return;
+    };
+    let Ok(name) = std::str::from_utf8(name) else {
+        return;
+    };
+    // SAFETY: this unbound resource is accessible only by the exclusive callback.
+    if let Some(mut controls) = unsafe { scope.world.get_resource_mut::<super::ScriptControls>() } {
+        controls
+            .animation
+            .push((entity, name.to_owned(), value != 0));
+    }
 }

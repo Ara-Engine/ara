@@ -18,6 +18,12 @@ pub(super) fn inputs<F: SimulationFeature>(
     let target = timeline.tick().0 + u32::from(sync.input_delay());
     let tick = u64::from(target.saturating_sub(origin));
     owner.status.predicted_tick = tick;
+    if target > origin {
+        let pending = std::mem::take(&mut owner.pending_actions);
+        for (name, input) in pending {
+            owner.inputs.insert((tick, name), input);
+        }
+    }
     let input = if target > origin && !owner.limit.is_some_and(|l| tick > l) {
         let latest = |name: &str| {
             owner

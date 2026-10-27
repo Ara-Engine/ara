@@ -29,6 +29,10 @@ pub enum Kind {
     Character,
     /// A sound or music file (WAV/OGG), imported by `ara.audio`.
     Audio,
+    /// A permissively licensed ZIP pack, verified before safe extraction.
+    Archive,
+    /// A font and its redistributable licence.
+    Font,
 }
 
 /// One pinned asset: a folder of files from one source page.

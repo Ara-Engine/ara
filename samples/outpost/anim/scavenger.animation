@@ -1,0 +1,177 @@
+{
+  "$schema": "ara://schema/animation/1",
+  "id": "ac_scavenger",
+  "records": {
+    "an_idle": {
+      "name": "Idle"
+    },
+    "an_interact": {
+      "name": "Punch"
+    },
+    "an_jump": {
+      "name": "Jump"
+    },
+    "an_running": {
+      "name": "Running"
+    },
+    "an_scavenger": {
+      "name": "Locomotion",
+      "controller": {
+        "parameters": {
+          "interact": {
+            "kind": "bool"
+          },
+          "jump": {
+            "kind": "bool"
+          },
+          "speed": {}
+        },
+        "nodes": {
+          "idle": {
+            "clip": "@anim/scavenger.animation#an_idle"
+          },
+          "interact": {
+            "clip": "@anim/scavenger.animation#an_interact"
+          },
+          "jump": {
+            "clip": "@anim/scavenger.animation#an_jump"
+          },
+          "move": {
+            "kind": "blend1d",
+            "parameterX": "speed",
+            "samples": [
+              {
+                "node": "walking",
+                "x": 2.4
+              },
+              {
+                "node": "running",
+                "x": 5
+              }
+            ]
+          },
+          "running": {
+            "clip": "@anim/scavenger.animation#an_running"
+          },
+          "walking": {
+            "clip": "@anim/scavenger.animation#an_walking"
+          }
+        },
+        "states": {
+          "idle": {
+            "node": "idle"
+          },
+          "interact": {
+            "node": "interact",
+            "duration": 19200,
+            "looping": false
+          },
+          "jump": {
+            "node": "jump",
+            "duration": 24000,
+            "looping": false
+          },
+          "move": {
+            "node": "move",
+            "duration": 46000
+          }
+        },
+        "transitions": [
+          {
+            "id": "move-interact",
+            "from": "move",
+            "to": "interact",
+            "duration": 3200,
+            "conditions": [
+              {
+                "parameter": "interact",
+                "boolValue": true
+              }
+            ]
+          },
+          {
+            "id": "idle-interact",
+            "from": "idle",
+            "to": "interact",
+            "duration": 3200,
+            "conditions": [
+              {
+                "parameter": "interact",
+                "boolValue": true
+              }
+            ]
+          },
+          {
+            "id": "move-jump",
+            "from": "move",
+            "to": "jump",
+            "duration": 3200,
+            "conditions": [
+              {
+                "parameter": "jump",
+                "boolValue": true
+              }
+            ]
+          },
+          {
+            "id": "idle-jump",
+            "from": "idle",
+            "to": "jump",
+            "duration": 3200,
+            "conditions": [
+              {
+                "parameter": "jump",
+                "boolValue": true
+              }
+            ]
+          },
+          {
+            "id": "start",
+            "from": "idle",
+            "to": "move",
+            "duration": 9600,
+            "conditions": [
+              {
+                "parameter": "speed",
+                "comparison": "greater",
+                "floatValue": 0.15
+              }
+            ]
+          },
+          {
+            "id": "stop",
+            "from": "move",
+            "to": "idle",
+            "duration": 9600,
+            "conditions": [
+              {
+                "parameter": "speed",
+                "comparison": "less",
+                "floatValue": 0.075
+              }
+            ]
+          },
+          {
+            "id": "jump-done",
+            "from": "jump",
+            "to": "idle",
+            "duration": 6400,
+            "exitTick": 24000
+          },
+          {
+            "id": "interact-done",
+            "from": "interact",
+            "to": "idle",
+            "duration": 6400,
+            "exitTick": 19200
+          }
+        ],
+        "initial": "idle",
+        "extractRootMotion": false
+      }
+    },
+    "an_walking": {
+      "name": "Walking"
+    }
+  }
+}

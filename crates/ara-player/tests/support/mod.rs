@@ -27,7 +27,9 @@ pub fn copy(from: &Path, to: &Path) {
 
 /// Reuse the gate's current Cargo artifact; standalone tests build the worker.
 pub fn import_worker() -> PathBuf {
-    if let Some(path) = std::env::var_os("CARGO_BIN_EXE_ara-import-worker") {
+    if let Some(path) = std::env::var_os("CARGO_BIN_EXE_ara-import-worker")
+        .or_else(|| std::env::var_os("ARA_IMPORT_WORKER"))
+    {
         let worker = PathBuf::from(path);
         assert!(
             worker.is_file(),

@@ -1,0 +1,351 @@
+{
+  "$schema": "ara://schema/types/1",
+  "types": {
+    "ExtractionBeacon": {
+      "kind": "component",
+      "doc": "The team's extraction beacon.",
+      "module": "Salvage",
+      "fields": {
+        "radius": {
+          "type": "f32",
+          "doc": "Radius in metres that every active scavenger must enter.",
+          "default": 4,
+          "unit": "m"
+        }
+      }
+    },
+    "SalvageCache": {
+      "kind": "component",
+      "doc": "A salvage cache. Ownership of the private reward stays on the collector.",
+      "module": "Salvage",
+      "fields": {
+        "kind": {
+          "type": "i32",
+          "doc": "Reward type: zero circuits, one cells, two radios.",
+          "default": 0,
+          "range": [0, 2]
+        },
+        "taken": {
+          "type": "bool",
+          "doc": "Whether any player has collected this cache.",
+          "default": false,
+          "replicate": {
+            "audience": "relevant"
+          }
+        },
+        "takenTick": {
+          "type": "u64",
+          "doc": "Tick of pickup, for a replicated pickup flash.",
+          "default": 0,
+          "replicate": {
+            "audience": "relevant"
+          }
+        }
+      }
+    },
+    "SalvageRun": {
+      "kind": "component",
+      "doc": "A five-minute salvage run. Only this director changes mission state.",
+      "module": "Salvage",
+      "fields": {
+        "goal": {
+          "type": "i32",
+          "doc": "Salvage caches required before extraction is enabled.",
+          "default": 8,
+          "replicate": {
+            "audience": "relevant"
+          }
+        },
+        "salvaged": {
+          "type": "i32",
+          "doc": "Team salvage progress; individual satchels remain private.",
+          "default": 0,
+          "replicate": {
+            "audience": "relevant"
+          }
+        },
+        "started": {
+          "type": "bool",
+          "doc": "Whether any scavenger has entered the run.",
+          "default": false,
+          "replicate": {
+            "audience": "relevant"
+          }
+        },
+        "won": {
+          "type": "bool",
+          "doc": "Whether the team extracted successfully.",
+          "default": false,
+          "replicate": {
+            "audience": "relevant"
+          }
+        },
+        "lost": {
+          "type": "bool",
+          "doc": "Whether the team ran out of time or survivors.",
+          "default": false,
+          "replicate": {
+            "audience": "relevant"
+          }
+        },
+        "ticksLeft": {
+          "type": "i32",
+          "doc": "Fixed ticks remaining until nightfall.",
+          "default": 18000,
+          "replicate": {
+            "audience": "relevant"
+          }
+        },
+        "elapsedTicks": {
+          "type": "i32",
+          "doc": "Elapsed fixed ticks, used by the result screen.",
+          "default": 0,
+          "replicate": {
+            "audience": "relevant"
+          }
+        },
+        "showHints": {
+          "type": "bool",
+          "doc": "Whether the crew still needs the first-minute control reminder.",
+          "default": true,
+          "replicate": {
+            "audience": "relevant"
+          }
+        },
+        "extractionTicks": {
+          "type": "i32",
+          "doc": "Consecutive ticks the whole team has held the extraction zone.",
+          "default": 0,
+          "replicate": {
+            "audience": "relevant"
+          }
+        },
+        "activePlayers": {
+          "type": "i32",
+          "doc": "Number of scavengers participating in this run.",
+          "default": 0,
+          "replicate": {
+            "audience": "relevant"
+          }
+        },
+        "alert": {
+          "type": "i32",
+          "doc": "Number of drones currently chasing, driving the tension music layer.",
+          "default": 0,
+          "replicate": {
+            "audience": "relevant"
+          }
+        },
+        "revives": {
+          "type": "i32",
+          "doc": "Successful teammate rescues, shown in results.",
+          "default": 0,
+          "replicate": {
+            "audience": "relevant"
+          }
+        },
+        "rescues": {
+          "type": "i32",
+          "doc": "Remaining emergency respawns, shared by the team.",
+          "default": 3,
+          "replicate": {
+            "audience": "relevant"
+          }
+        },
+        "wipeTicks": {
+          "type": "i32",
+          "doc": "Consecutive ticks with no standing survivor.",
+          "default": 0
+        }
+      }
+    },
+    "SecurityDrone": {
+      "kind": "component",
+      "doc": "A navmesh security drone. Its path is owned by the native NavAgent.",
+      "module": "Salvage",
+      "fields": {
+        "home": {
+          "type": "vec3",
+          "doc": "Patrol home position.",
+          "default": [0, 0, 0]
+        },
+        "chasing": {
+          "type": "bool",
+          "doc": "Whether a player is being chased.",
+          "default": false,
+          "replicate": {
+            "audience": "relevant"
+          }
+        },
+        "stunnedUntil": {
+          "type": "u64",
+          "doc": "EMP stun expiration in simulation ticks.",
+          "default": 0,
+          "replicate": {
+            "audience": "relevant"
+          }
+        }
+      }
+    },
+    "SharedDoor": {
+      "kind": "component",
+      "doc": "A shared physical door, opened once for the whole team.",
+      "module": "Salvage",
+      "fields": {
+        "open": {
+          "type": "bool",
+          "doc": "Whether the shared door has been unlocked.",
+          "default": false,
+          "replicate": {
+            "audience": "relevant"
+          }
+        },
+        "closedYaw": {
+          "type": "f32",
+          "doc": "Closed leaf yaw in degrees.",
+          "default": 0
+        },
+        "angle": {
+          "type": "f32",
+          "doc": "Current opening angle in degrees.",
+          "default": 0,
+          "replicate": {
+            "audience": "relevant"
+          }
+        },
+        "openTick": {
+          "type": "u64",
+          "doc": "Tick at which the door opened, for presentation feedback.",
+          "default": 0,
+          "replicate": {
+            "audience": "relevant"
+          }
+        }
+      }
+    },
+    "Survivor": {
+      "kind": "component",
+      "doc": "A scavenger's authoritative status and private satchel. All state lives in ECS.",
+      "module": "Salvage",
+      "fields": {
+        "player": {
+          "type": "u64",
+          "doc": "Authenticated input slot, filled by the director from PlayerControl.",
+          "default": 0,
+          "replicate": {
+            "audience": "relevant"
+          }
+        },
+        "active": {
+          "type": "bool",
+          "doc": "Whether this slot has entered the run.",
+          "default": false,
+          "replicate": {
+            "audience": "relevant"
+          }
+        },
+        "health": {
+          "type": "i32",
+          "doc": "Health; zero means downed and another scavenger can revive you.",
+          "default": 100,
+          "range": [0, 100],
+          "replicate": {
+            "audience": "relevant"
+          }
+        },
+        "bleedTicks": {
+          "type": "i32",
+          "doc": "Ticks until an emergency rescue is used while downed.",
+          "default": 0,
+          "replicate": {
+            "audience": "relevant"
+          }
+        },
+        "circuits": {
+          "type": "i32",
+          "doc": "Circuit boards carried by this player only.",
+          "default": 0,
+          "replicate": {
+            "audience": "owner"
+          }
+        },
+        "cells": {
+          "type": "i32",
+          "doc": "Battery cells carried by this player only.",
+          "default": 0,
+          "replicate": {
+            "audience": "owner"
+          }
+        },
+        "radios": {
+          "type": "i32",
+          "doc": "Radio parts carried by this player only.",
+          "default": 0,
+          "replicate": {
+            "audience": "owner"
+          }
+        },
+        "inventoryOpen": {
+          "type": "bool",
+          "doc": "Private inventory visibility.",
+          "default": false,
+          "replicate": {
+            "audience": "owner"
+          }
+        },
+        "prompt": {
+          "type": "i32",
+          "doc": "Prompt: 0 explore, 1 door, 2 salvage, 3 revive, 4 extraction, 5 EMP, 6 downed.",
+          "default": 0,
+          "replicate": {
+            "audience": "owner"
+          }
+        },
+        "atExtraction": {
+          "type": "bool",
+          "doc": "Team extraction radius membership.",
+          "default": false,
+          "replicate": {
+            "audience": "relevant"
+          }
+        },
+        "feedbackTick": {
+          "type": "u64",
+          "doc": "Last successful interaction tick, for presentation feedback.",
+          "default": 0,
+          "replicate": {
+            "audience": "relevant"
+          }
+        },
+        "stepTick": {
+          "type": "u64",
+          "doc": "Latest footfall tick, driving presentation sound without wall-clock timers.",
+          "default": 0,
+          "replicate": {
+            "audience": "relevant"
+          }
+        },
+        "useHeld": {
+          "type": "bool",
+          "doc": "Interaction hold on the previous fixed tick, for edge detection and replay.",
+          "default": false
+        },
+        "inventoryHeld": {
+          "type": "bool",
+          "doc": "Inventory hold on the previous fixed tick.",
+          "default": false
+        },
+        "reviveTicks": {
+          "type": "i32",
+          "doc": "Ticks spent contributing to a teammate's revive.",
+          "default": 0
+        },
+        "hitTick": {
+          "type": "u64",
+          "doc": "Last drone damage tick, providing invulnerability between hits.",
+          "default": 0
+        }
+      }
+    }
+  }
+}

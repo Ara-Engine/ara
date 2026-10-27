@@ -14,6 +14,7 @@
     <Project Path="examples/Ara.CommandExamples/Ara.CommandExamples.csproj" />
     <Project Path="samples/Outpost.Sample/Outpost.Sample.csproj" />
     <Project Path="samples/Outpost.Sample.Aot/Outpost.Sample.Aot.csproj" />
+    <Project Path="samples/Outpost.Game/Outpost.Game.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Ara.TestModule/Ara.TestModule.csproj" />

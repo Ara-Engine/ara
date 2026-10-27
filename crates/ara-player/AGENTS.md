@@ -1,10 +1,8 @@
 # ara-player
 
-The standalone game and S5 Play process. The edit-world owner (`ara` daemon via
-`ara-play-host`, or the editor) pre-spawns Play into a single-use pool; it connects over
-localhost WebSocket with the session token (`ARA_PLAY_TOKEN`), idles at zero CPU, and
-on `play.start` maps the shared-memory snapshot, builds an `ara_runtime::Runtime` and
-plays: windowed through SDL3 (`--window`) or headless. It exits on `play.stop`.
+Standalone games and S5 Play. Owners authenticate single-use players with `ARA_PLAY_TOKEN`, assign a snapshot on `play.start`, and exit on `play.stop`.
+`--game --project samples/outpost` opens native menus; exported UI games do so on ordinary launches.
+`--dedicated --headless` hosts four clients; `--connect IP:PORT` joins. `--bot --evidence DIR` drives headless bots and writes scratch evidence.
 
 ## Command line
 
@@ -36,6 +34,8 @@ presenter before hello and reuse its device at embed; surface-less services allo
 
 ## Modules
 
+- `game_app/`: native menus/settings, lobby, bots and the art-only `levels/menu.scene` backdrop (no C# host). `game_ui/`: bindings, labels and GPU/CPU composition; captures keep UDP polling.
+- `world/feedback.rs`: replicated event counters become audio, VFX and animation.
 - `packed.rs` and `standalone.rs`: the authored exported world and immutable pack source;
   ara-pack's bounded `native-decode` is linked into this player and its runtime templates.
 - `standalone/startup.rs`: shaderless progress (`device/loading.rs`, 225 KiB image + staging) precedes runtime/presenter/content workers. Real content, PSOs, uploads, effects and the initial GI volume/staging clear finish behind it; the surface bake can arrive later without allocation.

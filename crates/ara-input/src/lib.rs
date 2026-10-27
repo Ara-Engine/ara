@@ -172,6 +172,14 @@ pub struct InputState {
 }
 
 impl InputState {
+    /// Active fixed-tick actions in player/name order, for runtime language adapters.
+    pub fn iter(&self) -> impl Iterator<Item = (PlayerId, &str, ActionValue)> {
+        self.players.iter().flat_map(|(player, actions)| {
+            actions
+                .iter()
+                .map(move |(name, held)| (*player, name.as_str(), held.value))
+        })
+    }
     /// Validates a complete batch before changing anything, then applies at `tick`.
     pub fn apply(
         &mut self,
