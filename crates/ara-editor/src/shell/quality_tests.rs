@@ -380,9 +380,38 @@ fn settings_select_commits_mouse_keyboard_and_numeric_text_through_typed_actions
         .element
         .id
         .clone();
-    shell.click(&option, &mut clipboard).unwrap();
+    let before_pointer = select_pointer_report(&shell, &option);
+    let node = shell.ui.find(&option).unwrap();
+    let rect = shell.ui.nodes[node].rect;
+    let pointer = [rect.x + rect.w * 0.5, rect.y + rect.h * 0.5];
+    assert_eq!(
+        shell
+            .ui
+            .hit_test(pointer[0], pointer[1])
+            .map(|i| shell.ui.nodes[i].element.id.as_str()),
+        Some(option.as_str()),
+        "{before_pointer}"
+    );
+    shell
+        .event(InputEvent::PointerDown(pointer), &mut clipboard)
+        .unwrap();
+    assert_eq!(
+        shell.input.captured(),
+        Some(ara_ui::source::stable_id(&option)),
+        "before={before_pointer}\nafter={}",
+        select_pointer_report(&shell, &option)
+    );
+    let after_press = select_pointer_report(&shell, &option);
+    shell
+        .event(InputEvent::PointerUp(pointer), &mut clipboard)
+        .unwrap();
     shell.dispatch(&mut editor).unwrap();
-    assert_eq!(editor.state.settings["input.keymap"], expected);
+    assert_eq!(
+        editor.state.settings["input.keymap"],
+        expected,
+        "before={before_pointer}\npressed={after_press}\nafter={}",
+        select_pointer_report(&shell, &option)
+    );
     let definition = crate::settings::DEFS
         .iter()
         .find(|d| {
@@ -419,4 +448,13 @@ fn settings_select_commits_mouse_keyboard_and_numeric_text_through_typed_actions
     shell.key(&mut editor, 40, true, &mut clipboard).unwrap();
     shell.key(&mut editor, 40, false, &mut clipboard).unwrap();
     assert_eq!(editor.state.settings[definition.key], json!(value));
+}
+
+fn select_pointer_report(shell: &Shell, id: &str) -> Value {
+    let target=shell.ui.find(id).map(|i|{
+        let node=&shell.ui.nodes[i];
+        let pointer=[node.rect.x+node.rect.w*0.5,node.rect.y+node.rect.h*0.5];
+        json!({"rect":node.rect,"clip":node.clip,"shown":shell.ui.shown(i),"pointer":pointer,"hit":shell.ui.hit_test(pointer[0],pointer[1]).map(|i|shell.ui.nodes[i].element.id.as_str())})
+    });
+    json!({"target":id,"geometry":target,"capture":shell.input.captured().and_then(|id|shell.ui.by_id(id)).map(|i|shell.ui.nodes[i].element.id.as_str()),"focus":shell.input.focused().and_then(|id|shell.ui.by_id(id)).map(|i|shell.ui.nodes[i].element.id.as_str()),"scope":shell.input.focus_graph(&shell.ui),"overlays":shell.ui.transient_nodes().map(|i|json!({"id":shell.ui.nodes[i].element.id,"rect":shell.ui.nodes[i].rect,"clip":shell.ui.nodes[i].clip})).collect::<Vec<_>>()})
 }
