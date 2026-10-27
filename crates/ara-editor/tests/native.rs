@@ -122,9 +122,8 @@ fn native_interaction_route_matches_reviewed_dark_and_light_goldens() {
 #[test]
 #[ignore = "requires Vulkan validation and a compatible GPU; every window stays hidden"]
 fn native_docking_drags_match_drop_previews() {
-    let project = Scratch(
-        std::env::temp_dir().join(format!("ara-editor-golden-docking-{}", std::process::id())),
-    );
+    let project =
+        Scratch(target_root().join(format!("ara-editor-golden-docking-{}", std::process::id())));
     let output = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../../target/docking-native")
         .join(std::process::id().to_string());

@@ -21,6 +21,8 @@ pub fn catalogue() -> Vec<Story> {
             "dropdown" | "menu" => format!("<{tag} id='sample' test-id='subject' text='loc:example' action='game.open'><button id='choice' text='loc:resume' action='game.choose' style='position:absolute;top:48px;width:100%;'/></{tag}>"),
             "splitter" => "<panel id='split-row' class='split-row'><panel id='left' style='flex-grow:1;'><text id='left-text' text='loc:hierarchy'/></panel><splitter id='sample' test-id='subject' action='editor.split'/><panel id='right' style='flex-grow:1;'><text id='right-text' text='loc:inspector'/></panel></panel>".into(),
             "text" | "tab" => format!("<{tag} id='sample' test-id='subject' text='loc:example'/>"),
+            // A popover is placed beside its anchor (a root child, after layout).
+            "popover" => "<button id='anchor' text='loc:example' action='game.open'/><popover id='sample' test-id='subject' class='card' anchor='anchor' placement='bottom-start'><text id='example' text='loc:inventory'/><button id='child-action' text='loc:resume' action='game.resume'/></popover>".into(),
             _ => format!("<{tag} id='sample' test-id='subject'><text id='example' text='loc:example'/><button id='child-action' text='loc:resume' action='game.resume'/></{tag}>"),
         };
         let mut story = make(&format!("widget-{tag}"), tag, &body);

@@ -3895,7 +3895,10 @@ expression: out
         "color": {
           "type": "color",
           "doc": "Linear RGB tint (alpha is ignored).",
-          "default": [1, 1, 1, 1]
+          "default": [1, 1, 1, 1],
+          "editor": {
+            "temperature": true
+          }
         },
         "intensity": {
           "type": "f32",
@@ -4466,7 +4469,8 @@ expression: out
           "doc": "Default procedural radiance, or an RGB emission multiplier with a model/material asset. Models treat zero RGB as neutral; use `emissiveEnabled` to switch them off.",
           "default": [0, 0, 0],
           "editor": {
-            "color": true
+            "color": true,
+            "hdr": true
           }
         },
         "emissiveEnabled": {
@@ -4486,7 +4490,8 @@ expression: out
           "default": null,
           "range": [0, null],
           "editor": {
-            "color": true
+            "color": true,
+            "hdr": true
           }
         },
         "emissiveMaterials": {
