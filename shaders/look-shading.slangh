@@ -304,7 +304,9 @@ float3 ibl(Frame f,Look l,Surface s,float3 world,float3 v,int2 p,bool gathered,b
         // already see their surroundings, then ambient occlusion again).
         incident=ambient*multiBounce(s.ao,s.albedo);specular=lerp(spec*multiBounce(specularOcclusion(nv,s.ao,s.roughness),f0),r.rgb,gathered?r.a:0);
     }
-    float3 diffuse=incident*s.albedo*(1-s.metal)*(1-s.transmission)*(1-specularAlbedo-scattered)/PI;
+    // Never negative where the specular lobes' albedo exceeds one (bright partly
+    // metallic texels): negative radiance turns black and spreads through the resolve.
+    float3 diffuse=incident*s.albedo*(1-s.metal)*(1-s.transmission)*max(1-specularAlbedo-scattered,0)/PI;
     return diffuse+specular*specularAlbedo+incident*scattered/PI;
 }
 // Linear HDR radiance leaving `world` towards the camera (before fog and exposure).
@@ -336,12 +338,26 @@ float3 shade(Frame f,Look l,Surface s,float3 world,int2 p,bool gathered,bool hig
     }
     return result;
 }
+// A forward fragment's premultiplied output (ONE, ONE_MINUS_SRC_ALPHA): radiance `c`
+// over `coverage`, stopping `stop` of what lies behind. Safe to blend: a non-finite
+// result contributes nothing (an upstream NaN or Inf would turn black and spread
+// through the temporal resolve), negative radiance is zero, and luminance is at most
+// FORWARD_PEAK times display white at the frame's exposure. Forward geometry is often
+// thinner than a pixel (rims, lenses, wires): a glint on the sample the jitter lands
+// on would otherwise outshine what the area-filtered pixel holds, flicker against the
+// history and bloom into a smear.
+static const float FORWARD_PEAK=64;
+float4 forwardOutput(Frame f,float3 c,float coverage,float stop){
+    if(any(isnan(c))||any(isinf(c))||isnan(coverage)||isnan(stop))return 0;
+    c=max(c,0);float peak=FORWARD_PEAK/exposureScale(f,0),y=luminance(c);
+    return float4((y>peak?c*(peak/y):c)*saturate(coverage),saturate(stop));
+}
 // Premultiplied forward colour of a transparent or transmissive surface: alpha is
 // coverage times the share of light it stops; reflections keep full strength
 // over what it transmits (blending ONE, ONE_MINUS_SRC_ALPHA).
 float4 forwardColour(Frame f,Look l,Surface s,float3 world,int2 p,bool high=false){
     float2 uv=(float2(p)+0.5)/float2(f.extent.xy);
-    return float4(applyFog(f,l,shade(f,l,s,world,p,false,high),world,uv)*s.alpha,s.alpha*(1-s.transmission));
+    return forwardOutput(f,applyFog(f,l,shade(f,l,s,world,p,false,high),world,uv),s.alpha,s.alpha*(1-s.transmission));
 }
 // World-space view ray through pixel centre `p`.
 float3 viewRay(Frame f,float2 p){

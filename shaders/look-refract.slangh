@@ -30,7 +30,7 @@ uint4 refractRect(Frame f,Look l,uint level){
 }
 // Finite radiance: a non-finite value (an upstream NaN or Inf) reads as black rather
 // than spreading through blending and the temporal resolve.
-float3 refractFinite(float3 c){return any(isnan(c))||any(isinf(c))?float3(0):c;}
+float3 refractFinite(float3 c){return any(isnan(c))||any(isinf(c))?float3(0):max(c,0);}
 float refractViewDepth(Frame f,float3 world){return dot(world-f.camera.xyz,f.forward.xyz);}
 // Render-pixel position of a world point through the frame's (jittered) projection.
 // (-1, -1) behind the camera or where the projection is not finite.
@@ -167,5 +167,5 @@ float4 refractColour(Frame f,Look l,Surface s,uint2 volume,float scale,float3 wo
         float3 traced=refractTrace(f,l,exit,t2,reach,spread,chord,s.roughness,uv);
         transmitted=traced*exp(-m.absorption*chord)*s.albedo*s.albedo*leave;
     }
-    return float4(refractFinite((reflected+tau*through*transmitted)*s.alpha),s.alpha);
+    return forwardOutput(f,reflected+tau*through*transmitted,s.alpha,s.alpha);
 }

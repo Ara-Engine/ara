@@ -104,7 +104,8 @@ Surface surfaceMaterial(NativeMaterial m,Varying v){
         if(abs(determinant)>1e-10){float3 e1=ddx(v.world),e2=ddy(v.world);t=(e1*b.y-e2*a.y)/determinant;t-=normal*dot(t,normal);float3 bitangent=(e2*a.x-e1*b.x)/determinant;handedness=dot(cross(normal,t),bitangent)<0?-1:1;}
     }
     t=safeNormalize(t,normalize(cross(normal,abs(normal.y)<0.99?float3(0,1,0):float3(1,0,0))));float3 n=sampleMap(m,1,v).xyz;
-    s.normal=normalize(t*n.x+cross(normal,t)*handedness*n.y+normal*n.z);
+    // A degenerate tangent frame (zero handedness) can cancel the mapped normal.
+    s.normal=safeNormalize(t*n.x+cross(normal,t)*handedness*n.y+normal*n.z,normal);
     float4 mr=sampleMap(m,2,v);s.roughness=clamp(m.pbr.emissiveRoughness.w*mr.g,0.045,1);s.metal=saturate(m.pbr.surface.x*mr.b);
     s.emissive=max(0,m.pbr.emissiveRoughness.rgb*sampleMap(m,3,v).rgb);
     // Transmission is the dielectric layer's (glTF KHR_materials_transmission): metal
@@ -264,9 +265,13 @@ bool facesViewer(Varying v){return dot(v.normal,frame().camera.xyz-v.world)>=0;}
 // 2 front faces only. Lit frames draw each transparent instance's back faces before
 // its front faces (NativePipelines::forward_lit_back), so a closed film composites
 // far over near side instead of in triangle order (blocks along the tessellation).
+// The sun is a disk, not a point: forward surfaces (often thin, glossy and lit at
+// grazing angles) widen their lobe to at least its angular radius (GGX alpha), so a
+// mirror-like rim shows the sun's area-filtered highlight rather than a sub-pixel peak.
 Surface forwardSurface<let FACES:int>(Varying v){
     bool front=facesViewer(v);if((FACES==1 && front)||(FACES==2 && !front))discard;
-    Surface s=surface<1>(v);if(!front)s.normal=-s.normal;return s;
+    Surface s=surface<1>(v);if(!front)s.normal=-s.normal;
+    s.roughness=max(s.roughness,sqrt(max(look(frame()).sunLux.w,0)));return s;
 }
 // The forward pass; `high` selects the High/Epic tier's code at compile time.
 Forward nativeForward(Varying v,bool high){Surface s=forwardSurface<0>(v);Frame f=frame();Look l=look(f);Forward o;o.color=forwardColour(f,l,s,v.world,int2(v.clip.xy),high);o.id=float(v.id);o.albedo=float4(s.albedo,s.alpha);o.normal=gbufferEncodeNormal(s.normal,s.alpha);o.material=gbufferEncodeMaterial(s.roughness,s.metal,1,s.alpha);o.emissive=gbufferEncodeEmissive(s.emissive,s.alpha);o.velocity=float4(motion(v),0,1);return o;}
