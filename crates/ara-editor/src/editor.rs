@@ -499,16 +499,22 @@ impl Editor {
             }
         }
     }
-    /// Read-only current edit-world adapter.
+    /// Whether the active scene is loaded. Its identity and camera remain selected
+    /// while Undo or an external deletion makes it temporarily unavailable.
+    pub fn document_available(&self) -> bool {
+        crate::world::document_available(self.host.store(), &self.state.doc)
+    }
+    /// Read-only current edit-world adapter, empty while its document is unavailable.
     pub fn view(&self) -> anyhow::Result<DocumentView> {
-        let view = DocumentView::new(self.host.store(), &self.state.doc).map_err(|d| {
-            anyhow::anyhow!(
-                d.iter()
-                    .map(ToString::to_string)
-                    .collect::<Vec<_>>()
-                    .join("\n")
-            )
-        })?;
+        let view =
+            DocumentView::for_presentation(self.host.store(), &self.state.doc).map_err(|d| {
+                anyhow::anyhow!(
+                    d.iter()
+                        .map(ToString::to_string)
+                        .collect::<Vec<_>>()
+                        .join("\n")
+                )
+            })?;
         Ok(view)
     }
     /// Start a spatial gesture at the current revision.
@@ -689,3 +695,7 @@ impl Endpoint for Editor {
         self.call_for(ConnId::LOCAL, method, params)
     }
 }
+
+#[cfg(test)]
+#[path = "editor/availability_tests.rs"]
+mod availability_tests;

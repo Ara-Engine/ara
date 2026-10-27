@@ -753,7 +753,7 @@ impl Shell {
         let store = editor.host.store();
         let resolved = self
             .resolver
-            .resolve(store, &editor.state.doc)
+            .presentation(store, &editor.state.doc)
             .map_err(|d| format!("{d:?}"))?;
         self.resolved_key = Some((
             editor.state.doc.clone(),

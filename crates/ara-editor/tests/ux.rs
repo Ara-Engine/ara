@@ -367,7 +367,11 @@ fn settings_edits_are_undoable_commands_in_both_scopes() {
     let manifest: Value =
         serde_json::from_str(&std::fs::read_to_string(project.0.join("ara.project.json")).unwrap())
             .unwrap();
-    assert_eq!(manifest["settings"]["play.tickHz"], "120");
+    let policy = ara_host::project_policy::read(&project.0, "settings")
+        .unwrap()
+        .unwrap();
+    assert_eq!(policy["play.tickHz"], "120");
+    assert!(manifest.get("settings").is_none());
     assert_eq!(manifest["main"], "levels/main.scene");
     // Edit ▸ Undo follows focus: in Settings it undoes the last setting, with its label.
     let rows = shell.menu_rows(&mut editor, 1).unwrap();

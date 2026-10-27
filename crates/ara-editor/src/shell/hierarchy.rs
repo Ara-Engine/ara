@@ -30,6 +30,22 @@ impl Shell {
         out.push_str(&format!("<button id='hierarchy-filter' class='{} icon-button' label='Filter by type' description='Show only lights, cameras, meshes, prefabs, audio or effects' action='Dispatch'>{}</button>",if filtered{"selected"}else{"ghost"},if filtered{icons::icon_in("hierarchy-filter","funnel","on-selection")}else{icons::icon("hierarchy-filter","funnel")}));
         out.push_str("</panel>");
         self.hierarchy_saved_filters_markup(editor, out);
+        if !editor.document_available() {
+            self.hierarchy_key = None;
+            self.hierarchy.items.clear();
+            self.hierarchy_entities.clear();
+            self.hierarchy_style.clear();
+            self.entity_count = 0;
+            self.empty(
+                out,
+                "hierarchy-unavailable",
+                "file-question",
+                "Scene unavailable",
+                "This scene was removed or its creation was undone. Redo, restore the file, or open another scene. Its view is preserved.",
+                &[],
+            );
+            return Ok(());
+        }
         let resolved = self.resolved(editor)?;
         let changed = editor.agent_fields();
         let changed_entities: std::collections::BTreeSet<_> =

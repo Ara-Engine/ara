@@ -64,8 +64,19 @@ impl Shell {
         if editor.state.asset_path.is_some() {
             return self.import_panel(editor, out);
         }
-        let resolved = self.resolved(editor)?;
         self.nested_swatches.clear();
+        if !editor.document_available() {
+            self.empty(
+                out,
+                "inspector-unavailable",
+                "file-question",
+                "Scene unavailable",
+                "Restore this scene or use Redo to inspect its entities again. The current selection is preserved.",
+                &[],
+            );
+            return Ok(());
+        }
+        let resolved = self.resolved(editor)?;
         if editor.state.selection.is_empty() {
             self.empty(
                 out,
@@ -74,6 +85,22 @@ impl Shell {
                 "Nothing selected",
                 "Select an entity in the Scene or Hierarchy to edit its components.",
                 &[("inspector-empty-select", "Select all", "edit.select_all")],
+            );
+            return Ok(());
+        }
+        if !editor
+            .state
+            .selection
+            .iter()
+            .any(|id| resolved.contains_key(id))
+        {
+            self.empty(
+                out,
+                "inspector-selection-unavailable",
+                "mouse-pointer",
+                "Selection unavailable",
+                "The selected entities were removed. Undo restores them, or select another entity to continue.",
+                &[],
             );
             return Ok(());
         }
