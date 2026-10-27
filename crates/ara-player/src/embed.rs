@@ -16,8 +16,8 @@
 use crate::{device, input::DeviceEvent, input::Mapper};
 use anyhow::{Context, Result, ensure};
 use ara_gpu::{
+    external::ExportRing,
     shared::{Frame, FrameReady, SurfaceDesc, now_us},
-    vulkan::external::ExportRing,
 };
 use ara_runtime::extract::RenderFrame;
 use ara_runtime_render::Presenter;
@@ -148,7 +148,7 @@ impl Embedded {
             .context("renderer missing after warm-up")?;
         // SAFETY: The presenter (and its device) outlives the ring: `Player` declares
         // `embed` before `presenter`, and this thread owns the device's queues.
-        let ring = unsafe { ExportRing::new(renderer.gpu().context(), size)? };
+        let ring = unsafe { ExportRing::create(renderer.gpu(), size)? };
         let fps = params.max_fps.unwrap_or(60).clamp(1, 1000);
         Ok((
             Self {
@@ -185,7 +185,7 @@ impl Embedded {
         presenter.resize(size)?;
         let renderer = presenter.renderer().context("renderer missing")?;
         // SAFETY: Same device as the ring's; this thread owns its queues.
-        unsafe { self.ring.resize(renderer.gpu().context(), size)? };
+        unsafe { self.ring.recreate(renderer.gpu(), size)? };
         self.dirty = true;
         Ok(self.ring.desc())
     }
@@ -254,16 +254,18 @@ impl Embedded {
         let rendered_at_us = now_us();
         let copy = Instant::now();
         let renderer = presenter.renderer().context("renderer missing")?;
-        let source = renderer.gpu().native_image(
-            presenter
-                .output()
-                .context("completed presentation missing")?,
-        )?;
+        let source = presenter
+            .output()
+            .context("completed presentation missing")?;
         // SAFETY: The presenter completed this RGBA8 CopySource image at output_size
         // on the ring's device; this thread owns its queues.
         let Some(published) = (unsafe {
-            self.ring
-                .publish_scaled(source, presenter.output_size(), frame.tick)?
+            self.ring.publish_image(
+                renderer.gpu(),
+                source,
+                presenter.output_size(),
+                frame.tick,
+            )?
         }) else {
             return Ok(None);
         };

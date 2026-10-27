@@ -6,7 +6,7 @@
 #![allow(clippy::unwrap_used)]
 mod support;
 
-use ara_gpu::{GpuDevice, shared::Frame, vulkan::external::ImportedSurface};
+use ara_gpu::{GpuDevice, external::ImportedSurface, shared::Frame};
 use ara_play_host::embed::{DeviceEvent, Surfaces};
 use serde_json::{Value, json};
 use std::{
@@ -44,7 +44,7 @@ impl View {
             self.imported = None;
             // SAFETY: The device outlives the import; this thread owns its queue.
             self.imported =
-                Some(unsafe { ImportedSurface::new(gpu.context(), state.surface).unwrap() });
+                Some(unsafe { ImportedSurface::create(gpu, state.surface).unwrap() });
         }
         let frame = surfaces.take(world, 0)?;
         let imported = self.imported.as_mut()?;
@@ -61,12 +61,12 @@ impl View {
         Some(frame)
     }
 
-    fn pixels(&mut self) -> image::RgbaImage {
+    fn pixels(&mut self, gpu: &GpuDevice) -> image::RgbaImage {
         let frame = self.shown.unwrap();
         let imported = self.imported.as_mut().unwrap();
         let [w, h] = imported.size();
         // SAFETY: The shown slot is acquired; this thread owns the queue.
-        let bytes = unsafe { imported.read(frame.slot).unwrap() };
+        let bytes = unsafe { imported.read_pixels(gpu, frame.slot).unwrap() };
         image::RgbaImage::from_raw(w, h, bytes).unwrap()
     }
 }
@@ -168,7 +168,7 @@ fn embedded_play_shares_frames_with_the_owner_device() {
                 frames += 1;
                 ticks.push(frame.tick);
                 if frames % 30 == 0 {
-                    let (mean, spread) = luma_stats(&view.pixels());
+                    let (mean, spread) = luma_stats(&view.pixels(&gpu));
                     assert!(
                         mean > 8.0 && spread > 4.0,
                         "frame {frames}: black or flat ({mean}, {spread})"
@@ -225,7 +225,7 @@ fn embedded_play_shares_frames_with_the_owner_device() {
         }
         std::thread::sleep(Duration::from_millis(2));
     }
-    let live = view.pixels();
+    let live = view.pixels(&gpu);
     let evidence = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../target/renderer-unification/presenter-demo");
     std::fs::create_dir_all(&evidence).unwrap();
@@ -262,7 +262,7 @@ fn embedded_play_shares_frames_with_the_owner_device() {
         std::thread::sleep(Duration::from_millis(1));
     }
     let resize_ms = resized.elapsed().as_secs_f64() * 1000.0;
-    assert_eq!(view.pixels().dimensions(), (320, 180));
+    assert_eq!(view.pixels(&gpu).dimensions(), (320, 180));
     // And through JSON.
     let json_resize = agent.play(
         "resize",
@@ -277,7 +277,7 @@ fn embedded_play_shares_frames_with_the_owner_device() {
         }
         std::thread::sleep(Duration::from_millis(1));
     }
-    assert_eq!(view.pixels().dimensions(), (400, 240));
+    assert_eq!(view.pixels(&gpu).dimensions(), (400, 240));
 
     let status = agent.play("status", json!({}));
     let player_status: Value = status["worlds"][0]["players"][0].clone();
