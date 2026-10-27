@@ -98,10 +98,10 @@ impl NativeUi {
             )?;
         }
         let vertex = ash::util::read_spv(&mut std::io::Cursor::new(include_bytes!(
-            "../shaders/vertexMain.spv"
+            "../../shaders/vertexMain.spv"
         )))?;
         let fragment = ash::util::read_spv(&mut std::io::Cursor::new(include_bytes!(
-            "../shaders/fragmentMain.spv"
+            "../../shaders/fragmentMain.spv"
         )))?;
         // SAFETY: Validated offline SPIR-V; modules are cleaned on both pipeline success and failure.
         unsafe {

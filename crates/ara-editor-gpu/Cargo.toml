@@ -10,6 +10,7 @@ workspace = true
 
 [dependencies]
 ara-gpu = { path = "../ara-gpu" }
+ara-platform = { path = "../ara-platform" }
 ara-ui = { path = "../ara-ui" }
 ara-ui-render = { path = "../ara-ui-render" }
 anyhow = { workspace = true }
