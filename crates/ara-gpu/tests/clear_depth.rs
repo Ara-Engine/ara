@@ -14,6 +14,10 @@ fn barrier(resource: Resource, before: Access, after: Access) -> Command {
 }
 
 #[test]
+#[cfg_attr(
+    target_os = "macos",
+    ignore = "Vulkan GPU test; macOS runs the Metal backend"
+)]
 fn clear_depth_clears_only_its_tile_inside_a_depth_scope() -> Result<()> {
     let cache =
         std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/ara-gpu/clear-depth");

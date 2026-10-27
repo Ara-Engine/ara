@@ -1,6 +1,7 @@
 #![warn(missing_docs)]
 #![cfg_attr(test, allow(clippy::unwrap_used))]
 //! Offline Slang compiler orchestration. The engine never links this crate.
+mod metal;
 use anyhow::{Context, Result, ensure};
 use ara_gpu::cooked::{CookedPipeline, CookedStage, RenderState, Stage, binding_layout_hash};
 use serde::Deserialize;
@@ -81,6 +82,10 @@ pub fn cook(manifest: &Path, output: &Path, tools: &Toolchain) -> Result<usize> 
     let manifest_bytes = std::fs::read(manifest)?;
     let pipelines: CookManifest = serde_json::from_slice(&manifest_bytes)?;
     let compiler = String::from_utf8(run(Command::new(&tools.slangc).arg("-version"))?)?;
+    let converter = metal::Converter::discover()?;
+    if converter.is_none() {
+        metal::report_skipped();
+    }
     let mut source_hash = Sha256::new();
     let mut files = Vec::new();
     collect_sources(source_root, &mut files)?;
@@ -153,7 +158,8 @@ pub fn cook(manifest: &Path, output: &Path, tools: &Toolchain) -> Result<usize> 
                     && output.join(&s.dxil).with_extension("dxil.json").exists()
             })
         {
-            if old.key != key {
+            let converted = convert_stages(converter.as_ref(), output, &mut old.stages)?;
+            if old.key != key || converted {
                 old.key = key.clone();
                 publication.push((path, old));
             }
@@ -210,6 +216,7 @@ pub fn cook(manifest: &Path, output: &Path, tools: &Toolchain) -> Result<usize> 
                 metal: None,
             });
         }
+        convert_stages(converter.as_ref(), output, &mut stages)?;
         let cooked = CookedPipeline {
             version: 1,
             key: key.clone(),
@@ -242,6 +249,26 @@ pub fn cook(manifest: &Path, output: &Path, tools: &Toolchain) -> Result<usize> 
         std::fs::rename(temporary, signal)?;
     }
     Ok(rebuilt)
+}
+
+/// Fill missing or outdated Metal artifacts when the converter is installed; returns
+/// whether any stage changed. Without a converter, existing artifacts are kept.
+fn convert_stages(
+    converter: Option<&metal::Converter>,
+    output: &Path,
+    stages: &mut [CookedStage],
+) -> Result<bool> {
+    let Some(converter) = converter else {
+        return Ok(false);
+    };
+    let mut changed = false;
+    for stage in stages {
+        if !converter.current(output, stage) {
+            stage.metal = Some(converter.convert(output, stage)?);
+            changed = true;
+        }
+    }
+    Ok(changed)
 }
 
 fn pipeline_input_key(root: &Path, pipeline: &PipelineSource, compiler: &str) -> Result<String> {

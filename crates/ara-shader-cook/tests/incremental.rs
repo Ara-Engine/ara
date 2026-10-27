@@ -2,6 +2,10 @@ use anyhow::{Context, Result};
 use ara_shader_cook::{Toolchain, cook};
 use std::path::PathBuf;
 #[test]
+#[cfg_attr(
+    target_os = "macos",
+    ignore = "Slang cannot load dxc for DXIL on macOS; Windows is the canonical cook host"
+)]
 fn cook_reuses_intact_artifacts_and_recovers_corruption() -> Result<()> {
     let temporary = tempfile::tempdir()?;
     let root = temporary.path();

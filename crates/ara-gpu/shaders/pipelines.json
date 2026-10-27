@@ -1,0 +1,16 @@
+{
+  "clear_depth": {
+    "source": "clear_depth.slang",
+    "entries": {
+      "clearDepthVertex": "vertex"
+    },
+    "state": {
+      "color_formats": [],
+      "depth_format": 126,
+      "vertex_stride": 0,
+      "depth_test": false,
+      "depth_write": true,
+      "blend": false
+    }
+  }
+}

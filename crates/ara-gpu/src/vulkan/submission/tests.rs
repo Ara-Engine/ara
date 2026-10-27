@@ -1,6 +1,10 @@
 use super::*;
 
 #[test]
+#[cfg_attr(
+    target_os = "macos",
+    ignore = "Vulkan GPU test; macOS runs the Metal backend"
+)]
 fn rejected_middle_helper_still_flushes_and_retires_earlier_recorded_work() -> Result<()> {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../target/ara-gpu/batch-rejection");
@@ -30,6 +34,10 @@ fn rejected_middle_helper_still_flushes_and_retires_earlier_recorded_work() -> R
 }
 
 #[test]
+#[cfg_attr(
+    target_os = "macos",
+    ignore = "Vulkan GPU test; macOS runs the Metal backend"
+)]
 fn native_submission_failure_drains_recording_and_rejects_retry_without_heap_growth() -> Result<()>
 {
     let root =

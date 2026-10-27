@@ -27,10 +27,10 @@ impl InitialData {
         Self(DataSource::Deferred(Box::new(build)))
     }
 
-    pub(super) fn is_empty(&self) -> bool {
+    pub(crate) fn is_empty(&self) -> bool {
         matches!(&self.0, DataSource::Bytes(bytes) if bytes.is_empty())
     }
-    pub(super) fn load(self) -> Result<Vec<u8>> {
+    pub(crate) fn load(self) -> Result<Vec<u8>> {
         match self.0 {
             DataSource::Bytes(bytes) => Ok(bytes),
             DataSource::Deferred(build) => build(),

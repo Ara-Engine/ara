@@ -4,6 +4,10 @@ use ara_gpu::{
 };
 
 #[test]
+#[cfg_attr(
+    target_os = "macos",
+    ignore = "Vulkan GPU test; macOS runs the Metal backend"
+)]
 fn range_copies_preserve_other_bytes_and_reject_bad_offsets_before_submission() -> Result<()> {
     let cache =
         std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/ara-gpu/buffer-ranges");

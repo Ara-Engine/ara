@@ -12,6 +12,7 @@ pub struct Section {
     handle: windows_sys::Win32::Foundation::HANDLE,
     #[cfg(windows)]
     view: windows_sys::Win32::System::Memory::MEMORY_MAPPED_VIEW_ADDRESS,
+    #[cfg(windows)]
     len: usize,
 }
 

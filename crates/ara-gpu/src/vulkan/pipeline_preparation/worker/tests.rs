@@ -28,6 +28,10 @@ fn recipe() -> Vec<PipelinePreparation> {
 }
 
 #[test]
+#[cfg_attr(
+    target_os = "macos",
+    ignore = "Vulkan GPU test; macOS runs the Metal backend"
+)]
 fn blocked_pipeline_compiler_does_not_wait_or_publish_and_cancellation_is_bounded()
 -> anyhow::Result<()> {
     let root =

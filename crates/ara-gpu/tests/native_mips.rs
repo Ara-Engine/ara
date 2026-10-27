@@ -6,6 +6,10 @@ use ara_gpu::{
 };
 
 #[test]
+#[cfg_attr(
+    target_os = "macos",
+    ignore = "Vulkan GPU test; macOS runs the Metal backend"
+)]
 fn compressed_mip_chains_round_trip_and_reject_short_staging() {
     let cache =
         std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/ara-gpu/native-mips");

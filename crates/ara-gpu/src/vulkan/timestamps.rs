@@ -111,7 +111,7 @@ fn relative_tick(tick: u64, origin: u64, bits: u32) -> i64 {
 }
 
 #[derive(Default)]
-pub(super) struct Window {
+pub(crate) struct Window {
     active: bool,
     after: [u64; 2],
     queues: u8,
@@ -208,7 +208,7 @@ impl VulkanDevice {
 
 /// Delay a pass's begin until after its leading resource barriers. Empty and
 /// barrier-only passes still receive a paired begin/end, with labels preserved.
-pub(super) fn commands(commands: &[Command]) -> impl Iterator<Item = &Command> {
+pub(crate) fn commands(commands: &[Command]) -> impl Iterator<Item = &Command> {
     let mut iter = commands.iter().peekable();
     let mut begin = None;
     std::iter::from_fn(move || {

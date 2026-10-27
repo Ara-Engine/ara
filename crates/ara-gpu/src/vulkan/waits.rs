@@ -27,7 +27,7 @@ impl HostWaitStats {
     }
 }
 
-pub(super) struct Counter {
+pub(crate) struct Counter {
     generation: u64,
     nanoseconds: AtomicU64,
     calls: AtomicU64,
