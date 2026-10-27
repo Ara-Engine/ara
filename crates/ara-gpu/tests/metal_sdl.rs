@@ -33,9 +33,10 @@ fn main() {
         (window, view)
     };
     let mut gpu = MetalDevice::new_raster(&[], std::env::temp_dir()).expect("Metal 4 device");
+    // SAFETY: `view` is the live Metal view created above.
+    let layer = NonNull::new(unsafe { SDL_Metal_GetLayer(view) }).expect("CAMetalLayer");
     // SAFETY: the view's CAMetalLayer lives until SDL_Metal_DestroyView below, after the
     // presenter is dropped, and only this presenter presents into it.
-    let layer = NonNull::new(unsafe { SDL_Metal_GetLayer(view) }).expect("CAMetalLayer");
     let mut presenter =
         unsafe { Presenter::from_layer(&gpu, layer, size) }.expect("presenter on the SDL layer");
     let frame = gpu
