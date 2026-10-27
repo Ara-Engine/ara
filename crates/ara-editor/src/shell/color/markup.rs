@@ -72,7 +72,8 @@ impl Shell {
         };
         let component = picker.field.path.split('.').next().unwrap_or_default();
         let mut title = format!(
-            "{component} · {}",
+            "{} · {}",
+            super::super::inspector_panel::sentence(component),
             super::super::inspector_panel::sentence(&picker.field.label)
         );
         if let Some(pointer) = &picker.pointer {

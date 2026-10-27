@@ -78,7 +78,19 @@ impl Shell {
                 Binding::Scrub(field.path.clone(), None),
             );
         }
-        out.push_str(&format!("<{tag} id='field-{id}' class='prop-label{}' style='width:{label}px' description='{}{}' {}><text id='label-{id}' text='{}' /></{tag}><panel id='value-{id}' class='prop-value'>",if scrub {" scrubbable"} else {""},escape(&field.doc),if scrub {" · Drag to scrub; Shift: fine, Ctrl: coarse; Esc cancels."} else {""},if scrub {"cursor='ew-resize' action='Dispatch'"} else {""},escape(&sentence(&field.label))));
+        // Long names end in "…" inside the label column (its 12 + 6 px padding, 12 px
+        // text); the tooltip then leads with the full name, as Unity and Unreal do.
+        let name = sentence(&field.label);
+        let shown = self
+            .name_fit
+            .lines(&mut self.text, &name, (label - 18.).max(24.), 12., 1)[0]
+            .clone();
+        let full = if shown == name {
+            String::new()
+        } else {
+            format!("{name} · ")
+        };
+        out.push_str(&format!("<{tag} id='field-{id}' class='prop-label{}' style='width:{label}px' description='{}{}{}' {}><text id='label-{id}' text='{}' /></{tag}><panel id='value-{id}' class='prop-value'>",if scrub {" scrubbable"} else {""},escape(&full),escape(&field.doc),if scrub {" · Drag to scrub; Shift: fine, Ctrl: coarse; Esc cancels."} else {""},if scrub {"cursor='ew-resize' action='Dispatch'"} else {""},escape(&shown)));
         let value_start = out.len();
         match &field.widget {
             // An unset optional vector (`emissiveFactor`): None until set.

@@ -186,6 +186,14 @@ fn popovers_dismiss_on_click_away_and_return_focus() -> Result<()> {
     let toggle = popovers.pointer_down(&ui, [title.x + 2., title.y + 2.]);
     assert_eq!(toggle.close, ["menu"]);
     assert!(toggle.on_anchor);
+
+    // Focus returns best effort: closing still succeeds when the control that had it
+    // was disabled meanwhile.
+    let disabled = base.replace("<field id='name'", "<field id='name' disabled='true'");
+    ui.reconcile(&format!("<ui id='r'>{disabled}</ui>"))?;
+    ui.frame(&mut text)?;
+    popovers.sync(&mut ui, &mut input)?;
+    assert!(popovers.is_empty());
     Ok(())
 }
 

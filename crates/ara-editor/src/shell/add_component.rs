@@ -3,6 +3,8 @@
 //! and "New Script…" when the scripts command is registered.
 use super::*;
 
+/// A dropdown row's height (`.menu-item`).
+const ROW: f32 = 26.;
 /// The command that creates a C# behaviour and adds it to the selection (registered by
 /// the Assets/scripts tooling); its row only shows when it exists.
 const NEW_SCRIPT: &str = "component.new_script";
@@ -103,7 +105,13 @@ impl Shell {
             ara_ui::source::stable_id("add-component-filter"),
             Binding::AddComponentFilter,
         );
-        out.push_str(&format!("<popover id='add-component-pop' class='menu add-component' anchor='add-component' placement='bottom-start' offset='4' style='width:{width}px;max-height:420px'><panel id='add-component-filter-row' class='menu-filter'><field id='add-component-filter' class='search-input' style='height:26px' text='{}' label='Search components' action='Dispatch' /><image id='add-component-filter-icon' class='search-icon' src='icon-search' tint='true' />{}</panel>",escape(&state.query),if state.query.is_empty(){"<text id='add-component-placeholder' class='placeholder' text='Search components' />"}else{""}));
+        // The rows scroll inside a list of at most 12; the popover's own size stays
+        // honest, so it is placed right beside its button.
+        let list = (rows.len().max(1) as f32 * ROW).min(12. * ROW);
+        out.push_str(&format!("<popover id='add-component-pop' class='menu add-component' anchor='add-component' placement='bottom-start' offset='4' style='width:{width}px'><panel id='add-component-filter-row' class='menu-filter'><field id='add-component-filter' class='search-input' style='height:26px' text='{}' label='Search components' action='Dispatch' /><image id='add-component-filter-icon' class='search-icon' src='icon-search' tint='true' />{}</panel>",escape(&state.query),if state.query.is_empty(){"<text id='add-component-placeholder' class='placeholder' text='Search components' />"}else{""}));
+        out.push_str(&format!(
+            "<scroll id='add-component-list' style='height:{list}px;gap:0px;flex-shrink:0'>"
+        ));
         if rows.is_empty() {
             out.push_str("<text id='add-component-empty' class='caption' style='padding:6px' text='No matching components' />");
         }
@@ -124,8 +132,10 @@ impl Shell {
             } else {
                 ""
             };
-            out.push_str(&format!("<button id='{id}' class='menu-item{active}' label='Add {}' description='{}' action='Dispatch'>{}<text id='{id}-label' class='menu-label' text='{}' /></button>",escape(name),escape(doc),icons::icon(&format!("{id}-icon"),"box"),escape(name)));
+            let title = super::inspector_panel::sentence(name);
+            out.push_str(&format!("<button id='{id}' class='menu-item{active}' label='Add {}' description='{}' action='Dispatch'>{}<text id='{id}-label' class='menu-label' text='{}' /></button>",escape(&title),escape(doc),icons::icon(&format!("{id}-icon"),super::inspector_panel::component_icon(name)),escape(&title)));
         }
+        out.push_str("</scroll>");
         if commands::get(NEW_SCRIPT).is_some() {
             self.bind_command("add-component-script", NEW_SCRIPT, commands::Target::None);
             out.push_str("<panel id='add-component-sep' class='menu-sep'><panel id='add-component-line' class='menu-line' /></panel>");
@@ -156,6 +166,14 @@ impl Shell {
                 if let Some(s) = &mut self.add_component {
                     s.active = active;
                 }
+                self.rebuild(editor)?;
+                // Keep the highlighted row in view.
+                if let Some(list) = self.ui.find("add-component-list") {
+                    let height = self.ui.nodes[list].rect.h;
+                    let top = (active as f32 * ROW - height / 2. + ROW / 2.).max(0.);
+                    self.ui.scroll_to(list, [0., top])?;
+                }
+                return Ok(true);
             }
             40 | 88 => {
                 if let Some((name, _)) = rows.get(state.active.min(rows.len().saturating_sub(1))) {

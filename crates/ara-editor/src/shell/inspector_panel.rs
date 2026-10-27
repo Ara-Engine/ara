@@ -5,6 +5,27 @@ use super::*;
 use crate::inspector::Widget;
 
 /// `innerAngle` → `Inner angle`.
+/// The icon a component shows in Inspector headings and Add Component, by its kind.
+pub(super) fn component_icon(name: &str) -> &'static str {
+    let has = |part: &str| name.contains(part);
+    match name {
+        "Transform" => "move-3d",
+        "Light" => "lightbulb",
+        "VisualEffect" => "sparkles",
+        "Environment" | "HeightFog" => "sun",
+        _ if has("PostProcess") => "sliders-horizontal",
+        _ if has("Camera") => "camera",
+        _ if has("Audio") || has("Acoustic") => "volume-2",
+        _ if has("Character") || has("Input") || has("Controller") => "gamepad-2",
+        _ if has("Anim") || has("Ragdoll") => "person-standing",
+        _ if has("Nav") || has("Agent") => "map",
+        _ if has("Terrain") || has("Foliage") || has("Landscape") => "layers",
+        _ if has("Net") || has("Replicat") => "wifi",
+        _ if has("Script") || has("Behaviour") || has("Brain") => "file-code",
+        _ if has("Ui") || has("Canvas") || has("Sprite") => "layout-grid",
+        _ => "box",
+    }
+}
 pub(super) fn sentence(label: &str) -> String {
     let mut out = String::new();
     for (i, c) in label.chars().enumerate() {
@@ -211,15 +232,7 @@ impl Shell {
                 ara_ui::source::stable_id(&format!("component-menu-{head}")),
                 Binding::ContextMenu(Context::Component, Target::Component(head.clone())),
             );
-            let icon = match head.as_str() {
-                "Transform" => "move-3d",
-                "Light" => "lightbulb",
-                "Camera" => "camera",
-                "VisualEffect" => "sparkles",
-                "Environment" => "sun",
-                "PostProcess" | "PostProcessVolume" => "sliders-horizontal",
-                _ => "box",
-            };
+            let icon = component_icon(&head);
             let doc = editor
                 .host
                 .store()

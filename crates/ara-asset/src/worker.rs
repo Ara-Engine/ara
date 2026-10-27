@@ -603,7 +603,13 @@ impl ImportJob {
             return Ok(());
         };
         self.started = Instant::now();
-        let mut child = pending.command.spawn()?;
+        // A worker that cannot start (not built, wrong ARA_IMPORT_WORKER) names itself.
+        let mut child = pending.command.spawn().map_err(|e| {
+            Error::Worker(format!(
+                "cannot start `{}`: {e}",
+                Path::new(pending.command.get_program()).display()
+            ))
+        })?;
         if crate::trace::enabled() {
             crate::trace::event(
                 "worker.spawn",

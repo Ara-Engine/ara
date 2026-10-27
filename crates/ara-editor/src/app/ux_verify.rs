@@ -26,19 +26,20 @@ enum Setup {
     AddComponent,
     Empty,
 }
-/// A colour picker capture: the field, its units, intensity steps, pinned, eyedropper.
+/// A colour picker capture: the field, its units, typed values (hex, then intensity
+/// stops), pinned, eyedropper.
 #[derive(Clone, Copy)]
 struct Picker {
     path: &'static str,
     mode: &'static str,
-    stops: i8,
+    typed: &'static [(&'static str, &'static str)],
     pinned: bool,
     eyedropper: bool,
 }
 const PICKER: Picker = Picker {
     path: "MeshRenderer.color",
     mode: "rgb",
-    stops: 0,
+    typed: &[],
     pinned: false,
     eyedropper: false,
 };
@@ -85,7 +86,7 @@ const STEPS: &[(&str, Setup)] = &[
         Setup::Picker(Picker {
             path: "MeshRenderer.emissive",
             mode: "hsv",
-            stops: 2,
+            typed: &[("hex", "#FF7A1A"), ("stops", "2.5")],
             ..PICKER
         }),
     ),
@@ -395,14 +396,10 @@ impl UxVerification {
                 // Pinned over the Scene's upper left; the eyedropper over its centre.
                 let view = shell.viewport().ok_or("Scene view not visible")?;
                 let pin = picker.pinned.then_some([view.x + 24., view.y + 40.]);
-                shell.show_color_picker(
-                    editor,
-                    picker.path,
-                    picker.mode,
-                    picker.stops,
-                    pin,
-                    picker.eyedropper,
-                )?;
+                shell.show_color_picker(editor, picker.path, picker.mode, pin, picker.eyedropper)?;
+                for (field, text) in picker.typed {
+                    shell.type_in_picker(editor, field, text)?;
+                }
                 if picker.eyedropper {
                     shell.pointer = [view.x + view.w * 0.55, view.y + view.h * 0.5];
                 }
@@ -492,7 +489,7 @@ impl UxVerification {
                 shell.run_command(editor, "component.add", &Target::None)?;
             }
             Setup::Picker(_) => {
-                // Escape: the intensity steps the capture applied are restored.
+                // Escape: the values the capture typed are restored.
                 shell.cancel_eyedropper();
                 shell.close_color_picker(editor, true)?;
                 if std::mem::take(&mut self.added_light) {

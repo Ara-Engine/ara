@@ -152,14 +152,14 @@ pub(crate) fn linear_to_kelvin(linear: [f64; 3]) -> Option<f64> {
         .min_by(|a, b| error(*a).total_cmp(&error(*b)))?;
     (error(fine) < 0.004).then_some(fine)
 }
-/// Text colour (CSS hex) readable on a linear colour, clipped at 1: dark on light
-/// colours, light on dark ones (they contrast equally at a luminance of about 0.18).
+/// The theme token for text readable on a linear colour, clipped at 1: dark ink on
+/// light colours, light ink on dark ones (they contrast equally near luminance 0.18).
 pub(crate) fn contrast_text(linear: [f64; 3]) -> &'static str {
     let [r, g, b] = linear.map(|c| c.clamp(0., 1.));
     if 0.2126 * r + 0.7152 * g + 0.0722 * b > 0.18 {
-        "#101010"
+        "var(--swatch-ink)"
     } else {
-        "#F2F2F2"
+        "var(--swatch-ink-inverse)"
     }
 }
 /// Rounds a stored channel so documents stay stable (1e-5 is below an 8-bit step).

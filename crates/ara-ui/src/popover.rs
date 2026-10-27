@@ -327,7 +327,8 @@ struct Open {
 impl Popovers {
     /// Track popovers opened and closed since the last call and move focus accordingly:
     /// an opened popover takes focus on its first text field (a filter or search box),
-    /// and a closed one gives focus back to the control that had it.
+    /// and a closed one gives focus back to the control that had it, when that control
+    /// can still take it.
     pub fn sync(&mut self, ui: &mut Ui, input: &mut InputState) -> Result<()> {
         let shown: Vec<(usize, String)> = ui
             .popover_nodes()
@@ -340,10 +341,12 @@ impl Popovers {
             }
             let focus = top.focus;
             self.open.pop();
+            // Best effort: a control that has since been hidden, clipped or scoped out
+            // (another modal) simply keeps no focus.
             if let Some(focus) = focus
                 && ui.by_id(focus).is_some()
             {
-                input.focus(ui, focus)?;
+                let _ = input.focus(ui, focus);
             }
         }
         // Any other closed popover (below an open one) just leaves the stack.
@@ -357,8 +360,9 @@ impl Popovers {
                 id,
                 focus: input.focused(),
             });
+            // Best effort too: a field scrolled out of a clamped popover is not focusable.
             if let Some(field) = first_field(ui, index) {
-                input.focus(ui, field)?;
+                let _ = input.focus(ui, field);
             }
         }
         Ok(())

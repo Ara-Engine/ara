@@ -43,8 +43,8 @@
 .cp-hex { flex-grow:1; flex-basis:0px; min-width:0px; }
 .cp-mode { flex-grow:1; flex-basis:0px; justify-content:center; }
 .cp-exposure { flex-grow:1; flex-basis:0px; height:24px; padding:0px; border-width:0px; background:transparent; justify-content:center; align-items:center; }
-.cp-exposure-label { font-size:var(--font-size-small); color:#101010; }
+.cp-exposure-label { font-size:var(--font-size-small); color:var(--swatch-ink); }
 .cp-preset { flex-grow:1; flex-basis:0px; height:22px; padding:0px; border-width:0px; background:transparent; justify-content:center; align-items:center; }
-.cp-preset-label { font-size:10px; color:#101010; }
+.cp-preset-label { font-size:10px; color:var(--swatch-ink); }
 .cp-swatches { flex-direction:row; gap:5px; height:20px; flex-shrink:0; }
 .cp-swatch { width:20px; height:20px; flex-shrink:0; padding:0px; border-width:0px; background:transparent; }

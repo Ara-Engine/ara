@@ -40,6 +40,8 @@
     "warning-surface": "#fcf4e8",
     "success": "#10b981",
     "success-foreground": "#047857",
+    "swatch-ink": "#121212",
+    "swatch-ink-inverse": "#f5f5f5",
     "info": "#3b82f6",
     "info-foreground": "#1d4ed8",
     "code-background": "#ffffff",

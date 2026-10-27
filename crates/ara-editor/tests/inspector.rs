@@ -438,14 +438,12 @@ fn the_colour_picker_previews_drags_applies_each_gesture_once_and_escape_restore
         cyan[0].as_f64().unwrap() < 0.01 && cyan[1].as_f64().unwrap() > 0.99,
         "{cyan}"
     );
-    // Escape restores the colour it opened with (white), as one more transaction.
+    // Escape restores the colour it opened with (the default white) as one more
+    // transaction, leaving no authored value behind.
     assert!(shell.picker_escape(&mut editor).unwrap());
     shell.rebuild(&mut editor).unwrap();
     assert!(!picker_shown(&shell));
-    assert_eq!(
-        channels(authored(&editor, "e_crate001", "MeshRenderer", "color")),
-        vec![1.0, 1.0, 1.0, 1.0]
-    );
+    assert!(authored(&editor, "e_crate001", "MeshRenderer", "color").is_null());
     assert_eq!(history(&editor), before + 2);
     assert_eq!(text(&shell, "edit-MeshRenderer-color"), "#FFFFFF");
 }
@@ -545,7 +543,7 @@ fn add_component_is_a_searchable_dropdown_that_adds_in_one_step() {
     let pop = shell.ui.find("add-component-pop").unwrap();
     assert!(shell.ui.shown(pop));
     // Components the selection already has are not offered; New Script is.
-    assert!(add_row(&shell, "MeshRenderer").is_none());
+    assert!(add_row(&shell, "Mesh renderer").is_none());
     assert!(add_row(&shell, "New Script…").is_some());
     type_into(&mut shell, &mut editor, "add-component-filter", "ligh");
     let row = add_row(&shell, "Light").expect("Light matches the search");

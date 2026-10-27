@@ -113,6 +113,8 @@ pub(crate) struct ColorPicker {
     count: usize,
     /// Linear RGBA when it opened (Old, Escape) and as last applied.
     old: [f64; 4],
+    /// The field was a default or prefab value when it opened: Escape resets it.
+    inherited: bool,
     applied: [f64; 4],
     /// The edited colour: display-space HSV of the base colour, alpha and HDR stops.
     hsv: [f64; 3],
@@ -284,6 +286,18 @@ impl ColorPicker {
     pub(crate) fn pinned(&self) -> bool {
         self.pinned.is_some()
     }
+    /// Commands restoring the field as it was when the picker opened: an inherited or
+    /// default value is reset (no override left behind), an authored one rewritten.
+    fn restore_commands(&self) -> Vec<Value> {
+        if self.inherited {
+            return self
+                .entities
+                .iter()
+                .map(|entity| json!({"cmd": "editor.property.reset", "args": {"entity": entity, "path": self.field.path}}))
+                .collect();
+        }
+        self.commands()
+    }
     /// The draft marker that makes the Scene preview a gesture.
     fn marker(&self) -> String {
         format!("@picker|{}", self.target)
@@ -361,6 +375,10 @@ impl Shell {
             hdr: hints.hdr || old[..3].iter().any(|c| *c > 1.),
             ..hints
         };
+        let inherited = matches!(
+            field.provenance,
+            crate::inspector::Provenance::Default | crate::inspector::Provenance::Prefab
+        ) && !field.mixed;
         let mut picker = ColorPicker {
             target: target.to_owned(),
             hints,
@@ -370,6 +388,7 @@ impl Shell {
             pointer: pointer.map(str::to_owned),
             count,
             old,
+            inherited,
             applied: old,
             hsv: [0., 0., 0.],
             alpha: 1.,
@@ -407,7 +426,7 @@ impl Shell {
         if revert {
             if picker.applied != picker.old {
                 picker.set_linear(picker.old);
-                editor.apply(picker.commands(), "Restore colour", None)?;
+                editor.apply(picker.restore_commands(), "Restore colour", None)?;
             }
         } else if picker.applied != picker.old {
             let applied = picker.applied;
@@ -422,14 +441,13 @@ impl Shell {
             .is_some_and(|p| p.target == target)
     }
     /// Verification routes: open the picker on the Inspector field `path` as its swatch
-    /// does, in `mode` (`rgb`, `hsv` or `linear`), `stops` brighter (applied), pinned
-    /// at `pin` or with the eyedropper armed.
+    /// does, in `mode` (`rgb`, `hsv` or `linear`), pinned at `pin` or with the
+    /// eyedropper armed.
     pub fn show_color_picker(
         &mut self,
         editor: &mut Editor,
         path: &str,
         mode: &str,
-        stops: i8,
         pin: Option<[f32; 2]>,
         eyedropper: bool,
     ) -> ara_ui::Result<()> {
@@ -451,15 +469,24 @@ impl Shell {
             _ => Mode::Rgb,
         };
         self.picker_control(editor, Control::Mode(mode), &Value::Null)?;
-        if stops != 0 {
-            self.picker_control(editor, Control::Exposure(stops), &Value::Null)?;
-        }
         if let Some(picker) = &mut self.color_picker {
             picker.pinned = pin;
         }
         if eyedropper {
             self.arm_eyedropper(false);
         }
+        self.rebuild(editor)
+    }
+    /// Verification routes: type `text` into the open picker's `hex` or `stops` field
+    /// and apply it, as Enter does.
+    pub fn type_in_picker(&mut self, editor: &mut Editor, field: &str, text: &str) -> ara_ui::Result<()> {
+        let input = match field {
+            "stops" => Input::Stops,
+            "kelvin" => Input::Kelvin,
+            _ => Input::Hex { linear: false },
+        };
+        self.picker_control(editor, Control::Text(input), &json!(text))?;
+        self.commit_picker_text(editor)?;
         self.rebuild(editor)
     }
     /// Apply the picker's colour as one undoable transaction, when it changed.
