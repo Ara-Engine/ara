@@ -977,10 +977,17 @@ impl EditorService {
             }
             "editor.layout" => {
                 let p: EditorLayout = parse(params)?;
+                if p.window.is_some() && p.ratio.is_none() {
+                    return Err(vec![crate::invalid("window requires a splitter ratio")]);
+                }
                 let mut dock = state.dock().map_err(ui_error)?;
                 if let Some(ratio) = p.ratio {
-                    dock.resize_split(p.path.as_deref().unwrap_or(&[]), ratio)
-                        .map_err(ui_error)?;
+                    dock.resize_split_in(
+                        p.window.as_deref(),
+                        p.path.as_deref().unwrap_or(&[]),
+                        ratio,
+                    )
+                    .map_err(ui_error)?;
                 } else if let Some(panel) = p.panel {
                     state.focus = panel.clone();
                     if let Some(area) = p.area {

@@ -1,6 +1,9 @@
 use super::*;
 use ara_ui::input::InputEvent;
 use ara_ui_text::Clipboard;
+#[cfg(test)]
+#[path = "input/dock_resize_tests.rs"]
+mod dock_resize_tests;
 impl Shell {
     /// Read-only native semantic state for diagnostics and offscreen verification.
     pub(crate) fn native_input_state(&self) -> &ara_ui::native_input::Router {
@@ -204,16 +207,32 @@ impl Shell {
                 if action.name == "ResizeDock" {
                     if let Some(index) = self.ui.by_id(action.node) {
                         let id = &self.ui.nodes[index].element.id;
-                        if let Some(path) = id.strip_prefix("splitter-root") {
-                            // Floating-window and maximized splits resize natively but are not persisted.
-                            let path: Vec<_> = path
-                                .split('-')
-                                .filter(|s| !s.is_empty())
-                                .map(|part| part == "b")
-                                .collect();
+                        let prefix = self.current.as_deref().map_or_else(
+                            || "splitter-root".to_owned(),
+                            |window| format!("splitter-f{window}"),
+                        );
+                        // The maximized main view is a temporary tree (`max`),
+                        // while each floating surface keeps its own persisted root.
+                        if let Some(path) = id.strip_prefix(&prefix) {
+                            let path = if path.is_empty() {
+                                Some(Vec::new())
+                            } else {
+                                path.strip_prefix('-').and_then(|path| {
+                                    path.split('-')
+                                        .map(|part| match part {
+                                            "a" => Some(false),
+                                            "b" => Some(true),
+                                            _ => None,
+                                        })
+                                        .collect::<Option<Vec<_>>>()
+                                })
+                            }
+                            .ok_or("Invalid dock splitter path")?;
                             if let Some(ratio) = action.value.as_f64() {
-                                editor
-                                    .action("editor.layout", json!({"path":path,"ratio":ratio}))?;
+                                editor.action(
+                                    "editor.layout",
+                                    json!({"window":self.current,"path":path,"ratio":ratio}),
+                                )?;
                                 rebuild = true;
                             }
                         }

@@ -212,10 +212,31 @@ impl DockLayout {
     }
     /// Update a persisted split after dragging its runtime splitter; path entries choose first/second.
     pub fn resize_split(&mut self, path: &[bool], ratio: f32) -> Result<()> {
+        self.resize_split_in(None, path, ratio)
+    }
+    /// Resize a split in the main tree (`None`) or a floating window's own tree.
+    /// Unknown windows, invalid paths and non-finite ratios leave every tree unchanged.
+    /// Finite fractions retain the shared 0.1–0.9 limit.
+    pub fn resize_split_in(
+        &mut self,
+        window: Option<&str>,
+        path: &[bool],
+        ratio: f32,
+    ) -> Result<()> {
         if !ratio.is_finite() {
             return Err("ARA4042: invalid split ratio".into());
         }
-        let mut node = &mut self.root;
+        let mut node = match window {
+            None => &mut self.root,
+            Some(id) => {
+                &mut self
+                    .floating
+                    .iter_mut()
+                    .find(|window| window.id == id)
+                    .ok_or("ARA4042: floating window not found")?
+                    .root
+            }
+        };
         for second in path {
             let DockNode::Split {
                 first,
@@ -514,6 +535,9 @@ fn validate_into(
     }
     Ok(())
 }
+#[cfg(test)]
+#[path = "docking/resize_tests.rs"]
+mod resize_tests;
 #[cfg(test)]
 mod tests {
     use super::*;

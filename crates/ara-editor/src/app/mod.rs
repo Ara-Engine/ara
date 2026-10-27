@@ -13,6 +13,7 @@ mod eyedropper;
 mod file_picker;
 mod game;
 mod game_preview;
+mod hierarchy_verify;
 mod history_verify;
 mod import_drops;
 mod import_verify;
@@ -79,6 +80,7 @@ pub static LAUNCHED: std::sync::OnceLock<Instant> = std::sync::OnceLock::new();
 pub fn run(mut options: Options) -> ara_ui::Result<()> {
     if options.verify_behaviours {
         content_drags::fixture(&mut options)?;
+        hierarchy_verify::prepare(&options)?;
     }
     if options.headless {
         return headless(options);
@@ -361,6 +363,7 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
     let mut import_check = None;
     let mut asset_ops_check = None;
     let mut selection_check = None;
+    let mut hierarchy_check = None;
     let mut snapping_check = None;
     let mut input_check = None;
     let mut boundary_check = None;
@@ -571,6 +574,20 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
             if selection_check
                 .as_ref()
                 .is_some_and(selection_verify::SelectionCheck::finished)
+                && hierarchy_check.is_none()
+            {
+                hierarchy_check = Some(hierarchy_verify::HierarchyCheck::new(
+                    &mut editor,
+                    &options.output,
+                )?);
+            }
+            if let Some(check) = &mut hierarchy_check {
+                let scale = crate::native::points_to_logical(window.raw(), main_dpi);
+                check.inject(&mut editor, &mut shell, &window, scale, &mut events)?;
+            }
+            if hierarchy_check
+                .as_ref()
+                .is_some_and(hierarchy_verify::HierarchyCheck::finished)
                 && snapping_check.is_none()
             {
                 snapping_check = Some(snap_verify::SnapCheck::new(&mut editor, &options.output)?);
@@ -1839,6 +1856,9 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
             if let Some(check) = &mut selection_check {
                 check.end(&editor, &mut shell, &mut gpu, &controller)?;
             }
+            if let Some(check) = &mut hierarchy_check {
+                check.end_case(&mut editor, &mut shell, &mut gpu)?;
+            }
             if let Some(check) = &mut snapping_check {
                 check.end(&editor, &mut shell, &mut gpu, &floats)?;
             }
@@ -2000,6 +2020,17 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
             if !check.finished() || !check.failures().is_empty() {
                 return Err(format!(
                     "Native selection journey failed: {}",
+                    check.failures().join(", ")
+                )
+                .into());
+            }
+            let check = hierarchy_check
+                .as_ref()
+                .ok_or("The hierarchy workflow journey did not start")?;
+            check.write()?;
+            if !check.finished() || !check.failures().is_empty() {
+                return Err(format!(
+                    "Native hierarchy workflow journey failed: {}",
                     check.failures().join(", ")
                 )
                 .into());

@@ -273,6 +273,9 @@ pub(super) struct EditorLayout {
     pub before: Option<bool>,
     /// Path to a splitter: false means first, true means second.
     pub path: Option<Vec<bool>>,
+    /// Floating window identity for a splitter adjustment; absent targets the main window.
+    /// Requires `ratio`; panel moves and activation keep their existing area addressing.
+    pub window: Option<String>,
     /// Split fraction, constrained to 0.1 through 0.9.
     pub ratio: Option<f32>,
 }
