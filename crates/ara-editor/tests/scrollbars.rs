@@ -111,7 +111,12 @@ fn hierarchy_pool(shell: &Shell) -> HierarchyPool {
 #[test]
 fn hierarchy_thumb_drag_home_end_and_arrows_keep_the_pool_bounded() -> Result<()> {
     let project = Project::new()?;
-    let mut editor = Editor::open(&project.0)?;
+    let mut editor = Editor::open_with(&project.0, Some(project.0.join(".ara/test-user.json")))?;
+    // Measure settled retained work without optional colour-transition frames.
+    editor.action(
+        "editor.settings.set",
+        json!({"key":"appearance.reduceMotion","value":true}),
+    )?;
     let mut shell = Shell::new(&mut editor, [1440., 900.])?;
     let count = shell.ui.nodes.len();
     let pool = hierarchy_pool(&shell);
