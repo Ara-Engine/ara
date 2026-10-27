@@ -65,6 +65,29 @@ struct Recording<'a> {
     /// Passes begun so far, and the indices of passes still open.
     passes: usize,
     open: Vec<usize>,
+    /// Extent of the open rendering scope and its current viewport and scissor.
+    scope: [u32; 2],
+    view: (MTLViewport, MTLScissorRect),
+}
+
+/// Viewport and scissor covering one pixel rectangle (depth range 0..1).
+fn view(origin: [u32; 2], size: [u32; 2]) -> (MTLViewport, MTLScissorRect) {
+    (
+        MTLViewport {
+            originX: f64::from(origin[0]),
+            originY: f64::from(origin[1]),
+            width: f64::from(size[0]),
+            height: f64::from(size[1]),
+            znear: 0.,
+            zfar: 1.,
+        },
+        MTLScissorRect {
+            x: origin[0] as usize,
+            y: origin[1] as usize,
+            width: size[0] as usize,
+            height: size[1] as usize,
+        },
+    )
 }
 
 impl MetalDevice {
@@ -91,6 +114,8 @@ impl MetalDevice {
             heap,
             passes: 0,
             open: Vec::new(),
+            scope: [0; 2],
+            view: view([0; 2], [0; 2]),
         };
         rec.timestamp(0);
         // Pass begins move after their leading barriers, as on Vulkan.
@@ -164,24 +189,15 @@ impl MetalDevice {
                 let encoder = self.begin_rendering(rec, colors, depth.as_ref(), *size)?;
                 rec.active = Active::Render(encoder);
                 rec.bound = None;
+                rec.scope = *size;
+                rec.set_view(view([0, 0], *size))?;
             }
-            Command::Viewport { origin, size } => {
-                let encoder = rec.render()?;
-                encoder.setViewport(MTLViewport {
-                    originX: f64::from(origin[0]),
-                    originY: f64::from(origin[1]),
-                    width: f64::from(size[0]),
-                    height: f64::from(size[1]),
-                    znear: 0.,
-                    zfar: 1.,
-                });
-                encoder.setScissorRect(MTLScissorRect {
-                    x: origin[0] as usize,
-                    y: origin[1] as usize,
-                    width: size[0] as usize,
-                    height: size[1] as usize,
-                });
-            }
+            Command::Viewport { origin, size } => rec.set_view(view(*origin, *size))?,
+            Command::ClearDepth {
+                origin,
+                size,
+                depth,
+            } => self.clear_depth(rec, *origin, *size, *depth)?,
             Command::Draw(draw) => {
                 let indices = &self.buffers.get(draw.indices)?.raw;
                 let vertices = &self.buffers.get(draw.vertices)?.raw;
@@ -358,11 +374,6 @@ impl MetalDevice {
                 rec.timestamp(2 + 2 * pass);
                 rec.cmd.popDebugGroup();
             }
-            Command::ClearDepth { .. } => {
-                return Err(GpuError::Contract(
-                    "ClearDepth needs a cooked clear pipeline on Metal (not yet available)".into(),
-                ));
-            }
             Command::BuildAccelerationStructure(_) | Command::DrawMeshTasksIndirect { .. } => {
                 return Err(GpuError::Contract(
                     "Ray tracing and mesh tiers are not available on the Metal backend yet".into(),
@@ -442,15 +453,55 @@ impl MetalDevice {
         );
         encoder.setFrontFacingWinding(MTLWinding::CounterClockwise);
         encoder.setCullMode(MTLCullMode::None);
-        encoder.setViewport(MTLViewport {
-            originX: 0.,
-            originY: 0.,
-            width: f64::from(size[0]),
-            height: f64::from(size[1]),
-            znear: 0.,
-            zfar: 1.,
-        });
         Ok(encoder)
+    }
+
+    /// Draw the cooked clear triangle over one tile of the scope's depth attachment,
+    /// then restore the caller's viewport, scissor, pipeline and root constants.
+    fn clear_depth(
+        &mut self,
+        rec: &mut Recording,
+        origin: [u32; 2],
+        size: [u32; 2],
+        depth: f32,
+    ) -> Result<()> {
+        rec.render()?;
+        let fits =
+            |o: u32, s: u32, extent: u32| s > 0 && o.checked_add(s).is_some_and(|e| e <= extent);
+        if rec.formats.1.is_none()
+            || !fits(origin[0], size[0], rec.scope[0])
+            || !fits(origin[1], size[1], rec.scope[1])
+        {
+            return Err(GpuError::Contract(
+                "ClearDepth must lie within a rendering scope's depth attachment".into(),
+            ));
+        }
+        if self.clear.is_none() {
+            self.clear = Some(super::clear::Clear::cooked(&self.device)?);
+        }
+        let clear = self.clear.as_mut().expect("clear pipeline loaded above");
+        let state = clear.pipeline(&self.compiler, &rec.formats.0)?;
+        let depth_state = clear.depth.clone();
+        let encoder = rec.render()?;
+        encoder.setRenderPipelineState(&state);
+        encoder.setDepthStencilState(Some(&depth_state));
+        let (viewport, scissor) = view(origin, size);
+        encoder.setViewport(viewport);
+        encoder.setScissorRect(scissor);
+        let root = std::mem::replace(&mut rec.root, [depth.to_bits(), 0, 0, 0, 0, 0, 0, 0]);
+        let bound = self.bind_top_level(rec);
+        rec.root = root;
+        bound?;
+        // SAFETY: a three-vertex draw with no vertex input inside the open scope.
+        unsafe {
+            rec.render()?
+                .drawPrimitives_vertexStart_vertexCount(MTLPrimitiveType::Triangle, 0, 3);
+        }
+        let restore = rec.view;
+        rec.set_view(restore)?;
+        // The next draw rebinds the caller's pipeline and depth state.
+        rec.bound = None;
+        Ok(())
     }
 
     /// Bind the current graphics pipeline and a fresh top-level argument buffer.
@@ -587,9 +638,15 @@ impl MetalDevice {
         let total: u64 = (0..raw_image.levels)
             .map(|level| level_bytes(&raw_image.info, raw_image.size, level).1)
             .sum();
-        if total > raw_buffer.size || raw_image.info.depth {
+        if total > raw_buffer.size {
             return Err(GpuError::Contract("Image copy exceeds buffer".into()));
         }
+        // Depth32Float copies go through the depth plane explicitly.
+        let blit = if raw_image.info.depth {
+            MTLBlitOption::DepthFromDepthStencil
+        } else {
+            MTLBlitOption::None
+        };
         let (buffer, texture) = (raw_buffer.buffer.clone(), raw_image.texture.clone());
         let (info, size, levels) = (&raw_image.info, raw_image.size, raw_image.levels);
         let mut offset = 0;
@@ -606,14 +663,14 @@ impl MetalDevice {
             // region is the whole level of a resident texture.
             unsafe {
                 if upload {
-                    encoder.copyFromBuffer_sourceOffset_sourceBytesPerRow_sourceBytesPerImage_sourceSize_toTexture_destinationSlice_destinationLevel_destinationOrigin(
+                    encoder.copyFromBuffer_sourceOffset_sourceBytesPerRow_sourceBytesPerImage_sourceSize_toTexture_destinationSlice_destinationLevel_destinationOrigin_options(
                         &buffer, offset as usize, row as usize, bytes as usize, extent,
-                        &texture, 0, level as usize, origin,
+                        &texture, 0, level as usize, origin, blit,
                     );
                 } else {
-                    encoder.copyFromTexture_sourceSlice_sourceLevel_sourceOrigin_sourceSize_toBuffer_destinationOffset_destinationBytesPerRow_destinationBytesPerImage(
+                    encoder.copyFromTexture_sourceSlice_sourceLevel_sourceOrigin_sourceSize_toBuffer_destinationOffset_destinationBytesPerRow_destinationBytesPerImage_options(
                         &texture, 0, level as usize, origin, extent,
-                        &buffer, offset as usize, row as usize, bytes as usize,
+                        &buffer, offset as usize, row as usize, bytes as usize, blit,
                     );
                 }
             }
@@ -646,6 +703,14 @@ impl Recording<'_> {
         self.end();
         // SAFETY: as above; no encoder is open on the command buffer.
         unsafe { self.cmd.writeTimestampIntoHeap_atIndex(self.heap, index) };
+    }
+    /// Apply and remember the viewport and scissor of the open rendering scope.
+    fn set_view(&mut self, (viewport, scissor): (MTLViewport, MTLScissorRect)) -> Result<()> {
+        let encoder = self.render()?;
+        encoder.setViewport(viewport);
+        encoder.setScissorRect(scissor);
+        self.view = (viewport, scissor);
+        Ok(())
     }
     fn render(&self) -> Result<&ProtocolObject<dyn MTL4RenderCommandEncoder>> {
         match &self.active {

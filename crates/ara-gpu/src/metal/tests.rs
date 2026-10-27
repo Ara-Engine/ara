@@ -48,6 +48,11 @@ fragment float4 shade(Varyings in [[stage_in]], constant TopLevel& top [[buffer(
     float4 texel = top.textures[top.root[0]].texture.sample(nearest, in.uv);
     return texel * in.color;
 }
+struct ClearOut { float4 position [[position]]; };
+vertex ClearOut clearDepthVertex(uint id [[vertex_id]], constant TopLevel& top [[buffer(2)]]) {
+    float2 uv = float2((id << 1) & 2, id & 2);
+    return { float4(uv * float2(2, -2) + float2(-1, 1), as_type<float>(top.root[0]), 1) };
+}
 "#;
 
 fn device() -> MetalDevice {
@@ -288,4 +293,132 @@ fn retired_handles_go_stale_and_slots_free_after_completion() {
     assert_eq!(gpu.descriptor_usage().storage_buffers, 0);
     let replacement = storage(&mut gpu, 4);
     assert_eq!(gpu.storage_buffer(replacement).expect("slot"), slot);
+}
+
+impl MetalDevice {
+    /// Test-only: the clear pipeline from the MSL twin of `shaders/clear_depth.slang`.
+    fn msl_clear(&mut self) {
+        let library = native::pool(|| {
+            self.device
+                .newLibraryWithSource_options_error(
+                    &NSString::from_str(&format!("{ABI}{SHADERS}")),
+                    None,
+                )
+                .expect("test MSL compiles")
+        });
+        self.clear = Some(
+            super::clear::Clear::new(&self.device, library, "clearDepthVertex".into())
+                .expect("clear pipeline"),
+        );
+    }
+}
+
+#[test]
+fn clear_depth_clears_only_its_tile_and_leaves_color_untouched() {
+    let mut gpu = device();
+    gpu.msl_clear();
+    let depth = gpu
+        .create_image(
+            8,
+            8,
+            vk::Format::D32_SFLOAT,
+            vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT | vk::ImageUsageFlags::TRANSFER_SRC,
+        )
+        .expect("depth");
+    let color = gpu
+        .create_image(
+            8,
+            8,
+            vk::Format::R8G8B8A8_UNORM,
+            vk::ImageUsageFlags::COLOR_ATTACHMENT | vk::ImageUsageFlags::TRANSFER_SRC,
+        )
+        .expect("color");
+    let (depths, colors) = (
+        gpu.create_readback_buffer(256).expect("depth readback"),
+        gpu.create_readback_buffer(256).expect("color readback"),
+    );
+    let mut rec = gpu.begin(Queue::Graphics);
+    rec.push(Command::BeginRendering {
+        colors: vec![Attachment {
+            image: color,
+            clear: Some([0., 0., 1., 1.]),
+        }],
+        depth: Some(Attachment {
+            image: depth,
+            clear: Some([1.; 4]),
+        }),
+        size: [8, 8],
+    });
+    rec.push(Command::ClearDepth {
+        origin: [2, 4],
+        size: [4, 2],
+        depth: 0.25,
+    });
+    rec.push(Command::EndRendering);
+    for image in [depth, color] {
+        rec.barriers([Barrier {
+            resource: Resource::Image(image),
+            before: Access::Depth,
+            after: Access::CopySource,
+            handoff: None,
+        }]);
+    }
+    rec.push(Command::ReadImage {
+        source: depth,
+        destination: depths,
+    });
+    rec.push(Command::ReadImage {
+        source: color,
+        destination: colors,
+    });
+    let point = gpu.submit(rec.finish(), &[]).expect("submit");
+    gpu.resolve(point).expect("resolve");
+    let bytes = gpu.read(depths).expect("read depth");
+    let values: &[f32] = bytemuck::cast_slice(&bytes);
+    for y in 0..8 {
+        for x in 0..8 {
+            let tile = (2..6).contains(&x) && (4..6).contains(&y);
+            let expected = if tile { 0.25 } else { 1. };
+            assert_eq!(values[y * 8 + x], expected, "texel ({x}, {y})");
+        }
+    }
+    let pixels = words(&gpu.read(colors).expect("read color"));
+    assert!(
+        pixels.iter().all(|&p| p == 0xffff_0000),
+        "color stays cleared blue"
+    );
+    // Outside a depth scope the command is a contract error, as on Vulkan.
+    let mut rec = gpu.begin(Queue::Graphics);
+    rec.push(Command::BeginRendering {
+        colors: vec![Attachment {
+            image: color,
+            clear: None,
+        }],
+        depth: None,
+        size: [8, 8],
+    });
+    rec.push(Command::ClearDepth {
+        origin: [0, 0],
+        size: [1, 1],
+        depth: 0.,
+    });
+    rec.push(Command::EndRendering);
+    assert!(matches!(
+        gpu.submit(rec.finish(), &[]),
+        Err(GpuError::Contract(_))
+    ));
+}
+
+#[test]
+fn the_cooked_clear_pipeline_resolves_and_names_missing_converter_artifacts() {
+    let gpu = device();
+    // Until the canonical host cooks metallibs, loading names the missing lane;
+    // afterwards the same manifest loads.
+    match super::clear::Clear::cooked(&gpu.device) {
+        Ok(_) => {}
+        Err(GpuError::Contract(message)) => {
+            assert!(message.contains("no Metal artifacts"), "{message}")
+        }
+        Err(other) => panic!("cooked clear_depth must resolve: {other}"),
+    }
 }

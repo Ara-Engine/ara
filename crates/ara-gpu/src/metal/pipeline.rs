@@ -5,7 +5,7 @@
 //! alpha on attachment zero.
 use super::abi::{STAGE_IN_ATTRIBUTE_START, VERTEX_BUFFER_BIND_POINT};
 use super::native::{nil, ns_error, raw_format};
-use crate::cooked::{CookedPipeline, RenderState, Stage, binding_layout_hash};
+use crate::cooked::{CookedPipeline, CookedStage, RenderState, Stage, binding_layout_hash};
 use crate::{GpuError, Result};
 use objc2::rc::Retained;
 use objc2::runtime::ProtocolObject;
@@ -32,9 +32,9 @@ pub(super) enum NativePipeline {
 /// The subset of converter reflection (`--output-reflection-file`) the runtime uses,
 /// with the field names Apple's reflection guide documents.
 #[derive(serde::Deserialize)]
-struct Reflection {
+pub(super) struct Reflection {
     #[serde(rename = "EntryPoint")]
-    entry_point: String,
+    pub entry_point: String,
     #[serde(default)]
     tg_size: Option<[u32; 3]>,
     #[serde(default)]
@@ -48,50 +48,90 @@ pub(super) fn create(
     cooked: &CookedPipeline,
     dir: &Path,
 ) -> Result<NativePipeline> {
-    if cooked.version != 1 || cooked.binding_layout_hash != binding_layout_hash() {
-        return Err(GpuError::Contract(
-            "Cooked layout/schema mismatch; recook shaders".into(),
-        ));
-    }
-    let mut libraries = Vec::new();
-    for stage in &cooked.stages {
-        let metal = stage.metal.as_ref().ok_or_else(|| {
-            GpuError::Contract(format!(
-                "Pipeline stage {} has no Metal artifacts; cook it with Metal Shader \
-                 Converter (see docs/dev/macos.md)",
-                stage.source_entry
-            ))
-        })?;
-        let bytes = std::fs::read(dir.join(&metal.metallib)).map_err(anyhow::Error::from)?;
-        if format!("{:x}", Sha256::digest(&bytes)) != metal.metallib_hash {
-            return Err(GpuError::Contract(format!(
-                "Shader content hash mismatch: {}",
-                metal.metallib
-            )));
-        }
-        let reflection: Reflection = serde_json::from_slice(
-            &std::fs::read(dir.join(&metal.reflection)).map_err(anyhow::Error::from)?,
-        )
-        .map_err(anyhow::Error::from)?;
-        if reflection.needs_draw_params {
-            // The draw-parameter buffers (bind points 4/5) are defined only by the
-            // converter's runtime header; this lane is enabled once it is verified.
-            return Err(GpuError::Contract(format!(
-                "{}: converter draw parameters are not supported by the Metal backend yet",
-                stage.source_entry
-            )));
-        }
-        let library = device
-            .newLibraryWithData_error(&dispatch2::DispatchData::from_bytes(&bytes))
-            .map_err(|e| ns_error("metallib load", &e))?;
-        libraries.push((stage.stage, library, reflection));
-    }
+    let libraries = cooked
+        .stages
+        .iter()
+        .map(|stage| load(device, cooked, stage, dir))
+        .collect::<Result<Vec<_>>>()?;
     let functions = libraries
         .iter()
         .map(|(stage, library, reflection)| (*stage, &**library, reflection.entry_point.as_str()))
         .collect::<Vec<_>>();
     let threads = libraries.iter().find_map(|(_, _, r)| r.tg_size);
     build(device, compiler, &functions, &cooked.state, threads)
+}
+
+/// A loaded, hash-checked stage library with its converter reflection.
+pub(super) type LoadedStage = (Stage, Retained<ProtocolObject<dyn MTLLibrary>>, Reflection);
+
+/// Load one cooked stage's metallib (hash checked) and converter reflection.
+pub(super) fn load(
+    device: &ProtocolObject<dyn MTLDevice>,
+    cooked: &CookedPipeline,
+    stage: &CookedStage,
+    dir: &Path,
+) -> Result<LoadedStage> {
+    if cooked.version != 1 || cooked.binding_layout_hash != binding_layout_hash() {
+        return Err(GpuError::Contract(
+            "Cooked layout/schema mismatch; recook shaders".into(),
+        ));
+    }
+    let metal = stage.metal.as_ref().ok_or_else(|| {
+        GpuError::Contract(format!(
+            "Pipeline stage {} has no Metal artifacts; cook it with Metal Shader \
+             Converter on the canonical cook host (see docs/dev/macos.md)",
+            stage.source_entry
+        ))
+    })?;
+    let bytes = std::fs::read(dir.join(&metal.metallib)).map_err(anyhow::Error::from)?;
+    if format!("{:x}", Sha256::digest(&bytes)) != metal.metallib_hash {
+        return Err(GpuError::Contract(format!(
+            "Shader content hash mismatch: {}",
+            metal.metallib
+        )));
+    }
+    let reflection: Reflection = serde_json::from_slice(
+        &std::fs::read(dir.join(&metal.reflection)).map_err(anyhow::Error::from)?,
+    )
+    .map_err(anyhow::Error::from)?;
+    if reflection.needs_draw_params {
+        // The draw-parameter buffers (bind points 4/5) are defined only by the
+        // converter's runtime header; this lane is enabled once it is verified.
+        return Err(GpuError::Contract(format!(
+            "{}: converter draw parameters are not supported by the Metal backend yet",
+            stage.source_entry
+        )));
+    }
+    let library = device
+        .newLibraryWithData_error(&dispatch2::DispatchData::from_bytes(&bytes))
+        .map_err(|e| ns_error("metallib load", &e))?;
+    Ok((stage.stage, library, reflection))
+}
+
+/// A vertex-only render pipeline that writes depth and no color: `ClearDepth`.
+/// Color attachments match the rendering scope with writes masked off.
+pub(super) fn depth_only(
+    compiler: &ProtocolObject<dyn MTL4Compiler>,
+    library: &ProtocolObject<dyn MTLLibrary>,
+    entry: &str,
+    colors: &[MTLPixelFormat],
+) -> Result<Retained<ProtocolObject<dyn MTLRenderPipelineState>>> {
+    let function = MTL4LibraryFunctionDescriptor::new();
+    function.setName(Some(&NSString::from_str(entry)));
+    function.setLibrary(Some(library));
+    let descriptor = MTL4RenderPipelineDescriptor::new();
+    descriptor.setVertexFunctionDescriptor(Some(&function));
+    descriptor.setInputPrimitiveTopology(MTLPrimitiveTopologyClass::Triangle);
+    let attachments = descriptor.colorAttachments();
+    for (index, pixel) in colors.iter().enumerate() {
+        // SAFETY: rendering scopes have at most Metal's eight color attachments.
+        let attachment = unsafe { attachments.objectAtIndexedSubscript(index) };
+        attachment.setPixelFormat(*pixel);
+        attachment.setWriteMask(MTLColorWriteMask::None);
+    }
+    compiler
+        .newRenderPipelineStateWithDescriptor_compilerTaskOptions_error(&descriptor, None)
+        .map_err(|e| ns_error("depth-only pipeline", &e))
 }
 
 /// Build a pipeline from loaded libraries; shared by cooked artifacts and tests.

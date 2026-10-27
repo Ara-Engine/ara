@@ -17,9 +17,12 @@
 //!
 //! Pass timings come from MTL4 timestamp heaps ([`timestamps`]) on one GPU clock.
 //!
-//! Not yet available: acceleration structures, mesh/task stages, `ClearDepth`,
+//! `ClearDepth` draws the cooked vertex-only `clear_depth` pipeline ([`clear`]).
+//!
+//! Not yet available: acceleration structures, mesh/task stages,
 //! shader hot reload, HDR output and shared surfaces.
 mod abi;
+mod clear;
 mod completion;
 mod encode;
 mod native;
@@ -172,6 +175,8 @@ pub struct MetalDevice {
     timings: std::collections::VecDeque<(TimelinePoint, Vec<PassTiming>)>,
     timing_window: crate::vulkan::timestamps::Window,
     waits: crate::vulkan::waits::Counter,
+    /// The cooked `ClearDepth` pipeline, loaded on first use.
+    clear: Option<clear::Clear>,
 }
 
 impl MetalDevice {
@@ -257,6 +262,7 @@ impl MetalDevice {
             timings: std::collections::VecDeque::new(),
             timing_window: Default::default(),
             waits: Default::default(),
+            clear: None,
         })
     }
 
