@@ -17,6 +17,8 @@ const D27_GPU: [f64; 4] = [1., 1.75, 3., 5.];
 const D26_CPU: f64 = 4.;
 const D26_HITCH: f64 = 16.;
 const D26_FIRST_FRAME: f64 = 2000.;
+/// What the Play rows' first Game frame is (`ara-player` embed docs).
+const PLAY_ENTRY: &str = "the first published frame: embedded Play holds its simulation and publishes once its presentation is lit and settled, at most 1.5 s after its first content frame";
 const D26_FULL_SCENE: f64 = 3000.;
 /// The editor's bar: nothing on the UI thread may take longer than a 60 Hz frame.
 const EDITOR_FRAME: f64 = 16.7;
@@ -774,6 +776,7 @@ fn startup(results: &Results, rows: &mut Vec<Row>) {
             subject,
             "Play click → first Game frame, first Play (warm editor)",
         )
+        .note(PLAY_ENTRY)
         .source(source.clone())
         .value(first),
     );
@@ -789,6 +792,7 @@ fn startup(results: &Results, rows: &mut Vec<Row>) {
             subject,
             "Play click → first Game frame, repeat Plays (max)",
         )
+        .note(PLAY_ENTRY)
         .source(source)
         .value(repeat),
     );
