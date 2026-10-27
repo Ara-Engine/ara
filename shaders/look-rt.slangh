@@ -13,7 +13,8 @@ BIND(4) RaytracingAccelerationStructure acceleration[16] : register(t0,space4);
 // rtParams[0]: x reflection roughness cut, y longest ray (m), z ray-cone spread per
 //   render pixel (rad), w largest reflection blur sigma (render px).
 // rtParams[1]: x ray-origin bias (m), y bias per metre from the camera, z reflection
-//   intensity (the look's SSR tuning).
+//   intensity (the look's SSR tuning), w 1 where this frame's screen-space ambient
+//   light (look-shading.slangh screenAmbient) may occlude on-screen hits.
 // rtInfo[0]: x TLAS (acceleration heap), y instance rows, z geometry table, w
 //   materials (buffers). rtInfo[1]: x texture residency table, y instance -> LOD 0
 //   geometry entry (u32 per instance), z this frame's reflections (sampled; 0
@@ -186,6 +187,18 @@ Surface rtSurface(Look l,RtHit hit,float3 direction,float width,out float3 posit
     Surface s=rtSurfaceOf(l,t.material,t,n,width);
     if(dot(s.normal,geometric)<=0)s.normal=n;
     return s;
+}
+// Ambient visibility of a hit the camera also sees: this frame's screen-space
+// ambient light at the hit's pixel, where that pixel's surface lies on the hit's
+// plane (contact darkening the probes are too coarse for). Hits off screen or hidden
+// behind other surfaces keep 1: their probe irradiance is already visibility-weighted.
+float rtScreenVisibility(Frame f,Look l,float3 position,float3 geometric){
+    if(l.rtParams[1].w<0.5)return 1;
+    float4 clip=mul(f.vp,float4(position,1));if(clip.w<=0)return 1;
+    float2 uv=float2(clip.x/clip.w*0.5+0.5,0.5-clip.y/clip.w*0.5);if(any(uv<=0)||any(uv>=1))return 1;
+    int2 q=min(int2(uv*float2(f.extent.xy)),int2(f.extent.xy)-1);bool covered;float3 seen=gbufferWorld(f,q,covered);
+    if(!covered || abs(dot(geometric,seen-position))>0.01+0.004*length(position-f.camera.xyz))return 1;
+    float3 bounce;return screenAmbient(f,l,q,bounce);
 }
 // Radiance leaving a hit towards `v` (unit, back towards the ray's origin), from
 // the lighting caches only: emission, probe GI and sky light (ibl, as forward

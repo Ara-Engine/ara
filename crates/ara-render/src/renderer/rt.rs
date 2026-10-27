@@ -13,8 +13,10 @@
 //! graph (`RT.Accel`, after the G-buffer), so frames never wait on them.
 //!
 //! Reflections: `RT.Reflect` traces one ray per render pixel below the roughness
-//! cut; `RT.Filter.X`/`Y` widen glossy results by a depth/normal-aware Gaussian and
-//! composite them over screen-space reflections into the image the
+//! cut (on-screen hits take this frame's screen-space ambient light);
+//! `RT.Filter.X`/`Y` widen glossy results by a Gaussian aware of the reflector's
+//! depth and normal and of the reflected hit distance, and composite them over
+//! screen-space reflections into the image the
 //! `lighting_high_rt` variant reads (`ibl`'s `rays`). Below the cut traced
 //! reflections own the pixel (screen-space confidence edges are half resolution and
 //! move with the jitter: they would flicker); screen-space ones fill only the band
@@ -585,6 +587,11 @@ impl Rays {
         // Radians per render pixel at the image centre.
         let spread = 2. / (projection_y.abs().max(1e-6) * render[1].max(1) as f32);
         let flags = 1 | if self.masked { 2 } else { 0 };
+        // On-screen hits take this frame's screen-space ambient light: the High/Epic
+        // visibility bitmask (look::gpu bitmask_ao), whose image layout shading reads.
+        let screen_ambient = f32::from(u8::from(
+            quality.high_tier && quality.ambient_occlusion.is_some(),
+        ));
         frame.rt_params = [
             [
                 settings.reflection_roughness,
@@ -592,7 +599,7 @@ impl Rays {
                 spread,
                 MAX_SIGMA,
             ],
-            [BIAS, BIAS_PIXELS * spread, intensity, 0.],
+            [BIAS, BIAS_PIXELS * spread, intensity, screen_ambient],
         ];
         frame.rt_info = [
             [
