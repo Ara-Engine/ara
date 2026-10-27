@@ -1,4 +1,4 @@
-//! The Win32 window: a borderless, DWM-framed 480 × 200 card centred on the
+//! The Win32 window: a borderless, DWM-framed 560 × 240 dialog centred on the
 //! monitor under the pointer, per-monitor DPI aware, dragged by any empty area.
 //! The install runs on a worker thread that sends [`View`]s; its questions block
 //! it until a button answers. Closing is ignored while setup is busy.

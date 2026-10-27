@@ -3,6 +3,7 @@
 //! back. The data is a fixed fixture fed through the model's own
 //! reply handling (no service), so captures are reproducible; the service path is
 //! covered by `ara/tests/hub_ui.rs`.
+mod flows;
 mod interactions;
 use crate::{
     connection::Event,
@@ -44,7 +45,14 @@ fn seed_with(hub: &mut Hub, with_projects: bool) {
     let root = checkout();
     let evidence = |sample: &str, file: &str| {
         root.as_ref()
-            .map(|r| r.join("samples").join(sample).join("evidence").join(file))
+            .map(|r| {
+                let migrated = r.join("evidence/samples").join(sample).join(file);
+                if migrated.is_file() {
+                    migrated
+                } else {
+                    r.join("samples").join(sample).join("evidence").join(file)
+                }
+            })
             .filter(|p| p.is_file())
     };
     let base = r"C:\Users\tester\Ara Projects";
@@ -129,11 +137,11 @@ fn seed_with(hub: &mut Hub, with_projects: bool) {
             {"id":"ses_ed01","kind":"human","name":"ara-editor","joinedMs":0},
             {"id":"ses_ag01","kind":"agent","name":"claude-code","joinedMs":0}],
          "presence":{
-            "ses_ed01":{"doc":"levels/outpost.scene","selection":["e_campfire"]},
-            "ses_ag01":{"doc":"levels/outpost.scene","selection":[],"activity":{"what":"entity.create, transform.set","why":"lining the fence with floodlights"}}}},
+            "ses_ed01":{"doc":format!("{}/levels/outpost.scene",ara_hub_service::AUTHORING_ROOT),"selection":["e_campfire"]},
+            "ses_ag01":{"doc":format!("{}/levels/outpost.scene",ara_hub_service::AUTHORING_ROOT),"selection":[],"activity":{"what":"entity.create, transform.set","why":"lining the fence with floodlights"}}}},
         {"project":"project-2","participants":[
             {"id":"ses_ag02","kind":"agent","name":"codex","joinedMs":0}],
-         "presence":{"ses_ag02":{"doc":"levels/showcase.scene","selection":["e_plinth03","e_plinth04"]}}}
+         "presence":{"ses_ag02":{"doc":format!("{}/levels/showcase.scene",ara_hub_service::AUTHORING_ROOT),"selection":["e_plinth03","e_plinth04"]}}}
     ]});
     let (projects, statuses, activity) = if with_projects {
         (projects, statuses, activity)
@@ -188,6 +196,13 @@ fn seed_with(hub: &mut Hub, with_projects: bool) {
         hub.take_calls();
         return;
     }
+    hub.releases.can_self_update = true;
+    for version in ["0.0.1-alpha", "0.0.2-nightly", "0.0.3-alpha"] {
+        hub.event(Event::Reply {
+            call: Call::Release { method: "hub.engine.preflight", params: json!({"version":version}) },
+            result: Ok(json!({"destination":format!(r"C:\Users\tester\AppData\Local\Ara\Engines\{version}"),"downloadBytes":864_000_000_u64,"requiredBytes":3_456_000_000_u64,"availableBytes":42_000_000_000_u64,"channel":"preview"})),
+        });
+    }
     let release = |kind: &str, version: &str, channel: &str| {
         json!({
             "format":"ara.release/1","kind":kind,"version":version,"channel":channel,
@@ -199,7 +214,7 @@ fn seed_with(hub: &mut Hub, with_projects: bool) {
     for (method, value) in [
         (
             "hub.engines.available",
-            json!({"releases":[release("engine","0.0.3-alpha","preview")],"status":{"state":"fresh"},"checking":false}),
+            json!({"releases":[release("engine","0.0.3-alpha","preview")],"status":{"state":"fresh"},"checking":false,"installRoot":r"C:\Users\tester\AppData\Local\Ara\Engines"}),
         ),
         (
             "hub.updates",
@@ -291,6 +306,7 @@ pub fn run(
             println!("{}", path.display());
         }
         interactions::run(host, app, &folder, light)?;
+        flows::run(host, app, &folder, light)?;
     }
     Ok(())
 }

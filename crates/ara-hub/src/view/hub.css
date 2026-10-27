@@ -211,3 +211,29 @@ field:focus { border-color:var(--ring); }
 .link-row { height:52px; flex-shrink:0; flex-direction:row; align-items:center; justify-content:start; gap:14px; padding-left:16px; padding-right:16px; background:transparent; border-width:0px; border-radius:0px; }
 .link-row:hover { background:var(--raised); }
 .selected { background:var(--selection-surface); color:var(--selection-foreground); border-color:var(--selection-surface); }
+
+/* Root-level dialogs and enum dropdowns share the kit's focus/layer routing. */
+.dialog-layer { position:absolute; left:0px; top:0px; width:100%; height:100%; align-items:center; justify-content:center; background:var(--overlay); }
+.dialog-card { flex-shrink:0; gap:16px; padding:24px; background:var(--card); border-width:1px; border-color:var(--separator-strong); border-radius:var(--radius-base); }
+.dialog-heading { width:100%; min-width:0px; flex-shrink:0; flex-direction:row; align-items:center; gap:12px; }
+.dialog-icon { width:40px; height:40px; flex-shrink:0; align-items:center; justify-content:center; background:var(--accent-surface); border-radius:var(--radius-md); }
+.dialog-title { min-width:0px; flex-grow:1; flex-basis:0px; font-size:19px; white-space:normal; flex-shrink:1; color:var(--foreground); }
+.dialog-eyebrow { font-size:12px; color:var(--muted-foreground); }
+.dialog-copy { font-size:13px; white-space:normal; flex-shrink:1; color:var(--foreground); }
+.dialog-actions { flex-direction:row; align-items:center; gap:8px; padding-top:8px; }
+.release-notes { gap:12px; padding:18px; background:var(--background); border-width:1px; border-color:var(--border); border-radius:var(--radius-md); }
+.release-notes-scroll { max-height:180px; }
+.transfer { gap:12px; padding:18px; background:var(--background); border-width:1px; border-color:var(--border); border-radius:var(--radius-md); }
+.verified { flex-direction:row; align-items:center; gap:12px; padding:16px; background:var(--success-surface); border-radius:var(--radius-md); }
+.install-summary { gap:8px; padding:16px; background:var(--background); border-radius:var(--radius-md); }
+.destructive-button { background:var(--destructive-surface); color:var(--destructive-foreground); border-color:var(--destructive-foreground); }
+.destructive-button:hover { background:var(--destructive-surface); }
+.update-indicator { flex-direction:row; align-items:center; justify-content:start; gap:8px; height:36px; padding-left:10px; padding-right:10px; background:transparent; border-width:0px; color:var(--muted-foreground); }
+.update-indicator:hover { background:var(--raised); color:var(--foreground); }
+.dialog-error-scroll { max-height:320px; }
+.dialog-error-details { gap:12px; }
+
+.install-notes-scroll { max-height:96px; }
+.dialog-frame { border-radius:var(--radius-base); }
+
+.dialog-close-tooltip { padding:6px; font-size:12px; background:var(--popover); color:var(--popover-foreground); border-width:1px; border-color:var(--separator-strong); border-radius:var(--radius-sm); }

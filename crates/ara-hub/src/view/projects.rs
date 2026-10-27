@@ -19,22 +19,15 @@ pub(super) fn toolbar(p: &mut Page, hub: &Hub, _ctx: &Ctx) {
         });
         p.leaf("fill");
         p.text("small muted", "Sort");
-        p.panel("segment", |p| {
-            for (sort, label) in [(Sort::Recent, "Last opened"), (Sort::Name, "Name")] {
-                let class = if hub.prefs.sort == sort {
-                    "seg seg-on"
-                } else {
-                    "seg"
-                };
-                p.action(
-                    &format!("sort-{label}").to_lowercase().replace(' ', "-"),
-                    class,
-                    "",
-                    label,
-                    Some(Intent::Sort(sort)),
-                );
-            }
-        });
+        p.dropdown(
+            "project-sort",
+            "Sort projects",
+            vec![
+                ("Last opened".into(), Intent::Sort(Sort::Recent)),
+                ("Name".into(), Intent::Sort(Sort::Name)),
+            ],
+            Some(Intent::Sort(hub.prefs.sort)),
+        );
         p.panel("segment", |p| {
             for (layout, icon, label) in [
                 (Layout::Grid, "layout-grid", "Cards"),
