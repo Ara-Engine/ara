@@ -8,8 +8,10 @@ use std::path::Path;
 #[test]
 fn the_outpost_scene_post_process_loads_as_a_global_volume() {
     let schema = ara_runtime::schema(&[]).unwrap();
-    let path =
-        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../samples/outpost/levels/outpost.scene");
+    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../samples/outpost")
+        .join(ara_doc::AUTHORING_ROOT)
+        .join("levels/outpost.scene");
     let mut legacy: serde_json::Value =
         serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
     // Canonical saves migrate the sample. Recreate its former component in memory

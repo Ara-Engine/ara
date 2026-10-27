@@ -36,5 +36,15 @@ fn resource_paths_and_nonfatal_failures_survive_portable_ui()
     assert!(ui.resource_diagnostics[0].contains("assets/missing.png"));
     assert_eq!(ui.music[0].target, "e_music");
     assert_eq!(ui.music[0].field, "alert");
+    // The same resource contract survives a project-layout migration.
+    std::fs::write(root.path().join("ara.project.json"), "{}")?;
+    ara_host::project_layout::Migration::plan(root.path(), None)
+        .map_err(|d| d.to_string())?
+        .apply()
+        .map_err(|d| d.to_string())?;
+    let migrated = read_game_ui(root.path())?.ok_or("migrated game UI")?;
+    assert_eq!(migrated.images["reticle"], ui.images["reticle"]);
+    assert_eq!(migrated.resource_paths["image:missing"], "missing.png");
+    assert_eq!(migrated.resource_paths["image:reticle"], "reticle.png");
     Ok(())
 }

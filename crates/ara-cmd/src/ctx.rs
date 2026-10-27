@@ -362,6 +362,11 @@ impl EditCtx<'_, '_> {
         kind: &str,
         id: Option<&str>,
     ) -> Result<AssetId, Diagnostic> {
+        let path = if kind == "project" || (kind == "imports" && path == "settings/ara.imports") {
+            path.to_owned()
+        } else {
+            self.read().workspace().storage_path(path)
+        };
         let prefix = self
             .read()
             .schema()
@@ -391,7 +396,7 @@ impl EditCtx<'_, '_> {
         };
         self.staged.apply(Edit::Document {
             doc: asset.clone(),
-            path: path.to_owned(),
+            path,
             kind: Some(kind.to_owned()),
         })?;
         Ok(asset)

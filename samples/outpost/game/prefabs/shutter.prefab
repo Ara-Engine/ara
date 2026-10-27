@@ -1,0 +1,21 @@
+{
+  "$schema": "ara://schema/prefab/1",
+  "id": "pf_shutter",
+  "records": {
+    "e_part0": {
+      "name": "rollershutter_door_graffiti",
+      "parent": "e_root",
+      "order": "a0",
+      "MeshRenderer": {
+        "model": "@third_party/rollershutter_door/rollershutter_door_1k.gltf#as_rollershutterdoor",
+        "node": "rollershutter_door_graffiti"
+      },
+      "Transform": {}
+    },
+    "e_root": {
+      "name": "shutter",
+      "order": "a0",
+      "Transform": {}
+    }
+  }
+}

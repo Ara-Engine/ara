@@ -6,8 +6,8 @@ file (URL, BLAKE3, size, license, authors, source page) and `fetch` restores the
 
 | Project | Scenes |
 |---|---|
-| `outpost/` | `levels/outpost.scene`: Outpost at dusk (a derelict compound on 384 m of terrain with foliage, a campfire, floodlights, wind and music). `levels/hangar.scene`: the hangar interior at night, lit by emissive panels, a festoon and a few lamps. |
-| `showcase/` | `levels/showcase.scene`: a turntable stage with an animated mannequin, a jogger, 11 hero props on plinths and 18 material balls under a studio HDRI. |
+| `outpost/` | `game/levels/outpost.scene`: Outpost at dusk (a derelict compound on 384 m of terrain with foliage, a campfire, floodlights, wind and music). `game/levels/hangar.scene`: the hangar interior at night, lit by emissive panels, a festoon and a few lamps. |
+| `showcase/` | `game/levels/showcase.scene`: a turntable stage with an animated mannequin, a jogger, 11 hero props on plinths and 18 material balls under a studio HDRI. |
 
 ## How to play Outpost
 
@@ -24,9 +24,9 @@ resolution, window mode, volume, mouse sensitivity/invert and key bindings.
 From a Windows checkout, prepare the assets and tools once (PowerShell):
 
 ```powershell
-$env:CARGO_BUILD_JOBS = '4'
-$env:CARGO_TARGET_DIR = 'D:\AraBuild\outpost-game-target'
-.\crates\ara-dev\run.ps1 cargo -- -- build -j 4 --config samples/outpost/windows-build.toml -p ara -p ara-player -p ara-import-worker -p ara-samples -p ara-export -p ara-shader-cook
+$env:CARGO_BUILD_JOBS = '3'
+$env:CARGO_TARGET_DIR = 'C:\AraBuild\outpost-game-target'
+.\crates\ara-dev\run.ps1 cargo -- -- build -j 3 --config tests/samples/outpost/windows-build.toml -p ara -p ara-player -p ara-import-worker -p ara-samples -p ara-export -p ara-shader-cook
 $bin = Join-Path $env:CARGO_TARGET_DIR 'debug'
 & "$bin\ara-samples.exe" fetch outpost
 & "$bin\ara-samples.exe" verify outpost
@@ -47,7 +47,7 @@ has changed. For a dedicated authority and up to four clients:
 & "$bin\ara-player.exe" --game --project samples/outpost --connect 127.0.0.1:41090
 ```
 
-In the editor, open `samples/outpost`, select `levels/outpost.scene`, and choose
+In the editor, open `samples/outpost`, select `game/levels/outpost.scene`, and choose
 **Host + N** or **Dedicated + N** in Play's multiplayer configuration. Each view uses
 its own input owner and native HUD. Source launches cook missing assets on the
 loading screen; an exported build loads its pinned cooked pack.
@@ -55,11 +55,11 @@ loading screen; an exported build loads its pinned cooked pack.
 To export a playable Windows folder with NativeAOT gameplay:
 
 ```powershell
-.\samples\outpost\export.ps1 -Bin $bin -Output D:\AraBuild\Outpost-Windows
+.\tests\samples\outpost\export.ps1 -Bin $bin -Output C:\AraBuild\Outpost-Windows
 ```
 
-Open `D:\AraBuild\Outpost-Windows\build\ara-player.exe` to reach the main menu. Run it a second time and use
-**Join** to play co-op on this PC. For dedicated play, run `ara-player.exe --game
+Open `C:\AraBuild\Outpost-Windows\build\Outpost.exe` to reach the main menu. Run it a second time and use
+**Join** to play co-op on this PC. For dedicated play, run `Outpost.exe --game
 --dedicated --headless`, then open client instances normally. `--windowed` overrides
 the saved startup window mode. Leave the existing output folder intact; choose a
 new output path for another export.
@@ -67,8 +67,8 @@ new output path for another export.
 For two visible windows on one PC, launch from the exported folder twice:
 
 ```powershell
-Start-Process .\ara-player.exe -ArgumentList '--windowed'
-Start-Process .\ara-player.exe -ArgumentList '--windowed'
+Start-Process .\Outpost.exe -ArgumentList '--windowed'
+Start-Process .\Outpost.exe -ArgumentList '--windowed'
 ```
 
 Choose **Host a crew** in the first, then **Join** `127.0.0.1:41090` in the second.
@@ -77,7 +77,7 @@ Ready each scavenger, then switch windows with Alt+Tab to control that player.
 The offscreen gate uses fresh profiles and only its own child processes:
 
 ```powershell
-.\samples\outpost\tests\coop.ps1 -Bin $bin
+.\tests\samples\outpost\coop.ps1 -Bin $bin
 ```
 
 It tests solo, then drives four players in listen and dedicated modes, joins the last player after a
@@ -86,7 +86,7 @@ door/result view, and verifies two authority replays against live checkpoints.
 The scout tests real drone damage and the crew must revive it; every capture is 1080p.
 Live recordings hash tick multiples of 30 and the final tick; offline replays hash
 every tick. Normal play leaves state hashing off. To test the exported build, add
-`-ExportRoot D:\AraBuild\Outpost-Windows\build`. Art, fonts and sounds are
+`-ExportRoot C:\AraBuild\Outpost-Windows\build`. Art, fonts and sounds are
 listed in [THIRD_PARTY_ASSETS.md](THIRD_PARTY_ASSETS.md).
 
 ```sh
@@ -109,12 +109,17 @@ the attributed journal and keep stable document, stroke and exclusion IDs.
 The projects are ordinary Ara projects: `ara check`, `ara mcp` and the editor work in
 them as in any other. GPU commands need the Vulkan SDK (see `crates/ara-samples/AGENTS.md`).
 
-- `<project>/look/*.look.json`: what a scene cannot express yet for the captures:
+- `<project>/game/look/*.look.json`: what a scene cannot express yet for the captures:
   camera shots, an HDRI sky and the terrain ground material, plus temporary tuning
   overrides. Physical sky, height fog and exposure/post live in the scenes
   (`SkyAtmosphere`, `HeightFog`, `PostProcess`).
-- `<project>/evidence/`: fidelity captures (1440p native and upscaled, a sequence
-  strip), `*-timings.json` (per-pass GPU timings, content stats), Play and editor
-  captures.
+- `../evidence/samples/<project>/`: checked-in reference captures. Generated
+  fidelity, Play and editor captures go under `target/ara-samples/`, outside the
+  game project. `ARA_CAPTURE_OUTPUT_DIR` explicitly selects another destination.
+- `settings/builds/windows.export.json`: the game's export settings. The repo's
+  `tests/samples/outpost/export.ps1` helper supplies a local runtime pin; projects
+  no longer carry machine-specific export scripts or Cargo profile files.
+- [Project layout and migration](../docs/project-layout.md): creation, references,
+  ignored output roots, and `ara project migrate --dry-run`.
 - [`FINDINGS.md`](FINDINGS.md): engine bugs and friction found building these, with
   repros. [`THIRD_PARTY_ASSETS.md`](THIRD_PARTY_ASSETS.md): attribution.

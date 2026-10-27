@@ -32,7 +32,7 @@ fn sample_sidecars_match_installed_importer_versions() -> Result<(), Box<dyn std
     for project in ["outpost", "showcase"] {
         let project_root = root.join(project);
         let mut files = Vec::new();
-        sidecars(&project_root.join("assets"), &mut files)?;
+        sidecars(&project_root.join(ara_doc::AUTHORING_ROOT), &mut files)?;
         files.sort();
         assert!(!files.is_empty(), "{project}: missing sample sidecars");
         let mut db = ara_schema::SchemaDb::new();

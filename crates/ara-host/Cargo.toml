@@ -24,8 +24,10 @@ notify = "8.2"
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true, features = ["preserve_order", "float_roundtrip"] }
 tracing = { workspace = true }
+toml = { version = "1", default-features = false, features = ["parse", "serde"] }
 
 [dev-dependencies]
+ara-asset = { path = "../ara-asset" }
 ara-runtime = { path = "../ara-runtime" }
 insta = { workspace = true }
 

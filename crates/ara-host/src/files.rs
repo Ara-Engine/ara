@@ -195,7 +195,11 @@ impl State {
             self.log(d);
             return;
         }
-        let synced = self.files.synced.get(id).filter(|s| s.doc == *doc);
+        let synced = self
+            .files
+            .synced
+            .get(id)
+            .filter(|s| s.path == path && s.doc == *doc);
         if let Some(synced) = synced.filter(|_| !always) {
             let hash = journal::hash(&synced.text);
             self.journal(Entry::Flush {
@@ -328,6 +332,14 @@ impl State {
         match result {
             Ok(text) => {
                 let hash = journal::hash(&text);
+                if let Some(previous) = self
+                    .files
+                    .synced
+                    .get(&id)
+                    .filter(|previous| previous.path != path)
+                {
+                    self.files.io.untrack(previous.path.clone());
+                }
                 self.files
                     .synced
                     .insert(id.clone(), Synced::new(path, text, doc));

@@ -34,7 +34,10 @@ pub type ImportDoc = (String, String, ara_doc::Record);
 pub fn import_docs(workspace: &ara_doc::Workspace) -> Result<Vec<ImportDoc>, String> {
     workspace
         .docs()
-        .filter(|(_, doc)| doc.kind == "import" || doc.kind == "imports")
+        .filter(|(_, doc)| {
+            doc.kind == "import"
+                || (doc.kind == "imports" && workspace.is_project_document(doc.id.as_str()))
+        })
         .map(|(path, doc)| {
             let record = doc
                 .record(if doc.kind == "imports" {
@@ -43,7 +46,16 @@ pub fn import_docs(workspace: &ara_doc::Workspace) -> Result<Vec<ImportDoc>, Str
                     "i_settings"
                 })
                 .ok_or_else(|| format!("{path}: missing import settings"))?;
-            Ok((path.to_owned(), doc.id.to_string(), record.clone()))
+            Ok((
+                if doc.kind == "import" {
+                    workspace.reference_path(path)
+                } else {
+                    path
+                }
+                .to_owned(),
+                doc.id.to_string(),
+                record.clone(),
+            ))
         })
         .collect()
 }
@@ -64,25 +76,6 @@ pub struct Assets {
     busy: bool,
     /// Cache directory shared with players.
     pub cache: PathBuf,
-}
-
-fn sidecars(root: &Path, dir: &Path, out: &mut Vec<PathBuf>) {
-    let Ok(entries) = std::fs::read_dir(dir) else {
-        return;
-    };
-    for entry in entries.flatten() {
-        let path = entry.path();
-        let name = entry.file_name().to_string_lossy().into_owned();
-        if path.is_dir() {
-            if !(name.starts_with('.') || name == "target" || name == "node_modules")
-                && !(path != root && path.join("ara.project.json").exists())
-            {
-                sidecars(root, &path, out);
-            }
-        } else if name.ends_with(".import.json") {
-            out.push(path);
-        }
-    }
 }
 
 impl Assets {
@@ -172,9 +165,16 @@ impl Assets {
         // they are persisted (an in-process speedup), and pinning one would also make
         // Play depend on import timing; play cooks the requested preset directly.
         pipeline.reload.progressive = false;
-        let mut files = Vec::new();
-        sidecars(root, root, &mut files);
-        files.sort();
+        let authored_root = ara_host::project_layout::authored_root(root);
+        let files = ara_host::project::authored_files(root, &schema)
+            .map_err(|e| e.to_string())?
+            .into_iter()
+            .filter(|file| {
+                file.scope == ara_host::project::AuthoredScope::Authored
+                    && file.role == ara_host::project::AuthoredRole::ImportSidecar
+            })
+            .map(|file| root.join(file.storage_path))
+            .collect::<Vec<_>>();
         // An older worker without the query keeps every recorded version.
         let installed = worker.versions_with_encoder_hint().unwrap_or_default();
         let mut sources = BTreeSet::new();
@@ -186,7 +186,7 @@ impl Assets {
                 .map_err(|e| e.to_string())?;
             let mut settings = sidecar.settings().map_err(|e| e.to_string())?;
             let rel = file
-                .strip_prefix(root)
+                .strip_prefix(&authored_root)
                 .map_err(|e| e.to_string())?
                 .to_string_lossy()
                 .replace('\\', "/");
@@ -282,7 +282,10 @@ impl Assets {
     ) -> Result<(), String> {
         let project_preset = imports
             .iter()
-            .find(|(path, _, _)| path == ara_asset::PROJECT_IMPORT_SETTINGS_FILE)
+            .find(|(path, _, _)| {
+                path == ara_asset::PROJECT_IMPORT_SETTINGS_FILE
+                    || path == ara_asset::LEGACY_PROJECT_IMPORT_SETTINGS_FILE
+            })
             .map(|(_, _, record)| {
                 serde_json::from_value::<ara_asset::ProjectImportSettings>(
                     serde_json::Value::Object(record.clone()),
@@ -299,7 +302,9 @@ impl Assets {
         self.progress_stale |= project_changed;
         let mut current = BTreeMap::new();
         for (path, id, record) in imports {
-            if path == ara_asset::PROJECT_IMPORT_SETTINGS_FILE {
+            if path == ara_asset::PROJECT_IMPORT_SETTINGS_FILE
+                || path == ara_asset::LEGACY_PROJECT_IMPORT_SETTINGS_FILE
+            {
                 continue;
             }
             let source = path
@@ -545,6 +550,7 @@ mod tests {
     fn project_quality_is_loaded_as_a_host_document_before_import_synchronization() {
         let root = tempfile::tempdir().expect("project");
         std::fs::write(root.path().join("ara.project.json"), "{}").expect("marker");
+        std::fs::create_dir_all(root.path().join("settings")).expect("settings");
         let policy = ara_asset::ProjectImportSettings {
             preset: ara_asset::CookPreset::HighQuality,
         };

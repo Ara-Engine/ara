@@ -8,6 +8,7 @@ mod fmt;
 pub mod hub;
 mod init;
 mod merge;
+pub mod project;
 pub mod protocol;
 mod resolve;
 mod schema;

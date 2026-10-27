@@ -150,11 +150,16 @@ fn commands_need_a_project_marker_and_skip_nested_projects() {
         fs::write(root.join(dir).join("bad.scene"), "{ not json").expect("write");
     }
     fs::write(root.join("inner/ara.project.json"), "{}").expect("marker");
-    let (code, out, _) = ara_in(&root.join("levels"), &["check", "--json"]);
+    let (code, out, _) = ara_in(
+        &root
+            .join(ara_host::project_layout::AUTHORING_ROOT)
+            .join("scenes"),
+        &["check", "--json"],
+    );
     let report = json_of(&out);
     assert_eq!(
         (code, report["files"].clone(), report["errors"].clone()),
-        (0, json!(2), json!(0)),
+        (0, json!(3), json!(0)),
         "{out}"
     );
 }
@@ -171,14 +176,20 @@ fn init_writes_the_project_template() {
         .iter()
         .filter_map(Value::as_str)
         .collect();
+    let starter = format!(
+        "{}/{}",
+        ara_host::project_layout::AUTHORING_ROOT,
+        ara_host::project_layout::MAIN_SCENE
+    );
     for f in [
         "ara.project.json",
+        ara_host::project_layout::PREFERENCES,
         ara_asset::PROJECT_IMPORT_SETTINGS_FILE,
         "AGENTS.md",
         ".gitattributes",
         ".gitignore",
         ".mcp.json",
-        "levels/main.scene",
+        starter.as_str(),
     ] {
         assert!(created.contains(&f), "{f} not created: {created:?}");
     }
@@ -224,7 +235,9 @@ fn init_writes_the_project_template() {
 fn protocol_commands_work_offline_and_keep_history_between_runs() {
     let root = scratch("offline");
     ara_in(&root, &["init"]);
-    let scene = root.join("levels/main.scene");
+    let scene = root
+        .join(ara_host::project_layout::AUTHORING_ROOT)
+        .join("scenes/main.scene");
     let empty = fs::read_to_string(&scene).expect("scene");
 
     let (code, out, err) = ara_in(
@@ -233,7 +246,7 @@ fn protocol_commands_work_offline_and_keep_history_between_runs() {
             "do",
             "entity.create",
             "--doc",
-            "levels/main.scene",
+            "scenes/main.scene",
             "-p",
             "name=Crate",
             "-p",
@@ -288,7 +301,7 @@ fn protocol_commands_work_offline_and_keep_history_between_runs() {
     );
     let (code, out, _) = ara_in(
         &root,
-        &["do", "entity.creat", "--doc", "levels/main.scene", "--json"],
+        &["do", "entity.creat", "--doc", "scenes/main.scene", "--json"],
     );
     assert_eq!(code, 1);
     let d = &json_of(&out)["diagnostics"][0];
@@ -543,7 +556,7 @@ fn mcp_without_a_daemon_becomes_one_and_serves_http_too() {
     let session = begun["session"].as_str().expect("session").to_owned();
     mcp.tool(
         "ara_apply",
-        json!({ "session": session, "doc": "levels/main.scene", "why": "first entity",
+        json!({ "session": session, "doc": "scenes/main.scene", "why": "first entity",
                 "commands": [{ "cmd": "entity.create", "args": { "name": "Probe" } }] }),
     );
 

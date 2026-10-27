@@ -890,6 +890,7 @@ dependencies = [
  "ara-crash",
  "ara-diag",
  "ara-export-installer",
+ "ara-host",
  "ara-json",
  "ara-pack",
  "ara-play",
@@ -904,12 +905,16 @@ dependencies = [
  "clap",
  "dunce",
  "flate2",
+ "image",
+ "pdb",
  "quick-xml",
  "roxmltree 0.21.1",
  "serde",
  "serde_json",
+ "sha2 0.10.9",
  "tar",
  "tempfile",
+ "windows-sys 0.61.2",
  "zip 2.6.1",
 ]
 
@@ -1014,6 +1019,7 @@ dependencies = [
 name = "ara-host"
 version = "0.0.1-alpha"
 dependencies = [
+ "ara-asset",
  "ara-cmd",
  "ara-collab",
  "ara-components",
@@ -1032,6 +1038,7 @@ dependencies = [
  "notify",
  "serde",
  "serde_json",
+ "toml",
  "tracing",
 ]
 

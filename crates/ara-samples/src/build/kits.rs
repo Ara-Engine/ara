@@ -1,6 +1,6 @@
 //! The generated kit pieces the samples share: shipping containers, the guard hut,
 //! the hangar shell, the radio mast, slabs, light panels, glass, cables, puddles and
-//! the road ribbon. Each writes a glTF under `assets/kit/` (see `crate::kit`) that
+//! the road ribbon. Each writes a glTF under `kit/` (see `crate::kit`) that
 //! textures itself with fetched CC0 sets; the build registers it like any model.
 use crate::{
     kit::{Kit, Material, meters},

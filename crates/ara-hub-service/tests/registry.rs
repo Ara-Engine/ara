@@ -53,7 +53,12 @@ fn new_templates_get_balanced_import_policy_and_authored_policy_is_preserved() {
     }
     .canonical_text()
     .expect("canonical");
+    fs::create_dir_all(custom.join("settings")).expect("settings");
     fs::write(custom.join(PROJECT_IMPORT_SETTINGS_FILE), &text).expect("policy");
+    fs::create_dir_all(custom.join("settings/builds")).expect("build presets");
+    fs::write(custom.join("settings/builds/windows.export.json"),"{\"platform\":\"windows\",\"assembly\":\"Custom\",\"content\":\"content\",\"templates\":[]}").expect("authored preset");
+    fs::create_dir_all(custom.join("builds/old")).expect("old output");
+    fs::write(custom.join("builds/old/player.exe"), "output").expect("output");
     let project = root.join("project");
     fs::create_dir_all(&project).expect("project");
     templates
@@ -63,6 +68,12 @@ fn new_templates_get_balanced_import_policy_and_authored_policy_is_preserved() {
         fs::read_to_string(project.join(PROJECT_IMPORT_SETTINGS_FILE)).expect("copy"),
         text
     );
+    assert!(
+        fs::read_to_string(project.join("settings/builds/windows.export.json"))
+            .expect("preset")
+            .contains("Custom")
+    );
+    assert!(!project.join("builds/old/player.exe").exists());
     fs::remove_dir_all(root).expect("scratch cleanup");
 }
 fn config(directory: &Path) -> HubConfig {
@@ -329,7 +340,13 @@ fn canonical_registry_survives_restart_and_pins_the_project() {
         .filter(|(_, doc)| doc.kind == "scene")
         .map(|(path, _)| path)
         .collect();
-    assert_eq!(scenes, ["levels/main.scene"]);
+    assert_eq!(
+        scenes,
+        [format!(
+            "{}/scenes/main.scene",
+            ara_hub_service::AUTHORING_ROOT
+        )]
+    );
     drop(host);
     hub.call(
         "hub.update",
@@ -379,7 +396,15 @@ fn template_directory_copies_sources_and_excludes_machine_state() {
     fs::create_dir(&destination).expect("destination");
     source.instantiate("sample", &destination).expect("copy");
     assert!(destination.join("lesson.txt").is_file());
-    assert!(!destination.join(".ara").exists());
+    assert!(
+        !destination.join(".ara/token").exists(),
+        "template credentials must never be copied"
+    );
+    assert!(
+        fs::read_dir(destination.join(".ara"))
+            .expect("migration state")
+            .all(|entry| entry.expect("state entry").file_name() == "lock")
+    );
     assert!(source.instantiate("../sample", &destination).is_err());
 }
 
@@ -503,7 +528,8 @@ fn templates_read_their_marker_and_report_unfetched_sample_art() {
     source.instantiate("outpost", &destination).expect("copy");
     assert!(
         destination
-            .join("assets/third_party/barrel/barrel.bin")
+            .join(ara_hub_service::AUTHORING_ROOT)
+            .join("third_party/barrel/barrel.bin")
             .is_file()
     );
     assert!(!destination.join("evidence").exists());
@@ -605,8 +631,18 @@ fn missing_generated_kits_block_creation_even_after_third_party_art_is_fetched()
         json!({"template":"outpost","name":"Created","path":destination}),
     )
     .expect("complete generated kits");
-    assert!(destination.join("assets/kit/mesh.bin").is_file());
-    assert!(destination.join("assets/kit/palette.png").is_file());
+    assert!(
+        destination
+            .join(ara_hub_service::AUTHORING_ROOT)
+            .join("kit/mesh.bin")
+            .is_file()
+    );
+    assert!(
+        destination
+            .join(ara_hub_service::AUTHORING_ROOT)
+            .join("kit/palette.png")
+            .is_file()
+    );
 }
 
 #[test]

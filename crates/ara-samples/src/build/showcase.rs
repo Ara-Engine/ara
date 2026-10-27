@@ -86,7 +86,7 @@ fn balls() -> Vec<(&'static str, Material, f32)> {
 }
 
 /// Writes the stage, plinth and material balls and returns `(model name, glTF path)`.
-/// Only ignored `assets/kit/` files change.
+/// Only ignored `kit/` files change.
 fn kits(root: &Path, lock: &Lock) -> Result<Vec<(String, String)>> {
     let mut stage = Kit::new(vec![
         Material::textured("floor", "concrete_floor_02").tinted([0.32, 0.31, 0.3]),
@@ -124,7 +124,7 @@ fn kits(root: &Path, lock: &Lock) -> Result<Vec<(String, String)>> {
     Ok(written)
 }
 
-/// Writes every generated, git-ignored showcase file (`assets/kit/`) without
+/// Writes every generated, git-ignored showcase file (`kit/`) without
 /// authoring a document; see `outpost::generate`.
 pub fn generate(root: &Path, lock: &Lock) -> Result<()> {
     super::outpost::suit(root, lock)?;
@@ -134,17 +134,7 @@ pub fn generate(root: &Path, lock: &Lock) -> Result<()> {
 
 /// Builds the showcase project.
 pub fn build(ctx: &Ctx) -> Result<()> {
-    clean(
-        ctx,
-        &[
-            "levels",
-            "anim",
-            "prefabs",
-            "materials",
-            "assets/kit",
-            ".scratch",
-        ],
-    )?;
+    clean(ctx, &["levels", "anim", "prefabs", "materials", "kit"])?;
     let mut models = Models::default();
     for (name, asset) in [
         ("flight_helmet", "khronos_flight_helmet"),

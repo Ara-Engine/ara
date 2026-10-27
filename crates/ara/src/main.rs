@@ -63,6 +63,7 @@ enum Command {
     },
     /// Create a project: ara.project.json, AGENTS.md, .gitattributes, .gitignore,
     /// .mcp.json and a starter scene.
+    #[command(visible_alias = "new")]
     Init {
         /// Directory (default: the current one).
         dir: Option<PathBuf>,
@@ -72,6 +73,11 @@ enum Command {
         /// Configure the repository's merge driver even for a nested project.
         #[arg(long)]
         configure_git: bool,
+    },
+    /// Inspect or migrate the project's on-disk layout.
+    Project {
+        #[command(subcommand)]
+        command: ProjectCommand,
     },
     /// Rewrite documents in canonical form, repairing references.
     Fmt {
@@ -383,6 +389,19 @@ fn protocol_call(command: Command) -> Option<Result<Call, Vec<Diagnostic>>> {
 }
 
 #[derive(Subcommand)]
+enum ProjectCommand {
+    /// Unify authored files and migrate legacy references, settings and module manifests.
+    Migrate {
+        /// Preview all moves and reference rewrites without writing anything.
+        #[arg(long)]
+        dry_run: bool,
+        /// Destination for old evidence/tests/helpers (default: sibling <project>-support).
+        #[arg(long)]
+        support_dir: Option<PathBuf>,
+    },
+}
+
+#[derive(Subcommand)]
 enum ProfileCommand {
     /// Compare saved JSON summaries; exit 1 for regressions or incomplete evidence.
     Compare {
@@ -432,6 +451,18 @@ fn run(cli: Cli) -> Result<bool, Diagnostic> {
             name,
             configure_git,
         } => commands::init(dir.as_deref(), name.as_deref(), configure_git, json).map_err(io),
+        Command::Project {
+            command:
+                ProjectCommand::Migrate {
+                    dry_run,
+                    support_dir,
+                },
+        } => commands::project::migrate(
+            &project::root(root_flag, &[])?,
+            support_dir.as_deref(),
+            dry_run,
+            json,
+        ),
         Command::Fmt { check, files } => {
             commands::fmt(&open(&files)?, &files, check, json).map_err(io)
         }

@@ -13,7 +13,8 @@ Renderer capture, semantic queries and real engine input hooks remain seams.
 Run `cargo test -p ara-export-player`, `cargo clippy -p ara-export-player --all-targets`.
 Build with CARGO_BUILD_JOBS=2. Cross builds require target linker environment.
 
-Desktop entry calls ara_crash::monitor_from_args before app initialization, then
+Desktop entry locates its sibling `data/` (legacy flat pins remain readable), calls
+ara_crash::monitor_from_args before app initialization, then
 shipping::start before loading C#. The guard owns and reaps the monitor process.
 Crash config is build-scoped; storage uses LOCALAPPDATA/XDG_STATE_HOME, overridable
 with ARA_CRASH_DIR for tests. Neither capture nor startup transmits anything.

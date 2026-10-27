@@ -12,6 +12,7 @@ ara-pack = { path = "../ara-pack" }
 ara-asset = { path = "../ara-asset" }
 ara-play = { path = "../ara-play" }
 ara-play-host = { path = "../ara-play-host" }
+ara-host.workspace = true
 ara-bridge = { path = "../ara-bridge" }
 ara-diag.workspace = true
 ara-json = { path = "../ara-json" }
@@ -22,6 +23,9 @@ anyhow = { workspace = true }
 blake3 = { workspace = true, features = ["std", "pure"] }
 clap = { workspace = true, features = ["derive"] }
 ciborium.workspace = true
+image = { workspace = true, features = ["ico", "png"] }
+pdb = "0.8"
+sha2.workspace = true
 dunce = "1.0.5"
 quick-xml = "0.38.4"
 roxmltree = { workspace = true }
@@ -31,6 +35,9 @@ zip = { workspace = true, features = ["deflate"] }
 tar = "0.4"
 flate2 = "1.1"
 backhand = { version = "0.25.5", default-features = false, features = ["gzip", "error-strings"] }
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { workspace = true, features = ["Win32_Foundation", "Win32_System_LibraryLoader"] }
 
 [dev-dependencies]
 tempfile = { workspace = true }

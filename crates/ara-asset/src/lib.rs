@@ -24,7 +24,9 @@ pub use importer::{
 };
 pub use metrics::{ImportMetrics, ImportStage, StageTimer, StageTimes};
 pub use preset::{CookPreset, DEFAULT_THREAD_BUDGET};
-pub use project_settings::{PROJECT_IMPORT_SETTINGS_FILE, ProjectImportSettings};
+pub use project_settings::{
+    LEGACY_PROJECT_IMPORT_SETTINGS_FILE, PROJECT_IMPORT_SETTINGS_FILE, ProjectImportSettings,
+};
 pub use sidecar::{ImportSettings, Sidecar, SidecarCommand, VersionCheck, register_schema};
 pub use source::{AssetPipeline, SourceAsset, snapshot};
 pub use trace::event as record_import_trace;

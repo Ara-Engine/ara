@@ -1,6 +1,6 @@
 //! `samples/assets.lock.json`: every third-party file the sample projects use, pinned by
 //! URL, size and BLAKE3, with its license and attribution. Binaries never enter git;
-//! `fetch` materializes them under `<project>/assets/third_party/<asset>/`.
+//! `fetch` materializes them under `<authored-root>/third_party/<asset>/`.
 use anyhow::{Context, Result, ensure};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
@@ -39,7 +39,7 @@ pub enum Kind {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Asset {
-    /// Folder name under `assets/third_party/`; unique across the lock.
+    /// Folder name under `third_party/`; unique across the lock.
     pub id: String,
     /// Display title, as the source names it.
     pub title: String,
@@ -142,12 +142,12 @@ impl Lock {
 impl Asset {
     /// The asset folder inside a project.
     pub fn dir(&self, project: &Path) -> PathBuf {
-        project.join("assets/third_party").join(&self.id)
+        crate::authored_path(project, "third_party").join(&self.id)
     }
 
-    /// The project-relative path of one of its files (`assets/third_party/<id>/<path>`).
+    /// The authored-root-relative path of one of its files (`third_party/<id>/<path>`).
     pub fn relative(&self, file: &str) -> String {
-        format!("assets/third_party/{}/{file}", self.id)
+        format!("third_party/{}/{file}", self.id)
     }
 
     /// The first file with this extension (the model or HDR entry point).

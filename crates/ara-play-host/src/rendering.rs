@@ -5,15 +5,7 @@ use ara_play::RenderSettings;
 /// The pool opens its logical device before a PlayScene is transferred. Read
 /// only this small project policy when creating the pool, ahead of GPU warm-up.
 pub(crate) fn project(root: &std::path::Path) -> Result<RenderSettings, String> {
-    let bytes = match std::fs::read(root.join("ara.project.json")) {
-        Ok(bytes) => bytes,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-            return Ok(RenderSettings::default());
-        }
-        Err(error) => return Err(error.to_string()),
-    };
-    let project: serde_json::Value =
-        serde_json::from_slice(&bytes).map_err(|error| error.to_string())?;
+    let project = ara_host::project_layout::preferences(root).map_err(|error| error.to_string())?;
     project.get("rendering").map_or_else(
         || Ok(RenderSettings::default()),
         |settings| {
@@ -24,18 +16,13 @@ pub(crate) fn project(root: &std::path::Path) -> Result<RenderSettings, String> 
 }
 
 pub(crate) fn read(workspace: &Workspace) -> Result<RenderSettings, String> {
-    workspace
-        .doc("pj_project")
-        .and_then(|doc| doc.record("p_settings"))
-        .and_then(|record| record.get("settings"))
-        .and_then(|settings| settings.get("rendering"))
-        .map_or_else(
-            || Ok(RenderSettings::default()),
-            |value| {
-                serde_json::from_value(value.to_owned())
-                    .map_err(|error| format!("project rendering settings: {error}"))
-            },
-        )
+    ara_host::project_layout::policy(workspace, "rendering").map_or_else(
+        || Ok(RenderSettings::default()),
+        |value| {
+            serde_json::from_value(value.to_owned())
+                .map_err(|error| format!("project rendering settings: {error}"))
+        },
+    )
 }
 
 #[cfg(test)]

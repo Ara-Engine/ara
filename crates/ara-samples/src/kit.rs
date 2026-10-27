@@ -2,7 +2,7 @@
 //! light panels and material balls, written as glTF that references the fetched CC0
 //! texture sets (`../third_party/<set>/…`). UVs are in texture repeats, derived from
 //! the real-world size each texture covers, so texel density matches across pieces.
-//! Kits are deterministic and written by `build` into the ignored `assets/kit/`.
+//! Kits are deterministic and written by `build` into the ignored `kit/`.
 use crate::lock::{Asset, Lock};
 use anyhow::{Context, Result, ensure};
 use glam::{Mat3, Mat4, Vec2, Vec3};
@@ -347,10 +347,10 @@ impl Kit {
         }
     }
 
-    /// Writes `<project>/assets/kit/<name>.gltf` (+ `.bin`), resolving texture sets
-    /// against the lock. Returns the project-relative glTF path.
+    /// Writes `<authored-root>/kit/<name>.gltf` (+ `.bin`), resolving texture sets
+    /// against the lock. Returns the authored-root-relative glTF path.
     pub fn write(&self, project: &Path, lock: &Lock, name: &str) -> Result<String> {
-        let dir = project.join("assets/kit");
+        let dir = crate::authored_path(project, "kit");
         std::fs::create_dir_all(&dir)?;
         let mut bin: Vec<u8> = Vec::new();
         let mut views = Vec::new();
@@ -487,7 +487,7 @@ impl Kit {
             dir.join(format!("{name}.gltf")),
             ara_json::to_canonical_string(&gltf),
         )?;
-        Ok(format!("assets/kit/{name}.gltf"))
+        Ok(format!("kit/{name}.gltf"))
     }
 }
 
@@ -557,7 +557,7 @@ fn split_glb(bytes: &[u8]) -> Result<(Value, Option<Vec<u8>>)> {
     Ok((doc, bin))
 }
 
-/// Writes `assets/kit/<name>.png`: an image embedded in a fetched GLB (by image
+/// Writes `kit/<name>.png`: an image embedded in a fetched GLB (by image
 /// name), its colours replaced by luminance x `tint`. Recolours a palette-textured
 /// model without touching its UVs.
 pub fn recolor(
@@ -598,7 +598,7 @@ pub fn recolor(
         }
     }
     let out = format!("{name}.png");
-    let dir = project.join("assets/kit");
+    let dir = crate::authored_path(project, "kit");
     std::fs::create_dir_all(&dir)?;
     rgba.save(dir.join(&out))?;
     Ok(out)

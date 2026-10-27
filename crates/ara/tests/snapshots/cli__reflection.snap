@@ -3386,7 +3386,7 @@ expression: out
       "fields": {
         "preset": {
           "type": "option<CookPreset>",
-          "doc": "Texture encoding quality override. Omit this field to inherit the project preset in ara.imports; Balanced is the default for new projects.",
+          "doc": "Texture encoding quality override. Omit this field to inherit the project preset in settings/ara.imports; Balanced is the default for new projects.",
           "default": null,
           "options": [
             "balanced",
@@ -6334,7 +6334,7 @@ expression: out
     },
     "ProjectSettings": {
       "kind": "record",
-      "doc": "Project marker represented as a record so project changes share history and undo.",
+      "doc": "Project metadata and policy represented as records so changes share history and undo.",
       "module": "core",
       "prefix": "p",
       "fields": {
@@ -8618,7 +8618,7 @@ expression: out
       "singleRoot": true
     },
     "project": {
-      "doc": "Project startup and plugin settings; persisted as ara.project.json.",
+      "doc": "Project metadata in ara.project.json and policy in settings/project.json.",
       "schema": "ara://schema/project/1",
       "idPrefix": "pj",
       "extension": "project.json",

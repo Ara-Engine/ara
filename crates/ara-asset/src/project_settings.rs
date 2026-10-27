@@ -6,7 +6,9 @@ use serde::{Deserialize, Serialize};
 use std::path::Path;
 
 /// Project import policy document, editable through the inspector and typed commands.
-pub const PROJECT_IMPORT_SETTINGS_FILE: &str = "ara.imports";
+pub const PROJECT_IMPORT_SETTINGS_FILE: &str = "settings/ara.imports";
+/// Pre-layout project policy; accepted until `ara project migrate` relocates it.
+pub const LEGACY_PROJECT_IMPORT_SETTINGS_FILE: &str = "ara.imports";
 
 /// Defaults inherited by import sidecars which do not specify a preset.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Schema, Serialize, Deserialize)]
@@ -21,7 +23,12 @@ pub struct ProjectImportSettings {
 impl ProjectImportSettings {
     /// Reads the typed project policy; older projects inherit Balanced when absent.
     pub fn read(root: &Path, db: &SchemaDb) -> Result<Self> {
-        let text = match std::fs::read_to_string(root.join(PROJECT_IMPORT_SETTINGS_FILE)) {
+        let path = if root.join(PROJECT_IMPORT_SETTINGS_FILE).is_file() {
+            PROJECT_IMPORT_SETTINGS_FILE
+        } else {
+            LEGACY_PROJECT_IMPORT_SETTINGS_FILE
+        };
+        let text = match std::fs::read_to_string(root.join(path)) {
             Ok(text) => text,
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
                 return Ok(Self::default());

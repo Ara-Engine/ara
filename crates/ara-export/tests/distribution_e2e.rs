@@ -23,11 +23,17 @@ fn wait(child: &mut std::process::Child) -> std::process::ExitStatus {
 }
 fn assert_packages_exclude_private_artifacts(path: &Path) {
     let entries = ara_export::android::zip_entries(path).unwrap();
-    assert!(entries.contains_key("ara-player.exe"));
+    assert!(
+        entries
+            .keys()
+            .any(|name| !name.contains('/') && name.ends_with(".exe"))
+    );
+    assert!(entries.contains_key("data/ara-launch.json"));
     assert!(entries.keys().all(|p| !p.contains("symbols/")
         && !p.ends_with(".pdb")
         && !p.ends_with(".log")
-        && !p.ends_with(".dmp")));
+        && !p.ends_with(".dmp")
+        && !p.split('/').any(|part| part.starts_with("verify."))));
 }
 
 #[test]
@@ -85,7 +91,16 @@ fn packages_fox_content_and_symbolizes_exported_player_crashes() {
             }
         }
         assert!(summary.verify.passed);
-        assert!(request.output.join("build/game.arapack").is_file());
+        assert!(
+            request
+                .output
+                .join(if base == "android" {
+                    "build/game.arapack"
+                } else {
+                    "build/data/game.arapack"
+                })
+                .is_file()
+        );
         let manifest: ara_export::distribution::DistributionManifest = serde_json::from_slice(
             &std::fs::read(request.output.join("distribution.json")).unwrap(),
         )
@@ -133,7 +148,7 @@ fn packages_fox_content_and_symbolizes_exported_player_crashes() {
                 .spawn()
                 .unwrap();
             assert!(wait(&mut installer).success());
-            assert!(installation.join("ara-player.exe").is_file());
+            assert!(installation.join(&manifest.entry_point).is_file());
             assert!(!installation.join("symbols").exists());
         }
         println!(
@@ -143,13 +158,15 @@ fn packages_fox_content_and_symbolizes_exported_player_crashes() {
         reports.push(serde_json::to_value(summary).unwrap());
     }
     let (windows, build_id) = windows.unwrap();
+    let manifest: ara_export::distribution::DistributionManifest =
+        serde_json::from_slice(&std::fs::read(windows.join("distribution.json")).unwrap()).unwrap();
     let mut crashes = Vec::new();
     std::fs::create_dir_all(root.join("crashes")).unwrap();
     for mode in ["native", "panic", "managed"] {
         let directory = root.join("crashes").join(mode);
         std::fs::create_dir(&directory).unwrap();
         let log = std::fs::File::create(directory.join("process.log")).unwrap();
-        let mut child = Command::new(windows.join("build/ara-player.exe"))
+        let mut child = Command::new(windows.join("build").join(&manifest.entry_point))
             .args(["--headless", "--crash-probe", mode])
             .env("ARA_CRASH_DIR", &directory)
             .stdin(Stdio::null())

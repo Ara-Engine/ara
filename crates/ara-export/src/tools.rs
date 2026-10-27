@@ -293,3 +293,9 @@ pub fn project_path(root: &Path, relative: &str) -> Result<PathBuf> {
     }
     Ok(path)
 }
+
+/// Resolves an authored asset against the shared project layout; legacy projects
+/// retain their project-relative asset paths. Artifact pins use `project_path`.
+pub fn authored_path(root: &Path, relative: &str) -> Result<PathBuf> {
+    project_path(&ara_host::project_layout::authored_root(root), relative)
+}

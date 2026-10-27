@@ -107,14 +107,16 @@ impl TemplateSource for DirectoryTemplates {
     }
     fn instantiate(&self, template: &str, destination: &Path) -> Result<(), RpcError> {
         if template == "blank" {
-            fs::create_dir(destination.join("levels")).map_err(io_error)?;
-            fs::write(destination.join(".gitignore"), ".ara/\n").map_err(io_error)?;
+            ara_host::project_layout::write_support_files(destination, "New project")
+                .map_err(io_error)?;
             write_json(
                 &destination.join("ara.project.json"),
-                &json!({"name":"New project","main":"levels/main.scene"}),
+                &json!({"name":"New project","main":ara_host::project_layout::MAIN_SCENE,"layoutVersion":ara_host::project_layout::VERSION}),
             )?;
             write_json(
-                &destination.join("levels/main.scene"),
+                &destination
+                    .join(ara_host::project_layout::AUTHORING_ROOT)
+                    .join(ara_host::project_layout::MAIN_SCENE),
                 &json!({"$schema":"ara://schema/scene/1","id":"sc_main001","records":{}}),
             )?;
             write_import_defaults(destination)?;
@@ -129,6 +131,11 @@ impl TemplateSource for DirectoryTemplates {
             return Err(error);
         }
         copy_tree(&self.0.join(template), destination)?;
+        ara_host::project_layout::Migration::plan(destination, None)
+            .and_then(|plan| plan.apply())
+            .map_err(RpcError::from)?;
+        ara_host::project_layout::write_support_files(destination, "New project")
+            .map_err(io_error)?;
         write_import_defaults(destination)
     }
 }
@@ -136,6 +143,9 @@ impl TemplateSource for DirectoryTemplates {
 fn write_import_defaults(destination: &Path) -> Result<(), RpcError> {
     let path = destination.join(ara_asset::PROJECT_IMPORT_SETTINGS_FILE);
     if !path.exists() {
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent).map_err(io_error)?;
+        }
         let text = ara_asset::ProjectImportSettings::default()
             .canonical_text()
             .map_err(|error| invalid(error.to_string()))?;
@@ -166,7 +176,20 @@ fn describe(
         .and_then(|main| Path::new(main).file_stem())
         .map(|stem| stem.to_string_lossy().into_owned());
     let thumbnail = std::iter::once(root.join("thumbnail.png"))
-        .chain(main.map(|stem| root.join("evidence").join(format!("{stem}-player.png"))))
+        .chain(
+            main.as_ref()
+                .map(|stem| root.join("evidence").join(format!("{stem}-player.png"))),
+        )
+        .chain(
+            root.parent()
+                .and_then(Path::parent)
+                .zip(main)
+                .map(|(repo, stem)| {
+                    repo.join("evidence/samples")
+                        .join(id)
+                        .join(format!("{stem}-player.png"))
+                }),
+        )
         .find(|path| path.is_file());
     let name = text("name").unwrap_or_else(|| id.to_owned());
     // The samples lock identifies Ara sample templates; arbitrary custom
@@ -215,9 +238,13 @@ impl Lock {
             .filter(|asset| asset.projects.iter().any(|p| p == id))
             .flat_map(|asset| {
                 asset.files.iter().map(move |file| {
-                    root.join("assets/third_party")
-                        .join(&asset.id)
-                        .join(&file.path)
+                    let authored = ara_host::project_layout::authored_root(root);
+                    let media = if authored == root {
+                        authored.join("assets/third_party")
+                    } else {
+                        authored.join("third_party")
+                    };
+                    media.join(&asset.id).join(&file.path)
                 })
             })
             .collect();
@@ -284,9 +311,19 @@ fn copy_tree(source: &Path, destination: &Path) -> Result<(), RpcError> {
     for entry in fs::read_dir(source).map_err(io_error)? {
         let entry = entry.map_err(io_error)?;
         // Machine state and capture output never become part of a new project.
-        if [".ara", ".git", "target", "evidence"]
-            .iter()
-            .any(|n| entry.file_name() == *n)
+        if [
+            ".ara",
+            ".git",
+            "target",
+            "evidence",
+            "tests",
+            "export.ps1",
+            "windows-build.toml",
+        ]
+        .iter()
+        .any(|n| entry.file_name() == *n)
+            || (source.join("ara.project.json").is_file()
+                && (entry.file_name() == "builds" || entry.file_name() == "packages"))
         {
             continue;
         }

@@ -376,6 +376,50 @@ fn source_items(source: &Path, module: &Path, roots: &[PathBuf]) -> String {
 mod source_tests {
     use super::*;
     #[test]
+    fn authored_gameplay_modules_ship_while_editor_packages_and_settings_stay_out() -> Result<()> {
+        let target =
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/export-module-layout");
+        std::fs::create_dir_all(&target)?;
+        let root = tempfile::tempdir_in(target)?;
+        tools::write_json(
+            &root.path().join("ara.project.json"),
+            &serde_json::json!({"layoutVersion":ara_host::project_layout::VERSION,"name":"Shipping layout"}),
+        )?;
+        let authored = root.path().join(ara_host::project_layout::AUTHORING_ROOT);
+        for (directory, manifest) in [
+            (
+                authored.join("scripts/Gameplay"),
+                "[module]\nname = 'Gameplay'\n",
+            ),
+            (
+                authored.join("scripts/editor/Tools"),
+                "[module]\nname = 'Tools'\nprofile = 'editor'\n",
+            ),
+            (
+                root.path().join("packages/Unloaded"),
+                "this must never be parsed as a gameplay module",
+            ),
+            (
+                root.path().join("settings/Unloaded"),
+                "this must never be parsed as a gameplay module",
+            ),
+        ] {
+            std::fs::create_dir_all(&directory)?;
+            std::fs::write(directory.join("ara.module.toml"), manifest)?;
+        }
+        let modules = modules(root.path())?;
+        assert_eq!(
+            modules
+                .iter()
+                .map(|module| module.name.as_str())
+                .collect::<Vec<_>>(),
+            ["Gameplay"]
+        );
+        assert_eq!(modules[0].dir, authored.join("scripts/Gameplay"));
+        Ok(())
+    }
+
+    #[test]
     fn shipping_sources_exclude_nested_modules_and_generated_code() {
         let module = Path::new("/game");
         let roots = vec![module.to_owned(), module.join("Gameplay")];

@@ -561,7 +561,13 @@ fn global_mcp_edits_two_isolated_daemons_and_closes_one() {
         "open"
     );
     let scene: Value = serde_json::from_slice(
-        &fs::read(hub.directory.join("A/levels/main.scene")).expect("saved A"),
+        &fs::read(
+            hub.directory
+                .join("A")
+                .join(ara_host::project_layout::AUTHORING_ROOT)
+                .join("scenes/main.scene"),
+        )
+        .expect("saved A"),
     )
     .expect("scene");
     assert!(scene.to_string().contains("Only A"));

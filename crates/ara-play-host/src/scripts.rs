@@ -58,6 +58,7 @@ pub fn modules(root: &Path) -> Vec<PathBuf> {
                 || name.starts_with('.')
                 || [
                     "target",
+                    "builds",
                     "bin",
                     "obj",
                     "artifacts",

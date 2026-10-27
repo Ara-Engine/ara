@@ -9,7 +9,8 @@ it runs (`.ara/daemon.json`), else an in-process `ara_host::Host`.
 | Command | Does | Exit 1 when |
 |---|---|---|
 | `ara doctor` | Project-free .NET 10 SDK/runtime and bundled shader tool checks, with download fixes | a prerequisite is missing |
-| `ara init [dir] [--name n] [--configure-git]` | `ara.project.json` (`name`, `main` scene), `AGENTS.md` (conventions), `.gitattributes` (merge driver), `.gitignore` (`.ara/`), `.mcp.json`, `levels/main.scene`; see driver setup below | the project exists (ARA1902) |
+| `ara new [dir] [--name n] [--configure-git]` | `ara.project.json` (`name`, `main` scene), `AGENTS.md` (conventions), `.gitattributes` (merge driver), `.gitignore` (`.ara/`, `/builds/`), `.mcp.json`, `content/scenes/main.scene`; see driver setup below | the project exists (ARA1902) |
+| `ara project migrate [--dry-run] [--support-dir dir]` | preview or apply legacy content/settings migration, preserving IDs, references and journal history | collisions or an open project |
 | `ara fmt [--check] <files>` | canonical rewrite, repairing `@path#id` references | `--check` and a file would change; a file has errors |
 | `ara check [--fix] [files]` | schema, reference, structure and prefab checks (all documents by default); `--fix` first applies every diagnostic with exactly one `rename`/`set`/`remove` fix | any error |
 | `ara schema [names..] [--out dir]` | Schema DB summary; names: each one's doc page (fields, units, defaults); `--json` = `reflection.json`; `--out` writes JSON Schemas | project types are invalid; unknown name |

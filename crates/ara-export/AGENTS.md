@@ -22,7 +22,7 @@ Commands run out of process, below normal priority on Windows, with timeouts.
 Only C# and explicitly declared native plugins compile during an export.
 Runtime pins use `scripts::prepare`: project `ara.module.toml` gameplay modules,
 dependency graph, SDK generators/analyzers, then one NativeAOT `ara_script_init`
-image. `game/scripts.json` carries ABI/layout identity and the linked inventory.
+image. `data/game/scripts.json` carries ABI/layout identity and the linked inventory.
 `ara-export scripts --rid RID` (`scripts::build`) builds just that image and manifest,
 for hosts without an export lane yet (osx-arm64 players; docs/dev/macos.md).
 `ARA_DOTNET_SDK` selects SDK sources; `ARA_DOTNET_ARTIFACTS` selects prebuilt tools.
@@ -37,7 +37,9 @@ A Mac exports macOS itself: an ad-hoc signed `.app` (`src/macos.rs`; README "mac
 on a Mac"); iOS and other hosts use the documented SSH agent seam; no fake builds.
 See README.md for template bootstrapping, integration and Apple handoff.
 
-V2 outputs `build/`, `distribution.json`, packages and private `symbols/<build-id>`.
+Exports output `build/<Game>.exe` (Linux: `<Game>`), one `build/data/` and notices;
+macOS uses `<Game>.app` with `Contents/Resources` as its data root.
+`distribution.json`, packages, `report/`, logs and `symbols/<build-id>` sit outside `build/`.
 Never package symbols, verification logs or crash artifacts with the player.
 Windows pins require a matching PDB pin; ELF pins must retain DWARF until export.
 `ara-crash` converts symbols and strips deployed ELF files through diagnosed LLVM
@@ -45,7 +47,12 @@ objcopy. The current CLI is ara-export; the CLI owner wires `ara crash symbolize
 to ara_crash::symbols::symbolize and registers ara_crash::why::CrashExplainer.
 Managed capture is injected at compile time via a project-local MSBuild import,
 without modifying the game project or any host ABI. No upload runs automatically.
-Icon defaults: shipped Windows players retain their embedded game ICO; AppImage
-`ara-game.svg` and `.DirIcon` use `assets/brand/icons/game/ara-game.svg`. There is
-no export-preset icon path yet; runtime projects can use `Window::set_icon`.
+Preset `name` defaults to the project name; `version` stamps Windows resources and
+macOS bundle metadata. `icon` is an authored-root-relative ICO/ICNS/SVG on Windows/macOS/Linux.
+Without it players retain the engine's game icon. Branding precedes code signing.
+Named presets resolve from `settings/builds/`; derived export data uses `.ara/export-cache`.
+`preflight::runtime` checks installed companions, player/PDB GUID+age and complete
+cooked manifests/binaries/reflections before packaging; existing shader hashes are checked.
+`ARA-EXP-PREFLIGHT-001` offers `ara hub repair <version>` for an installed cohort;
+projects using that version must close first. Pinned ZIPs get the same resource preflight.
 Delivery formats are generic. No store SDKs, service settings or upload layouts.

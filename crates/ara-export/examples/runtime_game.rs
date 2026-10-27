@@ -43,7 +43,7 @@ fn main() -> Result<()> {
     let preset: ExportPreset = serde_json::from_value(serde_json::json!({
         "platform":platform,"config":"dev","lane":"nativeAot",
         "playerTemplate":"runtime","scriptProject":"","assembly":"AraGame",
-        "content":"assets","templates":[template]
+        "content":ara_host::project_layout::AUTHORING_ROOT,"templates":[template]
     }))?;
     preset.validate()?;
     let mut events = ara_export::event::Ndjson(std::io::stdout().lock());

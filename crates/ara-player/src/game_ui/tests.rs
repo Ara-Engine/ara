@@ -65,9 +65,9 @@ fn project_fonts_keep_bundled_body_fallbacks() -> Result<()> {
 #[test]
 fn outpost_native_menu_and_settings_controls_layout_activate_and_resize() -> Result<()> {
     let source: GameUi = serde_json::from_value(serde_json::json!({
-        "markup":include_str!(concat!(env!("CARGO_MANIFEST_DIR"),"/../../samples/outpost/ui/game.ui")),
-        "stylesheet":include_str!(concat!(env!("CARGO_MANIFEST_DIR"),"/../../samples/outpost/ui/game.css")),
-        "bindings":serde_json::from_str::<Value>(include_str!(concat!(env!("CARGO_MANIFEST_DIR"),"/../../samples/outpost/ui/bindings.json")))?
+        "markup":include_str!(concat!(env!("CARGO_MANIFEST_DIR"),"/../../samples/outpost/game/ui/game.ui")),
+        "stylesheet":include_str!(concat!(env!("CARGO_MANIFEST_DIR"),"/../../samples/outpost/game/ui/game.css")),
+        "bindings":serde_json::from_str::<Value>(include_str!(concat!(env!("CARGO_MANIFEST_DIR"),"/../../samples/outpost/game/ui/bindings.json")))?
     }))?;
     let mut surface = Surface::plain(&source, [1280, 720])?;
     surface.screen(Screen::Main)?;

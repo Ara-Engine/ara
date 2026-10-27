@@ -207,6 +207,16 @@ pub struct NativePlugin {
 pub struct ExportPreset {
     /// Destination OS.
     pub platform: Platform,
+    /// Shipped application name; defaults to the project name, then the assembly.
+    #[serde(default)]
+    pub name: Option<String>,
+    /// Authored-root-relative game icon: ICO on Windows, ICNS on macOS, SVG on Linux.
+    #[serde(default)]
+    pub icon: Option<String>,
+    /// Human-readable application version, with up to four numeric components.
+    #[serde(default = "default_application_version")]
+    #[ara(default = "1.0.0")]
+    pub version: String,
     /// Runtime configuration; release disables the observability server.
     #[serde(default)]
     #[ara(default = "release")]
@@ -215,7 +225,7 @@ pub struct ExportPreset {
     #[serde(default)]
     #[ara(default = "nativeAot")]
     pub lane: ScriptLane,
-    /// Project-relative S7 conformance project; runtime exports generate their own
+    /// Authored-root-relative S7 conformance project; runtime exports generate their own
     /// NativeAOT entry from `ara.module.toml` modules and may omit this field.
     #[serde(default)]
     #[ara(default = "")]
@@ -285,6 +295,9 @@ pub struct ExportPreset {
 }
 fn default_chunk() -> u32 {
     1048576
+}
+fn default_application_version() -> String {
+    "1.0.0".into()
 }
 fn default_package() -> String {
     "dev.ara.game".into()
@@ -367,6 +380,25 @@ impl ExportPreset {
     /// `validate`, requiring one pinned template per architecture when `pinned`.
     fn check(&self, pinned: bool) -> Result<()> {
         self.crash.validate()?;
+        if let Some(name) = &self.name {
+            crate::layout::validate_name(name)?;
+        }
+        crate::layout::version_parts(&self.version)?;
+        if let Some(icon) = &self.icon {
+            ara_pack::validate_path(icon)?;
+            let expected = match self.platform {
+                Platform::Windows => "ico",
+                Platform::Macos => "icns",
+                Platform::Linux => "svg",
+                _ => "png",
+            };
+            ensure!(
+                std::path::Path::new(icon)
+                    .extension()
+                    .is_some_and(|e| e == expected),
+                "ARA-EXP-LAYOUT-001: the game icon must be a .{expected} file"
+            );
+        }
         let compatible = match self.packaging {
             PackageFormat::Folder => true,
             PackageFormat::WindowsPortable | PackageFormat::WindowsInstaller => {

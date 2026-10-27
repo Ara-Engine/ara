@@ -179,14 +179,14 @@ impl Host {
         // identity stubs remain index entries until explicitly initialized.
         if project.db.kind("import").is_some() {
             for (id, path) in project.index.imports() {
-                let sidecar = format!("{path}.import.json");
+                let sidecar = project.storage_path(&format!("{path}.import.json"));
                 if let Ok(text) = fs::read_to_string(project.root.join(&sidecar)) {
                     let result = ara_doc::read(&text, &sidecar, &project.db, Some(&project.index));
                     if let Some(doc) = result
                         .doc
                         .filter(|d| d.kind == "import" && d.id.as_str() == id)
                     {
-                        ws.insert_with_asset_path(sidecar, doc, path);
+                        ws.insert_with_asset_path(sidecar, doc, project.storage_path(path));
                     }
                 }
             }

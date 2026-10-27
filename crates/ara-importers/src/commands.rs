@@ -67,7 +67,7 @@ fn validate_settings(importer: &str, settings: &Value, db: &SchemaDb) -> Result<
 #[ara(params, module = "asset")]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ImportInitializeParams {
-    /// Existing source media path, relative to the project.
+    /// Existing source media path, relative to the authored root.
     pub source: String,
     /// Stable asset ID or batch symbol; generated when omitted.
     pub id: Option<String>,
@@ -153,7 +153,10 @@ impl Command for Configure {
         if p.use_project_preset && p.preset.is_some() {
             return Err(invalid("choose either preset or useProjectPreset"));
         }
-        let path = format!("{}.import.json", p.source);
+        let path = cx
+            .read()
+            .workspace()
+            .storage_path(&format!("{}.import.json", p.source));
         let doc = cx
             .read()
             .workspace()
@@ -251,17 +254,20 @@ impl Command for ConfigureProject {
             .read()
             .workspace()
             .docs()
-            .find(|(path, _)| *path == PROJECT_IMPORT_SETTINGS_FILE)
-            .map(|(_, doc)| doc.id.clone());
+            .find(|(path, _)| {
+                *path == PROJECT_IMPORT_SETTINGS_FILE
+                    || *path == ara_asset::LEGACY_PROJECT_IMPORT_SETTINGS_FILE
+            })
+            .map(|(path, doc)| (path.to_owned(), doc.id.clone()));
         let record = ara_doc::RecordId::parse("pi_settings").map_err(invalid)?;
-        let id = if let Some(id) = existing {
+        let (path, id) = if let Some((path, id)) = existing {
             cx.apply_edit(ara_doc::Edit::Set {
                 doc: id.clone(),
                 id: record,
                 path: ara_schema::FieldPath::field("preset"),
                 value: Some(json!(p.preset)),
             })?;
-            id
+            (path, id)
         } else {
             let id =
                 cx.create_document(PROJECT_IMPORT_SETTINGS_FILE, "imports", Some("ip_project"))?;
@@ -274,8 +280,8 @@ impl Command for ConfigureProject {
                     .cloned()
                     .ok_or_else(|| invalid("project import settings must be an object"))?,
             })?;
-            id
+            (PROJECT_IMPORT_SETTINGS_FILE.to_owned(), id)
         };
-        Ok(json!({"id":id,"path":PROJECT_IMPORT_SETTINGS_FILE,"preset":p.preset}))
+        Ok(json!({"id":id,"path":path,"preset":p.preset}))
     }
 }

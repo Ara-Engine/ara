@@ -17,6 +17,7 @@ fn project_quality_defaults_round_trip_and_reject_invalid_settings() {
     };
     let text = settings.canonical_text().unwrap();
     let path = root.path().join(PROJECT_IMPORT_SETTINGS_FILE);
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
     std::fs::write(&path, &text).unwrap();
     assert_eq!(
         ProjectImportSettings::read(root.path(), &db).unwrap(),

@@ -71,6 +71,9 @@ fn real_main(t0: Instant) -> Result<bool, String> {
             other => return Err(format!("unknown argument {other}")),
         }
     }
+    if root.join("data/ara-launch.json").is_file() {
+        root = root.join("data");
+    }
     let _crash_capture = ara_export_player::shipping::start(&root)?;
     let crash_probe = match crash_probe.as_deref() {
         Some("native") => Some(ara_export_player::shipping::CrashProbe::Native),
