@@ -1146,6 +1146,14 @@ impl Shell {
         editor: &mut Editor,
         allow_asset_reflow: bool,
     ) -> ara_ui::Result<()> {
+        // Popover mounting focuses the palette's search field. Remember its
+        // caller before mounting, so replacement dialogs restore that caller.
+        if self.modal_root.is_none()
+            && self.modal_return_focus.is_none()
+            && (self.modal_active() || editor.state.palette || editor.state.canvas_add)
+        {
+            self.modal_return_focus = self.input.focused();
+        }
         self.parts.clear();
         self.hidden_bodies.clear();
         let mut markup = String::from("<ui id='editor'>");

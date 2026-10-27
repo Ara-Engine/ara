@@ -1,5 +1,7 @@
 use super::super::commands::Target;
 use super::*;
+#[cfg(test)]
+mod layout_tests;
 
 impl Shell {
     /// A bounded scroll surface for import jobs, appended by the Assets panel owner.
@@ -11,7 +13,9 @@ impl Shell {
         {
             return;
         }
-        out.push_str("<scroll id='asset-import-scroll' style='max-height:180px;min-height:0px;flex-shrink:0'><panel id='asset-import-jobs' style='padding:6px;gap:6px;flex-direction:column'>");
+        // A scroll view needs an actual viewport: the editor's generic scroll
+        // rule has zero flex basis, so max-height alone collapses this rail.
+        out.push_str("<scroll id='asset-import-scroll' style='height:25%;flex-basis:auto;max-height:180px;min-height:36px;flex-shrink:0'><panel id='asset-import-jobs' style='padding:6px;gap:6px;flex-direction:column'>");
         let queued = self.asset_import.queued.len() + self.asset_import.ready.len();
         if queued > 0 {
             out.push_str(&format!(
@@ -42,8 +46,8 @@ impl Shell {
             } else {
                 &job.destination
             };
-            out.push_str(&format!("<panel id='{key}' class='notice' style='flex-direction:column;gap:4px;min-width:0px'><panel id='{key}-heading' class='row' style='gap:6px'><text id='{key}-title' class='fill' style='white-space:normal;min-width:0px' text='{} file{} → {}' />",
-                job.sources,if job.sources==1 {""} else {"s"},escape(destination)));
+            out.push_str(&format!("<panel id='{key}' class='notice' style='flex-direction:column;align-items:stretch;gap:4px;min-width:0px;flex-shrink:0'><panel id='{key}-heading' class='row' style='gap:6px;min-width:0px;align-self:stretch;flex-shrink:0'><text id='{key}-title' class='fill' style='white-space:normal;min-width:0px;max-height:44px;overflow:hidden' description='{}' text='{} file{} → {}' />",
+                escape(destination),job.sources,if job.sources==1 {""} else {"s"},escape(destination)));
             let (command, label) = if running {
                 ("assets.import.cancel", "Cancel")
             } else {

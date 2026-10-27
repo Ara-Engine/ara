@@ -14,6 +14,16 @@ const SIDE: f32 = 240.;
 /// How often the page reads the running animator during Play.
 const LIVE_EVERY: std::time::Duration = std::time::Duration::from_millis(100);
 
+/// An absent initializer is a recoverable document state. Non-null source still
+/// goes through the strict controller decoder, including malformed source errors.
+fn controller_present(document: &ara_doc::Document) -> bool {
+    document.records().values().any(|record| {
+        record
+            .get("controller")
+            .is_some_and(|source| !source.is_null())
+    })
+}
+
 /// The running animator the Animation page follows during Play: the first scene
 /// entity (the selected one first) whose `Animator.controller` is the open controller,
 /// read through `play.read <entity>.AnimatorState`.
@@ -38,6 +48,18 @@ pub(crate) enum LiveChange {
 }
 
 impl Shell {
+    fn animation_unavailable(&mut self, out: &mut String, id: &str) {
+        let redo = format!("{id}-redo");
+        self.empty(
+            out,
+            id,
+            "person-standing",
+            "Controller unavailable",
+            "This animation document has no controller source. Redo its initialization, restore the source, or open another controller.",
+            &[(redo.as_str(), "Redo", "edit.redo")],
+        );
+    }
+
     pub(super) fn animation_panel(
         &mut self,
         editor: &Editor,
@@ -49,7 +71,11 @@ impl Shell {
             .as_deref()
             .and_then(|d| editor.host.store().workspace().path_of(d));
         super::graph_panel::tool_crumbs(out, "animation", path);
-        if resource.is_some() {
+        if resource
+            .as_deref()
+            .and_then(|doc| editor.host.store().workspace().doc(doc))
+            .is_some_and(controller_present)
+        {
             out.push_str("<panel id='animation-view-sep' class='toolbar-sep' /><panel id='animation-view' class='segment'>");
             for (id, label, blends) in [
                 ("animation-states", "States", false),
@@ -125,6 +151,10 @@ impl Shell {
             .workspace()
             .doc(&doc)
             .ok_or("controller missing")?;
+        if !controller_present(document) {
+            self.animation_unavailable(out, "animation-unavailable");
+            return Ok(());
+        }
         let (_, controller) = crate::authoring::animation::controller(document)?;
         let path = crate::authoring::animation::layout_path(&doc);
         let layout = editor
@@ -568,14 +598,17 @@ impl Shell {
         let Some(doc) = self.resource_for(editor, "animation") else {
             return Ok(());
         };
-        let (record, controller) = crate::authoring::animation::controller(
-            editor
-                .host
-                .store()
-                .workspace()
-                .doc(&doc)
-                .ok_or("controller missing")?,
-        )?;
+        let document = editor
+            .host
+            .store()
+            .workspace()
+            .doc(&doc)
+            .ok_or("controller missing")?;
+        if !controller_present(document) {
+            self.animation_unavailable(out, "animation-inspector-unavailable");
+            return Ok(());
+        }
+        let (record, controller) = crate::authoring::animation::controller(document)?;
         let width = self
             .ui
             .find("animation-inspector")
