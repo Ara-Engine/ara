@@ -99,8 +99,11 @@ fn source_replace_has_offline_undo_redo_and_rejects_external_changes() {
             std::thread::yield_now();
         }
     }
-    let dir = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../target/authoring-tests")
+    let dir = std::env::var_os("ARA_TEST_ROOT")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| {
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/authoring-tests")
+        })
         .join(format!("source-replace-{}", std::process::id()));
     let _ = fs::remove_dir_all(&dir);
     copy_dir(&fixtures(), &dir);
@@ -122,6 +125,14 @@ fn source_replace_has_offline_undo_redo_and_rejects_external_changes() {
     );
     drop(h);
     // A crash after the journal entry but before the byte write leaves this state.
+    let journal = dir.join(".ara/journal");
+    let interrupted = fs::read_to_string(&journal)
+        .expect("journal")
+        .lines()
+        .filter(|line| !line.contains("\"t\":\"fileFlush\""))
+        .map(|line| format!("{line}\n"))
+        .collect::<String>();
+    fs::write(journal, interrupted).expect("simulate crash before file flush acknowledgment");
     fs::write(dir.join(path), "before\n").expect("simulate interrupted materialization");
     let mut h = open(&dir, 2042);
     assert_eq!(
@@ -152,6 +163,18 @@ fn source_replace_has_offline_undo_redo_and_rejects_external_changes() {
         fs::read_to_string(dir.join(path)).expect("preserved"),
         "external\n"
     );
+    fs::write(dir.join(path), "before\n").expect("external editor restores an earlier revision");
+    drop(h);
+    let mut reopened = open(&dir, 2044);
+    assert_eq!(
+        fs::read_to_string(dir.join(path)).expect("external known bytes"),
+        "before\n",
+        "a completed flush must never be replayed over an intentional external restoration"
+    );
+    let session = begin(&mut reopened, "agent:fixer");
+    let errors = complete(&mut reopened, "history.undo", json!({"session":session}))
+        .expect_err("external restoration is a stale undo base");
+    assert_eq!(errors[0].code, codes::STALE_BASE);
 }
 
 #[test]

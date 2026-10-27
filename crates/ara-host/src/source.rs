@@ -14,7 +14,7 @@ use std::{
 };
 
 type Observed = Vec<(String, Option<FileState>)>;
-type FileTransitions = Vec<(usize, Option<FileState>, Option<FileState>)>;
+type FileTransitions = Vec<(usize, u64, Option<FileState>, Option<FileState>)>;
 
 struct Pending {
     job: String,
@@ -237,60 +237,98 @@ impl State {
     }
 
     /// Recover a journal's ordered file transitions before rebuilding document history.
-    /// The last matching state per path identifies a partial flush; unknown external
-    /// bytes are retained and diagnosed instead of being overwritten.
+    /// Completed flushes protect later external edits. For unfinished transitions,
+    /// the last matching state identifies a partial write; unknown bytes are kept.
     pub(crate) fn recover_file_states(&mut self, entries: &[Entry]) {
         let ops: Vec<_> = entries
             .iter()
             .filter_map(|e| {
                 if let Entry::Txn { txn, .. } = e {
-                    Some(&txn.ops)
+                    Some(txn.ops.iter().map(|op| (txn.result, op)))
                 } else {
                     None
                 }
             })
             .flatten()
-            .filter(|op| matches!(op, Op::File { .. }))
-            .cloned()
+            .filter(|(_, op)| matches!(op, Op::File { .. }))
+            .map(|(rev, op)| (rev, op.clone()))
             .collect();
-        if ops.is_empty() {
+        let flushes: BTreeMap<_, _> = entries
+            .iter()
+            .filter_map(|entry| {
+                if let Entry::FileFlush { path, rev, state } = entry {
+                    Some((
+                        ara_doc::file_state::path_key(path),
+                        (path.clone(), *rev, state.clone()),
+                    ))
+                } else {
+                    None
+                }
+            })
+            .collect();
+        if ops.is_empty() && flushes.is_empty() {
             return;
         }
         let root = self.root.clone();
         let task = std::thread::Builder::new().name("ara-file-recovery".into()).spawn(move || {
             let history = FileHistory::new(root);
-            let mut paths: BTreeMap<String, FileTransitions> = BTreeMap::new();
-            for (n, op) in ops.iter().enumerate() { if let Op::File { path, state, prev, .. } = op { paths.entry(path.clone()).or_default().push((n, prev.clone(), state.clone())); } }
+            let mut paths: BTreeMap<String, (String, FileTransitions)> = BTreeMap::new();
+            for (n, (rev, op)) in ops.iter().enumerate() {
+                if let Op::File { path, state, prev, .. } = op {
+                    let key = ara_doc::file_state::path_key(path);
+                    let entry = paths.entry(key.clone()).or_insert_with(|| (path.clone(), Vec::new()));
+                    entry.0 = path.clone();
+                    if flushes.get(&key).is_none_or(|(_, flushed, _)| rev > flushed) {
+                        entry.1.push((n, *rev, prev.clone(), state.clone()));
+                    }
+                }
+            }
+            for (key, (path, _, _)) in &flushes { paths.entry(key.clone()).or_insert_with(|| (path.clone(), Vec::new())); }
             let mut positions = BTreeMap::new();
             let mut diagnostics = Vec::new();
-            for (path, changes) in &paths {
+            for (key, (path, changes)) in &paths {
                 match history.observe(path) {
                     Ok(actual) => {
-                        let position = changes.iter().rev().find(|(_, _, state)| state == &actual).map(|(n, _, _)| n + 1)
-                            .or_else(|| (changes[0].1 == actual).then_some(0));
-                        if let Some(position) = position { positions.insert(path.clone(), position); }
+                        if changes.is_empty() {
+                            if flushes.get(key).is_some_and(|(_, _, state)| state != &actual) { diagnostics.push(Diagnostic::warning(codes::EXTERNAL_CONFLICT, "file changed after its completed flush; kept external bytes").file(path)); }
+                            continue;
+                        }
+                        let position = changes.iter().rev().find(|(_, _, _, state)| state == &actual).map(|(n, _, _, _)| n + 1)
+                            .or_else(|| (changes[0].2 == actual).then_some(changes[0].0));
+                        if let Some(position) = position { positions.insert(key.clone(), position); }
                         else { diagnostics.push(Diagnostic::warning(codes::EXTERNAL_CONFLICT, "file differs from every retained history state; kept external bytes").file(path)); }
                     }
                     Err(d) => diagnostics.push(d),
                 }
             }
-            for (n, op) in ops.iter().enumerate() {
-                if let Op::File { path, state, .. } = op && positions.get(path).is_some_and(|position| n >= *position)
-                    && let Err(d) = history.restore(path, state.as_ref()) { diagnostics.push(d); positions.remove(path); }
+            for (n, (_, op)) in ops.iter().enumerate() {
+                if let Op::File { path, state, .. } = op {
+                    let key = ara_doc::file_state::path_key(path);
+                    if positions.get(&key).is_some_and(|position| n >= *position)
+                        && let Err(d) = history.restore(path, state.as_ref()) { diagnostics.push(d); positions.remove(&key); }
+                }
             }
-            let states = paths.keys().filter_map(|path| match history.observe(path) { Ok(state) => Some((path.clone(), state)), Err(d) => { diagnostics.push(d); None } }).collect::<Observed>();
-            (states, diagnostics)
+            let completed = positions.keys().filter_map(|key| {
+                let (path, changes) = &paths[key];
+                let (_, rev, _, state) = changes.last()?;
+                Some(Entry::FileFlush { path:path.clone(), rev:*rev, state:state.clone() })
+            }).collect::<Vec<_>>();
+            let states = paths.values().filter_map(|(path, _)| match history.observe(path) { Ok(state) => Some((path.clone(), state)), Err(d) => { diagnostics.push(d); None } }).collect::<Observed>();
+            (states, diagnostics, completed)
         });
         match task.and_then(|t| {
             t.join()
                 .map_err(|_| std::io::Error::other("file recovery worker panicked"))
         }) {
-            Ok((states, diagnostics)) => {
+            Ok((states, diagnostics, completed)) => {
                 for (path, state) in states {
                     self.store.observe_file(path, state);
                 }
                 for d in diagnostics {
                     self.log(d);
+                }
+                for entry in completed {
+                    self.journal(entry);
                 }
             }
             Err(e) => self.log(Diagnostic::error(codes::IO, e.to_string())),

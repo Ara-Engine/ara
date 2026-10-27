@@ -395,9 +395,35 @@ impl Worker {
                         .iter()
                         .any(|op| matches!(op, ara_doc::Op::File { .. }))
                 {
-                    self.reply(Reply::Materialized(result.and_then(|()| {
-                        crate::file_state::FileHistory::new(&self.root).materialize(&txn.ops)
-                    })));
+                    let result = result.and_then(|()| {
+                        crate::file_state::FileHistory::new(&self.root).materialize(&txn.ops)?;
+                        // A completed flush is distinct from a journaled intent:
+                        // recovery must preserve later external edits, even when
+                        // they restore bytes seen in an older transaction.
+                        let mut final_states = std::collections::BTreeMap::new();
+                        for op in &txn.ops {
+                            if let ara_doc::Op::File { path, state, .. } = op {
+                                final_states
+                                    .insert(ara_doc::file_state::path_key(path), (path, state));
+                            }
+                        }
+                        for (path, state) in final_states.into_values() {
+                            self.journal
+                                .append(&Entry::FileFlush {
+                                    path: path.clone(),
+                                    rev: txn.result,
+                                    state: state.clone(),
+                                })
+                                .map_err(|e| {
+                                    Diagnostic::error(
+                                        codes::IO,
+                                        format!("cannot record file flush: {e}"),
+                                    )
+                                })?;
+                        }
+                        Ok(())
+                    });
+                    self.reply(Reply::Materialized(result));
                 } else if let Err(d) = result {
                     self.reply(Reply::JournalFailed(d));
                 }

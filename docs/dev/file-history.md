@@ -56,9 +56,12 @@ refresh/revalidate before retrying. Source replacement uses distinct preparation
 and pre-commit revalidation worker phases.
 
 On restart, the host recovers file transitions before rebuilding document history.
-Each path's last matching journal state identifies completed writes; remaining
-writes restore from immutable snapshots. Bytes matching no retained state are
-preserved and reported as an external conflict. `restore_documents` replays only
+Durable `fileFlush` acknowledgments distinguish completed writes from pending
+transaction intents. After a completed flush, external bytes are preserved even
+when they intentionally restore an older version. Only unfinished transitions
+are replayed; their last matching state identifies a partial write. Unknown bytes
+are preserved and reported as an external conflict. Compaction retains the last
+file acknowledgment, including absence. `restore_documents` replays only
 document data; the host separately supplies recovered file observations.
 
 `source.replace {path, baseHash, text}` requires an existing C# source whose exact

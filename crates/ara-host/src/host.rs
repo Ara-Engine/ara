@@ -976,7 +976,7 @@ impl State {
                         },
                     );
                 }
-                Entry::Base { .. } | Entry::Flush { .. } => {}
+                Entry::Base { .. } | Entry::Flush { .. } | Entry::FileFlush { .. } => {}
             }
         }
         if replayed > 0 {
