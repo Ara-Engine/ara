@@ -14,6 +14,13 @@ struct PlayViewState {
         reason = "this reflected field is stored in the typed navigation document"
     )]
     spectator: bool,
+    /// Spectator navigation speed in metres per second.
+    #[ara(default = 4, range(min = 0.5, max = 50))]
+    #[expect(
+        dead_code,
+        reason = "reflected navigation setting stored in the typed document"
+    )]
+    navigation_speed: f32,
 }
 /// Read-only camera pose decoded from the transient op store, never a second mutable state owner.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -35,6 +42,38 @@ pub struct ViewStore {
 const DOC: &str = "sc_editorview";
 const ENTITY: &str = "e_editorview";
 impl ViewStore {
+    /// The view's own navigation speed; it never changes gameplay movement settings.
+    pub fn navigation_speed(&self) -> f32 {
+        self.store
+            .workspace()
+            .doc(DOC)
+            .and_then(|doc| doc.record(ENTITY))
+            .and_then(|record| record.get("PlayViewState"))
+            .and_then(|state| state.get("navigationSpeed"))
+            .and_then(Value::as_f64)
+            .unwrap_or(4.) as f32
+    }
+    /// Change speed through the reflected navigation component's typed property op.
+    pub fn set_navigation_speed(&mut self, speed: f32) -> Result<(), Vec<Diagnostic>> {
+        if !speed.is_finite() || !(0.5..=50.).contains(&speed) {
+            return Err(fail(
+                codes::REQUEST,
+                "Spectator navigation speed must be between 0.5 and 50 metres per second",
+            ));
+        }
+        self.registry.apply(
+            &mut self.store,
+            &Batch::new(
+                DOC,
+                [(
+                    "property.set",
+                    json!({"entity":ENTITY,"path":"PlayViewState.navigationSpeed","value":speed}),
+                )],
+            ),
+            &Session::human(),
+        )?;
+        Ok(())
+    }
     /// Start a private in-memory navigation document using the engine's existing camera/transform schemas.
     pub fn new(schema: &SchemaDb) -> Result<Self, Vec<Diagnostic>> {
         let mut schema = schema.clone();
@@ -158,6 +197,11 @@ mod tests {
             .map_err(|problem| fail(codes::REQUEST, problem.to_string()))?;
         let mut view = ViewStore::new(&schema)?;
         assert!(view.pose().is_none());
+        assert_eq!(view.navigation_speed(), 4.);
+        view.set_navigation_speed(16.)?;
+        assert_eq!(view.navigation_speed(), 16.);
+        assert!(view.set_navigation_speed(f32::NAN).is_err());
+        assert!(view.set_navigation_speed(0.).is_err());
         let pose = ViewPose {
             position: [1., 2., 3.],
             rotation: [0., 45., 0.],

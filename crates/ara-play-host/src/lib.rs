@@ -9,6 +9,8 @@ pub mod assets;
 pub mod editor_control;
 pub mod embed;
 mod game_ui;
+/// Shared-process player ownership, with atomic status polling and one child reaper.
+pub mod group;
 mod keep;
 mod lifecycle;
 mod package;
@@ -28,7 +30,8 @@ pub use scripts::{ScriptPaths, modules as script_modules};
 use ara_diag::{Code, Diagnostic, FixAction};
 use ara_host::{Cx, Method, Service, parse};
 use ara_play::{
-    Joined, LinkConditions, NetStart, PlayScene, Role, SnapshotRef, Start, method, shm::Section,
+    Joined, LinkConditions, NetStart, PlayScene, ProcessMode, Role, SnapshotRef, Start, method,
+    shm::Section,
 };
 use ara_proto::Scope;
 use ara_schema::SchemaDb;
@@ -130,6 +133,7 @@ struct World {
     snapshot: Vec<u8>,
     section: Option<Section>,
     window: bool,
+    process_mode: ProcessMode,
     /// Embedded worlds: the surface size every rendering player started with.
     embed: Option<embed::EmbedParams>,
     /// Embedded players' current surfaces (handles owned by this process), by player.
@@ -631,6 +635,7 @@ impl PlayService {
         &mut self,
         roles: &[Role],
         window: bool,
+        process_mode: ProcessMode,
         embed: Option<&embed::EmbedParams>,
         snapshot: &SnapshotRef,
         start_paused: bool,
@@ -653,16 +658,25 @@ impl PlayService {
         let headless = roles.len() - windowed;
         let imports = self.assets()?.import_state();
         let pool = self.pool()?;
-        let mut windows = pool
-            .take_checked(windowed, true, Duration::from_secs(30), || {
+        let mut windows = if process_mode == ProcessMode::Shared {
+            Vec::new()
+        } else {
+            pool.take_checked(windowed, true, Duration::from_secs(30), || {
                 starting::check(progress)
             })
-            .map_err(|e| fail(codes::PLAY, e))?;
-        let mut heads = pool
-            .take_checked(headless, false, Duration::from_secs(30), || {
+            .map_err(|e| fail(codes::PLAY, e))?
+        };
+        let mut heads = if process_mode == ProcessMode::Shared {
+            pool.take_shared_checked(roles.len(), Duration::from_secs(60), || {
                 starting::check(progress)
             })
-            .map_err(|e| fail(codes::PLAY, e))?;
+            .map_err(|e| fail(codes::PLAY, e))?
+        } else {
+            pool.take_checked(headless, false, Duration::from_secs(30), || {
+                starting::check(progress)
+            })
+            .map_err(|e| fail(codes::PLAY, e))?
+        };
         let mut players: Vec<(Role, Player)> = Vec::new();
         let mut started = Vec::new();
         let mut surfaces = Vec::new();
@@ -817,6 +831,13 @@ impl PlayService {
                 "`embed` shows players inside the editor; leave `window` unset",
             ));
         }
+        let process_mode = p.process_mode.unwrap_or_default();
+        if process_mode == ProcessMode::Shared && p.window == Some(true) {
+            return Err(fail(
+                codes::REQUEST,
+                "Shared Play renders each client in its editor Game view; use separate processes for native SDL windows",
+            ));
+        }
         let conditions = p
             .conditions
             .unwrap_or_default()
@@ -863,6 +884,7 @@ impl PlayService {
         let (players, started, surfaces) = self.launch(
             &roles,
             window,
+            process_mode,
             p.embed.as_ref(),
             &snapshot,
             start_paused,
@@ -876,6 +898,7 @@ impl PlayService {
             "world": id, "scene": scene, "snapshotBytes":bytes.len(),
             "transport":if matches!(snapshot, SnapshotRef::Shm { .. }) {"shm"} else {"inline"},
             "prepareMs":encode_ms,"bootMs":boot_ms,"players":started,
+            "processMode":process_mode,
         });
         self.worlds.insert(
             id.clone(),
@@ -885,6 +908,7 @@ impl PlayService {
                 snapshot: bytes.clone(),
                 section,
                 window,
+                process_mode,
                 embed: p.embed,
                 surfaces,
                 start_paused,
@@ -933,6 +957,7 @@ impl PlayService {
             snapshot: bytes,
             section,
             window,
+            process_mode,
             embed,
             start_paused,
             hot_reload,
@@ -948,6 +973,7 @@ impl PlayService {
         let (players, started, surfaces) = self.launch(
             &roles,
             window,
+            process_mode,
             embed.as_ref(),
             &snapshot,
             start_paused,
@@ -964,6 +990,7 @@ impl PlayService {
                 snapshot: bytes,
                 section,
                 window,
+                process_mode,
                 embed,
                 surfaces,
                 start_paused,
@@ -978,7 +1005,7 @@ impl PlayService {
             },
         );
         self.announce(id);
-        Ok(json!({"world": id, "bootMs": boot_ms, "players": started}))
+        Ok(json!({"world": id, "bootMs": boot_ms, "players": started,"processMode":process_mode}))
     }
 
     fn stop(&mut self, id: &str) -> Result<Value, Vec<Diagnostic>> {
@@ -1022,6 +1049,7 @@ impl PlayService {
                 "status": "running",
                 "scene": w.scene,
                 "window": w.window,
+                "processMode": w.process_mode,
                 "hotReload": w.hot_reload,
                 "streamingAssets": w.streaming_assets,
                 "startup": w.startup,
@@ -1055,6 +1083,7 @@ impl PlayService {
                     scene: p.scene.clone(),
                     background: None,
                     mode: None,
+                    process_mode: None,
                     clients: None,
                     window: Some(false),
                     embed: None,

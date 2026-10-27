@@ -26,6 +26,9 @@ pub struct View {
     /// Start spectator mode from the current gameplay camera when no camera is supplied.
     #[serde(default)]
     pub capture_current: bool,
+    /// Spectator movement speed in metres per second; absent retains the view's speed.
+    #[serde(default)]
+    pub navigation_speed: Option<f32>,
 }
 /// A possession change applied by the authority, never independently patched on mirrors.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]

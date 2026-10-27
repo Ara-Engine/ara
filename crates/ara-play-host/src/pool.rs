@@ -26,7 +26,7 @@ pub const WATCHDOG: Duration = Duration::from_secs(5);
 /// A connected player process.
 pub struct Player {
     /// Owned child; killed on drop.
-    pub child: Child,
+    pub child: crate::group::ChildHandle,
     /// Live link.
     pub link: Link,
     /// Its hello (pid, window, init time, UDP address).
@@ -394,6 +394,32 @@ pub struct Pool {
 }
 
 impl Pool {
+    /// Launch independently owned headless/embedded player worlds in one process.
+    /// Each has a separate authenticated link, runtime, inputs and shared GPU surface.
+    pub fn take_shared(&mut self, count: usize, timeout: Duration) -> Result<Vec<Player>, String> {
+        self.take_shared_checked(count, timeout, || Ok(()))
+    }
+    pub(crate) fn take_shared_checked(
+        &mut self,
+        count: usize,
+        timeout: Duration,
+        check: impl FnMut() -> Result<(), &'static str>,
+    ) -> Result<Vec<Player>, String> {
+        self.next += 1;
+        let request = crate::group::Request {
+            name: format!("shared{}", self.next),
+            count,
+            timeout,
+        };
+        crate::group::spawn(
+            &self.config,
+            &self.token,
+            self.scripts.as_ref(),
+            self.rendering,
+            request,
+            check,
+        )
+    }
     /// Binds the live-link listener on 127.0.0.1 and starts filling the pool.
     pub fn new(config: PoolConfig, token: String) -> std::io::Result<Self> {
         Self::with_scripts(config, token, None)
@@ -671,7 +697,7 @@ impl Pool {
         link.respond(id, Ok(json!({}))).map_err(|e| e.to_string())?;
         link.flush().map_err(|e| e.to_string())?;
         Ok(Player {
-            child: spawn.child,
+            child: spawn.child.into(),
             link,
             hello,
             log: spawn.log,

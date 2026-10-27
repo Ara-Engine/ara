@@ -14,10 +14,12 @@ mod editor_control;
 mod game_ui;
 mod imports;
 pub mod link;
+mod process;
 pub mod shm;
 pub use editor_control::{Control, Controlled, View, ViewCamera};
 pub use game_ui::{GameUi, UiBinding, UiMusic, UiSound};
 pub use imports::{ImportState, Stall};
+pub use process::ProcessMode;
 
 use ara_doc::{AssetId, Document, Record, RecordId, Workspace};
 use serde::{Deserialize, Serialize};

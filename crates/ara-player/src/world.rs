@@ -25,7 +25,7 @@ use std::{
     collections::BTreeMap,
     path::PathBuf,
     sync::{Arc, atomic::Ordering},
-    time::Instant,
+    time::{Duration, Instant},
 };
 mod editor_control;
 mod feedback;
@@ -64,6 +64,8 @@ pub struct World<R = Play> {
     pub(crate) pending_controls: Vec<PendingControl>,
     /// Transient typed navigation state, separate from every authored gameplay camera.
     editor_view: ara_play_host::editor_control::ViewStore,
+    /// Presentation navigation clock; gameplay still advances only through its runtime.
+    navigation_remainder: Duration,
     /// C# modules and their host's event channel, when the scene runs any.
     scripts: Option<(ScriptSettings, std::sync::mpsc::Receiver<ScriptEvent>)>,
     /// The streamed world's cells, when the snapshot has a world.
@@ -94,6 +96,7 @@ impl<R> World<R> {
             pending: self.pending,
             pending_controls: self.pending_controls,
             editor_view: self.editor_view,
+            navigation_remainder: self.navigation_remainder,
             scripts: self.scripts,
             cells: self.cells,
         })
@@ -364,6 +367,7 @@ impl World {
                 pending: Vec::new(),
                 pending_controls: Vec::new(),
                 editor_view,
+                navigation_remainder: Duration::ZERO,
                 scripts,
                 cells,
             },

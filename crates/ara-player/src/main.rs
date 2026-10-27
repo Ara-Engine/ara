@@ -11,6 +11,7 @@ mod editor_control;
 mod embed;
 mod game_app;
 mod game_ui;
+mod group;
 #[cfg(all(test, windows))]
 mod icon_tests;
 mod input;
@@ -67,6 +68,9 @@ struct Args {
     /// Internal pool warm-up; only services with a Surfaces attachment request it.
     #[arg(long, hide = true)]
     prewarm_graphics: bool,
+    /// Internal owner mode: independently owned worlds inside this player process.
+    #[arg(long, hide = true)]
+    group_slots: Option<usize>,
     #[command(flatten)]
     standalone: standalone::Options,
 }
@@ -179,6 +183,9 @@ struct Player {
 
 fn run(args: Args, launched: Instant) -> Result<()> {
     ara_gpu::cpu_scope!("Player.run");
+    if let Some(count) = args.group_slots {
+        return group::run_group(args, launched, count);
+    }
     if args.owner.is_none() {
         if args.game.game || game_app::has_menu(&args)? {
             return game_app::run(args);
@@ -335,15 +342,22 @@ impl Player {
             // its first lit frame publishes (`embed` module docs).
             let holding = !world.runtime.networked()
                 && self.embed.as_ref().is_some_and(embed::Embedded::entering);
-            let inputs = match (&mut self.window, &mut self.embed) {
+            let spectator = world.spectating();
+            let (inputs, navigation) = match (&mut self.window, &mut self.embed) {
                 (Some(window), _) => {
-                    let (quit, inputs) = window.events(world.runtime.player())?;
+                    let (quit, inputs, navigation) =
+                        window.view_events(world.runtime.player(), spectator)?;
                     self.stop |= quit;
-                    inputs
+                    (inputs, navigation)
                 }
-                (None, Some(embed)) if !holding => embed.input.injections(world.runtime.player()),
-                (None, _) => Vec::new(),
+                (None, Some(embed)) if !holding => {
+                    embed.input.for_view(world.runtime.player(), spectator)
+                }
+                (None, _) => (Vec::new(), None),
             };
+            if let Some(navigation) = navigation {
+                world.navigate(navigation, elapsed)?;
+            }
             if !inputs.is_empty()
                 && let Err(e) = world.runtime.input(0, inputs)
             {

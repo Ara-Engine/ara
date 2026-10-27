@@ -18,7 +18,9 @@ pub struct PlayStartParams {
     pub background: Option<bool>,
     /// `local` (default), `host` (Listen) or `dedicated`.
     pub mode: Option<String>,
-    /// Additional client processes for `host`/`dedicated` (max 16).
+    /// Execute isolated player worlds in one shared process or separate processes (default).
+    pub process_mode: Option<ara_play::ProcessMode>,
+    /// Additional client worlds for `host`/`dedicated` (max 16).
     pub clients: Option<u32>,
     /// Open windows (SDL3) for local/host/client players; headless otherwise.
     pub window: Option<bool>,
@@ -188,6 +190,9 @@ pub struct PlayViewParams {
     pub camera: Option<ara_play::ViewCamera>,
     /// Start spectator mode from this player's current gameplay camera.
     pub capture_current: Option<bool>,
+    /// Spectator navigation speed in metres per second; default 4, valid range 0.5–50.
+    #[ara(range(min = 0.5, max = 50))]
+    pub navigation_speed: Option<f32>,
 }
 /// Parameters of `play.control`: one authority-boundary possession command.
 #[derive(Debug, Schema, Deserialize)]

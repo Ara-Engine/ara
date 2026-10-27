@@ -68,8 +68,69 @@ impl<R> World<R> {
     }
 }
 impl World {
+    pub(crate) fn spectating(&self) -> bool {
+        self.editor_view.pose().is_some()
+    }
+    /// Advance held navigation on a fixed 60 Hz presentation clock. Only typed
+    /// navigation ops change; ECS movement/actions remain owned by simulation.
+    pub(crate) fn navigate(
+        &mut self,
+        input: crate::input::Navigation,
+        elapsed: Duration,
+    ) -> Result<()> {
+        let Some(mut current) = self.editor_view.pose() else {
+            return Ok(());
+        };
+        let rotation = Quat::from_euler(
+            EulerRot::XYZ,
+            current.rotation[0].to_radians(),
+            current.rotation[1].to_radians(),
+            current.rotation[2].to_radians(),
+        );
+        let mut forward = rotation * Vec3::NEG_Z;
+        if input.look != [0.; 2] {
+            let yaw = forward.x.atan2(-forward.z) + input.look[0].to_radians();
+            let pitch = forward.y.asin().clamp(-1.553_343, 1.553_343) - input.look[1].to_radians();
+            let pitch = pitch.clamp(-1.553_343, 1.553_343);
+            forward = Vec3::new(
+                yaw.sin() * pitch.cos(),
+                pitch.sin(),
+                -yaw.cos() * pitch.cos(),
+            );
+        }
+        self.navigation_remainder += elapsed.min(Duration::from_millis(250));
+        let step = Duration::from_nanos(1_000_000_000 / 60);
+        let ticks = (self.navigation_remainder.as_nanos() / step.as_nanos()).min(15) as u32;
+        self.navigation_remainder = self.navigation_remainder.saturating_sub(step * ticks);
+        let right = forward.cross(Vec3::Y).normalize_or_zero();
+        let movement =
+            (right * input.movement[0] + Vec3::Y * input.movement[1] + forward * input.movement[2])
+                .normalize_or_zero();
+        let distance =
+            self.editor_view.navigation_speed() * if input.fast { 3. } else { 1. } * ticks as f32
+                / 60.;
+        if input.look == [0.; 2] && (ticks == 0 || movement == Vec3::ZERO) {
+            return Ok(());
+        }
+        current.position = (Vec3::from_array(current.position) + movement * distance).to_array();
+        let camera = ViewCamera {
+            position: current.position,
+            target: (Vec3::from_array(current.position) + forward).to_array(),
+            fov_y_degrees: current.fov_y_degrees,
+        };
+        self.editor_view
+            .set(Some(pose(&camera)?))
+            .map_err(diagnostics)?;
+        Ok(())
+    }
     /// Navigation-only typed ops change extraction, never an authored Camera or Transform.
     pub(crate) fn set_editor_view(&mut self, view: View) -> Result<Value> {
+        if let Some(speed) = view.navigation_speed {
+            self.editor_view
+                .set_navigation_speed(speed)
+                .map_err(diagnostics)?;
+        }
+        self.navigation_remainder = Duration::ZERO;
         let camera = match view.camera {
             Some(camera) => Some(camera),
             None if view.capture_current => {
@@ -92,7 +153,7 @@ impl World {
             .set(camera.as_ref().map(pose).transpose()?)
             .map_err(diagnostics)?;
         Ok(
-            json!({"mode":if camera.is_some(){"spectator"}else{"gameplay"},"revision":revision,"camera":camera}),
+            json!({"mode":if camera.is_some(){"spectator"}else{"gameplay"},"revision":revision,"camera":camera,"navigationSpeed":self.editor_view.navigation_speed()}),
         )
     }
     /// One input owner relinquishes its old actor(s) and acquires the selected
@@ -197,3 +258,6 @@ impl World {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests;
