@@ -346,10 +346,10 @@ impl PlayCheck {
                 tap(events, 62);
                 key(events, 225, false);
             }
-            24 if act == Act::Runtime => {
-                if editor.play_world.is_some() || editor.state.playing.is_some() {
-                    return self.wait();
-                }
+            24 if act == Act::Runtime
+                && (editor.play_world.is_some() || editor.state.playing.is_some()) =>
+            {
+                return self.wait();
             }
             _ => {}
         }

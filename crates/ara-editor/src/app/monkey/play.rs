@@ -55,11 +55,11 @@ impl State {
     /// Every stop/status is an ordinary action, so exact replay needs no inference.
     pub fn next(&mut self, next: impl FnOnce() -> Action) -> Action {
         let action = self.deferred.take().unwrap_or_else(next);
-        if starts(&action) {
-            if let Some(cleanup) = self.cleanup() {
-                self.deferred = Some(action);
-                return cleanup;
-            }
+        if starts(&action)
+            && let Some(cleanup) = self.cleanup()
+        {
+            self.deferred = Some(action);
+            return cleanup;
         }
         action
     }

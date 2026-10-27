@@ -43,6 +43,59 @@ fn editor_overlays_and_control_choices_fit_all_mounted_contexts() {
     // and successful checkpoints both have a reviewable measurement index.
 }
 
+#[test]
+fn retained_main_tooltips_fit_their_final_shaped_text() {
+    let project = Project::new();
+    let (_editor, mut shell) = project.open([1440., 900.]);
+    let mut measurements = Vec::new();
+    for id in ["play", "crumbs", "fold-outline"] {
+        let index = shell
+            .shown_node(id)
+            .unwrap_or_else(|| panic!("missing hover target {id}"));
+        let bounds = shell.ui.nodes[index]
+            .rect
+            .intersection(shell.ui.nodes[index].clip);
+        let mut hovered = false;
+        for point in [
+            [bounds.x + bounds.w * 0.5, bounds.y + bounds.h * 0.5],
+            [bounds.x + 1., bounds.y + 1.],
+        ] {
+            shell.pointer = point;
+            shell.hover_tooltip().unwrap();
+            if shell.tooltip_target.as_ref().map(|(target, _)| *target)
+                == Some(ara_ui::source::stable_id(id))
+            {
+                hovered = true;
+                break;
+            }
+        }
+        assert!(hovered, "{id} is a real hover target");
+        shell
+            .advance_tooltip_at(ara_ui::popover::SHOW_DELAY_MS + 10_000)
+            .unwrap();
+        shell.frame().unwrap();
+        let tip = &shell.ui.nodes[shell.shown_node("tooltip").expect("visible tooltip")];
+        let copy = &shell.ui.nodes[shell
+            .shown_node("tooltip-text")
+            .expect("visible tooltip copy")];
+        let outer = shell.ui.tree.layout(tip.layout_id).unwrap();
+        let text = copy.text.as_ref().expect("shaped copy");
+        let required = text.layout.width()
+            + outer.padding.left
+            + outer.padding.right
+            + outer.border.left
+            + outer.border.right;
+        measurements.push(json!({"target":id,"text":text.value,"textFontSize":text.size,"computedFontSize":copy.computed.font_size,"fontFamily":text.family,"textWidth":text.layout.width(),"requiredWidth":required,"box":tip.rect,"textBox":copy.rect,"padding":[outer.padding.left,outer.padding.right],"border":[outer.border.left,outer.border.right],"layout":format!("{:?}",shell.ui.tree.style(tip.layout_id).unwrap()),"fits":tip.rect.w<=required.max(ara_ui::popover::MIN_WIDTH)+16.}));
+    }
+    assert!(
+        measurements
+            .iter()
+            .all(|measurement| measurement["fits"] == true),
+        "{}",
+        ara_json::to_canonical_string(&json!(measurements))
+    );
+}
+
 fn run_sweep(project: &Project, capture: &mut impl FnMut(&mut Shell, &str)) -> Sweep {
     let (mut editor, mut shell) = project.open([1440., 900.]);
     let mut sweep = Sweep::default();

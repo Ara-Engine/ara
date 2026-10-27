@@ -95,14 +95,14 @@ impl Shell {
         {
             return Err("Apply or discard the pending runtime edits before changing client".into());
         }
-        if self.game_client != player || !capture {
-            if let (Some(world), Some(surfaces)) = (&editor.play_world, &editor.play_surfaces) {
-                surfaces.device(
-                    world,
-                    self.game_client,
-                    vec![ara_play_host::embed::DeviceEvent::FocusLost],
-                );
-            }
+        if (self.game_client != player || !capture)
+            && let (Some(world), Some(surfaces)) = (&editor.play_world, &editor.play_surfaces)
+        {
+            surfaces.device(
+                world,
+                self.game_client,
+                vec![ara_play_host::embed::DeviceEvent::FocusLost],
+            );
         }
         self.game_client = player;
         self.game_captured = capture;
