@@ -142,6 +142,7 @@ Both build .NET. Valley fixtures come from `ara-runtime-world`'s `valley` test.
 `tests/pending_game.rs` captures pending, failed and published models in a real child.
 `tests/embed.rs` (`--ignored`) exercises `PlayService::surfaces`: 90 demo frames imported on another GPU device, comparisons against captures, raw W input, typed/JSON resize and stop.
 It prints frame latency and per-frame cost.
+`tests/probes.rs` (`--ignored --test-threads=1`) spawns hidden `--probe NAME` routes (`src/standalone/probes.rs`: frames in flight, UI teardown, unpresentable pump) so SDL starts on a main thread, as macOS requires.
 `cargo clippy -p ara-player --all-targets -- -D warnings`.
 `cargo test -p ara-player --test embed hub_outpost -- --ignored` checks a fresh Hub Outpost template's native HUD for 30 seconds, then missing/corrupt reticles and path diagnostics.
 Use isolated Vulkan layers, `SDL_AUDIODRIVER=dummy`, and fresh `ARA_CONFIG_DIR`/`ARA_CRASH_DIR` under `target/`.
