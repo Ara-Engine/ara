@@ -469,26 +469,40 @@ fn datagram_conditions_duplicate_reorder_drop_and_shape() -> Result<()> {
     )?;
     assert_eq!(link.seed(), 21668);
     link.set_server(receiver.local_addr()?);
-    // Loopback UDP delivery is asynchronous on macOS. The link runs on the simulated
-    // `now`, so waiting for real delivery changes nothing it measures, and a late
-    // datagram still fails the "not yet delivered" checks.
-    let settle = || std::thread::sleep(Duration::from_millis(20));
+    // Loopback UDP delivery is asynchronous on macOS, so both waits below are on
+    // events, never on wall-clock time: the link is pumped at one simulated instant
+    // until the datagram has arrived, and the receiver is polled until it has data.
+    fn pump_until_offered(link: &mut Link, now: Instant, bytes: u64) -> Result<()> {
+        for _ in 0..1_000_000 {
+            link.pump(now, true)?;
+            if link.up.offered_bytes >= bytes {
+                return Ok(());
+            }
+            std::thread::yield_now();
+        }
+        Err(NetError("datagram never reached the link".into()))
+    }
+    fn recv_ready(socket: &UdpSocket, buffer: &mut [u8]) -> Result<usize> {
+        for _ in 0..1_000_000 {
+            match socket.recv_from(buffer) {
+                Ok((len, _)) => return Ok(len),
+                Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => std::thread::yield_now(),
+                Err(e) => return Err(e.into()),
+            }
+        }
+        Err(NetError("datagram never reached the receiver".into()))
+    }
     sender.send_to(&[1; 100], link.address()?)?;
-    settle();
     let now = Instant::now();
     let mut buffer = [0; 128];
-    link.pump(now, true)?;
-    settle();
+    pump_until_offered(&mut link, now, 100)?;
     assert!(receiver.recv_from(&mut buffer).is_err());
     link.pump(now + Duration::from_millis(31), true)?;
-    settle();
-    assert_eq!(receiver.recv_from(&mut buffer)?.0, 100);
+    assert_eq!(recv_ready(&receiver, &mut buffer)?, 100);
     link.pump(now + Duration::from_millis(100), true)?;
-    settle();
     assert!(receiver.recv_from(&mut buffer).is_err());
     link.pump(now + Duration::from_millis(131), true)?;
-    settle();
-    assert_eq!(receiver.recv_from(&mut buffer)?.0, 100);
+    assert_eq!(recv_ready(&receiver, &mut buffer)?, 100);
     assert_eq!(link.up.duplicated, 1);
     assert_eq!(link.up.offered_bytes, 100);
     assert_eq!(link.up.delivered_bytes, 200);
@@ -500,8 +514,7 @@ fn datagram_conditions_duplicate_reorder_drop_and_shape() -> Result<()> {
         Conditions::default(),
     )?;
     sender.send_to(&[2; 100], link.address()?)?;
-    settle();
-    link.pump(now + Duration::from_millis(200), true)?;
+    pump_until_offered(&mut link, now + Duration::from_millis(200), 200)?;
     assert_eq!(link.up.dropped, 1);
     Ok(())
 }
