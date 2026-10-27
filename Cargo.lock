@@ -1498,6 +1498,7 @@ name = "ara-player"
 version = "0.0.1-alpha"
 dependencies = [
  "anyhow",
+ "ara-2d",
  "ara-anim",
  "ara-asset",
  "ara-audio",
