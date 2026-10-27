@@ -3,10 +3,8 @@ use super::*;
 use ara_diag::Diagnostic;
 
 pub(super) fn warning(diagnostics: &mut Vec<Diagnostic>, message: String) {
-    let diagnostic = Diagnostic::warning(
-        ara_diag::Code(ara_ui::source::codes::GPU_RESOURCE),
-        message,
-    );
+    let diagnostic =
+        Diagnostic::warning(ara_diag::Code(ara_ui::source::codes::GPU_RESOURCE), message);
     eprintln!("ara-player: {diagnostic}");
     diagnostics.push(diagnostic);
 }
