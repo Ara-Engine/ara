@@ -1,0 +1,92 @@
+[
+  {
+    "scene": "showcase",
+    "shot": "materials",
+    "engine": "ara",
+    "flip": 0.255022257566452,
+    "ssim": 0.865572452545166,
+    "ppd": 67,
+    "width": 3840,
+    "height": 2160
+  },
+  {
+    "scene": "showcase",
+    "shot": "materials",
+    "engine": "unity",
+    "flip": 0.29801443219184875,
+    "ssim": 0.865506649017334,
+    "ppd": 67,
+    "width": 3840,
+    "height": 2160
+  },
+  {
+    "scene": "showcase",
+    "shot": "materials",
+    "engine": "unreal",
+    "flip": 0.24596448242664337,
+    "ssim": 0.8831016421318054,
+    "ppd": 67,
+    "width": 3840,
+    "height": 2160
+  },
+  {
+    "scene": "showcase",
+    "shot": "props",
+    "engine": "ara",
+    "flip": 0.18938103318214417,
+    "ssim": 0.9522207379341125,
+    "ppd": 67,
+    "width": 3840,
+    "height": 2160
+  },
+  {
+    "scene": "showcase",
+    "shot": "props",
+    "engine": "unity",
+    "flip": 0.20287461578845978,
+    "ssim": 0.9190803170204163,
+    "ppd": 67,
+    "width": 3840,
+    "height": 2160
+  },
+  {
+    "scene": "showcase",
+    "shot": "props",
+    "engine": "unreal",
+    "flip": 0.18472689390182495,
+    "ssim": 0.9605770111083984,
+    "ppd": 67,
+    "width": 3840,
+    "height": 2160
+  },
+  {
+    "scene": "showcase",
+    "shot": "stage",
+    "engine": "ara",
+    "flip": 0.21537324786186218,
+    "ssim": 0.9340514540672302,
+    "ppd": 67,
+    "width": 3840,
+    "height": 2160
+  },
+  {
+    "scene": "showcase",
+    "shot": "stage",
+    "engine": "unity",
+    "flip": 0.2218845635652542,
+    "ssim": 0.9070513844490051,
+    "ppd": 67,
+    "width": 3840,
+    "height": 2160
+  },
+  {
+    "scene": "showcase",
+    "shot": "stage",
+    "engine": "unreal",
+    "flip": 0.20538903772830963,
+    "ssim": 0.945395290851593,
+    "ppd": 67,
+    "width": 3840,
+    "height": 2160
+  }
+]

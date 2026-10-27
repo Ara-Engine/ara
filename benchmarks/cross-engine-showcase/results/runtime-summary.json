@@ -1,0 +1,3208 @@
+[
+  {
+    "scene": "showcase",
+    "engine": "ara",
+    "tier": "high",
+    "width": 2560,
+    "condition": "active-discord-call",
+    "camera_mode": "continuous interpolation",
+    "runs": 5,
+    "wall_p50": 2.4895,
+    "first_frame_ms": 600,
+    "cpu_p50": 0.49330000000000007,
+    "cpu_p95": 0.7100000000000002,
+    "full_scene_ms": 1572,
+    "wall_p95": 3.4656000000000002,
+    "frames": 7708,
+    "hitches_over_16ms": 0,
+    "gpu_p50": 1.7200320000001739,
+    "gpu_p95": 2.668352000000141,
+    "one_percent_low_fps": 260.648859948967,
+    "hitches_total": 0,
+    "spread": {
+      "gpu_p50": {
+        "min": 1.717439999999442,
+        "max": 1.7288000000007742,
+        "sample_cv_percent": 0.25729129898344294
+      },
+      "gpu_p95": {
+        "min": 2.657631999998557,
+        "max": 2.6805440000007366,
+        "sample_cv_percent": 0.32663755849881715
+      },
+      "cpu_p50": {
+        "min": 0.47509999999999986,
+        "max": 0.5129000000000004,
+        "sample_cv_percent": 3.187610454996411
+      },
+      "cpu_p95": {
+        "min": 0.6908000000000003,
+        "max": 0.7410000000000001,
+        "sample_cv_percent": 2.912062326187491
+      },
+      "wall_p50": {
+        "min": 2.4611,
+        "max": 2.5135,
+        "sample_cv_percent": 0.8394759059193622
+      },
+      "wall_p95": {
+        "min": 3.4368,
+        "max": 3.4930999999999996,
+        "sample_cv_percent": 0.5937063307880815
+      },
+      "one_percent_low_fps": {
+        "min": 257.44423406829765,
+        "max": 262.00494920630973,
+        "sample_cv_percent": 0.6524917539072012
+      },
+      "hitches_over_16ms": {
+        "min": 0,
+        "max": 0,
+        "sample_cv_percent": 0.0
+      }
+    },
+    "per_run": [
+      {
+        "repeat": 1,
+        "folder": "D:\\AraBench\\measurements\\active-call\\showcase\\ara\\high\\2560\\1",
+        "gpu_p50": 1.7190080000000307,
+        "gpu_p95": 2.6649600000000646,
+        "cpu_p50": 0.47509999999999986,
+        "cpu_p95": 0.6963000000000001,
+        "wall_p50": 2.4611,
+        "wall_p95": 3.4368,
+        "one_percent_low_fps": 262.00494920630973,
+        "hitches_over_16ms": 0,
+        "frames": 7785,
+        "first_frame_ms": 642,
+        "full_scene_ms": 1555
+      },
+      {
+        "repeat": 2,
+        "folder": "D:\\AraBench\\measurements\\active-call\\showcase\\ara\\high\\2560\\2",
+        "gpu_p50": 1.7288000000007742,
+        "gpu_p95": 2.668352000000141,
+        "cpu_p50": 0.5129000000000004,
+        "cpu_p95": 0.7256000000000002,
+        "wall_p50": 2.5135,
+        "wall_p95": 3.4756,
+        "one_percent_low_fps": 260.648859948967,
+        "hitches_over_16ms": 0,
+        "frames": 7644,
+        "first_frame_ms": 602,
+        "full_scene_ms": 1566
+      },
+      {
+        "repeat": 3,
+        "folder": "D:\\AraBench\\measurements\\active-call\\showcase\\ara\\high\\2560\\3",
+        "gpu_p50": 1.717439999999442,
+        "gpu_p95": 2.6739840000000186,
+        "cpu_p50": 0.5121999999999998,
+        "cpu_p95": 0.7410000000000001,
+        "wall_p50": 2.5073,
+        "wall_p95": 3.4930999999999996,
+        "one_percent_low_fps": 257.44423406829765,
+        "hitches_over_16ms": 0,
+        "frames": 7639,
+        "first_frame_ms": 600,
+        "full_scene_ms": 1735
+      },
+      {
+        "repeat": 4,
+        "folder": "D:\\AraBench\\measurements\\active-call\\showcase\\ara\\high\\2560\\4",
+        "gpu_p50": 1.7220800000000054,
+        "gpu_p95": 2.6805440000007366,
+        "cpu_p50": 0.49330000000000007,
+        "cpu_p95": 0.7100000000000002,
+        "wall_p50": 2.4895,
+        "wall_p95": 3.4619,
+        "one_percent_low_fps": 260.8964401684187,
+        "hitches_over_16ms": 0,
+        "frames": 7708,
+        "first_frame_ms": 556,
+        "full_scene_ms": 1577
+      },
+      {
+        "repeat": 5,
+        "folder": "D:\\AraBench\\measurements\\active-call\\showcase\\ara\\high\\2560\\5",
+        "gpu_p50": 1.7200320000001739,
+        "gpu_p95": 2.657631999998557,
+        "cpu_p50": 0.4917999999999998,
+        "cpu_p95": 0.6908000000000003,
+        "wall_p50": 2.4819999999999998,
+        "wall_p95": 3.4656000000000002,
+        "one_percent_low_fps": 260.3399171518279,
+        "hitches_over_16ms": 0,
+        "frames": 7739,
+        "first_frame_ms": 567,
+        "full_scene_ms": 1572
+      }
+    ]
+  },
+  {
+    "scene": "showcase",
+    "engine": "ara",
+    "tier": "high",
+    "width": 3840,
+    "condition": "active-discord-call",
+    "camera_mode": "continuous interpolation",
+    "runs": 5,
+    "wall_p50": 4.3369,
+    "first_frame_ms": 569,
+    "cpu_p50": 0.5610999999999997,
+    "cpu_p95": 0.8201000000000005,
+    "full_scene_ms": 1549,
+    "wall_p95": 4.8568999999999996,
+    "frames": 4542,
+    "hitches_over_16ms": 0,
+    "gpu_p50": 3.5120960000003834,
+    "gpu_p95": 3.865791999999601,
+    "one_percent_low_fps": 177.7156888955511,
+    "hitches_total": 0,
+    "spread": {
+      "gpu_p50": {
+        "min": 3.5042880000000878,
+        "max": 3.5389439999999013,
+        "sample_cv_percent": 0.4197199264719267
+      },
+      "gpu_p95": {
+        "min": 3.76147200000014,
+        "max": 4.3128639999999905,
+        "sample_cv_percent": 5.792767666213366
+      },
+      "cpu_p50": {
+        "min": 0.5399000000000003,
+        "max": 0.5679999999999992,
+        "sample_cv_percent": 2.439588830599278
+      },
+      "cpu_p95": {
+        "min": 0.7805999999999997,
+        "max": 0.8325000000000005,
+        "sample_cv_percent": 2.7778577367498825
+      },
+      "wall_p50": {
+        "min": 4.3034,
+        "max": 4.4076,
+        "sample_cv_percent": 1.0374649251687544
+      },
+      "wall_p95": {
+        "min": 4.679799999999999,
+        "max": 5.1991,
+        "sample_cv_percent": 4.45244659102347
+      },
+      "one_percent_low_fps": {
+        "min": 164.79357407599326,
+        "max": 192.62824020167767,
+        "sample_cv_percent": 6.8001776828848355
+      },
+      "hitches_over_16ms": {
+        "min": 0,
+        "max": 0,
+        "sample_cv_percent": 0.0
+      }
+    },
+    "per_run": [
+      {
+        "repeat": 1,
+        "folder": "D:\\AraBench\\measurements\\active-call\\showcase\\ara\\high\\3840\\1",
+        "gpu_p50": 3.5238079999999172,
+        "gpu_p95": 4.3128639999999905,
+        "cpu_p50": 0.5679999999999992,
+        "cpu_p95": 0.8325000000000005,
+        "wall_p50": 4.372199999999999,
+        "wall_p95": 5.1991,
+        "one_percent_low_fps": 172.28969171631164,
+        "hitches_over_16ms": 0,
+        "frames": 4464,
+        "first_frame_ms": 569,
+        "full_scene_ms": 1549
+      },
+      {
+        "repeat": 2,
+        "folder": "D:\\AraBench\\measurements\\active-call\\showcase\\ara\\high\\3840\\2",
+        "gpu_p50": 3.5120960000003834,
+        "gpu_p95": 3.865791999999601,
+        "cpu_p50": 0.563600000000001,
+        "cpu_p95": 0.8216999999999999,
+        "wall_p50": 4.3369,
+        "wall_p95": 4.9578,
+        "one_percent_low_fps": 177.7156888955511,
+        "hitches_over_16ms": 0,
+        "frames": 4542,
+        "first_frame_ms": 597,
+        "full_scene_ms": 1563
+      },
+      {
+        "repeat": 3,
+        "folder": "D:\\AraBench\\measurements\\active-call\\showcase\\ara\\high\\3840\\3",
+        "gpu_p50": 3.5042880000000878,
+        "gpu_p95": 3.76147200000014,
+        "cpu_p50": 0.5400000000000005,
+        "cpu_p95": 0.7896000000000001,
+        "wall_p50": 4.3034,
+        "wall_p95": 4.679799999999999,
+        "one_percent_low_fps": 192.62824020167767,
+        "hitches_over_16ms": 0,
+        "frames": 4611,
+        "first_frame_ms": 540,
+        "full_scene_ms": 1539
+      },
+      {
+        "repeat": 4,
+        "folder": "D:\\AraBench\\measurements\\active-call\\showcase\\ara\\high\\3840\\4",
+        "gpu_p50": 3.5389439999999013,
+        "gpu_p95": 3.875327999999172,
+        "cpu_p50": 0.5610999999999997,
+        "cpu_p95": 0.8201000000000005,
+        "wall_p50": 4.4076,
+        "wall_p95": 4.8568999999999996,
+        "one_percent_low_fps": 164.79357407599326,
+        "hitches_over_16ms": 0,
+        "frames": 4494,
+        "first_frame_ms": 676,
+        "full_scene_ms": 1623
+      },
+      {
+        "repeat": 5,
+        "folder": "D:\\AraBench\\measurements\\active-call\\showcase\\ara\\high\\3840\\5",
+        "gpu_p50": 3.5044159999997646,
+        "gpu_p95": 3.772927999998501,
+        "cpu_p50": 0.5399000000000003,
+        "cpu_p95": 0.7805999999999997,
+        "wall_p50": 4.3041,
+        "wall_p95": 4.679799999999999,
+        "one_percent_low_fps": 191.9663315560791,
+        "hitches_over_16ms": 0,
+        "frames": 4604,
+        "first_frame_ms": 556,
+        "full_scene_ms": 1534
+      }
+    ]
+  },
+  {
+    "scene": "showcase",
+    "engine": "ara",
+    "tier": "epic",
+    "width": 2560,
+    "condition": "active-discord-call",
+    "camera_mode": "continuous interpolation",
+    "runs": 5,
+    "wall_p50": 2.9269000000000003,
+    "first_frame_ms": 550,
+    "cpu_p50": 0.5033999999999996,
+    "cpu_p95": 0.7117,
+    "full_scene_ms": 1502,
+    "wall_p95": 3.2056,
+    "frames": 6727,
+    "hitches_over_16ms": 0,
+    "gpu_p50": 2.155264000000898,
+    "gpu_p95": 2.2288320000006934,
+    "one_percent_low_fps": 288.7647577900663,
+    "hitches_total": 0,
+    "spread": {
+      "gpu_p50": {
+        "min": 2.151583999999275,
+        "max": 2.166559999999663,
+        "sample_cv_percent": 0.2795335872000074
+      },
+      "gpu_p95": {
+        "min": 2.2172160000000076,
+        "max": 2.242975999999544,
+        "sample_cv_percent": 0.4820371547074308
+      },
+      "cpu_p50": {
+        "min": 0.4933999999999994,
+        "max": 0.5122,
+        "sample_cv_percent": 1.3583465644753507
+      },
+      "cpu_p95": {
+        "min": 0.7082000000000002,
+        "max": 0.7324000000000002,
+        "sample_cv_percent": 1.3752910937999676
+      },
+      "wall_p50": {
+        "min": 2.9126999999999996,
+        "max": 2.9332,
+        "sample_cv_percent": 0.29322148798643105
+      },
+      "wall_p95": {
+        "min": 3.1719999999999997,
+        "max": 3.211,
+        "sample_cv_percent": 0.5019433689437434
+      },
+      "one_percent_low_fps": {
+        "min": 284.2961496267359,
+        "max": 290.5128748470535,
+        "sample_cv_percent": 1.0411002175923403
+      },
+      "hitches_over_16ms": {
+        "min": 0,
+        "max": 0,
+        "sample_cv_percent": 0.0
+      }
+    },
+    "per_run": [
+      {
+        "repeat": 1,
+        "folder": "D:\\AraBench\\measurements\\active-call\\showcase\\ara\\epic\\2560\\1",
+        "gpu_p50": 2.155264000000898,
+        "gpu_p95": 2.2288320000006934,
+        "cpu_p50": 0.4933999999999994,
+        "cpu_p95": 0.7096999999999998,
+        "wall_p50": 2.9126999999999996,
+        "wall_p95": 3.1719999999999997,
+        "one_percent_low_fps": 290.5128748470535,
+        "hitches_over_16ms": 0,
+        "frames": 6771,
+        "first_frame_ms": 534,
+        "full_scene_ms": 1502
+      },
+      {
+        "repeat": 2,
+        "folder": "D:\\AraBench\\measurements\\active-call\\showcase\\ara\\epic\\2560\\2",
+        "gpu_p50": 2.1548799999982293,
+        "gpu_p95": 2.2373760000009497,
+        "cpu_p50": 0.5033999999999996,
+        "cpu_p95": 0.7082000000000002,
+        "wall_p50": 2.9177,
+        "wall_p95": 3.1974,
+        "one_percent_low_fps": 288.7647577900663,
+        "hitches_over_16ms": 0,
+        "frames": 6745,
+        "first_frame_ms": 563,
+        "full_scene_ms": 1487
+      },
+      {
+        "repeat": 3,
+        "folder": "D:\\AraBench\\measurements\\active-call\\showcase\\ara\\epic\\2560\\3",
+        "gpu_p50": 2.151583999999275,
+        "gpu_p95": 2.2172160000000076,
+        "cpu_p50": 0.5122,
+        "cpu_p95": 0.7324000000000002,
+        "wall_p50": 2.9298,
+        "wall_p95": 3.211,
+        "one_percent_low_fps": 290.07664848853005,
+        "hitches_over_16ms": 0,
+        "frames": 6727,
+        "first_frame_ms": 563,
+        "full_scene_ms": 1518
+      },
+      {
+        "repeat": 4,
+        "folder": "D:\\AraBench\\measurements\\active-call\\showcase\\ara\\epic\\2560\\4",
+        "gpu_p50": 2.1617279999991297,
+        "gpu_p95": 2.2213120000014897,
+        "cpu_p50": 0.5003000000000002,
+        "cpu_p95": 0.7163000000000004,
+        "wall_p50": 2.9269000000000003,
+        "wall_p95": 3.2056,
+        "one_percent_low_fps": 284.6007553638872,
+        "hitches_over_16ms": 0,
+        "frames": 6724,
+        "first_frame_ms": 550,
+        "full_scene_ms": 1533
+      },
+      {
+        "repeat": 5,
+        "folder": "D:\\AraBench\\measurements\\active-call\\showcase\\ara\\epic\\2560\\5",
+        "gpu_p50": 2.166559999999663,
+        "gpu_p95": 2.242975999999544,
+        "cpu_p50": 0.5045999999999999,
+        "cpu_p95": 0.7117,
+        "wall_p50": 2.9332,
+        "wall_p95": 3.2096,
+        "one_percent_low_fps": 284.2961496267359,
+        "hitches_over_16ms": 0,
+        "frames": 6719,
+        "first_frame_ms": 545,
+        "full_scene_ms": 1498
+      }
+    ]
+  },
+  {
+    "scene": "showcase",
+    "engine": "ara",
+    "tier": "epic",
+    "width": 3840,
+    "condition": "active-discord-call",
+    "camera_mode": "continuous interpolation",
+    "runs": 3,
+    "wall_p50": 5.3405,
+    "first_frame_ms": 571,
+    "cpu_p50": 0.5961999999999996,
+    "cpu_p95": 0.8426999999999998,
+    "full_scene_ms": 1542,
+    "wall_p95": 5.6812,
+    "frames": 3712,
+    "hitches_over_16ms": 0,
+    "gpu_p50": 4.453983999999764,
+    "gpu_p95": 4.6880959999980405,
+    "one_percent_low_fps": 158.49400663255707,
+    "hitches_total": 0,
+    "spread": {
+      "gpu_p50": {
+        "min": 4.451807999999801,
+        "max": 4.455359999999928,
+        "sample_cv_percent": 0.040212522272146514
+      },
+      "gpu_p95": {
+        "min": 4.686431999998604,
+        "max": 4.711840000000393,
+        "sample_cv_percent": 0.3027039830399437
+      },
+      "cpu_p50": {
+        "min": 0.5632999999999999,
+        "max": 0.6231,
+        "sample_cv_percent": 5.040411512692603
+      },
+      "cpu_p95": {
+        "min": 0.8120000000000003,
+        "max": 0.8618000000000006,
+        "sample_cv_percent": 2.995131137774227
+      },
+      "wall_p50": {
+        "min": 5.3117,
+        "max": 5.3449,
+        "sample_cv_percent": 0.33817185248959614
+      },
+      "wall_p95": {
+        "min": 5.6262,
+        "max": 5.7045,
+        "sample_cv_percent": 0.7090083705263147
+      },
+      "one_percent_low_fps": {
+        "min": 157.33145970886227,
+        "max": 158.6457994558449,
+        "sample_cv_percent": 0.4546317755555996
+      },
+      "hitches_over_16ms": {
+        "min": 0,
+        "max": 0,
+        "sample_cv_percent": 0.0
+      }
+    },
+    "per_run": [
+      {
+        "repeat": 1,
+        "folder": "D:\\AraBench\\measurements\\active-call\\showcase\\ara\\epic\\3840\\1",
+        "gpu_p50": 4.453983999999764,
+        "gpu_p95": 4.711840000000393,
+        "cpu_p50": 0.5961999999999996,
+        "cpu_p95": 0.8426999999999998,
+        "wall_p50": 5.3405,
+        "wall_p95": 5.7045,
+        "one_percent_low_fps": 158.6457994558449,
+        "hitches_over_16ms": 0,
+        "frames": 3712,
+        "first_frame_ms": 596,
+        "full_scene_ms": 1542
+      },
+      {
+        "repeat": 2,
+        "folder": "D:\\AraBench\\measurements\\active-call\\showcase\\ara\\epic\\3840\\2",
+        "gpu_p50": 4.451807999999801,
+        "gpu_p95": 4.686431999998604,
+        "cpu_p50": 0.6231,
+        "cpu_p95": 0.8618000000000006,
+        "wall_p50": 5.3449,
+        "wall_p95": 5.6812,
+        "one_percent_low_fps": 158.49400663255707,
+        "hitches_over_16ms": 0,
+        "frames": 3710,
+        "first_frame_ms": 549,
+        "full_scene_ms": 1542
+      },
+      {
+        "repeat": 3,
+        "folder": "D:\\AraBench\\measurements\\active-call\\showcase\\ara\\epic\\3840\\3",
+        "gpu_p50": 4.455359999999928,
+        "gpu_p95": 4.6880959999980405,
+        "cpu_p50": 0.5632999999999999,
+        "cpu_p95": 0.8120000000000003,
+        "wall_p50": 5.3117,
+        "wall_p95": 5.6262,
+        "one_percent_low_fps": 157.33145970886227,
+        "hitches_over_16ms": 0,
+        "frames": 3732,
+        "first_frame_ms": 571,
+        "full_scene_ms": 1560
+      }
+    ]
+  },
+  {
+    "scene": "showcase",
+    "engine": "unity",
+    "tier": "high",
+    "width": 2560,
+    "condition": "active-discord-call",
+    "camera_mode": "continuous interpolation",
+    "runs": 5,
+    "wall_p50": 1.1859,
+    "cpu_p50": 0.474,
+    "cpu_p95": 0.5853,
+    "window_seconds": 20.0008032,
+    "wall_p95": 1.5713,
+    "frames": 16140,
+    "hitches_over_16ms": 0,
+    "gpu_coverage": 0.9970973320158103,
+    "gpu_p50": 1.091584,
+    "gpu_p95": 1.168384,
+    "one_percent_low_fps": 413.4320500181323,
+    "hitches_total": 3,
+    "spread": {
+      "gpu_p50": {
+        "min": 1.089536,
+        "max": 1.101824,
+        "sample_cv_percent": 0.4391775056014381
+      },
+      "gpu_p95": {
+        "min": 1.156096,
+        "max": 1.273856,
+        "sample_cv_percent": 4.217706836573692
+      },
+      "cpu_p50": {
+        "min": 0.471,
+        "max": 0.4855,
+        "sample_cv_percent": 1.3114851408914874
+      },
+      "cpu_p95": {
+        "min": 0.5764,
+        "max": 0.6038,
+        "sample_cv_percent": 1.9172771535185422
+      },
+      "wall_p50": {
+        "min": 1.1747,
+        "max": 1.194,
+        "sample_cv_percent": 0.6100413235067599
+      },
+      "wall_p95": {
+        "min": 1.548,
+        "max": 1.9593,
+        "sample_cv_percent": 10.529477409980032
+      },
+      "one_percent_low_fps": {
+        "min": 308.95965511552663,
+        "max": 415.37726640220984,
+        "sample_cv_percent": 11.917607799331192
+      },
+      "hitches_over_16ms": {
+        "min": 0,
+        "max": 3,
+        "sample_cv_percent": 223.60679774997897
+      }
+    },
+    "per_run": [
+      {
+        "repeat": 1,
+        "folder": "D:\\AraBench\\measurements\\active-call\\showcase\\unity\\high\\2560\\1",
+        "gpu_p50": 1.089536,
+        "gpu_p95": 1.17248,
+        "cpu_p50": 0.474,
+        "cpu_p95": 0.5953,
+        "wall_p50": 1.1747,
+        "wall_p95": 1.9593,
+        "one_percent_low_fps": 409.5871715275225,
+        "hitches_over_16ms": 0,
+        "frames": 16140,
+        "gpu_coverage": 0.9978314745972738,
+        "window_seconds": 20.000595099999998
+      },
+      {
+        "repeat": 2,
+        "folder": "D:\\AraBench\\measurements\\active-call\\showcase\\unity\\high\\2560\\2",
+        "gpu_p50": 1.091584,
+        "gpu_p95": 1.156096,
+        "cpu_p50": 0.4802,
+        "cpu_p95": 0.5853,
+        "wall_p50": 1.1859,
+        "wall_p95": 1.5713,
+        "one_percent_low_fps": 413.4320500181323,
+        "hitches_over_16ms": 0,
+        "frames": 16137,
+        "gpu_coverage": 0.9972733469665985,
+        "window_seconds": 20.001053
+      },
+      {
+        "repeat": 3,
+        "folder": "D:\\AraBench\\measurements\\active-call\\showcase\\unity\\high\\2560\\3",
+        "gpu_p50": 1.093632,
+        "gpu_p95": 1.273856,
+        "cpu_p50": 0.4855,
+        "cpu_p95": 0.6038,
+        "wall_p50": 1.194,
+        "wall_p95": 1.7094,
+        "one_percent_low_fps": 308.95965511552663,
+        "hitches_over_16ms": 3,
+        "frames": 15837,
+        "gpu_coverage": 0.9951379680495043,
+        "window_seconds": 20.0008652
+      },
+      {
+        "repeat": 4,
+        "folder": "D:\\AraBench\\measurements\\active-call\\showcase\\unity\\high\\2560\\4",
+        "gpu_p50": 1.101824,
+        "gpu_p95": 1.168384,
+        "cpu_p50": 0.4715,
+        "cpu_p95": 0.58,
+        "wall_p50": 1.1883,
+        "wall_p95": 1.5535,
+        "one_percent_low_fps": 415.3349881783356,
+        "hitches_over_16ms": 0,
+        "frames": 16164,
+        "gpu_coverage": 0.9970304380103935,
+        "window_seconds": 20.000794999999997
+      },
+      {
+        "repeat": 5,
+        "folder": "D:\\AraBench\\measurements\\active-call\\showcase\\unity\\high\\2560\\5",
+        "gpu_p50": 1.091584,
+        "gpu_p95": 1.156096,
+        "cpu_p50": 0.471,
+        "cpu_p95": 0.5764,
+        "wall_p50": 1.1818,
+        "wall_p95": 1.548,
+        "one_percent_low_fps": 415.37726640220984,
+        "hitches_over_16ms": 0,
+        "frames": 16192,
+        "gpu_coverage": 0.9970973320158103,
+        "window_seconds": 20.0008032
+      }
+    ]
+  },
+  {
+    "scene": "showcase",
+    "engine": "unity",
+    "tier": "high",
+    "width": 3840,
+    "condition": "active-discord-call",
+    "camera_mode": "continuous interpolation",
+    "runs": 5,
+    "wall_p50": 1.873,
+    "cpu_p50": 0.4637,
+    "cpu_p95": 0.5916,
+    "window_seconds": 20.000513299999998,
+    "wall_p95": 2.1711,
+    "frames": 10351,
+    "hitches_over_16ms": 0,
+    "gpu_coverage": 0.9998052769934768,
+    "gpu_p50": 1.85344,
+    "gpu_p95": 2.141184,
+    "one_percent_low_fps": 321.32683264433444,
+    "hitches_total": 1,
+    "spread": {
+      "gpu_p50": {
+        "min": 1.83296,
+        "max": 1.88416,
+        "sample_cv_percent": 1.0434924606826395
+      },
+      "gpu_p95": {
+        "min": 1.921024,
+        "max": 2.880512,
+        "sample_cv_percent": 16.632407770572453
+      },
+      "cpu_p50": {
+        "min": 0.4591,
+        "max": 0.471,
+        "sample_cv_percent": 1.0792395152689633
+      },
+      "cpu_p95": {
+        "min": 0.5539,
+        "max": 0.6072,
+        "sample_cv_percent": 3.5113351123621155
+      },
+      "wall_p50": {
+        "min": 1.8654,
+        "max": 1.9069,
+        "sample_cv_percent": 0.8895539669802643
+      },
+      "wall_p95": {
+        "min": 2.0518,
+        "max": 2.812,
+        "sample_cv_percent": 13.362909645630575
+      },
+      "one_percent_low_fps": {
+        "min": 296.4557573988516,
+        "max": 403.36838994187724,
+        "sample_cv_percent": 13.53089534945402
+      },
+      "hitches_over_16ms": {
+        "min": 0,
+        "max": 1,
+        "sample_cv_percent": 223.60679774997894
+      }
+    },
+    "per_run": [
+      {
+        "repeat": 1,
+        "folder": "D:\\AraBench\\measurements\\active-call\\showcase\\unity\\high\\3840\\1",
+        "gpu_p50": 1.859584,
+        "gpu_p95": 2.880512,
+        "cpu_p50": 0.471,
+        "cpu_p95": 0.6072,
+        "wall_p50": 1.8826,
+        "wall_p95": 2.812,
+        "one_percent_low_fps": 318.659723390985,
+        "hitches_over_16ms": 0,
+        "frames": 10271,
+        "gpu_coverage": 0.9998052769934768,
+        "window_seconds": 20.000513299999998
+      },
+      {
+        "repeat": 2,
+        "folder": "D:\\AraBench\\measurements\\active-call\\showcase\\unity\\high\\3840\\2",
+        "gpu_p50": 1.83296,
+        "gpu_p95": 2.241536,
+        "cpu_p50": 0.4702,
+        "cpu_p95": 0.5908,
+        "wall_p50": 1.8687,
+        "wall_p95": 2.2858,
+        "one_percent_low_fps": 321.32683264433444,
+        "hitches_over_16ms": 0,
+        "frames": 10351,
+        "gpu_coverage": 0.9995169548835862,
+        "window_seconds": 20.0003129
+      },
+      {
+        "repeat": 3,
+        "folder": "D:\\AraBench\\measurements\\active-call\\showcase\\unity\\high\\3840\\3",
+        "gpu_p50": 1.88416,
+        "gpu_p95": 2.141184,
+        "cpu_p50": 0.4637,
+        "cpu_p95": 0.5916,
+        "wall_p50": 1.9069,
+        "wall_p95": 2.1711,
+        "one_percent_low_fps": 296.4557573988516,
+        "hitches_over_16ms": 1,
+        "frames": 10349,
+        "gpu_coverage": 0.9996134892260121,
+        "window_seconds": 20.000117
+      },
+      {
+        "repeat": 4,
+        "folder": "D:\\AraBench\\measurements\\active-call\\showcase\\unity\\high\\3840\\4",
+        "gpu_p50": 1.8432,
+        "gpu_p95": 2.048,
+        "cpu_p50": 0.4634,
+        "cpu_p95": 0.6007,
+        "wall_p50": 1.8654,
+        "wall_p95": 2.1158,
+        "one_percent_low_fps": 386.3669518319571,
+        "hitches_over_16ms": 0,
+        "frames": 10623,
+        "gpu_coverage": 0.9998117292666855,
+        "window_seconds": 20.0006035
+      },
+      {
+        "repeat": 5,
+        "folder": "D:\\AraBench\\measurements\\active-call\\showcase\\unity\\high\\3840\\5",
+        "gpu_p50": 1.85344,
+        "gpu_p95": 1.921024,
+        "cpu_p50": 0.4591,
+        "cpu_p95": 0.5539,
+        "wall_p50": 1.873,
+        "wall_p95": 2.0518,
+        "one_percent_low_fps": 403.36838994187724,
+        "hitches_over_16ms": 0,
+        "frames": 10618,
+        "gpu_coverage": 0.9998116406102844,
+        "window_seconds": 20.0013894
+      }
+    ]
+  },
+  {
+    "scene": "showcase",
+    "engine": "unity",
+    "tier": "epic",
+    "width": 2560,
+    "condition": "active-discord-call",
+    "camera_mode": "continuous interpolation",
+    "runs": 5,
+    "wall_p50": 1.3346,
+    "cpu_p50": 0.4642,
+    "cpu_p95": 0.5515,
+    "window_seconds": 20.0008727,
+    "wall_p95": 1.5049,
+    "frames": 14924,
+    "hitches_over_16ms": 0,
+    "gpu_coverage": 0.9996632316292854,
+    "gpu_p50": 1.283072,
+    "gpu_p95": 1.338368,
+    "one_percent_low_fps": 534.9578819401809,
+    "hitches_total": 0,
+    "spread": {
+      "gpu_p50": {
+        "min": 1.277952,
+        "max": 1.292288,
+        "sample_cv_percent": 0.40420321657269004
+      },
+      "gpu_p95": {
+        "min": 1.3312,
+        "max": 1.347584,
+        "sample_cv_percent": 0.4428399733278573
+      },
+      "cpu_p50": {
+        "min": 0.4617,
+        "max": 0.4713,
+        "sample_cv_percent": 0.7883100909272671
+      },
+      "cpu_p95": {
+        "min": 0.542,
+        "max": 0.5792,
+        "sample_cv_percent": 2.5828781033379684
+      },
+      "wall_p50": {
+        "min": 1.3291,
+        "max": 1.3424,
+        "sample_cv_percent": 0.3632886006691951
+      },
+      "wall_p95": {
+        "min": 1.4918,
+        "max": 1.5339,
+        "sample_cv_percent": 1.0781357614655187
+      },
+      "one_percent_low_fps": {
+        "min": 500.7561754327004,
+        "max": 562.7677367507592,
+        "sample_cv_percent": 4.7865674687137645
+      },
+      "hitches_over_16ms": {
+        "min": 0,
+        "max": 0,
+        "sample_cv_percent": 0.0
+      }
+    },
+    "per_run": [
+      {
+        "repeat": 1,
+        "folder": "D:\\AraBench\\measurements\\active-call\\showcase\\unity\\epic\\2560\\1",
+        "gpu_p50": 1.283072,
+        "gpu_p95": 1.338368,
+        "cpu_p50": 0.4713,
+        "cpu_p95": 0.5792,
+        "wall_p50": 1.3374,
+        "wall_p95": 1.5339,
+        "one_percent_low_fps": 500.7561754327004,
+        "hitches_over_16ms": 0,
+        "frames": 14850,
+        "gpu_coverage": 0.9993265993265993,
+        "window_seconds": 20.0009004
+      },
+      {
+        "repeat": 2,
+        "folder": "D:\\AraBench\\measurements\\active-call\\showcase\\unity\\epic\\2560\\2",
+        "gpu_p50": 1.277952,
+        "gpu_p95": 1.3312,
+        "cpu_p50": 0.4638,
+        "cpu_p95": 0.5515,
+        "wall_p50": 1.3291,
+        "wall_p95": 1.4918,
+        "one_percent_low_fps": 560.4918278423195,
+        "hitches_over_16ms": 0,
+        "frames": 14992,
+        "gpu_coverage": 0.9997331910352187,
+        "window_seconds": 20.0010842
+      },
+      {
+        "repeat": 3,
+        "folder": "D:\\AraBench\\measurements\\active-call\\showcase\\unity\\epic\\2560\\3",
+        "gpu_p50": 1.292288,
+        "gpu_p95": 1.347584,
+        "cpu_p50": 0.4642,
+        "cpu_p95": 0.5538,
+        "wall_p50": 1.3424,
+        "wall_p95": 1.5121,
+        "one_percent_low_fps": 534.9578819401809,
+        "hitches_over_16ms": 0,
+        "frames": 14847,
+        "gpu_coverage": 0.9996632316292854,
+        "window_seconds": 20.0008727
+      },
+      {
+        "repeat": 4,
+        "folder": "D:\\AraBench\\measurements\\active-call\\showcase\\unity\\epic\\2560\\4",
+        "gpu_p50": 1.28512,
+        "gpu_p95": 1.338368,
+        "cpu_p50": 0.4666,
+        "cpu_p95": 0.5477,
+        "wall_p50": 1.3344,
+        "wall_p95": 1.5049,
+        "one_percent_low_fps": 526.5062554208207,
+        "hitches_over_16ms": 0,
+        "frames": 14924,
+        "gpu_coverage": 0.9995979630125972,
+        "window_seconds": 20.0005477
+      },
+      {
+        "repeat": 5,
+        "folder": "D:\\AraBench\\measurements\\active-call\\showcase\\unity\\epic\\2560\\5",
+        "gpu_p50": 1.283072,
+        "gpu_p95": 1.33632,
+        "cpu_p50": 0.4617,
+        "cpu_p95": 0.542,
+        "wall_p50": 1.3346,
+        "wall_p95": 1.4981,
+        "one_percent_low_fps": 562.7677367507592,
+        "hitches_over_16ms": 0,
+        "frames": 14946,
+        "gpu_coverage": 0.9997992773986351,
+        "window_seconds": 20.000266
+      }
+    ]
+  },
+  {
+    "scene": "showcase",
+    "engine": "unity",
+    "tier": "epic",
+    "width": 3840,
+    "condition": "active-discord-call",
+    "camera_mode": "continuous interpolation",
+    "runs": 3,
+    "wall_p50": 2.2383,
+    "cpu_p50": 0.4675,
+    "cpu_p95": 0.6075,
+    "window_seconds": 20.001163100000003,
+    "wall_p95": 2.446,
+    "frames": 8887,
+    "hitches_over_16ms": 0,
+    "gpu_coverage": 0.9997749521773377,
+    "gpu_p50": 2.215936,
+    "gpu_p95": 2.315264,
+    "one_percent_low_fps": 338.40497189147464,
+    "hitches_total": 0,
+    "spread": {
+      "gpu_p50": {
+        "min": 2.19648,
+        "max": 2.266112,
+        "sample_cv_percent": 1.613873486002651
+      },
+      "gpu_p95": {
+        "min": 2.290688,
+        "max": 2.33472,
+        "sample_cv_percent": 0.9537501539624677
+      },
+      "cpu_p50": {
+        "min": 0.4668,
+        "max": 0.4688,
+        "sample_cv_percent": 0.21699575721813547
+      },
+      "cpu_p95": {
+        "min": 0.592,
+        "max": 0.6112,
+        "sample_cv_percent": 1.687705674097794
+      },
+      "wall_p50": {
+        "min": 2.2195,
+        "max": 2.2873,
+        "sample_cv_percent": 1.5568211362191995
+      },
+      "wall_p95": {
+        "min": 2.4231,
+        "max": 2.4929,
+        "sample_cv_percent": 1.4499198970616891
+      },
+      "one_percent_low_fps": {
+        "min": 331.5149547539244,
+        "max": 340.43068263916996,
+        "sample_cv_percent": 1.3877735864470973
+      },
+      "hitches_over_16ms": {
+        "min": 0,
+        "max": 0,
+        "sample_cv_percent": 0.0
+      }
+    },
+    "per_run": [
+      {
+        "repeat": 1,
+        "folder": "D:\\AraBench\\measurements\\active-call\\showcase\\unity\\epic\\3840\\1",
+        "gpu_p50": 2.215936,
+        "gpu_p95": 2.315264,
+        "cpu_p50": 0.4668,
+        "cpu_p95": 0.592,
+        "wall_p50": 2.2383,
+        "wall_p95": 2.446,
+        "one_percent_low_fps": 338.40497189147464,
+        "hitches_over_16ms": 0,
+        "frames": 8887,
+        "gpu_coverage": 0.9997749521773377,
+        "window_seconds": 20.001163100000003
+      },
+      {
+        "repeat": 2,
+        "folder": "D:\\AraBench\\measurements\\active-call\\showcase\\unity\\epic\\3840\\2",
+        "gpu_p50": 2.266112,
+        "gpu_p95": 2.33472,
+        "cpu_p50": 0.4675,
+        "cpu_p95": 0.6075,
+        "wall_p50": 2.2873,
+        "wall_p95": 2.4929,
+        "one_percent_low_fps": 331.5149547539244,
+        "hitches_over_16ms": 0,
+        "frames": 8698,
+        "gpu_coverage": 0.9997700620832375,
+        "window_seconds": 20.0014087
+      },
+      {
+        "repeat": 3,
+        "folder": "D:\\AraBench\\measurements\\active-call\\showcase\\unity\\epic\\3840\\3",
+        "gpu_p50": 2.19648,
+        "gpu_p95": 2.290688,
+        "cpu_p50": 0.4688,
+        "cpu_p95": 0.6112,
+        "wall_p50": 2.2195,
+        "wall_p95": 2.4231,
+        "one_percent_low_fps": 340.43068263916996,
+        "hitches_over_16ms": 0,
+        "frames": 8958,
+        "gpu_coverage": 0.9997767358785443,
+        "window_seconds": 20.0009604
+      }
+    ]
+  },
+  {
+    "scene": "showcase",
+    "engine": "unreal",
+    "tier": "high",
+    "width": 2560,
+    "condition": "active-discord-call",
+    "camera_mode": "continuous interpolation",
+    "runs": 5,
+    "wall_p50": 4.451,
+    "cpu_p50": 0.4747,
+    "cpu_p95": 0.5936,
+    "window_seconds": 19.9989193,
+    "capture_seconds": 36.80568519999995,
+    "wall_p95": 5.6145,
+    "frames": 4357,
+    "warmup_seconds": 5.0,
+    "hitches_over_16ms": 0,
+    "gpu_coverage": 1.0,
+    "gpu_p50": 3.7981,
+    "gpu_p95": 4.8894,
+    "one_percent_low_fps": 143.0929675009854,
+    "hitches_total": 1,
+    "spread": {
+      "gpu_p50": {
+        "min": 3.7847,
+        "max": 3.799,
+        "sample_cv_percent": 0.15818188303275837
+      },
+      "gpu_p95": {
+        "min": 4.8819,
+        "max": 4.895,
+        "sample_cv_percent": 0.11076741119785254
+      },
+      "cpu_p50": {
+        "min": 0.4702,
+        "max": 0.4855,
+        "sample_cv_percent": 1.3024983880235355
+      },
+      "cpu_p95": {
+        "min": 0.5879,
+        "max": 0.6015,
+        "sample_cv_percent": 1.0321801519025062
+      },
+      "wall_p50": {
+        "min": 4.4435,
+        "max": 4.4591,
+        "sample_cv_percent": 0.13319667258179327
+      },
+      "wall_p95": {
+        "min": 5.561,
+        "max": 5.6368,
+        "sample_cv_percent": 0.5256303925522349
+      },
+      "one_percent_low_fps": {
+        "min": 127.55741750731353,
+        "max": 144.32968048032916,
+        "sample_cv_percent": 5.094489921869759
+      },
+      "hitches_over_16ms": {
+        "min": 0,
+        "max": 1,
+        "sample_cv_percent": 223.60679774997894
+      }
+    },
+    "per_run": [
+      {
+        "repeat": 1,
+        "folder": "D:\\AraBench\\measurements\\active-call\\showcase\\unreal\\high\\2560\\1",
+        "gpu_p50": 3.7847,
+        "gpu_p95": 4.8855,
+        "cpu_p50": 0.4855,
+        "cpu_p95": 0.601,
+        "wall_p50": 4.4591,
+        "wall_p95": 5.561,
+        "one_percent_low_fps": 142.292638393335,
+        "hitches_over_16ms": 0,
+        "frames": 4359,
+        "capture_seconds": 36.8118453999999,
+        "warmup_seconds": 5.0,
+        "window_seconds": 20.0026431,
+        "gpu_coverage": 1.0
+      },
+      {
+        "repeat": 2,
+        "folder": "D:\\AraBench\\measurements\\active-call\\showcase\\unreal\\high\\2560\\2",
+        "gpu_p50": 3.7984,
+        "gpu_p95": 4.895,
+        "cpu_p50": 0.4772,
+        "cpu_p95": 0.5879,
+        "wall_p50": 4.4465,
+        "wall_p95": 5.6368,
+        "one_percent_low_fps": 143.0929675009854,
+        "hitches_over_16ms": 0,
+        "frames": 4357,
+        "capture_seconds": 37.05805060000013,
+        "warmup_seconds": 5.0,
+        "window_seconds": 19.9976217,
+        "gpu_coverage": 1.0
+      },
+      {
+        "repeat": 3,
+        "folder": "D:\\AraBench\\measurements\\active-call\\showcase\\unreal\\high\\2560\\3",
+        "gpu_p50": 3.794,
+        "gpu_p95": 4.8819,
+        "cpu_p50": 0.4747,
+        "cpu_p95": 0.6015,
+        "wall_p50": 4.451,
+        "wall_p95": 5.614,
+        "one_percent_low_fps": 127.55741750731353,
+        "hitches_over_16ms": 1,
+        "frames": 4346,
+        "capture_seconds": 36.80568519999995,
+        "warmup_seconds": 5.0,
+        "window_seconds": 19.998378499999998,
+        "gpu_coverage": 1.0
+      },
+      {
+        "repeat": 4,
+        "folder": "D:\\AraBench\\measurements\\active-call\\showcase\\unreal\\high\\2560\\4",
+        "gpu_p50": 3.799,
+        "gpu_p95": 4.8894,
+        "cpu_p50": 0.4702,
+        "cpu_p95": 0.5936,
+        "wall_p50": 4.4517,
+        "wall_p95": 5.6145,
+        "one_percent_low_fps": 144.32968048032916,
+        "hitches_over_16ms": 0,
+        "frames": 4357,
+        "capture_seconds": 36.74375140000002,
+        "warmup_seconds": 5.0,
+        "window_seconds": 20.0002317,
+        "gpu_coverage": 1.0
+      },
+      {
+        "repeat": 5,
+        "folder": "D:\\AraBench\\measurements\\active-call\\showcase\\unreal\\high\\2560\\5",
+        "gpu_p50": 3.7981,
+        "gpu_p95": 4.8933,
+        "cpu_p50": 0.4708,
+        "cpu_p95": 0.5905,
+        "wall_p50": 4.4435,
+        "wall_p95": 5.6281,
+        "one_percent_low_fps": 144.02250940892506,
+        "hitches_over_16ms": 0,
+        "frames": 4359,
+        "capture_seconds": 36.77856199999997,
+        "warmup_seconds": 5.0,
+        "window_seconds": 19.9989193,
+        "gpu_coverage": 1.0
+      }
+    ]
+  },
+  {
+    "scene": "showcase",
+    "engine": "unreal",
+    "tier": "high",
+    "width": 3840,
+    "condition": "active-discord-call",
+    "camera_mode": "continuous interpolation",
+    "runs": 5,
+    "wall_p50": 6.79,
+    "cpu_p50": 0.4862,
+    "cpu_p95": 0.757,
+    "window_seconds": 19.9980423,
+    "capture_seconds": 54.67050579999996,
+    "wall_p95": 7.4991,
+    "frames": 2918,
+    "warmup_seconds": 5.0,
+    "hitches_over_16ms": 0,
+    "gpu_coverage": 1.0,
+    "gpu_p50": 6.4674,
+    "gpu_p95": 6.9414,
+    "one_percent_low_fps": 114.68393305780188,
+    "hitches_total": 7,
+    "spread": {
+      "gpu_p50": {
+        "min": 6.4517,
+        "max": 6.4874,
+        "sample_cv_percent": 0.21163112550295324
+      },
+      "gpu_p95": {
+        "min": 6.8409,
+        "max": 7.6653,
+        "sample_cv_percent": 5.718609714352634
+      },
+      "cpu_p50": {
+        "min": 0.4711,
+        "max": 0.5566,
+        "sample_cv_percent": 6.836741860832234
+      },
+      "cpu_p95": {
+        "min": 0.6345,
+        "max": 0.9949,
+        "sample_cv_percent": 17.48442981343684
+      },
+      "wall_p50": {
+        "min": 6.7623,
+        "max": 6.8702,
+        "sample_cv_percent": 0.7565063764049608
+      },
+      "wall_p95": {
+        "min": 7.3839,
+        "max": 8.1308,
+        "sample_cv_percent": 4.486436576649791
+      },
+      "one_percent_low_fps": {
+        "min": 75.88708204557172,
+        "max": 120.28208554702486,
+        "sample_cv_percent": 18.445669673320314
+      },
+      "hitches_over_16ms": {
+        "min": 0,
+        "max": 6,
+        "sample_cv_percent": 186.26292586293283
+      }
+    },
+    "per_run": [
+      {
+        "repeat": 1,
+        "folder": "D:\\AraBench\\measurements\\active-call\\showcase\\unreal\\high\\3840\\1",
+        "gpu_p50": 6.4569,
+        "gpu_p95": 7.6249,
+        "cpu_p50": 0.4811,
+        "cpu_p95": 0.7075,
+        "wall_p50": 6.8702,
+        "wall_p95": 7.9985,
+        "one_percent_low_fps": 114.68393305780188,
+        "hitches_over_16ms": 0,
+        "frames": 2853,
+        "capture_seconds": 56.16061430000017,
+        "warmup_seconds": 5.0,
+        "window_seconds": 19.9980423,
+        "gpu_coverage": 1.0
+      },
+      {
+        "repeat": 2,
+        "folder": "D:\\AraBench\\measurements\\active-call\\showcase\\unreal\\high\\3840\\2",
+        "gpu_p50": 6.4874,
+        "gpu_p95": 7.6653,
+        "cpu_p50": 0.5566,
+        "cpu_p95": 0.9949,
+        "wall_p50": 6.8697,
+        "wall_p95": 8.1308,
+        "one_percent_low_fps": 93.88063368780286,
+        "hitches_over_16ms": 1,
+        "frames": 2855,
+        "capture_seconds": 56.699479400000016,
+        "warmup_seconds": 5.0,
+        "window_seconds": 19.996564,
+        "gpu_coverage": 1.0
+      },
+      {
+        "repeat": 3,
+        "folder": "D:\\AraBench\\measurements\\active-call\\showcase\\unreal\\high\\3840\\3",
+        "gpu_p50": 6.4517,
+        "gpu_p95": 6.8409,
+        "cpu_p50": 0.4862,
+        "cpu_p95": 0.7689,
+        "wall_p50": 6.7623,
+        "wall_p95": 7.4991,
+        "one_percent_low_fps": 75.88708204557172,
+        "hitches_over_16ms": 6,
+        "frames": 2918,
+        "capture_seconds": 54.48269419999997,
+        "warmup_seconds": 5.0,
+        "window_seconds": 19.9999181,
+        "gpu_coverage": 1.0
+      },
+      {
+        "repeat": 4,
+        "folder": "D:\\AraBench\\measurements\\active-call\\showcase\\unreal\\high\\3840\\4",
+        "gpu_p50": 6.4674,
+        "gpu_p95": 6.9414,
+        "cpu_p50": 0.4914,
+        "cpu_p95": 0.757,
+        "wall_p50": 6.79,
+        "wall_p95": 7.4515,
+        "one_percent_low_fps": 118.95778703621828,
+        "hitches_over_16ms": 0,
+        "frames": 2932,
+        "capture_seconds": 54.66756220000035,
+        "warmup_seconds": 5.0,
+        "window_seconds": 20.0025856,
+        "gpu_coverage": 1.0
+      },
+      {
+        "repeat": 5,
+        "folder": "D:\\AraBench\\measurements\\active-call\\showcase\\unreal\\high\\3840\\5",
+        "gpu_p50": 6.4674,
+        "gpu_p95": 6.9091,
+        "cpu_p50": 0.4711,
+        "cpu_p95": 0.6345,
+        "wall_p50": 6.7805,
+        "wall_p95": 7.3839,
+        "one_percent_low_fps": 120.28208554702486,
+        "hitches_over_16ms": 0,
+        "frames": 2935,
+        "capture_seconds": 54.67050579999996,
+        "warmup_seconds": 5.0,
+        "window_seconds": 19.9967307,
+        "gpu_coverage": 1.0
+      }
+    ]
+  },
+  {
+    "scene": "showcase",
+    "engine": "unreal",
+    "tier": "epic",
+    "width": 2560,
+    "condition": "active-discord-call",
+    "camera_mode": "continuous interpolation",
+    "runs": 5,
+    "wall_p50": 6.8087,
+    "cpu_p50": 0.4748,
+    "cpu_p95": 0.6276,
+    "window_seconds": 20.0028841,
+    "capture_seconds": 54.57335270000007,
+    "wall_p95": 7.3867,
+    "frames": 2924,
+    "warmup_seconds": 5.0,
+    "hitches_over_16ms": 0,
+    "gpu_coverage": 1.0,
+    "gpu_p50": 6.2526,
+    "gpu_p95": 6.5226,
+    "one_percent_low_fps": 117.97925138232357,
+    "hitches_total": 2,
+    "spread": {
+      "gpu_p50": {
+        "min": 6.239,
+        "max": 6.2794,
+        "sample_cv_percent": 0.2835097007601799
+      },
+      "gpu_p95": {
+        "min": 6.4832,
+        "max": 6.7021,
+        "sample_cv_percent": 1.3392146474101398
+      },
+      "cpu_p50": {
+        "min": 0.4706,
+        "max": 0.4808,
+        "sample_cv_percent": 0.8710685313338474
+      },
+      "cpu_p95": {
+        "min": 0.6089,
+        "max": 0.6445,
+        "sample_cv_percent": 2.162639741513221
+      },
+      "wall_p50": {
+        "min": 6.7913,
+        "max": 6.8237,
+        "sample_cv_percent": 0.17488722660331404
+      },
+      "wall_p95": {
+        "min": 7.3383,
+        "max": 7.4667,
+        "sample_cv_percent": 0.7289333209905106
+      },
+      "one_percent_low_fps": {
+        "min": 102.34513645677043,
+        "max": 118.85005441351657,
+        "sample_cv_percent": 6.079211395392425
+      },
+      "hitches_over_16ms": {
+        "min": 0,
+        "max": 2,
+        "sample_cv_percent": 223.60679774997894
+      }
+    },
+    "per_run": [
+      {
+        "repeat": 1,
+        "folder": "D:\\AraBench\\measurements\\active-call\\showcase\\unreal\\epic\\2560\\1",
+        "gpu_p50": 6.2794,
+        "gpu_p95": 6.5226,
+        "cpu_p50": 0.4766,
+        "cpu_p95": 0.6327,
+        "wall_p50": 6.8237,
+        "wall_p95": 7.4166,
+        "one_percent_low_fps": 117.97925138232357,
+        "hitches_over_16ms": 0,
+        "frames": 2920,
+        "capture_seconds": 54.796670999999826,
+        "warmup_seconds": 5.0,
+        "window_seconds": 20.0049264,
+        "gpu_coverage": 1.0
+      },
+      {
+        "repeat": 2,
+        "folder": "D:\\AraBench\\measurements\\active-call\\showcase\\unreal\\epic\\2560\\2",
+        "gpu_p50": 6.239,
+        "gpu_p95": 6.5059,
+        "cpu_p50": 0.4808,
+        "cpu_p95": 0.6445,
+        "wall_p50": 6.7913,
+        "wall_p95": 7.3383,
+        "one_percent_low_fps": 118.34132794748801,
+        "hitches_over_16ms": 0,
+        "frames": 2936,
+        "capture_seconds": 54.38729770000012,
+        "warmup_seconds": 5.0,
+        "window_seconds": 20.0017141,
+        "gpu_coverage": 1.0
+      },
+      {
+        "repeat": 3,
+        "folder": "D:\\AraBench\\measurements\\active-call\\showcase\\unreal\\epic\\2560\\3",
+        "gpu_p50": 6.2458,
+        "gpu_p95": 6.7021,
+        "cpu_p50": 0.4748,
+        "cpu_p95": 0.6276,
+        "wall_p50": 6.8055,
+        "wall_p95": 7.4667,
+        "one_percent_low_fps": 102.34513645677043,
+        "hitches_over_16ms": 2,
+        "frames": 2916,
+        "capture_seconds": 54.56944030000009,
+        "warmup_seconds": 5.0,
+        "window_seconds": 20.0028841,
+        "gpu_coverage": 1.0
+      },
+      {
+        "repeat": 4,
+        "folder": "D:\\AraBench\\measurements\\active-call\\showcase\\unreal\\epic\\2560\\4",
+        "gpu_p50": 6.2526,
+        "gpu_p95": 6.528,
+        "cpu_p50": 0.4706,
+        "cpu_p95": 0.6089,
+        "wall_p50": 6.8087,
+        "wall_p95": 7.3417,
+        "one_percent_low_fps": 115.10336473992587,
+        "hitches_over_16ms": 0,
+        "frames": 2928,
+        "capture_seconds": 54.57335270000007,
+        "warmup_seconds": 5.0,
+        "window_seconds": 20.0047166,
+        "gpu_coverage": 1.0
+      },
+      {
+        "repeat": 5,
+        "folder": "D:\\AraBench\\measurements\\active-call\\showcase\\unreal\\epic\\2560\\5",
+        "gpu_p50": 6.2742,
+        "gpu_p95": 6.4832,
+        "cpu_p50": 0.4714,
+        "cpu_p95": 0.6187,
+        "wall_p50": 6.8141,
+        "wall_p95": 7.3867,
+        "one_percent_low_fps": 118.85005441351657,
+        "hitches_over_16ms": 0,
+        "frames": 2924,
+        "capture_seconds": 54.80246660000003,
+        "warmup_seconds": 5.0,
+        "window_seconds": 19.9971364,
+        "gpu_coverage": 1.0
+      }
+    ]
+  },
+  {
+    "scene": "showcase",
+    "engine": "unreal",
+    "tier": "epic",
+    "width": 3840,
+    "condition": "active-discord-call",
+    "camera_mode": "continuous interpolation",
+    "runs": 3,
+    "wall_p50": 12.1763,
+    "cpu_p50": 0.4867,
+    "cpu_p95": 0.5671,
+    "window_seconds": 20.0030094,
+    "capture_seconds": 97.88491749999991,
+    "wall_p95": 12.899,
+    "frames": 1637,
+    "warmup_seconds": 5.0,
+    "hitches_over_16ms": 0,
+    "gpu_coverage": 1.0,
+    "gpu_p50": 11.7333,
+    "gpu_p95": 12.2845,
+    "one_percent_low_fps": 73.75575132163799,
+    "hitches_total": 0,
+    "spread": {
+      "gpu_p50": {
+        "min": 11.729,
+        "max": 11.7403,
+        "sample_cv_percent": 0.04860585035741503
+      },
+      "gpu_p95": {
+        "min": 12.2753,
+        "max": 12.3052,
+        "sample_cv_percent": 0.1246235291401253
+      },
+      "cpu_p50": {
+        "min": 0.4835,
+        "max": 0.4908,
+        "sample_cv_percent": 0.7513829348473123
+      },
+      "cpu_p95": {
+        "min": 0.5632,
+        "max": 0.5875,
+        "sample_cv_percent": 2.279128074250464
+      },
+      "wall_p50": {
+        "min": 12.1702,
+        "max": 12.1862,
+        "sample_cv_percent": 0.0663092908535784
+      },
+      "wall_p95": {
+        "min": 12.8846,
+        "max": 12.9014,
+        "sample_cv_percent": 0.07046338389515365
+      },
+      "one_percent_low_fps": {
+        "min": 73.50458171353016,
+        "max": 73.96411087307237,
+        "sample_cv_percent": 0.3120315552496283
+      },
+      "hitches_over_16ms": {
+        "min": 0,
+        "max": 0,
+        "sample_cv_percent": 0.0
+      }
+    },
+    "per_run": [
+      {
+        "repeat": 1,
+        "folder": "D:\\AraBench\\measurements\\active-call\\showcase\\unreal\\epic\\3840\\1",
+        "gpu_p50": 11.7403,
+        "gpu_p95": 12.3052,
+        "cpu_p50": 0.4908,
+        "cpu_p95": 0.5875,
+        "wall_p50": 12.1862,
+        "wall_p95": 12.9014,
+        "one_percent_low_fps": 73.50458171353016,
+        "hitches_over_16ms": 0,
+        "frames": 1635,
+        "capture_seconds": 97.88491749999991,
+        "warmup_seconds": 5.0,
+        "window_seconds": 20.0063501,
+        "gpu_coverage": 1.0
+      },
+      {
+        "repeat": 2,
+        "folder": "D:\\AraBench\\measurements\\active-call\\showcase\\unreal\\epic\\3840\\2",
+        "gpu_p50": 11.7333,
+        "gpu_p95": 12.2753,
+        "cpu_p50": 0.4835,
+        "cpu_p95": 0.5632,
+        "wall_p50": 12.1763,
+        "wall_p95": 12.8846,
+        "one_percent_low_fps": 73.75575132163799,
+        "hitches_over_16ms": 0,
+        "frames": 1637,
+        "capture_seconds": 98.03439479999979,
+        "warmup_seconds": 5.0,
+        "window_seconds": 20.0030094,
+        "gpu_coverage": 1.0
+      },
+      {
+        "repeat": 3,
+        "folder": "D:\\AraBench\\measurements\\active-call\\showcase\\unreal\\epic\\3840\\3",
+        "gpu_p50": 11.729,
+        "gpu_p95": 12.2845,
+        "cpu_p50": 0.4867,
+        "cpu_p95": 0.5671,
+        "wall_p50": 12.1702,
+        "wall_p95": 12.899,
+        "one_percent_low_fps": 73.96411087307237,
+        "hitches_over_16ms": 0,
+        "frames": 1637,
+        "capture_seconds": 97.87615780000017,
+        "warmup_seconds": 5.0,
+        "window_seconds": 19.9996351,
+        "gpu_coverage": 1.0
+      }
+    ]
+  },
+  {
+    "scene": "showcase",
+    "engine": "ara",
+    "tier": "high",
+    "width": 2560,
+    "condition": "quiet-admission-original",
+    "camera_mode": "60 Hz pose steps",
+    "runs": 3,
+    "wall_p50": 2.3709,
+    "first_frame_ms": 611,
+    "cpu_p50": 0.4695999999999996,
+    "cpu_p95": 0.6821999999999999,
+    "full_scene_ms": 1720,
+    "wall_p95": 2.654,
+    "frames": 8312,
+    "hitches_over_16ms": 0,
+    "gpu_p50": 1.638784000000669,
+    "gpu_p95": 1.7626879999988887,
+    "one_percent_low_fps": 347.3846279820799,
+    "hitches_total": 0,
+    "spread": {
+      "gpu_p50": {
+        "min": 1.6387200000026496,
+        "max": 1.6399679999994987,
+        "sample_cv_percent": 0.042874885644673594
+      },
+      "gpu_p95": {
+        "min": 1.7536959999997634,
+        "max": 1.7700799999984156,
+        "sample_cv_percent": 0.46562374212961816
+      },
+      "cpu_p50": {
+        "min": 0.4670000000000001,
+        "max": 0.5002999999999997,
+        "sample_cv_percent": 3.8668430177870783
+      },
+      "cpu_p95": {
+        "min": 0.6791999999999998,
+        "max": 0.7373999999999998,
+        "sample_cv_percent": 4.684120687623112
+      },
+      "wall_p50": {
+        "min": 2.3657,
+        "max": 2.4258,
+        "sample_cv_percent": 1.3947545218890556
+      },
+      "wall_p95": {
+        "min": 2.6370999999999998,
+        "max": 2.7754,
+        "sample_cv_percent": 2.8058133053602514
+      },
+      "one_percent_low_fps": {
+        "min": 294.88870499807234,
+        "max": 348.40430826813196,
+        "sample_cv_percent": 9.268546187717227
+      },
+      "hitches_over_16ms": {
+        "min": 0,
+        "max": 0,
+        "sample_cv_percent": 0.0
+      }
+    },
+    "per_run": [
+      {
+        "repeat": 1,
+        "folder": "D:\\AraBench\\measurements\\showcase\\ara-quiet-60hz\\high\\2560\\1",
+        "gpu_p50": 1.6399679999994987,
+        "gpu_p95": 1.7700799999984156,
+        "cpu_p50": 0.5002999999999997,
+        "cpu_p95": 0.7373999999999998,
+        "wall_p50": 2.4258,
+        "wall_p95": 2.7754,
+        "one_percent_low_fps": 294.88870499807234,
+        "hitches_over_16ms": 0,
+        "frames": 8090,
+        "first_frame_ms": 655,
+        "full_scene_ms": 1872
+      },
+      {
+        "repeat": 2,
+        "folder": "D:\\AraBench\\measurements\\showcase\\ara-quiet-60hz\\high\\2560\\2",
+        "gpu_p50": 1.638784000000669,
+        "gpu_p95": 1.7536959999997634,
+        "cpu_p50": 0.4670000000000001,
+        "cpu_p95": 0.6791999999999998,
+        "wall_p50": 2.3657,
+        "wall_p95": 2.6370999999999998,
+        "one_percent_low_fps": 348.40430826813196,
+        "hitches_over_16ms": 0,
+        "frames": 8329,
+        "first_frame_ms": 611,
+        "full_scene_ms": 1720
+      },
+      {
+        "repeat": 3,
+        "folder": "D:\\AraBench\\measurements\\showcase\\ara-quiet-60hz\\high\\2560\\3",
+        "gpu_p50": 1.6387200000026496,
+        "gpu_p95": 1.7626879999988887,
+        "cpu_p50": 0.4695999999999996,
+        "cpu_p95": 0.6821999999999999,
+        "wall_p50": 2.3709,
+        "wall_p95": 2.654,
+        "one_percent_low_fps": 347.3846279820799,
+        "hitches_over_16ms": 0,
+        "frames": 8312,
+        "first_frame_ms": 579,
+        "full_scene_ms": 1666
+      }
+    ]
+  },
+  {
+    "scene": "showcase",
+    "engine": "ara",
+    "tier": "high",
+    "width": 3840,
+    "condition": "quiet-admission-original",
+    "camera_mode": "60 Hz pose steps",
+    "runs": 3,
+    "wall_p50": 4.2154,
+    "first_frame_ms": 570,
+    "cpu_p50": 0.5319000000000003,
+    "cpu_p95": 0.7866999999999997,
+    "full_scene_ms": 1559,
+    "wall_p95": 4.6231,
+    "frames": 4705,
+    "hitches_over_16ms": 0,
+    "gpu_p50": 3.421088000000964,
+    "gpu_p95": 3.669216000000233,
+    "one_percent_low_fps": 195.41658541272184,
+    "hitches_total": 0,
+    "spread": {
+      "gpu_p50": {
+        "min": 3.412608000000546,
+        "max": 3.4278080000003683,
+        "sample_cv_percent": 0.2226855885184407
+      },
+      "gpu_p95": {
+        "min": 3.66627200000039,
+        "max": 3.6695360000012442,
+        "sample_cv_percent": 0.04904733155905116
+      },
+      "cpu_p50": {
+        "min": 0.5314000000000005,
+        "max": 0.5407000000000002,
+        "sample_cv_percent": 0.9783660889354154
+      },
+      "cpu_p95": {
+        "min": 0.7749999999999995,
+        "max": 0.8186,
+        "sample_cv_percent": 2.844148277256439
+      },
+      "wall_p50": {
+        "min": 4.2112,
+        "max": 4.2203,
+        "sample_cv_percent": 0.10803797695214135
+      },
+      "wall_p95": {
+        "min": 4.6101,
+        "max": 4.6589,
+        "sample_cv_percent": 0.5457515931657765
+      },
+      "one_percent_low_fps": {
+        "min": 192.16537670546774,
+        "max": 196.912817260393,
+        "sample_cv_percent": 1.245784341803545
+      },
+      "hitches_over_16ms": {
+        "min": 0,
+        "max": 0,
+        "sample_cv_percent": 0.0
+      }
+    },
+    "per_run": [
+      {
+        "repeat": 1,
+        "folder": "D:\\AraBench\\measurements\\showcase\\ara-quiet-60hz\\high\\3840\\1",
+        "gpu_p50": 3.4278080000003683,
+        "gpu_p95": 3.669216000000233,
+        "cpu_p50": 0.5407000000000002,
+        "cpu_p95": 0.8186,
+        "wall_p50": 4.2154,
+        "wall_p95": 4.6589,
+        "one_percent_low_fps": 192.16537670546774,
+        "hitches_over_16ms": 0,
+        "frames": 4691,
+        "first_frame_ms": 570,
+        "full_scene_ms": 1542
+      },
+      {
+        "repeat": 2,
+        "folder": "D:\\AraBench\\measurements\\showcase\\ara-quiet-60hz\\high\\3840\\2",
+        "gpu_p50": 3.412608000000546,
+        "gpu_p95": 3.6695360000012442,
+        "cpu_p50": 0.5319000000000003,
+        "cpu_p95": 0.7866999999999997,
+        "wall_p50": 4.2112,
+        "wall_p95": 4.6231,
+        "one_percent_low_fps": 195.41658541272184,
+        "hitches_over_16ms": 0,
+        "frames": 4711,
+        "first_frame_ms": 541,
+        "full_scene_ms": 1559
+      },
+      {
+        "repeat": 3,
+        "folder": "D:\\AraBench\\measurements\\showcase\\ara-quiet-60hz\\high\\3840\\3",
+        "gpu_p50": 3.421088000000964,
+        "gpu_p95": 3.66627200000039,
+        "cpu_p50": 0.5314000000000005,
+        "cpu_p95": 0.7749999999999995,
+        "wall_p50": 4.2203,
+        "wall_p95": 4.6101,
+        "one_percent_low_fps": 196.912817260393,
+        "hitches_over_16ms": 0,
+        "frames": 4705,
+        "first_frame_ms": 634,
+        "full_scene_ms": 1581
+      }
+    ]
+  },
+  {
+    "scene": "showcase",
+    "engine": "ara",
+    "tier": "epic",
+    "width": 2560,
+    "condition": "quiet-admission-original",
+    "camera_mode": "60 Hz pose steps",
+    "runs": 3,
+    "wall_p50": 2.8384,
+    "first_frame_ms": 589,
+    "cpu_p50": 0.4841999999999995,
+    "cpu_p95": 0.7041999999999997,
+    "full_scene_ms": 1589,
+    "wall_p95": 3.1107,
+    "frames": 6958,
+    "hitches_over_16ms": 0,
+    "gpu_p50": 2.080703999999969,
+    "gpu_p95": 2.1829760000000533,
+    "one_percent_low_fps": 299.5649461082662,
+    "hitches_total": 0,
+    "spread": {
+      "gpu_p50": {
+        "min": 2.0755199999985052,
+        "max": 2.0854400000007445,
+        "sample_cv_percent": 0.23847898907255138
+      },
+      "gpu_p95": {
+        "min": 2.1822720000000118,
+        "max": 2.194527999999991,
+        "sample_cv_percent": 0.3147265614582093
+      },
+      "cpu_p50": {
+        "min": 0.48299999999999965,
+        "max": 0.4897,
+        "sample_cv_percent": 0.7356539432748365
+      },
+      "cpu_p95": {
+        "min": 0.6970000000000001,
+        "max": 0.7227000000000001,
+        "sample_cv_percent": 1.8726272117637148
+      },
+      "wall_p50": {
+        "min": 2.8371,
+        "max": 2.8439,
+        "sample_cv_percent": 0.1271113856453297
+      },
+      "wall_p95": {
+        "min": 3.0983,
+        "max": 3.1510000000000002,
+        "sample_cv_percent": 0.8831218812076422
+      },
+      "one_percent_low_fps": {
+        "min": 295.99635332492704,
+        "max": 303.6344172214501,
+        "sample_cv_percent": 1.275062165832305
+      },
+      "hitches_over_16ms": {
+        "min": 0,
+        "max": 0,
+        "sample_cv_percent": 0.0
+      }
+    },
+    "per_run": [
+      {
+        "repeat": 1,
+        "folder": "D:\\AraBench\\measurements\\showcase\\ara-quiet-60hz\\epic\\2560\\1",
+        "gpu_p50": 2.0854400000007445,
+        "gpu_p95": 2.194527999999991,
+        "cpu_p50": 0.48299999999999965,
+        "cpu_p95": 0.7227000000000001,
+        "wall_p50": 2.8371,
+        "wall_p95": 3.1510000000000002,
+        "one_percent_low_fps": 295.99635332492704,
+        "hitches_over_16ms": 0,
+        "frames": 6937,
+        "first_frame_ms": 544,
+        "full_scene_ms": 1589
+      },
+      {
+        "repeat": 2,
+        "folder": "D:\\AraBench\\measurements\\showcase\\ara-quiet-60hz\\epic\\2560\\2",
+        "gpu_p50": 2.080703999999969,
+        "gpu_p95": 2.1829760000000533,
+        "cpu_p50": 0.4841999999999995,
+        "cpu_p95": 0.6970000000000001,
+        "wall_p50": 2.8439,
+        "wall_p95": 3.0983,
+        "one_percent_low_fps": 303.6344172214501,
+        "hitches_over_16ms": 0,
+        "frames": 6958,
+        "first_frame_ms": 589,
+        "full_scene_ms": 1516
+      },
+      {
+        "repeat": 3,
+        "folder": "D:\\AraBench\\measurements\\showcase\\ara-quiet-60hz\\epic\\2560\\3",
+        "gpu_p50": 2.0755199999985052,
+        "gpu_p95": 2.1822720000000118,
+        "cpu_p50": 0.4897,
+        "cpu_p95": 0.7041999999999997,
+        "wall_p50": 2.8384,
+        "wall_p95": 3.1107,
+        "one_percent_low_fps": 299.5649461082662,
+        "hitches_over_16ms": 0,
+        "frames": 6961,
+        "first_frame_ms": 596,
+        "full_scene_ms": 1615
+      }
+    ]
+  },
+  {
+    "scene": "showcase",
+    "engine": "ara",
+    "tier": "epic",
+    "width": 3840,
+    "condition": "quiet-admission-original",
+    "camera_mode": "60 Hz pose steps",
+    "runs": 3,
+    "wall_p50": 5.2597,
+    "first_frame_ms": 551,
+    "cpu_p50": 0.5627999999999993,
+    "cpu_p95": 0.8162000000000003,
+    "full_scene_ms": 1658,
+    "wall_p95": 5.553599999999999,
+    "frames": 3779,
+    "hitches_over_16ms": 0,
+    "gpu_p50": 4.395936000000802,
+    "gpu_p95": 4.6374720000003435,
+    "one_percent_low_fps": 167.86713757816315,
+    "hitches_total": 0,
+    "spread": {
+      "gpu_p50": {
+        "min": 4.394912000000659,
+        "max": 4.405151999999362,
+        "sample_cv_percent": 0.12821504030706604
+      },
+      "gpu_p95": {
+        "min": 4.601855999999316,
+        "max": 4.640127999999095,
+        "sample_cv_percent": 0.461925803256637
+      },
+      "cpu_p50": {
+        "min": 0.5487999999999991,
+        "max": 0.5820999999999996,
+        "sample_cv_percent": 2.9615895720482026
+      },
+      "cpu_p95": {
+        "min": 0.8126000000000007,
+        "max": 0.8310000000000004,
+        "sample_cv_percent": 1.1893138956485187
+      },
+      "wall_p50": {
+        "min": 5.2336,
+        "max": 5.2651,
+        "sample_cv_percent": 0.32069513725327015
+      },
+      "wall_p95": {
+        "min": 5.5309,
+        "max": 5.5715,
+        "sample_cv_percent": 0.3664847925879985
+      },
+      "one_percent_low_fps": {
+        "min": 161.91613255647675,
+        "max": 169.2479955247267,
+        "sample_cv_percent": 2.342196299083947
+      },
+      "hitches_over_16ms": {
+        "min": 0,
+        "max": 0,
+        "sample_cv_percent": 0.0
+      }
+    },
+    "per_run": [
+      {
+        "repeat": 1,
+        "folder": "D:\\AraBench\\measurements\\showcase\\ara-quiet-60hz\\epic\\3840\\1",
+        "gpu_p50": 4.394912000000659,
+        "gpu_p95": 4.601855999999316,
+        "cpu_p50": 0.5487999999999991,
+        "cpu_p95": 0.8126000000000007,
+        "wall_p50": 5.2336,
+        "wall_p95": 5.5309,
+        "one_percent_low_fps": 169.2479955247267,
+        "hitches_over_16ms": 0,
+        "frames": 3797,
+        "first_frame_ms": 557,
+        "full_scene_ms": 1658
+      },
+      {
+        "repeat": 2,
+        "folder": "D:\\AraBench\\measurements\\showcase\\ara-quiet-60hz\\epic\\3840\\2",
+        "gpu_p50": 4.395936000000802,
+        "gpu_p95": 4.640127999999095,
+        "cpu_p50": 0.5820999999999996,
+        "cpu_p95": 0.8310000000000004,
+        "wall_p50": 5.2651,
+        "wall_p95": 5.5715,
+        "one_percent_low_fps": 161.91613255647675,
+        "hitches_over_16ms": 0,
+        "frames": 3773,
+        "first_frame_ms": 542,
+        "full_scene_ms": 1550
+      },
+      {
+        "repeat": 3,
+        "folder": "D:\\AraBench\\measurements\\showcase\\ara-quiet-60hz\\epic\\3840\\3",
+        "gpu_p50": 4.405151999999362,
+        "gpu_p95": 4.6374720000003435,
+        "cpu_p50": 0.5627999999999993,
+        "cpu_p95": 0.8162000000000003,
+        "wall_p50": 5.2597,
+        "wall_p95": 5.553599999999999,
+        "one_percent_low_fps": 167.86713757816315,
+        "hitches_over_16ms": 0,
+        "frames": 3779,
+        "first_frame_ms": 551,
+        "full_scene_ms": 1662
+      }
+    ]
+  },
+  {
+    "scene": "showcase",
+    "engine": "unity",
+    "tier": "high",
+    "width": 2560,
+    "condition": "quiet-admission-original",
+    "camera_mode": "60 Hz pose steps",
+    "runs": 3,
+    "wall_p50": 1.1693,
+    "cpu_p50": 0.4624,
+    "cpu_p95": 0.5754,
+    "window_seconds": 20.0001687,
+    "wall_p95": 1.413,
+    "frames": 16825,
+    "hitches_over_16ms": 0,
+    "gpu_coverage": 0.9978603268945022,
+    "gpu_p50": 1.09056,
+    "gpu_p95": 1.140736,
+    "one_percent_low_fps": 564.5303561077648,
+    "hitches_total": 0,
+    "spread": {
+      "gpu_p50": {
+        "min": 1.081344,
+        "max": 1.09056,
+        "sample_cv_percent": 0.4892798891437449
+      },
+      "gpu_p95": {
+        "min": 1.13664,
+        "max": 1.144832,
+        "sample_cv_percent": 0.3590664272890475
+      },
+      "cpu_p50": {
+        "min": 0.4616,
+        "max": 0.4704,
+        "sample_cv_percent": 1.0469470792251654
+      },
+      "cpu_p95": {
+        "min": 0.5499,
+        "max": 0.5908,
+        "sample_cv_percent": 3.6111180093331163
+      },
+      "wall_p50": {
+        "min": 1.1668,
+        "max": 1.1731,
+        "sample_cv_percent": 0.2711964892961949
+      },
+      "wall_p95": {
+        "min": 1.3775,
+        "max": 1.4144,
+        "sample_cv_percent": 1.4919593024120055
+      },
+      "one_percent_low_fps": {
+        "min": 548.6907880660727,
+        "max": 619.6575163906746,
+        "sample_cv_percent": 6.44911574349964
+      },
+      "hitches_over_16ms": {
+        "min": 0,
+        "max": 0,
+        "sample_cv_percent": 0.0
+      }
+    },
+    "per_run": [
+      {
+        "repeat": 1,
+        "folder": "D:\\AraBench\\measurements\\showcase\\unity-quiet-60hz\\high\\2560\\1",
+        "gpu_p50": 1.09056,
+        "gpu_p95": 1.144832,
+        "cpu_p50": 0.4704,
+        "cpu_p95": 0.5754,
+        "wall_p50": 1.1731,
+        "wall_p95": 1.4144,
+        "one_percent_low_fps": 564.5303561077648,
+        "hitches_over_16ms": 0,
+        "frames": 16761,
+        "gpu_coverage": 0.9971362090567388,
+        "window_seconds": 20.0006011
+      },
+      {
+        "repeat": 2,
+        "folder": "D:\\AraBench\\measurements\\showcase\\unity-quiet-60hz\\high\\2560\\2",
+        "gpu_p50": 1.09056,
+        "gpu_p95": 1.140736,
+        "cpu_p50": 0.4616,
+        "cpu_p95": 0.5499,
+        "wall_p50": 1.1693,
+        "wall_p95": 1.3775,
+        "one_percent_low_fps": 619.6575163906746,
+        "hitches_over_16ms": 0,
+        "frames": 16899,
+        "gpu_coverage": 0.9984614474229244,
+        "window_seconds": 20.0001687
+      },
+      {
+        "repeat": 3,
+        "folder": "D:\\AraBench\\measurements\\showcase\\unity-quiet-60hz\\high\\2560\\3",
+        "gpu_p50": 1.081344,
+        "gpu_p95": 1.13664,
+        "cpu_p50": 0.4624,
+        "cpu_p95": 0.5908,
+        "wall_p50": 1.1668,
+        "wall_p95": 1.413,
+        "one_percent_low_fps": 548.6907880660727,
+        "hitches_over_16ms": 0,
+        "frames": 16825,
+        "gpu_coverage": 0.9978603268945022,
+        "window_seconds": 20.0001446
+      }
+    ]
+  },
+  {
+    "scene": "showcase",
+    "engine": "unity",
+    "tier": "high",
+    "width": 3840,
+    "condition": "quiet-admission-original",
+    "camera_mode": "60 Hz pose steps",
+    "runs": 3,
+    "wall_p50": 1.8608,
+    "cpu_p50": 0.4645,
+    "cpu_p95": 0.5586,
+    "window_seconds": 20.0012648,
+    "wall_p95": 2.0231,
+    "frames": 10700,
+    "hitches_over_16ms": 0,
+    "gpu_coverage": 0.9998130841121495,
+    "gpu_p50": 1.840128,
+    "gpu_p95": 1.912832,
+    "one_percent_low_fps": 402.1749621955536,
+    "hitches_total": 0,
+    "spread": {
+      "gpu_p50": {
+        "min": 1.820672,
+        "max": 1.885184,
+        "sample_cv_percent": 1.7900376644189582
+      },
+      "gpu_p95": {
+        "min": 1.892352,
+        "max": 1.95072,
+        "sample_cv_percent": 1.5434670860518738
+      },
+      "cpu_p50": {
+        "min": 0.4628,
+        "max": 0.4659,
+        "sample_cv_percent": 0.33428455418303177
+      },
+      "cpu_p95": {
+        "min": 0.558,
+        "max": 0.5604,
+        "sample_cv_percent": 0.22343463321639828
+      },
+      "wall_p50": {
+        "min": 1.8417,
+        "max": 1.9052,
+        "sample_cv_percent": 1.7429170025637133
+      },
+      "wall_p95": {
+        "min": 2.0107,
+        "max": 2.071,
+        "sample_cv_percent": 1.5648693026501939
+      },
+      "one_percent_low_fps": {
+        "min": 401.2804973177962,
+        "max": 410.7522116557158,
+        "sample_cv_percent": 1.2920638791489223
+      },
+      "hitches_over_16ms": {
+        "min": 0,
+        "max": 0,
+        "sample_cv_percent": 0.0
+      }
+    },
+    "per_run": [
+      {
+        "repeat": 1,
+        "folder": "D:\\AraBench\\measurements\\showcase\\unity-quiet-60hz\\high\\3840\\1",
+        "gpu_p50": 1.840128,
+        "gpu_p95": 1.912832,
+        "cpu_p50": 0.4645,
+        "cpu_p95": 0.5604,
+        "wall_p50": 1.8608,
+        "wall_p95": 2.0231,
+        "one_percent_low_fps": 401.2804973177962,
+        "hitches_over_16ms": 0,
+        "frames": 10700,
+        "gpu_coverage": 0.9998130841121495,
+        "window_seconds": 20.0012648
+      },
+      {
+        "repeat": 2,
+        "folder": "D:\\AraBench\\measurements\\showcase\\unity-quiet-60hz\\high\\3840\\2",
+        "gpu_p50": 1.820672,
+        "gpu_p95": 1.892352,
+        "cpu_p50": 0.4659,
+        "cpu_p95": 0.5586,
+        "wall_p50": 1.8417,
+        "wall_p95": 2.0107,
+        "one_percent_low_fps": 410.7522116557158,
+        "hitches_over_16ms": 0,
+        "frames": 10808,
+        "gpu_coverage": 0.9998149518874907,
+        "window_seconds": 20.000867
+      },
+      {
+        "repeat": 3,
+        "folder": "D:\\AraBench\\measurements\\showcase\\unity-quiet-60hz\\high\\3840\\3",
+        "gpu_p50": 1.885184,
+        "gpu_p95": 1.95072,
+        "cpu_p50": 0.4628,
+        "cpu_p95": 0.558,
+        "wall_p50": 1.9052,
+        "wall_p95": 2.071,
+        "one_percent_low_fps": 402.1749621955536,
+        "hitches_over_16ms": 0,
+        "frames": 10459,
+        "gpu_coverage": 0.9998087771297447,
+        "window_seconds": 20.001488900000002
+      }
+    ]
+  },
+  {
+    "scene": "showcase",
+    "engine": "unity",
+    "tier": "epic",
+    "width": 2560,
+    "condition": "quiet-admission-original",
+    "camera_mode": "60 Hz pose steps",
+    "runs": 3,
+    "wall_p50": 1.3364,
+    "cpu_p50": 0.4623,
+    "cpu_p95": 0.5533,
+    "window_seconds": 20.0012598,
+    "wall_p95": 1.5047,
+    "frames": 14901,
+    "hitches_over_16ms": 0,
+    "gpu_coverage": 0.9997309839262896,
+    "gpu_p50": 1.284096,
+    "gpu_p95": 1.34144,
+    "one_percent_low_fps": 560.185802426949,
+    "hitches_total": 0,
+    "spread": {
+      "gpu_p50": {
+        "min": 1.284096,
+        "max": 1.29024,
+        "sample_cv_percent": 0.27580426872116554
+      },
+      "gpu_p95": {
+        "min": 1.33632,
+        "max": 1.344512,
+        "sample_cv_percent": 0.30866485878264033
+      },
+      "cpu_p50": {
+        "min": 0.4599,
+        "max": 0.4707,
+        "sample_cv_percent": 1.2214039955854288
+      },
+      "cpu_p95": {
+        "min": 0.5482,
+        "max": 0.5639,
+        "sample_cv_percent": 1.4427080563003216
+      },
+      "wall_p50": {
+        "min": 1.335,
+        "max": 1.3417,
+        "sample_cv_percent": 0.2641937212689247
+      },
+      "wall_p95": {
+        "min": 1.4913,
+        "max": 1.5173,
+        "sample_cv_percent": 0.8642490718702486
+      },
+      "one_percent_low_fps": {
+        "min": 557.0006003644055,
+        "max": 580.3446550837612,
+        "sample_cv_percent": 2.237153128356295
+      },
+      "hitches_over_16ms": {
+        "min": 0,
+        "max": 0,
+        "sample_cv_percent": 0.0
+      }
+    },
+    "per_run": [
+      {
+        "repeat": 1,
+        "folder": "D:\\AraBench\\measurements\\showcase\\unity-quiet-60hz\\epic\\2560\\1",
+        "gpu_p50": 1.284096,
+        "gpu_p95": 1.33632,
+        "cpu_p50": 0.4599,
+        "cpu_p95": 0.5533,
+        "wall_p50": 1.335,
+        "wall_p95": 1.4913,
+        "one_percent_low_fps": 580.3446550837612,
+        "hitches_over_16ms": 0,
+        "frames": 14960,
+        "gpu_coverage": 0.9997994652406417,
+        "window_seconds": 20.001300500000003
+      },
+      {
+        "repeat": 2,
+        "folder": "D:\\AraBench\\measurements\\showcase\\unity-quiet-60hz\\epic\\2560\\2",
+        "gpu_p50": 1.29024,
+        "gpu_p95": 1.344512,
+        "cpu_p50": 0.4623,
+        "cpu_p95": 0.5482,
+        "wall_p50": 1.3417,
+        "wall_p95": 1.5047,
+        "one_percent_low_fps": 557.0006003644055,
+        "hitches_over_16ms": 0,
+        "frames": 14869,
+        "gpu_coverage": 0.9997309839262896,
+        "window_seconds": 20.0012598
+      },
+      {
+        "repeat": 3,
+        "folder": "D:\\AraBench\\measurements\\showcase\\unity-quiet-60hz\\epic\\2560\\3",
+        "gpu_p50": 1.284096,
+        "gpu_p95": 1.34144,
+        "cpu_p50": 0.4707,
+        "cpu_p95": 0.5639,
+        "wall_p50": 1.3364,
+        "wall_p95": 1.5173,
+        "one_percent_low_fps": 560.185802426949,
+        "hitches_over_16ms": 0,
+        "frames": 14901,
+        "gpu_coverage": 0.9996644520501979,
+        "window_seconds": 20.0009766
+      }
+    ]
+  },
+  {
+    "scene": "showcase",
+    "engine": "unity",
+    "tier": "epic",
+    "width": 3840,
+    "condition": "quiet-admission-original",
+    "camera_mode": "60 Hz pose steps",
+    "runs": 3,
+    "wall_p50": 2.2502,
+    "cpu_p50": 0.464,
+    "cpu_p95": 0.5885,
+    "window_seconds": 20.0009771,
+    "wall_p95": 2.4491,
+    "frames": 8848,
+    "hitches_over_16ms": 0,
+    "gpu_coverage": 0.9997739602169982,
+    "gpu_p50": 2.228224,
+    "gpu_p95": 2.307072,
+    "one_percent_low_fps": 342.5502442306264,
+    "hitches_total": 0,
+    "spread": {
+      "gpu_p50": {
+        "min": 2.228224,
+        "max": 2.296832,
+        "sample_cv_percent": 1.7596270524202449
+      },
+      "gpu_p95": {
+        "min": 2.301952,
+        "max": 2.397184,
+        "sample_cv_percent": 2.293626434744888
+      },
+      "cpu_p50": {
+        "min": 0.4634,
+        "max": 0.4698,
+        "sample_cv_percent": 0.7589302113834273
+      },
+      "cpu_p95": {
+        "min": 0.5849,
+        "max": 0.6058,
+        "sample_cv_percent": 1.8839924704031237
+      },
+      "wall_p50": {
+        "min": 2.2495,
+        "max": 2.3184,
+        "sample_cv_percent": 1.7414928729976267
+      },
+      "wall_p95": {
+        "min": 2.4438,
+        "max": 2.5395,
+        "sample_cv_percent": 2.171079137116825
+      },
+      "one_percent_low_fps": {
+        "min": 332.4189236043334,
+        "max": 346.37587698285597,
+        "sample_cv_percent": 2.1183762559268344
+      },
+      "hitches_over_16ms": {
+        "min": 0,
+        "max": 0,
+        "sample_cv_percent": 0.0
+      }
+    },
+    "per_run": [
+      {
+        "repeat": 1,
+        "folder": "D:\\AraBench\\measurements\\showcase\\unity-quiet-60hz\\epic\\3840\\1",
+        "gpu_p50": 2.296832,
+        "gpu_p95": 2.397184,
+        "cpu_p50": 0.4698,
+        "cpu_p95": 0.6058,
+        "wall_p50": 2.3184,
+        "wall_p95": 2.5395,
+        "one_percent_low_fps": 332.4189236043334,
+        "hitches_over_16ms": 0,
+        "frames": 8581,
+        "gpu_coverage": 0.9997669269315931,
+        "window_seconds": 20.0009771
+      },
+      {
+        "repeat": 2,
+        "folder": "D:\\AraBench\\measurements\\showcase\\unity-quiet-60hz\\epic\\3840\\2",
+        "gpu_p50": 2.228224,
+        "gpu_p95": 2.307072,
+        "cpu_p50": 0.464,
+        "cpu_p95": 0.5849,
+        "wall_p50": 2.2502,
+        "wall_p95": 2.4491,
+        "one_percent_low_fps": 342.5502442306264,
+        "hitches_over_16ms": 0,
+        "frames": 8848,
+        "gpu_coverage": 0.9997739602169982,
+        "window_seconds": 20.000864099999998
+      },
+      {
+        "repeat": 3,
+        "folder": "D:\\AraBench\\measurements\\showcase\\unity-quiet-60hz\\epic\\3840\\3",
+        "gpu_p50": 2.228224,
+        "gpu_p95": 2.301952,
+        "cpu_p50": 0.4634,
+        "cpu_p95": 0.5885,
+        "wall_p50": 2.2495,
+        "wall_p95": 2.4438,
+        "one_percent_low_fps": 346.37587698285597,
+        "hitches_over_16ms": 0,
+        "frames": 8856,
+        "gpu_coverage": 0.9997741644083108,
+        "window_seconds": 20.001231500000003
+      }
+    ]
+  },
+  {
+    "scene": "showcase",
+    "engine": "unreal",
+    "tier": "high",
+    "width": 2560,
+    "condition": "quiet-admission-original",
+    "camera_mode": "continuous interpolation",
+    "runs": 3,
+    "wall_p50": 4.3372,
+    "cpu_p50": 0.4565,
+    "cpu_p95": 0.6448,
+    "window_seconds": 20.0002846,
+    "capture_seconds": 35.120335300000136,
+    "wall_p95": 5.2774,
+    "frames": 4501,
+    "warmup_seconds": 5.0,
+    "hitches_over_16ms": 0,
+    "gpu_coverage": 1.0,
+    "gpu_p50": 3.7921,
+    "gpu_p95": 3.873,
+    "one_percent_low_fps": 150.34964463554104,
+    "hitches_total": 1,
+    "spread": {
+      "gpu_p50": {
+        "min": 3.7319,
+        "max": 3.7937,
+        "sample_cv_percent": 0.9337794273645679
+      },
+      "gpu_p95": {
+        "min": 3.8166,
+        "max": 3.8746,
+        "sample_cv_percent": 0.8569755911667696
+      },
+      "cpu_p50": {
+        "min": 0.4523,
+        "max": 0.7693,
+        "sample_cv_percent": 32.50456961489546
+      },
+      "cpu_p95": {
+        "min": 0.5418,
+        "max": 1.672,
+        "sample_cv_percent": 65.58246463372353
+      },
+      "wall_p50": {
+        "min": 4.2933,
+        "max": 5.345,
+        "sample_cv_percent": 12.770881190482836
+      },
+      "wall_p95": {
+        "min": 5.1208,
+        "max": 6.3785,
+        "sample_cv_percent": 12.256534254979758
+      },
+      "one_percent_low_fps": {
+        "min": 121.3799257286076,
+        "max": 154.6253310578759,
+        "sample_cv_percent": 12.726545151073068
+      },
+      "hitches_over_16ms": {
+        "min": 0,
+        "max": 1,
+        "sample_cv_percent": 173.20508075688772
+      }
+    },
+    "per_run": [
+      {
+        "repeat": 1,
+        "folder": "D:\\AraBench\\measurements\\showcase\\unreal\\high\\2560\\1",
+        "gpu_p50": 3.7319,
+        "gpu_p95": 3.8166,
+        "cpu_p50": 0.7693,
+        "cpu_p95": 1.672,
+        "wall_p50": 5.345,
+        "wall_p95": 6.3785,
+        "one_percent_low_fps": 121.3799257286076,
+        "hitches_over_16ms": 0,
+        "frames": 3670,
+        "capture_seconds": 28.270184900000057,
+        "warmup_seconds": 5.0,
+        "window_seconds": 19.999175299999997,
+        "gpu_coverage": 1.0
+      },
+      {
+        "repeat": 2,
+        "folder": "D:\\AraBench\\measurements\\showcase\\unreal\\high\\2560\\2",
+        "gpu_p50": 3.7921,
+        "gpu_p95": 3.8746,
+        "cpu_p50": 0.4565,
+        "cpu_p95": 0.6448,
+        "wall_p50": 4.3372,
+        "wall_p95": 5.2774,
+        "one_percent_low_fps": 150.34964463554104,
+        "hitches_over_16ms": 0,
+        "frames": 4501,
+        "capture_seconds": 35.43302870000002,
+        "warmup_seconds": 5.0,
+        "window_seconds": 20.0002846,
+        "gpu_coverage": 1.0
+      },
+      {
+        "repeat": 3,
+        "folder": "D:\\AraBench\\measurements\\showcase\\unreal\\high\\2560\\3",
+        "gpu_p50": 3.7937,
+        "gpu_p95": 3.873,
+        "cpu_p50": 0.4523,
+        "cpu_p95": 0.5418,
+        "wall_p50": 4.2933,
+        "wall_p95": 5.1208,
+        "one_percent_low_fps": 154.6253310578759,
+        "hitches_over_16ms": 1,
+        "frames": 4562,
+        "capture_seconds": 35.120335300000136,
+        "warmup_seconds": 5.0,
+        "window_seconds": 20.0012865,
+        "gpu_coverage": 1.0
+      }
+    ]
+  },
+  {
+    "scene": "showcase",
+    "engine": "unreal",
+    "tier": "high",
+    "width": 3840,
+    "condition": "quiet-admission-original",
+    "camera_mode": "continuous interpolation",
+    "runs": 3,
+    "wall_p50": 6.7569,
+    "cpu_p50": 0.4768,
+    "cpu_p95": 0.7187,
+    "window_seconds": 19.9990313,
+    "capture_seconds": 34.02784680000006,
+    "wall_p95": 7.3382,
+    "frames": 2950,
+    "warmup_seconds": 5.0,
+    "hitches_over_16ms": 0,
+    "gpu_coverage": 1.0,
+    "gpu_p50": 6.4495,
+    "gpu_p95": 6.6072,
+    "one_percent_low_fps": 121.18959708498623,
+    "hitches_total": 0,
+    "spread": {
+      "gpu_p50": {
+        "min": 6.4434,
+        "max": 6.465,
+        "sample_cv_percent": 0.17257571940767416
+      },
+      "gpu_p95": {
+        "min": 6.5959,
+        "max": 6.6117,
+        "sample_cv_percent": 0.12324468554311353
+      },
+      "cpu_p50": {
+        "min": 0.4734,
+        "max": 0.4811,
+        "sample_cv_percent": 0.808794021445183
+      },
+      "cpu_p95": {
+        "min": 0.7157,
+        "max": 0.7204,
+        "sample_cv_percent": 0.33132205770561834
+      },
+      "wall_p50": {
+        "min": 6.7524,
+        "max": 6.7751,
+        "sample_cv_percent": 0.1777615810840258
+      },
+      "wall_p95": {
+        "min": 7.3074,
+        "max": 7.3415,
+        "sample_cv_percent": 0.25661684284976444
+      },
+      "one_percent_low_fps": {
+        "min": 119.97984338631112,
+        "max": 124.14608186689223,
+        "sample_cv_percent": 1.760077053483456
+      },
+      "hitches_over_16ms": {
+        "min": 0,
+        "max": 0,
+        "sample_cv_percent": 0.0
+      }
+    },
+    "per_run": [
+      {
+        "repeat": 1,
+        "folder": "D:\\AraBench\\measurements\\showcase\\unreal\\high\\3840\\1",
+        "gpu_p50": 6.4434,
+        "gpu_p95": 6.6072,
+        "cpu_p50": 0.4811,
+        "cpu_p95": 0.7157,
+        "wall_p50": 6.7524,
+        "wall_p95": 7.3074,
+        "one_percent_low_fps": 124.14608186689223,
+        "hitches_over_16ms": 0,
+        "frames": 2953,
+        "capture_seconds": 34.141632900000005,
+        "warmup_seconds": 5.0,
+        "window_seconds": 19.9990313,
+        "gpu_coverage": 1.0
+      },
+      {
+        "repeat": 2,
+        "folder": "D:\\AraBench\\measurements\\showcase\\unreal\\high\\3840\\2",
+        "gpu_p50": 6.4495,
+        "gpu_p95": 6.5959,
+        "cpu_p50": 0.4768,
+        "cpu_p95": 0.7204,
+        "wall_p50": 6.7569,
+        "wall_p95": 7.3415,
+        "one_percent_low_fps": 119.97984338631112,
+        "hitches_over_16ms": 0,
+        "frames": 2950,
+        "capture_seconds": 33.93727529999993,
+        "warmup_seconds": 5.0,
+        "window_seconds": 20.0021385,
+        "gpu_coverage": 1.0
+      },
+      {
+        "repeat": 3,
+        "folder": "D:\\AraBench\\measurements\\showcase\\unreal\\high\\3840\\3",
+        "gpu_p50": 6.465,
+        "gpu_p95": 6.6117,
+        "cpu_p50": 0.4734,
+        "cpu_p95": 0.7187,
+        "wall_p50": 6.7751,
+        "wall_p95": 7.3382,
+        "one_percent_low_fps": 121.18959708498623,
+        "hitches_over_16ms": 0,
+        "frames": 2944,
+        "capture_seconds": 34.02784680000006,
+        "warmup_seconds": 5.0,
+        "window_seconds": 19.9947388,
+        "gpu_coverage": 1.0
+      }
+    ]
+  },
+  {
+    "scene": "showcase",
+    "engine": "unreal",
+    "tier": "epic",
+    "width": 2560,
+    "condition": "quiet-admission-original",
+    "camera_mode": "continuous interpolation",
+    "runs": 3,
+    "wall_p50": 6.8024,
+    "cpu_p50": 0.4644,
+    "cpu_p95": 0.5924,
+    "window_seconds": 20.0030383,
+    "capture_seconds": 34.162770399999985,
+    "wall_p95": 7.2979,
+    "frames": 2933,
+    "warmup_seconds": 5.0,
+    "hitches_over_16ms": 0,
+    "gpu_coverage": 1.0,
+    "gpu_p50": 6.28,
+    "gpu_p95": 6.4316,
+    "one_percent_low_fps": 117.22944616120456,
+    "hitches_total": 0,
+    "spread": {
+      "gpu_p50": {
+        "min": 6.2684,
+        "max": 6.282,
+        "sample_cv_percent": 0.1169867432493394
+      },
+      "gpu_p95": {
+        "min": 6.4149,
+        "max": 6.4369,
+        "sample_cv_percent": 0.17862604015579298
+      },
+      "cpu_p50": {
+        "min": 0.4606,
+        "max": 0.4703,
+        "sample_cv_percent": 1.0509008307761707
+      },
+      "cpu_p95": {
+        "min": 0.5871,
+        "max": 0.6118,
+        "sample_cv_percent": 2.1777693983802573
+      },
+      "wall_p50": {
+        "min": 6.7963,
+        "max": 6.8036,
+        "sample_cv_percent": 0.057559730252550775
+      },
+      "wall_p95": {
+        "min": 7.2799,
+        "max": 7.3106,
+        "sample_cv_percent": 0.21142788236610727
+      },
+      "one_percent_low_fps": {
+        "min": 114.47843054650858,
+        "max": 119.0427534112693,
+        "sample_cv_percent": 1.9656350995527179
+      },
+      "hitches_over_16ms": {
+        "min": 0,
+        "max": 0,
+        "sample_cv_percent": 0.0
+      }
+    },
+    "per_run": [
+      {
+        "repeat": 1,
+        "folder": "D:\\AraBench\\measurements\\showcase\\unreal\\epic\\2560\\1",
+        "gpu_p50": 6.28,
+        "gpu_p95": 6.4316,
+        "cpu_p50": 0.4703,
+        "cpu_p95": 0.6118,
+        "wall_p50": 6.8036,
+        "wall_p95": 7.3106,
+        "one_percent_low_fps": 117.22944616120456,
+        "hitches_over_16ms": 0,
+        "frames": 2932,
+        "capture_seconds": 34.162770399999985,
+        "warmup_seconds": 5.0,
+        "window_seconds": 20.0057313,
+        "gpu_coverage": 1.0
+      },
+      {
+        "repeat": 2,
+        "folder": "D:\\AraBench\\measurements\\showcase\\unreal\\epic\\2560\\2",
+        "gpu_p50": 6.2684,
+        "gpu_p95": 6.4149,
+        "cpu_p50": 0.4644,
+        "cpu_p95": 0.5924,
+        "wall_p50": 6.7963,
+        "wall_p95": 7.2799,
+        "one_percent_low_fps": 114.47843054650858,
+        "hitches_over_16ms": 0,
+        "frames": 2935,
+        "capture_seconds": 34.11230400000003,
+        "warmup_seconds": 5.0,
+        "window_seconds": 20.0030383,
+        "gpu_coverage": 1.0
+      },
+      {
+        "repeat": 3,
+        "folder": "D:\\AraBench\\measurements\\showcase\\unreal\\epic\\2560\\3",
+        "gpu_p50": 6.282,
+        "gpu_p95": 6.4369,
+        "cpu_p50": 0.4606,
+        "cpu_p95": 0.5871,
+        "wall_p50": 6.8024,
+        "wall_p95": 7.2979,
+        "one_percent_low_fps": 119.0427534112693,
+        "hitches_over_16ms": 0,
+        "frames": 2933,
+        "capture_seconds": 34.16942740000007,
+        "warmup_seconds": 5.0,
+        "window_seconds": 19.9965872,
+        "gpu_coverage": 1.0
+      }
+    ]
+  },
+  {
+    "scene": "showcase",
+    "engine": "unreal",
+    "tier": "epic",
+    "width": 3840,
+    "condition": "quiet-admission-original",
+    "camera_mode": "continuous interpolation",
+    "runs": 3,
+    "wall_p50": 12.1481,
+    "cpu_p50": 0.4792,
+    "cpu_p95": 0.5767,
+    "window_seconds": 20.0009866,
+    "capture_seconds": 60.97388769999987,
+    "wall_p95": 12.8128,
+    "frames": 1643,
+    "warmup_seconds": 5.0,
+    "hitches_over_16ms": 0,
+    "gpu_coverage": 1.0,
+    "gpu_p50": 11.7207,
+    "gpu_p95": 12.0661,
+    "one_percent_low_fps": 74.01144652324699,
+    "hitches_total": 0,
+    "spread": {
+      "gpu_p50": {
+        "min": 11.7004,
+        "max": 11.7365,
+        "sample_cv_percent": 0.15441911375573814
+      },
+      "gpu_p95": {
+        "min": 12.041,
+        "max": 12.1067,
+        "sample_cv_percent": 0.2746466594407782
+      },
+      "cpu_p50": {
+        "min": 0.4788,
+        "max": 0.4828,
+        "sample_cv_percent": 0.45870937373287896
+      },
+      "cpu_p95": {
+        "min": 0.5663,
+        "max": 0.5807,
+        "sample_cv_percent": 1.2937155992125144
+      },
+      "wall_p50": {
+        "min": 12.1262,
+        "max": 12.1603,
+        "sample_cv_percent": 0.14226921576469123
+      },
+      "wall_p95": {
+        "min": 12.7656,
+        "max": 12.8294,
+        "sample_cv_percent": 0.2585447734765089
+      },
+      "one_percent_low_fps": {
+        "min": 73.28167406380506,
+        "max": 74.64547788913127,
+        "sample_cv_percent": 0.9225007975048626
+      },
+      "hitches_over_16ms": {
+        "min": 0,
+        "max": 0,
+        "sample_cv_percent": 0.0
+      }
+    },
+    "per_run": [
+      {
+        "repeat": 1,
+        "folder": "D:\\AraBench\\measurements\\showcase\\unreal\\epic\\3840\\1",
+        "gpu_p50": 11.7207,
+        "gpu_p95": 12.0661,
+        "cpu_p50": 0.4792,
+        "cpu_p95": 0.5663,
+        "wall_p50": 12.1481,
+        "wall_p95": 12.7656,
+        "one_percent_low_fps": 74.01144652324699,
+        "hitches_over_16ms": 0,
+        "frames": 1643,
+        "capture_seconds": 61.066310200000075,
+        "warmup_seconds": 5.0,
+        "window_seconds": 20.0080345,
+        "gpu_coverage": 1.0
+      },
+      {
+        "repeat": 2,
+        "folder": "D:\\AraBench\\measurements\\showcase\\unreal\\epic\\3840\\2",
+        "gpu_p50": 11.7365,
+        "gpu_p95": 12.1067,
+        "cpu_p50": 0.4828,
+        "cpu_p95": 0.5767,
+        "wall_p50": 12.1603,
+        "wall_p95": 12.8294,
+        "one_percent_low_fps": 74.64547788913127,
+        "hitches_over_16ms": 0,
+        "frames": 1640,
+        "capture_seconds": 60.97388769999987,
+        "warmup_seconds": 5.0,
+        "window_seconds": 20.0009866,
+        "gpu_coverage": 1.0
+      },
+      {
+        "repeat": 3,
+        "folder": "D:\\AraBench\\measurements\\showcase\\unreal\\epic\\3840\\3",
+        "gpu_p50": 11.7004,
+        "gpu_p95": 12.041,
+        "cpu_p50": 0.4788,
+        "cpu_p95": 0.5807,
+        "wall_p50": 12.1262,
+        "wall_p95": 12.8128,
+        "one_percent_low_fps": 73.28167406380506,
+        "hitches_over_16ms": 0,
+        "frames": 1645,
+        "capture_seconds": 60.826598499999825,
+        "warmup_seconds": 5.0,
+        "window_seconds": 19.9964684,
+        "gpu_coverage": 1.0
+      }
+    ]
+  },
+  {
+    "scene": "showcase",
+    "engine": "ara",
+    "tier": "high",
+    "width": 2560,
+    "condition": "quiet-admission-continuous",
+    "camera_mode": "continuous interpolation",
+    "runs": 3,
+    "wall_p50": 2.4610000000000003,
+    "first_frame_ms": 549,
+    "cpu_p50": 0.49080000000000035,
+    "cpu_p95": 0.6981999999999999,
+    "full_scene_ms": 1514,
+    "wall_p95": 2.7333000000000003,
+    "frames": 8014,
+    "hitches_over_16ms": 0,
+    "gpu_p50": 1.7083199999979115,
+    "gpu_p95": 1.7826239999994868,
+    "one_percent_low_fps": 340.3748914267129,
+    "hitches_total": 0,
+    "spread": {
+      "gpu_p50": {
+        "min": 1.7046399999999267,
+        "max": 1.7121599999991304,
+        "sample_cv_percent": 0.22010901267820127
+      },
+      "gpu_p95": {
+        "min": 1.7797440000003917,
+        "max": 1.7920320000011998,
+        "sample_cv_percent": 0.3600686416484636
+      },
+      "cpu_p50": {
+        "min": 0.47809999999999975,
+        "max": 0.5286999999999997,
+        "sample_cv_percent": 5.2734541457903
+      },
+      "cpu_p95": {
+        "min": 0.6946999999999997,
+        "max": 0.7380999999999998,
+        "sample_cv_percent": 3.3942139313353508
+      },
+      "wall_p50": {
+        "min": 2.4436,
+        "max": 2.5024,
+        "sample_cv_percent": 1.2233818367196831
+      },
+      "wall_p95": {
+        "min": 2.7150999999999996,
+        "max": 2.7781,
+        "sample_cv_percent": 1.1823650480643992
+      },
+      "one_percent_low_fps": {
+        "min": 333.0543827216445,
+        "max": 341.804890173025,
+        "sample_cv_percent": 1.387091764243928
+      },
+      "hitches_over_16ms": {
+        "min": 0,
+        "max": 0,
+        "sample_cv_percent": 0.0
+      }
+    },
+    "per_run": [
+      {
+        "repeat": 1,
+        "folder": "D:\\AraBench\\measurements\\showcase\\ara\\high\\2560\\1",
+        "gpu_p50": 1.7121599999991304,
+        "gpu_p95": 1.7920320000011998,
+        "cpu_p50": 0.5286999999999997,
+        "cpu_p95": 0.7380999999999998,
+        "wall_p50": 2.5024,
+        "wall_p95": 2.7781,
+        "one_percent_low_fps": 333.0543827216445,
+        "hitches_over_16ms": 0,
+        "frames": 7879,
+        "first_frame_ms": 635,
+        "full_scene_ms": 1546
+      },
+      {
+        "repeat": 2,
+        "folder": "D:\\AraBench\\measurements\\showcase\\ara\\high\\2560\\2",
+        "gpu_p50": 1.7083199999979115,
+        "gpu_p95": 1.7826239999994868,
+        "cpu_p50": 0.49080000000000035,
+        "cpu_p95": 0.6981999999999999,
+        "wall_p50": 2.4610000000000003,
+        "wall_p95": 2.7333000000000003,
+        "one_percent_low_fps": 340.3748914267129,
+        "hitches_over_16ms": 0,
+        "frames": 8014,
+        "first_frame_ms": 549,
+        "full_scene_ms": 1514
+      },
+      {
+        "repeat": 3,
+        "folder": "D:\\AraBench\\measurements\\showcase\\ara\\high\\2560\\3",
+        "gpu_p50": 1.7046399999999267,
+        "gpu_p95": 1.7797440000003917,
+        "cpu_p50": 0.47809999999999975,
+        "cpu_p95": 0.6946999999999997,
+        "wall_p50": 2.4436,
+        "wall_p95": 2.7150999999999996,
+        "one_percent_low_fps": 341.804890173025,
+        "hitches_over_16ms": 0,
+        "frames": 8067,
+        "first_frame_ms": 539,
+        "full_scene_ms": 1480
+      }
+    ]
+  },
+  {
+    "scene": "showcase",
+    "engine": "ara",
+    "tier": "high",
+    "width": 3840,
+    "condition": "quiet-admission-continuous",
+    "camera_mode": "continuous interpolation",
+    "runs": 3,
+    "wall_p50": 4.3184000000000005,
+    "first_frame_ms": 572,
+    "cpu_p50": 0.5614000000000003,
+    "cpu_p95": 0.8121999999999998,
+    "full_scene_ms": 1615,
+    "wall_p95": 4.7168,
+    "frames": 4585,
+    "hitches_over_16ms": 0,
+    "gpu_p50": 3.504160000000411,
+    "gpu_p95": 3.7694720000004054,
+    "one_percent_low_fps": 191.15429351243105,
+    "hitches_total": 0,
+    "spread": {
+      "gpu_p50": {
+        "min": 3.503840000001219,
+        "max": 3.5077119999996285,
+        "sample_cv_percent": 0.06131078394603129
+      },
+      "gpu_p95": {
+        "min": 3.765375999999378,
+        "max": 3.801503999999113,
+        "sample_cv_percent": 0.523512161267355
+      },
+      "cpu_p50": {
+        "min": 0.5609000000000002,
+        "max": 0.5850999999999997,
+        "sample_cv_percent": 2.429975180722966
+      },
+      "cpu_p95": {
+        "min": 0.8115999999999999,
+        "max": 0.8746,
+        "sample_cv_percent": 4.346914620018273
+      },
+      "wall_p50": {
+        "min": 4.3176000000000005,
+        "max": 4.3628,
+        "sample_cv_percent": 0.5970178360155194
+      },
+      "wall_p95": {
+        "min": 4.7058,
+        "max": 4.8578,
+        "sample_cv_percent": 1.7806317767800988
+      },
+      "one_percent_low_fps": {
+        "min": 153.78577107182664,
+        "max": 191.38190633852713,
+        "sample_cv_percent": 12.105078522067718
+      },
+      "hitches_over_16ms": {
+        "min": 0,
+        "max": 0,
+        "sample_cv_percent": 0.0
+      }
+    },
+    "per_run": [
+      {
+        "repeat": 1,
+        "folder": "D:\\AraBench\\measurements\\showcase\\ara\\high\\3840\\1",
+        "gpu_p50": 3.503840000001219,
+        "gpu_p95": 3.765375999999378,
+        "cpu_p50": 0.5609000000000002,
+        "cpu_p95": 0.8115999999999999,
+        "wall_p50": 4.3184000000000005,
+        "wall_p95": 4.7058,
+        "one_percent_low_fps": 191.38190633852713,
+        "hitches_over_16ms": 0,
+        "frames": 4587,
+        "first_frame_ms": 547,
+        "full_scene_ms": 1615
+      },
+      {
+        "repeat": 2,
+        "folder": "D:\\AraBench\\measurements\\showcase\\ara\\high\\3840\\2",
+        "gpu_p50": 3.5077119999996285,
+        "gpu_p95": 3.7694720000004054,
+        "cpu_p50": 0.5614000000000003,
+        "cpu_p95": 0.8121999999999998,
+        "wall_p50": 4.3176000000000005,
+        "wall_p95": 4.7168,
+        "one_percent_low_fps": 191.15429351243105,
+        "hitches_over_16ms": 0,
+        "frames": 4585,
+        "first_frame_ms": 572,
+        "full_scene_ms": 1503
+      },
+      {
+        "repeat": 3,
+        "folder": "D:\\AraBench\\measurements\\showcase\\ara\\high\\3840\\3",
+        "gpu_p50": 3.504160000000411,
+        "gpu_p95": 3.801503999999113,
+        "cpu_p50": 0.5850999999999997,
+        "cpu_p95": 0.8746,
+        "wall_p50": 4.3628,
+        "wall_p95": 4.8578,
+        "one_percent_low_fps": 153.78577107182664,
+        "hitches_over_16ms": 0,
+        "frames": 4516,
+        "first_frame_ms": 586,
+        "full_scene_ms": 1771
+      }
+    ]
+  }
+]

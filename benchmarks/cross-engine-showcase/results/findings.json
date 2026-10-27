@@ -1,0 +1,30 @@
+{
+  "lead": [
+    "Final: Showcase only; Outpost and Hangar not run. Islam ended the benchmark after the Showcase checkpoint. Ara sits between Unity URP and Unreal in runtime GPU cost for this scene. Reflective and translucent materials expose visible defects; this single static scene does not establish an engine-wide ranking."
+  ],
+  "standings": [
+    "High at 4K, with the active Discord call: Ara GPU p95 is 3.87 ms, Unity URP 2.14 ms, and Unreal 6.94 ms. Ara uses 44% less GPU time than Unreal and 81% more than Unity. Corresponding 1% lows are 177.7, 321.3, and 114.7 FPS. These are measured effect configurations, not equal-quality renderers.",
+    "Unity is the runtime speed leader here, with baked APV rather than dynamic GI and no URP SSR. Ara\u2019s probe lighting and screen-space effects cost less than Unreal\u2019s software Lumen/VSM stack in this scene. These feature/work differences are likely contributors; the benchmark does not isolate their individual costs.",
+    "Across the 18 call-condition Ara runs, totaling about six scored minutes, no wall-frame interval exceeded 16 ms. Unity recorded four such intervals and Unreal ten over the corresponding scored windows. That is a result for this static scene and this session, not a general stability guarantee.",
+    "Ara High at 1440p has a higher GPU p95 than Epic despite a lower p50. This non-monotonic tail behavior deserves investigation alongside the known preview regressions. The measurements alone do not establish whether CPU stalls, scheduling, power behavior or renderer work causes it.",
+    "The corrected Cycles comparison favors Unreal overall: mean FLIP 0.2120 / SSIM 0.9297, versus Ara 0.2199 / 0.9173 and Unity 0.2409 / 0.8972. The small aggregate gap between Ara and Unreal hides obvious local defects: inspect the chrome/copper spheres and lantern. Metrics include tone-map differences and are not an absolute visual-quality score.",
+    "Ara loses clearly to Unity on the measured Play-entry proxy in this small scene: about 812 ms versus 81 ms with default domain reload on (93 ms off). Ara observes an embedded Game image; Unity marks its first Game-camera render callback. Unreal\u2019s roughly 58 ms PIE world/next-Slate-tick marker is weaker evidence and must not be presented as a comparable first-rendered-frame result."
+  ],
+  "showcase": [
+    "One common Blender-authored material/props studio feeds all three engines. It contains 67 rendered mesh objects and 407,603 triangles. The two additional Blender icospheres are importer bone-display helpers in a hidden, non-exported collection; they are not part of the rendered scene.",
+    "The material camera shows Ara\u2019s circular black reflection artifacts on the mirror-like spheres and strong lantern transparency differences. Unreal\u2019s reflections are also approximate but closer to Cycles in these views. Unity\u2019s metal spheres mainly reflect the shared environment because URP supplies no SSR. Likely causes include reflection fallback/compositing and material-import support; those are hypotheses, not validated shader diagnoses.",
+    "These are static rest meshes and static lights. Dynamic GI is enabled in Ara and Unreal, but this camera path does not test GI response to changing lights or moving geometry. Unity\u2019s successful command-line APV bake supplies indirect lighting with realtime direct lights and shadows."
+  ],
+  "showcase-editor": [
+    "Earlier quiet-admission editor orbit intervals were Ara 6.88 / 7.37 ms p50/p95, Unity 3.90 / 24.94 ms, and Unreal 8.33 / 9.12 ms. Unity\u2019s measurement uses actual Scene-view GUI repaints because its Scene-view renders did not fire the runtime render-pipeline callback. The first empty-orbit attempt was excluded and retained separately.",
+    "Viewport/layout and callback scopes differ. Ara used a 2560\u00d71440 editor window; Unity\u2019s logged Scene view was 1557\u00d7974; Unreal used its native saved layout. Do not turn these values into a pixel-normalized renderer ranking. Individual Play samples are shown so cold/warm differences remain visible."
+  ],
+  "limits": [
+    "Quiet-admission results remain available as requested. The earliest Ara/Unity camera adapters updated at 60 Hz while Unreal interpolated. Their numerical results are valid for those recorded configurations, but the primary interleaved call-condition matrix corrects this mismatch. Additional accepted continuous-camera Ara quiet runs are also retained separately.",
+    "An extra post-run process check initially treated a pre-existing Chrome process as new because it had no GPU activity in the idle samples. Its baseline presence and process birth time established that it was not new. The check was corrected; Chrome received no allowance and stayed charged by the native foreign-load threshold. No performance outlier was deleted for this correction.",
+    "Actual first display presentation is not measured for all three engines: PresentMon ETW access was denied. Ara exposes player present/readiness markers, Unity provides a first-scene CPU callback, and Unreal provides an initialization timestamp. These different startup markers are labeled separately rather than used for a startup winner.",
+    "All timing executables remain immutable. Offline video capture has separate readback instrumentation, fixed 60 Hz camera samples, and no renderer algorithm changes. Captures are excluded from performance tables. The original Ara checkout has no benchmark implementation edits; its isolated source snapshot and adapters are retained under the work directory.",
+    "The Unreal Showcase movie completed its 1,200-frame success callback and both encodes independently decoded as 20 seconds at 60 Hz. The editor then exited with access-violation status during shutdown; this capture failure is retained in the session log. Offline capture is excluded from timing results.",
+    "Outpost source preparation began before cancellation, but produced no accepted cross-engine measurements or reference images. Hangar was not started. No Outpost or Hangar result is included in this final report."
+  ]
+}

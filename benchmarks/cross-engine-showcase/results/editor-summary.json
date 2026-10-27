@@ -1,0 +1,206 @@
+[
+  {
+    "scene": "showcase",
+    "engine": "ara",
+    "condition": "quiet-admission",
+    "orbit": {
+      "p50_ms": 6.8774,
+      "p95_ms": 7.366499999999999,
+      "samples": 1465
+    },
+    "raw_scenario": {
+      "frames": 1465,
+      "presented": 1465,
+      "cpuMs": {
+        "samples": 1465,
+        "p50": 2.6447,
+        "p95": 2.9962999999999997,
+        "p99": 3.1710000000000003,
+        "max": 3.402
+      },
+      "inputMs": {
+        "samples": 1465,
+        "p50": 0.0011,
+        "p95": 0.0015,
+        "p99": 0.0015999999999999999,
+        "max": 0.0068000000000000005
+      },
+      "uiFrameMs": {
+        "samples": 1465,
+        "p50": 0.0825,
+        "p95": 0.1218,
+        "p99": 0.19469999999999998,
+        "max": 0.31839999999999996
+      },
+      "rebuildMs": {
+        "samples": 1465,
+        "p50": 0,
+        "p95": 0,
+        "p99": 0,
+        "max": 0
+      },
+      "mountMs": {
+        "samples": 1465,
+        "p50": 0,
+        "p95": 0,
+        "p99": 0,
+        "max": 0
+      },
+      "reconcileMs": {
+        "samples": 1465,
+        "p50": 0,
+        "p95": 0,
+        "p99": 0,
+        "max": 0
+      },
+      "sceneMs": {
+        "samples": 1465,
+        "p50": 0.4319,
+        "p95": 0.5294,
+        "p99": 0.5831999999999999,
+        "max": 0.6445
+      },
+      "tickMs": {
+        "samples": 1465,
+        "p50": 0.0158,
+        "p95": 0.0277,
+        "p99": 0.0363,
+        "max": 0.0929
+      },
+      "geometryMs": {
+        "samples": 1465,
+        "p50": 0.0003,
+        "p95": 0.00039999999999999996,
+        "p99": 0.00039999999999999996,
+        "max": 0.0101
+      },
+      "rebuilds": 0,
+      "renderMs": {
+        "samples": 1465,
+        "p50": 0.8344,
+        "p95": 0.9290999999999999,
+        "p99": 1.0562,
+        "max": 1.2077
+      },
+      "gpuWaitMs": {
+        "samples": 1465,
+        "p50": 0.7633,
+        "p95": 0.8564999999999999,
+        "p99": 0.9861,
+        "max": 1.137
+      },
+      "hostWaitMs": {
+        "samples": 1465,
+        "p50": 0.7636999999999999,
+        "p95": 0.8489,
+        "p99": 0.93,
+        "max": 1.4137
+      },
+      "workMs": {
+        "samples": 1465,
+        "p50": 1.1071000000000002,
+        "p95": 1.4096999999999997,
+        "p99": 1.5415000000000005,
+        "max": 1.758
+      },
+      "workCoverage": {
+        "measured": 1465,
+        "unavailable": 0
+      },
+      "presentMs": {
+        "samples": 1465,
+        "p50": 0.8006000000000001,
+        "p95": 0.8807,
+        "p99": 0.9671000000000001,
+        "max": 1.4698
+      },
+      "restyled": {
+        "samples": 1465,
+        "p50": 0,
+        "p95": 0,
+        "p99": 0,
+        "max": 0
+      },
+      "layoutPasses": {
+        "samples": 1465,
+        "p50": 0,
+        "p95": 0,
+        "p99": 0,
+        "max": 1
+      },
+      "shaped": {
+        "samples": 1465,
+        "p50": 0,
+        "p95": 0,
+        "p99": 0,
+        "max": 1
+      },
+      "paintNodes": {
+        "samples": 1465,
+        "p50": 303,
+        "p95": 303,
+        "p99": 303,
+        "max": 303
+      },
+      "inputToPresentMs": {
+        "samples": 1465,
+        "p50": 2.4219,
+        "p95": 2.7447,
+        "p99": 2.8655999999999997,
+        "max": 3.1904
+      }
+    },
+    "play_ms": [
+      812.3914,
+      779.0323999999999,
+      1052.9198
+    ],
+    "play_marker": "click to first Game frame observed by editor",
+    "settle_timed_out": false,
+    "window": "2560\u00d71440; viewport size not logged"
+  },
+  {
+    "scene": "showcase",
+    "engine": "unity",
+    "condition": "quiet-admission",
+    "orbit": {
+      "p50_ms": 3.9008000000002596,
+      "p95_ms": 24.937099999998935,
+      "samples": 1264
+    },
+    "play_reload_on_ms": [
+      172.4038,
+      81.369,
+      67.3167
+    ],
+    "play_reload_off_ms": [
+      103.0156,
+      76.1864,
+      93.1359
+    ],
+    "play_marker": "request to endCameraRendering callback of first Game camera",
+    "window": "1557x974; SceneView repaint intervals"
+  },
+  {
+    "scene": "showcase",
+    "engine": "unreal",
+    "condition": "quiet-admission",
+    "orbit": {
+      "p50_ms": 8.331799996085465,
+      "p95_ms": 9.120100003201514,
+      "samples": 1197
+    },
+    "play_world_ms": [
+      105.87260000465903,
+      51.942100006272085,
+      49.65419998916332
+    ],
+    "play_ms": [
+      111.11900000832975,
+      57.5033000059193,
+      55.39519999001641
+    ],
+    "play_marker": "request to next Slate tick after observing PIE world; presentation unverified",
+    "window": "native saved/default editor layout; viewport size not logged"
+  }
+]

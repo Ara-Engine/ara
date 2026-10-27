@@ -1,0 +1,47 @@
+{
+  "scope": "Showcase only; Outpost and Hangar not run",
+  "ara_source_commit": "13e8b9da83c0fdd36d0d12ea3a7fb8ce7a819c23",
+  "local_archive": "D:\\AraBench",
+  "hashes": {
+    "source\\showcase\\showcase.blend": {
+      "bytes": 168848077,
+      "sha256": "4c39def929eb24fc3842cd6d7810dd09f6b7bedf5e29212c87b0e2534caee323"
+    },
+    "source\\showcase\\showcase.glb": {
+      "bytes": 171050744,
+      "sha256": "b1474b5c5faa389a78b0af93ccdf4be244ed7fb8d5f3b682d604e5bf1cc64c72"
+    },
+    "source\\showcase\\manifest.json": {
+      "bytes": 326717,
+      "sha256": "e7820aa16a340440a0d70f3bf0c5cdf7a4d7e9f1c7676386fea6368109613147"
+    },
+    "ara-runtime.zip": {
+      "bytes": 44975712,
+      "sha256": "c90e3762d3c8b794a27118d0619d0b5a94fab33e6ad807400438261b4d13a460"
+    },
+    "builds\\ara\\showcase\\build\\ara-player.exe": {
+      "bytes": 70240768,
+      "sha256": "1bdf1a73be8c11fcc52a373d0232ab77bfedb07a20a77932663c1175ba50a53e"
+    },
+    "builds\\unity\\showcase\\AraBench.exe": {
+      "bytes": 667136,
+      "sha256": "7c5b8f3ecaf9ef88a16646eacc9f817f327e3dde3244ccc627bd2e273188247d"
+    },
+    "builds\\unity\\showcase\\AraBench_Data\\Managed\\Assembly-CSharp.dll": {
+      "bytes": 12800,
+      "sha256": "c19a6e4e5b777cf0a6fc355cd623e2a06c8cecbb945dbbcbae56062ad64ec44e"
+    },
+    "builds\\unreal\\showcase\\Windows\\AraBench\\Binaries\\Win64\\AraBench.exe": {
+      "bytes": 302188032,
+      "sha256": "80620ac4e797985b63aedd6337b0479db4ec04227dc447690a223ba92ec81b9c"
+    },
+    "capture-builds\\ara\\showcase\\ara-player.exe": {
+      "bytes": 70244864,
+      "sha256": "be0319524fe250ca981fe332de54147afcc22c9caabd967d166ac52e7725c083"
+    },
+    "capture-builds\\unity\\showcase\\AraBench_Data\\Managed\\Assembly-CSharp.dll": {
+      "bytes": 13824,
+      "sha256": "4c147a6be1551d968def375cece70dad5ccc4989cf3567daac6a6f7851a5a3aa"
+    }
+  }
+}

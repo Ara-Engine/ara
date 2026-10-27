@@ -1,0 +1,99 @@
+{
+  "$schema": "ara://schema/scene/1",
+  "id": "sc_vhg21atz",
+  "versions": {
+    "PostProcessVolume": 2
+  },
+  "records": {
+    "e_camera": {
+      "name": "Benchmark Camera",
+      "order": "a4",
+      "Camera": {
+        "fov": 46
+      },
+      "Transform": {
+        "position": [3.5962233543395996, 2.299999952316284, -7.900965690612793],
+        "rotation": [-170.90973, 0, -180]
+      }
+    },
+    "e_environment": {
+      "name": "Common environment and fixed EV",
+      "order": "a5",
+      "Environment": {
+        "sky": [0.5, 0.48, 0.45, 1],
+        "horizon": [0.6, 0.55, 0.5, 1],
+        "ground": [0.25, 0.22, 0.2, 1],
+        "exposure": 0.0016276041666666667
+      },
+      "PostProcessVolume": {
+        "overrides": [
+          {
+            "exposure": "manual",
+            "ev100": 9
+          },
+          {
+            "module": "toneMapping",
+            "toneMapping": "filmic"
+          },
+          {
+            "module": "bloom",
+            "bloom": 0.04
+          }
+        ]
+      }
+    },
+    "e_geometry": {
+      "name": "Shared Blender geometry",
+      "order": "a0",
+      "MeshRenderer": {
+        "model": "@assets/scene.glb#as_benchmark"
+      },
+      "Transform": {}
+    },
+    "e_light0": {
+      "name": "Sun",
+      "order": "a1",
+      "Light": {
+        "kind": "directional",
+        "color": [1, 0.95, 0.88, 1],
+        "intensity": 2200
+      },
+      "Transform": {
+        "position": [0, 10, 0],
+        "rotation": [-56.30994, -26.529753, -33.821842]
+      }
+    },
+    "e_light1": {
+      "name": "e_fill",
+      "order": "a2",
+      "Light": {
+        "kind": "spot",
+        "color": [1, 0.9, 0.8, 1],
+        "intensity": 4000,
+        "range": 14,
+        "innerAngle": 25,
+        "outerAngle": 45
+      },
+      "Transform": {
+        "position": [4, 2.5, -3.5],
+        "rotation": [-156.8014, 46.409485, 162.75523]
+      }
+    },
+    "e_light2": {
+      "name": "e_rim",
+      "order": "a3",
+      "Light": {
+        "kind": "spot",
+        "color": [0.75, 0.85, 1, 1],
+        "intensity": 9000,
+        "range": 14,
+        "innerAngle": 25,
+        "outerAngle": 45
+      },
+      "Transform": {
+        "position": [-3.5, 3.2, 3],
+        "rotation": [-36.253838, -43.25303, -26.679337]
+      }
+    }
+  }
+}

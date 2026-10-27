@@ -1,0 +1,6 @@
+# Preserve generated Unity serialization and patch context verbatim.
+ara/*.patch -whitespace
+unity/**/*.asset -whitespace
+unity/**/*.meta -whitespace
+unity/**/*.unity -whitespace
+unity/Assets/*.hdr binary
