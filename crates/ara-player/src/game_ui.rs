@@ -169,6 +169,13 @@ impl Surface {
         Ok(())
     }
 
+    /// Order the renderer's next work after this UI's composites (Metal runs them on
+    /// queues of their own; Vulkan's one queue already orders them).
+    pub(crate) fn order_before(&self, gpu: &mut ara_gpu::GpuDevice) {
+        if let Some(ui) = &self.gpu {
+            ui.order_before(gpu);
+        }
+    }
     /// Composites directly from the completed scene image; no scene readback or CPU upload.
     /// Show the composite with [`Self::present`] or [`Self::publish`].
     pub(crate) fn render(&mut self, presenter: &Presenter) -> Result<()> {
@@ -194,6 +201,8 @@ impl Surface {
             self.gpu = Some(gpu);
         }
         let gpu = self.gpu.as_mut().context("native UI allocated")?;
+        // The scene of a frame in flight may still be rendering into this image.
+        gpu.order_after(renderer.gpu());
         let id = stable_id("game-scene") as u32 & 0x7fff_ffff;
         // SAFETY: scene image/view and NativeUi share this presenter's live device.
         // The presenter replaces this image only after an idle wait (resize); its

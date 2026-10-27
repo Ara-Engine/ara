@@ -26,10 +26,21 @@ pub(super) struct Transfer {
     event: Retained<ProtocolObject<dyn MTLSharedEvent>>,
     value: u64,
     scale: Retained<MPSImageBilinearScale>,
+    /// The last [`Transfer::submit`] and its event value, until waited.
+    pending: Option<(Retained<CommandBuffer>, u64)>,
+}
+
+impl Drop for Transfer {
+    fn drop(&mut self) {
+        if let Some((cmd, _)) = self.pending.take() {
+            cmd.waitUntilCompleted();
+        }
+    }
 }
 
 // SAFETY: command queues and MPS kernels may be used from any thread; each transfer
-// is encoded, committed and waited inside one `&mut self` call.
+// is encoded and committed inside one `&mut self` call, and waited there or by the
+// next one.
 unsafe impl Send for Transfer {}
 // SAFETY: see `Send`; shared references never encode.
 unsafe impl Sync for Transfer {}
@@ -57,6 +68,7 @@ impl Transfer {
             event,
             value: 0,
             scale,
+            pending: None,
         })
     }
     /// Encode with `record`, commit and wait. With `after`, the copy follows all of that
@@ -67,6 +79,39 @@ impl Transfer {
         after: Option<&MetalDevice>,
         record: impl FnOnce(&Self, &CommandBuffer) -> Result<()>,
     ) -> Result<()> {
+        self.wait_pending(after)?;
+        let (cmd, value) = self.commit(after, record)?;
+        self.finish(&cmd, value, after)
+    }
+    /// Like [`Self::run`] after `gpu`'s work, but returns once committed (frames in
+    /// flight): the GPU orders the copy, and the next transfer first waits for this
+    /// one and reports how it ended.
+    pub fn submit(
+        &mut self,
+        gpu: &MetalDevice,
+        record: impl FnOnce(&Self, &CommandBuffer) -> Result<()>,
+    ) -> Result<()> {
+        self.wait_pending(Some(gpu))?;
+        self.pending = Some(self.commit(Some(gpu), record)?);
+        Ok(())
+    }
+    /// Order `gpu`'s next commits after every transfer committed so far: the next
+    /// frame rewrites images an in-flight copy still reads.
+    pub fn order_before(&self, gpu: &mut MetalDevice) {
+        gpu.wait_event(&self.event, self.value);
+    }
+    /// Wait for the last [`Self::submit`], if any, and report how it ended.
+    pub fn wait_pending(&mut self, after: Option<&MetalDevice>) -> Result<()> {
+        match self.pending.take() {
+            Some((cmd, value)) => self.finish(&cmd, value, after),
+            None => Ok(()),
+        }
+    }
+    fn commit(
+        &mut self,
+        after: Option<&MetalDevice>,
+        record: impl FnOnce(&Self, &CommandBuffer) -> Result<()>,
+    ) -> Result<(Retained<CommandBuffer>, u64)> {
         let cmd = self
             .queue
             .commandBuffer()
@@ -87,6 +132,10 @@ impl Transfer {
         let value = self.value;
         cmd.encodeSignalEvent_value(ProtocolObject::from_ref(&*self.event), value);
         cmd.commit();
+        Ok((cmd, value))
+    }
+    /// Wait for a committed transfer; with `after`, the wait counts as its host wait.
+    fn finish(&self, cmd: &CommandBuffer, value: u64, after: Option<&MetalDevice>) -> Result<()> {
         let event = &self.event;
         let wait = || event.waitUntilSignaledValue_timeoutMS(value, WAIT_TIMEOUT_MS);
         let signalled = match after {
