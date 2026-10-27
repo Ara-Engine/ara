@@ -87,6 +87,17 @@ pub fn path_key(path: &str) -> String {
     case::key(path)
 }
 
+/// Key for a prepared filesystem policy, including cross-platform planner simulation.
+/// `false` preserves spelling. `true` uses the shared Windows simple key on every
+/// non-macOS platform and the APFS key on macOS. Native `path_key` is unchanged.
+pub fn path_key_with_case(path: &str, case_insensitive: bool) -> String {
+    if case_insensitive {
+        case::insensitive_key(path)
+    } else {
+        path.to_owned()
+    }
+}
+
 /// The kind of a filesystem entry; directories retain empty folders and path casing.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

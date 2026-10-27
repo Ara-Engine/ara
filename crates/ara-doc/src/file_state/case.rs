@@ -2,14 +2,25 @@
 
 #[cfg(windows)]
 pub(super) fn key(path: &str) -> String {
-    windows_key(path)
+    insensitive_key(path)
+}
+
+pub(super) fn insensitive_key(path: &str) -> String {
+    #[cfg(target_os = "macos")]
+    {
+        apfs_key(path)
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        windows_key(path)
+    }
 }
 
 // Conservatively combine Unicode simple uppercase and non-Turkic simple folding.
 // Uppercasing includes ordinal aliases such as dotless i/I; simple folding also
 // includes sigma/final sigma and capital sharp S. Expansions and normalization
 // are deliberately absent, as in NTFS's UTF-16 upcase comparisons.
-#[cfg(any(windows, test))]
+#[cfg(any(not(target_os = "macos"), test))]
 fn windows_key(path: &str) -> String {
     use unicode_casefold::{Locale, UnicodeCaseFold, Variant};
     path.chars()
