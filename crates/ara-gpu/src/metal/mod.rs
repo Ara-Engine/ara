@@ -43,6 +43,7 @@ mod parity_tests;
 mod pipeline;
 mod prepare;
 pub mod present;
+mod reload;
 mod resources;
 mod scratch;
 mod tables;
@@ -151,6 +152,8 @@ pub struct MetalDevice {
     waits: crate::vulkan::waits::Counter,
     /// The cooked `ClearDepth` pipeline, loaded on first use.
     clear: Option<clear::Clear>,
+    /// Shader reload provenance (no hot reload on Metal yet, see `reload`).
+    shader_status: vulkan::ShaderStatus,
     /// Last: released after the workers joined, so the archive flush races no compile.
     _cache: cache::Lease,
 }
@@ -252,6 +255,7 @@ impl MetalDevice {
             timing_window: Default::default(),
             waits: Default::default(),
             clear: None,
+            shader_status: Default::default(),
             _cache: cache,
         })
     }
@@ -593,6 +597,16 @@ impl MetalDevice {
             return None;
         }
         self.timing_window.span(true)
+    }
+    /// Like `VulkanDevice::bind_acceleration_structure`; unreachable until the RT tier
+    /// lands, since `info().ray_tracing` is false and no structure can be created.
+    pub fn bind_acceleration_structure(
+        &mut self,
+        _structure: AccelerationStructure,
+    ) -> Result<HeapIndex> {
+        Err(GpuError::Contract(
+            "Acceleration structures are not available on the Metal backend yet".into(),
+        ))
     }
     /// Time between this window's submission intervals; overlap counts once.
     pub fn timing_window_gaps(&self) -> Option<f64> {
