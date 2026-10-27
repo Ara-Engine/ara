@@ -58,7 +58,8 @@ public sealed partial class SalvageRun : Behaviour
             player.Player = Input.Player(entity);
             var use = Input.Button(player.Player, "Interact");
             var inventory = Input.Button(player.Player, "Inventory");
-            if (use || inventory || Input.Axis2(player.Player, "Move") != Vector2.Zero || Input.Button(player.Player, "Jump")) player.Active = true;
+            // Solo Play starts with its only scavenger; network slots wait for input.
+            if (players.Length == 1 || use || inventory || Input.Axis2(player.Player, "Move") != Vector2.Zero || Input.Button(player.Player, "Jump")) player.Active = true;
             if (!player.Active) continue;
             ActivePlayers++;
             if (inventory && !player.InventoryHeld) player.InventoryOpen = !player.InventoryOpen;
