@@ -486,6 +486,20 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
                 let scale = crate::native::points_to_logical(window.raw(), main_dpi);
                 check.inject(&mut editor, &mut shell, &window, scale, &mut events)?;
             }
+            if input_check
+                .as_ref()
+                .is_some_and(input_verify::InputCheck::finished)
+                && prefab_check.is_none()
+            {
+                prefab_check = Some(prefab_verify::PrefabCheck::new(
+                    &mut editor,
+                    &options.output,
+                )?);
+            }
+            if let Some(check) = &mut prefab_check {
+                let scale = crate::native::points_to_logical(window.raw(), main_dpi);
+                check.inject(&mut editor, &mut shell, &window, scale, &mut events)?;
+            }
             let interaction_start = (!events.is_empty()).then(Instant::now);
             if events.iter().any(|(_, event)| {
                 matches!(
@@ -758,20 +772,6 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
                     &mut gpu,
                     last_dpi,
                 )?;
-            }
-            if input_check
-                .as_ref()
-                .is_some_and(input_verify::InputCheck::finished)
-                && prefab_check.is_none()
-            {
-                prefab_check = Some(prefab_verify::PrefabCheck::new(
-                    &mut editor,
-                    &options.output,
-                )?);
-            }
-            if let Some(check) = &mut prefab_check {
-                let scale = crate::native::points_to_logical(window.raw(), main_dpi);
-                check.inject(&mut editor, &mut shell, &window, scale, &mut events)?;
             }
             if shell.poll_build(&mut editor) {
                 shell.rebuild(&mut editor)?;
