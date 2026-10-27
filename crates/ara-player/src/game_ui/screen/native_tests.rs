@@ -19,7 +19,7 @@ fn fixture() -> Result<Surface> {
         "stylesheet":"ui {width:100%;height:100%;} field {width:180px;height:32px;padding:4px;} button {width:180px;height:32px;padding:4px;}",
         "bindings":[]
     }))?;
-    Surface::plain(&source, [400, 300])
+    Surface::plain(&source, [400, 300], 1.)
 }
 
 #[test]

@@ -8,7 +8,7 @@
 //! shipped (NativeAOT) and run that game too.
 //! Offscreen only (hidden window). Writes `NN-step.png` per step and, after every
 //! step, `journey.json` (what each step did, whether it worked and how long it took).
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
 use ara_editor_gpu::NativeUi;
@@ -290,7 +290,11 @@ impl Journey {
             "import" => {
                 if first {
                     editor.action("editor.workspace", json!({"folder": ""}))?;
-                    super::import_file(editor, Path::new(IMPORT))?;
+                    shell.queue_asset_import(crate::shell::asset_import::Request {
+                        sources: vec![PathBuf::from(IMPORT)],
+                        destination: String::new(),
+                        conflicts: Vec::new(),
+                    })?;
                     self.note =
                         "Assets > Import… rock.glb (copied into the project, imported off-thread)"
                             .into();

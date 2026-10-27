@@ -386,7 +386,7 @@ impl Shell {
             "Create folder",
             "Name the new folder inside the current authored folder.",
         );
-        let response = self.confirmations.prompt(options, "New Folder".into());
+        let response = self.confirmations.prompt(options, "New Folder");
         self.asset_ops.prompt = Some(Prompt::Folder { parent, response });
         self.asset_ops.revision += 1;
         self.menu = None;

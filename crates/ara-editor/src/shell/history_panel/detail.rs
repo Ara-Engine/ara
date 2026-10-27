@@ -11,6 +11,16 @@ fn value(value: Option<&Value>) -> String {
 }
 fn description(op: &ara_doc::Op) -> String {
     match op {
+        ara_doc::Op::File {
+            path, state, prev, ..
+        } => {
+            let operation = match (prev.is_some(), state.is_some()) {
+                (false, true) => "Create",
+                (true, false) => "Delete",
+                _ => "Replace",
+            };
+            format!("{operation} file entry · {path}")
+        }
         ara_doc::Op::Set {
             path,
             prev,

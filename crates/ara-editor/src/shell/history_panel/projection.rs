@@ -23,7 +23,7 @@ pub(super) fn short(value: &str, limit: usize) -> String {
     text
 }
 pub(super) fn document<'a>(store: &'a Store, op: &'a ara_doc::Op) -> &'a str {
-    if let ara_doc::Op::Document { path, .. } = op {
+    if let ara_doc::Op::Document { path, .. } | ara_doc::Op::File { path, .. } = op {
         return path;
     }
     store

@@ -79,7 +79,7 @@ impl Preparing {
             let next = match self.after.as_ref() {
                 Some(id) => source
                     .records()
-                    .range((Bound::Excluded(id), Bound::Unbounded))
+                    .range::<RecordId, _>((Bound::Excluded(id), Bound::Unbounded))
                     .next(),
                 None => source.records().iter().next(),
             };

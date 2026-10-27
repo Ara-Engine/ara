@@ -77,7 +77,7 @@ impl Shell {
         }
         Ok(())
     }
-    pub(super) fn asset_operations_markup(&mut self, out: &mut String) {
+    pub(in crate::shell) fn asset_operations_markup(&mut self, out: &mut String) {
         if let Some(rename) = &self.asset_ops.rename
             && let Some(error) = &rename.error
         {
