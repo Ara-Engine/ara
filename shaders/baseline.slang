@@ -171,7 +171,7 @@ void taaMain(uint3 t:SV_DispatchThreadID){
     }
     images[NonUniformResourceIndex(f.post.z)][p]=float4(min(result*exposure,65000),depth);
 }
-float3 displayCurve(Frame f,float3 x){uint curve=uint(f.forward.w);return curve==1?neutralCurve(x):curve==2?filmicCurve(x):tonemap(x);}
+float3 displayCurve(Frame f,float3 x){uint curve=uint(f.forward.w);return curve>=3?agxCurve(x,curve-3):curve==1?neutralCurve(x):curve==2?filmicCurve(x):tonemap(x);}
 [shader("compute")]
 [numthreads(8,8,1)]
 void tonemapMain(uint3 t:SV_DispatchThreadID){Frame f=frame();if(any(t.xy>=f.extent.xy))return;int2 p=int2(t.xy);float3 color=pixel(root.materials,p).rgb;

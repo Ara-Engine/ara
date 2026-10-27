@@ -146,7 +146,7 @@ void post<let MOTION:int>(uint3 tid){
     }else c=sceneColour(f,l,p,uv);
     if(l.bloom.x>0)c=lerp(c,bloom(f,l,uv),l.bloom.x);
     c=grade(f,l,max(c*exposureState(l).x,0),uv);
-    uint curve=l.flags.x;c=curve==1?neutralCurve(c):curve==2?filmicCurve(c):tonemap(c);
+    uint curve=l.flags.x;c=curve>=3?agxCurve(c,curve-3):curve==1?neutralCurve(c):curve==2?filmicCurve(c):tonemap(c);
     c=srgb(liftGammaGain(l,saturate(c)));
     if(l.lut.x!=0)c=lerp(c,colourLookup(l,c),asfloat(l.lut.z));
     images[NonUniformResourceIndex(f.post.w)][p]=float4(c,1);

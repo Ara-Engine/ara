@@ -217,6 +217,13 @@ pub enum ToneMapping {
     Neutral,
     /// Narkowicz's per-channel ACES fit (the legacy curve; saturated highlights).
     AcesFit,
+    /// AgX as Blender 5.1 forms it (Cycles' default view): keeps mid grey, bends
+    /// bright saturated light smoothly towards white instead of clipping its hue.
+    Agx,
+    /// AgX with Blender's Punchy look: deeper shadows and more contrast.
+    AgxPunchy,
+    /// AgX with Blender's Medium High Contrast look: contrast 1.2 about mid grey.
+    AgxMediumHighContrast,
 }
 
 /// The scene's authored look as extracted for renderers: the first entity in ID order

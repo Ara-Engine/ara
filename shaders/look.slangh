@@ -88,7 +88,7 @@ float luminance(float3 c){return dot(c,float3(0.2126,0.7152,0.0722));}
 
 float3 srgb(float3 x){return lerp(12.92*x,1.055*pow(max(x,0),1/2.4)-0.055,step(0.0031308,x));}
 // Display curves shared with the fidelity post pass (forward.w: 0 ACES fit, 1 PBR
-// Neutral, 2 fitted ACES filmic pre-scaled to keep 18% grey).
+// Neutral, 2 fitted ACES filmic pre-scaled to keep 18% grey, 3..5 AgX: agxCurve).
 float3 tonemap(float3 x){return saturate((x*(2.51*x+0.03))/(x*(2.43*x+0.59)+0.14));}
 float3 neutralCurve(float3 c){
     float minimum=min(c.x,min(c.y,c.z));float offset=minimum<=0.08?minimum-6.25*minimum*minimum:0.04;c-=offset;
@@ -100,6 +100,39 @@ float3 filmicCurve(float3 c){
     float3 v=float3(dot(float3(0.59719,0.35458,0.04823),c),dot(float3(0.07600,0.90834,0.01566),c),dot(float3(0.02840,0.13383,0.83777),c));
     v=(v*(v+0.0245786)-0.000090537)/(v*(0.983729*v+0.4329510)+0.238081);
     return saturate(float3(dot(float3(1.60475,-0.53108,-0.07367),v),dot(float3(-0.10208,1.10813,-0.00605),v),dot(float3(-0.00327,-0.07276,1.07602),v)));
+}
+// AgX (Troy Sobotka's image formation as Blender 5.1 ships it; ara_render_fidelity
+// colour.rs `agx` is the same maths): an independent analytic form fitted to Blender's
+// OCIO processor, within 0.5 (mean) and 2 (p95) 8-bit codes of it over 3.5k colours.
+// The two-segment hyperbolic sigmoid of log2 exposure over -10..+6.5 stops around 18%
+// grey, pivoting there with slope 2.38: x/(1+x^p)^(1/p) below (toe) and above
+// (shoulder), scaled to reach 0 and 1 at the ends; it yields Rec.1886 (2.4) code values.
+float3 agxSigmoid(float3 l){
+    float3 above=step(0.606060606,l),scale=lerp(0.563481689,0.723107701,above),power=lerp(1.522003776,1.489164645,above);
+    float3 t=2.380159557*abs(l-0.606060606)/scale;
+    return 0.489437090+sign(l-0.606060606)*scale*t*pow(1+pow(t,power),-1/power);
+}
+// Blender's AgX looks, applied per channel in its AgX Log space (Rec.2020 with
+// Blender's inset matrix, log2 over 25 stops): `look` 1 Punchy (a shadow curve
+// below 0.4, then CDL power 1.0912), 2 Medium High Contrast (contrast 1.2 about mid
+// grey, 0.4).
+float3 agxLook(float3 c,uint look){
+    float3 v=max(float3(dot(float3(0.544814746,0.373787398,0.081397855),c),dot(float3(0.140416948,0.754137555,0.105445497),c),dot(float3(0.088810420,0.178871756,0.732317824),c)),1e-10);
+    float3 l=(log2(v)+12.47393)/25;
+    if(look==2)l=(l-0.4)*1.2+0.4;
+    else{l=saturate(l);float3 d=min(l-0.4,0);l=lerp(0.367932255+d*(0.576921404+d*(-13.071582562+d*(-68.043428823+d*(-110.187104976+d*-47.912392721)))),pow(l,1.0912),step(0.4,l));}
+    v=exp2(l*25-12.47393);
+    return float3(dot(float3(2.114473395,-1.027378470,-0.087094925),v),dot(float3(-0.370504268,1.552926184,-0.182421916),v),dot(float3(-0.165931398,-0.254715528,1.420646926),v));
+}
+// Linear Rec.709 after exposure to linear display Rec.709 through AgX; `look` 0 base,
+// 1 Punchy, 2 Medium High Contrast (agxLook): the fitted inset, the sigmoid, the
+// outset, the display power and the return to Rec.709.
+float3 agxCurve(float3 c,uint look){
+    if(look!=0)c=agxLook(c,look);
+    float3 v=max(float3(dot(float3(0.586284653,0.320481389,0.093233958),c),dot(float3(0.115577053,0.766820846,0.117602100),c),dot(float3(0.090460175,0.189264504,0.720275322),c)),1e-10);
+    float3 s=agxSigmoid(saturate((log2(v)+12.47393)/16.5));
+    s=pow(max(float3(dot(float3(0.977084882,0.019273491,0.003641627),s),dot(float3(0.017531670,1.012742383,-0.030274053),s),dot(float3(0.012019836,0.012047557,0.975932607),s)),0),2.4);
+    return saturate(float3(dot(float3(1.807087207,-0.635807619,-0.171279588),s),dot(float3(-0.224544003,1.237837193,-0.013293189),s),dot(float3(-0.184566066,-0.281406333,1.465972400),s)));
 }
 static const float PLANET=6360000,TOP=6460000;
 // Aerosols scale Mie density relative to clear Earth air.

@@ -71,10 +71,11 @@ void aoDenoiseMain(uint3 tid:SV_DispatchThreadID){
 // Levesque and Gilet 2023 over GTAO's screen slices. Each sample hides only the slice
 // sectors between its front and its back (the sample pushed `shadowParams[0].x` metres
 // away from the camera), 32 sectors per slice in GTAO's cosine-weighted measure, so thin
-// or distant foreground stops darkening what lies behind it (no horizon halos). Each
-// newly hidden sector receives the sample's radiance from last frame's colour (the
-// reflection pyramid, reprojected) where the sample faces the pixel: one bounce from the
-// geometry within the radius (repeated frame to frame), which lighting adds where the
+// or distant foreground stops darkening what lies behind it (no horizon halos). The
+// sectors each slice side hides receive the radiance, from last frame's colour (the
+// reflection pyramid, reprojected), of the sample there that hides the most, where it
+// faces the pixel: one bounce from the geometry within the radius (repeated frame to
+// frame; one fetch per side, the denoise averages 64 of them), which lighting adds where the
 // sectors hide probe and sky light (look-shading.slangh ibl). Slice rotations and step
 // offsets follow a fixed 4x4 pattern that the denoise's 4x4 box averages exactly:
 // nothing varies per frame. Output (half resolution): rgb bounce irradiance, a
@@ -140,6 +141,9 @@ void aoBitmaskMain(uint3 tid:SV_DispatchThreadID){
         uint hidden=0;float3 received=0;
         for(uint sideIndex=0;sideIndex<2;sideIndex++){
             float sign=sideIndex==0?1.:-1.;uint full=sideIndex==0?positive:negative;
+            // The sample hiding the most sectors on this side lends its radiance to every
+            // sector the side hides: one radiance and normal fetch per side, not per sample.
+            uint sideBits=0,most=0;int2 source=0;float3 towards=0;float distance=0,span=1;
             for(uint k=0;k<steps&&(hidden&full)!=full;k++){
                 float t=(float(k)+jitter)/float(steps);float offset=max(t*t*radius,1+float(k));
                 float2 q=centre+direction*sign*offset;if(any(q<0)||any(q>=float2(f.extent.xy)))break;
@@ -151,16 +155,17 @@ void aoBitmaskMain(uint3 tid:SV_DispatchThreadID){
                 float3 back=delta-V*thickness;float front=dot(delta,V)/len;
                 float rear=lerp(front,dot(back,V)*rsqrt(max(dot(back,back),1e-10)),reach);
                 float a=aoShare(front,sign,n,sn,cn,lower,total),b=aoShare(rear,sign,n,sn,cn,lower,total);
-                uint fresh=aoSectors(min(a,b),max(a,b))&~hidden;
+                uint fresh=aoSectors(min(a,b),max(a,b))&~hidden;if(fresh==0)continue;
                 // Cutouts (gbufferOccluder) hide nothing.
-                if(fresh==0||gbufferOccluder(f,at)<0.5)continue;
-                hidden|=fresh;
-                if(bounce){
-                    bool found;float3 radiance=aoRadiance(f,l,P+delta,offset>16?2:1,found);
-                    // A diffuse sample sends its (view-independent) radiance where its front faces the pixel.
-                    float facing=saturate(-dot(gbufferNormal(f,at),delta)/max(len,1e-5)*4);
-                    if(found)received+=radiance*(facing*float(countbits(fresh)));
-                }
+                if(gbufferOccluder(f,at)<0.5)continue;
+                hidden|=fresh;uint count=countbits(fresh);sideBits+=count;
+                if(count>most){most=count;source=at;towards=delta;span=len;distance=offset;}
+            }
+            if(bounce&&sideBits>0){
+                bool found;float3 radiance=aoRadiance(f,l,P+towards,distance>16?2:1,found);
+                // A diffuse sample sends its (view-independent) radiance where its front faces the pixel.
+                float facing=saturate(-dot(gbufferNormal(f,source),towards)/span*4);
+                if(found)received+=radiance*(facing*float(sideBits));
             }
         }
         float weight=projectedLength*total;

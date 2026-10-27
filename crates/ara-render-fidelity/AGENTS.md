@@ -73,7 +73,7 @@ filter without luminance rejection on rough surfaces. Checkerboard transport mus
 repair invalid history before temporal resolve. Reference targets stay RGBA32F.
 Exposure is applied once after reconstruction; grading (white balance, contrast,
 saturation, vignette) follows it in scene-linear, then the tone mapper (AcesFit,
-PbrNeutral, Filmic) and the LUT. `post_process` replays the last frame (TAA kept). Capture is explicit; ordinary
+PbrNeutral, Filmic, AgX with Blender's looks: `colour::agx`, fitted to Blender 5.1) and the LUT. `post_process` replays the last frame (TAA kept). Capture is explicit; ordinary
 frames never read back image data. GPU pipelines only consume cooked artifacts.
 Every bindless input is declared to the graph, including masked textures.
 After merging shader changes, recook the merged source tree: neither parent's

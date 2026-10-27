@@ -15,43 +15,20 @@
 // Widest tent (half-width, texels at the pixel's level) the contact-hardening filter
 // uses; wider penumbrae clamp to it (about four to eight render pixels).
 static const float VSM_SOFT_TEXELS=4;
-// No page (request candidates).
-static const uint VSM_NONE=0xffffffffu;
-
-// Bits of the entries of `v` equal to `index`.
-uint vsmMatches(uint4 v,uint index){return (v.x==index?1u:0u)|(v.y==index?2u:0u)|(v.z==index?4u:0u)|(v.w==index?8u:0u);}
-// Sets the request bit of page-table index `index` (none: VSM_NONE) after a plain
-// load finds it unset: contended atomics cost more than the rest of the pass.
-void vsmSetBit(Look l,uint index){
-    if(index==VSM_NONE)return;
-    uint at=(index>>5)*4,bit=1u<<(index&31);
-    if((buffers[NonUniformResourceIndex(l.vsmRequest.x)].Load(at)&bit)==0)
-        buffers[NonUniformResourceIndex(l.vsmRequest.x)].InterlockedOr(at,bit);
-}
-// Requests up to eight pages per lane (bit i of `pending`: index lo[i], or hi[i-4]) in
-// one wave loop: each pass takes the wave's smallest pending page, which every lane
-// drops and the next lane in turn keeps; those lanes then set their bits together, so
-// the loads overlap instead of one per pass. Every lane of the wave must be active.
-void vsmMarkPages(Look l,uint4 lo,uint4 hi,uint pending){
-    uint mine=VSM_NONE,lane=0;
-    while(WaveActiveAnyTrue(pending!=0)){
-        // Selects, not a dynamic index: that would put the vectors in local memory.
-        uint i=firstbitlow(pending)&7;uint4 v=i<4?lo:hi;uint k=i&3;
-        uint index=WaveActiveMin(pending!=0?(k==0?v.x:k==1?v.y:k==2?v.z:v.w):VSM_NONE);
-        pending&=~(vsmMatches(lo,index)|(vsmMatches(hi,index)<<4));
-        if(WaveGetLaneIndex()==lane)mine=index;
-        if(++lane==WaveGetLaneCount()){vsmSetBit(l,mine);mine=VSM_NONE;lane=0;}
+// Sets the request bit of world page `page` at `level`: one lane per distinct page
+// of the wave (its pixels mostly share pages; contended atomics cost more than the
+// rest of the pass), after a plain load finds the bit unset.
+void vsmMark(Look l,uint level,int2 page){
+    uint index=vsmIndex(level,page);
+    for(;;){
+        if(WaveReadLaneFirst(index)!=index)continue;
+        if(WaveIsFirstLane()){
+            uint at=(index>>5)*4,bit=1u<<(index&31);
+            if((buffers[NonUniformResourceIndex(l.vsmRequest.x)].Load(at)&bit)==0)
+                buffers[NonUniformResourceIndex(l.vsmRequest.x)].InterlockedOr(at,bit);
+        }
+        break;
     }
-    vsmSetBit(l,mine);
-}
-// The page holding light-space `light` at `level` and, where it lies within `reach`
-// texels of the page's edges, the neighbours there: their indices in `pages`, the
-// requested ones as bits.
-uint vsmCandidates(Look l,uint level,float2 light,float reach,out uint4 pages){
-    float2 q=light/vsmStep(l,level);int2 page=int2(floor(q));float2 local=(q-float2(page))*VSM_PAGE;
-    int2 d=int2(local.x<reach?-1:local.x>VSM_PAGE-reach?1:0,local.y<reach?-1:local.y>VSM_PAGE-reach?1:0);
-    pages=uint4(vsmIndex(level,page),vsmIndex(level,page+int2(d.x,0)),vsmIndex(level,page+int2(0,d.y)),vsmIndex(level,page+d));
-    return 1u|(d.x!=0?2u:0u)|(d.y!=0?4u:0u)|(all(d!=0)?8u:0u);
 }
 // Last frame's tent half-width at render pixel `p` (vsmProjectMain): the soft filter's
 // reach there; one texel before the mask holds one.
@@ -59,26 +36,34 @@ float vsmLastTent(Look l,int2 p){
     if(l.vsmMask.x==0)return 1;
     float t=textures[NonUniformResourceIndex(l.vsmMask.x)].Load(int3(p,0)).g;return t>=1&&t<=VSM_SOFT_TEXELS?t:1;
 }
+// Marks the pages pixel `world` (light-space `light`, its normal at cosine `nl` to the
+// sun, last frame's tent `tent`) samples, and the neighbours within the projection's
+// reach of a page's edge: the normal offset's lateral shift plus, at its level, the
+// tent and its gather, and one level coarser the blocker window (2.5 texels).
+void vsmRequest(Frame f,Look l,float3 world,float3 light,float nl,float tent){
+    uint level=vsmLevel(f,l,world,light);float shift=shadowOffset(nl)*sqrt(saturate(1-nl*nl));
+    for(uint k=level;k<min(level+2,VSM_LEVELS);k++){
+        float2 q=light.xy/vsmStep(l,k);int2 page=int2(floor(q));
+        vsmMark(l,k,page);
+        float reach=k==level?shift+tent+1:shift*0.5+2.5;
+        float2 local=(q-float2(page))*VSM_PAGE;
+        int2 d=int2(local.x<reach?-1:local.x>VSM_PAGE-reach?1:0,local.y<reach?-1:local.y>VSM_PAGE-reach?1:0);
+        if(d.x!=0)vsmMark(l,k,page+int2(d.x,0));
+        if(d.y!=0)vsmMark(l,k,page+int2(0,d.y));
+        if(all(d!=0))vsmMark(l,k,page+d);
+    }
+}
 
 [shader("compute")][numthreads(8,8,1)]
 void vsmMarkMain(uint3 tid:SV_DispatchThreadID){
     Frame f=frame();Look l=look(f);if(l.vsmRequest.x==0)return;
     uint n=l.flags.z;int2 p=int2(tid.xy)*4+int2((n&1)*2+((n>>2)&1),((n>>1)&1)*2+((n>>3)&1));
-    // Lanes without a request stay active for the wave loop.
-    uint4 lo=VSM_NONE,hi=VSM_NONE;uint pending=0;
-    if(all(p<int2(f.extent.xy))){
-        float depth=gbufferDepth(f,p);float3 normal=gbufferNormal(f,p);float nl=dot(normal,f.sunDirection.xyz);
-        // Surfaces facing away from the sun take no sun term (look-shading.slangh shade).
-        if(depth>0&&nl>0){
-            float3 world=worldAtDepth(f,float2(p)+0.5,depth),light=vsmLight(l,world);uint level=vsmLevel(f,l,world,light);
-            // Past the page's edge the projection reads the normal offset plus, at this
-            // level, the tent and its gather, and one coarser the blocker window (2.5 texels).
-            float offset=shadowOffset(saturate(nl));
-            pending=vsmCandidates(l,level,light.xy,offset+1+vsmLastTent(l,p),lo);
-            if(level+1<VSM_LEVELS)pending|=vsmCandidates(l,level+1,light.xy,offset*0.5+3,hi)<<4;
-        }
-    }
-    vsmMarkPages(l,lo,hi,pending);
+    if(any(p>=int2(f.extent.xy)))return;
+    float depth=gbufferDepth(f,p);if(depth<=0)return;
+    // Surfaces facing away from the sun take no sun term (look-shading.slangh shade).
+    float nl=dot(gbufferNormal(f,p),f.sunDirection.xyz);if(nl<=0)return;
+    float3 world=worldAtDepth(f,float2(p)+0.5,depth);
+    vsmRequest(f,l,world,vsmLight(l,world),nl,vsmLastTent(l,p));
 }
 
 // A page lookup for the soft filters: world page `page` (in `slot`; -1 where not

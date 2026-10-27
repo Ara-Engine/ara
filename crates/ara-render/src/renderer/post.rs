@@ -19,6 +19,14 @@ pub enum ToneCurve {
     Neutral = 1,
     /// Hill's fitted ACES RRT+ODT, pre-scaled to keep 18% grey.
     Filmic = 2,
+    /// AgX, Troy Sobotka's image formation as Blender 5.1 ships it (look.slangh
+    /// `agxCurve`): 16.5 stops into a log sigmoid that keeps 18% grey and bends bright,
+    /// saturated light towards white.
+    Agx = 3,
+    /// AgX with Blender's "Punchy" look: deeper shadows, more contrast.
+    AgxPunchy = 4,
+    /// AgX with Blender's "Medium High Contrast" look: contrast 1.2 about mid grey.
+    AgxMediumHighContrast = 5,
 }
 
 /// `tonemapMain`'s pass-through view ID (`Frame.temporal.z`): outside every
