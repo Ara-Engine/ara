@@ -150,7 +150,9 @@ impl Shell {
                     value,
                     None,
                 )?;
+                let path = field.path.clone();
                 editor.apply(commands, "Add collection item", None)?;
+                self.reveal_appended_collection(editor, &path, pointer)?;
             }
         }
         self.menu = None;

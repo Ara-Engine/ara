@@ -339,6 +339,16 @@ impl Shell {
                     }
                     Binding::Command(id, target) => {
                         let (id, target) = (*id, target.clone());
+                        let appended = if id == "field.set" {
+                            match &target {
+                                commands::Target::Text(target) => target
+                                    .split_once('=')
+                                    .and_then(|(path, _)| self.append_collection_target(path)),
+                                _ => None,
+                            }
+                        } else {
+                            None
+                        };
                         let close_palette = editor.state.palette;
                         self.remember(id);
                         self.menu = None;
@@ -348,6 +358,9 @@ impl Shell {
                             editor.action("editor.palette", json!({"open":false}))?;
                         }
                         self.execute(editor, id, &target)?;
+                        if let Some((field, pointer)) = appended {
+                            self.reveal_appended_collection(editor, &field, &pointer)?;
+                        }
                         rebuild = true;
                     }
                     Binding::MenuBar(index) => {

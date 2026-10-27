@@ -249,6 +249,51 @@ fn element_default(db: &SchemaDb, ty: &ValueType) -> Value {
     }
     db.zero(ty)
 }
+/// Follow a collection's schema without treating map keys as property paths.
+pub(super) fn nested_type<'a>(
+    db: &'a SchemaDb,
+    ty: &'a ValueType,
+    pointer: &str,
+) -> Option<&'a ValueType> {
+    let mut ty = ty;
+    for key in tokens(pointer) {
+        ty = match inner(ty) {
+            ValueType::List(element) | ValueType::Keyed(element) | ValueType::Map(element) => {
+                element
+            }
+            ValueType::Named(name) => match &db.get(name)?.shape {
+                Shape::Struct { fields, .. } => &fields.iter().find(|field| field.name == key)?.ty,
+                _ => return None,
+            },
+            _ => return None,
+        };
+    }
+    Some(inner(ty))
+}
+/// A picker Add has an append token, never the index that happened to be next
+/// when its popup opened. Lower it to one current-state typed Append operation.
+fn append_template(
+    db: &SchemaDb,
+    ty: &ValueType,
+    pointer: &str,
+    value: Value,
+) -> ara_ui::Result<Option<(String, Value)>> {
+    let parts = tokens(pointer);
+    let mut parent = String::new();
+    for (depth, key) in parts.iter().enumerate() {
+        if key == "-"
+            && let Some(ValueType::List(element) | ValueType::Keyed(element)) =
+                nested_type(db, ty, &parent)
+        {
+            let mut item = element_default(db, element);
+            set_at(&mut item, &parts[depth + 1..], value)?;
+            return Ok(Some((parent, item)));
+        }
+        parent.push('/');
+        parent.push_str(&token(key));
+    }
+    Ok(None)
+}
 /// A struct's required (non-optional) asset field and its kind: such an item is
 /// created by picking the asset, never with an empty reference.
 fn required_asset(db: &SchemaDb, ty: &ValueType) -> Option<(String, Option<String>)> {
@@ -339,26 +384,32 @@ impl Shell {
             .and_then(|value| value.pointer(pointer).cloned())
             .unwrap_or(Value::Null)
     }
-    /// Whether `target` is one past the end of a list: picking there adds an item.
+    /// Whether picking at this semantic Add or legacy one-past-end target appends.
     pub(super) fn appends(&self, target: &str) -> bool {
-        let Some((path, pointer)) = target.split_once('#') else {
-            return false;
-        };
-        let value = self.fields.get(path).map(|f| &f.value);
-        let mut at = tokens(pointer);
-        while let Some(last) = at.pop() {
-            let parent = at
-                .iter()
-                .map(|t| format!("/{}", token(t)))
-                .collect::<String>();
-            if let Some(Value::Array(items)) = value.and_then(|v| v.pointer(&parent)) {
-                return last.parse::<usize>().is_ok_and(|i| i == items.len());
-            }
-        }
-        false
+        self.append_collection_target(target).is_some()
     }
-    /// `property.set` commands putting `value` at a field target; a nested target
-    /// replaces its field's whole value.
+    /// The explicit picker append's collection, captured before its command runs.
+    pub(super) fn append_collection_target(&self, target: &str) -> Option<(String, String)> {
+        let (path, pointer) = target.split_once('#')?;
+        let value = self
+            .compound_values
+            .get(path)
+            .map(|values| &values.value)
+            .or_else(|| self.fields.get(path).map(|field| &field.value))?;
+        let mut parent = String::new();
+        for key in tokens(pointer) {
+            if let Some(items) = value.pointer(&parent).and_then(Value::as_array)
+                && (key == "-" || key.parse::<usize>().is_ok_and(|index| index == items.len()))
+            {
+                return Some((path.to_owned(), parent));
+            }
+            parent.push('/');
+            parent.push_str(&token(&key));
+        }
+        None
+    }
+    /// Typed edits against current field values. A `/-` picker target creates a
+    /// schema-default item with Append, preserving concurrent collection inserts.
     pub(crate) fn field_commands(
         &self,
         editor: &Editor,
@@ -381,6 +432,22 @@ impl Shell {
             .compound_values
             .get(path)
             .map_or(&field.value, |values| &values.value);
+        if pointer.split('/').any(|part| part == "-")
+            && let crate::inspector::Widget::Compound { ty, .. } = &field.widget
+            && let Some((collection, item)) =
+                append_template(editor.host.store().schema(), ty, pointer, value.clone())?
+        {
+            return collection_adapter::commands(
+                editor,
+                selection,
+                field,
+                reference,
+                &collection,
+                Operation::Append,
+                item,
+                None,
+            );
+        }
         collection_adapter::commands(
             editor,
             selection,
@@ -581,7 +648,7 @@ impl Shell {
                     self.bindings.insert(
                         ara_ui::source::stable_id(&button),
                         Binding::AssetPicker(
-                            format!("{}#{pointer}/{n}/{}", field.path, token(&name)),
+                            format!("{}#{pointer}/-/{}", field.path, token(&name)),
                             kind,
                         ),
                     );

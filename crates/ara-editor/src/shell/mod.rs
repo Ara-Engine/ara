@@ -1349,6 +1349,7 @@ impl Shell {
                 .set_virtual_extent(grid, [width, self.asset_grid_extent])?;
             self.ui.scroll_to(grid, [0., self.asset_offset])?;
         }
+        self.reveal_collection_appends(editor)?;
         self.paint_decorations();
         if self.field_request != editor.state.focus_field
             && self.shown_node("inspector-scroll").is_some()
