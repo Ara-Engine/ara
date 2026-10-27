@@ -87,6 +87,7 @@ fn hidden(command: &mut Command) -> &mut Command {
 
 /// Select `path` in Explorer (Finder, or the file manager elsewhere).
 pub fn reveal(path: &Path) {
+    #[cfg(any(windows, target_os = "macos"))]
     let shown = crate::model::text::path(path);
     #[cfg(windows)]
     {
