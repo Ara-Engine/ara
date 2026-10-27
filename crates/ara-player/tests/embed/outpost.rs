@@ -107,9 +107,14 @@ fn hub_outpost_embedded_hud_survives_thirty_seconds_and_missing_images() {
             "{stage}: simulation stopped"
         );
         let image = view.pixels(&gpu);
-        let crew = agent.play("read", json!({"world":world,"paths":["e_run.SalvageRun.activePlayers"]}));
-        assert_eq!(crew["values"]["e_run.SalvageRun.activePlayers"], 1,
-            "embedded solo must count its local scavenger before any input: {crew}");
+        let crew = agent.play(
+            "read",
+            json!({"world":world,"paths":["e_run.SalvageRun.activePlayers"]}),
+        );
+        assert_eq!(
+            crew["values"]["e_run.SalvageRun.activePlayers"], 1,
+            "embedded solo must count its local scavenger before any input: {crew}"
+        );
         let (mean, spread) = luma_stats(&image);
         assert!(mean > 8. && spread > 4., "{stage}: black or flat image");
         image
