@@ -314,14 +314,18 @@ impl Player {
             self.link.flush()?;
         }
         if let Some(world) = &mut self.world {
+            // An embedded Play entry holds a local simulation (input and ticks) until
+            // its first lit frame publishes (`embed` module docs).
+            let holding = !world.runtime.networked()
+                && self.embed.as_ref().is_some_and(embed::Embedded::entering);
             let inputs = match (&mut self.window, &mut self.embed) {
                 (Some(window), _) => {
                     let (quit, inputs) = window.events(world.runtime.player())?;
                     self.stop |= quit;
                     inputs
                 }
-                (None, Some(embed)) => embed.input.injections(world.runtime.player()),
-                (None, None) => Vec::new(),
+                (None, Some(embed)) if !holding => embed.input.injections(world.runtime.player()),
+                (None, _) => Vec::new(),
             };
             if !inputs.is_empty()
                 && let Err(e) = world.runtime.input(0, inputs)
@@ -329,7 +333,12 @@ impl Player {
                 eprintln!("ara-player: input: {e:#}");
             }
             let period = Duration::from_secs_f64(1.0 / f64::from(world.runtime.hz()));
-            match world.runtime.advance(elapsed) {
+            let advanced = if holding {
+                Ok(None)
+            } else {
+                world.runtime.advance(elapsed)
+            };
+            match advanced {
                 Ok(Some(frame)) if frame.ticks > 0 => {
                     self.max_late = self
                         .max_late
@@ -957,6 +966,9 @@ impl Player {
             )?;
         }
         started.net_handshake_ms = handshake;
+        if let Some(embed) = &mut self.embed {
+            embed.begin_entry();
+        }
         self.last_advance = Instant::now();
         self.world = Some(world);
         Ok(started)
