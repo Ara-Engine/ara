@@ -27,6 +27,8 @@ pub(crate) struct Refraction {
     state: State,
     /// The render size the atlas was allocated for.
     size: [u32; 2],
+    /// Allocated and not yet cleared: the next frame zeroes it first (`Refract.Clear`).
+    fresh: bool,
 }
 
 /// Atlas extent for render size `size`: level 0, and levels 1..4 side by side
@@ -35,16 +37,22 @@ fn extent([w, h]: [u32; 2]) -> [u32; 2] {
     [w, h + (h / 2).max(1)]
 }
 
-/// Level `level`'s texel rect (x0, y0, x1, y1) covering render-pixel rect `rect`.
-fn level_rect(rect: [u32; 4], level: u32) -> [u32; 4] {
+/// Level `level`'s texel rect (x0, y0, x1, y1) covering render-pixel rect `rect`,
+/// within the level's own size at render size `render` (look-refract.slangh
+/// `refractRect`).
+fn level_rect(rect: [u32; 4], level: u32, render: [u32; 2]) -> [u32; 4] {
     let round_up = (1 << level) - 1;
+    let [w, h] = render.map(|v| (v >> level).max(1));
     [
-        rect[0] >> level,
-        rect[1] >> level,
-        (rect[2] + round_up) >> level,
-        (rect[3] + round_up) >> level,
+        (rect[0] >> level).min(w),
+        (rect[1] >> level).min(h),
+        ((rect[2] + round_up) >> level).min(w),
+        ((rect[3] + round_up) >> level).min(h),
     ]
 }
+
+/// `Refract.Clear`'s level code: zero the whole atlas (look-refract.slang).
+const CLEAR: u32 = 255;
 
 impl LookGpu {
     /// Prepares this frame's refraction of render-pixel rect `rect`: allocates the
@@ -78,6 +86,7 @@ impl LookGpu {
                     queue: Queue::Graphics,
                 },
                 size: self.render,
+                fresh: true,
             });
         }
         let r = self.refract.as_ref().expect("allocated above");
@@ -106,10 +115,17 @@ impl LookGpu {
             "Refract.Down3",
             "Refract.Down4",
         ];
-        let passes = (0..=LEVELS)
+        let passes = r
+            .fresh
+            .then_some(CLEAR)
+            .into_iter()
+            .chain(0..=LEVELS)
             .map(|level| {
                 let id = graph.pass(
-                    NAMES[level as usize],
+                    NAMES
+                        .get(level as usize)
+                        .copied()
+                        .unwrap_or("Refract.Clear"),
                     Queue::Graphics,
                     [
                         (hdr, Access::ShaderRead),
@@ -127,7 +143,8 @@ impl LookGpu {
     }
 
     /// Records level `level` over render-pixel rect `rect`: 0 copies the lit scene
-    /// (sampled HDR `hdr`) and view depth, 1..4 each blur the level above.
+    /// (sampled HDR `hdr`) and view depth, 1..4 each blur the level above, CLEAR
+    /// zeroes the whole atlas.
     pub(crate) fn record_refract(
         &self,
         recorder: &mut Recorder,
@@ -136,7 +153,12 @@ impl LookGpu {
         hdr: u32,
         rect: [u32; 4],
     ) {
-        let [x0, y0, x1, y1] = level_rect(rect, level);
+        let [x0, y0, x1, y1] = if level == CLEAR {
+            let [w, h] = extent(frames.render.1);
+            [0, 0, w, h]
+        } else {
+            level_rect(rect, level, frames.render.1)
+        };
         recorder.push(Command::Pipeline(self.pipelines.refract));
         recorder.push(Command::Constants(RootConstants {
             words: [frames.render.0, hdr, level, 0, 0, 0, 0, 0],
@@ -152,6 +174,7 @@ impl LookGpu {
     pub(crate) fn refract_finish(&mut self, atlas: ResourceId, final_states: &[State]) {
         if let Some(r) = &mut self.refract {
             r.state = final_states[atlas.0];
+            r.fresh = false;
         }
     }
 }
@@ -171,8 +194,12 @@ mod tests {
     #[test]
     fn levels_cover_the_rect_and_pack_beneath_level_zero() {
         assert_eq!(extent([2560, 1440]), [2560, 2160]);
-        assert_eq!(level_rect([10, 20, 101, 63], 0), [10, 20, 101, 63]);
-        assert_eq!(level_rect([10, 20, 101, 63], 2), [2, 5, 26, 16]);
+        let render = [1707, 960];
+        assert_eq!(level_rect([10, 20, 101, 63], 0, render), [10, 20, 101, 63]);
+        assert_eq!(level_rect([10, 20, 101, 63], 2, render), [2, 5, 26, 16]);
+        // A rect reaching the right edge stays inside each level (853 texels wide at
+        // level 1, not 854): no level writes into its neighbour.
+        assert_eq!(level_rect([1600, 0, 1707, 960], 1, render)[2], 853);
         // Levels 1..4 side by side fit within level 0's width.
         let w = 2561u32;
         assert!((1..=LEVELS).map(|l| (w >> l).max(1)).sum::<u32>() <= w);

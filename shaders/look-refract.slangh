@@ -22,15 +22,29 @@ uint2 refractLevelOrigin(Frame f,uint level){
 }
 float2 refractAtlasSize(Frame f){return float2(f.extent.x,f.extent.y+max(f.extent.y/2,1u));}
 // The texels (x0, y0, x1, y1) of level `level` this frame copied: the rect, rounded out.
-uint4 refractRect(Look l,uint level){uint4 r=l.refractInfo[1];uint up=(1u<<level)-1;return uint4(r.xy>>level,(r.zw+up)>>level);}
+// Clamped to the level's own size, so no level writes into its neighbour's texels
+// (look/refract.rs level_rect matches).
+uint4 refractRect(Frame f,Look l,uint level){
+    uint4 r=l.refractInfo[1];uint up=(1u<<level)-1;uint2 size=refractLevelSize(f,level);
+    return uint4(min(r.xy>>level,size),min((r.zw+up)>>level,size));
+}
+// Finite radiance: a non-finite value (an upstream NaN or Inf) reads as black rather
+// than spreading through blending and the temporal resolve.
+float3 refractFinite(float3 c){return any(isnan(c))||any(isinf(c))?float3(0):c;}
 float refractViewDepth(Frame f,float3 world){return dot(world-f.camera.xyz,f.forward.xyz);}
 // Render-pixel position of a world point through the frame's (jittered) projection.
+// (-1, -1) behind the camera or where the projection is not finite.
 float2 refractPixel(Frame f,float3 world){
-    float4 c=mul(f.vp,float4(world,1));float2 n=c.xy/c.w;return float2((n.x*0.5+0.5)*f.extent.x,(0.5-n.y*0.5)*f.extent.y);
+    float4 c=mul(f.vp,float4(world,1));if(!(c.w>1e-6))return -1;
+    float2 n=c.xy/c.w,p=float2((n.x*0.5+0.5)*f.extent.x,(0.5-n.y*0.5)*f.extent.y);
+    return any(isnan(p))||any(isinf(p))?float2(-1,-1):clamp(p,-1.,65535.);
 }
 // Bilinear radiance of level `level` at render uv, clamped inside the copied rect.
 float3 refractLevel(Frame f,Look l,uint level,float2 uv){
-    float4 r=float4(refractRect(l,level));float2 p=clamp(uv*float2(refractLevelSize(f,level)),r.xy+0.5,max(r.zw-0.5,r.xy+0.5));
+    // A texel inside the copied rect, so the bilinear footprint never reaches texels
+    // this frame did not write (precision would otherwise give them tiny weights).
+    float4 r=float4(refractRect(f,l,level));float2 lo=r.xy+1,hi=max(r.zw-1,lo);
+    float2 p=clamp(uv*float2(refractLevelSize(f,level)),lo,hi);
     return historyTex(l.refractInfo[0].x,(float2(refractLevelOrigin(f,level))+p)/refractAtlasSize(f)).rgb;
 }
 // Radiance at render uv blurred to `level` (0 sharp to 4), between levels.
@@ -153,5 +167,5 @@ float4 refractColour(Frame f,Look l,Surface s,uint2 volume,float scale,float3 wo
         float3 traced=refractTrace(f,l,exit,t2,reach,spread,chord,s.roughness,uv);
         transmitted=traced*exp(-m.absorption*chord)*s.albedo*s.albedo*leave;
     }
-    return float4((reflected+tau*through*transmitted)*s.alpha,s.alpha);
+    return float4(refractFinite((reflected+tau*through*transmitted)*s.alpha),s.alpha);
 }

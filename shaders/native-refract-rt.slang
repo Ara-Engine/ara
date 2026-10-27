@@ -39,7 +39,7 @@ float4 refractColourRt(Frame f,Look l,Surface s,uint2 volume,float scale,float3 
         if(dot(t2,t2)<1e-6){t2=t1;leave=1-f0;}else leave=refractLeave(f0,t2,n2);
         transmitted=refractRay(f,l,exit,t2,spread,chord,s.roughness)*exp(-m.absorption*chord)*s.albedo*s.albedo*leave;
     }
-    return float4((reflected+s.transmission*through*transmitted)*s.alpha,s.alpha);
+    return float4(refractFinite((reflected+s.transmission*through*transmitted)*s.alpha),s.alpha);
 }
 [shader("fragment")]
 ForwardLit nativeForwardRefractRtFragment(Varying v){
