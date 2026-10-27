@@ -217,6 +217,40 @@ fn windowless_presenter_copies_scales_and_converts_completed_frames() {
     ));
 }
 
+/// A bounded completion wait never consumes a frame it gave up on (an event pump's
+/// retry finds it pending); once the frame can finish, a later wait consumes it.
+#[test]
+fn bounded_completion_waits_leave_stalled_frames_pending() {
+    let mut gpu = device();
+    // The frame's commit waits on an event nothing has signalled yet.
+    let stall = gpu.device.newSharedEvent().expect("shared event");
+    gpu.wait_event(&stall, 1);
+    gpu.begin_deferred_completion().expect("scope");
+    gpu.submit(gpu.begin(Queue::Graphics).finish(), &[])
+        .expect("submit");
+    let mut frame = gpu.end_deferred_completion().expect("end");
+    let bound = std::time::Duration::from_millis(50);
+    let started = std::time::Instant::now();
+    let done = gpu
+        .wait_completion_for(&mut frame, bound, |_, _| {})
+        .expect("bounded wait");
+    assert!(
+        !done && !frame.is_resolved(),
+        "a timed-out wait consumed the frame"
+    );
+    assert!(
+        started.elapsed() < bound * 10,
+        "waited {:?}",
+        started.elapsed()
+    );
+    stall.setSignaledValue(1);
+    let done = gpu
+        .wait_completion_for(&mut frame, std::time::Duration::from_secs(5), |_, _| {})
+        .expect("wait");
+    assert!(done && frame.is_resolved());
+    gpu.assert_clean().expect("clean");
+}
+
 #[test]
 fn labelled_passes_resolve_to_ordered_timings_and_a_mixed_queue_window() {
     let mut gpu = device();
