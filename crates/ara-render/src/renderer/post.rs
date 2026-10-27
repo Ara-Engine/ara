@@ -21,6 +21,10 @@ pub enum ToneCurve {
     Filmic = 2,
 }
 
+/// `tonemapMain`'s pass-through view ID (`Frame.temporal.z`): outside every
+/// `ViewMode` ID, so neither a debug view nor the tone curve applies (sRGB only).
+const PASS_THROUGH: u32 = u32::MAX;
+
 /// Shared offline-cooked baseline post pass; it owns no scene or gameplay state.
 pub struct ToneMap {
     pipeline: Pipeline,
@@ -70,7 +74,7 @@ impl ToneMap {
         frame.extent = [size[0], size[1], 0, 0];
         frame.sun_color_exposure[3] = exposure;
         frame.post[3] = output;
-        frame.temporal[2] = if tone_map { 0 } else { 7 };
+        frame.temporal[2] = if tone_map { 0 } else { PASS_THROUGH };
         gpu.upload(self.frame, bytemuck::bytes_of(&frame))?;
         Ok(())
     }
