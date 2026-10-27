@@ -9,12 +9,14 @@ publish.workspace = true
 workspace = true
 
 [features]
+hotpatch = ["dep:ara-hotpatch", "ara-runtime-render/hotpatch"]
 tracy = ["ara-gpu/tracy", "ara-profile/tracy"]
 
 [build-dependencies]
 embed-resource.workspace = true
 
 [dependencies]
+ara-hotpatch = { path = "../ara-hotpatch", optional = true, features = ["runtime"] }
 ara-texture-gpu = { path = "../ara-texture-gpu" }
 ara-crash = { path = "../ara-crash" }
 ara-asset = { path = "../ara-asset" }

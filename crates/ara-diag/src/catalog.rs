@@ -26,7 +26,8 @@ use std::sync::OnceLock;
 use crate::Code;
 
 /// The catalog sources, in display order.
-const SOURCES: [(&str, &str); 10] = [
+const SOURCES: [(&str, &str); 11] = [
+    ("hotpatch.md", include_str!("../codes/hotpatch.md")),
     ("csharp.md", include_str!("../codes/csharp.md")),
     ("kernel.md", include_str!("../codes/kernel.md")),
     ("bus.md", include_str!("../codes/bus.md")),

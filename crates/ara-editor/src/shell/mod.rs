@@ -717,6 +717,13 @@ impl Shell {
         self.rebuild(editor)?;
         Ok(true)
     }
+
+    /// Invalidate retained panel markup after a body patch, then reconcile the UI.
+    #[cfg(feature = "hotpatch")]
+    pub fn rust_hotpatched(&mut self, editor: &mut Editor) -> ara_ui::Result<()> {
+        self.memos.clear();
+        self.rebuild(editor)
+    }
     fn rebuild_all(&mut self, editor: &mut Editor) -> ara_ui::Result<()> {
         self.built = (editor.panels_revision, editor.host.store().revision());
         // The keymap follows two settings; rebuilding it took ~0.1 ms per rebuild.

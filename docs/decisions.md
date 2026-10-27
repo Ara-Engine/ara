@@ -56,6 +56,17 @@ These are working decisions. A spike result or a new entry here can change them.
 | A12 | **Performance tiers (DOTS-class).** Engine systems and hot gameplay systems in Rust are the "Burst tier": the same LLVM backend, with `&mut` giving no-alias guarantees and SIMD via `glam`. C# systems run over chunk-batched spans with no per-entity calls, using explicit SIMD (`Vector128`/`Vector256`) and NativeAOT in shipping builds. A compiler for a C# subset through LLVM is in the build order, decided by the S8 benchmarks. | R07, R10 |
 | A13 | **C# hosting and reload (from S2).**<br>• Hosting: Rust hosts .NET via hostfxr in dev, with `Ara.Runtime` in the default ALC. One generated, layout-hashed `#[repr(C)]` ABI (`HostInit` + `HostApi` + `ScriptApi`); C# bindings are generated from Rust descriptors.<br>• Every entry point is `[UnmanagedCallersOnly]` and catches everything.<br>• Systems: one call per contiguous ECS batch, from Bevy task-pool threads, addressed by id into a C# table swapped only at tick boundaries. Rust never holds pointers into module code.<br>• Reload: **L1** (EnC body-only edits; any method containing a lambda or local function, a constructor, an initializer or a state machine escalates to L3, because a lambda delta crashed the process) or **L3** (a new collectible ALC per module generation).<br>• Runtime config: `QuickJitForLoops=false` (otherwise tiered compilation pins ALCs), `MetadataUpdaterSupport=true`.<br>• **Roslyn runs in a warm out-of-process compile server** (no compiler GC hitches in the game), and tick threads run at above-normal priority while it compiles. | S2, R10 |
 
+## Development Rust reload (S11)
+
+**A14 (2026-10-27):** opt-in development Rust hotpatching uses Dioxus Subsecond
+and Bevy ECS's experimental hotpatching dispatch. Publish at quiescent frame/tick
+boundaries, preserve last-good code on rejection, and rebuild for data-layout or
+unsupported retained-code changes. Patched simulation sessions are explicitly
+tainted for replay/networking. Shipping/export players exclude this feature.
+The Windows rust-lld facade and initial Windows/Mac evidence are in
+[`S11`](../spikes/s11-rust-hotpatch/RESULT.md). This does not change D17's toolchain
+or add dx as a build prerequisite. Actual engine-path latency is not measured yet.
+
 ## Spike results (M0)
 
 | Spike | Result | Decision | Evidence |

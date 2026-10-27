@@ -771,6 +771,12 @@ impl Runtime {
     /// animation time) without stepping the simulation. From then on [`Runtime::tick`]
     /// reports `tick` (effects replay to it, status shows it).
     pub fn present_mirror(&mut self, tick: u64) -> Result<()> {
+        #[cfg(feature = "hotpatch")]
+        if self.play.session().rust_hotpatched() {
+            return Err(RuntimeError(
+                "ARA7603: replicated presentation requires a rebuild after a Rust patch".into(),
+            ));
+        }
         self.presented = Some(tick);
         for plugin in &mut self.plugins {
             plugin.mirror(self.play.session_mut(), tick)?;
@@ -788,7 +794,7 @@ impl Runtime {
             );
             schedule
         });
-        mirror.run(self.play.session_mut().world_mut());
+        self.play.session_mut().run_presentation(mirror);
         if let Some(error) = self.fault() {
             return Err(RuntimeError(error));
         }

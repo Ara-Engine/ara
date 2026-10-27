@@ -74,6 +74,8 @@ pub struct Snapshot {
     pub(crate) sequences: BTreeMap<PlayerId, u64>,
     pub(crate) mode: SessionMode,
     pub(crate) systems: Vec<String>,
+    #[serde(default)]
+    pub(crate) rust_hotpatched: bool,
     /// Portable provider state by provider name (absent in pre-provider snapshots).
     #[serde(default)]
     pub(crate) external: BTreeMap<String, Value>,
@@ -121,7 +123,8 @@ impl Snapshot {
 /// Portable replay artifact. Systems are supplied by the matching engine build.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Replay {
-    /// Replay format version.
+    /// Format 1 is reproducible; format 2 marks Rust-patched development history
+    /// so readers predating the taint flag also refuse it.
     pub format: u32,
     /// Canonical initial scene/dependency digest.
     pub scene_hash: StateHash,
@@ -131,6 +134,9 @@ pub struct Replay {
     pub build_hash: StateHash,
     /// Reflected schema compatibility digest.
     pub schema_hash: StateHash,
+    /// True after any Rust patch; deterministic replay requires an unpatched build.
+    #[serde(default)]
+    pub rust_hotpatched: bool,
     /// Complete initial simulation checkpoint, including RNG and input holds.
     pub initial: Snapshot,
     /// Live checkpoint cadence; older replays require a hash after every tick.
@@ -212,6 +218,9 @@ impl Session {
         if !self.providers.is_empty() {
             state["external"] = serde_json::to_value(self.capture_external()?)?;
         }
+        if self.rust_hotpatched() {
+            state["rustHotpatched"] = Value::Bool(true);
+        }
         Ok(StateHash::of_value(&state))
     }
 
@@ -267,7 +276,7 @@ impl Session {
             }
         }
         Ok(Snapshot {
-            format: 1,
+            format: if self.rust_hotpatched() { 2 } else { 1 },
             schema_hash: self.schema_hash(),
             build_hash,
             scene_hash,
@@ -284,6 +293,7 @@ impl Session {
             sequences: self.sequences.clone(),
             mode: self.mode,
             systems: self.systems.clone(),
+            rust_hotpatched: self.rust_hotpatched(),
             external: self.capture_external()?,
             trusted: crate::provider::Trusted::default(),
         })
@@ -292,6 +302,9 @@ impl Session {
     /// Restores complete registered state. World handles for surviving identities remain
     /// usable; recreated identities must be resolved again. No raw Entity fields are saved.
     pub fn restore(&mut self, snapshot: &Snapshot, build_hash: StateHash) -> Result<()> {
+        if snapshot.rust_hotpatched || self.rust_hotpatched() {
+            return Err(SimError("ARA7603: restoring a deterministic checkpoint requires rebuilding after a Rust patch".into()));
+        }
         if snapshot.format != 1
             || snapshot.schema_hash != self.schema_hash()
             || snapshot.build_hash != build_hash
@@ -612,6 +625,11 @@ impl Session {
                 || ty == Some(std::any::TypeId::of::<bevy_ecs::schedule::Schedules>())
                 || ty.is_some_and(|ty| owned.contains(&ty))
             {
+                continue;
+            }
+            #[cfg(feature = "hotpatch")]
+            if ty == Some(std::any::TypeId::of::<bevy_ecs::HotPatchChanges>()) {
+                // Dispatch invalidation is host infrastructure, not replayed gameplay state.
                 continue;
             }
             if !self.edit.registry.resources.values().any(|codec| {
