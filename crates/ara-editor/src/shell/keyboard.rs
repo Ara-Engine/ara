@@ -530,6 +530,7 @@ mod dialog_tests {
             "Opening Build closes the palette through navigation"
         );
         assert_eq!(shell.modal_root, Some("build-options"));
+        assert_eq!(shell.modal_return_focus, Some(outside));
         assert_eq!(
             shell.input.focused(),
             Some(ara_ui::source::stable_id("build-profile-select"))
@@ -573,7 +574,18 @@ mod dialog_tests {
         shell.key(&mut editor, 41, true, &mut Clip)?;
         assert!(!shell.build_options_open());
         assert_eq!(shell.modal_root, None);
-        assert_eq!(shell.input.focused(), Some(outside));
+        assert_eq!(
+            shell.input.focused(),
+            Some(outside),
+            "return focus {:?}; target {:?}; input {}",
+            shell.modal_return_focus,
+            shell.ui.find("search-hierarchy").map(|i| (
+                &shell.ui.nodes[i].rect,
+                &shell.ui.nodes[i].clip,
+                shell.ui.shown(i)
+            )),
+            shell.input.focus_graph(&shell.ui)
+        );
 
         shell.open_build_options(&mut editor)?;
         shell.key(&mut editor, 81, true, &mut Clip)?;
