@@ -72,7 +72,10 @@ fn exported_game_ticks_csharp_after_relocation_without_author_files() {
     let pdb = PathBuf::from(std::env::var_os("ARA_SHIPPING_E2E_PDB").expect("matching player PDB"));
     let author = scratch.join("author");
     let authored = author.clone();
-    let module = authored.join("scripts/Gameplay");
+    // C# retains its compiler-discovery root while assets exercise the legacy layout.
+    let module = author
+        .join(ara_doc::AUTHORING_ROOT)
+        .join("scripts/Gameplay");
     std::fs::create_dir_all(&module).unwrap();
     std::fs::create_dir_all(authored.join("scenes")).unwrap();
     std::fs::create_dir_all(authored.join("prefabs")).unwrap();
