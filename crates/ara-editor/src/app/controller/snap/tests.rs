@@ -42,7 +42,27 @@ fn open() -> (Editor, Shell) {
             json!({"tool":"translate","local":true,"snapping":true}),
         )
         .unwrap();
-    let shell = Shell::new(&mut editor, [1440., 900.]).unwrap();
+    let mut shell = Shell::new(&mut editor, [1440., 900.]).unwrap();
+    // The scene opened empty, before the transformed fixtures were authored.
+    // Frame through the real navigation command instead of assuming the opening
+    // camera can see a source translated by its scaled/rotated parent.
+    let rect = shell.viewport().unwrap();
+    let framed = editor
+        .action("editor.frame", json!({"aspect":rect.w / rect.h}))
+        .unwrap();
+    assert_eq!(
+        framed["framingPending"], false,
+        "Procedural fixture bounds are immediately available"
+    );
+    shell.rebuild(&mut editor).unwrap();
+    let view = editor.view().unwrap();
+    let rect = shell.viewport().unwrap();
+    let handles = overlay::handles(&view, &editor.state, rect)
+        .expect("Frame selected must place the snap fixture in front of its real Scene camera");
+    assert!(
+        rect.contains(handles.origin[0], handles.origin[1]),
+        "Framed source gizmo must be inside the Scene viewport"
+    );
     (editor, shell)
 }
 fn records(editor: &Editor) -> Value {

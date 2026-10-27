@@ -157,9 +157,17 @@ fn scene_tab_drag_cancels_then_detaches_resizes_and_redocks_without_authoring_op
 
     begin(&mut shell, "scene");
     shell.leave();
-    let game = shell.ui.nodes[shell.shown_node("tab-game").unwrap()].rect;
+    let game = shell.ui.nodes[shell
+        .shown_node("tab-game")
+        .or_else(|| shell.shown_node("header-game"))
+        .expect("remaining Game panel has a visible tab or lone-panel header")]
+    .rect;
     shell.pointer = [game.x + 2., game.y + game.h * 0.5];
-    shell.drag_over();
+    assert!(shell.drag_over());
+    assert!(matches!(
+        shell.drop_preview.as_ref().unwrap().target,
+        DropTarget::Tab { .. }
+    ));
     shell.finish_tab_drag(&mut editor, None).unwrap();
     assert!(editor.state.floating.is_empty());
     assert_eq!(shell.scene_host().unwrap().0, None);
