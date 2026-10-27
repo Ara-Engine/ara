@@ -28,10 +28,17 @@ pub type GpuCompletion = vulkan::Completion;
 /// Deferred frame completion returned by [`GpuDevice`].
 #[cfg(target_os = "macos")]
 pub type GpuCompletion = metal::Completion;
+/// Shared surfaces (D19) of [`GpuDevice`]; see the Vulkan re-export.
+#[cfg(target_os = "macos")]
+pub use metal::external;
 use serde::{Deserialize, Serialize};
 #[cfg(feature = "tracy")]
 #[doc(hidden)]
 pub use tracy_client as __tracy;
+/// Shared surfaces (D19) of [`GpuDevice`]: `vulkan::external` or `metal::external`,
+/// whose `create`/`recreate`/`publish_image`/`read_pixels` forms are shared.
+#[cfg(not(target_os = "macos"))]
+pub use vulkan::external;
 
 /// A logical execution queue; backend family indices never enter the graph.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
