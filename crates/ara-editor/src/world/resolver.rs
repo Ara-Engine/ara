@@ -105,10 +105,9 @@ impl SceneResolver {
         store: &Store,
         doc: &str,
     ) -> Result<Arc<Resolved>, Vec<Diagnostic>> {
-        if super::document_available(store, doc) {
-            self.resolve(store, doc)
-        } else {
-            Ok(Arc::clone(&self.unavailable))
+        match self.resolve(store, doc) {
+            Err(_) if !super::document_available(store, doc) => Ok(Arc::clone(&self.unavailable)),
+            result => result,
         }
     }
     /// `world::resolve(store, doc)`, reusing earlier resolutions where it can.

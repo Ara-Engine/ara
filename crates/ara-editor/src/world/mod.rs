@@ -56,10 +56,11 @@ impl DocumentView {
     /// its identity so undo/redo or a file reload can restore the same view. This
     /// does not relax document validation for authoring commands.
     pub fn for_presentation(store: &Store, doc: &str) -> Result<Self, Vec<Diagnostic>> {
-        if document_available(store, doc) {
-            Self::new(store, doc)
-        } else {
-            Ok(Self::with_entities(store, Arc::new(Resolved::new())))
+        match Self::new(store, doc) {
+            Err(_) if !document_available(store, doc) => {
+                Ok(Self::with_entities(store, Arc::new(Resolved::new())))
+            }
+            result => result,
         }
     }
     /// The view of `entities`, the open scene already resolved at the store's current
