@@ -16,6 +16,7 @@ pub(super) fn job(base: &Path) -> Result<PathBuf> {
     Ok(path)
 }
 pub(super) fn ssh(config: &Config, base: &Path, script: &str, seconds: u64) -> Result<String> {
+    super::require_slot(base)?;
     let path = job(base)?;
     let input = path.join("input.sh");
     std::fs::write(&input, script.replace('\r', ""))?;
@@ -52,6 +53,7 @@ pub(super) fn ssh(config: &Config, base: &Path, script: &str, seconds: u64) -> R
     Ok(std::fs::read_to_string(stdout)?)
 }
 pub(super) fn scp(config: &Config, base: &Path, source: &Path, destination: &str) -> Result<()> {
+    super::require_slot(base)?;
     let path = job(base)?;
     let stderr = path.join("scp.log");
     let mut cmd = Command::new("scp");
@@ -75,6 +77,7 @@ pub(super) fn download(
     source: &str,
     destination: &Path,
 ) -> Result<()> {
+    super::require_slot(base)?;
     let path = job(base)?;
     let stderr = path.join("scp.log");
     let mut cmd = Command::new("scp");

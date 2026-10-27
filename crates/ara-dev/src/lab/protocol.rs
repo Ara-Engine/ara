@@ -80,7 +80,7 @@ fn tools() -> Value {
             "lab_mirror",
             "Configure the PC-owned Mac mirror; AC power is required before remote jobs.",
             schema(
-                json!({"host":string,"repo":string,"build_dir":string,"pc_repository":string}),
+                json!({"host":string,"repo":string,"build_dir":string,"pc_repository":string,"grant_slot":{"type":"boolean","default":false}}),
                 &[],
             ),
         ),

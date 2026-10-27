@@ -8,9 +8,6 @@ use std::{
 
 pub(super) fn retain(base: &Path, scene: &str, source: &Path) -> Result<PathBuf> {
     let source = source.canonicalize()?;
-    if source.starts_with(base.canonicalize()?) {
-        return Ok(source);
-    }
     let manifest = source.join("ara-launch.json");
     let launch: Value = serde_json::from_slice(&fs::read(&manifest)?)?;
     let pack = Path::new(launch["pack"].as_str().context("launch pack path")?);
@@ -26,6 +23,9 @@ pub(super) fn retain(base: &Path, scene: &str, source: &Path) -> Result<PathBuf>
         "scene content missing: {}",
         source.join(pack).display()
     );
+    if source.starts_with(base.canonicalize()?) {
+        return Ok(source);
+    }
     let folder = base.join("packs");
     fs::create_dir_all(&folder)?;
     let default = folder.join(scene);

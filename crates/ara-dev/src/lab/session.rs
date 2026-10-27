@@ -47,6 +47,7 @@ pub(super) struct Session {
     cancel: std::sync::Arc<std::sync::atomic::AtomicBool>,
     pub last_trace: Option<PathBuf>,
     root: PathBuf,
+    shader_view: PathBuf,
     _generation: Option<fs::File>,
 }
 impl Session {
@@ -55,6 +56,7 @@ impl Session {
         base: &Path,
         executable: &Path,
         name: &str,
+        view: &Path,
         selection: Selection,
         cancel: std::sync::Arc<std::sync::atomic::AtomicBool>,
     ) -> Result<Self> {
@@ -67,8 +69,7 @@ impl Session {
         fs::create_dir_all(&control)?;
         fs::create_dir_all(directory.join("empty-layers"))?;
         let mut command = Command::new(executable);
-        let view = super::variants::view(base, name);
-        super::variants::publish_tree(&super::variants::profile(base, &selection.variant), &view)?;
+        super::variants::publish_tree(&super::variants::profile(base, &selection.variant), view)?;
         command
             .current_dir(root)
             .arg("--root")
@@ -93,7 +94,7 @@ impl Session {
             .arg(&control)
             .arg("--gpu-cache")
             .arg(base.join("gpu-cache").join(name))
-            .env("ARA_SHADER_DIR", &view)
+            .env("ARA_SHADER_DIR", view)
             .env("ARA_CONFIG_DIR", directory.join("profile"))
             .env("ARA_CRASH_DIR", directory.join("crashes"))
             .env("VK_INSTANCE_LAYERS", "")
@@ -117,6 +118,7 @@ impl Session {
             cancel,
             last_trace: None,
             root: root.to_owned(),
+            shader_view: view.to_owned(),
             _generation: generation,
         };
         session.control(
@@ -251,13 +253,7 @@ impl Session {
     pub fn variant(&mut self, base: &Path, name: &str) -> Result<Value> {
         self::name(name)?;
         super::variants::Variants::load(base).ready(name)?;
-        let track = self
-            .directory
-            .parent()
-            .and_then(Path::file_name)
-            .context("track name")?
-            .to_string_lossy();
-        let view = super::variants::view(base, &track);
+        let view = self.shader_view.clone();
         let previous = self.selection.variant.clone();
         super::variants::publish_tree(&super::variants::profile(base, name), &view)?;
         match self.control(

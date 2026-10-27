@@ -510,10 +510,12 @@ A native no-op rebuild took 2.60 s (2.20 s in Cargo) with the same PID and gener
 Hotpatch strategies opt into this optimization explicitly; a successful patch still
 advances the quality-cache generation even when it requests no restart.
 
-The PC endpoint also owns the Mac mirror:
+The Mac mirror is experimental until native build and Metal validation pass. The PC endpoint owns its transport:
 
 ```powershell
 ara-dev lab mirror --host mac --repo /Users/islam/projects/ara
+# After the Mac owner grants a slot:
+ara-dev lab mirror --host mac --repo /Users/islam/projects/ara --grant-slot
 ara-dev lab status --platform mac
 ara-dev lab capture --platform mac --quick
 ara-dev lab measure --platform mac --frames 120 --no-wait
@@ -522,7 +524,12 @@ ara-dev lab measure --platform mac --frames 120 --no-wait
 Every MCP tool accepts `platform: "pc" | "mac"`. Claims remain shared across both
 machines. Registering a recipe with `platform: "mac"` cooks it on the PC and queues
 selection on the Mac after publication; it does not switch a PC track. `lab_mirror`
-configures host/repo/build_dir/pc_repository and queues synchronization. The peer
+configures host/repo/build_dir/pc_repository and queues synchronization. New and
+older configs default to waiting for a Mac slot. `--grant-slot` (MCP `grant_slot:true`)
+starts remote work only after the Mac owner releases its verification slot. Without
+a slot, Mac status is explicitly cached and no SSH, checkout, build or validation job
+runs. Every transport job rechecks the slot; a competing Cargo process also prevents
+checkout changes. The peer
 fetches the lab branch and private source-snapshot ref directly from the PC. The
 snapshot uses a private Git index and leaves every agent's branch, index and working
 files intact. A dirty Mac checkout refuses synchronization without discarding edits.
@@ -556,6 +563,12 @@ expose the platform argument.
 Mac native build, Metal validation and turnaround measurements are still pending:
 the Mac was on battery at the last successful power query and is currently offline.
 The code and PC-side tests can proceed without waking it or starting a remote build.
+
+Cold scene preparation runs in an owned, cancellable helper, under a scene-cache
+lease and the GPU queue. Opening a track returns `queued:true`; watch
+`preparing_sessions` and `preparation_errors` in status. The old track stays alive
+until its replacement answers controls. Invalid packs retain the old PID. Each track
+generation has a private shader view, so its replacement can warm independently.
 
 An observed agent session (the temporary recipe/source was removed afterward):
 

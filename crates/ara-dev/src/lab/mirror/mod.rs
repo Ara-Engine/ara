@@ -18,6 +18,8 @@ use std::{
 
 #[derive(Clone, Serialize, Deserialize)]
 pub(super) struct Config {
+    #[serde(default)]
+    pub slot_granted: bool,
     pub host: String,
     pub repo: String,
     pub build_dir: String,
@@ -28,8 +30,12 @@ pub(super) struct Config {
 impl Config {
     fn load(base: &Path) -> Result<Self> {
         Ok(serde_json::from_slice(
-            &std::fs::read(base.join("mirror/config.json"))
-                .context("configure the Mac with lab mirror first")?,
+            &std::fs::read(if base.join("mirror/config.json").is_file() {
+                base.join("mirror/config.json")
+            } else {
+                base.join("mirror/queued-config.json")
+            })
+            .context("configure the Mac with lab mirror first")?,
         )?)
     }
     fn validate(&self) -> Result<()> {
@@ -69,6 +75,7 @@ pub(super) fn configure(root: &Path, base: &Path, args: &Value) -> Result<Value>
         .trim_start_matches(r"\\?\")
         .replace('\\', "/");
     let value = Config {
+        slot_granted: args["grant_slot"].as_bool().unwrap_or(false),
         host: args["host"].as_str().unwrap_or("mac").into(),
         build_dir: args["build_dir"]
             .as_str()
@@ -112,7 +119,8 @@ impl Worker {
         let stop = Arc::new(AtomicBool::new(false));
         let (root, base, cancel) = (root.to_owned(), base.to_owned(), Arc::clone(&stop));
         let run = move || {
-            let mut pending = base.join("mirror/config.json").is_file();
+            let mut pending = base.join("mirror/config.json").is_file()
+                || base.join("mirror/queued-config.json").is_file();
             while !cancel.load(Ordering::Acquire) {
                 let delay = if pending {
                     Duration::from_secs(15)
@@ -154,11 +162,18 @@ impl Drop for Worker {
 fn sync(root: &Path, base: &Path, activity: &super::track::Activity) -> Result<()> {
     let config = Config::load(base)?;
     config.validate()?;
+    if !config.slot_granted {
+        super::session::write(
+            &base.join("mirror/status.json"),
+            &json!({"phase":"queued_for_mac_slot","build_started":false,"detail":"Mac preview verification has priority; wait for the user's slot grant"}),
+        )?;
+        return Ok(());
+    }
     let power = transport::ssh(&config, base, "/usr/bin/pmset -g batt\n", 20)?;
     super::mac::require_ac(&power)?;
     let commit = snapshot::create(root, base, &config.source_ref)?;
     let fetch = format!(
-        "{}test -z \"$(git status --porcelain --untracked-files=no)\" || {{ echo 'Mac checkout is dirty; keep its edits and resolve them before mirroring' >&2; exit 1; }}\ngit fetch --no-tags {} {} {}\nif test \"$(git rev-parse HEAD)\" != {}; then git checkout --detach {}; fi\n",
+        "{}if /usr/bin/pgrep -x cargo >/dev/null; then echo 'Mac build lane is occupied; checkout retained' >&2; exit 1; fi\ntest -z \"$(git status --porcelain --untracked-files=no)\" || {{ echo 'Mac checkout is dirty; keep its edits and resolve them before mirroring' >&2; exit 1; }}\ngit log -1 --format='Mac checkout before lab sync: %H %D' >&2\ngit fetch --no-tags {} {} {}\nif test \"$(git rev-parse HEAD)\" != {}; then git checkout --detach {}; fi\n",
         transport::prelude(&config),
         transport::quote(&config.pc_repository),
         transport::quote(&format!(
@@ -205,9 +220,18 @@ pub(super) fn proxy(root: &Path, tool: &str, mut args: Value) -> Result<Value> {
     let base = super::directory(root);
     let config = Config::load(&base)?;
     config.validate()?;
+    ensure!(
+        config.slot_granted || ["lab_status", "lab_logs"].contains(&tool),
+        "Mac mirror queued for a machine slot; wait for the user's slot grant before enabling lab mirror --grant-slot"
+    );
     args.as_object_mut()
         .context("tool arguments")?
         .remove("platform");
+    if !config.slot_granted {
+        return Ok(
+            json!({"platform":"mac","cached_only":true,"mirror":super::session::read(&base.join("mirror/status.json"))}),
+        );
+    }
     let mut value = transport::rpc(&config, &base, tool, bundle::portable(args))?;
     if ["lab_capture", "lab_measure", "lab_ab"].contains(&tool) {
         bundle::pull(&config, &base, &mut value)?;
@@ -215,4 +239,26 @@ pub(super) fn proxy(root: &Path, tool: &str, mut args: Value) -> Result<Value> {
     value["platform"] = json!("mac");
     value["mirror"] = super::session::read(&base.join("mirror/status.json")).unwrap_or(Value::Null);
     Ok(value)
+}
+
+pub(super) fn require_slot(base: &Path) -> Result<()> {
+    ensure!(
+        Config::load(base)?.slot_granted,
+        "Mac mirror is queued for the user's machine slot; no remote job started"
+    );
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn old_configs_do_not_implicitly_claim_a_mac_slot() -> Result<()> {
+        let config: Config = serde_json::from_value(
+            json!({"host":"mac","repo":"/repo","build_dir":"/repo/target","pc_repository":"pc:D:/repo","branch":"lab","source_ref":"refs/ara-lab/test"}),
+        )?;
+        assert!(!config.slot_granted);
+        config.validate()?;
+        Ok(())
+    }
 }

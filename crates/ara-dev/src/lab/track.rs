@@ -79,7 +79,8 @@ impl Track {
         let chosen = selection.clone();
         let cancel = Arc::new(AtomicBool::new(false));
         let stopped = Arc::clone(&cancel);
-        let resource_view = super::variants::view(&base, &name);
+        let resource_view = super::variants::view(&base, &format!("{name}-{}", session::id()));
+        let worker_view = resource_view.clone();
         let variant = Arc::new(Mutex::new(selection.variant.clone()));
         let active_variant = Arc::clone(&variant);
         let dirty = Arc::new(AtomicBool::new(false));
@@ -96,12 +97,17 @@ impl Track {
                 #[cfg(target_os = "macos")]
                 let _activity = activity.gpu.write().expect("lab activity");
                 let _visual = crate::gpu::visual(600)?;
+                ensure!(
+                    !stopped.load(Ordering::Acquire),
+                    "track cancelled before player startup"
+                );
                 super::daemon::vram()?;
                 Session::launch(
                     &root,
                     &base,
                     executable,
                     &name,
+                    &worker_view,
                     chosen.clone(),
                     Arc::clone(&stopped),
                 )
@@ -188,6 +194,7 @@ impl Track {
                                 &base,
                                 &next,
                                 &name,
+                                &worker_view,
                                 player.selection.clone(),
                                 Arc::clone(&stopped),
                             )

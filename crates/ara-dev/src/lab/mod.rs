@@ -40,6 +40,9 @@ enum Action {
     PrepareScene { input: PathBuf },
     /// Configure the PC-owned Mac source/artifact mirror and queue synchronization.
     Mirror {
+        /// Start remote work only after the Mac's current owner grants a machine slot.
+        #[arg(long)]
+        grant_slot: bool,
         #[arg(long, default_value = "mac")]
         host: String,
         #[arg(long, default_value = "/Users/islam/projects/ara")]
@@ -201,13 +204,14 @@ pub(crate) fn run(root: &Path, options: Options) -> Result<bool> {
     let (tool, mut arguments) = match options.action {
         Action::PrepareScene { input } => return prepare::run(root, &input),
         Action::Mirror {
+            grant_slot,
             host,
             repo,
             build_dir,
             pc_repository,
         } => (
             "lab_mirror",
-            json!({"host":host,"repo":repo,"build_dir":build_dir,"pc_repository":pc_repository}),
+            json!({"host":host,"repo":repo,"build_dir":build_dir,"pc_repository":pc_repository,"grant_slot":grant_slot}),
         ),
         Action::Rpc => {
             use std::io::{BufRead, Write};

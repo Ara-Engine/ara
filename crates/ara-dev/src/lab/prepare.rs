@@ -65,7 +65,12 @@ impl Pending {
             self.child.take();
             super::daemon::vram()?;
             self.candidate = Some(Track::launch(
-                root, base, executable, name, selection, activity,
+                root,
+                base,
+                executable,
+                name,
+                selection,
+                Arc::clone(&activity),
             )?);
         }
         if let Some(candidate) = &mut self.candidate {
@@ -76,6 +81,14 @@ impl Pending {
                 status["error"]
             );
             if status["running"] == true {
+                let Ok(_publication) = activity.gpu.try_write() else {
+                    return Ok(None);
+                };
+                super::variants::publish_tree(
+                    &super::variants::profile(base, &candidate.active_variant()),
+                    candidate.view(),
+                )?;
+                candidate.shaders_changed();
                 return Ok(self.candidate.take());
             }
         }
