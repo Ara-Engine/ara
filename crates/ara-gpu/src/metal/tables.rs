@@ -98,7 +98,11 @@ fn static_samplers(
             .newSamplerStateWithDescriptor(&descriptor)
             .ok_or_else(|| nil("static sampler"))
     };
-    Ok([sampler(wrap, wrap)?, sampler(wrap, clamp)?, sampler(clamp, clamp)?])
+    Ok([
+        sampler(wrap, wrap)?,
+        sampler(wrap, clamp)?,
+        sampler(clamp, clamp)?,
+    ])
 }
 
 /// The four root-signature tables, in root-parameter order, then the static samplers.
