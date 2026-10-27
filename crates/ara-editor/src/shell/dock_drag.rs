@@ -1,6 +1,6 @@
 //! Dock drop zones and their transient preview; mutations use the layout protocol.
 use super::*;
-use ara_ui::{input::InputEvent, paint::Draw, source::stable_id};
+use ara_ui::{paint::Draw, source::stable_id};
 
 /// Where a dragged tab would land; tab indices count the remaining destination tabs.
 #[derive(Clone, Debug, PartialEq)]
