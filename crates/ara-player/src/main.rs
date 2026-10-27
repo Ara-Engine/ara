@@ -178,6 +178,10 @@ struct Player {
 
 fn run(args: Args, launched: Instant) -> Result<()> {
     ara_gpu::cpu_scope!("Player.run");
+    // Probes need no pack: they open their own hidden window on this main thread.
+    if let Some(name) = &args.standalone.probe {
+        return standalone::probes::run(name);
+    }
     if args.owner.is_none() {
         if args.game.game || game_app::has_menu(&args)? {
             return game_app::run(args);

@@ -33,7 +33,7 @@ pub struct Windowed {
     present_enabled: bool,
     /// Opened hidden on purpose (timing and test probes): always rendered.
     hidden: bool,
-    /// Test override of `Window::presentable` (None: ask the window).
+    /// Probe override of `Window::presentable` (None: ask the window).
     presentable_override: Option<bool>,
 }
 
@@ -265,15 +265,14 @@ impl Windowed {
     }
 
     /// Whether presenting can show anything: hidden probe windows always render; a
-    /// minimized or occluded window does not (`Window::presentable`); tests override.
+    /// minimized or occluded window does not (`Window::presentable`); probes override.
     fn presentable(&self) -> bool {
         self.presentable_override
             .unwrap_or_else(|| self.hidden || self.window.presentable())
     }
 
-    /// Tests force `presentable` (Some) or return it to the window (None), standing
-    /// in for a minimized window without touching the desktop.
-    #[cfg(test)]
+    /// Probes (`standalone/probes.rs`) force `presentable` (Some) or return it to the
+    /// window (None), standing in for a minimized window without touching the desktop.
     pub(crate) fn override_presentable(&mut self, presentable: Option<bool>) {
         self.presentable_override = presentable;
     }
