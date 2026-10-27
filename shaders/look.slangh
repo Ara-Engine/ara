@@ -179,3 +179,9 @@ float3 applyFog(Frame f,Look l,float3 colour,float3 world,float2 uv){
     if((l.flags.y&(LOOK_PHYSICAL_SKY|LOOK_FOG))==0)return colour;
     float3 trans;float3 light=sampleFroxel(l,uv,length(world-f.camera.xyz),trans);return colour*trans+light;
 }
+// Normal offset in texels for a surface at `nl` (cosine to the light) in the fine
+// maps (virtual sun pages, local faces): 1.5 facing the light, widening towards
+// grazing incidence, where a constant offset leaves the surface's own depth
+// shadowing it in stripes. The cascades and far map keep 1.5: their texels are
+// coarse enough that a wider offset lifts receivers past small occluders.
+float shadowOffset(float nl){return 1.5+2.5*sqrt(saturate(1-nl*nl));}

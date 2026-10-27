@@ -78,6 +78,42 @@ impl ProbeSurfaces {
     }
 }
 
+/// Power of the cosine lobe the distance moments are filtered over: about one 8x8
+/// octahedral texel (some 22 degrees) across, as DDGI filters its depth maps. Raw
+/// per-texel moments jump at texel boundaries, so Chebyshev visibility flips where
+/// the direction to a shading point crosses one: sharp straight lines across flat
+/// faces near a probe.
+const MOMENT_LOBE: i32 = 12;
+
+/// Per moment texel, the normalized cosine-lobe weights of all 64 texels; the
+/// mixture of the texels' (mean, mean squared) keeps variance meaningful.
+fn moment_filter() -> &'static [[f32; SURFACE_TEXELS]; SURFACE_TEXELS] {
+    static FILTER: std::sync::OnceLock<[[f32; SURFACE_TEXELS]; SURFACE_TEXELS]> =
+        std::sync::OnceLock::new();
+    FILTER.get_or_init(|| {
+        let directions: [glam::Vec3; SURFACE_TEXELS] = std::array::from_fn(|t| {
+            oct_decode((glam::Vec2::new((t % 8) as f32, (t / 8) as f32) + 0.5) / 8.)
+        });
+        std::array::from_fn(|t| {
+            let mut weights: [f32; SURFACE_TEXELS] =
+                std::array::from_fn(|u| directions[t].dot(directions[u]).max(0.).powi(MOMENT_LOBE));
+            let total: f32 = weights.iter().sum();
+            weights.iter_mut().for_each(|w| *w /= total);
+            weights
+        })
+    })
+}
+
+/// Octahedral decode of `p` in 0..1 (`octDecode`, raster.slangh).
+fn oct_decode(p: glam::Vec2) -> glam::Vec3 {
+    let p = p * 2. - 1.;
+    let mut n = glam::Vec3::new(p.x, p.y, 1. - p.x.abs() - p.y.abs());
+    let t = (-n.z).clamp(0., 1.);
+    n.x += if n.x >= 0. { -t } else { t };
+    n.y += if n.y >= 0. { -t } else { t };
+    n.normalize()
+}
+
 /// Bytes of one probe record in a [`ProbeUpdate`]: [probe id, 0, 0, 0], then its
 /// [`SURFACE_TEXELS`] cache texels and [`STATIC_VECTORS`] statics.
 pub const PROBE_RECORD: usize = 16 + (SURFACE_TEXELS + STATIC_VECTORS) * 16;
@@ -113,6 +149,8 @@ impl ProbeUpdate {
             }
         };
         let mut records = Vec::with_capacity(probes.len() * PROBE_RECORD);
+        let filter = moment_filter();
+        let (lattices, bases) = (surfaces.layout.lattices(), surfaces.layout.bases());
         for &id in probes {
             let p = id as usize;
             ensure!(p < surfaces.len(), "probe {id} outside the lattice");
@@ -120,9 +158,32 @@ impl ProbeUpdate {
             records.extend_from_slice(bytemuck::cast_slice(
                 &surfaces.texels[p * SURFACE_TEXELS..(p + 1) * SURFACE_TEXELS],
             ));
-            records.extend_from_slice(bytemuck::cast_slice(
-                &surfaces.statics[p * STATIC_VECTORS..(p + 1) * STATIC_VECTORS],
-            ));
+            let mut statics: [[f32; 4]; STATIC_VECTORS] = surfaces.statics
+                [p * STATIC_VECTORS..(p + 1) * STATIC_VECTORS]
+                .try_into()
+                .expect("a probe's statics slice has STATIC_VECTORS entries");
+            // Clamped to twice the probe's lattice spacing, as DDGI clamps its ray
+            // distance: a missed ray's far distance must not pull its neighbours'
+            // means past every shading point (light leaks at silhouettes). Shading
+            // only weighs points within one cell of the probe.
+            let lattice = (0..lattices.len())
+                .rev()
+                .find(|&i| bases[i] <= p)
+                .map_or(lattices[0], |i| lattices[i]);
+            let limit = 2. * lattice.spacing.iter().copied().fold(0., f32::max);
+            let raw: [[f32; 4]; SURFACE_TEXELS] = std::array::from_fn(|t| {
+                let [mean, squared, ..] = statics[t];
+                [mean.min(limit), squared.min(limit * limit), 0., 0.]
+            });
+            for (texel, weights) in statics.iter_mut().zip(filter) {
+                let (mean, squared) = weights
+                    .iter()
+                    .zip(&raw)
+                    .fold((0., 0.), |(m, s), (w, r)| (m + w * r[0], s + w * r[1]));
+                texel[0] = mean;
+                texel[1] = squared;
+            }
+            records.extend_from_slice(bytemuck::cast_slice(&statics));
         }
         Ok(Self {
             layout: surfaces.layout,
@@ -455,5 +516,62 @@ impl GiGpu {
             self.deferred_converge = 0;
             self.deferred_weight = 1.;
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn moments_are_filtered_over_a_cosine_lobe_and_clamped_to_the_lattice() -> Result<()> {
+        let layout = ProbeLayout::single(ProbeLattice {
+            origin: [0.; 3],
+            spacing: [1.; 3],
+            counts: [2; 3],
+        });
+        let probes = 8;
+        let mut statics = vec![[0.; 4]; probes * STATIC_VECTORS];
+        for p in 0..probes {
+            for t in 0..SURFACE_TEXELS {
+                // Probe 0: near geometry in half its texels, missed rays in the rest.
+                statics[p * STATIC_VECTORS + t] = match (p, t < 32) {
+                    (0, true) => [0.5, 0.25, 0., 0.],
+                    (0, false) => [200., 40_000., 0., 0.],
+                    _ => [1., 1., 0., 0.],
+                };
+            }
+            statics[p * STATIC_VECTORS + SURFACE_TEXELS] = [0., 0., 0., 1.];
+        }
+        let surfaces = ProbeSurfaces {
+            layout,
+            texels: vec![[0; 4]; probes * SURFACE_TEXELS],
+            statics,
+        };
+        let update = ProbeUpdate::new(&surfaces, None)?;
+        let moments = |p: usize| -> Vec<[f32; 4]> {
+            let at = p * PROBE_RECORD + 16 + SURFACE_TEXELS * 16;
+            bytemuck::cast_slice(&update.records[at..at + SURFACE_TEXELS * 16]).to_vec()
+        };
+        // A uniform probe keeps its moments.
+        assert!(
+            moments(1)
+                .iter()
+                .all(|m| (m[0] - 1.).abs() < 1e-5 && (m[1] - 1.).abs() < 1e-5)
+        );
+        // Misses clamp to twice the spacing, and texels near the boundary blend both
+        // sides instead of jumping between them.
+        let near_far = moments(0);
+        assert!(
+            near_far
+                .iter()
+                .all(|m| (0.5 - 1e-5..=2. + 1e-5).contains(&m[0]))
+        );
+        assert!(near_far.iter().any(|m| m[0] > 0.6 && m[0] < 1.9));
+        // Relocation and the active flag pass through.
+        let at = PROBE_RECORD + 16 + (SURFACE_TEXELS + SURFACE_TEXELS) * 16;
+        let active: [f32; 4] = bytemuck::pod_read_unaligned(&update.records[at..at + 16]);
+        assert_eq!(active, [0., 0., 0., 1.]);
+        Ok(())
     }
 }

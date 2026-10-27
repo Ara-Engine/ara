@@ -64,7 +64,7 @@ float fogVisibility(Frame f,Look l,float3 world){
 static const uint LOCAL_FACES=2048,LOCAL_RECORDS=8192;
 // Visibility of `world` from shadowed local light `index` (look::local): the
 // light's face (a cube's by the major axis from the light), its atlas tile, a
-// normal offset of one and a half face texels and a 3x3 tent filter in the tile.
+// slope-scaled normal offset (shadowOffset) and a 3x3 tent filter in the tile.
 float localShadow(Look l,uint index,float3 world,float3 normal,float3 light){
     if(l.localShadows.y==0)return 1;
     uint2 entry=buffers[NonUniformResourceIndex(l.localShadows.x)].Load2(index*8);if(entry.y==0)return 1;
@@ -77,7 +77,7 @@ float localShadow(Look l,uint index,float3 world,float3 normal,float3 light){
     // A face's view depth is the major axis of the light-to-point vector (a
     // spot's is close to its length): texel size without a second transform.
     float texel=2*max(entry.y==1?length(d):max(a.x,max(a.y,a.z)),0.01)/(length(m[0].xyz)*res);
-    float4 h=mul(m,float4(world+normal*texel*1.5,1));if(h.w<=0)return 1;
+    float4 h=mul(m,float4(world+normal*texel*shadowOffset(saturate(dot(normal,normalize(light-world)))),1));if(h.w<=0)return 1;
     float3 q=h.xyz/h.w;float2 uv=float2(q.x*0.5+0.5,0.5-q.y*0.5);
     if(any(uv<0)||any(uv>1)||q.z<=0||q.z>1)return 1;
     float depth=q.z*1.002;
