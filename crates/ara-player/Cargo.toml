@@ -9,6 +9,7 @@ publish.workspace = true
 [features]
 default = []
 tracy = ["ara-gpu/tracy"]
+fidelity-lab = ["dep:ara-pathtrace"]
 
 [build-dependencies]
 embed-resource.workspace = true
@@ -20,6 +21,7 @@ ara-audio = { path = "../ara-audio" }
 ara-components.workspace = true
 ara-crash = { path = "../ara-crash" }
 ara-gpu = { path = "../ara-gpu" }
+ara-pathtrace = { path = "../ara-pathtrace", optional = true }
 ara-input = { path = "../ara-input" }
 ara-platform = { path = "../ara-platform" }
 ara-physics = { path = "../ara-physics" }

@@ -1,0 +1,211 @@
+//! One checkout-owned iteration daemon. Clients never invoke Cargo or own a player.
+pub(crate) mod build;
+mod claims;
+mod daemon;
+mod protocol;
+mod scenes;
+mod session;
+mod track;
+mod watch;
+pub(crate) use daemon::run_with_strategy;
+
+use anyhow::{Result, ensure};
+use clap::{Args, Subcommand};
+use serde_json::{Value, json};
+use std::{
+    fs,
+    path::{Path, PathBuf},
+    process::{Command, Stdio},
+};
+
+#[derive(Args)]
+pub(crate) struct Options {
+    #[command(subcommand)]
+    action: Action,
+}
+
+#[derive(Subcommand)]
+enum Action {
+    /// Start the singleton; returns once its endpoint is reachable.
+    Start {
+        /// Run attached to this terminal (the default detaches with hidden children).
+        #[arg(long)]
+        foreground: bool,
+        /// All Cargo outputs, on NVMe. Defaults to this checkout's target.
+        #[arg(long)]
+        build_dir: Option<PathBuf>,
+        /// Maximum resident track players; admission also checks available VRAM.
+        #[arg(long, default_value_t = 3, value_parser = clap::value_parser!(u32).range(1..=8))]
+        max_sessions: u32,
+    },
+    #[command(hide = true)]
+    Serve {
+        #[arg(long)]
+        build_dir: PathBuf,
+        #[arg(long)]
+        max_sessions: u32,
+    },
+    /// Serve lab tools over newline-delimited stdio MCP; stdout is protocol only.
+    Mcp,
+    /// Read daemon, build, shader, claim and warm-player state.
+    Status,
+    /// Declare ownership; overlapping claims are returned as warnings.
+    Claim {
+        #[arg(long)]
+        agent: String,
+        #[arg(required = true)]
+        paths: Vec<String>,
+    },
+    Release {
+        #[arg(long)]
+        agent: String,
+    },
+    /// Reload successfully cooked shaders in the selected track.
+    Reload {
+        #[arg(long, default_value = "default")]
+        session: String,
+    },
+    /// Queue one incremental build; the old players survive compiler failures.
+    Rebuild,
+    /// Open or select a hidden track on a frozen scene.
+    Session {
+        #[arg(long, default_value = "default")]
+        session: String,
+        #[arg(long, default_value = "showcase", value_parser = ["showcase", "outpost", "hangar"])]
+        scene: String,
+        #[arg(long)]
+        pack: Option<PathBuf>,
+        #[arg(long, default_value = "high", value_parser = ["low", "medium", "high", "epic"])]
+        preset: String,
+        #[arg(long, default_value_t = 2560)]
+        width: u32,
+        #[arg(long, default_value_t = 1440)]
+        height: u32,
+    },
+    /// Capture fixed cameras in the existing track, with reference metrics and crops.
+    Capture {
+        #[arg(long, default_value = "default")]
+        session: String,
+    },
+    /// Exclusive, guarded steady-state frame window.
+    Measure {
+        #[arg(long, default_value = "default")]
+        session: String,
+        #[arg(long, default_value_t = 120)]
+        frames: u32,
+        #[arg(long, default_value = "high")]
+        preset: String,
+        #[arg(long)]
+        no_wait: bool,
+        #[command(flatten)]
+        guard: crate::gpu_guard::Policy,
+    },
+    Logs {
+        #[arg(long, default_value_t = 50)]
+        lines: usize,
+    },
+    /// Stop only this daemon's exact children and release its checkout lease.
+    Stop,
+}
+
+pub(super) fn directory(root: &Path) -> PathBuf {
+    root.join("target/ara-dev/lab")
+}
+
+pub(crate) fn run(root: &Path, options: Options) -> Result<bool> {
+    let (tool, arguments) = match options.action {
+        Action::Start {
+            foreground,
+            build_dir,
+            max_sessions,
+        } => {
+            let build_dir = build_dir.unwrap_or_else(|| root.join("target"));
+            if foreground {
+                return daemon::run(root, &build_dir, max_sessions);
+            }
+            if let Ok(status) = protocol::call(root, "lab_status", json!({})) {
+                println!("{status}");
+                return Ok(true);
+            }
+            let base = directory(root);
+            fs::create_dir_all(&base)?;
+            let source = std::env::current_exe()?;
+            let binary_dir = base.join("bin").join(session::id());
+            fs::create_dir_all(&binary_dir)?;
+            let executable = binary_dir.join(
+                source
+                    .file_name()
+                    .ok_or_else(|| anyhow::anyhow!("lab executable filename"))?,
+            );
+            fs::copy(source, &executable)?;
+            let mut command = Command::new(executable);
+            command
+                .current_dir(root)
+                .arg("lab")
+                .arg("serve")
+                .arg("--build-dir")
+                .arg(build_dir)
+                .arg("--max-sessions")
+                .arg(max_sessions.to_string())
+                .stdin(Stdio::null())
+                .stdout(fs::File::create(base.join("daemon.log"))?)
+                .stderr(fs::File::create(base.join("daemon.stderr.log"))?);
+            build::background(&mut command);
+            let mut child = command.spawn()?;
+            let started = std::time::Instant::now();
+            loop {
+                if let Ok(value) = protocol::call(root, "lab_status", json!({})) {
+                    println!("{value}");
+                    return Ok(true);
+                }
+                ensure!(
+                    child.try_wait()?.is_none(),
+                    "lab startup failed; inspect {}",
+                    base.join("daemon.stderr.log").display()
+                );
+                ensure!(
+                    started.elapsed().as_secs() < 15,
+                    "lab endpoint did not appear; inspect daemon logs"
+                );
+                std::thread::sleep(std::time::Duration::from_millis(100));
+            }
+        }
+        Action::Serve {
+            build_dir,
+            max_sessions,
+        } => return daemon::run(root, &build_dir, max_sessions),
+        Action::Mcp => return protocol::mcp(root),
+        Action::Status => ("lab_status", json!({})),
+        Action::Claim { agent, paths } => ("lab_claim", json!({"agent":agent,"paths":paths})),
+        Action::Release { agent } => ("lab_release", json!({"agent":agent})),
+        Action::Reload { session } => ("lab_reload", json!({"session":session})),
+        Action::Rebuild => ("lab_rebuild", json!({})),
+        Action::Session {
+            session,
+            scene,
+            pack,
+            preset,
+            width,
+            height,
+        } => (
+            "lab_session",
+            json!({"session":session,"scene":scene,"pack":pack,"preset":preset,"width":width,"height":height}),
+        ),
+        Action::Capture { session } => ("lab_capture", json!({"session":session})),
+        Action::Measure {
+            session,
+            frames,
+            preset,
+            no_wait,
+            guard,
+        } => (
+            "lab_measure",
+            json!({"session":session,"frames":frames,"preset":preset,"no_wait":no_wait,"guard":guard}),
+        ),
+        Action::Logs { lines } => ("lab_logs", json!({"lines":lines})),
+        Action::Stop => ("lab_stop", json!({})),
+    };
+    let value: Value = protocol::call(root, tool, arguments)?;
+    println!("{}", serde_json::to_string_pretty(&value)?);
+    Ok(true)
+}

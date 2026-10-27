@@ -1,0 +1,199 @@
+{
+  "format": "ara.lab.quality/1",
+  "scene": "showcase",
+  "coordinate_note": "Rectangles are [x0,y0,x1,y1), normalized from the original 3840x2160 research crops.",
+  "reference_pixels": [
+    3840,
+    2160
+  ],
+  "pixels_per_degree": 67,
+  "reference_radiance_scale": 683,
+  "repeatability": {
+    "runs": 3,
+    "max_deviation": 0.002
+  },
+  "temporal": {
+    "block_size": 16,
+    "static_mean_max": 0.01,
+    "static_block_max": 0.03,
+    "frames": 8,
+    "pan_degrees_per_second": 2
+  },
+  "regions": [
+    {
+      "name": "metal",
+      "shot": "materials",
+      "rect": [
+        0.5338541666666666,
+        0.4675925925925926,
+        0.9296875,
+        0.7453703703703703
+      ],
+      "pixels_4k": [
+        2050,
+        1010,
+        3570,
+        1610
+      ],
+      "threshold": {
+        "kind": "matched_baseline_plus",
+        "tolerance": 0.002
+      },
+      "legacy_ldr": {
+        "ara": 0.3692,
+        "unreal": 0.269,
+        "unity": 0.3106
+      }
+    },
+    {
+      "name": "glass",
+      "shot": "materials",
+      "rect": [
+        0.234375,
+        0.27314814814814814,
+        0.4817708333333333,
+        0.4583333333333333
+      ],
+      "pixels_4k": [
+        900,
+        590,
+        1850,
+        990
+      ],
+      "threshold": {
+        "kind": "matched_baseline_plus",
+        "tolerance": 0.002
+      },
+      "legacy_ldr": {
+        "ara": 0.2749,
+        "unreal": 0.2288,
+        "unity": 0.4099
+      }
+    },
+    {
+      "name": "shadow",
+      "shot": "materials",
+      "rect": [
+        0.46875,
+        0.6574074074074074,
+        0.703125,
+        0.9074074074074074
+      ],
+      "pixels_4k": [
+        1800,
+        1420,
+        2700,
+        1960
+      ],
+      "threshold": {
+        "kind": "matched_baseline_plus",
+        "tolerance": 0.002
+      },
+      "legacy_ldr": {
+        "ara": 0.2265,
+        "unreal": 0.214,
+        "unity": 0.3294
+      }
+    },
+    {
+      "name": "lantern",
+      "shot": "stage",
+      "rect": [
+        0.4427083333333333,
+        0.46296296296296297,
+        0.703125,
+        0.7222222222222222
+      ],
+      "pixels_4k": [
+        1700,
+        1000,
+        2700,
+        1560
+      ],
+      "threshold": {
+        "kind": "matched_baseline_plus",
+        "tolerance": 0.002
+      },
+      "legacy_ldr": {
+        "ara": 0.3077,
+        "unreal": 0.2458,
+        "unity": 0.341
+      }
+    },
+    {
+      "name": "bottle",
+      "shot": "props",
+      "rect": [
+        0.75,
+        0.39814814814814814,
+        1,
+        0.6666666666666666
+      ],
+      "pixels_4k": [
+        2880,
+        860,
+        3840,
+        1440
+      ],
+      "threshold": {
+        "kind": "matched_baseline_plus",
+        "tolerance": 0.002
+      },
+      "legacy_ldr": {
+        "ara": 0.2811,
+        "unreal": 0.254,
+        "unity": 0.2318
+      }
+    },
+    {
+      "name": "gi",
+      "shot": "stage",
+      "rect": [
+        0.078125,
+        0.5740740740740741,
+        0.40625,
+        0.9722222222222222
+      ],
+      "pixels_4k": [
+        300,
+        1240,
+        1560,
+        2100
+      ],
+      "threshold": {
+        "kind": "matched_baseline_plus",
+        "tolerance": 0.002
+      },
+      "legacy_ldr": {
+        "ara": 0.1618,
+        "unreal": 0.2523,
+        "unity": 0.309
+      }
+    },
+    {
+      "name": "helmet",
+      "shot": "props",
+      "rect": [
+        0.19791666666666666,
+        0.3055555555555556,
+        0.390625,
+        0.6018518518518519
+      ],
+      "pixels_4k": [
+        760,
+        660,
+        1500,
+        1300
+      ],
+      "threshold": {
+        "kind": "matched_baseline_plus",
+        "tolerance": 0.002
+      },
+      "legacy_ldr": {
+        "ara": 0.2146,
+        "unreal": 0.1521,
+        "unity": 0.1966
+      }
+    }
+  ]
+}

@@ -13,6 +13,7 @@ mod boundary;
 mod cpu;
 mod gpu;
 mod hitches;
+mod lab;
 mod report;
 mod span;
 
@@ -43,10 +44,17 @@ pub(super) struct PerfOptions {
     perf_control: Option<PathBuf>,
     #[arg(long, requires = "perf_output")]
     keep_alive: bool,
+    /// Lab-owned player: retain GPU resources but render only requested windows.
+    #[arg(long, requires_all = ["keep_alive", "perf_control"])]
+    lab_idle: bool,
 }
 
 #[derive(Default, Deserialize)]
 struct Control {
+    request_id: Option<String>,
+    frames: Option<u32>,
+    camera: Option<lab::Camera>,
+    capture: Option<lab::Capture>,
     quality: Option<String>,
     #[serde(default)]
     reload_shaders: bool,
@@ -88,6 +96,7 @@ pub(super) struct Window {
     waiting_for_shader_epoch: Option<u64>,
     last_epoch: Option<u64>,
     live_status: Vec<u8>,
+    lab: lab::State,
 }
 
 fn quantiles(samples: &[f64]) -> Value {
@@ -116,7 +125,7 @@ impl Window {
         self.offscreen |= no_present;
     }
     pub fn new(options: PerfOptions, offscreen: bool, began: Instant) -> Self {
-        let collecting = options.perf_output.is_some();
+        let collecting = options.perf_output.is_some() && !options.lab_idle;
         let boundary = boundary::Boundary::new(
             options.perf_warmup,
             Duration::from_millis(options.perf_ready_timeout_ms),
@@ -147,6 +156,7 @@ impl Window {
             waiting_for_shader_epoch: None,
             last_epoch: None,
             live_status: Vec::new(),
+            lab: lab::State::default(),
         }
     }
 
@@ -186,7 +196,7 @@ impl Window {
                 .is_some_and(|old| old != shaders.epoch);
             // The first observed epoch is initial state. An explicit reload
             // already started its window; retain its waiting CPU history/clock.
-            if changed && self.waiting_for_shader_epoch.is_none() {
+            if changed && self.waiting_for_shader_epoch.is_none() && !self.options.lab_idle {
                 self.reset();
             }
         }
@@ -216,6 +226,10 @@ impl Window {
         requests.sort();
         for request in requests {
             let command: Control = serde_json::from_slice(&std::fs::read(&request)?)?;
+            self.lab.reply = command
+                .request_id
+                .as_ref()
+                .map(|_| request.with_extension("reply"));
             if command.stop {
                 std::fs::remove_file(request)?;
                 return Ok(true);
@@ -223,12 +237,28 @@ impl Window {
             if let Some(quality) = &command.quality {
                 presenter.set_quality(quality.parse()?);
             }
+            if let Some(frames) = command.frames {
+                ensure!((1..=100000).contains(&frames), "invalid measurement frames");
+                self.options.perf_frames = frames;
+            }
+            if let Some(camera) = command.camera {
+                self.lab.camera = Some(camera.view()?);
+            }
+            if let Some(capture) = command.capture {
+                self.lab.capture = Some(capture);
+            }
             if command.reload_shaders {
                 self.waiting_for_shader_epoch = Some(presenter.shader_status().epoch);
                 presenter.reload_shaders();
             }
-            if command.measure || command.quality.is_some() || command.reload_shaders {
+            if command.measure
+                || command.reload_shaders
+                || (!self.options.lab_idle && command.quality.is_some())
+            {
                 self.reset();
+            }
+            if !self.collecting && self.lab.capture.is_none() {
+                self.lab.respond(&json!({"applied":true}))?;
             }
             std::fs::rename(&request, request.with_extension("done"))?;
         }
@@ -257,15 +287,19 @@ impl Window {
             return Ok(false);
         }
         let mut shaders_ready = true;
-        if let Some(epoch) = self.waiting_for_shader_epoch {
+        if self.waiting_for_shader_epoch.is_some() {
             let status = presenter.shader_status();
             if let Some(error) = status.last_error {
                 eprintln!("Shader reload failed; previous result retained: {error}");
                 self.collecting = false;
                 self.waiting_for_shader_epoch = None;
+                self.lab.respond(
+                    &json!({"error":format!("shader reload failed; last good retained: {error}")}),
+                )?;
                 return Ok(false);
             }
-            if status.pending || status.epoch == epoch {
+            // An unchanged cohort completes without advancing the epoch.
+            if status.pending {
                 shaders_ready = false;
             } else {
                 self.waiting_for_shader_epoch = None;
@@ -365,6 +399,9 @@ impl Window {
             return Ok(false);
         }
         self.publish(presenter, phases, camera, report::Outcome::Ready)?;
+        if let Some(report) = &self.last_report {
+            self.lab.respond(&json!({"player":report}))?;
+        }
         self.collecting = false;
         Ok(!self.options.keep_alive)
     }
