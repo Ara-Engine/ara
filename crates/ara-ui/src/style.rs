@@ -489,7 +489,7 @@ mod tests {
                 &mut clipboard,
             )?;
             assert!(ui.drain_actions().any(|action| action.name == "Keep"));
-            ui.resize([300., 160.]);
+            ui.resize([300., 160.])?;
             ui.frame(&mut text)?;
             assert!((ui.nodes[cancel].rect.y - ui.nodes[keep].rect.y).abs() < 0.5);
             assert!((ui.nodes[actions].rect.h - 24.).abs() < 0.5);
