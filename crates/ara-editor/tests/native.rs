@@ -2,12 +2,23 @@
 //! that renders offscreen. `ARA_EDITOR_UPDATE_GOLDENS=1` rewrites the reviewed goldens.
 #![allow(clippy::unwrap_used)] // A failed fixture/capture operation should fail the test immediately.
 use serde_json::json;
-use std::{path::PathBuf, process::Command};
+use std::{
+    path::PathBuf,
+    process::Command,
+    sync::atomic::{AtomicU64, Ordering},
+};
+static SEQUENCE: AtomicU64 = AtomicU64::new(0);
+fn target_root() -> PathBuf {
+    std::env::var_os("CARGO_TARGET_DIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../target"))
+        .join("ara-editor-native")
+}
 
 struct Scratch(PathBuf);
 impl Drop for Scratch {
     fn drop(&mut self) {
-        assert!(self.0.starts_with(std::env::temp_dir()));
+        assert!(self.0.starts_with(target_root()));
         assert!(
             self.0
                 .file_name()
@@ -19,12 +30,13 @@ impl Drop for Scratch {
     }
 }
 
-#[test]
-#[ignore = "requires a native desktop, Vulkan validation and a compatible GPU"]
-fn native_interaction_route_matches_reviewed_dark_and_light_goldens() {
-    let project =
-        Scratch(std::env::temp_dir().join(format!("ara-editor-golden-{}", std::process::id())));
-    std::fs::create_dir(&project.0).unwrap();
+fn run_verification() -> (Scratch, PathBuf) {
+    let project = Scratch(target_root().join(format!(
+        "ara-editor-golden-{}-{}",
+        std::process::id(),
+        SEQUENCE.fetch_add(1, Ordering::Relaxed)
+    )));
+    std::fs::create_dir_all(&project.0).unwrap();
     std::fs::create_dir(project.0.join("levels")).unwrap();
     std::fs::write(
         project.0.join("ara.project.json"),
@@ -55,6 +67,28 @@ fn native_interaction_route_matches_reviewed_dark_and_light_goldens() {
         serde_json::from_str(&std::fs::read_to_string(output.join("interactions.json")).unwrap())
             .unwrap();
     assert_eq!(evidence["verified"], true);
+    (project, output)
+}
+
+#[test]
+#[ignore = "requires Vulkan validation and a compatible GPU; every window stays hidden"]
+fn native_titlebar_and_layout_interaction_route() {
+    let (_project, output) = run_verification();
+    let chrome: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(output.join("chrome.json")).unwrap())
+            .unwrap();
+    assert_eq!(chrome["verified"], true);
+    assert_eq!(chrome["logoAbout"], true);
+    assert_eq!(chrome["fullHeightSidebars"], true);
+    assert_eq!(chrome["centerBottomDock"], true);
+    #[cfg(windows)]
+    assert_eq!(chrome["nativeHitTest"]["maximize"], 9);
+}
+
+#[test]
+#[ignore = "requires Vulkan validation and a compatible GPU; every window stays hidden"]
+fn native_interaction_route_matches_reviewed_dark_and_light_goldens() {
+    let (_project, output) = run_verification();
     for theme in ["ara-dark", "ara-light", "palette-dark", "palette-light"] {
         let path =
             PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(format!("tests/goldens/{theme}.png"));
@@ -68,8 +102,7 @@ fn native_interaction_route_matches_reviewed_dark_and_light_goldens() {
         let comparison = ara_render::capture::compare(&golden, &actual, 0.005).unwrap();
         eprintln!("{theme}: 1-SSIM={}", comparison.score);
         if !comparison.passed {
-            let evidence =
-                PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("evidence/golden-failure");
+            let evidence = target_root().join("golden-failure");
             std::fs::create_dir_all(&evidence).unwrap();
             actual.save(evidence.join(format!("{theme}.png"))).unwrap();
             comparison
@@ -83,4 +116,34 @@ fn native_interaction_route_matches_reviewed_dark_and_light_goldens() {
             comparison.score
         );
     }
+}
+
+/// The focused route drives tabs/titles across hidden native windows at both UI scales.
+#[test]
+#[ignore = "requires Vulkan validation and a compatible GPU; every window stays hidden"]
+fn native_docking_drags_match_drop_previews() {
+    let project =
+        Scratch(target_root().join(format!("ara-editor-golden-docking-{}", std::process::id())));
+    let output = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../target/docking-native")
+        .join(std::process::id().to_string());
+    let status = Command::new(env!("CARGO_BIN_EXE_ara-editor"))
+        .arg(&project.0)
+        .args(["--verify-docking", "--frames", "2000", "--output"])
+        .arg(&output)
+        .status()
+        .unwrap();
+    assert!(
+        status.success(),
+        "native docking failed: {status}; evidence: {}",
+        output.display()
+    );
+    let report: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(output.join("drags.json")).unwrap()).unwrap();
+    let drags = report["drags"].as_array().unwrap();
+    assert!(drags.len() >= 29);
+    for drag in drags {
+        assert_eq!(drag["ok"], true, "{drag}");
+    }
+    assert!(output.join("dock-04-preview.png").exists());
 }

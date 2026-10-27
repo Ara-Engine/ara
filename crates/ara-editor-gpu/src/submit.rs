@@ -343,12 +343,17 @@ impl NativeUi {
         self.target_ready = true;
         Ok(())
     }
-    pub(super) fn readback(&self) -> Result<image::RgbaImage> {
+    /// Copy `size` pixels at `origin` of the rendered target back to the CPU.
+    pub(super) fn readback(&self, origin: [u32; 2], size: [u32; 2]) -> Result<image::RgbaImage> {
         let target = self
             .target
             .as_ref()
             .ok_or_else(|| anyhow::anyhow!("UI target not rendered"))?;
-        let bytes = target.size[0] as u64 * target.size[1] as u64 * 4;
+        anyhow::ensure!(
+            origin[0] + size[0] <= target.size[0] && origin[1] + size[1] <= target.size[1],
+            "UI readback outside the target"
+        );
+        let bytes = size[0] as u64 * size[1] as u64 * 4;
         let buffer = self
             .memory
             .buffer(bytes, vk::BufferUsageFlags::TRANSFER_DST)?;
@@ -367,9 +372,14 @@ impl NativeUi {
                             .aspect_mask(vk::ImageAspectFlags::COLOR)
                             .layer_count(1),
                     )
+                    .image_offset(vk::Offset3D {
+                        x: origin[0] as i32,
+                        y: origin[1] as i32,
+                        z: 0,
+                    })
                     .image_extent(vk::Extent3D {
-                        width: target.size[0],
-                        height: target.size[1],
+                        width: size[0],
+                        height: size[1],
                         depth: 1,
                     })],
             );
@@ -389,7 +399,7 @@ impl NativeUi {
             );
         }
         self.finish()?;
-        image::RgbaImage::from_raw(target.size[0], target.size[1], buffer.read(bytes as usize)?)
+        image::RgbaImage::from_raw(size[0], size[1], buffer.read(bytes as usize)?)
             .ok_or_else(|| anyhow::anyhow!("UI screenshot dimensions"))
     }
 }

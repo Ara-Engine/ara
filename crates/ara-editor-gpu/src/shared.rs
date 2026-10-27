@@ -55,7 +55,9 @@ impl NativeUi {
     /// Unregisters an external image and parks its descriptor on the blank texture.
     /// Use between UI frames when a Scene target is unwritten or was replaced;
     /// the adapter must not retain a stale native image in its next submission.
+    /// Draws of it are skipped until [`NativeUi::external_image`] attaches it again.
     pub fn forget_external(&mut self, id: u32) {
+        self.forgotten.insert(id);
         if let Some(slot) = self.external.remove(&id) {
             self.external_images.remove(&id);
             if let Some(view) = self.textures.get(&0).map(|t| t.image.view) {

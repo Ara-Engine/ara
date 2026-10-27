@@ -161,6 +161,19 @@ impl Shell {
                 );
                 out.push_str(&format!("<field id='set-{id}' class='number' style='width:120px' text='{}' label='{}' description='Enter to apply' action='Dispatch' /><text id='set-{id}-unit' class='caption' text='{}' />",escape(&panels::display(&value)),escape(d.label),escape(unit)));
             }
+            Kind::Colors { .. } => {
+                // Saved and edited from the colour picker; reset clears them.
+                let count = value.as_array().map_or(0, Vec::len);
+                let text = match count {
+                    0 => "None yet: save colours from the colour picker".to_owned(),
+                    1 => "1 colour, in the colour picker".to_owned(),
+                    n => format!("{n} colours, in the colour picker"),
+                };
+                out.push_str(&format!(
+                    "<text id='set-{id}' class='caption' text='{}' />",
+                    escape(&text)
+                ));
+            }
             Kind::Text | Kind::Map => {
                 self.bindings.insert(
                     ara_ui::source::stable_id(&format!("set-{id}")),
@@ -321,5 +334,6 @@ fn default_of(d: &Def) -> Value {
         crate::settings::Lit::S(v) => json!(v),
         crate::settings::Lit::N(v) => json!(v),
         crate::settings::Lit::Empty => json!({}),
+        crate::settings::Lit::None => json!([]),
     }
 }

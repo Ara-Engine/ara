@@ -125,7 +125,7 @@ pub(super) fn exercise_pressure(
         pressure.push(buffer);
     }
     let usage = renderer.gpu().descriptor_usage();
-    scene.set_preview_view(None);
+    scene.set_preview_view(&editor.state.doc, None);
     for attempt in 1..=ATTEMPTS {
         if let Some(failure) = &mut scene.recovery.failure {
             failure.retry_at = Instant::now();
@@ -176,7 +176,7 @@ pub(super) fn exercise_pressure(
         scene.render_capture(renderer, editor, view, 1).is_err(),
         "an explicit request cannot defeat exhausted-generation recovery"
     );
-    scene.set_preview_view(None);
+    scene.set_preview_view(&editor.state.doc, None);
     scene
         .render_capture(renderer, editor, view, 1)
         .map_err(|e| anyhow::anyhow!("{e}"))?;

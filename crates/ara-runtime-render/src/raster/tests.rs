@@ -4,6 +4,7 @@ use ara_runtime::{
     extract::{Draw, Geometry},
 };
 mod preparation;
+mod scene_switch;
 
 #[test]
 fn disabled_probe_gi_does_not_report_a_queued_emitter_search() -> Result<()> {

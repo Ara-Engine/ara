@@ -69,6 +69,9 @@ enum Command {
         /// Project name (default: the directory name).
         #[arg(long)]
         name: Option<String>,
+        /// Configure the repository's merge driver even for a nested project.
+        #[arg(long)]
+        configure_git: bool,
     },
     /// Rewrite documents in canonical form, repairing references.
     Fmt {
@@ -424,9 +427,11 @@ fn run(cli: Cli) -> Result<bool, Diagnostic> {
             }
             Ok(report.passed)
         }
-        Command::Init { dir, name } => {
-            commands::init(dir.as_deref(), name.as_deref(), json).map_err(io)
-        }
+        Command::Init {
+            dir,
+            name,
+            configure_git,
+        } => commands::init(dir.as_deref(), name.as_deref(), configure_git, json).map_err(io),
         Command::Fmt { check, files } => {
             commands::fmt(&open(&files)?, &files, check, json).map_err(io)
         }

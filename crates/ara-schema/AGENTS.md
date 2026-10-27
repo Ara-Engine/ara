@@ -65,6 +65,9 @@ Independent of bevy_ecs; depends on ara-diag and ara-json.
   `EditorHints::shows` is the one rule (the Inspector uses it). Presentation only:
   hidden fields keep their values and stay settable. `verify` rejects missing or
   conditional siblings, `set`/`empty` on never-empty types and unknown variants.
+- `editor.hdr` (colours above 1: the picker edits a base colour and stops) and
+  `editor.temperature` (light colours: Kelvin slider and presets) are picker hints
+  on `color`/colour-hinted vectors; like every hint they never affect validity.
 
 ## Testing
 

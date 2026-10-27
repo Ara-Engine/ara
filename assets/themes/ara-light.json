@@ -40,6 +40,8 @@
     "warning-surface": "#fcf4e8",
     "success": "#10b981",
     "success-foreground": "#047857",
+    "swatch-ink": "#121212",
+    "swatch-ink-inverse": "#f5f5f5",
     "info": "#3b82f6",
     "info-foreground": "#1d4ed8",
     "code-background": "#ffffff",
@@ -51,5 +53,29 @@
     "chart-5": "#e11d48",
     "chart-6": "#65a30d"
   },
-  "radius": { "base": 10, "md": 8, "sm": 6, "xs": 4 }
+  "radius": {
+    "base": 10,
+    "md": 8,
+    "sm": 6,
+    "xs": 4
+  },
+  "metrics": {
+    "control-size": 24,
+    "icon-size": 16,
+    "viewport-inset": 8,
+    "viewport-widget-inset": 12,
+    "viewport-widget-top": 48,
+    "font-size-body": 12,
+    "font-size-small": 11,
+    "font-size-heading": 15,
+    "space-xs": 2,
+    "space-sm": 4,
+    "space-md": 6,
+    "space-lg": 8,
+    "panel-padding": 8,
+    "panel-header-size": 28,
+    "toolbar-size": 28,
+    "tab-size": 28,
+    "statusbar-size": 24
+  }
 }

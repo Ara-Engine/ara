@@ -287,9 +287,11 @@ An overlay layer is already open, positioned invalidly, or not mounted under the
 
 Causes:
 - The same popup opened twice.
+- A `<popover>` with an unknown `placement`, an `at` that is not `x,y`, or a bad `offset`.
 
 Fixes:
 - Close a layer before reopening it; mount overlays under the root.
+- Write `placement='bottom-start'`, `at='120,48'` and `offset='4'`.
 
 ## ARA4050 ui::ATLAS: Glyph atlas request invalid
 owner: ara-ui-render

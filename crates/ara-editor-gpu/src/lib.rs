@@ -119,6 +119,9 @@ pub struct NativeUi {
     staging: Option<Buffer>,
     external: BTreeMap<u32, u32>,
     external_images: BTreeMap<u32, vk::Image>,
+    /// External images the host forgot (a Scene between completed frames): their
+    /// draws are skipped until the image is attached again.
+    forgotten: std::collections::BTreeSet<u32>,
     free_slots: Vec<u32>,
     instances: Vec<Instance>,
     masks: Vec<[f32; 4]>,
@@ -163,6 +166,7 @@ impl NativeUi {
             staging: None,
             external: BTreeMap::new(),
             external_images: BTreeMap::new(),
+            forgotten: Default::default(),
             free_slots: (0..256).rev().collect(),
             instances: Vec::new(),
             masks: Vec::new(),
@@ -234,6 +238,7 @@ impl NativeUi {
         };
         self.write_texture(slot, view);
         self.external_images.insert(id, image);
+        self.forgotten.remove(&id);
         Ok(())
     }
     /// Render into the target of another OS window (0 is the main window). Every
@@ -268,7 +273,19 @@ impl NativeUi {
     }
     /// Read the actual GPU target for a screenshot or CPU-backend comparison.
     pub fn pixels(&mut self) -> Result<image::RgbaImage> {
-        self.readback()
+        let size = self.output()?.1;
+        self.readback([0, 0], size)
+    }
+    /// Read the `size` pixels at `origin` of the rendered target (the colour picker's
+    /// eyedropper samples a few pixels around the pointer), clamped to the target.
+    pub fn pixels_in(&mut self, origin: [u32; 2], size: [u32; 2]) -> Result<image::RgbaImage> {
+        let target = self.output()?.1;
+        let origin = [origin[0].min(target[0] - 1), origin[1].min(target[1] - 1)];
+        let size = [
+            size[0].clamp(1, target[0] - origin[0]),
+            size[1].clamp(1, target[1] - origin[1]),
+        ];
+        self.readback(origin, size)
     }
     fn upload_inner(&mut self, texture: TextureUpload<'_>) -> Result<()> {
         ara_gpu::cpu_scope!("UI.upload");
@@ -365,6 +382,19 @@ impl UiGpu for NativeUi {
         instances: &[Instance],
         clips: &[Clip],
     ) -> ara_ui::Result<()> {
+        let Some(texture) = self
+            .external
+            .get(&batch.texture)
+            .copied()
+            .or_else(|| self.textures.get(&batch.texture).map(|t| t.slot))
+        else {
+            // An external image the host forgot (no completed Scene frame yet) draws
+            // nothing this frame; a texture never uploaded is a bug.
+            if self.forgotten.contains(&batch.texture) {
+                return Ok(());
+            }
+            return Err(format!("UI texture {} not uploaded", batch.texture).into());
+        };
         let first = self.instances.len() as u32;
         self.instances.extend_from_slice(instances);
         let mut rect = Box2 {
@@ -389,12 +419,6 @@ impl UiGpu for NativeUi {
         let y = (rect.y * self.dpi).floor().max(0.) as i32;
         let right = ((rect.x + rect.w) * self.dpi).ceil() as i32;
         let bottom = ((rect.y + rect.h) * self.dpi).ceil() as i32;
-        let texture = self
-            .external
-            .get(&batch.texture)
-            .copied()
-            .or_else(|| self.textures.get(&batch.texture).map(|t| t.slot))
-            .ok_or("UI texture not uploaded")?;
         self.draws.push(Draw {
             first,
             count: instances.len() as u32,

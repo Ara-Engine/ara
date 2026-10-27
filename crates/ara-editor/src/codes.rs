@@ -17,3 +17,5 @@ pub const RENDER: Code = Code(4504);
 pub const BUILD: Code = Code(4505);
 /// A scene references an asset file that is missing; it draws a placeholder.
 pub const MISSING_SOURCE: Code = Code(4506);
+/// An older saved layout was reset to the current default.
+pub const LAYOUT_RESET: Code = Code(4507);

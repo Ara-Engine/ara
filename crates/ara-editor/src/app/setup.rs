@@ -28,6 +28,10 @@ pub struct Options {
     pub verify_panels: bool,
     /// Run the Editor UX v2 capture route (menus, Settings, floating windows, tabs).
     pub verify_ux: bool,
+    /// Run only native dock drags, with before/preview/after captures at both UI scales.
+    pub verify_docking: bool,
+    /// Right-click Create → C# Script → rename → compile → attach, offscreen.
+    pub verify_assets: bool,
     /// Scene to open instead of the project's main scene (`levels/hangar.scene`).
     pub scene: Option<String>,
     /// Entities to select once the scene is open (comma-separated addresses), e.g. for
@@ -73,6 +77,8 @@ impl Options {
             || self.verify
             || self.verify_panels
             || self.verify_ux
+            || self.verify_docking
+            || self.verify_assets
             || self.verify_journey
             || self.verify_responsiveness
             || self.verify_first_hour
@@ -119,6 +125,8 @@ impl Default for Options {
             screenshot: false,
             verify_panels: false,
             verify_ux: false,
+            verify_docking: false,
+            verify_assets: false,
             scene: None,
             select: None,
             play: false,

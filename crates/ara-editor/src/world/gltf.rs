@@ -309,7 +309,26 @@ impl FidelityContent {
                     Ok(self.library.materials.load(workspace, source, &asset)?)
                 })?;
             }
+            // Changed colour lookup tables reload with the snapshot.
+            for id in self
+                .library
+                .luts
+                .ids()
+                .map(str::to_owned)
+                .collect::<Vec<_>>()
+            {
+                let _ = self.library.luts.load(source, &id);
+            }
             self.materials = Some(materials);
+        }
+        // Post-process volumes' colour lookup tables (ara_runtime::lut), decoded once each.
+        for row in view.entities().values() {
+            for id in ara_runtime::lut::record_references(&row.record) {
+                if self.library.luts.get(&id).is_none() {
+                    // A missing or non-`lut` import grades without its table.
+                    let _ = self.library.luts.load(source, &id);
+                }
+            }
         }
         let transforms = super::transforms_with(view.entities(), poses);
         for (address, row) in view.entities() {
