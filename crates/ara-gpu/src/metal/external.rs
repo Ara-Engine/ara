@@ -10,8 +10,7 @@ use super::native::{format, nil};
 use super::resources::NativeImage;
 use crate::commands::Command;
 use crate::shared::{
-    DeviceIdentity, Frame, IoSurface, Ring, SLOTS, SharedSurface, SlotDesc, SurfaceDesc,
-    SurfaceFormat,
+    Frame, IoSurface, Ring, SLOTS, SharedSurface, SlotDesc, SurfaceDesc, SurfaceFormat,
 };
 use crate::{Device, GpuError, Image, Queue, Resource, Result};
 use ash::vk;
@@ -26,17 +25,6 @@ use objc2_metal::*;
 
 /// `'RGBA'`: 8-bit RGBA in memory order, matching `R8G8B8A8_UNORM`.
 const PIXEL_FORMAT_RGBA: i32 = 0x5247_4241;
-
-/// The identity both sides compare; Apple silicon Macs have one GPU per registry ID.
-fn identity(gpu: &MetalDevice) -> DeviceIdentity {
-    let mut device_uuid = [0; 16];
-    device_uuid[..8].copy_from_slice(&gpu.device.registryID().to_le_bytes());
-    DeviceIdentity {
-        device_uuid,
-        driver_uuid: [0; 16],
-        luid: None,
-    }
-}
 
 /// Wrap one slot surface as an arena image on `gpu`.
 fn adopt(
@@ -117,7 +105,7 @@ impl ExportRing {
             width: self.size[0],
             height: self.size[1],
             format: SurfaceFormat::Rgba8Unorm,
-            device: identity(gpu),
+            device: gpu.info.identity,
             process: std::process::id(),
             slots: self
                 .slots
@@ -216,7 +204,7 @@ impl ImportedSurface {
     /// Import every slot; the producer must use this physical GPU.
     pub fn new(gpu: &mut MetalDevice, surface: &SharedSurface) -> Result<Self> {
         let desc = surface.desc();
-        if desc.device != identity(gpu) || desc.format != SurfaceFormat::Rgba8Unorm {
+        if desc.device != gpu.info.identity || desc.format != SurfaceFormat::Rgba8Unorm {
             return Err(GpuError::External(
                 "shared surface comes from another GPU or format".into(),
             ));

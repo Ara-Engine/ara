@@ -12,7 +12,7 @@ Owns the native GPU boundary. Vulkan uses ash revision
 - `Device`: portable descriptors, queues, cooked pipelines, recording and retirement.
 - `Command::CopyBufferRange` copies aligned ranges with checked capacities/overflow;
   it preserves unrelated destination bytes and is rejected inside rendering.
-- `VulkanDevice`: Vulkan backend; `context()` is read-only native integration access. Unsafe startup-only `split_loading` shares native lifetime with separate pools/arenas; serialize owners if graphics queues alias.
+- `VulkanDevice`: Vulkan backend; `context()` is read-only native integration access; `info()`, `wait_idle()` and `host_wait_stats()` are the portable forms both backends (`GpuDevice`) provide. Unsafe startup-only `split_loading` shares native lifetime with separate pools/arenas; serialize owners if graphics queues alias.
   `prepare_resources` admits two unpublished allocation/host-copy jobs; poll/cancel
   never waits. Adoption stays on the owner, as do ordered uploads and queue access.
 - `Context::host_wait_stats` snapshots cumulative host time in explicit driver waits.

@@ -111,6 +111,17 @@ impl VulkanDevice {
     pub fn host_wait_stats(&self) -> HostWaitStats {
         self.context.host_wait_stats()
     }
+    /// Capabilities recorded at creation; the backend-neutral form of `context().info`.
+    pub fn info(&self) -> &DeviceInfo {
+        &self.context.info
+    }
+    /// Wait until every queue is idle, e.g. before presentation objects are destroyed.
+    pub fn wait_idle(&self) -> Result<()> {
+        // SAFETY: the device lives as long as `self`; an idle wait has no other
+        // precondition.
+        unsafe { self.context.device.device_wait_idle() }.map_err(anyhow::Error::from)?;
+        Ok(())
+    }
     /// Create a debug/sync-validated device. Empty extensions create a headless device.
     pub fn new(window_extensions: &[CString], cache_dir: impl Into<PathBuf>) -> Result<Self> {
         Self::from_context(Context::new(window_extensions)?, cache_dir.into())

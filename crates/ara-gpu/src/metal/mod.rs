@@ -36,6 +36,7 @@ mod encode;
 pub mod external;
 #[cfg(test)]
 mod external_tests;
+mod info;
 mod native;
 #[cfg(test)]
 mod parity_tests;
@@ -114,27 +115,6 @@ struct Pending {
 /// Resolved pass timings kept for `resolve`/completion callers (bounded).
 const RESOLVED_TIMINGS: usize = 1024;
 
-/// Metal device capabilities recorded at creation.
-#[derive(Debug, Clone)]
-pub struct MetalInfo {
-    /// Native device name, e.g. "Apple M5 Pro".
-    pub name: String,
-    /// Apple GPU family 10 or later (hardware ray tracing and mesh shading).
-    pub apple10: bool,
-    /// Ray-query tier exposed by this backend; false until AS support lands.
-    pub ray_tracing: bool,
-    /// Mesh/task stages exposed by this backend; false until the mesh tier lands.
-    pub mesh_shading: bool,
-    /// BC1-BC7 sampled textures (always true on Apple silicon macOS).
-    pub texture_compression_bc: bool,
-    /// Sampled-image table capacity.
-    pub sampled_image_capacity: u32,
-    /// Storage-buffer table capacity.
-    pub storage_buffer_capacity: u32,
-    /// Recommended working-set size in MiB (unified memory).
-    pub working_set_mib: u64,
-}
-
 /// Owned Metal 4 device, arenas, converter descriptor tables and queue timelines.
 pub struct MetalDevice {
     device: Retained<ProtocolObject<dyn MTLDevice>>,
@@ -153,7 +133,7 @@ pub struct MetalDevice {
     submitted: [u64; 2],
     retired: Vec<Retired>,
     pending: Vec<Pending>,
-    info: MetalInfo,
+    info: vulkan::DeviceInfo,
     /// Distinguishes this device's completions from another device's.
     identity: u64,
     /// Submissions of the active deferred-completion scope.
@@ -218,16 +198,7 @@ impl MetalDevice {
         for buffer in tables.buffers() {
             residency.addAllocation(ProtocolObject::from_ref(buffer));
         }
-        let info = MetalInfo {
-            name: device.name().to_string(),
-            apple10: device.supportsFamily(MTLGPUFamily::Apple10),
-            ray_tracing: false,
-            mesh_shading: false,
-            texture_compression_bc: device.supportsBCTextureCompression(),
-            sampled_image_capacity: abi::TEXTURES,
-            storage_buffer_capacity: abi::BUFFERS,
-            working_set_mib: device.recommendedMaxWorkingSetSize() / (1024 * 1024),
-        };
+        let info = info::device_info(&device);
         // Joined last: a failed creation above never counts as a live device.
         let (compiler, cache) = cache::acquire(&device, cache_dir)?;
         Ok(Self {
@@ -267,9 +238,18 @@ impl MetalDevice {
     }
 
     /// Capabilities recorded at creation.
-    pub fn info(&self) -> &MetalInfo {
+    pub fn info(&self) -> &vulkan::DeviceInfo {
         &self.info
     }
+    /// Wait until both queues finished every submission.
+    pub fn wait_idle(&self) -> Result<()> {
+        for queue in [Queue::Graphics, Queue::Compute] {
+            let value = self.submitted[queue.index()];
+            Device::wait(self, TimelinePoint { queue, value })?;
+        }
+        Ok(())
+    }
+
     /// Reserved bindless slots, including resources awaiting retirement. Collect
     /// completed retirements first when checking a replacement for leaks.
     pub fn descriptor_usage(&self) -> crate::vulkan::DescriptorUsage {
