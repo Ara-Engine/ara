@@ -385,7 +385,10 @@ impl QualityPreset {
             },
             Self::High => Quality {
                 shadows: shadows(4, 2048, 150., (2048, 1500.)),
-                ambient_occlusion: ao(2, 6),
+                // Four steps per slice side: six measured 0.05 ms dearer (1440p) and further
+                // from Cycles in five of seven reference regions (bottle and glass within
+                // 0.002): the extra far samples over-darken.
+                ambient_occlusion: ao(2, 4),
                 reflections: ssr(0.5, 30., 24),
                 gi_budget: 2048,
                 bloom: true,
