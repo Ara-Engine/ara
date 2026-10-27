@@ -20,6 +20,15 @@ impl Window {
     /// Create a game window without flashing an intermediate decorated window.
     /// Hidden probes always retain their requested windowed extent and never show.
     pub fn game(title: &str, size: [u32; 2], mode: GameWindowMode, hidden: bool) -> Result<Self> {
+        // A game takes the click that activates its window (macOS otherwise drops it,
+        // so the first menu click after a Hub or Finder launch did nothing).
+        // SAFETY: Static NUL-terminated hint name and value, set before the window.
+        unsafe {
+            sdl3_sys::hints::SDL_SetHint(
+                sdl3_sys::hints::SDL_HINT_MOUSE_FOCUS_CLICKTHROUGH,
+                c"1".as_ptr(),
+            );
+        }
         let window = Self::hidden(title, size)?;
         if hidden {
             return Ok(window);
@@ -28,6 +37,8 @@ impl Window {
         // SAFETY: This main-thread owner retains its SDL window.
         unsafe {
             ensure!(SDL_ShowWindow(window.handle), "SDL show: {}", error());
+            // Ask for keyboard focus too; a launched game should not need a first click.
+            SDL_RaiseWindow(window.handle);
         }
         // Resolve asynchronous fullscreen changes before sizing the loading swapchain,
         // so its handoff never recreates it at the first game frame.

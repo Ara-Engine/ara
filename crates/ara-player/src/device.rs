@@ -64,6 +64,11 @@ impl Windowed {
     pub(crate) fn window_size(&self) -> Result<[u32; 2]> {
         self.window.size()
     }
+    /// Physical pixels per window point: the game UI's scale, so its layout units are
+    /// the window coordinates SDL reports the pointer in.
+    pub(crate) fn pixel_density(&self) -> f32 {
+        self.window.pixel_density()
+    }
     pub(crate) fn set_window_mode(
         &self,
         mode: ara_platform::GameWindowMode,

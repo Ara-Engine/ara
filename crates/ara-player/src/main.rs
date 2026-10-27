@@ -378,10 +378,11 @@ impl Player {
                 if let Some(source) = &world.ui {
                     let size = [embed.desc().width, embed.desc().height];
                     if embed.game_ui.is_none() {
-                        embed.game_ui = Some(game_ui::Surface::new(source, &world.runtime, size)?);
+                        embed.game_ui =
+                            Some(game_ui::Surface::new(source, &world.runtime, size, 1.)?);
                     }
                     if let Some(ui) = &mut embed.game_ui {
-                        ui.update(&world.runtime, world.runtime.player().0, size)?;
+                        ui.update(&world.runtime, world.runtime.player().0, size, 1.)?;
                     }
                 } else {
                     embed.game_ui = None;

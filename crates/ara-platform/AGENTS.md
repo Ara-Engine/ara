@@ -14,7 +14,8 @@ Metal view presented through `ara_gpu::metal::present` (`src/present/metal.rs`).
   switches at runtime (game Settings menus) and `game_mode` reads it back; presenters
   follow the new drawable size. Hidden game windows never enter fullscreen. SDL
   fullscreen synchronization finishes before loading/swapchain sizing; direct scanout
-  remains an OS/overlay decision.
+  remains an OS/overlay decision. Game windows raise on show and take the click that
+  activates them (`SDL_HINT_MOUSE_FOCUS_CLICKTHROUGH`).
 - `Event`: close, drawable resize, key/repeat, mouse motion/button and wheel input.
   Hosts translate these events into deterministic simulation actions.
 - `Window::set_cursor(SystemCursor)` lazily owns native cursor shapes until video
@@ -23,7 +24,8 @@ Metal view presented through `ara_gpu::metal::present` (`src/present/metal.rs`).
   (above its parent, minimizes with it). `poll_tagged()` drains every window's
   events tagged with `id()` (0 = application; a close request is `Quit` for its
   window); `poll()` keeps the single-window shape. `rect`/`set_position`/`raise`/
-  `toggle_fullscreen`/`display_scale`, `displays()` (usable bounds, for off-screen
+  `toggle_fullscreen`/`display_scale`/`pixel_density` (pixels per window point: pointer
+  events are in points, `size()` in pixels), `displays()` (usable bounds, for off-screen
   recovery) and `global_mouse()` (cross-window drags). `raw()` is for host adapters.
 - Custom captions: `Window::enable_custom_chrome` installs native caption/resize hit
   testing. Update `chrome_mut()` after layout in SDL window points. `minimize` and
