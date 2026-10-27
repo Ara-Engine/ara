@@ -1,6 +1,7 @@
 //! `prefab.instantiate`, `prefab.override.set` and `prefab.override.revert`.
 mod apply;
 mod create;
+mod references;
 mod sources;
 pub use apply::{PrefabApply, PrefabApplyParams};
 pub use create::{PrefabCreate, PrefabCreateParams, PrefabVariant};

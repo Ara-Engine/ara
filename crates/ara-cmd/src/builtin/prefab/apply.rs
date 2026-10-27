@@ -5,6 +5,7 @@ use crate::builtin::{
     EntityDeleteParams, PropertySet, PropertySetParams,
 };
 use ara_doc::{AssetId, field, is_component_key};
+use std::collections::BTreeMap;
 
 /// Parameters for atomic prefab application.
 #[derive(Debug, Schema, Deserialize)]
@@ -97,7 +98,8 @@ impl Command for PrefabApply {
                 &address,
                 &destination.doc,
             )?;
-            apply_value(ctx, &destination.doc, &source, path, value.clone())?;
+            let value = source_value(ctx, &anchor, &destination, path, value.clone())?;
+            apply_value(ctx, &destination.doc, &source, path, value)?;
             keys.push(key.clone());
         }
         let mut removals = Vec::new();
@@ -164,6 +166,41 @@ impl Command for PrefabApply {
 
 fn invalid(message: impl Into<String>) -> Diagnostic {
     Diagnostic::error(codes::INVALID_PARAMS, message)
+}
+
+fn source_value(
+    ctx: &EditCtx<'_, '_>,
+    anchor: &AssetId,
+    source: &super::sources::PrefabSource,
+    path: &str,
+    mut value: Value,
+) -> Result<Value, Diagnostic> {
+    let read = ctx.read();
+    let parsed: FieldPath = path.parse().map_err(invalid)?;
+    let resolved = read.schema().resolve_path(read.entity_type()?, &parsed)?;
+    let mut references = Vec::new();
+    read.schema()
+        .visit(&resolved.ty, &value, path, &mut |ty, value, _| {
+            if matches!(ty, ara_schema::ValueType::Entity)
+                && let Some(address) = value.as_str()
+            {
+                references.push(address.to_owned());
+            }
+        });
+    let mut remap = BTreeMap::new();
+    for address in references {
+        let candidate = super::sources::prefab_sources(read.workspace(), anchor.as_str(), &address)
+            .ok().and_then(|sources| sources.into_iter().find(|candidate| {
+                candidate.doc == source.doc && candidate.instance == source.instance
+            })).ok_or_else(|| invalid(format!(
+                "Reference `{address}` is outside the chosen prefab instance; keep this value as an instance override",
+            )))?;
+        remap.insert(address, candidate.entity);
+    }
+    super::references::map_refs(read.schema(), &resolved.ty, &mut value, &|address| {
+        remap.get(address).cloned().map(Value::String)
+    });
+    Ok(value)
 }
 
 fn apply_value(

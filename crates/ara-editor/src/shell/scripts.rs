@@ -41,6 +41,65 @@ pub(super) struct Rename {
 }
 
 impl Shell {
+    /// Reveal a diagnostic's exact source coordinates in the configured editor.
+    pub(crate) fn open_script_location(
+        &mut self,
+        editor: &Editor,
+        path: &str,
+        line: Option<u32>,
+        column: Option<u32>,
+    ) -> ara_ui::Result<()> {
+        let path = Path::new(path);
+        let file = if path.is_absolute() {
+            std::fs::canonicalize(path)?
+        } else {
+            crate::commands::project_path(editor.host.root(), &path.to_string_lossy())?
+        };
+        let root = std::fs::canonicalize(editor.host.root())?;
+        if !file.starts_with(&root) {
+            return Err("This diagnostic points outside the open project".into());
+        }
+        let line = line.unwrap_or(1).max(1);
+        let column = column.unwrap_or(1).max(1);
+        self.status_note = Some(format!("{}:{line}:{column}", file.display()));
+        if !self.open_ide || self.offscreen {
+            return Ok(());
+        }
+        let configured = editor
+            .state
+            .settings
+            .get("scripts.ide")
+            .and_then(Value::as_str)
+            .unwrap_or("");
+        if configured == "system" {
+            return ops::open_external(&file);
+        }
+        let code = if configured.is_empty() {
+            if cfg!(windows) { "code.cmd" } else { "code" }
+        } else {
+            configured
+        };
+        let mut command = std::process::Command::new(code);
+        if configured.is_empty()
+            || Path::new(code).file_name().is_some_and(|name| {
+                name.to_string_lossy()
+                    .to_ascii_lowercase()
+                    .starts_with("code")
+            })
+        {
+            command
+                .arg(&root)
+                .arg("--goto")
+                .arg(format!("{}:{line}:{column}", file.display()));
+        } else {
+            command.arg(&file);
+        }
+        if command.spawn().is_err() {
+            ops::open_external(&file)?;
+        }
+        Ok(())
+    }
+
     /// Create a script in the targeted folder, then focus its inline name before compiling.
     pub(crate) fn create_script(
         &mut self,

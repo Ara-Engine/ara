@@ -655,7 +655,12 @@ pub(crate) fn context(kind: Context) -> &'static [Item] {
             C("graph.frame"),
             C("graph.select_all"),
         ],
-        Context::Console => &[C("console.copy"), C("console.clear")],
+        Context::Console => &[
+            C("console.copy"),
+            C("console.collapse"),
+            C("console.clear_on_play"),
+            C("console.clear"),
+        ],
         Context::Profiler => &[
             C("profiler.record"),
             C("profiler.freeze"),

@@ -17,6 +17,7 @@ mod qa;
 mod responsiveness;
 mod scene_quality;
 mod scene_sync;
+mod selection_verify;
 mod setup;
 mod ux_verify;
 mod verify;
@@ -124,7 +125,7 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
     }
     window.enable_custom_chrome()?;
     let mut caption = window_chrome::SnapCaption::new(&window)?;
-    let mut clipboard = OsClipboard;
+    let mut clipboard = crate::native::SessionClipboard::new(offscreen);
     crate::native::frame::style(window.raw(), editor.state.light);
     let main_id = window.id();
     let dpi = options.dpi.unwrap_or_else(|| native.dpi()) * windows::ui_scale(&editor);
@@ -321,6 +322,7 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
         None
     };
     let mut navigation_check = None;
+    let mut selection_check = None;
     if panel_verification.is_some()
         || ux_verification.is_some()
         || journey.is_some()
@@ -448,6 +450,27 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
                     &mut events,
                 )?;
             }
+            if navigation_check
+                .as_ref()
+                .is_some_and(navigation_verify::NavigationCheck::finished)
+                && selection_check.is_none()
+            {
+                selection_check = Some(selection_verify::SelectionCheck::new(
+                    &mut editor,
+                    &options.output,
+                )?);
+            }
+            if let Some(check) = &mut selection_check {
+                let scale = crate::native::points_to_logical(window.raw(), main_dpi);
+                check.inject(
+                    &mut editor,
+                    &mut shell,
+                    &window,
+                    scale,
+                    &scene_view,
+                    &mut events,
+                )?;
+            }
             let interaction_start = (!events.is_empty()).then(Instant::now);
             if events.iter().any(|(_, event)| {
                 matches!(
@@ -536,7 +559,7 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
             if let Some(id) = &focused_float {
                 shell.enter(id);
             }
-            match native.input(&mut shell.ui, &mut shell.input) {
+            match native.input(&mut shell.ui, &mut shell.input, &mut clipboard) {
                 Ok(changed) => {
                     dirty |= changed;
                     // Typed text (IME commits) is input too.
@@ -1325,6 +1348,9 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
                     &scene_view,
                     frame_start.elapsed().as_secs_f64() * 1000.,
                 )?;
+            }
+            if let Some(check) = &mut selection_check {
+                check.end(&editor, &mut shell, &mut gpu)?;
                 if check.finished() {
                     game.close(&mut editor, &mut gpu)?;
                     break;
@@ -1409,6 +1435,17 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
             if !check.finished() || !check.failures().is_empty() {
                 return Err(format!(
                     "Native navigation journey failed: {}",
+                    check.failures().join(", ")
+                )
+                .into());
+            }
+            let check = selection_check
+                .as_ref()
+                .ok_or("The selection journey did not start")?;
+            check.write()?;
+            if !check.finished() || !check.failures().is_empty() {
+                return Err(format!(
+                    "Native selection journey failed: {}",
                     check.failures().join(", ")
                 )
                 .into());
@@ -1592,7 +1629,7 @@ fn route_event(
     gpu: &NativeUi,
     view: &crate::world::DocumentView,
     scene_view: &viewport::SceneView,
-    clipboard: &mut OsClipboard,
+    clipboard: &mut dyn ara_ui_text::Clipboard,
 ) -> ara_ui::Result<(bool, bool, bool)> {
     if shell.game_captured && (shell.modal_active() || shell.choice_open()) {
         game_input(&Event::FocusLost, editor, shell, dpi);

@@ -20,10 +20,8 @@ pub fn read_clipboard() -> Result<String> {
 pub fn write_clipboard(text: &str) -> Result<()> {
     let text = CString::new(text)?;
     // SAFETY: SDL copies this live NUL-terminated string before returning.
-    ensure!(
-        unsafe { sdl3_sys::clipboard::SDL_SetClipboardText(text.as_ptr()) },
-        "SDL clipboard write failed"
-    );
+    let changed = unsafe { sdl3_sys::clipboard::SDL_SetClipboardText(text.as_ptr()) };
+    ensure!(changed, "SDL clipboard write failed");
     Ok(())
 }
 
@@ -59,10 +57,9 @@ impl Window {
             h: area[3],
         };
         // SAFETY: the window is live, and SDL copies the stack rectangle.
-        ensure!(
-            unsafe { sdl3_sys::keyboard::SDL_SetTextInputArea(self.handle, &rect, cursor.max(0)) },
-            "SDL IME area failed"
-        );
+        let changed =
+            unsafe { sdl3_sys::keyboard::SDL_SetTextInputArea(self.handle, &rect, cursor.max(0)) };
+        ensure!(changed, "SDL IME area failed");
         Ok(())
     }
 }

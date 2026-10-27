@@ -98,6 +98,7 @@ fn create(
         .get(root.as_str())
         .ok_or_else(|| invalid("The selected entity cannot be resolved"))?;
     let transform = effective.record.get("Transform");
+    let has_transform = transform.is_some();
     let position = transform
         .and_then(|value| value.get("position"))
         .cloned()
@@ -105,7 +106,7 @@ fn create(
     let rotation = transform
         .and_then(|value| value.get("rotation"))
         .cloned()
-        .unwrap_or_else(|| json!([0, 0, 0, 1]));
+        .unwrap_or_else(|| json!([0, 0, 0]));
     let selected: std::collections::BTreeSet<_> = subtree.iter().map(|id| id.as_str()).collect();
     let addresses: Vec<_> = resolved
         .keys()
@@ -130,6 +131,7 @@ fn create(
         })
         .collect();
     let source = ctx.create_document(&params.path, "prefab", params.id.as_deref())?;
+    let mut overrides = Map::new();
     for (id, mut record) in records.iter().rev().cloned() {
         if id == root {
             record.shift_remove(field::PARENT);
@@ -149,11 +151,19 @@ fn create(
                 transform.shift_remove("rotation");
             }
         }
-        references::rewrite_record(ctx.read().schema(), &mut record, &source_ids);
         let copied = ids
             .get(id.as_str())
             .cloned()
             .ok_or_else(|| invalid("A copied record lost its new identity"))?;
+        references::rewrite_record(
+            ctx.read().schema(),
+            &mut record,
+            &source_ids,
+            &remap,
+            copied.as_str(),
+            id == root,
+            &mut overrides,
+        );
         ctx.apply_edit(Edit::Create {
             doc: source.clone(),
             id: copied,
@@ -174,10 +184,13 @@ fn create(
         field::PREFAB.into(),
         json!(format!("@{}#{}", params.path, source)),
     );
-    instance.insert(
-        field::OVERRIDES.into(),
-        json!({"Transform.position":position,"Transform.rotation":rotation}),
-    );
+    if has_transform {
+        overrides.insert("Transform.position".into(), position);
+        overrides.insert("Transform.rotation".into(), rotation);
+    }
+    if !overrides.is_empty() {
+        instance.insert(field::OVERRIDES.into(), Value::Object(overrides));
+    }
     ctx.apply_edit(Edit::Create {
         doc,
         id: root.clone(),

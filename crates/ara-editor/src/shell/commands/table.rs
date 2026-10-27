@@ -1030,10 +1030,13 @@ fn build() -> Vec<Spec> {
             "play",
             "F5",
             "Play the scene with the project's play settings; resumes when paused.",
-            |_, e, _| {
+            |s, e, _| {
                 if e.state.playing == Some(false) {
                     play(e, "play.resume", json!({}))?;
                 } else {
+                    if s.log_view.clear_on_play {
+                        s.clear_console(e)?;
+                    }
                     let mut params = play_params(e);
                     params["scene"] = json!(e.state.doc);
                     // The reply is immediate; the Game view follows the start's progress.
@@ -1668,25 +1671,32 @@ fn build() -> Vec<Spec> {
             "trash",
             "",
             "Hide the messages logged so far; new ones still appear.",
-            |s, e, _| {
-                let logs = e.action("logs", json!({"limit": 1}))?;
-                s.log_view.since = logs["cursor"].as_u64().unwrap_or(0);
-                s.console_open = None;
-                Ok(())
-            },
+            |s, e, _| s.clear_console(e),
         ),
         cmd(
             "console.collapse",
             "Collapse Repeated Messages",
             "layers",
             "",
-            "Show one row per code with its total count.",
+            "Group repeated messages with the same source location and origin.",
             |s, _, _| {
                 s.log_view.collapse = !s.log_view.collapse;
                 Ok(())
             },
         )
         .when(|c| Avail::Checked(c.logs.collapse)),
+        cmd(
+            "console.clear_on_play",
+            "Clear on Play",
+            "play",
+            "",
+            "Clear previous Console messages when Play starts.",
+            |s, _, _| {
+                s.log_view.clear_on_play = !s.log_view.clear_on_play;
+                Ok(())
+            },
+        )
+        .when(|c| Avail::Checked(c.logs.clear_on_play)),
         cmd(
             "console.errors",
             "Show Errors",

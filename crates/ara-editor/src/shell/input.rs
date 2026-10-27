@@ -444,11 +444,27 @@ impl Shell {
                                 args["doc"] = doc.clone().into();
                             }
                             editor.action("editor.select", args)?;
+                            editor.action(
+                                "editor.focus",
+                                json!({"panel":"inspector","field":diagnostic.location.path}),
+                            )?;
+                        } else if let Some(file) = diagnostic.location.file.as_deref() {
+                            self.open_script_location(
+                                editor,
+                                file,
+                                diagnostic.location.line,
+                                diagnostic.location.column,
+                            )?;
+                        } else if let Some(doc) = diagnostic.location.doc.as_deref() {
+                            if let Some(path) = editor.host.store().workspace().path_of(doc) {
+                                self.open_script_location(
+                                    editor,
+                                    path,
+                                    diagnostic.location.line,
+                                    diagnostic.location.column,
+                                )?;
+                            }
                         }
-                        editor.action(
-                            "editor.focus",
-                            json!({"panel":"inspector","field":diagnostic.location.path}),
-                        )?;
                         rebuild = true;
                     }
                     Binding::Protocol(method, params) => {

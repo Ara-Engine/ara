@@ -14,6 +14,8 @@ pub struct PrefabSource {
     pub path: String,
     /// Entity address in that prefab; it may itself be a nested instance.
     pub entity: String,
+    /// Owning instance address in the queried document, distinguishing repeated copies.
+    pub instance: String,
 }
 
 /// Sources from the nearest containing prefab to its nested or variant base sources.
@@ -59,6 +61,7 @@ fn trace(
     let mut entity = entity.to_owned();
     let mut sources = Vec::new();
     let mut seen = BTreeSet::from([doc.clone()]);
+    let mut namespace: Option<(String, String)> = None;
     loop {
         let document = workspace.doc(doc.as_str()).ok_or_else(|| {
             Diagnostic::error(codes::PREFAB_NOT_FOUND, "A source prefab is not loaded")
@@ -103,25 +106,31 @@ fn trace(
                 "A prefab source chain contains a cycle",
             ));
         }
+        let instance = match &namespace {
+            Some((instance, root)) if head == root => instance.clone(),
+            Some((instance, _)) => format!("{instance}/{head}"),
+            None => head.into(),
+        };
+        let root = source
+            .children(None)
+            .first()
+            .map(ToString::to_string)
+            .ok_or_else(|| Diagnostic::error(codes::ROOT_COUNT, "A prefab source has no root"))?;
         let address = match inner {
             Some(inner) => inner.to_owned(),
-            None => source
-                .children(None)
-                .first()
-                .map(ToString::to_string)
-                .ok_or_else(|| {
-                    Diagnostic::error(codes::ROOT_COUNT, "A prefab source has no root")
-                })?,
+            None => root.clone(),
         };
         sources.push(PrefabSource {
             doc: source.id.clone(),
             path: workspace.path_of(id).unwrap_or_default().into(),
             entity: address.clone(),
+            instance: instance.clone(),
         });
         if stop == Some(&source.id) {
             return Ok(sources);
         }
         doc = source.id.clone();
         entity = address;
+        namespace = Some((instance, root));
     }
 }

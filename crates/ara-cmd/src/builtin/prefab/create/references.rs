@@ -1,6 +1,6 @@
 //! Repair typed scene references to children moved behind a new prefab boundary.
 use super::*;
-use ara_schema::{SchemaDb, Shape, ValueType};
+use ara_schema::{SchemaDb, ValueType};
 use std::collections::{BTreeMap, BTreeSet};
 
 pub(super) fn replacement(address: &str, remap: &BTreeMap<String, String>) -> Option<String> {
@@ -11,17 +11,35 @@ pub(super) fn replacement(address: &str, remap: &BTreeMap<String, String>) -> Op
     })
 }
 
-pub(super) fn rewrite_record(db: &SchemaDb, record: &mut Record, remap: &BTreeMap<String, String>) {
+/// Keep references outside the new asset on its scene instance, while internal
+/// references become local to the new asset's namespace.
+pub(super) fn rewrite_record(
+    db: &SchemaDb,
+    record: &mut Record,
+    source_ids: &BTreeMap<String, String>,
+    scene_ids: &BTreeMap<String, String>,
+    copied: &str,
+    root: bool,
+    overrides: &mut Map<String, Value>,
+) {
     for (name, value) in record {
         if name == field::PARENT {
             if let Some(next) = value
                 .as_str()
-                .and_then(|address| replacement(address, remap))
+                .and_then(|address| replacement(address, source_ids))
             {
                 *value = json!(next);
             }
         } else if ara_doc::is_component_key(name) {
-            replace(db, &ValueType::Named(name.clone()), value, remap);
+            source_value(
+                db,
+                &ValueType::Named(name.clone()),
+                value,
+                source_ids,
+                scene_ids,
+                &override_key(copied, root, name),
+                overrides,
+            );
         } else if name == field::OVERRIDES {
             for (key, value) in value
                 .as_object_mut()
@@ -33,11 +51,53 @@ pub(super) fn rewrite_record(db: &SchemaDb, record: &mut Record, remap: &BTreeMa
                     db.get("Entity")
                         .and_then(|entity| db.resolve_path(entity, &path).ok())
                 }) {
-                    replace(db, &resolved.ty, value, remap);
+                    source_value(
+                        db,
+                        &resolved.ty,
+                        value,
+                        source_ids,
+                        scene_ids,
+                        &override_key(copied, root, key),
+                        overrides,
+                    );
                 }
             }
         }
     }
+}
+
+fn override_key(copied: &str, root: bool, key: &str) -> String {
+    if root && !key.contains('/') {
+        key.into()
+    } else {
+        format!("{copied}/{key}")
+    }
+}
+
+fn source_value(
+    db: &SchemaDb,
+    ty: &ValueType,
+    value: &mut Value,
+    source_ids: &BTreeMap<String, String>,
+    scene_ids: &BTreeMap<String, String>,
+    key: &str,
+    overrides: &mut Map<String, Value>,
+) {
+    let mut external = false;
+    db.visit(ty, value, key, &mut |ty, value, _| {
+        external |= matches!(ty, ValueType::Entity)
+            && value
+                .as_str()
+                .is_some_and(|address| replacement(address, source_ids).is_none());
+    });
+    if external {
+        let mut scene = value.clone();
+        replace(db, ty, &mut scene, scene_ids);
+        overrides.insert(key.into(), scene);
+    }
+    super::super::references::map_refs(db, ty, value, &|address| {
+        Some(replacement(address, source_ids).map_or(Value::Null, Value::String))
+    });
 }
 
 pub(super) fn remap_scene(
@@ -105,46 +165,7 @@ fn replace(
     value: &mut Value,
     remap: &BTreeMap<String, String>,
 ) -> bool {
-    match ty {
-        ValueType::Entity => {
-            if let Some(replacement) = value
-                .as_str()
-                .and_then(|address| replacement(address, remap))
-            {
-                *value = json!(replacement);
-                true
-            } else {
-                false
-            }
-        }
-        ValueType::Option(inner) => replace(db, inner, value, remap),
-        ValueType::List(inner) | ValueType::Keyed(inner) => value
-            .as_array_mut()
-            .into_iter()
-            .flatten()
-            .fold(false, |changed, value| {
-                replace(db, inner, value, remap) || changed
-            }),
-        ValueType::Map(inner) => value
-            .as_object_mut()
-            .into_iter()
-            .flat_map(|map| map.values_mut())
-            .fold(false, |changed, value| {
-                replace(db, inner, value, remap) || changed
-            }),
-        ValueType::Named(name) => {
-            let Some(Shape::Struct { fields, .. }) = db.get(name).map(|ty| &ty.shape) else {
-                return false;
-            };
-            let Some(map) = value.as_object_mut() else {
-                return false;
-            };
-            fields.iter().fold(false, |changed, field| {
-                map.get_mut(&field.name)
-                    .is_some_and(|value| replace(db, &field.ty, value, remap))
-                    || changed
-            })
-        }
-        _ => false,
-    }
+    super::super::references::map_refs(db, ty, value, &|address| {
+        replacement(address, remap).map(Value::String)
+    })
 }

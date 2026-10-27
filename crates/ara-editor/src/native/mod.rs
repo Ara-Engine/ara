@@ -188,17 +188,19 @@ impl Native {
         }
         Ok(())
     }
-    pub fn input(&mut self, ui: &mut Ui, input: &mut InputState) -> ara_ui::Result<bool> {
+    pub fn input(
+        &mut self,
+        ui: &mut Ui,
+        input: &mut InputState,
+        clipboard: &mut dyn Clipboard,
+    ) -> ara_ui::Result<bool> {
         #[cfg(windows)]
         {
-            Ok(
-                recover_input(self.accessibility.actions(ui, input, &mut OsClipboard))
-                    .unwrap_or(false),
-            )
+            Ok(recover_input(self.accessibility.actions(ui, input, clipboard)).unwrap_or(false))
         }
         #[cfg(not(windows))]
         {
-            let _ = (ui, input);
+            let _ = (ui, input, clipboard);
             Ok(false)
         }
     }
@@ -214,6 +216,36 @@ impl Drop for Native {
     }
 }
 pub(crate) struct OsClipboard;
+/// Bounded runs exercise clipboard semantics without changing the desktop clipboard.
+pub(crate) struct SessionClipboard {
+    isolated: bool,
+    text: String,
+}
+impl SessionClipboard {
+    pub fn new(isolated: bool) -> Self {
+        Self {
+            isolated,
+            text: String::new(),
+        }
+    }
+}
+impl Clipboard for SessionClipboard {
+    fn read(&mut self) -> ara_ui_text::Result<String> {
+        if self.isolated {
+            Ok(self.text.clone())
+        } else {
+            OsClipboard.read()
+        }
+    }
+    fn write(&mut self, text: &str) -> ara_ui_text::Result<()> {
+        if self.isolated {
+            self.text = text.into();
+            Ok(())
+        } else {
+            OsClipboard.write(text)
+        }
+    }
+}
 impl Clipboard for OsClipboard {
     fn read(&mut self) -> ara_ui_text::Result<String> {
         ara_platform::text::read_clipboard().map_err(|error| error.to_string().into())

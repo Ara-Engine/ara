@@ -5,6 +5,8 @@ use std::collections::BTreeSet;
 #[cfg(test)]
 mod navigation_tests;
 mod selection;
+#[cfg(test)]
+mod selection_gesture_tests;
 struct GizmoDrag {
     handle: overlay::Handle,
     start: [f32; 2],

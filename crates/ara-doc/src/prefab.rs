@@ -12,6 +12,8 @@
 //! Only `name` and components can be overridden. Records of the outer document may
 //! parent themselves inside an instance (`"parent": "e_4f9a/m4tz"`).
 
+mod references;
+
 use std::collections::BTreeMap;
 
 use ara_diag::{Diagnostic, FixAction, Location, codes};
@@ -269,9 +271,13 @@ impl Ctx<'_, '_> {
                 format!("{id}/{a}")
             }
         };
+        let addresses: std::collections::BTreeSet<_> = inner.keys().cloned().collect();
         let mut entities: Resolved = inner
             .into_iter()
             .map(|(addr, mut e)| {
+                references::remap(self.db, &mut e.record, &|address| {
+                    addresses.contains(address).then(|| map_addr(address))
+                });
                 if addr == root {
                     e.parent = parent_of(rec).map(str::to_owned);
                     e.order = order_of(rec).map(str::to_owned);

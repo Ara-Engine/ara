@@ -1,7 +1,7 @@
 //! Console and Problems, both read from the project's diagnostics bus (`logs`, the
 //! same stream `ara logs` and agents read):
 //! - **Console** is the chronological log: severity toggles with counts, collapse by
-//!   code, clear, search, time, origin and a source link per row; a selected row
+//!   message and source identity, clear, search, time, origin and a source link per row; a selected row
 //!   expands its details and fixes.
 //! - **Problems** is what is wrong now: errors and warnings grouped by file or
 //!   document, with one-click fixes and "Why", the catalog's explanation.
@@ -26,8 +26,10 @@ pub(crate) struct LogView {
     pub warnings: bool,
     /// Console shows info messages.
     pub info: bool,
-    /// Console merges rows with the same code into one.
+    /// Console merges repetitions of the same message, origin and source location.
     pub collapse: bool,
+    /// Clear previous messages when Play starts from this editor.
+    pub clear_on_play: bool,
     /// Console shows only records after this bus cursor (Clear).
     pub since: u64,
     /// Problems shows errors.
@@ -42,6 +44,7 @@ impl Default for LogView {
             warnings: true,
             info: true,
             collapse: false,
+            clear_on_play: false,
             since: 0,
             problem_errors: true,
             problem_warnings: true,
@@ -57,6 +60,43 @@ struct Entry {
     origin: String,
     diagnostic: ara_diag::Diagnostic,
 }
+
+/// Borrowed identity keeps distinct errors sharing one code visible without per-row key allocations.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+struct Identity<'a> {
+    code: ara_diag::Code,
+    severity: ara_diag::Severity,
+    message: &'a str,
+    origin: &'a str,
+    file: Option<&'a str>,
+    doc: Option<&'a str>,
+    record: Option<&'a str>,
+    path: Option<&'a str>,
+    line: Option<u32>,
+    column: Option<u32>,
+    command: Option<usize>,
+}
+impl Entry {
+    fn identity(&self) -> Identity<'_> {
+        let location = &self.diagnostic.location;
+        Identity {
+            code: self.diagnostic.code,
+            severity: self.diagnostic.severity,
+            message: &self.diagnostic.message,
+            origin: &self.origin,
+            file: location.file.as_deref(),
+            doc: location.doc.as_deref(),
+            record: location.record.as_deref(),
+            path: location.path.as_deref(),
+            line: location.line,
+            column: location.column,
+            command: location.command,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests;
 
 fn entries(editor: &mut Editor, since: u64, severity: &str) -> Vec<Entry> {
     let logs = editor
@@ -164,7 +204,7 @@ fn source(editor: &Editor, d: &ara_diag::Diagnostic) -> Option<(String, Binding)
         Some(line) => format!("{path}:{line}"),
         None => path.clone(),
     };
-    Some((label, Binding::Command("assets.show", Target::Asset(path))))
+    Some((label, Binding::Diagnostic(d.clone())))
 }
 
 /// Local wall-clock `HH:MM:SS` of a Unix time in milliseconds.
@@ -207,6 +247,13 @@ fn local_offset_minutes() -> i64 {
 }
 
 impl Shell {
+    pub(crate) fn clear_console(&mut self, editor: &mut Editor) -> ara_ui::Result<()> {
+        let logs = editor.action("logs", json!({"limit":1}))?;
+        self.log_view.since = logs["cursor"].as_u64().unwrap_or(0);
+        self.console_open = None;
+        Ok(())
+    }
+
     pub(super) fn console_panel(&mut self, editor: &mut Editor, out: &mut String) {
         let view = self.log_view;
         let (machine, all): (Vec<Entry>, Vec<Entry>) = entries(editor, view.since, "info")
@@ -234,6 +281,14 @@ impl Shell {
             "layers",
             editor,
             view.collapse,
+        );
+        self.tool_icon(
+            out,
+            "console-clear-play",
+            "console.clear_on_play",
+            "play",
+            editor,
+            view.clear_on_play,
         );
         out.push_str("<panel id='console-sep' class='toolbar-sep' />");
         for (id, command, severity, on) in [
@@ -282,15 +337,15 @@ impl Shell {
                         .contains(&query)
             })
             .collect();
-        // Collapse keeps the newest row of each code and sums its occurrences.
-        let mut totals: BTreeMap<String, u64> = BTreeMap::new();
+        // Keep the newest repetition of each diagnostic identity and sum its occurrences.
+        let mut totals: BTreeMap<Identity<'_>, u64> = BTreeMap::new();
         if view.collapse {
             for e in &rows {
-                *totals.entry(e.diagnostic.code.to_string()).or_default() += e.count;
+                *totals.entry(e.identity()).or_default() += e.count;
             }
             let mut seen = std::collections::BTreeSet::new();
             rows.reverse();
-            rows.retain(|e| seen.insert(e.diagnostic.code.to_string()));
+            rows.retain(|e| seen.insert(e.identity()));
             rows.reverse();
         }
         if rows.is_empty() && machine.is_empty() {
@@ -319,10 +374,7 @@ impl Shell {
         }
         for e in rows.iter().rev().take(300).rev() {
             let count = if view.collapse {
-                totals
-                    .get(&e.diagnostic.code.to_string())
-                    .copied()
-                    .unwrap_or(e.count)
+                totals.get(&e.identity()).copied().unwrap_or(e.count)
             } else {
                 e.count
             };
