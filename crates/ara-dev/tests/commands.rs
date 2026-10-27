@@ -301,6 +301,14 @@ fn configured_command(root: &Path, program: &str, args: &[&str]) -> Command {
         .env("CARGO_BUILD_JOBS", "2")
         .env("GIT_CONFIG_NOSYSTEM", "1")
         .env("GIT_CONFIG_GLOBAL", root.join("empty-gitconfig"));
+    // These selection fixtures intentionally compare against their initial main;
+    // automatic-main receipt/bootstrap behavior has separate transaction tests.
+    if program == env!("CARGO_BIN_EXE_ara-dev")
+        && args.first() == Some(&"check")
+        && !args.contains(&"--base")
+    {
+        command.args(["--base", "main"]);
+    }
     command
 }
 

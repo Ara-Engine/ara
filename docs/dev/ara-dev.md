@@ -7,7 +7,7 @@ Set `$env:CARGO_BUILD_JOBS='2'` in PowerShell on this shared Windows machine. GP
 `VULKAN_SDK` pointing to the installed SDK. All commands run from any directory in
 the checkout; no Python, CMake, service or extra build tool is required.
 
-On Windows, use `.\crates\ara-dev\run.ps1 check --no-compiler-cache --json` for the fast entry. It
+On Windows, use `.\crates\ara-dev\run.ps1 check --json` for the fast entry. It
 builds the small tool through `%LOCALAPPDATA%\ara\dev-build`, keeping bootstrap
 compilation out of engine Cargo locks. Final tool and engine executable names
 default to the worktree's `target/`; explicit independent output directories remain
@@ -23,14 +23,28 @@ Workspace formatting: `cargo run -p ara-dev -- fmt` writes changes;
 four-package batches, keeping rustfmt below Windows' command-line limit.
 Each batch has a log under `target/ara-dev/run-*`; failures return a nonzero exit.
 
+On main, an omitted base means `--base auto`: only changes since this checkout's
+last fully green gate are selected. Elsewhere the omitted base remains `main`.
+Receipts live in `target/ara-dev/last-green.json`, independently of Cargo outputs.
+Missing, rewritten, divergent or copied receipts require a full bootstrap, never
+a zero-change pass. For the first deployment, use `--base <known-last-green>` on
+the next batch; that green gate starts automatic tracking. Keep the receipt when
+cleaning build caches. `--plan --json` previews the effective base and full scope.
+See [the gate policy and measurements](gate-speed.md).
+
+Gates default to `CARGO_INCREMENTAL=0`; an explicit environment value wins.
+They use sccache when installed on PATH, preserve an explicit `RUSTC_WRAPPER`
+(including empty to disable), and otherwise use normal Cargo compilation.
+The shared-intermediate lane keeps its exclusive Cargo fingerprint cache instead.
 `check --no-compiler-cache` (also supported by `merge`) clears `RUSTC_WRAPPER`
 for child Cargo commands, preserving clippy's workspace wrapper. This uses
 [Cargo's documented empty-wrapper override](https://doc.rust-lang.org/cargo/reference/environment-variables.html).
 The Windows entry script also bypasses its bootstrap wrapper for this flag and
 restores the caller's environment. It leaves the shared cache server and other builds running. On this contended
 machine, a tiny optimized library probe took 20.70 seconds through sccache and
-1.02 seconds with direct Rust. The flag is opt-in; ordinary commands retain the
-caller's wrapper configuration. JSON reports include `compiler_cache_bypassed`
+1.02 seconds with direct Rust. That historical probe explains the former bypass
+recommendation; it does not measure today's cache. The bypass remains opt-in.
+JSON reports include compilation policy, effective base, `compiler_cache_bypassed`
 and total `elapsed_seconds`, including selection and hygiene, excluding bootstrap.
 
 On 2026-10-24, an artifact-ambiguity regression against `cd7cebd8` selected only ara-dev.
@@ -203,7 +217,8 @@ ignores formatting; Cargo.lock-only changes are reported without selecting sourc
 Use `--full` for dependency-only version upgrades. JSON/`--plan` distinguish `affected`
 (compile) from `test_packages` (execution).
 
-Tests execute the compiled artifact paths directly, two harnesses at a time by default.
+Tests execute compiled artifact paths directly, with one to four workers by default:
+at most half the available CPUs and one worker per 512 MiB of the RAM budget.
 Admission estimates reserve at most 4096 MiB and half the available physical RAM.
 `ARA_TEST_JOBS` (1–4), `ARA_TEST_RAM_MIB`, and `ARA_TEST_TIMEOUT_SECONDS` override these limits.
 The tracked `crates/ara-dev/test-tiers.toml` labels slow suites and exclusive GPU/.NET/process

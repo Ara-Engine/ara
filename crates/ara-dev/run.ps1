@@ -12,7 +12,7 @@ if ($env:ARA_SHARED_BUILD_DIR -or ($args.Count -gt 0 -and $args[0] -in @('check'
     $env:RUSTC_WRAPPER = $null
     $bootstrapConfig = @('--config', "build.rustc-wrapper=''")
 }
-$env:CARGO_BUILD_JOBS = '2'
+if (!$env:CARGO_BUILD_JOBS) { $env:CARGO_BUILD_JOBS = '2' }
 try {
     # Defaults never inherit another checkout's global target directory.
     # Disk inspects the caller's original configuration instead.

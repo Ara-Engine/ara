@@ -8,6 +8,7 @@ mod check;
 mod compile_cache;
 mod d26;
 mod editor;
+mod gate_base;
 mod git;
 mod gpu;
 mod gpu_guard;
@@ -64,8 +65,9 @@ enum Command {
     D26(d26::Options),
     /// Check changed crates and their reverse dependencies before handing off work.
     Check {
-        #[arg(long, default_value = "main")]
-        base: String,
+        /// auto uses this checkout's last green gate (default on main; main elsewhere).
+        #[arg(long)]
+        base: Option<String>,
         /// Emit a single JSON report (logs are written under target/ara-dev).
         #[arg(long)]
         json: bool,
@@ -177,7 +179,7 @@ fn run() -> Result<bool> {
             let result = check::run(
                 &root,
                 check::Options {
-                    base: &base,
+                    base: base.as_deref(),
                     json,
                     full,
                     known_path: known_failures.as_deref(),

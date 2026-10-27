@@ -6,12 +6,17 @@ Local developer binary. No engine dependencies; uses git and cargo as subprocess
   plain fmt writes; check leaves sources unchanged and fails on a formatting difference.
 - `check`: integrator's batch gate: source owners/direct consumers get tests;
   all transitive consumers get clippy. Markdown never cascades; catalog edits run coverage.
+  On main the default base is auto: checkout-local target/ara-dev/last-green.json.
+  Missing/stale/foreign receipts require full bootstrap; explicit --base REF overrides.
+  Only a clean, exception-free green run at unchanged HEAD advances the receipt.
   `--plan` previews selection; default deadline 40 minutes excludes package-cache waits.
   Doctests/coverage use that gate budget; `--timeout 0` leaves them unlimited.
-  `--no-compiler-cache` bypasses RUSTC_WRAPPER; JSON records total elapsed time.
+  Gates default CARGO_INCREMENTAL=0 and optional installed sccache; explicit env wins.
+  --no-compiler-cache bypasses it; shared intermediates retain Cargo's exclusive lane.
   Compile tests and regular bins together for the full selection and test profile;
   record Cargo artifact paths for peer CARGO_BIN_EXE_* values without feature re-resolution.
-  Native test workers share a RAM budget and resource groups; each suite has a deadline.
+  Native workers adapt up to four within RAM/CPU limits; ARA_TEST_JOBS overrides.
+  GPU/.NET/process resource groups stay exclusive; each suite has a deadline.
   `test-tiers.toml` labels slow GPU/.NET/process/capture suites; `--full` runs all.
 - `cargo -- <args>`: focused checks with optional `ARA_SHARED_BUILD_DIR` reuse.
   Explicit CARGO_BUILD_JOBS is preserved; the unset default is two.

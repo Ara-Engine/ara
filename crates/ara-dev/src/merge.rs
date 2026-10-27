@@ -82,7 +82,7 @@ pub(crate) fn run(
     if !check::run(
         root,
         check::Options {
-            base: &before,
+            base: Some(&before),
             json: false,
             full,
             known_path,
