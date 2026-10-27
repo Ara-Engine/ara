@@ -12,7 +12,9 @@ fn cook_reuses_intact_artifacts_and_recovers_corruption() -> Result<()> {
     let source = root.join("test.slang");
     let manifest = root.join("pipelines.json");
     let output = root.join("cooked");
-    let valid = "RWStructuredBuffer<float> result : register(u0); [shader(\"compute\")] [numthreads(1,1,1)] void computeMain(uint3 t:SV_DispatchThreadID) {result[t.x]=1.;}";
+    // Bound like the engine's storage-buffer table, so the optional Metal lane's root
+    // signature covers it when Metal Shader Converter is installed.
+    let valid = "[[vk::binding(1, 0)]] RWStructuredBuffer<float> result : register(u0, space2); [shader(\"compute\")] [numthreads(1,1,1)] void computeMain(uint3 t:SV_DispatchThreadID) {result[t.x]=1.;}";
     std::fs::write(&source, valid)?;
     std::fs::write(
         &manifest,
