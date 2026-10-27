@@ -83,20 +83,18 @@ fn demo_renders_moves_skins_and_relights_headless() {
     first.write(&root.join("demo-start.png")).unwrap();
     assert!(presenter.stats().rebuilt);
     assert!(presenter.renderer().unwrap().is_native());
-    // D29: the presentation device keeps optional ray tracing. High and Epic trace
-    // reflections there (hybrid) and only they build acceleration structures.
-    let hybrid = presenter.renderer().unwrap().gpu().info().ray_tracing
-        && matches!(
-            presenter.quality(),
-            Some(ara_runtime_render::QualityPreset::High | ara_runtime_render::QualityPreset::Epic)
-        );
-    let blas = presenter
-        .renderer()
-        .unwrap()
-        .native_geometry_stats()
-        .unwrap()
-        .blas;
-    assert_eq!(blas > 0, hybrid, "{blas} BLAS, hybrid {hybrid}");
+    // D29: the presentation device keeps optional ray tracing; the hybrid path keeps
+    // its acceleration structures in the renderer's own ray state, so the native
+    // geometry pool never builds the fidelity renderer's BLASes.
+    assert_eq!(
+        presenter
+            .renderer()
+            .unwrap()
+            .native_geometry_stats()
+            .unwrap()
+            .blas,
+        0
+    );
     if presenter.renderer().unwrap().gpu().info().ray_tracing {
         assert_eq!(
             presenter.quality(),
