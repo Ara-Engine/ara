@@ -61,7 +61,11 @@ pub(super) fn body(p: &mut Page, hub: &Hub, ctx: &Ctx) {
 
 fn heading(p: &mut Page, icon: &str, title: &str) {
     p.panel("dialog-heading", |p| {
-        p.panel("dialog-icon", |p| p.icon(icon, "accent icon-lg"));
+        if matches!(icon, "brand-hub" | "brand-engine") {
+            p.image(icon, "brand-icon-lg");
+        } else {
+            p.panel("dialog-icon", |p| p.icon(icon, "accent icon-lg"));
+        }
         p.text("dialog-title fill", title);
         p.button(
             "dialog-close",

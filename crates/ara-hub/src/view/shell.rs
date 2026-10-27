@@ -6,12 +6,8 @@ use ara_diag::FixAction;
 pub(super) fn sidebar(p: &mut Page, hub: &Hub) {
     p.panel("sidebar", |p| {
         p.panel("brand", |p| {
-            let mark = if hub.prefs.light {
-                "brand-wordmark-light"
-            } else {
-                "brand-wordmark"
-            };
-            p.image(mark, "wordmark");
+            p.image("brand-hub", "brand-icon");
+            p.text("brand-name", "Ara");
             p.panel("brand-tag", |p| p.text("", "Hub"));
         });
         p.leaf("nav-gap");
@@ -20,7 +16,7 @@ pub(super) fn sidebar(p: &mut Page, hub: &Hub) {
             .iter()
             .map(|a| a.participants.iter().filter(|x| x.kind == "agent").count())
             .sum();
-        for view in View::ALL {
+        for view in View::SIDEBAR {
             let count = match view {
                 View::Projects => Some((hub.projects.len(), false)),
                 View::Installs => Some((hub.engines.len(), false)),
@@ -102,6 +98,16 @@ pub(super) fn sidebar(p: &mut Page, hub: &Hub) {
 
 pub(super) fn header(p: &mut Page, hub: &Hub, ctx: &Ctx) {
     p.panel("header", |p| {
+        if hub.view == View::Create {
+            p.action(
+                "create-back",
+                "ghost",
+                "arrow-left",
+                "Back",
+                Some(Intent::Back),
+            );
+            p.leaf("header-divider");
+        }
         p.panel("col fill", |p| {
             p.text("title", hub.view.title());
             p.text("subtitle", &subtitle(hub));
@@ -131,6 +137,13 @@ pub(super) fn header(p: &mut Page, hub: &Hub, ctx: &Ctx) {
                 Some(Intent::AddEngine),
             ),
             _ => {}
+        }
+        if hub.view == View::Create {
+            p.panel("brand", |p| {
+                p.image("brand-hub", "brand-icon");
+                p.text("brand-name", "Ara");
+                p.text("small muted", "Hub");
+            });
         }
     });
     if hub.view == View::Projects {

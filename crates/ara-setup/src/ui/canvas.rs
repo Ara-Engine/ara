@@ -138,32 +138,6 @@ impl<'a> Canvas<'a> {
             coverage(rounded(x, y, rect, radius))
         });
     }
-    /// A filled polygon (even-odd), e.g. the Ara mark.
-    pub fn polygon(&mut self, points: &[(f32, f32)], color: Rgb) {
-        let (mut lo, mut hi) = ((f32::MAX, f32::MAX), (f32::MIN, f32::MIN));
-        for &(x, y) in points {
-            lo = (lo.0.min(x), lo.1.min(y));
-            hi = (hi.0.max(x), hi.1.max(y));
-        }
-        let bounds = RectF {
-            x: lo.0 - 1.0,
-            y: lo.1 - 1.0,
-            w: hi.0 - lo.0 + 2.0,
-            h: hi.1 - lo.1 + 2.0,
-        };
-        self.shade(bounds, color, |px, py| {
-            let mut distance = f32::MAX;
-            let mut inside = false;
-            for (i, &a) in points.iter().enumerate() {
-                let b = points[(i + 1) % points.len()];
-                distance = distance.min(segment(px, py, a, b));
-                if (a.1 > py) != (b.1 > py) && px < a.0 + (py - a.1) * (b.0 - a.0) / (b.1 - a.1) {
-                    inside = !inside;
-                }
-            }
-            coverage(if inside { -distance } else { distance })
-        });
-    }
     /// Strokes an icon scaled from its units into `rect`.
     pub fn strokes(&mut self, rect: RectF, units: f32, icon: Strokes<'_>, color: Rgb) {
         let scale = rect.w / units;

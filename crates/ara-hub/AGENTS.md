@@ -1,17 +1,16 @@
 # ara-hub
 
-Ara Hub (D25): the native launcher, `ara-hub.exe`. Projects, create from templates
-and the real-art samples, engine installs with per-project pins, agent onboarding
-and live activity. Runs on the editor's UI stack: `ara-ui` retained UI, SDL3 via
-`ara-platform`, the editor's Vulkan adapter `ara-editor-gpu` on a plain
-`ara_gpu::vulkan::Context` (no scene renderer), the same theme tokens, fonts and
-Lucide icons, DWM-styled native frame (D23), high-DPI.
+Ara Hub (D25), `ara-hub.exe`: projects, templates/samples, pinned engine installs,
+agent onboarding and activity. Uses `ara-ui`, SDL3/`ara-platform`, `ara-editor-gpu`
+on `ara_gpu::vulkan::Context` (no scene renderer), shared themes/fonts/Lucide,
+and a high-DPI DWM-styled native frame (D23).
 
-Everything it does goes through the user Hub service's JSON-RPC API; the wire
-contract is `crates/ara-hub-service/AGENTS.md`.
+All actions use Hub JSON-RPC; its contract is `../ara-hub-service/AGENTS.md`.
 
 Icons: `build.rs` embeds `assets/brand/icons/hub/ara-hub.rc` into both Hub and
 `ara-hub-updater`; the native Hub window explicitly sets the Hub 64 px PNG.
+The sidebar pairs the new Hub SVG icon with native Ara text. Engine cards and
+installation dialogs use the engine SVG family; update dialogs use the Hub icon.
 
 ## Layout
 
@@ -21,6 +20,11 @@ Icons: `build.rs` embeds `assets/brand/icons/hub/ara-hub.rc` into both Hub and
   No window, GPU or socket, so tests drive exactly what the window drives.
   `create.rs` is the Create form; `wire.rs` the service result types (unknown
   fields ignored); `engines.rs` finds installed builds; `text.rs` formatting.
+- Create is a dedicated full-window page, opened by New project or a template;
+  it has no sidebar entry. Back, Esc and mouse Back return to the opener. Native
+  page state restores its scroll/focus, while Projects search and preferences stay
+  in the model. Nested Select popups and dialogs consume Back/Esc first.
+  Successful creation queues the existing Open RPC for the new project.
 - `connection.rs`: the service on its own thread. `connect_or_start` with the
   `ara` beside `ara-hub` (`--ara` overrides), `hub.subscribe` before `Connected`
   (the model then refreshes every list), `hub.changed` → `Event::Changed`, a 2 s
@@ -39,7 +43,7 @@ Icons: `build.rs` embeds `assets/brand/icons/hub/ara-hub.rc` into both Hub and
 - `native/`: window/GPU host and loop (`mod.rs`), retained `App` (`app.rs`: rebuild,
   input routing, keys), `input.rs` (SDL text/IME, clipboard, folder drops),
   `selects.rs` retains typed choices across replies and routes native search/IME;
-  `frame.rs` (DWM colors), `images.rs` (icons, wordmark, previews decoded off
+  `frame.rs` (DWM colors), `images.rs` (icons and previews decoded off
   thread, center-cropped to 16:9), `os.rs` (pickers, Explorer, install snippets,
   local docs).
 - `capture.rs`: `ara-hub --capture DIR` seeds a fixed fixture through the model's
@@ -59,7 +63,7 @@ This feature stays off in shipping builds; see ara-release's rehearsal command.
   Scroll offsets clamp after layout; explicit focus requests and hover update then.
 - Theme changes call `switch_theme` once to swap palette tokens. Initial inherited
   colors resolve in the runtime; `Ui::editor` is used only for window creation.
-- Built-in icons, wordmarks and Starter art decode/upload on first visible use,
+- Built-in icons, brand marks and Starter art decode/upload on first visible use,
   then stay resident across pages/themes. DPI changes invalidate that image set.
   MCP snippet helper processes start only on opening Agents, after bootstrap is ready.
 - Agent instructions quote the verified absolute CLI path (including spaces/apostrophes).
@@ -97,16 +101,13 @@ This feature stays off in shipping builds; see ara-release's rehearsal command.
   connect or check releases. Engine-bundled Hubs cannot replace their engine dir.
 - Release builds use the Windows GUI subsystem; fatal startup errors show a message box.
 
-## Copied from ara-editor (extract later)
-
-`native/input.rs` (text watch, clipboard) and `native/frame.rs` (DWM style) are
-minimal copies of `ara-editor/src/native/`; fonts are embedded from
-`ara-editor/assets/fonts`. Move them into a shared native-UI crate once the
-editor's panel rebuild lands.
+`native/input.rs` and `native/frame.rs` copy the editor's text/clipboard and DWM
+adapters; fonts embed from `ara-editor/assets/fonts`. Extract these into a shared
+native-UI crate after the editor panel rebuild.
 
 ## Tests
 
-Set `CARGO_BUILD_JOBS=4`, `VULKAN_SDK` and an explicit scratch profile for every
+Set `CARGO_BUILD_JOBS=2`, `VULKAN_SDK` and an explicit scratch profile for every
 test, capture and manual check (PowerShell, from the workspace root):
 `$env:ARA_CONFIG_DIR = (New-Item -ItemType Directory -Force "target/hub-checks/$([guid]::NewGuid())/config").FullName`.
 The config-isolation test fails without this. Checkout binaries reject the real
@@ -133,6 +134,8 @@ user profile, even via --config-dir. Never register worktree builds there.
 - `cargo clippy -p ara-hub --all-targets -- -D warnings`.
 - `tests/responsiveness.rs` covers presentation, idle, dismissal and queued clicks;
   `tests/async_rpc.rs` holds a service reply while input still completes.
+  `tests/create_navigation.rs` drives Back/Esc/mouse return, viewport/search
+  restoration, the shared engine Select, origin tracking and create-then-open.
   Opt-in CPU timings: set ARA_HUB_TIMINGS to an absolute target/.../timings.json,
   then `cargo test -p ara-hub --test responsiveness measure_hub_frames -- --ignored`.
   Captures also inject menu, rename and dismiss clicks and save before/after images.
@@ -142,6 +145,6 @@ user profile, even via --config-dir. Never register worktree builds there.
 - `ara_ui` CSS: one class/type/ID per selector, flex/grid with `fr` tracks only,
   no font weight, colors only through `var(--token)`. Grid cards need
   `min-width:0px` or long names widen their track.
-- The texture heap is 256 images (icons, wordmarks, atlases, previews).
+- The texture heap is 256 images (icons, atlases, previews).
 - Never point a dev Hub at the default config dir: starting the service from a
   dev `ara` re-registers `0.0.1-alpha` to that dev build.
