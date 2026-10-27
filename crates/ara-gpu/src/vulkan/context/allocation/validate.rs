@@ -16,6 +16,7 @@ pub(crate) fn validate_image(
         ..
     } = *desc;
     let [width, height] = size;
+    crate::attachments::validate_usage(usage)?;
     if matches!(
         format,
         vk::Format::BC4_UNORM_BLOCK

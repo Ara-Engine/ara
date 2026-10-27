@@ -94,7 +94,15 @@ pub(super) fn image(
     // SAFETY: `levels` was checked against the full mip chain of this extent.
     unsafe { descriptor.setMipmapLevelCount(levels as usize) };
     descriptor.setUsage(texture_usage(usage));
-    descriptor.setStorageMode(MTLStorageMode::Private);
+    crate::attachments::validate_usage(usage)?;
+    // Transient attachments live in tile memory only, with no backing allocation.
+    descriptor.setStorageMode(
+        if usage.contains(vk::ImageUsageFlags::TRANSIENT_ATTACHMENT) {
+            MTLStorageMode::Memoryless
+        } else {
+            MTLStorageMode::Private
+        },
+    );
     let texture = device
         .newTextureWithDescriptor(&descriptor)
         .ok_or_else(|| nil("texture"))?;

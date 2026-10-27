@@ -2,7 +2,9 @@
 use crate::*;
 use serde::Serialize;
 
-/// Color/depth attachment with an optional clear. None preserves prior contents.
+/// Color/depth attachment with an optional clear. None preserves prior contents,
+/// unless the list leaves them dead (undefined, discarded or transient; see
+/// `attachments`), which tile-based GPUs then neither load nor store.
 #[derive(Clone, Copy)]
 pub struct Attachment {
     /// Arena-owned target.
