@@ -61,9 +61,10 @@ fn main() -> Result<()> {
             }
             renderer.render(&camera, 0.0015)?;
             // SAFETY: Renderer completed this CopySource image and both native owners remain live.
-            if let Err(error) =
-                unsafe { present.present_image(renderer.gpu(), renderer.output(), renderer.size()) }
-            {
+            let presented = unsafe {
+                present.present_image(renderer.gpu(), renderer.output(), renderer.size())
+            };
+            if let Err(error) = presented {
                 if error.downcast_ref::<ara_gpu::vk::Result>()
                     == Some(&ara_gpu::vk::Result::ERROR_OUT_OF_DATE_KHR)
                 {

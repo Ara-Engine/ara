@@ -6,7 +6,9 @@ use super::*;
 /// The global mouse buttons last frame, so a click outside the window is an edge.
 #[derive(Default)]
 pub(super) struct Buttons {
+    #[cfg(windows)]
     left: bool,
+    #[cfg(windows)]
     right: bool,
 }
 
