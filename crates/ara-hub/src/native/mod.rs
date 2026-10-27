@@ -89,6 +89,10 @@ struct Host {
 impl Host {
     fn new(options: &Options, light: bool) -> anyhow::Result<Self> {
         let window = Window::new("Ara Hub", options.size)?;
+        // Native icons are cosmetic; Wayland may not support them.
+        let _ = window.set_icon_png(include_bytes!(
+            "../../../../assets/brand/icons/hub/ara-hub-64.png"
+        ));
         frame::style(window.raw(), light);
         let input = NativeInput::attach(window.raw())?;
         let gpu = ara_editor_gpu::open_presentation(&window.extensions()?)?;

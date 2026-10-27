@@ -174,7 +174,7 @@ pub fn appimage(build: &Path, runtime: &Path, output: &Path) -> Result<()> {
     }
     fs.push_file(std::io::Cursor::new(b"#!/bin/sh\nHERE=\"$(CDPATH= cd -- \"$(dirname -- \"$0\")\" && pwd)\"\nexec \"$HERE/ara-player\" --root \"$HERE\" \"$@\"\n"), "AppRun", backhand::NodeHeader::new(0o755, 0, 0, 0))?;
     fs.push_file(std::io::Cursor::new(b"[Desktop Entry]\nType=Application\nName=Ara Game\nExec=AppRun\nIcon=ara-game\nCategories=Game;\n"), "ara-game.desktop", backhand::NodeHeader::new(0o644, 0, 0, 0))?;
-    let icon = b"<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"128\" height=\"128\"><rect width=\"128\" height=\"128\" rx=\"24\" fill=\"#23252b\"/><path d=\"M28 96 64 28 100 96M44 72h40\" fill=\"none\" stroke=\"#fff\" stroke-width=\"12\"/></svg>";
+    let icon = include_bytes!("../../../assets/brand/icons/game/ara-game.svg");
     for name in ["ara-game.svg", ".DirIcon"] {
         fs.push_file(
             std::io::Cursor::new(icon),

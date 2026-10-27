@@ -30,7 +30,9 @@ Metal view presented through `ara_gpu::metal::present` (`src/present/metal.rs`).
   `toggle_maximize` retain native actions; other windows keep their existing frames.
 - Icon: `Window::new` applies the Ara app icon (`assets/brand/png/ara-icon-64.png`,
   embedded; failures are ignored because Wayland has no window icons). Games call
-  `set_icon(rgba, [w, h])`. Regenerate the PNG with `cargo run -p ara-brand -- export`.
+  `set_icon(rgba, [w, h])` or `set_icon_png(png)`. Hosts explicitly select 64 px
+  engine (editor/loading/floats), hub (Hub), or game (player) PNGs in
+  `assets/brand/icons/`. Regenerate with `cargo run -p ara-brand -- icons`.
 - `Present`: backend-selected (`src/present/{vulkan,metal}.rs`). Portable surface:
   `create`, `create_with_output`, `present_image`, `present_encoded`, `retire` (no
   wait; callers wait for idle where they need it), `output_settings`, `surface_format`.

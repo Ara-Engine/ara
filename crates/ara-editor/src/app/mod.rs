@@ -103,6 +103,10 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
     } else {
         Window::new(&title, options.size)?
     };
+    // Native icons are cosmetic; Wayland may not support them.
+    let _ = window.set_icon_png(include_bytes!(
+        "../../../../assets/brand/icons/engine/ara-engine-64.png"
+    ));
     let mut native = Native::attach(&title)?;
     if options.verify
         || options.verify_panels
