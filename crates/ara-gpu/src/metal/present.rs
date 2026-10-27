@@ -129,7 +129,7 @@ impl Presenter {
             .ok_or_else(|| nil("CAMetalLayer nextDrawable"))?;
         let target = drawable.texture();
         let [width, height] = self.size.map(|v| v as usize);
-        self.transfer.run(gpu, |transfer, cmd| {
+        self.transfer.run(Some(gpu), |transfer, cmd| {
             transfer.copy(cmd, &texture, &target)?;
             if let Some(buffer) = &readback {
                 let blit = cmd.blitCommandEncoder().ok_or_else(|| nil("blit encoder"))?;

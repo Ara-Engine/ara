@@ -163,7 +163,7 @@ impl ExportRing {
         let (from, to) = (raw.texture.clone(), self.slots[slot as usize].1.clone());
         let copied = pool(|| {
             self.transfer
-                .run(gpu, |transfer, cmd| transfer.copy(cmd, &from, &to))
+                .run(Some(gpu), |transfer, cmd| transfer.copy(cmd, &from, &to))
         });
         if let Err(error) = copied {
             self.ring.abandon(slot);
@@ -210,6 +210,8 @@ pub struct ImportedSurface {
     _surfaces: SharedSurface,
     owned: [bool; SLOTS],
     transfer: Transfer,
+    /// The GPU, for readback buffers.
+    device: Retained<ProtocolObject<dyn MTLDevice>>,
 }
 
 impl ImportedSurface {
@@ -240,6 +242,7 @@ impl ImportedSurface {
             _surfaces: shared,
             owned: [false; SLOTS],
             transfer: Transfer::new(gpu)?,
+            device: gpu.device.clone(),
         })
     }
     /// The imported generation.
@@ -278,10 +281,18 @@ impl ImportedSurface {
         }
         Ok(())
     }
-    /// Read an owned slot as tightly packed RGBA8 rows (tests, screenshots).
+    /// Read an owned slot as tightly packed RGBA8 rows ([`Self::read`]).
+    /// # Safety
+    /// As [`Self::read`].
+    pub unsafe fn read_pixels(&mut self, _gpu: &MetalDevice, slot: u32) -> Result<Vec<u8>> {
+        // SAFETY: forwarded caller contract.
+        unsafe { self.read(slot) }
+    }
+    /// Read an owned slot as tightly packed RGBA8 rows (tests, screenshots). The
+    /// producer wrote it, so the copy waits on nothing of this process.
     /// # Safety
     /// As Vulkan's `read`: this thread owns the import's copy queue.
-    pub unsafe fn read_pixels(&mut self, gpu: &MetalDevice, slot: u32) -> Result<Vec<u8>> {
+    pub unsafe fn read(&mut self, slot: u32) -> Result<Vec<u8>> {
         if !self.owns(slot) {
             return Err(GpuError::Contract(format!(
                 "slot {slot} is not acquired by this device"
@@ -291,11 +302,11 @@ impl ImportedSurface {
         let row = width * 4;
         let source = self.textures[slot as usize].clone();
         pool(|| {
-            let buffer = gpu
+            let buffer = self
                 .device
                 .newBufferWithLength_options(row * height, MTLResourceOptions::StorageModeShared)
                 .ok_or_else(|| nil("readback buffer"))?;
-            self.transfer.run(gpu, |_, cmd| {
+            self.transfer.run(None, |_, cmd| {
                 let blit = cmd.blitCommandEncoder().ok_or_else(|| nil("blit encoder"))?;
                 let extent = MTLSize {
                     width,
