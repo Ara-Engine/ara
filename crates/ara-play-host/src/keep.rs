@@ -13,7 +13,7 @@ mod planner;
 impl PlayService {
     /// Enrich a read-only player diff with the same field classification as Keep.
     pub(crate) fn diff_for_keep(
-        &self,
+        &mut self,
         cx: &Cx<'_>,
         world: &str,
         entities: Option<&[String]>,
