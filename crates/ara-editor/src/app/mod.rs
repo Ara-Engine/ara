@@ -684,7 +684,9 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
                 } else {
                     &mut clipboard
                 };
-                destination.write(&text)?;
+                if let Err(error) = destination.write(&text) {
+                    editor.report_failure(&*error);
+                }
             }
             shell.main_rect = window.rect()?;
             let fly_dt = navigation_check

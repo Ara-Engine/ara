@@ -13,17 +13,18 @@ impl Shell {
                 .unwrap_or(self.ui.size[0] * 0.55);
             let compact = width < 780.;
             let narrow = width < 1000.;
-            out.push_str("<panel id='scene-tools' class='viewport-tools'><panel id='scene-edit-tools' class='viewport-cluster'><panel id='transform-segment' class='viewport-segment'>");
+            out.push_str("<panel id='scene-tools' class='viewport-tools'><panel id='scene-edit-tools' class='viewport-cluster'>");
             let tool = editor.state.tool;
             let gizmos = !editor.state.hide_gizmos;
+            self.bind_command("tool-select", "view.tool.select", Target::None);
+            let select_keys = self
+                .keymap
+                .chords("view.tool.select")
+                .first()
+                .map(|chord| chord.text())
+                .unwrap_or_default();
+            out.push_str(&format!("<button id='tool-select' class='viewport-button{}' label='Select' description='Select · {select_keys}' action='Dispatch'>{}</button><panel id='tool-select-separator' class='viewport-divider' /><panel id='transform-segment' class='viewport-segment' name='mode'>",if gizmos {""}else{" viewport-button-on"},icons::icon_in("tool-select","mouse-pointer","viewport-icon")));
             for (id, command, icon, label, on) in [
-                (
-                    "tool-select",
-                    "view.tool.select",
-                    "mouse-pointer",
-                    "Select",
-                    !gizmos,
-                ),
                 (
                     "tool-Translate",
                     "view.tool.move",

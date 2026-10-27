@@ -693,10 +693,28 @@ fn dropping_an_asset_from_assets_fills_the_field() {
     assert!(shell.drop_at(&mut editor).unwrap());
     assert_eq!(model(&editor), "@models/crate.gltf#as_crate0001");
     // A texture dropped on the model field is refused, with the reason.
+    let revision = editor.host.store().revision();
     shell.pointer = centre(&shell, &card(&shell, "rock"));
     shell.begin_drag();
     shell.pointer = centre(&shell, "asset-field-MeshRenderer-model");
-    assert!(shell.drop_at(&mut editor).is_err());
+    shell.content_drag_over(&editor, 0.).unwrap();
+    let preview = shell.content_drag_report();
+    assert_eq!(preview["feedback"]["valid"], false);
+    assert!(
+        preview["feedback"]["reason"]
+            .as_str()
+            .is_some_and(|reason| reason.contains("not rock.png"))
+    );
+    assert!(
+        shell.drop_at(&mut editor).unwrap(),
+        "invalid drops are consumed with feedback"
+    );
+    assert_eq!(
+        editor.host.store().revision(),
+        revision,
+        "refused drops produce no authoring ops"
+    );
+    assert!(!shell.content_pending());
     assert_eq!(model(&editor), "@models/crate.gltf#as_crate0001");
     shell.rebuild(&mut editor).unwrap();
     assert!(

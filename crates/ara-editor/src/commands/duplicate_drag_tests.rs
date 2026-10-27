@@ -67,8 +67,9 @@ fn duplicate_transform_is_one_undo_and_remaps_references_across_selected_subtree
     assert_eq!(entities[a].record["FollowCamera"]["target"], c);
     assert_eq!(entities[c].record["FollowCamera"]["target"], b);
     assert_eq!(
-        entities[a].record["Transform"]["position"],
-        json!([3, 4, 5])
+        serde_json::from_value::<[f32; 3]>(entities[a].record["Transform"]["position"].clone())
+            .unwrap(),
+        [3., 4., 5.]
     );
     assert_eq!(
         entities["e_sourcea1"].record["FollowCamera"]["target"],
@@ -125,8 +126,9 @@ fn linked_prefab_duplicate_keeps_source_and_internal_reference_without_flattened
         format!("{copy}/e_inner01")
     );
     assert_eq!(
-        resolved[copy].record["Transform"]["position"],
-        json!([5, 6, 7])
+        serde_json::from_value::<[f32; 3]>(resolved[copy].record["Transform"]["position"].clone())
+            .unwrap(),
+        [5., 6., 7.]
     );
     assert_eq!(editor.host.store().revision(), before + 1);
     editor.action("history.undo", json!({})).unwrap();

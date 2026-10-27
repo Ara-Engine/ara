@@ -101,6 +101,36 @@ fn roots(editor: &Editor) -> Vec<String> {
     roots.sort_by(|(a, ea), (b, eb)| ea.order.cmp(&eb.order).then(a.cmp(b)));
     roots.into_iter().map(|(id, _)| id.to_owned()).collect()
 }
+/// Linked metadata is authored in the scene; resolved entities expose source and components.
+fn placed_prefab(editor: &Editor) -> String {
+    let document = editor
+        .host
+        .store()
+        .workspace()
+        .doc(&editor.state.doc)
+        .unwrap();
+    let instances: Vec<_> = document
+        .records()
+        .iter()
+        .filter(|(_, record)| {
+            record.get("prefab").and_then(Value::as_str) == Some("@assets/box.prefab#pf_drag0001")
+        })
+        .collect();
+    assert_eq!(
+        instances.len(),
+        1,
+        "one linked prefab must be authored by the drop"
+    );
+    let (id, record) = instances[0];
+    assert!(
+        !record.contains_key("Transform"),
+        "instance pose belongs in overrides"
+    );
+    let resolved = crate::world::resolve(editor.host.store(), &editor.state.doc).unwrap();
+    assert_eq!(resolved[id.as_str()].source.0.as_str(), "pf_drag0001");
+    assert!(resolved[id.as_str()].record.contains_key("MeshRenderer"));
+    id.to_string()
+}
 fn show_asset(editor: &mut Editor, shell: &mut Shell) {
     editor
         .action("editor.layout.show", json!({"panel":"assets"}))
@@ -213,7 +243,7 @@ fn clicks_escape_deleted_sources_and_locked_targets_never_mutate_the_document() 
     begin(&mut shell, IDS[1], &mut clip);
     editor
         .apply(
-            vec![json!({"cmd":"entity.delete","args":{"entity":IDS[1]}})],
+            vec![json!({"cmd":"entity.delete","args":{"entities":[IDS[1]]}})],
             "Delete during drag",
             None,
         )
@@ -329,6 +359,7 @@ fn prefab_asset_drop_uses_the_indicated_hierarchy_slot_and_invalid_reference_is_
         .action("editor.select", json!({"entities":[IDS[1]]}))
         .unwrap();
     show_asset(&mut editor, &mut shell);
+    let revision = editor.host.store().revision();
     let mut clip = Clipboard::default();
     begin_asset(&mut shell, &mut clip);
     let target = row(&shell, IDS[3]);
@@ -338,13 +369,13 @@ fn prefab_asset_drop_uses_the_indicated_hierarchy_slot_and_invalid_reference_is_
         [target.x + 80., target.y + 1.],
         &mut clip,
     );
-    shell.drop_at(&mut editor).unwrap();
-    let resolved = crate::world::resolve(editor.host.store(), &editor.state.doc).unwrap();
-    let placed = resolved
-        .iter()
-        .find(|(_, e)| e.record.contains_key("prefab"))
-        .map(|(id, _)| id)
-        .unwrap();
+    let preview = shell.content_drag_report();
+    assert_eq!(preview["feedback"]["valid"], true);
+    assert_eq!(preview["feedback"]["target"]["kind"], "hierarchy");
+    assert_eq!(preview["feedback"]["target"]["placement"], "Before");
+    assert!(shell.drop_at(&mut editor).unwrap());
+    assert_eq!(editor.host.store().revision(), revision + 1);
+    let placed = placed_prefab(&editor);
     assert_eq!(
         roots(&editor),
         [IDS[0], IDS[1], IDS[2], placed.as_str(), IDS[3], IDS[4]]
@@ -363,24 +394,35 @@ fn prefab_asset_drop_uses_the_indicated_hierarchy_slot_and_invalid_reference_is_
             .as_ref()
             .is_some_and(|note| note.contains("not box.prefab"))
     );
+    editor.action("history.undo", json!({})).unwrap();
+    assert_eq!(roots(&editor), IDS, "one undo removes the placed instance");
 }
 
 #[test]
 fn surface_snap_survives_release_revalidation_and_reference_drop_crosses_surfaces() {
     let (mut editor, mut shell) = open();
     show_asset(&mut editor, &mut shell);
+    let revision = editor.host.store().revision();
     let mut clip = Clipboard::default();
     begin_asset(&mut shell, &mut clip);
     let viewport = shell.viewport().unwrap();
     move_to(&mut shell, &editor, centre(viewport), &mut clip);
     shell.content_surface_hit([1., 2., 3.]);
-    shell.drop_at(&mut editor).unwrap();
+    assert_eq!(
+        shell.content_drag_report()["feedback"]["target"]["position"],
+        json!([1., 2., 3.])
+    );
+    assert!(shell.drop_at(&mut editor).unwrap());
+    assert_eq!(editor.host.store().revision(), revision + 1);
+    let placed = placed_prefab(&editor);
     let resolved = crate::world::resolve(editor.host.store(), &editor.state.doc).unwrap();
-    let placed = resolved
-        .values()
-        .find(|e| e.record.contains_key("prefab"))
-        .unwrap();
-    assert_eq!(placed.record["Transform"]["position"], json!([1., 2., 3.]));
+    assert_eq!(
+        serde_json::from_value::<[f32; 3]>(
+            resolved[&placed].record["Transform"]["position"].clone()
+        )
+        .unwrap(),
+        [1., 2., 3.]
+    );
     shell.event(InputEvent::Cancel, &mut clip).unwrap();
     editor.apply(vec![json!({"cmd":"entity.create","args":{"id":"e_camera01","name":"Camera","components":{"Transform":{},"Camera":{},"FollowCamera":{}}}})], "Create camera", None).unwrap();
     editor
