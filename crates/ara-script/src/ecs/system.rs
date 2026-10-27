@@ -30,6 +30,8 @@ const MIN_CHUNK_ROWS: usize = 1024;
 /// One C# system's declared access, resolved to bevy component ids.
 #[derive(Clone, Debug)]
 pub(crate) struct SystemPlan {
+    /// Stable host context handle, carried as an integer across task-pool jobs.
+    pub host: usize,
     /// System id (`module << 16 | index`).
     pub id: u32,
     /// Columns in parameter order: `(component, write, element size)`.
@@ -320,11 +322,12 @@ impl ScriptQuery<'_, '_> {
         }
         st.used = chunk;
         let run = st.plan.api.run_system;
+        let host = st.plan.host;
         if scratch.calls.len() == 1 || st.plan.serial {
             for call in &scratch.calls {
                 // SAFETY: the call describes live columns within this system's access;
                 // calls run one at a time, in chunk order.
-                unsafe { run(call) };
+                unsafe { run(host as *mut c_void, call) };
             }
             return;
         }
@@ -338,7 +341,7 @@ impl ScriptQuery<'_, '_> {
                     // SAFETY: each call covers rows no other task touches, within the
                     // system's declared access; its buffer is its own; resources are
                     // read-only here (writers run serially, above).
-                    unsafe { run(call.get()) };
+                    unsafe { run(host as *mut c_void, call.get()) };
                 });
             }
         });

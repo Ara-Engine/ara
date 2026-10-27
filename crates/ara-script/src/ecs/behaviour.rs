@@ -35,6 +35,8 @@ impl BehaviourPlan {
 
 /// What one behaviour phase runs with.
 pub(crate) struct Phase<'a> {
+    /// Stable host context handle.
+    pub host: *mut c_void,
     /// The C# entry points.
     pub api: &'a ScriptApi,
     /// `PHASE_TICK` or `PHASE_FRAME`.
@@ -58,6 +60,7 @@ pub(crate) fn run_phase(
     chunks: &mut Vec<(*const u64, *mut u8, usize)>,
 ) {
     let Phase {
+        host,
         api,
         phase,
         tick,
@@ -112,7 +115,7 @@ pub(crate) fn run_phase(
             };
             // SAFETY: the call describes live rows of the data column; no structural
             // change happens until the phase ends (ops are buffered in `buf`).
-            unsafe { (api.run_behaviours)(&call) };
+            unsafe { (api.run_behaviours)(host, &call) };
         }
     }
     chunks.clear();

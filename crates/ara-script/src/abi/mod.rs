@@ -20,7 +20,7 @@ pub(crate) use describe::Fnv;
 pub use describe::{AbiConst, AbiField, AbiFn, AbiStruct, AbiTable};
 
 /// Bumped on any incompatible change to the semantics of the tables.
-pub const ABI_VERSION: u32 = 2;
+pub const ABI_VERSION: u32 = 3;
 
 abi_structs! { PUBLIC_STRUCTS;
     /// The fixed simulation tick that every system, behaviour and command sees.
@@ -161,6 +161,12 @@ abi_structs! { ABI_STRUCTS;
 }
 
 abi_consts! { ABI_CONSTS;
+    /// `HostApi::component_json`: read a component as schema JSON.
+    pub const COMPONENT_READ: u32 = 0;
+    /// `HostApi::component_json`: replace an existing component from schema JSON.
+    pub const COMPONENT_WRITE: u32 = 1;
+    /// `HostApi::component_json`: check presence without serializing the value.
+    pub const COMPONENT_HAS: u32 = 2;
     /// `HostInit::flags`: the runtime was started with EnC enabled (`DOTNET_MODIFIABLE_ASSEMBLIES=debug`).
     pub const INIT_ENC: u32 = 1;
     /// `ReloadReport::kind`: the first load of a module.
@@ -282,33 +288,38 @@ abi_table! {
         fn cmd_push(ctx: *mut c_void, buf: *mut c_void, op: u32, type_index: u32, entity: u64, data: *const u8, len: u32);
         /// The compile server started (1) or finished (0) a compile; the host raises tick-thread priority meanwhile.
         fn compile_state(ctx: *mut c_void, active: u32);
+        /// Reads (op 0), writes (op 1), or checks presence (op 2) through a reflected ECS codec.
+        /// Read returns the UTF-8 byte count, negative required capacity, or zero if absent.
+        /// Write returns 1 on success, 0 on failure. Spans are borrowed only for this call.
+        fn component_json(ctx: *mut c_void, entity: u64, component: u32, op: u32, data: *const u8, len: u32, out: *mut u8, cap: u32) -> i32;
     }
 }
 
 abi_table! {
-    /// Functions the C# runtime fills in for the host. Exceptions never cross them.
+    /// Functions the C# runtime fills in for the host. Every call takes the unique
+    /// host handle (`HostInit.ctx`); exceptions never cross them.
     pub struct ScriptApi as SCRIPT_API {
         /// Loads modules described by UTF-8 JSON (dev: starts the compile server; AOT: the linked modules).
-        fn load_modules(json: *const u8, len: u32) -> i32;
+        fn load_modules(host: *mut c_void, json: *const u8, len: u32) -> i32;
         /// Applies staged reloads at a tick boundary. Returns `BOUNDARY_*` bits.
-        fn tick_boundary(tick: *const Tick) -> u32;
+        fn tick_boundary(host: *mut c_void, tick: *const Tick) -> u32;
         /// Non-zero if a staged reload is waiting for the next boundary.
-        fn has_pending() -> u32;
+        fn has_pending(host: *mut c_void) -> u32;
         /// Runs one system over one chunk. Returns `RUN_*`.
-        fn run_system(call: *const SystemCall) -> i32;
+        fn run_system(host: *mut c_void, call: *const SystemCall) -> i32;
         /// Runs one behaviour type over one chunk for one phase. Returns `RUN_*`.
-        fn run_behaviours(call: *const BehaviourCall) -> i32;
+        fn run_behaviours(host: *mut c_void, call: *const BehaviourCall) -> i32;
         /// Runs one command. Returns `RUN_*`.
-        fn run_command(call: *mut CommandCall) -> i32;
+        fn run_command(host: *mut c_void, call: *mut CommandCall) -> i32;
         /// Recompiles a module hot (1: Debug IL, EnC) or cold (0: optimized).
-        fn set_heat(module: u32, hot: u32) -> i32;
+        fn set_heat(host: *mut c_void, module: u32, hot: u32) -> i32;
         /// Asks for a compile of changed files (UTF-8 JSON `{"module", "paths", "origin"}`). Agent edits
         /// are coalesced and run behind human ones. Never blocks: the result arrives as a staged reload.
-        fn request_compile(json: *const u8, len: u32) -> i32;
+        fn request_compile(host: *mut c_void, json: *const u8, len: u32) -> i32;
         /// Diagnostics counters (`DIAG_*`).
-        fn diag(key: u32) -> u64;
+        fn diag(host: *mut c_void, key: u32) -> u64;
         /// Stops the compile client, unloads every module and returns the leaked-ALC count.
-        fn shutdown() -> i32;
+        fn shutdown(host: *mut c_void) -> i32;
     }
 }
 

@@ -238,6 +238,55 @@ impl SimRegistry {
         self.dynamic.get(name)
     }
 
+    /// Installs a reflected component's actual ECS storage for a scripting host.
+    pub fn install_component(&self, world: &mut World, name: &str) -> Result<ComponentId> {
+        if let Some(codec) = self.typed.get(name) {
+            return Ok((codec.install)(world));
+        }
+        self.dynamic
+            .get(name)
+            .map(|layout| layout.register(world))
+            .ok_or_else(|| SimError(format!("unknown component {name}")))
+    }
+
+    /// Reads typed or schema-owned ECS storage without retaining a world borrow.
+    pub fn read_component(
+        &self,
+        world: &World,
+        entity: Entity,
+        name: &str,
+        id: ComponentId,
+    ) -> Result<Option<Value>> {
+        if let Some(codec) = self.typed.get(name) {
+            return (codec.read)(world, entity);
+        }
+        self.dynamic
+            .get(name)
+            .ok_or_else(|| SimError(format!("unknown component {name}")))?
+            .read(world, id, entity)
+    }
+
+    /// Writes through the same materialization and codec as scene projection.
+    pub fn write_component(
+        &self,
+        world: &mut World,
+        entity: Entity,
+        name: &str,
+        id: ComponentId,
+        value: &Value,
+    ) -> Result<()> {
+        self.validate(name, value)?;
+        let value = materialize(&self.schema, &ValueType::Named(name.to_owned()), value);
+        self.validate(name, &value)?;
+        if let Some(codec) = self.typed.get(name) {
+            return (codec.write)(world, entity, value);
+        }
+        self.dynamic
+            .get(name)
+            .ok_or_else(|| SimError(format!("unknown component {name}")))?
+            .insert(world, id, entity, &value)
+    }
+
     pub(crate) fn prepare_command(&self, command: &mut BoundaryCommand) -> Result<()> {
         let codec = self
             .handlers

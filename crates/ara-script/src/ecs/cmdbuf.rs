@@ -64,6 +64,50 @@ impl CmdBuf {
 pub(crate) struct ScriptCatalog {
     /// `(id, size)` by script component index.
     pub components: Vec<(ComponentId, usize)>,
+    pub names: Vec<Option<String>>,
+    pub json: Option<std::sync::Arc<ara_sim::SimRegistry>>,
+}
+
+impl ScriptCatalog {
+    pub fn read(&self, world: &World, entity: Entity, index: u32) -> Option<Vec<u8>> {
+        let &(id, size) = self.components.get(index as usize)?;
+        match self.names.get(index as usize).and_then(Option::as_deref) {
+            Some(name) => serde_json::to_vec(
+                &self
+                    .json
+                    .as_ref()?
+                    .read_component(world, entity, name, id)
+                    .ok()??,
+            )
+            .ok(),
+            None => component_bytes(world, entity, id, size),
+        }
+    }
+
+    pub fn insert(&self, world: &mut World, entity: Entity, index: u32, bytes: &[u8]) -> bool {
+        let Some(&(id, size)) = self.components.get(index as usize) else {
+            return false;
+        };
+        match self.names.get(index as usize).and_then(Option::as_deref) {
+            Some(name) => serde_json::from_slice(bytes)
+                .ok()
+                .zip(self.json.as_ref())
+                .is_some_and(|(value, json)| {
+                    json.write_component(world, entity, name, id, &value)
+                        .is_ok()
+                }),
+            None => insert_bytes(
+                world,
+                entity,
+                id,
+                if size == 0 && bytes.len() == 1 {
+                    &[]
+                } else {
+                    bytes
+                },
+            ),
+        }
+    }
 }
 
 /// A cue emitted by C#, decoded to JSON when the host drains it.
@@ -162,7 +206,7 @@ pub(crate) fn snapshot(
 ) -> Vec<(u32, Vec<u8>)> {
     (0u32..)
         .zip(&catalog.components)
-        .filter_map(|(i, (id, size))| component_bytes(world, entity, *id, *size).map(|b| (i, b)))
+        .filter_map(|(i, _)| catalog.read(world, entity, i).map(|b| (i, b)))
         .collect()
 }
 
@@ -221,14 +265,12 @@ pub(crate) fn apply(
                 }
             }
             // Tags (empty structs) are 1 byte in C# and zero-sized in bevy.
-            (CMD_INSERT, Some((id, size)))
-                if size == op.data.len() || (size == 0 && op.data.len() == 1) =>
-            {
+            (CMD_INSERT, Some((_id, _size))) => {
                 let previous = applied
                     .is_some()
-                    .then(|| component_bytes(world, entity, id, size))
+                    .then(|| catalog.read(world, entity, op.type_index))
                     .flatten();
-                if insert_bytes(world, entity, id, &op.data[..size]) {
+                if catalog.insert(world, entity, op.type_index, &op.data) {
                     if let Some(a) = applied.as_deref_mut() {
                         a.push(Applied::Insert {
                             entity: op.entity,
@@ -240,8 +282,8 @@ pub(crate) fn apply(
                     problems.push(bad("insert on a missing entity".into()));
                 }
             }
-            (CMD_REMOVE, Some((id, size))) => {
-                if let Some(bytes) = component_bytes(world, entity, id, size)
+            (CMD_REMOVE, Some((id, _size))) => {
+                if let Some(bytes) = catalog.read(world, entity, op.type_index)
                     && let Ok(mut e) = world.get_entity_mut(entity)
                 {
                     e.remove_by_id(id);

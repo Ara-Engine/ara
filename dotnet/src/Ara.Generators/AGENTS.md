@@ -5,7 +5,8 @@ The Roslyn incremental generator every gameplay module uses (netstandard2.0, Ros
 ## What it emits
 
 - `[Component]`/`[Resource]`/`[Cue]` structs: `IComponent<T>` (etc.) with a script index set
-  at registration, and `__AraOffsets()` (measured field offsets).
+  at registration in the active host's map (also safe for shared NativeAOT types),
+  and `__AraLayout()` (measured field offsets).
 - `[Query]` methods: `__AraRun_<Method>(SystemCall*)`, one loop over a chunk with
   `Unsafe.Add` over column base pointers (no bounds checks, no per-entity host calls).
 - `Behaviour` subclasses: a nested `Data` component (one field per `[Property]`) and the
@@ -24,6 +25,8 @@ The Roslyn incremental generator every gameplay module uses (netstandard2.0, Ros
 - Diagnostics ARA0701–0707 (`Descriptors.cs`): not partial, bad system parameter, missing
   doc, not blittable, bad command, bad behaviour, bad system method.
 - Registration order is deterministic (sorted by schema name; systems by `(Order, name)`).
+- `ColorPicker(Hdr = true, Temperature = true)` and `Header` combine into one schema
+  `editor` object, keeping colour hints available to the native inspector and docs.
 
 ## Testing
 

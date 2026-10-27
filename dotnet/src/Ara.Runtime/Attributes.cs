@@ -183,6 +183,8 @@ public sealed class DefaultAttribute(params object[] values) : Attribute
 {
     /// <summary>The value, or a vector's components.</summary>
     public object[] Values { get; } = values;
+    /// <summary>Schema JSON for a null, collection or nested-record default; overrides Values.</summary>
+    public string? Json { get; init; }
 }
 
 /// <summary>Recipients of a replicated field.</summary>
@@ -243,4 +245,14 @@ public sealed class HeaderAttribute(string text) : Attribute
 {
     /// <summary>The heading.</summary>
     public string Text { get; } = text;
+}
+
+/// <summary>Edits a linear RGB(A) value with the engine's colour picker.</summary>
+[AttributeUsage(AttributeTargets.Field | AttributeTargets.Property)]
+public sealed class ColorPickerAttribute : Attribute
+{
+    /// <summary>Allows emissive values above one using an intensity in stops.</summary>
+    public bool Hdr { get; init; }
+    /// <summary>Offers light-temperature presets and a Kelvin slider.</summary>
+    public bool Temperature { get; init; }
 }

@@ -40,6 +40,139 @@ fn sample(world: &mut World) -> ScriptHost {
     host(world, &[("Outpost.Sample", "samples/Outpost.Sample")])
 }
 
+#[test]
+fn two_worlds_drop_one_host_and_the_other_keeps_ticking() {
+    let _clr = support::clr_lock();
+    let mut first_world = World::new();
+    let first = sample(&mut first_world);
+    let mut second_world = World::new();
+    let mut second = sample(&mut second_world);
+    let door = second_world.spawn(EcsTransform::default()).id();
+    second
+        .insert_component(
+            &mut second_world,
+            door,
+            "Door",
+            &json!({"openAngle":90,"isOpen":true}),
+        )
+        .expect("door");
+    second.run_tick(&mut second_world, tick(0));
+    assert_eq!(
+        second_world
+            .get::<EcsTransform>(door)
+            .expect("transform")
+            .rotation[1],
+        9.0
+    );
+    drop(first);
+    drop(first_world);
+    second.run_tick(&mut second_world, tick(1));
+    assert_eq!(
+        second_world
+            .get::<EcsTransform>(door)
+            .expect("transform")
+            .rotation[1],
+        18.0
+    );
+    assert_eq!(second.shutdown(), 0);
+}
+
+#[test]
+fn two_worlds_keep_callbacks_components_faults_and_undo_separate() {
+    let _clr = support::clr_lock();
+    let mut first_world = World::new();
+    let mut first = sample(&mut first_world);
+    let mut second_world = World::new();
+    let mut second = sample(&mut second_world);
+    let first_actor = survivor(&first, &mut first_world, 20, 2);
+    let second_actor = survivor(&second, &mut second_world, 60, 1);
+    assert_eq!(
+        first_actor, second_actor,
+        "world-local entity IDs intentionally alias"
+    );
+    let first_door = first_world.spawn(EcsTransform::default()).id();
+    let second_door = second_world.spawn(EcsTransform::default()).id();
+    for (host, world, door, speed) in [
+        (&mut first, &mut first_world, first_door, 3),
+        (&mut second, &mut second_world, second_door, 90),
+    ] {
+        host.insert_component(
+            world,
+            door,
+            "Door",
+            &json!({"openAngle":speed,"isOpen":true}),
+        )
+        .expect("door");
+    }
+    let record = first
+        .execute_command(
+            &mut first_world,
+            "game.UseMedkit",
+            &json!({"actor":actor(first_actor)}),
+            None,
+        )
+        .expect("first command");
+    second
+        .execute_command(
+            &mut second_world,
+            "game.UseMedkit",
+            &json!({"actor":actor(second_actor)}),
+            None,
+        )
+        .expect("second command");
+    first.undo(&mut first_world, &record).expect("first undo");
+    assert_eq!(
+        first.read_component(&first_world, first_actor, "Vitality"),
+        Some(json!({"hp":20,"medkits":2}))
+    );
+    assert_eq!(
+        second.read_component(&second_world, second_actor, "Vitality"),
+        Some(json!({"hp":85,"medkits":0}))
+    );
+    let mut probe = ModuleSpec::from_dir(&support::dotnet().join("tests/Ara.TestModule"))
+        .expect("probe module");
+    probe.assembly = Some(support::bin("Ara.TestModule").join("Ara.TestModule.dll"));
+    first
+        .load_modules(&mut first_world, &[probe])
+        .expect("first-only module");
+    first
+        .insert_component(&mut first_world, first_actor, "Counter", &json!({}))
+        .expect("counter");
+    let fault = first
+        .execute_command(
+            &mut first_world,
+            "test.Fail",
+            &json!({"target":actor(first_actor)}),
+            None,
+        )
+        .expect_err("first-only fault");
+    assert_eq!(fault.code, codes::COMMAND_FAULT);
+    assert_eq!(first.diag(ara_script::abi::DIAG_FAULTS), 1);
+    assert_eq!(second.diag(ara_script::abi::DIAG_FAULTS), 0);
+    std::thread::scope(|scope| {
+        scope.spawn(|| first.run_tick(&mut first_world, tick(0)));
+        second.run_tick(&mut second_world, tick(0));
+    });
+    assert_eq!(
+        first_world
+            .get::<EcsTransform>(first_door)
+            .expect("first transform")
+            .rotation[1],
+        3.0
+    );
+    assert_eq!(
+        second_world
+            .get::<EcsTransform>(second_door)
+            .expect("second transform")
+            .rotation[1],
+        9.0
+    );
+    assert!(errors(&first.take_diagnostics()).is_empty());
+    assert!(errors(&second.take_diagnostics()).is_empty());
+    assert_eq!(first.shutdown(), 0);
+    assert_eq!(second.shutdown(), 0);
+}
+
 fn tick(frame: u64) -> Tick {
     Tick {
         frame,
@@ -96,7 +229,7 @@ fn csharp_types_register_into_the_schema_db() {
     );
 }
 
-/// Gravity then Movement (ordered: both touch Velocity) over three tables, checked
+/// Gravity then Movement (ordered: both touch SampleVelocity) over three tables, checked
 /// against the same f32 arithmetic in Rust.
 #[test]
 fn systems_run_over_every_chunk_in_parallel() {
@@ -106,8 +239,13 @@ fn systems_run_over_every_chunk_in_parallel() {
     let mut bodies = Vec::new();
     for i in 0..30_000u32 {
         let e = world.spawn(EcsTransform::default()).id();
-        host.insert_component(&mut world, e, "Velocity", &json!({ "linear": [1, 0, 0] }))
-            .expect("velocity");
+        host.insert_component(
+            &mut world,
+            e,
+            "SampleVelocity",
+            &json!({ "linear": [1, 0, 0] }),
+        )
+        .expect("velocity");
         let mass = if i % 3 == 0 { 0.0 } else { 2.0 };
         host.insert_component(&mut world, e, "Mass", &json!({ "value": mass }))
             .expect("mass");

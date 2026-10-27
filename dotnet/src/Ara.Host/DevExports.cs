@@ -11,7 +11,7 @@ namespace Ara.Hosting;
 /// </summary>
 public static unsafe class DevExports
 {
-    /// <summary><c>ara_script_init</c> for JIT hosts. Returns 0 on success.</summary>
+    /// <summary>Creates one world's loader and dispatch in the shared CLR. Returns 0 on success.</summary>
     [UnmanagedCallersOnly]
     public static int Init(HostInit* host, ScriptApi* api)
     {

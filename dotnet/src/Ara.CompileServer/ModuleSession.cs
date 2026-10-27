@@ -151,7 +151,7 @@ internal sealed class ModuleSession
         foreach (var path in SourceFiles())
         {
             var full = Path.GetFullPath(path);
-            var text = File.ReadAllText(full);
+            var text = ReadWithRetry(full) ?? throw new FileNotFoundException("module source disappeared", full);
             _disk[full] = text;
             texts[full] = text;
             trees[full] = ModuleCompiler.Parse(full, text);
@@ -206,12 +206,19 @@ internal sealed class ModuleSession
             new Phases(0, Stopwatch.GetTimestamp()), [], null, ctx, false, ct);
     }
 
-    static string? ReadWithRetry(string path)
+    /// <summary>Reads source without denying edits or replacements by another world's editor.</summary>
+    internal static string? ReadWithRetry(string path)
     {
         var sw = Stopwatch.StartNew();
         while (true)
         {
-            try { return File.Exists(path) ? File.ReadAllText(path) : null; }
+            try
+            {
+                if (!File.Exists(path)) return null;
+                using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+                using var reader = new StreamReader(stream);
+                return reader.ReadToEnd();
+            }
             catch (IOException) when (sw.ElapsedMilliseconds < 200) { Thread.Yield(); }
         }
     }

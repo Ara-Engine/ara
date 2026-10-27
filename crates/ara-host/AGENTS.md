@@ -83,21 +83,16 @@ ara-why, ara-profile, ara-collab.
 `rpc.discover`; `session.begin/status/diff/checkpoint/rollback/end`;
 `history.list/undo/redo`; `review.list/accept/revert`; `schema.list/describe/search`;
 `query`; `inspect`; `cmd.apply`; `logs`; `docs.search`;
-`jobs.list/status/start/cancel`; `subscribe`/`unsubscribe` (topics `ops`,
-`diagnostics`, `history`, `jobs`); `doc.sync`; `daemon.shutdown`.
-Reserved families (`run`, `capture`, `play`, `test`) answer ARA1806 until a
-service registers them.
-
+`jobs.list/status/start/cancel`; `subscribe`/`unsubscribe` (topics `ops`, `diagnostics`, `history`, `jobs`); `doc.sync`; `daemon.shutdown`.
+Reserved families (`run`, `capture`, `play`, `test`) answer ARA1806 until a service registers them.
 - `cmd.apply` / `inspect`: `doc` is optional (`core/pick.rs`): the one document
   holding every entity the call names (IDs, addresses, `name:` selectors), else
-  the only scene, else the main scene; else ARA1814 with a fix per candidate.
-  Named documents also match by unique stem or file name (`outpost`).
+  the only scene, else the main scene; else ARA1814 with a fix per candidate. Named documents also match by unique stem or file name (`outpost`).
 - `cmd.apply` returns `doc` (path) and `text`: what was applied where, then every
   created / modified / deleted record with its name and symbol (`would …` for dry
   runs) and the rollback checkpoint. Agent sessions need a `why` (ARA1610); the
   error comes with everything a dry run of the batch reports. Registry fixes are
-  relocated to `commands[i].args…` like their locations. `as` may equal `args.id`
-  and may skip its `$`. `schema.describe` takes `names` or one `name`.
+  relocated to `commands[i].args…` like their locations. `as` may equal `args.id` and may skip its `$`. `schema.describe` takes `names` or one `name`.
 - `cmd.apply`'s catalog entry lists every command with its args in the `cmd`
   field's description (`list_commands`), so MCP clients see them without lookups.
 - `session.begin` also returns `documents` (path, kind, ID) and `mainScene`.
@@ -105,16 +100,12 @@ service registers them.
   validates lossless ops. Save/fmt use `Project::read_document`/`write_document`,
   preserving XML/identity comments. Reconcile UI conflicts before native persistence.
 - `Cx::main_scene` reads unsaved transactional `project.setMain` settings for Play's default.
-- `inspect` entities and `query` terms accept names: `name:Crate`, a bare word
-  (`query`: names containing it; `inspect`: one exact match).
+- `inspect` entities and `query` terms accept names: `name:Crate`, a bare word (`query`: names containing it; `inspect`: one exact match).
 - Scene-to-text flags unresolved merge conflicts with the `ara resolve` hint.
-
 ## Semantics
-
 - Every call: route → session + scope (host) → params validated against the
   params type → service → **drain**. The drain journals each commit, tracks agent
-  commits for review, schedules the flush and notifies subscribers. Command scopes
-  are checked by the ara-cmd registry inside `cmd.apply`.
+  commits for review, schedules the flush and notifies subscribers. Command scopes are checked by the ara-cmd registry inside `cmd.apply`.
 - Review: agent transactions start `accepted` under amended D24; `review.revert` undoes a whole
   transaction (store undo) or a subset of entities (a compensating transaction
   based on the target's revision, so later edits conflict). Accept remains an
@@ -131,13 +122,11 @@ service registers them.
   rescan); `flush()` waits for it all. `watch_every` zero checks per tick (tests). An
   external edit three-way merges (base = last synced) as a human `external edit`; invalid
   files and conflicts mark the doc diverged until `doc.sync {keep: memory|disk}` or a clean edit.
-
 ## Gotchas
 - Host/store IDs use `HostConfig::seed`; reopening with the same test seed re-mints them.
 - `*.types.json` changes are only reported (ARA1912); restart to load them. Sessions
   survive restarts; subscriptions don't. Commands return before their journal line
   lands (in commit order): a crash loses only queued lines; no fsync per line.
-
 ## Testing
 `cargo test -p ara-host`: query parsing, logs, journal compaction, review, a held file thread.
 `tests/host.rs` copies fixtures to scratch: protocol, scopes, dry runs, symbols, review,
@@ -146,5 +135,16 @@ document inference, apply text and agent `why`. `tests/collab.rs`: advisory clai
 presence, branches/restart/submits and participant undo. Scene-to-text snapshots.
 `tests/diag.rs` serializes the global bus: grouped/attributed logs, cross-thread
 subscriptions, report/clear, executable `why` fixes and restart persistence.
-`Cx::create_document` delegates to `doc.create`, including format templates;
-fill documents with `Cx::apply` for normal attribution/history/undo.
+`Cx::create_document` delegates to `doc.create`, including format templates; fill documents with `Cx::apply` for normal attribution/history/undo.
+## Structured reference (`docs.json`)
+`docs::structured` writes canonical JSON via `ara_json`, format `ara.docs/1`. Top level: `format`, `engineVersion`, `protocolVersion`, `types`, `commands`,
+`methods`, `diagnostics`, `csharpExamples`, `topics`. Catalogs are objects keyed by
+stable schema/command/method/code name. Fields carry type, unit, range, materialized
+schema default, doc, replication and value examples. Commands carry parameter JSON
+Schemas; methods carry scope, params and extensible result JSON Schemas. Result
+properties are optional because several methods vary their payload with parameters.
+C# examples carry page ID, source, region and compiled code, extracted from
+`dotnet/examples/` and embedded in markdown, full text and MCP search.
+`ara docs --json` continues to print the file-count summary. The engine package ships
+`docs.json`; publish lists its hash/size/URL in the signed release manifest.
+Run `cargo test -p ara-host --test docs` for round-trip and complete catalog/region coverage.

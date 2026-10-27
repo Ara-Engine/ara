@@ -366,6 +366,12 @@ impl Registry {
         };
         for s in &d.systems {
             for a in &s.columns {
+                if self
+                    .component(&a.name)
+                    .is_some_and(|i| self.components[i as usize].json)
+                {
+                    problems.push(error(codes::BAD_DESCRIPTOR, format!("system `{}` requests a raw column for accessor component `{}`; use World.Get in a behaviour or command",s.name,a.name)));
+                }
                 if !known_component(&a.name) {
                     problems.push(error(
                         codes::UNKNOWN_COMPONENT,
@@ -482,6 +488,7 @@ impl Registry {
                         id,
                         layout,
                         owner,
+                        json: false,
                     };
                     ids_changed = true;
                 }
@@ -492,6 +499,7 @@ impl Registry {
                         id,
                         layout,
                         owner,
+                        json: false,
                     });
                     self.catalog_dirty = true;
                 }

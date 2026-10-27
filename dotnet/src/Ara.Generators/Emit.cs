@@ -79,7 +79,7 @@ public static class Emit
         };
         return InShell(m.Shell, $"global::Ara.{iface}<{self}>", c =>
         {
-            c.Line(Hidden).Line("internal static uint __araIndex = uint.MaxValue;");
+            Index(c, m.Shell.FullName);
             c.Line("/// <summary>Script index, assigned by the host when the module registers.</summary>");
             c.Line($"public static uint {prop} => __araIndex;");
             Layout(c, self, m.Fields);
@@ -127,6 +127,12 @@ public static class Emit
 
     static string Pass(string refKind) => refKind switch { "ref" => "ref ", "in" => "in ", _ => "" };
 
+    // NativeAOT shares module types between worlds; registration indexes belong to the host.
+    static void Index(Code c, string type)
+    {
+        c.Line(Hidden).Line($"internal static uint __araIndex {{ get => global::Ara.Hosting.Host.TypeIndex({Lit(type)}); set => global::Ara.Hosting.Host.SetTypeIndex({Lit(type)}, value); }}");
+    }
+
     /// <summary>A behaviour's data component and its property implementations.</summary>
     public static string Behaviour(BehaviourModel m) => InShell(m.Shell, null, c =>
     {
@@ -137,7 +143,7 @@ public static class Emit
             c.Line("/// <summary>" + Xml(p.Doc) + "</summary>");
             c.Line($"public {p.CsType} {p.Name};");
         }
-        c.Line(Hidden).Line("internal static uint __araIndex = uint.MaxValue;");
+        Index(c, m.Shell.FullName + ".Data");
         c.Line("/// <summary>Script component index, assigned by the host when the module registers.</summary>");
         c.Line("public static uint TypeIndex => __araIndex;");
         Layout(c, "Data", m.Props.Select(p => p.Name));

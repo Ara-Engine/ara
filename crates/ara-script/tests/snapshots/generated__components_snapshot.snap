@@ -9,6 +9,8 @@ expression: components.text
 #nullable enable
 using System.Numerics;
 using System.Runtime.InteropServices;
+using System.Text.Json;
+using Ara.Hosting;
 
 namespace Ara;
 
@@ -25,41 +27,49 @@ public partial struct Door : IComponent<Door>
     /// <remarks>
     /// Default: "closed".
     /// </remarks>
-    [FieldOffset(0)] public DoorState State;
+    [FieldOffset(0), Default("closed")]
+    public DoorState State;
     /// <summary>
     /// The hinge it swings on.
     /// </summary>
-    [FieldOffset(4)] public Hinge Hinge;
+    /// <remarks>
+    /// Default: {}.
+    /// </remarks>
+    [FieldOffset(4), Default(Json = "{}")]
+    public Hinge Hinge;
     /// <summary>
     /// Swing speed.
     /// </summary>
     /// <remarks>
     /// Unit: deg/s. Range: [0, ∞]. Default: 90. Replicated to relevant clients.
     /// </remarks>
-    [FieldOffset(20), Unit("deg/s"), Min(0), Replicate(Audience.Relevant, Quantize = 0.5, Interpolate = Interpolate.Linear), Default(90)] public float Speed;
+    [FieldOffset(20), Unit("deg/s"), Min(0), Replicate(Audience.Relevant, Quantize = 0.5, Interpolate = Interpolate.Linear), Default(90)]
+    public float Speed;
     /// <summary>
     /// Locked doors ignore use.
     /// </summary>
     /// <remarks>
     /// Default: false.
     /// </remarks>
-    [FieldOffset(24), FormerlySerializedAs("isLocked")] public bool Locked;
+    [FieldOffset(24), Default(false), FormerlySerializedAs("isLocked")]
+    public bool Locked;
     /// <summary>
     /// Who may unlock it.
     /// </summary>
     /// <remarks>
     /// Default: null. Replicated to the owning client.
     /// </remarks>
-    [FieldOffset(32), Replicate(Audience.Owner)] public Entity Owner;
+    [FieldOffset(32), Replicate(Audience.Owner), Default(Json = "null")]
+    public Entity Owner;
     /// <summary>
     /// Paint color.
     /// </summary>
     /// <remarks>
     /// Default: [1,1,1,1].
     /// </remarks>
-    [FieldOffset(40)] public Color Tint;
-
-    /// <summary>Script component index: engine components are numbered in binding order.</summary>
+    [FieldOffset(40), Default(1, 1, 1, 1)]
+    public Color Tint;
+    /// <summary>Stable engine component index.</summary>
     public static uint TypeIndex => 0;
 }
 
@@ -90,19 +100,122 @@ public partial struct Hinge
     /// <remarks>
     /// Default: [0,1,0].
     /// </remarks>
-    [FieldOffset(0), Default(0, 1, 0)] public Vector3 Axis;
+    [FieldOffset(0), Default(0, 1, 0)]
+    public Vector3 Axis;
     /// <summary>
     /// Swing limit.
     /// </summary>
     /// <remarks>
     /// Unit: deg. Range: [0, 180]. Default: 0.
     /// </remarks>
-    [FieldOffset(12), Unit("deg"), Range(0, 180)] public float Limit;
+    [FieldOffset(12), Unit("deg"), Range(0, 180), Default(0)]
+    public float Limit;
 }
 
-/// <summary>Engine component names in binding order (index = <c>TypeIndex</c>).</summary>
+/// <summary>Engine components in stable binding order.</summary>
 public static class EngineComponents
 {
-    /// <summary>Schema names, by script component index.</summary>
+    /// <summary>Schema names by TypeIndex.</summary>
     public static readonly string[] Names = ["Door"];
+    internal static readonly string[] DefaultJson = [
+        "{\"state\":\"closed\",\"hinge\":{},\"speed\":90,\"locked\":false,\"owner\":null,\"tint\":[1,1,1,1]}",
+    ];
+}
+
+internal static class EngineValueCodecs
+{
+    static JsonElement Field(JsonElement v, string name, string fallback)
+    {
+        if (v.TryGetProperty(name, out var field)) return field;
+        using var doc = JsonDocument.Parse(fallback);
+        return doc.RootElement.Clone();
+    }
+    internal static Door ReadDoor(JsonElement v)
+        => new()
+        {
+            State = ReadDoorState(Field(v, "state", "\"closed\"")),
+            Hinge = ReadHinge(Field(v, "hinge", "{}")),
+            Speed = Field(v, "speed", "90").GetSingle(),
+            Locked = Field(v, "locked", "false").GetBoolean(),
+            Owner = new Entity(Field(v, "owner", "null").GetUInt64()),
+            Tint = new Color(Field(v, "tint", "[1,1,1,1]")[0].GetSingle(), Field(v, "tint", "[1,1,1,1]")[1].GetSingle(), Field(v, "tint", "[1,1,1,1]")[2].GetSingle(), Field(v, "tint", "[1,1,1,1]")[3].GetSingle()),
+        };
+    internal static void WriteDoor(Utf8JsonWriter w, Door v)
+    {
+        w.WriteStartObject();
+        w.WritePropertyName("state");
+        {
+        WriteDoorState(w, v.State);
+        }
+        w.WritePropertyName("hinge");
+        {
+        WriteHinge(w, v.Hinge);
+        }
+        w.WritePropertyName("speed");
+        {
+        WriteFloat(w, v.Speed);
+        }
+        w.WritePropertyName("locked");
+        {
+        w.WriteBooleanValue(v.Locked);
+        }
+        w.WritePropertyName("owner");
+        {
+        w.WriteNumberValue(v.Owner.Bits);
+        }
+        w.WritePropertyName("tint");
+        {
+        w.WriteStartArray();
+        WriteFloat(w, v.Tint.R);
+        WriteFloat(w, v.Tint.G);
+        WriteFloat(w, v.Tint.B);
+        WriteFloat(w, v.Tint.A);
+        w.WriteEndArray();
+        }
+        w.WriteEndObject();
+    }
+    internal static DoorState ReadDoorState(JsonElement v)
+        => v.GetString() switch
+        {
+            "closed" => DoorState.Closed,
+            "opening" => DoorState.Opening,
+            _ => throw new JsonException("unknown enum variant")
+        };
+    internal static void WriteDoorState(Utf8JsonWriter w, DoorState v) => w.WriteStringValue(v switch
+    {
+        DoorState.Closed => "closed",
+        DoorState.Opening => "opening",
+        _ => throw new JsonException("unknown enum value")
+    });
+    internal static Hinge ReadHinge(JsonElement v)
+        => new()
+        {
+            Axis = new Vector3(Field(v, "axis", "[0,1,0]")[0].GetSingle(), Field(v, "axis", "[0,1,0]")[1].GetSingle(), Field(v, "axis", "[0,1,0]")[2].GetSingle()),
+            Limit = Field(v, "limit", "0").GetSingle(),
+        };
+    internal static void WriteHinge(Utf8JsonWriter w, Hinge v)
+    {
+        w.WriteStartObject();
+        w.WritePropertyName("axis");
+        {
+        w.WriteStartArray();
+        WriteFloat(w, v.Axis.X);
+        WriteFloat(w, v.Axis.Y);
+        WriteFloat(w, v.Axis.Z);
+        w.WriteEndArray();
+        }
+        w.WritePropertyName("limit");
+        {
+        WriteFloat(w, v.Limit);
+        }
+        w.WriteEndObject();
+    }
+    static void WriteFloat(Utf8JsonWriter w, float value)
+    {
+        if (value == 0 && float.IsNegative(value)) w.WriteRawValue("-0.0"); else w.WriteNumberValue(value);
+    }
+    static void WriteFloat(Utf8JsonWriter w, double value)
+    {
+        if (value == 0 && double.IsNegative(value)) w.WriteRawValue("-0.0"); else w.WriteNumberValue(value);
+    }
 }

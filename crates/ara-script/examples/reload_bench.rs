@@ -17,7 +17,6 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicI64, Ordering};
 use std::time::{Duration, Instant};
 
-use ara_schema::SchemaDb;
 use ara_script::abi::{RELOAD_L1, RELOAD_L2, RELOAD_L3, ReloadReport, Tick};
 use ara_script::{EngineBindings, ModuleSpec, ScriptConfig, ScriptHost, bind_component};
 use bevy_ecs::component::Component;
@@ -172,8 +171,7 @@ fn main() {
     }
     println!("module: {} filler files, ~{} lines", i, lines + 150);
 
-    let mut db = SchemaDb::new();
-    ara_components::register(&mut db);
+    let db = ara_runtime::schema(&[]).expect("engine schema");
     let engine = bind_component!(EngineBindings::new(), EcsTransform as "Transform" { position, rotation, scale });
     let mut world = World::new();
     let verbose = std::env::args().any(|a| a == "--verbose");
@@ -195,8 +193,13 @@ fn main() {
 
     for n in 0..20_000 {
         let e = world.spawn(EcsTransform::default()).id();
-        host.insert_component(&mut world, e, "Velocity", &json!({ "linear": [1, 0, 0] }))
-            .expect("velocity");
+        host.insert_component(
+            &mut world,
+            e,
+            "SampleVelocity",
+            &json!({ "linear": [1, 0, 0] }),
+        )
+        .expect("velocity");
         host.insert_component(
             &mut world,
             e,

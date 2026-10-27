@@ -134,6 +134,19 @@ pub fn publish(
         notes.push_str("\nNo Authenticode code signing yet. Windows SmartScreen warns when running the installer.\n");
     }
     let mut files = vec![archive, setup];
+    if kind == Kind::Engine {
+        let docs = dist.join(&prefix).join("docs.json");
+        ensure!(
+            docs.is_file(),
+            "packaged docs.json is missing; repackage this engine version"
+        );
+        let reference: serde_json::Value = serde_json::from_slice(&fs::read(&docs)?)?;
+        ensure!(
+            reference["format"] == "ara.docs/1" && reference["engineVersion"] == version,
+            "packaged docs.json has the wrong format or engine version"
+        );
+        files.push(docs);
+    }
     let notices = dist.join(&prefix).join("THIRD_PARTY_NOTICES.txt");
     let notices_md = dist.join(&prefix).join("THIRD_PARTY_NOTICES.md");
     if notices.is_file() {

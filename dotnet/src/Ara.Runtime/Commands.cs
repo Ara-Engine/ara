@@ -33,14 +33,24 @@ public readonly unsafe struct Commands
     public void Despawn(Entity entity) => Host.CmdPush(_buf, AbiConst.CmdDespawn, 0, entity.Bits, null, 0);
 
     /// <summary>Adds (or replaces) a component at the sync point.</summary>
-    public void Add<T>(Entity entity, in T value) where T : unmanaged, IComponent<T>
+    public void Add<T>(Entity entity, in T value) where T : IComponent<T> => T.Insert(in this, entity, in value);
+
+    internal void InsertNative<T>(Entity entity, in T value) where T : IComponent<T>
     {
+        if (System.Runtime.CompilerServices.RuntimeHelpers.IsReferenceOrContainsReferences<T>())
+            throw new InvalidOperationException("managed components require a generated codec");
         T copy = value;
-        Host.CmdPush(_buf, AbiConst.CmdInsert, T.TypeIndex, entity.Bits, &copy, (uint)sizeof(T));
+        Host.CmdPush(_buf, AbiConst.CmdInsert, T.TypeIndex, entity.Bits,
+            System.Runtime.CompilerServices.Unsafe.AsPointer(ref copy), (uint)System.Runtime.CompilerServices.Unsafe.SizeOf<T>());
+    }
+
+    internal void InsertJson(Entity entity, uint index, ReadOnlySpan<byte> json)
+    {
+        fixed (byte* data = json) Host.CmdPush(_buf, AbiConst.CmdInsert, index, entity.Bits, data, (uint)json.Length);
     }
 
     /// <summary>Removes a component at the sync point.</summary>
-    public void Remove<T>(Entity entity) where T : unmanaged, IComponent<T> =>
+    public void Remove<T>(Entity entity) where T : IComponent<T> =>
         Host.CmdPush(_buf, AbiConst.CmdRemove, T.TypeIndex, entity.Bits, null, 0);
 
     /// <summary>Emits a presentation cue (sound, VFX). Cues never change simulation state.</summary>

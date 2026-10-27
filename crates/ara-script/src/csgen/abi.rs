@@ -123,7 +123,7 @@ fn table_def(out: &mut String, t: &AbiTable) -> Result<(), String> {
 }
 
 /// Renders `Abi.g.cs`.
-pub fn render(engine: &[StructLayout]) -> Result<String, String> {
+pub fn render(engine: &[StructLayout], native_count: usize) -> Result<String, String> {
     let mut o = String::from(HEADER);
     o.push_str("using System.ComponentModel;\nusing System.Runtime.CompilerServices;\nusing System.Runtime.InteropServices;\n\n");
     o.push_str("namespace Ara\n{\n");
@@ -185,6 +185,7 @@ pub fn render(engine: &[StructLayout]) -> Result<String, String> {
     checks.extend(
         engine
             .iter()
+            .take(native_count)
             .map(|c| (format!("global::Ara.{}", c.name), c.size)),
     );
     for (ty, size) in checks {
