@@ -303,6 +303,11 @@ impl Renderer {
     pub fn set_completed_timings(&mut self, timings: Vec<PassTiming>) {
         self.last_timings = timings;
     }
+    /// Takes the last completed timings, so a presenter can keep showing them
+    /// while it records a frame that will complete later (rendering clears them).
+    pub fn take_timings(&mut self) -> Vec<PassTiming> {
+        std::mem::take(&mut self.last_timings)
+    }
     /// Apply a changed display extent at native resolution. An unchanged window
     /// notification preserves its active render size and temporal history; use
     /// `resize_upscaled(size, size)` to explicitly switch an upscaled view to native.

@@ -92,8 +92,12 @@ pub struct NativeUi {
     masks: Vec<[f32; 4]>,
     draws: Vec<Draw>,
     /// Time spent waiting for submitted UI work since `take_gpu_wait` (≈ GPU time,
-    /// since every submission waits for its fence).
+    /// since every submission waits for its fence, at once or deferred).
     gpu_wait: std::cell::Cell<std::time::Duration>,
+    /// Submissions return without waiting (`set_deferred_completion`).
+    deferred: bool,
+    /// A submission whose fence `wait_previous` has not waited yet.
+    in_flight: std::cell::Cell<bool>,
     logical: [u32; 2],
     dpi: f32,
     overlays: Vec<Overlay>,
@@ -137,6 +141,8 @@ impl NativeUi {
             masks: Vec::new(),
             draws: Vec::new(),
             gpu_wait: Default::default(),
+            deferred: false,
+            in_flight: Default::default(),
             logical: [1, 1],
             dpi: 1.,
             overlays: Vec::new(),
@@ -191,6 +197,8 @@ impl NativeUi {
         image: vk::Image,
         view: vk::ImageView,
     ) -> Result<()> {
+        // Descriptor writes must not race a deferred submission that reads them.
+        self.wait_previous()?;
         let slot = if let Some(slot) = self.external.get(&id) {
             *slot
         } else {
@@ -257,6 +265,7 @@ impl NativeUi {
         if self.external.contains_key(&texture.id) {
             return Ok(());
         }
+        self.wait_previous()?;
         ensure!(
             texture.width > 0
                 && texture.height > 0

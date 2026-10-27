@@ -42,6 +42,7 @@ impl Presenter {
     /// visible. Call after a completed `present`, on the preparation worker, and
     /// continue presenting until true. Does not wait for the bulk probe bake.
     pub fn preallocate_startup_resources(&mut self) -> Result<bool> {
+        self.drain()?;
         match (&mut self.raster, &mut self.renderer) {
             (Some(raster), Some(renderer)) => raster.preallocate_probe_resources(renderer),
             _ => Ok(true),
@@ -119,6 +120,8 @@ impl Presenter {
     /// Blocks until a pending probe GI acquisition is installed (captures and
     /// measurements that must not change lighting midway).
     pub fn wait_probe_gi(&mut self) -> Result<()> {
+        // Installing the probes writes storage a frame in flight reads.
+        self.drain()?;
         if let (Some(raster), Some(renderer)) = (&mut self.raster, &mut self.renderer) {
             raster.wait_probe_gi(renderer)?;
         }
@@ -192,6 +195,10 @@ impl Presenter {
         resolve: impl FnOnce() -> Result<Content>,
     ) -> Result<()> {
         ara_gpu::cpu_scope!("Presenter.prepare");
+        self.stats = PresentStats::default();
+        // Preparation writes host-visible storage the frame in flight still reads;
+        // waiting it reports its GPU costs into this present's stats.
+        self.drain()?;
         let started = Instant::now();
         self.ensure_device()?;
         let renderer = self
@@ -212,7 +219,6 @@ impl Presenter {
                 plan.preset, plan.requested, plan.path
             );
         }
-        self.stats = PresentStats::default();
         match plan.path {
             RenderPath::Raster(raster) => {
                 if let Some(old) = self.live.take() {
@@ -330,7 +336,59 @@ impl Presenter {
         self.prepare_with(frame, || Ok(Content::default()))
     }
 
-    /// Presents through the selected renderer and publishes only a completed image.
+    /// Lets raster presents return once the frame is submitted, waiting it at the
+    /// start of the next present or preparation (one frame of CPU/GPU overlap).
+    /// Only for hosts whose later use of `output` is GPU work on the same queue
+    /// (the window blit, the game UI composite); CPU readbacks `drain` first.
+    /// Off by default; turning it off drains.
+    pub fn set_frames_in_flight(&mut self, enabled: bool) -> Result<()> {
+        self.frames_in_flight = enabled;
+        if !enabled {
+            self.drain()?;
+        }
+        Ok(())
+    }
+
+    /// Waits for the raster frame in flight, if any, and reports its GPU costs and
+    /// device span in `stats` (with frames in flight they lag one present).
+    pub fn drain(&mut self) -> Result<()> {
+        let Some(submitted) = self.in_flight.take() else {
+            return Ok(());
+        };
+        let started = Instant::now();
+        let renderer = self
+            .renderer
+            .as_mut()
+            .context("raster presentation device")?;
+        let costs = RasterView::finish_batched(renderer, submitted)?;
+        self.stats.in_flight_wait = started.elapsed();
+        self.completed(costs);
+        Ok(())
+    }
+
+    /// Records a completed raster frame's costs and the device's timing window.
+    fn completed(&mut self, costs: GpuFrameCosts) {
+        self.stats.gpu_ms = costs.accounted_ms();
+        self.stats.gpu = Some(costs);
+        self.timing_window();
+    }
+
+    /// The device span and submission gaps of the last completed work.
+    fn timing_window(&mut self) {
+        self.stats.gpu_span_ms = self
+            .renderer
+            .as_ref()
+            .and_then(|renderer| renderer.gpu().timing_window())
+            .map(ara_gpu::vulkan::TimestampSpan::milliseconds);
+        self.stats.gpu_submission_gap_ms = self
+            .renderer
+            .as_ref()
+            .and_then(|renderer| renderer.gpu().timing_window_gaps());
+    }
+
+    /// Presents through the selected renderer and publishes only a completed image;
+    /// with frames in flight (`set_frames_in_flight`), a submitted one, whose stats
+    /// arrive with the next present.
     pub fn present_with(
         &mut self,
         frame: &RenderFrame,
@@ -340,37 +398,46 @@ impl Presenter {
         let result = (|| {
             self.prepare_with(frame, resolve)?;
             let started = Instant::now();
-            let source = if let Some(live) = &mut self.live {
-                let renderer = self.renderer.as_mut().context("presentation device")?;
-                let mut costs = live.render(renderer.gpu_mut(), frame)?;
-                costs.scene_update_ms = self.stats.gpu_ms;
-                self.stats.gpu_ms = costs.accounted_ms();
-                self.stats.gpu = Some(costs);
-                live.view.output()
-            } else if let Some(raster) = &mut self.raster {
+            if let Some(raster) = &mut self.raster
+                && self.live.is_none()
+            {
                 let renderer = self
                     .renderer
                     .as_mut()
                     .context("raster presentation device")?;
-                let costs =
-                    raster.render_batched(renderer, frame, &camera(frame)?, ViewMode::Lit)?;
-                self.stats.gpu_ms = costs.accounted_ms();
-                self.stats.gpu = Some(costs);
-                renderer.output()
+                // Publication joins the frame's completion scope: nothing waits here.
+                let (published, size) = (&mut self.published, self.size);
+                let submitted = raster.submit_batched(
+                    renderer,
+                    frame,
+                    &camera(frame)?,
+                    ViewMode::Lit,
+                    |renderer| {
+                        let source = renderer.output();
+                        Published::publish(published, renderer.gpu_mut(), source, size).map(drop)
+                    },
+                )?;
+                if self.frames_in_flight {
+                    self.in_flight = Some(submitted);
+                } else {
+                    let costs = RasterView::finish_batched(renderer, submitted)?;
+                    self.completed(costs);
+                }
             } else {
-                self.present_baseline(frame)?;
-                self.output.context("legacy completed output")?
-            };
-            self.publish(source)?;
-            self.stats.gpu_span_ms = self
-                .renderer
-                .as_ref()
-                .and_then(|renderer| renderer.gpu().timing_window())
-                .map(ara_gpu::vulkan::TimestampSpan::milliseconds);
-            self.stats.gpu_submission_gap_ms = self
-                .renderer
-                .as_ref()
-                .and_then(|renderer| renderer.gpu().timing_window_gaps());
+                let source = if let Some(live) = &mut self.live {
+                    let renderer = self.renderer.as_mut().context("presentation device")?;
+                    let mut costs = live.render(renderer.gpu_mut(), frame)?;
+                    costs.scene_update_ms = self.stats.gpu_ms;
+                    self.stats.gpu_ms = costs.accounted_ms();
+                    self.stats.gpu = Some(costs);
+                    live.view.output()
+                } else {
+                    self.present_baseline(frame)?;
+                    self.output.context("legacy completed output")?
+                };
+                self.publish(source)?;
+                self.timing_window();
+            }
             self.stats.render = started.elapsed();
             self.published_quality = self.plan.map(|plan| plan.preset);
             Ok(())
@@ -406,6 +473,7 @@ impl Presenter {
 
 impl Drop for Presenter {
     fn drop(&mut self) {
+        let _ = self.drain();
         if let Some(renderer) = &mut self.renderer {
             if let Some(live) = self.live.take() {
                 let _ = live.destroy(renderer.gpu_mut());

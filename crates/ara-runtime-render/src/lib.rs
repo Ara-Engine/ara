@@ -77,8 +77,11 @@ pub struct PresentStats {
     pub updated: usize,
     /// CPU time spent preparing and uploading (excludes GPU rendering).
     pub prepare: Duration,
-    /// Time inside `Renderer::render` (records, submits and waits for the GPU).
+    /// Time inside `Renderer::render`: records and submits, and waits for the GPU
+    /// unless frames are in flight (`Presenter::set_frames_in_flight`).
     pub render: Duration,
+    /// Time this present waited for the previous frame in flight to complete.
+    pub in_flight_wait: Duration,
 }
 
 /// Owns the renderer and the per-draw upload state.
@@ -127,6 +130,10 @@ pub struct Presenter {
     look_override: Option<ara_render_fidelity::environment::FrameEnvironment>,
     /// The colour lookup table the baseline renderer holds (`apply_lut`).
     lut: Option<std::sync::Arc<ara_components::post::ColorLut>>,
+    /// Raster frames return once submitted (`set_frames_in_flight`).
+    frames_in_flight: bool,
+    /// The submitted raster frame not yet waited (`drain`).
+    in_flight: Option<raster::Submitted>,
 }
 
 fn fnv(hash: u64, bytes: &[u8]) -> u64 {
@@ -222,6 +229,8 @@ impl Presenter {
             environment: None,
             look_override: None,
             lut: None,
+            frames_in_flight: false,
+            in_flight: None,
         }
     }
 
@@ -240,6 +249,7 @@ impl Presenter {
 
     /// The renderer, mutably: development tools read live frames through
     /// `Renderer::capture_completed` without a capture reset.
+    /// Callers that submit or read back through it first `drain` a frame in flight.
     pub fn renderer_mut(&mut self) -> Option<&mut Renderer> {
         self.renderer.as_mut()
     }

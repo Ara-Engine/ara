@@ -273,6 +273,15 @@ impl NativeUi {
     pub fn take_gpu_wait(&self) -> std::time::Duration {
         self.gpu_wait.take()
     }
+    /// The Vulkan adapter's deferred completion (`wait_previous` at the start of
+    /// the next UI frame); Metal still waits each submission, so it has no effect.
+    pub fn set_deferred_completion(&mut self, _deferred: bool) -> Result<()> {
+        Ok(())
+    }
+    /// Nothing to wait: every Metal submission completes before returning.
+    pub fn wait_previous(&self) -> Result<()> {
+        Ok(())
+    }
     fn upload_inner(&mut self, texture: TextureUpload<'_>) -> Result<()> {
         ara_gpu::cpu_scope!("UI.upload");
         if self.external.contains_key(&texture.id) {

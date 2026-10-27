@@ -184,6 +184,11 @@ impl Windowed {
             self.recreate(presenter)?;
             presenter.resize(size)?;
         }
+        // Frames in flight: the scene, its UI composite and the window blit return
+        // once submitted; each waits its previous frame at the start of the next, so
+        // simulation and extraction overlap the GPU. Everything after the scene here
+        // is GPU work on the same queue.
+        presenter.set_frames_in_flight(true)?;
         presenter.present_with(frame, resolve)?;
         let cpu = started.elapsed() - presenter.stats().render;
         let renderer = presenter
@@ -192,15 +197,19 @@ impl Windowed {
         if self.present_enabled && self.present.is_none() {
             // SAFETY: the window and device both outlive `present`, which is destroyed
             // after device idle in `recreate`/`Drop` ordering below.
-            self.present = Some(unsafe { Present::create(renderer.gpu(), &self.window)? });
+            let mut present = unsafe { Present::create(renderer.gpu(), &self.window)? };
+            // SAFETY: created on this renderer's live device.
+            unsafe { present.set_frames_in_flight(renderer.gpu(), true)? };
+            self.present = Some(present);
         }
         // The game UI (if any) composites the scene into its own target and presents it.
         if let Some(surface) = &mut self.game_ui {
+            surface.set_frames_in_flight(true)?;
             surface.render(presenter)?;
         }
         let result = match &mut self.present {
-            // SAFETY: the renderer, or the game UI over it, completed its CopySource image;
-            // both owners are live.
+            // SAFETY: the renderer, or the game UI over it, submitted its CopySource image
+            // ahead of the blit on this queue; both owners are live.
             Some(present) => unsafe {
                 match &self.game_ui {
                     Some(surface) => surface.present(renderer.gpu(), present),

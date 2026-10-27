@@ -277,3 +277,34 @@ fn demo_renders_moves_skins_and_relights_headless() {
     }
     presenter.renderer().unwrap().gpu().assert_clean().unwrap();
 }
+
+/// Frames in flight: a present returns once submitted, reporting the previous
+/// frame's GPU costs and pass timings; turning it off drains the last frame.
+#[test]
+fn frames_in_flight_report_the_previous_frame() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../target/renderer-unification/frames-in-flight");
+    let mut rt = runtime();
+    let mut frame = RenderFrame::default();
+    rt.extract(&mut frame);
+    let mut presenter = Presenter::new([480, 270], Vec::new(), root.join("gpu"));
+    presenter.present(&frame).unwrap();
+    assert!(
+        presenter.stats().gpu.is_some(),
+        "a synchronous present completes"
+    );
+    presenter.set_frames_in_flight(true).unwrap();
+    presenter.present(&frame).unwrap();
+    assert!(
+        presenter.stats().gpu.is_none(),
+        "the first frame in flight has no completed predecessor"
+    );
+    presenter.present(&frame).unwrap();
+    let stats = presenter.stats();
+    assert!(stats.gpu.is_some_and(|c| c.raster_ms > 0.), "{stats:?}");
+    assert!(stats.gpu_span_ms.is_some(), "{stats:?}");
+    assert!(!presenter.pass_timings().is_empty());
+    presenter.set_frames_in_flight(false).unwrap();
+    assert!(presenter.stats().gpu.is_some(), "turning it off drains");
+    presenter.renderer().unwrap().gpu().assert_clean().unwrap();
+}

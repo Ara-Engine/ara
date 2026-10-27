@@ -24,6 +24,13 @@ pub struct Present {
 }
 
 impl Present {
+    /// The Vulkan presentation's opt-in overlap (no queue idle after each blit);
+    /// every Metal `present_image` still waits its own work, so it has no effect.
+    /// # Safety
+    /// `gpu` created this presentation and is live.
+    pub unsafe fn set_frames_in_flight(&mut self, _gpu: &GpuDevice, _enabled: bool) -> Result<()> {
+        Ok(())
+    }
     /// Present into `window` with SDR output.
     /// # Safety
     /// Keep the device and window alive until [`Self::retire`] or drop; call from the
