@@ -158,6 +158,41 @@ fn a_pipeline_is_rebound_on_each_encoder_a_pass_timestamp_opens() {
 }
 
 #[test]
+fn back_to_back_pass_timestamps_share_one_write_and_resolve_in_order() {
+    let mut gpu = device();
+    let fill = gpu.msl_pipeline(
+        &[(Stage::Compute, "fill")],
+        &RenderState::default(),
+        Some([64, 1, 1]),
+    );
+    let buffer = storage(&mut gpu, 64);
+    let slot = gpu.storage_buffer(buffer).expect("slot");
+    let mut rec = gpu.begin(Queue::Compute);
+    rec.push(Command::Pipeline(fill));
+    for index in 0..3 {
+        rec.push(Command::BeginPass(format!("pass {index}")));
+        rec.push(Command::Constants(RootConstants {
+            words: [slot.index, index, 64, 0, 0, 0, 0, 0],
+        }));
+        rec.push(Command::Dispatch([1, 1, 1]));
+        rec.push(Command::EndPass);
+    }
+    let point = gpu.submit(rec.finish(), &[]).expect("submit");
+    let timings = gpu.resolve(point).expect("resolve");
+    assert_eq!(timings.len(), 3);
+    for pass in &timings {
+        assert!(
+            pass.start_ms > 0. && pass.start_ms <= pass.end_ms,
+            "{pass:?}"
+        );
+    }
+    // A pass end and the next begin have no work between them: one timestamp.
+    for pair in timings.windows(2) {
+        assert_eq!(pair[0].end_ms, pair[1].start_ms);
+    }
+}
+
+#[test]
 fn submissions_share_one_timestamp_heap_as_ranges_and_reuse_freed_ones() {
     let gpu = device();
     let mut pool = timestamps::Pool::default();

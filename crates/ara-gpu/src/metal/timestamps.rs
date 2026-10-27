@@ -23,6 +23,9 @@ pub(super) struct Timing {
     /// First slot of the submission's range.
     pub base: usize,
     pub labels: Vec<String>,
+    /// Slots never written because they measure the same point as an earlier one,
+    /// as `(slot, written slot)` relative to `base`; resolved as copies.
+    pub aliases: Vec<(usize, usize)>,
 }
 
 impl Timing {
@@ -75,7 +78,12 @@ impl Pool {
             return None;
         }
         self.used.insert(at, (base, required));
-        Some(Timing { heap, base, labels })
+        Some(Timing {
+            heap,
+            base,
+            labels,
+            aliases: Vec::new(),
+        })
     }
     /// Free a completed (or never committed) submission's range.
     pub fn recycle(&mut self, timing: &Timing) {
@@ -90,8 +98,9 @@ pub(super) fn resolve(
     queue: Queue,
 ) -> Result<(Vec<PassTiming>, TimestampSpan)> {
     let slots = timing.slots();
-    // SAFETY: the range lies inside the heap and every slot in it was written by the
-    // completed submission (begin/end of the submission and of each pass).
+    // SAFETY: the range lies inside the heap. The completed submission wrote every
+    // slot in it (begin/end of the submission and of each pass) except aliases,
+    // whose values are replaced below.
     let data = unsafe {
         timing
             .heap
@@ -107,12 +116,18 @@ pub(super) fn resolve(
         )));
     }
     let scale = 1000.0 / device.queryTimestampFrequency() as f64;
-    let ms = |slot: usize| {
-        let at = slot * stride;
-        let mut tick = [0; 8];
-        tick.copy_from_slice(&bytes[at..at + 8]);
-        u64::from_le_bytes(tick) as f64 * scale
-    };
+    let mut ticks: Vec<u64> = (0..slots)
+        .map(|slot| {
+            let at = slot * stride;
+            let mut tick = [0; 8];
+            tick.copy_from_slice(&bytes[at..at + 8]);
+            u64::from_le_bytes(tick)
+        })
+        .collect();
+    for &(slot, written) in &timing.aliases {
+        ticks[slot] = ticks[written];
+    }
+    let ms = |slot: usize| ticks[slot] as f64 * scale;
     let passes = timing
         .labels
         .iter()

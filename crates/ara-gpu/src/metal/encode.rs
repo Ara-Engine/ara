@@ -87,6 +87,11 @@ struct Recording<'a> {
     /// Timestamp heap and the list's first slot, laid out as in [`super::timestamps`];
     /// none for an untimed list.
     heap: Option<(&'a ProtocolObject<dyn MTL4CounterHeap>, usize)>,
+    /// The last command-buffer timestamp's slot while no encoder has opened since:
+    /// a timestamp now would measure the same point, so it reuses that slot.
+    stamp: Option<usize>,
+    /// Slots that reuse an earlier one, as `(slot, written slot)`.
+    aliases: Vec<(usize, usize)>,
     /// Passes begun so far, and the indices of passes still open.
     passes: usize,
     open: Vec<usize>,
@@ -117,8 +122,10 @@ fn view(origin: [u32; 2], size: [u32; 2]) -> (MTLViewport, MTLScissorRect) {
 
 impl MetalDevice {
     /// Encode `list` into `cmd`, writing its timestamps into `heap` from the given
-    /// slot, if any. Errors leave
-    /// `cmd` uncommitted; partially recorded commands are discarded with it.
+    /// slot, if any. Returns the timestamp slots left unwritten because they would
+    /// repeat the previous one, as `(slot, written slot)` pairs relative to the first
+    /// slot ([`super::timestamps::Timing::aliases`]). Errors leave `cmd` uncommitted;
+    /// partially recorded commands are discarded with it.
     pub(super) fn encode(
         &mut self,
         cmd: &ProtocolObject<dyn MTL4CommandBuffer>,
@@ -126,7 +133,7 @@ impl MetalDevice {
         scratch: &mut Scratch,
         created: &mut Vec<Chunk>,
         heap: Option<(&ProtocolObject<dyn MTL4CounterHeap>, usize)>,
-    ) -> Result<()> {
+    ) -> Result<Vec<(usize, usize)>> {
         let mut rec = Recording {
             cmd,
             scratch,
@@ -138,6 +145,8 @@ impl MetalDevice {
             root: [0; 8],
             formats: (Vec::new(), None),
             heap,
+            stamp: None,
+            aliases: Vec::new(),
             passes: 0,
             open: Vec::new(),
             scope: [0; 2],
@@ -153,7 +162,7 @@ impl MetalDevice {
         }
         rec.end();
         rec.timestamp(1 + 2 * rec.passes);
-        result
+        result.map(|()| rec.aliases)
     }
 
     fn encode_one(&mut self, rec: &mut Recording, queue: Queue, command: &Command) -> Result<()> {
@@ -218,6 +227,7 @@ impl MetalDevice {
                 let encoder = self.begin_rendering(rec, colors, depth.as_ref(), *size)?;
                 rec.active = Active::Render(encoder);
                 rec.bound = None;
+                rec.stamp = None;
                 rec.scope = *size;
                 rec.set_view(view([0, 0], *size))?;
             }
@@ -714,12 +724,13 @@ impl Recording<'_> {
     /// encoder is closed and the timestamp goes between encoders on the command
     /// buffer, so begin and end use one ordered mechanism (mixing command-buffer and
     /// in-encoder timestamps gave end < begin under load). Splitting the encoder
-    /// orders nothing that the barrier lowering does not already order.
+    /// orders nothing that the barrier lowering does not already order. Metal runs
+    /// each command-buffer timestamp as a small driver dispatch, so consecutive ones
+    /// with no encoder between them (a pass end and the next begin) share one write.
     fn timestamp(&mut self, index: usize) {
         let Some((heap, base)) = self.heap else {
             return;
         };
-        let index = base + index;
         if let Active::Render(encoder) = &self.active {
             // SAFETY: the pool reserved this list's 2 * passes + 2 slots from `base`
             // inside the heap, and `index` stays inside that range.
@@ -728,14 +739,19 @@ impl Recording<'_> {
                     MTL4TimestampGranularity::Precise,
                     MTLRenderStages::Fragment,
                     heap,
-                    index,
+                    base + index,
                 );
             }
             return;
         }
         self.end();
+        if let Some(written) = self.stamp {
+            self.aliases.push((index, written));
+            return;
+        }
         // SAFETY: as above; no encoder is open on the command buffer.
-        unsafe { self.cmd.writeTimestampIntoHeap_atIndex(heap, index) };
+        unsafe { self.cmd.writeTimestampIntoHeap_atIndex(heap, base + index) };
+        self.stamp = Some(index);
     }
     /// The queue barrier an encoder running `encoder` stages owes the pending graph
     /// barriers, if any: wait for their earlier stages before its own waiting ones.
@@ -789,6 +805,7 @@ impl Recording<'_> {
             encoder.setArgumentTable(Some(&device.table));
             self.active = Active::Compute(encoder);
             self.bound = None;
+            self.stamp = None;
         }
         match &self.active {
             Active::Compute(encoder) => Ok(encoder),

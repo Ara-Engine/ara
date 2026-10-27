@@ -570,7 +570,7 @@ impl MetalDevice {
                 _ => None,
             })
             .collect();
-        let timing = self.timestamp_pool.take(&self.device, labels);
+        let mut timing = self.timestamp_pool.take(&self.device, labels);
         let heap = timing.as_ref().map(|timing| (&*timing.heap, timing.base));
         let encoded = self.encode(&cmd, &list, &mut scratch, &mut created, heap);
         cmd.endCommandBuffer();
@@ -579,15 +579,22 @@ impl MetalDevice {
                 .addAllocation(ProtocolObject::from_ref(&**chunk));
             self.residency_dirty = true;
         }
-        if let Err(error) = encoded {
-            // Nothing was committed: the allocator and scratch are immediately reusable.
-            allocator.reset();
-            self.allocators.push(allocator);
-            self.scratch.recycle(scratch.chunks);
-            if let Some(timing) = &timing {
-                self.timestamp_pool.recycle(timing);
+        let aliases = match encoded {
+            Ok(aliases) => aliases,
+            Err(error) => {
+                // Nothing was committed: the allocator and scratch are immediately
+                // reusable.
+                allocator.reset();
+                self.allocators.push(allocator);
+                self.scratch.recycle(scratch.chunks);
+                if let Some(timing) = &timing {
+                    self.timestamp_pool.recycle(timing);
+                }
+                return Err(error);
             }
-            return Err(error);
+        };
+        if let Some(timing) = &mut timing {
+            timing.aliases = aliases;
         }
         let mut dependencies = [0; 2];
         for wait in waits {
