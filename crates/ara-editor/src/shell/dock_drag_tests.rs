@@ -2,6 +2,7 @@
 #![allow(clippy::unwrap_used)]
 use super::*;
 use ara_ui::docking::DockNode;
+use ara_ui::input::InputEvent;
 use std::{
     path::PathBuf,
     sync::atomic::{AtomicU64, Ordering},
