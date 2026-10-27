@@ -131,6 +131,30 @@ fn outpost_menu_takes_pointer_and_keyboard_where_drawn_at_1x_and_2x() -> Result<
     Ok(())
 }
 
+/// The editor's Game view hands an embedded player its surface in physical pixels and
+/// its UI scale: at 2x the HUD must keep the size and place it has at 1x.
+#[test]
+fn an_embedded_hud_keeps_its_panel_size_at_the_owner_scale() -> Result<()> {
+    let source = outpost_ui()?;
+    let panel = [960_u32, 540];
+    let mut layouts = Vec::new();
+    for scale in [1_f32, 2.] {
+        let surface_pixels = panel.map(|v| (v as f32 * scale) as u32);
+        let mut surface = Surface::plain(&source, surface_pixels, scale)?;
+        surface.screen(Screen::Pause)?;
+        let resume = surface.ui.find("resume").context("pause menu")?;
+        let rect = surface.ui.nodes[resume].rect;
+        // Drawn into the surface at `scale`: twice the pixels, the same panel points.
+        assert_eq!(
+            surface.ui.size.map(|v| v * scale),
+            surface_pixels.map(|v| v as f32)
+        );
+        layouts.push([rect.x, rect.y, rect.w, rect.h]);
+    }
+    assert_eq!(layouts[0], layouts[1], "the HUD moved or resized at 2x");
+    Ok(())
+}
+
 #[test]
 fn outpost_native_menu_and_settings_controls_layout_activate_and_resize() -> Result<()> {
     let mut surface = Surface::plain(&outpost_ui()?, [1280, 720], 1.)?;
