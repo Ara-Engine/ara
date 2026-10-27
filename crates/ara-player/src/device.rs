@@ -31,6 +31,10 @@ pub struct Windowed {
     frame_times: Vec<f32>,
     window_start: Instant,
     present_enabled: bool,
+    /// Opened hidden on purpose (timing and test probes): always rendered.
+    hidden: bool,
+    /// Test override of `Window::presentable` (None: ask the window).
+    presentable_override: Option<bool>,
 }
 
 /// A one-box frame that creates the renderer and warms its pipelines before Play.
@@ -185,11 +189,37 @@ impl Windowed {
             std::thread::sleep(Duration::from_millis(5));
             return Ok(());
         }
+        // Minimized or occluded, nothing would show: render and present nothing (a
+        // driver's present path may stall until the window shows) and keep pumping.
+        if !self.presentable() {
+            std::thread::sleep(Duration::from_millis(10));
+            return Ok(());
+        }
         if presenter.size() != size {
             self.recreate(presenter)?;
             presenter.resize(size)?;
         }
+        // Frames in flight: the scene, its UI composite and the window blit return
+        // once submitted; each waits its previous frame at the start of the next, so
+        // simulation and extraction overlap the GPU. Everything after the scene here
+        // is GPU work on the same queue.
+        presenter.set_frames_in_flight(true)?;
+        // The UI composite and the window copy of the frame in flight may still read
+        // the image this frame's scene rewrites; on Metal they run on queues of their
+        // own, so the scene waits for them on the GPU.
+        if let Some(renderer) = presenter.renderer_mut() {
+            if let Some(surface) = &self.game_ui {
+                surface.order_before(renderer.gpu_mut());
+            }
+            if let Some(present) = &self.present {
+                present.order_before(renderer.gpu_mut());
+            }
+        }
         presenter.present_with(frame, resolve)?;
+        // The frame in flight is stalled (Presenter::STALL_WAIT): nothing new to show.
+        if presenter.stats().skipped {
+            return Ok(());
+        }
         let cpu = started.elapsed() - presenter.stats().render;
         let renderer = presenter
             .renderer()
@@ -197,15 +227,21 @@ impl Windowed {
         if self.present_enabled && self.present.is_none() {
             // SAFETY: the window and device both outlive `present`, which is destroyed
             // after device idle in `recreate`/`Drop` ordering below.
-            self.present = Some(unsafe { Present::create(renderer.gpu(), &self.window)? });
+            let mut present = unsafe { Present::create(renderer.gpu(), &self.window)? };
+            // SAFETY: created on this renderer's live device.
+            unsafe { present.set_frames_in_flight(renderer.gpu(), true)? };
+            self.present = Some(present);
         }
         // The game UI (if any) composites the scene into its own target and presents it.
         if let Some(surface) = &mut self.game_ui {
-            surface.render(presenter)?;
+            surface.set_frames_in_flight(true)?;
+            if !surface.render(presenter)? {
+                return Ok(());
+            }
         }
         let result = match &mut self.present {
-            // SAFETY: the renderer, or the game UI over it, completed its CopySource image;
-            // both owners are live.
+            // SAFETY: the renderer, or the game UI over it, submitted its CopySource image
+            // ahead of the blit on this queue; both owners are live.
             Some(present) => unsafe {
                 match &self.game_ui {
                     Some(surface) => surface.present(renderer.gpu(), present),
@@ -231,6 +267,20 @@ impl Windowed {
         self.frame_times
             .push((cpu + presenter.stats().render).as_secs_f32() * 1000.0);
         Ok(())
+    }
+
+    /// Whether presenting can show anything: hidden probe windows always render; a
+    /// minimized or occluded window does not (`Window::presentable`); tests override.
+    fn presentable(&self) -> bool {
+        self.presentable_override
+            .unwrap_or_else(|| self.hidden || self.window.presentable())
+    }
+
+    /// Tests force `presentable` (Some) or return it to the window (None), standing
+    /// in for a minimized window without touching the desktop.
+    #[cfg(test)]
+    pub(crate) fn override_presentable(&mut self, presentable: Option<bool>) {
+        self.presentable_override = presentable;
     }
 
     /// Prepares a 2D extraction before the frame's read-only audio worker starts.

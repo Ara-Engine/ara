@@ -23,6 +23,9 @@ pub type GpuDevice = vulkan::VulkanDevice;
 /// The platform's native backend (D12): Metal 4 on macOS (D15). See the Vulkan alias.
 #[cfg(target_os = "macos")]
 pub type GpuDevice = metal::MetalDevice;
+/// Ended deferred scopes a device allows unconsumed at once: one frame on the GPU
+/// while the next one records (`begin_deferred_completion` refuses a third).
+pub const FRAMES_IN_FLIGHT: usize = 2;
 /// Deferred frame completion returned by [`GpuDevice`].
 #[cfg(not(target_os = "macos"))]
 pub type GpuCompletion = vulkan::Completion;

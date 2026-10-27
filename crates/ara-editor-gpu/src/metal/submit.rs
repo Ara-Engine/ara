@@ -1,6 +1,7 @@
 //! One portable command list per UI frame: this frame's texture uploads, the target
 //! and borrowed images' transitions, then one viewport + root constants + six-vertex
-//! instanced draw per batch, submitted and waited for.
+//! instanced draw per batch, submitted and waited for (or, with deferred completion,
+//! waited by the next frame).
 use super::{NativeUi, Records};
 use anyhow::{Context, Result};
 use ara_gpu::commands::{Attachment, Command};
@@ -18,7 +19,7 @@ fn transition(image: Image, before: Access, after: Access) -> Command {
 }
 
 /// A published storage buffer holding `bytes`, reusing the current one when large
-/// enough (every submission completes before the next frame writes it).
+/// enough (the previous submission is finished before the next frame writes it).
 fn records(
     device: &mut MetalDevice,
     current: Option<Records>,
@@ -48,6 +49,8 @@ fn records(
 
 impl NativeUi {
     pub(super) fn submit(&mut self) -> Result<()> {
+        // The previous submission reads the records written below.
+        self.finish_previous()?;
         // SAFETY: Instance is repr(C), four initialized float4s, 64 bytes, with no
         // internal or tail padding.
         let instance_bytes = unsafe {
@@ -153,9 +156,11 @@ impl NativeUi {
         self.instance_records = Some(instances);
         self.mask_records = Some(masks);
         let point = self.device.submit(rec.finish(), &[])?;
-        let waited = std::time::Instant::now();
-        self.device.resolve(point)?;
-        self.gpu_wait.set(self.gpu_wait.get() + waited.elapsed());
+        self.in_flight.set(Some(point));
+        if !self.deferred {
+            self.finish_previous()?;
+        }
+        // Retirement releases the staging buffers once the submission completes.
         for upload in std::mem::take(&mut self.pending) {
             Device::retire(&mut self.device, Resource::Buffer(upload.staging))?;
         }

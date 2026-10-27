@@ -242,7 +242,7 @@ float3 shade(Frame f,Look l,Surface s,float3 world,int2 p,bool gathered) {
 // over what it transmits (blending ONE, ONE_MINUS_SRC_ALPHA).
 float4 forwardColour(Frame f,Look l,Surface s,float3 world,int2 p){
     float2 uv=(float2(p)+0.5)/float2(f.extent.xy);
-    return float4(applyFog(f,l,shade(f,l,s,world,p,false),world,uv)*s.alpha,s.alpha*(1-s.transmission));
+    return float4(exposeHdr(f,l,applyFog(f,l,shade(f,l,s,world,p,false),world,uv))*s.alpha,s.alpha*(1-s.transmission));
 }
 // World-space view ray through pixel centre `p`.
 float3 viewRay(Frame f,float2 p){

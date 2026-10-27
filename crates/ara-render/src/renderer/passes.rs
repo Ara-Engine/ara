@@ -56,6 +56,7 @@ impl Renderer {
         capture: bool,
     ) -> Result<()> {
         ara_gpu::cpu_scope!("Raster.render_frame");
+        self.exposure = exposure;
         self.collect_view_resources()?;
         ensure!(
             exposure.is_finite() && exposure > 0.,
@@ -1528,7 +1529,8 @@ impl Renderer {
                         *look_pass,
                         self.frames(),
                         input,
-                        resolved.is_some(),
+                        // The HDR is pre-exposed like the resolve (`HdrExposure`).
+                        true,
                     );
                 } else if wire == Some(pass.id) {
                     self.record_wire_composite(&mut recorder, true);

@@ -45,6 +45,9 @@ pub struct Options {
     /// Measure UI cost and click reliability with input injected into the window
     /// loop (`app/responsiveness.rs`); writes `responsiveness.json`.
     pub verify_responsiveness: bool,
+    /// Only the responsiveness probe's unpresentable scenario: the window loop must
+    /// render and present nothing and keep pumping, then resume presenting.
+    pub verify_unpresentable: bool,
     /// Replay a new user's first hour on a fresh project (`app/qa.rs`); writes
     /// `first-hour.json` and a capture per step.
     pub verify_first_hour: bool,
@@ -81,6 +84,7 @@ impl Options {
             || self.verify_assets
             || self.verify_journey
             || self.verify_responsiveness
+            || self.verify_unpresentable
             || self.verify_first_hour
             || self.verify_scene_quality
             || self.verify_loading
@@ -135,6 +139,7 @@ impl Default for Options {
             verify_scene_quality: false,
             verify_loading: false,
             verify_responsiveness: false,
+            verify_unpresentable: false,
             settle: None,
         }
     }

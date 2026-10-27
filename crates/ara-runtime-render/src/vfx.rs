@@ -123,6 +123,7 @@ impl Effects {
                 },
                 intensity: effect.intensity,
                 exposure: frame.environment.exposure,
+                hdr_exposure: Some(renderer.hdr_exposure()),
                 scene_background: (!renderer.is_native()).then_some(color),
                 scene_color: renderer.is_native().then_some(color),
                 scene_depth: Some(depth),
@@ -239,6 +240,8 @@ impl Effects {
             },
             None => Lighting::default(),
         };
+        // The captured scene HDR is pre-exposed; so is each effect's output after it.
+        let hdr_exposure = Some(renderer.hdr_exposure());
         let gpu = renderer.gpu_mut();
         for effect in &frame.effects {
             let key = (effect.effect.clone(), request.size);
@@ -249,6 +252,7 @@ impl Effects {
                     &definition,
                     &cooked_root().join(&definition.name),
                     request.size,
+                    ara_vfx_gpu::RASTER_HDR,
                 )?;
                 self.systems.insert(key.clone(), system);
             }
@@ -290,6 +294,7 @@ impl Effects {
                         scale: effect.scale,
                     },
                     intensity: effect.intensity,
+                    hdr_exposure,
                     scene_background: Some(background),
                     scene_depth: Some(depth),
                     lighting: lighting(),

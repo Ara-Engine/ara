@@ -9,12 +9,22 @@ pub struct Completion {
     device: vk::Device,
     resolved: bool,
     failure: Option<String>,
+    window: (Option<crate::commands::TimestampSpan>, Option<f64>),
 }
 impl Completion {
     /// Whether its submissions and query storage have been consumed. On a later
     /// diagnostic error, owners may still retire this completed frame's resources.
     pub fn is_resolved(&self) -> bool {
         self.resolved
+    }
+    /// This frame's own device span once consumed, exact while frames overlap in
+    /// flight (the device's `timing_window` spans everything since its reset).
+    pub fn timing_window(&self) -> Option<crate::commands::TimestampSpan> {
+        self.window.0
+    }
+    /// Gaps between this frame's submission intervals once consumed.
+    pub fn timing_window_gaps(&self) -> Option<f64> {
+        self.window.1
     }
 }
 
@@ -66,11 +76,18 @@ impl VulkanDevice {
 
     fn begin_completion(&mut self, isolate_scene: bool) -> Result<()> {
         self.check_submission()?;
-        if self.deferred.is_some() || self.completion_pending {
+        if self.deferred.is_some() {
             return Err(GpuError::Contract("Nested deferred completion".into()));
         }
+        if self.pending_completions >= crate::FRAMES_IN_FLIGHT {
+            return Err(GpuError::Contract(
+                "Frames in flight are at their limit; consume the oldest first".into(),
+            ));
+        }
+        // Without a pending frame, nothing may still run; with one, its own
+        // submissions are the work in flight (the next frame records meanwhile).
         let completed = self.completed()?;
-        if (0..2).any(|q| completed[q] < self.submitted[q]) {
+        if self.pending_completions == 0 && (0..2).any(|q| completed[q] < self.submitted[q]) {
             return Err(GpuError::Contract(
                 "Previous frame is still in flight".into(),
             ));
@@ -94,12 +111,13 @@ impl VulkanDevice {
             .deferred
             .take()
             .ok_or_else(|| GpuError::Contract("No deferred completion scope".into()))?;
-        self.completion_pending = true;
+        self.pending_completions += 1;
         Ok(Completion {
             points,
             device: self.context.device.handle(),
             resolved: false,
             failure: self.submission_error.as_deref().map(str::to_owned),
+            window: (None, None),
         })
     }
 
@@ -130,12 +148,17 @@ impl VulkanDevice {
         frame: &mut Completion,
         mut consume: impl FnMut(TimelinePoint, Vec<PassTiming>),
     ) -> Result<()> {
-        for point in frame.points.drain(..) {
+        let points = std::mem::take(&mut frame.points);
+        for &point in &points {
             consume(point, self.resolve_completed(point)?);
         }
-        self.completion_pending = false;
+        frame.window = timestamps::frame_window(&self.recent_spans, &points, self.clock.shared());
+        self.pending_completions = self.pending_completions.saturating_sub(1);
         frame.resolved = true;
-        self.publish_completed_to_ui()?;
+        // With another frame still in flight, the last one to complete publishes.
+        if self.pending_completions == 0 {
+            self.publish_completed_to_ui()?;
+        }
         self.collect()?;
         self.assert_clean()?;
         if let Some(error) = frame.failure.take() {
@@ -150,6 +173,68 @@ impl VulkanDevice {
         let mut timings = Vec::new();
         self.wait_completion_with(frame, |_, passes| timings.extend(passes))?;
         Ok(timings)
+    }
+
+    /// `wait_completion_with`, waiting at most `timeout`. Ok(false) leaves `frame`
+    /// pending and unconsumed: a driver whose present path stalls (a minimized or
+    /// undisplayed window) must not block an event pump, which retries later.
+    pub fn wait_completion_for(
+        &mut self,
+        frame: &mut Completion,
+        timeout: std::time::Duration,
+        consume: impl FnMut(TimelinePoint, Vec<PassTiming>),
+    ) -> Result<bool> {
+        self.check_completion(frame)?;
+        if self.deferred.is_some() {
+            return Err(GpuError::Contract(
+                "Cannot wait an active frame scope".into(),
+            ));
+        }
+        let deadline = std::time::Instant::now() + timeout;
+        let mut last = [0; 2];
+        for point in &frame.points {
+            last[point.queue.index()] = last[point.queue.index()].max(point.value);
+        }
+        for queue in [Queue::Graphics, Queue::Compute] {
+            let value = last[queue.index()];
+            if value > 0 && !self.wait_until(TimelinePoint { queue, value }, deadline)? {
+                return Ok(false);
+            }
+        }
+        self.consume_completion(frame, consume)?;
+        Ok(true)
+    }
+
+    /// Waits for `point` until `deadline`; false on timeout.
+    fn wait_until(&self, point: TimelinePoint, deadline: std::time::Instant) -> Result<bool> {
+        crate::cpu_scope!("GPU.timeline_wait_bounded");
+        if point.value > self.submitted[point.queue.index()]
+            || point.value > self.flushed[point.queue.index()]
+        {
+            return Err(GpuError::Contract(
+                "Cannot wait on unsubmitted or unflushed work".into(),
+            ));
+        }
+        let timeout = deadline
+            .saturating_duration_since(std::time::Instant::now())
+            .as_nanos()
+            .min(u128::from(u64::MAX)) as u64;
+        let result = self.context.measure_host_wait(|| {
+            // SAFETY: Point was signalled here; no object is destroyed during wait.
+            unsafe {
+                self.context.device.wait_semaphores(
+                    &vk::SemaphoreWaitInfo::default()
+                        .semaphores(&[self.timelines[point.queue.index()]])
+                        .values(&[point.value]),
+                    timeout,
+                )
+            }
+        });
+        match result {
+            Ok(()) => Ok(true),
+            Err(vk::Result::TIMEOUT) => Ok(false),
+            Err(error) => Err(anyhow::Error::from(error).into()),
+        }
     }
 
     /// Wait once at a frame boundary and deliver each submission's original pass

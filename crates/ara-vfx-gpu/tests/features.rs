@@ -24,6 +24,7 @@ fn ribbon_mesh_surface_and_depth_collision_execute_on_gpu() {
             &effect,
             &root.join("cooked").join(&effect.name),
             [960, 540],
+            ara_vfx_gpu::LINEAR_HDR,
         )
         .unwrap();
         let request = CaptureRequest {
@@ -97,9 +98,14 @@ fn composites_into_renderer_hdr_and_preserves_imported_states() {
         &effect,
         &root.join("cooked/campfire"),
         [960, 540],
+        // Composited into the raster scene HDR (pre-exposed, `view.hdr_exposure`).
+        ara_vfx_gpu::RASTER_HDR,
     )
     .unwrap();
-    let mut view = View::default();
+    let mut view = View {
+        hdr_exposure: Some(renderer.hdr_exposure()),
+        ..View::default()
+    };
     for _ in 0..30 {
         renderer.render(&view.camera, view.exposure).unwrap();
         let (image, sampled_index, state) = renderer.feature_depth();
