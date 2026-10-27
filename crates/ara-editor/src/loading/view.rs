@@ -114,10 +114,9 @@ const FAILURE_TEXT: f32 = CONTENT - 22. - 16. - 10.;
 pub(crate) fn markup(status: &Status, measure: &mut dyn Measure) -> String {
     let stage = status.stage();
     let mut out = String::from("<ui id='loading'><panel id='loading-root' class='root'>");
-    // The Hub's brand row: wordmark and a version tag.
+    // Engine branding and the current release version.
     out.push_str(&format!(
-        "<panel id='loading-head' class='head'><image id='loading-wordmark' class='wordmark' src='{}' /><panel id='loading-version' class='tag'><text id='loading-version-text' text='{}' /></panel></panel>",
-        if status.light { "loading-wordmark-light" } else { "loading-wordmark" },
+        "<panel id='loading-head' class='head'><image id='loading-engine' class='engine-icon' src='loading-engine' /><panel id='loading-version' class='tag'><text id='loading-version-text' text='{}' /></panel></panel>",
         escape(env!("CARGO_PKG_VERSION"))
     ));
     out.push_str(&format!(

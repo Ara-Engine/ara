@@ -73,8 +73,8 @@ pub(crate) fn install(renderer: &mut Renderer, dpi: f32) -> ara_ui::Result<()> {
     renderer.set_raster_scale(dpi)?;
     Ok(())
 }
-/// The Ara app icon (`assets/brand/ara-icon.svg`, 64-unit view box).
-const BRAND: &str = include_str!("../../../../assets/brand/ara-icon.svg");
+/// The engine's small-size icon, authored for compact native chrome (64-unit view box).
+const BRAND: &str = include_str!("../../../../assets/brand/icons/engine/ara-engine-small.svg");
 const ASSETS: &[(&str, &str)] = &[
     ("activity", include_str!("../../assets/icons/activity.svg")),
     (

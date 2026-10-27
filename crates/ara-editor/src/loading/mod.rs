@@ -309,7 +309,7 @@ impl Splash {
         ui_gpu.set_dpi(dpi)?;
         let mut renderer = Renderer::default();
         crate::shell::icons::install(&mut renderer, dpi).map_err(|e| anyhow::anyhow!("{e}"))?;
-        install_wordmarks(&mut renderer, dpi)?;
+        install_engine_icon(&mut renderer, dpi)?;
         let mut splash = Self {
             ui_gpu,
             present: None,
@@ -573,48 +573,38 @@ fn rounded(window: &Window, light: bool) {
     }
 }
 
-/// The Hub's wordmark for both themes, at 2× the device scale (64 × 30 logical).
-fn install_wordmarks(renderer: &mut Renderer, dpi: f32) -> anyhow::Result<()> {
+/// The engine icon for both themes, at 2× the device scale (30 × 30 logical).
+fn install_engine_icon(renderer: &mut Renderer, dpi: f32) -> anyhow::Result<()> {
     let scale = dpi.max(1.) * 2.;
-    let size = [(64. * scale).round() as u32, (30. * scale).round() as u32];
-    for (name, svg) in [
-        (
-            "loading-wordmark",
-            include_str!("../../../../assets/brand/ara-wordmark.svg"),
-        ),
-        (
-            "loading-wordmark-light",
-            include_str!("../../../../assets/brand/ara-wordmark-light.svg"),
-        ),
-    ] {
-        let tree = resvg::usvg::Tree::from_str(svg, &resvg::usvg::Options::default())?;
-        let mut pixels =
-            resvg::tiny_skia::Pixmap::new(size[0], size[1]).context("wordmark extent")?;
-        let fit = (size[0] as f32 / tree.size().width()).min(size[1] as f32 / tree.size().height());
-        resvg::render(
-            &tree,
-            resvg::tiny_skia::Transform::from_scale(fit, fit),
-            &mut pixels.as_mut(),
-        );
-        // tiny-skia stores premultiplied pixels; UI images are straight alpha.
-        let mut rgba = pixels.take();
-        for pixel in rgba.as_chunks_mut::<4>().0 {
-            if pixel[3] > 0 {
-                for n in 0..3 {
-                    pixel[n] = ((u32::from(pixel[n]) * 255) / u32::from(pixel[3])).min(255) as u8;
-                }
+    let size = [(30. * scale).round() as u32; 2];
+    let svg = include_str!("../../../../assets/brand/icons/engine/ara-engine.svg");
+    let tree = resvg::usvg::Tree::from_str(svg, &resvg::usvg::Options::default())?;
+    let mut pixels =
+        resvg::tiny_skia::Pixmap::new(size[0], size[1]).context("engine icon extent")?;
+    let fit = (size[0] as f32 / tree.size().width()).min(size[1] as f32 / tree.size().height());
+    resvg::render(
+        &tree,
+        resvg::tiny_skia::Transform::from_scale(fit, fit),
+        &mut pixels.as_mut(),
+    );
+    // tiny-skia stores premultiplied pixels; UI images are straight alpha.
+    let mut rgba = pixels.take();
+    for pixel in rgba.as_chunks_mut::<4>().0 {
+        if pixel[3] > 0 {
+            for n in 0..3 {
+                pixel[n] = ((u32::from(pixel[n]) * 255) / u32::from(pixel[3])).min(255) as u8;
             }
         }
-        renderer
-            .image(
-                stable_id(name) as u32 & 0x7fff_ffff,
-                Image {
-                    width: size[0],
-                    height: size[1],
-                    rgba,
-                },
-            )
-            .map_err(|e| anyhow::anyhow!("{e}"))?;
     }
+    renderer
+        .image(
+            stable_id("loading-engine") as u32 & 0x7fff_ffff,
+            Image {
+                width: size[0],
+                height: size[1],
+                rgba,
+            },
+        )
+        .map_err(|e| anyhow::anyhow!("{e}"))?;
     Ok(())
 }
