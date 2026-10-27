@@ -14,6 +14,7 @@ mod journey;
 mod monkey;
 mod navigation_verify;
 mod panels_verify;
+mod prefab_verify;
 mod qa;
 mod responsiveness;
 mod scene_quality;
@@ -325,6 +326,7 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
     let mut navigation_check = None;
     let mut selection_check = None;
     let mut input_check = None;
+    let mut prefab_check = None;
     if panel_verification.is_some()
         || ux_verification.is_some()
         || journey.is_some()
@@ -756,6 +758,20 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
                     &mut gpu,
                     last_dpi,
                 )?;
+            }
+            if input_check
+                .as_ref()
+                .is_some_and(input_verify::InputCheck::finished)
+                && prefab_check.is_none()
+            {
+                prefab_check = Some(prefab_verify::PrefabCheck::new(
+                    &mut editor,
+                    &options.output,
+                )?);
+            }
+            if let Some(check) = &mut prefab_check {
+                let scale = crate::native::points_to_logical(window.raw(), main_dpi);
+                check.inject(&mut editor, &mut shell, &window, scale, &mut events)?;
             }
             if shell.poll_build(&mut editor) {
                 shell.rebuild(&mut editor)?;
@@ -1378,6 +1394,9 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
                     &mut gpu,
                     frame_start.elapsed().as_secs_f64() * 1000.,
                 )?;
+            }
+            if let Some(check) = &mut prefab_check {
+                check.end(&editor, &shell, &mut gpu)?;
                 if check.finished() {
                     game.close(&mut editor, &mut gpu)?;
                     break;
@@ -1484,6 +1503,17 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
             if !check.finished() || !check.failures().is_empty() {
                 return Err(format!(
                     "Native input journey failed: {}",
+                    check.failures().join(", ")
+                )
+                .into());
+            }
+            let check = prefab_check
+                .as_ref()
+                .ok_or("The prefab journey did not start")?;
+            check.write()?;
+            if !check.finished() || !check.failures().is_empty() {
+                return Err(format!(
+                    "Native prefab journey failed: {}",
                     check.failures().join(", ")
                 )
                 .into());

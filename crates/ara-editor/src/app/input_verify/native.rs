@@ -13,7 +13,7 @@ fn push(mut event: SDL_Event, events: &mut Vec<(u32, Event)>) -> ara_ui::Result<
     Ok(())
 }
 
-pub(super) fn key(
+pub(in crate::app) fn key(
     window: &Window,
     scan: i32,
     down: bool,
@@ -37,7 +37,7 @@ pub(super) fn key(
     )
 }
 
-pub(super) fn tap(
+pub(in crate::app) fn tap(
     window: &Window,
     scan: i32,
     events: &mut Vec<(u32, Event)>,
@@ -46,7 +46,7 @@ pub(super) fn tap(
     key(window, scan, false, events)
 }
 
-pub(super) fn shortcut(
+pub(in crate::app) fn shortcut(
     window: &Window,
     scan: i32,
     events: &mut Vec<(u32, Event)>,
@@ -57,7 +57,7 @@ pub(super) fn shortcut(
     key(window, primary, false, events)
 }
 
-pub(super) fn text(
+pub(in crate::app) fn text(
     window: &Window,
     text: &str,
     events: &mut Vec<(u32, Event)>,
@@ -83,7 +83,7 @@ pub(super) fn text(
     Ok(())
 }
 
-pub(super) fn preedit(
+pub(in crate::app) fn preedit(
     window: &Window,
     text: &str,
     events: &mut Vec<(u32, Event)>,
@@ -114,7 +114,7 @@ pub(super) fn preedit(
     Ok(())
 }
 
-pub(super) fn motion(
+pub(in crate::app) fn motion(
     window: &Window,
     point: [f32; 2],
     scale: f32,
@@ -135,7 +135,7 @@ pub(super) fn motion(
     )
 }
 
-pub(super) fn button(
+pub(in crate::app) fn button(
     window: &Window,
     down: bool,
     events: &mut Vec<(u32, Event)>,
@@ -159,7 +159,10 @@ pub(super) fn button(
     )
 }
 
-pub(super) fn focus_lost(window: &Window, events: &mut Vec<(u32, Event)>) -> ara_ui::Result<()> {
+pub(in crate::app) fn focus_lost(
+    window: &Window,
+    events: &mut Vec<(u32, Event)>,
+) -> ara_ui::Result<()> {
     push(
         SDL_Event {
             window: SDL_WindowEvent {

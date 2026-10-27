@@ -1,6 +1,6 @@
 //! J14: SDL → native editor routing → shared retained controls, on a hidden target.
 //! The clipboard is memory-only; this journey never reads or replaces the OS clipboard.
-mod native;
+pub(super) mod native;
 mod proof;
 use crate::{
     Editor,
