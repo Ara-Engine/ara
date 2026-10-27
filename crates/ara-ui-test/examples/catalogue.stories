@@ -341,7 +341,7 @@
     "st_10": {
       "name": "widget-tooltip",
       "component": "tooltip",
-      "markup": "<ui id='root'><text id='story-title' class='heading' text='widget-tooltip'/><tooltip id='sample' test-id='subject'><text id='example' text='loc:example'/><button id='child-action' text='loc:resume' action='game.resume'/></tooltip></ui>",
+      "markup": "<ui id='root'><text id='story-title' class='heading' text='widget-tooltip'/><button id='anchor' text='loc:resume' action='game.resume'/><tooltip id='sample' test-id='subject' class='card' anchor='anchor' placement='bottom-start'><text id='example' text='loc:example'/></tooltip></ui>",
       "stylesheet": "#sample { min-height:48px; } .split-row { flex-direction:row; gap:6px; height:150px; } splitter { width:8px; background:var(--border); } .warning { color:var(--warning-foreground); } .error { color:var(--destructive-foreground); }",
       "fixtureType": "UiStoryFixture",
       "fixture": {

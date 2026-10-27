@@ -3,6 +3,7 @@
   "basedOn": "T3 Code default light",
   "colors": {
     "background": "#fcfcfc",
+    "overlay": "#00000055",
     "foreground": "#27272a",
     "muted": "#fafafa",
     "muted-foreground": "#71717b",

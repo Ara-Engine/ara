@@ -84,10 +84,11 @@ pub fn accessibility(ui: &crate::Ui, focus: Option<u64>) -> accesskit::TreeUpdat
             if matches!(
                 n.element.tag.as_str(),
                 "field" | "input" | "button" | "toggle" | "slider" | "tab" | "dropdown"
-            ) {
+            ) && ui.accepts_input(*index)
+            {
                 node.add_action(Action::Focus);
             }
-            if n.element.tag == "button" {
+            if matches!(n.element.tag.as_str(), "button" | "dropdown") && ui.accepts_input(*index) {
                 node.add_action(Action::Click);
             }
             match ui.widgets.get(&stable_id(&n.element.id)) {
@@ -114,6 +115,14 @@ pub fn accessibility(ui: &crate::Ui, focus: Option<u64>) -> accesskit::TreeUpdat
                 Some(crate::widgets::Widget::Scroll(p)) => {
                     node.set_scroll_x(f64::from(p[0]));
                     node.set_scroll_y(f64::from(p[1]));
+                }
+                Some(crate::widgets::Widget::Choice { open, .. })
+                    if n.element.tag == "dropdown" =>
+                {
+                    node.set_expanded(*open);
+                    if let Some(text) = &n.text {
+                        node.set_value(text.value.as_str());
+                    }
                 }
                 _ => {}
             }
