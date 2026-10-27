@@ -1,10 +1,8 @@
 # ara-player
 
-The standalone game and S5 Play process. The edit-world owner (`ara` daemon via
-`ara-play-host`, or the editor) pre-spawns Play into a single-use pool; it connects over
-localhost WebSocket with the session token (`ARA_PLAY_TOKEN`), idles at zero CPU, and
-on `play.start` maps the shared-memory snapshot, builds an `ara_runtime::Runtime` and
-plays: windowed through SDL3 (`--window`) or headless. It exits on `play.stop`.
+Standalone games and S5 Play. Owners authenticate single-use players with `ARA_PLAY_TOKEN`, assign a snapshot on `play.start`, and exit on `play.stop`.
+`--game --project samples/outpost` opens native menus; exported UI games do so on ordinary launches.
+`--dedicated --headless` hosts four clients; `--connect IP:PORT` joins. `--bot --evidence DIR` drives headless bots and writes scratch evidence.
 
 ## Command line
 
@@ -12,12 +10,13 @@ plays: windowed through SDL3 (`--window`) or headless. It exits on `play.stop`.
 [--quality auto|low|medium|high|epic] [--ray-tracing[=true|false]]`.
 Without `--owner`, loads `ara-launch.json` beside the executable (or `--root DIR`),
 reads the authored PlayScene/cooked generations from game.arapack, and opens a game
-window. `--headless [--capture PNG] [--ticks N]` captures without a window;
+borderless desktop-fullscreen window (`--windowed` restores a resizable window). `--headless [--capture PNG] [--ticks N]` captures without a window;
 `--frames N` bounds a windowed probe. Shipped assets never discover or import source
 files. The same World, input mapper, animation/physics and presenters run both modes.
 `--offscreen --frames N` keeps the continuous render/present path hidden (perf mode,
 `--perf-output`, implies it; reports label `hiddenWindow`, no compositor latency).
 `--headless` is the separate still-capture path. Owner-mode probes honour `--offscreen`;
+`--no-present --perf-output JSON` is a hidden no-WSI diagnostic: rendered milestones and `presentation: noPresent` never claim loading/full-scene presented latency.
 `ARA_PLAY_OFFSCREEN=1` adds it to pooled windowed players (hidden entry-latency runs).
 `--read entity.Component.field` adds a value to `ARA_RESULT.reads` after simulation;
 repeat it to inspect shipped C# or Rust component fields. Shipping hosts resolve their
@@ -25,8 +24,7 @@ NativeAOT metadata against the export folder; development host paths are rejecte
 Only pooled Play requires the owner token. `build.rs` embeds the Ara
 exe icon (`assets/brand/ara.ico`); ara-platform sets the window icon.
 
-Build with `--features tracy` to record literal CPU zones across Play world build,
-extraction, native instance updates, GPU recording/timeline waits, presentation
+Build with `--features tracy` to record literal CPU zones across Play world build, extraction, native instance updates, GPU recording/timeline waits, presentation
 and audio. The optional client starts in the executable; normal builds erase zones.
 `tests/entry_latency.rs` (ignored real-project probe): set `ARA_PLAY_ENTRY_PROJECT`,
 `ARA_BENCH_PLAYER` (optimized player) and `CARGO_BIN_EXE_ara-import-worker`; it reports
@@ -36,6 +34,8 @@ presenter before hello and reuse its device at embed; surface-less services allo
 
 ## Modules
 
+- `game_app/`: native menus/settings, lobby, bots and the art-only `levels/menu.scene` backdrop (no C# host). `game_ui/`: bindings, labels and GPU/CPU composition; captures keep UDP polling.
+- `world/feedback.rs`: replicated event counters become audio, VFX and animation.
 - `packed.rs` and `standalone.rs`: the authored exported world and immutable pack source;
   ara-pack's bounded `native-decode` is linked into this player and its runtime templates.
 - `standalone/startup.rs`: shaderless progress (`device/loading.rs`, 225 KiB image + staging) precedes runtime/presenter/content workers. Real content, PSOs, uploads, effects and the initial GI volume/staging clear finish behind it; the surface bake can arrive later without allocation.

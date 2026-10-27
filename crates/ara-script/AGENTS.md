@@ -11,10 +11,13 @@ Depends on ara-schema, ara-diag, ara-components, bevy_ecs 0.20, netcorehost, lib
   `Transform`), shared by the runtime, export hash and checked-in binding generation.
   A new schema does not expose Rust storage until it has an explicit checked binding.
 
-- `abi` (ABI v2): `HostInit` (+ `HostApi`, Rust → C#) and `ScriptApi` (C# → Rust), `Tick`,
+- `abi` (ABI v3): `HostInit` (+ `HostApi`, Rust → C#) and `ScriptApi` (C# → Rust), `Tick`,
   `Frame`, `SystemCall`, `BehaviourCall`, `CommandCall`, `ReloadReport` (kind, escalation,
   origin, cascade size, per-phase µs), the `ABI_CONSTS` (`RELOAD_*`, `ESC_*`, `ORIGIN_*`) and
   `layout_hash(engine_layouts)`. Entry point: `ara_script_init(*const HostInit, *mut ScriptApi)`.
+- `ScriptInputs`, `ScriptNavigation`, `ScriptControls`: exclusive fixed-tick host
+  seams for sorted entity queries, replayable input, nav destinations, character
+  stops and boolean animator parameters. The embedding runtime supplies/drains them.
 - `csgen`: Rust → C# (`csharp(db, engine)`, `write`, `stale`, `blittable_components`):
   `Abi.g.cs`, `Components.g.cs`, `Units.g.cs`, `Codes.g.cs`.
 - `ScriptHost` (per process; one .NET runtime):

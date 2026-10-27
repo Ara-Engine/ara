@@ -44,6 +44,22 @@ public static unsafe class Host
         RequireExclusive();
         s_init.Api.Navigate(s_init.Ctx, entity.Bits, target.X, target.Y, target.Z, enabled ? 1u : 0u);
     }
+    /// <summary>Suppresses this actor's movement and jump for the current fixed tick.</summary>
+    public static void CharacterStop(Entity entity)
+    {
+        RequireExclusive();
+        s_init.Api.CharacterStop(s_init.Ctx, entity.Bits);
+    }
+    /// <summary>Queues a named boolean animator input at the fixed-tick boundary.</summary>
+    public static void AnimationBool(Entity entity, string name, bool value)
+    {
+        RequireExclusive();
+        var count = Encoding.UTF8.GetByteCount(name);
+        if (count > 128) throw new ArgumentException("Animation names are limited to 128 UTF-8 bytes", nameof(name));
+        Span<byte> bytes = stackalloc byte[count];
+        Encoding.UTF8.GetBytes(name, bytes);
+        fixed (byte* p = bytes) s_init.Api.AnimationBool(s_init.Ctx, entity.Bits, p, (uint)count, value ? 1u : 0u);
+    }
     static HostInit s_init;
     static volatile bool s_detached;
     [ThreadStatic] static bool t_exclusive;

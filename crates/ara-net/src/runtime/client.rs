@@ -1,3 +1,5 @@
+#[cfg(test)]
+mod clock_tests;
 mod systems;
 use super::*;
 use lightyear::prediction::{
@@ -22,7 +24,7 @@ pub struct ClientConfig {
 pub struct ClientStatus {
     /// Most recently received authoritative simulation tick.
     pub tick: u64,
-    /// Most recently sampled native prediction tick, in game-relative ticks.
+    /// Current native input tick after clock corrections, in game-relative ticks.
     pub predicted_tick: u64,
     /// Whether native timeline synchronization completed.
     pub synced: bool,
@@ -52,6 +54,7 @@ struct Owner {
     ready: bool,
     limit: Option<u64>,
     inputs: BTreeMap<(u64, String), Injection>,
+    pending_actions: BTreeMap<String, Injection>,
     source: Option<fn(u64, PlayerId) -> Option<ActionValue>>,
     last_checked: BTreeMap<NetId, u32>,
     status: ClientStatus,
@@ -80,6 +83,14 @@ pub struct Client<F: SimulationFeature> {
     poll_interval: Duration,
 }
 impl<F: SimulationFeature> Client<F> {
+    fn input_tick(&self) -> u64 {
+        let world = self.app.world();
+        world.resource::<Owner>().origin.map_or(0, |origin| {
+            let local = world.resource::<LocalTimeline>().tick().0;
+            let delay = u32::from(world.resource::<LocalTimelineSync>().input_delay());
+            u64::from(local.saturating_add(delay).saturating_sub(origin))
+        })
+    }
     /// Connects with a trusted short-lived token and matching schema registry.
     pub fn new(policies: PolicyRegistry, config: ClientConfig, token: JoinToken) -> Result<Self> {
         let mut app = base::<F>(false, policies, config.hz)?;
@@ -102,6 +113,7 @@ impl<F: SimulationFeature> Client<F> {
             ready: false,
             limit: config.tick_limit,
             inputs: BTreeMap::new(),
+            pending_actions: BTreeMap::new(),
             source: None,
             last_checked: BTreeMap::new(),
             status: ClientStatus::default(),
@@ -164,8 +176,7 @@ impl<F: SimulationFeature> Client<F> {
     pub fn action_codec(&mut self, codec: crate::ActionCodec<F::Input>) {
         self.app.insert_resource(codec);
     }
-    /// Queues bounded headless/device action injection at an explicit game tick.
-    pub fn inject(&mut self, tick: u64, input: Injection) -> Result<()> {
+    fn validate_action(&self, input: &Injection) -> Result<()> {
         let codec = self
             .app
             .world()
@@ -181,12 +192,32 @@ impl<F: SimulationFeature> Client<F> {
             }
             F::input(Some(input.value))?;
         }
+        Ok(())
+    }
+    /// Queues an immediate device action for the next native sampling boundary.
+    /// One-tick presses cannot expire before their first sample during a clock shift.
+    pub fn inject_next(&mut self, input: Injection) -> Result<()> {
+        self.validate_action(&input)?;
+        let mut owner = self.app.world_mut().resource_mut::<Owner>();
+        if input.player != owner.player
+            || input.hold_ticks == 0
+            || owner.pending_actions.len() + owner.inputs.len() >= 2048
+        {
+            return Err(NetError("invalid/bounded client action injection".into()));
+        }
+        owner.pending_actions.insert(input.action.clone(), input);
+        Ok(())
+    }
+    /// Queues bounded action injection at an explicit game tick.
+    pub fn inject(&mut self, tick: u64, input: Injection) -> Result<()> {
+        self.validate_action(&input)?;
+        let current_tick = self.input_tick();
         let mut owner = self.app.world_mut().resource_mut::<Owner>();
         if input.player != owner.player
             || input.hold_ticks == 0
             || tick.checked_add(u64::from(input.hold_ticks)).is_none()
-            || owner.inputs.len() >= 2048
-            || tick <= owner.status.predicted_tick
+            || owner.inputs.len() + owner.pending_actions.len() >= 2048
+            || tick <= current_tick
             || owner.limit.is_some_and(|limit| tick > limit)
         {
             return Err(NetError("invalid/bounded client action injection".into()));
@@ -253,8 +284,10 @@ impl<F: SimulationFeature> Client<F> {
     }
     /// Timeline/rollback/interpolation diagnostics without exposing backend types.
     pub fn status(&mut self) -> ClientStatus {
+        let current_tick = self.input_tick();
         let world = self.app.world_mut();
         let mut result = world.resource::<Owner>().status.clone();
+        result.predicted_tick = current_tick;
         result.synced = world.resource::<LocalTimelineSync>().is_synced();
         let metrics = world.resource::<PredictionMetrics>();
         result.rollbacks = metrics.rollbacks;
@@ -310,21 +343,16 @@ impl<F: SimulationFeature> Client<F> {
     }
     /// Decodes only received fields. Private/authority-only fields stay absent.
     pub fn component(&mut self, id: NetId, component: &str) -> Result<Option<serde_json::Value>> {
-        let world = self.app.world_mut();
-        let fields = world
-            .query::<(&Spawn, Option<&PublicFields>, Option<&OwnerFields>)>()
-            .iter(world)
-            .find(|(s, _, _)| s.id == id)
-            .map(|(_, public, private)| {
-                let mut p = public.map(|p| p.0.clone()).unwrap_or_default();
-                if let Some(private) = private {
-                    p.0.extend(private.0.0.clone());
-                }
-                p
-            });
-        fields
-            .map(|p| world.resource::<Policies>().0.component(&p, component))
-            .transpose()
+        let world = self.app.world();
+        let owner = world.resource::<Owner>();
+        let Some(view) = owner.field_views.get(&id) else {
+            return Ok(None);
+        };
+        let policies = &world.resource::<Policies>().0;
+        if !policies.contains_component(&view.current, component) {
+            return Ok(None);
+        }
+        Ok(Some(policies.component(&view.current, component)?))
     }
     /// Samples two received generic-field baselines using schema interpolation.
     /// Native feature views use `view`; this path handles other reflected components.
@@ -340,6 +368,9 @@ impl<F: SimulationFeature> Client<F> {
             return Ok(None);
         };
         let policies = &world.resource::<Policies>().0;
+        if !policies.contains_component(&view.current, component) {
+            return Ok(None);
+        }
         Ok(Some(policies.component(
             &policies.interpolate(&view.previous, &view.current, alpha),
             component,

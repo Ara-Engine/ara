@@ -292,6 +292,10 @@ abi_table! {
         fn input_player(ctx: *mut c_void, entity: u64) -> u64;
         /// Queues a navmesh destination after the exclusive gameplay phase; enabled=0 stops.
         fn navigate(ctx: *mut c_void, entity: u64, x: f32, y: f32, z: f32, enabled: u32);
+        /// Suppresses locomotion during this fixed tick (downed actors or completed runs).
+        fn character_stop(ctx: *mut c_void, entity: u64);
+        /// Queues a named boolean animator parameter after exclusive gameplay callbacks.
+        fn animation_bool(ctx: *mut c_void, entity: u64, name: *const u8, len: u32, value: u32);
     }
 }
 

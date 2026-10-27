@@ -21,10 +21,10 @@ struct Look {
     uint4 giBuffers;   // x surface caches, y probe relocation/state (buffers)
     uint4 giUpdate;    // x first relit probe, y relit probes this frame, z atlas probes per row, w shading weight (f32 bits)
     uint4 giImages;    // irradiance read (sampled), write (sampled), write (storage), moments (sampled)
-    float4 ao;         // x radius (m), y slices, z steps per side
+    float4 ao;         // x radius (m), y slices, z steps per side, w intensity (power on visibility; 1 physical)
     uint4 aoImages;    // trace, denoised (sampled), trace, denoised (storage); half resolution
     uint4 giGather;    // diffuse, specular (sampled), diffuse, specular (storage); half resolution
-    float4 ssr;        // x max roughness, y max distance (m), z march steps
+    float4 ssr;        // x max roughness, y max distance (m), z march steps, w intensity (scales hit confidence)
     uint4 ssrImages;   // pyramid, trace (sampled), pyramid, trace (storage)
     float4 weather;    // x cloud coverage (0..1), y cloud layer altitude (m)
     float4x4 farShadow; // light view-projection of the far shadow map
@@ -44,6 +44,19 @@ struct Look {
     float4 giLatticeOrigin[4];  // probe lattices, finest first (look-gi.slangh GiLattice): xyz first probe centre, w edge falloff (cells)
     float4 giLatticeSpacing[4]; // xyz probe separation, w surface bias (m)
     uint4 giLatticeCounts[4];   // xyz dimensions, w first global probe id
+    // Display grading and lens effects (post-process volumes; look-post.slang).
+    float4 lift;       // rgb display-space lift added to the shadows (0 neutral)
+    float4 gamma;      // rgb display-space midtone power (1 neutral)
+    float4 gain;       // rgb display-space gain (1 neutral), w chromatic aberration strength (0 off)
+    uint4 lut;         // x colour lookup table strip (sampled; 0 none), y slices (16 or 32), z contribution (f32 bits)
+    // Depth of field (look-dof.slang): radius = y*(1 - x/depth) render pixels.
+    float4 dof;        // x focus distance (m; 0 off), y circle-of-confusion scale (render px), z largest radius (render px), w near strength
+    float4 dofBlur;    // x far strength, y gather samples
+    uint4 dofImages;   // prepared, gathered (sampled), prepared, gathered (storage); half render resolution
+    uint4 dofOutput;   // x composite (storage), y composite (sampled); render resolution
+    // Motion blur (look-motion.slangh): gathered by the post pass's motion variant.
+    float4 motion;     // x shutter fraction of a frame (0 off), y samples, z longest blur (display px)
+    uint4 motionImages; // tile max, neighbour max (sampled), tile max, neighbour max (storage); display / 16
 };
 static const uint LOOK_PHYSICAL_SKY=1,LOOK_FOG=2,LOOK_RESET=4,LOOK_AMBIENT_OCCLUSION=8,LOOK_REFLECTIONS=16,LOOK_SNAP=32,LOOK_LOCAL_INDIRECT=64;
 Look look(Frame f){return buffers[NonUniformResourceIndex(f.look.x)].Load<Look>(0);}

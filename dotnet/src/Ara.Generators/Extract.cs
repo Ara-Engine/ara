@@ -143,7 +143,7 @@ public static class Extract
             props.Add(new PropModel(modifiers, p.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat), p.Name, p.GetMethod is not null, set, doc));
             members.Add(new Member(p.Name, p.Type, doc, p.GetAttributes(), p));
         }
-        var summary = Docs.Summary(t);
+        var summary = Docs.Summary(ctx.Node);
         defs.Add(new TypeDef(t.Name, Schema.StructJson(t, "component", members, defs, diags,
             doc: summary.Length > 0 ? summary : null)));
         return new BehaviourModel(shell ?? new Shell(null, default, "", ""), t.Name, props.ToEquatable(), defs.ToEquatable(), diags.ToEquatable());

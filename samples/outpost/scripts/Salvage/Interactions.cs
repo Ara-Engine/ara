@@ -18,6 +18,22 @@ public sealed partial class SalvageRun
             var d = PlanarDistanceSquared(position, World.Read<Transform>(entity).Position);
             if (d < distance) { distance = d; nearest = entity; kind = 3; }
         }
+        // Reviving has priority over props and threats in the same interaction range.
+        if (kind == 3)
+        {
+            player.Prompt = 3;
+            player.ReviveTicks = use ? player.ReviveTicks + 1 : 0;
+            if (player.ReviveTicks >= 90)
+            {
+                ref var teammate = ref World.Get<Survivor>(nearest);
+                teammate.Health = 60;
+                teammate.BleedTicks = 0;
+                player.ReviveTicks = 0;
+                player.FeedbackTick = tick.Frame;
+                Revives++;
+            }
+            return;
+        }
         foreach (var entity in caches)
         {
             if (World.Read<SalvageCache>(entity).Taken) continue;
@@ -37,20 +53,6 @@ public sealed partial class SalvageRun
             if (d < distance) { distance = d; nearest = entity; kind = 5; }
         }
         player.Prompt = kind == 0 && player.AtExtraction ? 4 : kind;
-        if (kind == 3 && use)
-        {
-            player.ReviveTicks++;
-            if (player.ReviveTicks >= 90)
-            {
-                ref var teammate = ref World.Get<Survivor>(nearest);
-                teammate.Health = 60;
-                teammate.BleedTicks = 0;
-                player.ReviveTicks = 0;
-                player.FeedbackTick = tick.Frame;
-                Revives++;
-            }
-            return;
-        }
         player.ReviveTicks = 0;
         if (!use || player.UseHeld || nearest.IsNull) return;
         switch (kind)
@@ -70,7 +72,6 @@ public sealed partial class SalvageRun
                     case 1: player.Cells++; break;
                     case 2: player.Radios++; break;
                 }
-                World.Get<Transform>(nearest).Scale = Vector3.Zero;
                 Salvaged++;
                 break;
             case 5:

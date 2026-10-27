@@ -8,9 +8,9 @@ extern crate glam34 as glam;
 mod crash;
 mod device;
 mod embed;
-mod input;
-mod game_ui;
 mod game_app;
+mod game_ui;
+mod input;
 mod net;
 mod packed;
 mod pending_models;
@@ -171,7 +171,9 @@ struct Player {
 fn run(args: Args, launched: Instant) -> Result<()> {
     ara_gpu::cpu_scope!("Player.run");
     if args.owner.is_none() {
-        if args.game.game { return game_app::run(args); }
+        if args.game.game || game_app::has_menu(&args)? {
+            return game_app::run(args);
+        }
         return standalone::run(args, launched);
     }
     let init = launched;
@@ -349,7 +351,24 @@ impl Player {
             }
             world.mark();
             if let Some(window) = &mut self.window {
-                window.update_game_ui(world.ui.as_ref(), &world.runtime, world.runtime.player().0)?;
+                window.update_game_ui(
+                    world.ui.as_ref(),
+                    &world.runtime,
+                    world.runtime.player().0,
+                )?;
+            }
+            if let Some(embed) = &mut self.embed {
+                if let Some(source) = &world.ui {
+                    let size = [embed.desc().width, embed.desc().height];
+                    if embed.game_ui.is_none() {
+                        embed.game_ui = Some(game_ui::Surface::new(source, &world.runtime, size)?);
+                    }
+                    if let Some(ui) = &mut embed.game_ui {
+                        ui.update(&world.runtime, world.runtime.player().0, size)?;
+                    }
+                } else {
+                    embed.game_ui = None;
+                }
             }
             let tick = world.runtime.tick();
             let due: Vec<PendingPatch> = {
@@ -1010,4 +1029,13 @@ fn not_embedded() -> Failure {
 
 fn parse<T: serde::de::DeserializeOwned>(params: Value) -> std::result::Result<T, Failure> {
     serde_json::from_value(params).map_err(|e| Failure::Params(e.to_string()))
+}
+
+#[cfg(test)]
+mod cli_tests {
+    #[test]
+    fn game_and_standalone_arguments_form_one_valid_command() {
+        use clap::CommandFactory;
+        super::Args::command().debug_assert();
+    }
 }

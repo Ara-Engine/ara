@@ -17,10 +17,12 @@ embed-resource.workspace = true
 anyhow = { workspace = true }
 ara-asset = { path = "../ara-asset" }
 ara-audio = { path = "../ara-audio" }
+ara-components.workspace = true
 ara-crash = { path = "../ara-crash" }
 ara-gpu = { path = "../ara-gpu" }
 ara-input = { path = "../ara-input" }
 ara-platform = { path = "../ara-platform" }
+ara-physics = { path = "../ara-physics" }
 ara-play = { path = "../ara-play" }
 ara-play-host = { path = "../ara-play-host" }
 ara-json.workspace = true
@@ -29,6 +31,8 @@ ara-render = { path = "../ara-render" }
 ara-runtime = { path = "../ara-runtime" }
 ara-runtime-audio = { path = "../ara-runtime-audio" }
 ara-runtime-net = { path = "../ara-runtime-net" }
+ara-nav = { path = "../ara-nav" }
+ara-anim = { path = "../ara-anim" }
 ara-runtime-world = { path = "../ara-runtime-world" }
 ara-schema.workspace = true
 ara-runtime-render = { path = "../ara-runtime-render" }

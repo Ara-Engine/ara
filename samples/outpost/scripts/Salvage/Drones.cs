@@ -38,7 +38,7 @@ public sealed partial class SalvageRun
             if (tick.Frame < victim.HitTick + 60) continue;
             victim.HitTick = tick.Frame;
             victim.Health = Math.Max(0, victim.Health - 12);
-            if (victim.Health == 0) victim.BleedTicks = 1200;
+            if (victim.Health == 0) victim.BleedTicks = 480;
         }
     }
 }

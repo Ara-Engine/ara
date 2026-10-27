@@ -41,7 +41,9 @@ const HISTORY0: usize = 7;
 const HISTORY1: usize = 8;
 const OUTPUT: usize = 9;
 const MOTION: usize = 10;
-const TARGET_COUNT: usize = 11;
+/// Wireframe view modes' edge mask (R8, render size; `ViewMode::wire`).
+const WIRE: usize = 11;
+const TARGET_COUNT: usize = 12;
 
 struct Mesh {
     /// Stable external identity, the key for `Renderer::update_mesh`.
@@ -77,6 +79,8 @@ struct Pipelines {
     forward: Pipeline,
     taa: Pipeline,
     tonemap: Pipeline,
+    /// Draws the wire mask over the display image (`ViewMode::wire`).
+    wire_composite: Pipeline,
 }
 
 /// Vulkan renderer with persistent extracted scene resources and per-view histories.
@@ -212,6 +216,7 @@ impl Renderer {
             forward: load("forward")?,
             taa: load("taa")?,
             tonemap: load("tonemap")?,
+            wire_composite: load("wire_composite")?,
         };
         let targets = Self::targets(&mut gpu, size, size)?;
         Self::upload_scene(
@@ -397,6 +402,25 @@ impl Renderer {
     pub fn set_look(&mut self, look: crate::look::Look) -> Result<()> {
         look.validate()?;
         self.look.look = look;
+        Ok(())
+    }
+    /// Sets the colour lookup table graded through last (`Grading::lut_contribution`
+    /// of it): `(size, texels)`, `size` steps per channel (2 to 32) and `size`³ RGBA8
+    /// texels in strip order (red + blue × size across, green down; sRGB in and out),
+    /// or `None` for none. Writes the look's existing table: never allocates.
+    pub fn set_color_lut(&mut self, lut: Option<(u32, &[u32])>) -> Result<()> {
+        let Some((size, texels)) = lut else {
+            self.look.lut_size = 0;
+            return Ok(());
+        };
+        ensure!(
+            (2..=crate::look::gpu::LUT_SIZE).contains(&size)
+                && texels.len() == size.pow(3) as usize,
+            "a colour lookup table has size³ texels for a size of 2 to 32"
+        );
+        self.gpu
+            .upload_queued(self.look.lut, bytemuck::cast_slice(texels))?;
+        self.look.lut_size = size;
         Ok(())
     }
     /// The look applied to rendered frames.

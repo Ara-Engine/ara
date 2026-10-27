@@ -30,6 +30,7 @@ pub struct Windowed {
     frames: u32,
     frame_times: Vec<f32>,
     window_start: Instant,
+    present_enabled: bool,
 }
 
 /// A one-box frame that creates the renderer and warms its pipelines before Play.
@@ -57,9 +58,24 @@ pub fn warm_frame() -> RenderFrame {
 }
 
 impl Windowed {
-    pub(crate) fn raw_events(&mut self) -> Result<Vec<Event>> { self.window.poll() }
-    pub(crate) fn game_window(&self) -> &Window { &self.window }
-    pub(crate) fn window_size(&self) -> Result<[u32; 2]> { self.window.size() }
+    pub(crate) fn raw_events(&mut self) -> Result<Vec<Event>> {
+        self.window.poll()
+    }
+    pub(crate) fn window_size(&self) -> Result<[u32; 2]> {
+        self.window.size()
+    }
+    pub(crate) fn set_window_mode(
+        &self,
+        mode: ara_platform::GameWindowMode,
+        size: [u32; 2],
+    ) -> Result<()> {
+        self.window.set_game_mode(mode, size)
+    }
+    /// Startup-only diagnostic: render normally without creating a swapchain.
+    pub(crate) fn disable_presentation(&mut self) {
+        debug_assert!(self.present.is_none() && self.present2d.is_none());
+        self.present_enabled = false;
+    }
     /// Updates startup status without changing the presentation surface or inputs.
     pub(crate) fn title(&self, text: &str) -> Result<()> {
         self.window.set_title(&format!("Ara | {text}"))
@@ -173,7 +189,7 @@ impl Windowed {
         let renderer = presenter
             .renderer()
             .ok_or_else(|| anyhow::anyhow!("renderer missing"))?;
-        if self.present.is_none() {
+        if self.present_enabled && self.present.is_none() {
             // SAFETY: the window and device both outlive `present`, which is destroyed
             // after device idle in `recreate`/`Drop` ordering below.
             self.present = Some(unsafe { Present::new(renderer.gpu().context(), &self.window)? });
@@ -181,7 +197,12 @@ impl Windowed {
         let (image, output_size) = if let Some(surface) = &mut self.game_ui {
             surface.render(presenter)?
         } else {
-            (renderer.gpu().native_image(presenter.output().context("presented image missing")?)?, presenter.output_size())
+            (
+                renderer
+                    .gpu()
+                    .native_image(presenter.output().context("presented image missing")?)?,
+                presenter.output_size(),
+            )
         };
         let result = match &mut self.present {
             // SAFETY: the renderer completed this CopySource image; both owners are live.
@@ -231,7 +252,7 @@ impl Windowed {
         let started = Instant::now();
         presenter.present()?;
         let renderer = presenter.renderer().context("2D renderer missing")?;
-        if self.present2d.is_none() {
+        if self.present_enabled && self.present2d.is_none() {
             // SAFETY: the window and 2D device outlive this native presentation object.
             self.present2d = Some(unsafe { Present::new(renderer.gpu().context(), &self.window)? });
         }

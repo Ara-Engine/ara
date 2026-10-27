@@ -600,9 +600,11 @@ name = "ara-audio-mix"
 version = "0.0.1-alpha"
 dependencies = [
  "ara-audio",
+ "ara-cmd",
  "ara-diag",
  "ara-doc",
  "ara-json",
+ "ara-ops",
  "ara-schema",
  "serde",
  "serde_json",
@@ -708,6 +710,7 @@ version = "0.0.1-alpha"
 dependencies = [
  "ara-schema",
  "bevy_ecs",
+ "glam 0.30.9",
  "serde",
  "serde_json",
 ]
@@ -1441,6 +1444,7 @@ version = "0.0.1-alpha"
 dependencies = [
  "ara-components",
  "ara-doc",
+ "ara-schema",
  "ciborium",
  "serde",
  "serde_json",
@@ -1474,8 +1478,10 @@ name = "ara-player"
 version = "0.0.1-alpha"
 dependencies = [
  "anyhow",
+ "ara-anim",
  "ara-asset",
  "ara-audio",
+ "ara-components",
  "ara-crash",
  "ara-diag",
  "ara-doc",
@@ -1487,8 +1493,10 @@ dependencies = [
  "ara-input",
  "ara-json",
  "ara-mcp",
+ "ara-nav",
  "ara-ops",
  "ara-pack",
+ "ara-physics",
  "ara-platform",
  "ara-play",
  "ara-play-host",
@@ -1586,6 +1594,7 @@ dependencies = [
  "ara-components",
  "ara-gpu",
  "ara-render",
+ "ara-schema",
  "ara-texture-stream",
  "bytemuck",
  "glam 0.30.9",
@@ -1782,10 +1791,12 @@ dependencies = [
 name = "ara-runtime-script"
 version = "0.0.1-alpha"
 dependencies = [
+ "ara-anim",
  "ara-components",
  "ara-diag",
  "ara-input",
  "ara-nav",
+ "ara-physics",
  "ara-runtime",
  "ara-schema",
  "ara-script",

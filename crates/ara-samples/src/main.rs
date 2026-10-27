@@ -15,11 +15,11 @@ mod capture;
 mod credits;
 mod editor;
 mod fetch;
+mod game;
 mod kit;
 mod lock;
 mod play;
 mod sources;
-mod game;
 
 #[derive(Parser)]
 #[command(about = "Ara sample projects with real CC0 art")]
@@ -178,7 +178,12 @@ fn main() -> Result<()> {
         }
     };
     match cli.command {
-        Command::Game => game::author(&build::Ctx::open(&samples,"outpost","Outpost",read_lock()?)?)?,
+        Command::Game => game::author(&build::Ctx::open(
+            &samples,
+            "outpost",
+            "Outpost",
+            read_lock()?,
+        )?)?,
         Command::AddPolyhaven {
             polyhaven,
             id,
@@ -259,7 +264,9 @@ fn main() -> Result<()> {
             let lock = read_lock()?;
             match project.as_str() {
                 "outpost" => {
-                    build::outpost::build(&build::Ctx::open(&samples, "outpost", "Outpost", lock)?)?
+                    let ctx = build::Ctx::open(&samples, "outpost", "Outpost", lock)?;
+                    build::outpost::build(&ctx)?;
+                    game::author(&ctx)?;
                 }
                 "showcase" => build::showcase::build(&build::Ctx::open(
                     &samples,

@@ -160,6 +160,7 @@ fn acoustic_cell(
 
 /// One world's audio: engine, mixer, room reverb, acoustics and live voices.
 pub struct AudioPresenter {
+    music_intensities: BTreeMap<String, f32>,
     engine: AudioEngine,
     mixer: Mixer,
     room: RoomReverbHandle,
@@ -180,6 +181,16 @@ fn invalid(what: String) -> AudioError {
 }
 
 impl AudioPresenter {
+    /// Retargets a score from replicated presentation bindings without writing simulation state.
+    /// Pass `None` to resume the authored MusicSource intensity.
+    pub fn set_music_intensity(&mut self, entity: &str, intensity: Option<f32>) {
+        if let Some(value) = intensity.filter(|v| v.is_finite()) {
+            self.music_intensities
+                .insert(entity.to_owned(), value.clamp(0., 1.));
+        } else {
+            self.music_intensities.remove(entity);
+        }
+    }
     /// An engine at 48 kHz with the room reverb aux and the mixer of the first `mixer`
     /// document in `documents` (none: `master` routed to the room reverb).
     pub fn new(documents: &Workspace) -> Result<Self> {
@@ -225,6 +236,7 @@ impl AudioPresenter {
             }
         }
         Ok(Self {
+            music_intensities: BTreeMap::new(),
             engine,
             mixer,
             room,
@@ -499,7 +511,11 @@ impl AudioPresenter {
                 surfaces.insert(physics.value, (material, id.0.clone()));
             }
             if let Some(music) = entity.get::<MusicSource>() {
-                scores.push((id.0.clone(), music.clone()));
+                let mut music = music.clone();
+                if let Some(intensity) = self.music_intensities.get(&id.0) {
+                    music.intensity = *intensity;
+                }
+                scores.push((id.0.clone(), music));
             }
             if let Some(graph) = entity.get::<AudioGraphSource>() {
                 graph_sources.insert(id.0.clone(), graph.clone());

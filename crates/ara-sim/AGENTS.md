@@ -36,6 +36,10 @@ Depends on the authoring kernel and Bevy ECS/tasks 0.20, never ara-proto or netc
 - `SessionAdapter`: optional ara-net seam for Listen/Dedicated. The adapter owns
   authentication, ownership checks, limits, codecs and connection state. Local has
   no adapter, replica, transport, per-connection allocation or network serialization.
+- Hashing is off in normal sessions. `set_hash_interval(NonZeroU32)` selects live
+  recording checkpoints by absolute tick number (default 1); set it before recording.
+  Replays retain every boundary and a final hash; offline verification hashes every
+  tick and checks the recorded cadence. Legacy replays default to cadence 1.
 - `SimRegistry::prepare_stream_entity` validates cell rows on workers.
   `Session::step_with_streaming` supplies an exclusive `StreamingBoundary` before
   tick systems. Spawn parents first; despawn children first (no cascading unload).

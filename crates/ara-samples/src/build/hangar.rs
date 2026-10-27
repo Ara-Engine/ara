@@ -98,7 +98,7 @@ pub fn build(ctx: &Ctx, models: &Models) -> Result<()> {
             "Environment": {"sky": [0.01, 0.015, 0.035, 1], "horizon": [0.04, 0.045, 0.06, 1], "ground": [0.01, 0.01, 0.01, 1], "intensity": 30, "exposure": 0.02},
             // Dusty air: lamps get halos and volumetric falloff near the floor.
             "HeightFog": {"density": 0.015, "falloff": 6, "albedo": [0.85, 0.82, 0.78, 1], "anisotropy": 0.6},
-            "PostProcess": {"compensation": -0.5, "minEv100": 2, "maxEv100": 8, "bloom": 0.06}
+            "PostProcessVolume": {"overrides": [{"module": "exposure", "compensation": -0.5, "minEv100": 2, "maxEv100": 8}, {"module": "bloom", "bloom": 0.06}]}
         }),
     );
     s.entity(

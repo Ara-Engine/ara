@@ -33,7 +33,7 @@ impl FidelityContent {
                             "Environment",
                             "SkyAtmosphere",
                             "HeightFog",
-                            "PostProcess",
+                            "PostProcessVolume",
                         ]
                         .iter()
                         .any(|key| row.record.contains_key(*key))

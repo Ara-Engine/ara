@@ -48,6 +48,15 @@ pub struct ScriptInputs {
 #[derive(Resource, Default)]
 pub struct ScriptNavigation(pub Vec<(u64, Option<[f32; 3]>)>);
 
+/// Per-tick native controls emitted by exclusive C# gameplay, drained before physics/animation.
+#[derive(Resource, Default)]
+pub struct ScriptControls {
+    /// Actors whose desired movement and jump are suppressed for this tick.
+    pub stopped: Vec<u64>,
+    /// Boolean animator inputs, in callback order.
+    pub animation: Vec<(u64, String, bool)>,
+}
+
 use crate::abi::{self, Frame, HostInit, PHASE_FRAME, PHASE_TICK, ReloadReport, ScriptApi, Tick};
 use crate::clr::{self, Loaded, Runtime};
 use crate::codes;

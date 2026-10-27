@@ -7,10 +7,11 @@
 
 pub mod assets;
 pub mod embed;
+mod game_ui;
 mod keep;
 mod lifecycle;
 mod package;
-mod game_ui;
+pub use game_ui::read as read_game_ui;
 pub use package::{package_scene, package_scene_for_export, package_scene_with_progress};
 pub mod params;
 pub mod pool;

@@ -25,7 +25,7 @@ use ara_anim::{
 };
 use ara_components::Transform;
 use ara_nav::NavAgentState;
-use ara_physics::Velocity;
+use ara_physics::{CharacterMotion, Velocity};
 use ara_schema::AssetRef;
 use ara_sim::{Identity, SimContext, SimError, StateProvider};
 use bevy_ecs::prelude::*;
@@ -60,6 +60,8 @@ pub struct Library {
     pub models: Models,
     /// Native graph/instance overrides resolved outside frame extraction.
     pub materials: crate::material::Materials,
+    /// Post-process volumes' colour lookup tables, decoded outside frame extraction.
+    pub luts: crate::lut::Luts,
     /// The project's `.animation` records (controllers, clips, motion databases).
     pub documents: Documents,
     programs: BTreeMap<String, Arc<Program>>,
@@ -371,6 +373,7 @@ type Animated<'w, 's> = Query<
         Option<&'static Velocity>,
         Option<&'static NavAgentState>,
         Option<&'static LocomotionIntent>,
+        Option<&'static CharacterMotion>,
     ),
 >;
 
@@ -380,7 +383,7 @@ type Animated<'w, 's> = Query<
 /// intent's desired velocity. Entities are independent, so order is irrelevant.
 pub fn animate(context: Res<SimContext>, mut query: Animated) {
     let dt = context.dt() as f32;
-    for (mut slot, velocity, nav, intent) in &mut query {
+    for (mut slot, velocity, nav, intent, motion) in &mut query {
         if slot.fault.is_some() {
             continue;
         }
@@ -393,6 +396,15 @@ pub fn animate(context: Res<SimContext>, mut query: Animated) {
         let speed = (v[0] * v[0] + v[2] * v[2]).sqrt();
         let slot = &mut *slot;
         let program = &*slot.program;
+        if let Some(id) = program.controller.parameter("jump")
+            && let Err(error) = slot.animator.set(
+                id,
+                ParameterValue::Bool(motion.is_some_and(|m| !m.grounded)),
+            )
+        {
+            slot.fault = Some(error.0);
+            continue;
+        }
         let result = program
             .speed
             .map_or(Ok(()), |id| {

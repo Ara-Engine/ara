@@ -4,9 +4,9 @@
 //! press), Left Shift Sprint, right-drag Look. Injections go through
 //! `Session::inject`, the replayable path agents use too.
 use ara_input::{ActionValue, Injection, PlayerId};
-use ara_runtime::control::{JUMP, LOOK, MOVE, SPRINT, INTERACT, INVENTORY};
+use ara_runtime::control::{INTERACT, INVENTORY, JUMP, LOOK, MOVE, SPRINT};
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 // SDL scancodes used by the default bindings.
 const W: i32 = 26;
@@ -65,13 +65,22 @@ pub struct Mapper {
     orbit: bool,
     look: [f32; 2],
     jump: bool,
-    interact: bool,
+    sent_interact: bool,
     inventory: bool,
     sent_move: [f32; 2],
     sent_sprint: bool,
+    bindings: BTreeMap<String, i32>,
 }
 
 impl Mapper {
+    /// Changes a physical key binding; actions and network/replay values remain stable.
+    pub(crate) fn bind(&mut self, action: &str, scancode: i32) {
+        self.apply(DeviceEvent::FocusLost);
+        self.bindings.insert(action.to_owned(), scancode);
+    }
+    fn key(&self, action: &str, default: i32) -> i32 {
+        self.bindings.get(action).copied().unwrap_or(default)
+    }
     /// Folds one event into the held state; [`Mapper::injections`] turns it into
     /// actions for the next tick.
     pub fn apply(&mut self, event: DeviceEvent) {
@@ -81,9 +90,8 @@ impl Mapper {
                 down: true,
             } => {
                 if self.keys.insert(scancode) {
-                    self.jump |= scancode == SPACE;
-                    self.interact |= scancode == 8;
-                    self.inventory |= scancode == 43;
+                    self.jump |= scancode == self.key("Jump", SPACE);
+                    self.inventory |= scancode == self.key("Inventory", 43);
                 }
             }
             DeviceEvent::Key {
@@ -108,7 +116,6 @@ impl Mapper {
                 self.orbit = false;
                 self.look = [0.0; 2];
                 self.jump = false;
-                self.interact = false;
                 self.inventory = false;
             }
         }
@@ -120,10 +127,16 @@ impl Mapper {
         let held = |a: i32, b: i32| self.keys.contains(&a) || self.keys.contains(&b);
         let axis = |pos: bool, neg: bool| f32::from(u8::from(pos)) - f32::from(u8::from(neg));
         let movement = [
-            axis(held(D, RIGHT), held(A, LEFT)),
-            axis(held(W, UP), held(S, DOWN)),
+            axis(
+                held(self.key("Right", D), RIGHT),
+                held(self.key("Left", A), LEFT),
+            ),
+            axis(
+                held(self.key("Forward", W), UP),
+                held(self.key("Backward", S), DOWN),
+            ),
         ];
-        let sprint = self.keys.contains(&LEFT_SHIFT);
+        let sprint = self.keys.contains(&self.key("Sprint", LEFT_SHIFT));
         let mut inputs = Vec::new();
         if movement != self.sent_move {
             inputs.push(Injection {
@@ -160,10 +173,23 @@ impl Mapper {
                 hold_ticks: 1,
             });
         }
-        for (action, pressed) in [(INTERACT, &mut self.interact), (INVENTORY, &mut self.inventory)] {
-            if std::mem::take(pressed) {
-                inputs.push(Injection { player, action: action.into(), value: ActionValue::Button(true), hold_ticks: 1 });
-            }
+        let interact = self.keys.contains(&self.key("Interact", 8));
+        if interact != self.sent_interact {
+            inputs.push(Injection {
+                player,
+                action: INTERACT.into(),
+                value: ActionValue::Button(interact),
+                hold_ticks: HELD,
+            });
+            self.sent_interact = interact;
+        }
+        if std::mem::take(&mut self.inventory) {
+            inputs.push(Injection {
+                player,
+                action: INVENTORY.into(),
+                value: ActionValue::Button(true),
+                hold_ticks: 1,
+            });
         }
         inputs
     }
@@ -176,6 +202,24 @@ mod tests {
 
     fn key(scancode: i32, down: bool) -> DeviceEvent {
         DeviceEvent::Key { scancode, down }
+    }
+
+    #[test]
+    fn rebound_interaction_stays_held_for_revives_and_releases_on_focus_loss() {
+        let mut mapper = Mapper::default();
+        mapper.bind("Interact", 9);
+        mapper.apply(key(9, true));
+        let held = mapper.injections(PlayerId(1));
+        assert_eq!(held.len(), 1);
+        assert_eq!(held[0].action, INTERACT);
+        assert_eq!(held[0].value, ActionValue::Button(true));
+        assert_eq!(held[0].hold_ticks, HELD);
+        assert!(mapper.injections(PlayerId(1)).is_empty());
+        mapper.apply(DeviceEvent::FocusLost);
+        assert_eq!(
+            mapper.injections(PlayerId(1))[0].value,
+            ActionValue::Button(false)
+        );
     }
 
     fn actions(inputs: &[Injection]) -> Vec<(String, ActionValue)> {

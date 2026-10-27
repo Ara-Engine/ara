@@ -10,11 +10,11 @@
 //! - A crashing player writes one [`CRASH_PREFIX`] line ([`CrashReport`]) to stderr.
 #![warn(missing_docs)]
 
+mod game_ui;
 mod imports;
 pub mod link;
 pub mod shm;
-mod game_ui;
-pub use game_ui::{GameUi, UiBinding};
+pub use game_ui::{GameUi, UiBinding, UiMusic, UiSound};
 pub use imports::{ImportState, Stall};
 
 use ara_doc::{AssetId, Document, Record, RecordId, Workspace};

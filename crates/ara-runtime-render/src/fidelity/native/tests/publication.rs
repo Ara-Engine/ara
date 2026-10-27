@@ -3,9 +3,8 @@ use ara_asset::{
     CachedImport, Cancellation, CookPreset, ImportContext, ImportInput, TargetPlatform,
 };
 use ara_render::{Renderer, capture::ViewMode, scene::CameraSpec};
-use ara_render_fidelity::{
-    environment::FrameEnvironment,
-    presets::{Capabilities, Plan, QualityChoice, QualityPreset, RenderOptions, RenderPath},
+use ara_render_fidelity::presets::{
+    Capabilities, Plan, QualityChoice, QualityPreset, RenderOptions, RenderPath,
 };
 use ara_runtime::{
     animation::Library,
@@ -130,7 +129,7 @@ fn raster_adopts_staged_model_publications_without_unwritten_frames_or_descripto
         let RenderPath::Raster(plan) = plan.path else {
             panic!("raster default")
         };
-        let look = FrameEnvironment::resolve(&frame.look, frame.environment.exposure);
+        let look = crate::environment(&frame);
         let camera = CameraSpec::LookAt {
             position: glam30::Vec3::new(2.5, 5., 5.),
             target: glam30::Vec3::new(2.5, 0., 0.5),

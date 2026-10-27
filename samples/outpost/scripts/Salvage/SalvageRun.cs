@@ -17,6 +17,8 @@ public sealed partial class SalvageRun : Behaviour
     [Property, Default(18000), Replicate] public partial int TicksLeft { get; set; }
     /// <summary>Elapsed fixed ticks, used by the result screen.</summary>
     [Property, Replicate] public partial int ElapsedTicks { get; set; }
+    /// <summary>Whether the crew still needs the first-minute control reminder.</summary>
+    [Property, Default(true), Replicate] public partial bool ShowHints { get; set; }
     /// <summary>Consecutive ticks the whole team has held the extraction zone.</summary>
     [Property, Replicate] public partial int ExtractionTicks { get; set; }
     /// <summary>Number of scavengers participating in this run.</summary>
@@ -61,20 +63,27 @@ public sealed partial class SalvageRun : Behaviour
             ActivePlayers++;
             if (inventory && !player.InventoryHeld) player.InventoryOpen = !player.InventoryOpen;
             player.InventoryHeld = inventory;
-            if (Won || Lost) { player.UseHeld = use; continue; }
+            Animation.SetBool(entity, "interact", tick.Frame - player.FeedbackTick < 24 && player.FeedbackTick > 0);
+            Animation.SetBool(entity, "jump", Input.Button(player.Player, "Jump"));
+            if (Won || Lost) { Movement.Stop(entity); player.UseHeld = use; continue; }
             if (player.Health == 0)
             {
+                Movement.Stop(entity);
+                player.Prompt = 6;
                 player.BleedTicks--;
                 if (player.BleedTicks <= 0 && Rescues > 0)
                 {
                     Rescues--;
                     player.Health = 60;
+                    player.BleedTicks = 0;
                     World.Get<Transform>(entity).Position = extraction + new Vector3((float)player.Player, 0, 0);
+                    standing++;
                 }
                 player.UseHeld = use;
                 continue;
             }
             standing++;
+            if (Input.Axis2(player.Player, "Move") != Vector2.Zero && tick.Frame % 24 == 0) player.StepTick = tick.Frame;
             var position = World.Read<Transform>(entity).Position;
             player.AtExtraction = PlanarDistanceSquared(position, extraction) < radius * radius;
             if (player.AtExtraction) extracted++;
@@ -82,13 +91,19 @@ public sealed partial class SalvageRun : Behaviour
             player.UseHeld = use;
         }
         AnimateDoors(doors, tick.Dt);
-        if (Won || Lost) return;
+        if (Won || Lost)
+        {
+            Alert = 0;
+            foreach (var drone in drones) Navigation.Stop(drone);
+            return;
+        }
         Started |= ActivePlayers > 0;
         if (!Started) return;
         ElapsedTicks++;
+        ShowHints = ElapsedTicks < 3600;
         TicksLeft--;
         WipeTicks = standing == 0 ? WipeTicks + 1 : 0;
-        if (TicksLeft <= 0 || WipeTicks >= 300) { Lost = true; return; }
+        if (TicksLeft <= 0 || (WipeTicks >= 300 && Rescues == 0)) { Lost = true; return; }
         UpdateDrones(drones, players, tick);
         ExtractionTicks = Salvaged >= Goal && extracted == ActivePlayers && standing == ActivePlayers ? ExtractionTicks + 1 : 0;
         if (ExtractionTicks >= 180) Won = true;

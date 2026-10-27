@@ -3633,6 +3633,140 @@
       ]
     },
     {
+      "id": "outpost_impact",
+      "title": "Impact Sounds",
+      "kind": "archive",
+      "source": "https://kenney.nl/assets/impact-sounds",
+      "license": "CC0-1.0",
+      "authors": [
+        "Kenney"
+      ],
+      "projects": [
+        "outpost"
+      ],
+      "files": [
+        {
+          "path": "pack.zip",
+          "url": "https://kenney.nl/media/pages/assets/impact-sounds/87b4ddecda-1677589768/kenney_impact-sounds.zip",
+          "size": 800850,
+          "blake3": "5b0843c8b6f88e88f5421fc33681158db4816dcd6d727f59685a9d7565cb6bc7"
+        }
+      ]
+    },
+    {
+      "id": "outpost_interface",
+      "title": "Interface Sounds",
+      "kind": "archive",
+      "source": "https://kenney.nl/assets/interface-sounds",
+      "license": "CC0-1.0",
+      "authors": [
+        "Kenney"
+      ],
+      "projects": [
+        "outpost"
+      ],
+      "files": [
+        {
+          "path": "pack.zip",
+          "url": "https://kenney.nl/media/pages/assets/interface-sounds/fa43c1dd4d-1677589452/kenney_interface-sounds.zip",
+          "size": 834536,
+          "blake3": "37c6de155c2ecdf38983563ce5a5206e44b71124177f3fe77e77881f417a0cc7"
+        }
+      ]
+    },
+    {
+      "id": "outpost_robot",
+      "title": "Robot Expressive",
+      "kind": "character",
+      "source": "https://quaternius.com/packs/animatedrobot.html",
+      "license": "CC0-1.0",
+      "authors": [
+        "Quaternius",
+        "Tomás Laulhé",
+        "Don McCurdy"
+      ],
+      "projects": [
+        "outpost"
+      ],
+      "files": [
+        {
+          "path": "README.md",
+          "url": "https://raw.githubusercontent.com/mrdoob/three.js/e06d724a29df5b44c6ad878207974eb09ed7e0d9/examples/models/gltf/RobotExpressive/README.md",
+          "size": 364,
+          "blake3": "0e20b30290f9128df2788e0a65e200c3efe145a607506d4d3bfc2fe9e30f794b"
+        },
+        {
+          "path": "RobotExpressive.glb",
+          "url": "https://raw.githubusercontent.com/mrdoob/three.js/e06d724a29df5b44c6ad878207974eb09ed7e0d9/examples/models/gltf/RobotExpressive/RobotExpressive.glb",
+          "size": 463988,
+          "blake3": "5869cb813e6a6093eda7af2824a9c13a582750e0443e88ce7c991a1f83415521"
+        }
+      ]
+    },
+    {
+      "id": "outpost_scifi",
+      "title": "Sci-Fi Sounds",
+      "kind": "archive",
+      "source": "https://kenney.nl/assets/sci-fi-sounds",
+      "license": "CC0-1.0",
+      "authors": [
+        "Kenney"
+      ],
+      "projects": [
+        "outpost"
+      ],
+      "files": [
+        {
+          "path": "pack.zip",
+          "url": "https://kenney.nl/media/pages/assets/sci-fi-sounds/6b296f9ecf-1677589334/kenney_sci-fi-sounds.zip",
+          "size": 5875104,
+          "blake3": "edc28a1cdf10c017d5bef17385304344c88039700d7078c2d26da37a84cc359a"
+        }
+      ]
+    },
+    {
+      "id": "outpost_space",
+      "title": "Space Kit",
+      "kind": "archive",
+      "source": "https://kenney.nl/assets/space-kit",
+      "license": "CC0-1.0",
+      "authors": [
+        "Kenney"
+      ],
+      "projects": [
+        "outpost"
+      ],
+      "files": [
+        {
+          "path": "pack.zip",
+          "url": "https://kenney.nl/media/pages/assets/space-kit/20874c75ac-1677698978/kenney_space-kit.zip",
+          "size": 6677531,
+          "blake3": "d8727f9017ab8f73335ff07f4008f5b00ec52d8b32bcd64be4e70bfdf009de2d"
+        }
+      ]
+    },
+    {
+      "id": "outpost_ui",
+      "title": "UI Pack Space Expansion (icons and Kenney Future fonts)",
+      "kind": "archive",
+      "source": "https://kenney.nl/assets/ui-pack-sci-fi",
+      "license": "CC0-1.0",
+      "authors": [
+        "Kenney"
+      ],
+      "projects": [
+        "outpost"
+      ],
+      "files": [
+        {
+          "path": "pack.zip",
+          "url": "https://kenney.nl/media/pages/assets/ui-pack-sci-fi/b67c2acd31-1724181109/kenney_ui-pack-space-expansion.zip",
+          "size": 768505,
+          "blake3": "e4e954bd1725a529f5be39f7b56ec8dc1bda3382b084799cbec728ee3c98d6fc"
+        }
+      ]
+    },
+    {
       "id": "overhead_crane",
       "title": "Overhead Crane",
       "kind": "model",

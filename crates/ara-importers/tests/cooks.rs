@@ -487,6 +487,39 @@ fn jpeg_hdr_and_exr_decode_to_correct_cooked_transfer_functions() {
 }
 
 #[test]
+fn lookup_tables_cook_uncompressed_without_mips_or_transfer() {
+    // A 16-slice identity strip: x = red + blue × 16, y = green, sRGB values as authored.
+    let image = RgbaImage::from_fn(256, 16, |x, y| {
+        let step = |v: u32| (v * 255 / 15) as u8;
+        image::Rgba([step(x % 16), step(y), step(x / 16), 255])
+    });
+    let mut bytes = Vec::new();
+    image::codecs::png::PngEncoder::new(&mut bytes)
+        .write_image(&image, 256, 16, image::ExtendedColorType::Rgba8)
+        .unwrap();
+    let output = cook(&input(
+        bytes,
+        &TextureImporter,
+        serde_json::json!({"usage": "lut"}),
+    ));
+    let texture = ara_asset_format::Texture::read(&output.artifacts[0].bytes).unwrap();
+    assert_eq!(
+        texture.format(),
+        ara_asset_format::TextureFormat::Rgba16Float
+    );
+    assert_eq!(texture.dimensions(), [256, 16]);
+    let levels: Vec<_> = texture.levels().collect();
+    assert_eq!(levels.len(), 1, "no mips");
+    // Texel (x = 5, y = 7): red 5/15, green 7/15, blue 0, unchanged by any transfer.
+    let at = (7 * 256 + 5) * 8;
+    let channel = |i: usize| {
+        half::f16::from_le_bytes([levels[0][at + i * 2], levels[0][at + i * 2 + 1]]).to_f32()
+    };
+    assert!((channel(0) - 5. / 15.).abs() < 2e-3 && (channel(1) - 7. / 15.).abs() < 2e-3);
+    assert_eq!(channel(2), 0.);
+}
+
+#[test]
 fn signed_hdr_and_hdr_alpha_retain_values_in_float_ktx2() {
     for (value, format) in [
         (

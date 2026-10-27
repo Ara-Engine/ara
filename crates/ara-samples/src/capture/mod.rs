@@ -76,8 +76,12 @@ pub fn run(samples: &Path, lock: &Lock, request: &Request<'_>) -> Result<()> {
         }
     }
     let (scene, stats) = convert::scene(&world, &frame, &look, lock, &root)?;
+    // One look for every shot: post-process volumes blend at the first shot's camera
+    // (exact for global volumes).
+    let camera = look.shots.first().map_or([0.; 3], |shot| shot.position);
     let mut environment = ara_render_fidelity::environment::FrameEnvironment::resolve(
-        &look.scene_look(frame.look),
+        &look.scene_look(frame.look.clone()),
+        glam::Vec3::from_array(camera),
         frame.environment.exposure,
     );
     look.tune_effects(&mut frame.effects);

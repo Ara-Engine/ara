@@ -1,6 +1,6 @@
 //! Complete predicted movement state and a bounded multi-action input codec.
 use super::*;
-use ara_runtime::control::{JUMP, LOOK, SPRINT, INTERACT, INVENTORY};
+use ara_runtime::control::{INTERACT, INVENTORY, JUMP, LOOK, SPRINT};
 use std::collections::BTreeMap;
 
 /// Every control sampled into one native prediction-history entry.
@@ -340,6 +340,8 @@ mod tests {
             look: [90_000, 0],
             sprint: true,
             jump: true,
+            interact: true,
+            inventory: true,
         };
         let before = state;
         Locomotion::step(&mut state, &input);
@@ -379,5 +381,16 @@ mod tests {
             .is_err()
         );
         assert!(sample(&BTreeMap::from([(SPRINT.into(), ActionValue::Axis(1.0))])).is_err());
+    }
+
+    #[test]
+    fn gameplay_buttons_survive_the_movement_codec() {
+        let input = MotorInput {
+            interact: true,
+            inventory: true,
+            ..Default::default()
+        };
+        let actions = expand(&input).expect("bounded input").into_iter().collect();
+        assert_eq!(sample(&actions).expect("typed actions"), input);
     }
 }

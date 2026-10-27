@@ -177,6 +177,46 @@ fn behaviours_tick_with_ecs_backed_properties() {
     assert!(errors(&host.take_diagnostics()).is_empty());
 }
 
+/// Repro for process-global loader/callback ownership; the integrator routes its fix.
+#[test]
+#[ignore = "multi-world C# host lifecycle is routed to the engine owner"]
+fn two_worlds_drop_one_host_and_the_other_keeps_ticking() {
+    let _clr = support::clr_lock();
+    let mut first_world = World::new();
+    let first = sample(&mut first_world);
+    let mut second_world = World::new();
+    let mut second = sample(&mut second_world);
+    let door = second_world.spawn(EcsTransform::default()).id();
+    second
+        .insert_component(
+            &mut second_world,
+            door,
+            "Door",
+            &json!({"openAngle":90,"isOpen":true}),
+        )
+        .expect("door");
+    second.run_tick(&mut second_world, tick(1));
+    assert_eq!(
+        second_world
+            .get::<EcsTransform>(door)
+            .expect("transform")
+            .rotation[1],
+        9.
+    );
+    drop(first);
+    drop(first_world);
+    second.run_tick(&mut second_world, tick(2));
+    assert_eq!(
+        second_world
+            .get::<EcsTransform>(door)
+            .expect("transform")
+            .rotation[1],
+        18.,
+        "dropping one world must preserve another world's module dispatch"
+    );
+    assert!(errors(&second.take_diagnostics()).is_empty());
+}
+
 fn survivor(host: &ScriptHost, world: &mut World, hp: u16, medkits: u8) -> Entity {
     let e = world.spawn_empty().id();
     host.insert_component(

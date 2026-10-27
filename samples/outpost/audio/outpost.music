@@ -18,7 +18,15 @@
         {
           "name": "lonelyhood",
           "clip": "@assets/third_party/oga_lonelyhood/Lonelyhood.ogg#as_lonelyhood",
-          "gainDb": -10
+          "gainDb": -10,
+          "looping": true
+        },
+        {
+          "name": "security",
+          "clip": "@assets/third_party/oga_freezer/freezer.ogg#as_drone",
+          "intensity": [0.1, 0.8],
+          "gainDb": -16,
+          "looping": true
         }
       ]
     }

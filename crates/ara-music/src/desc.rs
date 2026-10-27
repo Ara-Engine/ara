@@ -64,6 +64,8 @@ pub struct StemDesc {
     /// Stem gain.
     #[ara(unit = Decibels, range(min = -96, max = 24))]
     pub gain_db: f32,
+    /// Repeat a short ambience/tension loop until its segment ends.
+    pub looping: bool,
 }
 
 impl Default for StemDesc {
@@ -73,6 +75,7 @@ impl Default for StemDesc {
             clip: None,
             intensity: [0.0, 0.0],
             gain_db: 0.0,
+            looping: false,
         }
     }
 }

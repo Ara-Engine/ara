@@ -199,16 +199,32 @@ fn extract(archive: &Path, destination: &Path) -> Result<()> {
     let mut total = 0u64;
     for index in 0..zip.len() {
         let mut entry = zip.by_index(index)?;
-        let path = entry.enclosed_name().context("archive contains an unsafe path")?;
-        ensure!(entry.unix_mode().is_none_or(|mode| mode & 0o170000 != 0o120000), "archive symlinks are not supported");
-        total = total.checked_add(entry.size()).context("archive size overflow")?;
+        let path = entry
+            .enclosed_name()
+            .context("archive contains an unsafe path")?;
+        ensure!(
+            entry
+                .unix_mode()
+                .is_none_or(|mode| mode & 0o170000 != 0o120000),
+            "archive symlinks are not supported"
+        );
+        total = total
+            .checked_add(entry.size())
+            .context("archive size overflow")?;
         ensure!(total <= 512 * 1024 * 1024, "asset archive exceeds 512 MiB");
         let path = destination.join(path);
-        if entry.is_dir() { std::fs::create_dir_all(path)?; continue; }
-        if let Some(parent) = path.parent() { std::fs::create_dir_all(parent)?; }
+        if entry.is_dir() {
+            std::fs::create_dir_all(path)?;
+            continue;
+        }
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
         let mut bytes = Vec::new();
         entry.read_to_end(&mut bytes)?;
-        if std::fs::read(&path).ok().as_deref() != Some(&bytes) { std::fs::write(path, bytes)?; }
+        if std::fs::read(&path).ok().as_deref() != Some(&bytes) {
+            std::fs::write(path, bytes)?;
+        }
     }
     Ok(())
 }

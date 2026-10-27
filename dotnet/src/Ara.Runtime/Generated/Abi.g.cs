@@ -294,7 +294,7 @@ namespace Ara.Hosting
     /// <summary>
     /// Passed to <c>ara_script_init</c>: ABI identity, the host context and the host table.
     /// </summary>
-    [StructLayout(LayoutKind.Explicit, Size = 144)]
+    [StructLayout(LayoutKind.Explicit, Size = 160)]
     public unsafe partial struct HostInit
     {
         /// <summary>
@@ -322,7 +322,7 @@ namespace Ara.Hosting
     /// <summary>
     /// Functions the Rust host offers C#. Each takes the opaque <c>ctx</c> from <c>HostInit</c>.
     /// </summary>
-    [StructLayout(LayoutKind.Explicit, Size = 120)]
+    [StructLayout(LayoutKind.Explicit, Size = 136)]
     public unsafe partial struct HostApi
     {
         /// <summary>
@@ -405,6 +405,16 @@ namespace Ara.Hosting
         /// </summary>
         // (void* ctx, ulong entity, float x, float y, float z, uint enabled)
         [FieldOffset(112)] public delegate* unmanaged<void*, ulong, float, float, float, uint, void> Navigate;
+        /// <summary>
+        /// Suppresses locomotion during this fixed tick (downed actors or completed runs).
+        /// </summary>
+        // (void* ctx, ulong entity)
+        [FieldOffset(120)] public delegate* unmanaged<void*, ulong, void> CharacterStop;
+        /// <summary>
+        /// Queues a named boolean animator parameter after exclusive gameplay callbacks.
+        /// </summary>
+        // (void* ctx, ulong entity, byte* name, uint len, uint value)
+        [FieldOffset(128)] public delegate* unmanaged<void*, ulong, byte*, uint, uint, void> AnimationBool;
     }
 
     /// <summary>
@@ -658,7 +668,7 @@ namespace Ara.Hosting
         /// <summary>Must equal the host's <c>ABI_VERSION</c>.</summary>
         public const uint Version = 3;
         /// <summary>Hash of every ABI layout and the engine components this file was generated from.</summary>
-        public const ulong LayoutHash = 0xBAD6976A1C47B2BDUL;
+        public const ulong LayoutHash = 0x942EFAB2231FF08FUL;
 
         /// <summary>Checks that the C# layouts agree with the generated sizes; returns an error or null.</summary>
         public static string? VerifySizes()
@@ -669,7 +679,7 @@ namespace Ara.Hosting
             if (Unsafe.SizeOf<global::Ara.Hosting.BehaviourCall>() != 56) return "global::Ara.Hosting.BehaviourCall: expected 56 bytes, got " + Unsafe.SizeOf<global::Ara.Hosting.BehaviourCall>();
             if (Unsafe.SizeOf<global::Ara.Hosting.CommandCall>() != 112) return "global::Ara.Hosting.CommandCall: expected 112 bytes, got " + Unsafe.SizeOf<global::Ara.Hosting.CommandCall>();
             if (Unsafe.SizeOf<global::Ara.Hosting.ReloadReport>() != 120) return "global::Ara.Hosting.ReloadReport: expected 120 bytes, got " + Unsafe.SizeOf<global::Ara.Hosting.ReloadReport>();
-            if (Unsafe.SizeOf<global::Ara.Hosting.HostInit>() != 144) return "global::Ara.Hosting.HostInit: expected 144 bytes, got " + Unsafe.SizeOf<global::Ara.Hosting.HostInit>();
+            if (Unsafe.SizeOf<global::Ara.Hosting.HostInit>() != 160) return "global::Ara.Hosting.HostInit: expected 160 bytes, got " + Unsafe.SizeOf<global::Ara.Hosting.HostInit>();
             if (Unsafe.SizeOf<global::Ara.Transform>() != 36) return "global::Ara.Transform: expected 36 bytes, got " + Unsafe.SizeOf<global::Ara.Transform>();
             return null;
         }

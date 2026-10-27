@@ -12,7 +12,7 @@ public partial struct Survivor
     [Replicate] public bool Active;
     /// <summary>Health; zero means downed and another scavenger can revive you.</summary>
     [Default(100), Range(0, 100), Replicate] public int Health;
-    /// <summary>Ticks until rescue becomes unavailable while downed.</summary>
+    /// <summary>Ticks until an emergency rescue is used while downed.</summary>
     [Replicate] public int BleedTicks;
     /// <summary>Circuit boards carried by this player only.</summary>
     [Replicate(Audience.Owner)] public int Circuits;
@@ -22,12 +22,14 @@ public partial struct Survivor
     [Replicate(Audience.Owner)] public int Radios;
     /// <summary>Private inventory visibility.</summary>
     [Replicate(Audience.Owner)] public bool InventoryOpen;
-    /// <summary>Prompt: 0 explore, 1 door, 2 salvage, 3 revive, 4 extraction, 5 EMP.</summary>
+    /// <summary>Prompt: 0 explore, 1 door, 2 salvage, 3 revive, 4 extraction, 5 EMP, 6 downed.</summary>
     [Replicate(Audience.Owner)] public int Prompt;
     /// <summary>Team extraction radius membership.</summary>
     [Replicate] public bool AtExtraction;
     /// <summary>Last successful interaction tick, for presentation feedback.</summary>
-    [Replicate(Audience.Owner)] public ulong FeedbackTick;
+    [Replicate] public ulong FeedbackTick;
+    /// <summary>Latest footfall tick, driving presentation sound without wall-clock timers.</summary>
+    [Replicate] public ulong StepTick;
     /// <summary>Interaction hold on the previous fixed tick, for edge detection and replay.</summary>
     public bool UseHeld;
     /// <summary>Inventory hold on the previous fixed tick.</summary>

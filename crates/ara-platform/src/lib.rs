@@ -4,4 +4,4 @@ mod output;
 mod present;
 mod window;
 pub use present::Present;
-pub use window::{Event, Window};
+pub use window::{Event, GameWindowMode, Window};

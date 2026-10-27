@@ -7,9 +7,9 @@ Owns the M1 baseline renderer and agent visual feedback. Gameplay state stays in
 
 ## Public API
 
-- `Graph`: declared accesses, stable topological ordering, barriers, explicit queue release/acquire pairs, timeline dependencies, transient images.
-  Compilation indexes resource uses once; declaration-order versions and queue handoffs stay deterministic.
-- `Renderer::new`, `render`, `render_view` (live debug view mode), `resize`, `capture`: cooked Vulkan rendering; read-only
+- `Graph`: declared accesses, stable topological ordering, barriers, explicit queue release/acquire pairs, timeline dependencies, transient images. Compilation indexes resource uses once; declaration-order versions and queue handoffs stay deterministic.
+- `Renderer::new`, `render`, `render_view` (live debug view mode; `Wireframe`/`LitWireframe` draw native triangle edges, unjittered, into
+  the `WIRE` mask and composite them after post), `resize`, `capture`, `set_color_lut` (a 32³ host buffer): cooked Vulkan rendering; read-only
   `gpu()` access for diagnostics/native presentation. Unchanged display resizes retain TAAU targets/history. `resize_upscaled(render, display)` is TAAU:
   scene passes, feature color/depth and IDs at `render_size()`; history, output, captures and picks at `size()`.
 - `prewarm_view_quality` caches one camera on the startup worker; `create_view` claims it. `preallocate_view` reserves exact render/display targets, constants and retained pairs on the allocation worker; `submit_secondary` draws. Independent motion,
@@ -53,15 +53,17 @@ Owns the M1 baseline renderer and agent visual feedback. Gameplay state stays in
 - `update_geometry`: atomically replace meshes/materials/lights, retaining the
   device, targets and last good scene on failure. Textures/environment belong to
   asset integration. `entity_channel`, `entities`, `entity_at` expose picking.
-- `update_materials` replaces parameters in their existing order and remaps scene
-  texture slots without uploading geometry. `rename` updates an entity's capture
-  label. Invalid edits retain the previous content.
+- `update_materials` replaces parameters in their existing order and remaps scene texture slots without uploading
+  geometry. `rename` updates an entity's capture label. Invalid edits retain the previous content.
 - `submit_scene_frame` / `poll_scene_frame` keep one Scene frame in flight and two retained color/ID pairs; `output_size()` may lag a resize. UI reads only the completed pair.
   `entity_at` copies one texel on the UI queue; picks/outlines follow the displayed frame, while authored gizmo poses can lead by one Scene frame. `wait_scene_frame` is for capture/shutdown.
   Same-queue passes share a submission; cross-queue edges and deferred helper boundaries retain GPU waits/timestamps. Synchronous `render`/`render_view` remain available.
 - `look::Look` (`Renderer::set_look`): D27 raster look after the G-buffer: physical sky LUTs and their IBL,
   CSM-shadowed froxel fog, histogram or manual exposure (snaps to its meter on a reset and while new GI arrives;
-  `exposure`/`seed_exposure` carry a converged exposure across views), bloom, grading and the display curve.
+  `exposure`/`seed_exposure` carry a converged exposure across views), bloom, grading and the display curve,
+  plus volume lens effects (`look::lens`): display lift/gamma/gain and chromatic aberration in the post pass,
+  half-res gather DoF before TAA (TAA reads `DOF_COMPOSITE`), McGuire motion blur as the `look_post_motion`
+  variant, AO/SSR tuning `OverPreset`. Their images allocate with the quality budget, never on a look edit.
   Hosts map `SceneLook` with `FrameEnvironment::raster` (ara-render-fidelity). The sky IBL,
   far map, cascades and horizon sun map rebuild on any sun change past `SUN_HOLD` (noise only): once
   something animates the sun, add a threshold with an old/new crossfade.
@@ -89,17 +91,15 @@ Owns the M1 baseline renderer and agent visual feedback. Gameplay state stays in
 
 ## Gotchas
 
-The Vulkan SDK is required for cooking, not runtime. Cooked SPIR-V/DXIL and their
-reflection are committed under `cooked/`; no shader compiler is linked at runtime.
-Use `../../shaders/pipelines.json`; changing the binding ABI requires a full cook.
+The Vulkan SDK is required for cooking, not runtime. Cooked SPIR-V/DXIL and their reflection are committed under
+`cooked/`; no shader compiler is linked at runtime. Use `../../shaders/pipelines.json`; changing the binding ABI requires a full cook.
 The renderer rejects mixed source cohorts. Byte-address frame/material/light
 records and 48-byte vertex records must match Slang's column-major ABI.
 
-Shaders: `raster.slangh` is the shared ABI (bindings, Frame, Surface; Frame.look.x
-is the look record, look.w the native motion texture, sizes/upscale the TAAU sizes,
-jitter offset and mip footprint; resolve and post use a display-extent record). `look*.slang(h)` belong to
-the look; never use 16-bit intrinsics (f16tof32) there: the device enables no
-Int16/Float16 capability, so pack halves with bit math.
+Shaders: `raster.slangh` is the shared ABI (bindings, Frame, Surface; Frame.look.x is the look record, look.w the
+native motion texture, sizes/upscale the TAAU sizes, jitter offset and mip footprint; resolve and post use a
+display-extent record). `look*.slang(h)` belong to the look; never use 16-bit intrinsics (f16tof32) there: the device
+enables no Int16/Float16 capability, so pack halves with bit math.
 
 Frames use reversed-Z, metres and linear HDR: sun in lux, point/spot flux in
 lumens, environments in cd/m2, exposure a linear multiplier (README.md: tone mapper,

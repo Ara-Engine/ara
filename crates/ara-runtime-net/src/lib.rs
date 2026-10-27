@@ -4,8 +4,8 @@
 //!   millidegrees) is its complete rollback unit and `step` is integer math, so owner
 //!   prediction and Lightyear rollback replay it bit-exactly. [`NetPlugin`] steps every
 //!   player's motor from its `Move` action at `Stage::Gameplay` (the physics character
-//!   is asked for the same velocity, which keeps ground height and pushes), then pins
-//!   the character to the motor at `Stage::Late`.
+//!   is asked for the same velocity), then reconciles the motor with authoritative
+//!   character contacts at `Stage::Late`.
 //! - [`NetHost`]: the play world's [`Runtime`] as an `ara_net::Authoritative` inside a
 //!   Lightyear server. The server's timeline is the clock; each boundary runs the
 //!   runtime's plugins (C#, ...) around the session step; every `Identity` entity

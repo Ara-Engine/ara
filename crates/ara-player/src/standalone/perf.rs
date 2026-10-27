@@ -56,9 +56,17 @@ struct Control {
     stop: bool,
 }
 
+impl PerfOptions {
+    pub(super) fn requested(&self) -> bool {
+        self.perf_output.is_some()
+    }
+}
+
 pub(super) struct Window {
     options: PerfOptions,
     offscreen: bool,
+    no_present: bool,
+    windowed: bool,
     frames: BTreeMap<String, Vec<f64>>,
     passes: BTreeMap<String, Vec<f64>>,
     gpu: gpu::Samples,
@@ -101,6 +109,12 @@ impl Window {
     pub fn enabled(&self) -> bool {
         self.options.perf_output.is_some()
     }
+    /// Label the no-WSI discriminator separately from presented measurements.
+    pub fn configure_presentation(&mut self, no_present: bool, windowed: bool) {
+        self.no_present = no_present;
+        self.windowed = windowed;
+        self.offscreen |= no_present;
+    }
     pub fn new(options: PerfOptions, offscreen: bool, began: Instant) -> Self {
         let collecting = options.perf_output.is_some();
         let boundary = boundary::Boundary::new(
@@ -109,6 +123,8 @@ impl Window {
         );
         Self {
             offscreen: offscreen || collecting,
+            no_present: false,
+            windowed: false,
             options,
             frames: BTreeMap::new(),
             passes: BTreeMap::new(),

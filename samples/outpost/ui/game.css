@@ -1,23 +1,59 @@
-ui { width:100%; height:100%; color:#f1eee5; font-size:17px; }
-#hud { width:100%; height:100%; }
-.screen { position:absolute; left:0px; top:0px; width:100%; height:100%; padding:44px; gap:16px; background:#101a25; color:#e8ebdf; }
-.logo { font-size:78px; color:#f6cd78; }
-.menu-buttons { width:460px; gap:14px;  }
-input { background:#23343e; padding:14px; width:310px; }
-slider { width:430px; height:24px; background:#273c46; color:#9ee6e0; }
-#settings { gap:8px; }
-#settings button { width:470px; padding:9px; }
+ui { width:100%; height:100%; color:#f0f2ed; font-family:Noto Sans; font-size:17px; }
 panel { display:flex; flex-direction:column; gap:10px; }
 text { flex-shrink:0; }
-#top { position:absolute; left:28px; right:28px; top:24px; flex-direction:row; justify-content:space-between; align-items:start; }
-.mission { background:#131b22e8; padding:22px; border-radius:10px; width:540px; }
-.eyebrow { color:#e5b56a; font-size:13px; }
+#hud { width:100%; height:100%; }
+.screen { position:absolute; left:0px; top:0px; width:100%; height:100%; padding:48px; gap:16px; background:#101a25f5; }
+.eyebrow { color:#ddbb80; font-size:14px; }
 .title { font-size:30px; color:#fff9ea; }
-.row { flex-direction:row; gap:3px; font-size:24px; color:#9ee6e0; }
-.status { background:#131b22e8; padding:20px; border-radius:10px; width:280px; }
-#health { font-size:25px; color:#a9edd0; }
-#help { position:absolute; left:28px; bottom:24px; background:#131b22e8; border-radius:10px; padding:20px; }
-#prompt { color:#f6cd78; font-size:20px; }
-.modal { position:absolute; left:350px; top:190px; width:560px; background:#101a25f5; padding:34px; border-radius:14px; border-width:2px; border-color:#719ba4; gap:20px; }
-button { background:#bdddce; color:#13252d; padding:14px; border-radius:6px; font-size:20px; }
-button:hover { background:#e5b56a; }
+.row { flex-direction:row; gap:8px; align-items:center; }
+button { background:#203338f0; color:#ecf1e9; padding:14px; border-radius:4px; border-width:1px; border-color:#566c68; font-size:18px; font-family:Noto Sans; }
+button:hover { background:#344e4d; border-color:#ddbb80; }
+button:focus { border-width:2px; border-color:#f6cd78; background:#304744; }
+button:active { background:#d6b77c; color:#111f23; }
+input { background:#102229e8; color:#eef3ee; padding:14px; border-radius:4px; border-width:1px; border-color:#526762; width:424px; font-size:17px; }
+input:focus { border-color:#e3c184; }
+#main-menu { padding:0px; background:#00000000; }
+#menu-content { position:absolute; left:80px; top:68px; width:560px; gap:22px; }
+#title-lockup { gap:2px; }
+.logo { font-family:Kenney Future; font-size:84px; color:#fff4da; white-space:nowrap; }
+#title-rule { width:76px; height:4px; background:#dabb80; }
+.subtitle { font-family:Kenney Future; font-size:22px; color:#dabb80; }
+.menu-description { width:440px; color:#c5ccc6; font-size:18px; }
+.menu-buttons { width:560px; gap:18px; }
+#play-row { gap:12px; }
+#host { width:274px; background:#dabb80; color:#142025; border-color:#dabb80; }
+#host:hover { background:#f4d49a; }
+#host:focus { border-color:#fff5d9; background:#ebce92; }
+#host:active { background:#ab8e59; }
+#solo { width:274px; }
+#join-group { gap:8px; }
+#join { width:124px; }
+#menu-options { gap:12px; }
+#open-settings { width:160px; padding:10px; }
+#quit { width:160px; padding:10px; }
+#connection-error { font-size:15px; color:#b8c4bd; }
+#menu-footer { position:absolute; left:80px; bottom:28px; font-size:13px; color:#bcc7c0; }
+#settings { gap:8px; }
+.setting-button { width:470px; padding:9px; }
+.settings-columns { flex-direction:row; gap:40px; }
+.settings-column { width:480px; gap:8px; }
+slider { width:430px; height:24px; background:#273c46; color:#9ee6e0; }
+.teammate { position:absolute; width:180px; height:28px; white-space:nowrap; background:#13252ddd; color:#b6f0e5; padding:5px; font-size:14px; }
+#aim { position:absolute; left:0px; top:0px; width:100%; height:100%; justify-content:center; align-items:center; }
+#reticle { width:20px; height:20px; }
+#top { position:absolute; left:24px; right:24px; top:20px; flex-direction:row; justify-content:space-between; align-items:start; }
+.mission { width:340px; gap:5px; padding:14px; background:#101b22df; border-radius:6px; }
+#objective-count { gap:0px; height:30px; }
+#salvaged { white-space:nowrap; font-size:20px; }
+#goal { white-space:nowrap; font-size:20px; }
+#ui_005 { white-space:nowrap; font-size:20px; }
+#ui_006 { white-space:nowrap; }
+.status { width:228px; gap:3px; padding:14px; background:#101b22df; border-radius:6px; font-size:15px; }
+#health { font-size:22px; color:#b6edcf; }
+#help { position:absolute; left:24px; bottom:20px; gap:5px; background:#101b22d9; border-radius:6px; padding:12px; }
+#control-hints { gap:3px; font-size:14px; color:#cbd2ce; }
+#ui_009 { white-space:nowrap; font-size:14px; }
+#ui_010 { white-space:nowrap; font-size:14px; }
+#prompt { color:#f6cd78; font-size:17px; }
+.overlay { position:absolute; left:0px; top:0px; width:100%; height:100%; justify-content:center; align-items:center; background:#07101899; }
+.modal { width:540px; background:#101c24f5; padding:32px; border-radius:8px; border-width:1px; border-color:#719b91; gap:18px; }

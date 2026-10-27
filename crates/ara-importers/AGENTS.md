@@ -3,6 +3,7 @@
 Production pure glTF/GLB, FBX, image and audio importers for ara-import-worker.
 Public API: registry, Importer implementations, cook_mesh/cook_texture/cook_texture_with_preset,
 MeshSettings/TextureSettings and Vertex. Host SourceAsset/snapshot live in ara-asset.
+`TextureUsage::Lut` cooks colour lookup table strips uncompressed (RGBA16F, one level, values as authored).
 `commands::register` exposes `import.initialize` and `import.configure` to the
 shared CLI/MCP registry. It selects the importer from the source extension and
 records its installed version; callers provide source, optional stable ID and settings.

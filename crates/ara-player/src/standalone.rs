@@ -9,6 +9,8 @@ use serde_json::json;
 use std::{path::PathBuf, sync::Arc, time::Instant};
 mod perf;
 mod startup;
+#[cfg(test)]
+mod tests;
 
 #[derive(clap::Args)]
 pub(super) struct Options {
@@ -23,6 +25,12 @@ pub(super) struct Options {
     /// Run continuous presentation on a hidden Vulkan window; perf mode implies this.
     #[arg(long, conflicts_with = "headless")]
     pub(super) offscreen: bool,
+    /// Use a resizable game window instead of borderless desktop fullscreen.
+    #[arg(long, conflicts_with = "headless")]
+    pub(crate) windowed: bool,
+    /// Diagnose rendering without swapchain acquisition or presentation; always hidden.
+    #[arg(long, requires = "perf_output", conflicts_with = "headless")]
+    no_present: bool,
     /// Write a capture after --ticks (headless defaults to verify.png).
     #[arg(long)]
     capture: Option<PathBuf>,
@@ -44,8 +52,15 @@ struct Launch {
     encryption_key_env: Option<String>,
 }
 
+impl Options {
+    pub(crate) fn opens_menu(&self) -> bool {
+        !self.headless && !self.offscreen && !self.perf.requested() && self.frames.is_none()
+    }
+}
+
 pub(super) fn run(args: Args, began: Instant) -> Result<()> {
     let mut perf = perf::Window::new(args.standalone.perf, args.standalone.offscreen, began);
+    perf.configure_presentation(args.standalone.no_present, args.standalone.windowed);
     ensure!(
         !args.standalone.headless || !perf.enabled(),
         "perf frame windows need continuous presentation; use --offscreen instead of --headless"
@@ -126,6 +141,12 @@ pub(super) fn run(args: Args, began: Instant) -> Result<()> {
                 quality,
                 options: render_options,
                 hidden: perf.offscreen(),
+                window_mode: if args.standalone.windowed {
+                    ara_platform::GameWindowMode::Windowed
+                } else {
+                    ara_platform::GameWindowMode::Borderless
+                },
+                no_present: args.standalone.no_present,
             },
             began,
             &mut phases,
@@ -238,7 +259,11 @@ pub(super) fn run(args: Args, began: Instant) -> Result<()> {
             }
             if frames == 0 {
                 phases
-                    .entry("first_frame_ms")
+                    .entry(if args.standalone.no_present {
+                        "first_rendered_frame_ms"
+                    } else {
+                        "first_frame_ms"
+                    })
                     .or_insert_with(|| began.elapsed().as_millis());
             } else {
                 let elapsed = frame_start.elapsed().as_secs_f64() * 1000.;
@@ -258,7 +283,11 @@ pub(super) fn run(args: Args, began: Instant) -> Result<()> {
             }
             if is_2d || presenter.presentation_error().is_none() {
                 phases
-                    .entry("full_scene_frame_ms")
+                    .entry(if args.standalone.no_present {
+                        "full_scene_rendered_ms"
+                    } else {
+                        "full_scene_frame_ms"
+                    })
                     .or_insert_with(|| began.elapsed().as_millis());
             }
             frames += 1;
@@ -291,7 +320,7 @@ pub(super) fn run(args: Args, began: Instant) -> Result<()> {
                                 .map(|elapsed| elapsed.as_secs_f64() * 1000.)
                         },
                         total_ms: frame_start.elapsed().as_secs_f64() * 1000.,
-                        first_presented: frames == 1,
+                        first_presented: frames == 1 && !args.standalone.no_present,
                     },
                 );
                 // A failed readiness window still owns a live swapchain. Retire

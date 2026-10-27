@@ -54,6 +54,8 @@ pub struct RasterView {
     key: u64,
     pending_gi: bool,
     look: Option<FrameEnvironment>,
+    /// The colour lookup table the renderer holds (`FrameEnvironment::lut`).
+    lut: Option<std::sync::Arc<ara_components::post::ColorLut>>,
     fades: fade::Fades,
     placeholder_changes: ara_render::instanced::Changes,
 }
@@ -90,6 +92,7 @@ impl RasterView {
             key: crate::FNV,
             pending_gi: false,
             look: None,
+            lut: None,
             fades: Default::default(),
             placeholder_changes: Default::default(),
         }
@@ -279,7 +282,7 @@ impl RasterView {
             key,
             native,
         } = candidate;
-        let look = FrameEnvironment::resolve(&frame.look, frame.environment.exposure);
+        let look = crate::environment(&frame);
         self.prepare_inner(
             renderer,
             &frame,
@@ -409,6 +412,7 @@ impl RasterView {
                 ara_gpu::cpu_scope!("RasterView.apply_look");
                 renderer.set_look(raster_look)?;
             }
+            crate::apply_lut(renderer, frame, &look, &mut self.lut)?;
             self.adopt_emitters(false)?;
             let prepared = self.prepared.as_mut().context("native raster content")?;
             if snapshot_changed {

@@ -9,6 +9,30 @@ namespace Ara.Generators.Tests;
 public class GeneratorTests
 {
     [Fact]
+    public void BehaviourDocumentationIsIndependentOfPartialDeclarationOrder()
+    {
+        const string helper="""
+            /// <summary>Mission helpers.</summary>
+            public sealed partial class Mission { void Helper() { } }
+            """;
+        const string root="""
+            /// <summary>The authoritative mission.</summary>
+            public sealed partial class Mission : Behaviour
+            {
+                /// <summary>Recovered salvage.</summary>
+                [Property] public partial int Salvage { get; set; }
+            }
+            """;
+        foreach (var source in new[] { helper+"\n"+root, root+"\n"+helper })
+        {
+            var result=Run("namespace Game;\n"+source);
+            Assert.Empty(result.Diags.Where(d=>d.Severity==DiagnosticSeverity.Error));
+            var generated=string.Join("\n",result.Sources.Values);
+            Assert.Contains("The authoritative mission.",generated,StringComparison.Ordinal);
+            Assert.DoesNotContain("Mission helpers.",generated,StringComparison.Ordinal);
+        }
+    }
+    [Fact]
     public void BehaviourGeneratesWhenAHelperPartialPrecedesTheBaseDeclaration()
     {
         var result = Run("""
@@ -24,7 +48,7 @@ public class GeneratorTests
             """);
         Assert.Empty(result.Diags.Where(d => d.Severity == DiagnosticSeverity.Error));
         Assert.Empty(result.Out.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error));
-        Assert.Single(result.Sources.Keys.Where(k => k.Contains("behaviour", StringComparison.Ordinal)));
+        Assert.Single(result.Sources.Keys, k => k.Contains("behaviour", StringComparison.Ordinal));
     }
     const string Usings = "global using System;\nglobal using System.Numerics;\nglobal using Ara;\n";
 

@@ -38,6 +38,9 @@ ara-runtime, ara-sim. The .NET side lives in `dotnet/`.
 3. `install(Gameplay)`: the host moves into the world (`Scripts` resource, reached only
    through exclusive access); the `scripts` exclusive system applies queued values and
    runs `ScriptHost::run_tick` (C# systems in `(Order, name)` order, then behaviours).
+   Applied action values and PlayerControl owners become immutable `ScriptInputs`;
+   queued Navigation/Movement/Animation requests drain into native ECS state before
+   navigation, character physics and animation. These transient resources are not game state.
 4. `before_tick`: `tick_boundary` (the only place code changes); reports, diagnostics
    and types go out on the channel; `RELOAD_L4` asks the owner for a restart, which
    resumes a fresh player from `play.snapshot` (state kept).

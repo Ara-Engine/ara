@@ -8,7 +8,8 @@ use crate::{FidelityView, Mode, PostSettings, Settings, Tier, Upscaler};
 use anyhow::{Result, bail};
 use ara_gpu::vulkan::VulkanDevice;
 use ara_render::look::{
-    AmbientOcclusion, FarShadows, LocalShadows, Quality, Reflections, Shadows, VirtualShadows,
+    AmbientOcclusion, DepthOfFieldQuality, FarShadows, LocalShadows, MotionBlurQuality, Quality,
+    Reflections, Shadows, VirtualShadows,
 };
 
 /// User-facing quality tier. D27: every tier is raster by default
@@ -301,6 +302,20 @@ impl QualityPreset {
                 steps,
             })
         };
+        // Lens effects run only while a post-process volume asks for them: depth of
+        // field from Low (a cheap gather), motion blur from Medium.
+        let dof = |samples, max_radius| {
+            Some(DepthOfFieldQuality {
+                samples,
+                max_radius,
+            })
+        };
+        let motion = |samples, max_length| {
+            Some(MotionBlurQuality {
+                samples,
+                max_length,
+            })
+        };
         match self {
             // LOD error and the cull size are in render pixels (about two
             // display pixels each at Low's scale).
@@ -317,6 +332,8 @@ impl QualityPreset {
                 local_shadows: None,
                 horizon: Some(1024),
                 virtual_shadows: None,
+                depth_of_field: dof(12, 0.01),
+                motion_blur: None,
             },
             Self::Medium => Quality {
                 shadows: shadows(3, 1024, 100., (1024, 1000.)),
@@ -336,6 +353,8 @@ impl QualityPreset {
                 }),
                 horizon: Some(2048),
                 virtual_shadows: None,
+                depth_of_field: dof(20, 0.015),
+                motion_blur: motion(8, 24.),
             },
             Self::High => Quality {
                 shadows: shadows(4, 2048, 150., (2048, 1500.)),
@@ -359,6 +378,8 @@ impl QualityPreset {
                     budget: 32,
                     bias: 0.,
                 }),
+                depth_of_field: dof(32, 0.02),
+                motion_blur: motion(12, 32.),
             },
             Self::Epic => Quality {
                 shadows: shadows(4, 2048, 250., (2048, 2000.)),
@@ -382,6 +403,8 @@ impl QualityPreset {
                     budget: 64,
                     bias: 0.,
                 }),
+                depth_of_field: dof(48, 0.025),
+                motion_blur: motion(16, 32.),
             },
         }
     }

@@ -43,6 +43,18 @@ impl Window {
             );
         }
         let mut report = json!({"format":"ara.player.perf/1","pid":std::process::id(),"quality":presenter.quality().map(|q|q.name()),"presentation":if self.offscreen {"hiddenWindow"} else {"window"},"validation":cfg!(debug_assertions),"startup":phases,"camera":camera,"frames":self.measured,"warmup":self.options.perf_warmup,"cpu":cpu,"gpu_passes":passes,"gpu_other":self.gpu.report(),"gpu_coverage":self.gpu.coverage(),"shaders":presenter.shader_status()});
+        if self.no_present {
+            report["presentation"] = json!("noPresent");
+        }
+        report["presentation_settings"] = self.presentation_settings();
+        report["gpu_submission_counters"] = presenter.renderer().map_or(Value::Null, |renderer| {
+            json!({"scope":"Cumulative renderer backend only; excludes native WSI and UI submissions",
+                "backend":renderer.gpu().submission_stats()})
+        });
+        report["gpu_queue_priority"] = presenter.renderer().map_or(Value::Null, |renderer| {
+            let info = &renderer.gpu().context().info;
+            json!({"extension":info.global_priority_extension,"graphics":info.graphics_global_priority})
+        });
         report
             .as_object_mut()
             .context("performance report object")?
@@ -79,6 +91,16 @@ impl Window {
 
     fn update_run(&self, report: &mut Value) {
         report["run"] = json!({"definition":"All game frames since launch, including readiness, warmup, keepalive gaps and later measurement requests; loading-view latency is in startup.","cpu":self.run_cpu.report(),"hitches":self.hitches.report()});
+    }
+
+    fn presentation_settings(&self) -> Value {
+        json!({
+            "present_calls": !self.no_present,
+            "visible": !self.offscreen && !self.no_present,
+            "diagnostic": self.no_present,
+            "present_mode": if self.no_present { Value::Null } else { json!("fifo") },
+            "window_mode": if self.offscreen || self.windowed { "windowed" } else { "borderlessFullscreen" },
+        })
     }
 
     fn write_report(&self, report: &Value) -> Result<()> {

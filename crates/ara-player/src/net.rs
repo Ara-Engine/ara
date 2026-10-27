@@ -90,6 +90,14 @@ impl Play {
         !matches!(self, Play::Local(_))
     }
 
+    /// The native client clock must synchronize before its lobby accepts input.
+    pub fn synced(&mut self) -> bool {
+        match self {
+            Play::Mirror(_, mirror) => mirror.synced(),
+            _ => true,
+        }
+    }
+
     /// Fails for methods that move simulation time: networked worlds run on the
     /// authority's timeline.
     pub fn local_only(&self, what: &str) -> Result<()> {

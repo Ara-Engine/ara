@@ -11,6 +11,8 @@ ara-components.workspace = true
 ara-diag.workspace = true
 ara-input = { path = "../ara-input" }
 ara-nav = { path = "../ara-nav" }
+ara-anim = { path = "../ara-anim" }
+ara-physics = { path = "../ara-physics" }
 ara-runtime = { path = "../ara-runtime" }
 ara-schema.workspace = true
 ara-script = { path = "../ara-script" }

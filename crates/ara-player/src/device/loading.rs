@@ -204,12 +204,19 @@ impl Windowed {
         size: [u32; 2],
         hidden: bool,
     ) -> Result<(Self, Vec<std::ffi::CString>, [u32; 2])> {
+        Self::open_unprepared_with_mode(name, size, hidden, ara_platform::GameWindowMode::Windowed)
+    }
+
+    /// Standalone games select desktop fullscreen; pooled editor windows keep
+    /// their independent requested extents. Hidden probes never enter fullscreen.
+    pub(crate) fn open_unprepared_with_mode(
+        name: &str,
+        size: [u32; 2],
+        hidden: bool,
+        mode: ara_platform::GameWindowMode,
+    ) -> Result<(Self, Vec<std::ffi::CString>, [u32; 2])> {
         let title = format!("Ara | {name}");
-        let window = if hidden {
-            Window::hidden(&title, size)?
-        } else {
-            Window::new(&title, size)?
-        };
+        let window = Window::game(&title, size, mode, hidden)?;
         let size = window.size()?;
         let extensions = window.extensions()?;
         Ok((
@@ -222,6 +229,7 @@ impl Windowed {
                 frames: 0,
                 frame_times: Vec::new(),
                 window_start: Instant::now(),
+                present_enabled: true,
             },
             extensions,
             size,
@@ -233,6 +241,9 @@ impl Windowed {
             return Ok(false);
         }
         loading.draw(progress)?;
+        if !self.present_enabled {
+            return Ok(true);
+        }
         if loading.present.is_none() {
             // SAFETY: This window and shared device outlive the swapchain, which
             // is transferred to the game owner after completed worker preparation.

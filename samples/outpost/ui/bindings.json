@@ -1,18 +1,205 @@
 [
-  {"node":"salvaged","entity":"e_run","component":"SalvageRun","field":"salvaged"},
-  {"node":"goal","entity":"e_run","component":"SalvageRun","field":"goal"},
-  {"node":"health","entity":"player","component":"Survivor","field":"health","template":"{value} HP"},
-  {"node":"clock","entity":"e_run","component":"SalvageRun","field":"ticksLeft","template":"{value} ticks until nightfall"},
-  {"node":"crew","entity":"e_run","component":"SalvageRun","field":"activePlayers","template":"{value} scavengers online"},
-  {"node":"alert","entity":"e_run","component":"SalvageRun","field":"alert","template":"{value} drones chasing"},
-  {"node":"prompt","entity":"player","component":"Survivor","field":"prompt","template":"Interaction {value}  /  E to use"},
-  {"node":"inventory","entity":"player","component":"Survivor","field":"inventoryOpen","visibility":true},
-  {"node":"circuits","entity":"player","component":"Survivor","field":"circuits","template":"Circuit boards: {value}"},
-  {"node":"cells","entity":"player","component":"Survivor","field":"cells","template":"Battery cells: {value}"},
-  {"node":"radios","entity":"player","component":"Survivor","field":"radios","template":"Radio parts: {value}"},
-  {"node":"win","entity":"e_run","component":"SalvageRun","field":"won","visibility":true},
-  {"node":"lose","entity":"e_run","component":"SalvageRun","field":"lost","visibility":true},
-  {"node":"win-salvage","entity":"e_run","component":"SalvageRun","field":"salvaged","template":"Salvage recovered: {value}"},
-  {"node":"win-time","entity":"e_run","component":"SalvageRun","field":"elapsedTicks","template":"Elapsed ticks: {value}"},
-  {"node":"win-revives","entity":"e_run","component":"SalvageRun","field":"revives","template":"Teammates revived: {value}"}
+  {
+    "node": "control-hints",
+    "entity": "e_run",
+    "component": "SalvageRun",
+    "field": "showHints",
+    "visibility": true
+  },
+  {
+    "node": "salvaged",
+    "entity": "e_run",
+    "component": "SalvageRun",
+    "field": "salvaged"
+  },
+  {
+    "node": "goal",
+    "entity": "e_run",
+    "component": "SalvageRun",
+    "field": "goal"
+  },
+  {
+    "node": "health",
+    "entity": "player",
+    "component": "Survivor",
+    "field": "health",
+    "template": "{value} HP"
+  },
+  {
+    "node": "clock",
+    "entity": "e_run",
+    "component": "SalvageRun",
+    "field": "ticksLeft",
+    "clock": true,
+    "template": "Nightfall in {value}"
+  },
+  {
+    "node": "crew",
+    "entity": "e_run",
+    "component": "SalvageRun",
+    "field": "activePlayers",
+    "template": "Crew online: {value}"
+  },
+  {
+    "node": "alert",
+    "entity": "e_run",
+    "component": "SalvageRun",
+    "field": "alert",
+    "template": "{value} drones chasing"
+  },
+  {
+    "node": "prompt",
+    "entity": "player",
+    "component": "Survivor",
+    "field": "prompt",
+    "template": "{value}",
+    "labels": {
+      "0": "Find the glowing signal caches",
+      "1": "E - Open shared hatch",
+      "2": "E - Recover salvage",
+      "3": "Hold E - Revive teammate",
+      "4": "Blue beacon - quota first, then hold together for 3 seconds",
+      "5": "E - EMP stun drone",
+      "6": "Downed - call a teammate or await emergency rescue"
+    }
+  },
+  {
+    "node": "inventory",
+    "entity": "player",
+    "component": "Survivor",
+    "field": "inventoryOpen",
+    "visibility": true
+  },
+  {
+    "node": "circuits",
+    "entity": "player",
+    "component": "Survivor",
+    "field": "circuits",
+    "template": "Circuit boards: {value}"
+  },
+  {
+    "node": "cells",
+    "entity": "player",
+    "component": "Survivor",
+    "field": "cells",
+    "template": "Battery cells: {value}"
+  },
+  {
+    "node": "radios",
+    "entity": "player",
+    "component": "Survivor",
+    "field": "radios",
+    "template": "Radio parts: {value}"
+  },
+  {
+    "node": "win",
+    "entity": "e_run",
+    "component": "SalvageRun",
+    "field": "won",
+    "visibility": true
+  },
+  {
+    "node": "lose",
+    "entity": "e_run",
+    "component": "SalvageRun",
+    "field": "lost",
+    "visibility": true
+  },
+  {
+    "node": "win-salvage",
+    "entity": "e_run",
+    "component": "SalvageRun",
+    "field": "salvaged",
+    "template": "Salvage recovered: {value}"
+  },
+  {
+    "node": "win-time",
+    "entity": "e_run",
+    "component": "SalvageRun",
+    "field": "elapsedTicks",
+    "clock": true,
+    "template": "Run time: {value}"
+  },
+  {
+    "node": "win-revives",
+    "entity": "e_run",
+    "component": "SalvageRun",
+    "field": "revives",
+    "template": "Teammates revived: {value}"
+  },
+  {
+    "node": "lose-salvage",
+    "entity": "e_run",
+    "component": "SalvageRun",
+    "field": "salvaged",
+    "template": "Salvage recovered: {value}"
+  },
+  {
+    "node": "lose-time",
+    "entity": "e_run",
+    "component": "SalvageRun",
+    "field": "elapsedTicks",
+    "clock": true,
+    "template": "Run time: {value}"
+  },
+  {
+    "node": "lose-revives",
+    "entity": "e_run",
+    "component": "SalvageRun",
+    "field": "revives",
+    "template": "Teammates revived: {value}"
+  },
+  {
+    "node": "extraction-progress",
+    "entity": "e_run",
+    "component": "SalvageRun",
+    "field": "extractionTicks",
+    "clock": true,
+    "template": "Extraction uplink {value} / 0:03"
+  },
+  {
+    "node": "crew-one",
+    "entity": "e_player",
+    "component": "Survivor",
+    "field": "health",
+    "template": "Crew 1 - {value} HP",
+    "world": true,
+    "active": "active"
+  },
+  {
+    "node": "crew-two",
+    "entity": "e_player02",
+    "component": "Survivor",
+    "field": "health",
+    "template": "Crew 2 - {value} HP",
+    "world": true,
+    "active": "active"
+  },
+  {
+    "node": "crew-three",
+    "entity": "e_player03",
+    "component": "Survivor",
+    "field": "health",
+    "template": "Crew 3 - {value} HP",
+    "world": true,
+    "active": "active"
+  },
+  {
+    "node": "crew-four",
+    "entity": "e_player04",
+    "component": "Survivor",
+    "field": "health",
+    "template": "Crew 4 - {value} HP",
+    "world": true,
+    "active": "active"
+  },
+  {
+    "node": "crew-five",
+    "entity": "e_player05",
+    "component": "Survivor",
+    "field": "health",
+    "template": "Crew 5 - {value} HP",
+    "world": true,
+    "active": "active"
+  }
 ]

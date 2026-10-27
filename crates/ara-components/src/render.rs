@@ -1,7 +1,8 @@
-//! The authorable look of a scene: physical sky, height fog and post processing,
-//! plus the project's rendering quality setting. Renderers receive the first entity
-//! (stable-ID order) carrying each component through the runtime extraction; the
-//! sun is the scene's directional light. Every field doc is an inspector tooltip.
+//! The authorable look of a scene: physical sky and height fog (the first entity in
+//! stable-ID order carrying each), post-process volumes (`crate::post`, all of them),
+//! plus the project's rendering quality setting. Renderers receive them through the
+//! runtime extraction; the sun is the scene's directional light. Every field doc is an
+//! inspector tooltip.
 
 use ara_schema::{Color, Schema};
 use bevy_ecs::prelude::Component;
@@ -109,7 +110,7 @@ impl Default for HeightFog {
     }
 }
 
-/// How the camera exposes the scene.
+/// How the camera exposes the scene (a post-process volume's exposure override).
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Schema, Serialize, Deserialize)]
 #[ara(module = "render")]
 #[serde(rename_all = "camelCase")]
@@ -136,76 +137,18 @@ pub enum ToneMapping {
     AcesFit,
 }
 
-/// Camera exposure, tone mapping, bloom and colour grading. The first entity in
-/// ID order wins; without one, renderers meter automatically with Filmic tone mapping.
-#[derive(Debug, Clone, Copy, PartialEq, Component, Schema, Serialize, Deserialize)]
-#[ara(component, module = "render")]
-#[serde(default, rename_all = "camelCase", deny_unknown_fields)]
-pub struct PostProcess {
-    /// Automatic metering or a fixed exposure.
-    pub exposure: ExposureMode,
-    /// Manual exposure value at ISO 100. Sunny day ≈ 15, overcast ≈ 12, sunset ≈ 10,
-    /// lit interior ≈ 7, night street ≈ 3.
-    #[ara(default = 10, range(min = -10, max = 24))]
-    pub ev100: f32,
-    /// Exposure compensation in stops, applied in both modes; +1 doubles the brightness.
-    #[ara(range(min = -8, max = 8))]
-    pub compensation: f32,
-    /// Darkest exposure automatic metering may pick (lower = brighter in dark scenes).
-    #[ara(default = -2, range(min = -10, max = 24))]
-    pub min_ev100: f32,
-    /// Brightest exposure automatic metering may pick.
-    #[ara(default = 16, range(min = -10, max = 24))]
-    pub max_ev100: f32,
-    /// How fast automatic exposure adapts, per second; higher reacts faster.
-    #[ara(default = 2, range(min = 0.1, max = 20))]
-    pub adaptation_speed: f32,
-    /// Display transform.
-    pub tone_mapping: ToneMapping,
-    /// Fraction of light spread into the bloom glow around bright pixels.
-    #[ara(default = 0.04, range(min = 0, max = 0.25))]
-    pub bloom: f32,
-    /// White balance: the colour temperature that renders as neutral white. Lower
-    /// warms the image's whites to neutral (tungsten ≈ 3200), higher cools them.
-    #[ara(default = 6500, unit = Kelvin, range(min = 1500, max = 15000))]
-    pub white_balance: f32,
-    /// Colour saturation; 0 is greyscale, 1 unchanged.
-    #[ara(default = 1, range(min = 0, max = 2))]
-    pub saturation: f32,
-    /// Contrast around middle grey; 1 unchanged.
-    #[ara(default = 1, range(min = 0.5, max = 2))]
-    pub contrast: f32,
-    /// Darkening toward the frame corners; 0 disables it.
-    #[ara(range(min = 0, max = 1))]
-    pub vignette: f32,
-}
-impl Default for PostProcess {
-    fn default() -> Self {
-        Self {
-            exposure: ExposureMode::Auto,
-            ev100: 10.0,
-            compensation: 0.0,
-            min_ev100: -2.0,
-            max_ev100: 16.0,
-            adaptation_speed: 2.0,
-            tone_mapping: ToneMapping::Filmic,
-            bloom: 0.04,
-            white_balance: 6500.0,
-            saturation: 1.0,
-            contrast: 1.0,
-            vignette: 0.0,
-        }
-    }
-}
-
-/// The scene's authored look as extracted for renderers: the first entity in ID
-/// order carrying each component, or `None`.
-#[derive(Debug, Default, Clone, Copy, PartialEq)]
+/// The scene's authored look as extracted for renderers: the first entity in ID order
+/// carrying the sky and the fog, and every post-process volume (blend them for a
+/// camera with `post_at`).
+#[derive(Debug, Default, Clone, PartialEq)]
 pub struct SceneLook {
     /// Physical sky, when authored.
     pub sky: Option<SkyAtmosphere>,
     /// Height fog, when authored.
     pub fog: Option<HeightFog>,
-    /// Exposure and display, when authored.
-    pub post: Option<PostProcess>,
+    /// Post-process volumes with their entity poses, in entity ID order.
+    pub volumes: Vec<crate::post::PostVolume>,
+    /// The decoded lookup tables the volumes reference, by asset ID (shared with the
+    /// runtime's library; never copied per frame).
+    pub luts: Vec<(String, std::sync::Arc<crate::post::ColorLut>)>,
 }
