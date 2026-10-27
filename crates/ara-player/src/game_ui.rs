@@ -178,10 +178,14 @@ impl Surface {
     }
     /// Composites directly from the completed scene image; no scene readback or CPU upload.
     /// Show the composite with [`Self::present`] or [`Self::publish`].
-    pub(crate) fn render(&mut self, presenter: &Presenter) -> Result<()> {
+    /// False when the previous composite is still running after
+    /// `Presenter::STALL_WAIT` (a stalled present path): nothing rendered this frame.
+    pub(crate) fn render(&mut self, presenter: &Presenter) -> Result<bool> {
         // The previous composite reads the UI storage this frame rewrites.
-        if let Some(gpu) = &self.gpu {
-            gpu.wait_previous()?;
+        if let Some(gpu) = &self.gpu
+            && !gpu.wait_previous_for(Presenter::STALL_WAIT)?
+        {
+            return Ok(false);
         }
         self.resize(presenter.size())?;
         self.ui.frame(&mut self.text).map_err(ui_error)?;
@@ -243,7 +247,7 @@ impl Surface {
         self.ui.display.commands.remove(0);
         rendered?;
         self.report_missing_images();
-        Ok(())
+        Ok(true)
     }
 
     /// Presents the last composite into the window.

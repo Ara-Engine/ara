@@ -175,6 +175,68 @@ impl VulkanDevice {
         Ok(timings)
     }
 
+    /// `wait_completion_with`, waiting at most `timeout`. Ok(false) leaves `frame`
+    /// pending and unconsumed: a driver whose present path stalls (a minimized or
+    /// undisplayed window) must not block an event pump, which retries later.
+    pub fn wait_completion_for(
+        &mut self,
+        frame: &mut Completion,
+        timeout: std::time::Duration,
+        consume: impl FnMut(TimelinePoint, Vec<PassTiming>),
+    ) -> Result<bool> {
+        self.check_completion(frame)?;
+        if self.deferred.is_some() {
+            return Err(GpuError::Contract(
+                "Cannot wait an active frame scope".into(),
+            ));
+        }
+        let deadline = std::time::Instant::now() + timeout;
+        let mut last = [0; 2];
+        for point in &frame.points {
+            last[point.queue.index()] = last[point.queue.index()].max(point.value);
+        }
+        for queue in [Queue::Graphics, Queue::Compute] {
+            let value = last[queue.index()];
+            if value > 0 && !self.wait_until(TimelinePoint { queue, value }, deadline)? {
+                return Ok(false);
+            }
+        }
+        self.consume_completion(frame, consume)?;
+        Ok(true)
+    }
+
+    /// Waits for `point` until `deadline`; false on timeout.
+    fn wait_until(&self, point: TimelinePoint, deadline: std::time::Instant) -> Result<bool> {
+        crate::cpu_scope!("GPU.timeline_wait_bounded");
+        if point.value > self.submitted[point.queue.index()]
+            || point.value > self.flushed[point.queue.index()]
+        {
+            return Err(GpuError::Contract(
+                "Cannot wait on unsubmitted or unflushed work".into(),
+            ));
+        }
+        let timeout = deadline
+            .saturating_duration_since(std::time::Instant::now())
+            .as_nanos()
+            .min(u128::from(u64::MAX)) as u64;
+        let result = self.context.measure_host_wait(|| {
+            // SAFETY: Point was signalled here; no object is destroyed during wait.
+            unsafe {
+                self.context.device.wait_semaphores(
+                    &vk::SemaphoreWaitInfo::default()
+                        .semaphores(&[self.timelines[point.queue.index()]])
+                        .values(&[point.value]),
+                    timeout,
+                )
+            }
+        });
+        match result {
+            Ok(()) => Ok(true),
+            Err(vk::Result::TIMEOUT) => Ok(false),
+            Err(error) => Err(anyhow::Error::from(error).into()),
+        }
+    }
+
     /// Wait once at a frame boundary and deliver each submission's original pass
     /// timings in submission order. Owners can account view/feature ranges without
     /// copying labels or treating deferred helpers as zero-cost work.

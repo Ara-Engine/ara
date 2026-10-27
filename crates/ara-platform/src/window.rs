@@ -178,6 +178,14 @@ impl Window {
                 .collect())
         }
     }
+    /// Whether presenting can show anything: false while minimized or occluded. Hosts
+    /// then render and present nothing, since a driver's present path may stall
+    /// until the window shows again, and keep pumping events.
+    pub fn presentable(&self) -> bool {
+        // SAFETY: Live window on its owning thread.
+        let flags = unsafe { SDL_GetWindowFlags(self.handle) };
+        flags & (SDL_WINDOW_MINIMIZED | SDL_WINDOW_OCCLUDED) == SDL_WindowFlags(0)
+    }
     /// Current drawable size in physical pixels.
     pub fn size(&self) -> Result<[u32; 2]> {
         let mut w = 0;

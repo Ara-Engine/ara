@@ -291,6 +291,16 @@ impl NativeUi {
         }
         Ok(())
     }
+    /// `wait_previous`, waiting at most `timeout`; false while it is still running.
+    pub fn wait_previous_for(&self, timeout: std::time::Duration) -> Result<bool> {
+        let Some(point) = self.in_flight.get() else {
+            return Ok(true);
+        };
+        let waited = std::time::Instant::now();
+        let done = self.device.wait_point_for(point, timeout)?;
+        self.gpu_wait.set(self.gpu_wait.get() + waited.elapsed());
+        Ok(done)
+    }
     /// Waits the last submission if it is still running.
     pub fn wait_previous(&self) -> Result<()> {
         if let Some(point) = self.in_flight.get() {

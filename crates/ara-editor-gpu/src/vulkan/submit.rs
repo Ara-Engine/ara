@@ -69,6 +69,30 @@ impl NativeUi {
     /// Metal's counterpart orders the renderer's next work after this adapter's;
     /// one shared queue already does here.
     pub fn order_before(&self, _gpu: &mut ara_gpu::GpuDevice) {}
+    /// `wait_previous`, waiting at most `timeout`: false while the last submission is
+    /// still running (a stalled present path), so an event pump can skip this frame.
+    pub fn wait_previous_for(&self, timeout: std::time::Duration) -> Result<bool> {
+        if !self.in_flight.get() {
+            return Ok(true);
+        }
+        let waited = std::time::Instant::now();
+        let nanos = timeout.as_nanos().min(u128::from(u64::MAX)) as u64;
+        // SAFETY: the fence belongs to this adapter's live device and was submitted.
+        let result = unsafe {
+            self.memory
+                .device
+                .wait_for_fences(&[self.fence], true, nanos)
+        };
+        self.gpu_wait.set(self.gpu_wait.get() + waited.elapsed());
+        match result {
+            Ok(()) => {
+                self.in_flight.set(false);
+                Ok(true)
+            }
+            Err(vk::Result::TIMEOUT) => Ok(false),
+            Err(error) => Err(error.into()),
+        }
+    }
     /// Waits the last submission's fence if it has not been waited.
     pub fn wait_previous(&self) -> Result<()> {
         if !self.in_flight.get() {

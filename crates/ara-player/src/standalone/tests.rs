@@ -79,6 +79,59 @@ fn frames_in_flight_with_game_ui_and_swapchain_stay_validation_clean() -> Result
 }
 
 #[test]
+#[ignore = "hidden SDL GPU pump probe; run explicitly (one test thread) on the GPU host"]
+fn an_unpresentable_window_never_blocks_the_event_pump() -> Result<()> {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../target/standalone-pump");
+    std::fs::create_dir_all(&root)?;
+    let (window, presenter) = crate::device::Windowed::open_offscreen(
+        "Pump",
+        [160, 90],
+        &root,
+        ara_runtime_render::QualityChoice::Preset(ara_runtime_render::QualityPreset::Low),
+        ara_runtime_render::RenderOptions { ray_tracing: false },
+    )?;
+    let mut owner = Presentation {
+        window: Some(window),
+        presenter2d: Presenter2d::new(&root),
+        presenter,
+    };
+    let window = owner.window.as_mut().context("window")?;
+    let content = || Ok(ara_runtime_render::fidelity::native::Content::default());
+    for _ in 0..3 {
+        window.present(&mut owner.presenter, &crate::device::warm_frame(), content)?;
+    }
+    // A minimized window (stood in for by the override): every present returns
+    // promptly and submits nothing, with frames still in flight from before.
+    window.override_presentable(Some(false));
+    window.take_stats();
+    for _ in 0..5 {
+        let started = Instant::now();
+        window.present(&mut owner.presenter, &crate::device::warm_frame(), content)?;
+        let took = started.elapsed();
+        ensure!(
+            took < std::time::Duration::from_millis(100),
+            "present blocked for {took:?}"
+        );
+    }
+    let (fps, _) = window.take_stats();
+    ensure!(
+        fps == 0.,
+        "an unpresentable window presented {fps} frames per second"
+    );
+    // Shown again, it renders and reports its frames.
+    window.override_presentable(None);
+    for _ in 0..3 {
+        window.present(&mut owner.presenter, &crate::device::warm_frame(), content)?;
+    }
+    ensure!(owner.presenter.stats().gpu.is_some(), "presenting resumed");
+    owner.presenter.set_frames_in_flight(false)?;
+    let renderer = owner.presenter.renderer().context("renderer")?;
+    renderer.gpu().wait_idle()?;
+    renderer.gpu().assert_clean()?;
+    Ok(())
+}
+
+#[test]
 fn exported_games_default_to_borderless_with_an_explicit_windowed_override() -> Result<()> {
     let args = Args::try_parse_from(["ara-player"])?;
     assert!(!args.standalone.windowed);

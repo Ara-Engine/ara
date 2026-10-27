@@ -155,6 +155,69 @@ impl MetalDevice {
         }
         self.consume_completion(frame, consume)
     }
+    /// Waits for `point` at most `timeout`; false on timeout (an event pump's bound).
+    pub fn wait_point_for(
+        &self,
+        point: TimelinePoint,
+        timeout: std::time::Duration,
+    ) -> Result<bool> {
+        if point.value > self.submitted[point.queue.index()]
+            || point.value > self.flushed[point.queue.index()]
+        {
+            return Err(GpuError::Contract(
+                "Cannot wait on unsubmitted or unflushed work".into(),
+            ));
+        }
+        let ms = timeout.as_millis().min(u128::from(u64::MAX)) as u64;
+        let event = &self.events[point.queue.index()];
+        Ok(self
+            .waits
+            .measure(|| event.waitUntilSignaledValue_timeoutMS(point.value, ms)))
+    }
+    /// `wait_completion_with`, waiting at most `timeout`; Ok(false) leaves `frame`
+    /// pending (see the Vulkan completion).
+    pub fn wait_completion_for(
+        &mut self,
+        frame: &mut Completion,
+        timeout: std::time::Duration,
+        consume: impl FnMut(TimelinePoint, Vec<PassTiming>),
+    ) -> Result<bool> {
+        self.check_completion(frame)?;
+        if self.deferred.is_some() {
+            return Err(GpuError::Contract(
+                "Cannot wait an active frame scope".into(),
+            ));
+        }
+        let deadline = std::time::Instant::now() + timeout;
+        let mut last = [0; 2];
+        for point in &frame.points {
+            last[point.queue.index()] = last[point.queue.index()].max(point.value);
+        }
+        for queue in [Queue::Graphics, Queue::Compute] {
+            let value = last[queue.index()];
+            if value == 0 {
+                continue;
+            }
+            if value > self.submitted[queue.index()] || value > self.flushed[queue.index()] {
+                return Err(GpuError::Contract(
+                    "Cannot wait on unsubmitted or unflushed work".into(),
+                ));
+            }
+            let ms = deadline
+                .saturating_duration_since(std::time::Instant::now())
+                .as_millis()
+                .min(u128::from(u64::MAX)) as u64;
+            let event = &self.events[queue.index()];
+            if !self
+                .waits
+                .measure(|| event.waitUntilSignaledValue_timeoutMS(value, ms))
+            {
+                return Ok(false);
+            }
+        }
+        self.consume_completion(frame, consume)?;
+        Ok(true)
+    }
     /// Check that all submitted work completed before a UI shows its images. Scene
     /// and UI share one Metal graphics queue, so no GPU dependency is added.
     pub fn publish_completed_to_ui(&self) -> Result<()> {

@@ -359,21 +359,56 @@ impl Presenter {
         Ok(())
     }
 
-    /// Waits for the raster frame in flight, if any, and reports its GPU costs and
+    /// How long a frames-in-flight present waits for the oldest frame before it
+    /// skips (`PresentStats::skipped`): far beyond a healthy frame, short enough
+    /// that a stalled present path never makes the window stop responding.
+    pub const STALL_WAIT: Duration = Duration::from_millis(100);
+
+    /// Waits for the raster frames in flight, if any, and reports their GPU costs and
     /// device span in `stats` (with frames in flight they lag one present).
     pub fn drain(&mut self) -> Result<()> {
-        let Some(submitted) = self.in_flight.take() else {
-            return Ok(());
-        };
         let started = Instant::now();
-        let renderer = self
-            .renderer
-            .as_mut()
-            .context("raster presentation device")?;
-        let finished = RasterView::finish_batched(renderer, submitted)?;
-        self.stats.in_flight_wait = started.elapsed();
-        self.completed(finished.costs);
+        while let Some(submitted) = self.in_flight.pop_front() {
+            let renderer = self
+                .renderer
+                .as_mut()
+                .context("raster presentation device")?;
+            let finished = RasterView::finish_batched(renderer, submitted)?;
+            self.stats.in_flight_wait = started.elapsed();
+            self.completed(finished.costs);
+        }
         Ok(())
+    }
+
+    /// Waits the oldest frames in flight until at most `keep` remain, each for at most
+    /// `STALL_WAIT`, reporting them from their own completion windows. False when one
+    /// has not completed in time: the caller submits nothing and keeps pumping.
+    fn settle(&mut self, keep: usize) -> Result<bool> {
+        while self.in_flight.len() > keep {
+            let started = Instant::now();
+            let renderer = self
+                .renderer
+                .as_mut()
+                .context("raster presentation device")?;
+            let Some(submitted) = self.in_flight.pop_front() else {
+                break;
+            };
+            let finished = RasterView::finish_within(renderer, submitted, Some(Self::STALL_WAIT))?;
+            self.stats.in_flight_wait += started.elapsed();
+            match finished {
+                Ok(finished) => {
+                    self.stats.gpu_ms = finished.costs.accounted_ms();
+                    self.stats.gpu = Some(finished.costs);
+                    self.stats.gpu_span_ms = finished.span_ms;
+                    self.stats.gpu_submission_gap_ms = finished.gaps_ms;
+                }
+                Err(pending) => {
+                    self.in_flight.push_front(pending);
+                    return Ok(false);
+                }
+            }
+        }
+        Ok(true)
     }
 
     /// Whether the next present can record while the frame in flight runs: frames
@@ -383,7 +418,7 @@ impl Presenter {
         let (Some(renderer), true, true, true) = (
             &self.renderer,
             self.frames_in_flight,
-            self.in_flight.is_some(),
+            self.in_flight.len() == 1,
             self.live.is_none() && self.raster.is_some(),
         ) else {
             return Ok(false);
@@ -431,15 +466,10 @@ impl Presenter {
                 Published::publish(published, renderer.gpu_mut(), source, size).map(drop)
             },
         )?;
-        if let Some(previous) = self.in_flight.replace(submitted) {
-            let waited = Instant::now();
-            let finished = RasterView::finish_batched(renderer, previous)?;
-            self.stats.in_flight_wait = waited.elapsed();
-            self.stats.gpu_ms = finished.costs.accounted_ms();
-            self.stats.gpu = Some(finished.costs);
-            self.stats.gpu_span_ms = finished.span_ms;
-            self.stats.gpu_submission_gap_ms = finished.gaps_ms;
-        }
+        // Frame N, bounded: a stalled one stays queued behind N+1 (the next present
+        // retries it before submitting anything).
+        self.in_flight.push_back(submitted);
+        self.settle(1)?;
         self.stats.render = started.elapsed();
         self.published_quality = self.plan.map(|plan| plan.preset);
         Ok(())
@@ -475,8 +505,22 @@ impl Presenter {
     ) -> Result<()> {
         ara_gpu::cpu_scope!("Presenter.present");
         let result = (|| {
-            if self.overlap_ready()? {
-                return self.present_overlapped(frame, resolve);
+            if self.frames_in_flight {
+                self.stats.skipped = false;
+                self.stats.in_flight_wait = Duration::ZERO;
+                // Never block the event pump: with a frame in flight that has not
+                // completed within STALL_WAIT, submit nothing this time.
+                if !self.settle(1)? {
+                    self.stats.skipped = true;
+                    return Ok(());
+                }
+                if self.overlap_ready()? {
+                    return self.present_overlapped(frame, resolve);
+                }
+                if !self.settle(0)? {
+                    self.stats.skipped = true;
+                    return Ok(());
+                }
             }
             self.prepare_with(frame, resolve)?;
             let started = Instant::now();
@@ -500,7 +544,7 @@ impl Presenter {
                     },
                 )?;
                 if self.frames_in_flight {
-                    self.in_flight = Some(submitted);
+                    self.in_flight.push_back(submitted);
                 } else {
                     let finished = RasterView::finish_batched(renderer, submitted)?;
                     self.completed(finished.costs);

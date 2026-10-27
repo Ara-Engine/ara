@@ -14,6 +14,10 @@ use ara_gpu::{
 use sdl3_sys::vulkan::SDL_Vulkan_CreateSurface;
 /// Presentations that may be in flight at once (`Present::set_frames_in_flight`).
 const SLOTS: usize = 2;
+/// Longest a presentation waits to acquire an image or reuse a slot before it skips
+/// the frame: a stalled presentation engine (minimized, occluded or undisplayed
+/// window) must never block the caller's event pump.
+const PRESENT_WAIT_NS: u64 = 100_000_000;
 /// One presentation's acquire semaphore, and its blit and the fence that retires it.
 struct Slot {
     acquire: vk::Semaphore,
@@ -211,17 +215,26 @@ impl Present {
     }
     /// Acquire the next image, signalling `semaphore`; OUT_OF_DATE is returned for
     /// caller recreation.
-    fn acquire(&self, gpu: &Gpu, semaphore: vk::Semaphore) -> Result<u32> {
+    /// None when no image is available within `PRESENT_WAIT_NS` (the frame is skipped;
+    /// a timed-out acquire signals nothing, so `semaphore` stays reusable).
+    fn acquire(&self, gpu: &Gpu, semaphore: vk::Semaphore) -> Result<Option<u32>> {
         ara_gpu::cpu_scope!("Platform.acquire");
-        gpu.measure_host_wait(|| {
+        let result = gpu.measure_host_wait(|| {
             // SAFETY: The blit that last waited this semaphore completed (`retire_slot`).
             unsafe {
-                Ok(self
-                    .loader
-                    .acquire_next_image(self.swapchain, u64::MAX, semaphore, vk::Fence::null())?
-                    .0)
+                self.loader.acquire_next_image(
+                    self.swapchain,
+                    PRESENT_WAIT_NS,
+                    semaphore,
+                    vk::Fence::null(),
+                )
             }
-        })
+        });
+        match result {
+            Ok((index, _)) => Ok(Some(index)),
+            Err(vk::Result::TIMEOUT | vk::Result::NOT_READY) => Ok(None),
+            Err(error) => Err(error.into()),
+        }
     }
     /// Lets presentations return once the blit is submitted instead of idling the
     /// graphics queue: each presentation waits only the blit that last used its
@@ -235,30 +248,36 @@ impl Present {
         if !enabled {
             for slot in 0..SLOTS {
                 // SAFETY: forwarded caller contract.
-                unsafe { self.retire_slot(gpu.context(), slot)? };
+                unsafe { self.retire_slot(gpu.context(), slot, u64::MAX)? };
             }
         }
         self.frames_in_flight = enabled;
         Ok(())
     }
-    /// Waits the blit that last used `slot` and frees its command buffer.
+    /// Waits (at most `timeout_ns`) for the blit that last used `slot` and frees its
+    /// command buffer; false while it is still pending (the slot stays busy).
     /// # Safety
     /// `gpu` created this presentation and is live.
-    unsafe fn retire_slot(&mut self, gpu: &Gpu, slot: usize) -> Result<()> {
-        let Some(command) = self.slots[slot].command.take() else {
-            return Ok(());
+    unsafe fn retire_slot(&mut self, gpu: &Gpu, slot: usize, timeout_ns: u64) -> Result<bool> {
+        let Some(command) = self.slots[slot].command else {
+            return Ok(true);
         };
         let fence = self.slots[slot].fence;
         ara_gpu::cpu_scope!("Platform.present_slot_wait");
         // SAFETY: the fence was submitted with `command` on this device; once it
         // signals, the command buffer and the slot's acquire semaphore are idle.
         unsafe {
-            gpu.measure_host_wait(|| gpu.device.wait_for_fences(&[fence], true, u64::MAX))?;
+            match gpu.measure_host_wait(|| gpu.device.wait_for_fences(&[fence], true, timeout_ns)) {
+                Ok(()) => {}
+                Err(vk::Result::TIMEOUT) => return Ok(false),
+                Err(error) => return Err(error.into()),
+            }
             gpu.device.reset_fences(&[fence])?;
             gpu.device
                 .free_command_buffers(gpu.graphics_pool, &[command]);
         }
-        Ok(())
+        self.slots[slot].command = None;
+        Ok(true)
     }
     /// Per-image binary semaphore, reused only after image reacquisition.
     pub fn rendered(&self, index: u32) -> vk::Semaphore {
@@ -442,9 +461,14 @@ impl Present {
             "Presentation has been destroyed"
         );
         let slot = self.next;
+        // A stalled presentation engine skips frames rather than blocking the caller.
         // SAFETY: this presentation was created on `gpu`.
-        unsafe { self.retire_slot(gpu, slot)? };
-        let index = self.acquire(gpu, self.slots[slot].acquire)?;
+        if !unsafe { self.retire_slot(gpu, slot, PRESENT_WAIT_NS)? } {
+            return Ok(());
+        }
+        let Some(index) = self.acquire(gpu, self.slots[slot].acquire)? else {
+            return Ok(());
+        };
         let cmd = gpu.commands(false)?;
         // SAFETY: Fresh command buffer, never submitted.
         unsafe {

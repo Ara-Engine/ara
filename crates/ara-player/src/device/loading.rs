@@ -235,6 +235,8 @@ impl Windowed {
                 frame_times: Vec::new(),
                 window_start: Instant::now(),
                 present_enabled: true,
+                hidden,
+                presentable_override: None,
             },
             extensions,
             size,

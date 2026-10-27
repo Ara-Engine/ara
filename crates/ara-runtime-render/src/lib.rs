@@ -82,6 +82,11 @@ pub struct PresentStats {
     pub render: Duration,
     /// Time this present waited for the previous frame in flight to complete.
     pub in_flight_wait: Duration,
+    /// With frames in flight: this present submitted nothing because the frame in
+    /// flight did not complete within `Presenter::STALL_WAIT` (a stalled present
+    /// path: minimized, occluded or undisplayed window). Hosts skip the UI and the
+    /// window blit for it and keep pumping events.
+    pub skipped: bool,
 }
 
 /// Owns the renderer and the per-draw upload state.
@@ -132,8 +137,8 @@ pub struct Presenter {
     lut: Option<std::sync::Arc<ara_components::post::ColorLut>>,
     /// Raster frames return once submitted (`set_frames_in_flight`).
     frames_in_flight: bool,
-    /// The submitted raster frame not yet waited (`drain`).
-    in_flight: Option<raster::Submitted>,
+    /// Submitted raster frames not yet waited, oldest first (at most two).
+    in_flight: std::collections::VecDeque<raster::Submitted>,
 }
 
 fn fnv(hash: u64, bytes: &[u8]) -> u64 {
@@ -230,7 +235,7 @@ impl Presenter {
             look_override: None,
             lut: None,
             frames_in_flight: false,
-            in_flight: None,
+            in_flight: std::collections::VecDeque::new(),
         }
     }
 
