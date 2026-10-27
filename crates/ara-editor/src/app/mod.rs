@@ -81,6 +81,16 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
     if options.verify_behaviours {
         content_drags::fixture(&mut options)?;
         hierarchy_verify::prepare(&options)?;
+        std::fs::write(
+            options.output.join("verification-scope.json"),
+            ara_json::to_canonical_string(&json!({
+                "schema":"ara.editor.behaviour-scope/1",
+                "scope":if options.behaviour_asset_ops {"full"} else {"editor-core"},
+                "extendedImportAndAssetOperationsIncluded":options.behaviour_asset_ops,
+                "fullAcceptanceRequiresExtendedAssets":true,
+                "size":options.size,"dpi":options.dpi,
+            })),
+        )?;
     }
     if options.headless {
         return headless(options);
@@ -493,6 +503,7 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
             if content_drags
                 .as_ref()
                 .is_some_and(content_drags::ContentDrags::finished)
+                && options.behaviour_asset_ops
                 && import_check.is_none()
             {
                 import_check = Some(import_verify::ImportCheck::new(
@@ -525,11 +536,16 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
                 let scale = crate::native::points_to_logical(window.raw(), main_dpi);
                 check.inject(&mut editor, &mut shell, &window, scale, &mut events)?;
             }
-            if asset_ops_check
-                .as_ref()
-                .is_some_and(asset_ops_verify::AssetOpsCheck::finished)
-                && navigation_check.is_none()
-            {
+            let preceding_behaviours_finished = if options.behaviour_asset_ops {
+                asset_ops_check
+                    .as_ref()
+                    .is_some_and(asset_ops_verify::AssetOpsCheck::finished)
+            } else {
+                content_drags
+                    .as_ref()
+                    .is_some_and(content_drags::ContentDrags::finished)
+            };
+            if preceding_behaviours_finished && navigation_check.is_none() {
                 navigation_check = Some(navigation_verify::NavigationCheck::new(
                     &editor,
                     &options.output,
@@ -1979,7 +1995,7 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
                 .into());
             }
         }
-        if options.verify_behaviours {
+        if options.verify_behaviours && options.behaviour_asset_ops {
             let check = import_check
                 .as_ref()
                 .ok_or("The OS import journey did not start")?;
@@ -2002,6 +2018,8 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
                 )
                 .into());
             }
+        }
+        if options.verify_behaviours {
             let check = snapping_check
                 .as_ref()
                 .ok_or("The snapping journey did not start")?;

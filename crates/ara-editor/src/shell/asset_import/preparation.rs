@@ -32,7 +32,9 @@ impl Shell {
                 sources: request.sources.len(),
                 selection,
                 status: backend::Status::preparing(),
-                last: Instant::now(),
+                // Obtain the first authority cancellation flag on the next pump;
+                // subsequent unchanged polls keep the normal 100 ms cadence.
+                last: Instant::now() - Duration::from_millis(100),
                 cancel_requested: false,
                 preparation: Some(request),
                 plan: None,
@@ -80,7 +82,7 @@ impl Shell {
             sources: request.sources.len(),
             status: backend::Status::preparing(),
             selection,
-            last: Instant::now(),
+            last: Instant::now() - Duration::from_millis(100),
             cancel_requested: false,
             preparation: None,
             plan: Some(plan),

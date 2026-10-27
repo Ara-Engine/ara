@@ -32,6 +32,8 @@ pub struct Options {
     pub verify_docking: bool,
     /// Run native content drag/drop, reference, component and OS-import behaviour journeys.
     pub verify_behaviours: bool,
+    /// Include extended import and filesystem lifecycle checks in the behaviour run.
+    pub behaviour_asset_ops: bool,
     /// Right-click Create → C# Script → rename → compile → attach, offscreen.
     pub verify_assets: bool,
     /// Scene to open instead of the project's main scene (`levels/hangar.scene`).
@@ -145,6 +147,7 @@ impl Default for Options {
             verify_ux: false,
             verify_docking: false,
             verify_behaviours: false,
+            behaviour_asset_ops: true,
             verify_assets: false,
             scene: None,
             select: None,

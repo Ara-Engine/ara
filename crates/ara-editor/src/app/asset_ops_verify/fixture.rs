@@ -34,6 +34,9 @@ fn done(editor: &mut Editor, job: &str) -> ara_ui::Result<bool> {
     }
 }
 impl Fixture {
+    pub fn report(&self, editor: &Editor, shell: &Shell, act: Act) -> Value {
+        json!({"foldersJob":self.folders,"populated":self.populated,"cancelJob":self.cancel_job,"readyFolders":self.ready,"pendingSave":editor.host.unsaved(),"cachedFolder":storage(shell,&act.path()),"cachedSource":storage(shell,&act.source()),"cachedFiles":shell.asset_authored_files().len()})
+    }
     pub fn new(editor: &mut Editor, output: &Path) -> ara_ui::Result<Self> {
         // Resolve both real paths with the same Windows prefix policy before
         // comparing: the host may retain a verbatim path while CLI output uses D:.
@@ -217,7 +220,10 @@ pub(super) fn snapshot(editor: &Editor, storage: &str) -> ara_ui::Result<Value> 
     let mut files = BTreeMap::new();
     let mut directories = Vec::new();
     walk(&root.join(storage), "", &mut files, &mut directories)?;
-    let documents:serde_json::Map<_,_>=editor.host.store().workspace().docs().map(|(path,doc)|(path.to_owned(),json!({"id":doc.id,"kind":doc.kind,"text":ara_doc::write(doc,editor.host.store().schema())}))).collect();
+    let documents:serde_json::Map<_,_>=editor.host.store().workspace().docs().map(|(path,doc)| {
+        let canonical = ara_doc::write(doc,editor.host.store().schema());
+        (path.to_owned(),json!({"id":doc.id,"kind":doc.kind,"bytes":canonical.len(),"digest":blake3::hash(canonical.as_bytes()).to_hex().to_string()}))
+    }).collect();
     let mut references = BTreeSet::new();
     for (_, document) in editor.host.store().workspace().docs() {
         for record in document.records().values() {
@@ -233,8 +239,55 @@ pub(super) fn snapshot(editor: &Editor, storage: &str) -> ara_ui::Result<Value> 
         .map(|(id, path)| (path.to_owned(), id.to_owned()))
         .collect();
     Ok(
-        json!({"files":files,"directories":directories,"documents":documents,"references":references,"imports":imports}),
+        json!({"schemaVersion":1,"documentRepresentation":{"algorithm":"blake3","canonicalWriter":"ara_doc::write","keys":"exact workspace paths","source":"canonical documents retained in the isolated fixture"},"fileFingerprintAlgorithm":"blake3","files":files,"directories":directories,"documents":documents,"references":references,"imports":imports}),
     )
+}
+
+/// Bounded differences keep failures actionable without embedding complete scenes.
+pub(super) fn difference(expected: &Value, actual: &Value) -> Value {
+    let mut differences = Vec::new();
+    let mut count = 0;
+    for section in ["files", "documents", "imports"] {
+        let keys: BTreeSet<_> = expected[section]
+            .as_object()
+            .into_iter()
+            .flat_map(|map| map.keys())
+            .chain(
+                actual[section]
+                    .as_object()
+                    .into_iter()
+                    .flat_map(|map| map.keys()),
+            )
+            .collect();
+        for path in keys {
+            if expected[section][path] != actual[section][path] {
+                count += 1;
+                if differences.len() < 64 {
+                    differences.push(json!({"section":section,"path":path,"expected":expected[section][path],"actual":actual[section][path]}));
+                }
+            }
+        }
+    }
+    for section in ["directories", "references"] {
+        if expected[section] != actual[section] {
+            count += 1;
+            let values = |snapshot: &Value| {
+                snapshot[section]
+                    .as_array()
+                    .into_iter()
+                    .flatten()
+                    .filter_map(Value::as_str)
+                    .map(str::to_owned)
+                    .collect::<BTreeSet<_>>()
+            };
+            let before = values(expected);
+            let after = values(actual);
+            if differences.len() < 64 {
+                differences.push(json!({"section":section,"missing":before.difference(&after).take(64).collect::<Vec<_>>(),"unexpected":after.difference(&before).take(64).collect::<Vec<_>>()}));
+            }
+        }
+    }
+    json!({"changes":differences,"totalChanges":count,"truncated":count>64})
 }
 fn walk(
     root: &Path,

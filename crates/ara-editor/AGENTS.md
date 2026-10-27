@@ -148,3 +148,5 @@ Tool pages (`docs/design/editor-tool-pages.md`) share a breadcrumb toolbar, side
 status strip; `graph/style.rs` names nodes/pins; swatches paint after layout. VFX Hide/Isolate
 are preview-only; its timeline drives `vfx_stream`. In Play the Animation page polls
 `play.read <entity>.AnimatorState` (`AnimationLive`). Imports use `import.initialize`/`configure`.
+
+The full --verify-behaviours route includes extended imports and asset lifecycle checks; --verify-behaviours-core runs the other native stories independently and writes verification-scope.json. A core result does not establish asset acceptance.

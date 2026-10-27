@@ -476,6 +476,7 @@ impl EditorState {
             || self.hidden != other.hidden
             || self.quality != other.quality
             || self.render_quality != other.render_quality
+            || self.render_choice() != other.render_choice()
     }
     pub(crate) fn panels_changed(&self, other: &Self) -> bool {
         self.doc != other.doc
