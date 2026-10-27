@@ -529,13 +529,7 @@ impl Store {
     /// Undoes applied ops, newest first. Used when a transaction fails.
     fn rollback(&mut self, ops: &[Op]) {
         for op in ops.iter().rev() {
-            if matches!(op, Op::Document { .. }) {
-                self.ws
-                    .apply(op.inverse().to_edit(), &self.db)
-                    .expect("inverse of a staged document lifecycle op applies");
-            } else if let Some(doc) = self.ws.doc_mut(op.doc().as_str()) {
-                doc.revert(op, &self.db);
-            }
+            self.ws.revert(op, &self.db);
         }
     }
 
