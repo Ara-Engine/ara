@@ -22,8 +22,10 @@ pub(super) fn device_info(device: &ProtocolObject<dyn MTLDevice>) -> DeviceInfo 
         vendor_id: APPLE_VENDOR,
         device_id: 0,
         discrete: false,
-        // Unified memory: the working set Metal recommends for this process.
+        // Unified memory is device-local on Apple GPUs: plan with the working set
+        // Metal recommends for this process.
         device_local_mib: device.recommendedMaxWorkingSetSize() / (1024 * 1024),
+        unified_device_local: device.hasUnifiedMemory(),
         ray_tracing: false,
         texture_compression_bc: device.supportsBCTextureCompression(),
         sampled_image_capacity: abi::TEXTURES,

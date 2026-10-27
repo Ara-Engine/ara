@@ -172,6 +172,14 @@ fn submissions_share_one_timestamp_heap_as_ranges_and_reuse_freed_ones() {
 }
 
 #[test]
+fn apple_unified_memory_is_the_device_local_quality_budget() {
+    let gpu = device();
+    let budget = gpu.device.recommendedMaxWorkingSetSize() / (1024 * 1024);
+    assert!(gpu.info().unified_device_local);
+    assert_eq!(gpu.info().quality_memory_mib(), Some(budget));
+}
+
+#[test]
 fn graphics_waits_on_the_compute_timeline_and_encoder_barriers_order_dispatches() {
     let mut gpu = device();
     let fill = gpu.msl_pipeline(

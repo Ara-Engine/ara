@@ -345,6 +345,7 @@ impl Gpu {
             let sampled_image_capacity = capacities.sampled_images;
             let storage_buffer_capacity = capacities.storage_buffers;
             let info = DeviceInfo {
+                unified_device_local: false,
                 graphics_global_priority: if high_priority { "high" } else { "medium" },
                 global_priority_extension,
                 name: CStr::from_ptr(properties.device_name.as_ptr())

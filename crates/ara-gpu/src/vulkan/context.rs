@@ -146,8 +146,12 @@ pub struct DeviceInfo {
     /// Discrete adapter classification; shared-memory integrated/CPU devices use
     /// conservative raster auto-selection regardless of their reported heap size.
     pub discrete: bool,
-    /// Sum of physical device-local heaps in MiB, recorded once at device creation.
+    /// Sum of physical device-local heaps in MiB, recorded once at device creation;
+    /// on Apple GPUs, the working set Metal recommends for the process.
     pub device_local_mib: u64,
+    /// Unified memory the GPU uses as device-local (Apple silicon), so automatic
+    /// quality selection plans with `device_local_mib` as on a discrete adapter.
+    pub unified_device_local: bool,
     /// Optional RT-tier support; the raster baseline never requires it.
     pub ray_tracing: bool,
     /// Enabled BC4/BC5/BC6H/BC7 sampled textures, without CPU decompression.
@@ -208,6 +212,15 @@ pub struct DeviceInfo {
     pub external_memory: bool,
     /// Physical GPU and driver identity (`VkPhysicalDeviceIDProperties`).
     pub identity: crate::shared::DeviceIdentity,
+}
+
+impl DeviceInfo {
+    /// Device-local memory automatic quality selection may plan for: dedicated memory on
+    /// discrete adapters, the recommended working set on Apple GPUs, and none on
+    /// shared-memory integrated or CPU devices (they keep the conservative raster tier).
+    pub fn quality_memory_mib(&self) -> Option<u64> {
+        (self.discrete || self.unified_device_local).then_some(self.device_local_mib)
+    }
 }
 
 /// Owns queue recording and allocations, retaining a shared native device lifetime.
@@ -390,5 +403,64 @@ impl Drop for NativeDevice {
                 .destroy_debug_utils_messenger(self.messenger, None);
             self.instance.destroy_instance(None);
         }
+    }
+}
+
+/// A complete record with neutral values, for tests that vary a few fields.
+#[cfg(test)]
+pub(crate) fn test_info() -> DeviceInfo {
+    DeviceInfo {
+        graphics_global_priority: "medium",
+        global_priority_extension: None,
+        mesh_shading: false,
+        mesh_dispatch: [0; 4],
+        task_dispatch: [0; 4],
+        geometry_shader: false,
+        hdr_metadata: false,
+        buffer_int64_atomics: false,
+        shader_integer_dot_product: false,
+        packed_integer_dot_accelerated: false,
+        name: String::new(),
+        vendor_id: 1,
+        device_id: 2,
+        discrete: false,
+        device_local_mib: 0,
+        unified_device_local: false,
+        ray_tracing: false,
+        texture_compression_bc: false,
+        sampled_image_capacity: 65_536,
+        storage_buffer_capacity: 128,
+        max_image_dimension: 16384,
+        max_storage_buffer_range: 1 << 27,
+        wave_ops: true,
+        api_version: String::new(),
+        driver_version: 3,
+        graphics_family: 0,
+        compute_family: 1,
+        graphics_queue_flags: String::new(),
+        compute_queue_flags: String::new(),
+        descriptor_heap_available: false,
+        timestamp_period_ns: 1.,
+        timestamp_valid_bits: [64; 2],
+        timestamp_clock: None,
+        pipeline_cache_uuid: vec![7; 16],
+        external_memory: false,
+        identity: Default::default(),
+    }
+}
+
+#[cfg(test)]
+mod info_tests {
+    #[test]
+    fn quality_memory_counts_dedicated_and_apple_unified_memory_only() {
+        let mut info = super::test_info();
+        info.device_local_mib = 16_384;
+        // Shared-memory integrated and CPU devices keep the conservative tier.
+        assert_eq!(info.quality_memory_mib(), None);
+        info.unified_device_local = true;
+        assert_eq!(info.quality_memory_mib(), Some(16_384));
+        info.unified_device_local = false;
+        info.discrete = true;
+        assert_eq!(info.quality_memory_mib(), Some(16_384));
     }
 }

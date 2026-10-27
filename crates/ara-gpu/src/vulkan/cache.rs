@@ -55,43 +55,7 @@ mod tests {
     use super::*;
     #[test]
     fn rejects_corrupt_and_foreign_headers() {
-        let info = DeviceInfo {
-            graphics_global_priority: "medium",
-            global_priority_extension: None,
-            mesh_shading: false,
-            mesh_dispatch: [0; 4],
-            task_dispatch: [0; 4],
-            geometry_shader: false,
-            hdr_metadata: false,
-            buffer_int64_atomics: false,
-            shader_integer_dot_product: false,
-            packed_integer_dot_accelerated: false,
-            name: String::new(),
-            vendor_id: 1,
-            device_id: 2,
-            discrete: false,
-            device_local_mib: 0,
-            ray_tracing: false,
-            texture_compression_bc: false,
-            sampled_image_capacity: 65_536,
-            storage_buffer_capacity: 128,
-            max_image_dimension: 16384,
-            max_storage_buffer_range: 1 << 27,
-            wave_ops: true,
-            api_version: String::new(),
-            driver_version: 3,
-            graphics_family: 0,
-            compute_family: 1,
-            graphics_queue_flags: String::new(),
-            compute_queue_flags: String::new(),
-            descriptor_heap_available: false,
-            timestamp_period_ns: 1.,
-            timestamp_valid_bits: [64; 2],
-            timestamp_clock: None,
-            pipeline_cache_uuid: vec![7; 16],
-            external_memory: false,
-            identity: Default::default(),
-        };
+        let info = crate::vulkan::context::test_info();
         let mut bytes = Vec::new();
         for word in [32u32, 1, 1, 2] {
             bytes.extend(word.to_le_bytes());
