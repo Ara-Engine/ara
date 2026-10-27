@@ -32,6 +32,7 @@ pub use host::{
     ScriptNavigation,
 };
 pub use module::{MODULE_FILE, ModuleProfile, ModuleSpec, load_order};
+pub mod project;
 
 /// Checked native views for the standard C# runtime. Other engine components use
 /// generated typed accessors through the simulation registry at callback boundaries.

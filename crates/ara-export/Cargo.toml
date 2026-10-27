@@ -40,6 +40,7 @@ backhand = { version = "0.25.5", default-features = false, features = ["gzip", "
 windows-sys = { workspace = true, features = ["Win32_Foundation", "Win32_System_LibraryLoader"] }
 
 [dev-dependencies]
+ara-doc.workspace = true
 tempfile = { workspace = true }
 ara-runtime = { path = "../ara-runtime" }
 ara-runtime-script = { path = "../ara-runtime-script" }

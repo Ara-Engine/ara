@@ -26,10 +26,18 @@ fn path_xml(path: &Path) -> String {
 
 /// Finds module folders, excluding build outputs and editor-only modules.
 pub fn modules(root: &Path) -> Result<Vec<ModuleSpec>> {
-    let mut specs = ara_play_host::script_modules(root)
-        .into_iter()
-        .map(|path| ModuleSpec::from_dir(&path).map_err(|e| anyhow::anyhow!("{e}")))
-        .collect::<Result<Vec<_>>>()?;
+    let inventory = ara_script::project::publish(root, ModuleProfile::Gameplay)
+        .map_err(|e| anyhow::anyhow!("{e}"))?;
+    let mut specs = inventory.gameplay_specs(root).map_err(|errors| {
+        anyhow::anyhow!(
+            "{}",
+            errors
+                .iter()
+                .map(ToString::to_string)
+                .collect::<Vec<_>>()
+                .join("\n")
+        )
+    })?;
     specs.retain(|spec| spec.profile == ModuleProfile::Gameplay);
     let mut names = std::collections::BTreeSet::new();
     for spec in &specs {
@@ -148,11 +156,25 @@ pub fn prepare(
             )
         })
         .collect();
+    let inventory = ara_script::project::inventory(project).map_err(|d| anyhow::anyhow!("{d}"))?;
     for spec in &specs {
         let csproj = &projects[spec.name.as_str()];
         std::fs::create_dir_all(csproj.parent().context("module project directory")?)?;
-        let source = dunce::canonicalize(&spec.dir)?;
-        let includes = source_items(&source, &spec.dir, &ara_play_host::script_modules(project));
+        let module = inventory
+            .modules
+            .iter()
+            .find(|module| module.name == spec.name)
+            .context("shipping module missing from inventory")?;
+        let includes = module
+            .sources
+            .iter()
+            .map(|source| {
+                format!(
+                    r#"<Compile Include="{}" />"#,
+                    path_xml(&project.join(&source.storage_path))
+                )
+            })
+            .collect::<String>();
         let refs = spec
             .references
             .iter()
@@ -344,91 +366,9 @@ pub fn write_manifest(output: &Path, library: &str, modules: &[String]) -> Resul
     )
 }
 
-/// The shipping compiler respects the same nested-module boundaries as Roslyn.
-fn source_items(source: &Path, module: &Path, roots: &[PathBuf]) -> String {
-    let mut excludes = [
-        "bin",
-        "obj",
-        "target",
-        "artifacts",
-        "node_modules",
-        "spikes",
-        ".*",
-    ]
-    .into_iter()
-    .map(|dir| format!("{}/**/{dir}/**", path_xml(source)))
-    .collect::<Vec<_>>();
-    excludes.extend(
-        roots
-            .iter()
-            .filter(|root| root.as_path() != module)
-            .filter_map(|root| root.strip_prefix(module).ok())
-            .map(|relative| format!("{}/**", path_xml(&source.join(relative)))),
-    );
-    format!(
-        r#"<Compile Include="{}/**/*.cs" Exclude="{}" />"#,
-        path_xml(source),
-        excludes.join(";")
-    )
-}
-
 #[cfg(test)]
 mod source_tests {
     use super::*;
-    #[test]
-    fn authored_gameplay_modules_ship_while_editor_packages_and_settings_stay_out() -> Result<()> {
-        let target =
-            Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/export-module-layout");
-        std::fs::create_dir_all(&target)?;
-        let root = tempfile::tempdir_in(target)?;
-        tools::write_json(
-            &root.path().join("ara.project.json"),
-            &serde_json::json!({"layoutVersion":ara_host::project_layout::VERSION,"name":"Shipping layout"}),
-        )?;
-        let authored = root.path().join(ara_host::project_layout::AUTHORING_ROOT);
-        for (directory, manifest) in [
-            (
-                authored.join("scripts/Gameplay"),
-                "[module]\nname = 'Gameplay'\n",
-            ),
-            (
-                authored.join("scripts/editor/Tools"),
-                "[module]\nname = 'Tools'\nprofile = 'editor'\n",
-            ),
-            (
-                root.path().join("packages/Unloaded"),
-                "this must never be parsed as a gameplay module",
-            ),
-            (
-                root.path().join("settings/Unloaded"),
-                "this must never be parsed as a gameplay module",
-            ),
-        ] {
-            std::fs::create_dir_all(&directory)?;
-            std::fs::write(directory.join("ara.module.toml"), manifest)?;
-        }
-        let modules = modules(root.path())?;
-        assert_eq!(
-            modules
-                .iter()
-                .map(|module| module.name.as_str())
-                .collect::<Vec<_>>(),
-            ["Gameplay"]
-        );
-        assert_eq!(modules[0].dir, authored.join("scripts/Gameplay"));
-        Ok(())
-    }
-
-    #[test]
-    fn shipping_sources_exclude_nested_modules_and_generated_code() {
-        let module = Path::new("/game");
-        let roots = vec![module.to_owned(), module.join("Gameplay")];
-        let xml = source_items(module, module, &roots);
-        assert!(xml.contains(&format!("{}/**", path_xml(&module.join("Gameplay")))));
-        assert!(xml.contains("/game/**/obj/**"));
-        assert!(xml.contains("/game/**/.*/**"));
-        assert!(!xml.contains(";/game/**;"));
-    }
     #[test]
     fn script_images_take_each_platforms_shared_library_name() {
         assert_eq!(library_name("Outpost", "win-x64"), "Outpost.dll");

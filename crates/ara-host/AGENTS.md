@@ -1,10 +1,6 @@
 # ara-host
-One project's engine host behind the Engine Protocol: sessions and scopes, the
-method registry (`Service`) and the core methods, review state, checkpoints, the
-journal, always-saved persistence and external-edit reconciliation. The daemon
-(`ara serve`) serves it; the offline CLI and tests call it in-process.
-Depends on ara-cmd, ara-ops, ara-doc, ara-merge, ara-schema, ara-proto, ara-diag,
-ara-why, ara-profile, ara-collab.
+One project's Engine Protocol host: sessions, Service registry, attributed history,
+review, checkpoints, persistence and reconciliation. Used by `ara serve`, offline CLI and tests.
 ## Public API
 - `Project::open(root)` (needs `ara.project.json`), `main_scene()` (`main` in the
   marker, else `scenes/main.scene`), `project::discover(start)`,
@@ -91,7 +87,7 @@ ara-why, ara-profile, ara-collab.
 `history.list/undo/redo`; `review.list/accept/revert`; `schema.list/describe/search`;
 `query`; `inspect`; `cmd.apply`; `logs`; `docs.search`;
 `jobs.list/status/start/cancel`; `subscribe`/`unsubscribe` (topics `ops`, `diagnostics`, `history`, `jobs`); `doc.sync`; `daemon.shutdown`.
-Reserved families (`run`, `capture`, `play`, `test`) answer ARA1806 until a service registers them.
+CLI/daemon register `run`/`capture`/`play`/`test` through ara-play-host; bare Hosts report ARA1806 for absent services.
 - `cmd.apply` / `inspect`: `doc` is optional (`core/pick.rs`): the one document
   holding every entity the call names (IDs, addresses, `name:` selectors), else
   the only scene, else the main scene; else ARA1814 with a fix per candidate. Named documents also match by unique stem or file name (`outpost`).
@@ -117,13 +113,17 @@ Reserved families (`run`, `capture`, `play`, `test`) answer ARA1806 until a serv
   transaction (store undo) or a subset of entities (a compensating transaction
   based on the target's revision, so later edits conflict). Accept remains an
   idempotent compatibility action for humans and agents. Redo restores `accepted`.
+- Entity-only revert selects the caller agent's latest applicable turn; human
+  callers select the latest turn, including human-authored edits. Explicit transaction IDs may target other
+  agents. Results carry author, reason and IDs; compensating transactions keep
+  their untracked status across journal replay.
 - Checkpoints: one per agent `cmd.apply` turn at its prior revision, plus manual ones.
   `session.rollback` undoes the session's later transactions all or nothing.
 - Journal: `txn`, `flush` (doc, rev, FNV hash), `session`, `ended`, `checkpoint`,
   `review`, `base` lines. On open, each file's revision is its newest flush entry
   with a matching hash; newer transactions are re-applied. Compaction (past 4096
   entries, nothing unsaved or being written) keeps the newest 1024 transactions.
-- File I/O runs on the file thread (`file_io.rs`) in request order, never on the host
+- File I/O runs on the file thread (`file_io.rs`) in request order; source/asset snapshot API: [`file-history.md`](../../docs/dev/file-history.md).
   thread: journal lines and compaction, `diagnostics.jsonl`, writes after `debounce`
   (temp + rename; `flush` journaled when it lands), removals, `notify` events (30 s
   rescan); `flush()` waits for it all. `watch_every` zero checks per tick (tests). An

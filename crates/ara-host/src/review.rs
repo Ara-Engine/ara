@@ -2,9 +2,9 @@
 //!
 //! Status lives per (transaction, entity). A transaction is `applied` while any of
 //! its entities is, `reverted` when all are, `accepted` otherwise. Human edits and
-//! undos are not tracked (they need no review).
+//! undos need no review; human turns acquire per-entity status on a partial revert.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use ara_ops::{Transaction, TxnId};
 
@@ -31,9 +31,19 @@ pub fn touched(txn: &Transaction) -> Vec<String> {
 #[derive(Debug, Default)]
 pub struct Review {
     txns: BTreeMap<TxnId, BTreeMap<String, ReviewStatus>>,
+    excluded: BTreeSet<TxnId>,
 }
 
 impl Review {
+    /// Compensations stay out of entity-turn selection, including after replay.
+    pub fn exclude(&mut self, txn: TxnId) {
+        self.excluded.insert(txn);
+    }
+
+    /// True for a compensation rather than an authoring turn.
+    pub fn is_excluded(&self, txn: &TxnId) -> bool {
+        self.excluded.contains(txn)
+    }
     /// Tracks attribution and revert state without creating a review requirement.
     pub fn track(&mut self, txn: &Transaction) {
         let entities = touched(txn)

@@ -4,8 +4,9 @@ Run on Windows x64 with Rust/MSVC, Vulkan SDK and the x64 .NET 10 SDK installed.
 Set `CARGO_BUILD_JOBS=2` and `VULKAN_SDK` to the SDK being redistributed.
 
 ```powershell
-cargo run -p ara-release -- package --version 0.0.1-alpha
-cargo run -p ara-release -- notes --version 0.0.1-alpha
+$version = (cargo metadata --format-version 1 --no-deps | ConvertFrom-Json).packages | Where-Object name -eq ara-release | Select-Object -ExpandProperty version
+cargo run -p ara-release -- package --version $version
+cargo run -p ara-release -- notes --version $version
 cargo run -p ara-release -- smoke
 ```
 

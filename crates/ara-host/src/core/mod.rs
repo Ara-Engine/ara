@@ -136,6 +136,11 @@ impl Service for Core {
     ) -> Result<Value, Vec<Diagnostic>> {
         let st = &mut *cx.st;
         let sid = cx.session.clone().unwrap_or_default();
+        if method != "cmd.apply"
+            && let Some(preparing) = st.prepare_file_call(&sid, method, &params)?
+        {
+            return Ok(preparing);
+        }
         match method {
             "rpc.discover" => Ok(read::discover(st)),
             "session.begin" => session::begin(st, parse(params)?),

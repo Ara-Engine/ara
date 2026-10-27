@@ -1,12 +1,7 @@
-//! Gameplay modules: one folder, one `ara.module.toml`, one assembly, one reload unit.
-//!
-//! ```toml
-//! [module]
-//! name = "Outpost.Sample"        # assembly and module name
-//! hot = false                    # start as Debug IL with EnC (default: cold, optimized)
-//! references = ["Outpost.Core"]  # modules this one uses (default: none)
-//! profile = "gameplay"           # API allowlist: "gameplay" (default) or "editor"
-//! ```
+//! Gameplay module descriptors from the shared D30 project inventory.
+//! Authored boundaries use `<name>.module.json`; the implicit module is `game`.
+//! `ModuleSpec::from_dir` reads private generated input descriptors, with legacy
+//! TOML support retained for standalone SDK fixtures and migration tools.
 //!
 //! Modules stay small (soft cap about 5k lines): L3 reload cost scales with assembly
 //! size, not edit size (R10). The compile server reports modules past the cap. A module
@@ -17,7 +12,7 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use ara_diag::{Diagnostic, codes};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use crate::codes as host_codes;
 
@@ -25,7 +20,7 @@ use crate::codes as host_codes;
 pub const MODULE_FILE: &str = "ara.module.toml";
 
 /// Which API allowlist a module compiles against (`ARA05xx`).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum ModuleProfile {
     /// Gameplay code: no files, network, reflection, threads, processes or native interop.
@@ -83,8 +78,49 @@ struct ModuleSection {
 }
 
 impl ModuleSpec {
+    /// Whether the published source inventory assigns this file to this module.
+    /// Legacy standalone fixtures retain their folder membership until migrated.
+    pub fn owns_source(&self, path: &Path) -> Result<bool, Diagnostic> {
+        let inputs = self.dir.join("module.inputs.json");
+        if !inputs.is_file() {
+            return Ok(path.starts_with(&self.dir));
+        }
+        let descriptor: crate::project::ModuleInputs = serde_json::from_slice(
+            &std::fs::read(&inputs).map_err(|e| Diagnostic::error(codes::IO, e.to_string()))?,
+        )
+        .map_err(|e| Diagnostic::error(codes::INVALID_PARAMS, e.to_string()))?;
+        let path =
+            std::fs::canonicalize(path).map_err(|e| Diagnostic::error(codes::IO, e.to_string()))?;
+        Ok(descriptor.sources.iter().any(|source| {
+            let candidate = Path::new(&descriptor.project).join(&source.storage_path);
+            ara_doc::file_state::same_path(
+                &candidate.to_string_lossy().replace('\\', "/"),
+                &path.to_string_lossy().replace('\\', "/"),
+            )
+        }))
+    }
+
     /// Reads `dir/ara.module.toml`. The module is watched by default.
     pub fn from_dir(dir: &Path) -> Result<Self, Diagnostic> {
+        let inputs = dir.join("module.inputs.json");
+        if inputs.is_file() {
+            let text = std::fs::read_to_string(&inputs)
+                .map_err(|e| Diagnostic::error(codes::IO, e.to_string()))?;
+            let descriptor: crate::project::ModuleInputs =
+                serde_json::from_str(&text).map_err(|e| {
+                    Diagnostic::error(codes::INVALID_PARAMS, e.to_string())
+                        .file(inputs.display().to_string())
+                })?;
+            return Ok(Self {
+                name: descriptor.name,
+                dir: dir.to_owned(),
+                assembly: Some(Path::new(&descriptor.project).join(descriptor.assembly_path)),
+                watch: true,
+                hot: descriptor.hot,
+                references: descriptor.references,
+                profile: descriptor.profile,
+            });
+        }
         let path = dir.join(MODULE_FILE);
         let text = std::fs::read_to_string(&path).map_err(|e| {
             Diagnostic::error(codes::IO, format!("read `{}`: {e}", path.display()))

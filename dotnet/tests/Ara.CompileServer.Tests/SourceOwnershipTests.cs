@@ -4,6 +4,33 @@ namespace Ara.CompileServer.Tests;
 public sealed class SourceOwnershipTests
 {
     [Fact]
+    public void Compile_session_uses_project_inventory_and_requests_restart_when_a_file_crosses_editor_boundary()
+    {
+        var root = InstalledTools.Scratch("compile-membership");
+        var authored = Path.Combine(root, "game");
+        var state = Path.Combine(root, ".ara", "scripts", "game");
+        Directory.CreateDirectory(authored);
+        Directory.CreateDirectory(state);
+        var source = Path.Combine(authored, "Helper.cs");
+        File.WriteAllText(source, "public class Helper { }");
+        File.WriteAllText(Path.Combine(state, "module.inputs.json"), System.Text.Json.JsonSerializer.Serialize(new { project = root, authoringRoot = "game", name = "game" }));
+        var session = new ModuleSession(0, "game", state, false, [typeof(Behaviour).Assembly.Location], [], "gameplay", null);
+        Assert.Equal([source], session.SourceFiles());
+        Assert.Equal(authored, session.WatchDirectory);
+        var capture = new Capture();
+        using var coordinator = new Coordinator(capture, new AnalyzerSet());
+        coordinator.Hello(false, "");
+        coordinator.Watch(0, "game", state, false, [typeof(Behaviour).Assembly.Location], [], "gameplay", watch: false);
+        Assert.Equal(Ara.Hosting.AbiConst.ReloadInitial, capture.Next().Reload().Single().Kind);
+        Directory.CreateDirectory(Path.Combine(authored, "deep", "editor"));
+        var destination = Path.Combine(authored, "deep", "editor", "Helper.cs");
+        File.Move(source, destination);
+        Assert.Empty(session.SourceFiles());
+        coordinator.Change(0, [source, destination], Ara.Hosting.AbiConst.OriginHuman, System.Diagnostics.Stopwatch.GetTimestamp());
+        Assert.Equal(Ara.Hosting.MessageKind.Restart, capture.Next().Kind);
+    }
+
+    [Fact]
     public void Nested_module_sources_belong_only_to_the_nested_module()
     {
         var root = Path.Combine(Path.GetTempPath(), "ara-source-ownership-" + Guid.NewGuid().ToString("N"));

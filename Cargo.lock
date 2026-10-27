@@ -794,6 +794,7 @@ dependencies = [
  "proptest",
  "serde",
  "serde_json",
+ "sha2 0.10.9",
 ]
 
 [[package]]
@@ -889,6 +890,7 @@ dependencies = [
  "ara-components",
  "ara-crash",
  "ara-diag",
+ "ara-doc",
  "ara-export-installer",
  "ara-host",
  "ara-json",
@@ -1038,6 +1040,7 @@ dependencies = [
  "notify",
  "serde",
  "serde_json",
+ "sha2 0.10.9",
  "toml",
  "tracing",
 ]
@@ -1505,6 +1508,7 @@ dependencies = [
  "ara-proto",
  "ara-runtime",
  "ara-schema",
+ "ara-script",
  "serde",
  "serde_json",
  "tempfile",
@@ -1953,6 +1957,8 @@ dependencies = [
  "ara-cmd",
  "ara-components",
  "ara-diag",
+ "ara-doc",
+ "ara-json",
  "ara-profile",
  "ara-runtime",
  "ara-schema",
@@ -2232,6 +2238,7 @@ version = "0.0.1-alpha"
 dependencies = [
  "ara-diag",
  "ara-material",
+ "ara-schema",
  "serde",
  "serde_json",
 ]

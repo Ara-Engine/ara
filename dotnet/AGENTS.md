@@ -35,8 +35,11 @@ are central (`Directory.Packages.props`). Warnings are errors.
 
 ## Writing gameplay modules
 
-- A module is a folder with `ara.module.toml` (`[module] name = "..."`, optional `hot`,
-  `references = ["Core"]`, `profile = "editor"`), compiled as one assembly; keep it under ~5k
+- A lowercase `<name>.module.json` creates a folder boundary (`name`, optional `hot`
+  and `references`). Sources outside named boundaries belong to `game`. Exact
+  `editor` ancestors create separate editor assemblies; gameplay never references them.
+  The shared inventory takes its authored root from Rust; private outputs stay under
+  `.ara/scripts/<module>/`. See `docs/dev/csharp-project-inventory.md`. Keep modules under ~5k
   lines (L3 cost, including the Windows AMSI scan of the new image, scales with module size).
 - A module may use public types of the modules it references (no cycles). An L3 of a
   referenced module relinks or rebuilds this one in the same swap.

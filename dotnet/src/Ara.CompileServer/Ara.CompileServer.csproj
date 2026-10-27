@@ -18,10 +18,12 @@
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp" VersionOverride="5.3.0" />
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Workspaces" VersionOverride="5.3.0" />
     <!-- Only for the shared ABI constants (reload kinds, escalation codes). -->
     <ProjectReference Include="../Ara.Runtime/Ara.Runtime.csproj" />
     <ProjectReference Include="../Ara.Generators/Ara.Generators.csproj" />
     <ProjectReference Include="../Ara.Analyzers/Ara.Analyzers.csproj" />
+    <ProjectReference Include="../Ara.Analyzers.CodeFixes/Ara.Analyzers.CodeFixes.csproj" />
   </ItemGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="Ara.CompileServer.Tests" />

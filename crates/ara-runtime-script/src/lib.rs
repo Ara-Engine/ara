@@ -50,7 +50,7 @@ pub struct ScriptSettings {
     pub host_dir: PathBuf,
     /// `Ara.CompileServer.dll` for hot reload; `None` loads prebuilt assemblies only.
     pub compile_server: Option<PathBuf>,
-    /// Module folders, each with an `ara.module.toml`.
+    /// Private module input directories from the shared project inventory.
     pub modules: Vec<PathBuf>,
 }
 
@@ -725,7 +725,12 @@ pub fn module_of(settings: &ScriptSettings, path: &std::path::Path) -> Option<(S
     settings
         .modules
         .iter()
-        .filter(|dir| path.starts_with(dir))
-        .max_by_key(|dir| dir.components().count())
-        .and_then(|dir| Some((ModuleSpec::from_dir(dir).ok()?.name, dir.clone())))
+        .filter_map(|dir| {
+            let module = ModuleSpec::from_dir(dir).ok()?;
+            module
+                .owns_source(path)
+                .ok()?
+                .then_some((module.name, dir.clone()))
+        })
+        .max_by_key(|(_, dir)| dir.components().count())
 }

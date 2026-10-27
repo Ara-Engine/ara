@@ -43,3 +43,4 @@ pub use read::{ReadResult, read, read_header};
 pub use refs::AssetIndex;
 pub use workspace::Workspace;
 pub use write::{canonical_record, to_value, write};
+pub mod file_state;

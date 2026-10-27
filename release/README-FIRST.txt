@@ -1,4 +1,4 @@
-ARA 0.0.1-alpha - WINDOWS TESTER BUILD
+ARA {{VERSION}} - WINDOWS TESTER BUILD
 
 Requirements: Windows 10/11 x64, 16 GB RAM, Vulkan 1.3 GPU and current driver.
 Ray tracing recommended: RTX 20-series or newer / RX 6000+.
@@ -10,7 +10,7 @@ https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist
 Run the setup EXE, or extract the portable ZIP and run:
   powershell -NoProfile -ExecutionPolicy Bypass -File .\install.ps1
 Silent install / custom destination (in PowerShell, add | Out-Host to wait for it):
-  ara-0.0.1-alpha-windows-x64-setup.exe --silent --destination C:\path\Ara
+  ara-{{VERSION}}-windows-x64-setup.exe --silent --destination C:\path\Ara
 Each version installs to %LOCALAPPDATA%\Programs\Ara\<version> by default.
 Running setup again for an installed version asks before replacing it (silent
 installs need --replace); folders that are not Ara installations are never touched.

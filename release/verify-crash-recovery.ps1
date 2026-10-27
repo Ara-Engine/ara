@@ -2,7 +2,12 @@
 param([string]$Distribution, [string]$Output)
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path -Parent $PSScriptRoot
-if (-not $Distribution) { $Distribution = Join-Path $repo 'target/release-dist/ara-0.0.1-alpha-windows-x64' }
+if (-not $Distribution) {
+    $manifest = Get-Content -Raw -LiteralPath (Join-Path $repo 'Cargo.toml')
+    $releaseVersion = [regex]::Match($manifest, '(?ms)^\[workspace\.package\]\s*.*?^version\s*=\s*"([^"]+)"').Groups[1].Value
+    if (-not $releaseVersion) { throw 'Cannot read workspace.package.version; pass -Distribution' }
+    $Distribution = Join-Path $repo "target/release-dist/ara-$releaseVersion-windows-x64"
+}
 if (-not $Output) { $Output = Join-Path $repo ('target/release-dist/crash-recovery-' + $PID) }
 $Distribution = [IO.Path]::GetFullPath($Distribution)
 $Output = [IO.Path]::GetFullPath($Output)

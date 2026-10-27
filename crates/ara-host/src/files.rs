@@ -301,6 +301,11 @@ impl State {
                 }
             }
             Reply::JournalFailed(d) => self.log(d),
+            Reply::Materialized(result) => {
+                if let Err(d) = result {
+                    self.log(d);
+                }
+            }
             Reply::DiagnosticsFailed { seqs, error } => {
                 self.diag_file.retry(seqs);
                 let d = Diagnostic::warning(

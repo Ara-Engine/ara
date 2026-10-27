@@ -107,6 +107,25 @@ impl Store {
         &self.ws
     }
 
+    /// Publish a worker's observed file state before typed commands or history preflight.
+    /// This changes no files and records no transaction.
+    pub fn observe_file(&mut self, path: String, state: Option<ara_doc::file_state::FileState>) {
+        self.ws.observe_file(path, state);
+    }
+
+    /// Publish a worker's validated, complete preparation handle for typed commands.
+    pub fn prepare_files(
+        &mut self,
+        inventory: ara_doc::file_state::PreparedInventory,
+    ) -> Result<(), Diagnostic> {
+        self.ws.prepare_files(inventory)
+    }
+
+    /// Release command-local preparation metadata after the owner finishes its batch.
+    pub fn clear_prepared_files(&mut self) {
+        self.ws.clear_prepared_files();
+    }
+
     /// Loads a document that appeared on disk (or replaces one by ID). This is not an
     /// edit: no op is recorded. Record changes always go through transactions.
     pub fn load_doc(&mut self, path: impl Into<String>, doc: Document) {
@@ -174,6 +193,14 @@ impl Store {
             .and_then(|id| self.txn(id))
     }
 
+    /// Whether a retained transaction is still on its author's undo stack.
+    /// Entity-scoped tools use this to select active turns, including redos.
+    pub fn undoable(&self, id: &TxnId) -> bool {
+        self.txn(id)
+            .and_then(|t| self.stacks.get(&t.author))
+            .is_some_and(|s| s.undo.contains(id))
+    }
+
     /// The transaction that reverted `id`, if any.
     pub fn reverted_by(&self, id: &TxnId) -> Option<&TxnId> {
         self.reverted_by.get(id)
@@ -238,7 +265,7 @@ impl Store {
     /// Puts a journaled transaction back into history after a restart, keeping its ID,
     /// author and revisions. With `apply`, its ops are applied first (the documents on
     /// disk predate it); without, the documents already contain it. Subscribers are not
-    /// notified. Redo stacks are not restored.
+    /// notified. Undo and redo stacks use the same transitions as live commits.
     ///
     /// Fails with `ARA1501` unless `txn.result` is past the current revision, and with
     /// the op's diagnostic if an op no longer applies (nothing changes then).
@@ -253,7 +280,9 @@ impl Store {
         txn: Transaction,
         documents: &BTreeSet<AssetId>,
     ) -> Result<(), Vec<Diagnostic>> {
-        self.restore_selected(txn, |op| documents.contains(op.doc()))
+        self.restore_selected(txn, |op| {
+            !matches!(op, Op::File { .. }) && documents.contains(op.doc())
+        })
     }
 
     fn restore_selected(
@@ -288,20 +317,7 @@ impl Store {
         if let Some(key) = &txn.idempotency_key {
             self.by_key.insert(key.clone(), index);
         }
-        match &txn.reverts {
-            Some(target) => {
-                self.reverted_by.insert(target.clone(), txn.id.clone());
-                for stacks in self.stacks.values_mut() {
-                    stacks.undo.retain(|t| t != target);
-                }
-            }
-            None => self
-                .stacks
-                .entry(txn.author.clone())
-                .or_default()
-                .undo
-                .push(txn.id.clone()),
-        }
+        self.record_stacks(&txn);
         self.by_id.insert(txn.id.clone(), index);
         self.history.push(txn);
         Ok(())
@@ -321,47 +337,21 @@ impl Store {
 
     /// Undoes `author`'s most recent transaction that is still in effect.
     pub fn undo_last(&mut self, author: &Author) -> Result<&Transaction, Vec<Diagnostic>> {
-        let Some(id) = self.stacks.get_mut(author).and_then(|s| s.undo.pop()) else {
+        let Some(id) = self.stacks.get(author).and_then(|s| s.undo.last()).cloned() else {
             return Err(vec![nothing(author, "undo")]);
         };
-        match self.revert(&id, author.clone()) {
-            Ok(new) => {
-                let undo_id = self.history[new].id.clone();
-                self.stacks
-                    .entry(author.clone())
-                    .or_default()
-                    .redo
-                    .push(undo_id);
-                Ok(&self.history[new])
-            }
-            Err(e) => {
-                self.stacks.entry(author.clone()).or_default().undo.push(id);
-                Err(e)
-            }
-        }
+        let new = self.revert(&id, author.clone())?;
+        Ok(&self.history[new])
     }
 
     /// Redoes `author`'s most recently undone transaction. A new edit by the author
     /// clears the redo stack.
     pub fn redo_last(&mut self, author: &Author) -> Result<&Transaction, Vec<Diagnostic>> {
-        let Some(id) = self.stacks.get_mut(author).and_then(|s| s.redo.pop()) else {
+        let Some(id) = self.stacks.get(author).and_then(|s| s.redo.last()).cloned() else {
             return Err(vec![nothing(author, "redo")]);
         };
-        match self.revert(&id, author.clone()) {
-            Ok(new) => {
-                let redo_id = self.history[new].id.clone();
-                self.stacks
-                    .entry(author.clone())
-                    .or_default()
-                    .undo
-                    .push(redo_id);
-                Ok(&self.history[new])
-            }
-            Err(e) => {
-                self.stacks.entry(author.clone()).or_default().redo.push(id);
-                Err(e)
-            }
-        }
+        let new = self.revert(&id, author.clone())?;
+        Ok(&self.history[new])
     }
 
     /// Per-participant undo (D21): undoes `id` without undoing anyone else's work.
@@ -568,15 +558,36 @@ impl Store {
         if let Some(key) = &txn.idempotency_key {
             self.by_key.insert(key.clone(), index);
         }
-        if txn.reverts.is_none() {
-            let stacks = self.stacks.entry(txn.author.clone()).or_default();
-            stacks.undo.push(id.clone());
-            stacks.redo.clear();
-        }
+        self.record_stacks(&txn);
         self.by_id.insert(id, index);
         self.subscribers.retain(|s| s.send(txn.clone()).is_ok());
         self.history.push(txn);
         index
+    }
+
+    /// Rebuildable from the journal's transactions, including selective undo.
+    fn record_stacks(&mut self, txn: &Transaction) {
+        if let Some(target) = &txn.reverts {
+            let redo = self
+                .stacks
+                .get(&txn.author)
+                .is_some_and(|s| s.redo.contains(target));
+            for stacks in self.stacks.values_mut() {
+                stacks.undo.retain(|id| id != target);
+                stacks.redo.retain(|id| id != target);
+            }
+            let stacks = self.stacks.entry(txn.author.clone()).or_default();
+            if redo {
+                stacks.undo.push(txn.id.clone());
+            } else {
+                stacks.redo.push(txn.id.clone());
+            }
+            self.reverted_by.insert(target.clone(), txn.id.clone());
+        } else {
+            let stacks = self.stacks.entry(txn.author.clone()).or_default();
+            stacks.undo.push(txn.id.clone());
+            stacks.redo.clear();
+        }
     }
 }
 

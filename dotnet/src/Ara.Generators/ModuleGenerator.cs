@@ -81,8 +81,9 @@ public sealed class ModuleGenerator : IIncrementalGenerator
                 types[def.Name] = def.Json;
             }
             var declares = data.Count + sys.Length + behs.Length + cmds.Length > 0;
-            if (declares || native)
-                spc.AddSource("AraModule.g.cs", Emit.Module(mod.Name, declares, data, sys, behs, cmds, types, native, mod.Linked.ToList()));
+            // Helper-only dependency assemblies are modules too. The native entry
+            // remains an aggregator unless it also declares gameplay registrations.
+            spc.AddSource("AraModule.g.cs", Emit.Module(mod.Name, declares || !native, data, sys, behs, cmds, types, native, mod.Linked.ToList()));
         });
     }
 
