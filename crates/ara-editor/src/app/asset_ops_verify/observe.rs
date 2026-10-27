@@ -361,7 +361,7 @@ impl AssetOpsCheck {
             self.output.join(format!("{prefix}.layout.json")),
             ara_json::to_canonical_string(&shell.layout_report()),
         )?;
-        self.trace.push(json!({"stage":stage,"age":self.age,"revision":editor.host.store().revision(),"assetOperation":shell.asset_operation_report(),"drag":shell.content_drag_report(),"selection":fixture::selection(editor,shell),"forceButtons":force_buttons(shell)}));
+        self.trace.push(json!({"stage":stage,"age":self.age,"revision":editor.host.store().revision(),"assetOperation":shell.asset_operation_report(),"historyReceipt":self.history_probe,"focus":shell.input.focused().and_then(|id|shell.ui.by_id(id)).map(|index|shell.ui.nodes[index].element.id.as_str()),"drag":shell.content_drag_report(),"selection":fixture::selection(editor,shell),"forceButtons":force_buttons(shell)}));
         Ok(())
     }
 }

@@ -7,6 +7,7 @@ use std::{
     path::Path,
 };
 mod fixture;
+mod history;
 mod input;
 mod observe;
 const ROOT: &str = "P4 Asset Proof";
@@ -144,6 +145,8 @@ pub(super) struct AssetOpsCheck {
     results: Vec<Value>,
     trace: Vec<Value>,
     events: u64,
+    history_probe: Value,
+    snapshot_difference: Value,
 }
 impl AssetOpsCheck {
     pub fn new(editor: &mut Editor, output: &Path) -> ara_ui::Result<Self> {
@@ -180,6 +183,8 @@ impl AssetOpsCheck {
             results: Vec::new(),
             trace: Vec::new(),
             events: 0,
+            history_probe: Value::Null,
+            snapshot_difference: Value::Null,
         })
     }
     pub fn finished(&self) -> bool {
@@ -230,7 +235,7 @@ impl AssetOpsCheck {
             self.input(act, editor, shell, window, scale, events)
         })();
         if let Err(error) = result {
-            self.results.push(json!({"journey":act.label(),"ok":false,"error":error.to_string(),"age":self.age,"trace":self.trace,"assetOperation":shell.asset_operation_report(),"events":self.events}));
+            self.results.push(json!({"journey":act.label(),"ok":false,"error":error.to_string(),"age":self.age,"trace":self.trace,"assetOperation":shell.asset_operation_report(),"historyReceipt":self.history_probe,"snapshotDifference":self.snapshot_difference,"fixtureReadiness":self.fixture.report(editor,shell,act),"focus":shell.input.focused().and_then(|id|shell.ui.by_id(id)).map(|index|shell.ui.nodes[index].element.id.as_str()),"events":self.events}));
             events.clear();
             events.push((window.id(), Event::FocusLost));
             input::tap(window, 41, events);
@@ -275,6 +280,8 @@ impl AssetOpsCheck {
         self.initialized = false;
         self.trace.clear();
         self.events = 0;
+        self.history_probe = Value::Null;
+        self.snapshot_difference = Value::Null;
         self.selection_paths = Value::Null;
         self.committed_selection = None;
         self.undo_selection = None;

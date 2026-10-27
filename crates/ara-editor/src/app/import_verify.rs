@@ -345,11 +345,24 @@ impl ImportCheck {
                     if status["status"] != "running" {
                         return Err("Preparation completed before a cancelable native frame; cancellation remains unverified".into());
                     }
+                    if status.get("cancellable").is_none() {
+                        // The just-created frontend card is not a jobs.status
+                        // receipt. Never infer a commit boundary from its placeholder.
+                        return self.wait();
+                    }
                     if !cancellable(status) {
                         return Err(
                             "Import reached committing before cancellation could be observed"
                                 .into(),
                         );
+                    }
+                    let id = job["job"]
+                        .as_str()
+                        .ok_or("Cancelable import job identity missing")?;
+                    let action =
+                        format!("asset-import-{:016x}-action", ara_ui::source::stable_id(id));
+                    if ready_control(shell, &action, window, scale, events)?.is_none() {
+                        return self.wait();
                     }
                     self.cancel_observed = Some(status.clone());
                 }
@@ -720,18 +733,19 @@ fn folder_point(shell: &Shell, path: &str) -> Option<[f32; 2]> {
     } else {None}
 })
 }
-fn click(
+/// Reveal an enabled control with native scrolling before observing or clicking it.
+fn ready_control(
     shell: &Shell,
     id: &str,
     window: &Window,
     scale: f32,
     events: &mut Vec<(u32, Event)>,
-) -> ara_ui::Result<bool> {
+) -> ara_ui::Result<Option<ara_ui::paint::Box2>> {
     let Some(node) = shell.shown_node(id).map(|index| &shell.ui.nodes[index]) else {
-        return Ok(false);
+        return Ok(None);
     };
     if node.state.disabled {
-        return Ok(false);
+        return Ok(None);
     }
     let rect = node.rect.intersection(node.clip);
     if node.rect.w <= 2.
@@ -760,8 +774,20 @@ fn click(
                 )?;
             }
         }
-        return Ok(false);
+        return Ok(None);
     }
+    Ok(Some(rect))
+}
+fn click(
+    shell: &Shell,
+    id: &str,
+    window: &Window,
+    scale: f32,
+    events: &mut Vec<(u32, Event)>,
+) -> ara_ui::Result<bool> {
+    let Some(rect) = ready_control(shell, id, window, scale, events)? else {
+        return Ok(false);
+    };
     native_input::motion(
         window,
         [rect.x + rect.w * 0.5, rect.y + rect.h * 0.5],

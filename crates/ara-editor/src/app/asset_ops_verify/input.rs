@@ -289,6 +289,9 @@ impl AssetOpsCheck {
                     if !crate::shell::asset_import::preparation_cancellable(&status) {
                         return Err("Asset preparation completed before a native cancellation window was observed; cancellation remains unverified".into());
                     }
+                    if control(shell, "asset-operation-cancel").is_none() {
+                        return self.wait();
+                    }
                     self.cancel_observed = Some(status);
                 }
             }
@@ -326,14 +329,12 @@ impl AssetOpsCheck {
             8 if act.fails() => tap(window, 41, events),
             9 if act.undo() => Self::history_key(window, false, events),
             10 if act.undo() => {
-                if editor.host.store().revision() < self.before_revision + 2
-                    || editor.host.unsaved()
-                    || shell.asset_operation_report()["followingHistory"] == true
-                {
+                if !self.history_ready(editor, shell, 1)? {
                     return self.wait();
                 }
                 let undo = fixture::snapshot(editor, &storage)?;
                 if undo != self.before {
+                    self.snapshot_difference = fixture::difference(&self.before, &undo);
                     return Err("One native Undo did not restore the complete asset batch and its references".into());
                 }
                 self.undo = Some(undo);
@@ -347,13 +348,17 @@ impl AssetOpsCheck {
             }
             11 if act.undo() => Self::history_key(window, true, events),
             12 if act.undo() => {
-                if editor.host.store().revision() < self.before_revision + 3
-                    || editor.host.unsaved()
-                    || shell.asset_operation_report()["followingHistory"] == true
-                {
+                if !self.history_ready(editor, shell, 2)? {
                     return self.wait();
                 }
-                if self.committed.as_ref() != Some(&fixture::snapshot(editor, &storage)?) {
+                let actual = fixture::snapshot(editor, &storage)?;
+                if self.committed.as_ref() != Some(&actual) {
+                    self.snapshot_difference = fixture::difference(
+                        self.committed
+                            .as_ref()
+                            .ok_or("Committed snapshot is missing")?,
+                        &actual,
+                    );
                     return Err("One native Redo did not restore the complete asset batch".into());
                 }
                 let selection = fixture::selection(editor, shell);
@@ -371,29 +376,32 @@ impl AssetOpsCheck {
                 Self::history_key(window, false, events);
             }
             15 if act == Act::Duplicate => {
-                if editor.host.store().revision() < self.before_revision + 4
-                    || editor.host.unsaved()
-                    || shell.asset_operation_report()["followingHistory"] == true
-                {
+                if !self.history_ready(editor, shell, 3)? {
                     return self.wait();
                 }
-                if fixture::snapshot(editor, &storage)? != self.before
+                let actual = fixture::snapshot(editor, &storage)?;
+                if actual != self.before
                     || self.unrelated_selection.as_ref() != Some(&fixture::selection(editor, shell))
                 {
+                    self.snapshot_difference = fixture::difference(&self.before, &actual);
                     return Err("Undo overrode a later human asset selection".into());
                 }
             }
             16 if act == Act::Duplicate => Self::history_key(window, true, events),
             17 if act == Act::Duplicate => {
-                if editor.host.store().revision() < self.before_revision + 5
-                    || editor.host.unsaved()
-                    || shell.asset_operation_report()["followingHistory"] == true
-                {
+                if !self.history_ready(editor, shell, 4)? {
                     return self.wait();
                 }
-                if self.committed.as_ref() != Some(&fixture::snapshot(editor, &storage)?)
+                let actual = fixture::snapshot(editor, &storage)?;
+                if self.committed.as_ref() != Some(&actual)
                     || self.unrelated_selection.as_ref() != Some(&fixture::selection(editor, shell))
                 {
+                    self.snapshot_difference = fixture::difference(
+                        self.committed
+                            .as_ref()
+                            .ok_or("Committed snapshot is missing")?,
+                        &actual,
+                    );
                     return Err("Redo overrode a later human asset selection".into());
                 }
             }

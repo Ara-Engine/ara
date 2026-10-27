@@ -146,7 +146,9 @@ impl Shell {
         self.asset_ops.job = Some(Job {
             id,
             status: json!({"status":"running","progress":0,"message":"Preparing asset transaction…"}),
-            polled: Instant::now(),
+            // The placeholder cannot authorize cancellation; fetch the first live
+            // receipt on the next pump, then retain the ordinary polling cadence.
+            polled: Instant::now() - Duration::from_millis(100),
             began: Instant::now(),
             plan,
             selection,
