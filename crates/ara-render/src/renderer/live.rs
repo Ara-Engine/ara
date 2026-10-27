@@ -2,7 +2,9 @@
 use super::*;
 use ara_gpu::{Barrier, GpuCompletion as Completion, vulkan::Command};
 mod completion;
-#[cfg(test)]
+// Host-gated deferred-completion tests: they block queues with raw Vulkan timeline
+// semaphores and compare native queue handles.
+#[cfg(all(test, not(target_os = "macos")))]
 mod tests;
 
 #[derive(Default)]

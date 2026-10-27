@@ -5,7 +5,8 @@ use ara_gpu::GpuDevice;
 use ara_gpu::{Access, Barrier, Buffer, Device, Image, Queue, Resource, commands::Command, vk};
 
 const SIZE: [u32; 2] = [320, 180];
-#[cfg(test)]
+// The split shares one native Vulkan device and swapchain; checked by raw handles.
+#[cfg(all(test, not(target_os = "macos")))]
 mod tests;
 
 /// One 225 KiB image and staging buffer with independent loading queue/pools.
@@ -21,16 +22,16 @@ pub(crate) struct Loading {
 }
 
 impl Loading {
-    #[cfg(test)]
+    #[cfg(all(test, not(target_os = "macos")))]
     pub(crate) fn native_device(&self) -> vk::Device {
         self.gpu.context().device.handle()
     }
 
-    #[cfg(test)]
+    #[cfg(all(test, not(target_os = "macos")))]
     pub(crate) fn swapchain(&self) -> Option<vk::SwapchainKHR> {
         self.present.as_ref().map(Present::native_swapchain)
     }
-    #[cfg(test)]
+    #[cfg(all(test, not(target_os = "macos")))]
     pub(crate) fn new(extensions: &[std::ffi::CString], cache: &Path) -> Result<Self> {
         ara_gpu::cpu_scope!("Player.loading_device");
         Self::with_device(GpuDevice::new_raster(extensions, cache.join("loading"))?)
@@ -189,7 +190,7 @@ impl Windowed {
     pub(crate) fn drawable_size(&self) -> Result<[u32; 2]> {
         self.window.size()
     }
-    #[cfg(test)]
+    #[cfg(all(test, not(target_os = "macos")))]
     pub(crate) fn swapchain(&self) -> Option<vk::SwapchainKHR> {
         self.present.as_ref().map(Present::native_swapchain)
     }

@@ -4,7 +4,8 @@ use ara_runtime_render::{QualityChoice, RenderOptions};
 use std::{collections::BTreeMap, path::Path, thread, time::Duration};
 mod content;
 mod graphics;
-#[cfg(test)]
+// Startup handoff checks compare native Vulkan swapchain and device handles.
+#[cfg(all(test, not(target_os = "macos")))]
 mod tests;
 
 pub(super) struct Settings<'a> {

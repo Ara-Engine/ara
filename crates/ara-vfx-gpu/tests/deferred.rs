@@ -1,4 +1,6 @@
-//! First-use VFX construction inside an asynchronous Scene frame.
+//! First-use VFX construction inside an asynchronous Scene frame. Vulkan only: the
+//! atlas upload is held back with a raw timeline semaphore.
+#![cfg(not(target_os = "macos"))]
 use anyhow::Result;
 use ara_gpu::vk::TaggedStructure;
 use ara_gpu::{Device, GpuDevice, Queue, Resource, vk};
