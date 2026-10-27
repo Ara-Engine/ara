@@ -30,6 +30,16 @@ static NO_SELECTION: BTreeSet<String> = BTreeSet::new();
 
 impl Shell {
     pub(super) fn resource_for(&self, editor: &Editor, domain: &str) -> Option<String> {
+        // Undo/deletion must not silently turn the selected document into another
+        // edit target. Keep the explicit identity so Redo can restore its view.
+        if editor
+            .state
+            .resource
+            .as_ref()
+            .is_some_and(|id| editor.host.store().workspace().doc(id).is_none())
+        {
+            return None;
+        }
         let matches = |doc: &ara_doc::Document| {
             if domain == "animation" {
                 doc.kind == "animation"
@@ -424,6 +434,9 @@ impl Shell {
         Some((at, count))
     }
 }
+
+#[cfg(test)]
+mod resource_tests;
 
 /// The open document as a breadcrumb ("samples / material.graph"); the folder is
 /// muted and the file name reads as the page title.
