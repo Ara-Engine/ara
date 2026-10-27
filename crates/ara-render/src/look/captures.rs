@@ -174,11 +174,13 @@ impl CaptureSpec {
     }
 }
 
-/// Reflection captures for content without authored ones: one over each cluster
-/// of smooth objects (metals, glossy and clear surfaces), taken just above it, and
-/// one over the whole static enclosure (up to 200 m across) as the fallback. All
-/// project onto the enclosure's box, its floor at the widest thin slab's top. At
-/// most `limit`; capture points avoid objects' bounds.
+/// Reflection captures for content without authored ones: one over the static
+/// enclosure (up to 200 m across), taken from its most open point near the largest
+/// cluster of smooth objects (metals, glossy and clear surfaces), and one more over
+/// each other cluster far from that point, where an open point exists near it. Open
+/// points keep at least [`OPEN`] metres from every object (and from walls and
+/// ceilings), so no neighbour fills a capture's view. All project onto the
+/// enclosure's box, its floor at the widest thin slab's top. At most `limit`.
 pub fn auto_place(scene: &instanced::Scene, limit: usize) -> Vec<CaptureSpec> {
     let boxes: Vec<_> = scene
         .instances
@@ -199,6 +201,16 @@ fn union(a: [Vec3; 2], b: [Vec3; 2]) -> [Vec3; 2] {
     [a[0].min(b[0]), a[1].max(b[1])]
 }
 
+/// Clearance (m) that makes a capture point open: nearer geometry would fill its view.
+const OPEN: f32 = 1.5;
+/// Capture heights above the floor that candidates sample (eye level first).
+const HEIGHTS: [f32; 4] = [1.6, 1.2, 2.0, 2.5];
+
+/// Distance from `p` to box `b` (zero inside).
+fn outside(b: &[Vec3; 2], p: Vec3) -> f32 {
+    (b[0] - p).max(p - b[1]).max(Vec3::ZERO).length()
+}
+
 /// [`auto_place`] over instance bounds and whether each is smooth.
 fn place(boxes: &[([Vec3; 2], bool)], limit: usize) -> Vec<CaptureSpec> {
     let valid: Vec<_> = boxes
@@ -213,40 +225,66 @@ fn place(boxes: &[([Vec3; 2], bool)], limit: usize) -> Vec<CaptureSpec> {
     let footprint = size.x.max(0.01) * size.z.max(0.01);
     let area = |b: &[Vec3; 2]| (b[1].x - b[0].x) * (b[1].z - b[0].z);
     // The floor: the widest thin slab spanning a quarter of the footprint.
-    let floor = valid
+    let slab = valid
         .iter()
         .map(|(b, _)| *b)
         .filter(|b| {
             let s = b[1] - b[0];
             area(b) >= footprint * 0.25 && s.y <= 0.1 * s.x.min(s.z)
         })
-        .max_by(|a, b| area(a).total_cmp(&area(b)))
-        .map_or(enclosure[0].y, |b| b[1].y);
-    // Objects stand inside the enclosure; the floor and shell span it.
-    let objects: Vec<_> = valid
+        .max_by(|a, b| area(a).total_cmp(&area(b)));
+    let floor = slab.map_or(enclosure[0].y, |b| b[1].y);
+    // Above the highest capture point: open scenes project the sky high enough.
+    let top = enclosure[1].y.max(floor + HEIGHTS[3] + 0.5);
+    // Clearance from geometry: objects by their bounds; shells spanning the enclosure
+    // (rooms, terrain) by their faces from inside. The floor slab is the projection
+    // box's own floor and costs nothing. Very large scenes score their largest 2048.
+    let mut solids: Vec<([Vec3; 2], bool)> = valid
         .iter()
-        .filter(|(b, _)| area(b) < footprint * 0.25)
-        .copied()
+        .filter(|(b, _)| Some(*b) != slab)
+        .map(|(b, _)| (*b, area(b) >= footprint * 0.25))
         .collect();
-    let top = enclosure[1].y.max(floor + 0.5);
-    let open = |p: Vec3| {
-        objects
-            .iter()
-            .all(|(b, _)| !(p.cmpge(b[0] - 0.15).all() && p.cmple(b[1] + 0.15).all()))
+    let volume = |b: &[Vec3; 2]| (b[1] - b[0]).max(Vec3::splat(0.01)).element_product();
+    solids.sort_by(|a, b| volume(&b.0).total_cmp(&volume(&a.0)));
+    solids.truncate(2048);
+    let clearance = |p: Vec3| {
+        let mut nearest = OPEN;
+        for (b, shell) in &solids {
+            let inside = p.cmpge(b[0]).all() && p.cmple(b[1]).all();
+            let d = if inside && *shell {
+                (p - b[0]).min(b[1] - p).min_element()
+            } else {
+                outside(b, p)
+            };
+            nearest = nearest.min(d);
+        }
+        (p.y - floor).min(nearest).max(0.)
     };
-    // The nearest open point to `p` on a half-metre lattice around it.
-    let settle = |p: Vec3| {
-        let mut candidates: Vec<Vec3> = (-4..=4)
-            .flat_map(|x| (0..=2).flat_map(move |y| (-4..=4).map(move |z| (x, y, z))))
-            .map(|(x, y, z)| p + Vec3::new(x as f32 * 0.5, y as f32 * 0.3, z as f32 * 0.5))
-            .filter(|c| c.y < top)
-            .collect();
-        candidates.sort_by(|a, b| {
-            (*a - p)
-                .length_squared()
-                .total_cmp(&(*b - p).length_squared())
-        });
-        candidates.into_iter().find(|c| open(*c)).unwrap_or(p)
+    // The most open point of a horizontal region (clearance capped at OPEN), nearest
+    // `anchor` and eye level among equals.
+    let open = |region: [Vec3; 2], anchor: Vec3| {
+        let mut best: Option<(f32, f32, Vec3)> = None;
+        for height in HEIGHTS {
+            let y = floor + height;
+            for i in 0..=16 {
+                for k in 0..=16 {
+                    let p = Vec3::new(
+                        region[0].x + (region[1].x - region[0].x) * i as f32 / 16.,
+                        y,
+                        region[0].z + (region[1].z - region[0].z) * k as f32 / 16.,
+                    );
+                    let score = clearance(p);
+                    let away = Vec3::new(p.x - anchor.x, 0., p.z - anchor.z).length()
+                        + 0.5 * (height - HEIGHTS[0]).abs();
+                    let better = best
+                        .is_none_or(|(s, a, _)| score > s + 1e-3 || (score > s - 1e-3 && away < a));
+                    if better {
+                        best = Some((score, away, p));
+                    }
+                }
+            }
+        }
+        best.map(|(score, _, p)| (score, p))
     };
     let projection = [
         Vec3::new(enclosure[0].x, floor, enclosure[0].z),
@@ -267,15 +305,68 @@ fn place(boxes: &[([Vec3; 2], bool)], limit: usize) -> Vec<CaptureSpec> {
             intensity: 1.,
         }
     };
+    let objects: Vec<_> = valid
+        .iter()
+        .filter(|(b, _)| area(b) < footprint * 0.25)
+        .copied()
+        .collect();
     let smooth: Vec<_> = objects
         .iter()
         .filter(|(_, smooth)| *smooth)
         .map(|(b, _)| *b)
         .collect();
+    let centre = |b: &[Vec3; 2]| (b[0] + b[1]) * 0.5;
+    let around = |b: [Vec3; 2], margin: f32| {
+        [
+            (b[0] - margin).max(enclosure[0]),
+            (b[1] + margin).min(enclosure[1]),
+        ]
+    };
     let mut clusters = cluster(&smooth, 1.5, 12.);
     clusters.sort_by(|a, b| area(b).total_cmp(&area(a)));
+    // Where reflections matter most: around the largest smooth cluster, else around
+    // the objects, else the enclosure's centre.
+    let (region, anchor) = match clusters.first() {
+        Some(c) => (around(*c, 4.), centre(c)),
+        None => {
+            let content = objects
+                .iter()
+                .map(|(b, _)| *b)
+                .reduce(union)
+                .unwrap_or(enclosure);
+            (around(content, 2.), centre(&content))
+        }
+    };
     let mut specs = Vec::new();
-    for c in clusters.iter().take(limit.saturating_sub(1)) {
+    let mut main = None;
+    if size.x.max(size.z) <= 200.
+        && limit > 0
+        && let Some((_, point)) = open(region, anchor)
+    {
+        let blend = (0.1 * size.x.min(size.z)).clamp(0.5, 4.);
+        specs.push(spec(
+            [enclosure[0] - 0.5, enclosure[1] + 0.5],
+            blend,
+            point,
+            0,
+        ));
+        main = Some(point);
+    }
+    // Smooth clusters far from the enclosure's capture get their own, where open.
+    for c in clusters {
+        if specs.len() >= limit {
+            break;
+        }
+        let middle = centre(&c);
+        if main.is_some_and(|p: Vec3| Vec3::new(p.x - middle.x, 0., p.z - middle.z).length() < 6.) {
+            continue;
+        }
+        let Some((score, point)) = open(around(c, 3.), middle) else {
+            continue;
+        };
+        if score < OPEN - 1e-3 {
+            continue;
+        }
         let extent = c[1] - c[0];
         let margin = (0.35 * extent.x.max(extent.z)).clamp(1., 4.);
         let influence = [
@@ -286,22 +377,7 @@ fn place(boxes: &[([Vec3; 2], bool)], limit: usize) -> Vec<CaptureSpec> {
             ),
             c[1] + margin,
         ];
-        let centre = (c[0] + c[1]) * 0.5;
-        let height = (c[1].y + 0.35).min(top - 0.05).max(floor + 0.5);
-        let point = settle(Vec3::new(centre.x, height, centre.z));
         specs.push(spec(influence, margin * 0.6, point, 1));
-    }
-    if size.x.max(size.z) <= 200. && specs.len() < limit {
-        let centre = (enclosure[0] + enclosure[1]) * 0.5;
-        let height = floor + (0.5 * (top - floor)).clamp(0.5, 1.7);
-        let point = settle(Vec3::new(centre.x, height, centre.z));
-        let blend = (0.1 * size.x.min(size.z)).clamp(0.5, 4.);
-        specs.push(spec(
-            [enclosure[0] - 0.5, enclosure[1] + 0.5],
-            blend,
-            point,
-            0,
-        ));
     }
     specs
 }
@@ -859,8 +935,7 @@ mod tests {
 
     /// A stage like the Showcase: a wide floor, a figure at its centre and a grid of
     /// smooth spheres off to one side.
-    #[test]
-    fn automatic_captures_cover_smooth_clusters_and_the_enclosure_from_open_space() {
+    fn stage() -> Vec<([Vec3; 2], bool)> {
         let mut boxes = vec![
             slab([-15., -0.2, -15.], [15., 0.12, 15.], false),
             slab([-0.97, 0.12, -0.16], [0.97, 1.95, 0.21], false),
@@ -871,22 +946,44 @@ mod tests {
                 boxes.push(slab([x - 0.3, 0., z - 0.3], [x + 0.3, 0.6, z + 0.3], true));
             }
         }
+        boxes
+    }
+
+    #[test]
+    fn the_stage_is_captured_from_open_space_near_its_smooth_objects() {
+        let boxes = stage();
+        let specs = place(&boxes, 8);
+        assert_eq!(specs.len(), 1, "{specs:?}");
+        let spec = specs[0];
+        spec.validate().expect("valid automatic capture");
+        // Nothing within the clearance, eye level or above, near the spheres.
+        let point = spec.capture_point();
+        for (b, _) in &boxes[1..] {
+            assert!(outside(b, point) >= OPEN - 1e-3, "{point} near {b:?}");
+        }
+        assert!(point.y >= 0.12 + 1.2 - 1e-3, "{point}");
+        assert!(point.x.abs() < 2. && (point.z - 3.9).abs() < 2., "{point}");
+        // Projected onto the floor's top.
+        let floor = spec.position.y + spec.projection_centre.y - spec.projection.y;
+        assert!((floor - 0.12).abs() < 1e-4, "{floor}");
+    }
+
+    #[test]
+    fn far_smooth_clusters_get_their_own_open_capture() {
+        let mut boxes = stage();
+        boxes[0] = slab([-40., -0.2, -40.], [40., 0.12, 40.], false);
+        boxes.push(slab([29., 0., 29.], [31., 1., 31.], true));
         let specs = place(&boxes, 8);
         assert_eq!(specs.len(), 2, "{specs:?}");
-        let (spheres, stage) = (specs[0], specs[1]);
-        assert!(spheres.priority > stage.priority);
-        // Over the spheres, above them, projected onto the floor's top.
-        let point = spheres.capture_point();
-        assert!(point.y > 0.6 && point.z > 3. && point.z < 4.8, "{point}");
-        let floor = spheres.position.y + spheres.projection_centre.y - spheres.projection.y;
-        assert!((floor - 0.12).abs() < 1e-4, "{floor}");
-        // The enclosure's capture point leaves the figure's bounds.
-        let point = stage.capture_point();
-        let inside = point.cmpge(Vec3::new(-1.12, 0., -0.31)).all()
-            && point.cmple(Vec3::new(1.12, 2.1, 0.36)).all();
-        assert!(!inside, "{point}");
-        for spec in &specs {
-            spec.validate().expect("valid automatic capture");
+        let far = specs[1];
+        assert_eq!(far.priority, 1);
+        let point = far.capture_point();
+        assert!(
+            (point - Vec3::new(30., point.y, 30.)).length() < 4.,
+            "{point}"
+        );
+        for (b, _) in &boxes[1..] {
+            assert!(outside(b, point) >= OPEN - 1e-3, "{point} near {b:?}");
         }
     }
 

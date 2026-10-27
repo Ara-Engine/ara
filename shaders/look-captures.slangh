@@ -66,11 +66,18 @@ float3 captureLevel(Look l,CaptureShade c,float3 d,uint k){
 // blend front to back by influence in record order (priority, then smaller first).
 // Each looks up the lobe's dominant direction where it leaves the projection box,
 // as seen from the capture point (Lagarde & Zanuttini 2012), at the surface's own
-// roughness: one pair of roughness-level fetches per contributing capture. (No
+// roughness: one pair of roughness-level fetches per contributing capture. Objects
+// inside the box are seen from the capture point, not the surface, so a capture is
+// trusted less the farther the surface is from its capture point (fully within 2 m,
+// not at all past 6 m) and half as much on mirror-smooth lobes, where that parallax
+// shows most (SSR and ray queries own mirrors); the rest falls back to probe and sky
+// reflections. (No
 // distance-based sharpening: where the capture's sight line to that hit is blocked,
 // as under objects inside the box, sharpening turns their smear into streaks.)
 float4 captureReflection(Look l,float3 world,float3 n,float3 v,float roughness,uint mask){
-    float4 sum=0;
+    // Influence accumulates front to back (so a tile's mask may stop at the first
+    // capture covering it fully); trust only scales the result's coverage.
+    float4 sum=0;float trusted=0;
     if(mask==0)return sum;
     // GGX dominant direction (Lagarde & de Rousiers 2014): rough lobes lean to the normal.
     float a=roughness*roughness,s=1-a;float3 r=normalize(lerp(n,reflect(-v,n),s*(sqrt(s)+a)));
@@ -89,9 +96,11 @@ float4 captureReflection(Look l,float3 world,float3 n,float3 v,float roughness,u
             float level=roughness*(CAPTURE_LEVELS-1);
             uint low=min(uint(level),CAPTURE_LEVELS-1),high=min(low+1,CAPTURE_LEVELS-1);
             float3 radiance=lerp(captureLevel(l,d,along,low),captureLevel(l,d,along,high),level-float(low))*ratio.rgb;
-            float share=w*w*(3-2*w)*(1-sum.a)*ratio.w;sum+=float4(radiance*share,share);
+            float offset=length(world-d.origin.xyz);
+            float trust=(l.captureInfo[1].w&CAPTURE_DEBUG_MIRROR)!=0?1:saturate(1.5-offset*0.25)*lerp(0.5,1,saturate((roughness-0.1)/0.3));
+            float share=w*w*(3-2*w)*(1-sum.a)*ratio.w;sum+=float4(radiance*share,share);trusted+=share*trust;
         }
     }
     if(sum.a>0)sum.rgb/=sum.a;
-    return sum;
+    return float4(sum.rgb,trusted);
 }
