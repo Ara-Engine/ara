@@ -218,6 +218,36 @@ impl NetHost {
         &self.players
     }
 
+    /// Refresh one actor's existing network identity/owner after a typed control
+    /// command reached its authority boundary. Prediction ownership uses the normal server metadata.
+    pub fn refresh_control_owner(&mut self, identity: &str) -> Result<()> {
+        let _ = attach_motors(self.runtime_mut());
+        let runtime = self.runtime();
+        let session = runtime.play().session();
+        let entity = session
+            .entity(identity)
+            .ok_or_else(|| NetError(format!("controlled actor {identity} was removed")))?;
+        let owner = session
+            .world()
+            .get::<PlayerControl>(entity)
+            .map(|control| control.player)
+            .filter(|owner| *owner != 0);
+        let version = PolicyRegistry::new(runtime.schema().clone())?.hash();
+        self.server.spawn(
+            identity,
+            &format!("@play#{identity}"),
+            version,
+            owner.map(PlayerId),
+            None,
+        )?;
+        self.players.retain(|(actor, _)| actor != identity);
+        if let Some(owner) = owner {
+            self.players.push((identity.to_owned(), owner));
+            self.players.sort();
+        }
+        Ok(())
+    }
+
     /// Changes one client's simulated conditions (both directions).
     pub fn conditions(&mut self, index: usize, conditions: Conditions) -> Result<()> {
         self.links

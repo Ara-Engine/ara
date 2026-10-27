@@ -136,6 +136,8 @@ pub struct PlayInspectParams {
     /// Networked worlds: which process answers (0 = the authority, the default;
     /// 1.. = clients in launch order, player `index + 1`).
     pub player: Option<u32>,
+    /// Return a Host job immediately; inspect the result through jobs instead of blocking.
+    pub background: Option<bool>,
 }
 
 /// Params of `play.read`.
@@ -152,6 +154,8 @@ pub struct PlayReadParams {
     /// Networked worlds: which process answers (0 = the authority, the default;
     /// 1.. = clients in launch order, player `index + 1`).
     pub player: Option<u32>,
+    /// Return a Host job immediately while the requested player answers.
+    pub background: Option<bool>,
 }
 
 /// Params of `play.patch`: live edits applied at the next tick boundary.
@@ -165,6 +169,39 @@ pub struct PlayPatchParams {
     pub world: Option<String>,
     /// Edits `{entity, path, value}` (`{"entity":"e_lamp1","path":"Light.color","value":[1,0,0,1]}`).
     pub sets: Vec<Value>,
+    /// Return a Host job immediately; completion acknowledges the applying authority tick.
+    pub background: Option<bool>,
+}
+
+/// Parameters of the nonblocking editor view switch `play.view`.
+#[derive(Debug, Schema, Deserialize)]
+#[ara(params)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PlayViewParams {
+    /// Calling editor or agent session.
+    pub session: String,
+    /// Active world; absent selects the latest world.
+    pub world: Option<String>,
+    /// Rendering player index (0 local/listen host, 1+ clients).
+    pub player: u32,
+    /// Editor spectator camera; null restores this player's gameplay camera.
+    pub camera: Option<ara_play::ViewCamera>,
+    /// Start spectator mode from this player's current gameplay camera.
+    pub capture_current: Option<bool>,
+}
+/// Parameters of `play.control`: one authority-boundary possession command.
+#[derive(Debug, Schema, Deserialize)]
+#[ara(params)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PlayControlParams {
+    /// Calling editor or agent session.
+    pub session: String,
+    /// Active world; absent selects the latest world.
+    pub world: Option<String>,
+    /// Player index whose controls transfer (0 local/listen host, 1+ clients).
+    pub player: u32,
+    /// Controllable entity address; null ejects this player without stopping simulation.
+    pub entity: Option<ara_schema::EntityRef>,
 }
 
 /// Params of `play.capture`.
@@ -271,6 +308,8 @@ pub struct PlayKeepParams {
     pub include_driven: Option<bool>,
     /// Why, shown in review.
     pub why: Option<String>,
+    /// Read the runtime diff asynchronously, then keep it in one attributed content transaction.
+    pub background: Option<bool>,
 }
 
 /// Params of `play.debug.crash` (fault-isolation tests).

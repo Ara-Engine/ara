@@ -23,6 +23,22 @@ impl PlayService {
                 .ok_or_else(|| fail(codes::UNKNOWN_WORLD, "no play world is running"))?,
         };
         let diff = self.call(&world, method::DIFF, json!({}), false)?;
+        self.keep_from_diff(cx, p, diff)
+    }
+
+    /// The asynchronous path rejoins its live initiating session here. Diff filtering,
+    /// conflict checks and the one typed Cx.apply transaction are shared by both paths.
+    pub(crate) fn keep_from_diff(
+        &mut self,
+        cx: &mut Cx<'_>,
+        p: PlayKeepParams,
+        diff: Value,
+    ) -> Result<Value, Vec<Diagnostic>> {
+        let world = p
+            .world
+            .clone()
+            .or_else(|| self.latest())
+            .ok_or_else(|| fail(codes::UNKNOWN_WORLD, "No Play world is running"))?;
         let scene = self.world(&world)?.scene.clone();
         let changes: Vec<ara_runtime::live::Change> =
             serde_json::from_value(diff["changes"].clone())

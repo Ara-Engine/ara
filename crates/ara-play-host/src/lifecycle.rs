@@ -191,6 +191,7 @@ mod tests {
             grace: Instant::now() + Duration::from_secs(10),
             events: Vec::new(),
             embed: Vec::new(),
+            replies: Default::default(),
         };
         let mut service = PlayService::new(&root, PlayConfig::for_project(&root));
         service.worlds.insert(

@@ -6,6 +6,7 @@
 #![warn(missing_docs)]
 
 pub mod assets;
+pub mod editor_control;
 pub mod embed;
 mod game_ui;
 mod keep;
@@ -178,6 +179,8 @@ pub struct PlayService {
     channel: Option<embed::Channel>,
     /// Warm a bounded headless graphics view only for an attached Game surface.
     graphics_prewarm: bool,
+    /// Explicit editor reads/patches/Keep requests waiting for nonblocking player replies.
+    editor_jobs: BTreeMap<String, editor_control::Pending>,
 }
 
 impl PlayService {
@@ -210,6 +213,7 @@ impl PlayService {
             next: 0,
             channel: None,
             graphics_prewarm: false,
+            editor_jobs: BTreeMap::new(),
         }
     }
 
@@ -1150,6 +1154,8 @@ impl Service for PlayService {
             play(Method::new::<PlayInspectParams>(db, "play.inspect", "Read an entity's runtime components.").read_only(), "inspect"),
             play(Method::new::<PlayReadParams>(db, "play.read", "Read entity.Component.field values at the current tick.").read_only(), "read"),
             play(Method::new::<PlayPatchParams>(db, "play.patch", "Live-edit authored values; applied at the next tick boundary and acknowledged after it."), "patch"),
+            play(Method::new::<PlayViewParams>(db,"play.view","Set this player's spectator camera without editing authored cameras; returns a nonblocking Host job."),"view"),
+            play(Method::new::<PlayControlParams>(db,"play.control","Possess or eject a controllable actor through typed ops at one authority boundary; returns a Host job."),"control"),
             play(Method::new::<PlayCaptureParams>(db, "play.capture", "State hash and, with a path, a labelled capture (numbered marks + legend)."), "capture"),
             play(Method::new::<PlayWatchParams>(db, "play.watch", "Sample entity.Component.field paths during step/until."), "watch"),
             play(Method::new::<WorldParams>(db, "play.record", "Start recording a replay (initial checkpoint + per-tick hashes)."), "record"),
@@ -1181,6 +1187,15 @@ impl Service for PlayService {
         params: Value,
     ) -> Result<Value, Vec<Diagnostic>> {
         let latest = self.latest().unwrap_or_default();
+        if (params["background"] == true
+            && matches!(
+                method,
+                "play.inspect" | "play.read" | "play.patch" | "play.keep"
+            ))
+            || matches!(method, "play.view" | "play.control")
+        {
+            return self.start_editor_job(cx, method, params);
+        }
         let world_of = |params: &Value| {
             params["world"]
                 .as_str()
@@ -1264,6 +1279,7 @@ impl Service for PlayService {
                 if let Some(map) = forward.as_object_mut() {
                     map.remove("session");
                     map.remove("world");
+                    map.remove("background");
                     only = map
                         .remove("player")
                         .and_then(|p| p.as_u64())
@@ -1271,7 +1287,8 @@ impl Service for PlayService {
                 }
                 let (target, broadcast) = match method {
                     "play.pause" | "play.resume" | "play.timescale" | "play.input"
-                    | "play.patch" | "play.step" => (method, true),
+                    | "play.step" => (method, true),
+                    "play.patch" => (method, false),
                     "play.inspect" | "play.read" | "play.capture" | "play.watch" | "play.until"
                     | "play.record" | "play.recording" | "play.replay" | "play.diff"
                     | "play.debug.crash" | "play.commands" | "play.captureAudio" => (method, false),
@@ -1340,6 +1357,7 @@ impl Service for PlayService {
                 cx.publish_commands("play", &Value::Null);
             }
         }
+        self.poll_editor_jobs(cx);
         for problem in self.pump_embed() {
             cx.log(problem);
         }

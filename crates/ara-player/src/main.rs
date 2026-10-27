@@ -7,6 +7,7 @@
 extern crate glam34 as glam;
 mod crash;
 mod device;
+mod editor_control;
 mod embed;
 mod game_app;
 mod game_ui;
@@ -315,6 +316,7 @@ impl Player {
     /// free) or sleep until the next tick is due (headless).
     fn frame(&mut self) -> Result<()> {
         ara_gpu::cpu_scope!("Player.frame");
+        self.acknowledge_controls()?;
         let warming_window = self.window.is_some() && !self.window_ready;
         if warming_window {
             busy(&mut self.link, "first window frame")?;
@@ -588,6 +590,9 @@ impl Player {
         if method == method::PATCH {
             return self.patch(id, params);
         }
+        if method == method::CONTROL {
+            return self.control_request(id, params);
+        }
         let result = self.dispatch(&method, params);
         let reply = match result {
             Ok(value) => Ok(value),
@@ -612,9 +617,9 @@ impl Player {
         let outcome = (|| -> std::result::Result<Option<Value>, Failure> {
             let patch: ara_play::Patch = parse(params)?;
             let world = self.world.as_mut().ok_or_else(no_world)?;
-            world.runtime.local_only("play.patch")?;
+            world.runtime.authoritative_only("play.patch")?;
             let tick = world.patch(&patch)?;
-            if world.runtime.running() {
+            if world.runtime.networked() || world.runtime.running() {
                 world.pending.push(PendingPatch {
                     id: id.clone(),
                     tick,
@@ -822,6 +827,7 @@ impl Player {
             world.runtime.local_only(method)?;
         }
         let value = match method {
+            method::VIEW => world.set_editor_view(parse::<ara_play::View>(params)?)?,
             method::JOIN => {
                 let join: ara_play::Join = parse(params)?;
                 serde_json::to_value(world.runtime.join(join.index)?)?

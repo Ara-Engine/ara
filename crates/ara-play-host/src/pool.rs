@@ -43,6 +43,77 @@ pub struct Player {
     pub events: Vec<ara_play::Event>,
     /// Embedded players' surface and frame notices not yet drained.
     pub embed: Vec<crate::embed::Notice>,
+    /// Bounded nonblocking service requests; replies survive ordinary heartbeat polling.
+    pub(crate) replies: Replies,
+}
+
+#[derive(Default)]
+pub(crate) struct Replies(std::collections::BTreeMap<u64, Option<Result<Value, Value>>>);
+impl Replies {
+    fn reserve(&mut self, id: u64) -> bool {
+        if self.0.len() >= 64 {
+            return false;
+        }
+        self.0.insert(id, None);
+        true
+    }
+    fn observe(&mut self, message: &Message) {
+        if let Message::Response { id, result } = message
+            && let Some(id) = id.as_u64()
+            && let Some(reply) = self.0.get_mut(&id)
+        {
+            *reply = Some(result.clone());
+        }
+    }
+    fn take(&mut self, id: u64) -> Option<Result<Value, Value>> {
+        let reply = self.0.get_mut(&id)?.take()?;
+        self.0.remove(&id);
+        Some(reply)
+    }
+}
+
+#[cfg(test)]
+mod reply_tests {
+    use super::*;
+    #[test]
+    fn out_of_order_job_replies_survive_polling_and_are_taken_once() {
+        let mut replies = Replies::default();
+        assert!(replies.reserve(1));
+        assert!(replies.reserve(2));
+        replies.observe(&Message::Response {
+            id: json!(2),
+            result: Ok(json!({"tick":42})),
+        });
+        replies.observe(&Message::Response {
+            id: json!(99),
+            result: Ok(json!("unsolicited")),
+        });
+        assert!(replies.take(1).is_none());
+        assert_eq!(replies.take(2), Some(Ok(json!({"tick":42}))));
+        assert!(replies.take(2).is_none());
+        assert_eq!(replies.0.len(), 1);
+        replies.observe(&Message::Response {
+            id: json!(1),
+            result: Err(json!({"message":"rejected"})),
+        });
+        assert_eq!(replies.take(1), Some(Err(json!({"message":"rejected"}))));
+        assert!(replies.0.is_empty());
+    }
+    #[test]
+    fn mailbox_is_bounded_and_canceled_requests_cannot_reappear() {
+        let mut replies = Replies::default();
+        for id in 0..64 {
+            assert!(replies.reserve(id));
+        }
+        assert!(!replies.reserve(64));
+        replies.0.remove(&12);
+        replies.observe(&Message::Response {
+            id: json!(12),
+            result: Ok(Value::Null),
+        });
+        assert_eq!(replies.0.len(), 63);
+        assert!(replies.reserve(64));
+    }
 }
 
 impl Drop for Player {
@@ -58,6 +129,7 @@ impl Player {
     /// Handles a non-response message (heartbeats); anything arriving counts as alive.
     pub fn observe(&mut self, message: &Message) {
         self.seen = Instant::now();
+        self.replies.observe(message);
         if let Message::Notification { method, params } = message {
             if method == STATUS {
                 self.status = serde_json::from_value(params.clone()).ok();
@@ -98,6 +170,40 @@ impl Player {
         timeout: Duration,
     ) -> Result<Result<Value, Value>, Value> {
         self.call_checked(method, params, timeout, || Ok(()))
+    }
+
+    /// Queue a request without waiting for its player tick or response. `check`
+    /// keeps its bounded reply alive alongside heartbeats and embedded frame notices.
+    pub(crate) fn request(&mut self, method: &str, params: &Value) -> Result<u64, Value> {
+        if self.replies.0.len() >= 64 {
+            return Err(error(
+                -32000,
+                "too many pending player requests",
+                Value::Null,
+            ));
+        }
+        let id = self
+            .link
+            .request(method, params)
+            .map_err(|problem| error(-32000, problem.to_string(), Value::Null))?;
+        if !self.replies.reserve(id) {
+            return Err(error(
+                -32000,
+                "too many pending player requests",
+                Value::Null,
+            ));
+        }
+        if let Err(problem) = self.link.flush() {
+            self.replies.0.remove(&id);
+            return Err(error(-32000, problem.to_string(), Value::Null));
+        }
+        Ok(id)
+    }
+    pub(crate) fn response(&mut self, id: u64) -> Option<Result<Value, Value>> {
+        self.replies.take(id)
+    }
+    pub(crate) fn forget_request(&mut self, id: u64) {
+        self.replies.0.remove(&id);
     }
 
     /// Startup-only cancellable wait. Ordinary calls retain their synchronous contract.
@@ -160,7 +266,7 @@ impl Player {
 
     /// Drains heartbeats; returns a fault if the player died or hung.
     pub fn check(&mut self) -> Option<Value> {
-        loop {
+        for _ in 0..256 {
             match self.link.poll() {
                 Ok(Some(message)) => self.observe(&message),
                 Ok(None) => break,
@@ -574,6 +680,7 @@ impl Pool {
             grace: Instant::now(),
             events: Vec::new(),
             embed: Vec::new(),
+            replies: Default::default(),
         })
     }
 

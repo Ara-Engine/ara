@@ -109,6 +109,23 @@ impl Play {
         Ok(())
     }
 
+    /// Authoring operations belong to the authority's next boundary. Mirrors
+    /// adopt only the resulting declared replication; they never patch local copies.
+    pub fn authoritative_only(&self, what: &str) -> Result<()> {
+        if matches!(self, Play::Mirror(..)) {
+            bail!("{what}: runtime edits must be sent to the authority player");
+        }
+        Ok(())
+    }
+    /// Adopt one control op's ECS owner in the authority's existing network actor metadata.
+    pub fn refresh_control_owner(&mut self, identity: &str) -> Result<()> {
+        match self {
+            Play::Local(_) => Ok(()),
+            Play::Host(host) => Ok(host.refresh_control_owner(identity)?),
+            Play::Mirror(..) => bail!("only an authority changes control ownership"),
+        }
+    }
+
     /// One frame: local worlds advance by host time while running; authorities poll
     /// their server (which steps the world); clients poll and present their mirror.
     pub fn advance(&mut self, elapsed: Duration) -> Result<Option<FrameAdvance>> {
