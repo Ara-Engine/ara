@@ -244,16 +244,16 @@ fn truth(
                     .context("study renderer")?
                     .set_jitter_override(None);
                 let image = capture?.image;
-                for (s, p) in sum.chunks_exact_mut(3).zip(image.pixels()) {
-                    for c in 0..3 {
-                        s[c] += decode(p.0[c]);
+                for (s, p) in sum.as_chunks_mut::<3>().0.iter_mut().zip(image.pixels()) {
+                    for (s, &v) in s.iter_mut().zip(&p.0) {
+                        *s += decode(v);
                     }
                 }
             }
         }
         let n = (GT_GRID * GT_GRID) as f32;
         let mut out = RgbaImage::new(size[0], size[1]);
-        for (p, s) in out.pixels_mut().zip(sum.chunks_exact(3)) {
+        for (p, s) in out.pixels_mut().zip(sum.as_chunks::<3>().0) {
             p.0 = [encode(s[0] / n), encode(s[1] / n), encode(s[2] / n), 255];
         }
         out.save(dir.join(&file))?;
