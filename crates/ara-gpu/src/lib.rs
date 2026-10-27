@@ -28,6 +28,14 @@ pub type GpuCompletion = vulkan::Completion;
 /// Deferred frame completion returned by [`GpuDevice`].
 #[cfg(target_os = "macos")]
 pub type GpuCompletion = metal::Completion;
+/// A same-device view of an engine image for native UI attachments
+/// (`GpuDevice::image_view`): the `VkImageView` off Apple platforms.
+#[cfg(not(target_os = "macos"))]
+pub type NativeView = vk::ImageView;
+/// On Metal the engine image handle itself: the Metal UI backend resolves its texture
+/// on the same device.
+#[cfg(target_os = "macos")]
+pub type NativeView = Image;
 /// Shared surfaces (D19) of [`GpuDevice`]; see the Vulkan re-export.
 #[cfg(target_os = "macos")]
 pub use metal::external;
