@@ -19,6 +19,30 @@ if (args.Contains("--inventory", StringComparer.Ordinal))
     return 0;
 }
 
+if (args.Contains("--editor-session", StringComparer.Ordinal))
+{
+    if (int.TryParse(Arg("--parent"), out var editorParent) && editorParent != 0) _ = Task.Run(() => WatchParent(editorParent));
+    var output = Console.Out;
+    Console.SetOut(Console.Error); // Extension console output cannot corrupt the protocol.
+    using var session = new EditorRunner.Session();
+    while (await Console.In.ReadLineAsync() is { } line)
+    {
+        var request = System.Text.Json.JsonSerializer.Deserialize<EditorRequest>(line, CodeFixRunner.Json)
+            ?? throw new ArgumentException("missing editor request");
+        await output.WriteLineAsync(System.Text.Json.JsonSerializer.Serialize(session.Run(request), CodeFixRunner.Json));
+        await output.FlushAsync();
+    }
+    return 0;
+}
+
+if (args.Contains("--editor", StringComparer.Ordinal))
+{
+    var request = System.Text.Json.JsonSerializer.Deserialize<EditorRequest>(await Console.In.ReadToEndAsync(), CodeFixRunner.Json)
+        ?? throw new ArgumentException("missing editor request");
+    Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(EditorRunner.Run(request), CodeFixRunner.Json));
+    return 0;
+}
+
 if (args.Contains("--compile-project", StringComparer.Ordinal))
 {
     var request = System.Text.Json.JsonSerializer.Deserialize<ProjectBuildRequest>(await Console.In.ReadToEndAsync(), CodeFixRunner.Json)

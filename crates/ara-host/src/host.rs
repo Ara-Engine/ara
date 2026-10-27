@@ -33,11 +33,12 @@ use crate::session::{Approval, DefaultPolicy, Sessions};
 
 /// Method families reserved for services that register later, with who provides
 /// them. Calls get `ARA1806` until then.
-pub const RESERVED: [(&str, &str); 4] = [
-    ("run", "the C# script worker (code mode)"),
+pub const RESERVED: [(&str, &str); 5] = [
+    ("run", "the headless project execution service"),
     ("capture", "the renderer's headless capture service"),
     ("play", "the simulation / play-mode service"),
     ("test", "the test runner"),
+    ("source", "the C# analyzer code-fix service"),
 ];
 
 /// Host settings.
@@ -570,6 +571,9 @@ impl Host {
 
 impl Drop for Host {
     fn drop(&mut self) {
+        // Join service preparation workers and stop owned children while the
+        // authority and project lock still exist, before draining durable writes.
+        self.services.clear();
         if self.st.profile_attached {
             ara_profile::ThreadRegistration::detach();
         }

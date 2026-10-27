@@ -80,11 +80,19 @@ are preserved and reported as an external conflict. Compaction retains the last
 file acknowledgment, including absence. `restore_documents` replays only
 document data; the host separately supplies recovered file observations.
 
-`source.replace {path, baseHash, text}` requires an existing C# source whose exact
-hash matches analysis. It returns a standard preparation job, then an ordinary
+`source.replace {path, baseHash, text, from?}` checks the source's exact base hash.
+A null `baseHash` creates an absent source under `AUTHORING_ROOT`, including
+reversible parent directories. `from` relocates an existing source while replacing
+its text; an unrelated destination must be absent. Existing legacy sources can
+still be edited. Commands consume prepared states and perform no filesystem I/O.
+It returns a standard preparation job, then an ordinary
 `cmd.apply` result with transaction and ops. External changes refuse apply/undo
 with ARA1501. CLI `Engine::call` advances local endpoints until preparation jobs
 finish, so offline commands cannot exit and discard their queued work.
+Source jobs complete after the file worker acknowledges materialization, including
+its coded restore failures. Services using `Cx::apply_prepared` can poll
+`Cx::materialization_result(revision)` for that same acknowledgment. Nested service
+workflows can read `Cx::job_record(job)` without another protocol call.
 Their total duration is unlimited while the job's progress fraction or phase changes.
 `ARA_JOB_STALL_TIMEOUT_SECS` sets the positive stall budget (default 120 seconds);
 no progress within that budget returns ARA1815 with the job handle and last phase.

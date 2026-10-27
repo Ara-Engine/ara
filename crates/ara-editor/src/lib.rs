@@ -10,6 +10,7 @@ mod capture;
 pub mod codes;
 mod commands;
 mod editor;
+mod extensions;
 mod fixes;
 pub mod graph;
 /// Editor-only Vulkan adapter over the shared engine device.

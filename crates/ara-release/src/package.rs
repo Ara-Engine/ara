@@ -306,6 +306,7 @@ fn bundle_dotnet(root: &Path, stage: &Path, symbols: &Path, dist: &Path) -> Resu
     for project in [
         "Ara.Host",
         "Ara.Runtime",
+        "Ara.Editor",
         "Ara.CompileServer",
         "Ara.Analyzers",
         "Ara.Analyzers.CodeFixes",

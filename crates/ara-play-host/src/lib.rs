@@ -20,6 +20,8 @@ mod published;
 mod rendering;
 pub use published::{ImportProgress, PublishedAssets, PublishedGeneration, PublishedSnapshot};
 mod scripts;
+mod source_fixes;
+pub use source_fixes::{SourceFixParams, SourceFixService};
 mod spec;
 mod starting;
 
@@ -181,6 +183,8 @@ pub struct PlayService {
     graphics_prewarm: bool,
     /// The daemon owns headless tools; editors retain their render-boundary capture service.
     headless_automation: bool,
+    headless_capture: bool,
+    source_writes: scripts::SourceWrites,
 }
 
 impl PlayService {
@@ -214,12 +218,21 @@ impl PlayService {
             channel: None,
             graphics_prewarm: false,
             headless_automation: false,
+            headless_capture: false,
+            source_writes: scripts::SourceWrites::default(),
         }
     }
 
-    /// Enables the daemon's one-shot run/capture tools. Native editors provide
-    /// their own capture service and keep the default Play-only registration.
+    /// Enables the daemon's one-shot run/capture tools.
     pub fn with_headless_automation(mut self) -> Self {
+        self.headless_automation = true;
+        self.headless_capture = true;
+        self
+    }
+
+    /// Enable headless execution while the native editor supplies its own capture
+    /// service at the rendering boundary. Both use the same command registry.
+    pub fn with_headless_run(mut self) -> Self {
         self.headless_automation = true;
         self
     }
@@ -1192,7 +1205,11 @@ impl Service for PlayService {
             Method::new::<TestRunParams>(db, "test.run", "Run a playtest (inputs, steps, tick-level assertions) in a fresh headless player; optionally twice for determinism.")
                 .scope(Scope::Play)
                 .tool("ara_test"),
-        ].into_iter().filter(|m| self.headless_automation || !matches!(m.name.as_str(), "run" | "capture")).collect()
+        ].into_iter().filter(|m| match m.name.as_str() {
+            "run" => self.headless_automation,
+            "capture" => self.headless_capture,
+            _ => true,
+        }).collect()
     }
 
     fn call(
@@ -1267,7 +1284,7 @@ impl Service for PlayService {
             }
             "script.write" => {
                 let p: ScriptWriteParams = parse(params)?;
-                self.script_write(cx, p)
+                self.queue_script_write(cx, p)
             }
             "play.events" => {
                 let world = self.world(&world_of(&params))?;
@@ -1333,6 +1350,7 @@ impl Service for PlayService {
     }
 
     fn tick(&mut self, cx: &mut Cx<'_>) {
+        self.poll_script_writes(cx);
         self.poll_starting(cx);
         for problem in self.collect_stopped() {
             cx.log(problem);

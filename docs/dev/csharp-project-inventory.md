@@ -26,7 +26,8 @@ creates a nested boundary; names compare case-insensitively. Only `name`,
 `references` and `hot` are accepted. Exact `editor` folder ancestors assign a
 separate editor assembly, including below a gameplay manifest. An editor assembly
 references its gameplay owner. Gameplay cannot reference editor assemblies.
-Symlinks, nested projects and packages are excluded from discovery.
+Symlinks and nested projects are excluded from discovery; the project-root
+`packages/` directory is outside the authored root.
 
 Initial `ara_play_host::open_project` calls `publish(Gameplay)` before loading
 scenes. Thus open, `ara check` and export generate schemas on a fresh clone without

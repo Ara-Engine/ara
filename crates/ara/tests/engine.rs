@@ -425,7 +425,11 @@ struct Mcp {
 
 impl Mcp {
     fn start(root: &Path) -> Mcp {
-        let mut child = Command::new(env!("CARGO_BIN_EXE_ara"))
+        Self::start_executable(root, Path::new(env!("CARGO_BIN_EXE_ara")))
+    }
+    fn start_executable(root: &Path, executable: &Path) -> Mcp {
+        let mut child = Command::new(executable)
+            .env_remove("ARA_DOTNET_ARTIFACTS")
             .current_dir(root)
             .arg("mcp")
             .arg("--root")
@@ -491,6 +495,116 @@ impl Mcp {
     }
 }
 
+#[test]
+fn installed_sdk_code_fixes_work_through_cli_and_mcp_apply_with_offline_undo() {
+    fn copy_tools(from: &Path, to: &Path) {
+        fs::create_dir_all(to).expect("tool directory");
+        for entry in fs::read_dir(from).expect("prebuilt .NET SDK").flatten() {
+            let destination = to.join(entry.file_name());
+            if entry.file_type().expect("kind").is_dir() {
+                copy_tools(&entry.path(), &destination);
+            } else if entry.path().extension().is_none_or(|ext| ext != "pdb") {
+                fs::copy(entry.path(), destination).expect("installed SDK file");
+            }
+        }
+    }
+    let root = scratch("installed-code-fixes");
+    let engine = root.join("engine");
+    fs::create_dir_all(&engine).expect("engine");
+    fs::write(engine.join("engine.json"), "{}")
+        .expect("installed engine marker disables checkout fallback");
+    let executable = engine.join(if cfg!(windows) { "ara.exe" } else { "ara" });
+    fs::copy(env!("CARGO_BIN_EXE_ara"), &executable).expect("installed CLI");
+    let artifacts = std::env::var_os("ARA_DOTNET_ARTIFACTS")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| {
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("../../dotnet/artifacts/bin")
+        });
+    for project in ["Ara.CompileServer", "Ara.Host"] {
+        copy_tools(
+            &artifacts.join(project).join("release"),
+            &engine
+                .join("dotnet/artifacts/bin")
+                .join(project)
+                .join("release"),
+        );
+    }
+    let provider =
+        engine.join("dotnet/artifacts/bin/Ara.CompileServer/release/Ara.Analyzers.CodeFixes.dll");
+    assert!(
+        provider.is_file(),
+        "release tool dependencies must ship the providers"
+    );
+    let project = root.join("project");
+    fs::create_dir_all(project.join(ara_doc::AUTHORING_ROOT)).expect("project");
+    fs::write(project.join("ara.project.json"), "{}").expect("marker");
+    fs::write(
+        project.join(ara_doc::AUTHORING_ROOT).join("main.scene"),
+        r#"{"$schema":"ara://schema/scene/1","id":"sc_fix","records":{}}"#,
+    )
+    .expect("scene");
+    let relative = format!("{}/Broken.cs", ara_doc::AUTHORING_ROOT);
+    let source = project.join(&relative);
+    let before = "using Ara; using System.Numerics;\n/// <summary>Fixable gameplay helper.</summary>\npublic sealed partial class Broken : Behaviour { private int cache; protected override void OnTick(in Tick tick) { var v = Vector3.Zero; var x = v.x; System.Console.WriteLine(x); } }";
+    fs::write(&source, before).expect("source");
+    let run = |args: &[&str]| {
+        let result = Command::new(&executable)
+            .current_dir(&project)
+            .args(args)
+            .env_remove("ARA_DOTNET_ARTIFACTS")
+            .env("ARA_CONFIG_DIR", root.join("profile"))
+            .output()
+            .expect("installed ara");
+        let stdout = String::from_utf8_lossy(&result.stdout).into_owned();
+        assert!(
+            result.status.success(),
+            "{args:?}: {stdout}{}",
+            String::from_utf8_lossy(&result.stderr)
+        );
+        json_of(&stdout)
+    };
+    let fixed = run(&["fix", &relative, "--json", "--author", "agent:installed"]);
+    assert!(fixed["txn"].is_string(), "{fixed}");
+    let after = fs::read_to_string(&source).expect("fixed");
+    assert!(after.contains("[Transient]"), "{after}");
+    assert!(after.contains("v.X"), "{after}");
+    assert!(after.contains("Log.Info"), "{after}");
+    run(&["undo", "--json", "--author", "agent:installed"]);
+    assert_eq!(fs::read_to_string(&source).expect("undone"), before);
+    run(&["redo", "--json", "--author", "agent:installed"]);
+    assert_eq!(fs::read_to_string(&source).expect("redone"), after);
+    run(&["undo", "--json", "--author", "agent:installed"]);
+    let mut mcp = Mcp::start_executable(&project, &executable);
+    let pending = mcp.tool("ara_fix", json!({"paths":[relative],"apply":false}));
+    let deadline = Instant::now() + Duration::from_secs(90);
+    let preview = loop {
+        let status = mcp.tool("ara_jobs", json!({"action":"status","job":pending["job"]}));
+        if status["status"] == "done" {
+            break status["result"].clone();
+        }
+        assert_ne!(status["status"], "failed", "{status}");
+        assert!(Instant::now() < deadline, "{status}");
+        thread::sleep(Duration::from_millis(20));
+    };
+    assert_eq!(preview["commands"][0]["cmd"], "source.replace");
+    let pending = mcp.tool(
+        "ara_apply",
+        json!({"commands":preview["commands"],"why":"Apply the installed analyzer fix"}),
+    );
+    loop {
+        let status = mcp.tool("ara_jobs", json!({"action":"status","job":pending["job"]}));
+        if status["status"] == "done" {
+            assert!(status["result"]["txn"].is_string());
+            break;
+        }
+        assert_ne!(status["status"], "failed", "{status}");
+        assert!(Instant::now() < deadline, "{status}");
+        thread::sleep(Duration::from_millis(20));
+    }
+    mcp.close();
+    assert_eq!(fs::read_to_string(&source).expect("MCP applied"), after);
+}
+
 fn wait_for(what: &str, mut ok: impl FnMut() -> bool) {
     let end = Instant::now() + Duration::from_secs(20);
     while !ok() {
@@ -522,7 +636,10 @@ fn an_mcp_agent_edits_through_the_daemon_and_reverts_its_turn() {
 
     let mut mcp = Mcp::start(&root);
     let tools = mcp.request("tools/list", json!({}));
-    assert_eq!(tools["result"]["tools"].as_array().map(Vec::len), Some(13));
+    assert_eq!(
+        tools["result"]["tools"].as_array().map(Vec::len),
+        Some(ara_mcp::tools::TOOLS.len())
+    );
 
     let begun = mcp.tool(
         "ara_session",
@@ -645,7 +762,7 @@ fn mcp_without_a_daemon_becomes_one_and_serves_http_too() {
     assert_eq!(status, 200, "{body}");
     assert_eq!(
         json_of(&body)["result"]["tools"].as_array().map(Vec::len),
-        Some(13)
+        Some(ara_mcp::tools::TOOLS.len())
     );
     let (status, _) = mcp_http(port, "wrong-token", "", &list);
     assert_eq!(status, 401);

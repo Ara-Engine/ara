@@ -855,6 +855,7 @@ dependencies = [
  "glam 0.34.1",
  "gltf",
  "image",
+ "notify",
  "parley 0.12.0",
  "resvg",
  "sdl3-sys",

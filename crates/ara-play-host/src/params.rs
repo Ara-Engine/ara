@@ -370,7 +370,7 @@ pub struct PlayCaptureAudioParams {
 pub struct ScriptWriteParams {
     /// Session handle from `session.begin`.
     pub session: String,
-    /// Project-relative `.cs` path inside a module folder (`scripts/Outpost/Door.cs`).
+    /// Inventoried `.cs` reference or project-relative storage path under the authored root.
     pub path: String,
     /// The complete new source text.
     pub text: String,

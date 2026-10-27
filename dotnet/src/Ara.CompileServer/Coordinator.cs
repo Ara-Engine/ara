@@ -125,10 +125,10 @@ internal sealed class Coordinator : ICompileContext, IDisposable
         {
             var until = Stopwatch.GetTimestamp() + ClaimTicks;
             lock (_lock)
-                foreach (var p in paths) _claims[Path.GetFullPath(p)] = until;
+                foreach (var p in paths) _claims[ProjectInventory.ProjectPath(p)] = until;
         }
         var w = new Work(WorkKind.Change, slot, origin, tEvent);
-        w.Paths.UnionWith(paths.Select(Path.GetFullPath));
+        w.Paths.UnionWith(paths.Select(ProjectInventory.ProjectPath));
         Enqueue(w);
     }
 

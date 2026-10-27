@@ -37,6 +37,7 @@ pub fn endpoint(root: &Path) -> Result<Box<dyn Endpoint>, Diagnostic> {
                 ara_audio_why::register(h.why());
                 h.why().register(Box::new(ara_ai::why::NpcExplainer));
                 ara_world::service::register(&mut h)?;
+                h.register(Box::new(ara_play_host::SourceFixService::new(root)))?;
                 h.register(Box::new(
                     ara_play_host::PlayService::new(
                         root,

@@ -106,12 +106,12 @@ without joining it; omitted/false keeps the synchronous world-ready response.
   expect, patch, watch, capture, hash) in fresh headless players; `determinism` runs
   it twice in separate processes and requires equal final hashes.
 
-- C# (`scripts.rs`): projects with module folders (`ara.module.toml`) send them to
-  players (`PlayScene::scripts`); without a .NET build Play is refused with a setup
-  diagnostic. `script.write` from an agent session makes every world claim the path
-  (`play.compile`) before the file is written. Player `play.event`s: reloads and
+- C# (`scripts.rs`): the shared D30 inventory publishes gameplay schemas before
+  validation and sends private module inputs to players (`PlayScene::scripts`).
+  `script.write` prepares a `source.replace` transaction on a worker, makes worlds
+  claim agent paths (`play.compile`), then waits for materialization. Player `play.event`s: reloads and
   diagnostics (buffered for `play.events`, logged), `types` (the owner keeps each
-  module's `<Name>.types.json` current, canonical, inside the project), `restart`
+  module's private `.ara/scripts/` schema current, canonical), `restart`
   (L4: resume a fresh player from `play.snapshot`). The C# catalog is published to the
   host (`Cx::publish_commands("play", ..)`) on start, after reloads and on stop.
 

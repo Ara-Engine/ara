@@ -138,10 +138,18 @@ impl Shell {
                         })
                 })
                 .ok_or("No unused script name")?;
-        editor.action(
+        let created = editor.action(
             "script.create",
             json!({"path":path,"template":template,"compile":false}),
         )?;
+        let path = created["path"]
+            .as_str()
+            .ok_or("script.create returned no path")?
+            .to_owned();
+        let folder = path
+            .rsplit_once('/')
+            .map_or("", |(folder, _)| folder)
+            .to_owned();
         self.browser.insert_path(&path, "cs");
         self.asset_offset = 0.;
         editor.action("editor.search", json!({"panel":"assets","query":""}))?;

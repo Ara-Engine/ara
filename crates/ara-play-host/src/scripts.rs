@@ -9,6 +9,8 @@ use ara_host::Cx;
 use ara_play::{Event, ScriptScene, method};
 use serde_json::{Value, json};
 use std::path::{Path, PathBuf};
+mod write;
+pub(crate) use write::SourceWrites;
 
 /// The .NET JIT host and compile server players load C# modules with.
 #[derive(Debug, Clone)]
@@ -100,38 +102,7 @@ impl PlayService {
     /// `script.write`: an agent writes a C# source. Every running world's players
     /// claim the path as an agent edit first (coalesced, compiled behind human edits),
     /// then the file is written; the reload applies at a tick boundary.
-    pub(crate) fn script_write(
-        &mut self,
-        cx: &Cx<'_>,
-        p: ScriptWriteParams,
-    ) -> Result<Value, Vec<Diagnostic>> {
-        let relative = Path::new(&p.path);
-        if relative.is_absolute()
-            || relative
-                .components()
-                .any(|c| matches!(c, std::path::Component::ParentDir))
-            || relative.extension().is_none_or(|e| e != "cs")
-        {
-            return Err(fail(
-                codes::REQUEST,
-                "path must be a project-relative `.cs` file",
-            ));
-        }
-        let path = self.root.join(relative);
-        let inventory = ara_script::project::inventory(&self.root).map_err(|d| vec![d])?;
-        if !inventory
-            .sources
-            .iter()
-            .any(|source| self.root.join(&source.storage_path) == path)
-        {
-            return Err(fail(
-                codes::REQUEST,
-                format!("{} is not inside a C# module folder", p.path),
-            ));
-        }
-        let agent = cx
-            .session()
-            .is_some_and(|s| s.author.to_string().starts_with("agent:"));
+    fn claim_source(&mut self, path: &Path, agent: bool) -> Result<usize, Vec<Diagnostic>> {
         let mut claimed = 0;
         if agent {
             let ids: Vec<String> = self.worlds.keys().cloned().collect();
@@ -145,11 +116,7 @@ impl PlayService {
                 claimed += usize::from(result["claimed"].as_bool().unwrap_or(false));
             }
         }
-        if let Some(dir) = path.parent() {
-            std::fs::create_dir_all(dir).map_err(|e| fail(codes::REQUEST, e.to_string()))?;
-        }
-        std::fs::write(&path, &p.text).map_err(|e| fail(codes::REQUEST, e.to_string()))?;
-        Ok(json!({"path": p.path, "agent": agent, "claimedBy": claimed}))
+        Ok(claimed)
     }
 
     /// Drains player events into each world's buffer (logging diagnostics and the

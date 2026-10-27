@@ -100,7 +100,10 @@ enum Request {
 #[derive(Debug)]
 pub(crate) enum Reply {
     /// Committed file transitions finished on the file worker.
-    Materialized(Result<(), Diagnostic>),
+    Materialized {
+        revision: u64,
+        result: Result<(), Diagnostic>,
+    },
     /// A watched file's contents changed on disk (possibly back to what the host
     /// last wrote: compare before merging).
     Changed { path: String, text: String },
@@ -307,7 +310,7 @@ impl FileThread {
     }
     fn count(&mut self, reply: Reply) -> Reply {
         match &reply {
-            Reply::Saved { .. } | Reply::Removed { .. } | Reply::Materialized(_) => {
+            Reply::Saved { .. } | Reply::Removed { .. } | Reply::Materialized { .. } => {
                 self.pending = self.pending.saturating_sub(1);
             }
             Reply::Compacted { entries, .. } => {
@@ -423,7 +426,10 @@ impl Worker {
                         }
                         Ok(())
                     });
-                    self.reply(Reply::Materialized(result));
+                    self.reply(Reply::Materialized {
+                        revision: txn.result,
+                        result,
+                    });
                 } else if let Err(d) = result {
                     self.reply(Reply::JournalFailed(d));
                 }
