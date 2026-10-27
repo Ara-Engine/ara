@@ -955,6 +955,7 @@ dependencies = [
  "anyhow",
  "ara-diag",
  "ara-json",
+ "ara-sdl3-src",
  "ash 0.38.0+1.4.352",
  "bytemuck",
  "dispatch2",
