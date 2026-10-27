@@ -126,7 +126,17 @@ pub(crate) struct State {
     pub(crate) stop: bool,
     killed: bool,
     ops: Receiver<Transaction>,
-    _lock: File,
+    _lock: ProjectLock,
+}
+
+/// Releases ownership after the file worker drains, even if an OS reference survives close.
+struct ProjectLock(File);
+
+impl Drop for ProjectLock {
+    fn drop(&mut self) {
+        // Closing remains the fallback if the OS reports an unlock error.
+        let _ = self.0.unlock();
+    }
 }
 
 /// One project's engine host.
@@ -144,11 +154,11 @@ fn io_error(what: &str, path: &Path, e: std::io::Error) -> Diagnostic {
 }
 
 /// Takes the project lock (`.ara/lock`). `ARA1903` if another process holds it.
-fn lock(state_dir: &Path) -> Result<File, Diagnostic> {
+fn lock(state_dir: &Path) -> Result<ProjectLock, Diagnostic> {
     let path = state_dir.join("lock");
     let file = File::create(&path).map_err(|e| io_error("create", &path, e))?;
     match file.try_lock() {
-        Ok(()) => Ok(file),
+        Ok(()) => Ok(ProjectLock(file)),
         Err(TryLockError::WouldBlock) => Err(Diagnostic::error(
             codes::DAEMON_RUNNING,
             "another `ara` process (a daemon or a running command) holds this project's lock",
