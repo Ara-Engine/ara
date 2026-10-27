@@ -301,7 +301,9 @@ impl ImportCheck {
                 if act.choice().is_some() {
                     if report["choosingConflict"] != true {
                         if import_job(&report, &self.old_jobs).is_some() {
-                            return Err("A known conflict imported without its shared choice".into());
+                            return Err(
+                                "A known conflict imported without its shared choice".into()
+                            );
                         }
                         return self.wait();
                     }
