@@ -39,7 +39,7 @@ impl NativeResidency {
                 };
                 ensure!(!resident.borrowed, "native reuse source is not published");
                 // Validate device/handle identity before exposing the borrowed row.
-                gpu.native_image(resident.image)?;
+                gpu.image_extent(resident.image)?;
                 self.entries[id.0 as usize].resident = Some(Resident {
                     borrowed: true,
                     ..resident

@@ -61,7 +61,7 @@ pub struct ViewOutput {
     /// Color image retained by the view until it resizes or is released.
     pub image: Image,
     /// Native view for a UI external-image attachment on this renderer's device.
-    pub view: vk::ImageView,
+    pub view: ara_gpu::NativeView,
     /// Independent entity-ID channel in Graphics/CopySource.
     pub entities: Image,
     /// Actual physical output extent.
