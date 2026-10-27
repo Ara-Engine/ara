@@ -38,6 +38,7 @@ pub mod external;
 mod external_tests;
 mod info;
 mod native;
+mod native_access;
 #[cfg(test)]
 mod parity_tests;
 mod pipeline;
