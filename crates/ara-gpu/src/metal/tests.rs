@@ -525,7 +525,6 @@ fn another_device_adopts_and_reads_a_texture_of_the_same_gpu() {
     let adopted = borrower
         .adopt_texture(
             texture.clone(),
-            vk::Format::R8G8B8A8_UNORM,
             vk::ImageUsageFlags::TRANSFER_SRC | vk::ImageUsageFlags::SAMPLED,
         )
         .expect("adopt");
@@ -547,12 +546,9 @@ fn another_device_adopts_and_reads_a_texture_of_the_same_gpu() {
         "{:08x}",
         pixels[0]
     );
-    assert!(matches!(
-        borrower.adopt_texture(
-            texture,
-            vk::Format::B8G8R8A8_UNORM,
-            vk::ImageUsageFlags::SAMPLED
-        ),
-        Err(GpuError::Contract(_))
-    ));
+    drop(texture);
+    assert_eq!(
+        super::native::engine_format(MTLPixelFormat::R32Float),
+        Some(vk::Format::R32_SFLOAT)
+    );
 }

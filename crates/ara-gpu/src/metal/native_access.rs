@@ -4,7 +4,7 @@
 //! adopted; adoption retains the texture, which stays alive while the borrower holds
 //! it, so the owner may retire its own handle at any time.
 use super::MetalDevice;
-use super::native::format;
+use super::native::{engine_format, format};
 use super::resources::NativeImage;
 use crate::{GpuError, Image, Result};
 use ash::vk;
@@ -17,19 +17,25 @@ impl MetalDevice {
     }
     /// Wrap a single-level texture of the same `MTLDevice` (another device's image, an
     /// IOSurface slot) as an image here: published to this device's tables, copied and
-    /// retired like any other image. `format` and `usage` describe it as created.
+    /// retired like any other image. `usage` describes it as created; its engine format
+    /// follows from its pixel format.
     pub fn adopt_texture(
         &mut self,
         texture: crate::NativeImage,
-        format_of: vk::Format,
         usage: vk::ImageUsageFlags,
     ) -> Result<Image> {
-        let info = format(format_of)?;
-        if texture.pixelFormat() != info.pixel || texture.mipmapLevelCount() != 1 {
-            return Err(GpuError::Contract(format!(
-                "Adopted texture is not a single-level {format_of:?} image"
-            )));
+        let pixel = texture.pixelFormat();
+        let engine = engine_format(pixel).ok_or_else(|| {
+            GpuError::Contract(format!(
+                "Adopted texture format {pixel:?} has no engine format"
+            ))
+        })?;
+        if texture.mipmapLevelCount() != 1 {
+            return Err(GpuError::Contract(
+                "Adopted textures have a single mip level".into(),
+            ));
         }
+        let info = format(engine)?;
         if texture.device().registryID() != self.device.registryID() {
             return Err(GpuError::Contract(
                 "Adopted texture belongs to another GPU".into(),
