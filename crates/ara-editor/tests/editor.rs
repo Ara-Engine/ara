@@ -1106,9 +1106,12 @@ fn tests_resolve_isolated_profile_directories_under_target() {
 /// profile and never lands in the project. The project's default is
 /// `rendering.quality` in settings/project.json, edited through the typed settings command.
 #[test]
-fn scene_quality_persists_as_a_preference_and_the_project_default_in_its_manifest() {
+fn scene_quality_persists_as_a_user_preference_and_canonical_project_policy() {
     use ara_render_fidelity::presets::{QualityChoice, QualityPreset};
     let project = Project::new();
+    let original_marker: Value =
+        serde_json::from_str(&std::fs::read_to_string(project.0.join("ara.project.json")).unwrap())
+            .unwrap();
     let profile = ara_editor::settings::config_dir()
         .unwrap()
         .join(format!("quality-roundtrip-{}", std::process::id()));
@@ -1142,7 +1145,10 @@ fn scene_quality_persists_as_a_preference_and_the_project_default_in_its_manifes
     let marker: Value =
         serde_json::from_str(&std::fs::read_to_string(project.0.join("ara.project.json")).unwrap())
             .unwrap();
-    assert_eq!(marker["main"], "levels/main.scene");
+    assert_eq!(
+        marker, original_marker,
+        "Quality edits preserve project identity metadata"
+    );
     assert!(marker.get("rendering").is_none());
 
     let mut editor = Editor::open_with(&project.0, Some(preferences.clone())).unwrap();
