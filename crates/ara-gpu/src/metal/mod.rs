@@ -12,17 +12,29 @@
 //! - every buffer, texture, table and scratch chunk is in one residency set attached
 //!   to both queues, since Metal 4 has no implicit residency for indirect resources.
 //!
-//! Not yet available: timestamps (`resolve` returns no pass timings), acceleration
-//! structures, mesh/task stages, `ClearDepth`, presentation and shared surfaces.
+//! Also mirrored: deferred frame completion ([`Completion`]), off-thread resource and
+//! pipeline preparation, and CAMetalLayer presentation ([`present::Presenter`]).
+//!
+//! Not yet available: timestamps (no pass timings are returned), acceleration
+//! structures, mesh/task stages, `ClearDepth`, shader hot reload, HDR output and
+//! shared surfaces.
 mod abi;
+mod completion;
 mod encode;
 mod native;
+#[cfg(test)]
+mod parity_tests;
 mod pipeline;
+mod prepare;
+pub mod present;
 mod resources;
 mod scratch;
 mod tables;
 #[cfg(test)]
 mod tests;
+mod worker;
+
+pub use completion::Completion;
 
 use crate::arena::Arena;
 use crate::commands::{CommandList, PassTiming, Recorder};
@@ -41,6 +53,23 @@ use std::ptr::NonNull;
 #[link(name = "CoreGraphics", kind = "framework")]
 unsafe extern "C" {}
 
+/// One `MTL4Compiler` per process. Every `MetalDevice` wraps the same system device,
+/// and creating compilers while another compiles raced inside the driver on macOS 27
+/// (heap corruption in parallel tests).
+fn shared_compiler(
+    device: &ProtocolObject<dyn MTLDevice>,
+) -> Result<Retained<ProtocolObject<dyn MTL4Compiler>>> {
+    static COMPILER: std::sync::OnceLock<Retained<ProtocolObject<dyn MTL4Compiler>>> =
+        std::sync::OnceLock::new();
+    if let Some(compiler) = COMPILER.get() {
+        return Ok(compiler.clone());
+    }
+    let created = device
+        .newCompilerWithDescriptor_error(&MTL4CompilerDescriptor::new())
+        .map_err(|e| ns_error("MTL4 compiler", &e))?;
+    Ok(COMPILER.get_or_init(|| created).clone())
+}
+
 /// Timeline waits give up after this long: a faulted command buffer never signals.
 const WAIT_TIMEOUT_MS: u64 = 20_000;
 
@@ -49,6 +78,19 @@ struct Owned<V> {
     /// Last submission value per queue that may reference this resource.
     last: [u64; 2],
     heap: Option<HeapIndex>,
+    /// Queue that ordered updates use, moved by explicit barrier handoffs.
+    owner: Queue,
+}
+
+impl<V> Owned<V> {
+    fn new(raw: V) -> Self {
+        Self {
+            raw,
+            last: [0; 2],
+            heap: None,
+            owner: Queue::Graphics,
+        }
+    }
 }
 
 enum Retired {
@@ -108,6 +150,16 @@ pub struct MetalDevice {
     retired: Vec<Retired>,
     pending: Vec<Pending>,
     info: MetalInfo,
+    /// Distinguishes this device's completions from another device's.
+    identity: u64,
+    /// Submissions of the active deferred-completion scope.
+    deferred: Option<Vec<TimelinePoint>>,
+    /// Submitted values when the scope began; every scoped submission waits on them.
+    deferred_waits: [u64; 2],
+    /// An ended scope awaits poll/wait.
+    completion_pending: bool,
+    resource_worker: Option<prepare::ResourceWorker>,
+    pipeline_worker: Option<prepare::PipelineWorker>,
 }
 
 impl MetalDevice {
@@ -118,6 +170,9 @@ impl MetalDevice {
         _window_extensions: &[std::ffi::CString],
         _cache_dir: impl Into<std::path::PathBuf>,
     ) -> Result<Self> {
+        native::pool(Self::create)
+    }
+    fn create() -> Result<Self> {
         let device = MTLCreateSystemDefaultDevice().ok_or_else(|| nil("Metal device"))?;
         if !device.supportsFamily(MTLGPUFamily::Metal4) {
             return Err(GpuError::Contract(format!(
@@ -139,9 +194,7 @@ impl MetalDevice {
         for queue in &queues {
             queue.addResidencySet(&residency);
         }
-        let compiler = device
-            .newCompilerWithDescriptor_error(&MTL4CompilerDescriptor::new())
-            .map_err(|e| ns_error("MTL4 compiler", &e))?;
+        let compiler = shared_compiler(&device)?;
         let table_desc = MTL4ArgumentTableDescriptor::new();
         table_desc.setMaxBufferBindCount(abi::ARGUMENT_TABLE_BUFFERS);
         let table = device
@@ -179,6 +232,15 @@ impl MetalDevice {
             retired: Vec::new(),
             pending: Vec::new(),
             info,
+            identity: {
+                static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+                NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+            },
+            deferred: None,
+            deferred_waits: [0; 2],
+            completion_pending: false,
+            resource_worker: None,
+            pipeline_worker: None,
         })
     }
 
@@ -204,15 +266,15 @@ impl MetalDevice {
         usage: vk::BufferUsageFlags,
         host: bool,
     ) -> Result<Buffer> {
-        let raw = resources::buffer(&self.device, size, usage, host)?;
+        let raw = native::pool(|| resources::buffer(&self.device, size, usage, host))?;
+        self.adopt_buffer(raw)
+    }
+    /// Make a created buffer resident and give it an arena identity.
+    fn adopt_buffer(&mut self, raw: NativeBuffer) -> Result<Buffer> {
         self.residency
             .addAllocation(ProtocolObject::from_ref(&*raw.buffer));
         self.residency_dirty = true;
-        self.buffers.insert(Owned {
-            raw,
-            last: [0; 2],
-            heap: None,
-        })
+        self.buffers.insert(Owned::new(raw))
     }
     /// Allocate host-readable transfer memory (shared storage is CPU-cached here).
     pub fn create_readback_buffer(&mut self, size: u64) -> Result<Buffer> {
@@ -236,15 +298,15 @@ impl MetalDevice {
         mip_levels: u32,
         usage: vk::ImageUsageFlags,
     ) -> Result<Image> {
-        let raw = resources::image(&self.device, size, format, mip_levels, usage)?;
+        let raw = native::pool(|| resources::image(&self.device, size, format, mip_levels, usage))?;
+        self.adopt_image(raw)
+    }
+    /// Make a created texture resident and give it an arena identity.
+    fn adopt_image(&mut self, raw: NativeImage) -> Result<Image> {
         self.residency
             .addAllocation(ProtocolObject::from_ref(&*raw.texture));
         self.residency_dirty = true;
-        self.images.insert(Owned {
-            raw,
-            last: [0; 2],
-            heap: None,
-        })
+        self.images.insert(Owned::new(raw))
     }
     /// Write a host buffer after every preceding use has completed.
     #[track_caller]
@@ -339,8 +401,9 @@ impl MetalDevice {
         cooked: &cooked::CookedPipeline,
         artifacts: &std::path::Path,
     ) -> Result<Pipeline> {
-        let native = pipeline::create(&self.device, &self.compiler, cooked, artifacts)?;
-        self.pipelines.insert(native)
+        let created =
+            native::pool(|| pipeline::create(&self.device, &self.compiler, cooked, artifacts))?;
+        self.pipelines.insert(created)
     }
     /// Invalidate a pipeline identity; release it after all queues complete.
     pub fn retire_pipeline(&mut self, pipeline: Pipeline) -> Result<()> {
@@ -368,6 +431,28 @@ impl MetalDevice {
     /// Submit one list with timeline dependencies. Returns a monotonic signal point.
     /// Bindless reachability is conservative: all published resources are retained.
     pub fn submit(&mut self, list: CommandList, waits: &[TimelinePoint]) -> Result<TimelinePoint> {
+        native::pool(|| self.submit_now(list, waits))
+    }
+    fn submit_now(&mut self, list: CommandList, waits: &[TimelinePoint]) -> Result<TimelinePoint> {
+        // Inside a deferred scope, every submission also waits on the work submitted
+        // before the scope began (the boundary a synchronous resolve used to give).
+        let mut merged = Vec::new();
+        let waits = if self.deferred.is_some() {
+            let mut dependencies = self.deferred_waits;
+            for point in waits {
+                let value = &mut dependencies[point.queue.index()];
+                *value = (*value).max(point.value);
+            }
+            for queue in [Queue::Graphics, Queue::Compute] {
+                let value = dependencies[queue.index()];
+                if value > 0 {
+                    merged.push(TimelinePoint { queue, value });
+                }
+            }
+            &merged[..]
+        } else {
+            waits
+        };
         for wait in waits {
             if wait.value > self.submitted[wait.queue.index()] {
                 return Err(GpuError::Contract("Wait targets unsubmitted work".into()));
@@ -439,6 +524,19 @@ impl MetalDevice {
             allocator,
             chunks: scratch.chunks,
         });
+        if let Some(points) = &mut self.deferred {
+            points.push(point);
+        }
+        for command in &list.commands {
+            if let commands::Command::Barrier(Barrier {
+                resource: Resource::Buffer(buffer),
+                handoff,
+                ..
+            }) = command
+            {
+                self.buffers.get_mut(*buffer)?.owner = handoff.map_or(queue, |h| h.to);
+            }
+        }
         Ok(point)
     }
     /// Wait for a submission and release its recording storage. Metal counter
@@ -550,6 +648,13 @@ impl Device for MetalDevice {
         Ok(())
     }
     fn collect(&mut self) -> Result<()> {
+        native::pool(|| self.collect_now())
+    }
+}
+
+impl MetalDevice {
+    /// Release completed retirements: table slots, residency and native objects.
+    fn collect_now(&mut self) -> Result<()> {
         self.reclaim()?;
         let done = Device::completed(self)?;
         let mut index = 0;
@@ -614,15 +719,17 @@ impl Drop for MetalDevice {
     fn drop(&mut self) {
         // Native objects are reference counted, but the GPU may still read memory we
         // own (tables, scratch, resources): wait for every submitted value first.
-        for queue in [Queue::Graphics, Queue::Compute] {
-            let value = self.submitted[queue.index()];
-            if value > 0 {
-                let _ = self.events[queue.index()]
-                    .waitUntilSignaledValue_timeoutMS(value, WAIT_TIMEOUT_MS);
+        native::pool(|| {
+            for queue in [Queue::Graphics, Queue::Compute] {
+                let value = self.submitted[queue.index()];
+                if value > 0 {
+                    let _ = self.events[queue.index()]
+                        .waitUntilSignaledValue_timeoutMS(value, WAIT_TIMEOUT_MS);
+                }
             }
-        }
-        for queue in &self.queues {
-            queue.removeResidencySet(&self.residency);
-        }
+            for queue in &self.queues {
+                queue.removeResidencySet(&self.residency);
+            }
+        });
     }
 }

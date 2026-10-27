@@ -13,6 +13,21 @@ pub mod shared;
 pub mod vulkan;
 
 pub use ash::vk;
+
+/// The platform's native backend (D12): Vulkan 1.3, except Metal 4 on macOS. A
+/// cfg-selected alias, so callers stay monomorphic: off Apple platforms this *is*
+/// [`vulkan::VulkanDevice`], with no dispatch cost.
+#[cfg(not(target_os = "macos"))]
+pub type GpuDevice = vulkan::VulkanDevice;
+/// The platform's native backend (D12): Metal 4 on macOS (D15). See the Vulkan alias.
+#[cfg(target_os = "macos")]
+pub type GpuDevice = metal::MetalDevice;
+/// Deferred frame completion returned by [`GpuDevice`].
+#[cfg(not(target_os = "macos"))]
+pub type GpuCompletion = vulkan::Completion;
+/// Deferred frame completion returned by [`GpuDevice`].
+#[cfg(target_os = "macos")]
+pub type GpuCompletion = metal::Completion;
 use serde::{Deserialize, Serialize};
 #[cfg(feature = "tracy")]
 #[doc(hidden)]

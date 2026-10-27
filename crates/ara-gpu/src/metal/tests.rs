@@ -62,17 +62,19 @@ impl MetalDevice {
         state: &RenderState,
         threads: Option<[u32; 3]>,
     ) -> Pipeline {
-        let source = NSString::from_str(&format!("{ABI}{SHADERS}"));
-        let library = self
-            .device
-            .newLibraryWithSource_options_error(&source, None)
-            .expect("test MSL compiles");
-        let functions = entries
-            .iter()
-            .map(|(stage, name)| (*stage, &*library, *name))
-            .collect::<Vec<_>>();
-        let native = pipeline::build(&self.device, &self.compiler, &functions, state, threads)
-            .expect("test pipeline");
+        let native = native::pool(|| {
+            let source = NSString::from_str(&format!("{ABI}{SHADERS}"));
+            let library = self
+                .device
+                .newLibraryWithSource_options_error(&source, None)
+                .expect("test MSL compiles");
+            let functions = entries
+                .iter()
+                .map(|(stage, name)| (*stage, &*library, *name))
+                .collect::<Vec<_>>();
+            pipeline::build(&self.device, &self.compiler, &functions, state, threads)
+                .expect("test pipeline")
+        });
         self.pipelines.insert(native).expect("pipeline handle")
     }
 }

@@ -7,6 +7,14 @@ use objc2::rc::Retained;
 use objc2_foundation::NSError;
 use objc2_metal::{MTLPixelFormat, MTLTextureUsage};
 
+/// Run Metal work inside an autorelease pool. Metal autoreleases temporaries
+/// (descriptors, reflection arrays); threads without a pool drain them only at thread
+/// exit, so long-lived engine threads would accumulate them forever. Every backend
+/// entry point that calls into Metal goes through here.
+pub(super) fn pool<T>(work: impl FnOnce() -> T) -> T {
+    objc2::rc::autoreleasepool(|_| work())
+}
+
 /// A backend failure carrying the Metal error description.
 pub(super) fn ns_error(context: &str, error: &Retained<NSError>) -> GpuError {
     GpuError::Backend(anyhow::anyhow!(

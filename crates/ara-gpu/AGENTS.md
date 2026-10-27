@@ -144,7 +144,7 @@ updates: `cargo run -p ara-gpu --example heap_probe_manifest`, then
 `ara-shader-cook crates/ara-gpu/tests/shaders/pipelines.json crates/ara-gpu/tests/cooked`.
 `tests/external.rs` (Windows) exports a ring on one device, imports it on a second,
 cycles every slot through a resize and checks pixels and validation on both.
-
-Metal 4's implementation point is `metal.rs`, enabled only on macOS. Implement
-this same portable surface using converter-compatible root buffers, argument
-tables, residency and completion retirement; do not emulate Vulkan heap packing.
+Metal 4 (macOS; `src/metal/mod.rs` docs hold the contract; `GpuDevice` is the cfg alias):
+converter ABI only as Apple documents it (`abi.rs`); one MTL4Compiler per process (driver
+race); wrap Metal calls in `native::pool`. Test: `MTL_DEBUG_LAYER=1 MTL_SHADER_VALIDATION=1
+cargo test -p ara-gpu --lib metal`. Vulkan GPU tests are ignored on macOS.

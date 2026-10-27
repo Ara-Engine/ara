@@ -30,6 +30,8 @@ tracy-client = { version = "0.18", optional = true, default-features = false, fe
 objc2 = "0.6.2"
 objc2-foundation = "0.3.2"
 objc2-metal = "0.3.2"
+objc2-quartz-core = "0.3.2"
+objc2-core-foundation = "0.3"
 dispatch2 = "0.3"
 
 [target.'cfg(windows)'.dependencies]
