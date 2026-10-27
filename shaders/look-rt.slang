@@ -69,12 +69,13 @@ void rtReflectMain(uint3 tid:SV_DispatchThreadID){
 // A hit blocks its sub-cone by the share of it below the hit surface's plane (half
 // when grazing it, all when facing it), so reflected silhouettes fade over the
 // lobe instead of stepping; blocked shares take the hit's radiance. Root word 1:
-// output (storage): rgb blocked radiance (premultiplied), a the blocked share.
+// output (storage): rgb blocked radiance (premultiplied), a the blocked share (-1
+// where nothing was traced). RT.Rough.X/Y then widen it (rtRoughFilterMain).
 static const uint RT_ROUGH_RAYS=4;
 [shader("compute")][numthreads(8,8,1)]
 void rtRoughMain(uint3 tid:SV_DispatchThreadID){
     Frame f=frame();Look l=look(f);uint2 half=(f.extent.xy+1)/2;if(any(tid.xy>=half))return;
-    int2 p=min(int2(tid.xy)*2,int2(f.extent.xy)-1);float4 result=0;
+    int2 p=min(int2(tid.xy)*2,int2(f.extent.xy)-1);float4 result=float4(0,0,0,-1);
     bool covered;float3 world=gbufferWorld(f,p,covered);float roughness=gbufferMaterial(f,p).x;
     // Metals only: their specular lobe is all of their light, while a dielectric's is a
     // few percent whose probe/sky fallback reads fine (Showcase: tracing rough floors
@@ -102,19 +103,48 @@ void rtRoughMain(uint3 tid:SV_DispatchThreadID){
                 blocked+=rtShadeHit(f,l,s,position,geometric,-dir)*c;share+=c;
             }
         }
-        if(valid>0)result=float4(min(blocked/valid,float3(60000)),share/valid);
+        result=valid>0?float4(min(blocked/valid,float3(60000)),share/valid):float4(0);
     }
     images[NonUniformResourceIndex(root.materials)][tid.xy]=result;
 }
-// The rough lobes' occlusion at full-resolution pixel `p` (`image`: RT.Rough's
-// result): the 2x2 half-resolution results around it, equally weighted so their
-// four ring phases form the whole quadrature, rejecting other surfaces by depth.
+// One axis of the rough result's spatial filter (half resolution). A wide lobe's
+// occlusion is low frequency, while sixteen directions per 2x2 block alias on small
+// bright hits, which flicker as the sub-pixel jitter moves each texel's surface
+// point: nine taps (four texels each side, every ring phase twice) average the
+// blocked radiance and share of the texels on the same surface (tangent-plane
+// distance, normal similarity), about 300 rays per output pixel after both axes and
+// rtRoughAt, still deterministic. Untraced texels (-1) neither contribute nor
+// change. Root words: 1 input (sampled), 2 output (storage), 3 axis (0 x, 1 y).
+[shader("compute")][numthreads(8,8,1)]
+void rtRoughFilterMain(uint3 tid:SV_DispatchThreadID){
+    Frame f=frame();uint2 half=(f.extent.xy+1)/2;if(any(tid.xy>=half))return;int2 q=int2(tid.xy);
+    float4 c=pixel(root.materials,q);
+    [branch]if(c.a>=0){
+        int2 limit=int2(f.extent.xy)-1;bool covered;float3 world=gbufferWorld(f,min(q*2,limit),covered);
+        float3 n=gbufferNormal(f,min(q*2,limit));float tolerance=0.02+0.02*length(world-f.camera.xyz);
+        int2 axis=root.entity==0?int2(1,0):int2(0,1);float4 sum=c;float total=1;
+        for(int k=-4;k<=4;k++){
+            int2 t=q+axis*k;if(k==0 || any(t<0) || any(t>=int2(half)))continue;
+            float4 r=pixel(root.materials,t);if(r.a<0)continue;
+            bool tapCovered;float3 tapWorld=gbufferWorld(f,min(t*2,limit),tapCovered);if(!tapCovered)continue;
+            float w=exp(-0.125*float(k*k)-abs(dot(n,tapWorld-world))/tolerance)*pow(saturate(dot(n,gbufferNormal(f,min(t*2,limit)))),8);
+            sum+=r*w;total+=w;
+        }
+        c=sum/total;
+    }
+    images[NonUniformResourceIndex(root.material)][q]=c;
+}
+// The rough lobes' occlusion at full-resolution pixel `p` (`image`: the filtered
+// RT.Rough result): the 2x2 half-resolution results around it, equally weighted so
+// their four ring phases form the whole quadrature, rejecting other surfaces by
+// depth and untraced texels (zero where none is traced).
 float4 rtRoughAt(Frame f,uint image,int2 p){
     int2 half=int2((f.extent.xy+1)/2),b=int2(floor((float2(p)+0.5)*0.5-0.5));
     float depth=pixel(f.extra.x,p).x;float4 sum=0,nearest=0;float total=0,best=1e30;
     for(uint k=0;k<4;k++){
-        int2 q=clamp(b+int2(k&1,k>>1),int2(0),half-1);float dz=abs(pixel(f.extra.x,q*2).x/max(depth,1e-7)-1);
-        float w=exp(-dz*40);float4 r=pixel(image,q);sum+=r*w;total+=w;if(dz<best){best=dz;nearest=r;}
+        int2 q=clamp(b+int2(k&1,k>>1),int2(0),half-1);float4 r=pixel(image,q);if(r.a<0)continue;
+        float dz=abs(pixel(f.extra.x,q*2).x/max(depth,1e-7)-1);
+        float w=exp(-dz*40);sum+=r*w;total+=w;if(dz<best){best=dz;nearest=r;}
     }
     return total>1e-3?sum/total:nearest;
 }

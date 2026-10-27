@@ -50,6 +50,8 @@ pub(super) enum RtPass {
     Reflect,
     /// Rough lobes' occlusion, four rays per 2x2 pixels (`rtRoughMain`).
     Rough,
+    /// The rough result's spatial filter, axis 0 (x) or 1 (y) (`rtRoughFilterMain`).
+    RoughFilter(u32),
     /// Blur axis 0 (x) or 1 (y, composited with screen-space reflections).
     Filter(u32),
 }
@@ -65,6 +67,8 @@ struct Pipelines {
     refract: Pipeline,
     /// Rough lobes' ray-traced occlusion (`rtRoughMain`).
     rough: Pipeline,
+    /// Its spatial filter (`rtRoughFilterMain`).
+    rough_filter: Pipeline,
 }
 
 struct Blas {
@@ -85,10 +89,10 @@ struct Tlas {
 /// by every camera (no history).
 struct Images {
     size: [u32; 2],
-    images: [Image; 3],
-    sampled: [u32; 3],
-    storage: [u32; 3],
-    states: [State; 3],
+    images: [Image; 4],
+    sampled: [u32; 4],
+    storage: [u32; 4],
+    states: [State; 4],
 }
 
 /// The published generation the structures describe.
@@ -103,7 +107,7 @@ struct Content {
 /// This frame's graph identities, from `declare` until `finish`.
 struct Ids {
     tlas: ResourceId,
-    images: [ResourceId; 3],
+    images: [ResourceId; 4],
 }
 
 /// Hybrid ray-query state of a renderer: acceleration structures over its native
@@ -135,12 +139,13 @@ pub(super) struct Rays {
 }
 
 /// Cooked recipes, in `Pipelines` field order.
-const RECIPES: [&str; 5] = [
+const RECIPES: [&str; 6] = [
     "look_rt_reflect",
     "look_rt_filter",
     "lighting_high_rt",
     "native_forward_refract_rt",
     "look_rt_rough",
+    "look_rt_rough_filter",
 ];
 
 /// The ray-query PSOs, compiled off-thread (`GpuDevice::prepare_pipelines`) the
@@ -218,7 +223,8 @@ impl Psos {
         if let Self::Pending(ticket) = *self
             && let Some(handles) = gpu.poll_prepared_pipelines(ticket)?
         {
-            let [reflect, filter, lighting, refract, rough]: [Pipeline; RECIPES.len()] = handles
+            let [reflect, filter, lighting, refract, rough, rough_filter]: [Pipeline;
+                RECIPES.len()] = handles
                 .try_into()
                 .map_err(|_| anyhow::anyhow!("hybrid PSO count differs"))?;
             *self = Self::Ready(Pipelines {
@@ -227,6 +233,7 @@ impl Psos {
                 lighting,
                 refract,
                 rough,
+                rough_filter,
             });
         }
         Ok(match self {
@@ -540,7 +547,7 @@ impl Rays {
         // The trace and the blur's intermediate at full size, rough occlusion at half.
         let half = size.map(|v| v.div_ceil(2));
         let mut images = Vec::with_capacity(3);
-        for extent in [size, size, half] {
+        for extent in [size, size, half, half] {
             let image = gpu.create_image(
                 extent[0],
                 extent[1],
@@ -549,9 +556,9 @@ impl Rays {
             )?;
             images.push(image);
         }
-        let images = [images[0], images[1], images[2]];
-        let mut sampled = [0; 3];
-        let mut storage = [0; 3];
+        let images = [images[0], images[1], images[2], images[3]];
+        let mut sampled = [0; 4];
+        let mut storage = [0; 4];
         for (i, &image) in images.iter().enumerate() {
             sampled[i] = gpu.sampled_image(image, false)?.index;
             storage[i] = gpu.storage_image(image)?.index;
@@ -564,7 +571,7 @@ impl Rays {
             states: [State {
                 access: Access::Undefined,
                 queue: Queue::Graphics,
-            }; 3],
+            }; 4],
         });
         Ok(())
     }
@@ -658,6 +665,7 @@ impl Rays {
                 graph.import(Resource::Image(images.images[0]), images.states[0]),
                 graph.import(Resource::Image(images.images[1]), images.states[1]),
                 graph.import(Resource::Image(images.images[2]), images.states[2]),
+                graph.import(Resource::Image(images.images[3]), images.states[3]),
             ],
         };
         let mut passes = Vec::new();
@@ -673,7 +681,7 @@ impl Rays {
             graph.after(accel, gbuffer)?;
             passes.push((accel, RtPass::Accel));
         }
-        let [trace, blur, rough] = ids.images;
+        let [trace, blur, rough, widened] = ids.images;
         let stages = [
             (
                 "RT.Reflect",
@@ -681,6 +689,16 @@ impl Rays {
                 vec![(trace, Access::Storage)],
             ),
             ("RT.Rough", RtPass::Rough, vec![(rough, Access::Storage)]),
+            (
+                "RT.Rough.X",
+                RtPass::RoughFilter(0),
+                vec![(rough, Access::ShaderRead), (widened, Access::Storage)],
+            ),
+            (
+                "RT.Rough.Y",
+                RtPass::RoughFilter(1),
+                vec![(widened, Access::ShaderRead), (rough, Access::Storage)],
+            ),
             (
                 "RT.Filter.X",
                 RtPass::Filter(0),
@@ -749,6 +767,12 @@ impl Rays {
             return;
         };
         let groups = [render[0].div_ceil(8), render[1].div_ceil(8), 1];
+        // The rough lobes' passes run at half the render size.
+        let half = [
+            render[0].div_ceil(2).div_ceil(8),
+            render[1].div_ceil(2).div_ceil(8),
+            1,
+        ];
         match pass {
             RtPass::Accel => self.record_builds(recorder),
             RtPass::Reflect => {
@@ -763,11 +787,24 @@ impl Rays {
                 recorder.push(Command::Constants(RootConstants {
                     words: [frame, images.storage[2], 0, 0, 0, 0, 0, 0],
                 }));
-                recorder.push(Command::Dispatch([
-                    render[0].div_ceil(2).div_ceil(8),
-                    render[1].div_ceil(2).div_ceil(8),
-                    1,
-                ]));
+                recorder.push(Command::Dispatch(half));
+            }
+            RtPass::RoughFilter(axis) => {
+                let (input, output) = if axis == 0 { (2, 3) } else { (3, 2) };
+                recorder.push(Command::Pipeline(pipelines.rough_filter));
+                recorder.push(Command::Constants(RootConstants {
+                    words: [
+                        frame,
+                        images.sampled[input],
+                        images.storage[output],
+                        axis,
+                        0,
+                        0,
+                        0,
+                        0,
+                    ],
+                }));
+                recorder.push(Command::Dispatch(half));
             }
             RtPass::Filter(axis) => {
                 let (input, output) = if axis == 0 { (0, 1) } else { (1, 0) };
