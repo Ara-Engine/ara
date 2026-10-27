@@ -33,8 +33,11 @@ pub struct Windowed {
     present_enabled: bool,
     /// Opened hidden on purpose (timing and test probes): always rendered.
     hidden: bool,
-    /// Test override of `Window::presentable` (None: ask the window).
+    /// Probe override of `Window::presentable` (None: ask the window).
     presentable_override: Option<bool>,
+    /// This frame's 2D prepare found the window unable to show it, or its last copy
+    /// still running: its present skips too (`ready_2d`).
+    skip_2d: bool,
 }
 
 /// A one-box frame that creates the renderer and warms its pipelines before Play.
@@ -227,10 +230,16 @@ impl Windowed {
         if self.present_enabled && self.present.is_none() {
             // SAFETY: the window and device both outlive `present`, which is destroyed
             // after device idle in `recreate`/`Drop` ordering below.
-            let mut present = unsafe { Present::create(renderer.gpu(), &self.window)? };
-            // SAFETY: created on this renderer's live device.
+            self.present = Some(unsafe { Present::create(renderer.gpu(), &self.window)? });
+        }
+        // The window copy returns once submitted, like the scene and its UI composite.
+        // Set every frame: a presentation adopted from the loading view
+        // (`finish_loading`) starts synchronous, and its copy would wait for this
+        // frame's GPU work before the next frame could record.
+        if let Some(present) = &mut self.present {
+            // SAFETY: created on this renderer's device, or on the loading device that
+            // shares its native device; both are live.
             unsafe { present.set_frames_in_flight(renderer.gpu(), true)? };
-            self.present = Some(present);
         }
         // The game UI (if any) composites the scene into its own target and presents it.
         if let Some(surface) = &mut self.game_ui {
@@ -270,15 +279,14 @@ impl Windowed {
     }
 
     /// Whether presenting can show anything: hidden probe windows always render; a
-    /// minimized or occluded window does not (`Window::presentable`); tests override.
+    /// minimized or occluded window does not (`Window::presentable`); probes override.
     fn presentable(&self) -> bool {
         self.presentable_override
             .unwrap_or_else(|| self.hidden || self.window.presentable())
     }
 
-    /// Tests force `presentable` (Some) or return it to the window (None), standing
-    /// in for a minimized window without touching the desktop.
-    #[cfg(test)]
+    /// Probes (`standalone/probes.rs`) force `presentable` (Some) or return it to the
+    /// window (None), standing in for a minimized window without touching the desktop.
     pub(crate) fn override_presentable(&mut self, presentable: Option<bool>) {
         self.presentable_override = presentable;
     }
@@ -294,14 +302,38 @@ impl Windowed {
         if size.contains(&0) {
             return Ok(());
         }
+        self.skip_2d = !self.ready_2d(presenter)?;
+        if self.skip_2d {
+            return Ok(());
+        }
         if presenter.renderer().is_some_and(|r| r.size() != size) {
             self.recreate_2d(presenter)?;
         }
         presenter.prepare(world, tick, size, &self.window.extensions()?)
     }
 
-    /// Renders and blits the native 2D target; no pixel data crosses the CPU.
+    /// Whether a 2D frame may upload and render now. The 2D renderer waits for its
+    /// own submissions, so it must never queue them behind a stalled presentation:
+    /// nothing while the window cannot show (as `present`), and nothing until its
+    /// last copy has finished, waiting at most `Presenter::STALL_WAIT`.
+    fn ready_2d(&mut self, presenter: &Presenter2d) -> Result<bool> {
+        if !self.presentable() {
+            std::thread::sleep(Duration::from_millis(10));
+            return Ok(false);
+        }
+        let (Some(present), Some(renderer)) = (&mut self.present2d, presenter.renderer()) else {
+            return Ok(true);
+        };
+        // SAFETY: created on this 2D renderer's live device.
+        unsafe { present.settled(renderer.gpu(), Presenter::STALL_WAIT) }
+    }
+
+    /// Renders and blits the native 2D target; no pixel data crosses the CPU. Skips
+    /// the frame its prepare skipped (`ready_2d`).
     pub fn present_2d(&mut self, presenter: &mut Presenter2d) -> Result<()> {
+        if std::mem::take(&mut self.skip_2d) {
+            return Ok(());
+        }
         if self.window.size()?.contains(&0) {
             std::thread::sleep(Duration::from_millis(5));
             return Ok(());

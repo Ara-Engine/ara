@@ -997,6 +997,7 @@ dependencies = [
  "ara-json",
  "ara-sdl3-src",
  "ash 0.38.0+1.4.352",
+ "block2 0.6.2",
  "bytemuck",
  "dispatch2",
  "objc2 0.6.5",
@@ -1574,6 +1575,7 @@ name = "ara-player"
 version = "0.0.1-alpha"
 dependencies = [
  "anyhow",
+ "ara-2d",
  "ara-anim",
  "ara-asset",
  "ara-audio",

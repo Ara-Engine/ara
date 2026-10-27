@@ -237,6 +237,7 @@ impl Windowed {
                 present_enabled: true,
                 hidden,
                 presentable_override: None,
+                skip_2d: false,
             },
             extensions,
             size,

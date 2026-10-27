@@ -14,6 +14,7 @@ use objc2::rc::Retained;
 use objc2::runtime::ProtocolObject;
 use objc2_metal::*;
 use objc2_metal_performance_shaders::{MPSImageBilinearScale, MPSImageEdgeMode};
+use std::time::Duration;
 
 /// A native texture borrowed for one transfer.
 pub(super) type Texture = ProtocolObject<dyn MTLTexture>;
@@ -99,6 +100,16 @@ impl Transfer {
     /// frame rewrites images an in-flight copy still reads.
     pub fn order_before(&self, gpu: &mut MetalDevice) {
         gpu.wait_event(&self.event, self.value);
+    }
+    /// Whether the last [`Self::submit`] finished within `timeout` (true when none is
+    /// pending). It stays pending: the next transfer still reports how it ended.
+    pub fn pending_done_within(&self, gpu: &MetalDevice, timeout: Duration) -> bool {
+        let Some((_, value)) = &self.pending else {
+            return true;
+        };
+        let ms = timeout.as_millis().min(u128::from(u64::MAX)) as u64;
+        gpu.waits
+            .measure(|| self.event.waitUntilSignaledValue_timeoutMS(*value, ms))
     }
     /// Wait for the last [`Self::submit`], if any, and report how it ended.
     pub fn wait_pending(&mut self, after: Option<&MetalDevice>) -> Result<()> {
