@@ -16,12 +16,11 @@ Owns the native GPU boundary. Vulkan uses ash revision
   never waits. Adoption stays on the owner, as do ordered uploads and queue access.
 - `Context::host_wait_stats` snapshots cumulative host time in explicit driver waits.
   Native integration uses `measure_host_wait` for leaf waits only; never nest it.
-- Completed timestamp pools are reused (32 pools, at most 1024 queries each).
-  In-flight pools stay exclusive; oversized/burst overflow pools are freed on resolve.
-- Pass begins follow leading barriers at ALL_COMMANDS; `PassTiming` carries device
-  start/end. `reset_timing_window`/`timing_window` include every resolved submission
-  and gaps. KHR/EXT calibrated timestamps enable a shared clock; mixed queues without
-  that guarantee have no whole-frame span. Tests cover ordering, overlap and wrap.
+- Timestamp pools are reused (32, at most 1024 queries); in-flight pools stay exclusive,
+  overflow pools are freed on resolve. Pass begins follow leading barriers; `PassTiming`
+  carries device start/end; `timing_window` spans resolved submissions and gaps (shared
+  clock via calibrated timestamps, else no mixed-queue span). `set_pass_timing(false)`
+  makes Metal lists untimed; Vulkan keeps timing. Tests cover ordering, overlap, wrap.
 - `upload_range(buffer, byte_offset, bytes)` writes only changed coherent rows,
   with the same bounds and in-flight-use checks as `upload`.
 - `VulkanDevice::create_mip_image`: native sampled mip chains, including BC4/5/7.
@@ -34,7 +33,8 @@ Owns the native GPU boundary. Vulkan uses ash revision
   `Stage::{Mesh,Task}` and `DrawMeshTasksIndirect` require the mesh tier; the
   existing vertex/indirect path remains available. Mesh reads use ALL_GRAPHICS
   barriers. Slang PrimitiveId also needs the reported core geometryShader feature.
-- `Barrier`, `Access`, `Handoff`, `TimelinePoint`: explicit graph synchronization.
+- `Barrier`, `Access`, `Handoff`, `TimelinePoint`: graph synchronization; `after: Undefined` discards, so `attachments::ops` skips the scope's store and colour load.
+  `TRANSIENT_ATTACHMENT` images are attachment-only: Metal memoryless, Vulkan lazily allocated.
 - `AccelerationDesc`: static BLAS/TLAS allocation; build with a typed command.
   `TriangleRange` selects checked aligned byte ranges in shared vertex/index
   allocations; indices remain local to the range. Multiple BLAS builds and their
