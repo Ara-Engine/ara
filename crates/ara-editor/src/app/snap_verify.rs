@@ -1,6 +1,5 @@
 //! J2 mesh snap proof: native pointer/key events, transient previews and one typed undo.
 use super::*;
-use ara_ui::paint::Box2;
 use std::path::Path;
 mod fixture;
 mod input;

@@ -629,7 +629,6 @@ impl Controller {
                             shell.input.blur(&mut shell.ui);
                             let rect = shell.viewport().ok_or("viewport missing")?;
                             if self.begin_vertex(editor, shell, view, scene_view)? {
-                                dirty = true;
                                 scene_dirty = true;
                             } else if let Some(handles) =
                                 overlay::handles(view, &editor.state, rect)

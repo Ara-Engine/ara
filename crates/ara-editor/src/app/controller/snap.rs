@@ -1,7 +1,6 @@
 //! Exact contact previews are transient; release and End use ordinary transform commands.
 use super::*;
 use ara_doc::prefab::Resolved;
-use ara_ui::paint::Box2;
 use glam::Mat4;
 use std::collections::BTreeMap;
 
