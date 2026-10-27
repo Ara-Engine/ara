@@ -33,7 +33,7 @@ the operation; an incomplete graph must never authorize safe delete.
 
 `asset.import` with `dryRun: true` performs the same source, path, sidecar and
 companion validation without staging/history writes or cooking. Conflict rows
-use `source`, `destination_logical_path`, `existing_asset_id` and `kind`.
+use `source`, `destinationLogicalPath`, `existingAssetId` and `kind`.
 Real preparation uses `FileHistory` for undo bytes; BLAKE3 importer proofs and
 SHA-256 file-state tokens are separate identities. Never compare them directly.
 Revalidate bytes, directory membership, importer/policy metadata and authority

@@ -348,6 +348,34 @@ impl Mappings {
                 self.value(value, context, owner, &mut vec![key.clone()]);
             }
         }
+        // Only the selected UI changes storage/identity. Inbound UI consumers keep
+        // their original bytes apart from the references repaired above.
+        if document.kind == "ui"
+            && let Some((id, _)) = self.assets.get(context)
+            && let Some(Value::String(source)) = record.get_mut("source")
+        {
+            pin_ui_identity(source, id);
+        }
+    }
+}
+
+fn pin_ui_identity(source: &mut String, id: &AssetId) {
+    const HEADER: &str = "<!-- ara:asset ";
+    if source.lines().any(|line| {
+        line.trim()
+            .strip_prefix(HEADER)
+            .and_then(|metadata| metadata.strip_suffix(" -->"))
+            .is_some()
+    }) {
+        return;
+    }
+    if source.starts_with("<?xml")
+        && let Some(end) = source.find("?>")
+    {
+        let end = end + 2;
+        *source = format!("{}\n{HEADER}{id} -->\n{}", &source[..end], &source[end..]);
+    } else {
+        source.insert_str(0, &format!("{HEADER}{id} -->\n"));
     }
 }
 

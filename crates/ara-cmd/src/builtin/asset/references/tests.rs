@@ -275,3 +275,136 @@ fn unknown_authored_json_tracks_explicit_references_without_guessing_bare_paths(
         &value
     ));
 }
+
+#[test]
+fn selected_headerless_ui_move_pins_identity_through_a_typed_source_edit() {
+    let text =
+        "<?xml version=\"1.0\"?>\n<ui id=\"hud\"><text id=\"title\" text=\"Ready\" /></ui>\n";
+    let ui = document("ui", "ui_legacy", json!({"us_source":{"source":text}}));
+    let mappings = Mappings::new(
+        "ui/game.ui",
+        Some("features/hud.ui"),
+        &[source("ui/game.ui", ui.clone())],
+    );
+    let mut workspace = Workspace::default();
+    workspace.insert("ui/game.ui", ui.clone());
+    let edits = fixups(&workspace, &mappings);
+    let [
+        Edit::Set {
+            doc,
+            id,
+            path,
+            value: Some(Value::String(pinned)),
+        },
+    ] = edits.as_slice()
+    else {
+        panic!("expected one typed UI source edit: {edits:?}");
+    };
+    assert_eq!(doc, &ui.id);
+    assert_eq!(id.as_str(), "us_source");
+    assert_eq!(path, &FieldPath::field("source"));
+    assert_eq!(
+        pinned,
+        "<?xml version=\"1.0\"?>\n<!-- ara:asset ui_legacy -->\n\n<ui id=\"hud\"><text id=\"title\" text=\"Ready\" /></ui>\n"
+    );
+    assert_eq!(
+        workspace
+            .doc("ui_legacy")
+            .expect("unchanged original")
+            .record("us_source")
+            .expect("record")["source"],
+        text,
+        "the op retains original bytes for undo"
+    );
+    let mut again = json!({"source":pinned})
+        .as_object()
+        .expect("record")
+        .clone();
+    mappings.rewrite_record(&ui, &mut again);
+    assert_eq!(
+        again["source"],
+        pinned.as_str(),
+        "identity pinning is idempotent"
+    );
+}
+
+#[test]
+fn duplicate_and_import_pin_the_selected_ui_mapped_identity() {
+    let ui = document(
+        "ui",
+        "ui_original",
+        json!({"us_source":{"source":"<ui id=\"hud\" />\n"}}),
+    );
+    for target in [Some("copy/game.ui"), None] {
+        let mut mappings = Mappings::new("ui/game.ui", target, &[source("ui/game.ui", ui.clone())]);
+        mappings.assets.insert(
+            "ui_original".into(),
+            (
+                AssetId::parse("ui_mapped").expect("mapped ID"),
+                "copy/game.ui".into(),
+            ),
+        );
+        let mut record = ui.record("us_source").expect("source").clone();
+        mappings.rewrite_record(&ui, &mut record);
+        assert_eq!(
+            record["source"],
+            "<!-- ara:asset ui_mapped -->\n<ui id=\"hud\" />\n"
+        );
+    }
+}
+
+#[test]
+fn explicit_ui_identity_is_remapped_without_adding_another_comment() {
+    let ui = document(
+        "ui",
+        "ui_original",
+        json!({"us_source":{"source":"<!-- ara:asset ui_original -->\n<ui id=\"ui_original\" />\n"}}),
+    );
+    let mut mappings = Mappings::new(
+        "ui/game.ui",
+        Some("copy/game.ui"),
+        &[source("ui/game.ui", ui.clone())],
+    );
+    mappings.assets.insert(
+        "ui_original".into(),
+        (
+            AssetId::parse("ui_copy").expect("copy ID"),
+            "copy/game.ui".into(),
+        ),
+    );
+    let mut record = ui.record("us_source").expect("source").clone();
+    mappings.rewrite_record(&ui, &mut record);
+    assert_eq!(
+        record["source"],
+        "<!-- ara:asset ui_copy -->\n<ui id=\"ui_copy\" />\n"
+    );
+    assert_eq!(
+        record["source"]
+            .as_str()
+            .expect("XML")
+            .matches("<!-- ara:asset ")
+            .count(),
+        1
+    );
+}
+
+#[test]
+fn inbound_headerless_ui_is_repaired_without_pinning_its_unmoved_identity() {
+    let prefab = document("prefab", "pf_box", json!({"e_root":{}}));
+    let mappings = Mappings::new(
+        "props",
+        Some("warehouse"),
+        &[source("props/box.prefab", prefab)],
+    );
+    let ui = document("ui", "ui_inbound", json!({}));
+    let mut record =
+        json!({"source":"<ui id=\"hud\"><image src=\"@props/box.prefab#pf_box\" /></ui>\n"})
+            .as_object()
+            .expect("record")
+            .clone();
+    mappings.rewrite_record(&ui, &mut record);
+    assert_eq!(
+        record["source"],
+        "<ui id=\"hud\"><image src=\"@warehouse/box.prefab#pf_box\" /></ui>\n"
+    );
+}

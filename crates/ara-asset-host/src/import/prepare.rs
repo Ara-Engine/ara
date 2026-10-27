@@ -355,7 +355,7 @@ pub(super) fn inspect(
                 })
         {
             return Err(Error::Invalid(format!(
-                "import destination `{destination}` is project metadata/policy or a protected legacy root; migrate the project or choose an authored folder"
+                "import destination `{destination}` is project metadata/policy or a protected legacy root; choose a folder inside authored content"
             )));
         }
     }

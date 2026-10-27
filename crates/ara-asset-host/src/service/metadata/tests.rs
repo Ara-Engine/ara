@@ -20,6 +20,40 @@ fn write_json(path: &Path, value: &Value) {
 }
 
 #[test]
+fn conventional_scene_context_respects_the_selected_authored_root() {
+    let scratch = scratch();
+    write_project(scratch.path());
+    let mut bindings = bindings(scratch.path());
+    let scoped = ara_doc::AssetId::parse("sc_scoped").expect("scoped scene ID");
+    let legacy = ara_doc::AssetId::parse("sc_legacy").expect("legacy scene ID");
+    for root in ["", ara_doc::AUTHORING_ROOT, "custom/content"] {
+        bindings.workspace = ara_doc::Workspace::default();
+        bindings.workspace.set_reference_root(root);
+        bindings.workspace.insert(
+            bindings.workspace.storage_path("scenes/main.scene"),
+            ara_doc::Document::new("scene", scoped.clone()),
+        );
+        assert_eq!(
+            scene_context(&bindings).expect("scoped starter fallback"),
+            Some(scoped.clone())
+        );
+        bindings.workspace.insert(
+            bindings.workspace.storage_path("levels/main.scene"),
+            ara_doc::Document::new("scene", legacy.clone()),
+        );
+        assert_eq!(
+            scene_context(&bindings).expect("layout-specific starter context"),
+            Some(if root.is_empty() {
+                legacy.clone()
+            } else {
+                scoped.clone()
+            }),
+            "the reference root determines conventional layout precedence"
+        );
+    }
+}
+
+#[test]
 fn policy_references_resolve_by_id_path_fallback_and_policy_precedence() {
     let scratch = scratch();
     write_project(scratch.path());

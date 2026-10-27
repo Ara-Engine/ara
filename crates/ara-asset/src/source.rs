@@ -427,8 +427,8 @@ impl AssetPipeline {
             (self.authored_root != self.root).then(|| format!("{}/", ara_doc::AUTHORING_ROOT));
         let mut policy_changed = false;
         for path in self.watcher.changed()? {
-            if path == crate::PROJECT_IMPORT_SETTINGS_FILE
-                || path == crate::LEGACY_PROJECT_IMPORT_SETTINGS_FILE
+            if ara_doc::file_state::same_path(&path, crate::PROJECT_IMPORT_SETTINGS_FILE)
+                || ara_doc::file_state::same_path(&path, crate::LEGACY_PROJECT_IMPORT_SETTINGS_FILE)
             {
                 policy_changed = true;
             } else if let Some(prefix) = &prefix {

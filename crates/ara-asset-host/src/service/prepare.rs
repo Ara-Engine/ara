@@ -66,13 +66,14 @@ pub(super) fn run(
         preset: Default::default(),
         asset_hashes: Default::default(),
     };
-    bindings.preset = bindings
-        .workspace
-        .docs()
-        .find_map(|(path, document)| {
-            matches!(path, "settings/ara.imports" | "ara.imports")
-                .then(|| document.record("pi_settings"))
-                .flatten()
+    bindings.preset = ["settings/ara.imports", "ara.imports"]
+        .into_iter()
+        .find_map(|path| {
+            bindings
+                .workspace
+                .docs()
+                .find_map(|(name, document)| (name == path).then_some(document))
+                .and_then(|document| document.record("pi_settings"))
         })
         .map(|record| {
             serde_json::from_value::<ara_asset::ProjectImportSettings>(Value::Object(

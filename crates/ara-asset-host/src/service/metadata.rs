@@ -183,9 +183,15 @@ fn scene_context(bindings: &Bindings) -> Result<Option<ara_doc::AssetId>, Vec<Di
     let Some(main) = ara_host::project_layout::policy(&bindings.workspace, "main")
         .filter(|value| !value.is_null())
     else {
+        let defaults = if bindings.workspace.reference_root().is_empty() {
+            ["levels/main.scene", ara_host::project_layout::MAIN_SCENE]
+        } else {
+            [ara_host::project_layout::MAIN_SCENE, "levels/main.scene"]
+        };
         return Ok(bindings
             .workspace
-            .find(ara_host::project_layout::MAIN_SCENE)
+            .find(defaults[0])
+            .or_else(|| bindings.workspace.find(defaults[1]))
             .cloned());
     };
     let main = main.as_str().ok_or_else(|| {

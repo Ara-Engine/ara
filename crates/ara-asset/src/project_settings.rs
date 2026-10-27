@@ -35,7 +35,7 @@ impl ProjectImportSettings {
             }
             Err(error) => return Err(error.into()),
         };
-        let read = ara_doc::read(&text, PROJECT_IMPORT_SETTINGS_FILE, db, None);
+        let read = ara_doc::read(&text, path, db, None);
         if read.diags.iter().any(ara_diag::Diagnostic::is_error) {
             return Err(Error::Invalid(
                 read.diags
