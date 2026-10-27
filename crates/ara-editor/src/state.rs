@@ -559,7 +559,7 @@ impl EditorState {
             self.reduce_motion = v;
         }
     }
-    /// The project's default quality (`ara.project.json` `rendering.quality`).
+    /// The project's default quality (`settings/project.json` `rendering.quality`, with legacy fallback).
     pub fn project_quality(&self) -> QualityChoice {
         self.settings
             .get("rendering.quality")
