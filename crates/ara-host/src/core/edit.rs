@@ -231,7 +231,17 @@ impl State {
             && p.commands.iter().all(|c| {
                 matches!(
                     c.cmd.as_str(),
-                    "doc.create" | "project.setMain" | "import.initialize" | "import.configure"
+                    "doc.create"
+                        | "project.setMain"
+                        | "import.initialize"
+                        | "import.configure"
+                        | "asset.move"
+                        | "asset.rename"
+                        | "asset.duplicate"
+                        | "asset.delete"
+                        | "asset.import"
+                        | "folder.create"
+                        | "build_profile.create"
                 )
             });
         let doc = if workspace_command && p.doc.is_none() {

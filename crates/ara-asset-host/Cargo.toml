@@ -8,10 +8,19 @@ publish.workspace = true
 
 [dependencies]
 ara-asset = { path = "../ara-asset" }
+ara-cmd = { path = "../ara-cmd" }
+ara-diag = { path = "../ara-diag" }
+ara-doc = { path = "../ara-doc" }
+ara-host = { path = "../ara-host" }
+ara-importers = { path = "../ara-importers" }
+ara-json = { path = "../ara-json" }
+ara-schema = { path = "../ara-schema" }
+serde.workspace = true
+serde_json.workspace = true
 
 [dev-dependencies]
+ara-proto = { path = "../ara-proto" }
 tempfile.workspace = true
-serde_json.workspace = true
 
 [lints]
 workspace = true

@@ -27,6 +27,7 @@ pub mod journal;
 pub mod params;
 mod profile;
 pub mod project;
+pub mod project_policy;
 mod project_settings;
 pub mod query;
 pub mod review;
@@ -38,6 +39,7 @@ pub mod tree;
 mod ui_document;
 pub mod why;
 
+pub use files::FileCommitReceipt;
 pub use host::{Host, HostConfig, RESERVED};
 pub use project::Project;
 pub use service::{Cx, Method, Service, parse};

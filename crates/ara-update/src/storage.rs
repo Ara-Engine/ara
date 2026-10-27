@@ -75,6 +75,8 @@ fn available(path: &Path) -> io::Result<u64> {
     }
     // SAFETY: successful statvfs initialized the structure.
     let stats = unsafe { stats.assume_init() };
+    // statvfs counters are platform-sized; widen them on 32-bit Unix as well.
+    #[allow(clippy::unnecessary_cast)]
     Ok((stats.f_bavail as u64).saturating_mul(stats.f_frsize as u64))
 }
 
