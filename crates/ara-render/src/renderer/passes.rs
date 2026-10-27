@@ -952,8 +952,8 @@ impl Renderer {
         // frames of the primary view; a deferred frame plans it here and `finish`
         // declares it. Resolving the primary view without it forgets its history.
         self.tsr.release_unused(&mut self.gpu)?;
-        let tsr = self.tsr.upscaler == crate::tsr::Upscaler::Tsr
-            && camera.projection.z_axis.w != 0.;
+        let tsr =
+            self.tsr.upscaler == crate::tsr::Upscaler::Tsr && camera.projection.z_axis.w != 0.;
         if tsr {
             self.tsr.prepare(
                 &mut self.gpu,
