@@ -2,9 +2,10 @@
 use super::*;
 
 impl Presenter {
-    /// Read the current display without rerendering or resetting temporal history.
+    /// Wait for the current frame and read its display, preserving temporal history.
     #[cfg(feature = "fidelity-lab")]
     pub fn lab_display(&mut self, frame: &RenderFrame) -> Result<image::RgbaImage> {
+        self.drain()?;
         let renderer = self
             .renderer
             .as_mut()
@@ -27,9 +28,10 @@ impl Presenter {
                 .image)
         }
     }
-    /// Explicit dev readback of live scene-linear radiance, preserving accumulation.
+    /// Wait for the current frame and read scene-linear radiance, preserving accumulation.
     #[cfg(feature = "fidelity-lab")]
     pub fn lab_radiance(&mut self) -> Result<([u32; 2], Vec<[f32; 4]>)> {
+        self.drain()?;
         let renderer = self
             .renderer
             .as_mut()
