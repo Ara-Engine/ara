@@ -239,8 +239,9 @@ fn native_inputs_interleave_the_complete_command_edge_sweep() {
     let mut native_seen = BTreeSet::new();
     let required = commands::all().len() * actions::edge_case_count();
     let mut reached_protocol = false;
+    let mut typed = typed::State::default();
     for _ in 0..required * 2 + 128 {
-        let action = generator.next(&shell);
+        let action = generator.next(&editor, &shell, &mut typed);
         if let Action::Command { id, target } = &action {
             cases_seen
                 .entry(id.clone())
@@ -285,6 +286,230 @@ fn native_inputs_interleave_the_complete_command_edge_sweep() {
             "missing early native input {kind}"
         );
     }
+}
+
+#[test]
+fn typed_catalog_and_seven_case_sweep_follow_real_host_descriptors_in_fixed_order() {
+    let project = Project::new();
+    let (mut editor, mut shell) = project.open();
+    let revision = editor.host.store().revision();
+    let mut typed = typed::State::default();
+    let mut discovery = Vec::new();
+    while let Some(action) = typed.discovery_action() {
+        discovery.push(serde_json::to_value(&action).unwrap());
+        typed
+            .run(&action, &mut editor, &mut shell)
+            .unwrap()
+            .unwrap();
+    }
+    assert_eq!(discovery.len(), 3);
+    assert_eq!(discovery[0]["method"], "schema.list");
+    assert_eq!(discovery[0]["params"]["kind"], "command");
+    assert_eq!(discovery[2]["method"], "jobs.list");
+    let listed = editor
+        .action("schema.list", json!({"kind":"command"}))
+        .unwrap();
+    let expected: BTreeSet<_> = listed["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|entry| entry["name"].as_str().unwrap().to_owned())
+        .collect();
+    let report = typed.report();
+    assert_eq!(report["typedCommandCatalogErrors"], json!([]));
+    assert_eq!(report["typedCommandCatalog"], json!(expected));
+    assert_eq!(
+        report["typedCommandCoverageComplete"], false,
+        "Generation is not execution"
+    );
+    let mut actual = BTreeMap::<String, Vec<String>>::new();
+    let mut ordered = Vec::new();
+    let mut references = false;
+    let mut numeric = false;
+    let mut nan_text = false;
+    while let Some(action) = typed.next(&editor) {
+        let Action::TypedCommand {
+            name,
+            doc,
+            args,
+            case,
+            changed_fields,
+        } = action
+        else {
+            panic!("Catalog generation must not produce unrecorded side effects");
+        };
+        assert!(editor.host.store().workspace().doc(&doc).is_some());
+        if name == "transform.set" {
+            references |= case == "missingOrDeletedReferences"
+                && args.to_string().contains("e_deleted001")
+                && changed_fields > 0;
+            numeric |= case == "hugePositiveNumbers"
+                && args["position"][0].as_f64() == Some(1e308)
+                && changed_fields > 0;
+            nan_text |=
+                case == "nanAsText" && args.to_string().contains("\"NaN\"") && changed_fields > 0;
+        }
+        ordered.push((name.clone(), case.clone()));
+        actual.entry(name).or_default().push(case);
+    }
+    assert_eq!(actual.keys().cloned().collect::<BTreeSet<_>>(), expected);
+    assert!(actual.values().all(|cases| cases.len() == 7));
+    assert!(ordered.windows(2).all(|pair| pair[0].0 <= pair[1].0));
+    assert!(
+        references && numeric && nan_text,
+        "Schema-directed values must reach actual transform args"
+    );
+    assert_eq!(editor.host.store().revision(), revision);
+    assert!(
+        !typed.complete(),
+        "Generated probes must not count as offered cmd.apply calls"
+    );
+}
+
+#[test]
+fn typed_calls_report_actual_commits_and_replay_exact_doc_args_and_case() {
+    let project = Project::new();
+    let (mut editor, mut shell) = project.open();
+    let output = project.0.join("typed-recording");
+    let mut runner = Monkey::new(97, Duration::from_secs(30), Some(5), &output).unwrap();
+    for _ in 0..3 {
+        runner.step(&mut editor, &mut shell).unwrap();
+    }
+    runner.generator.enqueue([
+        Action::TypedCommand {
+            name: "entity.create".into(),
+            doc: "sc_monkey01".into(),
+            args: json!({"id":"e_typedprobe","name":"Typed probe","components":{"Transform":{}}}),
+            case: "registeredExample".into(),
+            changed_fields: 0,
+        },
+        Action::TypedCommand {
+            name: "transform.set".into(),
+            doc: "sc_monkey01".into(),
+            args: json!({"entities":["e_typedprobe"],"position":["NaN",0,0]}),
+            case: "nanAsText".into(),
+            changed_fields: 1,
+        },
+    ]);
+    while !runner.finished() {
+        runner.step(&mut editor, &mut shell).unwrap();
+    }
+    runner.finish_with(&mut editor).unwrap();
+    let report: Value =
+        serde_json::from_str(&std::fs::read_to_string(output.join("monkey.json")).unwrap())
+            .unwrap();
+    assert_eq!(report["typedCommandCounts"]["entity.create"]["attempts"], 1);
+    assert_eq!(report["typedCommandCounts"]["entity.create"]["accepted"], 1);
+    assert_eq!(
+        report["typedCommandCounts"]["entity.create"]["committedTransactions"],
+        1
+    );
+    assert_eq!(report["typedCommandCounts"]["transform.set"]["attempts"], 1);
+    assert_eq!(report["typedCommandCounts"]["transform.set"]["accepted"], 0);
+    assert_eq!(
+        report["typedCommandCounts"]["transform.set"]["committedTransactions"],
+        0
+    );
+    assert_eq!(report["typedCommandCoverageComplete"], false);
+    let replay_project = Project::new();
+    let (mut replay_editor, mut replay_shell) = replay_project.open();
+    let replay_output = replay_project.0.join("typed-replay");
+    let journal = output.join("monkey-events.jsonl");
+    let mut replay =
+        Monkey::from_journal(&journal, Duration::from_secs(30), &replay_output).unwrap();
+    while !replay.finished() {
+        replay.step(&mut replay_editor, &mut replay_shell).unwrap();
+    }
+    replay.finish_with(&mut replay_editor).unwrap();
+    let actions = |path: &Path| {
+        std::fs::read_to_string(path)
+            .unwrap()
+            .lines()
+            .map(|line| serde_json::from_str::<Value>(line).unwrap())
+            .filter(|row| row["phase"] == "begin")
+            .map(|row| row["action"].clone())
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(
+        actions(&journal),
+        actions(&replay_output.join("monkey-events.jsonl"))
+    );
+    assert_eq!(
+        replay.typed.report()["typedCommandCounts"]["entity.create"]["committedTransactions"],
+        1
+    );
+    assert!(
+        replay_editor
+            .host
+            .store()
+            .workspace()
+            .doc("sc_monkey01")
+            .unwrap()
+            .record("e_typedprobe")
+            .is_some()
+    );
+}
+
+#[test]
+fn production_stage_measurements_are_retained_only_for_spikes_and_count_each_frame_once() {
+    let project = Project::new();
+    let mut runner = Monkey::new(
+        7,
+        Duration::from_secs(30),
+        Some(1),
+        &project.0.join("stages"),
+    )
+    .unwrap();
+    let stages = super::super::responsiveness::Sample {
+        tick_ms: 7.,
+        geometry_ms: 12.,
+        host_wait_ms: Some(80.),
+        ..Default::default()
+    };
+    runner.record_frame_with_stages(Duration::from_millis(4), &stages);
+    assert!(runner.slowest.is_empty());
+    runner.record_frame_with_stages(Duration::from_millis(125), &stages);
+    runner.record_frame(Duration::from_millis(3));
+    assert_eq!(runner.frames, 3);
+    assert_eq!(runner.spikes, 1);
+    assert_eq!(runner.slowest.len(), 1);
+    assert_eq!(runner.slowest[0]["stages"]["tick_ms"], 7.);
+    assert_eq!(runner.slowest[0]["stages"]["host_wait_ms"], 80.);
+}
+
+#[test]
+fn a_rejected_catalog_discovery_cannot_report_complete_typed_coverage() {
+    let project = Project::new();
+    let (mut editor, mut shell) = project.open();
+    let revision = editor.host.store().revision();
+    let mut typed = typed::State::default();
+    let invalid = Action::Protocol {
+        method: "schema.list".into(),
+        params: json!({"kind":"unknown-kind"}),
+        raw: false,
+    };
+    assert!(
+        typed
+            .run(&invalid, &mut editor, &mut shell)
+            .unwrap()
+            .is_err()
+    );
+    while let Some(action) = typed.discovery_action() {
+        typed
+            .run(&action, &mut editor, &mut shell)
+            .unwrap()
+            .unwrap();
+    }
+    let report = typed.report();
+    assert_eq!(report["typedCommandCatalogReady"], true);
+    assert!(
+        !report["typedCommandCatalogErrors"]
+            .as_array()
+            .unwrap()
+            .is_empty()
+    );
+    assert_eq!(report["typedCommandCoverageComplete"], false);
+    assert_eq!(editor.host.store().revision(), revision);
 }
 
 #[test]

@@ -3,6 +3,14 @@ use super::{Editor, Shell, escape};
 use ara_ui::source::stable_id;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 
+/// One successful generated body per panel, invalidated with stylesheet or theme.
+#[derive(Default)]
+pub(super) struct Compilation {
+    valid: std::collections::BTreeMap<String, blake3::Hash>,
+    #[cfg(test)]
+    checks: usize,
+}
+
 /// Controlled failure kind for the isolated, offscreen panel recovery journey.
 #[derive(Clone, Copy, Debug)]
 pub(crate) enum ProbeFailure {
@@ -10,6 +18,10 @@ pub(crate) enum ProbeFailure {
     Error,
     /// Unwind inside the production panel boundary after its real staged render.
     Panic,
+    /// Emit an unsupported inline property after its real staged render.
+    Style,
+    /// Emit a nonfinite widget value after its real staged render.
+    Widget,
 }
 
 /// An explicitly armed one-shot probe; ordinary shells and soak processes keep `None`.
@@ -19,11 +31,25 @@ pub(super) struct Probe {
     correlation: String,
 }
 impl Probe {
-    fn fail(self) -> ara_ui::Result<()> {
+    fn emit(self, out: &mut String) -> ara_ui::Result<()> {
         let message = format!("Panel recovery verification {}", self.correlation);
         match self.kind {
             ProbeFailure::Error => Err(message.into()),
             ProbeFailure::Panic => panic!("{message}"),
+            ProbeFailure::Style => {
+                out.push_str(&format!(
+                    "<panel id='panel-probe-style-{}' style='align-self:stretch' />",
+                    escape(&self.correlation)
+                ));
+                Ok(())
+            }
+            ProbeFailure::Widget => {
+                out.push_str(&format!(
+                    "<slider id='panel-probe-widget-{}' min='0' max='1' value='NaN' />",
+                    escape(&self.correlation)
+                ));
+                Ok(())
+            }
         }
     }
 }
@@ -65,6 +91,41 @@ impl Failure {
 }
 
 impl Shell {
+    /// Prepare the active surface once before its panels render, so validation
+    /// and mounting use identical styles. Changes invalidate cached checks once.
+    pub(super) fn prepare_panel_validation(&mut self, editor: &Editor) -> ara_ui::Result<()> {
+        let theme_changed = self
+            .ui
+            .set_theme_tokens(self.styles.tokens(editor.state.light));
+        let stylesheet_changed = self.ui.set_stylesheet(&self.stylesheet(editor))?;
+        if theme_changed || stylesheet_changed {
+            self.panel_compilation.valid.clear();
+        }
+        Ok(())
+    }
+
+    /// Validate only changed generated bodies, using the actual part's root and
+    /// the same compiler as reconciliation. No runtime nodes or layout are made.
+    fn validate_panel(&mut self, panel: &str, body: &str) -> ara_ui::Result<()> {
+        let fingerprint = blake3::hash(body.as_bytes());
+        if self.panel_compilation.valid.get(panel) == Some(&fingerprint) {
+            return Ok(());
+        }
+        #[cfg(test)]
+        {
+            self.panel_compilation.checks += 1;
+        }
+        let markup = format!(
+            "<panel id='body-{}' class='tab-body'>{body}</panel>",
+            escape(panel)
+        );
+        self.ui.validate_markup(&markup)?;
+        self.panel_compilation
+            .valid
+            .insert(panel.to_owned(), fingerprint);
+        Ok(())
+    }
+
     /// Arm a render failure only in the hidden native recovery fixture. This is an
     /// internal journey seam, never an editor command, registry entry or global flag.
     pub(crate) fn arm_panel_probe(
@@ -121,6 +182,8 @@ impl Shell {
     /// Clear a panel's quarantine before retrying its normal retained render.
     pub(crate) fn retry_panel(&mut self, panel: &str) -> bool {
         self.bodies.remove(panel);
+        self.memos.remove(panel);
+        self.panel_compilation.valid.remove(panel);
         self.panel_failures.remove(panel).is_some()
     }
 
@@ -147,11 +210,25 @@ impl Shell {
         let mut body = String::new();
         let result = catch_unwind(AssertUnwindSafe(|| -> ara_ui::Result<()> {
             render(self, editor, &mut body)?;
-            if let Some(probe) = self.panel_probe.take_if(|probe| probe.panel == panel)
+            let correlation = if let Some(probe) =
+                self.panel_probe.take_if(|probe| probe.panel == panel)
                 && self.offscreen
             {
-                probe.fail()?;
-            }
+                let correlation = probe.correlation.clone();
+                probe.emit(&mut body)?;
+                Some(correlation)
+            } else {
+                None
+            };
+            self.validate_panel(panel, &body)
+                .map_err(|error| -> Box<dyn std::error::Error> {
+                    match correlation {
+                        Some(correlation) => {
+                            format!("Panel recovery verification {correlation}: {error}").into()
+                        }
+                        None => error,
+                    }
+                })?;
             Ok(())
         }));
         let staged = std::mem::replace(&mut self.bindings, previous);

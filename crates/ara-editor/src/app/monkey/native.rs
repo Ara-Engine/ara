@@ -38,7 +38,10 @@ impl Adapter {
         main: &Surface,
         floats: &[Surface],
     ) -> ara_ui::Result<Option<Input>> {
-        if matches!(action, Action::Command { .. } | Action::Protocol { .. }) {
+        if matches!(
+            action,
+            Action::Command { .. } | Action::Protocol { .. } | Action::TypedCommand { .. }
+        ) {
             return Ok(None);
         }
         let mut events = Vec::new();
@@ -150,7 +153,7 @@ impl Adapter {
                 tab(surface, *reverse, &mut events);
                 tap(surface, 40, &mut events);
             }
-            Action::Command { .. } | Action::Protocol { .. } => {}
+            Action::Command { .. } | Action::Protocol { .. } | Action::TypedCommand { .. } => {}
         }
         Ok(Some(Input {
             events,

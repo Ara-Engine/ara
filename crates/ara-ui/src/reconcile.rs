@@ -74,6 +74,14 @@ enum Source {
 }
 
 impl Ui {
+    /// Validate generated markup against this surface's current stylesheet and
+    /// editor policy before publishing it. Uses reconciliation's source, style and
+    /// widget checks without changing the retained tree, input, text or layout.
+    pub fn validate_markup(&self, markup: &str) -> Result<()> {
+        let elements = source::compile(markup)?;
+        self.validate(elements.iter(), &HashMap::new())
+    }
+
     /// Update the retained tree to `markup` (same stylesheet and theme). Nodes match by
     /// ID and tag; see the module docs for what a kept node retains. A kept node's text
     /// follows the markup, except a kept input: it keeps its live edit (caret,
@@ -641,3 +649,7 @@ impl Assembly<'_> {
         index
     }
 }
+
+#[cfg(test)]
+#[path = "reconcile/validation_tests.rs"]
+mod validation_tests;

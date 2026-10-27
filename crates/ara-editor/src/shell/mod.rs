@@ -333,6 +333,7 @@ pub struct Shell {
     tooltip_delay: ara_ui::popover::HoverDelay,
     tooltip_clock: std::time::Instant,
     panel_failures: BTreeMap<String, panel_boundary::Failure>,
+    panel_compilation: panel_boundary::Compilation,
     field_request: Option<String>,
     /// Each graph page's canvas (`graph_panel::GRAPH_PAGES`).
     graphs: BTreeMap<&'static str, graph_panel::GraphCanvas>,
@@ -646,6 +647,7 @@ impl Shell {
             tooltip_delay: Default::default(),
             tooltip_clock: std::time::Instant::now(),
             panel_failures: BTreeMap::new(),
+            panel_compilation: Default::default(),
             field_request: None,
             canvas_display: Default::default(),
             graphs: BTreeMap::new(),
@@ -937,9 +939,6 @@ impl Shell {
         result
     }
     fn mount_markup(&mut self, editor: &mut Editor, markup: &str) -> ara_ui::Result<()> {
-        self.ui
-            .set_theme_tokens(self.styles.tokens(editor.state.light));
-        self.ui.set_stylesheet(&self.stylesheet(editor))?;
         let reconciling = std::time::Instant::now();
         // Area headers and tab bodies are parts: an unchanged one keeps its retained
         // subtree, virtual rows included.
@@ -1114,6 +1113,7 @@ impl Shell {
         editor: &mut Editor,
         window: &ara_ui::docking::Floating,
     ) -> ara_ui::Result<()> {
+        self.prepare_panel_validation(editor)?;
         self.parts.clear();
         self.hidden_bodies.clear();
         let mut markup = String::from(
@@ -1158,6 +1158,7 @@ impl Shell {
         {
             self.modal_return_focus = self.input.focused();
         }
+        self.prepare_panel_validation(editor)?;
         self.parts.clear();
         self.hidden_bodies.clear();
         let mut markup = String::from("<ui id='editor'>");

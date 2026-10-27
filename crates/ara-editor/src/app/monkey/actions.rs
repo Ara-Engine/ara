@@ -30,6 +30,14 @@ impl Clipboard for MemoryClipboard {
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub(in crate::app) enum Action {
+    TypedCommand {
+        name: String,
+        doc: String,
+        args: Value,
+        case: String,
+        #[serde(default)]
+        changed_fields: usize,
+    },
     Command {
         id: String,
         target: Target,
@@ -90,6 +98,16 @@ impl Action {
         clipboard: &mut dyn Clipboard,
     ) -> ara_ui::Result<()> {
         match self {
+            Self::TypedCommand {
+                name,
+                doc,
+                args,
+                case,
+                ..
+            } => {
+                editor.action("cmd.apply", json!({"doc":doc,"why":format!("Editor monkey: {name} ({case})"),"commands":[{"cmd":name,"args":args}]}))?;
+                shell.rebuild(editor)
+            }
             Self::Command { id, target } => shell.run_command(editor, id, target),
             Self::Protocol {
                 method,
@@ -259,6 +277,10 @@ impl Generator {
         }
     }
 
+    pub fn queued(&self) -> bool {
+        !self.pending.is_empty()
+    }
+
     #[cfg(test)]
     pub(super) fn enqueue(&mut self, actions: impl IntoIterator<Item = Action>) {
         self.pending.extend(actions);
@@ -281,15 +303,22 @@ impl Generator {
         }
     }
 
-    pub fn next(&mut self, shell: &Shell) -> Action {
+    pub fn next(
+        &mut self,
+        editor: &Editor,
+        shell: &Shell,
+        typed: &mut super::typed::State,
+    ) -> Action {
         if let Some(action) = self.pending.pop_front() {
             return action;
         }
         // Native input must already run during coverage, even when expensive
         // commands consume most of the budget. Pending gestures stay contiguous.
         let specs = commands::all();
-        let covered = self.command_cursor + self.method_cursor;
+        let covered = self.command_cursor + self.method_cursor + typed.generated;
         if (self.command_cursor < specs.len() * TARGET_CASES
+            || typed.pending()
+            || !typed.drained()
             || self.method_cursor < self.methods.len() * PARAM_CASES)
             && covered > 0
             && covered.is_multiple_of(32)
@@ -303,6 +332,9 @@ impl Generator {
             let target = edge_target(self.command_cursor % TARGET_CASES);
             self.command_cursor += 1;
             return registry_action(spec.id, target);
+        }
+        if let Some(action) = typed.next(editor) {
+            return action;
         }
         if self.method_cursor < self.methods.len() * PARAM_CASES {
             let method = self.methods[self.method_cursor / PARAM_CASES].clone();

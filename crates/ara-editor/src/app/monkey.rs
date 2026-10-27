@@ -8,6 +8,7 @@ mod play;
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
 mod tests;
+mod typed;
 mod watchdog;
 
 use crate::{
@@ -48,6 +49,7 @@ pub(super) struct Monkey {
     replay: Option<VecDeque<Recorded>>,
     clipboard: MemoryClipboard,
     play: play::State,
+    typed: typed::State,
     actions: u64,
     workload_actions: u64,
     cleanup_actions: u64,
@@ -105,6 +107,7 @@ impl Monkey {
             replay: None,
             clipboard: MemoryClipboard::default(),
             play: play::State::default(),
+            typed: typed::State::default(),
             actions: 0,
             workload_actions: 0,
             cleanup_actions: 0,
@@ -234,7 +237,7 @@ impl Monkey {
             }
             let action = if !self.held_buttons.is_empty() || !self.held_keys.is_empty() {
                 Action::FocusLost
-            } else if let Some(action) = self.play.drain() {
+            } else if let Some(action) = self.play.drain().or_else(|| self.typed.drain()) {
                 action
             } else {
                 return Ok(false);
@@ -244,12 +247,22 @@ impl Monkey {
                 action,
                 cleanup: true,
             }
+        } else if let Some(action) = self
+            .typed
+            .discovery_action()
+            .filter(|_| !self.generator.queued())
+        {
+            Recorded {
+                action,
+                cleanup: false,
+            }
         } else {
             let generator = &mut self.generator;
+            let typed = &mut self.typed;
             let before = self.play.cleanup_actions();
             let action = self.play.next(|| {
                 generator.initialize(editor);
-                generator.next(shell)
+                generator.next(editor, shell, typed)
             });
             Recorded {
                 action,
@@ -267,7 +280,10 @@ impl Monkey {
         let mut play_event = None;
         let result = catch_unwind(AssertUnwindSafe(|| {
             let before = self.play.before(editor)?;
-            let result = run(&action, editor, shell, &mut self.clipboard);
+            let result = match self.typed.run(&action, editor, shell) {
+                Some(result) => result,
+                None => run(&action, editor, shell, &mut self.clipboard),
+            };
             play_event = self.play.after(editor, &before)?;
             result
         }));
@@ -296,6 +312,9 @@ impl Monkey {
             }
         };
         match &action {
+            Action::TypedCommand { .. } => {
+                *self.methods.entry("cmd.apply".into()).or_default() += 1;
+            }
             Action::Command { id, target } => {
                 *self.commands.entry(id.clone()).or_default() += 1;
                 if accepted {
@@ -328,6 +347,16 @@ impl Monkey {
                 json!({"phase":"playInventory","step":self.actions-1,"inventory":inventory}),
             )?;
         }
+        if let Some(catalog) = self.typed.take_catalog() {
+            std::fs::write(
+                self.output.join("monkey-typed-catalog.json"),
+                ara_json::to_canonical_string(&catalog),
+            )?;
+            self.write_event(json!({"phase":"typedCatalog","step":self.actions-1,"catalog":"monkey-typed-catalog.json","names":catalog["names"],"errors":catalog["errors"]}))?;
+        }
+        for result in self.typed.take_events() {
+            self.write_event(json!({"phase":"typedResult","step":self.actions-1,"result":result}))?;
+        }
         self.write_event(json!({"phase":"end","step":self.actions-1,"outcome":outcome,"actionMs":at.elapsed().as_secs_f64()*1000.}))?;
         if self.actions.is_multiple_of(64) || self.finished() {
             self.read_diagnostics(editor)?;
@@ -337,14 +366,33 @@ impl Monkey {
     }
 
     /// Record the complete production-loop frame supplied by the window owner.
+    #[allow(dead_code, reason = "CPU/replay consumers retain the frame-only API")]
     pub fn record_frame(&mut self, elapsed: Duration) {
+        self.record_frame_inner(elapsed, None);
+    }
+
+    /// Attach production phase timings only to slow frames; normal frames allocate
+    /// no stage JSON and use the same counters as [`Self::record_frame`].
+    pub fn record_frame_with_stages(
+        &mut self,
+        elapsed: Duration,
+        stages: &super::responsiveness::Sample,
+    ) {
+        self.record_frame_inner(elapsed, Some(stages));
+    }
+
+    fn record_frame_inner(
+        &mut self,
+        elapsed: Duration,
+        stages: Option<&super::responsiveness::Sample>,
+    ) {
         self.frames += 1;
         self.watchdog.progress(self.actions, None);
         let ms = elapsed.as_secs_f64() * 1000.;
         self.max_frame_ms = self.max_frame_ms.max(ms);
         if elapsed >= SPIKE {
             self.spikes += 1;
-            self.slowest.push(json!({"frame":self.frames,"step":self.actions.saturating_sub(1),"milliseconds":ms,"action":self.last_action}));
+            self.slowest.push(json!({"frame":self.frames,"step":self.actions.saturating_sub(1),"milliseconds":ms,"action":self.last_action,"stages":stages}));
             self.slowest.sort_by(|a, b| {
                 b["milliseconds"]
                     .as_f64()
@@ -374,7 +422,10 @@ impl Monkey {
             || self.max_steps.is_some_and(|n| self.workload_actions >= n)
     }
     fn resources_drained(&self) -> bool {
-        self.play.drained() && self.held_buttons.is_empty() && self.held_keys.is_empty()
+        self.play.drained()
+            && self.typed.drained()
+            && self.held_buttons.is_empty()
+            && self.held_keys.is_empty()
     }
     fn track_held(&mut self, action: &Action) {
         match action {
@@ -442,6 +493,7 @@ impl Monkey {
             && self.started.elapsed() >= self.budget
             && self.native_events > 0
             && self.missing_command_cases().is_empty()
+            && self.typed.complete()
     }
 
     /// Count events actually offered to route_event, rather than generated events
@@ -550,7 +602,8 @@ impl Monkey {
                 "commandEdgeCases":self.command_cases,"commandCallbacksAccepted":self.command_successes,
                 "protocolMethods":self.methods,"unvisitedCommands":unvisited,
                 "uiActions":self.ui_actions,
-                "coverageComplete":missing_cases.is_empty(),"missingCommandEdgeCases":missing_cases,
+                "shellCommandCoverageComplete":missing_cases.is_empty(),
+                "coverageComplete":missing_cases.is_empty() && self.typed.complete(),"missingCommandEdgeCases":missing_cases,
                 "edgeCasesPerCommand":actions::edge_case_count(),"nativeEventsRouted":self.native_events,
                 "journal":"monkey-events.jsonl",
                 "replayedJournal":self.replay.is_some(),
@@ -561,6 +614,7 @@ impl Monkey {
                 "exactReplay":"--monkey-replay <original-output>/monkey-events.jsonl --output <new-output>",
                 "limits":["Command coverage counts attempted edge targets; disabled or deferred commands can reject before their implementation runs. Accepted callbacks are counted separately.","Protocol method probes include malformed envelopes and stale sessions; a method attempt is not complete implementation coverage.","The watchdog persists permanent stalls independently; an external process timeout is required to end a permanently stalled editor.","Long frames and watchdog stalls are reported separately; hangs is their lower bound because their intervals can overlap.","NaN and infinity reach numeric controls as text because JSON cannot represent non-finite numbers."]
             }),
+            self.typed.report(),
         ] {
             let Value::Object(fields) = section else {
                 return Err("Monkey report section is not an object".into());
