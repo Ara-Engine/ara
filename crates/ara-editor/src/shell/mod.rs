@@ -759,7 +759,17 @@ impl Shell {
     /// revisions (an action that rebuilt in dispatch changed them); true if it rebuilt.
     pub fn rebuild_if_stale(&mut self, editor: &mut Editor) -> ara_ui::Result<bool> {
         let compiled = self.poll_script_job(editor)?;
-        if !compiled && self.built == (editor.panels_revision, editor.host.store().revision()) {
+        let play_changed = match self.poll_play_job(editor) {
+            Ok(changed) => changed,
+            Err(error) => {
+                editor.report_failure(&*error);
+                true
+            }
+        };
+        if !compiled
+            && !play_changed
+            && self.built == (editor.panels_revision, editor.host.store().revision())
+        {
             return Ok(false);
         }
         self.rebuild(editor)?;

@@ -160,7 +160,7 @@ impl Action {
             }
             Self::KeyState { scancode, pressed } => {
                 shell.key(editor, *scancode, *pressed, clipboard)?;
-                shell.dispatch(editor)
+                shell.dispatch(editor).map(|_| ())
             }
             Self::PointerButton {
                 point,

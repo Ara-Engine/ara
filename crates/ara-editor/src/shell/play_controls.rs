@@ -3,6 +3,7 @@
 use super::*;
 use ara_schema::ValueType;
 mod fields;
+mod jobs;
 mod network;
 mod runtime;
 pub(crate) use network::conditions;
@@ -69,6 +70,7 @@ pub(crate) struct State {
     expanded: std::collections::BTreeSet<String>,
     pages: BTreeMap<String, usize>,
     message: Option<String>,
+    pending: Option<jobs::Pending>,
 }
 impl Shell {
     pub(crate) fn toggle_play_options(&mut self, editor: &mut Editor) -> ara_ui::Result<()> {
@@ -120,6 +122,9 @@ impl Shell {
         action: &Action,
         value: Value,
     ) -> ara_ui::Result<()> {
+        if self.play_controls.pending.is_some() {
+            return Err("Wait for the current runtime operation to complete".into());
+        }
         match action {
             Action::Field(target) => {
                 let runtime = self
@@ -176,6 +181,9 @@ impl Shell {
         self.rebuild(editor)
     }
     pub(crate) fn discard_play_fields(&mut self, editor: &mut Editor) -> ara_ui::Result<()> {
+        if self.play_controls.pending.is_some() {
+            return Err("Wait for the current runtime operation to complete".into());
+        }
         if let Some(runtime) = &mut self.play_controls.runtime {
             runtime.drafts.clear();
         }
@@ -184,7 +192,7 @@ impl Shell {
     }
     /// The explicit inspection snapshot and live tile metadata, used by native acceptance evidence.
     pub(crate) fn play_runtime_report(&self) -> Value {
-        json!({"controlledPlayer":self.game_client,"captured":self.game_captured,"players":self.play_controls.players.iter().map(|(player,info)|json!({"player":player,"live":info.live,"size":info.size,"fps":info.fps})).collect::<Vec<_>>(),"inspection":self.play_controls.runtime.as_ref().map(|runtime|json!({"world":runtime.world,"player":runtime.player,"entity":runtime.entity,"tick":runtime.tick,"components":runtime.components,"drafts":runtime.drafts.len(),"editable":runtime.local})),"message":self.play_controls.message})
+        json!({"controlledPlayer":self.game_client,"captured":self.game_captured,"pending":self.play_controls.pending.is_some(),"players":self.play_controls.players.iter().map(|(player,info)|json!({"player":player,"live":info.live,"size":info.size,"fps":info.fps})).collect::<Vec<_>>(),"inspection":self.play_controls.runtime.as_ref().map(|runtime|json!({"world":runtime.world,"player":runtime.player,"entity":runtime.entity,"tick":runtime.tick,"components":runtime.components,"drafts":runtime.drafts.len(),"editable":runtime.local})),"message":self.play_controls.message})
     }
     /// Each visible tile owns its own capture rectangle; changing focus never swaps images.
     pub(crate) fn game_input_rect(&self) -> Option<Box2> {

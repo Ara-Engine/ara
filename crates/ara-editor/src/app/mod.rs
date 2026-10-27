@@ -776,6 +776,17 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
             let tick_at = Instant::now();
             server.pump(&mut editor);
             editor.tick();
+            match shell.poll_play_job(&mut editor) {
+                Ok(true) => {
+                    shell.rebuild(&mut editor)?;
+                    dirty = true;
+                }
+                Ok(false) => {}
+                Err(error) => {
+                    editor.report_failure(&*error);
+                    dirty = true;
+                }
+            }
             let tick_ms = tick_at.elapsed().as_secs_f64() * 1000.;
             // The Game view, in the main window or a floating one: its size (physical
             // pixels, at its window's scale) is where embedded Play starts, what it

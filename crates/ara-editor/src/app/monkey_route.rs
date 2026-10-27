@@ -16,7 +16,7 @@ pub(super) fn step(
     shell: &mut Shell,
     renderer: &mut Renderer,
     gpu: &NativeUi,
-    view: &EditWorldView,
+    view: &crate::world::DocumentView,
     scene_view: &viewport::SceneView,
 ) -> ara_ui::Result<bool> {
     let main = monkey::native::Surface {

@@ -224,6 +224,9 @@ impl PlayCheck {
         if !scale.is_finite() || scale <= 0. {
             return Err("Play proof native input scale is invalid".into());
         }
+        if act == Act::Runtime && self.age > 9 && shell.play_runtime_report()["pending"] == true {
+            return self.wait();
+        }
         let target = match (act, self.age) {
             (_, 2) => Some("game-options"),
             (Act::Multi, 4) => Some("play-mode"),

@@ -28,7 +28,7 @@ impl Shell {
                 let value = db.canonical_value(&ValueType::Named(component.clone()), value);
                 for desc in ty.fields().iter().filter(|desc| !desc.editor.hidden) {
                     let mut desc = desc.clone();
-                    desc.editor.read_only |= !runtime.local;
+                    desc.editor.read_only |= !runtime.local || self.play_controls.pending.is_some();
                     let path = format!("{component}.{}", desc.name);
                     let field = value
                         .get(&desc.name)
