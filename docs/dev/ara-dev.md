@@ -507,6 +507,20 @@ performance baseline; the normal CPU policy refused the loaded machine. The
 sampler runs at Normal-equivalent thread priority so BelowNormal builds cannot
 starve monitoring into accepting an unobserved interval.
 
+On 2026-10-28 the default cached A/B improved to **12.63 and 12.73 s**, including
+admission and the unchanged load guard. Its work inside the guarded operation took
+6.50–6.53 s: 1.34–1.43 s switching, 4.78–4.85 s measuring all eight windows, and
+0.27–0.28 s retrieving the two temporal reports. Consecutive equal selections skip
+reloads, and other switches copy only changed cohorts. Temporal cache identity uses
+the acknowledged shader cohort, avoiding a race with the status-file refresh;
+native checks matched each cached identity to its actual A/B window.
+
+These turnaround probes used the explicit relaxed policy under 82.1–92.5% mean
+foreign CPU; both GPU-span comparisons were inconclusive. The default policy
+refused a 99.37% foreign CPU peak. A fresh temporal analysis still took 58.47 s
+including admission (42.42 s in temporal work); it is not advertised as a cached
+20-second A/B. Raw evidence is under `target/lab-baseline/ab-fastpath/`.
+
 The warm-restart strategy compares the staged player and its SDL library byte for
 byte. An unchanged player keeps its PID, selection and temporal cache generation.
 A native no-op rebuild took 2.60 s (2.20 s in Cargo) with the same PID and generation.

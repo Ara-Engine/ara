@@ -48,6 +48,8 @@ pub(super) struct Session {
     pub last_trace: Option<PathBuf>,
     root: PathBuf,
     shader_view: PathBuf,
+    // A control acknowledgement precedes the asynchronous status-file refresh.
+    shader_cohorts: Option<Value>,
     _generation: Option<fs::File>,
 }
 impl Session {
@@ -119,6 +121,7 @@ impl Session {
             last_trace: None,
             root: root.to_owned(),
             shader_view: view.to_owned(),
+            shader_cohorts: None,
             _generation: generation,
         };
         session.control(
@@ -152,6 +155,15 @@ impl Session {
             if let Some(value) = read(&response) {
                 if let Some(error) = value["error"].as_str() {
                     bail!("{error}");
+                }
+                if let Some(cohorts) = [
+                    &value["shaders"]["cohorts"],
+                    &value["player"]["shaders"]["cohorts"],
+                ]
+                .into_iter()
+                .find(|cohorts| cohorts.is_object())
+                {
+                    self.shader_cohorts = Some(cohorts.clone());
                 }
                 return Ok(value);
             }
@@ -194,7 +206,11 @@ impl Session {
         let base = self.directory.ancestors().nth(3).context("lab base")?;
         let quality = self.quality()?;
         let status = read(&self.directory.join("status.json")).context("player status")?;
-        let identity = json!({"format":"ara.lab.temporal-cache/2","generation":read(&base.join("generation.json")),"selection":self.selection,"shaders":status["shaders"]["cohorts"],"content_generation":status["readiness"]["generation"],"config":quality["temporal"]});
+        let cohorts = self
+            .shader_cohorts
+            .as_ref()
+            .unwrap_or(&status["shaders"]["cohorts"]);
+        let identity = json!({"format":"ara.lab.temporal-cache/3","generation":read(&base.join("generation.json")),"selection":self.selection,"shaders":cohorts,"content_generation":status["readiness"]["generation"],"config":quality["temporal"]});
         let mut hasher = std::collections::hash_map::DefaultHasher::new();
         identity.to_string().hash(&mut hasher);
         let cache = base
@@ -255,7 +271,7 @@ impl Session {
         super::variants::Variants::load(base).ready(name)?;
         let view = self.shader_view.clone();
         let previous = self.selection.variant.clone();
-        super::variants::publish_tree(&super::variants::profile(base, name), &view)?;
+        super::variants::publish_selection(&super::variants::profile(base, name), &view)?;
         match self.control(
             json!({"reload_shaders":true,"measure":false,"frames":1}),
             Duration::from_secs(60),
@@ -265,7 +281,10 @@ impl Session {
                 Ok(json!({"variant":name,"reload":result}))
             }
             Err(error) => {
-                super::variants::publish_tree(&super::variants::profile(base, &previous), &view)?;
+                super::variants::publish_selection(
+                    &super::variants::profile(base, &previous),
+                    &view,
+                )?;
                 let _ = self.control(
                     json!({"reload_shaders":true,"measure":false,"frames":1}),
                     Duration::from_secs(60),

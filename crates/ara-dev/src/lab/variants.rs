@@ -231,6 +231,60 @@ pub(super) fn view(base: &Path, name: &str) -> PathBuf {
     base.join("views").join(name).join("shaders")
 }
 
+/// Existing views need only the cohorts whose publication token differs. A fresh
+/// view and legacy cohorts without tokens still use the complete-copy contract.
+pub(super) fn publish_selection(source: &Path, destination: &Path) -> Result<()> {
+    if !destination.is_dir() {
+        return publish_tree(source, destination);
+    }
+    if let Ok(token) = fs::read(source.join(".ara-shader-reload")) {
+        return if fs::read(destination.join(".ara-shader-reload"))
+            .ok()
+            .as_ref()
+            == Some(&token)
+        {
+            Ok(())
+        } else {
+            publish_tree(source, destination)
+        };
+    }
+    let entries = fs::read_dir(source)?.collect::<std::io::Result<Vec<_>>>()?;
+    if entries.iter().any(|e| {
+        let path = e.path();
+        path.extension().is_some_and(|x| x == "json")
+            && !e.file_name().to_string_lossy().starts_with('.')
+    }) {
+        let unchanged = entries.iter().all(|entry| {
+            entry.file_type().is_ok_and(|ty| {
+                ty.is_dir()
+                    || entry.metadata().is_ok_and(|source| {
+                        fs::metadata(destination.join(entry.file_name())).is_ok_and(|target| {
+                            source.len() == target.len()
+                                && source.modified().ok() == target.modified().ok()
+                        })
+                    })
+            })
+        });
+        if unchanged {
+            return Ok(());
+        }
+        return publish_tree(source, destination);
+    }
+    for entry in entries {
+        let ty = entry.file_type()?;
+        let target = destination.join(entry.file_name());
+        if ty.is_symlink() {
+            continue;
+        }
+        if ty.is_dir() {
+            publish_selection(&entry.path(), &target)?;
+        } else {
+            publish_file(&entry.path(), &target)?;
+        }
+    }
+    Ok(())
+}
+
 /// Copy immutable artifacts before metadata and the cohort signal. Preserve mtimes
 /// so a warm publication only copies changed files. Never modify a tracked output.
 pub(super) fn publish_tree(source: &Path, destination: &Path) -> Result<()> {
@@ -258,26 +312,67 @@ pub(super) fn publish_tree(source: &Path, destination: &Path) -> Result<()> {
             publish_tree(&entry.path(), &target)?;
             continue;
         }
-        let meta = entry.metadata()?;
-        if fs::metadata(&target)
-            .is_ok_and(|old| old.len() == meta.len() && old.modified().ok() == meta.modified().ok())
-        {
-            continue;
-        }
-        let temporary = target.with_extension(format!("{}.tmp", session::id()));
-        fs::copy(entry.path(), &temporary)?;
-        fs::File::options()
-            .write(true)
-            .open(&temporary)?
-            .set_times(fs::FileTimes::new().set_modified(meta.modified()?))?;
-        fs::rename(temporary, target)?;
+        publish_file(&entry.path(), &target)?;
     }
+    Ok(())
+}
+
+fn publish_file(source: &Path, target: &Path) -> Result<()> {
+    let meta = fs::metadata(source)?;
+    if fs::metadata(target)
+        .is_ok_and(|old| old.len() == meta.len() && old.modified().ok() == meta.modified().ok())
+    {
+        return Ok(());
+    }
+    let temporary = target.with_extension(format!("{}.tmp", session::id()));
+    fs::copy(source, &temporary)?;
+    fs::File::options()
+        .write(true)
+        .open(&temporary)?
+        .set_times(fs::FileTimes::new().set_modified(meta.modified()?))?;
+    fs::rename(temporary, target)?;
     Ok(())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn selection_switches_and_restores_signalled_and_legacy_cohorts() -> Result<()> {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../target/lab-tests")
+            .join(session::id());
+        let baseline = root.join("baseline");
+        for cohort in ["a", "b"] {
+            fs::create_dir_all(baseline.join(cohort).join("key"))?;
+            fs::write(baseline.join(cohort).join("pipeline.json"), b"baseline")?;
+            fs::write(baseline.join(cohort).join("key/shader"), b"baseline")?;
+        }
+        fs::write(baseline.join("a/.ara-shader-reload"), b"baseline")?;
+        let experiment = root.join("experiment");
+        let view = root.join("view");
+        publish_tree(&baseline, &experiment)?;
+        publish_tree(&baseline, &view)?;
+        for cohort in ["a", "b"] {
+            fs::write(experiment.join(cohort).join("pipeline.json"), b"experiment")?;
+            fs::write(experiment.join(cohort).join("key/shader"), b"experiment")?;
+        }
+        fs::write(experiment.join("a/.ara-shader-reload"), b"experiment")?;
+        publish_selection(&experiment, &view)?;
+        for cohort in ["a", "b"] {
+            assert_eq!(
+                fs::read(view.join(cohort).join("key/shader"))?,
+                b"experiment"
+            );
+        }
+        publish_selection(&baseline, &view)?;
+        for cohort in ["a", "b"] {
+            assert_eq!(fs::read(view.join(cohort).join("key/shader"))?, b"baseline");
+        }
+        fs::remove_dir_all(root)?;
+        Ok(())
+    }
+
     #[test]
     fn changed_recipe_rebases_removed_overrides_before_publication() -> Result<()> {
         let root = Path::new(env!("CARGO_MANIFEST_DIR"))
