@@ -447,6 +447,11 @@ impl Renderer {
             .zip(&self.targets.states)
             .map(|(&image, &state)| graph.import(Resource::Image(image), state))
             .collect::<Vec<_>>();
+        // GBuffer rewrites these every frame and only this graph reads them: after
+        // their last pass, tile-based GPUs neither store nor reload them.
+        for target in [ALBEDO, NORMAL, MATERIAL, EMISSIVE] {
+            graph.discard(ids[target])?;
+        }
         let tile = graph.import(
             Resource::Buffer(self.targets.tiles),
             State {

@@ -1,22 +1,22 @@
 {
   "binding_layout_hash": "f71261afa0d52758f34ca15c916d2da422ee92b118ede6e189c970911a274f1e",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "18b2b4b9f049dde1669d5ac2979968226e9a86e34c0c5ae47aa32c8119236c71",
+  "key": "cd460cdf461d399f982f0319a59b2dbfbbdae668cb8e1492a0211c96ea223b0d",
   "stages": [
     {
-      "dxil": "18b2b4b9f049dde1669d5ac2979968226e9a86e34c0c5ae47aa32c8119236c71/giRelightMain.dxil",
-      "dxil_hash": "e16dd709d8d825361d2362ad76cfed887d2fc7dc63730279512f8bcf65b7a271",
+      "dxil": "cd460cdf461d399f982f0319a59b2dbfbbdae668cb8e1492a0211c96ea223b0d/giRelightMain.dxil",
+      "dxil_hash": "36d21a175627f23d4386fdb48f62eeded45865a875ede3ba05954e55e754b0fd",
       "metal": {
         "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
-        "metallib": "18b2b4b9f049dde1669d5ac2979968226e9a86e34c0c5ae47aa32c8119236c71/giRelightMain.metallib",
-        "metallib_hash": "22951acdcc95992b3e3579a9c3aaf2b284f526484b1f510339c9b0c838df0c9b",
-        "reflection": "18b2b4b9f049dde1669d5ac2979968226e9a86e34c0c5ae47aa32c8119236c71/giRelightMain.metal.json",
+        "metallib": "cd460cdf461d399f982f0319a59b2dbfbbdae668cb8e1492a0211c96ea223b0d/giRelightMain.metallib",
+        "metallib_hash": "b32fc8f6b07b86b908414fecb4bed7d9b56298fd065637248a7d057835475562",
+        "reflection": "cd460cdf461d399f982f0319a59b2dbfbbdae668cb8e1492a0211c96ea223b0d/giRelightMain.metal.json",
         "root_signature_hash": "1cc11e518b14c2b24e05fc30812bfd2b87e0a9c313ea79a4620a443a723525ef"
       },
       "source_entry": "giRelightMain",
-      "spirv": "18b2b4b9f049dde1669d5ac2979968226e9a86e34c0c5ae47aa32c8119236c71/giRelightMain.spv",
+      "spirv": "cd460cdf461d399f982f0319a59b2dbfbbdae668cb8e1492a0211c96ea223b0d/giRelightMain.spv",
       "spirv_entry": "main",
-      "spirv_hash": "e6fdb6a226dceadecf1ef8ad2ed4cbb39fd2efbdb9ec34b71cf7dfec3172a85b",
+      "spirv_hash": "ce1e21a43fcfdaccfa4514bc5219331cb8a137b773f95d214b578351792e94d6",
       "stage": "compute"
     }
   ],

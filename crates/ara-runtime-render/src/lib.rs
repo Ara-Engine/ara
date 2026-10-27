@@ -117,6 +117,8 @@ pub struct Presenter {
     warned_budget: bool,
     /// Background probe GI acquisition for raster content (`set_probe_gi`).
     probe_gi: bool,
+    /// GPU pass timestamps on the presentation device (`set_pass_timing`).
+    pass_timing: bool,
     /// Renderer selection (`set_render_options`).
     options: ara_render_fidelity::presets::RenderOptions,
     /// The content's authored environment map (HDRI), replacing the sky gradient.
@@ -215,6 +217,7 @@ impl Presenter {
             output: None,
             warned_budget: false,
             probe_gi: true,
+            pass_timing: true,
             options: ara_render_fidelity::presets::RenderOptions::default(),
             environment: None,
             look_override: None,

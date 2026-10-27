@@ -202,8 +202,16 @@ impl VulkanDevice {
         let mut timestamp = 1;
         {
             crate::cpu_scope!("GPU.record_commands");
+            let mut scopes = crate::attachments::ops(&list.commands, |image| {
+                self.images.get(image).is_ok_and(|i| {
+                    i.raw
+                        .usage
+                        .contains(vk::ImageUsageFlags::TRANSIENT_ATTACHMENT)
+                })
+            })
+            .into_iter();
             for command in super::timestamps::commands(&list.commands) {
-                self.encode(cmd, queue, query, &mut timestamp, command)?;
+                self.encode(cmd, queue, query, &mut timestamp, &mut scopes, command)?;
             }
         }
         // SAFETY: Query `required-1` is reserved for the submission's completed

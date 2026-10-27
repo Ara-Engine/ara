@@ -3,6 +3,7 @@
 //! Ara's owned GPU resources, explicit queues and offline pipeline contract.
 pub mod acceleration;
 pub mod arena;
+mod attachments;
 pub mod commands;
 pub mod cooked;
 mod cpu;
@@ -174,7 +175,8 @@ pub enum Resource {
 /// Semantic resource usage lowered to backend stages, masks and layouts.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Access {
-    /// First use of uninitialized transient storage.
+    /// First use of uninitialized transient storage. As a barrier's `after`, the
+    /// contents are discarded: a rendering scope right before skips storing them.
     Undefined,
     /// Vertex input buffer.
     Vertex,

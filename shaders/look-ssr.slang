@@ -36,10 +36,15 @@ void ssrTraceMain(uint3 tid:SV_DispatchThreadID){
     int2 p=int2(tid.xy)*2;bool covered;float3 world=gbufferWorld(f,p,covered);float roughness=gbufferMaterial(f,p).x;float4 result=0;
     if(covered && roughness<l.ssr.x){
         float3 n=normalize(gbufferNormal(f,p)),v=normalize(world.xyz-f.camera.xyz),r=reflect(v,n);
-        // Clip the ray to the near plane, then march its screen-space projection.
+        // Clip the ray in world space so it ends in front of the near plane
+        // (camera.w), then march its screen-space projection. A segment reaching
+        // behind the camera has no linear projection: clipping it after projecting
+        // swept arbitrary pixels and reported false hits for rays reflected back
+        // towards the camera (dark discs on mirror spheres).
         float distance=length(world.xyz-f.camera.xyz),reach=min(l.ssr.y,distance*2);
+        float ahead=dot(world.xyz-f.camera.xyz,f.forward.xyz),toward=dot(r,f.forward.xyz);
+        if(toward<0)reach=min(reach,max(ahead-f.camera.w*2,0)/-toward);
         float3 a=ssrProject(f,world.xyz+n*0.01),b=ssrProject(f,world.xyz+r*reach);
-        if(b.z<=0){float t=a.z/max(a.z-b.z,1e-6)*0.99;b=lerp(a,b,t);}
         uint steps=uint(l.ssr.z);float2 delta=(b.xy-a.xy)/float(steps);float jitter=0.5;
         float previous=0;bool hit=false;float3 at=a;
         for(uint i=1;i<=steps;i++){

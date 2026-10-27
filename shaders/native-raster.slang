@@ -103,7 +103,9 @@ Surface surfaceMaterial(NativeMaterial m,Varying v){
     s.normal=normalize(t*n.x+cross(normal,t)*handedness*n.y+normal*n.z);
     float4 mr=sampleMap(m,2,v);s.roughness=clamp(m.pbr.emissiveRoughness.w*mr.g,0.045,1);s.metal=saturate(m.pbr.surface.x*mr.b);
     s.emissive=max(0,m.pbr.emissiveRoughness.rgb*sampleMap(m,3,v).rgb);
-    s.ao=lerp(1,sampleMap(m,4,v).r,m.factors.x);s.transmission=saturate(m.factors.y*sampleMap(m,5,v).r);return s;
+    // Transmission is the dielectric layer's (glTF KHR_materials_transmission): metal
+    // reflects whatever its transmission factor says.
+    s.ao=lerp(1,sampleMap(m,4,v).r,m.factors.x);s.transmission=saturate(m.factors.y*sampleMap(m,5,v).r)*(1-s.metal);return s;
 }
 // Terrain projection weights from the surface normal: the top projection (world
 // X/Z, the layers' UVs) alone on gentle slopes; past about 26 degrees the world Z/Y

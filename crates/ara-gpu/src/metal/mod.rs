@@ -162,6 +162,8 @@ pub struct MetalDevice {
     resource_worker: Option<prepare::ResourceWorker>,
     pipeline_worker: Option<prepare::PipelineWorker>,
     timestamp_pool: timestamps::Pool,
+    /// Whether submissions take GPU timestamps (`set_pass_timing`).
+    pass_timing: bool,
     /// Pass timings of completed submissions, oldest first, until resolved.
     timings: std::collections::VecDeque<(TimelinePoint, Vec<PassTiming>)>,
     timing_window: crate::vulkan::timestamps::Window,
@@ -270,6 +272,7 @@ impl MetalDevice {
             resource_worker: None,
             pipeline_worker: None,
             timestamp_pool: timestamps::Pool::default(),
+            pass_timing: true,
             timings: std::collections::VecDeque::new(),
             timing_window: Default::default(),
             waits: Default::default(),
@@ -373,9 +376,12 @@ impl MetalDevice {
     }
     /// Make a created texture resident and give it an arena identity.
     fn adopt_image(&mut self, raw: NativeImage) -> Result<Image> {
-        self.residency
-            .addAllocation(ProtocolObject::from_ref(&*raw.texture));
-        self.residency_dirty = true;
+        // Memoryless (transient) textures have no allocation; residency sets reject them.
+        if !raw.memoryless() {
+            self.residency
+                .addAllocation(ProtocolObject::from_ref(&*raw.texture));
+            self.residency_dirty = true;
+        }
         self.images.insert(Owned::new(raw))
     }
     /// Write a host buffer after every preceding use has completed.
@@ -570,7 +576,11 @@ impl MetalDevice {
                 _ => None,
             })
             .collect();
-        let mut timing = self.timestamp_pool.take(&self.device, labels);
+        let mut timing = if self.pass_timing {
+            self.timestamp_pool.take(&self.device, labels)
+        } else {
+            None
+        };
         let heap = timing.as_ref().map(|timing| (&*timing.heap, timing.base));
         let encoded = self.encode(&cmd, &list, &mut scratch, &mut created, heap);
         cmd.endCommandBuffer();
@@ -691,6 +701,13 @@ impl MetalDevice {
         Device::wait(self, point)?;
         self.reclaim()?;
         Ok(self.take_timings(point))
+    }
+    /// Take GPU timestamps (pass timings and the timing window); on by default. Off,
+    /// later submissions run untimed and resolve no pass timings. Each command-buffer
+    /// timestamp is a driver dispatch, but with pass boundaries sharing one (22 a
+    /// frame in Outpost) turning them off measured no win on the M5 Pro.
+    pub fn set_pass_timing(&mut self, enabled: bool) {
+        self.pass_timing = enabled;
     }
     /// Start a measurement boundary: only later, resolved submissions contribute.
     pub fn reset_timing_window(&mut self) {
@@ -893,9 +910,11 @@ impl MetalDevice {
                     if let Some(slot) = i.raw.storage {
                         self.tables.storage_images.release(slot);
                     }
-                    self.residency
-                        .removeAllocation(ProtocolObject::from_ref(&*i.raw.texture));
-                    self.residency_dirty = true;
+                    if !i.raw.memoryless() {
+                        self.residency
+                            .removeAllocation(ProtocolObject::from_ref(&*i.raw.texture));
+                        self.residency_dirty = true;
+                    }
                 }
                 Retired::Pipeline { .. } => {}
             }
