@@ -83,6 +83,75 @@ fn a_popover_shifts_inside_the_window_and_submenus_flip_left() {
     assert_eq!(wide.size[0], WINDOW[0] - 2. * MARGIN);
 }
 
+#[test]
+fn signed_gaps_overlap_anchor_edges_and_stay_bounded_when_flipped() {
+    let right: Placement = "right-start".parse().expect("placement");
+    let overlap = place(anchor(40., 30., 80., 24.), [120., 60.], WINDOW, right, -2.);
+    assert_eq!(overlap.side, Side::Right);
+    assert_eq!(overlap.origin, [118., 30.]);
+    let flipped = place(anchor(300., 30., 80., 24.), [120., 60.], WINDOW, right, -2.);
+    assert_eq!(flipped.side, Side::Left);
+    assert_eq!(flipped.origin, [182., 30.]);
+    for offset in [-2., -10_000., f32::MIN] {
+        for placement in ["bottom-start", "top-end", "left-center", "right-start"] {
+            for window in [[2., 2.], WINDOW] {
+                let placed = place(
+                    anchor(390., 280., 80., 24.),
+                    [900., 600.],
+                    window,
+                    placement.parse().expect("placement"),
+                    offset,
+                );
+                assert!(
+                    placed
+                        .origin
+                        .iter()
+                        .chain(&placed.size)
+                        .all(|value| value.is_finite() && *value >= 0.)
+                );
+                assert!(
+                    placed.origin[0] + placed.size[0] <= window[0] + 0.5,
+                    "{placed:?}"
+                );
+                assert!(
+                    placed.origin[1] + placed.size[1] <= window[1] + 0.5,
+                    "{placed:?}"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn frame_accepts_native_submenu_overlap_but_rejects_nonfinite_gaps() -> Result<()> {
+    let mut text = TextSystem::bundled()?;
+    let markup = |offset| {
+        format!(
+            "<ui id='root'><button id='row' text='Submenu' style='position:absolute;left:300px;top:30px;width:80px;height:24px;padding:0px' /><popover id='submenu' anchor='row' placement='right-start' offset='{offset}' style='width:120px'><button id='child' text='Child' style='height:60px;padding:0px' /></popover></ui>"
+        )
+    };
+    let mut ui = Ui::editor(&markup("-2"), EDITOR_CSS, WINDOW)?;
+    ui.frame(&mut text)?;
+    let submenu = ui.nodes[ui.find("submenu").expect("submenu")].rect;
+    assert_eq!(
+        [submenu.x, submenu.y, submenu.w, submenu.h],
+        [182., 30., 120., 60.]
+    );
+    assert_eq!(
+        ui.frame(&mut text)?.layout_passes,
+        0,
+        "overlap placement is stable while idle"
+    );
+    for offset in ["NaN", "inf", "-inf"] {
+        ui.reconcile(&markup(offset))?;
+        let error = ui
+            .frame(&mut text)
+            .expect_err("nonfinite authored gap must be diagnosed");
+        assert!(error.to_string().contains("ARA4046"), "{error}");
+    }
+    Ok(())
+}
+
 fn rows(prefix: &str, n: usize) -> String {
     (0..n)
         .map(|i| {
