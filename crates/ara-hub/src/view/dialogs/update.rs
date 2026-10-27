@@ -3,10 +3,10 @@ use super::*;
 
 pub(super) fn body(p: &mut Page, hub: &Hub) {
     let Some(release) = &hub.releases.hub else {
-        heading(p, "circle-check", "You're up to date");
+        heading(p, "brand-hub", "You're up to date");
         return;
     };
-    heading(p, "sparkles", &format!("Ara Hub {}", release.version));
+    heading(p, "brand-hub", &format!("Ara Hub {}", release.version));
     release_identity(p, release);
     p.panel("release-notes", |p| {
         p.text("label", "WHAT'S NEW");

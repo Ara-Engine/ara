@@ -12,6 +12,8 @@ contract is `crates/ara-hub-service/AGENTS.md`.
 
 Icons: `build.rs` embeds `assets/brand/icons/hub/ara-hub.rc` into both Hub and
 `ara-hub-updater`; the native Hub window explicitly sets the Hub 64 px PNG.
+The sidebar pairs the new Hub SVG icon with native Ara text. Engine cards and
+installation dialogs use the engine SVG family; update dialogs use the Hub icon.
 
 ## Layout
 
@@ -21,6 +23,11 @@ Icons: `build.rs` embeds `assets/brand/icons/hub/ara-hub.rc` into both Hub and
   No window, GPU or socket, so tests drive exactly what the window drives.
   `create.rs` is the Create form; `wire.rs` the service result types (unknown
   fields ignored); `engines.rs` finds installed builds; `text.rs` formatting.
+- Create is a dedicated full-window page, opened by New project or a template;
+  it has no sidebar entry. Back, Esc and mouse Back return to the opener. Native
+  page state restores its scroll/focus, while Projects search and preferences stay
+  in the model. Nested Select popups and dialogs consume Back/Esc first.
+  Successful creation queues the existing Open RPC for the new project.
 - `connection.rs`: the service on its own thread. `connect_or_start` with the
   `ara` beside `ara-hub` (`--ara` overrides), `hub.subscribe` before `Connected`
   (the model then refreshes every list), `hub.changed` → `Event::Changed`, a 2 s
@@ -59,7 +66,7 @@ This feature stays off in shipping builds; see ara-release's rehearsal command.
   Scroll offsets clamp after layout; explicit focus requests and hover update then.
 - Theme changes call `switch_theme` once to swap palette tokens. Initial inherited
   colors resolve in the runtime; `Ui::editor` is used only for window creation.
-- Built-in icons, wordmarks and Starter art decode/upload on first visible use,
+- Built-in icons, brand marks and Starter art decode/upload on first visible use,
   then stay resident across pages/themes. DPI changes invalidate that image set.
   MCP snippet helper processes start only on opening Agents, after bootstrap is ready.
 - Agent instructions quote the verified absolute CLI path (including spaces/apostrophes).
@@ -133,6 +140,8 @@ user profile, even via --config-dir. Never register worktree builds there.
 - `cargo clippy -p ara-hub --all-targets -- -D warnings`.
 - `tests/responsiveness.rs` covers presentation, idle, dismissal and queued clicks;
   `tests/async_rpc.rs` holds a service reply while input still completes.
+  `tests/create_navigation.rs` drives Back/Esc/mouse return, viewport/search
+  restoration, the shared engine Select, origin tracking and create-then-open.
   Opt-in CPU timings: set ARA_HUB_TIMINGS to an absolute target/.../timings.json,
   then `cargo test -p ara-hub --test responsiveness measure_hub_frames -- --ignored`.
   Captures also inject menu, rename and dismiss clicks and save before/after images.

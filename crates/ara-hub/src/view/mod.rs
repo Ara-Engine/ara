@@ -303,8 +303,10 @@ impl Page {
 pub fn page(hub: &Hub, ctx: &Ctx) -> Page {
     let mut page = Page::default();
     page.markup.push_str("<ui id='hub'>");
-    page.scoped("sidebar", |p| shell::sidebar(p, hub));
-    page.leaf("sidebar-edge");
+    if hub.view != crate::model::View::Create {
+        page.scoped("sidebar", |p| shell::sidebar(p, hub));
+        page.leaf("sidebar-edge");
+    }
     page.panel("main", |p| {
         p.scoped("header", |p| shell::header(p, hub, ctx));
         let scroll = format!("scroll-{:?}", hub.view).to_lowercase();

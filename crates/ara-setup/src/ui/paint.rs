@@ -4,9 +4,10 @@
 //! (a 560 × 240 dialog) times the monitor scale. Colours are the Hub's Ara Dark
 //! theme tokens (`assets/themes/ara-dark.json`).
 use super::{
-    Action, Busy, View,
+    Action, Busy, View, brand,
     canvas::{Canvas, RectF, Rgb, Strokes},
 };
+use crate::flow::Kind;
 use std::sync::OnceLock;
 use windows_sys::Win32::{
     Foundation::{RECT, SIZE},
@@ -311,26 +312,16 @@ const CHECK: Strokes<'static> = Strokes {
     circles: &[((12.0, 12.0), 10.0)],
     width: 2.0,
 };
-/// `assets/brand/ara-mark.svg` (64 units): the A and its diamond.
-const MARK: [&[(f32, f32)]; 2] = [
-    &[
-        (32.0, 4.0),
-        (60.0, 60.0),
-        (44.0, 60.0),
-        (28.0, 28.0),
-        (12.0, 60.0),
-        (4.0, 60.0),
-    ],
-    &[(28.0, 44.0), (34.0, 50.0), (28.0, 56.0), (22.0, 50.0)],
-];
-
 enum Op {
     Fill {
         rect: RectF,
         radius: f32,
         color: Rgb,
     },
-    Mark(RectF),
+    Brand {
+        rect: RectF,
+        kind: Kind,
+    },
     Icon {
         rect: RectF,
         icon: Strokes<'static>,
@@ -358,6 +349,7 @@ struct Painter<'a> {
     dc: HDC,
     fonts: &'a Fonts,
     scale: f32,
+    kind: Kind,
     ops: Vec<Op>,
     hits: Vec<(Action, RectF)>,
 }
@@ -439,11 +431,16 @@ impl Painter<'_> {
             Tone::Error => (colors.destructive_surface, colors.destructive),
             Tone::Success => (colors.background.mix(colors.success, 0.14), colors.success),
         };
-        self.fill((PAD, PAD, TILE, TILE), 10.0, surface);
+        if !matches!(tone, Tone::Brand) {
+            self.fill((PAD, PAD, TILE, TILE), 10.0, surface);
+        }
         let icon = match tone {
             Tone::Brand => {
-                let rect = self.rect(PAD + 8.0, PAD + 8.0, 24.0, 24.0);
-                self.ops.push(Op::Mark(rect));
+                let rect = self.rect(PAD, PAD, TILE, TILE);
+                self.ops.push(Op::Brand {
+                    rect,
+                    kind: self.kind,
+                });
                 None
             }
             Tone::Warning => Some(TRIANGLE),
@@ -586,6 +583,7 @@ pub fn paint(
         dc: surface.dc(),
         fonts: &fonts,
         scale,
+        kind: view.kind().unwrap_or(Kind::Engine),
         ops: Vec::new(),
         hits: Vec::new(),
     };
@@ -596,6 +594,7 @@ pub fn paint(
             subtitle,
             lead,
             destination,
+            ..
         } => {
             p.header(Tone::Brand, title, subtitle, Font::Small, colors.muted);
             p.text(
@@ -743,6 +742,7 @@ pub fn paint(
         h: height as f32,
     };
     let mut texts = Vec::new();
+    let mut brands = Vec::new();
     {
         let mut canvas = Canvas::new(width as usize, height as usize, surface.pixels());
         canvas.clear(colors.background);
@@ -753,15 +753,7 @@ pub fn paint(
                     radius,
                     color,
                 } => canvas.round_rect(rect, radius, color),
-                Op::Mark(rect) => {
-                    for shape in MARK {
-                        let points: Vec<_> = shape
-                            .iter()
-                            .map(|(x, y)| (rect.x + x * rect.w / 64.0, rect.y + y * rect.h / 64.0))
-                            .collect();
-                        canvas.polygon(&points, colors.primary);
-                    }
-                }
+                Op::Brand { rect, kind } => brands.push((rect, kind)),
                 Op::Icon { rect, icon, color } => canvas.strokes(rect, 24.0, icon, color),
                 Op::Sheen { rect, tick } => {
                     // A soft highlight sweeping along the filled bar.
@@ -783,6 +775,11 @@ pub fn paint(
             Frame::System => {}
             Frame::Square => ring(&mut canvas, full, 0.0, colors.border),
             Frame::Preview => ring(&mut canvas, full, CORNER * scale, colors.border),
+        }
+    }
+    for (rect, kind) in brands {
+        if let Some(icon) = brand::Icon::load(kind, rect.w.round() as i32) {
+            icon.draw(surface.dc(), rect);
         }
     }
     // SAFETY: the DC owns the DIB written above; text is drawn after the direct

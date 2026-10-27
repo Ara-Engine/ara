@@ -3,8 +3,8 @@
 use super::{Ctx, Page, columns, shell, tracks};
 use crate::model::{Hub, Intent, Pick, Template, text};
 
-/// Sidebar, padding, settings column and gap.
-const CHROME: f32 = 317. + 380. + 28.;
+/// Page padding, settings column and gap; creation uses the full window.
+const CHROME: f32 = 80. + 380. + 28.;
 
 pub(super) fn body(p: &mut Page, hub: &Hub, ctx: &Ctx) {
     p.panel("create", |p| {
@@ -201,13 +201,7 @@ fn settings(p: &mut Page, hub: &Hub) {
         p.leaf("divider");
         p.panel("row", |p| {
             p.leaf("fill");
-            p.action(
-                "create-cancel",
-                "",
-                "",
-                "Cancel",
-                Some(Intent::Navigate(crate::model::View::Projects)),
-            );
+            p.action("create-cancel", "", "", "Cancel", Some(Intent::Back));
             let label = if form.submitting {
                 "Creating…"
             } else {

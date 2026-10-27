@@ -20,7 +20,7 @@ pub(super) fn body(p: &mut Page, hub: &Hub) {
     for release in &hub.releases.available {
         p.panel("panel-card", |p| {
             p.panel("row", |p| {
-                p.icon("package", "accent icon-lg");
+                p.image("brand-engine", "brand-icon-sm");
                 p.text("engine-version fill", &format!("Ara {}", release.version));
                 p.panel("pill", |p| {
                     p.text(
@@ -153,7 +153,7 @@ pub(super) fn body(p: &mut Page, hub: &Hub) {
             .collect();
         p.panel("panel-card", |p| {
             p.panel("row", |p| {
-                p.panel("engine-icon", |p| p.icon("package", "icon-lg accent"));
+                p.image("brand-engine", "brand-icon-lg");
                 p.panel("col fill", |p| {
                     p.panel("row", |p| {
                         p.text("engine-version", &format!("Ara {}", engine.version));
