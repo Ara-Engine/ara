@@ -61,7 +61,8 @@ impl GeometryPreparation {
             .collect();
         let mut buffers = Buffers::default();
         if !packed.lods.is_empty() {
-            let storage = vk::BufferUsageFlags::STORAGE_BUFFER;
+            // Indexed native draws bind the pool as their index buffer.
+            let storage = vk::BufferUsageFlags::STORAGE_BUFFER | vk::BufferUsageFlags::INDEX_BUFFER;
             buffers.add(
                 STATIC,
                 packed.static_size,

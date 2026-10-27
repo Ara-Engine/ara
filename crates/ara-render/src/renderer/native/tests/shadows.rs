@@ -180,7 +180,8 @@ fn local_shadow_slots_keep_faces_independent_cache_casters_and_record_depth() ->
         .as_ref()
         .unwrap()
         .resources(&mut |resource, before| {
-            if before != Access::ShaderRead {
+            // The geometry pool stays in Geometry (index and shader reads).
+            if before != Access::ShaderRead && before != Access::Geometry {
                 recorder.barriers([Barrier {
                     resource,
                     before,

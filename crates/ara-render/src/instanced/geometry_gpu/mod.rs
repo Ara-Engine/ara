@@ -94,6 +94,20 @@ impl GeometryGpu {
         self.lod_data.get(entry as usize).map(|lod| lod.index_count)
     }
 
+    /// First index (u32 elements into [`Self::index_buffer`]) of a LOD entry;
+    /// its indices are local to the LOD's vertices.
+    pub fn first_index(&self, entry: u32) -> Option<u32> {
+        self.lod_data
+            .get(entry as usize)
+            .and_then(|lod| u32::try_from(lod.index_offset / 4).ok())
+    }
+
+    /// The static pool, which indexed draws bind as their index buffer; absent
+    /// for a sky-only scene. It rests in `Access::Geometry` ([`Self::resources`]).
+    pub fn index_buffer(&self) -> Option<Buffer> {
+        self.static_pool
+    }
+
     /// BLAS for a geometry-table entry; absent on the raster path.
     pub fn blas(&self, entry: u32) -> Option<AccelerationStructure> {
         self.structures.get(entry as usize).copied()
@@ -104,11 +118,12 @@ impl GeometryGpu {
         self.stats
     }
 
-    /// Vertex/index/table resources and their initial access for the consuming graph.
+    /// Vertex/index/table resources and their initial access for the consuming graph;
+    /// the static pool rests in `Access::Geometry` (index and shader reads).
     pub fn resources(&self) -> impl Iterator<Item = (Resource, Access)> + '_ {
         self.static_pool
             .into_iter()
-            .map(|buffer| (Resource::Buffer(buffer), Access::ShaderRead))
+            .map(|buffer| (Resource::Buffer(buffer), Access::Geometry))
             .chain(
                 self.dynamic
                     .into_iter()

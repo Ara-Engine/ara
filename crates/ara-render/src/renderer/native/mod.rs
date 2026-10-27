@@ -19,7 +19,7 @@ pub use prepared::{NativeContent, NativeSeed};
 mod tests;
 mod updates;
 mod view;
-use batches::Groups;
+use batches::{Batch, Groups};
 use culling::{Culling, PageView};
 pub(in crate::renderer) use view::NativeView;
 
@@ -848,6 +848,17 @@ impl Native {
         }
     }
 
+    /// Records the forward draws (pass 5): through the lit PSO (colour, ids and
+    /// motion) unless the frame's debug view reads the G-buffer they blend into.
+    pub(super) fn record_forward(&self, recorder: &mut Recorder, root: RootConstants, lit: bool) {
+        let pipeline = if lit {
+            self.pipelines.forward_lit
+        } else {
+            self.pipelines.forward
+        };
+        self.record_with(recorder, root, 5, pipeline);
+    }
+
     /// Records the G-buffer draws (pass 4) through the PSO for the preset's
     /// `terrain_detail` (`NativePipelines::gbuffer_for`).
     pub(super) fn record_gbuffer(
@@ -858,6 +869,26 @@ impl Native {
     ) {
         let pipeline = self.pipelines.gbuffer_for(terrain_detail);
         self.record_with(recorder, root, 4, pipeline);
+    }
+
+    /// One draw of `batch`: indexed, so shared vertices are shaded once, except
+    /// through the wire PSO, whose edges need each triangle's own three corners.
+    fn draw(&self, batch: &Batch, pipeline: Pipeline) -> Command {
+        if pipeline == self.pipelines.wire {
+            return Command::DrawProcedural {
+                vertices: batch.vertices,
+                instances: batch.count,
+            };
+        }
+        Command::DrawIndexedProcedural {
+            indices: self
+                .pool
+                .index_buffer()
+                .expect("drawn batches have pooled geometry"),
+            first_index: batch.first_index,
+            count: batch.vertices,
+            instances: batch.count,
+        }
     }
 
     fn record_with(
@@ -881,10 +912,7 @@ impl Native {
             constants.words[6] = self.textures.binding().map_or(0, |b| b.buffer_index);
             constants.words[7] = self.visible_index;
             recorder.push(Command::Constants(constants));
-            recorder.push(Command::DrawProcedural {
-                vertices: batch.vertices,
-                instances: batch.count,
-            });
+            recorder.push(self.draw(batch, pipeline));
         }
     }
 
@@ -907,10 +935,7 @@ impl Native {
             constants.words[6] = self.textures.binding().map_or(0, |b| b.buffer_index);
             constants.words[7] = rows;
             recorder.push(Command::Constants(constants));
-            recorder.push(Command::DrawProcedural {
-                vertices: batch.vertices,
-                instances: batch.count,
-            });
+            recorder.push(self.draw(batch, self.pipelines.shadow));
         }
     }
 

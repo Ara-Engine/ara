@@ -44,7 +44,11 @@ fn stages(access: Access) -> MTLStages {
     match access {
         Access::Undefined | Access::HostRead | Access::HostWrite => MTLStages::empty(),
         Access::Vertex | Access::Index => MTLStages::Vertex,
-        Access::Indirect | Access::ShaderRead | Access::Storage | Access::AsRead => SHADER_STAGES,
+        Access::Indirect
+        | Access::ShaderRead
+        | Access::Storage
+        | Access::AsRead
+        | Access::Geometry => SHADER_STAGES,
         // Attachment loads, depth tests and stores all run in the fragment stage.
         Access::Color | Access::Depth => MTLStages::Fragment,
         Access::CopySource | Access::CopyDestination => MTLStages::Blit,
@@ -329,6 +333,38 @@ impl MetalDevice {
                             *vertices as usize,
                             *instances as usize,
                             0,
+                        );
+                }
+            }
+            Command::DrawIndexedProcedural {
+                indices,
+                first_index,
+                count,
+                instances,
+            } => {
+                let buffer = &self.buffers.get(*indices)?.raw;
+                let first = u64::from(*first_index) * 4;
+                let end = first + u64::from(*count) * 4;
+                if *count == 0
+                    || *instances == 0
+                    || end > buffer.size
+                    || !buffer.usage.contains(vk::BufferUsageFlags::INDEX_BUFFER)
+                {
+                    return Err(GpuError::Contract("Invalid indexed procedural draw".into()));
+                }
+                let address = buffer.buffer.gpuAddress() + first;
+                self.bind_render(rec, DrawKind::Procedural)?;
+                // SAFETY: the checked index range lies inside the resident index buffer;
+                // the pipeline has no vertex input.
+                unsafe {
+                    rec.render()?
+                        .drawIndexedPrimitives_indexCount_indexType_indexBuffer_indexBufferLength_instanceCount(
+                            MTLPrimitiveType::Triangle,
+                            *count as usize,
+                            MTLIndexType::UInt32,
+                            address,
+                            (end - first) as usize,
+                            *instances as usize,
                         );
                 }
             }

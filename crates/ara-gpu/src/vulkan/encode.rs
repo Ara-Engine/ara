@@ -265,6 +265,20 @@ impl VulkanDevice {
                     vertices,
                     instances,
                 } => device.cmd_draw(cmd, *vertices, *instances, 0, 0),
+                Command::DrawIndexedProcedural {
+                    indices,
+                    first_index,
+                    count,
+                    instances,
+                } => {
+                    device.cmd_bind_index_buffer(
+                        cmd,
+                        self.buffers.get(*indices)?.raw.handle,
+                        0,
+                        vk::IndexType::UINT32,
+                    );
+                    device.cmd_draw_indexed(cmd, *count, *instances, *first_index, 0, 0);
+                }
                 Command::EndRendering => device.cmd_end_rendering(cmd),
                 Command::UploadImage {
                     source,

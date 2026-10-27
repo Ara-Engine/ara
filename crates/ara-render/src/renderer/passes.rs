@@ -31,7 +31,9 @@ enum Recipe {
     GBuffer,
     Tile,
     Lighting,
-    Forward,
+    /// Blended and transmissive draws; `true` through the native lit PSO, which
+    /// leaves the G-buffer alone (only the debug views read it afterwards).
+    Forward(bool),
     Taa,
     Tonemap,
     /// The camera's native draws again into the wire mask (`ViewMode::wire`).
@@ -486,7 +488,14 @@ impl Renderer {
                         queue: Queue::Graphics,
                     },
                 );
-                graphics.push((id, Access::ShaderRead));
+                // The geometry pool stays in Geometry: indexed draws read it as
+                // their index buffer as well as through shader storage.
+                let read = if access == Access::Geometry {
+                    access
+                } else {
+                    Access::ShaderRead
+                };
+                graphics.push((id, read));
             });
         }
         let mut frame_input = None;
@@ -739,27 +748,32 @@ impl Renderer {
             .chain(look_reads.iter().copied()),
         );
         declare(lighting, Recipe::Lighting);
+        // Lit native frames blend colour, ids and motion only, so the G-buffer's
+        // last use (and its discard) is lighting; the debug views (and the
+        // baseline PSO) also blend into the G-buffer they display.
+        let forward_lit = mode.lit() && self.native.is_some();
+        let forward_gbuffer = (!forward_lit)
+            .then_some([ALBEDO, NORMAL, MATERIAL, EMISSIVE].map(|t| (ids[t], Access::Color)))
+            .into_iter()
+            .flatten();
         let forward = graph.pass(
             "ForwardTransparency",
             Queue::Graphics,
             [
                 (ids[HDR], Access::Color),
-                (ids[ALBEDO], Access::Color),
-                (ids[NORMAL], Access::Color),
-                (ids[MATERIAL], Access::Color),
-                (ids[EMISSIVE], Access::Color),
                 (ids[DEPTH], Access::Depth),
                 (ids[ID], Access::Color),
                 (tile, Access::ShaderRead),
             ]
             .into_iter()
+            .chain(forward_gbuffer)
             .chain(cascade_reads.iter().copied())
             .chain(far_read)
             .chain(local_read)
             .chain(look_reads.iter().copied())
             .chain(self.native.as_ref().map(|_| (ids[MOTION], Access::Color))),
         );
-        declare(forward, Recipe::Forward);
+        declare(forward, Recipe::Forward(forward_lit));
         let mut shaded = shadow_passes;
         shaded.extend([gbuffer, lighting, forward]);
         if self.look.frame_wire {
@@ -1190,41 +1204,27 @@ impl Renderer {
                         recorder.push(Command::Fullscreen);
                         recorder.push(Command::EndRendering);
                     }
-                    Recipe::Forward => {
+                    Recipe::Forward(lit) => {
                         recorder.push(Command::Pipeline(self.pipelines.forward));
+                        // Attachment order matches the PSOs' targets: colour, id,
+                        // then the G-buffer (unless lit), then motion (native).
+                        let gbuffer: &[usize] = if lit {
+                            &[]
+                        } else {
+                            &[ALBEDO, NORMAL, MATERIAL, EMISSIVE]
+                        };
+                        let native_motion = self.native.as_ref().map(|_| MOTION);
                         recorder.push(Command::BeginRendering {
-                            colors: vec![
-                                Attachment {
-                                    image: self.targets.images[HDR],
+                            colors: [HDR, ID]
+                                .iter()
+                                .chain(gbuffer)
+                                .copied()
+                                .chain(native_motion)
+                                .map(|target| Attachment {
+                                    image: self.targets.images[target],
                                     clear: None,
-                                },
-                                Attachment {
-                                    image: self.targets.images[ID],
-                                    clear: None,
-                                },
-                                Attachment {
-                                    image: self.targets.images[ALBEDO],
-                                    clear: None,
-                                },
-                                Attachment {
-                                    image: self.targets.images[NORMAL],
-                                    clear: None,
-                                },
-                                Attachment {
-                                    image: self.targets.images[MATERIAL],
-                                    clear: None,
-                                },
-                                Attachment {
-                                    image: self.targets.images[EMISSIVE],
-                                    clear: None,
-                                },
-                            ]
-                            .into_iter()
-                            .chain(self.native.as_ref().map(|_| Attachment {
-                                image: self.targets.images[MOTION],
-                                clear: None,
-                            }))
-                            .collect(),
+                                })
+                                .collect(),
                             depth: Some(Attachment {
                                 image: self.targets.images[DEPTH],
                                 clear: None,
@@ -1232,7 +1232,7 @@ impl Renderer {
                             size: self.render,
                         });
                         if let Some(native) = &self.native {
-                            native.record(&mut recorder, footprint, 5);
+                            native.record_forward(&mut recorder, footprint, lit);
                         }
                         let mut transparent = self
                             .content
