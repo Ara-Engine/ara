@@ -18,6 +18,8 @@ pub struct Workspace {
     docs: BTreeMap<AssetId, (String, Document)>,
     index: AssetIndex,
     files: BTreeMap<String, crate::file_state::FileState>,
+    file_keys: BTreeMap<String, String>,
+    prepared: Option<std::sync::Arc<crate::file_state::PreparedInventory>>,
     /// Bumped whenever a document is loaded, replaced or unloaded (see
     /// [`Workspace::generation`]).
     generation: u64,
@@ -46,7 +48,7 @@ impl Workspace {
             for token in base.iter().chain(state.iter()) {
                 token.validate()?;
             }
-            let prev = self.files.get(&path).cloned();
+            let prev = self.file_state(&path).cloned();
             if prev != base {
                 return Err(Diagnostic::error(codes::STALE_BASE, format!("file `{path}` changed since its base snapshot; read it again before applying")).file(&path));
             }
@@ -159,13 +161,20 @@ impl Workspace {
             docs: BTreeMap::new(),
             index,
             files: BTreeMap::new(),
+            file_keys: BTreeMap::new(),
+            prepared: None,
             generation: 0,
         }
     }
 
     /// Observed filesystem state supplied by the host, never a disk write.
     pub fn observe_file(&mut self, path: String, state: Option<crate::file_state::FileState>) {
+        let key = crate::file_state::path_key(&path);
+        if let Some(existing) = self.file_keys.remove(&key) {
+            self.files.remove(&existing);
+        }
         if let Some(state) = state {
+            self.file_keys.insert(key, path.clone());
             self.files.insert(path, state);
         } else {
             self.files.remove(&path);
@@ -174,12 +183,44 @@ impl Workspace {
 
     /// Last host-observed or staged state of an entry.
     pub fn file_state(&self, path: &str) -> Option<&crate::file_state::FileState> {
-        self.files.get(path)
+        self.file_keys
+            .get(&crate::file_state::path_key(path))
+            .and_then(|p| self.files.get(p))
+    }
+
+    /// Publish an authority-checked immutable preparation handle. No I/O occurs here.
+    pub fn prepare_files(
+        &mut self,
+        inventory: crate::file_state::PreparedInventory,
+    ) -> Result<(), Diagnostic> {
+        inventory.validate()?;
+        for (path, state) in &inventory.entries {
+            self.observe_file(path.clone(), state.clone());
+        }
+        self.prepared = Some(std::sync::Arc::new(inventory));
+        Ok(())
+    }
+
+    /// Prepared facts and opaque metadata for the current command batch.
+    pub fn prepared_files(&self) -> Option<&crate::file_state::PreparedInventory> {
+        self.prepared.as_deref()
+    }
+
+    /// Drop batch-local preparation metadata, retaining observed file states for history.
+    pub fn clear_prepared_files(&mut self) {
+        self.prepared = None;
     }
 
     /// Prepared entries, including empty directories, in canonical path order.
     pub fn file_entries(&self) -> impl Iterator<Item = (&str, &crate::file_state::FileState)> {
-        self.files.iter().map(|(p, s)| (p.as_str(), s))
+        self.files
+            .iter()
+            .filter(|(path, _)| {
+                self.prepared
+                    .as_ref()
+                    .is_none_or(|prepared| prepared.contains(path))
+            })
+            .map(|(p, s)| (p.as_str(), s))
     }
 
     /// Adds or replaces a document at `path` and indexes it.

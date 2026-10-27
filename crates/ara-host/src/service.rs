@@ -158,6 +158,37 @@ pub struct Cx<'a> {
 }
 
 impl Cx<'_> {
+    /// Commit a typed batch with a complete inventory revalidated by its owner on a
+    /// preparation worker. Metadata is visible only during this batch. This avoids
+    /// re-entering source preparation when a source/asset owner already prepared it.
+    pub fn apply_prepared(
+        &mut self,
+        params: ApplyParams,
+        inventory: ara_doc::file_state::PreparedInventory,
+        prepared_at: u64,
+    ) -> Result<Value, Vec<Diagnostic>> {
+        if self.st.store.revision() != prepared_at {
+            return Err(vec![Diagnostic::error(
+                codes::STALE_BASE,
+                "authority changed during file preparation; revalidate and retry",
+            )]);
+        }
+        self.st
+            .store
+            .prepare_files(inventory)
+            .map_err(|d| vec![d])?;
+        let previous_calling = std::mem::replace(&mut self.st.calling, self.session.clone());
+        let previous_origin = self.st.store.origin().map(str::to_owned);
+        self.st.store.set_origin(self.session.clone());
+        let previous = std::mem::replace(&mut self.st.file_jobs.applying, true);
+        let result = self.apply(params);
+        self.st.drain();
+        self.st.file_jobs.applying = previous;
+        self.st.store.clear_prepared_files();
+        self.st.calling = previous_calling;
+        self.st.store.set_origin(previous_origin);
+        result
+    }
     /// Publish a worker's prepared file inventory before applying typed source/asset
     /// commands. Tokens contain no mutable bytes and this never writes to disk.
     pub fn observe_files(

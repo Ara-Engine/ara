@@ -3,7 +3,7 @@
 use ara_diag::{Diagnostic, codes};
 use ara_doc::{
     Op,
-    file_state::{FileKind, FileState, check_path},
+    file_state::{FileKind, FileState, PreparedInventory, check_path, path_key},
 };
 use sha2::{Digest, Sha256};
 use std::{
@@ -27,6 +27,98 @@ pub struct FileHistory {
 }
 
 impl FileHistory {
+    /// Snapshot a complete subtree and its directory membership on a preparation worker.
+    /// Owners can add destination absences and opaque metadata before revalidation.
+    pub fn prepare_tree(&self, relative: &str) -> Result<PreparedInventory, Diagnostic> {
+        let mut prepared = PreparedInventory::default();
+        for (path, state) in self.snapshot_tree(relative)? {
+            if state.kind == FileKind::Directory {
+                prepared
+                    .directories
+                    .insert(path.clone(), self.directory_entries(&path)?);
+            }
+            prepared.entries.insert(path, Some(state));
+        }
+        if !prepared.entries.contains_key(relative) {
+            prepared.entries.insert(relative.to_owned(), None);
+        }
+        for (directory, children) in &prepared.directories {
+            let captured = prepared
+                .entries
+                .keys()
+                .filter(|p| {
+                    p.rsplit_once('/')
+                        .is_some_and(|(parent, _)| parent == directory)
+                })
+                .cloned()
+                .collect::<Vec<_>>();
+            if &captured != children {
+                return Err(Diagnostic::error(
+                    codes::STALE_BASE,
+                    "directory changed while preparing its complete inventory",
+                )
+                .file(directory));
+            }
+        }
+        self.revalidate(&prepared)?;
+        Ok(prepared)
+    }
+
+    /// Complete direct-child storage paths, excluding the protected engine/Git trees.
+    pub fn directory_entries(&self, relative: &str) -> Result<Vec<String>, Diagnostic> {
+        let directory = if relative.is_empty() {
+            self.root.clone()
+        } else {
+            self.path(relative)?
+        };
+        let mut entries = Vec::new();
+        for entry in fs::read_dir(directory).map_err(io)? {
+            let entry = entry.map_err(io)?;
+            let name = entry
+                .file_name()
+                .into_string()
+                .map_err(|_| io("file names must be UTF-8"))?;
+            if name.eq_ignore_ascii_case(".ara") || name.eq_ignore_ascii_case(".git") {
+                continue;
+            }
+            entries.push(if relative.is_empty() {
+                name
+            } else {
+                format!("{relative}/{name}")
+            });
+        }
+        entries.sort();
+        Ok(entries)
+    }
+
+    /// Revalidate bytes, existence, empty folders and complete directory membership
+    /// immediately before the authority commits. Runs only on a preparation worker.
+    pub fn revalidate(&self, prepared: &PreparedInventory) -> Result<(), Diagnostic> {
+        self.revalidate_with(prepared, |_| Ok(()))
+    }
+
+    /// The owner can additionally reject changed sidecar/policy/worker identities
+    /// through its opaque metadata; this adapter knows no importer-specific shape.
+    pub fn revalidate_with(
+        &self,
+        prepared: &PreparedInventory,
+        metadata: impl FnOnce(&serde_json::Value) -> Result<(), Diagnostic>,
+    ) -> Result<(), Diagnostic> {
+        prepared.validate()?;
+        for (path, state) in &prepared.entries {
+            self.preflight(path, state.as_ref())?;
+        }
+        for (path, entries) in &prepared.directories {
+            if self.directory_entries(path)? != *entries {
+                return Err(Diagnostic::error(
+                    codes::STALE_BASE,
+                    "directory inventory changed since preparation; refresh before committing",
+                )
+                .file(path));
+            }
+        }
+        metadata(&prepared.metadata)
+    }
     /// Open the project's `.ara/file-history` store. Construction performs no I/O.
     pub fn new(root: impl Into<PathBuf>) -> Self {
         Self { root: root.into() }
@@ -226,7 +318,8 @@ impl FileHistory {
                 path, state, prev, ..
             } = op
             {
-                let current = match staged.get(path) {
+                let key = path_key(path);
+                let current = match staged.get(&key) {
                     Some(s) => s,
                     None => {
                         self.preflight(path, prev.as_ref())?;
@@ -246,7 +339,7 @@ impl FileHistory {
                         return Err(io(format!("missing file snapshot {}", s.hash)));
                     }
                 }
-                staged.insert(path.clone(), state.clone());
+                staged.insert(key, state.clone());
             }
         }
         Ok(())

@@ -95,6 +95,15 @@ pub struct ReadCtx<'a> {
 }
 
 impl<'a> ReadCtx<'a> {
+    /// Authority-checked worker facts for this batch, including opaque owner metadata.
+    pub fn prepared_files(&self) -> Option<&ara_doc::file_state::PreparedInventory> {
+        self.store.workspace().prepared_files()
+    }
+
+    /// Subsystem-owned preparation metadata; commands interpret only their owner's shape.
+    pub fn prepared_metadata(&self) -> Option<&Value> {
+        self.prepared_files().map(|p| &p.metadata)
+    }
     /// Host-prepared filesystem entries in path order; no filesystem access occurs here.
     pub fn file_entries(&self) -> impl Iterator<Item = (&str, &ara_doc::file_state::FileState)> {
         self.store.workspace().file_entries()
@@ -348,6 +357,14 @@ pub struct EditCtx<'a, 's> {
 }
 
 impl EditCtx<'_, '_> {
+    /// Immutable metadata supplied by the preparing subsystem; no I/O is available here.
+    pub fn prepared_metadata(&self) -> Option<&Value> {
+        self.staged
+            .store()
+            .workspace()
+            .prepared_files()
+            .map(|p| &p.metadata)
+    }
     /// Prepared filesystem entries, including directories, in path order.
     pub fn file_entries(&self) -> impl Iterator<Item = (&str, &ara_doc::file_state::FileState)> {
         self.staged.store().workspace().file_entries()
@@ -365,6 +382,18 @@ impl EditCtx<'_, '_> {
         path: &str,
         state: Option<ara_doc::file_state::FileState>,
     ) -> Result<(), Diagnostic> {
+        if self
+            .staged
+            .store()
+            .workspace()
+            .prepared_files()
+            .is_none_or(|p| !p.contains(path))
+        {
+            return Err(Diagnostic::error(
+                codes::INVALID_PARAMS,
+                format!("file `{path}` is outside the checked prepared inventory"),
+            ));
+        }
         let base = self.file_state(path).cloned();
         self.staged.apply(Edit::File {
             doc: self.doc.clone(),

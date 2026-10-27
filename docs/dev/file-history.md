@@ -39,6 +39,22 @@ before queueing file materialization on the same ordered file thread. Native-doc
 creation validation recognizes planned source-media writes in that transaction.
 File undo/redo preparation uses the same snapshots and runs as a standard job.
 
+`PreparedInventory` carries initial `entries` (including explicit absence), complete
+directory-child listings, and an opaque `metadata` JSON value. `ReadCtx::prepared_files`
+and `prepared_metadata` expose this immutable handle; `EditCtx::prepared_metadata`
+exposes the same owner slot. A command cannot `set_file` outside the checked inventory.
+Windows aliases share state/conflict keys, while ops retain the requested path casing.
+
+`FileHistory::prepare_tree` builds a complete subtree on a worker. Before authority
+commit, call `revalidate` for byte/existence/directory checks, or `revalidate_with`
+to additionally check opaque policy/worker identities. The adapter never parses
+importers or owner metadata. Finish through `Cx::apply_prepared(params, inventory,
+prepared_at_revision)`: it checks the captured authority revision, publishes the
+handle only for that batch, preserves the initiating session and returns ordinary
+command outputs/transaction/ops. A changed authority or inventory returns ARA1501;
+refresh/revalidate before retrying. Source replacement uses distinct preparation
+and pre-commit revalidation worker phases.
+
 On restart, the host recovers file transitions before rebuilding document history.
 Each path's last matching journal state identifies completed writes; remaining
 writes restore from immutable snapshots. Bytes matching no retained state are

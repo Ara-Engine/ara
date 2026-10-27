@@ -1,7 +1,10 @@
 //! File preparation jobs and history recovery; no hashing or copying on host ticks.
 use crate::{Cx, Service, file_state::FileHistory, host::State, journal::Entry};
 use ara_diag::{Diagnostic, codes};
-use ara_doc::{Op, file_state::FileState};
+use ara_doc::{
+    Op,
+    file_state::{FileState, PreparedInventory},
+};
 use ara_ops::TxnId;
 use ara_proto::ConnId;
 use serde_json::{Value, json};
@@ -19,13 +22,14 @@ struct Pending {
     method: String,
     params: Value,
     revision: u64,
-    ready: Receiver<Result<Observed, Vec<Diagnostic>>>,
+    ready: Receiver<Result<PreparedInventory, Vec<Diagnostic>>>,
+    revalidated: bool,
 }
 
 #[derive(Default)]
 pub(crate) struct FileJobs {
     pending: Vec<Pending>,
-    applying: bool,
+    pub(crate) applying: bool,
 }
 
 impl State {
@@ -84,10 +88,12 @@ impl State {
             .spawn(move || {
                 let store = FileHistory::new(root);
                 let result = (|| {
-                    let mut observed = BTreeMap::new();
+                    let mut inventory = PreparedInventory::default();
+                    let mut staged = BTreeMap::new();
                     for source in sources {
                         let state = store.snapshot(&source.path).map_err(|d| vec![d])?;
-                        if state.as_ref().is_none_or(|s| s.hash != source.base_hash) {
+                        let current = staged.get(&source.path).unwrap_or(&state);
+                        if current.as_ref().is_none_or(|s| s.hash != source.base_hash) {
                             return Err(vec![
                                 Diagnostic::error(
                                     codes::STALE_BASE,
@@ -96,16 +102,33 @@ impl State {
                                 .file(&source.path),
                             ]);
                         }
-                        store.put(source.text.as_bytes()).map_err(|d| vec![d])?;
-                        observed.entry(source.path).or_insert(state);
+                        let next = store.put(source.text.as_bytes()).map_err(|d| vec![d])?;
+                        staged.insert(source.path.clone(), Some(next));
+                        inventory.entries.entry(source.path).or_insert(state);
                     }
                     store.preflight_ops(&inverse).map_err(|d| vec![d])?;
                     for op in inverse {
                         if let Op::File { path, prev, .. } = op {
-                            observed.entry(path).or_insert(prev);
+                            inventory.entries.entry(path).or_insert(prev);
                         }
                     }
-                    Ok(observed.into_iter().collect())
+                    let parents: Vec<_> = inventory
+                        .entries
+                        .keys()
+                        .map(|path| {
+                            path.rsplit_once('/')
+                                .map_or("", |(parent, _)| parent)
+                                .to_owned()
+                        })
+                        .collect();
+                    for parent in parents {
+                        inventory.directories.insert(
+                            parent.clone(),
+                            store.directory_entries(&parent).map_err(|d| vec![d])?,
+                        );
+                    }
+                    store.revalidate(&inventory).map_err(|d| vec![d])?;
+                    Ok(inventory)
                 })();
                 let _ = send.send(result);
             })
@@ -118,13 +141,14 @@ impl State {
             params: params.clone(),
             revision: self.store.revision(),
             ready,
+            revalidated: false,
         });
         Ok(Some(json!({"ok":true,"job":job,"preparing":true})))
     }
 
     pub(crate) fn poll_file_jobs(&mut self) {
         let mut waiting = Vec::new();
-        for pending in std::mem::take(&mut self.file_jobs.pending) {
+        for mut pending in std::mem::take(&mut self.file_jobs.pending) {
             let prepared = match pending.ready.try_recv() {
                 Ok(result) => result,
                 Err(mpsc::TryRecvError::Empty) => {
@@ -143,6 +167,36 @@ impl State {
             {
                 continue;
             }
+            // A distinct validation phase runs after preparation, immediately before
+            // the authority turn that commits. Owners can use the same hook for
+            // opaque worker/policy metadata without importer knowledge in the host.
+            if !pending.revalidated
+                && let Ok(inventory) = prepared.as_ref()
+            {
+                let inventory = inventory.clone();
+                let history = FileHistory::new(self.root.clone());
+                let (send, ready) = mpsc::channel();
+                match std::thread::Builder::new()
+                    .name("ara-file-revalidate".into())
+                    .spawn(move || {
+                        let checked = history
+                            .revalidate(&inventory)
+                            .map(|()| inventory)
+                            .map_err(|d| vec![d]);
+                        let _ = send.send(checked);
+                    }) {
+                    Ok(_) => {
+                        pending.ready = ready;
+                        pending.revalidated = true;
+                        waiting.push(pending);
+                    }
+                    Err(error) => self.finish_job(
+                        &pending.job,
+                        Err(vec![Diagnostic::error(codes::IO, error.to_string())]),
+                    ),
+                }
+                continue;
+            }
             let result = prepared.and_then(|states| {
                 if self.store.revision() != pending.revision {
                     return Err(vec![Diagnostic::error(
@@ -156,9 +210,7 @@ impl State {
                         "file command session ended during preparation",
                     )]);
                 }
-                for (path, state) in states {
-                    self.store.observe_file(path, state);
-                }
+                self.store.prepare_files(states).map_err(|d| vec![d])?;
                 self.file_jobs.applying = true;
                 self.calling = Some(pending.session.clone());
                 self.store.set_origin(Some(pending.session.clone()));
@@ -172,6 +224,7 @@ impl State {
                     pending.params,
                 );
                 self.drain();
+                self.store.clear_prepared_files();
                 self.file_jobs.applying = false;
                 self.calling = None;
                 self.store.set_origin(None);

@@ -7,6 +7,42 @@ use ara_host::file_state::FileHistory;
 use std::{fs, path::Path};
 
 #[test]
+fn prepared_inventory_revalidates_directory_membership_and_opaque_owner_metadata() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../target/file-history-tests")
+        .join(format!("prepared-{}", std::process::id()));
+    let _ = fs::remove_dir_all(&root);
+    fs::create_dir_all(root.join("media/empty")).expect("folder");
+    fs::write(root.join("media/model.bin"), b"base").expect("file");
+    let history = FileHistory::new(&root);
+    let mut prepared = history
+        .prepare_tree("media")
+        .expect("complete prepared inventory");
+    prepared.metadata = serde_json::json!({"worker":"v7", "policyHash":"policy-before"});
+    history
+        .revalidate_with(&prepared, |metadata| {
+            assert_eq!(metadata["worker"], "v7");
+            Ok(())
+        })
+        .expect("owner metadata passes through unchanged");
+    fs::write(root.join("media/extra.bin"), b"unexpected").expect("concurrent addition");
+    let error = history
+        .revalidate(&prepared)
+        .expect_err("a newly added entry invalidates a complete inventory");
+    assert_eq!(error.code, ara_diag::codes::STALE_BASE);
+    fs::remove_file(root.join("media/extra.bin")).expect("remove fixture extra");
+    let error = history
+        .revalidate_with(&prepared, |_| {
+            Err(ara_diag::Diagnostic::error(
+                ara_diag::codes::STALE_BASE,
+                "worker/policy identity changed",
+            ))
+        })
+        .expect_err("the asset owner can veto changed worker metadata");
+    assert!(error.message.contains("worker/policy"));
+}
+
+#[test]
 fn snapshots_keep_binary_bytes_empty_folders_and_preflight_all_paths_before_restore() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../target/file-history-tests")

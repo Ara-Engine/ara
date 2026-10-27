@@ -2,6 +2,78 @@
 use ara_diag::{Diagnostic, codes};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
+use std::collections::BTreeMap;
+
+/// Worker-prepared facts for a file-bearing command batch. The authority revalidates
+/// these facts before commit. The opaque metadata belongs to the preparing subsystem.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PreparedInventory {
+    /// Initial file/directory states and explicitly observed destination absence.
+    pub entries: BTreeMap<String, Option<FileState>>,
+    /// Complete direct-child storage paths of inspected directories, sorted ordinally.
+    /// The empty key denotes the project root; protected engine/Git entries are excluded.
+    pub directories: BTreeMap<String, Vec<String>>,
+    /// Owner-defined immutable worker/policy/URI/reference mapping metadata.
+    pub metadata: serde_json::Value,
+}
+
+impl PreparedInventory {
+    /// Validate the pure shape before publishing an inventory to commands.
+    pub fn validate(&self) -> Result<(), Diagnostic> {
+        for (path, state) in &self.entries {
+            check_path(path)?;
+            if let Some(state) = state {
+                state.validate()?;
+            }
+        }
+        for (directory, children) in &self.directories {
+            if !directory.is_empty() {
+                check_path(directory)?;
+            }
+            for child in children {
+                check_path(child)?;
+                if child.rsplit_once('/').map_or("", |(p, _)| p) != directory {
+                    return Err(Diagnostic::error(
+                        codes::INVALID_PARAMS,
+                        "directory inventory must contain direct children only",
+                    ));
+                }
+            }
+            if children.windows(2).any(|pair| pair[0] >= pair[1]) {
+                return Err(Diagnostic::error(
+                    codes::INVALID_PARAMS,
+                    "directory inventory must be sorted and unique",
+                ));
+            }
+        }
+        Ok(())
+    }
+
+    /// Whether an initial state (including absence) was prepared for this path.
+    pub fn contains(&self, path: &str) -> bool {
+        self.entries.contains_key(path)
+            || (cfg!(windows) && self.entries.keys().any(|p| same_path(p, path)))
+    }
+}
+
+/// Storage-path equality used by file state transitions on this platform.
+pub fn same_path(a: &str, b: &str) -> bool {
+    if cfg!(windows) {
+        a.eq_ignore_ascii_case(b)
+    } else {
+        a == b
+    }
+}
+
+/// Stable conflict/preflight key; op paths retain their original casing.
+pub fn path_key(path: &str) -> String {
+    if cfg!(windows) {
+        path.to_ascii_lowercase()
+    } else {
+        path.to_owned()
+    }
+}
 
 /// The kind of a filesystem entry; directories retain empty folders and path casing.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -86,7 +158,7 @@ pub fn check_path(path: &str) -> Result<(), Diagnostic> {
 
 /// Stable pseudo-record key keeps file touches separate in conflict checks and attribution.
 pub fn record_id(path: &str) -> crate::RecordId {
-    let hash = FileState::bytes(path.as_bytes()).hash;
+    let hash = FileState::bytes(path_key(path).as_bytes()).hash;
     crate::RecordId::parse(&format!("f_{}", &hash[..16]))
         .expect("hexadecimal file key is a valid record ID")
 }

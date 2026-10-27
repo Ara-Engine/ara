@@ -113,6 +113,19 @@ impl Store {
         self.ws.observe_file(path, state);
     }
 
+    /// Publish a worker's validated, complete preparation handle for typed commands.
+    pub fn prepare_files(
+        &mut self,
+        inventory: ara_doc::file_state::PreparedInventory,
+    ) -> Result<(), Diagnostic> {
+        self.ws.prepare_files(inventory)
+    }
+
+    /// Release command-local preparation metadata after the owner finishes its batch.
+    pub fn clear_prepared_files(&mut self) {
+        self.ws.clear_prepared_files();
+    }
+
     /// Loads a document that appeared on disk (or replaces one by ID). This is not an
     /// edit: no op is recorded. Record changes always go through transactions.
     pub fn load_doc(&mut self, path: impl Into<String>, doc: Document) {
