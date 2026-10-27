@@ -1,20 +1,20 @@
 {
   "binding_layout_hash": "f71261afa0d52758f34ca15c916d2da422ee92b118ede6e189c970911a274f1e",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "ca57ba53df399f91b96ba0052fa0634792b610c184e9b38422c8fc2e1f97adc4",
+  "key": "744d560c1bdc566b009b8b9205913e38c659c172282a46d90129582c6ccf45a9",
   "stages": [
     {
-      "dxil": "12ffe74adc5ba2bb9b959a45be900de3582987999e4ca88630ca813b40dcdb2d/giRelightVsmMain.dxil",
+      "dxil": "03bc2615b56ddcd5be698e2db28b75b60c8be3b586e45062a8f426a871748654/giRelightVsmMain.dxil",
       "dxil_hash": "4b1e6bf2c9fbedc86b66ce30561c51925cb5b82a6c9360055651d881da664e17",
       "metal": {
         "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
-        "metallib": "12ffe74adc5ba2bb9b959a45be900de3582987999e4ca88630ca813b40dcdb2d/giRelightVsmMain.metallib",
+        "metallib": "03bc2615b56ddcd5be698e2db28b75b60c8be3b586e45062a8f426a871748654/giRelightVsmMain.metallib",
         "metallib_hash": "b741c210d0228d23a0f758d749df695787f4a7a11c0772dd7b4a87619fbe6c14",
-        "reflection": "12ffe74adc5ba2bb9b959a45be900de3582987999e4ca88630ca813b40dcdb2d/giRelightVsmMain.metal.json",
+        "reflection": "03bc2615b56ddcd5be698e2db28b75b60c8be3b586e45062a8f426a871748654/giRelightVsmMain.metal.json",
         "root_signature_hash": "1cc11e518b14c2b24e05fc30812bfd2b87e0a9c313ea79a4620a443a723525ef"
       },
       "source_entry": "giRelightVsmMain",
-      "spirv": "12ffe74adc5ba2bb9b959a45be900de3582987999e4ca88630ca813b40dcdb2d/giRelightVsmMain.spv",
+      "spirv": "03bc2615b56ddcd5be698e2db28b75b60c8be3b586e45062a8f426a871748654/giRelightVsmMain.spv",
       "spirv_entry": "main",
       "spirv_hash": "bda1257caf0e44ff0ae67b251530768bb92e4309d0069e1e10f443842d43641a",
       "stage": "compute"
