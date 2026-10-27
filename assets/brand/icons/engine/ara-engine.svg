@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+	<title>Ara</title>
+	<defs><linearGradient id="tile" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1d1d1d"/><stop offset="1" stop-color="#050505"/></linearGradient></defs>
+	<rect width="64" height="64" rx="14" fill="url(#tile)"/>
+	<rect x="0.5" y="0.5" width="63" height="63" rx="13.5" fill="none" stroke="#fff" stroke-opacity="0.1"/>
+	<defs><radialGradient id="glow"><stop offset="0" stop-color="#fff" stop-opacity="0.55"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient></defs>
+	<g transform="translate(7.2 7.4) scale(0.775)">
+		<mask id="window"><rect x="-8" y="-8" width="80" height="80" fill="#fff"/><polygon points="27 26 34 35 27 44 20 35" fill="#000"/></mask>
+		<g mask="url(#window)"><polygon points="30.58 3.37 5.01 28.02 26.01 33.5" fill="#ffffff"/><polygon points="33.06 3.02 28.44 33.52 58.94 27.97" fill="#e0e0e0"/><polygon points="5.35 30.59 30.44 60.16 25.96 35.97" fill="#a3a3a3"/><polygon points="28.4 35.97 33 60.82 58.78 30.44" fill="#7a7a7a"/></g>
+		<circle cx="27" cy="35" r="11" fill="url(#glow)"/>
+		<polygon points="27 30.2 30.6 35 27 39.8 23.4 35" fill="#fff"/>
+	</g>
+</svg>

@@ -10,6 +10,9 @@ Lucide icons, DWM-styled native frame (D23), high-DPI.
 Everything it does goes through the user Hub service's JSON-RPC API; the wire
 contract is `crates/ara-hub-service/AGENTS.md`.
 
+Icons: `build.rs` embeds `assets/brand/icons/hub/ara-hub.rc` into both Hub and
+`ara-hub-updater`; the native Hub window explicitly sets the Hub 64 px PNG.
+
 ## Layout
 
 - `model/`: `Hub`, the whole UI state. `intent(Intent)` for people,

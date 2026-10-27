@@ -11,8 +11,8 @@ Public boundaries:
   per element (`shell/compound.rs`, `path#pointer`). `shell`: retained panel tree.
 - `gpu`: 64-byte instance ABI, raster/MSDF atlases, ordered draws and clip masks.
 - `transport`: authenticated localhost EP and MCP; no project state on IO threads.
-- `build.rs`: embeds `assets/brand/ara.ico` as the Windows exe icon (embed-resource;
-  `rc.exe` ships with the Windows SDK MSVC already needs). The window icon comes from ara-platform.
+- `build.rs`: embeds `assets/brand/icons/engine/ara-engine.rc` (engine ICO).
+  Main, loading and floating windows explicitly set its 64 px PNG via ara-platform.
 
 Every content change uses cmd.apply, including gizmo commits and diagnostic fixes.
 Gizmo and typed-draft previews are transient renderer patches, never document writes.

@@ -218,6 +218,10 @@ impl Windowed {
     ) -> Result<(Self, Vec<std::ffi::CString>, [u32; 2])> {
         let title = format!("Ara | {name}");
         let window = Window::game(&title, size, mode, hidden)?;
+        // Native icons are cosmetic; Wayland may not support them.
+        let _ = window.set_icon_png(include_bytes!(
+            "../../../../assets/brand/icons/game/ara-game-64.png"
+        ));
         let size = window.size()?;
         let extensions = window.extensions()?;
         Ok((

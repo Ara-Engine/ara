@@ -42,4 +42,7 @@ objcopy. The current CLI is ara-export; the CLI owner wires `ara crash symbolize
 to ara_crash::symbols::symbolize and registers ara_crash::why::CrashExplainer.
 Managed capture is injected at compile time via a project-local MSBuild import,
 without modifying the game project or any host ABI. No upload runs automatically.
+Icon defaults: shipped Windows players retain their embedded game ICO; AppImage
+`ara-game.svg` and `.DirIcon` use `assets/brand/icons/game/ara-game.svg`. There is
+no export-preset icon path yet; runtime projects can use `Window::set_icon`.
 Delivery formats are generic. No store SDKs, service settings or upload layouts.

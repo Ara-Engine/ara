@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+	<title>Ara game</title>
+	<defs><linearGradient id="tile" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1a1a1a"/><stop offset="1" stop-color="#050505"/></linearGradient></defs>
+	<rect width="64" height="64" rx="14" fill="url(#tile)"/>
+	<rect x="0.5" y="0.5" width="63" height="63" rx="13.5" fill="none" stroke="#fff" stroke-opacity="0.1"/>
+	<defs><radialGradient id="glow" cx="0.42" cy="0.45"><stop offset="0" stop-color="#fff" stop-opacity="0.16"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient></defs>
+	<rect x="2" y="2" width="60" height="60" rx="12" fill="url(#glow)"/>
+	<g transform="translate(8 8.2) scale(0.75)" stroke="#fff" stroke-linejoin="round">
+		<mask id="window"><rect x="-8" y="-8" width="80" height="80" fill="#fff"/><polygon points="27 26 34 35 27 44 20 35" fill="#000"/></mask>
+		<g mask="url(#window)"><polygon points="30.58 3.37 5.01 28.02 26.01 33.5" fill="#fff" fill-opacity="0.3" stroke-opacity="0.85" stroke-width="1.3"/><polygon points="33.06 3.02 28.44 33.52 58.94 27.97" fill="#fff" fill-opacity="0.2" stroke-opacity="0.85" stroke-width="1.3"/><polygon points="5.35 30.59 30.44 60.16 25.96 35.97" fill="#fff" fill-opacity="0.11" stroke-opacity="0.85" stroke-width="1.3"/><polygon points="28.4 35.97 33 60.82 58.78 30.44" fill="#fff" fill-opacity="0.06" stroke-opacity="0.85" stroke-width="1.3"/></g>
+		<polygon points="27 26 34 35 27 44 20 35" fill="none" stroke-opacity="0.9" stroke-width="1.2"/>
+	</g>
+</svg>
