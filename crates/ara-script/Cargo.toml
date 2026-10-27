@@ -13,6 +13,8 @@ profiling = ["dep:ara-profile", "dep:tracing"]
 ara-profile = { path = "../ara-profile", optional = true, features = ["instrumentation"] }
 tracing = { workspace = true, optional = true }
 ara-components.workspace = true
+ara-runtime = { path = "../ara-runtime" }
+ara-sim = { path = "../ara-sim" }
 ara-diag.workspace = true
 ara-schema.workspace = true
 bevy_ecs = { workspace = true, features = ["std", "multi_threaded", "async_executor"] }
@@ -35,6 +37,7 @@ windows-sys = { workspace = true, features = [
 ] }
 
 [dev-dependencies]
+ara-cmd.workspace = true
 insta = { workspace = true }
 
 [lints]

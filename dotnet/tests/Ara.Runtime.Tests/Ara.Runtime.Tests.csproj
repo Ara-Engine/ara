@@ -9,6 +9,8 @@
     <PackageReference Include="xunit" />
     <PackageReference Include="xunit.runner.visualstudio" />
     <ProjectReference Include="../../src/Ara.Runtime/Ara.Runtime.csproj" />
+    <ProjectReference Include="../../examples/Ara.Examples/Ara.Examples.csproj" />
+    <ProjectReference Include="../../examples/Ara.CommandExamples/Ara.CommandExamples.csproj" />
   </ItemGroup>
   <ItemGroup>
     <Using Include="Xunit" />

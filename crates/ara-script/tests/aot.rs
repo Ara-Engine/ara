@@ -32,7 +32,7 @@ fn native_aot_sample_runs_against_the_host() {
 
     // Gravity + Movement (systems), Door (behaviour).
     let body = world.spawn(EcsTransform::default()).id();
-    host.insert_component(&mut world, body, "Velocity", &json!({}))
+    host.insert_component(&mut world, body, "SampleVelocity", &json!({}))
         .expect("velocity");
     host.insert_component(&mut world, body, "Mass", &json!({ "value": 1 }))
         .expect("mass");
@@ -57,7 +57,7 @@ fn native_aot_sample_runs_against_the_host() {
         );
     }
     let v = host
-        .read_component(&world, body, "Velocity")
+        .read_component(&world, body, "SampleVelocity")
         .expect("velocity");
     assert!(
         (v["linear"][1].as_f64().unwrap_or(0.0) + 4.905).abs() < 1e-4,

@@ -96,7 +96,7 @@ fn csharp_types_register_into_the_schema_db() {
     );
 }
 
-/// Gravity then Movement (ordered: both touch Velocity) over three tables, checked
+/// Gravity then Movement (ordered: both touch SampleVelocity) over three tables, checked
 /// against the same f32 arithmetic in Rust.
 #[test]
 fn systems_run_over_every_chunk_in_parallel() {
@@ -106,8 +106,13 @@ fn systems_run_over_every_chunk_in_parallel() {
     let mut bodies = Vec::new();
     for i in 0..30_000u32 {
         let e = world.spawn(EcsTransform::default()).id();
-        host.insert_component(&mut world, e, "Velocity", &json!({ "linear": [1, 0, 0] }))
-            .expect("velocity");
+        host.insert_component(
+            &mut world,
+            e,
+            "SampleVelocity",
+            &json!({ "linear": [1, 0, 0] }),
+        )
+        .expect("velocity");
         let mass = if i % 3 == 0 { 0.0 } else { 2.0 };
         host.insert_component(&mut world, e, "Mass", &json!({ "value": mass }))
             .expect("mass");

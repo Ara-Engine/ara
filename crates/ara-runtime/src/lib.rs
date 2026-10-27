@@ -179,7 +179,8 @@ pub fn schema(project_types: &[serde_json::Value]) -> Result<SchemaDb> {
     Ok(db)
 }
 
-fn register_components(registry: &mut SimRegistry) -> std::result::Result<(), SimError> {
+/// Installs the runtime's typed ECS codecs, shared with generated C# accessors.
+pub fn register_components(registry: &mut SimRegistry) -> std::result::Result<(), SimError> {
     use ara_physics as p;
     registry.register_component::<p::PhysicsId>()?;
     registry.register_component::<p::PhysicsPose>()?;

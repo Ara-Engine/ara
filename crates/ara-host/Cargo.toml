@@ -26,6 +26,7 @@ serde_json = { workspace = true, features = ["preserve_order", "float_roundtrip"
 tracing = { workspace = true }
 
 [dev-dependencies]
+ara-runtime = { path = "../ara-runtime" }
 insta = { workspace = true }
 
 [lints]

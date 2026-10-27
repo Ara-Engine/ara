@@ -179,7 +179,11 @@ public static class Schema
             else if (IsAra(c, "RangeAttribute") && args.Length == 2) { min = Num(args[0]); max = Num(args[1]); }
             else if (IsAra(c, "MinAttribute") && args.Length == 1) min = Num(args[0]);
             else if (IsAra(c, "MaxAttribute") && args.Length == 1) max = Num(args[0]);
-            else if (IsAra(c, "DefaultAttribute") && args.Length == 1) j.Key("default").Raw(DefaultJson(args[0]));
+            else if (IsAra(c, "DefaultAttribute") && args.Length == 1)
+            {
+                var json = a.NamedArguments.FirstOrDefault(p => p.Key == "Json").Value.Value as string;
+                j.Key("default").Raw(json ?? DefaultJson(args[0]));
+            }
             else if (IsAra(c, "ReplicateAttribute")) j.Key("replicate").Raw(ReplicateJson(a));
             else if (IsAra(c, "FormerlySerializedAsAttribute") && StringArg(a) is { } old) aliases.Add(Camel(old));
             else if (IsAra(c, "HeaderAttribute") && StringArg(a) is { } group) j.Key("editor").Open().Key("group").String(group).Close();

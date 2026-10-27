@@ -27,19 +27,18 @@ public static unsafe class ScriptRuntime
     {
         try
         {
-            Host.Attach(*host);
+            // Only the identity prefix is readable until compatibility is known:
+            // even unshipped revisions of one ABI version can have shorter tables.
+            if (host == null || api == null) return 1;
             if (host->AbiVersion != AbiInfo.Version)
             {
-                Diag.Report(AraCodes.StaleBindings, "error", $"ABI version mismatch: host {host->AbiVersion}, C# runtime {AbiInfo.Version}");
                 return 1;
             }
             if (host->LayoutHash != AbiInfo.LayoutHash)
             {
-                Diag.Report(AraCodes.StaleBindings, "error",
-                    $"stale generated bindings: host layout hash {host->LayoutHash:X16}, C# {AbiInfo.LayoutHash:X16}; " +
-                    "regenerate (ARA_UPDATE_GENERATED=1 cargo test -p ara-script --test generated) and rebuild dotnet/");
                 return 2;
             }
+            Host.Attach(*host);
             if (AbiInfo.VerifySizes() is { } err)
             {
                 Diag.Report(AraCodes.StaleBindings, "error", "layout mismatch: " + err);
@@ -311,6 +310,7 @@ public static unsafe class ScriptRuntime
                     obj.CommandBuffer = null;
                 }
             }
+            EngineAccess.Flush();
             return AbiConst.RunOk;
         }
         catch (Exception ex)
@@ -338,7 +338,9 @@ public static unsafe class ScriptRuntime
         var previous = Host.EnterExclusive();
         try
         {
-            return entry.Invoke(call);
+            var result = entry.Invoke(call);
+            EngineAccess.Flush();
+            return result;
         }
         catch (Exception ex)
         {

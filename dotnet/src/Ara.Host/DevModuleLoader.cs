@@ -306,7 +306,7 @@ public sealed class DevModuleLoader : IModuleLoader
         var entries = generated.Concat(lambdas).ToArray();
         // The JIT is thread-safe: spread the entry points over a few pool threads (the
         // boosted tick threads keep priority).
-        Parallel.ForEach(entries, new ParallelOptions { MaxDegreeOfParallelism = Math.Max(1, Environment.ProcessorCount / 4) },
+        Parallel.ForEach(entries, new ParallelOptions { MaxDegreeOfParallelism = Math.Max(1, System.Environment.ProcessorCount / 4) },
             m => RuntimeHelpers.PrepareMethod(m.MethodHandle));
     }
 

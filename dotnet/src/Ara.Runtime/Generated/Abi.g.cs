@@ -294,7 +294,7 @@ namespace Ara.Hosting
     /// <summary>
     /// Passed to <c>ara_script_init</c>: ABI identity, the host context and the host table.
     /// </summary>
-    [StructLayout(LayoutKind.Explicit, Size = 112)]
+    [StructLayout(LayoutKind.Explicit, Size = 120)]
     public unsafe partial struct HostInit
     {
         /// <summary>
@@ -322,7 +322,7 @@ namespace Ara.Hosting
     /// <summary>
     /// Functions the Rust host offers C#. Each takes the opaque <c>ctx</c> from <c>HostInit</c>.
     /// </summary>
-    [StructLayout(LayoutKind.Explicit, Size = 88)]
+    [StructLayout(LayoutKind.Explicit, Size = 96)]
     public unsafe partial struct HostApi
     {
         /// <summary>
@@ -383,6 +383,13 @@ namespace Ara.Hosting
         /// </summary>
         // (void* ctx, uint active)
         [FieldOffset(80)] public delegate* unmanaged<void*, uint, void> CompileState;
+        /// <summary>
+        /// Reads (op 0), writes (op 1), or checks presence (op 2) through a reflected ECS codec.
+        /// Read returns the UTF-8 byte count, negative required capacity, or zero if absent.
+        /// Write returns 1 on success, 0 on failure. Spans are borrowed only for this call.
+        /// </summary>
+        // (void* ctx, ulong entity, uint component, uint op, byte* data, uint len, byte* out, uint cap)
+        [FieldOffset(88)] public delegate* unmanaged<void*, ulong, uint, uint, byte*, uint, byte*, uint, int> ComponentJson;
     }
 
     /// <summary>
@@ -447,6 +454,18 @@ namespace Ara.Hosting
     /// <summary>Constants shared with the Rust host (`ara_script::abi`).</summary>
     public static class AbiConst
     {
+        /// <summary>
+        /// <c>HostApi::component_json</c>: read a component as schema JSON.
+        /// </summary>
+        public const uint ComponentRead = 0u;
+        /// <summary>
+        /// <c>HostApi::component_json</c>: replace an existing component from schema JSON.
+        /// </summary>
+        public const uint ComponentWrite = 1u;
+        /// <summary>
+        /// <c>HostApi::component_json</c>: check presence without serializing the value.
+        /// </summary>
+        public const uint ComponentHas = 2u;
         /// <summary>
         /// <c>HostInit::flags</c>: the runtime was started with EnC enabled (<c>DOTNET_MODIFIABLE_ASSEMBLIES=debug</c>).
         /// </summary>
@@ -634,9 +653,9 @@ namespace Ara.Hosting
     public static class AbiInfo
     {
         /// <summary>Must equal the host's <c>ABI_VERSION</c>.</summary>
-        public const uint Version = 2;
+        public const uint Version = 3;
         /// <summary>Hash of every ABI layout and the engine components this file was generated from.</summary>
-        public const ulong LayoutHash = 0x7A85E63E68A33AF0UL;
+        public const ulong LayoutHash = 0xFB90B3AE57A1C140UL;
 
         /// <summary>Checks that the C# layouts agree with the generated sizes; returns an error or null.</summary>
         public static string? VerifySizes()
@@ -647,7 +666,7 @@ namespace Ara.Hosting
             if (Unsafe.SizeOf<global::Ara.Hosting.BehaviourCall>() != 56) return "global::Ara.Hosting.BehaviourCall: expected 56 bytes, got " + Unsafe.SizeOf<global::Ara.Hosting.BehaviourCall>();
             if (Unsafe.SizeOf<global::Ara.Hosting.CommandCall>() != 112) return "global::Ara.Hosting.CommandCall: expected 112 bytes, got " + Unsafe.SizeOf<global::Ara.Hosting.CommandCall>();
             if (Unsafe.SizeOf<global::Ara.Hosting.ReloadReport>() != 120) return "global::Ara.Hosting.ReloadReport: expected 120 bytes, got " + Unsafe.SizeOf<global::Ara.Hosting.ReloadReport>();
-            if (Unsafe.SizeOf<global::Ara.Hosting.HostInit>() != 112) return "global::Ara.Hosting.HostInit: expected 112 bytes, got " + Unsafe.SizeOf<global::Ara.Hosting.HostInit>();
+            if (Unsafe.SizeOf<global::Ara.Hosting.HostInit>() != 120) return "global::Ara.Hosting.HostInit: expected 120 bytes, got " + Unsafe.SizeOf<global::Ara.Hosting.HostInit>();
             if (Unsafe.SizeOf<global::Ara.Transform>() != 36) return "global::Ara.Transform: expected 36 bytes, got " + Unsafe.SizeOf<global::Ara.Transform>();
             return null;
         }

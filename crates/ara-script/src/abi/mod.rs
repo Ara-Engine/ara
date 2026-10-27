@@ -20,7 +20,7 @@ pub(crate) use describe::Fnv;
 pub use describe::{AbiConst, AbiField, AbiFn, AbiStruct, AbiTable};
 
 /// Bumped on any incompatible change to the semantics of the tables.
-pub const ABI_VERSION: u32 = 2;
+pub const ABI_VERSION: u32 = 3;
 
 abi_structs! { PUBLIC_STRUCTS;
     /// The fixed simulation tick that every system, behaviour and command sees.
@@ -161,6 +161,12 @@ abi_structs! { ABI_STRUCTS;
 }
 
 abi_consts! { ABI_CONSTS;
+    /// `HostApi::component_json`: read a component as schema JSON.
+    pub const COMPONENT_READ: u32 = 0;
+    /// `HostApi::component_json`: replace an existing component from schema JSON.
+    pub const COMPONENT_WRITE: u32 = 1;
+    /// `HostApi::component_json`: check presence without serializing the value.
+    pub const COMPONENT_HAS: u32 = 2;
     /// `HostInit::flags`: the runtime was started with EnC enabled (`DOTNET_MODIFIABLE_ASSEMBLIES=debug`).
     pub const INIT_ENC: u32 = 1;
     /// `ReloadReport::kind`: the first load of a module.
@@ -282,6 +288,10 @@ abi_table! {
         fn cmd_push(ctx: *mut c_void, buf: *mut c_void, op: u32, type_index: u32, entity: u64, data: *const u8, len: u32);
         /// The compile server started (1) or finished (0) a compile; the host raises tick-thread priority meanwhile.
         fn compile_state(ctx: *mut c_void, active: u32);
+        /// Reads (op 0), writes (op 1), or checks presence (op 2) through a reflected ECS codec.
+        /// Read returns the UTF-8 byte count, negative required capacity, or zero if absent.
+        /// Write returns 1 on success, 0 on failure. Spans are borrowed only for this call.
+        fn component_json(ctx: *mut c_void, entity: u64, component: u32, op: u32, data: *const u8, len: u32, out: *mut u8, cap: u32) -> i32;
     }
 }
 

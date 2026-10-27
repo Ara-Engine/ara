@@ -15,7 +15,7 @@ it runs (`.ara/daemon.json`), else an in-process `ara_host::Host`.
 | `ara schema [names..] [--out dir]` | Schema DB summary; names: each one's doc page (fields, units, defaults); `--json` = `reflection.json`; `--out` writes JSON Schemas | project types are invalid; unknown name |
 | `ara merge [-o out] <base> <ours> <theirs>` | semantic 3-way merge over `ours` (git `%O %A %B`) | conflicts |
 | `ara resolve <file> [--ours\|--theirs] [--pick r:path=side]..` | settles `$conflicts` by side (`ours`, `theirs`, `base`) | conflicts left |
-| `ara docs --llms [--out dir]` | `llms.txt`, `llms-full.txt`, per-type/command/method pages (default `.ara/docs`) | never |
+| `ara docs --llms [--out dir]` | `docs.json`, `llms.txt`, `llms-full.txt`, per-type/command/method pages (default `.ara/docs`); `--json` prints the summary | never |
 | `ara serve [--port n] [--stdio]` | the daemon: EP over WebSocket (+stdio), MCP at `POST /mcp`; `--json` prints `{pid, port, url, mcp}` once listening | it cannot start |
 | `ara mcp` | Global MCP through the user Hub; `--root` retains per-project mode | it cannot start |
 | `ara do [cmd] [--doc d] [--args json\|@file\|-] [-p k=v].. [--as $s] [--why w] [--dry-run]` | one-call `cmd.apply`; without `cmd`, `--args` is a batch `{commands: [{cmd, args, as}], why, doc}` | the batch fails |

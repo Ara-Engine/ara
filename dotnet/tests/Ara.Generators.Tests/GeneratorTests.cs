@@ -116,6 +116,28 @@ public class GeneratorTests
     }
 
     [Fact]
+    public void Nested_defaults_keep_their_schema_json()
+    {
+        const string source = """
+            namespace Game;
+            /// <summary>A nested value.</summary>
+            public struct Pair {
+                /// <summary>The horizontal value.</summary>
+                public int X;
+            }
+            /// <summary>A component with a nested default.</summary>
+            [Component] public partial struct Data {
+                /// <summary>Initial nested state.</summary>
+                [Default(Json = "{\"x\":2}")] public Pair Nested;
+            }
+            """;
+        var (output, diags, sources) = Run(source);
+        Assert.Empty(diags.Where(d => d.Severity == DiagnosticSeverity.Error));
+        Assert.Empty(output.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error));
+        Assert.Contains("""\"default\":{\"x\":2}""", sources["AraModule.g.cs"]);
+    }
+
+    [Fact]
     public void Native_entry_is_emitted_on_request()
     {
         var (output, _, sources) = Run(Module, native: true);

@@ -20,6 +20,15 @@ pub fn docs(project: &Project, out: Option<&Path>, json_out: bool) -> Result<boo
         &name,
     );
     let mut files = vec![
+        (
+            "docs.json".to_owned(),
+            docs::structured(
+                &project.db,
+                &project.registry,
+                &ara_host::core_methods(),
+                &name,
+            ),
+        ),
         ("llms.txt".to_owned(), docs::llms_txt(&pages, &name)),
         ("llms-full.txt".to_owned(), docs::llms_full(&pages, &name)),
     ];

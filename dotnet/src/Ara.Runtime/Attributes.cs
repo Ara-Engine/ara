@@ -183,6 +183,8 @@ public sealed class DefaultAttribute(params object[] values) : Attribute
 {
     /// <summary>The value, or a vector's components.</summary>
     public object[] Values { get; } = values;
+    /// <summary>Schema JSON for a null, collection or nested-record default; overrides Values.</summary>
+    public string? Json { get; init; }
 }
 
 /// <summary>Recipients of a replicated field.</summary>

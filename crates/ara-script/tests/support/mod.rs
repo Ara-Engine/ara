@@ -33,6 +33,9 @@ pub fn bin(project: &str) -> PathBuf {
 
 /// Builds the solution (Release) once per test process.
 pub fn build() {
+    if std::env::var_os("ARA_DOTNET_PREBUILT").is_some() {
+        return;
+    }
     static BUILT: OnceLock<()> = OnceLock::new();
     BUILT.get_or_init(|| {
         let out = Command::new("dotnet")
@@ -113,8 +116,7 @@ pub fn clr_lock() -> MutexGuard<'static, ()> {
 
 /// The engine schema and bindings the generated C# was built for.
 pub fn engine() -> (SchemaDb, EngineBindings) {
-    let mut db = SchemaDb::new();
-    ara_components::register(&mut db);
+    let db = ara_runtime::schema(&[]).expect("engine schema");
     let bindings = bind_component!(EngineBindings::new(), EcsTransform as "Transform" { position, rotation, scale });
     assert_eq!(bindings.names(), EngineBindings::builtin().names());
     (db, bindings)

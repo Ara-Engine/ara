@@ -2,7 +2,7 @@ namespace Outpost;
 
 /// <summary>Linear velocity of a moving body.</summary>
 [Component]
-public partial struct Velocity
+public partial struct SampleVelocity
 {
     /// <summary>Metres per second.</summary>
     [Unit(Units.MetersPerSecond)] public Vector3 Linear;
@@ -28,7 +28,7 @@ public partial struct GameRules
 public static partial class Gravity
 {
     [Query]
-    static void Run(ref Velocity v, in Mass m, in Tick t, in GameRules rules)
+    static void Run(ref SampleVelocity v, in Mass m, in Tick t, in GameRules rules)
     {
         if (m.Value > 0f) v.Linear.Y -= rules.Gravity * t.Dt;
     }
@@ -38,5 +38,5 @@ public static partial class Gravity
 public static partial class Movement
 {
     [Query(Order = 10)]
-    static void Run(ref Transform tr, in Velocity v, in Tick t) => tr.Position += v.Linear * t.Dt;
+    static void Run(ref Transform tr, in SampleVelocity v, in Tick t) => tr.Position += v.Linear * t.Dt;
 }

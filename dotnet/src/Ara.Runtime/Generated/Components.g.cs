@@ -5,8 +5,3717 @@
 #nullable enable
 using System.Numerics;
 using System.Runtime.InteropServices;
+using System.Text.Json;
+using Ara.Hosting;
 
 namespace Ara;
+
+/// <summary>
+/// Surface acoustics for reflection, scattering and transmission.
+/// </summary>
+[StructLayout(LayoutKind.Explicit, Size = 28)]
+public partial struct AcousticMaterial
+{
+    /// <summary>
+    /// Fraction of energy absorbed on reflection: low/mid/high bands.
+    /// </summary>
+    /// <remarks>
+    /// Range: [0, 1]. Default: [0.1,0.2,0.3].
+    /// </remarks>
+    [FieldOffset(0), Range(0, 1), Default(0.1, 0.2, 0.3)]
+    public Vector3 Absorption;
+    /// <summary>
+    /// Fraction of reflected energy scattered diffusely (0 specular, 1 diffuse).
+    /// </summary>
+    /// <remarks>
+    /// Range: [0, 1]. Default: 0.05.
+    /// </remarks>
+    [FieldOffset(12), Range(0, 1), Default(0.05)]
+    public float Scattering;
+    /// <summary>
+    /// Fraction of energy transmitted through the surface: low/mid/high bands.
+    /// </summary>
+    /// <remarks>
+    /// Range: [0, 1]. Default: [0.1,0.05,0.03].
+    /// </remarks>
+    [FieldOffset(16), Range(0, 1), Default(0.1, 0.05, 0.03)]
+    public Vector3 Transmission;
+}
+
+/// <summary>
+/// An opening (door, window, archway) connecting two zones. An empty zone name is outdoors.
+/// </summary>
+[EngineComponent("AcousticPortal", Module = "audio")]
+public partial struct AcousticPortal : IComponent<AcousticPortal>
+{
+    /// <summary>
+    /// First zone's name; empty means outdoors.
+    /// </summary>
+    /// <remarks>
+    /// Default: "".
+    /// </remarks>
+    [Default("")]
+    public string? A;
+    /// <summary>
+    /// Second zone's name; empty means outdoors.
+    /// </summary>
+    /// <remarks>
+    /// Default: "".
+    /// </remarks>
+    [Default("")]
+    public string? B;
+    /// <summary>
+    /// World-space center of the opening, supplied by the bridge.
+    /// </summary>
+    /// <remarks>
+    /// Unit: m. Default: [0,0,0].
+    /// </remarks>
+    [Unit("m"), Default(0, 0, 0)]
+    public Vector3 Position;
+    /// <summary>
+    /// Opening width.
+    /// </summary>
+    /// <remarks>
+    /// Unit: m. Range: [0.01, 1000]. Default: 1.
+    /// </remarks>
+    [Unit("m"), Range(0.01, 1000), Default(1)]
+    public float Width;
+    /// <summary>
+    /// Opening height.
+    /// </summary>
+    /// <remarks>
+    /// Unit: m. Range: [0.01, 1000]. Default: 2.
+    /// </remarks>
+    [Unit("m"), Range(0.01, 1000), Default(2)]
+    public float Height;
+    /// <summary>
+    /// How open it is: 0 closed (blocks), 1 fully open. Drive from door state.
+    /// </summary>
+    /// <remarks>
+    /// Range: [0, 1]. Default: 1.
+    /// </remarks>
+    [Range(0, 1), Default(1)]
+    public float Open;
+    /// <summary>Stable engine component index.</summary>
+    public static uint TypeIndex => 1;
+    /// <inheritdoc/>
+    public static ref AcousticPortal Access(Entity entity, bool write) => ref EngineAccess.Get(entity, TypeIndex, write, EngineValueCodecs.ReadAcousticPortal, EngineValueCodecs.WriteAcousticPortal);
+    /// <inheritdoc/>
+    public static void Insert(in Commands commands, Entity entity, in AcousticPortal value) => commands.InsertJson(entity, TypeIndex, EngineAccess.Encode(value, EngineValueCodecs.WriteAcousticPortal));
+    /// <inheritdoc/>
+    public static bool Contains(Entity entity) => Host.ComponentHas(entity.Bits, TypeIndex);
+}
+
+/// <summary>
+/// Per-source acoustic behaviour, alongside <c>AudioSource</c>. Optional: sources without it use <c>AcousticSource::default()</c>.
+/// </summary>
+[EngineComponent("AcousticSource", Module = "audio")]
+public partial struct AcousticSource : IComponent<AcousticSource>
+{
+    /// <summary>
+    /// Trace geometry between source and listener for occlusion and transmission.
+    /// </summary>
+    /// <remarks>
+    /// Default: true.
+    /// </remarks>
+    [Default(true)]
+    public bool Occlusion;
+    /// <summary>
+    /// Radius sampled for partial (volumetric) occlusion; 0 traces only the center ray.
+    /// </summary>
+    /// <remarks>
+    /// Unit: m. Range: [0, 50]. Default: 0.5.
+    /// </remarks>
+    [Unit("m"), Range(0, 50), Default(0.5)]
+    public float OcclusionRadius;
+    /// <summary>
+    /// Apply frequency-dependent air absorption over the propagation distance.
+    /// </summary>
+    /// <remarks>
+    /// Default: true.
+    /// </remarks>
+    [Default(true)]
+    public bool AirAbsorption;
+    /// <summary>
+    /// Doppler strength: 0 disables pitch shift, 1 is physical, larger exaggerates.
+    /// </summary>
+    /// <remarks>
+    /// Range: [0, 4]. Default: 1.
+    /// </remarks>
+    [Range(0, 4), Default(1)]
+    public float Doppler;
+    /// <summary>
+    /// Room reverb send before zone and portal attenuation.
+    /// </summary>
+    /// <remarks>
+    /// Range: [0, 1]. Default: 1.
+    /// </remarks>
+    [Range(0, 1), Default(1)]
+    public float ReverbSend;
+    /// <summary>
+    /// Custom distance curve: <c>[meters, linear gain]</c> points with increasing distance. Empty uses <c>AudioSource.attenuation</c>; cones still apply.
+    /// </summary>
+    /// <remarks>
+    /// Default: [].
+    /// </remarks>
+    [Default(Json = "[]")]
+    public Vector2[] DistanceCurve;
+    /// <summary>Stable engine component index.</summary>
+    public static uint TypeIndex => 2;
+    /// <inheritdoc/>
+    public static ref AcousticSource Access(Entity entity, bool write) => ref EngineAccess.Get(entity, TypeIndex, write, EngineValueCodecs.ReadAcousticSource, EngineValueCodecs.WriteAcousticSource);
+    /// <inheritdoc/>
+    public static void Insert(in Commands commands, Entity entity, in AcousticSource value) => commands.InsertJson(entity, TypeIndex, EngineAccess.Encode(value, EngineValueCodecs.WriteAcousticSource));
+    /// <inheritdoc/>
+    public static bool Contains(Entity entity) => Host.ComponentHas(entity.Bits, TypeIndex);
+}
+
+/// <summary>
+/// Acoustic surface of static geometry or a collider. The physics ray adapter maps hit bodies to this component; absent components read as <c>generic</c>.
+/// </summary>
+[EngineComponent("AcousticSurface", Module = "audio")]
+public partial struct AcousticSurface : IComponent<AcousticSurface>
+{
+    /// <summary>
+    /// Named material; ignored when <c>custom</c> is set.
+    /// </summary>
+    /// <remarks>
+    /// Default: "generic".
+    /// </remarks>
+    [Default("generic")]
+    public MaterialPreset Preset;
+    /// <summary>
+    /// Explicit material values overriding the preset.
+    /// </summary>
+    /// <remarks>
+    /// Default: null.
+    /// </remarks>
+    [Default(Json = "null")]
+    public AcousticMaterial? Custom;
+    /// <summary>Stable engine component index.</summary>
+    public static uint TypeIndex => 3;
+    /// <inheritdoc/>
+    public static ref AcousticSurface Access(Entity entity, bool write) => ref EngineAccess.Get(entity, TypeIndex, write, EngineValueCodecs.ReadAcousticSurface, EngineValueCodecs.WriteAcousticSurface);
+    /// <inheritdoc/>
+    public static void Insert(in Commands commands, Entity entity, in AcousticSurface value) => commands.InsertJson(entity, TypeIndex, EngineAccess.Encode(value, EngineValueCodecs.WriteAcousticSurface));
+    /// <inheritdoc/>
+    public static bool Contains(Entity entity) => Host.ComponentHas(entity.Bits, TypeIndex);
+}
+
+/// <summary>
+/// Skeletal animation for this entity's <c>MeshRenderer.model</c>, compiled to an ara-anim program: the <c>controller</c> document when set, else an <c>idle</c> state and a <c>move</c> state whose 1D blend tree is driven by the entity's ground speed, cross-faded at <c>moveThreshold</c>.
+/// </summary>
+[EngineComponent("Animator", Module = "animation")]
+public partial struct Animator : IComponent<Animator>
+{
+    /// <summary>
+    /// Controller authored in an <c>.animation</c> document (<c>@anim/fox.animation#an_fox</c>): its state machine, blend trees and motion matching replace the built-in idle/locomotion graph below. A float <c>speed</c> parameter follows ground speed.
+    /// </summary>
+    /// <remarks>
+    /// Default: null.
+    /// </remarks>
+    [Default(Json = "null")]
+    public string? Controller;
+    /// <summary>
+    /// Idle clip name.
+    /// </summary>
+    /// <remarks>
+    /// Default: "".
+    /// </remarks>
+    [Default("")]
+    public string? Idle;
+    /// <summary>
+    /// Moving blend samples in increasing speed order.
+    /// </summary>
+    /// <remarks>
+    /// Default: [].
+    /// </remarks>
+    [Default(Json = "[]")]
+    public LocomotionClip[] Locomotion;
+    /// <summary>
+    /// Ground speed separating idle from moving.
+    /// </summary>
+    /// <remarks>
+    /// Unit: m/s. Range: [0, ∞]. Default: 0.15.
+    /// </remarks>
+    [Unit("m/s"), Min(0), Default(0.15)]
+    public float MoveThreshold;
+    /// <summary>
+    /// Cross-fade duration between idle and moving.
+    /// </summary>
+    /// <remarks>
+    /// Unit: s. Range: [0, ∞]. Default: 0.2.
+    /// </remarks>
+    [Unit("s"), Min(0), Default(0.2)]
+    public float Fade;
+    /// <summary>
+    /// Moves the entity by the extracted root motion (only without a character controller or navigation agent, which own movement).
+    /// </summary>
+    /// <remarks>
+    /// Default: false.
+    /// </remarks>
+    [Default(false)]
+    public bool RootMotion;
+    /// <summary>Stable engine component index.</summary>
+    public static uint TypeIndex => 4;
+    /// <inheritdoc/>
+    public static ref Animator Access(Entity entity, bool write) => ref EngineAccess.Get(entity, TypeIndex, write, EngineValueCodecs.ReadAnimator, EngineValueCodecs.WriteAnimator);
+    /// <inheritdoc/>
+    public static void Insert(in Commands commands, Entity entity, in Animator value) => commands.InsertJson(entity, TypeIndex, EngineAccess.Encode(value, EngineValueCodecs.WriteAnimator));
+    /// <inheritdoc/>
+    public static bool Contains(Entity entity) => Host.ComponentHas(entity.Bits, TypeIndex);
+}
+
+/// <summary>
+/// Distance rolloff model, evaluated in meters.
+/// </summary>
+public enum Attenuation : uint
+{
+    /// <summary>
+    /// Inverse distance, clamped at the reference distance and silent at the maximum.
+    /// </summary>
+    Inverse = 0,
+    /// <summary>
+    /// Linear fade between reference and maximum distance.
+    /// </summary>
+    Linear = 1,
+    /// <summary>
+    /// Inverse-square energy falloff with a finite range fade.
+    /// </summary>
+    InverseSquare = 2,
+}
+
+/// <summary>
+/// Plays a procedural audio graph (an ara-audio-graph <c>graph</c> document, domain <c>audio</c>) from this entity, spatialized and attenuated by its <c>AudioSource</c> (whose clip stays empty). Gameplay writes <c>parameters</c> and bumps <c>triggers</c>; the audio presenter forwards changes sample-accurately at the next control frame.
+/// </summary>
+[EngineComponent("AudioGraphSource", Module = "audio")]
+public partial struct AudioGraphSource : IComponent<AudioGraphSource>
+{
+    /// <summary>
+    /// The audio graph document.
+    /// </summary>
+    /// <remarks>
+    /// Default: null.
+    /// </remarks>
+    [Default(Json = "null")]
+    public string? Graph;
+    /// <summary>
+    /// Parameter values by name (clamped to the graph's declared ranges).
+    /// </summary>
+    /// <remarks>
+    /// Default: {}.
+    /// </remarks>
+    [Default(Json = "{}")]
+    public Dictionary<string, float> Parameters;
+    /// <summary>
+    /// Trigger counters by name: each increment fires the trigger once.
+    /// </summary>
+    /// <remarks>
+    /// Default: {}.
+    /// </remarks>
+    [Default(Json = "{}")]
+    public Dictionary<string, uint> Triggers;
+    /// <summary>Stable engine component index.</summary>
+    public static uint TypeIndex => 5;
+    /// <inheritdoc/>
+    public static ref AudioGraphSource Access(Entity entity, bool write) => ref EngineAccess.Get(entity, TypeIndex, write, EngineValueCodecs.ReadAudioGraphSource, EngineValueCodecs.WriteAudioGraphSource);
+    /// <inheritdoc/>
+    public static void Insert(in Commands commands, Entity entity, in AudioGraphSource value) => commands.InsertJson(entity, TypeIndex, EngineAccess.Encode(value, EngineValueCodecs.WriteAudioGraphSource));
+    /// <inheritdoc/>
+    public static bool Contains(Entity entity) => Host.ComponentHas(entity.Bits, TypeIndex);
+}
+
+/// <summary>
+/// Presentation listener, usually copied from the local player's camera component.
+/// </summary>
+[StructLayout(LayoutKind.Explicit, Size = 60)]
+[EngineComponent("AudioListener", Module = "audio")]
+public partial struct AudioListener : IComponent<AudioListener>
+{
+    /// <summary>
+    /// Listener world position.
+    /// </summary>
+    /// <remarks>
+    /// Unit: m. Default: [0,0,0].
+    /// </remarks>
+    [FieldOffset(0), Unit("m"), Default(0, 0, 0)]
+    public Vector3 Position;
+    /// <summary>
+    /// Listener world velocity in meters per second.
+    /// </summary>
+    /// <remarks>
+    /// Default: [0,0,0].
+    /// </remarks>
+    [FieldOffset(12), Default(0, 0, 0)]
+    public Vector3 Velocity;
+    /// <summary>
+    /// Forward direction; the default engine basis looks down negative Z.
+    /// </summary>
+    /// <remarks>
+    /// Default: [0,0,-1].
+    /// </remarks>
+    [FieldOffset(24), Default(0, 0, -1)]
+    public Vector3 Forward;
+    /// <summary>
+    /// Up direction; must not be parallel to forward.
+    /// </summary>
+    /// <remarks>
+    /// Default: [0,1,0].
+    /// </remarks>
+    [FieldOffset(36), Default(0, 1, 0)]
+    public Vector3 Up;
+    /// <summary>
+    /// Listener sensitivity cone inner full angle.
+    /// </summary>
+    /// <remarks>
+    /// Unit: deg. Range: [0, 360]. Default: 360.
+    /// </remarks>
+    [FieldOffset(48), Unit("deg"), Range(0, 360), Default(360)]
+    public float ConeInner;
+    /// <summary>
+    /// Listener sensitivity cone outer full angle.
+    /// </summary>
+    /// <remarks>
+    /// Unit: deg. Range: [0, 360]. Default: 360.
+    /// </remarks>
+    [FieldOffset(52), Unit("deg"), Range(0, 360), Default(360)]
+    public float ConeOuter;
+    /// <summary>
+    /// Linear sensitivity outside the listener cone.
+    /// </summary>
+    /// <remarks>
+    /// Range: [0, 1]. Default: 1.
+    /// </remarks>
+    [FieldOffset(56), Range(0, 1), Default(1)]
+    public float ConeOuterGain;
+    /// <summary>Stable engine component index.</summary>
+    public static uint TypeIndex => 6;
+    /// <inheritdoc/>
+    public static ref AudioListener Access(Entity entity, bool write) => ref EngineAccess.Get(entity, TypeIndex, write, EngineValueCodecs.ReadAudioListener, EngineValueCodecs.WriteAudioListener);
+    /// <inheritdoc/>
+    public static void Insert(in Commands commands, Entity entity, in AudioListener value) => commands.InsertJson(entity, TypeIndex, EngineAccess.Encode(value, EngineValueCodecs.WriteAudioListener));
+    /// <inheritdoc/>
+    public static bool Contains(Entity entity) => Host.ComponentHas(entity.Bits, TypeIndex);
+}
+
+/// <summary>
+/// Declarative sound intent. Playback cursors and decoder state are presentation only.
+/// </summary>
+[EngineComponent("AudioSource", Module = "audio")]
+public partial struct AudioSource : IComponent<AudioSource>
+{
+    /// <summary>
+    /// Cooked clip reference in <c>@path#id</c> form; absent means no clip.
+    /// </summary>
+    /// <remarks>
+    /// Default: null.
+    /// </remarks>
+    [Default(Json = "null")]
+    public string? Clip;
+    /// <summary>
+    /// Mixer bus name resolved by the presentation bridge.
+    /// </summary>
+    /// <remarks>
+    /// Default: "master".
+    /// </remarks>
+    [Default("master")]
+    public string? Bus;
+    /// <summary>
+    /// Linear source amplitude.
+    /// </summary>
+    /// <remarks>
+    /// Range: [0, 16]. Default: 1.
+    /// </remarks>
+    [Range(0, 16), Default(1)]
+    public float Gain;
+    /// <summary>
+    /// Playback pitch multiplier before Doppler.
+    /// </summary>
+    /// <remarks>
+    /// Range: [0.125, 8]. Default: 1.
+    /// </remarks>
+    [Range(0.125, 8), Default(1)]
+    public float Pitch;
+    /// <summary>
+    /// Whether the clip repeats.
+    /// </summary>
+    /// <remarks>
+    /// Default: false.
+    /// </remarks>
+    [Default(false)]
+    public bool Looping;
+    /// <summary>
+    /// Whether position affects the sound.
+    /// </summary>
+    /// <remarks>
+    /// Default: true.
+    /// </remarks>
+    [Default(true)]
+    public bool Spatial;
+    /// <summary>
+    /// Voice budget priority; larger values are retained first.
+    /// </summary>
+    /// <remarks>
+    /// Default: 128.
+    /// </remarks>
+    [Default(128)]
+    public byte Priority;
+    /// <summary>
+    /// Full-volume radius.
+    /// </summary>
+    /// <remarks>
+    /// Unit: m. Range: [0.01, 100000]. Default: 1.
+    /// </remarks>
+    [Unit("m"), Range(0.01, 100000), Default(1)]
+    public float ReferenceDistance;
+    /// <summary>
+    /// Silent beyond this distance; must exceed referenceDistance.
+    /// </summary>
+    /// <remarks>
+    /// Unit: m. Range: [0.02, 1000000]. Default: 100.
+    /// </remarks>
+    [Unit("m"), Range(0.02, 1000000), Default(100)]
+    public float MaxDistance;
+    /// <summary>
+    /// Shape of the distance attenuation curve.
+    /// </summary>
+    /// <remarks>
+    /// Default: "inverse".
+    /// </remarks>
+    [Default("inverse")]
+    public Attenuation Attenuation;
+    /// <summary>
+    /// Source position, supplied from the ECS world transform by the bridge.
+    /// </summary>
+    /// <remarks>
+    /// Unit: m. Default: [0,0,0].
+    /// </remarks>
+    [Unit("m"), Default(0, 0, 0)]
+    public Vector3 Position;
+    /// <summary>
+    /// Source velocity in meters per second for Doppler.
+    /// </summary>
+    /// <remarks>
+    /// Default: [0,0,0].
+    /// </remarks>
+    [Default(0, 0, 0)]
+    public Vector3 Velocity;
+    /// <summary>
+    /// Source forward axis; normalized during spatial evaluation.
+    /// </summary>
+    /// <remarks>
+    /// Default: [0,0,-1].
+    /// </remarks>
+    [Default(0, 0, -1)]
+    public Vector3 Forward;
+    /// <summary>
+    /// Full angle of the unattenuated source cone.
+    /// </summary>
+    /// <remarks>
+    /// Unit: deg. Range: [0, 360]. Default: 360.
+    /// </remarks>
+    [Unit("deg"), Range(0, 360), Default(360)]
+    public float ConeInner;
+    /// <summary>
+    /// Full angle at which the source reaches coneOuterGain.
+    /// </summary>
+    /// <remarks>
+    /// Unit: deg. Range: [0, 360]. Default: 360.
+    /// </remarks>
+    [Unit("deg"), Range(0, 360), Default(360)]
+    public float ConeOuter;
+    /// <summary>
+    /// Linear amplitude outside the source cone.
+    /// </summary>
+    /// <remarks>
+    /// Range: [0, 1]. Default: 1.
+    /// </remarks>
+    [Range(0, 1), Default(1)]
+    public float ConeOuterGain;
+    /// <summary>Stable engine component index.</summary>
+    public static uint TypeIndex => 7;
+    /// <inheritdoc/>
+    public static ref AudioSource Access(Entity entity, bool write) => ref EngineAccess.Get(entity, TypeIndex, write, EngineValueCodecs.ReadAudioSource, EngineValueCodecs.WriteAudioSource);
+    /// <inheritdoc/>
+    public static void Insert(in Commands commands, Entity entity, in AudioSource value) => commands.InsertJson(entity, TypeIndex, EngineAccess.Encode(value, EngineValueCodecs.WriteAudioSource));
+    /// <inheritdoc/>
+    public static bool Contains(Entity entity) => Host.ComponentHas(entity.Bits, TypeIndex);
+}
+
+/// <summary>
+/// Runs a behaviour on this entity (authoring).
+/// </summary>
+[EngineComponent("Brain", Module = "ai")]
+public partial struct Brain : IComponent<Brain>
+{
+    /// <summary>
+    /// Behaviour graph asset (<c>@ai/guard.behavior#gr_...</c>).
+    /// </summary>
+    /// <remarks>
+    /// Default: null.
+    /// </remarks>
+    [Default(Json = "null")]
+    public string? Behavior;
+    /// <summary>
+    /// Blackboard overrides as <c>name = expression</c> (no IDs), e.g. <c>route = [vec3(0, 0, 4), vec3(8, 0, 4)]</c>.
+    /// </summary>
+    /// <remarks>
+    /// Default: [].
+    /// </remarks>
+    [Default(Json = "[]")]
+    public string?[] Overrides;
+    /// <summary>
+    /// Whether the brain thinks.
+    /// </summary>
+    /// <remarks>
+    /// Default: true.
+    /// </remarks>
+    [Default(true)]
+    public bool Enabled;
+    /// <summary>Stable engine component index.</summary>
+    public static uint TypeIndex => 8;
+    /// <inheritdoc/>
+    public static ref Brain Access(Entity entity, bool write) => ref EngineAccess.Get(entity, TypeIndex, write, EngineValueCodecs.ReadBrain, EngineValueCodecs.WriteBrain);
+    /// <inheritdoc/>
+    public static void Insert(in Commands commands, Entity entity, in Brain value) => commands.InsertJson(entity, TypeIndex, EngineAccess.Encode(value, EngineValueCodecs.WriteBrain));
+    /// <inheritdoc/>
+    public static bool Contains(Entity entity) => Host.ComponentHas(entity.Bits, TypeIndex);
+}
+
+/// <summary>
+/// A viewpoint looking along the entity's local -Z axis. The lowest <c>priority</c> wins.
+/// </summary>
+[StructLayout(LayoutKind.Explicit, Size = 8)]
+[EngineComponent("Camera", Module = "render")]
+public partial struct Camera : IComponent<Camera>
+{
+    /// <summary>
+    /// Vertical field of view.
+    /// </summary>
+    /// <remarks>
+    /// Unit: deg. Range: [1, 170]. Default: 55.
+    /// </remarks>
+    [FieldOffset(0), Unit("deg"), Range(1, 170), Default(55)]
+    public float Fov;
+    /// <summary>
+    /// Selection order when several cameras exist; lower is preferred.
+    /// </summary>
+    /// <remarks>
+    /// Default: 0.
+    /// </remarks>
+    [FieldOffset(4), Default(0)]
+    public int Priority;
+    /// <summary>Stable engine component index.</summary>
+    public static uint TypeIndex => 9;
+    /// <inheritdoc/>
+    public static ref Camera Access(Entity entity, bool write) => ref EngineAccess.Get(entity, TypeIndex, write, EngineValueCodecs.ReadCamera, EngineValueCodecs.WriteCamera);
+    /// <inheritdoc/>
+    public static void Insert(in Commands commands, Entity entity, in Camera value) => commands.InsertJson(entity, TypeIndex, EngineAccess.Encode(value, EngineValueCodecs.WriteCamera));
+    /// <inheritdoc/>
+    public static bool Contains(Entity entity) => Host.ComponentHas(entity.Bits, TypeIndex);
+}
+
+/// <summary>
+/// Orthographic view. Pixel mode uses integer zoom and nearest texel sampling.
+/// </summary>
+[StructLayout(LayoutKind.Explicit, Size = 44)]
+[EngineComponent("Camera2d", Module = "twoD")]
+public partial struct Camera2d : IComponent<Camera2d>
+{
+    /// <summary>
+    /// View centre in world metres.
+    /// </summary>
+    /// <remarks>
+    /// Default: [0,0].
+    /// </remarks>
+    [FieldOffset(0), Default(0, 0)]
+    public Vector2 Centre;
+    /// <summary>
+    /// Art pixels per world metre.
+    /// </summary>
+    /// <remarks>
+    /// Range: [0.001, ∞]. Default: 16.
+    /// </remarks>
+    [FieldOffset(8), Min(0.001), Default(16)]
+    public float PixelsPerMetre;
+    /// <summary>
+    /// Screen pixels per art pixel, rounded to an integer in pixel mode.
+    /// </summary>
+    /// <remarks>
+    /// Range: [0.001, ∞]. Default: 2.
+    /// </remarks>
+    [FieldOffset(12), Min(0.001), Default(2)]
+    public float Zoom;
+    /// <summary>
+    /// Snap view and sprite geometry to art pixels and sample nearest texels.
+    /// </summary>
+    /// <remarks>
+    /// Default: true.
+    /// </remarks>
+    [FieldOffset(16), Default(true)]
+    public bool PixelPerfect;
+    /// <summary>
+    /// Linear scene ambient illumination.
+    /// </summary>
+    /// <remarks>
+    /// Default: [0.2,0.2,0.25].
+    /// </remarks>
+    [FieldOffset(20), Default(0.2, 0.2, 0.25)]
+    public Vector3 Ambient;
+    /// <summary>
+    /// Linear clear color behind every layer.
+    /// </summary>
+    /// <remarks>
+    /// Default: [0.012,0.018,0.032].
+    /// </remarks>
+    [FieldOffset(32), Default(0.012, 0.018, 0.032)]
+    public Vector3 Background;
+    /// <summary>Stable engine component index.</summary>
+    public static uint TypeIndex => 10;
+    /// <inheritdoc/>
+    public static ref Camera2d Access(Entity entity, bool write) => ref EngineAccess.Get(entity, TypeIndex, write, EngineValueCodecs.ReadCamera2d, EngineValueCodecs.WriteCamera2d);
+    /// <inheritdoc/>
+    public static void Insert(in Commands commands, Entity entity, in Camera2d value) => commands.InsertJson(entity, TypeIndex, EngineAccess.Encode(value, EngineValueCodecs.WriteCamera2d));
+    /// <inheritdoc/>
+    public static bool Contains(Entity entity) => Host.ComponentHas(entity.Bits, TypeIndex);
+}
+
+/// <summary>
+/// Predicted capsule movement: slopes, stairs, moving platforms, crouching and pushing.
+/// </summary>
+[StructLayout(LayoutKind.Explicit, Size = 40)]
+[EngineComponent("CharacterController", Module = "physics")]
+public partial struct CharacterController : IComponent<CharacterController>
+{
+    /// <summary>
+    /// Standing capsule radius.
+    /// </summary>
+    /// <remarks>
+    /// Unit: m. Range: [0.001, ∞]. Default: 0.3.
+    /// </remarks>
+    [FieldOffset(0), Unit("m"), Min(0.001), Default(0.3)]
+    public float Radius;
+    /// <summary>
+    /// Complete standing height; must exceed twice the radius.
+    /// </summary>
+    /// <remarks>
+    /// Unit: m. Range: [0.001, ∞]. Default: 1.8.
+    /// </remarks>
+    [FieldOffset(4), Unit("m"), Min(0.001), Default(1.8)]
+    public float Height;
+    /// <summary>
+    /// Complete crouched height, between diameter and standing height.
+    /// </summary>
+    /// <remarks>
+    /// Unit: m. Range: [0.001, ∞]. Default: 1.0.
+    /// </remarks>
+    [FieldOffset(8), Unit("m"), Min(0.001), Default(1)]
+    public float CrouchHeight;
+    /// <summary>
+    /// Maximum walkable slope angle.
+    /// </summary>
+    /// <remarks>
+    /// Unit: deg. Range: [0.1, 89.9]. Default: 45.
+    /// </remarks>
+    [FieldOffset(12), Unit("deg"), Range(0.1, 89.9), Default(45)]
+    public float MaxSlopeDeg;
+    /// <summary>
+    /// Maximum stair step height.
+    /// </summary>
+    /// <remarks>
+    /// Unit: m. Range: [0, ∞]. Default: 0.35.
+    /// </remarks>
+    [FieldOffset(16), Unit("m"), Min(0), Default(0.35)]
+    public float StepHeight;
+    /// <summary>
+    /// Distance searched below feet to stay on a descending surface.
+    /// </summary>
+    /// <remarks>
+    /// Unit: m. Range: [0, ∞]. Default: 0.5.
+    /// </remarks>
+    [FieldOffset(20), Unit("m"), Min(0), Default(0.5)]
+    public float StickDown;
+    /// <summary>
+    /// Capsule collision padding.
+    /// </summary>
+    /// <remarks>
+    /// Unit: m. Range: [0, ∞]. Default: 0.02.
+    /// </remarks>
+    [FieldOffset(24), Unit("m"), Min(0), Default(0.02)]
+    public float Padding;
+    /// <summary>
+    /// Maximum force used to push rigid bodies.
+    /// </summary>
+    /// <remarks>
+    /// Unit: N. Range: [0, ∞]. Default: 1000.
+    /// </remarks>
+    [FieldOffset(28), Unit("N"), Min(0), Default(1000)]
+    public float MaxStrength;
+    /// <summary>
+    /// Character mass used for dynamic body interaction.
+    /// </summary>
+    /// <remarks>
+    /// Unit: kg. Range: [0.001, ∞]. Default: 70.
+    /// </remarks>
+    [FieldOffset(32), Unit("kg"), Min(0.001), Default(70)]
+    public float Mass;
+    /// <summary>
+    /// Collision group used for movement queries.
+    /// </summary>
+    /// <remarks>
+    /// Range: [1, 15]. Default: 1.
+    /// </remarks>
+    [FieldOffset(36), Range(1, 15), Default(1)]
+    public uint Layer;
+    /// <summary>Stable engine component index.</summary>
+    public static uint TypeIndex => 11;
+    /// <inheritdoc/>
+    public static ref CharacterController Access(Entity entity, bool write) => ref EngineAccess.Get(entity, TypeIndex, write, EngineValueCodecs.ReadCharacterController, EngineValueCodecs.WriteCharacterController);
+    /// <inheritdoc/>
+    public static void Insert(in Commands commands, Entity entity, in CharacterController value) => commands.InsertJson(entity, TypeIndex, EngineAccess.Encode(value, EngineValueCodecs.WriteCharacterController));
+    /// <inheritdoc/>
+    public static bool Contains(Entity entity) => Host.ComponentHas(entity.Bits, TypeIndex);
+}
+
+/// <summary>
+/// Kinematic capsule character: slopes, steps, ground snapping and pushing. The entity needs no RigidBody2d/Collider2d; the controller owns its capsule.
+/// </summary>
+[StructLayout(LayoutKind.Explicit, Size = 28)]
+[EngineComponent("CharacterController2d", Module = "physics2d")]
+public partial struct CharacterController2d : IComponent<CharacterController2d>
+{
+    /// <summary>
+    /// Capsule radius.
+    /// </summary>
+    /// <remarks>
+    /// Unit: m. Range: [0.001, ∞]. Default: 0.3.
+    /// </remarks>
+    [FieldOffset(0), Unit("m"), Min(0.001), Default(0.3)]
+    public float Radius;
+    /// <summary>
+    /// Complete capsule height; must exceed twice the radius.
+    /// </summary>
+    /// <remarks>
+    /// Unit: m. Range: [0.001, ∞]. Default: 1.8.
+    /// </remarks>
+    [FieldOffset(4), Unit("m"), Min(0.001), Default(1.8)]
+    public float Height;
+    /// <summary>
+    /// Maximum walkable slope angle.
+    /// </summary>
+    /// <remarks>
+    /// Unit: deg. Range: [0.1, 89.9]. Default: 45.
+    /// </remarks>
+    [FieldOffset(8), Unit("deg"), Range(0.1, 89.9), Default(45)]
+    public float MaxSlopeDeg;
+    /// <summary>
+    /// Maximum step height climbed automatically; zero disables stepping.
+    /// </summary>
+    /// <remarks>
+    /// Unit: m. Range: [0, ∞]. Default: 0.25.
+    /// </remarks>
+    [FieldOffset(12), Unit("m"), Min(0), Default(0.25)]
+    public float StepHeight;
+    /// <summary>
+    /// Distance searched below the feet to stay on descending ground; zero disables it.
+    /// </summary>
+    /// <remarks>
+    /// Unit: m. Range: [0, ∞]. Default: 0.2.
+    /// </remarks>
+    [FieldOffset(16), Unit("m"), Min(0), Default(0.2)]
+    public float StickDown;
+    /// <summary>
+    /// Collision padding kept between the capsule and the world.
+    /// </summary>
+    /// <remarks>
+    /// Unit: m. Range: [0.0001, ∞]. Default: 0.01.
+    /// </remarks>
+    [FieldOffset(20), Unit("m"), Min(0.0001), Default(0.01)]
+    public float Padding;
+    /// <summary>
+    /// Collision group used for movement queries.
+    /// </summary>
+    /// <remarks>
+    /// Range: [1, 15]. Default: 1.
+    /// </remarks>
+    [FieldOffset(24), Range(1, 15), Default(1)]
+    public uint Layer;
+    /// <summary>Stable engine component index.</summary>
+    public static uint TypeIndex => 12;
+    /// <inheritdoc/>
+    public static ref CharacterController2d Access(Entity entity, bool write) => ref EngineAccess.Get(entity, TypeIndex, write, EngineValueCodecs.ReadCharacterController2d, EngineValueCodecs.WriteCharacterController2d);
+    /// <inheritdoc/>
+    public static void Insert(in Commands commands, Entity entity, in CharacterController2d value) => commands.InsertJson(entity, TypeIndex, EngineAccess.Encode(value, EngineValueCodecs.WriteCharacterController2d));
+    /// <inheritdoc/>
+    public static bool Contains(Entity entity) => Host.ComponentHas(entity.Bits, TypeIndex);
+}
+
+/// <summary>
+/// Per-tick character intent: replay this input exactly once before the rigid-body step.
+/// </summary>
+[StructLayout(LayoutKind.Explicit, Size = 20)]
+[EngineComponent("CharacterInput", Module = "physics")]
+public partial struct CharacterInput : IComponent<CharacterInput>
+{
+    /// <summary>
+    /// Desired world-space horizontal velocity; Y must be zero.
+    /// </summary>
+    /// <remarks>
+    /// Unit: m/s. Default: [0,0,0]. Replicated to the owning client.
+    /// </remarks>
+    [FieldOffset(0), Unit("m/s"), Replicate(Audience.Owner, Rollback = true), Default(0, 0, 0)]
+    public Vector3 DesiredVelocity;
+    /// <summary>
+    /// Jump launch speed; zero means no jump this tick.
+    /// </summary>
+    /// <remarks>
+    /// Unit: m/s. Range: [0, ∞]. Default: 0. Replicated to the owning client.
+    /// </remarks>
+    [FieldOffset(12), Unit("m/s"), Min(0), Replicate(Audience.Owner, Rollback = true), Default(0)]
+    public float JumpSpeed;
+    /// <summary>
+    /// Requested crouch; standing may be blocked by clearance.
+    /// </summary>
+    /// <remarks>
+    /// Default: false. Replicated to the owning client.
+    /// </remarks>
+    [FieldOffset(16), Replicate(Audience.Owner, Rollback = true), Default(false)]
+    public bool Crouch;
+    /// <summary>Stable engine component index.</summary>
+    public static uint TypeIndex => 13;
+    /// <inheritdoc/>
+    public static ref CharacterInput Access(Entity entity, bool write) => ref EngineAccess.Get(entity, TypeIndex, write, EngineValueCodecs.ReadCharacterInput, EngineValueCodecs.WriteCharacterInput);
+    /// <inheritdoc/>
+    public static void Insert(in Commands commands, Entity entity, in CharacterInput value) => commands.InsertJson(entity, TypeIndex, EngineAccess.Encode(value, EngineValueCodecs.WriteCharacterInput));
+    /// <inheritdoc/>
+    public static bool Contains(Entity entity) => Host.ComponentHas(entity.Bits, TypeIndex);
+}
+
+/// <summary>
+/// Per-tick character intent, read exactly once by each boundary. Gameplay writes it before the physics system; it is not cleared, so held input repeats.
+/// </summary>
+[StructLayout(LayoutKind.Explicit, Size = 12)]
+[EngineComponent("CharacterInput2d", Module = "physics2d")]
+public partial struct CharacterInput2d : IComponent<CharacterInput2d>
+{
+    /// <summary>
+    /// Desired world-space velocity. With gravity it must be perpendicular to gravity (vertical motion comes from gravity and jumps); zero-gravity worlds use both axes.
+    /// </summary>
+    /// <remarks>
+    /// Unit: m/s. Default: [0,0]. Replicated to the owning client.
+    /// </remarks>
+    [FieldOffset(0), Unit("m/s"), Replicate(Audience.Owner, Rollback = true), Default(0, 0)]
+    public Vector2 DesiredVelocity;
+    /// <summary>
+    /// Jump launch speed, applied only while grounded; zero means no jump this tick.
+    /// </summary>
+    /// <remarks>
+    /// Unit: m/s. Range: [0, ∞]. Default: 0. Replicated to the owning client.
+    /// </remarks>
+    [FieldOffset(8), Unit("m/s"), Min(0), Replicate(Audience.Owner, Rollback = true), Default(0)]
+    public float JumpSpeed;
+    /// <summary>Stable engine component index.</summary>
+    public static uint TypeIndex => 14;
+    /// <inheritdoc/>
+    public static ref CharacterInput2d Access(Entity entity, bool write) => ref EngineAccess.Get(entity, TypeIndex, write, EngineValueCodecs.ReadCharacterInput2d, EngineValueCodecs.WriteCharacterInput2d);
+    /// <inheritdoc/>
+    public static void Insert(in Commands commands, Entity entity, in CharacterInput2d value) => commands.InsertJson(entity, TypeIndex, EngineAccess.Encode(value, EngineValueCodecs.WriteCharacterInput2d));
+    /// <inheritdoc/>
+    public static bool Contains(Entity entity) => Host.ComponentHas(entity.Bits, TypeIndex);
+}
+
+/// <summary>
+/// Character support and stance mirrored at every fixed boundary.
+/// </summary>
+[StructLayout(LayoutKind.Explicit, Size = 28)]
+[EngineComponent("CharacterMotion", Module = "physics")]
+public partial struct CharacterMotion : IComponent<CharacterMotion>
+{
+    /// <summary>
+    /// Walkable ground support.
+    /// </summary>
+    /// <remarks>
+    /// Default: false. Replicated to the owning client.
+    /// </remarks>
+    [FieldOffset(0), Replicate(Audience.Owner, Rollback = true), Default(false)]
+    public bool Grounded;
+    /// <summary>
+    /// Actual stance; a ceiling can prevent standing.
+    /// </summary>
+    /// <remarks>
+    /// Default: false. Replicated to the owning client.
+    /// </remarks>
+    [FieldOffset(1), Replicate(Audience.Owner, Rollback = true), Default(false)]
+    public bool Crouched;
+    /// <summary>
+    /// Platform contact velocity.
+    /// </summary>
+    /// <remarks>
+    /// Unit: m/s. Default: [0,0,0]. Replicated to the owning client.
+    /// </remarks>
+    [FieldOffset(4), Unit("m/s"), Replicate(Audience.Owner, Rollback = true), Default(0, 0, 0)]
+    public Vector3 GroundVelocity;
+    /// <summary>
+    /// Supporting surface normal.
+    /// </summary>
+    /// <remarks>
+    /// Default: [0,0,0]. Replicated to the owning client.
+    /// </remarks>
+    [FieldOffset(16), Replicate(Audience.Owner, Rollback = true), Default(0, 0, 0)]
+    public Vector3 GroundNormal;
+    /// <summary>Stable engine component index.</summary>
+    public static uint TypeIndex => 15;
+    /// <inheritdoc/>
+    public static ref CharacterMotion Access(Entity entity, bool write) => ref EngineAccess.Get(entity, TypeIndex, write, EngineValueCodecs.ReadCharacterMotion, EngineValueCodecs.WriteCharacterMotion);
+    /// <inheritdoc/>
+    public static void Insert(in Commands commands, Entity entity, in CharacterMotion value) => commands.InsertJson(entity, TypeIndex, EngineAccess.Encode(value, EngineValueCodecs.WriteCharacterMotion));
+    /// <inheritdoc/>
+    public static bool Contains(Entity entity) => Host.ComponentHas(entity.Bits, TypeIndex);
+}
+
+/// <summary>
+/// Character support mirrored at every fixed boundary.
+/// </summary>
+[StructLayout(LayoutKind.Explicit, Size = 12)]
+[EngineComponent("CharacterMotion2d", Module = "physics2d")]
+public partial struct CharacterMotion2d : IComponent<CharacterMotion2d>
+{
+    /// <summary>
+    /// Walkable ground support after the last move.
+    /// </summary>
+    /// <remarks>
+    /// Default: false. Replicated to the owning client.
+    /// </remarks>
+    [FieldOffset(0), Replicate(Audience.Owner, Rollback = true), Default(false)]
+    public bool Grounded;
+    /// <summary>
+    /// Supporting surface normal; zero while airborne.
+    /// </summary>
+    /// <remarks>
+    /// Default: [0,0]. Replicated to the owning client.
+    /// </remarks>
+    [FieldOffset(4), Replicate(Audience.Owner, Rollback = true), Default(0, 0)]
+    public Vector2 GroundNormal;
+    /// <summary>Stable engine component index.</summary>
+    public static uint TypeIndex => 16;
+    /// <inheritdoc/>
+    public static ref CharacterMotion2d Access(Entity entity, bool write) => ref EngineAccess.Get(entity, TypeIndex, write, EngineValueCodecs.ReadCharacterMotion2d, EngineValueCodecs.WriteCharacterMotion2d);
+    /// <inheritdoc/>
+    public static void Insert(in Commands commands, Entity entity, in CharacterMotion2d value) => commands.InsertJson(entity, TypeIndex, EngineAccess.Encode(value, EngineValueCodecs.WriteCharacterMotion2d));
+    /// <inheritdoc/>
+    public static bool Contains(Entity entity) => Host.ComponentHas(entity.Bits, TypeIndex);
+}
+
+/// <summary>
+/// Collision geometry, material, layer and trigger settings.
+/// </summary>
+[EngineComponent("Collider", Module = "physics")]
+public partial struct Collider : IComponent<Collider>
+{
+    /// <summary>
+    /// Primitive type or externally cooked shape.
+    /// </summary>
+    /// <remarks>
+    /// Default: "box".
+    /// </remarks>
+    [Default("box")]
+    public ColliderKind Kind;
+    /// <summary>
+    /// Shape center in body-local metres, after visual scale is baked. The body origin remains at Transform/PhysicsPose; rotation also rotates this offset.
+    /// </summary>
+    /// <remarks>
+    /// Unit: m. Default: [0,0,0].
+    /// </remarks>
+    [Unit("m"), Default(0, 0, 0)]
+    public Vector3 Center;
+    /// <summary>
+    /// Box half extents; scale must be baked before physics extraction.
+    /// </summary>
+    /// <remarks>
+    /// Unit: m. Range: [0.0001, ∞]. Default: [0.5,0.5,0.5].
+    /// </remarks>
+    [Unit("m"), Min(0.0001), Default(0.5, 0.5, 0.5)]
+    public Vector3 HalfExtents;
+    /// <summary>
+    /// Sphere, capsule or cylinder radius.
+    /// </summary>
+    /// <remarks>
+    /// Unit: m. Range: [0.0001, ∞]. Default: 0.5.
+    /// </remarks>
+    [Unit("m"), Min(0.0001), Default(0.5)]
+    public float Radius;
+    /// <summary>
+    /// Cylinder half height, excluding the capsule hemispheres.
+    /// </summary>
+    /// <remarks>
+    /// Unit: m. Range: [0, ∞]. Default: 0.5.
+    /// </remarks>
+    [Unit("m"), Min(0), Default(0.5)]
+    public float HalfHeight;
+    /// <summary>
+    /// Cooked collision asset (<c>@path#id</c>); resolve into <c>CookedCollider</c> before ticking.
+    /// </summary>
+    /// <remarks>
+    /// Default: null.
+    /// </remarks>
+    [Default(Json = "null")]
+    public string? Asset;
+    /// <summary>
+    /// Source model node name/index for model-derived geometry; absent uses its default scene.
+    /// </summary>
+    /// <remarks>
+    /// Default: null.
+    /// </remarks>
+    [Default(Json = "null")]
+    public string? Node;
+    /// <summary>
+    /// Subtree-local primitive for model-derived geometry; absent uses the complete subtree.
+    /// </summary>
+    /// <remarks>
+    /// Default: null.
+    /// </remarks>
+    [Default(Json = "null")]
+    public uint? Primitive;
+    /// <summary>
+    /// Zero selects static/moving defaults from the body; 1..15 select an explicit group.
+    /// </summary>
+    /// <remarks>
+    /// Range: [0, 15]. Default: 0.
+    /// </remarks>
+    [Range(0, 15), Default(0)]
+    public uint Layer;
+    /// <summary>
+    /// Report trigger events without a collision response.
+    /// </summary>
+    /// <remarks>
+    /// Default: false.
+    /// </remarks>
+    [Default(false)]
+    public bool Sensor;
+    /// <summary>
+    /// Coulomb friction coefficient.
+    /// </summary>
+    /// <remarks>
+    /// Range: [0, ∞]. Default: 0.6.
+    /// </remarks>
+    [Min(0), Default(0.6)]
+    public float Friction;
+    /// <summary>
+    /// Elasticity: zero is inelastic, one is perfectly elastic.
+    /// </summary>
+    /// <remarks>
+    /// Range: [0, 1]. Default: 0.
+    /// </remarks>
+    [Range(0, 1), Default(0)]
+    public float Restitution;
+    /// <summary>Stable engine component index.</summary>
+    public static uint TypeIndex => 17;
+    /// <inheritdoc/>
+    public static ref Collider Access(Entity entity, bool write) => ref EngineAccess.Get(entity, TypeIndex, write, EngineValueCodecs.ReadCollider, EngineValueCodecs.WriteCollider);
+    /// <inheritdoc/>
+    public static void Insert(in Commands commands, Entity entity, in Collider value) => commands.InsertJson(entity, TypeIndex, EngineAccess.Encode(value, EngineValueCodecs.WriteCollider));
+    /// <inheritdoc/>
+    public static bool Contains(Entity entity) => Host.ComponentHas(entity.Bits, TypeIndex);
+}
+
+/// <summary>
+/// Collision geometry, material, layer and trigger settings for a <c>RigidBody2d</c>.
+/// </summary>
+[EngineComponent("Collider2d", Module = "physics2d")]
+public partial struct Collider2d : IComponent<Collider2d>
+{
+    /// <summary>
+    /// Primitive type or convex polygon.
+    /// </summary>
+    /// <remarks>
+    /// Default: "box".
+    /// </remarks>
+    [Default("box")]
+    public ColliderKind2d Kind;
+    /// <summary>
+    /// Box half extents; scale must be baked before physics extraction.
+    /// </summary>
+    /// <remarks>
+    /// Unit: m. Range: [0.0001, ∞]. Default: [0.5,0.5].
+    /// </remarks>
+    [Unit("m"), Min(0.0001), Default(0.5, 0.5)]
+    public Vector2 HalfExtents;
+    /// <summary>
+    /// Circle or capsule radius.
+    /// </summary>
+    /// <remarks>
+    /// Unit: m. Range: [0.0001, ∞]. Default: 0.5.
+    /// </remarks>
+    [Unit("m"), Min(0.0001), Default(0.5)]
+    public float Radius;
+    /// <summary>
+    /// Capsule segment half height, excluding the end caps.
+    /// </summary>
+    /// <remarks>
+    /// Unit: m. Range: [0, ∞]. Default: 0.5.
+    /// </remarks>
+    [Unit("m"), Min(0), Default(0.5)]
+    public float HalfHeight;
+    /// <summary>
+    /// Local convex hull input for polygons, in metres.
+    /// </summary>
+    /// <remarks>
+    /// Default: [].
+    /// </remarks>
+    [Default(Json = "[]")]
+    public Vector2[] Points;
+    /// <summary>
+    /// Zero selects static/moving defaults from the body; 1..15 select an explicit group.
+    /// </summary>
+    /// <remarks>
+    /// Range: [0, 15]. Default: 0.
+    /// </remarks>
+    [Range(0, 15), Default(0)]
+    public uint Layer;
+    /// <summary>
+    /// Report overlaps without a collision response.
+    /// </summary>
+    /// <remarks>
+    /// Default: false.
+    /// </remarks>
+    [Default(false)]
+    public bool Sensor;
+    /// <summary>
+    /// Coulomb friction coefficient.
+    /// </summary>
+    /// <remarks>
+    /// Range: [0, ∞]. Default: 0.6.
+    /// </remarks>
+    [Min(0), Default(0.6)]
+    public float Friction;
+    /// <summary>
+    /// Elasticity: zero is inelastic, one is perfectly elastic.
+    /// </summary>
+    /// <remarks>
+    /// Range: [0, 1]. Default: 0.
+    /// </remarks>
+    [Range(0, 1), Default(0)]
+    public float Restitution;
+    /// <summary>Stable engine component index.</summary>
+    public static uint TypeIndex => 18;
+    /// <inheritdoc/>
+    public static ref Collider2d Access(Entity entity, bool write) => ref EngineAccess.Get(entity, TypeIndex, write, EngineValueCodecs.ReadCollider2d, EngineValueCodecs.WriteCollider2d);
+    /// <inheritdoc/>
+    public static void Insert(in Commands commands, Entity entity, in Collider2d value) => commands.InsertJson(entity, TypeIndex, EngineAccess.Encode(value, EngineValueCodecs.WriteCollider2d));
+    /// <inheritdoc/>
+    public static bool Contains(Entity entity) => Host.ComponentHas(entity.Bits, TypeIndex);
+}
+
+/// <summary>
+/// Primitive or cooked geometry selection. Cooked geometry is resolved by the asset worker.
+/// </summary>
+public enum ColliderKind : uint
+{
+    /// <summary>
+    /// Box using half extents.
+    /// </summary>
+    Box = 0,
+    /// <summary>
+    /// Sphere using radius.
+    /// </summary>
+    Sphere = 1,
+    /// <summary>
+    /// Y-axis capsule using cylinder half height and radius.
+    /// </summary>
+    Capsule = 2,
+    /// <summary>
+    /// Y-axis cylinder using half height and radius.
+    /// </summary>
+    Cylinder = 3,
+    /// <summary>
+    /// Immutable cooked hull, mesh, terrain or compound, attached as <c>CookedCollider</c>.
+    /// </summary>
+    Cooked = 4,
+    /// <summary>
+    /// Convex hull from the selected cooked model geometry; supports moving bodies.
+    /// </summary>
+    ModelConvex = 5,
+    /// <summary>
+    /// Triangle surface from the selected cooked model geometry; static bodies only.
+    /// </summary>
+    ModelMesh = 6,
+}
+
+/// <summary>
+/// Convex 2D geometry selection; 2D never reuses the 3D shape vocabulary.
+/// </summary>
+public enum ColliderKind2d : uint
+{
+    /// <summary>
+    /// Box using half extents.
+    /// </summary>
+    Box = 0,
+    /// <summary>
+    /// Circle using radius.
+    /// </summary>
+    Circle = 1,
+    /// <summary>
+    /// Y-axis capsule using segment half height and radius.
+    /// </summary>
+    Capsule = 2,
+    /// <summary>
+    /// Convex hull of <c>points</c> (3 to 64 local-space points).
+    /// </summary>
+    Polygon = 3,
+}
+
+/// <summary>
+/// Procedural sky radiance and camera exposure. The first in stable-ID order wins.
+/// </summary>
+[StructLayout(LayoutKind.Explicit, Size = 56)]
+[EngineComponent("Environment", Module = "render")]
+public partial struct Environment : IComponent<Environment>
+{
+    /// <summary>
+    /// Zenith sky color (linear).
+    /// </summary>
+    /// <remarks>
+    /// Default: [0.22,0.32,0.6,1].
+    /// </remarks>
+    [FieldOffset(0), Default(0.22, 0.32, 0.6, 1)]
+    public Color Sky;
+    /// <summary>
+    /// Horizon sky color (linear).
+    /// </summary>
+    /// <remarks>
+    /// Default: [0.95,0.62,0.4,1].
+    /// </remarks>
+    [FieldOffset(16), Default(0.95, 0.62, 0.4, 1)]
+    public Color Horizon;
+    /// <summary>
+    /// Ground color seen below the horizon (linear).
+    /// </summary>
+    /// <remarks>
+    /// Default: [0.18,0.16,0.14,1].
+    /// </remarks>
+    [FieldOffset(32), Default(0.18, 0.16, 0.14, 1)]
+    public Color Ground;
+    /// <summary>
+    /// Sky radiance scale in candela per square metre.
+    /// </summary>
+    /// <remarks>
+    /// Unit: cd. Range: [0, ∞]. Default: 900.
+    /// </remarks>
+    [FieldOffset(48), Unit("cd"), Min(0), Default(900)]
+    public float Intensity;
+    /// <summary>
+    /// Linear camera exposure multiplier, applied before tone mapping.
+    /// </summary>
+    /// <remarks>
+    /// Range: [1e-7, ∞]. Default: 0.0015.
+    /// </remarks>
+    [FieldOffset(52), Min(0.0000001), Default(0.0015)]
+    public float Exposure;
+    /// <summary>Stable engine component index.</summary>
+    public static uint TypeIndex => 19;
+    /// <inheritdoc/>
+    public static ref Environment Access(Entity entity, bool write) => ref EngineAccess.Get(entity, TypeIndex, write, EngineValueCodecs.ReadEnvironment, EngineValueCodecs.WriteEnvironment);
+    /// <inheritdoc/>
+    public static void Insert(in Commands commands, Entity entity, in Environment value) => commands.InsertJson(entity, TypeIndex, EngineAccess.Encode(value, EngineValueCodecs.WriteEnvironment));
+    /// <inheritdoc/>
+    public static bool Contains(Entity entity) => Host.ComponentHas(entity.Bits, TypeIndex);
+}
+
+/// <summary>
+/// How the camera exposes the scene.
+/// </summary>
+public enum ExposureMode : uint
+{
+    /// <summary>
+    /// Meter the frame's luminance and adapt within <c>minEv100</c>..<c>maxEv100</c>.
+    /// </summary>
+    Auto = 0,
+    /// <summary>
+    /// Fixed photographic exposure <c>ev100</c>.
+    /// </summary>
+    Manual = 1,
+}
+
+/// <summary>
+/// Tick-driven flipbook state, wholly contained in an ECS component.
+/// </summary>
+[EngineComponent("Flipbook", Module = "twoD")]
+public partial struct Flipbook : IComponent<Flipbook>
+{
+    /// <summary>
+    /// Ordered clip frames.
+    /// </summary>
+    /// <remarks>
+    /// Default: [].
+    /// </remarks>
+    [Default(Json = "[]")]
+    public FlipbookFrame[] Frames;
+    /// <summary>
+    /// Clip's start tick, preserved through snapshots.
+    /// </summary>
+    /// <remarks>
+    /// Default: 0.
+    /// </remarks>
+    [Default(0)]
+    public ulong StartTick;
+    /// <summary>
+    /// Repeat rather than hold the final frame.
+    /// </summary>
+    /// <remarks>
+    /// Default: false.
+    /// </remarks>
+    [Default(false)]
+    public bool Looping;
+    /// <summary>Stable engine component index.</summary>
+    public static uint TypeIndex => 20;
+    /// <inheritdoc/>
+    public static ref Flipbook Access(Entity entity, bool write) => ref EngineAccess.Get(entity, TypeIndex, write, EngineValueCodecs.ReadFlipbook, EngineValueCodecs.WriteFlipbook);
+    /// <inheritdoc/>
+    public static void Insert(in Commands commands, Entity entity, in Flipbook value) => commands.InsertJson(entity, TypeIndex, EngineAccess.Encode(value, EngineValueCodecs.WriteFlipbook));
+    /// <inheritdoc/>
+    public static bool Contains(Entity entity) => Host.ComponentHas(entity.Bits, TypeIndex);
+}
+
+/// <summary>
+/// One deterministic flipbook frame.
+/// </summary>
+public partial struct FlipbookFrame
+{
+    /// <summary>
+    /// Atlas region name.
+    /// </summary>
+    /// <remarks>
+    /// Default: "".
+    /// </remarks>
+    [Default("")]
+    public string? Region;
+    /// <summary>
+    /// Frame duration in fixed simulation ticks; must be positive.
+    /// </summary>
+    /// <remarks>
+    /// Default: 0.
+    /// </remarks>
+    [Default(0)]
+    public uint Ticks;
+}
+
+/// <summary>
+/// Third-person orbit rig: places this entity behind <c>target</c>, steered by <c>Look</c>.
+/// </summary>
+[EngineComponent("FollowCamera", Module = "gameplay")]
+public partial struct FollowCamera : IComponent<FollowCamera>
+{
+    /// <summary>
+    /// Followed entity.
+    /// </summary>
+    /// <remarks>
+    /// Default: null.
+    /// </remarks>
+    [Default(Json = "null")]
+    public string? Target;
+    /// <summary>
+    /// Orbit distance from the aim point; the boom stops in front of static box colliders.
+    /// </summary>
+    /// <remarks>
+    /// Unit: m. Range: [0.1, ∞]. Default: 5.
+    /// </remarks>
+    [Unit("m"), Min(0.1), Default(5)]
+    public float Distance;
+    /// <summary>
+    /// Aim point height above the target's origin.
+    /// </summary>
+    /// <remarks>
+    /// Unit: m. Default: 0.8.
+    /// </remarks>
+    [Unit("m"), Default(0.8)]
+    public float Height;
+    /// <summary>
+    /// Orbit yaw; 0 looks along +Z. Simulation state driven by <c>Look</c>.
+    /// </summary>
+    /// <remarks>
+    /// Unit: deg. Default: 0.
+    /// </remarks>
+    [Unit("deg"), Default(0)]
+    public float Yaw;
+    /// <summary>
+    /// Orbit pitch above the horizon; simulation state driven by <c>Look</c>.
+    /// </summary>
+    /// <remarks>
+    /// Unit: deg. Range: [-80, 80]. Default: 20.
+    /// </remarks>
+    [Unit("deg"), Range(-80, 80), Default(20)]
+    public float Pitch;
+    /// <summary>
+    /// Look sensitivity: degrees per tick at full axis deflection.
+    /// </summary>
+    /// <remarks>
+    /// Unit: deg. Range: [0, ∞]. Default: 2.5.
+    /// </remarks>
+    [Unit("deg"), Min(0), Default(2.5)]
+    public float Sensitivity;
+    /// <summary>
+    /// Input owner whose <c>Look</c> action steers the rig.
+    /// </summary>
+    /// <remarks>
+    /// Default: 1.
+    /// </remarks>
+    [Default(1)]
+    public ulong Player;
+    /// <summary>Stable engine component index.</summary>
+    public static uint TypeIndex => 21;
+    /// <inheritdoc/>
+    public static ref FollowCamera Access(Entity entity, bool write) => ref EngineAccess.Get(entity, TypeIndex, write, EngineValueCodecs.ReadFollowCamera, EngineValueCodecs.WriteFollowCamera);
+    /// <inheritdoc/>
+    public static void Insert(in Commands commands, Entity entity, in FollowCamera value) => commands.InsertJson(entity, TypeIndex, EngineAccess.Encode(value, EngineValueCodecs.WriteFollowCamera));
+    /// <inheritdoc/>
+    public static bool Contains(Entity entity) => Host.ComponentHas(entity.Bits, TypeIndex);
+}
+
+/// <summary>
+/// Tile coordinate layout; hex is axial and pointy-topped.
+/// </summary>
+public enum GridLayout : uint
+{
+    /// <summary>
+    /// Axis-aligned rectangular cells.
+    /// </summary>
+    Grid = 0,
+    /// <summary>
+    /// Axial q/r hexagons with cell size equal to their bounding box.
+    /// </summary>
+    Hex = 1,
+    /// <summary>
+    /// Diamond grid, cell size equal to a diamond's bounding box.
+    /// </summary>
+    Isometric = 2,
+}
+
+/// <summary>
+/// Exponential height fog lit by the sun, the sky and local lights (volumetric shafts where shadows cut the beams). Density halves every <c>falloff × ln 2</c> metres above <c>baseHeight</c>. The first entity in ID order wins.
+/// </summary>
+[StructLayout(LayoutKind.Explicit, Size = 32)]
+[EngineComponent("HeightFog", Module = "render")]
+public partial struct HeightFog : IComponent<HeightFog>
+{
+    /// <summary>
+    /// Extinction at <c>baseHeight</c>, per metre. 0.002 is a light haze (visibility ≈ 1.5 km), 0.02 a thick fog (≈ 150 m).
+    /// </summary>
+    /// <remarks>
+    /// Range: [0, 0.1]. Default: 0.002.
+    /// </remarks>
+    [FieldOffset(0), Range(0, 0.1), Default(0.002)]
+    public float Density;
+    /// <summary>
+    /// World altitude where the fog has its full density.
+    /// </summary>
+    /// <remarks>
+    /// Unit: m. Default: 0.
+    /// </remarks>
+    [FieldOffset(4), Unit("m"), Default(0)]
+    public float BaseHeight;
+    /// <summary>
+    /// Scale height: density falls by a factor of e over this many metres of altitude.
+    /// </summary>
+    /// <remarks>
+    /// Unit: m. Range: [1, 10000]. Default: 60.
+    /// </remarks>
+    [FieldOffset(8), Unit("m"), Range(1, 10000), Default(60)]
+    public float Falloff;
+    /// <summary>
+    /// Scattering colour (single-scattering albedo, linear). Grey-white for water fog, warm for dust.
+    /// </summary>
+    /// <remarks>
+    /// Default: [0.9,0.9,0.9,1].
+    /// </remarks>
+    [FieldOffset(12), Default(0.9, 0.9, 0.9, 1)]
+    public Color Albedo;
+    /// <summary>
+    /// Forward-scattering bias: 0 is uniform, toward 1 the fog glows around the sun and lamps.
+    /// </summary>
+    /// <remarks>
+    /// Range: [0, 0.9]. Default: 0.3.
+    /// </remarks>
+    [FieldOffset(28), Range(0, 0.9), Default(0.3)]
+    public float Anisotropy;
+    /// <summary>Stable engine component index.</summary>
+    public static uint TypeIndex => 22;
+    /// <inheritdoc/>
+    public static ref HeightFog Access(Entity entity, bool write) => ref EngineAccess.Get(entity, TypeIndex, write, EngineValueCodecs.ReadHeightFog, EngineValueCodecs.WriteHeightFog);
+    /// <inheritdoc/>
+    public static void Insert(in Commands commands, Entity entity, in HeightFog value) => commands.InsertJson(entity, TypeIndex, EngineAccess.Encode(value, EngineValueCodecs.WriteHeightFog));
+    /// <inheritdoc/>
+    public static bool Contains(Entity entity) => Host.ComponentHas(entity.Bits, TypeIndex);
+}
+
+/// <summary>
+/// Joint on a body; connection zero anchors to the world. Anchors/axes are world-space.
+/// </summary>
+[StructLayout(LayoutKind.Explicit, Size = 112)]
+[EngineComponent("Joint", Module = "physics")]
+public partial struct Joint : IComponent<Joint>
+{
+    /// <summary>
+    /// Constraint primitive.
+    /// </summary>
+    /// <remarks>
+    /// Default: "fixed".
+    /// </remarks>
+    [FieldOffset(0), Default("fixed")]
+    public JointKind Kind;
+    /// <summary>
+    /// PhysicsId of the connected body; zero is the world.
+    /// </summary>
+    /// <remarks>
+    /// Default: 0.
+    /// </remarks>
+    [FieldOffset(8), Default(0)]
+    public ulong ConnectedBody;
+    /// <summary>
+    /// Anchor on the connected body, or the world anchor.
+    /// </summary>
+    /// <remarks>
+    /// Unit: m. Default: [0,0,0].
+    /// </remarks>
+    [FieldOffset(16), Unit("m"), Default(0, 0, 0)]
+    public Vector3 AnchorA;
+    /// <summary>
+    /// Anchor on this entity's body.
+    /// </summary>
+    /// <remarks>
+    /// Unit: m. Default: [0,0,0].
+    /// </remarks>
+    [FieldOffset(28), Unit("m"), Default(0, 0, 0)]
+    public Vector3 AnchorB;
+    /// <summary>
+    /// Unit primary axis (hinge direction, slider direction, or frame X).
+    /// </summary>
+    /// <remarks>
+    /// Default: [1,0,0].
+    /// </remarks>
+    [FieldOffset(40), Default(1, 0, 0)]
+    public Vector3 Axis;
+    /// <summary>
+    /// Unit perpendicular normal (frame Y).
+    /// </summary>
+    /// <remarks>
+    /// Default: [0,1,0].
+    /// </remarks>
+    [FieldOffset(52), Default(0, 1, 0)]
+    public Vector3 Normal;
+    /// <summary>
+    /// Minimum XYZ translation; X is the slider/distance lower bound.
+    /// </summary>
+    /// <remarks>
+    /// Unit: m. Default: [0,0,0].
+    /// </remarks>
+    [FieldOffset(64), Unit("m"), Default(0, 0, 0)]
+    public Vector3 TranslationMin;
+    /// <summary>
+    /// Maximum XYZ translation; X is the slider/distance upper bound.
+    /// </summary>
+    /// <remarks>
+    /// Unit: m. Default: [0,0,0].
+    /// </remarks>
+    [FieldOffset(76), Unit("m"), Default(0, 0, 0)]
+    public Vector3 TranslationMax;
+    /// <summary>
+    /// Minimum XYZ angular limits; X is the hinge lower bound.
+    /// </summary>
+    /// <remarks>
+    /// Unit: rad. Range: [-3.1415928, 3.1415928]. Default: [0,0,0].
+    /// </remarks>
+    [FieldOffset(88), Unit("rad"), Range(-3.1415928, 3.1415928), Default(0, 0, 0)]
+    public Vector3 RotationMin;
+    /// <summary>
+    /// Maximum XYZ angular limits; X is the hinge upper bound.
+    /// </summary>
+    /// <remarks>
+    /// Unit: rad. Range: [-3.1415928, 3.1415928]. Default: [0,0,0].
+    /// </remarks>
+    [FieldOffset(100), Unit("rad"), Range(-3.1415928, 3.1415928), Default(0, 0, 0)]
+    public Vector3 RotationMax;
+    /// <summary>Stable engine component index.</summary>
+    public static uint TypeIndex => 23;
+    /// <inheritdoc/>
+    public static ref Joint Access(Entity entity, bool write) => ref EngineAccess.Get(entity, TypeIndex, write, EngineValueCodecs.ReadJoint, EngineValueCodecs.WriteJoint);
+    /// <inheritdoc/>
+    public static void Insert(in Commands commands, Entity entity, in Joint value) => commands.InsertJson(entity, TypeIndex, EngineAccess.Encode(value, EngineValueCodecs.WriteJoint));
+    /// <inheritdoc/>
+    public static bool Contains(Entity entity) => Host.ComponentHas(entity.Bits, TypeIndex);
+}
+
+/// <summary>
+/// Joint primitive implemented by the backend.
+/// </summary>
+public enum JointKind : uint
+{
+    /// <summary>
+    /// Locks all relative motion.
+    /// </summary>
+    Fixed = 0,
+    /// <summary>
+    /// Rotation around one axis.
+    /// </summary>
+    Hinge = 1,
+    /// <summary>
+    /// Translation along one axis.
+    /// </summary>
+    Slider = 2,
+    /// <summary>
+    /// Separation constrained to a distance interval.
+    /// </summary>
+    Distance = 3,
+    /// <summary>
+    /// Coincident anchors with free rotation.
+    /// </summary>
+    Point = 4,
+    /// <summary>
+    /// Independent translation and angular limits on three axes each.
+    /// </summary>
+    SixDof = 5,
+}
+
+/// <summary>
+/// A light at the entity's world position. Edits apply live in play.
+/// </summary>
+[StructLayout(LayoutKind.Explicit, Size = 36)]
+[EngineComponent("Light", Module = "render")]
+public partial struct Light : IComponent<Light>
+{
+    /// <summary>
+    /// Point, spot or directional.
+    /// </summary>
+    /// <remarks>
+    /// Default: "point".
+    /// </remarks>
+    [FieldOffset(0), Default("point")]
+    public LightKind Kind;
+    /// <summary>
+    /// Linear RGB tint (alpha is ignored).
+    /// </summary>
+    /// <remarks>
+    /// Default: [1,1,1,1].
+    /// </remarks>
+    [FieldOffset(4), Default(1, 1, 1, 1)]
+    public Color Color;
+    /// <summary>
+    /// Luminous flux in lumens (point/spot) or illuminance in lux (directional).
+    /// </summary>
+    /// <remarks>
+    /// Range: [0, ∞]. Default: 800.
+    /// </remarks>
+    [FieldOffset(20), Min(0), Default(800)]
+    public float Intensity;
+    /// <summary>
+    /// Influence radius of point and spot lights.
+    /// </summary>
+    /// <remarks>
+    /// Unit: m. Range: [0.01, ∞]. Default: 10.
+    /// </remarks>
+    [FieldOffset(24), Unit("m"), Min(0.01), Default(10)]
+    public float Range;
+    /// <summary>
+    /// Spot inner cone half-angle.
+    /// </summary>
+    /// <remarks>
+    /// Unit: deg. Range: [0, 89]. Default: 20.
+    /// </remarks>
+    [FieldOffset(28), Unit("deg"), Range(0, 89), Default(20)]
+    public float InnerAngle;
+    /// <summary>
+    /// Spot outer cone half-angle.
+    /// </summary>
+    /// <remarks>
+    /// Unit: deg. Range: [0.1, 89]. Default: 30.
+    /// </remarks>
+    [FieldOffset(32), Unit("deg"), Range(0.1, 89), Default(30)]
+    public float OuterAngle;
+    /// <summary>Stable engine component index.</summary>
+    public static uint TypeIndex => 24;
+    /// <inheritdoc/>
+    public static ref Light Access(Entity entity, bool write) => ref EngineAccess.Get(entity, TypeIndex, write, EngineValueCodecs.ReadLight, EngineValueCodecs.WriteLight);
+    /// <inheritdoc/>
+    public static void Insert(in Commands commands, Entity entity, in Light value) => commands.InsertJson(entity, TypeIndex, EngineAccess.Encode(value, EngineValueCodecs.WriteLight));
+    /// <inheritdoc/>
+    public static bool Contains(Entity entity) => Host.ComponentHas(entity.Bits, TypeIndex);
+}
+
+/// <summary>
+/// Point light for an explicitly lit sprite; Z provides normal-map elevation.
+/// </summary>
+[StructLayout(LayoutKind.Explicit, Size = 32)]
+[EngineComponent("Light2d", Module = "twoD")]
+public partial struct Light2d : IComponent<Light2d>
+{
+    /// <summary>
+    /// Position in world metres.
+    /// </summary>
+    /// <remarks>
+    /// Default: [0,0,0].
+    /// </remarks>
+    [FieldOffset(0), Default(0, 0, 0)]
+    public Vector3 Position;
+    /// <summary>
+    /// Linear RGB intensity.
+    /// </summary>
+    /// <remarks>
+    /// Default: [1,1,1].
+    /// </remarks>
+    [FieldOffset(12), Default(1, 1, 1)]
+    public Vector3 Color;
+    /// <summary>
+    /// Finite influence radius in metres.
+    /// </summary>
+    /// <remarks>
+    /// Range: [0.001, ∞]. Default: 5.
+    /// </remarks>
+    [FieldOffset(24), Min(0.001), Default(5)]
+    public float Radius;
+    /// <summary>
+    /// Test tile/sprite occluder segments between light and fragment.
+    /// </summary>
+    /// <remarks>
+    /// Default: false.
+    /// </remarks>
+    [FieldOffset(28), Default(false)]
+    public bool Shadows;
+    /// <summary>Stable engine component index.</summary>
+    public static uint TypeIndex => 25;
+    /// <inheritdoc/>
+    public static ref Light2d Access(Entity entity, bool write) => ref EngineAccess.Get(entity, TypeIndex, write, EngineValueCodecs.ReadLight2d, EngineValueCodecs.WriteLight2d);
+    /// <inheritdoc/>
+    public static void Insert(in Commands commands, Entity entity, in Light2d value) => commands.InsertJson(entity, TypeIndex, EngineAccess.Encode(value, EngineValueCodecs.WriteLight2d));
+    /// <inheritdoc/>
+    public static bool Contains(Entity entity) => Host.ComponentHas(entity.Bits, TypeIndex);
+}
+
+/// <summary>
+/// How a light emits.
+/// </summary>
+public enum LightKind : uint
+{
+    /// <summary>
+    /// Omnidirectional point light.
+    /// </summary>
+    Point = 0,
+    /// <summary>
+    /// Cone light aimed along the entity's local -Z axis.
+    /// </summary>
+    Spot = 1,
+    /// <summary>
+    /// Sun-like light shining along the entity's local -Z axis; casts cascaded shadows.
+    /// </summary>
+    Directional = 2,
+}
+
+/// <summary>
+/// How agents traverse an off-mesh link. Animation reads it from <c>NavAgentState.traversal</c> (an intent), never through a call.
+/// </summary>
+public enum LinkKind : uint
+{
+    /// <summary>
+    /// Straight walk at agent speed (narrow passages, scripted moves).
+    /// </summary>
+    Walk = 0,
+    /// <summary>
+    /// Ballistic arc with <c>arc_height</c>; plays a jump animation.
+    /// </summary>
+    Jump = 1,
+    /// <summary>
+    /// Vertical climb at reduced speed; plays a ladder animation.
+    /// </summary>
+    Ladder = 2,
+    /// <summary>
+    /// Passable only while open; agents wait at the start and request opening.
+    /// </summary>
+    Door = 3,
+    /// <summary>
+    /// Passable only while the cabin is present; riders wait, then ride.
+    /// </summary>
+    Elevator = 4,
+    /// <summary>
+    /// Instant relocation (portals, spawn tubes).
+    /// </summary>
+    Teleport = 5,
+}
+
+/// <summary>
+/// One clip of a locomotion blend and the ground speed it represents.
+/// </summary>
+public partial struct LocomotionClip
+{
+    /// <summary>
+    /// Animation name inside the model (the glTF animation name).
+    /// </summary>
+    /// <remarks>
+    /// Default: "".
+    /// </remarks>
+    [Default("")]
+    public string? Clip;
+    /// <summary>
+    /// Ground speed at which this clip has full weight.
+    /// </summary>
+    /// <remarks>
+    /// Unit: m/s. Range: [0, ∞]. Default: 0.
+    /// </remarks>
+    [Unit("m/s"), Min(0), Default(0)]
+    public float Speed;
+}
+
+/// <summary>
+/// Named surface materials with Steam Audio's published values.
+/// </summary>
+public enum MaterialPreset : uint
+{
+    /// <summary>
+    /// Average interior surface.
+    /// </summary>
+    Generic = 0,
+    /// <summary>
+    /// Brick wall.
+    /// </summary>
+    Brick = 1,
+    /// <summary>
+    /// Poured concrete.
+    /// </summary>
+    Concrete = 2,
+    /// <summary>
+    /// Ceramic tile.
+    /// </summary>
+    Ceramic = 3,
+    /// <summary>
+    /// Loose gravel.
+    /// </summary>
+    Gravel = 4,
+    /// <summary>
+    /// Carpet on concrete.
+    /// </summary>
+    Carpet = 5,
+    /// <summary>
+    /// Window glass.
+    /// </summary>
+    Glass = 6,
+    /// <summary>
+    /// Plaster on brick.
+    /// </summary>
+    Plaster = 7,
+    /// <summary>
+    /// Wooden panels.
+    /// </summary>
+    Wood = 8,
+    /// <summary>
+    /// Sheet metal.
+    /// </summary>
+    Metal = 9,
+    /// <summary>
+    /// Natural rock.
+    /// </summary>
+    Rock = 10,
+}
+
+/// <summary>
+/// Draws geometry at the entity's interpolated world transform.
+/// </summary>
+[EngineComponent("MeshRenderer", Module = "render")]
+public partial struct MeshRenderer : IComponent<MeshRenderer>
+{
+    /// <summary>
+    /// Procedural shape, drawn when <c>model</c> is empty.
+    /// </summary>
+    /// <remarks>
+    /// Default: "box".
+    /// </remarks>
+    [Default("box")]
+    public MeshShape Shape;
+    /// <summary>
+    /// Shape size: box extents, sphere/capsule diameter in x and capsule height in y, plane extents in x and z.
+    /// </summary>
+    /// <remarks>
+    /// Unit: m. Range: [0.0001, ∞]. Default: [1,1,1].
+    /// </remarks>
+    [Unit("m"), Min(0.0001), Default(1, 1, 1)]
+    public Vector3 Size;
+    /// <summary>
+    /// Imported model (<c>@path#id</c> of a glTF/FBX source). Its meshes are drawn instead of the shape; skinned meshes follow this entity's Animator.
+    /// </summary>
+    /// <remarks>
+    /// Default: null.
+    /// </remarks>
+    [Default(Json = "null"), FormerlySerializedAs("mesh")]
+    public string? Model;
+    /// <summary>
+    /// Source node name or numeric glTF index. <c>name:3</c> selects a numeric name. The drawable subtree retains source rotation/scale and restores its pivot to the entity origin. Absent selects the complete default scene.
+    /// </summary>
+    /// <remarks>
+    /// Default: null.
+    /// </remarks>
+    [Default(Json = "null")]
+    public string? Node;
+    /// <summary>
+    /// Zero-based primitive within the selected subtree (or whole model).
+    /// </summary>
+    /// <remarks>
+    /// Default: null.
+    /// </remarks>
+    [Default(Json = "null")]
+    public uint? Primitive;
+    /// <summary>
+    /// Native material assets by subtree-local primitive slot; omitted slots use the model.
+    /// </summary>
+    /// <remarks>
+    /// Default: [].
+    /// </remarks>
+    [Default(Json = "[]")]
+    public PrimitiveMaterialOverride[] MaterialOverrides;
+    /// <summary>
+    /// Linear base color multiplier and opacity.
+    /// </summary>
+    /// <remarks>
+    /// Default: [1,1,1,1].
+    /// </remarks>
+    [Default(1, 1, 1, 1), FormerlySerializedAs("tint")]
+    public Color Color;
+    /// <summary>
+    /// Perceptual roughness.
+    /// </summary>
+    /// <remarks>
+    /// Range: [0, 1]. Default: 0.6.
+    /// </remarks>
+    [Range(0, 1), Default(0.6)]
+    public float Roughness;
+    /// <summary>
+    /// Metalness.
+    /// </summary>
+    /// <remarks>
+    /// Range: [0, 1]. Default: 0.
+    /// </remarks>
+    [Range(0, 1), Default(0)]
+    public float Metallic;
+    /// <summary>
+    /// Default procedural radiance, or an RGB emission multiplier with a model/material asset. Models treat zero RGB as neutral; use <c>emissiveEnabled</c> to switch them off.
+    /// </summary>
+    /// <remarks>
+    /// Default: [0,0,0].
+    /// </remarks>
+    [Default(0, 0, 0)]
+    public Vector3 Emissive;
+    /// <summary>
+    /// Enables emission without modifying the source model or its materials.
+    /// </summary>
+    /// <remarks>
+    /// Default: true.
+    /// </remarks>
+    [Default(true)]
+    public bool EmissiveEnabled;
+    /// <summary>
+    /// Emission multiplier, applied once after the source or overridden factor.
+    /// </summary>
+    /// <remarks>
+    /// Range: [0, ∞]. Default: 1.
+    /// </remarks>
+    [Min(0), Default(1)]
+    public float EmissiveStrength;
+    /// <summary>
+    /// Optional linear RGB replacement for the source emissive factor, useful for lamps.
+    /// </summary>
+    /// <remarks>
+    /// Range: [0, ∞]. Default: null.
+    /// </remarks>
+    [Min(0), Default(Json = "null")]
+    public Vector3? EmissiveFactor;
+    /// <summary>
+    /// Source material names or numeric indices affected by <c>emissiveFactor</c>. Empty targets all; <c>name:3</c> disambiguates a numeric material name.
+    /// </summary>
+    /// <remarks>
+    /// Default: [].
+    /// </remarks>
+    [Default(Json = "[]")]
+    public string?[] EmissiveMaterials;
+    /// <summary>Stable engine component index.</summary>
+    public static uint TypeIndex => 26;
+    /// <inheritdoc/>
+    public static ref MeshRenderer Access(Entity entity, bool write) => ref EngineAccess.Get(entity, TypeIndex, write, EngineValueCodecs.ReadMeshRenderer, EngineValueCodecs.WriteMeshRenderer);
+    /// <inheritdoc/>
+    public static void Insert(in Commands commands, Entity entity, in MeshRenderer value) => commands.InsertJson(entity, TypeIndex, EngineAccess.Encode(value, EngineValueCodecs.WriteMeshRenderer));
+    /// <inheritdoc/>
+    public static bool Contains(Entity entity) => Host.ComponentHas(entity.Bits, TypeIndex);
+}
+
+/// <summary>
+/// Built-in procedural geometry for gray-box levels.
+/// </summary>
+public enum MeshShape : uint
+{
+    /// <summary>
+    /// Axis-aligned box with <c>size</c> extents.
+    /// </summary>
+    Box = 0,
+    /// <summary>
+    /// Sphere with diameter <c>size.x</c>.
+    /// </summary>
+    Sphere = 1,
+    /// <summary>
+    /// Upright capsule with diameter <c>size.x</c> and total height <c>size.y</c>.
+    /// </summary>
+    Capsule = 2,
+    /// <summary>
+    /// Upward-facing quad spanning <c>size.x</c> by <c>size.z</c>.
+    /// </summary>
+    Plane = 3,
+}
+
+/// <summary>
+/// How a rigid body moves; kinematic targets are runtime intents.
+/// </summary>
+public enum MotionType : uint
+{
+    /// <summary>
+    /// Infinite mass, fixed scenery.
+    /// </summary>
+    Static = 0,
+    /// <summary>
+    /// Infinite mass, moves to an explicit target each tick.
+    /// </summary>
+    Kinematic = 1,
+    /// <summary>
+    /// Finite mass, simulated by the solver.
+    /// </summary>
+    Dynamic = 2,
+}
+
+/// <summary>
+/// How a rigid body moves; kinematic bodies follow their written pose.
+/// </summary>
+public enum MotionType2d : uint
+{
+    /// <summary>
+    /// Infinite mass, fixed scenery.
+    /// </summary>
+    Static = 0,
+    /// <summary>
+    /// Infinite mass; moves to its <c>PhysicsPose2d</c> each tick and pushes dynamic bodies.
+    /// </summary>
+    Kinematic = 1,
+    /// <summary>
+    /// Finite mass, simulated by the solver.
+    /// </summary>
+    Dynamic = 2,
+}
+
+/// <summary>
+/// Plays a <c>.music</c> document's interactive score (segments, transitions, intensity layers) from this entity, non-spatial. Presentation intent: gameplay writes <c>intensity</c> and <c>segment</c>; the audio presenter follows them.
+/// </summary>
+[EngineComponent("MusicSource", Module = "audio")]
+public partial struct MusicSource : IComponent<MusicSource>
+{
+    /// <summary>
+    /// The score (<c>.music</c> document).
+    /// </summary>
+    /// <remarks>
+    /// Default: null.
+    /// </remarks>
+    [Default(Json = "null")]
+    public string? Music;
+    /// <summary>
+    /// Mixer bus the stems play on.
+    /// </summary>
+    /// <remarks>
+    /// Default: "music".
+    /// </remarks>
+    [Default("music")]
+    public string? Bus;
+    /// <summary>
+    /// Intensity from 0 to 1: stems whose range contains it are audible.
+    /// </summary>
+    /// <remarks>
+    /// Range: [0, 1]. Default: 0.
+    /// </remarks>
+    [Range(0, 1), Default(0)]
+    public float Intensity;
+    /// <summary>
+    /// Segment to transition to (on the score's sync rule); empty follows the score.
+    /// </summary>
+    /// <remarks>
+    /// Default: "".
+    /// </remarks>
+    [Default("")]
+    public string? Segment;
+    /// <summary>Stable engine component index.</summary>
+    public static uint TypeIndex => 27;
+    /// <inheritdoc/>
+    public static ref MusicSource Access(Entity entity, bool write) => ref EngineAccess.Get(entity, TypeIndex, write, EngineValueCodecs.ReadMusicSource, EngineValueCodecs.WriteMusicSource);
+    /// <inheritdoc/>
+    public static void Insert(in Commands commands, Entity entity, in MusicSource value) => commands.InsertJson(entity, TypeIndex, EngineAccess.Encode(value, EngineValueCodecs.WriteMusicSource));
+    /// <inheritdoc/>
+    public static bool Contains(Entity entity) => Host.ComponentHas(entity.Bits, TypeIndex);
+}
+
+/// <summary>
+/// Dimensions, speed and permitted areas of one navigation agent.
+/// </summary>
+[StructLayout(LayoutKind.Explicit, Size = 28)]
+[EngineComponent("NavAgent", Module = "navigation")]
+public partial struct NavAgent : IComponent<NavAgent>
+{
+    /// <summary>
+    /// Mesh profile ID; radius and height must fit that profile.
+    /// </summary>
+    /// <remarks>
+    /// Default: 0.
+    /// </remarks>
+    [FieldOffset(0), Default(0)]
+    public uint Profile;
+    /// <summary>
+    /// Collision radius in metres.
+    /// </summary>
+    /// <remarks>
+    /// Unit: m. Range: [0.001, 10]. Default: 0.3.
+    /// </remarks>
+    [FieldOffset(4), Unit("m"), Range(0.001, 10), Default(0.3)]
+    public float Radius;
+    /// <summary>
+    /// Required clearance in metres.
+    /// </summary>
+    /// <remarks>
+    /// Unit: m. Range: [0.01, 100]. Default: 1.8.
+    /// </remarks>
+    [FieldOffset(8), Unit("m"), Range(0.01, 100), Default(1.8)]
+    public float Height;
+    /// <summary>
+    /// Maximum movement speed in metres per second.
+    /// </summary>
+    /// <remarks>
+    /// Range: [0, 1000]. Default: 3.
+    /// </remarks>
+    [FieldOffset(12), Range(0, 1000), Default(3)]
+    public float MaxSpeed;
+    /// <summary>
+    /// Maximum change in velocity per second.
+    /// </summary>
+    /// <remarks>
+    /// Range: [0, 10000]. Default: 8.
+    /// </remarks>
+    [FieldOffset(16), Range(0, 10000), Default(8)]
+    public float Acceleration;
+    /// <summary>
+    /// Areas this agent can use (one bit per area).
+    /// </summary>
+    /// <remarks>
+    /// Default: 65535.
+    /// </remarks>
+    [FieldOffset(20), Default(65535)]
+    public ushort AreaMask;
+    /// <summary>
+    /// Arrival tolerance in metres.
+    /// </summary>
+    /// <remarks>
+    /// Unit: m. Range: [0.001, 10]. Default: 0.1.
+    /// </remarks>
+    [FieldOffset(24), Unit("m"), Range(0.001, 10), Default(0.1)]
+    public float StoppingDistance;
+    /// <summary>Stable engine component index.</summary>
+    public static uint TypeIndex => 28;
+    /// <inheritdoc/>
+    public static ref NavAgent Access(Entity entity, bool write) => ref EngineAccess.Get(entity, TypeIndex, write, EngineValueCodecs.ReadNavAgent, EngineValueCodecs.WriteNavAgent);
+    /// <inheritdoc/>
+    public static void Insert(in Commands commands, Entity entity, in NavAgent value) => commands.InsertJson(entity, TypeIndex, EngineAccess.Encode(value, EngineValueCodecs.WriteNavAgent));
+    /// <inheritdoc/>
+    public static bool Contains(Entity entity) => Host.ComponentHas(entity.Bits, TypeIndex);
+}
+
+/// <summary>
+/// A named agent type: its own baked mesh (dimensions) and traversal costs. Agents select it through <c>NavAgent.profile == profile</c>.
+/// </summary>
+[EngineComponent("NavAgentType", Module = "navigation")]
+public partial struct NavAgentType : IComponent<NavAgentType>
+{
+    /// <summary>
+    /// Mesh profile ID shared by the type's agents and its bake.
+    /// </summary>
+    /// <remarks>
+    /// Default: 0.
+    /// </remarks>
+    [Default(0)]
+    public uint Profile;
+    /// <summary>
+    /// Inspector name (Humanoid, Brute, Drone).
+    /// </summary>
+    /// <remarks>
+    /// Default: "".
+    /// </remarks>
+    [Default("")]
+    public string? Name;
+    /// <summary>
+    /// Bake radius in metres.
+    /// </summary>
+    /// <remarks>
+    /// Unit: m. Range: [0.01, 10]. Default: 0.3.
+    /// </remarks>
+    [Unit("m"), Range(0.01, 10), Default(0.3)]
+    public float Radius;
+    /// <summary>
+    /// Bake clearance height in metres.
+    /// </summary>
+    /// <remarks>
+    /// Unit: m. Range: [0.1, 100]. Default: 1.8.
+    /// </remarks>
+    [Unit("m"), Range(0.1, 100), Default(1.8)]
+    public float Height;
+    /// <summary>
+    /// Maximum step height in metres.
+    /// </summary>
+    /// <remarks>
+    /// Unit: m. Range: [0, 10]. Default: 0.4.
+    /// </remarks>
+    [Unit("m"), Range(0, 10), Default(0.4)]
+    public float Climb;
+    /// <summary>
+    /// Steepest walkable slope in degrees.
+    /// </summary>
+    /// <remarks>
+    /// Unit: deg. Range: [0, 89]. Default: 45.
+    /// </remarks>
+    [Unit("deg"), Range(0, 89), Default(45)]
+    public float Slope;
+    /// <summary>
+    /// Cost multiplier per area ID (index 0..15); missing entries are 1.
+    /// </summary>
+    /// <remarks>
+    /// Default: [].
+    /// </remarks>
+    [Default(Json = "[]")]
+    public float[] AreaCosts;
+    /// <summary>
+    /// Areas this type may enter (one bit per area).
+    /// </summary>
+    /// <remarks>
+    /// Default: 65535.
+    /// </remarks>
+    [Default(65535)]
+    public ushort AreaMask;
+    /// <summary>Stable engine component index.</summary>
+    public static uint TypeIndex => 29;
+    /// <inheritdoc/>
+    public static ref NavAgentType Access(Entity entity, bool write) => ref EngineAccess.Get(entity, TypeIndex, write, EngineValueCodecs.ReadNavAgentType, EngineValueCodecs.WriteNavAgentType);
+    /// <inheritdoc/>
+    public static void Insert(in Commands commands, Entity entity, in NavAgentType value) => commands.InsertJson(entity, TypeIndex, EngineAccess.Encode(value, EngineValueCodecs.WriteNavAgentType));
+    /// <inheritdoc/>
+    public static bool Contains(Entity entity) => Host.ComponentHas(entity.Bits, TypeIndex);
+}
+
+/// <summary>
+/// Area label and cost policy for the collision-geometry producer and query filters.
+/// </summary>
+[EngineComponent("NavArea", Module = "navigation")]
+public partial struct NavArea : IComponent<NavArea>
+{
+    /// <summary>
+    /// Semantic area ID, from 0 through 15.
+    /// </summary>
+    /// <remarks>
+    /// Range: [0, 15]. Default: 0.
+    /// </remarks>
+    [Range(0, 15), Default(0)]
+    public byte Area;
+    /// <summary>
+    /// Inspector name (for example Ground, Water or Hazard).
+    /// </summary>
+    /// <remarks>
+    /// Default: "".
+    /// </remarks>
+    [Default("")]
+    public string? Name;
+    /// <summary>
+    /// Default query traversal cost; agents can override it in their state filter.
+    /// </summary>
+    /// <remarks>
+    /// Range: [1, 1000000]. Default: 1.
+    /// </remarks>
+    [Range(1, 1000000), Default(1)]
+    public float Cost;
+    /// <summary>Stable engine component index.</summary>
+    public static uint TypeIndex => 30;
+    /// <inheritdoc/>
+    public static ref NavArea Access(Entity entity, bool write) => ref EngineAccess.Get(entity, TypeIndex, write, EngineValueCodecs.ReadNavArea, EngineValueCodecs.WriteNavArea);
+    /// <inheritdoc/>
+    public static void Insert(in Commands commands, Entity entity, in NavArea value) => commands.InsertJson(entity, TypeIndex, EngineAccess.Encode(value, EngineValueCodecs.WriteNavArea));
+    /// <inheritdoc/>
+    public static bool Contains(Entity entity) => Host.ComponentHas(entity.Bits, TypeIndex);
+}
+
+/// <summary>
+/// Authored off-mesh connection in world space (jump, ladder or scripted passage).
+/// </summary>
+[StructLayout(LayoutKind.Explicit, Size = 48)]
+[EngineComponent("NavLink", Module = "navigation")]
+public partial struct NavLink : IComponent<NavLink>
+{
+    /// <summary>
+    /// Stable nonzero connection ID.
+    /// </summary>
+    /// <remarks>
+    /// Default: 0.
+    /// </remarks>
+    [FieldOffset(0), Default(0)]
+    public uint Id;
+    /// <summary>
+    /// Start endpoint in world space.
+    /// </summary>
+    /// <remarks>
+    /// Unit: m. Default: [0,0,0].
+    /// </remarks>
+    [FieldOffset(4), Unit("m"), Default(0, 0, 0)]
+    public Vector3 Start;
+    /// <summary>
+    /// End endpoint in world space.
+    /// </summary>
+    /// <remarks>
+    /// Unit: m. Default: [0,0,0].
+    /// </remarks>
+    [FieldOffset(16), Unit("m"), Default(0, 0, 0)]
+    public Vector3 End;
+    /// <summary>
+    /// Maximum horizontal attachment distance.
+    /// </summary>
+    /// <remarks>
+    /// Unit: m. Range: [0.001, 100]. Default: 0.5.
+    /// </remarks>
+    [FieldOffset(28), Unit("m"), Range(0.001, 100), Default(0.5)]
+    public float Radius;
+    /// <summary>
+    /// Traversal area index, from 0 through 15.
+    /// </summary>
+    /// <remarks>
+    /// Range: [0, 15]. Default: 0.
+    /// </remarks>
+    [FieldOffset(32), Range(0, 15), Default(0)]
+    public byte Area;
+    /// <summary>
+    /// Whether traversal is allowed in both directions.
+    /// </summary>
+    /// <remarks>
+    /// Default: true.
+    /// </remarks>
+    [FieldOffset(33), Default(true)]
+    public bool Bidirectional;
+    /// <summary>
+    /// Whether the connection is available to the baker.
+    /// </summary>
+    /// <remarks>
+    /// Default: true.
+    /// </remarks>
+    [FieldOffset(34), Default(true)]
+    public bool Enabled;
+    /// <summary>
+    /// How agents traverse it: drives traversal motion, gating and animation hooks.
+    /// </summary>
+    /// <remarks>
+    /// Default: "walk".
+    /// </remarks>
+    [FieldOffset(36), Default("walk")]
+    public LinkKind Kind;
+    /// <summary>
+    /// Traversal time in seconds; 0 derives it from length and agent speed.
+    /// </summary>
+    /// <remarks>
+    /// Unit: s. Range: [0, 600]. Default: 0.
+    /// </remarks>
+    [FieldOffset(40), Unit("s"), Range(0, 600), Default(0)]
+    public float Duration;
+    /// <summary>
+    /// Jump apex above the straight start-end line, in metres (jumps only).
+    /// </summary>
+    /// <remarks>
+    /// Unit: m. Range: [0, 100]. Default: 0.5.
+    /// </remarks>
+    [FieldOffset(44), Unit("m"), Range(0, 100), Default(0.5)]
+    public float ArcHeight;
+    /// <summary>Stable engine component index.</summary>
+    public static uint TypeIndex => 31;
+    /// <inheritdoc/>
+    public static ref NavLink Access(Entity entity, bool write) => ref EngineAccess.Get(entity, TypeIndex, write, EngineValueCodecs.ReadNavLink, EngineValueCodecs.WriteNavLink);
+    /// <inheritdoc/>
+    public static void Insert(in Commands commands, Entity entity, in NavLink value) => commands.InsertJson(entity, TypeIndex, EngineAccess.Encode(value, EngineValueCodecs.WriteNavLink));
+    /// <inheritdoc/>
+    public static bool Contains(Entity entity) => Host.ComponentHas(entity.Bits, TypeIndex);
+}
+
+/// <summary>
+/// Authored raw-geometry navigation surface; its derived mesh is content-addressed.
+/// </summary>
+[EngineComponent("NavMeshSurface", Module = "navigation")]
+public partial struct NavMeshSurface : IComponent<NavMeshSurface>
+{
+    /// <summary>
+    /// Shared bake profiles to generate from this surface.
+    /// </summary>
+    /// <remarks>
+    /// Default: [].
+    /// </remarks>
+    [Default(Json = "[]")]
+    public uint[] Profiles;
+    /// <summary>
+    /// Source collision geometry asset, resolved by the asset/physics integration.
+    /// </summary>
+    /// <remarks>
+    /// Default: null.
+    /// </remarks>
+    [Default(Json = "null")]
+    public string? Geometry;
+    /// <summary>
+    /// World-space lower bake bound.
+    /// </summary>
+    /// <remarks>
+    /// Unit: m. Default: [0,0,0].
+    /// </remarks>
+    [Unit("m"), Default(0, 0, 0)]
+    public Vector3 Min;
+    /// <summary>
+    /// World-space upper bake bound.
+    /// </summary>
+    /// <remarks>
+    /// Unit: m. Default: [0,0,0].
+    /// </remarks>
+    [Unit("m"), Default(0, 0, 0)]
+    public Vector3 Max;
+    /// <summary>
+    /// Horizontal voxel size in metres.
+    /// </summary>
+    /// <remarks>
+    /// Unit: m. Range: [0.01, 10]. Default: 0.2.
+    /// </remarks>
+    [Unit("m"), Range(0.01, 10), Default(0.2)]
+    public float CellSize;
+    /// <summary>
+    /// Interior tile width in voxels.
+    /// </summary>
+    /// <remarks>
+    /// Range: [8, 256]. Default: 64.
+    /// </remarks>
+    [Range(8, 256), Default(64)]
+    public ushort TileSize;
+    /// <summary>Stable engine component index.</summary>
+    public static uint TypeIndex => 32;
+    /// <inheritdoc/>
+    public static ref NavMeshSurface Access(Entity entity, bool write) => ref EngineAccess.Get(entity, TypeIndex, write, EngineValueCodecs.ReadNavMeshSurface, EngineValueCodecs.WriteNavMeshSurface);
+    /// <inheritdoc/>
+    public static void Insert(in Commands commands, Entity entity, in NavMeshSurface value) => commands.InsertJson(entity, TypeIndex, EngineAccess.Encode(value, EngineValueCodecs.WriteNavMeshSurface));
+    /// <inheritdoc/>
+    public static bool Contains(Entity entity) => Host.ComponentHas(entity.Bits, TypeIndex);
+}
+
+/// <summary>
+/// Dynamic obstacle: an axis-aligned box centred on the entity's <c>NavPosition</c>. Carve/Area changes publish after <c>NavConfig::rebake_latency_ticks</c>; until then (and always for <c>Avoid</c>) agents avoid it locally.
+/// </summary>
+[StructLayout(LayoutKind.Explicit, Size = 24)]
+[EngineComponent("NavObstacle", Module = "navigation")]
+public partial struct NavObstacle : IComponent<NavObstacle>
+{
+    /// <summary>
+    /// Stable nonzero ID; changes are canonically ordered by it.
+    /// </summary>
+    /// <remarks>
+    /// Default: 0.
+    /// </remarks>
+    [FieldOffset(0), Default(0)]
+    public uint Id;
+    /// <summary>
+    /// Box half extents in metres.
+    /// </summary>
+    /// <remarks>
+    /// Unit: m. Default: [0.5,0.5,0.5].
+    /// </remarks>
+    [FieldOffset(4), Unit("m"), Default(0.5, 0.5, 0.5)]
+    public Vector3 HalfExtents;
+    /// <summary>
+    /// Carve, relabel or avoid only.
+    /// </summary>
+    /// <remarks>
+    /// Default: "carve".
+    /// </remarks>
+    [FieldOffset(16), Default("carve")]
+    public ObstacleMode Mode;
+    /// <summary>
+    /// Area applied in <c>Area</c> mode, from 0 through 15.
+    /// </summary>
+    /// <remarks>
+    /// Range: [0, 15]. Default: 0.
+    /// </remarks>
+    [FieldOffset(20), Range(0, 15), Default(0)]
+    public byte Area;
+    /// <summary>Stable engine component index.</summary>
+    public static uint TypeIndex => 33;
+    /// <inheritdoc/>
+    public static ref NavObstacle Access(Entity entity, bool write) => ref EngineAccess.Get(entity, TypeIndex, write, EngineValueCodecs.ReadNavObstacle, EngineValueCodecs.WriteNavObstacle);
+    /// <inheritdoc/>
+    public static void Insert(in Commands commands, Entity entity, in NavObstacle value) => commands.InsertJson(entity, TypeIndex, EngineAccess.Encode(value, EngineValueCodecs.WriteNavObstacle));
+    /// <inheritdoc/>
+    public static bool Contains(Entity entity) => Host.ComponentHas(entity.Bits, TypeIndex);
+}
+
+/// <summary>
+/// How the navigation reacts to a dynamic obstacle.
+/// </summary>
+public enum ObstacleMode : uint
+{
+    /// <summary>
+    /// Cut the box out of the navmesh (background tile rebake). Paths go around.
+    /// </summary>
+    Carve = 0,
+    /// <summary>
+    /// Relabel the box with <c>area</c>, whose per-type cost decides avoidance.
+    /// </summary>
+    Area = 1,
+    /// <summary>
+    /// No rebake: local avoidance only (moving carts, temporary crowds).
+    /// </summary>
+    Avoid = 2,
+}
+
+/// <summary>
+/// An AI's senses: a sight cone with peripheral vision, hearing and memory.
+/// </summary>
+[StructLayout(LayoutKind.Explicit, Size = 28)]
+[EngineComponent("Perceiver", Module = "ai")]
+public partial struct Perceiver : IComponent<Perceiver>
+{
+    /// <summary>
+    /// Sight range in metres inside the cone.
+    /// </summary>
+    /// <remarks>
+    /// Unit: m. Range: [0, 10000]. Default: 25.
+    /// </remarks>
+    [FieldOffset(0), Unit("m"), Range(0, 10000), Default(25)]
+    public float SightRange;
+    /// <summary>
+    /// Full field of view in degrees.
+    /// </summary>
+    /// <remarks>
+    /// Unit: deg. Range: [0, 360]. Default: 120.
+    /// </remarks>
+    [FieldOffset(4), Unit("deg"), Range(0, 360), Default(120)]
+    public float Fov;
+    /// <summary>
+    /// Range in metres outside the cone (peripheral awareness); 0 disables.
+    /// </summary>
+    /// <remarks>
+    /// Unit: m. Range: [0, 1000]. Default: 2.
+    /// </remarks>
+    [FieldOffset(8), Unit("m"), Range(0, 1000), Default(2)]
+    public float PeripheralRange;
+    /// <summary>
+    /// Eye height above the feet in metres.
+    /// </summary>
+    /// <remarks>
+    /// Unit: m. Range: [0, 100]. Default: 1.7.
+    /// </remarks>
+    [FieldOffset(12), Unit("m"), Range(0, 100), Default(1.7)]
+    public float EyeHeight;
+    /// <summary>
+    /// Hearing multiplier applied to every noise radius.
+    /// </summary>
+    /// <remarks>
+    /// Range: [0, 100]. Default: 1.
+    /// </remarks>
+    [FieldOffset(16), Range(0, 100), Default(1)]
+    public float Hearing;
+    /// <summary>
+    /// Noise radius multiplier when the sound path is occluded.
+    /// </summary>
+    /// <remarks>
+    /// Range: [0, 1]. Default: 0.5.
+    /// </remarks>
+    [FieldOffset(20), Range(0, 1), Default(0.5)]
+    public float Occlusion;
+    /// <summary>
+    /// Seconds a memory survives after the last stimulus.
+    /// </summary>
+    /// <remarks>
+    /// Unit: s. Range: [0, 3600]. Default: 8.
+    /// </remarks>
+    [FieldOffset(24), Unit("s"), Range(0, 3600), Default(8)]
+    public float Memory;
+    /// <summary>Stable engine component index.</summary>
+    public static uint TypeIndex => 34;
+    /// <inheritdoc/>
+    public static ref Perceiver Access(Entity entity, bool write) => ref EngineAccess.Get(entity, TypeIndex, write, EngineValueCodecs.ReadPerceiver, EngineValueCodecs.WritePerceiver);
+    /// <inheritdoc/>
+    public static void Insert(in Commands commands, Entity entity, in Perceiver value) => commands.InsertJson(entity, TypeIndex, EngineAccess.Encode(value, EngineValueCodecs.WritePerceiver));
+    /// <inheritdoc/>
+    public static bool Contains(Entity entity) => Host.ComponentHas(entity.Bits, TypeIndex);
+}
+
+/// <summary>
+/// Stable simulation identity; nonzero and unique within a physics world.
+/// </summary>
+[StructLayout(LayoutKind.Explicit, Size = 8)]
+[EngineComponent("PhysicsId", Module = "physics")]
+public partial struct PhysicsId : IComponent<PhysicsId>
+{
+    /// <summary>
+    /// Stable scene/network identity. Zero asks Play to assign a unique value from the entity identity; positive values explicitly reserve an identity.
+    /// </summary>
+    /// <remarks>
+    /// Range: [0, ∞]. Default: 0.
+    /// </remarks>
+    [FieldOffset(0), Min(0), Default(0)]
+    public ulong Value;
+    /// <summary>Stable engine component index.</summary>
+    public static uint TypeIndex => 35;
+    /// <inheritdoc/>
+    public static ref PhysicsId Access(Entity entity, bool write) => ref EngineAccess.Get(entity, TypeIndex, write, EngineValueCodecs.ReadPhysicsId, EngineValueCodecs.WritePhysicsId);
+    /// <inheritdoc/>
+    public static void Insert(in Commands commands, Entity entity, in PhysicsId value) => commands.InsertJson(entity, TypeIndex, EngineAccess.Encode(value, EngineValueCodecs.WritePhysicsId));
+    /// <inheritdoc/>
+    public static bool Contains(Entity entity) => Host.ComponentHas(entity.Bits, TypeIndex);
+}
+
+/// <summary>
+/// Resolved world-space pose in meters. Hierarchy/scale resolution runs before physics.
+/// </summary>
+[StructLayout(LayoutKind.Explicit, Size = 28)]
+[EngineComponent("PhysicsPose", Module = "physics")]
+public partial struct PhysicsPose : IComponent<PhysicsPose>
+{
+    /// <summary>
+    /// Body origin or character feet, in world space.
+    /// </summary>
+    /// <remarks>
+    /// Unit: m. Default: [0,0,0]. Replicated to relevant clients.
+    /// </remarks>
+    [FieldOffset(0), Unit("m"), Replicate(Audience.Relevant, Interpolate = Interpolate.Linear, Rollback = true), Default(0, 0, 0)]
+    public Vector3 Position;
+    /// <summary>
+    /// Unit quaternion in XYZW order; use baked rotations for cross-platform replay.
+    /// </summary>
+    /// <remarks>
+    /// Default: [0,0,0,1]. Replicated to relevant clients.
+    /// </remarks>
+    [FieldOffset(12), Replicate(Audience.Relevant, Interpolate = Interpolate.Slerp, Rollback = true), Default(0, 0, 0, 1)]
+    public Quaternion Rotation;
+    /// <summary>Stable engine component index.</summary>
+    public static uint TypeIndex => 36;
+    /// <inheritdoc/>
+    public static ref PhysicsPose Access(Entity entity, bool write) => ref EngineAccess.Get(entity, TypeIndex, write, EngineValueCodecs.ReadPhysicsPose, EngineValueCodecs.WritePhysicsPose);
+    /// <inheritdoc/>
+    public static void Insert(in Commands commands, Entity entity, in PhysicsPose value) => commands.InsertJson(entity, TypeIndex, EngineAccess.Encode(value, EngineValueCodecs.WritePhysicsPose));
+    /// <inheritdoc/>
+    public static bool Contains(Entity entity) => Host.ComponentHas(entity.Bits, TypeIndex);
+}
+
+/// <summary>
+/// World-space 2D pose, written back by the solver at every completed boundary.
+/// </summary>
+[StructLayout(LayoutKind.Explicit, Size = 12)]
+[EngineComponent("PhysicsPose2d", Module = "physics2d")]
+public partial struct PhysicsPose2d : IComponent<PhysicsPose2d>
+{
+    /// <summary>
+    /// Body origin or character capsule centre, in world space.
+    /// </summary>
+    /// <remarks>
+    /// Unit: m. Default: [0,0]. Replicated to relevant clients.
+    /// </remarks>
+    [FieldOffset(0), Unit("m"), Replicate(Audience.Relevant, Interpolate = Interpolate.Linear, Rollback = true), Default(0, 0)]
+    public Vector2 Position;
+    /// <summary>
+    /// Counter-clockwise rotation about +Z.
+    /// </summary>
+    /// <remarks>
+    /// Unit: rad. Default: 0. Replicated to relevant clients.
+    /// </remarks>
+    [FieldOffset(8), Unit("rad"), Replicate(Audience.Relevant, Interpolate = Interpolate.Linear, Rollback = true), Default(0)]
+    public float Rotation;
+    /// <summary>Stable engine component index.</summary>
+    public static uint TypeIndex => 37;
+    /// <inheritdoc/>
+    public static ref PhysicsPose2d Access(Entity entity, bool write) => ref EngineAccess.Get(entity, TypeIndex, write, EngineValueCodecs.ReadPhysicsPose2d, EngineValueCodecs.WritePhysicsPose2d);
+    /// <inheritdoc/>
+    public static void Insert(in Commands commands, Entity entity, in PhysicsPose2d value) => commands.InsertJson(entity, TypeIndex, EngineAccess.Encode(value, EngineValueCodecs.WritePhysicsPose2d));
+    /// <inheritdoc/>
+    public static bool Contains(Entity entity) => Host.ComponentHas(entity.Bits, TypeIndex);
+}
+
+/// <summary>
+/// Drives this entity's CharacterController from <c>Move</c>, <c>Sprint</c> and <c>Jump</c>, relative to its camera rig's yaw.
+/// </summary>
+[EngineComponent("PlayerControl", Module = "gameplay")]
+public partial struct PlayerControl : IComponent<PlayerControl>
+{
+    /// <summary>
+    /// Input owner (<c>PlayerId</c>).
+    /// </summary>
+    /// <remarks>
+    /// Default: 1.
+    /// </remarks>
+    [Default(1)]
+    public ulong Player;
+    /// <summary>
+    /// Walking speed.
+    /// </summary>
+    /// <remarks>
+    /// Unit: m/s. Range: [0, ∞]. Default: 1.6.
+    /// </remarks>
+    [Unit("m/s"), Min(0), Default(1.6)]
+    public float WalkSpeed;
+    /// <summary>
+    /// Sprinting speed.
+    /// </summary>
+    /// <remarks>
+    /// Unit: m/s. Range: [0, ∞]. Default: 4.5.
+    /// </remarks>
+    [Unit("m/s"), Min(0), Default(4.5)]
+    public float RunSpeed;
+    /// <summary>
+    /// Jump launch speed.
+    /// </summary>
+    /// <remarks>
+    /// Unit: m/s. Range: [0, ∞]. Default: 4.5.
+    /// </remarks>
+    [Unit("m/s"), Min(0), Default(4.5)]
+    public float JumpSpeed;
+    /// <summary>
+    /// Maximum turn rate toward the movement direction.
+    /// </summary>
+    /// <remarks>
+    /// Unit: deg/s. Range: [0, ∞]. Default: 540.
+    /// </remarks>
+    [Unit("deg/s"), Min(0), Default(540)]
+    public float TurnRate;
+    /// <summary>
+    /// Facing yaw; 0 faces +Z. Simulation state.
+    /// </summary>
+    /// <remarks>
+    /// Unit: deg. Default: 0.
+    /// </remarks>
+    [Unit("deg"), Default(0)]
+    public float Yaw;
+    /// <summary>
+    /// Camera rig whose yaw orients <c>Move</c>; world axes when empty.
+    /// </summary>
+    /// <remarks>
+    /// Default: null.
+    /// </remarks>
+    [Default(Json = "null")]
+    public string? Camera;
+    /// <summary>Stable engine component index.</summary>
+    public static uint TypeIndex => 38;
+    /// <inheritdoc/>
+    public static ref PlayerControl Access(Entity entity, bool write) => ref EngineAccess.Get(entity, TypeIndex, write, EngineValueCodecs.ReadPlayerControl, EngineValueCodecs.WritePlayerControl);
+    /// <inheritdoc/>
+    public static void Insert(in Commands commands, Entity entity, in PlayerControl value) => commands.InsertJson(entity, TypeIndex, EngineAccess.Encode(value, EngineValueCodecs.WritePlayerControl));
+    /// <inheritdoc/>
+    public static bool Contains(Entity entity) => Host.ComponentHas(entity.Bits, TypeIndex);
+}
+
+/// <summary>
+/// Camera exposure, tone mapping, bloom and colour grading. The first entity in ID order wins; without one, renderers meter automatically with Filmic tone mapping.
+/// </summary>
+[StructLayout(LayoutKind.Explicit, Size = 48)]
+[EngineComponent("PostProcess", Module = "render")]
+public partial struct PostProcess : IComponent<PostProcess>
+{
+    /// <summary>
+    /// Automatic metering or a fixed exposure.
+    /// </summary>
+    /// <remarks>
+    /// Default: "auto".
+    /// </remarks>
+    [FieldOffset(0), Default("auto")]
+    public ExposureMode Exposure;
+    /// <summary>
+    /// Manual exposure value at ISO 100. Sunny day ≈ 15, overcast ≈ 12, sunset ≈ 10, lit interior ≈ 7, night street ≈ 3.
+    /// </summary>
+    /// <remarks>
+    /// Range: [-10, 24]. Default: 10.
+    /// </remarks>
+    [FieldOffset(4), Range(-10, 24), Default(10)]
+    public float Ev100;
+    /// <summary>
+    /// Exposure compensation in stops, applied in both modes; +1 doubles the brightness.
+    /// </summary>
+    /// <remarks>
+    /// Range: [-8, 8]. Default: 0.
+    /// </remarks>
+    [FieldOffset(8), Range(-8, 8), Default(0)]
+    public float Compensation;
+    /// <summary>
+    /// Darkest exposure automatic metering may pick (lower = brighter in dark scenes).
+    /// </summary>
+    /// <remarks>
+    /// Range: [-10, 24]. Default: -2.
+    /// </remarks>
+    [FieldOffset(12), Range(-10, 24), Default(-2)]
+    public float MinEv100;
+    /// <summary>
+    /// Brightest exposure automatic metering may pick.
+    /// </summary>
+    /// <remarks>
+    /// Range: [-10, 24]. Default: 16.
+    /// </remarks>
+    [FieldOffset(16), Range(-10, 24), Default(16)]
+    public float MaxEv100;
+    /// <summary>
+    /// How fast automatic exposure adapts, per second; higher reacts faster.
+    /// </summary>
+    /// <remarks>
+    /// Range: [0.1, 20]. Default: 2.
+    /// </remarks>
+    [FieldOffset(20), Range(0.1, 20), Default(2)]
+    public float AdaptationSpeed;
+    /// <summary>
+    /// Display transform.
+    /// </summary>
+    /// <remarks>
+    /// Default: "filmic".
+    /// </remarks>
+    [FieldOffset(24), Default("filmic")]
+    public ToneMapping ToneMapping;
+    /// <summary>
+    /// Fraction of light spread into the bloom glow around bright pixels.
+    /// </summary>
+    /// <remarks>
+    /// Range: [0, 0.25]. Default: 0.04.
+    /// </remarks>
+    [FieldOffset(28), Range(0, 0.25), Default(0.04)]
+    public float Bloom;
+    /// <summary>
+    /// White balance: the colour temperature that renders as neutral white. Lower warms the image's whites to neutral (tungsten ≈ 3200), higher cools them.
+    /// </summary>
+    /// <remarks>
+    /// Unit: K. Range: [1500, 15000]. Default: 6500.
+    /// </remarks>
+    [FieldOffset(32), Unit("K"), Range(1500, 15000), Default(6500)]
+    public float WhiteBalance;
+    /// <summary>
+    /// Colour saturation; 0 is greyscale, 1 unchanged.
+    /// </summary>
+    /// <remarks>
+    /// Range: [0, 2]. Default: 1.
+    /// </remarks>
+    [FieldOffset(36), Range(0, 2), Default(1)]
+    public float Saturation;
+    /// <summary>
+    /// Contrast around middle grey; 1 unchanged.
+    /// </summary>
+    /// <remarks>
+    /// Range: [0.5, 2]. Default: 1.
+    /// </remarks>
+    [FieldOffset(40), Range(0.5, 2), Default(1)]
+    public float Contrast;
+    /// <summary>
+    /// Darkening toward the frame corners; 0 disables it.
+    /// </summary>
+    /// <remarks>
+    /// Range: [0, 1]. Default: 0.
+    /// </remarks>
+    [FieldOffset(44), Range(0, 1), Default(0)]
+    public float Vignette;
+    /// <summary>Stable engine component index.</summary>
+    public static uint TypeIndex => 39;
+    /// <inheritdoc/>
+    public static ref PostProcess Access(Entity entity, bool write) => ref EngineAccess.Get(entity, TypeIndex, write, EngineValueCodecs.ReadPostProcess, EngineValueCodecs.WritePostProcess);
+    /// <inheritdoc/>
+    public static void Insert(in Commands commands, Entity entity, in PostProcess value) => commands.InsertJson(entity, TypeIndex, EngineAccess.Encode(value, EngineValueCodecs.WritePostProcess));
+    /// <inheritdoc/>
+    public static bool Contains(Entity entity) => Host.ComponentHas(entity.Bits, TypeIndex);
+}
+
+/// <summary>
+/// One native material graph/instance replacing a selected model primitive's material.
+/// </summary>
+public partial struct PrimitiveMaterialOverride
+{
+    /// <summary>
+    /// Zero-based primitive within the selected subtree, before <c>primitive</c> filtering.
+    /// </summary>
+    /// <remarks>
+    /// Default: 0.
+    /// </remarks>
+    [Default(0)]
+    public uint Primitive;
+    /// <summary>
+    /// Authoritative material graph or material-instance asset (<c>@path#id</c>).
+    /// </summary>
+    /// <remarks>
+    /// Default: null.
+    /// </remarks>
+    [Default(Json = "null")]
+    public string? Material;
+}
+
+/// <summary>
+/// A room or space with its own reverb. The listener's zone drives the room reverb; sources in other zones reach the listener through portals.
+/// </summary>
+[EngineComponent("ReverbZone", Module = "audio")]
+public partial struct ReverbZone : IComponent<ReverbZone>
+{
+    /// <summary>
+    /// Unique zone name; portals, traces and diagnostics refer to zones by name.
+    /// </summary>
+    /// <remarks>
+    /// Default: "".
+    /// </remarks>
+    [Default("")]
+    public string? Name;
+    /// <summary>
+    /// Volume shape.
+    /// </summary>
+    /// <remarks>
+    /// Default: "box".
+    /// </remarks>
+    [Default("box")]
+    public ZoneShape Shape;
+    /// <summary>
+    /// World-space center, supplied from the entity transform by the bridge.
+    /// </summary>
+    /// <remarks>
+    /// Unit: m. Default: [0,0,0].
+    /// </remarks>
+    [Unit("m"), Default(0, 0, 0)]
+    public Vector3 Position;
+    /// <summary>
+    /// World rotation as a unit quaternion (x, y, z, w), supplied by the bridge.
+    /// </summary>
+    /// <remarks>
+    /// Default: [0,0,0,1].
+    /// </remarks>
+    [Default(0, 0, 0, 1)]
+    public Vector4 Rotation;
+    /// <summary>
+    /// Box half extents.
+    /// </summary>
+    /// <remarks>
+    /// Unit: m. Default: [5,3,5].
+    /// </remarks>
+    [Unit("m"), Default(5, 3, 5)]
+    public Vector3 HalfExtents;
+    /// <summary>
+    /// Sphere radius.
+    /// </summary>
+    /// <remarks>
+    /// Unit: m. Range: [0.1, 10000]. Default: 5.
+    /// </remarks>
+    [Unit("m"), Range(0.1, 10000), Default(5)]
+    public float Radius;
+    /// <summary>
+    /// Width inside the boundary over which the listener crossfades to the outer space.
+    /// </summary>
+    /// <remarks>
+    /// Unit: m. Range: [0, 100]. Default: 1.
+    /// </remarks>
+    [Unit("m"), Range(0, 100), Default(1)]
+    public float Fade;
+    /// <summary>
+    /// Nested zones: the highest priority containing zone wins.
+    /// </summary>
+    /// <remarks>
+    /// Default: 0.
+    /// </remarks>
+    [Default(0)]
+    public int Priority;
+    /// <summary>
+    /// Wall material, deriving absorption for the realtime room model.
+    /// </summary>
+    /// <remarks>
+    /// Default: "generic".
+    /// </remarks>
+    [Default("generic")]
+    public MaterialPreset Material;
+    /// <summary>
+    /// Explicit low/mid/high reverberation times in seconds, overriding derived and baked values.
+    /// </summary>
+    /// <remarks>
+    /// Default: null.
+    /// </remarks>
+    [Default(Json = "null")]
+    public Vector3? Rt60;
+    /// <summary>
+    /// Reverb return gain.
+    /// </summary>
+    /// <remarks>
+    /// Range: [0, 4]. Default: 1.
+    /// </remarks>
+    [Range(0, 4), Default(1)]
+    public float Wet;
+    /// <summary>
+    /// Geometric early reflections from the zone's walls.
+    /// </summary>
+    /// <remarks>
+    /// Default: true.
+    /// </remarks>
+    [Default(true)]
+    public bool EarlyReflections;
+    /// <summary>
+    /// Prefer baked probe reverb times inside this zone when cooked cells are loaded.
+    /// </summary>
+    /// <remarks>
+    /// Default: true.
+    /// </remarks>
+    [Default(true)]
+    public bool UseBaked;
+    /// <summary>Stable engine component index.</summary>
+    public static uint TypeIndex => 40;
+    /// <inheritdoc/>
+    public static ref ReverbZone Access(Entity entity, bool write) => ref EngineAccess.Get(entity, TypeIndex, write, EngineValueCodecs.ReadReverbZone, EngineValueCodecs.WriteReverbZone);
+    /// <inheritdoc/>
+    public static void Insert(in Commands commands, Entity entity, in ReverbZone value) => commands.InsertJson(entity, TypeIndex, EngineAccess.Encode(value, EngineValueCodecs.WriteReverbZone));
+    /// <inheritdoc/>
+    public static bool Contains(Entity entity) => Host.ComponentHas(entity.Bits, TypeIndex);
+}
+
+/// <summary>
+/// Rigid-body authoring settings; simulation state is written to pose and velocity.
+/// </summary>
+[StructLayout(LayoutKind.Explicit, Size = 12)]
+[EngineComponent("RigidBody", Module = "physics")]
+public partial struct RigidBody : IComponent<RigidBody>
+{
+    /// <summary>
+    /// Static, kinematic, or dynamic motion.
+    /// </summary>
+    /// <remarks>
+    /// Default: "static".
+    /// </remarks>
+    [FieldOffset(0), Default("static")]
+    public MotionType Motion;
+    /// <summary>
+    /// Mass in kilograms; zero computes mass from the collider's 1000 kg/m3 density.
+    /// </summary>
+    /// <remarks>
+    /// Unit: kg. Range: [0, ∞]. Default: 0.
+    /// </remarks>
+    [FieldOffset(4), Unit("kg"), Min(0), Default(0)]
+    public float Mass;
+    /// <summary>
+    /// Permit inactive bodies to sleep.
+    /// </summary>
+    /// <remarks>
+    /// Default: true.
+    /// </remarks>
+    [FieldOffset(8), Default(true)]
+    public bool AllowSleep;
+    /// <summary>
+    /// Use swept collision detection for fast bodies.
+    /// </summary>
+    /// <remarks>
+    /// Default: false.
+    /// </remarks>
+    [FieldOffset(9), Default(false)]
+    public bool Continuous;
+    /// <summary>Stable engine component index.</summary>
+    public static uint TypeIndex => 41;
+    /// <inheritdoc/>
+    public static ref RigidBody Access(Entity entity, bool write) => ref EngineAccess.Get(entity, TypeIndex, write, EngineValueCodecs.ReadRigidBody, EngineValueCodecs.WriteRigidBody);
+    /// <inheritdoc/>
+    public static void Insert(in Commands commands, Entity entity, in RigidBody value) => commands.InsertJson(entity, TypeIndex, EngineAccess.Encode(value, EngineValueCodecs.WriteRigidBody));
+    /// <inheritdoc/>
+    public static bool Contains(Entity entity) => Host.ComponentHas(entity.Bits, TypeIndex);
+}
+
+/// <summary>
+/// Rigid-body authoring settings; simulation state is written to pose and velocity.
+/// </summary>
+[StructLayout(LayoutKind.Explicit, Size = 12)]
+[EngineComponent("RigidBody2d", Module = "physics2d")]
+public partial struct RigidBody2d : IComponent<RigidBody2d>
+{
+    /// <summary>
+    /// Static, kinematic, or dynamic motion.
+    /// </summary>
+    /// <remarks>
+    /// Default: "static".
+    /// </remarks>
+    [FieldOffset(0), Default("static")]
+    public MotionType2d Motion;
+    /// <summary>
+    /// Mass in kilograms; zero computes mass from the collider's 1 kg/m2 area density.
+    /// </summary>
+    /// <remarks>
+    /// Unit: kg. Range: [0, ∞]. Default: 0.
+    /// </remarks>
+    [FieldOffset(4), Unit("kg"), Min(0), Default(0)]
+    public float Mass;
+    /// <summary>
+    /// Permit inactive bodies to sleep.
+    /// </summary>
+    /// <remarks>
+    /// Default: true.
+    /// </remarks>
+    [FieldOffset(8), Default(true)]
+    public bool AllowSleep;
+    /// <summary>
+    /// Use swept collision detection for fast bodies.
+    /// </summary>
+    /// <remarks>
+    /// Default: false.
+    /// </remarks>
+    [FieldOffset(9), Default(false)]
+    public bool Continuous;
+    /// <summary>
+    /// Prevent physical rotation, for upright props and platforms.
+    /// </summary>
+    /// <remarks>
+    /// Default: false.
+    /// </remarks>
+    [FieldOffset(10), Default(false)]
+    public bool LockRotation;
+    /// <summary>Stable engine component index.</summary>
+    public static uint TypeIndex => 42;
+    /// <inheritdoc/>
+    public static ref RigidBody2d Access(Entity entity, bool write) => ref EngineAccess.Get(entity, TypeIndex, write, EngineValueCodecs.ReadRigidBody2d, EngineValueCodecs.WriteRigidBody2d);
+    /// <inheritdoc/>
+    public static void Insert(in Commands commands, Entity entity, in RigidBody2d value) => commands.InsertJson(entity, TypeIndex, EngineAccess.Encode(value, EngineValueCodecs.WriteRigidBody2d));
+    /// <inheritdoc/>
+    public static bool Contains(Entity entity) => Host.ComponentHas(entity.Bits, TypeIndex);
+}
+
+/// <summary>
+/// A physical sky and aerial perspective lit by the scene's directional light. The sun's elevation sets the time of day; without this component the scene uses its <c>Environment</c> gradient. The first entity in ID order wins.
+/// </summary>
+[StructLayout(LayoutKind.Explicit, Size = 16)]
+[EngineComponent("SkyAtmosphere", Module = "render")]
+public partial struct SkyAtmosphere : IComponent<SkyAtmosphere>
+{
+    /// <summary>
+    /// World altitude of the planet surface (sea level); the sky and fog measure height from here.
+    /// </summary>
+    /// <remarks>
+    /// Unit: m. Default: 0.
+    /// </remarks>
+    [FieldOffset(0), Unit("m"), Default(0)]
+    public float SeaLevel;
+    /// <summary>
+    /// Aerosol (haze, dust) density relative to clear Earth air. Raise it for dusty or humid skies: a whiter horizon, a wider sun glow and stronger aerial perspective.
+    /// </summary>
+    /// <remarks>
+    /// Range: [0, 20]. Default: 1.
+    /// </remarks>
+    [FieldOffset(4), Range(0, 20), Default(1)]
+    public float Aerosols;
+    /// <summary>
+    /// Fraction of the sky covered by the lit cloud layer; 0 disables clouds.
+    /// </summary>
+    /// <remarks>
+    /// Range: [0, 1]. Default: 0.
+    /// </remarks>
+    [FieldOffset(8), Range(0, 1), Default(0)]
+    public float CloudCoverage;
+    /// <summary>
+    /// Altitude of the cloud layer above sea level.
+    /// </summary>
+    /// <remarks>
+    /// Unit: m. Range: [500, 20000]. Default: 2200.
+    /// </remarks>
+    [FieldOffset(12), Unit("m"), Range(500, 20000), Default(2200)]
+    public float CloudHeight;
+    /// <summary>Stable engine component index.</summary>
+    public static uint TypeIndex => 43;
+    /// <inheritdoc/>
+    public static ref SkyAtmosphere Access(Entity entity, bool write) => ref EngineAccess.Get(entity, TypeIndex, write, EngineValueCodecs.ReadSkyAtmosphere, EngineValueCodecs.WriteSkyAtmosphere);
+    /// <inheritdoc/>
+    public static void Insert(in Commands commands, Entity entity, in SkyAtmosphere value) => commands.InsertJson(entity, TypeIndex, EngineAccess.Encode(value, EngineValueCodecs.WriteSkyAtmosphere));
+    /// <inheritdoc/>
+    public static bool Contains(Entity entity) => Host.ComponentHas(entity.Bits, TypeIndex);
+}
+
+/// <summary>
+/// A batched sprite with optional normal-mapped 2D illumination.
+/// </summary>
+[EngineComponent("Sprite", Module = "twoD")]
+public partial struct Sprite : IComponent<Sprite>
+{
+    /// <summary>
+    /// Atlas asset reference, resolved to a resident texture at extraction.
+    /// </summary>
+    /// <remarks>
+    /// Default: null.
+    /// </remarks>
+    [Default(Json = "null")]
+    public string? Atlas;
+    /// <summary>
+    /// Stable region name in the atlas.
+    /// </summary>
+    /// <remarks>
+    /// Default: "".
+    /// </remarks>
+    [Default("")]
+    public string? Region;
+    /// <summary>
+    /// Optional normal atlas, using the same rectangles.
+    /// </summary>
+    /// <remarks>
+    /// Default: null.
+    /// </remarks>
+    [Default(Json = "null")]
+    public string? NormalAtlas;
+    /// <summary>
+    /// Desired world size in metres; zero selects source size / pixels per metre.
+    /// </summary>
+    /// <remarks>
+    /// Default: [0,0].
+    /// </remarks>
+    [Default(0, 0)]
+    public Vector2 Size;
+    /// <summary>
+    /// Linear, straight-alpha tint.
+    /// </summary>
+    /// <remarks>
+    /// Default: [1,1,1,1].
+    /// </remarks>
+    [Default(1, 1, 1, 1)]
+    public Vector4 Tint;
+    /// <summary>
+    /// Painter's sorting layer; lower draws first.
+    /// </summary>
+    /// <remarks>
+    /// Default: 0.
+    /// </remarks>
+    [Default(0)]
+    public int SortingLayer;
+    /// <summary>
+    /// Painter's order within a layer; stable identity breaks ties.
+    /// </summary>
+    /// <remarks>
+    /// Default: 0.
+    /// </remarks>
+    [Default(0)]
+    public int Order;
+    /// <summary>
+    /// Mirror horizontally about the pivot.
+    /// </summary>
+    /// <remarks>
+    /// Default: false.
+    /// </remarks>
+    [Default(false)]
+    public bool FlipX;
+    /// <summary>
+    /// Mirror vertically about the pivot.
+    /// </summary>
+    /// <remarks>
+    /// Default: false.
+    /// </remarks>
+    [Default(false)]
+    public bool FlipY;
+    /// <summary>
+    /// Apply the region's nine-slice borders when resizing.
+    /// </summary>
+    /// <remarks>
+    /// Default: false.
+    /// </remarks>
+    [Default(false)]
+    public bool NineSlice;
+    /// <summary>
+    /// Opt into normal-mapped local lights and geometric shadows.
+    /// </summary>
+    /// <remarks>
+    /// Default: false.
+    /// </remarks>
+    [Default(false)]
+    public bool Lit;
+    /// <summary>
+    /// Parallax factor; one follows the world, zero follows the camera.
+    /// </summary>
+    /// <remarks>
+    /// Default: [1,1].
+    /// </remarks>
+    [Default(1, 1)]
+    public Vector2 Parallax;
+    /// <summary>Stable engine component index.</summary>
+    public static uint TypeIndex => 44;
+    /// <inheritdoc/>
+    public static ref Sprite Access(Entity entity, bool write) => ref EngineAccess.Get(entity, TypeIndex, write, EngineValueCodecs.ReadSprite, EngineValueCodecs.WriteSprite);
+    /// <inheritdoc/>
+    public static void Insert(in Commands commands, Entity entity, in Sprite value) => commands.InsertJson(entity, TypeIndex, EngineAccess.Encode(value, EngineValueCodecs.WriteSprite));
+    /// <inheritdoc/>
+    public static bool Contains(Entity entity) => Host.ComponentHas(entity.Bits, TypeIndex);
+}
+
+/// <summary>
+/// Something perceivers can see and remember (players, corpses, thrown objects).
+/// </summary>
+[EngineComponent("Stimulus", Module = "ai")]
+public partial struct Stimulus : IComponent<Stimulus>
+{
+    /// <summary>
+    /// Category name behaviours query (<c>player</c>, <c>corpse</c>).
+    /// </summary>
+    /// <remarks>
+    /// Default: "".
+    /// </remarks>
+    [Default("")]
+    public string? Kind;
+    /// <summary>
+    /// Height of the sight target above the feet in metres.
+    /// </summary>
+    /// <remarks>
+    /// Unit: m. Range: [0, 100]. Default: 1.2.
+    /// </remarks>
+    [Unit("m"), Range(0, 100), Default(1.2)]
+    public float Height;
+    /// <summary>
+    /// Detection range multiplier (0 = invisible, 0.5 = crouched in shadow).
+    /// </summary>
+    /// <remarks>
+    /// Range: [0, 10]. Default: 1.
+    /// </remarks>
+    [Range(0, 10), Default(1)]
+    public float Visibility;
+    /// <summary>Stable engine component index.</summary>
+    public static uint TypeIndex => 45;
+    /// <inheritdoc/>
+    public static ref Stimulus Access(Entity entity, bool write) => ref EngineAccess.Get(entity, TypeIndex, write, EngineValueCodecs.ReadStimulus, EngineValueCodecs.WriteStimulus);
+    /// <inheritdoc/>
+    public static void Insert(in Commands commands, Entity entity, in Stimulus value) => commands.InsertJson(entity, TypeIndex, EngineAccess.Encode(value, EngineValueCodecs.WriteStimulus));
+    /// <inheritdoc/>
+    public static bool Contains(Entity entity) => Host.ComponentHas(entity.Bits, TypeIndex);
+}
+
+/// <summary>
+/// Streams a <c>.world</c>'s cells into play around the players (<c>ara-runtime-world</c>). Put it on one entity of the level scene; the cell documents stay out of the projection and arrive at tick boundaries. With a <c>Terrain</c>, navigation then follows the resident <c>TerrainChunk</c>s.
+/// </summary>
+[EngineComponent("StreamedWorld", Module = "world")]
+public partial struct StreamedWorld : IComponent<StreamedWorld>
+{
+    /// <summary>
+    /// The world manifest (<c>.world</c> document).
+    /// </summary>
+    /// <remarks>
+    /// Default: null.
+    /// </remarks>
+    [Default(Json = "null")]
+    public string? World;
+    /// <summary>Stable engine component index.</summary>
+    public static uint TypeIndex => 46;
+    /// <inheritdoc/>
+    public static ref StreamedWorld Access(Entity entity, bool write) => ref EngineAccess.Get(entity, TypeIndex, write, EngineValueCodecs.ReadStreamedWorld, EngineValueCodecs.WriteStreamedWorld);
+    /// <inheritdoc/>
+    public static void Insert(in Commands commands, Entity entity, in StreamedWorld value) => commands.InsertJson(entity, TypeIndex, EngineAccess.Encode(value, EngineValueCodecs.WriteStreamedWorld));
+    /// <inheritdoc/>
+    public static bool Contains(Entity entity) => Host.ComponentHas(entity.Bits, TypeIndex);
+}
+
+/// <summary>
+/// Puts a <c>.terrain</c> heightfield (and its <c>.foliage</c> scatter) in play: rendered by the landscape renderer, walkable for navigation, solid where <c>TerrainChunk</c>s exist.
+/// </summary>
+[EngineComponent("Terrain", Module = "terrain")]
+public partial struct Terrain : IComponent<Terrain>
+{
+    /// <summary>
+    /// The heightfield manifest (<c>.terrain</c> document).
+    /// </summary>
+    /// <remarks>
+    /// Default: null.
+    /// </remarks>
+    [Default(Json = "null")]
+    public string? TerrainAsset;
+    /// <summary>
+    /// Scatter rules over it (<c>.foliage</c> document), drawn by the landscape renderer.
+    /// </summary>
+    /// <remarks>
+    /// Default: null.
+    /// </remarks>
+    [Default(Json = "null")]
+    public string? Foliage;
+    /// <summary>Stable engine component index.</summary>
+    public static uint TypeIndex => 47;
+    /// <inheritdoc/>
+    public static ref Terrain Access(Entity entity, bool write) => ref EngineAccess.Get(entity, TypeIndex, write, EngineValueCodecs.ReadTerrain, EngineValueCodecs.WriteTerrain);
+    /// <inheritdoc/>
+    public static void Insert(in Commands commands, Entity entity, in Terrain value) => commands.InsertJson(entity, TypeIndex, EngineAccess.Encode(value, EngineValueCodecs.WriteTerrain));
+    /// <inheritdoc/>
+    public static bool Contains(Entity entity) => Host.ComponentHas(entity.Bits, TypeIndex);
+}
+
+/// <summary>
+/// Collision for one terrain tile (grid coordinates of the level's <c>Terrain</c>). Author these in world cells to stream collision with the cells.
+/// </summary>
+[StructLayout(LayoutKind.Explicit, Size = 8)]
+[EngineComponent("TerrainChunk", Module = "terrain")]
+public partial struct TerrainChunk : IComponent<TerrainChunk>
+{
+    /// <summary>
+    /// Tile index along world X.
+    /// </summary>
+    /// <remarks>
+    /// Default: 0.
+    /// </remarks>
+    [FieldOffset(0), Default(0)]
+    public int X;
+    /// <summary>
+    /// Tile index along world Z.
+    /// </summary>
+    /// <remarks>
+    /// Default: 0.
+    /// </remarks>
+    [FieldOffset(4), Default(0)]
+    public int Z;
+    /// <summary>Stable engine component index.</summary>
+    public static uint TypeIndex => 48;
+    /// <inheritdoc/>
+    public static ref TerrainChunk Access(Entity entity, bool write) => ref EngineAccess.Get(entity, TypeIndex, write, EngineValueCodecs.ReadTerrainChunk, EngineValueCodecs.WriteTerrainChunk);
+    /// <inheritdoc/>
+    public static void Insert(in Commands commands, Entity entity, in TerrainChunk value) => commands.InsertJson(entity, TypeIndex, EngineAccess.Encode(value, EngineValueCodecs.WriteTerrainChunk));
+    /// <inheritdoc/>
+    public static bool Contains(Entity entity) => Host.ComponentHas(entity.Bits, TypeIndex);
+}
+
+/// <summary>
+/// Ownership marker for generated colliders, separate from gameplay body state.
+/// </summary>
+[EngineComponent("TileColliderSource2d", Module = "physics2d")]
+public partial struct TileColliderSource2d : IComponent<TileColliderSource2d>
+{
+    /// <summary>
+    /// Map entity whose tiles generated this collider.
+    /// </summary>
+    /// <remarks>
+    /// Default: null.
+    /// </remarks>
+    [Default(Json = "null")]
+    public string? Owner;
+    /// <summary>Stable engine component index.</summary>
+    public static uint TypeIndex => 49;
+    /// <inheritdoc/>
+    public static ref TileColliderSource2d Access(Entity entity, bool write) => ref EngineAccess.Get(entity, TypeIndex, write, EngineValueCodecs.ReadTileColliderSource2d, EngineValueCodecs.WriteTileColliderSource2d);
+    /// <inheritdoc/>
+    public static void Insert(in Commands commands, Entity entity, in TileColliderSource2d value) => commands.InsertJson(entity, TypeIndex, EngineAccess.Encode(value, EngineValueCodecs.WriteTileColliderSource2d));
+    /// <inheritdoc/>
+    public static bool Contains(Entity entity) => Host.ComponentHas(entity.Bits, TypeIndex);
+}
+
+/// <summary>
+/// A tile's visual, terrain, collision and lighting definition.
+/// </summary>
+public partial struct TileDefinition
+{
+    /// <summary>
+    /// Stable atlas region name.
+    /// </summary>
+    /// <remarks>
+    /// Default: "".
+    /// </remarks>
+    [Default("")]
+    public string? Region;
+    /// <summary>
+    /// Drawn size in metres around the region pivot; zero uses the cell size. Taller tiles (walls, trees) overlap their neighbors and draw back to front.
+    /// </summary>
+    /// <remarks>
+    /// Unit: m. Range: [0, ∞]. Default: [0,0].
+    /// </remarks>
+    [Unit("m"), Min(0), Default(0, 0)]
+    public Vector2 Size;
+    /// <summary>
+    /// Auto-tiling terrain group; zero opts out of rules.
+    /// </summary>
+    /// <remarks>
+    /// Default: 0.
+    /// </remarks>
+    [Default(0)]
+    public uint Terrain;
+    /// <summary>
+    /// Generate a static collider and shadow silhouette from this cell.
+    /// </summary>
+    /// <remarks>
+    /// Default: false.
+    /// </remarks>
+    [Default(false)]
+    public bool Solid;
+    /// <summary>
+    /// Opt into local lights and normal maps.
+    /// </summary>
+    /// <remarks>
+    /// Default: false.
+    /// </remarks>
+    [Default(false)]
+    public bool Lit;
+}
+
+/// <summary>
+/// One map layer with stable identity, source cells and independent painter order.
+/// </summary>
+public partial struct TileLayer
+{
+    /// <summary>
+    /// Stable layer identity (<c>l_ground</c>), used in field paths and cache keys.
+    /// </summary>
+    /// <remarks>
+    /// Default: "".
+    /// </remarks>
+    [Default("")]
+    public string? Id;
+    /// <summary>
+    /// Sorting layer shared with sprites.
+    /// </summary>
+    /// <remarks>
+    /// Default: 0.
+    /// </remarks>
+    [Default(0)]
+    public int SortingLayer;
+    /// <summary>
+    /// Draw order within the sorting layer.
+    /// </summary>
+    /// <remarks>
+    /// Default: 0.
+    /// </remarks>
+    [Default(0)]
+    public int Order;
+    /// <summary>
+    /// Parallax factor per world axis.
+    /// </summary>
+    /// <remarks>
+    /// Default: [1,1].
+    /// </remarks>
+    [Default(1, 1)]
+    public Vector2 Parallax;
+    /// <summary>
+    /// Linear, straight-alpha tint applied to every tile, e.g. to darken backgrounds.
+    /// </summary>
+    /// <remarks>
+    /// Default: [1,1,1,1].
+    /// </remarks>
+    [Default(1, 1, 1, 1)]
+    public Vector4 Tint;
+    /// <summary>
+    /// Signed <c>x,y</c> keys to positive tile numbers; missing cells are empty.
+    /// </summary>
+    /// <remarks>
+    /// Default: {}.
+    /// </remarks>
+    [Default(Json = "{}")]
+    public Dictionary<string, uint> Cells;
+}
+
+/// <summary>
+/// First matching rule wins. Masks use <c>GridLayout::neighbors</c> bit order; a neighbor "matches" when its tile's definition has the rule's terrain.
+/// </summary>
+[StructLayout(LayoutKind.Explicit, Size = 16)]
+public partial struct TileRule
+{
+    /// <summary>
+    /// Terrain group to transform.
+    /// </summary>
+    /// <remarks>
+    /// Default: 0.
+    /// </remarks>
+    [FieldOffset(0), Default(0)]
+    public uint Terrain;
+    /// <summary>
+    /// Neighbors which must share this terrain.
+    /// </summary>
+    /// <remarks>
+    /// Default: 0.
+    /// </remarks>
+    [FieldOffset(4), Default(0)]
+    public uint Required;
+    /// <summary>
+    /// Neighbors which must not share this terrain.
+    /// </summary>
+    /// <remarks>
+    /// Default: 0.
+    /// </remarks>
+    [FieldOffset(8), Default(0)]
+    public uint Forbidden;
+    /// <summary>
+    /// Output tile number; its definition must have the same terrain.
+    /// </summary>
+    /// <remarks>
+    /// Default: 0.
+    /// </remarks>
+    [FieldOffset(12), Default(0)]
+    public uint Tile;
+}
+
+/// <summary>
+/// Canonical text source for a tilemap. Binary chunks are derived cache products.
+/// </summary>
+[EngineComponent("Tilemap", Module = "twoD")]
+public partial struct Tilemap : IComponent<Tilemap>
+{
+    /// <summary>
+    /// Atlas asset reference; never a native descriptor.
+    /// </summary>
+    /// <remarks>
+    /// Default: null.
+    /// </remarks>
+    [Default(Json = "null")]
+    public string? Atlas;
+    /// <summary>
+    /// Optional normal atlas matching the source regions.
+    /// </summary>
+    /// <remarks>
+    /// Default: null.
+    /// </remarks>
+    [Default(Json = "null")]
+    public string? NormalAtlas;
+    /// <summary>
+    /// Grid, pointy hex or diamond layout.
+    /// </summary>
+    /// <remarks>
+    /// Default: "grid".
+    /// </remarks>
+    [Default("grid")]
+    public GridLayout Layout;
+    /// <summary>
+    /// World dimensions of a cell's bounding box in metres.
+    /// </summary>
+    /// <remarks>
+    /// Default: [1,1].
+    /// </remarks>
+    [Default(1, 1)]
+    public Vector2 CellSize;
+    /// <summary>
+    /// Tile number text to definitions; zero is reserved for empty cells.
+    /// </summary>
+    /// <remarks>
+    /// Default: {}.
+    /// </remarks>
+    [Default(Json = "{}")]
+    public Dictionary<string, TileDefinition> Definitions;
+    /// <summary>
+    /// Stable layers. Their array order never determines painter order.
+    /// </summary>
+    /// <remarks>
+    /// Default: [].
+    /// </remarks>
+    [Default(Json = "[]")]
+    public TileLayer[] Layers;
+    /// <summary>
+    /// Ordered auto-tiling rules.
+    /// </summary>
+    /// <remarks>
+    /// Default: [].
+    /// </remarks>
+    [Default(Json = "[]")]
+    public TileRule[] Rules;
+    /// <summary>Stable engine component index.</summary>
+    public static uint TypeIndex => 50;
+    /// <inheritdoc/>
+    public static ref Tilemap Access(Entity entity, bool write) => ref EngineAccess.Get(entity, TypeIndex, write, EngineValueCodecs.ReadTilemap, EngineValueCodecs.WriteTilemap);
+    /// <inheritdoc/>
+    public static void Insert(in Commands commands, Entity entity, in Tilemap value) => commands.InsertJson(entity, TypeIndex, EngineAccess.Encode(value, EngineValueCodecs.WriteTilemap));
+    /// <inheritdoc/>
+    public static bool Contains(Entity entity) => Host.ComponentHas(entity.Bits, TypeIndex);
+}
+
+/// <summary>
+/// The display transform that compresses scene radiance into the screen's range.
+/// </summary>
+public enum ToneMapping : uint
+{
+    /// <summary>
+    /// Filmic ACES-style curve with a soft toe and highlight desaturation, similar to Unreal's default; the most cinematic.
+    /// </summary>
+    Filmic = 0,
+    /// <summary>
+    /// Khronos PBR Neutral: keeps material colours accurate up to bright highlights.
+    /// </summary>
+    Neutral = 1,
+    /// <summary>
+    /// Narkowicz's per-channel ACES fit (the legacy curve; saturated highlights).
+    /// </summary>
+    AcesFit = 2,
+}
 
 /// <summary>
 /// Position, rotation and scale of an entity relative to its parent.
@@ -21,29 +3730,3489 @@ public partial struct Transform : IComponent<Transform>
     /// <remarks>
     /// Unit: m. Default: [0,0,0]. Replicated to relevant clients.
     /// </remarks>
-    [FieldOffset(0), Unit("m"), Replicate(Audience.Relevant, Quantize = 0.001, Interpolate = Interpolate.Linear, Rollback = true)] public Vector3 Position;
+    [FieldOffset(0), Unit("m"), Replicate(Audience.Relevant, Quantize = 0.001, Interpolate = Interpolate.Linear, Rollback = true), Default(0, 0, 0)]
+    public Vector3 Position;
     /// <summary>
     /// Rotation relative to the parent, as XYZ Euler angles.
     /// </summary>
     /// <remarks>
     /// Unit: deg. Default: [0,0,0]. Replicated to relevant clients.
     /// </remarks>
-    [FieldOffset(12), Unit("deg"), Replicate(Audience.Relevant, Quantize = 0.01, Interpolate = Interpolate.Slerp, Rollback = true)] public Vector3 Rotation;
+    [FieldOffset(12), Unit("deg"), Replicate(Audience.Relevant, Quantize = 0.01, Interpolate = Interpolate.Slerp, Rollback = true), Default(0, 0, 0)]
+    public Vector3 Rotation;
     /// <summary>
     /// Scale relative to the parent; <c>[1, 1, 1]</c> is unscaled.
     /// </summary>
     /// <remarks>
     /// Default: [1,1,1].
     /// </remarks>
-    [FieldOffset(24), Default(1, 1, 1)] public Vector3 Scale;
-
-    /// <summary>Script component index: engine components are numbered in binding order.</summary>
+    [FieldOffset(24), Default(1, 1, 1)]
+    public Vector3 Scale;
+    /// <summary>Stable engine component index.</summary>
     public static uint TypeIndex => 0;
 }
 
-/// <summary>Engine component names in binding order (index = <c>TypeIndex</c>).</summary>
+/// <summary>
+/// Four-wheel engine/automatic-gearbox vehicle, using S6's stable defaults.
+/// </summary>
+[StructLayout(LayoutKind.Explicit, Size = 56)]
+[EngineComponent("Vehicle", Module = "physics")]
+public partial struct Vehicle : IComponent<Vehicle>
+{
+    /// <summary>
+    /// Chassis half extents.
+    /// </summary>
+    /// <remarks>
+    /// Unit: m. Range: [0.001, ∞]. Default: [0.9,0.2,2].
+    /// </remarks>
+    [FieldOffset(0), Unit("m"), Min(0.001), Default(0.9, 0.2, 2)]
+    public Vector3 HalfExtents;
+    /// <summary>
+    /// Chassis mass.
+    /// </summary>
+    /// <remarks>
+    /// Unit: kg. Range: [0.001, ∞]. Default: 1500.
+    /// </remarks>
+    [FieldOffset(12), Unit("kg"), Min(0.001), Default(1500)]
+    public float Mass;
+    /// <summary>
+    /// All four wheel radii.
+    /// </summary>
+    /// <remarks>
+    /// Unit: m. Range: [0.001, ∞]. Default: 0.35.
+    /// </remarks>
+    [FieldOffset(16), Unit("m"), Min(0.001), Default(0.35)]
+    public float WheelRadius;
+    /// <summary>
+    /// All four wheel widths.
+    /// </summary>
+    /// <remarks>
+    /// Unit: m. Range: [0.001, ∞]. Default: 0.2.
+    /// </remarks>
+    [FieldOffset(20), Unit("m"), Min(0.001), Default(0.2)]
+    public float WheelWidth;
+    /// <summary>
+    /// Minimum suspension length.
+    /// </summary>
+    /// <remarks>
+    /// Unit: m. Range: [0, ∞]. Default: 0.2.
+    /// </remarks>
+    [FieldOffset(24), Unit("m"), Min(0), Default(0.2)]
+    public float SuspensionMin;
+    /// <summary>
+    /// Maximum suspension length.
+    /// </summary>
+    /// <remarks>
+    /// Unit: m. Range: [0.001, ∞]. Default: 0.5.
+    /// </remarks>
+    [FieldOffset(28), Unit("m"), Min(0.001), Default(0.5)]
+    public float SuspensionMax;
+    /// <summary>
+    /// Suspension spring frequency.
+    /// </summary>
+    /// <remarks>
+    /// Unit: Hz. Range: [0.001, ∞]. Default: 1.5.
+    /// </remarks>
+    [FieldOffset(32), Unit("Hz"), Min(0.001), Default(1.5)]
+    public float SuspensionFrequency;
+    /// <summary>
+    /// Suspension damping ratio.
+    /// </summary>
+    /// <remarks>
+    /// Range: [0, ∞]. Default: 0.5.
+    /// </remarks>
+    [FieldOffset(36), Min(0), Default(0.5)]
+    public float SuspensionDamping;
+    /// <summary>
+    /// Front wheel steering lock.
+    /// </summary>
+    /// <remarks>
+    /// Unit: deg. Range: [0, 89]. Default: 30.
+    /// </remarks>
+    [FieldOffset(40), Unit("deg"), Range(0, 89), Default(30)]
+    public float MaxSteerDeg;
+    /// <summary>
+    /// Engine peak torque; Jolt's gearbox/engine curves supply the remaining defaults.
+    /// </summary>
+    /// <remarks>
+    /// Unit: N*m. Range: [0.001, ∞]. Default: 500.
+    /// </remarks>
+    [FieldOffset(44), Unit("N*m"), Min(0.001), Default(500)]
+    public float EngineMaxTorque;
+    /// <summary>
+    /// Rear-wheel drive; false selects front-wheel drive.
+    /// </summary>
+    /// <remarks>
+    /// Default: true.
+    /// </remarks>
+    [FieldOffset(48), Default(true)]
+    public bool RearWheelDrive;
+    /// <summary>
+    /// Chassis collision layer.
+    /// </summary>
+    /// <remarks>
+    /// Range: [1, 15]. Default: 1.
+    /// </remarks>
+    [FieldOffset(52), Range(1, 15), Default(1)]
+    public uint Layer;
+    /// <summary>Stable engine component index.</summary>
+    public static uint TypeIndex => 51;
+    /// <inheritdoc/>
+    public static ref Vehicle Access(Entity entity, bool write) => ref EngineAccess.Get(entity, TypeIndex, write, EngineValueCodecs.ReadVehicle, EngineValueCodecs.WriteVehicle);
+    /// <inheritdoc/>
+    public static void Insert(in Commands commands, Entity entity, in Vehicle value) => commands.InsertJson(entity, TypeIndex, EngineAccess.Encode(value, EngineValueCodecs.WriteVehicle));
+    /// <inheritdoc/>
+    public static bool Contains(Entity entity) => Host.ComponentHas(entity.Bits, TypeIndex);
+}
+
+/// <summary>
+/// Replayable driver intent consumed every fixed tick.
+/// </summary>
+[StructLayout(LayoutKind.Explicit, Size = 16)]
+[EngineComponent("VehicleInput", Module = "physics")]
+public partial struct VehicleInput : IComponent<VehicleInput>
+{
+    /// <summary>
+    /// Signed accelerator, with negative input selecting reverse.
+    /// </summary>
+    /// <remarks>
+    /// Range: [-1, 1]. Default: 0. Replicated to the owning client.
+    /// </remarks>
+    [FieldOffset(0), Range(-1, 1), Replicate(Audience.Owner, Rollback = true), Default(0)]
+    public float Throttle;
+    /// <summary>
+    /// Signed steering, positive turns right.
+    /// </summary>
+    /// <remarks>
+    /// Range: [-1, 1]. Default: 0. Replicated to the owning client.
+    /// </remarks>
+    [FieldOffset(4), Range(-1, 1), Replicate(Audience.Owner, Rollback = true), Default(0)]
+    public float Steer;
+    /// <summary>
+    /// Service brake.
+    /// </summary>
+    /// <remarks>
+    /// Range: [0, 1]. Default: 0. Replicated to the owning client.
+    /// </remarks>
+    [FieldOffset(8), Range(0, 1), Replicate(Audience.Owner, Rollback = true), Default(0)]
+    public float Brake;
+    /// <summary>
+    /// Rear-wheel handbrake.
+    /// </summary>
+    /// <remarks>
+    /// Range: [0, 1]. Default: 0. Replicated to the owning client.
+    /// </remarks>
+    [FieldOffset(12), Range(0, 1), Replicate(Audience.Owner, Rollback = true), Default(0)]
+    public float HandBrake;
+    /// <summary>Stable engine component index.</summary>
+    public static uint TypeIndex => 52;
+    /// <inheritdoc/>
+    public static ref VehicleInput Access(Entity entity, bool write) => ref EngineAccess.Get(entity, TypeIndex, write, EngineValueCodecs.ReadVehicleInput, EngineValueCodecs.WriteVehicleInput);
+    /// <inheritdoc/>
+    public static void Insert(in Commands commands, Entity entity, in VehicleInput value) => commands.InsertJson(entity, TypeIndex, EngineAccess.Encode(value, EngineValueCodecs.WriteVehicleInput));
+    /// <inheritdoc/>
+    public static bool Contains(Entity entity) => Host.ComponentHas(entity.Bits, TypeIndex);
+}
+
+/// <summary>
+/// Vehicle drivetrain and suspension state mirrored into ECS after each tick.
+/// </summary>
+[StructLayout(LayoutKind.Explicit, Size = 12)]
+[EngineComponent("VehicleTelemetry", Module = "physics")]
+public partial struct VehicleTelemetry : IComponent<VehicleTelemetry>
+{
+    /// <summary>
+    /// Grounded wheel count.
+    /// </summary>
+    /// <remarks>
+    /// Range: [0, 4]. Default: 0. Replicated to relevant clients.
+    /// </remarks>
+    [FieldOffset(0), Range(0, 4), Replicate(Audience.Relevant, Rollback = true), Default(0)]
+    public uint WheelsInContact;
+    /// <summary>
+    /// Current engine speed in revolutions per minute.
+    /// </summary>
+    /// <remarks>
+    /// Range: [0, ∞]. Default: 0. Replicated to relevant clients.
+    /// </remarks>
+    [FieldOffset(4), Min(0), Replicate(Audience.Relevant, Rollback = true), Default(0)]
+    public float EngineRpm;
+    /// <summary>
+    /// Gear index (negative is reverse).
+    /// </summary>
+    /// <remarks>
+    /// Default: 0. Replicated to relevant clients.
+    /// </remarks>
+    [FieldOffset(8), Replicate(Audience.Relevant, Rollback = true), Default(0)]
+    public int Gear;
+    /// <summary>Stable engine component index.</summary>
+    public static uint TypeIndex => 53;
+    /// <inheritdoc/>
+    public static ref VehicleTelemetry Access(Entity entity, bool write) => ref EngineAccess.Get(entity, TypeIndex, write, EngineValueCodecs.ReadVehicleTelemetry, EngineValueCodecs.WriteVehicleTelemetry);
+    /// <inheritdoc/>
+    public static void Insert(in Commands commands, Entity entity, in VehicleTelemetry value) => commands.InsertJson(entity, TypeIndex, EngineAccess.Encode(value, EngineValueCodecs.WriteVehicleTelemetry));
+    /// <inheritdoc/>
+    public static bool Contains(Entity entity) => Host.ComponentHas(entity.Bits, TypeIndex);
+}
+
+/// <summary>
+/// Authoritative velocity, synchronized at tick boundaries.
+/// </summary>
+[StructLayout(LayoutKind.Explicit, Size = 24)]
+[EngineComponent("Velocity", Module = "physics")]
+public partial struct Velocity : IComponent<Velocity>
+{
+    /// <summary>
+    /// World-space linear velocity.
+    /// </summary>
+    /// <remarks>
+    /// Unit: m/s. Default: [0,0,0]. Replicated to relevant clients.
+    /// </remarks>
+    [FieldOffset(0), Unit("m/s"), Replicate(Audience.Relevant, Rollback = true), Default(0, 0, 0)]
+    public Vector3 Linear;
+    /// <summary>
+    /// World-space angular velocity.
+    /// </summary>
+    /// <remarks>
+    /// Unit: rad/s. Default: [0,0,0]. Replicated to relevant clients.
+    /// </remarks>
+    [FieldOffset(12), Unit("rad/s"), Replicate(Audience.Relevant, Rollback = true), Default(0, 0, 0)]
+    public Vector3 Angular;
+    /// <summary>Stable engine component index.</summary>
+    public static uint TypeIndex => 54;
+    /// <inheritdoc/>
+    public static ref Velocity Access(Entity entity, bool write) => ref EngineAccess.Get(entity, TypeIndex, write, EngineValueCodecs.ReadVelocity, EngineValueCodecs.WriteVelocity);
+    /// <inheritdoc/>
+    public static void Insert(in Commands commands, Entity entity, in Velocity value) => commands.InsertJson(entity, TypeIndex, EngineAccess.Encode(value, EngineValueCodecs.WriteVelocity));
+    /// <inheritdoc/>
+    public static bool Contains(Entity entity) => Host.ComponentHas(entity.Bits, TypeIndex);
+}
+
+/// <summary>
+/// Authoritative velocity, synchronized at tick boundaries.
+/// </summary>
+[StructLayout(LayoutKind.Explicit, Size = 12)]
+[EngineComponent("Velocity2d", Module = "physics2d")]
+public partial struct Velocity2d : IComponent<Velocity2d>
+{
+    /// <summary>
+    /// World-space linear velocity.
+    /// </summary>
+    /// <remarks>
+    /// Unit: m/s. Default: [0,0]. Replicated to relevant clients.
+    /// </remarks>
+    [FieldOffset(0), Unit("m/s"), Replicate(Audience.Relevant, Rollback = true), Default(0, 0)]
+    public Vector2 Linear;
+    /// <summary>
+    /// Counter-clockwise angular velocity.
+    /// </summary>
+    /// <remarks>
+    /// Unit: rad/s. Default: 0. Replicated to relevant clients.
+    /// </remarks>
+    [FieldOffset(8), Unit("rad/s"), Replicate(Audience.Relevant, Rollback = true), Default(0)]
+    public float Angular;
+    /// <summary>Stable engine component index.</summary>
+    public static uint TypeIndex => 55;
+    /// <inheritdoc/>
+    public static ref Velocity2d Access(Entity entity, bool write) => ref EngineAccess.Get(entity, TypeIndex, write, EngineValueCodecs.ReadVelocity2d, EngineValueCodecs.WriteVelocity2d);
+    /// <inheritdoc/>
+    public static void Insert(in Commands commands, Entity entity, in Velocity2d value) => commands.InsertJson(entity, TypeIndex, EngineAccess.Encode(value, EngineValueCodecs.WriteVelocity2d));
+    /// <inheritdoc/>
+    public static bool Contains(Entity entity) => Host.ComponentHas(entity.Bits, TypeIndex);
+}
+
+/// <summary>
+/// A GPU particle effect drawn at this entity. Presentation only: gameplay reads ara-vfx CPU events, never GPU particles. <c>effect</c> names a cooked library effect (<c>campfire</c>, <c>sparks</c>, <c>depth_sparks</c>, <c>magic_swirl</c>, <c>smoke</c>, <c>muzzle_flash</c>, <c>rain</c>, <c>dust</c>).
+/// </summary>
+[EngineComponent("VisualEffect", Module = "vfx")]
+public partial struct VisualEffect : IComponent<VisualEffect>
+{
+    /// <summary>
+    /// Cooked library effect name.
+    /// </summary>
+    /// <remarks>
+    /// Default: "campfire".
+    /// </remarks>
+    [Default("campfire")]
+    public string? Effect;
+    /// <summary>
+    /// Uniform size: the effect's shape, sprite sizes and speeds grow together (2 doubles a campfire's height and spread).
+    /// </summary>
+    /// <remarks>
+    /// Range: [0.05, 50]. Default: 1.
+    /// </remarks>
+    [Range(0.05, 50), Default(1)]
+    public float Scale;
+    /// <summary>
+    /// Brightness multiplier on the effect's emitted and lit colour; its opacity is unchanged. Lower it for effects that glow too hot under a scene's exposure.
+    /// </summary>
+    /// <remarks>
+    /// Range: [0, 50]. Default: 1.
+    /// </remarks>
+    [Range(0, 50), Default(1)]
+    public float Intensity;
+    /// <summary>Stable engine component index.</summary>
+    public static uint TypeIndex => 56;
+    /// <inheritdoc/>
+    public static ref VisualEffect Access(Entity entity, bool write) => ref EngineAccess.Get(entity, TypeIndex, write, EngineValueCodecs.ReadVisualEffect, EngineValueCodecs.WriteVisualEffect);
+    /// <inheritdoc/>
+    public static void Insert(in Commands commands, Entity entity, in VisualEffect value) => commands.InsertJson(entity, TypeIndex, EngineAccess.Encode(value, EngineValueCodecs.WriteVisualEffect));
+    /// <inheritdoc/>
+    public static bool Contains(Entity entity) => Host.ComponentHas(entity.Bits, TypeIndex);
+}
+
+/// <summary>
+/// Server-side AI: walks the navmesh to random points inside a box, pausing between.
+/// </summary>
+[StructLayout(LayoutKind.Explicit, Size = 48)]
+[EngineComponent("Wanderer", Module = "gameplay")]
+public partial struct Wanderer : IComponent<Wanderer>
+{
+    /// <summary>
+    /// Minimum corner of the roaming box (world space).
+    /// </summary>
+    /// <remarks>
+    /// Unit: m. Default: [0,0,0].
+    /// </remarks>
+    [FieldOffset(0), Unit("m"), Default(0, 0, 0)]
+    public Vector3 Min;
+    /// <summary>
+    /// Maximum corner of the roaming box (world space).
+    /// </summary>
+    /// <remarks>
+    /// Unit: m. Default: [0,0,0].
+    /// </remarks>
+    [FieldOffset(12), Unit("m"), Default(0, 0, 0)]
+    public Vector3 Max;
+    /// <summary>
+    /// Ticks to wait after arriving before choosing the next goal.
+    /// </summary>
+    /// <remarks>
+    /// Default: 45.
+    /// </remarks>
+    [FieldOffset(24), Default(45)]
+    public uint PauseTicks;
+    /// <summary>
+    /// Tick at which the next goal is chosen. Simulation state.
+    /// </summary>
+    /// <remarks>
+    /// Default: 0.
+    /// </remarks>
+    [FieldOffset(32), Default(0)]
+    public ulong ResumeTick;
+    /// <summary>
+    /// Goals chosen so far. Simulation state.
+    /// </summary>
+    /// <remarks>
+    /// Default: 0.
+    /// </remarks>
+    [FieldOffset(40), Default(0)]
+    public uint Goals;
+    /// <summary>Stable engine component index.</summary>
+    public static uint TypeIndex => 57;
+    /// <inheritdoc/>
+    public static ref Wanderer Access(Entity entity, bool write) => ref EngineAccess.Get(entity, TypeIndex, write, EngineValueCodecs.ReadWanderer, EngineValueCodecs.WriteWanderer);
+    /// <inheritdoc/>
+    public static void Insert(in Commands commands, Entity entity, in Wanderer value) => commands.InsertJson(entity, TypeIndex, EngineAccess.Encode(value, EngineValueCodecs.WriteWanderer));
+    /// <inheritdoc/>
+    public static bool Contains(Entity entity) => Host.ComponentHas(entity.Bits, TypeIndex);
+}
+
+/// <summary>
+/// Reverb zone volume shape.
+/// </summary>
+public enum ZoneShape : uint
+{
+    /// <summary>
+    /// Oriented box with <c>halfExtents</c>.
+    /// </summary>
+    Box = 0,
+    /// <summary>
+    /// Sphere with <c>radius</c>.
+    /// </summary>
+    Sphere = 1,
+}
+
+/// <summary>Engine components in stable binding order.</summary>
 public static class EngineComponents
 {
-    /// <summary>Schema names, by script component index.</summary>
-    public static readonly string[] Names = ["Transform"];
+    /// <summary>Schema names by TypeIndex.</summary>
+    public static readonly string[] Names = ["Transform", "AcousticPortal", "AcousticSource", "AcousticSurface", "Animator", "AudioGraphSource", "AudioListener", "AudioSource", "Brain", "Camera", "Camera2d", "CharacterController", "CharacterController2d", "CharacterInput", "CharacterInput2d", "CharacterMotion", "CharacterMotion2d", "Collider", "Collider2d", "Environment", "Flipbook", "FollowCamera", "HeightFog", "Joint", "Light", "Light2d", "MeshRenderer", "MusicSource", "NavAgent", "NavAgentType", "NavArea", "NavLink", "NavMeshSurface", "NavObstacle", "Perceiver", "PhysicsId", "PhysicsPose", "PhysicsPose2d", "PlayerControl", "PostProcess", "ReverbZone", "RigidBody", "RigidBody2d", "SkyAtmosphere", "Sprite", "Stimulus", "StreamedWorld", "Terrain", "TerrainChunk", "TileColliderSource2d", "Tilemap", "Vehicle", "VehicleInput", "VehicleTelemetry", "Velocity", "Velocity2d", "VisualEffect", "Wanderer"];
+    internal static readonly string[] DefaultJson = [
+        "{\"position\":[0,0,0],\"rotation\":[0,0,0],\"scale\":[1,1,1]}",
+        "{\"a\":\"\",\"b\":\"\",\"position\":[0,0,0],\"width\":1,\"height\":2,\"open\":1}",
+        "{\"occlusion\":true,\"occlusionRadius\":0.5,\"airAbsorption\":true,\"doppler\":1,\"reverbSend\":1,\"distanceCurve\":[]}",
+        "{\"preset\":\"generic\",\"custom\":null}",
+        "{\"controller\":null,\"idle\":\"\",\"locomotion\":[],\"moveThreshold\":0.15,\"fade\":0.2,\"rootMotion\":false}",
+        "{\"graph\":null,\"parameters\":{},\"triggers\":{}}",
+        "{\"position\":[0,0,0],\"velocity\":[0,0,0],\"forward\":[0,0,-1],\"up\":[0,1,0],\"coneInner\":360,\"coneOuter\":360,\"coneOuterGain\":1}",
+        "{\"clip\":null,\"bus\":\"master\",\"gain\":1,\"pitch\":1,\"looping\":false,\"spatial\":true,\"priority\":128,\"referenceDistance\":1,\"maxDistance\":100,\"attenuation\":\"inverse\",\"position\":[0,0,0],\"velocity\":[0,0,0],\"forward\":[0,0,-1],\"coneInner\":360,\"coneOuter\":360,\"coneOuterGain\":1}",
+        "{\"behavior\":null,\"overrides\":[],\"enabled\":true}",
+        "{\"fov\":55,\"priority\":0}",
+        "{\"centre\":[0,0],\"pixelsPerMetre\":16,\"zoom\":2,\"pixelPerfect\":true,\"ambient\":[0.2,0.2,0.25],\"background\":[0.012,0.018,0.032]}",
+        "{\"radius\":0.3,\"height\":1.8,\"crouchHeight\":1.0,\"maxSlopeDeg\":45,\"stepHeight\":0.35,\"stickDown\":0.5,\"padding\":0.02,\"maxStrength\":1000,\"mass\":70,\"layer\":1}",
+        "{\"radius\":0.3,\"height\":1.8,\"maxSlopeDeg\":45,\"stepHeight\":0.25,\"stickDown\":0.2,\"padding\":0.01,\"layer\":1}",
+        "{\"desiredVelocity\":[0,0,0],\"jumpSpeed\":0,\"crouch\":false}",
+        "{\"desiredVelocity\":[0,0],\"jumpSpeed\":0}",
+        "{\"grounded\":false,\"crouched\":false,\"groundVelocity\":[0,0,0],\"groundNormal\":[0,0,0]}",
+        "{\"grounded\":false,\"groundNormal\":[0,0]}",
+        "{\"kind\":\"box\",\"center\":[0,0,0],\"halfExtents\":[0.5,0.5,0.5],\"radius\":0.5,\"halfHeight\":0.5,\"asset\":null,\"node\":null,\"primitive\":null,\"layer\":0,\"sensor\":false,\"friction\":0.6,\"restitution\":0}",
+        "{\"kind\":\"box\",\"halfExtents\":[0.5,0.5],\"radius\":0.5,\"halfHeight\":0.5,\"points\":[],\"layer\":0,\"sensor\":false,\"friction\":0.6,\"restitution\":0}",
+        "{\"sky\":[0.22,0.32,0.6,1],\"horizon\":[0.95,0.62,0.4,1],\"ground\":[0.18,0.16,0.14,1],\"intensity\":900,\"exposure\":0.0015}",
+        "{\"frames\":[],\"startTick\":0,\"looping\":false}",
+        "{\"target\":null,\"distance\":5,\"height\":0.8,\"yaw\":0,\"pitch\":20,\"sensitivity\":2.5,\"player\":1}",
+        "{\"density\":0.002,\"baseHeight\":0,\"falloff\":60,\"albedo\":[0.9,0.9,0.9,1],\"anisotropy\":0.3}",
+        "{\"kind\":\"fixed\",\"connectedBody\":0,\"anchorA\":[0,0,0],\"anchorB\":[0,0,0],\"axis\":[1,0,0],\"normal\":[0,1,0],\"translationMin\":[0,0,0],\"translationMax\":[0,0,0],\"rotationMin\":[0,0,0],\"rotationMax\":[0,0,0]}",
+        "{\"kind\":\"point\",\"color\":[1,1,1,1],\"intensity\":800,\"range\":10,\"innerAngle\":20,\"outerAngle\":30}",
+        "{\"position\":[0,0,0],\"color\":[1,1,1],\"radius\":5,\"shadows\":false}",
+        "{\"shape\":\"box\",\"size\":[1,1,1],\"model\":null,\"node\":null,\"primitive\":null,\"materialOverrides\":[],\"color\":[1,1,1,1],\"roughness\":0.6,\"metallic\":0,\"emissive\":[0,0,0],\"emissiveEnabled\":true,\"emissiveStrength\":1,\"emissiveFactor\":null,\"emissiveMaterials\":[]}",
+        "{\"music\":null,\"bus\":\"music\",\"intensity\":0,\"segment\":\"\"}",
+        "{\"profile\":0,\"radius\":0.3,\"height\":1.8,\"maxSpeed\":3,\"acceleration\":8,\"areaMask\":65535,\"stoppingDistance\":0.1}",
+        "{\"profile\":0,\"name\":\"\",\"radius\":0.3,\"height\":1.8,\"climb\":0.4,\"slope\":45,\"areaCosts\":[],\"areaMask\":65535}",
+        "{\"area\":0,\"name\":\"\",\"cost\":1}",
+        "{\"id\":0,\"start\":[0,0,0],\"end\":[0,0,0],\"radius\":0.5,\"area\":0,\"bidirectional\":true,\"enabled\":true,\"kind\":\"walk\",\"duration\":0,\"arcHeight\":0.5}",
+        "{\"profiles\":[],\"geometry\":null,\"min\":[0,0,0],\"max\":[0,0,0],\"cellSize\":0.2,\"tileSize\":64}",
+        "{\"id\":0,\"halfExtents\":[0.5,0.5,0.5],\"mode\":\"carve\",\"area\":0}",
+        "{\"sightRange\":25,\"fov\":120,\"peripheralRange\":2,\"eyeHeight\":1.7,\"hearing\":1,\"occlusion\":0.5,\"memory\":8}",
+        "{\"value\":0}",
+        "{\"position\":[0,0,0],\"rotation\":[0,0,0,1]}",
+        "{\"position\":[0,0],\"rotation\":0}",
+        "{\"player\":1,\"walkSpeed\":1.6,\"runSpeed\":4.5,\"jumpSpeed\":4.5,\"turnRate\":540,\"yaw\":0,\"camera\":null}",
+        "{\"exposure\":\"auto\",\"ev100\":10,\"compensation\":0,\"minEv100\":-2,\"maxEv100\":16,\"adaptationSpeed\":2,\"toneMapping\":\"filmic\",\"bloom\":0.04,\"whiteBalance\":6500,\"saturation\":1,\"contrast\":1,\"vignette\":0}",
+        "{\"name\":\"\",\"shape\":\"box\",\"position\":[0,0,0],\"rotation\":[0,0,0,1],\"halfExtents\":[5,3,5],\"radius\":5,\"fade\":1,\"priority\":0,\"material\":\"generic\",\"rt60\":null,\"wet\":1,\"earlyReflections\":true,\"useBaked\":true}",
+        "{\"motion\":\"static\",\"mass\":0,\"allowSleep\":true,\"continuous\":false}",
+        "{\"motion\":\"static\",\"mass\":0,\"allowSleep\":true,\"continuous\":false,\"lockRotation\":false}",
+        "{\"seaLevel\":0,\"aerosols\":1,\"cloudCoverage\":0,\"cloudHeight\":2200}",
+        "{\"atlas\":null,\"region\":\"\",\"normalAtlas\":null,\"size\":[0,0],\"tint\":[1,1,1,1],\"sortingLayer\":0,\"order\":0,\"flipX\":false,\"flipY\":false,\"nineSlice\":false,\"lit\":false,\"parallax\":[1,1]}",
+        "{\"kind\":\"\",\"height\":1.2,\"visibility\":1}",
+        "{\"world\":null}",
+        "{\"terrain\":null,\"foliage\":null}",
+        "{\"x\":0,\"z\":0}",
+        "{\"owner\":null}",
+        "{\"atlas\":null,\"normalAtlas\":null,\"layout\":\"grid\",\"cellSize\":[1,1],\"definitions\":{},\"layers\":[],\"rules\":[]}",
+        "{\"halfExtents\":[0.9,0.2,2],\"mass\":1500,\"wheelRadius\":0.35,\"wheelWidth\":0.2,\"suspensionMin\":0.2,\"suspensionMax\":0.5,\"suspensionFrequency\":1.5,\"suspensionDamping\":0.5,\"maxSteerDeg\":30,\"engineMaxTorque\":500,\"rearWheelDrive\":true,\"layer\":1}",
+        "{\"throttle\":0,\"steer\":0,\"brake\":0,\"handBrake\":0}",
+        "{\"wheelsInContact\":0,\"engineRpm\":0,\"gear\":0}",
+        "{\"linear\":[0,0,0],\"angular\":[0,0,0]}",
+        "{\"linear\":[0,0],\"angular\":0}",
+        "{\"effect\":\"campfire\",\"scale\":1,\"intensity\":1}",
+        "{\"min\":[0,0,0],\"max\":[0,0,0],\"pauseTicks\":45,\"resumeTick\":0,\"goals\":0}",
+    ];
+}
+
+internal static class EngineValueCodecs
+{
+    static JsonElement Field(JsonElement v, string name, string fallback)
+    {
+        if (v.TryGetProperty(name, out var field)) return field;
+        using var doc = JsonDocument.Parse(fallback);
+        return doc.RootElement.Clone();
+    }
+    internal static AcousticMaterial ReadAcousticMaterial(JsonElement v)
+        => new()
+        {
+            Absorption = new Vector3(Field(v, "absorption", "[0.1,0.2,0.3]")[0].GetSingle(), Field(v, "absorption", "[0.1,0.2,0.3]")[1].GetSingle(), Field(v, "absorption", "[0.1,0.2,0.3]")[2].GetSingle()),
+            Scattering = Field(v, "scattering", "0.05").GetSingle(),
+            Transmission = new Vector3(Field(v, "transmission", "[0.1,0.05,0.03]")[0].GetSingle(), Field(v, "transmission", "[0.1,0.05,0.03]")[1].GetSingle(), Field(v, "transmission", "[0.1,0.05,0.03]")[2].GetSingle()),
+        };
+    internal static void WriteAcousticMaterial(Utf8JsonWriter w, AcousticMaterial v)
+    {
+        w.WriteStartObject();
+        w.WritePropertyName("absorption");
+        {
+        w.WriteStartArray();
+        WriteFloat(w, v.Absorption.X);
+        WriteFloat(w, v.Absorption.Y);
+        WriteFloat(w, v.Absorption.Z);
+        w.WriteEndArray();
+        }
+        w.WritePropertyName("scattering");
+        {
+        WriteFloat(w, v.Scattering);
+        }
+        w.WritePropertyName("transmission");
+        {
+        w.WriteStartArray();
+        WriteFloat(w, v.Transmission.X);
+        WriteFloat(w, v.Transmission.Y);
+        WriteFloat(w, v.Transmission.Z);
+        w.WriteEndArray();
+        }
+        w.WriteEndObject();
+    }
+    internal static AcousticPortal ReadAcousticPortal(JsonElement v)
+        => new()
+        {
+            A = Field(v, "a", "\"\"").ValueKind == JsonValueKind.Null ? null : Field(v, "a", "\"\"").GetString(),
+            B = Field(v, "b", "\"\"").ValueKind == JsonValueKind.Null ? null : Field(v, "b", "\"\"").GetString(),
+            Position = new Vector3(Field(v, "position", "[0,0,0]")[0].GetSingle(), Field(v, "position", "[0,0,0]")[1].GetSingle(), Field(v, "position", "[0,0,0]")[2].GetSingle()),
+            Width = Field(v, "width", "1").GetSingle(),
+            Height = Field(v, "height", "2").GetSingle(),
+            Open = Field(v, "open", "1").GetSingle(),
+        };
+    internal static void WriteAcousticPortal(Utf8JsonWriter w, AcousticPortal v)
+    {
+        w.WriteStartObject();
+        w.WritePropertyName("a");
+        {
+        w.WriteStringValue(v.A);
+        }
+        w.WritePropertyName("b");
+        {
+        w.WriteStringValue(v.B);
+        }
+        w.WritePropertyName("position");
+        {
+        w.WriteStartArray();
+        WriteFloat(w, v.Position.X);
+        WriteFloat(w, v.Position.Y);
+        WriteFloat(w, v.Position.Z);
+        w.WriteEndArray();
+        }
+        w.WritePropertyName("width");
+        {
+        WriteFloat(w, v.Width);
+        }
+        w.WritePropertyName("height");
+        {
+        WriteFloat(w, v.Height);
+        }
+        w.WritePropertyName("open");
+        {
+        WriteFloat(w, v.Open);
+        }
+        w.WriteEndObject();
+    }
+    internal static AcousticSource ReadAcousticSource(JsonElement v)
+        => new()
+        {
+            Occlusion = Field(v, "occlusion", "true").GetBoolean(),
+            OcclusionRadius = Field(v, "occlusionRadius", "0.5").GetSingle(),
+            AirAbsorption = Field(v, "airAbsorption", "true").GetBoolean(),
+            Doppler = Field(v, "doppler", "1").GetSingle(),
+            ReverbSend = Field(v, "reverbSend", "1").GetSingle(),
+            DistanceCurve = Field(v, "distanceCurve", "[]").EnumerateArray().Select(static item0 => new Vector2(item0[0].GetSingle(), item0[1].GetSingle())).ToArray(),
+        };
+    internal static void WriteAcousticSource(Utf8JsonWriter w, AcousticSource v)
+    {
+        w.WriteStartObject();
+        w.WritePropertyName("occlusion");
+        {
+        w.WriteBooleanValue(v.Occlusion);
+        }
+        w.WritePropertyName("occlusionRadius");
+        {
+        WriteFloat(w, v.OcclusionRadius);
+        }
+        w.WritePropertyName("airAbsorption");
+        {
+        w.WriteBooleanValue(v.AirAbsorption);
+        }
+        w.WritePropertyName("doppler");
+        {
+        WriteFloat(w, v.Doppler);
+        }
+        w.WritePropertyName("reverbSend");
+        {
+        WriteFloat(w, v.ReverbSend);
+        }
+        w.WritePropertyName("distanceCurve");
+        {
+        w.WriteStartArray();
+        if (v.DistanceCurve is not null) foreach (var item0 in v.DistanceCurve)
+        {
+        w.WriteStartArray();
+        WriteFloat(w, item0.X);
+        WriteFloat(w, item0.Y);
+        w.WriteEndArray();
+        }
+        w.WriteEndArray();
+        }
+        w.WriteEndObject();
+    }
+    internal static AcousticSurface ReadAcousticSurface(JsonElement v)
+        => new()
+        {
+            Preset = ReadMaterialPreset(Field(v, "preset", "\"generic\"")),
+            Custom = Field(v, "custom", "null").ValueKind == JsonValueKind.Null ? null : (AcousticMaterial?)(ReadAcousticMaterial(Field(v, "custom", "null"))),
+        };
+    internal static void WriteAcousticSurface(Utf8JsonWriter w, AcousticSurface v)
+    {
+        w.WriteStartObject();
+        w.WritePropertyName("preset");
+        {
+        WriteMaterialPreset(w, v.Preset);
+        }
+        w.WritePropertyName("custom");
+        {
+        if (v.Custom is { } option0)
+        {
+        WriteAcousticMaterial(w, option0);
+        } else w.WriteNullValue();
+        }
+        w.WriteEndObject();
+    }
+    internal static Animator ReadAnimator(JsonElement v)
+        => new()
+        {
+            Controller = Field(v, "controller", "null").ValueKind == JsonValueKind.Null ? null : (string?)(Field(v, "controller", "null").ValueKind == JsonValueKind.Null ? null : Field(v, "controller", "null").GetString()),
+            Idle = Field(v, "idle", "\"\"").ValueKind == JsonValueKind.Null ? null : Field(v, "idle", "\"\"").GetString(),
+            Locomotion = Field(v, "locomotion", "[]").EnumerateArray().Select(static item0 => ReadLocomotionClip(item0)).ToArray(),
+            MoveThreshold = Field(v, "moveThreshold", "0.15").GetSingle(),
+            Fade = Field(v, "fade", "0.2").GetSingle(),
+            RootMotion = Field(v, "rootMotion", "false").GetBoolean(),
+        };
+    internal static void WriteAnimator(Utf8JsonWriter w, Animator v)
+    {
+        w.WriteStartObject();
+        w.WritePropertyName("controller");
+        {
+        if (v.Controller is { } option0)
+        {
+        w.WriteStringValue(option0);
+        } else w.WriteNullValue();
+        }
+        w.WritePropertyName("idle");
+        {
+        w.WriteStringValue(v.Idle);
+        }
+        w.WritePropertyName("locomotion");
+        {
+        w.WriteStartArray();
+        if (v.Locomotion is not null) foreach (var item0 in v.Locomotion)
+        {
+        WriteLocomotionClip(w, item0);
+        }
+        w.WriteEndArray();
+        }
+        w.WritePropertyName("moveThreshold");
+        {
+        WriteFloat(w, v.MoveThreshold);
+        }
+        w.WritePropertyName("fade");
+        {
+        WriteFloat(w, v.Fade);
+        }
+        w.WritePropertyName("rootMotion");
+        {
+        w.WriteBooleanValue(v.RootMotion);
+        }
+        w.WriteEndObject();
+    }
+    internal static Attenuation ReadAttenuation(JsonElement v)
+        => v.GetString() switch
+        {
+            "inverse" => Attenuation.Inverse,
+            "linear" => Attenuation.Linear,
+            "inverseSquare" => Attenuation.InverseSquare,
+            _ => throw new JsonException("unknown enum variant")
+        };
+    internal static void WriteAttenuation(Utf8JsonWriter w, Attenuation v) => w.WriteStringValue(v switch
+    {
+        Attenuation.Inverse => "inverse",
+        Attenuation.Linear => "linear",
+        Attenuation.InverseSquare => "inverseSquare",
+        _ => throw new JsonException("unknown enum value")
+    });
+    internal static AudioGraphSource ReadAudioGraphSource(JsonElement v)
+        => new()
+        {
+            Graph = Field(v, "graph", "null").ValueKind == JsonValueKind.Null ? null : (string?)(Field(v, "graph", "null").ValueKind == JsonValueKind.Null ? null : Field(v, "graph", "null").GetString()),
+            Parameters = Field(v, "parameters", "{}").EnumerateObject().ToDictionary(static item0 => item0.Name, static item0 => item0.Value.GetSingle()),
+            Triggers = Field(v, "triggers", "{}").EnumerateObject().ToDictionary(static item0 => item0.Name, static item0 => item0.Value.GetUInt32()),
+        };
+    internal static void WriteAudioGraphSource(Utf8JsonWriter w, AudioGraphSource v)
+    {
+        w.WriteStartObject();
+        w.WritePropertyName("graph");
+        {
+        if (v.Graph is { } option0)
+        {
+        w.WriteStringValue(option0);
+        } else w.WriteNullValue();
+        }
+        w.WritePropertyName("parameters");
+        {
+        w.WriteStartObject();
+        if (v.Parameters is not null) foreach (var item0 in v.Parameters.OrderBy(static p => p.Key, StringComparer.Ordinal))
+        {
+        w.WritePropertyName(item0.Key);
+        WriteFloat(w, item0.Value);
+        }
+        w.WriteEndObject();
+        }
+        w.WritePropertyName("triggers");
+        {
+        w.WriteStartObject();
+        if (v.Triggers is not null) foreach (var item0 in v.Triggers.OrderBy(static p => p.Key, StringComparer.Ordinal))
+        {
+        w.WritePropertyName(item0.Key);
+        w.WriteNumberValue(item0.Value);
+        }
+        w.WriteEndObject();
+        }
+        w.WriteEndObject();
+    }
+    internal static AudioListener ReadAudioListener(JsonElement v)
+        => new()
+        {
+            Position = new Vector3(Field(v, "position", "[0,0,0]")[0].GetSingle(), Field(v, "position", "[0,0,0]")[1].GetSingle(), Field(v, "position", "[0,0,0]")[2].GetSingle()),
+            Velocity = new Vector3(Field(v, "velocity", "[0,0,0]")[0].GetSingle(), Field(v, "velocity", "[0,0,0]")[1].GetSingle(), Field(v, "velocity", "[0,0,0]")[2].GetSingle()),
+            Forward = new Vector3(Field(v, "forward", "[0,0,-1]")[0].GetSingle(), Field(v, "forward", "[0,0,-1]")[1].GetSingle(), Field(v, "forward", "[0,0,-1]")[2].GetSingle()),
+            Up = new Vector3(Field(v, "up", "[0,1,0]")[0].GetSingle(), Field(v, "up", "[0,1,0]")[1].GetSingle(), Field(v, "up", "[0,1,0]")[2].GetSingle()),
+            ConeInner = Field(v, "coneInner", "360").GetSingle(),
+            ConeOuter = Field(v, "coneOuter", "360").GetSingle(),
+            ConeOuterGain = Field(v, "coneOuterGain", "1").GetSingle(),
+        };
+    internal static void WriteAudioListener(Utf8JsonWriter w, AudioListener v)
+    {
+        w.WriteStartObject();
+        w.WritePropertyName("position");
+        {
+        w.WriteStartArray();
+        WriteFloat(w, v.Position.X);
+        WriteFloat(w, v.Position.Y);
+        WriteFloat(w, v.Position.Z);
+        w.WriteEndArray();
+        }
+        w.WritePropertyName("velocity");
+        {
+        w.WriteStartArray();
+        WriteFloat(w, v.Velocity.X);
+        WriteFloat(w, v.Velocity.Y);
+        WriteFloat(w, v.Velocity.Z);
+        w.WriteEndArray();
+        }
+        w.WritePropertyName("forward");
+        {
+        w.WriteStartArray();
+        WriteFloat(w, v.Forward.X);
+        WriteFloat(w, v.Forward.Y);
+        WriteFloat(w, v.Forward.Z);
+        w.WriteEndArray();
+        }
+        w.WritePropertyName("up");
+        {
+        w.WriteStartArray();
+        WriteFloat(w, v.Up.X);
+        WriteFloat(w, v.Up.Y);
+        WriteFloat(w, v.Up.Z);
+        w.WriteEndArray();
+        }
+        w.WritePropertyName("coneInner");
+        {
+        WriteFloat(w, v.ConeInner);
+        }
+        w.WritePropertyName("coneOuter");
+        {
+        WriteFloat(w, v.ConeOuter);
+        }
+        w.WritePropertyName("coneOuterGain");
+        {
+        WriteFloat(w, v.ConeOuterGain);
+        }
+        w.WriteEndObject();
+    }
+    internal static AudioSource ReadAudioSource(JsonElement v)
+        => new()
+        {
+            Clip = Field(v, "clip", "null").ValueKind == JsonValueKind.Null ? null : (string?)(Field(v, "clip", "null").ValueKind == JsonValueKind.Null ? null : Field(v, "clip", "null").GetString()),
+            Bus = Field(v, "bus", "\"master\"").ValueKind == JsonValueKind.Null ? null : Field(v, "bus", "\"master\"").GetString(),
+            Gain = Field(v, "gain", "1").GetSingle(),
+            Pitch = Field(v, "pitch", "1").GetSingle(),
+            Looping = Field(v, "looping", "false").GetBoolean(),
+            Spatial = Field(v, "spatial", "true").GetBoolean(),
+            Priority = Field(v, "priority", "128").GetByte(),
+            ReferenceDistance = Field(v, "referenceDistance", "1").GetSingle(),
+            MaxDistance = Field(v, "maxDistance", "100").GetSingle(),
+            Attenuation = ReadAttenuation(Field(v, "attenuation", "\"inverse\"")),
+            Position = new Vector3(Field(v, "position", "[0,0,0]")[0].GetSingle(), Field(v, "position", "[0,0,0]")[1].GetSingle(), Field(v, "position", "[0,0,0]")[2].GetSingle()),
+            Velocity = new Vector3(Field(v, "velocity", "[0,0,0]")[0].GetSingle(), Field(v, "velocity", "[0,0,0]")[1].GetSingle(), Field(v, "velocity", "[0,0,0]")[2].GetSingle()),
+            Forward = new Vector3(Field(v, "forward", "[0,0,-1]")[0].GetSingle(), Field(v, "forward", "[0,0,-1]")[1].GetSingle(), Field(v, "forward", "[0,0,-1]")[2].GetSingle()),
+            ConeInner = Field(v, "coneInner", "360").GetSingle(),
+            ConeOuter = Field(v, "coneOuter", "360").GetSingle(),
+            ConeOuterGain = Field(v, "coneOuterGain", "1").GetSingle(),
+        };
+    internal static void WriteAudioSource(Utf8JsonWriter w, AudioSource v)
+    {
+        w.WriteStartObject();
+        w.WritePropertyName("clip");
+        {
+        if (v.Clip is { } option0)
+        {
+        w.WriteStringValue(option0);
+        } else w.WriteNullValue();
+        }
+        w.WritePropertyName("bus");
+        {
+        w.WriteStringValue(v.Bus);
+        }
+        w.WritePropertyName("gain");
+        {
+        WriteFloat(w, v.Gain);
+        }
+        w.WritePropertyName("pitch");
+        {
+        WriteFloat(w, v.Pitch);
+        }
+        w.WritePropertyName("looping");
+        {
+        w.WriteBooleanValue(v.Looping);
+        }
+        w.WritePropertyName("spatial");
+        {
+        w.WriteBooleanValue(v.Spatial);
+        }
+        w.WritePropertyName("priority");
+        {
+        w.WriteNumberValue(v.Priority);
+        }
+        w.WritePropertyName("referenceDistance");
+        {
+        WriteFloat(w, v.ReferenceDistance);
+        }
+        w.WritePropertyName("maxDistance");
+        {
+        WriteFloat(w, v.MaxDistance);
+        }
+        w.WritePropertyName("attenuation");
+        {
+        WriteAttenuation(w, v.Attenuation);
+        }
+        w.WritePropertyName("position");
+        {
+        w.WriteStartArray();
+        WriteFloat(w, v.Position.X);
+        WriteFloat(w, v.Position.Y);
+        WriteFloat(w, v.Position.Z);
+        w.WriteEndArray();
+        }
+        w.WritePropertyName("velocity");
+        {
+        w.WriteStartArray();
+        WriteFloat(w, v.Velocity.X);
+        WriteFloat(w, v.Velocity.Y);
+        WriteFloat(w, v.Velocity.Z);
+        w.WriteEndArray();
+        }
+        w.WritePropertyName("forward");
+        {
+        w.WriteStartArray();
+        WriteFloat(w, v.Forward.X);
+        WriteFloat(w, v.Forward.Y);
+        WriteFloat(w, v.Forward.Z);
+        w.WriteEndArray();
+        }
+        w.WritePropertyName("coneInner");
+        {
+        WriteFloat(w, v.ConeInner);
+        }
+        w.WritePropertyName("coneOuter");
+        {
+        WriteFloat(w, v.ConeOuter);
+        }
+        w.WritePropertyName("coneOuterGain");
+        {
+        WriteFloat(w, v.ConeOuterGain);
+        }
+        w.WriteEndObject();
+    }
+    internal static Brain ReadBrain(JsonElement v)
+        => new()
+        {
+            Behavior = Field(v, "behavior", "null").ValueKind == JsonValueKind.Null ? null : (string?)(Field(v, "behavior", "null").ValueKind == JsonValueKind.Null ? null : Field(v, "behavior", "null").GetString()),
+            Overrides = Field(v, "overrides", "[]").EnumerateArray().Select(static item0 => item0.ValueKind == JsonValueKind.Null ? null : item0.GetString()).ToArray(),
+            Enabled = Field(v, "enabled", "true").GetBoolean(),
+        };
+    internal static void WriteBrain(Utf8JsonWriter w, Brain v)
+    {
+        w.WriteStartObject();
+        w.WritePropertyName("behavior");
+        {
+        if (v.Behavior is { } option0)
+        {
+        w.WriteStringValue(option0);
+        } else w.WriteNullValue();
+        }
+        w.WritePropertyName("overrides");
+        {
+        w.WriteStartArray();
+        if (v.Overrides is not null) foreach (var item0 in v.Overrides)
+        {
+        w.WriteStringValue(item0);
+        }
+        w.WriteEndArray();
+        }
+        w.WritePropertyName("enabled");
+        {
+        w.WriteBooleanValue(v.Enabled);
+        }
+        w.WriteEndObject();
+    }
+    internal static Camera ReadCamera(JsonElement v)
+        => new()
+        {
+            Fov = Field(v, "fov", "55").GetSingle(),
+            Priority = Field(v, "priority", "0").GetInt32(),
+        };
+    internal static void WriteCamera(Utf8JsonWriter w, Camera v)
+    {
+        w.WriteStartObject();
+        w.WritePropertyName("fov");
+        {
+        WriteFloat(w, v.Fov);
+        }
+        w.WritePropertyName("priority");
+        {
+        w.WriteNumberValue(v.Priority);
+        }
+        w.WriteEndObject();
+    }
+    internal static Camera2d ReadCamera2d(JsonElement v)
+        => new()
+        {
+            Centre = new Vector2(Field(v, "centre", "[0,0]")[0].GetSingle(), Field(v, "centre", "[0,0]")[1].GetSingle()),
+            PixelsPerMetre = Field(v, "pixelsPerMetre", "16").GetSingle(),
+            Zoom = Field(v, "zoom", "2").GetSingle(),
+            PixelPerfect = Field(v, "pixelPerfect", "true").GetBoolean(),
+            Ambient = new Vector3(Field(v, "ambient", "[0.2,0.2,0.25]")[0].GetSingle(), Field(v, "ambient", "[0.2,0.2,0.25]")[1].GetSingle(), Field(v, "ambient", "[0.2,0.2,0.25]")[2].GetSingle()),
+            Background = new Vector3(Field(v, "background", "[0.012,0.018,0.032]")[0].GetSingle(), Field(v, "background", "[0.012,0.018,0.032]")[1].GetSingle(), Field(v, "background", "[0.012,0.018,0.032]")[2].GetSingle()),
+        };
+    internal static void WriteCamera2d(Utf8JsonWriter w, Camera2d v)
+    {
+        w.WriteStartObject();
+        w.WritePropertyName("centre");
+        {
+        w.WriteStartArray();
+        WriteFloat(w, v.Centre.X);
+        WriteFloat(w, v.Centre.Y);
+        w.WriteEndArray();
+        }
+        w.WritePropertyName("pixelsPerMetre");
+        {
+        WriteFloat(w, v.PixelsPerMetre);
+        }
+        w.WritePropertyName("zoom");
+        {
+        WriteFloat(w, v.Zoom);
+        }
+        w.WritePropertyName("pixelPerfect");
+        {
+        w.WriteBooleanValue(v.PixelPerfect);
+        }
+        w.WritePropertyName("ambient");
+        {
+        w.WriteStartArray();
+        WriteFloat(w, v.Ambient.X);
+        WriteFloat(w, v.Ambient.Y);
+        WriteFloat(w, v.Ambient.Z);
+        w.WriteEndArray();
+        }
+        w.WritePropertyName("background");
+        {
+        w.WriteStartArray();
+        WriteFloat(w, v.Background.X);
+        WriteFloat(w, v.Background.Y);
+        WriteFloat(w, v.Background.Z);
+        w.WriteEndArray();
+        }
+        w.WriteEndObject();
+    }
+    internal static CharacterController ReadCharacterController(JsonElement v)
+        => new()
+        {
+            Radius = Field(v, "radius", "0.3").GetSingle(),
+            Height = Field(v, "height", "1.8").GetSingle(),
+            CrouchHeight = Field(v, "crouchHeight", "1.0").GetSingle(),
+            MaxSlopeDeg = Field(v, "maxSlopeDeg", "45").GetSingle(),
+            StepHeight = Field(v, "stepHeight", "0.35").GetSingle(),
+            StickDown = Field(v, "stickDown", "0.5").GetSingle(),
+            Padding = Field(v, "padding", "0.02").GetSingle(),
+            MaxStrength = Field(v, "maxStrength", "1000").GetSingle(),
+            Mass = Field(v, "mass", "70").GetSingle(),
+            Layer = Field(v, "layer", "1").GetUInt32(),
+        };
+    internal static void WriteCharacterController(Utf8JsonWriter w, CharacterController v)
+    {
+        w.WriteStartObject();
+        w.WritePropertyName("radius");
+        {
+        WriteFloat(w, v.Radius);
+        }
+        w.WritePropertyName("height");
+        {
+        WriteFloat(w, v.Height);
+        }
+        w.WritePropertyName("crouchHeight");
+        {
+        WriteFloat(w, v.CrouchHeight);
+        }
+        w.WritePropertyName("maxSlopeDeg");
+        {
+        WriteFloat(w, v.MaxSlopeDeg);
+        }
+        w.WritePropertyName("stepHeight");
+        {
+        WriteFloat(w, v.StepHeight);
+        }
+        w.WritePropertyName("stickDown");
+        {
+        WriteFloat(w, v.StickDown);
+        }
+        w.WritePropertyName("padding");
+        {
+        WriteFloat(w, v.Padding);
+        }
+        w.WritePropertyName("maxStrength");
+        {
+        WriteFloat(w, v.MaxStrength);
+        }
+        w.WritePropertyName("mass");
+        {
+        WriteFloat(w, v.Mass);
+        }
+        w.WritePropertyName("layer");
+        {
+        w.WriteNumberValue(v.Layer);
+        }
+        w.WriteEndObject();
+    }
+    internal static CharacterController2d ReadCharacterController2d(JsonElement v)
+        => new()
+        {
+            Radius = Field(v, "radius", "0.3").GetSingle(),
+            Height = Field(v, "height", "1.8").GetSingle(),
+            MaxSlopeDeg = Field(v, "maxSlopeDeg", "45").GetSingle(),
+            StepHeight = Field(v, "stepHeight", "0.25").GetSingle(),
+            StickDown = Field(v, "stickDown", "0.2").GetSingle(),
+            Padding = Field(v, "padding", "0.01").GetSingle(),
+            Layer = Field(v, "layer", "1").GetUInt32(),
+        };
+    internal static void WriteCharacterController2d(Utf8JsonWriter w, CharacterController2d v)
+    {
+        w.WriteStartObject();
+        w.WritePropertyName("radius");
+        {
+        WriteFloat(w, v.Radius);
+        }
+        w.WritePropertyName("height");
+        {
+        WriteFloat(w, v.Height);
+        }
+        w.WritePropertyName("maxSlopeDeg");
+        {
+        WriteFloat(w, v.MaxSlopeDeg);
+        }
+        w.WritePropertyName("stepHeight");
+        {
+        WriteFloat(w, v.StepHeight);
+        }
+        w.WritePropertyName("stickDown");
+        {
+        WriteFloat(w, v.StickDown);
+        }
+        w.WritePropertyName("padding");
+        {
+        WriteFloat(w, v.Padding);
+        }
+        w.WritePropertyName("layer");
+        {
+        w.WriteNumberValue(v.Layer);
+        }
+        w.WriteEndObject();
+    }
+    internal static CharacterInput ReadCharacterInput(JsonElement v)
+        => new()
+        {
+            DesiredVelocity = new Vector3(Field(v, "desiredVelocity", "[0,0,0]")[0].GetSingle(), Field(v, "desiredVelocity", "[0,0,0]")[1].GetSingle(), Field(v, "desiredVelocity", "[0,0,0]")[2].GetSingle()),
+            JumpSpeed = Field(v, "jumpSpeed", "0").GetSingle(),
+            Crouch = Field(v, "crouch", "false").GetBoolean(),
+        };
+    internal static void WriteCharacterInput(Utf8JsonWriter w, CharacterInput v)
+    {
+        w.WriteStartObject();
+        w.WritePropertyName("desiredVelocity");
+        {
+        w.WriteStartArray();
+        WriteFloat(w, v.DesiredVelocity.X);
+        WriteFloat(w, v.DesiredVelocity.Y);
+        WriteFloat(w, v.DesiredVelocity.Z);
+        w.WriteEndArray();
+        }
+        w.WritePropertyName("jumpSpeed");
+        {
+        WriteFloat(w, v.JumpSpeed);
+        }
+        w.WritePropertyName("crouch");
+        {
+        w.WriteBooleanValue(v.Crouch);
+        }
+        w.WriteEndObject();
+    }
+    internal static CharacterInput2d ReadCharacterInput2d(JsonElement v)
+        => new()
+        {
+            DesiredVelocity = new Vector2(Field(v, "desiredVelocity", "[0,0]")[0].GetSingle(), Field(v, "desiredVelocity", "[0,0]")[1].GetSingle()),
+            JumpSpeed = Field(v, "jumpSpeed", "0").GetSingle(),
+        };
+    internal static void WriteCharacterInput2d(Utf8JsonWriter w, CharacterInput2d v)
+    {
+        w.WriteStartObject();
+        w.WritePropertyName("desiredVelocity");
+        {
+        w.WriteStartArray();
+        WriteFloat(w, v.DesiredVelocity.X);
+        WriteFloat(w, v.DesiredVelocity.Y);
+        w.WriteEndArray();
+        }
+        w.WritePropertyName("jumpSpeed");
+        {
+        WriteFloat(w, v.JumpSpeed);
+        }
+        w.WriteEndObject();
+    }
+    internal static CharacterMotion ReadCharacterMotion(JsonElement v)
+        => new()
+        {
+            Grounded = Field(v, "grounded", "false").GetBoolean(),
+            Crouched = Field(v, "crouched", "false").GetBoolean(),
+            GroundVelocity = new Vector3(Field(v, "groundVelocity", "[0,0,0]")[0].GetSingle(), Field(v, "groundVelocity", "[0,0,0]")[1].GetSingle(), Field(v, "groundVelocity", "[0,0,0]")[2].GetSingle()),
+            GroundNormal = new Vector3(Field(v, "groundNormal", "[0,0,0]")[0].GetSingle(), Field(v, "groundNormal", "[0,0,0]")[1].GetSingle(), Field(v, "groundNormal", "[0,0,0]")[2].GetSingle()),
+        };
+    internal static void WriteCharacterMotion(Utf8JsonWriter w, CharacterMotion v)
+    {
+        w.WriteStartObject();
+        w.WritePropertyName("grounded");
+        {
+        w.WriteBooleanValue(v.Grounded);
+        }
+        w.WritePropertyName("crouched");
+        {
+        w.WriteBooleanValue(v.Crouched);
+        }
+        w.WritePropertyName("groundVelocity");
+        {
+        w.WriteStartArray();
+        WriteFloat(w, v.GroundVelocity.X);
+        WriteFloat(w, v.GroundVelocity.Y);
+        WriteFloat(w, v.GroundVelocity.Z);
+        w.WriteEndArray();
+        }
+        w.WritePropertyName("groundNormal");
+        {
+        w.WriteStartArray();
+        WriteFloat(w, v.GroundNormal.X);
+        WriteFloat(w, v.GroundNormal.Y);
+        WriteFloat(w, v.GroundNormal.Z);
+        w.WriteEndArray();
+        }
+        w.WriteEndObject();
+    }
+    internal static CharacterMotion2d ReadCharacterMotion2d(JsonElement v)
+        => new()
+        {
+            Grounded = Field(v, "grounded", "false").GetBoolean(),
+            GroundNormal = new Vector2(Field(v, "groundNormal", "[0,0]")[0].GetSingle(), Field(v, "groundNormal", "[0,0]")[1].GetSingle()),
+        };
+    internal static void WriteCharacterMotion2d(Utf8JsonWriter w, CharacterMotion2d v)
+    {
+        w.WriteStartObject();
+        w.WritePropertyName("grounded");
+        {
+        w.WriteBooleanValue(v.Grounded);
+        }
+        w.WritePropertyName("groundNormal");
+        {
+        w.WriteStartArray();
+        WriteFloat(w, v.GroundNormal.X);
+        WriteFloat(w, v.GroundNormal.Y);
+        w.WriteEndArray();
+        }
+        w.WriteEndObject();
+    }
+    internal static Collider ReadCollider(JsonElement v)
+        => new()
+        {
+            Kind = ReadColliderKind(Field(v, "kind", "\"box\"")),
+            Center = new Vector3(Field(v, "center", "[0,0,0]")[0].GetSingle(), Field(v, "center", "[0,0,0]")[1].GetSingle(), Field(v, "center", "[0,0,0]")[2].GetSingle()),
+            HalfExtents = new Vector3(Field(v, "halfExtents", "[0.5,0.5,0.5]")[0].GetSingle(), Field(v, "halfExtents", "[0.5,0.5,0.5]")[1].GetSingle(), Field(v, "halfExtents", "[0.5,0.5,0.5]")[2].GetSingle()),
+            Radius = Field(v, "radius", "0.5").GetSingle(),
+            HalfHeight = Field(v, "halfHeight", "0.5").GetSingle(),
+            Asset = Field(v, "asset", "null").ValueKind == JsonValueKind.Null ? null : (string?)(Field(v, "asset", "null").ValueKind == JsonValueKind.Null ? null : Field(v, "asset", "null").GetString()),
+            Node = Field(v, "node", "null").ValueKind == JsonValueKind.Null ? null : (string?)(Field(v, "node", "null").ValueKind == JsonValueKind.Null ? null : Field(v, "node", "null").GetString()),
+            Primitive = Field(v, "primitive", "null").ValueKind == JsonValueKind.Null ? null : (uint?)(Field(v, "primitive", "null").GetUInt32()),
+            Layer = Field(v, "layer", "0").GetUInt32(),
+            Sensor = Field(v, "sensor", "false").GetBoolean(),
+            Friction = Field(v, "friction", "0.6").GetSingle(),
+            Restitution = Field(v, "restitution", "0").GetSingle(),
+        };
+    internal static void WriteCollider(Utf8JsonWriter w, Collider v)
+    {
+        w.WriteStartObject();
+        w.WritePropertyName("kind");
+        {
+        WriteColliderKind(w, v.Kind);
+        }
+        w.WritePropertyName("center");
+        {
+        w.WriteStartArray();
+        WriteFloat(w, v.Center.X);
+        WriteFloat(w, v.Center.Y);
+        WriteFloat(w, v.Center.Z);
+        w.WriteEndArray();
+        }
+        w.WritePropertyName("halfExtents");
+        {
+        w.WriteStartArray();
+        WriteFloat(w, v.HalfExtents.X);
+        WriteFloat(w, v.HalfExtents.Y);
+        WriteFloat(w, v.HalfExtents.Z);
+        w.WriteEndArray();
+        }
+        w.WritePropertyName("radius");
+        {
+        WriteFloat(w, v.Radius);
+        }
+        w.WritePropertyName("halfHeight");
+        {
+        WriteFloat(w, v.HalfHeight);
+        }
+        w.WritePropertyName("asset");
+        {
+        if (v.Asset is { } option0)
+        {
+        w.WriteStringValue(option0);
+        } else w.WriteNullValue();
+        }
+        w.WritePropertyName("node");
+        {
+        if (v.Node is { } option0)
+        {
+        w.WriteStringValue(option0);
+        } else w.WriteNullValue();
+        }
+        w.WritePropertyName("primitive");
+        {
+        if (v.Primitive is { } option0)
+        {
+        w.WriteNumberValue(option0);
+        } else w.WriteNullValue();
+        }
+        w.WritePropertyName("layer");
+        {
+        w.WriteNumberValue(v.Layer);
+        }
+        w.WritePropertyName("sensor");
+        {
+        w.WriteBooleanValue(v.Sensor);
+        }
+        w.WritePropertyName("friction");
+        {
+        WriteFloat(w, v.Friction);
+        }
+        w.WritePropertyName("restitution");
+        {
+        WriteFloat(w, v.Restitution);
+        }
+        w.WriteEndObject();
+    }
+    internal static Collider2d ReadCollider2d(JsonElement v)
+        => new()
+        {
+            Kind = ReadColliderKind2d(Field(v, "kind", "\"box\"")),
+            HalfExtents = new Vector2(Field(v, "halfExtents", "[0.5,0.5]")[0].GetSingle(), Field(v, "halfExtents", "[0.5,0.5]")[1].GetSingle()),
+            Radius = Field(v, "radius", "0.5").GetSingle(),
+            HalfHeight = Field(v, "halfHeight", "0.5").GetSingle(),
+            Points = Field(v, "points", "[]").EnumerateArray().Select(static item0 => new Vector2(item0[0].GetSingle(), item0[1].GetSingle())).ToArray(),
+            Layer = Field(v, "layer", "0").GetUInt32(),
+            Sensor = Field(v, "sensor", "false").GetBoolean(),
+            Friction = Field(v, "friction", "0.6").GetSingle(),
+            Restitution = Field(v, "restitution", "0").GetSingle(),
+        };
+    internal static void WriteCollider2d(Utf8JsonWriter w, Collider2d v)
+    {
+        w.WriteStartObject();
+        w.WritePropertyName("kind");
+        {
+        WriteColliderKind2d(w, v.Kind);
+        }
+        w.WritePropertyName("halfExtents");
+        {
+        w.WriteStartArray();
+        WriteFloat(w, v.HalfExtents.X);
+        WriteFloat(w, v.HalfExtents.Y);
+        w.WriteEndArray();
+        }
+        w.WritePropertyName("radius");
+        {
+        WriteFloat(w, v.Radius);
+        }
+        w.WritePropertyName("halfHeight");
+        {
+        WriteFloat(w, v.HalfHeight);
+        }
+        w.WritePropertyName("points");
+        {
+        w.WriteStartArray();
+        if (v.Points is not null) foreach (var item0 in v.Points)
+        {
+        w.WriteStartArray();
+        WriteFloat(w, item0.X);
+        WriteFloat(w, item0.Y);
+        w.WriteEndArray();
+        }
+        w.WriteEndArray();
+        }
+        w.WritePropertyName("layer");
+        {
+        w.WriteNumberValue(v.Layer);
+        }
+        w.WritePropertyName("sensor");
+        {
+        w.WriteBooleanValue(v.Sensor);
+        }
+        w.WritePropertyName("friction");
+        {
+        WriteFloat(w, v.Friction);
+        }
+        w.WritePropertyName("restitution");
+        {
+        WriteFloat(w, v.Restitution);
+        }
+        w.WriteEndObject();
+    }
+    internal static ColliderKind ReadColliderKind(JsonElement v)
+        => v.GetString() switch
+        {
+            "box" => ColliderKind.Box,
+            "sphere" => ColliderKind.Sphere,
+            "capsule" => ColliderKind.Capsule,
+            "cylinder" => ColliderKind.Cylinder,
+            "cooked" => ColliderKind.Cooked,
+            "modelConvex" => ColliderKind.ModelConvex,
+            "modelMesh" => ColliderKind.ModelMesh,
+            _ => throw new JsonException("unknown enum variant")
+        };
+    internal static void WriteColliderKind(Utf8JsonWriter w, ColliderKind v) => w.WriteStringValue(v switch
+    {
+        ColliderKind.Box => "box",
+        ColliderKind.Sphere => "sphere",
+        ColliderKind.Capsule => "capsule",
+        ColliderKind.Cylinder => "cylinder",
+        ColliderKind.Cooked => "cooked",
+        ColliderKind.ModelConvex => "modelConvex",
+        ColliderKind.ModelMesh => "modelMesh",
+        _ => throw new JsonException("unknown enum value")
+    });
+    internal static ColliderKind2d ReadColliderKind2d(JsonElement v)
+        => v.GetString() switch
+        {
+            "box" => ColliderKind2d.Box,
+            "circle" => ColliderKind2d.Circle,
+            "capsule" => ColliderKind2d.Capsule,
+            "polygon" => ColliderKind2d.Polygon,
+            _ => throw new JsonException("unknown enum variant")
+        };
+    internal static void WriteColliderKind2d(Utf8JsonWriter w, ColliderKind2d v) => w.WriteStringValue(v switch
+    {
+        ColliderKind2d.Box => "box",
+        ColliderKind2d.Circle => "circle",
+        ColliderKind2d.Capsule => "capsule",
+        ColliderKind2d.Polygon => "polygon",
+        _ => throw new JsonException("unknown enum value")
+    });
+    internal static Environment ReadEnvironment(JsonElement v)
+        => new()
+        {
+            Sky = new Color(Field(v, "sky", "[0.22,0.32,0.6,1]")[0].GetSingle(), Field(v, "sky", "[0.22,0.32,0.6,1]")[1].GetSingle(), Field(v, "sky", "[0.22,0.32,0.6,1]")[2].GetSingle(), Field(v, "sky", "[0.22,0.32,0.6,1]")[3].GetSingle()),
+            Horizon = new Color(Field(v, "horizon", "[0.95,0.62,0.4,1]")[0].GetSingle(), Field(v, "horizon", "[0.95,0.62,0.4,1]")[1].GetSingle(), Field(v, "horizon", "[0.95,0.62,0.4,1]")[2].GetSingle(), Field(v, "horizon", "[0.95,0.62,0.4,1]")[3].GetSingle()),
+            Ground = new Color(Field(v, "ground", "[0.18,0.16,0.14,1]")[0].GetSingle(), Field(v, "ground", "[0.18,0.16,0.14,1]")[1].GetSingle(), Field(v, "ground", "[0.18,0.16,0.14,1]")[2].GetSingle(), Field(v, "ground", "[0.18,0.16,0.14,1]")[3].GetSingle()),
+            Intensity = Field(v, "intensity", "900").GetSingle(),
+            Exposure = Field(v, "exposure", "0.0015").GetSingle(),
+        };
+    internal static void WriteEnvironment(Utf8JsonWriter w, Environment v)
+    {
+        w.WriteStartObject();
+        w.WritePropertyName("sky");
+        {
+        w.WriteStartArray();
+        WriteFloat(w, v.Sky.R);
+        WriteFloat(w, v.Sky.G);
+        WriteFloat(w, v.Sky.B);
+        WriteFloat(w, v.Sky.A);
+        w.WriteEndArray();
+        }
+        w.WritePropertyName("horizon");
+        {
+        w.WriteStartArray();
+        WriteFloat(w, v.Horizon.R);
+        WriteFloat(w, v.Horizon.G);
+        WriteFloat(w, v.Horizon.B);
+        WriteFloat(w, v.Horizon.A);
+        w.WriteEndArray();
+        }
+        w.WritePropertyName("ground");
+        {
+        w.WriteStartArray();
+        WriteFloat(w, v.Ground.R);
+        WriteFloat(w, v.Ground.G);
+        WriteFloat(w, v.Ground.B);
+        WriteFloat(w, v.Ground.A);
+        w.WriteEndArray();
+        }
+        w.WritePropertyName("intensity");
+        {
+        WriteFloat(w, v.Intensity);
+        }
+        w.WritePropertyName("exposure");
+        {
+        WriteFloat(w, v.Exposure);
+        }
+        w.WriteEndObject();
+    }
+    internal static ExposureMode ReadExposureMode(JsonElement v)
+        => v.GetString() switch
+        {
+            "auto" => ExposureMode.Auto,
+            "manual" => ExposureMode.Manual,
+            _ => throw new JsonException("unknown enum variant")
+        };
+    internal static void WriteExposureMode(Utf8JsonWriter w, ExposureMode v) => w.WriteStringValue(v switch
+    {
+        ExposureMode.Auto => "auto",
+        ExposureMode.Manual => "manual",
+        _ => throw new JsonException("unknown enum value")
+    });
+    internal static Flipbook ReadFlipbook(JsonElement v)
+        => new()
+        {
+            Frames = Field(v, "frames", "[]").EnumerateArray().Select(static item0 => ReadFlipbookFrame(item0)).ToArray(),
+            StartTick = Field(v, "startTick", "0").GetUInt64(),
+            Looping = Field(v, "looping", "false").GetBoolean(),
+        };
+    internal static void WriteFlipbook(Utf8JsonWriter w, Flipbook v)
+    {
+        w.WriteStartObject();
+        w.WritePropertyName("frames");
+        {
+        w.WriteStartArray();
+        if (v.Frames is not null) foreach (var item0 in v.Frames)
+        {
+        WriteFlipbookFrame(w, item0);
+        }
+        w.WriteEndArray();
+        }
+        w.WritePropertyName("startTick");
+        {
+        w.WriteNumberValue(v.StartTick);
+        }
+        w.WritePropertyName("looping");
+        {
+        w.WriteBooleanValue(v.Looping);
+        }
+        w.WriteEndObject();
+    }
+    internal static FlipbookFrame ReadFlipbookFrame(JsonElement v)
+        => new()
+        {
+            Region = Field(v, "region", "\"\"").ValueKind == JsonValueKind.Null ? null : Field(v, "region", "\"\"").GetString(),
+            Ticks = Field(v, "ticks", "0").GetUInt32(),
+        };
+    internal static void WriteFlipbookFrame(Utf8JsonWriter w, FlipbookFrame v)
+    {
+        w.WriteStartObject();
+        w.WritePropertyName("region");
+        {
+        w.WriteStringValue(v.Region);
+        }
+        w.WritePropertyName("ticks");
+        {
+        w.WriteNumberValue(v.Ticks);
+        }
+        w.WriteEndObject();
+    }
+    internal static FollowCamera ReadFollowCamera(JsonElement v)
+        => new()
+        {
+            Target = Field(v, "target", "null").ValueKind == JsonValueKind.Null ? null : (string?)(Field(v, "target", "null").ValueKind == JsonValueKind.Null ? null : Field(v, "target", "null").GetString()),
+            Distance = Field(v, "distance", "5").GetSingle(),
+            Height = Field(v, "height", "0.8").GetSingle(),
+            Yaw = Field(v, "yaw", "0").GetSingle(),
+            Pitch = Field(v, "pitch", "20").GetSingle(),
+            Sensitivity = Field(v, "sensitivity", "2.5").GetSingle(),
+            Player = Field(v, "player", "1").GetUInt64(),
+        };
+    internal static void WriteFollowCamera(Utf8JsonWriter w, FollowCamera v)
+    {
+        w.WriteStartObject();
+        w.WritePropertyName("target");
+        {
+        if (v.Target is { } option0)
+        {
+        w.WriteStringValue(option0);
+        } else w.WriteNullValue();
+        }
+        w.WritePropertyName("distance");
+        {
+        WriteFloat(w, v.Distance);
+        }
+        w.WritePropertyName("height");
+        {
+        WriteFloat(w, v.Height);
+        }
+        w.WritePropertyName("yaw");
+        {
+        WriteFloat(w, v.Yaw);
+        }
+        w.WritePropertyName("pitch");
+        {
+        WriteFloat(w, v.Pitch);
+        }
+        w.WritePropertyName("sensitivity");
+        {
+        WriteFloat(w, v.Sensitivity);
+        }
+        w.WritePropertyName("player");
+        {
+        w.WriteNumberValue(v.Player);
+        }
+        w.WriteEndObject();
+    }
+    internal static GridLayout ReadGridLayout(JsonElement v)
+        => v.GetString() switch
+        {
+            "grid" => GridLayout.Grid,
+            "hex" => GridLayout.Hex,
+            "isometric" => GridLayout.Isometric,
+            _ => throw new JsonException("unknown enum variant")
+        };
+    internal static void WriteGridLayout(Utf8JsonWriter w, GridLayout v) => w.WriteStringValue(v switch
+    {
+        GridLayout.Grid => "grid",
+        GridLayout.Hex => "hex",
+        GridLayout.Isometric => "isometric",
+        _ => throw new JsonException("unknown enum value")
+    });
+    internal static HeightFog ReadHeightFog(JsonElement v)
+        => new()
+        {
+            Density = Field(v, "density", "0.002").GetSingle(),
+            BaseHeight = Field(v, "baseHeight", "0").GetSingle(),
+            Falloff = Field(v, "falloff", "60").GetSingle(),
+            Albedo = new Color(Field(v, "albedo", "[0.9,0.9,0.9,1]")[0].GetSingle(), Field(v, "albedo", "[0.9,0.9,0.9,1]")[1].GetSingle(), Field(v, "albedo", "[0.9,0.9,0.9,1]")[2].GetSingle(), Field(v, "albedo", "[0.9,0.9,0.9,1]")[3].GetSingle()),
+            Anisotropy = Field(v, "anisotropy", "0.3").GetSingle(),
+        };
+    internal static void WriteHeightFog(Utf8JsonWriter w, HeightFog v)
+    {
+        w.WriteStartObject();
+        w.WritePropertyName("density");
+        {
+        WriteFloat(w, v.Density);
+        }
+        w.WritePropertyName("baseHeight");
+        {
+        WriteFloat(w, v.BaseHeight);
+        }
+        w.WritePropertyName("falloff");
+        {
+        WriteFloat(w, v.Falloff);
+        }
+        w.WritePropertyName("albedo");
+        {
+        w.WriteStartArray();
+        WriteFloat(w, v.Albedo.R);
+        WriteFloat(w, v.Albedo.G);
+        WriteFloat(w, v.Albedo.B);
+        WriteFloat(w, v.Albedo.A);
+        w.WriteEndArray();
+        }
+        w.WritePropertyName("anisotropy");
+        {
+        WriteFloat(w, v.Anisotropy);
+        }
+        w.WriteEndObject();
+    }
+    internal static Joint ReadJoint(JsonElement v)
+        => new()
+        {
+            Kind = ReadJointKind(Field(v, "kind", "\"fixed\"")),
+            ConnectedBody = Field(v, "connectedBody", "0").GetUInt64(),
+            AnchorA = new Vector3(Field(v, "anchorA", "[0,0,0]")[0].GetSingle(), Field(v, "anchorA", "[0,0,0]")[1].GetSingle(), Field(v, "anchorA", "[0,0,0]")[2].GetSingle()),
+            AnchorB = new Vector3(Field(v, "anchorB", "[0,0,0]")[0].GetSingle(), Field(v, "anchorB", "[0,0,0]")[1].GetSingle(), Field(v, "anchorB", "[0,0,0]")[2].GetSingle()),
+            Axis = new Vector3(Field(v, "axis", "[1,0,0]")[0].GetSingle(), Field(v, "axis", "[1,0,0]")[1].GetSingle(), Field(v, "axis", "[1,0,0]")[2].GetSingle()),
+            Normal = new Vector3(Field(v, "normal", "[0,1,0]")[0].GetSingle(), Field(v, "normal", "[0,1,0]")[1].GetSingle(), Field(v, "normal", "[0,1,0]")[2].GetSingle()),
+            TranslationMin = new Vector3(Field(v, "translationMin", "[0,0,0]")[0].GetSingle(), Field(v, "translationMin", "[0,0,0]")[1].GetSingle(), Field(v, "translationMin", "[0,0,0]")[2].GetSingle()),
+            TranslationMax = new Vector3(Field(v, "translationMax", "[0,0,0]")[0].GetSingle(), Field(v, "translationMax", "[0,0,0]")[1].GetSingle(), Field(v, "translationMax", "[0,0,0]")[2].GetSingle()),
+            RotationMin = new Vector3(Field(v, "rotationMin", "[0,0,0]")[0].GetSingle(), Field(v, "rotationMin", "[0,0,0]")[1].GetSingle(), Field(v, "rotationMin", "[0,0,0]")[2].GetSingle()),
+            RotationMax = new Vector3(Field(v, "rotationMax", "[0,0,0]")[0].GetSingle(), Field(v, "rotationMax", "[0,0,0]")[1].GetSingle(), Field(v, "rotationMax", "[0,0,0]")[2].GetSingle()),
+        };
+    internal static void WriteJoint(Utf8JsonWriter w, Joint v)
+    {
+        w.WriteStartObject();
+        w.WritePropertyName("kind");
+        {
+        WriteJointKind(w, v.Kind);
+        }
+        w.WritePropertyName("connectedBody");
+        {
+        w.WriteNumberValue(v.ConnectedBody);
+        }
+        w.WritePropertyName("anchorA");
+        {
+        w.WriteStartArray();
+        WriteFloat(w, v.AnchorA.X);
+        WriteFloat(w, v.AnchorA.Y);
+        WriteFloat(w, v.AnchorA.Z);
+        w.WriteEndArray();
+        }
+        w.WritePropertyName("anchorB");
+        {
+        w.WriteStartArray();
+        WriteFloat(w, v.AnchorB.X);
+        WriteFloat(w, v.AnchorB.Y);
+        WriteFloat(w, v.AnchorB.Z);
+        w.WriteEndArray();
+        }
+        w.WritePropertyName("axis");
+        {
+        w.WriteStartArray();
+        WriteFloat(w, v.Axis.X);
+        WriteFloat(w, v.Axis.Y);
+        WriteFloat(w, v.Axis.Z);
+        w.WriteEndArray();
+        }
+        w.WritePropertyName("normal");
+        {
+        w.WriteStartArray();
+        WriteFloat(w, v.Normal.X);
+        WriteFloat(w, v.Normal.Y);
+        WriteFloat(w, v.Normal.Z);
+        w.WriteEndArray();
+        }
+        w.WritePropertyName("translationMin");
+        {
+        w.WriteStartArray();
+        WriteFloat(w, v.TranslationMin.X);
+        WriteFloat(w, v.TranslationMin.Y);
+        WriteFloat(w, v.TranslationMin.Z);
+        w.WriteEndArray();
+        }
+        w.WritePropertyName("translationMax");
+        {
+        w.WriteStartArray();
+        WriteFloat(w, v.TranslationMax.X);
+        WriteFloat(w, v.TranslationMax.Y);
+        WriteFloat(w, v.TranslationMax.Z);
+        w.WriteEndArray();
+        }
+        w.WritePropertyName("rotationMin");
+        {
+        w.WriteStartArray();
+        WriteFloat(w, v.RotationMin.X);
+        WriteFloat(w, v.RotationMin.Y);
+        WriteFloat(w, v.RotationMin.Z);
+        w.WriteEndArray();
+        }
+        w.WritePropertyName("rotationMax");
+        {
+        w.WriteStartArray();
+        WriteFloat(w, v.RotationMax.X);
+        WriteFloat(w, v.RotationMax.Y);
+        WriteFloat(w, v.RotationMax.Z);
+        w.WriteEndArray();
+        }
+        w.WriteEndObject();
+    }
+    internal static JointKind ReadJointKind(JsonElement v)
+        => v.GetString() switch
+        {
+            "fixed" => JointKind.Fixed,
+            "hinge" => JointKind.Hinge,
+            "slider" => JointKind.Slider,
+            "distance" => JointKind.Distance,
+            "point" => JointKind.Point,
+            "sixDof" => JointKind.SixDof,
+            _ => throw new JsonException("unknown enum variant")
+        };
+    internal static void WriteJointKind(Utf8JsonWriter w, JointKind v) => w.WriteStringValue(v switch
+    {
+        JointKind.Fixed => "fixed",
+        JointKind.Hinge => "hinge",
+        JointKind.Slider => "slider",
+        JointKind.Distance => "distance",
+        JointKind.Point => "point",
+        JointKind.SixDof => "sixDof",
+        _ => throw new JsonException("unknown enum value")
+    });
+    internal static Light ReadLight(JsonElement v)
+        => new()
+        {
+            Kind = ReadLightKind(Field(v, "kind", "\"point\"")),
+            Color = new Color(Field(v, "color", "[1,1,1,1]")[0].GetSingle(), Field(v, "color", "[1,1,1,1]")[1].GetSingle(), Field(v, "color", "[1,1,1,1]")[2].GetSingle(), Field(v, "color", "[1,1,1,1]")[3].GetSingle()),
+            Intensity = Field(v, "intensity", "800").GetSingle(),
+            Range = Field(v, "range", "10").GetSingle(),
+            InnerAngle = Field(v, "innerAngle", "20").GetSingle(),
+            OuterAngle = Field(v, "outerAngle", "30").GetSingle(),
+        };
+    internal static void WriteLight(Utf8JsonWriter w, Light v)
+    {
+        w.WriteStartObject();
+        w.WritePropertyName("kind");
+        {
+        WriteLightKind(w, v.Kind);
+        }
+        w.WritePropertyName("color");
+        {
+        w.WriteStartArray();
+        WriteFloat(w, v.Color.R);
+        WriteFloat(w, v.Color.G);
+        WriteFloat(w, v.Color.B);
+        WriteFloat(w, v.Color.A);
+        w.WriteEndArray();
+        }
+        w.WritePropertyName("intensity");
+        {
+        WriteFloat(w, v.Intensity);
+        }
+        w.WritePropertyName("range");
+        {
+        WriteFloat(w, v.Range);
+        }
+        w.WritePropertyName("innerAngle");
+        {
+        WriteFloat(w, v.InnerAngle);
+        }
+        w.WritePropertyName("outerAngle");
+        {
+        WriteFloat(w, v.OuterAngle);
+        }
+        w.WriteEndObject();
+    }
+    internal static Light2d ReadLight2d(JsonElement v)
+        => new()
+        {
+            Position = new Vector3(Field(v, "position", "[0,0,0]")[0].GetSingle(), Field(v, "position", "[0,0,0]")[1].GetSingle(), Field(v, "position", "[0,0,0]")[2].GetSingle()),
+            Color = new Vector3(Field(v, "color", "[1,1,1]")[0].GetSingle(), Field(v, "color", "[1,1,1]")[1].GetSingle(), Field(v, "color", "[1,1,1]")[2].GetSingle()),
+            Radius = Field(v, "radius", "5").GetSingle(),
+            Shadows = Field(v, "shadows", "false").GetBoolean(),
+        };
+    internal static void WriteLight2d(Utf8JsonWriter w, Light2d v)
+    {
+        w.WriteStartObject();
+        w.WritePropertyName("position");
+        {
+        w.WriteStartArray();
+        WriteFloat(w, v.Position.X);
+        WriteFloat(w, v.Position.Y);
+        WriteFloat(w, v.Position.Z);
+        w.WriteEndArray();
+        }
+        w.WritePropertyName("color");
+        {
+        w.WriteStartArray();
+        WriteFloat(w, v.Color.X);
+        WriteFloat(w, v.Color.Y);
+        WriteFloat(w, v.Color.Z);
+        w.WriteEndArray();
+        }
+        w.WritePropertyName("radius");
+        {
+        WriteFloat(w, v.Radius);
+        }
+        w.WritePropertyName("shadows");
+        {
+        w.WriteBooleanValue(v.Shadows);
+        }
+        w.WriteEndObject();
+    }
+    internal static LightKind ReadLightKind(JsonElement v)
+        => v.GetString() switch
+        {
+            "point" => LightKind.Point,
+            "spot" => LightKind.Spot,
+            "directional" => LightKind.Directional,
+            _ => throw new JsonException("unknown enum variant")
+        };
+    internal static void WriteLightKind(Utf8JsonWriter w, LightKind v) => w.WriteStringValue(v switch
+    {
+        LightKind.Point => "point",
+        LightKind.Spot => "spot",
+        LightKind.Directional => "directional",
+        _ => throw new JsonException("unknown enum value")
+    });
+    internal static LinkKind ReadLinkKind(JsonElement v)
+        => v.GetString() switch
+        {
+            "walk" => LinkKind.Walk,
+            "jump" => LinkKind.Jump,
+            "ladder" => LinkKind.Ladder,
+            "door" => LinkKind.Door,
+            "elevator" => LinkKind.Elevator,
+            "teleport" => LinkKind.Teleport,
+            _ => throw new JsonException("unknown enum variant")
+        };
+    internal static void WriteLinkKind(Utf8JsonWriter w, LinkKind v) => w.WriteStringValue(v switch
+    {
+        LinkKind.Walk => "walk",
+        LinkKind.Jump => "jump",
+        LinkKind.Ladder => "ladder",
+        LinkKind.Door => "door",
+        LinkKind.Elevator => "elevator",
+        LinkKind.Teleport => "teleport",
+        _ => throw new JsonException("unknown enum value")
+    });
+    internal static LocomotionClip ReadLocomotionClip(JsonElement v)
+        => new()
+        {
+            Clip = Field(v, "clip", "\"\"").ValueKind == JsonValueKind.Null ? null : Field(v, "clip", "\"\"").GetString(),
+            Speed = Field(v, "speed", "0").GetSingle(),
+        };
+    internal static void WriteLocomotionClip(Utf8JsonWriter w, LocomotionClip v)
+    {
+        w.WriteStartObject();
+        w.WritePropertyName("clip");
+        {
+        w.WriteStringValue(v.Clip);
+        }
+        w.WritePropertyName("speed");
+        {
+        WriteFloat(w, v.Speed);
+        }
+        w.WriteEndObject();
+    }
+    internal static MaterialPreset ReadMaterialPreset(JsonElement v)
+        => v.GetString() switch
+        {
+            "generic" => MaterialPreset.Generic,
+            "brick" => MaterialPreset.Brick,
+            "concrete" => MaterialPreset.Concrete,
+            "ceramic" => MaterialPreset.Ceramic,
+            "gravel" => MaterialPreset.Gravel,
+            "carpet" => MaterialPreset.Carpet,
+            "glass" => MaterialPreset.Glass,
+            "plaster" => MaterialPreset.Plaster,
+            "wood" => MaterialPreset.Wood,
+            "metal" => MaterialPreset.Metal,
+            "rock" => MaterialPreset.Rock,
+            _ => throw new JsonException("unknown enum variant")
+        };
+    internal static void WriteMaterialPreset(Utf8JsonWriter w, MaterialPreset v) => w.WriteStringValue(v switch
+    {
+        MaterialPreset.Generic => "generic",
+        MaterialPreset.Brick => "brick",
+        MaterialPreset.Concrete => "concrete",
+        MaterialPreset.Ceramic => "ceramic",
+        MaterialPreset.Gravel => "gravel",
+        MaterialPreset.Carpet => "carpet",
+        MaterialPreset.Glass => "glass",
+        MaterialPreset.Plaster => "plaster",
+        MaterialPreset.Wood => "wood",
+        MaterialPreset.Metal => "metal",
+        MaterialPreset.Rock => "rock",
+        _ => throw new JsonException("unknown enum value")
+    });
+    internal static MeshRenderer ReadMeshRenderer(JsonElement v)
+        => new()
+        {
+            Shape = ReadMeshShape(Field(v, "shape", "\"box\"")),
+            Size = new Vector3(Field(v, "size", "[1,1,1]")[0].GetSingle(), Field(v, "size", "[1,1,1]")[1].GetSingle(), Field(v, "size", "[1,1,1]")[2].GetSingle()),
+            Model = Field(v, "model", "null").ValueKind == JsonValueKind.Null ? null : (string?)(Field(v, "model", "null").ValueKind == JsonValueKind.Null ? null : Field(v, "model", "null").GetString()),
+            Node = Field(v, "node", "null").ValueKind == JsonValueKind.Null ? null : (string?)(Field(v, "node", "null").ValueKind == JsonValueKind.Null ? null : Field(v, "node", "null").GetString()),
+            Primitive = Field(v, "primitive", "null").ValueKind == JsonValueKind.Null ? null : (uint?)(Field(v, "primitive", "null").GetUInt32()),
+            MaterialOverrides = Field(v, "materialOverrides", "[]").EnumerateArray().Select(static item0 => ReadPrimitiveMaterialOverride(item0)).ToArray(),
+            Color = new Color(Field(v, "color", "[1,1,1,1]")[0].GetSingle(), Field(v, "color", "[1,1,1,1]")[1].GetSingle(), Field(v, "color", "[1,1,1,1]")[2].GetSingle(), Field(v, "color", "[1,1,1,1]")[3].GetSingle()),
+            Roughness = Field(v, "roughness", "0.6").GetSingle(),
+            Metallic = Field(v, "metallic", "0").GetSingle(),
+            Emissive = new Vector3(Field(v, "emissive", "[0,0,0]")[0].GetSingle(), Field(v, "emissive", "[0,0,0]")[1].GetSingle(), Field(v, "emissive", "[0,0,0]")[2].GetSingle()),
+            EmissiveEnabled = Field(v, "emissiveEnabled", "true").GetBoolean(),
+            EmissiveStrength = Field(v, "emissiveStrength", "1").GetSingle(),
+            EmissiveFactor = Field(v, "emissiveFactor", "null").ValueKind == JsonValueKind.Null ? null : (Vector3?)(new Vector3(Field(v, "emissiveFactor", "null")[0].GetSingle(), Field(v, "emissiveFactor", "null")[1].GetSingle(), Field(v, "emissiveFactor", "null")[2].GetSingle())),
+            EmissiveMaterials = Field(v, "emissiveMaterials", "[]").EnumerateArray().Select(static item0 => item0.ValueKind == JsonValueKind.Null ? null : item0.GetString()).ToArray(),
+        };
+    internal static void WriteMeshRenderer(Utf8JsonWriter w, MeshRenderer v)
+    {
+        w.WriteStartObject();
+        w.WritePropertyName("shape");
+        {
+        WriteMeshShape(w, v.Shape);
+        }
+        w.WritePropertyName("size");
+        {
+        w.WriteStartArray();
+        WriteFloat(w, v.Size.X);
+        WriteFloat(w, v.Size.Y);
+        WriteFloat(w, v.Size.Z);
+        w.WriteEndArray();
+        }
+        w.WritePropertyName("model");
+        {
+        if (v.Model is { } option0)
+        {
+        w.WriteStringValue(option0);
+        } else w.WriteNullValue();
+        }
+        w.WritePropertyName("node");
+        {
+        if (v.Node is { } option0)
+        {
+        w.WriteStringValue(option0);
+        } else w.WriteNullValue();
+        }
+        w.WritePropertyName("primitive");
+        {
+        if (v.Primitive is { } option0)
+        {
+        w.WriteNumberValue(option0);
+        } else w.WriteNullValue();
+        }
+        w.WritePropertyName("materialOverrides");
+        {
+        w.WriteStartArray();
+        if (v.MaterialOverrides is not null) foreach (var item0 in v.MaterialOverrides)
+        {
+        WritePrimitiveMaterialOverride(w, item0);
+        }
+        w.WriteEndArray();
+        }
+        w.WritePropertyName("color");
+        {
+        w.WriteStartArray();
+        WriteFloat(w, v.Color.R);
+        WriteFloat(w, v.Color.G);
+        WriteFloat(w, v.Color.B);
+        WriteFloat(w, v.Color.A);
+        w.WriteEndArray();
+        }
+        w.WritePropertyName("roughness");
+        {
+        WriteFloat(w, v.Roughness);
+        }
+        w.WritePropertyName("metallic");
+        {
+        WriteFloat(w, v.Metallic);
+        }
+        w.WritePropertyName("emissive");
+        {
+        w.WriteStartArray();
+        WriteFloat(w, v.Emissive.X);
+        WriteFloat(w, v.Emissive.Y);
+        WriteFloat(w, v.Emissive.Z);
+        w.WriteEndArray();
+        }
+        w.WritePropertyName("emissiveEnabled");
+        {
+        w.WriteBooleanValue(v.EmissiveEnabled);
+        }
+        w.WritePropertyName("emissiveStrength");
+        {
+        WriteFloat(w, v.EmissiveStrength);
+        }
+        w.WritePropertyName("emissiveFactor");
+        {
+        if (v.EmissiveFactor is { } option0)
+        {
+        w.WriteStartArray();
+        WriteFloat(w, option0.X);
+        WriteFloat(w, option0.Y);
+        WriteFloat(w, option0.Z);
+        w.WriteEndArray();
+        } else w.WriteNullValue();
+        }
+        w.WritePropertyName("emissiveMaterials");
+        {
+        w.WriteStartArray();
+        if (v.EmissiveMaterials is not null) foreach (var item0 in v.EmissiveMaterials)
+        {
+        w.WriteStringValue(item0);
+        }
+        w.WriteEndArray();
+        }
+        w.WriteEndObject();
+    }
+    internal static MeshShape ReadMeshShape(JsonElement v)
+        => v.GetString() switch
+        {
+            "box" => MeshShape.Box,
+            "sphere" => MeshShape.Sphere,
+            "capsule" => MeshShape.Capsule,
+            "plane" => MeshShape.Plane,
+            _ => throw new JsonException("unknown enum variant")
+        };
+    internal static void WriteMeshShape(Utf8JsonWriter w, MeshShape v) => w.WriteStringValue(v switch
+    {
+        MeshShape.Box => "box",
+        MeshShape.Sphere => "sphere",
+        MeshShape.Capsule => "capsule",
+        MeshShape.Plane => "plane",
+        _ => throw new JsonException("unknown enum value")
+    });
+    internal static MotionType ReadMotionType(JsonElement v)
+        => v.GetString() switch
+        {
+            "static" => MotionType.Static,
+            "kinematic" => MotionType.Kinematic,
+            "dynamic" => MotionType.Dynamic,
+            _ => throw new JsonException("unknown enum variant")
+        };
+    internal static void WriteMotionType(Utf8JsonWriter w, MotionType v) => w.WriteStringValue(v switch
+    {
+        MotionType.Static => "static",
+        MotionType.Kinematic => "kinematic",
+        MotionType.Dynamic => "dynamic",
+        _ => throw new JsonException("unknown enum value")
+    });
+    internal static MotionType2d ReadMotionType2d(JsonElement v)
+        => v.GetString() switch
+        {
+            "static" => MotionType2d.Static,
+            "kinematic" => MotionType2d.Kinematic,
+            "dynamic" => MotionType2d.Dynamic,
+            _ => throw new JsonException("unknown enum variant")
+        };
+    internal static void WriteMotionType2d(Utf8JsonWriter w, MotionType2d v) => w.WriteStringValue(v switch
+    {
+        MotionType2d.Static => "static",
+        MotionType2d.Kinematic => "kinematic",
+        MotionType2d.Dynamic => "dynamic",
+        _ => throw new JsonException("unknown enum value")
+    });
+    internal static MusicSource ReadMusicSource(JsonElement v)
+        => new()
+        {
+            Music = Field(v, "music", "null").ValueKind == JsonValueKind.Null ? null : (string?)(Field(v, "music", "null").ValueKind == JsonValueKind.Null ? null : Field(v, "music", "null").GetString()),
+            Bus = Field(v, "bus", "\"music\"").ValueKind == JsonValueKind.Null ? null : Field(v, "bus", "\"music\"").GetString(),
+            Intensity = Field(v, "intensity", "0").GetSingle(),
+            Segment = Field(v, "segment", "\"\"").ValueKind == JsonValueKind.Null ? null : Field(v, "segment", "\"\"").GetString(),
+        };
+    internal static void WriteMusicSource(Utf8JsonWriter w, MusicSource v)
+    {
+        w.WriteStartObject();
+        w.WritePropertyName("music");
+        {
+        if (v.Music is { } option0)
+        {
+        w.WriteStringValue(option0);
+        } else w.WriteNullValue();
+        }
+        w.WritePropertyName("bus");
+        {
+        w.WriteStringValue(v.Bus);
+        }
+        w.WritePropertyName("intensity");
+        {
+        WriteFloat(w, v.Intensity);
+        }
+        w.WritePropertyName("segment");
+        {
+        w.WriteStringValue(v.Segment);
+        }
+        w.WriteEndObject();
+    }
+    internal static NavAgent ReadNavAgent(JsonElement v)
+        => new()
+        {
+            Profile = Field(v, "profile", "0").GetUInt32(),
+            Radius = Field(v, "radius", "0.3").GetSingle(),
+            Height = Field(v, "height", "1.8").GetSingle(),
+            MaxSpeed = Field(v, "maxSpeed", "3").GetSingle(),
+            Acceleration = Field(v, "acceleration", "8").GetSingle(),
+            AreaMask = Field(v, "areaMask", "65535").GetUInt16(),
+            StoppingDistance = Field(v, "stoppingDistance", "0.1").GetSingle(),
+        };
+    internal static void WriteNavAgent(Utf8JsonWriter w, NavAgent v)
+    {
+        w.WriteStartObject();
+        w.WritePropertyName("profile");
+        {
+        w.WriteNumberValue(v.Profile);
+        }
+        w.WritePropertyName("radius");
+        {
+        WriteFloat(w, v.Radius);
+        }
+        w.WritePropertyName("height");
+        {
+        WriteFloat(w, v.Height);
+        }
+        w.WritePropertyName("maxSpeed");
+        {
+        WriteFloat(w, v.MaxSpeed);
+        }
+        w.WritePropertyName("acceleration");
+        {
+        WriteFloat(w, v.Acceleration);
+        }
+        w.WritePropertyName("areaMask");
+        {
+        w.WriteNumberValue(v.AreaMask);
+        }
+        w.WritePropertyName("stoppingDistance");
+        {
+        WriteFloat(w, v.StoppingDistance);
+        }
+        w.WriteEndObject();
+    }
+    internal static NavAgentType ReadNavAgentType(JsonElement v)
+        => new()
+        {
+            Profile = Field(v, "profile", "0").GetUInt32(),
+            Name = Field(v, "name", "\"\"").ValueKind == JsonValueKind.Null ? null : Field(v, "name", "\"\"").GetString(),
+            Radius = Field(v, "radius", "0.3").GetSingle(),
+            Height = Field(v, "height", "1.8").GetSingle(),
+            Climb = Field(v, "climb", "0.4").GetSingle(),
+            Slope = Field(v, "slope", "45").GetSingle(),
+            AreaCosts = Field(v, "areaCosts", "[]").EnumerateArray().Select(static item0 => item0.GetSingle()).ToArray(),
+            AreaMask = Field(v, "areaMask", "65535").GetUInt16(),
+        };
+    internal static void WriteNavAgentType(Utf8JsonWriter w, NavAgentType v)
+    {
+        w.WriteStartObject();
+        w.WritePropertyName("profile");
+        {
+        w.WriteNumberValue(v.Profile);
+        }
+        w.WritePropertyName("name");
+        {
+        w.WriteStringValue(v.Name);
+        }
+        w.WritePropertyName("radius");
+        {
+        WriteFloat(w, v.Radius);
+        }
+        w.WritePropertyName("height");
+        {
+        WriteFloat(w, v.Height);
+        }
+        w.WritePropertyName("climb");
+        {
+        WriteFloat(w, v.Climb);
+        }
+        w.WritePropertyName("slope");
+        {
+        WriteFloat(w, v.Slope);
+        }
+        w.WritePropertyName("areaCosts");
+        {
+        w.WriteStartArray();
+        if (v.AreaCosts is not null) foreach (var item0 in v.AreaCosts)
+        {
+        WriteFloat(w, item0);
+        }
+        w.WriteEndArray();
+        }
+        w.WritePropertyName("areaMask");
+        {
+        w.WriteNumberValue(v.AreaMask);
+        }
+        w.WriteEndObject();
+    }
+    internal static NavArea ReadNavArea(JsonElement v)
+        => new()
+        {
+            Area = Field(v, "area", "0").GetByte(),
+            Name = Field(v, "name", "\"\"").ValueKind == JsonValueKind.Null ? null : Field(v, "name", "\"\"").GetString(),
+            Cost = Field(v, "cost", "1").GetSingle(),
+        };
+    internal static void WriteNavArea(Utf8JsonWriter w, NavArea v)
+    {
+        w.WriteStartObject();
+        w.WritePropertyName("area");
+        {
+        w.WriteNumberValue(v.Area);
+        }
+        w.WritePropertyName("name");
+        {
+        w.WriteStringValue(v.Name);
+        }
+        w.WritePropertyName("cost");
+        {
+        WriteFloat(w, v.Cost);
+        }
+        w.WriteEndObject();
+    }
+    internal static NavLink ReadNavLink(JsonElement v)
+        => new()
+        {
+            Id = Field(v, "id", "0").GetUInt32(),
+            Start = new Vector3(Field(v, "start", "[0,0,0]")[0].GetSingle(), Field(v, "start", "[0,0,0]")[1].GetSingle(), Field(v, "start", "[0,0,0]")[2].GetSingle()),
+            End = new Vector3(Field(v, "end", "[0,0,0]")[0].GetSingle(), Field(v, "end", "[0,0,0]")[1].GetSingle(), Field(v, "end", "[0,0,0]")[2].GetSingle()),
+            Radius = Field(v, "radius", "0.5").GetSingle(),
+            Area = Field(v, "area", "0").GetByte(),
+            Bidirectional = Field(v, "bidirectional", "true").GetBoolean(),
+            Enabled = Field(v, "enabled", "true").GetBoolean(),
+            Kind = ReadLinkKind(Field(v, "kind", "\"walk\"")),
+            Duration = Field(v, "duration", "0").GetSingle(),
+            ArcHeight = Field(v, "arcHeight", "0.5").GetSingle(),
+        };
+    internal static void WriteNavLink(Utf8JsonWriter w, NavLink v)
+    {
+        w.WriteStartObject();
+        w.WritePropertyName("id");
+        {
+        w.WriteNumberValue(v.Id);
+        }
+        w.WritePropertyName("start");
+        {
+        w.WriteStartArray();
+        WriteFloat(w, v.Start.X);
+        WriteFloat(w, v.Start.Y);
+        WriteFloat(w, v.Start.Z);
+        w.WriteEndArray();
+        }
+        w.WritePropertyName("end");
+        {
+        w.WriteStartArray();
+        WriteFloat(w, v.End.X);
+        WriteFloat(w, v.End.Y);
+        WriteFloat(w, v.End.Z);
+        w.WriteEndArray();
+        }
+        w.WritePropertyName("radius");
+        {
+        WriteFloat(w, v.Radius);
+        }
+        w.WritePropertyName("area");
+        {
+        w.WriteNumberValue(v.Area);
+        }
+        w.WritePropertyName("bidirectional");
+        {
+        w.WriteBooleanValue(v.Bidirectional);
+        }
+        w.WritePropertyName("enabled");
+        {
+        w.WriteBooleanValue(v.Enabled);
+        }
+        w.WritePropertyName("kind");
+        {
+        WriteLinkKind(w, v.Kind);
+        }
+        w.WritePropertyName("duration");
+        {
+        WriteFloat(w, v.Duration);
+        }
+        w.WritePropertyName("arcHeight");
+        {
+        WriteFloat(w, v.ArcHeight);
+        }
+        w.WriteEndObject();
+    }
+    internal static NavMeshSurface ReadNavMeshSurface(JsonElement v)
+        => new()
+        {
+            Profiles = Field(v, "profiles", "[]").EnumerateArray().Select(static item0 => item0.GetUInt32()).ToArray(),
+            Geometry = Field(v, "geometry", "null").ValueKind == JsonValueKind.Null ? null : (string?)(Field(v, "geometry", "null").ValueKind == JsonValueKind.Null ? null : Field(v, "geometry", "null").GetString()),
+            Min = new Vector3(Field(v, "min", "[0,0,0]")[0].GetSingle(), Field(v, "min", "[0,0,0]")[1].GetSingle(), Field(v, "min", "[0,0,0]")[2].GetSingle()),
+            Max = new Vector3(Field(v, "max", "[0,0,0]")[0].GetSingle(), Field(v, "max", "[0,0,0]")[1].GetSingle(), Field(v, "max", "[0,0,0]")[2].GetSingle()),
+            CellSize = Field(v, "cellSize", "0.2").GetSingle(),
+            TileSize = Field(v, "tileSize", "64").GetUInt16(),
+        };
+    internal static void WriteNavMeshSurface(Utf8JsonWriter w, NavMeshSurface v)
+    {
+        w.WriteStartObject();
+        w.WritePropertyName("profiles");
+        {
+        w.WriteStartArray();
+        if (v.Profiles is not null) foreach (var item0 in v.Profiles)
+        {
+        w.WriteNumberValue(item0);
+        }
+        w.WriteEndArray();
+        }
+        w.WritePropertyName("geometry");
+        {
+        if (v.Geometry is { } option0)
+        {
+        w.WriteStringValue(option0);
+        } else w.WriteNullValue();
+        }
+        w.WritePropertyName("min");
+        {
+        w.WriteStartArray();
+        WriteFloat(w, v.Min.X);
+        WriteFloat(w, v.Min.Y);
+        WriteFloat(w, v.Min.Z);
+        w.WriteEndArray();
+        }
+        w.WritePropertyName("max");
+        {
+        w.WriteStartArray();
+        WriteFloat(w, v.Max.X);
+        WriteFloat(w, v.Max.Y);
+        WriteFloat(w, v.Max.Z);
+        w.WriteEndArray();
+        }
+        w.WritePropertyName("cellSize");
+        {
+        WriteFloat(w, v.CellSize);
+        }
+        w.WritePropertyName("tileSize");
+        {
+        w.WriteNumberValue(v.TileSize);
+        }
+        w.WriteEndObject();
+    }
+    internal static NavObstacle ReadNavObstacle(JsonElement v)
+        => new()
+        {
+            Id = Field(v, "id", "0").GetUInt32(),
+            HalfExtents = new Vector3(Field(v, "halfExtents", "[0.5,0.5,0.5]")[0].GetSingle(), Field(v, "halfExtents", "[0.5,0.5,0.5]")[1].GetSingle(), Field(v, "halfExtents", "[0.5,0.5,0.5]")[2].GetSingle()),
+            Mode = ReadObstacleMode(Field(v, "mode", "\"carve\"")),
+            Area = Field(v, "area", "0").GetByte(),
+        };
+    internal static void WriteNavObstacle(Utf8JsonWriter w, NavObstacle v)
+    {
+        w.WriteStartObject();
+        w.WritePropertyName("id");
+        {
+        w.WriteNumberValue(v.Id);
+        }
+        w.WritePropertyName("halfExtents");
+        {
+        w.WriteStartArray();
+        WriteFloat(w, v.HalfExtents.X);
+        WriteFloat(w, v.HalfExtents.Y);
+        WriteFloat(w, v.HalfExtents.Z);
+        w.WriteEndArray();
+        }
+        w.WritePropertyName("mode");
+        {
+        WriteObstacleMode(w, v.Mode);
+        }
+        w.WritePropertyName("area");
+        {
+        w.WriteNumberValue(v.Area);
+        }
+        w.WriteEndObject();
+    }
+    internal static ObstacleMode ReadObstacleMode(JsonElement v)
+        => v.GetString() switch
+        {
+            "carve" => ObstacleMode.Carve,
+            "area" => ObstacleMode.Area,
+            "avoid" => ObstacleMode.Avoid,
+            _ => throw new JsonException("unknown enum variant")
+        };
+    internal static void WriteObstacleMode(Utf8JsonWriter w, ObstacleMode v) => w.WriteStringValue(v switch
+    {
+        ObstacleMode.Carve => "carve",
+        ObstacleMode.Area => "area",
+        ObstacleMode.Avoid => "avoid",
+        _ => throw new JsonException("unknown enum value")
+    });
+    internal static Perceiver ReadPerceiver(JsonElement v)
+        => new()
+        {
+            SightRange = Field(v, "sightRange", "25").GetSingle(),
+            Fov = Field(v, "fov", "120").GetSingle(),
+            PeripheralRange = Field(v, "peripheralRange", "2").GetSingle(),
+            EyeHeight = Field(v, "eyeHeight", "1.7").GetSingle(),
+            Hearing = Field(v, "hearing", "1").GetSingle(),
+            Occlusion = Field(v, "occlusion", "0.5").GetSingle(),
+            Memory = Field(v, "memory", "8").GetSingle(),
+        };
+    internal static void WritePerceiver(Utf8JsonWriter w, Perceiver v)
+    {
+        w.WriteStartObject();
+        w.WritePropertyName("sightRange");
+        {
+        WriteFloat(w, v.SightRange);
+        }
+        w.WritePropertyName("fov");
+        {
+        WriteFloat(w, v.Fov);
+        }
+        w.WritePropertyName("peripheralRange");
+        {
+        WriteFloat(w, v.PeripheralRange);
+        }
+        w.WritePropertyName("eyeHeight");
+        {
+        WriteFloat(w, v.EyeHeight);
+        }
+        w.WritePropertyName("hearing");
+        {
+        WriteFloat(w, v.Hearing);
+        }
+        w.WritePropertyName("occlusion");
+        {
+        WriteFloat(w, v.Occlusion);
+        }
+        w.WritePropertyName("memory");
+        {
+        WriteFloat(w, v.Memory);
+        }
+        w.WriteEndObject();
+    }
+    internal static PhysicsId ReadPhysicsId(JsonElement v)
+        => new()
+        {
+            Value = Field(v, "value", "0").GetUInt64(),
+        };
+    internal static void WritePhysicsId(Utf8JsonWriter w, PhysicsId v)
+    {
+        w.WriteStartObject();
+        w.WritePropertyName("value");
+        {
+        w.WriteNumberValue(v.Value);
+        }
+        w.WriteEndObject();
+    }
+    internal static PhysicsPose ReadPhysicsPose(JsonElement v)
+        => new()
+        {
+            Position = new Vector3(Field(v, "position", "[0,0,0]")[0].GetSingle(), Field(v, "position", "[0,0,0]")[1].GetSingle(), Field(v, "position", "[0,0,0]")[2].GetSingle()),
+            Rotation = new Quaternion(Field(v, "rotation", "[0,0,0,1]")[0].GetSingle(), Field(v, "rotation", "[0,0,0,1]")[1].GetSingle(), Field(v, "rotation", "[0,0,0,1]")[2].GetSingle(), Field(v, "rotation", "[0,0,0,1]")[3].GetSingle()),
+        };
+    internal static void WritePhysicsPose(Utf8JsonWriter w, PhysicsPose v)
+    {
+        w.WriteStartObject();
+        w.WritePropertyName("position");
+        {
+        w.WriteStartArray();
+        WriteFloat(w, v.Position.X);
+        WriteFloat(w, v.Position.Y);
+        WriteFloat(w, v.Position.Z);
+        w.WriteEndArray();
+        }
+        w.WritePropertyName("rotation");
+        {
+        w.WriteStartArray();
+        WriteFloat(w, v.Rotation.X);
+        WriteFloat(w, v.Rotation.Y);
+        WriteFloat(w, v.Rotation.Z);
+        WriteFloat(w, v.Rotation.W);
+        w.WriteEndArray();
+        }
+        w.WriteEndObject();
+    }
+    internal static PhysicsPose2d ReadPhysicsPose2d(JsonElement v)
+        => new()
+        {
+            Position = new Vector2(Field(v, "position", "[0,0]")[0].GetSingle(), Field(v, "position", "[0,0]")[1].GetSingle()),
+            Rotation = Field(v, "rotation", "0").GetSingle(),
+        };
+    internal static void WritePhysicsPose2d(Utf8JsonWriter w, PhysicsPose2d v)
+    {
+        w.WriteStartObject();
+        w.WritePropertyName("position");
+        {
+        w.WriteStartArray();
+        WriteFloat(w, v.Position.X);
+        WriteFloat(w, v.Position.Y);
+        w.WriteEndArray();
+        }
+        w.WritePropertyName("rotation");
+        {
+        WriteFloat(w, v.Rotation);
+        }
+        w.WriteEndObject();
+    }
+    internal static PlayerControl ReadPlayerControl(JsonElement v)
+        => new()
+        {
+            Player = Field(v, "player", "1").GetUInt64(),
+            WalkSpeed = Field(v, "walkSpeed", "1.6").GetSingle(),
+            RunSpeed = Field(v, "runSpeed", "4.5").GetSingle(),
+            JumpSpeed = Field(v, "jumpSpeed", "4.5").GetSingle(),
+            TurnRate = Field(v, "turnRate", "540").GetSingle(),
+            Yaw = Field(v, "yaw", "0").GetSingle(),
+            Camera = Field(v, "camera", "null").ValueKind == JsonValueKind.Null ? null : (string?)(Field(v, "camera", "null").ValueKind == JsonValueKind.Null ? null : Field(v, "camera", "null").GetString()),
+        };
+    internal static void WritePlayerControl(Utf8JsonWriter w, PlayerControl v)
+    {
+        w.WriteStartObject();
+        w.WritePropertyName("player");
+        {
+        w.WriteNumberValue(v.Player);
+        }
+        w.WritePropertyName("walkSpeed");
+        {
+        WriteFloat(w, v.WalkSpeed);
+        }
+        w.WritePropertyName("runSpeed");
+        {
+        WriteFloat(w, v.RunSpeed);
+        }
+        w.WritePropertyName("jumpSpeed");
+        {
+        WriteFloat(w, v.JumpSpeed);
+        }
+        w.WritePropertyName("turnRate");
+        {
+        WriteFloat(w, v.TurnRate);
+        }
+        w.WritePropertyName("yaw");
+        {
+        WriteFloat(w, v.Yaw);
+        }
+        w.WritePropertyName("camera");
+        {
+        if (v.Camera is { } option0)
+        {
+        w.WriteStringValue(option0);
+        } else w.WriteNullValue();
+        }
+        w.WriteEndObject();
+    }
+    internal static PostProcess ReadPostProcess(JsonElement v)
+        => new()
+        {
+            Exposure = ReadExposureMode(Field(v, "exposure", "\"auto\"")),
+            Ev100 = Field(v, "ev100", "10").GetSingle(),
+            Compensation = Field(v, "compensation", "0").GetSingle(),
+            MinEv100 = Field(v, "minEv100", "-2").GetSingle(),
+            MaxEv100 = Field(v, "maxEv100", "16").GetSingle(),
+            AdaptationSpeed = Field(v, "adaptationSpeed", "2").GetSingle(),
+            ToneMapping = ReadToneMapping(Field(v, "toneMapping", "\"filmic\"")),
+            Bloom = Field(v, "bloom", "0.04").GetSingle(),
+            WhiteBalance = Field(v, "whiteBalance", "6500").GetSingle(),
+            Saturation = Field(v, "saturation", "1").GetSingle(),
+            Contrast = Field(v, "contrast", "1").GetSingle(),
+            Vignette = Field(v, "vignette", "0").GetSingle(),
+        };
+    internal static void WritePostProcess(Utf8JsonWriter w, PostProcess v)
+    {
+        w.WriteStartObject();
+        w.WritePropertyName("exposure");
+        {
+        WriteExposureMode(w, v.Exposure);
+        }
+        w.WritePropertyName("ev100");
+        {
+        WriteFloat(w, v.Ev100);
+        }
+        w.WritePropertyName("compensation");
+        {
+        WriteFloat(w, v.Compensation);
+        }
+        w.WritePropertyName("minEv100");
+        {
+        WriteFloat(w, v.MinEv100);
+        }
+        w.WritePropertyName("maxEv100");
+        {
+        WriteFloat(w, v.MaxEv100);
+        }
+        w.WritePropertyName("adaptationSpeed");
+        {
+        WriteFloat(w, v.AdaptationSpeed);
+        }
+        w.WritePropertyName("toneMapping");
+        {
+        WriteToneMapping(w, v.ToneMapping);
+        }
+        w.WritePropertyName("bloom");
+        {
+        WriteFloat(w, v.Bloom);
+        }
+        w.WritePropertyName("whiteBalance");
+        {
+        WriteFloat(w, v.WhiteBalance);
+        }
+        w.WritePropertyName("saturation");
+        {
+        WriteFloat(w, v.Saturation);
+        }
+        w.WritePropertyName("contrast");
+        {
+        WriteFloat(w, v.Contrast);
+        }
+        w.WritePropertyName("vignette");
+        {
+        WriteFloat(w, v.Vignette);
+        }
+        w.WriteEndObject();
+    }
+    internal static PrimitiveMaterialOverride ReadPrimitiveMaterialOverride(JsonElement v)
+        => new()
+        {
+            Primitive = Field(v, "primitive", "0").GetUInt32(),
+            Material = Field(v, "material", "null").ValueKind == JsonValueKind.Null ? null : Field(v, "material", "null").GetString(),
+        };
+    internal static void WritePrimitiveMaterialOverride(Utf8JsonWriter w, PrimitiveMaterialOverride v)
+    {
+        w.WriteStartObject();
+        w.WritePropertyName("primitive");
+        {
+        w.WriteNumberValue(v.Primitive);
+        }
+        w.WritePropertyName("material");
+        {
+        w.WriteStringValue(v.Material);
+        }
+        w.WriteEndObject();
+    }
+    internal static ReverbZone ReadReverbZone(JsonElement v)
+        => new()
+        {
+            Name = Field(v, "name", "\"\"").ValueKind == JsonValueKind.Null ? null : Field(v, "name", "\"\"").GetString(),
+            Shape = ReadZoneShape(Field(v, "shape", "\"box\"")),
+            Position = new Vector3(Field(v, "position", "[0,0,0]")[0].GetSingle(), Field(v, "position", "[0,0,0]")[1].GetSingle(), Field(v, "position", "[0,0,0]")[2].GetSingle()),
+            Rotation = new Vector4(Field(v, "rotation", "[0,0,0,1]")[0].GetSingle(), Field(v, "rotation", "[0,0,0,1]")[1].GetSingle(), Field(v, "rotation", "[0,0,0,1]")[2].GetSingle(), Field(v, "rotation", "[0,0,0,1]")[3].GetSingle()),
+            HalfExtents = new Vector3(Field(v, "halfExtents", "[5,3,5]")[0].GetSingle(), Field(v, "halfExtents", "[5,3,5]")[1].GetSingle(), Field(v, "halfExtents", "[5,3,5]")[2].GetSingle()),
+            Radius = Field(v, "radius", "5").GetSingle(),
+            Fade = Field(v, "fade", "1").GetSingle(),
+            Priority = Field(v, "priority", "0").GetInt32(),
+            Material = ReadMaterialPreset(Field(v, "material", "\"generic\"")),
+            Rt60 = Field(v, "rt60", "null").ValueKind == JsonValueKind.Null ? null : (Vector3?)(new Vector3(Field(v, "rt60", "null")[0].GetSingle(), Field(v, "rt60", "null")[1].GetSingle(), Field(v, "rt60", "null")[2].GetSingle())),
+            Wet = Field(v, "wet", "1").GetSingle(),
+            EarlyReflections = Field(v, "earlyReflections", "true").GetBoolean(),
+            UseBaked = Field(v, "useBaked", "true").GetBoolean(),
+        };
+    internal static void WriteReverbZone(Utf8JsonWriter w, ReverbZone v)
+    {
+        w.WriteStartObject();
+        w.WritePropertyName("name");
+        {
+        w.WriteStringValue(v.Name);
+        }
+        w.WritePropertyName("shape");
+        {
+        WriteZoneShape(w, v.Shape);
+        }
+        w.WritePropertyName("position");
+        {
+        w.WriteStartArray();
+        WriteFloat(w, v.Position.X);
+        WriteFloat(w, v.Position.Y);
+        WriteFloat(w, v.Position.Z);
+        w.WriteEndArray();
+        }
+        w.WritePropertyName("rotation");
+        {
+        w.WriteStartArray();
+        WriteFloat(w, v.Rotation.X);
+        WriteFloat(w, v.Rotation.Y);
+        WriteFloat(w, v.Rotation.Z);
+        WriteFloat(w, v.Rotation.W);
+        w.WriteEndArray();
+        }
+        w.WritePropertyName("halfExtents");
+        {
+        w.WriteStartArray();
+        WriteFloat(w, v.HalfExtents.X);
+        WriteFloat(w, v.HalfExtents.Y);
+        WriteFloat(w, v.HalfExtents.Z);
+        w.WriteEndArray();
+        }
+        w.WritePropertyName("radius");
+        {
+        WriteFloat(w, v.Radius);
+        }
+        w.WritePropertyName("fade");
+        {
+        WriteFloat(w, v.Fade);
+        }
+        w.WritePropertyName("priority");
+        {
+        w.WriteNumberValue(v.Priority);
+        }
+        w.WritePropertyName("material");
+        {
+        WriteMaterialPreset(w, v.Material);
+        }
+        w.WritePropertyName("rt60");
+        {
+        if (v.Rt60 is { } option0)
+        {
+        w.WriteStartArray();
+        WriteFloat(w, option0.X);
+        WriteFloat(w, option0.Y);
+        WriteFloat(w, option0.Z);
+        w.WriteEndArray();
+        } else w.WriteNullValue();
+        }
+        w.WritePropertyName("wet");
+        {
+        WriteFloat(w, v.Wet);
+        }
+        w.WritePropertyName("earlyReflections");
+        {
+        w.WriteBooleanValue(v.EarlyReflections);
+        }
+        w.WritePropertyName("useBaked");
+        {
+        w.WriteBooleanValue(v.UseBaked);
+        }
+        w.WriteEndObject();
+    }
+    internal static RigidBody ReadRigidBody(JsonElement v)
+        => new()
+        {
+            Motion = ReadMotionType(Field(v, "motion", "\"static\"")),
+            Mass = Field(v, "mass", "0").GetSingle(),
+            AllowSleep = Field(v, "allowSleep", "true").GetBoolean(),
+            Continuous = Field(v, "continuous", "false").GetBoolean(),
+        };
+    internal static void WriteRigidBody(Utf8JsonWriter w, RigidBody v)
+    {
+        w.WriteStartObject();
+        w.WritePropertyName("motion");
+        {
+        WriteMotionType(w, v.Motion);
+        }
+        w.WritePropertyName("mass");
+        {
+        WriteFloat(w, v.Mass);
+        }
+        w.WritePropertyName("allowSleep");
+        {
+        w.WriteBooleanValue(v.AllowSleep);
+        }
+        w.WritePropertyName("continuous");
+        {
+        w.WriteBooleanValue(v.Continuous);
+        }
+        w.WriteEndObject();
+    }
+    internal static RigidBody2d ReadRigidBody2d(JsonElement v)
+        => new()
+        {
+            Motion = ReadMotionType2d(Field(v, "motion", "\"static\"")),
+            Mass = Field(v, "mass", "0").GetSingle(),
+            AllowSleep = Field(v, "allowSleep", "true").GetBoolean(),
+            Continuous = Field(v, "continuous", "false").GetBoolean(),
+            LockRotation = Field(v, "lockRotation", "false").GetBoolean(),
+        };
+    internal static void WriteRigidBody2d(Utf8JsonWriter w, RigidBody2d v)
+    {
+        w.WriteStartObject();
+        w.WritePropertyName("motion");
+        {
+        WriteMotionType2d(w, v.Motion);
+        }
+        w.WritePropertyName("mass");
+        {
+        WriteFloat(w, v.Mass);
+        }
+        w.WritePropertyName("allowSleep");
+        {
+        w.WriteBooleanValue(v.AllowSleep);
+        }
+        w.WritePropertyName("continuous");
+        {
+        w.WriteBooleanValue(v.Continuous);
+        }
+        w.WritePropertyName("lockRotation");
+        {
+        w.WriteBooleanValue(v.LockRotation);
+        }
+        w.WriteEndObject();
+    }
+    internal static SkyAtmosphere ReadSkyAtmosphere(JsonElement v)
+        => new()
+        {
+            SeaLevel = Field(v, "seaLevel", "0").GetSingle(),
+            Aerosols = Field(v, "aerosols", "1").GetSingle(),
+            CloudCoverage = Field(v, "cloudCoverage", "0").GetSingle(),
+            CloudHeight = Field(v, "cloudHeight", "2200").GetSingle(),
+        };
+    internal static void WriteSkyAtmosphere(Utf8JsonWriter w, SkyAtmosphere v)
+    {
+        w.WriteStartObject();
+        w.WritePropertyName("seaLevel");
+        {
+        WriteFloat(w, v.SeaLevel);
+        }
+        w.WritePropertyName("aerosols");
+        {
+        WriteFloat(w, v.Aerosols);
+        }
+        w.WritePropertyName("cloudCoverage");
+        {
+        WriteFloat(w, v.CloudCoverage);
+        }
+        w.WritePropertyName("cloudHeight");
+        {
+        WriteFloat(w, v.CloudHeight);
+        }
+        w.WriteEndObject();
+    }
+    internal static Sprite ReadSprite(JsonElement v)
+        => new()
+        {
+            Atlas = Field(v, "atlas", "null").ValueKind == JsonValueKind.Null ? null : (string?)(Field(v, "atlas", "null").ValueKind == JsonValueKind.Null ? null : Field(v, "atlas", "null").GetString()),
+            Region = Field(v, "region", "\"\"").ValueKind == JsonValueKind.Null ? null : Field(v, "region", "\"\"").GetString(),
+            NormalAtlas = Field(v, "normalAtlas", "null").ValueKind == JsonValueKind.Null ? null : (string?)(Field(v, "normalAtlas", "null").ValueKind == JsonValueKind.Null ? null : Field(v, "normalAtlas", "null").GetString()),
+            Size = new Vector2(Field(v, "size", "[0,0]")[0].GetSingle(), Field(v, "size", "[0,0]")[1].GetSingle()),
+            Tint = new Vector4(Field(v, "tint", "[1,1,1,1]")[0].GetSingle(), Field(v, "tint", "[1,1,1,1]")[1].GetSingle(), Field(v, "tint", "[1,1,1,1]")[2].GetSingle(), Field(v, "tint", "[1,1,1,1]")[3].GetSingle()),
+            SortingLayer = Field(v, "sortingLayer", "0").GetInt32(),
+            Order = Field(v, "order", "0").GetInt32(),
+            FlipX = Field(v, "flipX", "false").GetBoolean(),
+            FlipY = Field(v, "flipY", "false").GetBoolean(),
+            NineSlice = Field(v, "nineSlice", "false").GetBoolean(),
+            Lit = Field(v, "lit", "false").GetBoolean(),
+            Parallax = new Vector2(Field(v, "parallax", "[1,1]")[0].GetSingle(), Field(v, "parallax", "[1,1]")[1].GetSingle()),
+        };
+    internal static void WriteSprite(Utf8JsonWriter w, Sprite v)
+    {
+        w.WriteStartObject();
+        w.WritePropertyName("atlas");
+        {
+        if (v.Atlas is { } option0)
+        {
+        w.WriteStringValue(option0);
+        } else w.WriteNullValue();
+        }
+        w.WritePropertyName("region");
+        {
+        w.WriteStringValue(v.Region);
+        }
+        w.WritePropertyName("normalAtlas");
+        {
+        if (v.NormalAtlas is { } option0)
+        {
+        w.WriteStringValue(option0);
+        } else w.WriteNullValue();
+        }
+        w.WritePropertyName("size");
+        {
+        w.WriteStartArray();
+        WriteFloat(w, v.Size.X);
+        WriteFloat(w, v.Size.Y);
+        w.WriteEndArray();
+        }
+        w.WritePropertyName("tint");
+        {
+        w.WriteStartArray();
+        WriteFloat(w, v.Tint.X);
+        WriteFloat(w, v.Tint.Y);
+        WriteFloat(w, v.Tint.Z);
+        WriteFloat(w, v.Tint.W);
+        w.WriteEndArray();
+        }
+        w.WritePropertyName("sortingLayer");
+        {
+        w.WriteNumberValue(v.SortingLayer);
+        }
+        w.WritePropertyName("order");
+        {
+        w.WriteNumberValue(v.Order);
+        }
+        w.WritePropertyName("flipX");
+        {
+        w.WriteBooleanValue(v.FlipX);
+        }
+        w.WritePropertyName("flipY");
+        {
+        w.WriteBooleanValue(v.FlipY);
+        }
+        w.WritePropertyName("nineSlice");
+        {
+        w.WriteBooleanValue(v.NineSlice);
+        }
+        w.WritePropertyName("lit");
+        {
+        w.WriteBooleanValue(v.Lit);
+        }
+        w.WritePropertyName("parallax");
+        {
+        w.WriteStartArray();
+        WriteFloat(w, v.Parallax.X);
+        WriteFloat(w, v.Parallax.Y);
+        w.WriteEndArray();
+        }
+        w.WriteEndObject();
+    }
+    internal static Stimulus ReadStimulus(JsonElement v)
+        => new()
+        {
+            Kind = Field(v, "kind", "\"\"").ValueKind == JsonValueKind.Null ? null : Field(v, "kind", "\"\"").GetString(),
+            Height = Field(v, "height", "1.2").GetSingle(),
+            Visibility = Field(v, "visibility", "1").GetSingle(),
+        };
+    internal static void WriteStimulus(Utf8JsonWriter w, Stimulus v)
+    {
+        w.WriteStartObject();
+        w.WritePropertyName("kind");
+        {
+        w.WriteStringValue(v.Kind);
+        }
+        w.WritePropertyName("height");
+        {
+        WriteFloat(w, v.Height);
+        }
+        w.WritePropertyName("visibility");
+        {
+        WriteFloat(w, v.Visibility);
+        }
+        w.WriteEndObject();
+    }
+    internal static StreamedWorld ReadStreamedWorld(JsonElement v)
+        => new()
+        {
+            World = Field(v, "world", "null").ValueKind == JsonValueKind.Null ? null : (string?)(Field(v, "world", "null").ValueKind == JsonValueKind.Null ? null : Field(v, "world", "null").GetString()),
+        };
+    internal static void WriteStreamedWorld(Utf8JsonWriter w, StreamedWorld v)
+    {
+        w.WriteStartObject();
+        w.WritePropertyName("world");
+        {
+        if (v.World is { } option0)
+        {
+        w.WriteStringValue(option0);
+        } else w.WriteNullValue();
+        }
+        w.WriteEndObject();
+    }
+    internal static Terrain ReadTerrain(JsonElement v)
+        => new()
+        {
+            TerrainAsset = Field(v, "terrain", "null").ValueKind == JsonValueKind.Null ? null : (string?)(Field(v, "terrain", "null").ValueKind == JsonValueKind.Null ? null : Field(v, "terrain", "null").GetString()),
+            Foliage = Field(v, "foliage", "null").ValueKind == JsonValueKind.Null ? null : (string?)(Field(v, "foliage", "null").ValueKind == JsonValueKind.Null ? null : Field(v, "foliage", "null").GetString()),
+        };
+    internal static void WriteTerrain(Utf8JsonWriter w, Terrain v)
+    {
+        w.WriteStartObject();
+        w.WritePropertyName("terrain");
+        {
+        if (v.TerrainAsset is { } option0)
+        {
+        w.WriteStringValue(option0);
+        } else w.WriteNullValue();
+        }
+        w.WritePropertyName("foliage");
+        {
+        if (v.Foliage is { } option0)
+        {
+        w.WriteStringValue(option0);
+        } else w.WriteNullValue();
+        }
+        w.WriteEndObject();
+    }
+    internal static TerrainChunk ReadTerrainChunk(JsonElement v)
+        => new()
+        {
+            X = Field(v, "x", "0").GetInt32(),
+            Z = Field(v, "z", "0").GetInt32(),
+        };
+    internal static void WriteTerrainChunk(Utf8JsonWriter w, TerrainChunk v)
+    {
+        w.WriteStartObject();
+        w.WritePropertyName("x");
+        {
+        w.WriteNumberValue(v.X);
+        }
+        w.WritePropertyName("z");
+        {
+        w.WriteNumberValue(v.Z);
+        }
+        w.WriteEndObject();
+    }
+    internal static TileColliderSource2d ReadTileColliderSource2d(JsonElement v)
+        => new()
+        {
+            Owner = Field(v, "owner", "null").ValueKind == JsonValueKind.Null ? null : Field(v, "owner", "null").GetString(),
+        };
+    internal static void WriteTileColliderSource2d(Utf8JsonWriter w, TileColliderSource2d v)
+    {
+        w.WriteStartObject();
+        w.WritePropertyName("owner");
+        {
+        w.WriteStringValue(v.Owner);
+        }
+        w.WriteEndObject();
+    }
+    internal static TileDefinition ReadTileDefinition(JsonElement v)
+        => new()
+        {
+            Region = Field(v, "region", "\"\"").ValueKind == JsonValueKind.Null ? null : Field(v, "region", "\"\"").GetString(),
+            Size = new Vector2(Field(v, "size", "[0,0]")[0].GetSingle(), Field(v, "size", "[0,0]")[1].GetSingle()),
+            Terrain = Field(v, "terrain", "0").GetUInt32(),
+            Solid = Field(v, "solid", "false").GetBoolean(),
+            Lit = Field(v, "lit", "false").GetBoolean(),
+        };
+    internal static void WriteTileDefinition(Utf8JsonWriter w, TileDefinition v)
+    {
+        w.WriteStartObject();
+        w.WritePropertyName("region");
+        {
+        w.WriteStringValue(v.Region);
+        }
+        w.WritePropertyName("size");
+        {
+        w.WriteStartArray();
+        WriteFloat(w, v.Size.X);
+        WriteFloat(w, v.Size.Y);
+        w.WriteEndArray();
+        }
+        w.WritePropertyName("terrain");
+        {
+        w.WriteNumberValue(v.Terrain);
+        }
+        w.WritePropertyName("solid");
+        {
+        w.WriteBooleanValue(v.Solid);
+        }
+        w.WritePropertyName("lit");
+        {
+        w.WriteBooleanValue(v.Lit);
+        }
+        w.WriteEndObject();
+    }
+    internal static TileLayer ReadTileLayer(JsonElement v)
+        => new()
+        {
+            Id = Field(v, "id", "\"\"").ValueKind == JsonValueKind.Null ? null : Field(v, "id", "\"\"").GetString(),
+            SortingLayer = Field(v, "sortingLayer", "0").GetInt32(),
+            Order = Field(v, "order", "0").GetInt32(),
+            Parallax = new Vector2(Field(v, "parallax", "[1,1]")[0].GetSingle(), Field(v, "parallax", "[1,1]")[1].GetSingle()),
+            Tint = new Vector4(Field(v, "tint", "[1,1,1,1]")[0].GetSingle(), Field(v, "tint", "[1,1,1,1]")[1].GetSingle(), Field(v, "tint", "[1,1,1,1]")[2].GetSingle(), Field(v, "tint", "[1,1,1,1]")[3].GetSingle()),
+            Cells = Field(v, "cells", "{}").EnumerateObject().ToDictionary(static item0 => item0.Name, static item0 => item0.Value.GetUInt32()),
+        };
+    internal static void WriteTileLayer(Utf8JsonWriter w, TileLayer v)
+    {
+        w.WriteStartObject();
+        w.WritePropertyName("id");
+        {
+        w.WriteStringValue(v.Id);
+        }
+        w.WritePropertyName("sortingLayer");
+        {
+        w.WriteNumberValue(v.SortingLayer);
+        }
+        w.WritePropertyName("order");
+        {
+        w.WriteNumberValue(v.Order);
+        }
+        w.WritePropertyName("parallax");
+        {
+        w.WriteStartArray();
+        WriteFloat(w, v.Parallax.X);
+        WriteFloat(w, v.Parallax.Y);
+        w.WriteEndArray();
+        }
+        w.WritePropertyName("tint");
+        {
+        w.WriteStartArray();
+        WriteFloat(w, v.Tint.X);
+        WriteFloat(w, v.Tint.Y);
+        WriteFloat(w, v.Tint.Z);
+        WriteFloat(w, v.Tint.W);
+        w.WriteEndArray();
+        }
+        w.WritePropertyName("cells");
+        {
+        w.WriteStartObject();
+        if (v.Cells is not null) foreach (var item0 in v.Cells.OrderBy(static p => p.Key, StringComparer.Ordinal))
+        {
+        w.WritePropertyName(item0.Key);
+        w.WriteNumberValue(item0.Value);
+        }
+        w.WriteEndObject();
+        }
+        w.WriteEndObject();
+    }
+    internal static TileRule ReadTileRule(JsonElement v)
+        => new()
+        {
+            Terrain = Field(v, "terrain", "0").GetUInt32(),
+            Required = Field(v, "required", "0").GetUInt32(),
+            Forbidden = Field(v, "forbidden", "0").GetUInt32(),
+            Tile = Field(v, "tile", "0").GetUInt32(),
+        };
+    internal static void WriteTileRule(Utf8JsonWriter w, TileRule v)
+    {
+        w.WriteStartObject();
+        w.WritePropertyName("terrain");
+        {
+        w.WriteNumberValue(v.Terrain);
+        }
+        w.WritePropertyName("required");
+        {
+        w.WriteNumberValue(v.Required);
+        }
+        w.WritePropertyName("forbidden");
+        {
+        w.WriteNumberValue(v.Forbidden);
+        }
+        w.WritePropertyName("tile");
+        {
+        w.WriteNumberValue(v.Tile);
+        }
+        w.WriteEndObject();
+    }
+    internal static Tilemap ReadTilemap(JsonElement v)
+        => new()
+        {
+            Atlas = Field(v, "atlas", "null").ValueKind == JsonValueKind.Null ? null : (string?)(Field(v, "atlas", "null").ValueKind == JsonValueKind.Null ? null : Field(v, "atlas", "null").GetString()),
+            NormalAtlas = Field(v, "normalAtlas", "null").ValueKind == JsonValueKind.Null ? null : (string?)(Field(v, "normalAtlas", "null").ValueKind == JsonValueKind.Null ? null : Field(v, "normalAtlas", "null").GetString()),
+            Layout = ReadGridLayout(Field(v, "layout", "\"grid\"")),
+            CellSize = new Vector2(Field(v, "cellSize", "[1,1]")[0].GetSingle(), Field(v, "cellSize", "[1,1]")[1].GetSingle()),
+            Definitions = Field(v, "definitions", "{}").EnumerateObject().ToDictionary(static item0 => item0.Name, static item0 => ReadTileDefinition(item0.Value)),
+            Layers = Field(v, "layers", "[]").EnumerateArray().Select(static item0 => ReadTileLayer(item0)).ToArray(),
+            Rules = Field(v, "rules", "[]").EnumerateArray().Select(static item0 => ReadTileRule(item0)).ToArray(),
+        };
+    internal static void WriteTilemap(Utf8JsonWriter w, Tilemap v)
+    {
+        w.WriteStartObject();
+        w.WritePropertyName("atlas");
+        {
+        if (v.Atlas is { } option0)
+        {
+        w.WriteStringValue(option0);
+        } else w.WriteNullValue();
+        }
+        w.WritePropertyName("normalAtlas");
+        {
+        if (v.NormalAtlas is { } option0)
+        {
+        w.WriteStringValue(option0);
+        } else w.WriteNullValue();
+        }
+        w.WritePropertyName("layout");
+        {
+        WriteGridLayout(w, v.Layout);
+        }
+        w.WritePropertyName("cellSize");
+        {
+        w.WriteStartArray();
+        WriteFloat(w, v.CellSize.X);
+        WriteFloat(w, v.CellSize.Y);
+        w.WriteEndArray();
+        }
+        w.WritePropertyName("definitions");
+        {
+        w.WriteStartObject();
+        if (v.Definitions is not null) foreach (var item0 in v.Definitions.OrderBy(static p => p.Key, StringComparer.Ordinal))
+        {
+        w.WritePropertyName(item0.Key);
+        WriteTileDefinition(w, item0.Value);
+        }
+        w.WriteEndObject();
+        }
+        w.WritePropertyName("layers");
+        {
+        w.WriteStartArray();
+        if (v.Layers is not null) foreach (var item0 in v.Layers)
+        {
+        WriteTileLayer(w, item0);
+        }
+        w.WriteEndArray();
+        }
+        w.WritePropertyName("rules");
+        {
+        w.WriteStartArray();
+        if (v.Rules is not null) foreach (var item0 in v.Rules)
+        {
+        WriteTileRule(w, item0);
+        }
+        w.WriteEndArray();
+        }
+        w.WriteEndObject();
+    }
+    internal static ToneMapping ReadToneMapping(JsonElement v)
+        => v.GetString() switch
+        {
+            "filmic" => ToneMapping.Filmic,
+            "neutral" => ToneMapping.Neutral,
+            "acesFit" => ToneMapping.AcesFit,
+            _ => throw new JsonException("unknown enum variant")
+        };
+    internal static void WriteToneMapping(Utf8JsonWriter w, ToneMapping v) => w.WriteStringValue(v switch
+    {
+        ToneMapping.Filmic => "filmic",
+        ToneMapping.Neutral => "neutral",
+        ToneMapping.AcesFit => "acesFit",
+        _ => throw new JsonException("unknown enum value")
+    });
+    internal static Transform ReadTransform(JsonElement v)
+        => new()
+        {
+            Position = new Vector3(Field(v, "position", "[0,0,0]")[0].GetSingle(), Field(v, "position", "[0,0,0]")[1].GetSingle(), Field(v, "position", "[0,0,0]")[2].GetSingle()),
+            Rotation = new Vector3(Field(v, "rotation", "[0,0,0]")[0].GetSingle(), Field(v, "rotation", "[0,0,0]")[1].GetSingle(), Field(v, "rotation", "[0,0,0]")[2].GetSingle()),
+            Scale = new Vector3(Field(v, "scale", "[1,1,1]")[0].GetSingle(), Field(v, "scale", "[1,1,1]")[1].GetSingle(), Field(v, "scale", "[1,1,1]")[2].GetSingle()),
+        };
+    internal static void WriteTransform(Utf8JsonWriter w, Transform v)
+    {
+        w.WriteStartObject();
+        w.WritePropertyName("position");
+        {
+        w.WriteStartArray();
+        WriteFloat(w, v.Position.X);
+        WriteFloat(w, v.Position.Y);
+        WriteFloat(w, v.Position.Z);
+        w.WriteEndArray();
+        }
+        w.WritePropertyName("rotation");
+        {
+        w.WriteStartArray();
+        WriteFloat(w, v.Rotation.X);
+        WriteFloat(w, v.Rotation.Y);
+        WriteFloat(w, v.Rotation.Z);
+        w.WriteEndArray();
+        }
+        w.WritePropertyName("scale");
+        {
+        w.WriteStartArray();
+        WriteFloat(w, v.Scale.X);
+        WriteFloat(w, v.Scale.Y);
+        WriteFloat(w, v.Scale.Z);
+        w.WriteEndArray();
+        }
+        w.WriteEndObject();
+    }
+    internal static Vehicle ReadVehicle(JsonElement v)
+        => new()
+        {
+            HalfExtents = new Vector3(Field(v, "halfExtents", "[0.9,0.2,2]")[0].GetSingle(), Field(v, "halfExtents", "[0.9,0.2,2]")[1].GetSingle(), Field(v, "halfExtents", "[0.9,0.2,2]")[2].GetSingle()),
+            Mass = Field(v, "mass", "1500").GetSingle(),
+            WheelRadius = Field(v, "wheelRadius", "0.35").GetSingle(),
+            WheelWidth = Field(v, "wheelWidth", "0.2").GetSingle(),
+            SuspensionMin = Field(v, "suspensionMin", "0.2").GetSingle(),
+            SuspensionMax = Field(v, "suspensionMax", "0.5").GetSingle(),
+            SuspensionFrequency = Field(v, "suspensionFrequency", "1.5").GetSingle(),
+            SuspensionDamping = Field(v, "suspensionDamping", "0.5").GetSingle(),
+            MaxSteerDeg = Field(v, "maxSteerDeg", "30").GetSingle(),
+            EngineMaxTorque = Field(v, "engineMaxTorque", "500").GetSingle(),
+            RearWheelDrive = Field(v, "rearWheelDrive", "true").GetBoolean(),
+            Layer = Field(v, "layer", "1").GetUInt32(),
+        };
+    internal static void WriteVehicle(Utf8JsonWriter w, Vehicle v)
+    {
+        w.WriteStartObject();
+        w.WritePropertyName("halfExtents");
+        {
+        w.WriteStartArray();
+        WriteFloat(w, v.HalfExtents.X);
+        WriteFloat(w, v.HalfExtents.Y);
+        WriteFloat(w, v.HalfExtents.Z);
+        w.WriteEndArray();
+        }
+        w.WritePropertyName("mass");
+        {
+        WriteFloat(w, v.Mass);
+        }
+        w.WritePropertyName("wheelRadius");
+        {
+        WriteFloat(w, v.WheelRadius);
+        }
+        w.WritePropertyName("wheelWidth");
+        {
+        WriteFloat(w, v.WheelWidth);
+        }
+        w.WritePropertyName("suspensionMin");
+        {
+        WriteFloat(w, v.SuspensionMin);
+        }
+        w.WritePropertyName("suspensionMax");
+        {
+        WriteFloat(w, v.SuspensionMax);
+        }
+        w.WritePropertyName("suspensionFrequency");
+        {
+        WriteFloat(w, v.SuspensionFrequency);
+        }
+        w.WritePropertyName("suspensionDamping");
+        {
+        WriteFloat(w, v.SuspensionDamping);
+        }
+        w.WritePropertyName("maxSteerDeg");
+        {
+        WriteFloat(w, v.MaxSteerDeg);
+        }
+        w.WritePropertyName("engineMaxTorque");
+        {
+        WriteFloat(w, v.EngineMaxTorque);
+        }
+        w.WritePropertyName("rearWheelDrive");
+        {
+        w.WriteBooleanValue(v.RearWheelDrive);
+        }
+        w.WritePropertyName("layer");
+        {
+        w.WriteNumberValue(v.Layer);
+        }
+        w.WriteEndObject();
+    }
+    internal static VehicleInput ReadVehicleInput(JsonElement v)
+        => new()
+        {
+            Throttle = Field(v, "throttle", "0").GetSingle(),
+            Steer = Field(v, "steer", "0").GetSingle(),
+            Brake = Field(v, "brake", "0").GetSingle(),
+            HandBrake = Field(v, "handBrake", "0").GetSingle(),
+        };
+    internal static void WriteVehicleInput(Utf8JsonWriter w, VehicleInput v)
+    {
+        w.WriteStartObject();
+        w.WritePropertyName("throttle");
+        {
+        WriteFloat(w, v.Throttle);
+        }
+        w.WritePropertyName("steer");
+        {
+        WriteFloat(w, v.Steer);
+        }
+        w.WritePropertyName("brake");
+        {
+        WriteFloat(w, v.Brake);
+        }
+        w.WritePropertyName("handBrake");
+        {
+        WriteFloat(w, v.HandBrake);
+        }
+        w.WriteEndObject();
+    }
+    internal static VehicleTelemetry ReadVehicleTelemetry(JsonElement v)
+        => new()
+        {
+            WheelsInContact = Field(v, "wheelsInContact", "0").GetUInt32(),
+            EngineRpm = Field(v, "engineRpm", "0").GetSingle(),
+            Gear = Field(v, "gear", "0").GetInt32(),
+        };
+    internal static void WriteVehicleTelemetry(Utf8JsonWriter w, VehicleTelemetry v)
+    {
+        w.WriteStartObject();
+        w.WritePropertyName("wheelsInContact");
+        {
+        w.WriteNumberValue(v.WheelsInContact);
+        }
+        w.WritePropertyName("engineRpm");
+        {
+        WriteFloat(w, v.EngineRpm);
+        }
+        w.WritePropertyName("gear");
+        {
+        w.WriteNumberValue(v.Gear);
+        }
+        w.WriteEndObject();
+    }
+    internal static Velocity ReadVelocity(JsonElement v)
+        => new()
+        {
+            Linear = new Vector3(Field(v, "linear", "[0,0,0]")[0].GetSingle(), Field(v, "linear", "[0,0,0]")[1].GetSingle(), Field(v, "linear", "[0,0,0]")[2].GetSingle()),
+            Angular = new Vector3(Field(v, "angular", "[0,0,0]")[0].GetSingle(), Field(v, "angular", "[0,0,0]")[1].GetSingle(), Field(v, "angular", "[0,0,0]")[2].GetSingle()),
+        };
+    internal static void WriteVelocity(Utf8JsonWriter w, Velocity v)
+    {
+        w.WriteStartObject();
+        w.WritePropertyName("linear");
+        {
+        w.WriteStartArray();
+        WriteFloat(w, v.Linear.X);
+        WriteFloat(w, v.Linear.Y);
+        WriteFloat(w, v.Linear.Z);
+        w.WriteEndArray();
+        }
+        w.WritePropertyName("angular");
+        {
+        w.WriteStartArray();
+        WriteFloat(w, v.Angular.X);
+        WriteFloat(w, v.Angular.Y);
+        WriteFloat(w, v.Angular.Z);
+        w.WriteEndArray();
+        }
+        w.WriteEndObject();
+    }
+    internal static Velocity2d ReadVelocity2d(JsonElement v)
+        => new()
+        {
+            Linear = new Vector2(Field(v, "linear", "[0,0]")[0].GetSingle(), Field(v, "linear", "[0,0]")[1].GetSingle()),
+            Angular = Field(v, "angular", "0").GetSingle(),
+        };
+    internal static void WriteVelocity2d(Utf8JsonWriter w, Velocity2d v)
+    {
+        w.WriteStartObject();
+        w.WritePropertyName("linear");
+        {
+        w.WriteStartArray();
+        WriteFloat(w, v.Linear.X);
+        WriteFloat(w, v.Linear.Y);
+        w.WriteEndArray();
+        }
+        w.WritePropertyName("angular");
+        {
+        WriteFloat(w, v.Angular);
+        }
+        w.WriteEndObject();
+    }
+    internal static VisualEffect ReadVisualEffect(JsonElement v)
+        => new()
+        {
+            Effect = Field(v, "effect", "\"campfire\"").ValueKind == JsonValueKind.Null ? null : Field(v, "effect", "\"campfire\"").GetString(),
+            Scale = Field(v, "scale", "1").GetSingle(),
+            Intensity = Field(v, "intensity", "1").GetSingle(),
+        };
+    internal static void WriteVisualEffect(Utf8JsonWriter w, VisualEffect v)
+    {
+        w.WriteStartObject();
+        w.WritePropertyName("effect");
+        {
+        w.WriteStringValue(v.Effect);
+        }
+        w.WritePropertyName("scale");
+        {
+        WriteFloat(w, v.Scale);
+        }
+        w.WritePropertyName("intensity");
+        {
+        WriteFloat(w, v.Intensity);
+        }
+        w.WriteEndObject();
+    }
+    internal static Wanderer ReadWanderer(JsonElement v)
+        => new()
+        {
+            Min = new Vector3(Field(v, "min", "[0,0,0]")[0].GetSingle(), Field(v, "min", "[0,0,0]")[1].GetSingle(), Field(v, "min", "[0,0,0]")[2].GetSingle()),
+            Max = new Vector3(Field(v, "max", "[0,0,0]")[0].GetSingle(), Field(v, "max", "[0,0,0]")[1].GetSingle(), Field(v, "max", "[0,0,0]")[2].GetSingle()),
+            PauseTicks = Field(v, "pauseTicks", "45").GetUInt32(),
+            ResumeTick = Field(v, "resumeTick", "0").GetUInt64(),
+            Goals = Field(v, "goals", "0").GetUInt32(),
+        };
+    internal static void WriteWanderer(Utf8JsonWriter w, Wanderer v)
+    {
+        w.WriteStartObject();
+        w.WritePropertyName("min");
+        {
+        w.WriteStartArray();
+        WriteFloat(w, v.Min.X);
+        WriteFloat(w, v.Min.Y);
+        WriteFloat(w, v.Min.Z);
+        w.WriteEndArray();
+        }
+        w.WritePropertyName("max");
+        {
+        w.WriteStartArray();
+        WriteFloat(w, v.Max.X);
+        WriteFloat(w, v.Max.Y);
+        WriteFloat(w, v.Max.Z);
+        w.WriteEndArray();
+        }
+        w.WritePropertyName("pauseTicks");
+        {
+        w.WriteNumberValue(v.PauseTicks);
+        }
+        w.WritePropertyName("resumeTick");
+        {
+        w.WriteNumberValue(v.ResumeTick);
+        }
+        w.WritePropertyName("goals");
+        {
+        w.WriteNumberValue(v.Goals);
+        }
+        w.WriteEndObject();
+    }
+    internal static ZoneShape ReadZoneShape(JsonElement v)
+        => v.GetString() switch
+        {
+            "box" => ZoneShape.Box,
+            "sphere" => ZoneShape.Sphere,
+            _ => throw new JsonException("unknown enum variant")
+        };
+    internal static void WriteZoneShape(Utf8JsonWriter w, ZoneShape v) => w.WriteStringValue(v switch
+    {
+        ZoneShape.Box => "box",
+        ZoneShape.Sphere => "sphere",
+        _ => throw new JsonException("unknown enum value")
+    });
+    static void WriteFloat(Utf8JsonWriter w, float value)
+    {
+        if (value == 0 && float.IsNegative(value)) w.WriteRawValue("-0.0"); else w.WriteNumberValue(value);
+    }
+    static void WriteFloat(Utf8JsonWriter w, double value)
+    {
+        if (value == 0 && double.IsNegative(value)) w.WriteRawValue("-0.0"); else w.WriteNumberValue(value);
+    }
 }

@@ -44,10 +44,10 @@ public abstract unsafe class Behaviour
     protected internal virtual void OnReload() { }
 
     /// <summary>One of this entity's components, for reading and writing.</summary>
-    protected ref T Get<T>() where T : unmanaged, IComponent<T> => ref World.Get<T>(Entity);
+    protected ref T Get<T>() where T : IComponent<T> => ref World.Get<T>(Entity);
 
     /// <summary>True if this entity has the component.</summary>
-    protected bool Has<T>() where T : unmanaged, IComponent<T> => World.Has<T>(Entity);
+    protected bool Has<T>() where T : IComponent<T> => World.Has<T>(Entity);
 
     /// <summary>Structural changes, applied after this phase.</summary>
     protected Commands Commands => new(CommandBuffer);

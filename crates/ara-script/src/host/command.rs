@@ -90,8 +90,8 @@ enum Step {
     Despawn(u64),
     /// Undo a despawn: a new entity with these components; later steps naming the old
     /// entity go to the new one.
-    Respawn(u64, Vec<(ComponentId, Vec<u8>)>),
-    Set(u64, ComponentId, Vec<u8>),
+    Respawn(u64, Vec<(u32, Vec<u8>)>),
+    Set(u64, u32, Vec<u8>),
     Remove(u64, ComponentId),
     Resource(ComponentId, Vec<u8>),
 }
@@ -251,12 +251,11 @@ impl ScriptHost {
             .before
             .iter()
             .filter_map(|(entity, component, before)| {
-                let c = self.registry.components.get(*component as usize)?;
-                let after = cmdbuf::component_bytes(
+                self.registry.components.get(*component as usize)?;
+                let after = world.resource::<ScriptCatalog>().read(
                     world,
                     Entity::try_from_bits(*entity)?,
-                    c.id,
-                    c.layout.size,
+                    *component,
                 )?;
                 (after != *before).then(|| ComponentWrite {
                     entity: *entity,
@@ -321,11 +320,13 @@ impl ScriptHost {
 
     fn restore(&self, world: &mut World, journal: &Journal) {
         for (entity, component, before) in journal.before.iter().rev() {
-            if let (Some(e), Some(c)) = (
+            if let (Some(e), Some(_)) = (
                 Entity::try_from_bits(*entity),
                 self.registry.components.get(*component as usize),
             ) {
-                cmdbuf::insert_bytes(world, e, c.id, before);
+                world.resource_scope(|world, catalog: Mut<ScriptCatalog>| {
+                    catalog.insert(world, e, *component, before);
+                });
             }
         }
         for (resource, before) in &journal.resources {
@@ -367,14 +368,18 @@ impl ScriptHost {
                 }
                 Step::Respawn(bits, components) => {
                     let e = world.spawn_empty().id();
-                    for (id, bytes) in components {
-                        cmdbuf::insert_bytes(world, e, id, &bytes);
+                    for (i, bytes) in components {
+                        world.resource_scope(|world, catalog: Mut<ScriptCatalog>| {
+                            catalog.insert(world, e, i, &bytes);
+                        });
                     }
                     remap.insert(bits, e);
                 }
-                Step::Set(bits, id, bytes) => {
+                Step::Set(bits, i, bytes) => {
                     if let Some(e) = entity(bits, &remap) {
-                        cmdbuf::insert_bytes(world, e, id, &bytes);
+                        world.resource_scope(|world, catalog: Mut<ScriptCatalog>| {
+                            catalog.insert(world, e, i, &bytes);
+                        });
                     }
                 }
                 Step::Remove(bits, id) => {
@@ -394,7 +399,7 @@ impl ScriptHost {
     /// current world (a dry run tracks which entities each step leaves alive).
     fn undo_steps(&self, world: &World, record: &CommandRecord) -> Result<Vec<Step>, String> {
         let schema = &self.registry.schema;
-        let component = |i: u32, bytes: &[u8]| -> Result<(ComponentId, Vec<u8>), String> {
+        let component = |i: u32, bytes: &[u8]| -> Result<(u32, Vec<u8>), String> {
             let (name, then) = record
                 .layouts
                 .components
@@ -406,7 +411,18 @@ impl ScriptHost {
                     .iter()
                     .find(|c| &c.name == name)
                     .ok_or_else(|| format!("component `{name}` no longer exists"))?;
-            Ok((now.id, convert(schema, then, &now.layout, bytes)))
+            let index = self
+                .registry
+                .component(name)
+                .ok_or_else(|| format!("component `{name}` disappeared"))?;
+            Ok((
+                index,
+                if now.json {
+                    bytes.to_vec()
+                } else {
+                    convert(schema, then, &now.layout, bytes)
+                },
+            ))
         };
         let resource = |i: u32, bytes: &[u8]| -> Result<(ComponentId, Vec<u8>), String> {
             let (name, then) = record
@@ -461,7 +477,10 @@ impl ScriptHost {
                             let (id, bytes) = component(*i, bytes)?;
                             Step::Set(*entity, id, bytes)
                         }
-                        None => Step::Remove(*entity, component(*i, &[])?.0),
+                        None => Step::Remove(
+                            *entity,
+                            self.registry.components[component(*i, &[])?.0 as usize].id,
+                        ),
                     });
                 }
                 Applied::Remove {
@@ -492,7 +511,11 @@ impl ScriptHost {
         let comp = |i: u32| self.registry.components.get(i as usize);
         let decode = |i: u32, b: &[u8]| {
             comp(i).map_or(Value::Null, |c| {
-                value::decode(&self.registry.schema, &c.layout, b)
+                if c.json {
+                    serde_json::from_slice(b).unwrap_or(Value::Null)
+                } else {
+                    value::decode(&self.registry.schema, &c.layout, b)
+                }
             })
         };
         let name = |i: u32| comp(i).map_or(Value::Null, |c| Value::String(c.name.clone()));

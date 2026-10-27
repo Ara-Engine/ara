@@ -18,7 +18,8 @@ struct Binding {
     offsets: Vec<(&'static str, usize)>,
 }
 
-/// The engine components exposed to C#, in binding order. The order is part of the
+/// Checked native ECS views used by C#, in binding order. Other engine components
+/// use generated codecs through the simulation registry. Native order is part of the
 /// ABI: it must match the order the C# bindings were generated with, or the layout
 /// hash differs. Use `builtin` for Ara.Runtime's checked-in native views.
 #[derive(Default)]
@@ -74,7 +75,7 @@ impl EngineBindings {
         self
     }
 
-    /// Bound names, in binding order.
+    /// Native view names, in binding order.
     pub fn names(&self) -> Vec<&str> {
         self.items.iter().map(|b| b.name.as_str()).collect()
     }
@@ -143,8 +144,7 @@ mod tests {
 
     #[test]
     fn builtin_views_validate_rust_offsets_and_match_the_generated_abi() {
-        let mut schema = SchemaDb::new();
-        ara_components::register(&mut schema);
+        let schema = ara_runtime::schema(&[]).expect("engine schema");
         let bindings = EngineBindings::builtin();
         let native = bindings
             .resolve(&schema, &mut World::new())
@@ -152,9 +152,10 @@ mod tests {
         let layouts: Vec<_> = native.into_iter().map(|(_, _, layout)| layout).collect();
         let generated = crate::csgen::engine_layouts(&schema, &bindings.names())
             .expect("native view schemas have blittable layouts");
-        assert_eq!(
-            crate::abi::layout_hash(&layouts),
-            crate::abi::layout_hash(&generated)
+        assert_eq!(&generated[..layouts.len()], layouts);
+        assert!(
+            generated.len() > layouts.len(),
+            "accessor contracts participate in the ABI hash"
         );
         assert!(
             crate::csgen::blittable_components(&schema).len() > bindings.names().len(),

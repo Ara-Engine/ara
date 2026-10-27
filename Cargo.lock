@@ -994,6 +994,7 @@ dependencies = [
  "ara-ops",
  "ara-profile",
  "ara-proto",
+ "ara-runtime",
  "ara-schema",
  "ara-ui-document",
  "ara-why",
@@ -1895,10 +1896,13 @@ dependencies = [
 name = "ara-script"
 version = "0.0.1-alpha"
 dependencies = [
+ "ara-cmd",
  "ara-components",
  "ara-diag",
  "ara-profile",
+ "ara-runtime",
  "ara-schema",
+ "ara-sim",
  "bevy_ecs",
  "bevy_tasks",
  "insta",

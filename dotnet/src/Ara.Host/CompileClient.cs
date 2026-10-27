@@ -23,13 +23,13 @@ internal sealed class CompileClient : IDisposable
     internal CompileClient(string serverDll, DevModuleLoader loader)
     {
         _loader = loader;
-        var name = $"ara-compile-{Environment.ProcessId}-{Guid.NewGuid():N}";
+        var name = $"ara-compile-{System.Environment.ProcessId}-{Guid.NewGuid():N}";
         _pipe = new NamedPipeServerStream(name, PipeDirection.InOut, 1, PipeTransmissionMode.Byte, PipeOptions.Asynchronous);
         var appHost = Path.ChangeExtension(serverDll, RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? ".exe" : null);
         var psi = File.Exists(appHost)
             ? new ProcessStartInfo(appHost)
             : new ProcessStartInfo("dotnet") { ArgumentList = { "exec", serverDll } };
-        foreach (var arg in new[] { "--pipe", name, "--parent", Environment.ProcessId.ToString() }) psi.ArgumentList.Add(arg);
+        foreach (var arg in new[] { "--pipe", name, "--parent", System.Environment.ProcessId.ToString() }) psi.ArgumentList.Add(arg);
         psi.UseShellExecute = false;
         psi.RedirectStandardOutput = false;
         psi.RedirectStandardError = false;
@@ -40,7 +40,7 @@ internal sealed class CompileClient : IDisposable
         if (!connect.Wait(TimeSpan.FromSeconds(30)))
             throw new TimeoutException("the compile server did not connect within 30 s");
         Protocol.Send(_pipe, MessageKind.Hello, new Protocol.Writer()
-            .U32(Protocol.Version).U32((uint)Environment.ProcessId).Bool(MetadataUpdater.IsSupported).Str(Capabilities()).ToArray());
+            .U32(Protocol.Version).U32((uint)System.Environment.ProcessId).Bool(MetadataUpdater.IsSupported).Str(Capabilities()).ToArray());
         _reader = new Thread(ReadLoop) { Name = "ara-compile-client", IsBackground = true };
         _reader.Start();
     }

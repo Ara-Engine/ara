@@ -16,7 +16,7 @@ use ara_diag::Diagnostic;
 use bevy_ecs::entity::Entity;
 use bevy_ecs::world::unsafe_world_cell::UnsafeWorldCell;
 
-use crate::abi::{HostApi, ReloadReport};
+use crate::abi::{COMPONENT_HAS, COMPONENT_READ, COMPONENT_WRITE, HostApi, ReloadReport};
 use crate::codes;
 use crate::ecs::cmdbuf::{CmdBuf, Op};
 use crate::host::registry::Registry;
@@ -134,6 +134,7 @@ impl HostCtx {
             reserve_entity: host_reserve_entity,
             cmd_push: host_cmd_push,
             compile_state: host_compile_state,
+            component_json: host_component_json,
         }
     }
 }
@@ -250,6 +251,9 @@ unsafe extern "C" fn host_component_ptr(
     let Ok(cell) = scope.world.get_entity(e) else {
         return std::ptr::null_mut();
     };
+    if comp.json {
+        return std::ptr::null_mut();
+    }
     if comp.layout.size == 0 {
         return if cell.contains_id(comp.id) {
             TAG_BYTES.as_ptr().cast()
@@ -358,4 +362,82 @@ unsafe extern "C" fn host_cmd_push(
 unsafe extern "C" fn host_compile_state(c: *mut c_void, active: u32) {
     // SAFETY: C# passes back the ctx it was given.
     unsafe { ctx(c) }.boost.set(active != 0);
+}
+
+unsafe extern "C" fn host_component_json(
+    c: *mut c_void,
+    entity: u64,
+    component: u32,
+    op: u32,
+    data: *const u8,
+    len: u32,
+    out: *mut u8,
+    cap: u32,
+) -> i32 {
+    // SAFETY: the runtime returns its live context and borrowed spans from HostApi.
+    let c = unsafe { ctx(c) };
+    let Some(scope) = c.current() else {
+        return 0;
+    };
+    let Some(entity_id) = Entity::try_from_bits(entity) else {
+        return 0;
+    };
+    // SAFETY: this callback runs only on the exclusive scope's owning thread.
+    let (world, registry) = unsafe { (scope.world.world_mut(), &*scope.registry) };
+    let Some(comp) = registry.components.get(component as usize) else {
+        return 0;
+    };
+    if op == COMPONENT_HAS {
+        return i32::from(
+            world
+                .get_entity(entity_id)
+                .is_ok_and(|e| e.contains_id(comp.id)),
+        );
+    }
+    let Some(before) = world
+        .resource::<crate::ecs::cmdbuf::ScriptCatalog>()
+        .read(world, entity_id, component)
+    else {
+        return 0;
+    };
+    if op == COMPONENT_READ {
+        let value = if comp.json {
+            before
+        } else {
+            serde_json::to_vec(&crate::value::decode(
+                &registry.schema,
+                &comp.layout,
+                &before,
+            ))
+            .unwrap_or_default()
+        };
+        return write_response(&value, out, cap);
+    }
+    if op != COMPONENT_WRITE {
+        return 0;
+    }
+    // SAFETY: data/len is a readable UTF-8 JSON span for this call.
+    let Ok(value) = serde_json::from_slice(unsafe { bytes(data, len) }) else {
+        return 0;
+    };
+    let encoded = if comp.json {
+        serde_json::to_vec(&value).ok()
+    } else {
+        crate::value::encode(&registry.schema, &comp.layout, &value, &comp.name).ok()
+    };
+    let Some(encoded) = encoded else {
+        return 0;
+    };
+    if let Some(journal) = scope.journal {
+        // SAFETY: the journal is exclusively borrowed for this scope.
+        let journal = unsafe { &mut *journal };
+        if journal.seen.insert((entity, component)) {
+            journal.before.push((entity, component, before));
+        }
+    }
+    world.resource_scope(
+        |world, catalog: bevy_ecs::prelude::Mut<crate::ecs::cmdbuf::ScriptCatalog>| {
+            i32::from(catalog.insert(world, entity_id, component, &encoded))
+        },
+    )
 }

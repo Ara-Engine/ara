@@ -30,6 +30,7 @@ pub(crate) struct ScriptComponent {
     pub id: ComponentId,
     pub layout: StructLayout,
     pub owner: Owner,
+    pub json: bool,
 }
 
 /// A resource or cue declared by C#.
@@ -120,6 +121,7 @@ impl ModuleRecord {
 
 /// Everything registered by the engine and the C# modules.
 pub(crate) struct Registry {
+    pub json: Option<std::sync::Arc<ara_sim::SimRegistry>>,
     pub schema: SchemaDb,
     pub components: Vec<ScriptComponent>,
     pub resources: Vec<ScriptData>,
@@ -155,6 +157,7 @@ pub(crate) fn convert(
 impl Registry {
     pub fn new(schema: SchemaDb) -> Self {
         Registry {
+            json: None,
             schema,
             components: Vec::new(),
             resources: Vec::new(),
@@ -183,6 +186,12 @@ impl Registry {
     /// The catalog the command-buffer code reads from the world.
     pub fn catalog(&self) -> ScriptCatalog {
         ScriptCatalog {
+            json: self.json.clone(),
+            names: self
+                .components
+                .iter()
+                .map(|c| c.json.then(|| c.name.clone()))
+                .collect(),
             components: self
                 .components
                 .iter()

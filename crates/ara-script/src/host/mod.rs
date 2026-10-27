@@ -177,7 +177,7 @@ fn default_log(level: u32, msg: &str) {
 impl ScriptHost {
     /// Starts the C# runtime and binds the engine components.
     ///
-    /// `schema` must contain the engine components in `engine`; C# modules add their
+    /// `schema` contains the complete engine schema (`ara_runtime::schema`); C# modules add their
     /// types to the host's copy ([`ScriptHost::schema`]). On non-Windows platforms call
     /// this before other threads read the environment: EnC needs an environment
     /// variable set before .NET starts.
@@ -197,15 +197,49 @@ impl ScriptHost {
         let resolved = engine
             .resolve(&registry.schema, world)
             .map_err(|d| vec![d])?;
-        let layouts: Vec<_> = resolved.iter().map(|(_, _, l)| l.clone()).collect();
+        let layouts =
+            crate::csgen::engine_layouts(&registry.schema, &engine.names()).map_err(|d| vec![d])?;
         for (name, id, layout) in resolved {
             registry.components.push(ScriptComponent {
                 name,
                 id,
                 layout,
                 owner: Owner::Engine,
+                json: false,
             });
         }
+        let mut codecs = ara_sim::SimRegistry::new(registry.schema.clone())
+            .map_err(|e| vec![Diagnostic::error(codes::BAD_DESCRIPTOR, e.to_string())])?;
+        ara_runtime::register_components(&mut codecs)
+            .map_err(|e| vec![Diagnostic::error(codes::BAD_DESCRIPTOR, e.to_string())])?;
+        let names: Vec<_> = ara_runtime::schema(&[])
+            .map_err(|e| vec![Diagnostic::error(codes::BAD_DESCRIPTOR, e.to_string())])?
+            .components()
+            .map(|t| t.name.clone())
+            .collect();
+        for name in names {
+            if registry.component(&name).is_some() {
+                continue;
+            }
+            if registry.schema.get(&name).is_none() {
+                return Err(vec![Diagnostic::error(
+                    codes::UNKNOWN_COMPONENT,
+                    format!("engine schema is missing `{name}`"),
+                )]);
+            }
+            let id = codecs
+                .install_component(world, &name)
+                .map_err(|e| vec![Diagnostic::error(codes::BAD_DESCRIPTOR, e.to_string())])?;
+            let layout = crate::csgen::binding_layout(&registry.schema, &name);
+            registry.components.push(ScriptComponent {
+                name,
+                id,
+                layout,
+                owner: Owner::Engine,
+                json: true,
+            });
+        }
+        registry.json = Some(std::sync::Arc::new(codecs));
         // Leaked on purpose: see `HostCtx` (one per process, a few hundred bytes).
         let ctx: &'static HostCtx = Box::leak(Box::new(HostCtx::new(
             config.log.unwrap_or_else(|| Box::new(default_log)),
@@ -234,8 +268,12 @@ impl ScriptHost {
                     .map_err(|_| Vec::<Diagnostic>::new())?,
             );
             problems.push(Diagnostic::error(
-                codes::RUNTIME_START,
-                format!("ara_script_init failed with {rc}"),
+                if matches!(rc, 1 | 2) { codes::STALE_BINDINGS } else { codes::RUNTIME_START },
+                if matches!(rc, 1 | 2) {
+                    format!("C# rejected the ABI identity (status {rc}); regenerate bindings and rebuild dotnet/")
+                } else {
+                    format!("ara_script_init failed with {rc}")
+                },
             ));
             return Err(problems);
         }
@@ -739,8 +777,12 @@ impl ScriptHost {
 
     /// A component's value as JSON (agent inspection).
     pub fn read_component(&self, world: &World, entity: Entity, name: &str) -> Option<Value> {
-        let c = &self.registry.components[self.registry.component(name)? as usize];
-        let bytes = cmdbuf::component_bytes(world, entity, c.id, c.layout.size)?;
+        let i = self.registry.component(name)?;
+        let c = &self.registry.components[i as usize];
+        let bytes = world.resource::<ScriptCatalog>().read(world, entity, i)?;
+        if c.json {
+            return serde_json::from_slice(&bytes).ok();
+        }
         Some(value::decode(&self.registry.schema, &c.layout, &bytes))
     }
 
@@ -759,8 +801,15 @@ impl ScriptHost {
             )
         })?;
         let c = &self.registry.components[i as usize];
-        let bytes = value::encode(&self.registry.schema, &c.layout, v, name)?;
-        if cmdbuf::insert_bytes(world, entity, c.id, &bytes) {
+        let bytes = if c.json {
+            serde_json::to_vec(v)
+                .map_err(|e| Diagnostic::error(codes::BAD_DESCRIPTOR, e.to_string()))?
+        } else {
+            value::encode(&self.registry.schema, &c.layout, v, name)?
+        };
+        if world.resource_scope(|world, catalog: Mut<ScriptCatalog>| {
+            catalog.insert(world, entity, i, &bytes)
+        }) {
             Ok(())
         } else {
             Err(Diagnostic::error(

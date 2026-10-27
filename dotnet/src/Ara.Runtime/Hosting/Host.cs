@@ -38,7 +38,13 @@ public static unsafe class Host
         return was;
     }
 
-    internal static void ExitExclusive(bool previous) => t_exclusive = previous;
+    internal static void ExitExclusive(bool previous)
+    {
+        // Successful callbacks flush inside their fault boundary. Failed callbacks
+        // discard copies here, so cleanup cannot write or throw after fault handling.
+        try { if (!previous) EngineAccess.Discard(); }
+        finally { t_exclusive = previous; }
+    }
 
     static void RequireExclusive()
     {
@@ -97,6 +103,35 @@ public static unsafe class Host
     {
         RequireExclusive();
         return s_init.Api.ComponentPtr(s_init.Ctx, entity, component, write ? 1u : 0u);
+    }
+
+    internal static byte[]? ComponentJson(ulong entity, uint component)
+    {
+        RequireExclusive();
+        var buffer = new byte[1024];
+        while (true)
+        {
+            int n;
+            fixed (byte* output = buffer)
+                n = s_init.Api.ComponentJson(s_init.Ctx, entity, component, AbiConst.ComponentRead, null, 0, output, (uint)buffer.Length);
+            if (n == 0) return null;
+            if (n > 0) return buffer.AsSpan(0, n).ToArray();
+            buffer = new byte[-n];
+        }
+    }
+
+    internal static bool ComponentHas(ulong entity, uint component)
+    {
+        RequireExclusive();
+        return s_init.Api.ComponentJson(s_init.Ctx, entity, component, AbiConst.ComponentHas, null, 0, null, 0) != 0;
+    }
+
+    internal static void ComponentWrite(ulong entity, uint component, ReadOnlySpan<byte> json)
+    {
+        RequireExclusive();
+        fixed (byte* data = json)
+            if (s_init.Api.ComponentJson(s_init.Ctx, entity, component, AbiConst.ComponentWrite, data, (uint)json.Length, null, 0) != 1)
+                throw new InvalidOperationException($"component #{component} on {new Entity(entity)} rejected the value");
     }
 
     internal static byte* ResourcePtr(uint resource, bool write)
