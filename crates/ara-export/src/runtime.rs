@@ -37,11 +37,36 @@ pub(crate) fn inputs(
     // A deployed player must never depend on the author's cache or navigation path.
     scene.cache.clear();
     scene.nav_cache = None;
+    validate_portable_scene(&scene)?;
     inputs.push(Input {
         path: ".ara/scene.cbor".into(),
         bytes: scene.encode().map_err(anyhow::Error::msg)?,
     });
     Ok(inputs)
+}
+
+/// The pack keeps authored logical paths and compiled gameplay only. Filesystem
+/// roots belong to authoring/import workers and are never part of player discovery.
+fn validate_portable_scene(scene: &ara_play::PlayScene) -> Result<()> {
+    for document in &scene.documents {
+        ara_pack::validate_path(&document.path)?;
+    }
+    for path in scene.imports.values() {
+        ara_pack::validate_path(path)?;
+    }
+    if let Some(scripts) = &scene.scripts {
+        let ara_play::ScriptHost::NativeAot { manifest } = &scripts.host else {
+            anyhow::bail!("ARA0920: an export cannot include an author-machine script host");
+        };
+        ara_pack::validate_path(manifest)?;
+        ensure!(
+            scripts.host_dir.is_empty()
+                && scripts.compile_server.is_none()
+                && scripts.modules.is_empty(),
+            "ARA0920: an exported script host must not contain SDK/compiler/source paths"
+        );
+    }
+    Ok(())
 }
 
 /// Resolves an entire runtime cohort from the already hash-verified template ZIP.
@@ -69,6 +94,7 @@ pub(crate) fn unpack_template(
             name == executable
                 || name == "engine.json"
                 || name == "SDL3.dll"
+                || name == "THIRD_PARTY_NOTICES.txt"
                 || name == crate::macos::ICON
                 || (entry.is_dir() && matches!(name.as_str(), "resources" | "dotnet"))
                 || name.starts_with("resources/")
@@ -108,6 +134,8 @@ pub(crate) fn unpack_template(
     }
     let player = destination.join(executable);
     ensure!(player.is_file(), "runtime template lacks {executable}");
-    crate::runtime_template::require_shipping_player(&player)?;
+    crate::runtime_template::inventory(&player, destination).context(
+        "ARA-EXP-PREFLIGHT-001: pinned runtime template is missing or has corrupt cooked resources",
+    )?;
     Ok(player)
 }

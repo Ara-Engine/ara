@@ -60,7 +60,7 @@ pub(crate) fn has_menu(args: &Args) -> Result<bool> {
         return Ok(false);
     }
     let root = match &args.standalone.root {
-        Some(root) => root.to_owned(),
+        Some(root) => ara_gpu::cooked::player_data_root(root),
         None => ara_gpu::cooked::install_root().context("player install folder")?,
     };
     if !root.join("ara-launch.json").is_file() {
@@ -95,6 +95,11 @@ pub(crate) fn run(args: Args) -> Result<()> {
         .clone()
         .or(args.standalone.root.clone())
         .unwrap_or_else(|| ara_gpu::cooked::install_root().unwrap_or_default());
+    let root = if args.game.project.is_some() {
+        root
+    } else {
+        ara_gpu::cooked::player_data_root(&root)
+    };
     let initial = if args.game.project.is_some() {
         None
     } else {

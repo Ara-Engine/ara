@@ -100,11 +100,9 @@ fn main() {
     let directory = std::env::var_os("ARA_CRASH_DIR")
         .map(PathBuf::from)
         .unwrap_or_else(|| {
-            // A macOS app runs from `/` with signed contents: use the user's folder.
-            cfg!(target_os = "macos")
-                .then(|| ara_crash::desktop::directory().ok())
-                .flatten()
-                .unwrap_or_else(|| PathBuf::from(".ara/crashes"))
+            // Installed game folders are immutable, including on Windows/Linux.
+            ara_crash::desktop::directory()
+                .unwrap_or_else(|_| std::env::temp_dir().join("ara-player-crashes"))
         });
     let build_id = std::env::var("ARA_BUILD_ID")
         .ok()

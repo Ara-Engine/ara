@@ -1150,31 +1150,33 @@ fn collect_refs(value: &Value, out: &mut BTreeSet<String>) {
     }
 }
 
-fn types_files(root: &Path, dir: &Path, out: &mut Vec<Value>) {
-    let Ok(entries) = std::fs::read_dir(dir) else {
+fn types_files(root: &Path, _dir: &Path, out: &mut Vec<Value>) {
+    use ara_host::project::{AuthoredRole, AuthoredScope, authored_files};
+    let Ok(files) = authored_files(root, &SchemaDb::new()) else {
         return;
     };
-    // A C# module's folder (the project root can be one) holds its generated types,
-    // which the player's host registers itself.
-    let module = dir.join("ara.module.toml").exists();
-    let mut entries: Vec<_> = entries.flatten().collect();
-    entries.sort_by_key(|e| e.path());
-    for entry in entries {
-        let path = entry.path();
-        let name = entry.file_name().to_string_lossy().into_owned();
-        if path.is_dir() {
-            // C# module folders hold generated types the player's host registers itself.
-            if !(name.starts_with('.') || name == "target" || name == "node_modules")
-                && !(path != root && path.join("ara.project.json").exists())
-                && !path.join("ara.module.toml").exists()
-            {
-                types_files(root, &path, out);
-            }
-        } else if name.ends_with(".types.json")
-            && !module
-            && let Some(value) = std::fs::read_to_string(&path)
-                .ok()
-                .and_then(|t| serde_json::from_str(&t).ok())
+    // Legacy generated module schemas are registered by the script host, not twice.
+    let modules: std::collections::BTreeSet<_> = files
+        .iter()
+        .filter(|file| {
+            file.scope == AuthoredScope::Authored
+                && (file.role == AuthoredRole::ScriptModule
+                    || file.path.ends_with("ara.module.toml"))
+        })
+        .filter_map(|file| Path::new(&file.storage_path).parent().map(Path::to_owned))
+        .collect();
+    for file in files {
+        if file.scope != AuthoredScope::Authored
+            || file.role != AuthoredRole::Schema
+            || Path::new(&file.storage_path)
+                .parent()
+                .is_some_and(|parent| modules.contains(parent))
+        {
+            continue;
+        }
+        if let Some(value) = std::fs::read_to_string(root.join(file.storage_path))
+            .ok()
+            .and_then(|text| serde_json::from_str(&text).ok())
         {
             out.push(value);
         }

@@ -5,37 +5,25 @@ use ara_play::RenderSettings;
 /// The pool opens its logical device before a PlayScene is transferred. Read
 /// only this small project policy when creating the pool, ahead of GPU warm-up.
 pub(crate) fn project(root: &std::path::Path) -> Result<RenderSettings, String> {
-    let bytes = match std::fs::read(root.join("ara.project.json")) {
-        Ok(bytes) => bytes,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-            return Ok(RenderSettings::default());
-        }
-        Err(error) => return Err(error.to_string()),
-    };
-    let project: serde_json::Value =
-        serde_json::from_slice(&bytes).map_err(|error| error.to_string())?;
-    project.get("rendering").map_or_else(
+    let settings =
+        ara_host::project_policy::read(root, "rendering").map_err(|error| error.to_string())?;
+    settings.map_or_else(
         || Ok(RenderSettings::default()),
         |settings| {
-            serde_json::from_value(settings.to_owned())
+            serde_json::from_value(settings)
                 .map_err(|error| format!("project rendering settings: {error}"))
         },
     )
 }
 
 pub(crate) fn read(workspace: &Workspace) -> Result<RenderSettings, String> {
-    workspace
-        .doc("pj_project")
-        .and_then(|doc| doc.record("p_settings"))
-        .and_then(|record| record.get("settings"))
-        .and_then(|settings| settings.get("rendering"))
-        .map_or_else(
-            || Ok(RenderSettings::default()),
-            |value| {
-                serde_json::from_value(value.to_owned())
-                    .map_err(|error| format!("project rendering settings: {error}"))
-            },
-        )
+    ara_host::project_policy::policy(workspace, "rendering").map_or_else(
+        || Ok(RenderSettings::default()),
+        |value| {
+            serde_json::from_value(value.to_owned())
+                .map_err(|error| format!("project rendering settings: {error}"))
+        },
+    )
 }
 
 #[cfg(test)]
@@ -43,21 +31,52 @@ pub(crate) fn read(workspace: &Workspace) -> Result<RenderSettings, String> {
 mod tests {
     use super::*;
 
+    fn scratch() -> tempfile::TempDir {
+        let root = std::env::var_os("ARA_TEST_ROOT")
+            .or_else(|| std::env::var_os("CARGO_TARGET_DIR"))
+            .map(std::path::PathBuf::from)
+            .unwrap_or_else(|| {
+                if cfg!(windows) {
+                    std::path::PathBuf::from("D:/AraBuild/ux-hub-evidence")
+                } else {
+                    std::env::temp_dir()
+                }
+            })
+            .join("render-policy-read-tests");
+        std::fs::create_dir_all(&root).expect("scratch root");
+        tempfile::Builder::new()
+            .prefix("render-policy-")
+            .tempdir_in(root)
+            .expect("isolated scratch")
+    }
+
     #[test]
     fn pool_reads_the_project_rt_policy_before_gpu_warmup() {
-        let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("../../target/ara-play-host/render-policy")
-            .join(std::process::id().to_string());
-        std::fs::create_dir_all(&root).unwrap();
+        let temporary = scratch();
+        let root = temporary.path();
         for enabled in [false, true] {
             std::fs::write(root.join("ara.project.json"),
                 ara_json::to_canonical_string(&serde_json::json!({"name":"GPU policy", "rendering":{"quality":"high", "rayTracing":enabled}}))).unwrap();
-            assert_eq!(project(&root).unwrap().ray_tracing, enabled);
+            assert_eq!(project(root).unwrap().ray_tracing, enabled);
             assert_eq!(
-                project(&root).unwrap().quality,
+                project(root).unwrap().quality,
                 ara_play::QualitySetting::High
             );
         }
+        std::fs::create_dir(root.join("settings")).expect("settings fixture");
+        std::fs::write(
+            root.join(ara_host::project_policy::PREFERENCES),
+            r#"{"rendering":{"quality":"medium","rayTracing":false}}"#,
+        )
+        .expect("saved policy");
+        assert_eq!(
+            project(root).expect("saved rendering").quality,
+            ara_play::QualitySetting::Medium
+        );
+        assert!(!project(root).expect("saved RT policy").ray_tracing);
+        std::fs::write(root.join(ara_host::project_policy::PREFERENCES), "{}")
+            .expect("empty overrides");
+        assert!(project(root).expect("legacy fallback").ray_tracing);
     }
     #[test]
     fn uses_current_project_settings_and_rejects_unknown_presets() {

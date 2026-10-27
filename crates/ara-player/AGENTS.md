@@ -7,7 +7,8 @@ Standalone games and S5 Play. Owners authenticate single-use players with `ARA_P
 
 `ara-player --owner <port> [--name slot] [--window] [--size 1280x720] [--gpu-cache dir]
 [--quality auto|low|medium|high|epic] [--ray-tracing[=true|false]]`.
-Without `--owner`, loads `ara-launch.json` beside the executable (or `--root DIR`),
+Without `--owner`, loads `ara-launch.json` in the sibling `data/` (legacy flat and
+macOS `Contents/Resources` roots remain readable; `--root DIR` accepts either),
 reads the authored PlayScene/cooked generations from game.arapack, and opens a game
 borderless desktop-fullscreen window (`--windowed` restores a resizable window). `--headless [--capture PNG] [--ticks N]` captures without a window;
 `--frames N` bounds a windowed probe. Shipped assets never discover or import source
@@ -20,7 +21,7 @@ files. The same World, input mapper, animation/physics and presenters run both m
 `--read entity.Component.field` adds a value to `ARA_RESULT.reads` after simulation;
 repeat it to inspect shipped C# or Rust component fields. Shipping hosts resolve their
 NativeAOT metadata against the export folder; development host paths are rejected.
-Only pooled Play requires the owner token. `build.rs` embeds `assets/brand/icons/game/ara-game.rc`; window creation sets the game 64 px PNG. Exported players retain this default; projects can override with `Window::set_icon`.
+Only pooled Play requires the owner token. `build.rs` embeds `assets/brand/icons/game/ara-game.rc`; window creation sets the game 64 px PNG. Export presets can stamp a custom ICO into Windows players and name/version their copied executable before signing.
 
 Build with `--features tracy` to record literal CPU zones across Play world build, extraction, native instance updates, GPU recording/timeline waits, presentation
 and audio. The optional client starts in the executable; normal builds erase zones.
