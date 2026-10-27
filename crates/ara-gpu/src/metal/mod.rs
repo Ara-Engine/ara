@@ -46,6 +46,7 @@ pub mod present;
 mod reload;
 mod resources;
 mod scratch;
+mod serialized;
 mod tables;
 #[cfg(test)]
 mod tests;

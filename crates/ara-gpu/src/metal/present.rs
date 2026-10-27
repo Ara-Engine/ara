@@ -8,7 +8,7 @@
 //! Scaled presentation and HDR (EDR) output are not implemented yet.
 use super::MetalDevice;
 use super::native::{nil, pool};
-use crate::{Device, GpuError, Image, Queue, Result, TimelinePoint};
+use crate::{Device, GpuError, Image, Queue, Result};
 use ash::vk;
 use objc2::rc::Retained;
 use objc2::runtime::ProtocolObject;
@@ -134,96 +134,50 @@ impl Presenter {
             .nextDrawable()
             .ok_or_else(|| nil("CAMetalLayer nextDrawable"))?;
         let target = drawable.texture();
-        let queue = Queue::Graphics;
-        let point = TimelinePoint {
-            queue,
-            value: gpu.submitted[queue.index()] + 1,
-        };
-        let allocator = match gpu.allocators.pop() {
-            Some(allocator) => allocator,
-            None => gpu
-                .device
-                .newCommandAllocator()
-                .ok_or_else(|| nil("command allocator"))?,
-        };
-        let cmd = gpu
-            .device
-            .newCommandBuffer()
-            .ok_or_else(|| nil("command buffer"))?;
-        cmd.beginCommandBufferWithAllocator(&allocator);
-        let encoder = cmd
-            .computeCommandEncoder()
-            .ok_or_else(|| nil("compute encoder"))?;
-        // Every earlier write to the source on this queue precedes the copy.
-        encoder.barrierAfterQueueStages_beforeStages_visibilityOptions(
-            MTLStages::All,
-            MTLStages::Blit,
-            MTL4VisibilityOptions::Device,
-        );
         let [width, height] = self.size;
-        let extent = MTLSize {
-            width: width as usize,
-            height: height as usize,
-            depth: 1,
-        };
-        let origin = MTLOrigin { x: 0, y: 0, z: 0 };
-        // SAFETY: equally sized BGRA8 textures (checked); the drawable is resident
-        // through the layer's residency set and the source through the device's.
-        unsafe {
-            encoder.copyFromTexture_sourceSlice_sourceLevel_sourceOrigin_sourceSize_toTexture_destinationSlice_destinationLevel_destinationOrigin(
-                &texture, 0, 0, origin, extent, &target, 0, 0, origin,
-            );
-        }
-        if let Some(buffer) = &readback {
-            encoder.barrierAfterEncoderStages_beforeEncoderStages_visibilityOptions(
-                MTLStages::Blit,
-                MTLStages::Blit,
-                MTL4VisibilityOptions::Device,
-            );
-            let row = width as usize * 4;
-            // SAFETY: the readback buffer was created by this device; callers size it
-            // for the whole drawable (tests only).
-            unsafe {
-                encoder.copyFromTexture_sourceSlice_sourceLevel_sourceOrigin_sourceSize_toBuffer_destinationOffset_destinationBytesPerRow_destinationBytesPerImage(
-                    &target, 0, 0, origin, extent, buffer, 0, row, row * height as usize,
-                );
-            }
-        }
-        encoder.endEncoding();
-        cmd.endCommandBuffer();
-        if std::mem::take(&mut gpu.residency_dirty) {
-            gpu.residency.commit();
-        }
-        let native = &gpu.queues[queue.index()];
-        // The source may have been written on the compute queue too.
-        for other in [Queue::Graphics, Queue::Compute] {
-            let value = gpu.submitted[other.index()];
-            if value > 0 {
-                native.waitForEvent_value(
-                    ProtocolObject::from_ref(&*gpu.events[other.index()]),
-                    value,
-                );
-            }
-        }
         let mtl_drawable = ProtocolObject::from_ref(&*drawable);
-        native.waitForDrawable(mtl_drawable);
-        let buffers = [NonNull::from(&*cmd)];
-        // SAFETY: one ended, never-committed command buffer; the array outlives the call.
-        unsafe { native.commit_count(NonNull::from(&buffers[0]), 1) };
-        native.signalDrawable(mtl_drawable);
-        native.signalEvent_value(
-            ProtocolObject::from_ref(&*gpu.events[queue.index()]),
-            point.value,
-        );
+        let point = gpu.submit_serialized(
+            |encoder| {
+                let extent = MTLSize {
+                    width: width as usize,
+                    height: height as usize,
+                    depth: 1,
+                };
+                let origin = MTLOrigin { x: 0, y: 0, z: 0 };
+                // SAFETY: equally sized BGRA8 textures (checked); the drawable is
+                // resident through the layer's residency set and the source through the
+                // device's.
+                unsafe {
+                    encoder.copyFromTexture_sourceSlice_sourceLevel_sourceOrigin_sourceSize_toTexture_destinationSlice_destinationLevel_destinationOrigin(
+                        &texture, 0, 0, origin, extent, &target, 0, 0, origin,
+                    );
+                }
+                if let Some(buffer) = &readback {
+                    encoder.barrierAfterEncoderStages_beforeEncoderStages_visibilityOptions(
+                        MTLStages::Blit,
+                        MTLStages::Blit,
+                        MTL4VisibilityOptions::Device,
+                    );
+                    let row = width as usize * 4;
+                    // SAFETY: the readback buffer was created by this device; callers
+                    // size it for the whole drawable (tests only).
+                    unsafe {
+                        encoder.copyFromTexture_sourceSlice_sourceLevel_sourceOrigin_sourceSize_toBuffer_destinationOffset_destinationBytesPerRow_destinationBytesPerImage(
+                            &target, 0, 0, origin, extent, buffer, 0, row, row * height as usize,
+                        );
+                    }
+                }
+            },
+            |native, before| {
+                if before {
+                    native.waitForDrawable(mtl_drawable);
+                } else {
+                    native.signalDrawable(mtl_drawable);
+                }
+            },
+        )?;
         drawable.present();
-        gpu.submitted[queue.index()] = point.value;
-        gpu.images.get_mut(source)?.last[queue.index()] = point.value;
-        gpu.pending.push(super::Pending {
-            point,
-            allocator,
-            chunks: Vec::new(),
-            timing: None,
-        });
+        gpu.images.get_mut(source)?.last[point.queue.index()] = point.value;
         Device::wait(gpu, point)
     }
 }

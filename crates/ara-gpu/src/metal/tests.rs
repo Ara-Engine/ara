@@ -424,3 +424,45 @@ fn the_cooked_clear_pipeline_resolves_and_names_missing_converter_artifacts() {
         Err(other) => panic!("cooked clear_depth must resolve: {other}"),
     }
 }
+
+#[test]
+fn ui_pixel_readback_returns_one_id_texel_and_rejects_bad_requests() {
+    let mut gpu = device();
+    let id = gpu
+        .create_image(
+            8,
+            4,
+            vk::Format::R32_SFLOAT,
+            vk::ImageUsageFlags::COLOR_ATTACHMENT | vk::ImageUsageFlags::TRANSFER_SRC,
+        )
+        .expect("ID image");
+    let mut rec = gpu.begin(Queue::Graphics);
+    rec.push(Command::BeginRendering {
+        colors: vec![Attachment {
+            image: id,
+            clear: Some([42.5, 0., 0., 0.]),
+        }],
+        depth: None,
+        size: [8, 4],
+    });
+    rec.push(Command::EndRendering);
+    let point = gpu.submit(rec.finish(), &[]).expect("clear");
+    gpu.resolve(point).expect("resolve");
+    // SAFETY: the cleared image is complete and nothing writes it during the call.
+    let texel = unsafe { gpu.read_ui_pixel(id, [7, 3]) }.expect("pick");
+    assert_eq!(f32::from_le_bytes(texel), 42.5);
+    // SAFETY: as above; the request itself is invalid.
+    let outside = unsafe { gpu.read_ui_pixel(id, [8, 0]) };
+    assert!(matches!(outside, Err(GpuError::Contract(_))));
+    let color = gpu
+        .create_image(
+            2,
+            2,
+            vk::Format::R8G8B8A8_UNORM,
+            vk::ImageUsageFlags::TRANSFER_SRC,
+        )
+        .expect("color image");
+    // SAFETY: an idle image; only its format is wrong.
+    let wrong = unsafe { gpu.read_ui_pixel(color, [0, 0]) };
+    assert!(matches!(wrong, Err(GpuError::Contract(_))));
+}
