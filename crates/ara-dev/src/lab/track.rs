@@ -89,8 +89,12 @@ impl Track {
         let worker_name = format!("ara-lab-{name}");
         let run = move || {
             let launch = |executable: &Path| -> Result<Session> {
+                let _power = super::mac::Job::start()?;
                 let _start = activity.starts.lock().expect("player admission");
+                #[cfg(not(target_os = "macos"))]
                 let _activity = activity.gpu.read().expect("lab activity");
+                #[cfg(target_os = "macos")]
+                let _activity = activity.gpu.write().expect("lab activity");
                 let _visual = crate::gpu::visual(600)?;
                 super::daemon::vram()?;
                 Session::launch(
@@ -171,8 +175,12 @@ impl Track {
                 match work {
                     Work::Restart(next, _generation, revision) => {
                         let outcome = (|| -> Result<Session> {
+                            let _power = super::mac::Job::start()?;
                             let _start = activity.starts.lock().expect("player admission");
+                            #[cfg(not(target_os = "macos"))]
                             let _activity = activity.gpu.read().expect("lab activity");
+                            #[cfg(target_os = "macos")]
+                            let _activity = activity.gpu.write().expect("lab activity");
                             let _visual = crate::gpu::visual(600)?;
                             super::daemon::vram()?;
                             Session::launch(
@@ -223,6 +231,7 @@ impl Track {
                     Work::Operation { tool, args, reply } => {
                         let started = std::time::Instant::now();
                         let result = (|| -> Result<Value> {
+                            let _power = super::mac::Job::start()?;
                             let source_current = up_to_date
                                 && applied_revision == requested_revision.load(Ordering::Acquire)
                                 && activity.rust_latest.load(Ordering::Acquire)
@@ -468,10 +477,18 @@ impl Track {
         Ok(self.send.send(Work::Operation { tool, args, reply })?)
     }
     pub fn reload_target(&self) -> Option<super::build::ReloadTarget> {
+        if self.latest["running"] != true {
+            return None;
+        }
         Some(super::build::ReloadTarget {
             pid: self.latest["pid"].as_u64()? as u32,
             control: PathBuf::from(self.latest["directory"].as_str()?).join("control"),
         })
+    }
+    pub fn can_reuse(&self) -> bool {
+        (self.latest["running"] == true || self.latest["starting"] == true)
+            && self.latest["error"].is_null()
+            && self.latest["restart_error"].is_null()
     }
     pub fn view(&self) -> &Path {
         &self.resource_view

@@ -331,7 +331,7 @@ ara-dev lab stop
 `ara-dev lab mcp` is a stdio MCP endpoint for the same daemon: `lab_status`,
 `lab_claim`, `lab_release`, `lab_session`, `lab_reload`, `lab_rebuild`,
 `lab_capture`, `lab_measure`, `lab_variant`, `lab_ab`, `lab_set`, `lab_reference`,
-`lab_logs`, `lab_stop`. MCP stdout contains only
+`lab_logs`, `lab_stop`, `lab_mirror`. MCP stdout contains only
 JSON-RPC. All CLI results are JSON. Track names are independent of agent claims;
 claim overlaps warn and retain both owners. Claims never prevent an edit.
 
@@ -355,7 +355,10 @@ Showcase uses the benchmark export when present at
 `D:/AraBench/builds/ara/showcase/build`; pass `--pack` to select another frozen
 export. Outpost and Hangar reuse perf packs or export scratch sample copies once.
 Showcase's fixed cameras are stage, materials and props, using the sample look's
-matching transforms. Captures and comparisons go under `target/ara-dev/lab/captures`.
+matching transforms. External exports are retained as private content/gameplay
+snapshots under the lab packs cache; executable/symbol copies are omitted. Other
+worktrees and benchmark cleanup cannot remove a running track's restart input.
+Captures and comparisons go under `target/ara-dev/lab/captures`.
 `ARA_LAB_REFERENCES` overrides the reference root (default `D:/AraBench/report/images`);
 each scene has a `cycles/<camera>.png` reference. Missing references are reported.
 The seven Showcase regions are normalized in `crates/ara-dev/src/lab/quality/showcase.json`
@@ -500,6 +503,72 @@ with a ±0.399 ms 95% interval. These are functional/turnaround results, not a c
 performance baseline; the normal CPU policy refused the loaded machine. The
 sampler runs at Normal-equivalent thread priority so BelowNormal builds cannot
 starve monitoring into accepting an unobserved interval.
+
+The warm-restart strategy compares the staged player and its SDL library byte for
+byte. An unchanged player keeps its PID, selection and temporal cache generation.
+A native no-op rebuild took 2.60 s (2.20 s in Cargo) with the same PID and generation.
+Hotpatch strategies opt into this optimization explicitly; a successful patch still
+advances the quality-cache generation even when it requests no restart.
+
+The PC endpoint also owns the Mac mirror:
+
+```powershell
+ara-dev lab mirror --host mac --repo /Users/islam/projects/ara
+ara-dev lab status --platform mac
+ara-dev lab capture --platform mac --quick
+ara-dev lab measure --platform mac --frames 120 --no-wait
+```
+
+Every MCP tool accepts `platform: "pc" | "mac"`. Claims remain shared across both
+machines. Registering a recipe with `platform: "mac"` cooks it on the PC and queues
+selection on the Mac after publication; it does not switch a PC track. `lab_mirror`
+configures host/repo/build_dir/pc_repository and queues synchronization. The peer
+fetches the lab branch and private source-snapshot ref directly from the PC. The
+snapshot uses a private Git index and leaves every agent's branch, index and working
+files intact. A dirty Mac checkout refuses synchronization without discarding edits.
+
+Only changed published cooked files travel over SSH. Active pipeline metadata
+selects the required SPIR-V/metallib/reflection files; obsolete artifact directories
+are excluded. The Mac publishes complete imports under its visual lock, signals
+cohorts last, and hot-swaps native Metal PSOs in a background worker. Layout/state
+changes or failed compilation retain the last good cohort. The Mac never cooks
+shaders. Frozen packs and references are cached under its lab target; Outpost/Hangar
+build their osx-arm64 gameplay image once when needed. Returned captures, crops,
+temporal artifacts and timing reports copy back under the PC's
+`target/ara-dev/lab/mirror/mac/` and tool results use those local paths.
+
+The Mac samples native host/process CPU time and AGX per-client cumulative GPU time
+through the same guard and GPU queue. Missing counters fail closed. WindowServer
+uses the compositor allowance, and foreign nice/BelowNormal builds still count.
+Before each Mac build or player job the peer checks `pmset -g batt`; battery or an
+unknown state refuses with `ARA_LAB_MAC_BATTERY` (ARA6092). A scoped `caffeinate`
+process lasts only for the job. Mac Cargo uses one job at nice 10; a foreign Cargo
+process postpones admission. Free-space admission defaults to 15 GiB for a cold
+player build and 2 GiB for incremental work (`ARA_LAB_MIN_DISK_GIB` overrides it).
+The mirror retries unavailable/battery peers while PC work continues. Tool upgrades
+stop only the endpoint recorded as this mirror's owner, using its authenticated
+control protocol. A pre-existing foreign Mac lab is retained.
+
+The PC proxy smoke test kept status responsive (0.307 s) and captured all three
+cameras in 3.990 s while the unreachable Mac peer retried. All 15 MCP tool schemas
+expose the platform argument.
+
+Mac native build, Metal validation and turnaround measurements are still pending:
+the Mac was on battery at the last successful power query and is currently offline.
+The code and PC-side tests can proceed without waking it or starting a remote build.
+
+An observed agent session (the temporary recipe/source was removed afterward):
+
+```text
+lab_claim lab-smoke: shaders/lab-smoke-post.slang
+edit sibling: post output * LAB_TEST_GAIN; register lab-smoke with define 0.8
+lab_capture: matched region mean 0.242371 baseline -> 0.425025 experiment; FAIL
+lab_ab: four paired windows, B-A +0.000120 ms; 95% [-0.399199, +0.399439]
+result: keep baseline; no timing win, quality regresses
+```
+
+The A/B line is the explicitly relaxed, contended functional run described above;
+its 45.4% mean foreign CPU is recorded. The default guard refused this machine load.
 
 The hotpatch integration seam is `lab::run_with_strategy` and
 `lab::build::ReloadStrategy`: `command` supplies the build, `stage` reads its artifacts

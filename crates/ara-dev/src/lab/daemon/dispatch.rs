@@ -5,12 +5,39 @@ impl Lab {
         let args = request.arguments;
         let name = args["session"].as_str().unwrap_or("default");
         match request.tool.as_str() {
+            "lab_mirror" => {
+                ensure!(!cfg!(target_os = "macos"), "configure the mirror on the PC");
+                let result = super::super::mirror::configure(&self.root, &self.base, &args)?;
+                if let Some(mirror) = &self.mirror {
+                    mirror.notify();
+                }
+                Ok(result)
+            }
+            "_lab_import" => {
+                ensure!(
+                    cfg!(target_os = "macos"),
+                    "cooked imports are accepted only by the Mac peer"
+                );
+                if session::read(&self.base.join("mirror/imported.json"))
+                    .is_some_and(|v| v["directory"] == args["directory"])
+                {
+                    return Ok(json!({"imported":true,"unchanged":true}));
+                }
+                self.pending_import = Some(args);
+                self.activity
+                    .shaders_latest
+                    .store(false, std::sync::atomic::Ordering::Release);
+                Ok(json!({"queued":true,"cook_host":"pc"}))
+            }
             "lab_status" => self.status(),
             "lab_claim" => {
                 let agent = args["agent"].as_str().context("agent required")?;
                 let paths: Vec<String> = serde_json::from_value(args["paths"].clone())?;
                 let warnings = self.claims.claim(agent, &paths)?;
                 self.persist()?;
+                if let Some(mirror) = &self.mirror {
+                    mirror.notify();
+                }
                 Ok(json!({"agent":agent,"warnings":warnings}))
             }
             "lab_release" => {
@@ -18,6 +45,9 @@ impl Lab {
                     .0
                     .remove(args["agent"].as_str().context("agent required")?);
                 self.persist()?;
+                if let Some(mirror) = &self.mirror {
+                    mirror.notify();
+                }
                 Ok(json!({"released":true}))
             }
             "lab_rebuild" => {
@@ -40,29 +70,38 @@ impl Lab {
             "lab_session" => {
                 session::name(name)?;
                 if args["close"] == true {
+                    self.preparing.remove(name);
+                    self.preparation_errors.remove(name);
                     self.sessions.remove(name);
                     self.persist()?;
                     return Ok(json!({"closed":name}));
                 }
                 ensure!(
                     self.sessions.contains_key(name)
-                        || self.sessions.len() < self.max_sessions as usize,
+                        || self.sessions.len()
+                            + self
+                                .preparing
+                                .keys()
+                                .filter(|n| !self.sessions.contains_key(*n))
+                                .count()
+                            < self.max_sessions as usize,
                     "resident player limit reached; stop or reuse a track"
                 );
-                vram()?;
-                let selection =
-                    super::super::scenes::select(&self.root, &self.base, &args, &self.binaries)?;
-                let player = Session::launch(
+                ensure!(
+                    !self.preparing.contains_key(name),
+                    "this track already has a pending scene; inspect lab_status"
+                );
+                let pending = super::super::prepare::Pending::start(
                     &self.root,
                     &self.base,
-                    super::super::session::Session::executable(&self.binaries)?,
-                    name,
-                    selection,
-                    std::sync::Arc::clone(&self.activity),
+                    &args,
+                    &self.binaries,
                 )?;
-                self.sessions.insert(name.into(), player);
-                self.persist()?;
-                self.sessions.get_mut(name).context("new session")?.status()
+                self.preparation_errors.remove(name);
+                self.preparing.insert(name.into(), pending);
+                Ok(
+                    json!({"queued":true,"session":name,"last_good_retained":self.sessions.contains_key(name)}),
+                )
             }
             "lab_variant" => {
                 let variant = args["name"].as_str().context("variant name required")?;
@@ -95,6 +134,10 @@ impl Lab {
                 }
                 if !args["recipe"].is_null() {
                     ensure!(
+                        !cfg!(target_os = "macos"),
+                        "register recipes through the PC endpoint; the PC is the only shader cook host"
+                    );
+                    ensure!(
                         args["promote"] != true,
                         "cook and verify a recipe before promoting it"
                     );
@@ -111,11 +154,17 @@ impl Lab {
                         self.cooks.insert((variant.into(), manifest));
                     }
                     self.variants.save(&self.base)?;
-                    self.pending_variants.insert(name.into(), variant.into());
+                    if args["_cook_only"] != true {
+                        self.pending_variants.insert(name.into(), variant.into());
+                    }
                     return Ok(json!({"queued":true,"variant":variant,"session":name}));
                 }
                 self.variants.ready(variant)?;
                 if args["promote"] == true {
+                    ensure!(
+                        !cfg!(target_os = "macos"),
+                        "promote variants on the PC cook host"
+                    );
                     let packages = self.variants.packages(variant)?;
                     for relative in &packages {
                         self.variants.queued(variant, relative);
@@ -141,5 +190,40 @@ impl Lab {
             }
             _ => bail!("unknown lab tool {}", request.tool),
         }
+    }
+}
+
+impl Lab {
+    pub(super) fn publish_import(&mut self) -> Result<()> {
+        if self.pending_import.is_none() {
+            return Ok(());
+        }
+        let activity = std::sync::Arc::clone(&self.activity);
+        let Ok(_publication) = activity.gpu.try_write() else {
+            return Ok(());
+        };
+        let args = self.pending_import.take().context("pending import")?;
+        super::super::mirror::bundle::import(&self.base, &args)?;
+        self.variants = super::super::variants::Variants::load(&self.base);
+        self.claims = serde_json::from_value(args["claims"].clone())?;
+        for session in self.sessions.values_mut() {
+            let name = session.active_variant();
+            super::super::variants::publish_tree(
+                &super::super::variants::profile(&self.base, &name),
+                session.view(),
+            )?;
+            session.shaders_changed();
+            session.control(
+                json!({"reload_shaders":true,"measure":false}),
+                Duration::from_secs(60),
+            )?;
+        }
+        session::write(&self.base.join("mirror/imported.json"), &args)?;
+        self.activity.shaders_latest.store(
+            args["shaders_current"] != false,
+            std::sync::atomic::Ordering::Release,
+        );
+        self.event("mirror_imported", json!({"directory":args["directory"]}));
+        Ok(())
     }
 }

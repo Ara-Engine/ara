@@ -2,6 +2,10 @@
 use super::*;
 impl Lab {
     pub(super) fn tick_shaders(&mut self) -> Result<()> {
+        if cfg!(target_os = "macos") {
+            self.cooks.clear();
+            return Ok(());
+        }
         let activity = std::sync::Arc::clone(&self.activity);
         let publication = activity.gpu.try_write();
         if publication.is_ok()

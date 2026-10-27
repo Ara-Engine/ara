@@ -27,6 +27,10 @@ pub(crate) trait ReloadStrategy {
     fn publish_superseded(&self) -> bool {
         false
     }
+    /// Full executable strategies can keep a byte-identical live player.
+    fn reuse_unchanged_player(&self) -> bool {
+        false
+    }
     fn command(&self, root: &Path, target: &Path) -> Command;
     /// Patch-only builders can return artifacts without producing a new player executable.
     fn stage(&self, directory: &Path, cache: &Path) -> Result<crate::binaries::Binaries> {
@@ -52,6 +56,9 @@ pub(crate) struct ReloadTarget {
 }
 pub(crate) struct WarmRestart;
 impl ReloadStrategy for WarmRestart {
+    fn reuse_unchanged_player(&self) -> bool {
+        true
+    }
     fn publish_superseded(&self) -> bool {
         true
     }
@@ -59,7 +66,14 @@ impl ReloadStrategy for WarmRestart {
         "rebuild_warm_restart"
     }
     fn command(&self, root: &Path, target: &Path) -> Command {
+        #[cfg(not(target_os = "macos"))]
         let mut cmd = Command::new("cargo");
+        #[cfg(target_os = "macos")]
+        let mut cmd = {
+            let mut c = Command::new("/usr/bin/nice");
+            c.args(["-n", "10", "cargo"]);
+            c
+        };
         cmd.current_dir(root).args([
             "build",
             "--locked",
@@ -69,19 +83,20 @@ impl ReloadStrategy for WarmRestart {
             "--timings",
         ]);
         cmd.args(["--features", "ara-player/fidelity-lab"]);
-        for package in [
-            "ara-player",
-            "ara-shader-cook",
-            "ara-export",
-            "ara-import-worker",
-        ] {
+        for package in ["ara-player", "ara-export", "ara-import-worker"] {
             cmd.args(["-p", package]);
         }
+        #[cfg(not(target_os = "macos"))]
+        cmd.args(["-p", "ara-shader-cook"]);
         cmd.env("CARGO_TARGET_DIR", target)
             .env("CARGO_BUILD_BUILD_DIR", target)
             .env("CARGO_BUILD_JOBS", "4")
             .env("CARGO_INCREMENTAL", "1")
             .env("RUSTC_WRAPPER", "");
+        #[cfg(target_os = "macos")]
+        {
+            cmd.env("CARGO_BUILD_JOBS", "1");
+        }
         background(&mut cmd);
         cmd
     }
@@ -141,6 +156,8 @@ pub(super) fn daemon(command: &mut Command) -> Result<()> {
 }
 
 pub(super) struct Build {
+    disk_checked: Instant,
+    _power: super::mac::Job,
     pub child: crate::process::Tree,
     pub directory: PathBuf,
     pub started: Instant,
@@ -153,16 +170,27 @@ impl Build {
         strategy: &dyn ReloadStrategy,
     ) -> Result<Self> {
         fs::create_dir_all(&directory)?;
+        super::mac::build_disk(target)?;
+        let power = super::mac::Job::start()?;
         let mut command = strategy.command(root, target);
         command
             .stdout(fs::File::create(directory.join("cargo.jsonl"))?)
             .stderr(fs::File::create(directory.join("cargo.log"))?);
         let child = crate::process::Tree::spawn(&mut command)?;
         Ok(Self {
+            disk_checked: Instant::now(),
+            _power: power,
             child,
             directory,
             started: Instant::now(),
         })
+    }
+    pub fn monitor_disk(&mut self, target: &Path) -> Result<()> {
+        if self.disk_checked.elapsed().as_secs() >= 5 {
+            self.disk_checked = Instant::now();
+            super::mac::running_disk(target)?;
+        }
+        Ok(())
     }
     pub fn outcome(
         &self,
@@ -203,18 +231,84 @@ impl Build {
         let player = binaries
             .get_mut("ara-player")
             .context("build did not produce ara-player")?;
+        if let Some(cached) = super::session::read(&base.join("binaries.json"))
+            .and_then(|v| v["ara-player"].as_str().map(PathBuf::from))
+            && same_player(player, &cached)?
+        {
+            *player = cached;
+            return Ok(binaries);
+        }
         let stage = base.join("players").join(super::session::id());
         fs::create_dir_all(&stage)?;
         let destination = stage.join(player.file_name().context("player filename")?);
         fs::copy(&*player, &destination)?;
         if let Some(parent) = player.parent() {
-            let name = "SDL3.dll";
-            if parent.join(name).is_file() {
-                fs::copy(parent.join(name), stage.join(name))?;
+            for name in ["SDL3.dll", "libSDL3.dylib"] {
+                if parent.join(name).is_file() {
+                    fs::copy(parent.join(name), stage.join(name))?;
+                }
             }
         }
         *player = destination;
         ensure!(player.is_file(), "staged player missing");
         Ok(binaries)
+    }
+}
+
+fn same_player(a: &Path, b: &Path) -> Result<bool> {
+    use std::io::Read;
+    let same = |a: &Path, b: &Path| -> Result<bool> {
+        if !a.is_file() || !b.is_file() || fs::metadata(a)?.len() != fs::metadata(b)?.len() {
+            return Ok(false);
+        }
+        let (mut a, mut b) = (fs::File::open(a)?, fs::File::open(b)?);
+        let (mut x, mut y) = ([0_u8; 65536], [0_u8; 65536]);
+        loop {
+            let n = a.read(&mut x)?;
+            b.read_exact(&mut y[..n])?;
+            if x[..n] != y[..n] {
+                return Ok(false);
+            }
+            if n == 0 {
+                return Ok(true);
+            }
+        }
+    };
+    if !same(a, b)? {
+        return Ok(false);
+    }
+    for name in ["SDL3.dll", "libSDL3.dylib"] {
+        let (a, b) = (a.with_file_name(name), b.with_file_name(name));
+        if a.is_file() != b.is_file() || a.is_file() && !same(&a, &b)? {
+            return Ok(false);
+        }
+    }
+    Ok(true)
+}
+
+#[cfg(test)]
+mod reuse_tests {
+    use super::*;
+    #[test]
+    fn executable_and_dynamic_library_must_both_match() -> Result<()> {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../target/lab-tests")
+            .join(super::super::session::id());
+        let (a, b) = (root.join("a/player"), root.join("b/player"));
+        fs::create_dir_all(a.parent().context("parent")?)?;
+        fs::create_dir_all(b.parent().context("parent")?)?;
+        fs::write(&a, [42_u8; 131073])?;
+        fs::copy(&a, &b)?;
+        assert!(same_player(&a, &b)?);
+        fs::write(a.with_file_name("SDL3.dll"), b"first")?;
+        assert!(!same_player(&a, &b)?);
+        fs::copy(a.with_file_name("SDL3.dll"), b.with_file_name("SDL3.dll"))?;
+        assert!(same_player(&a, &b)?);
+        fs::write(b.with_file_name("SDL3.dll"), b"other")?;
+        assert!(!same_player(&a, &b)?);
+        fs::write(&b, b"different")?;
+        assert!(!same_player(&a, &b)?);
+        fs::remove_dir_all(root)?;
+        Ok(())
     }
 }

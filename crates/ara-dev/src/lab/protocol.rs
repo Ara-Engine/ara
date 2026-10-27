@@ -68,13 +68,22 @@ pub(super) fn call(root: &Path, tool: &str, arguments: Value) -> Result<Value> {
     Ok(reply["result"].clone())
 }
 
-fn schema(properties: Value, required: &[&str]) -> Value {
+fn schema(mut properties: Value, required: &[&str]) -> Value {
+    properties["platform"] = json!({"type":"string","enum":["pc","mac"],"default":"pc"});
     json!({"type":"object","properties":properties,"required":required,"additionalProperties":false})
 }
 fn tools() -> Value {
     let string = json!({"type":"string"});
     let session = json!({"type":"string","default":"default"});
     let definitions = [
+        (
+            "lab_mirror",
+            "Configure the PC-owned Mac mirror; AC power is required before remote jobs.",
+            schema(
+                json!({"host":string,"repo":string,"build_dir":string,"pc_repository":string}),
+                &[],
+            ),
+        ),
         (
             "lab_status",
             "Builds, claims, shader errors and resident tracks.",

@@ -316,10 +316,11 @@ pub(super) fn counter_pid(name: &str) -> Option<u32> {
     name.strip_prefix("pid_")?.split('_').next()?.parse().ok()
 }
 fn os_path(load: &Load) -> bool {
-    load.pid == 4 || load.name.eq_ignore_ascii_case("csrss.exe")
+    (load.pid == 4 && load.name.eq_ignore_ascii_case("System"))
+        || load.name.eq_ignore_ascii_case("csrss.exe")
 }
 fn dwm(load: &Load) -> bool {
-    load.name.eq_ignore_ascii_case("dwm.exe")
+    load.name.eq_ignore_ascii_case("dwm.exe") || load.name.eq_ignore_ascii_case("WindowServer")
 }
 
 impl Classifier {

@@ -14,6 +14,7 @@ pub(super) fn render(
     args: &Value,
     activity: &super::track::Activity,
 ) -> Result<Value> {
+    let _power = super::mac::Job::start()?;
     let _reference = activity.references.lock().expect("reference job");
     let scene = args["scene"].as_str().unwrap_or("showcase");
     ensure!(

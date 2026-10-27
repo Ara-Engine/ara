@@ -59,6 +59,8 @@ impl Session {
         cancel: std::sync::Arc<std::sync::atomic::AtomicBool>,
     ) -> Result<Self> {
         self::name(name)?;
+        #[cfg(target_os = "macos")]
+        super::mac::scripts(root, base, &selection.pack, &selection.scene)?;
         let generation = super::generations::pin(base, executable)?;
         let directory = base.join("sessions").join(name).join(id());
         let control = directory.join("control");
@@ -131,6 +133,7 @@ impl Session {
         )
     }
     pub fn control(&mut self, mut request: Value, timeout: Duration) -> Result<Value> {
+        let _power = super::mac::Job::start()?;
         let id = id();
         request["request_id"] = json!(id);
         write(

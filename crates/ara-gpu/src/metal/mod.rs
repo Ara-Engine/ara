@@ -24,8 +24,7 @@
 //!
 //! Shared surfaces (D19) use global IOSurfaces ([`external`]).
 //!
-//! Not yet available: acceleration structures, mesh/task stages,
-//! shader hot reload and HDR output.
+//! Not yet available: acceleration structures, mesh/task stages and HDR output.
 mod abi;
 mod cache;
 #[cfg(test)]
@@ -168,8 +167,7 @@ pub struct MetalDevice {
     waits: crate::vulkan::waits::Counter,
     /// The cooked `ClearDepth` pipeline, loaded on first use.
     clear: Option<clear::Clear>,
-    /// Shader reload provenance (no hot reload on Metal yet, see `reload`).
-    shader_status: vulkan::ShaderStatus,
+    shader_worker: Option<reload::Worker>,
     #[cfg(feature = "fidelity-lab")]
     pub(crate) lab_params: crate::tunables::Registry,
     submission_stats: vulkan::SubmissionStats,
@@ -242,6 +240,11 @@ impl MetalDevice {
         let info = info::device_info(&device);
         // Joined last: a failed creation above never counts as a live device.
         let (compiler, cache) = cache::acquire(&device, cache_dir)?;
+        let shader_worker = if std::env::var_os("ARA_SHADER_DIR").is_some() {
+            Some(reload::Worker::new(device.clone(), compiler.clone())?)
+        } else {
+            None
+        };
         Ok(Self {
             device,
             queues,
@@ -276,7 +279,7 @@ impl MetalDevice {
             timing_window: Default::default(),
             waits: Default::default(),
             clear: None,
-            shader_status: Default::default(),
+            shader_worker,
             #[cfg(feature = "fidelity-lab")]
             lab_params: Default::default(),
             submission_stats: Default::default(),
@@ -477,10 +480,20 @@ impl MetalDevice {
     ) -> Result<Pipeline> {
         let created =
             native::pool(|| pipeline::create(&self.device, &self.compiler, cooked, artifacts))?;
-        self.pipelines.insert(created)
+        let handle = self.pipelines.insert(created)?;
+        if let Some(worker) = &mut self.shader_worker
+            && let Err(error) = worker.track(handle, cooked, artifacts)
+        {
+            self.retire_pipeline(handle)?;
+            return Err(error.into());
+        }
+        Ok(handle)
     }
     /// Invalidate a pipeline identity; release it after all queues complete.
     pub fn retire_pipeline(&mut self, pipeline: Pipeline) -> Result<()> {
+        if let Some(worker) = &self.shader_worker {
+            worker.forget(pipeline);
+        }
         let native = self.pipelines.remove(pipeline)?;
         self.retired.push(Retired::Pipeline {
             _native: native,

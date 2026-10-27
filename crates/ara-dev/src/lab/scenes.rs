@@ -1,4 +1,5 @@
 //! Frozen scene selection; no importing or export ever mutates tracked sample files.
+mod cache;
 use anyhow::{Context, Result, ensure};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -50,26 +51,36 @@ pub(super) fn select(
     let pack = if let Some(path) = args["pack"].as_str() {
         PathBuf::from(path).canonicalize()?
     } else {
-        let mut candidates = vec![
-            base.join("packs").join(scene),
-            root.join("target/ara-dev/perf").join(scene),
-            PathBuf::from(format!("D:/AraBench/builds/ara/{scene}/build")),
-        ];
-        for checkout in std::iter::once(root.to_owned()).chain(common_checkout(root)) {
-            candidates.push(checkout.join("target/ara-dev/perf").join(scene));
-            let folder = checkout.join("target/d26/packs");
-            if let Ok(entries) = fs::read_dir(folder) {
-                let mut packs = entries
-                    .filter_map(|entry| entry.ok())
-                    .map(|entry| entry.path())
-                    .filter(|path| {
-                        path.file_name()
-                            .is_some_and(|f| f.to_string_lossy().starts_with(&format!("{scene}-")))
-                    })
-                    .collect::<Vec<_>>();
-                packs.sort();
-                packs.reverse();
-                candidates.extend(packs);
+        let mut candidates = if scene == "showcase" {
+            vec![
+                base.join("packs/showcase-benchmark"),
+                PathBuf::from("D:/AraBench/builds/ara/showcase/build"),
+            ]
+        } else {
+            vec![
+                base.join("packs").join(scene),
+                root.join("target/ara-dev/perf").join(scene),
+                PathBuf::from(format!("D:/AraBench/builds/ara/{scene}/build")),
+            ]
+        };
+        if scene != "showcase" {
+            for checkout in std::iter::once(root.to_owned()).chain(common_checkout(root)) {
+                candidates.push(checkout.join("target/ara-dev/perf").join(scene));
+                let folder = checkout.join("target/d26/packs");
+                if let Ok(entries) = fs::read_dir(folder) {
+                    let mut packs = entries
+                        .filter_map(|e| e.ok())
+                        .map(|e| e.path())
+                        .filter(|p| {
+                            p.file_name().is_some_and(|f| {
+                                f.to_string_lossy().starts_with(&format!("{scene}-"))
+                            })
+                        })
+                        .collect::<Vec<_>>();
+                    packs.sort();
+                    packs.reverse();
+                    candidates.extend(packs);
+                }
             }
         }
         if let Some(pack) = candidates
@@ -78,6 +89,10 @@ pub(super) fn select(
         {
             pack
         } else {
+            ensure!(
+                !cfg!(target_os = "macos"),
+                "Mac scene pack missing; synchronize PC lab packs with lab mirror before selecting {scene}"
+            );
             freeze(root, base, scene, binaries)?
         }
     };
@@ -86,6 +101,14 @@ pub(super) fn select(
         "{} is not an exported pack",
         pack.display()
     );
+    let cache_name = if !args["pack"].is_null() {
+        format!("{scene}-{}", super::session::id())
+    } else if scene == "showcase" {
+        "showcase-benchmark".into()
+    } else {
+        scene.into()
+    };
+    let pack = cache::retain(base, &cache_name, &pack)?;
     let camera = shots(root, scene)?
         .first()
         .map(|shot| shot["camera"].clone());
@@ -128,6 +151,26 @@ fn freeze(
     scene: &str,
     binaries: &crate::binaries::Binaries,
 ) -> Result<PathBuf> {
+    let mut binaries = binaries.clone();
+    let raw = super::build::default_directory(root).join("perf/ara-player.exe");
+    if cfg!(windows) && raw.is_file() && raw.with_file_name("ara_player.pdb").is_file() {
+        binaries.insert("ara-player".into(), raw);
+    }
+    if scene == "showcase" && Path::new("D:/AraBench/ara/showcase/ara.project.json").is_file() {
+        let staging = base.join("staging").join(super::session::id());
+        super::watch::copy_tree(Path::new("D:/AraBench/ara/showcase"), &staging)?;
+        return crate::perf::freeze::pack(
+            root,
+            base,
+            &base.join("packs/showcase-benchmark"),
+            &staging,
+            &binaries,
+        );
+    }
+    ensure!(
+        scene != "showcase",
+        "Showcase needs its benchmark export or Blender-built author project under D:/AraBench; pass --pack to an existing benchmark export"
+    );
     let sample = if scene == "showcase" {
         "showcase"
     } else {
@@ -145,7 +188,7 @@ fn freeze(
         base,
         &base.join("packs").join(scene),
         &staging,
-        binaries,
+        &binaries,
     )
 }
 
