@@ -166,11 +166,7 @@ impl MetalDevice {
             stamp: None,
             aliases: Vec::new(),
             scopes: attachments::ops(&list.commands, |image| {
-                self.images.get(image).is_ok_and(|i| {
-                    i.raw
-                        .usage
-                        .contains(vk::ImageUsageFlags::TRANSIENT_ATTACHMENT)
-                })
+                self.images.get(image).is_ok_and(|i| i.raw.memoryless())
             })
             .into_iter(),
             passes: 0,

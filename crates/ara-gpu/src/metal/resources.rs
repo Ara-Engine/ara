@@ -27,6 +27,14 @@ pub(super) struct NativeImage {
     pub storage: Option<crate::HeapIndex>,
 }
 
+impl NativeImage {
+    /// A transient attachment in tile memory only, with no allocation to make resident.
+    pub fn memoryless(&self) -> bool {
+        self.usage
+            .contains(vk::ImageUsageFlags::TRANSIENT_ATTACHMENT)
+    }
+}
+
 pub(super) fn buffer(
     device: &ProtocolObject<dyn MTLDevice>,
     size: u64,

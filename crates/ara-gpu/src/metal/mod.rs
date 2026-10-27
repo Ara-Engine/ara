@@ -376,9 +376,12 @@ impl MetalDevice {
     }
     /// Make a created texture resident and give it an arena identity.
     fn adopt_image(&mut self, raw: NativeImage) -> Result<Image> {
-        self.residency
-            .addAllocation(ProtocolObject::from_ref(&*raw.texture));
-        self.residency_dirty = true;
+        // Memoryless (transient) textures have no allocation; residency sets reject them.
+        if !raw.memoryless() {
+            self.residency
+                .addAllocation(ProtocolObject::from_ref(&*raw.texture));
+            self.residency_dirty = true;
+        }
         self.images.insert(Owned::new(raw))
     }
     /// Write a host buffer after every preceding use has completed.
@@ -907,9 +910,11 @@ impl MetalDevice {
                     if let Some(slot) = i.raw.storage {
                         self.tables.storage_images.release(slot);
                     }
-                    self.residency
-                        .removeAllocation(ProtocolObject::from_ref(&*i.raw.texture));
-                    self.residency_dirty = true;
+                    if !i.raw.memoryless() {
+                        self.residency
+                            .removeAllocation(ProtocolObject::from_ref(&*i.raw.texture));
+                        self.residency_dirty = true;
+                    }
                 }
                 Retired::Pipeline { .. } => {}
             }
