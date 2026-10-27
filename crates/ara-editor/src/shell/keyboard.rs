@@ -645,9 +645,12 @@ mod dialog_tests {
         let project = Project::new()?;
         let mut editor = Editor::open(&project.0)?;
         let mut shell = Shell::new(&mut editor, [900., 600.])?;
+        let outside = ara_ui::source::stable_id("search-hierarchy");
+        shell.input.focus(&mut shell.ui, outside)?;
         editor.action("editor.palette", json!({"open":true}))?;
         shell.rebuild(&mut editor)?;
         assert_eq!(shell.modal_root, Some("palette"));
+        assert_eq!(shell.modal_return_focus, Some(outside));
         shell.dialog = Some(Dialog::save_layout());
         shell.rebuild(&mut editor)?;
         assert_eq!(shell.modal_root, Some("dialog"));
@@ -660,6 +663,10 @@ mod dialog_tests {
         shell
             .input
             .focus(&mut shell.ui, ara_ui::source::stable_id("palette-search"))?;
+        editor.action("editor.palette", json!({"open":false}))?;
+        shell.rebuild(&mut editor)?;
+        assert_eq!(shell.modal_root, None);
+        assert_eq!(shell.input.focused(), Some(outside));
         Ok(())
     }
 

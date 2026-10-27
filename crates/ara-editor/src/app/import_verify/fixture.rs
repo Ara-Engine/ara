@@ -105,9 +105,10 @@ pub(super) fn snapshot(editor: &Editor, storage: &str) -> ara_ui::Result<Value> 
         .workspace()
         .docs()
         .map(|(path, doc)| {
+            let canonical=ara_doc::write(doc,editor.host.store().schema());
             (
                 path.to_owned(),
-                Value::String(ara_doc::write(doc, editor.host.store().schema())),
+                json!({"id":doc.id,"kind":doc.kind,"bytes":canonical.len(),"digest":blake3::hash(canonical.as_bytes()).to_hex().to_string()}),
             )
         })
         .collect();
@@ -120,5 +121,8 @@ pub(super) fn snapshot(editor: &Editor, storage: &str) -> ara_ui::Result<Value> 
         .imports()
         .filter_map(|(id, path)| path.strip_prefix(&prefix).map(|name| (name, id)))
         .collect();
-    Ok(json!({"documents":docs,"files":files,"identities":identities}))
+    Ok(
+        json!({"schemaVersion":1,"documentRepresentation":{"algorithm":"blake3","canonicalWriter":"ara_doc::write","keys":"exact workspace paths","source":"canonical documents retained in the isolated fixture"},
+        "fileFingerprintAlgorithm":"fnv1a64","documents":docs,"files":files,"identities":identities}),
+    )
 }

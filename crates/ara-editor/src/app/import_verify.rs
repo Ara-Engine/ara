@@ -94,6 +94,8 @@ pub(super) struct ImportCheck {
     stream_frames: u32,
     recovering: bool,
     cleanup_events: u64,
+    cleanup_capture_pending: bool,
+    cleanup_controls_captured: bool,
 }
 impl ImportCheck {
     pub fn new(editor: &mut Editor, output: &Path) -> ara_ui::Result<Self> {
@@ -135,6 +137,8 @@ impl ImportCheck {
             stream_frames: 0,
             recovering: false,
             cleanup_events: 0,
+            cleanup_capture_pending: false,
+            cleanup_controls_captured: false,
         })
     }
     pub fn finished(&self) -> bool {
@@ -459,6 +463,25 @@ impl ImportCheck {
         shell: &Shell,
         gpu: &mut NativeUi,
     ) -> ara_ui::Result<()> {
+        if self.recovering && self.cleanup_capture_pending {
+            let act = ACTS
+                .get(self.index.saturating_sub(1))
+                .ok_or("Cleanup capture has no owning import case")?;
+            let name = format!("import-{:02}-{}-cleanup-controls", self.index, act.label());
+            gpu.select_target(0);
+            gpu.pixels()?
+                .save(self.output.join(format!("{name}.png")))?;
+            std::fs::write(
+                self.output.join(format!("{name}.layout.json")),
+                ara_json::to_canonical_string(&shell.layout_report()),
+            )?;
+            self.cleanup_capture_pending = false;
+            self.cleanup_controls_captured = true;
+            if let Some(result) = self.results.last_mut() {
+                result["cleanupControlCapture"] = json!({"prefix":name,"nativeTarget":0});
+            }
+            self.write()?;
+        }
         if std::mem::take(&mut self.failed_frame)
             || self.finished()
             || self.recovering
@@ -592,6 +615,8 @@ impl ImportCheck {
         self.stream_frames = 0;
         self.recovering = true;
         self.cleanup_events = 0;
+        self.cleanup_capture_pending = false;
+        self.cleanup_controls_captured = false;
     }
     fn capture(
         &mut self,
@@ -709,7 +734,11 @@ fn click(
         return Ok(false);
     }
     let rect = node.rect.intersection(node.clip);
-    if rect.w <= 2. || rect.h < node.rect.h * 0.8 {
+    if node.rect.w <= 2.
+        || node.rect.h <= 2.
+        || rect.w < node.rect.w * 0.99
+        || rect.h < node.rect.h * 0.99
+    {
         // Finished cards remain reviewable in a real scrolling surface. Use its
         // normal wheel path to reach an owned job instead of clicking through a clip.
         if id.starts_with("asset-import-")
@@ -724,7 +753,11 @@ fn click(
                     scale,
                     events,
                 )?;
-                native_input::wheel(window, if node.rect.y < rect.y { 4. } else { -4. }, events)?;
+                native_input::wheel(
+                    window,
+                    if node.rect.y < rect.y { 0.25 } else { -0.25 },
+                    events,
+                )?;
             }
         }
         return Ok(false);
