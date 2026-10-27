@@ -17,6 +17,8 @@ use crate::{AssetId, Edit, Op, RecordId};
 pub struct Workspace {
     docs: BTreeMap<AssetId, (String, Document)>,
     index: AssetIndex,
+    reference_root: String,
+    project_paths: BTreeSet<String>,
     files: BTreeMap<String, crate::file_state::FileState>,
     file_keys: BTreeMap<String, String>,
     prepared: Option<std::sync::Arc<crate::file_state::PreparedInventory>>,
@@ -156,6 +158,8 @@ impl Workspace {
         Workspace {
             docs: BTreeMap::new(),
             index,
+            reference_root: String::new(),
+            project_paths: BTreeSet::new(),
             files: BTreeMap::new(),
             file_keys: BTreeMap::new(),
             prepared: None,
@@ -219,13 +223,28 @@ impl Workspace {
             .map(|(p, s)| (p.as_str(), s))
     }
 
-    /// Adds or replaces a document at `path` and indexes it.
+    /// Adds or replaces a document, indexing authored assets and retaining project scope.
     pub fn insert(&mut self, path: impl Into<String>, doc: Document) {
         let path = path.into();
         self.insert_with_asset_path(path.clone(), doc, path);
     }
 
-    /// Loads a document at `path` while references to its ID resolve to `asset_path`.
+    /// Loads transactional project metadata without making it an addressable game asset.
+    pub fn insert_project_document(&mut self, path: impl Into<String>, doc: Document) {
+        let path = path.into();
+        self.project_paths.insert(path.clone());
+        self.insert(path, doc);
+    }
+
+    /// Whether this loaded document belongs to project configuration rather than authored content.
+    pub fn is_project_document(&self, id: &str) -> bool {
+        self.docs
+            .get(id)
+            .is_some_and(|(path, _)| self.project_paths.contains(path))
+    }
+
+    /// Loads a document and its source at project-relative storage paths.
+    /// References to its ID omit the workspace's configured authored-root prefix.
     /// Import settings can therefore be saved as a sidecar of their source media.
     pub fn insert_with_asset_path(
         &mut self,
@@ -234,8 +253,22 @@ impl Workspace {
         asset_path: impl Into<String>,
     ) {
         let path = path.into();
-        let kind = (doc.kind != "import").then(|| doc.kind.clone());
-        self.index.insert(doc.id.to_string(), asset_path, kind);
+        let asset_path = asset_path.into();
+        if doc.kind == "project"
+            || (!self.reference_root.is_empty() && !path.starts_with(&self.reference_root))
+        {
+            self.project_paths.insert(path.clone());
+        }
+        if self.project_paths.contains(&path) {
+            self.index.remove(doc.id.as_str());
+        } else {
+            let kind = (doc.kind != "import").then(|| doc.kind.clone());
+            self.index.insert(
+                doc.id.to_string(),
+                self.reference_path(&asset_path).to_owned(),
+                kind,
+            );
+        }
         self.docs.insert(doc.id.clone(), (path, doc));
         self.generation += 1;
     }
@@ -270,6 +303,27 @@ impl Workspace {
         self.docs.get(id).map(|(p, _)| p.as_str())
     }
 
+    /// Sets the physical directory prefix omitted from asset references. Legacy workspaces use an empty prefix.
+    pub fn set_reference_root(&mut self, root: &str) {
+        self.reference_root = if root.is_empty() {
+            String::new()
+        } else {
+            format!("{}/", root.trim_end_matches('/'))
+        };
+    }
+    /// Physical project-relative storage path for an authored-root-relative path.
+    pub fn storage_path(&self, path: &str) -> String {
+        format!("{}{path}", self.reference_root)
+    }
+    /// Authored-root-relative reference path for a physical project-relative storage path.
+    pub fn reference_path<'a>(&self, path: &'a str) -> &'a str {
+        path.strip_prefix(&self.reference_root).unwrap_or(path)
+    }
+    /// The physical directory prefix omitted from references (without a trailing slash).
+    pub fn reference_root(&self) -> &str {
+        self.reference_root.trim_end_matches('/')
+    }
+
     /// Finds a loaded document by asset ID, path or `@path#id` reference.
     pub fn find(&self, key: &str) -> Option<&AssetId> {
         let id = if key.starts_with('@') {
@@ -279,6 +333,8 @@ impl Workspace {
                 .or_else(|| parts.path.and_then(|p| self.index.id_of(p)))?
         } else if self.docs.contains_key(key) {
             key
+        } else if let Some((id, _)) = self.docs.iter().find(|(_, (path, _))| path == key) {
+            id.as_str()
         } else {
             self.index.id_of(key)?
         };
