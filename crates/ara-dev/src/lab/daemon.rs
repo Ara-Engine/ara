@@ -62,10 +62,22 @@ struct Lab {
 }
 impl Lab {
     fn event(&mut self, kind: &str, value: Value) {
-        if ["source_changes", "shader_cook"].contains(&kind)
-            && let Some(mirror) = &self.mirror
-        {
-            mirror.notify();
+        if let Some(mirror) = &self.mirror {
+            if kind == "source_changes"
+                && value.as_array().is_some_and(|paths| {
+                    paths.iter().any(|path| {
+                        path.as_str().is_some_and(|path| {
+                            Path::new(path)
+                                .extension()
+                                .is_some_and(|ext| ext == "rs" || ext == "toml" || ext == "lock")
+                        })
+                    })
+                })
+            {
+                mirror.notify_sources();
+            } else if ["shader_cook", "shader_views_published"].contains(&kind) {
+                mirror.notify();
+            }
         }
         let event = json!({"at":crate::d26::validity::unix_ms().unwrap_or_default(),"kind":kind,"detail":value});
         eprintln!("{event}");

@@ -581,7 +581,12 @@ files intact. A dirty Mac checkout refuses synchronization without discarding ed
 
 Only changed published cooked files travel over SSH. Active pipeline metadata
 selects the required SPIR-V/metallib/reflection files; obsolete artifact directories
-are excluded. The Mac publishes complete imports under its visual lock, signals
+are excluded. Shader publication uses the artifact lane without another source
+snapshot, fetch or tool bootstrap. Rust changes use the source lane. Coalesced
+notifications retain a pending Rust update, and snapshots preserve Git's stat cache
+for unchanged files. Slot grants do not invalidate the already uploaded scene and
+reference inventory. Mirror status reports source, transfer and bootstrap phases.
+The Mac publishes complete imports under its visual lock, signals
 cohorts last, and hot-swaps native Metal PSOs in a background worker. Layout/state
 changes or failed compilation retain the last good cohort. The Mac never cooks
 shaders. Frozen packs and references are cached under its lab target; Outpost/Hangar
@@ -605,9 +610,10 @@ The PC proxy smoke test kept status responsive (0.307 s) and captured all three
 cameras in 3.990 s while the unreachable Mac peer retried. All 15 MCP tool schemas
 expose the platform argument.
 
-Mac native build, Metal validation and turnaround measurements are still pending:
-the Mac was on battery at the last successful power query and is currently offline.
-The code and PC-side tests can proceed without waking it or starting a remote build.
+Mac native build, Metal validation and turnaround measurements are still pending.
+The first native bootstrap exposed a missing libc Mach binding; the guard now uses
+the public system ABI directly. This remains experimental until the native checks
+pass. PC-side tests cover slot refusal without starting any SSH or snapshot job.
 
 Cold scene preparation runs in an owned, cancellable helper, under a scene-cache
 lease and the GPU queue. Opening a track returns `queued:true`; watch

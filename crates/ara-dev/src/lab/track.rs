@@ -57,6 +57,8 @@ pub(super) struct Track {
     dirty: Arc<AtomicBool>,
     base: PathBuf,
     revision: Arc<AtomicU64>,
+    #[cfg(target_os = "macos")]
+    worker: Option<std::thread::JoinHandle<()>>,
 }
 impl Track {
     pub fn launch(
@@ -435,7 +437,9 @@ impl Track {
                 );
             }
         };
-        std::thread::Builder::new().name(worker_name).spawn(run)?;
+        let worker = std::thread::Builder::new().name(worker_name).spawn(run)?;
+        #[cfg(not(target_os = "macos"))]
+        drop(worker);
         Ok(Self {
             selection,
             send,
@@ -448,6 +452,8 @@ impl Track {
             dirty,
             base: cache_base,
             revision,
+            #[cfg(target_os = "macos")]
+            worker: Some(worker),
         })
     }
     pub fn status(&mut self) -> Result<Value> {
@@ -510,5 +516,11 @@ impl Track {
 impl Drop for Track {
     fn drop(&mut self) {
         self.cancel.store(true, Ordering::Release);
+        // Unix child process groups are retired by the worker's owned Session.
+        // Let that destructor run before the daemon exits and abandons its threads.
+        #[cfg(target_os = "macos")]
+        if let Some(worker) = self.worker.take() {
+            let _ = worker.join();
+        }
     }
 }

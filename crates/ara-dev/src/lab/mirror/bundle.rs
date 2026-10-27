@@ -64,6 +64,12 @@ fn shaders(source: &Path, prefix: &str, files: &mut BTreeMap<String, PathBuf>) -
         let name = format!("{prefix}/{}", entry.file_name().to_string_lossy());
         relative(&name)?;
         if ty.is_dir() {
+            // Active metadata adds its own content-addressed artifacts below.
+            let component = entry.file_name();
+            let component = component.to_string_lossy();
+            if component.len() == 64 && component.bytes().all(|c| c.is_ascii_hexdigit()) {
+                continue;
+            }
             shaders(&path, &name, files)?;
             continue;
         }
@@ -156,7 +162,10 @@ pub(super) fn push(
     }
     let mut previous =
         super::super::session::read(&base.join("mirror/uploaded.json")).unwrap_or(json!({}));
-    if previous["_configuration"] != serde_json::to_value(config)? {
+    let configuration = json!({"host":config.host,"repo":config.repo});
+    if previous["_configuration"]["host"] != configuration["host"]
+        || previous["_configuration"]["repo"] != configuration["repo"]
+    {
         previous = json!({});
     }
     let current = files
@@ -241,7 +250,7 @@ pub(super) fn push(
     uploaded["_variants"] = variants;
     uploaded["_shaders_current"] = json!(shaders_current);
     uploaded["_claims"] = claims;
-    uploaded["_configuration"] = serde_json::to_value(config)?;
+    uploaded["_configuration"] = configuration;
     super::super::session::write(&base.join("mirror/uploaded.json"), &uploaded)
 }
 
@@ -381,6 +390,12 @@ mod tests {
         for name in ["a.spv", "a.metallib", "a.metal.json", "orphan.metallib"] {
             fs::write(root.join("key").join(name), b"artifact")?;
         }
+        let obsolete = root.join("f".repeat(64));
+        fs::create_dir_all(&obsolete)?;
+        fs::write(
+            obsolete.join("reflection.json"),
+            br#"{"stages":[{"spirv":"missing"}]}"#,
+        )?;
         let manifest = json!({"stages":[{"spirv":"key/a.spv","metal":{"metallib":"key/a.metallib","reflection":"key/a.metal.json"}}]});
         super::super::super::session::write(&root.join("pipeline.json"), &manifest)?;
         let mut files = BTreeMap::new();

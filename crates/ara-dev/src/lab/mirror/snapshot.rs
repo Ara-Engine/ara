@@ -40,7 +40,9 @@ pub(super) fn create(root: &Path, base: &Path, reference: &str) -> Result<String
         );
         Ok(String::from_utf8(result.stdout)?.trim().to_owned())
     };
-    git(&["read-tree", "HEAD"], None)?;
+    // One-tree merge preserves stat entries for unchanged blobs. A plain read-tree
+    // discarded them and made every shader-only notification rehash cooked archives.
+    git(&["read-tree", "-m", "HEAD"], None)?;
     let mut args = vec!["add", "-A", "--"];
     for item in [
         "Cargo.toml",

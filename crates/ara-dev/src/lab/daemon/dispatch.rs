@@ -9,7 +9,7 @@ impl Lab {
                 ensure!(!cfg!(target_os = "macos"), "configure the mirror on the PC");
                 let result = super::super::mirror::configure(&self.root, &self.base, &args)?;
                 if let Some(mirror) = &self.mirror {
-                    mirror.notify();
+                    mirror.notify_sources();
                 }
                 Ok(result)
             }
@@ -208,7 +208,7 @@ impl Lab {
         self.claims = serde_json::from_value(args["claims"].clone())?;
         for session in self.sessions.values_mut() {
             let name = session.active_variant();
-            super::super::variants::publish_tree(
+            super::super::variants::publish_selection(
                 &super::super::variants::profile(&self.base, &name),
                 session.view(),
             )?;
