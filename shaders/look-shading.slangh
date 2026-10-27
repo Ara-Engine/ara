@@ -268,21 +268,23 @@ float3 ibl(Frame f,Look l,Surface s,float3 world,float3 v,int2 p,bool gathered,b
     if(gathered)r=rays?rtReflection(l,p):screenReflection(f,l,p);
     if(high){
         uint debug=l.captureInfo[1].w;
-        if(!rays)r.a=(debug&CAPTURE_DEBUG_ONLY)!=0?r.a:smoothstep(0.2,0.9,r.a);
         [branch]if(r.a<0.999||debug!=0){
             uint mask=gathered?captureTileMask(f,l,p):l.captureInfo[1].z;
             float4 c=captureReflection(l,world,s.normal,v,(debug&CAPTURE_DEBUG_MIRROR)!=0?0:s.roughness,mask);
             if((debug&CAPTURE_DEBUG_MIRROR)!=0)return c.rgb;
             spec=lerp(spec,c.rgb,c.a);
+            // Under a capture, SSR's low-confidence fringe fades into it smoothly.
+            if(!rays&&(debug&CAPTURE_DEBUG_ONLY)==0)r.a=lerp(r.a,smoothstep(0.2,0.9,r.a),c.a);
             if((debug&CAPTURE_DEBUG_ONLY)!=0)r.a*=1-c.a;
         }
     }
-    if(gathered)spec=lerp(spec,r.rgb,r.a);
     float2 ab=environmentBrdf(nv,s.roughness);float3 specularAlbedo=f0*ab.x+ab.y;
     // Multiple scattering (Fdez-Aguera 2019): the share 1 - Ess that single-scattering
     // GGX loses returns as a diffuse-like lobe tinted by the mean Fresnel and lit by the
     // irradiance; diffuse keeps the energy neither specular term reflects.
     float ess=saturate(ab.x+ab.y);float3 mean=f0+(1-f0)/21;float3 scattered=specularAlbedo*mean*(1-ess)/(1-(1-ess)*mean);
+    // Traced reflections (SSR, RT; `r`) carry their own visibility, so specular
+    // occlusion and the screen bounce fill darken only the probe/sky/capture fallback.
     float3 incident,specular;
     if(high&&gathered){
         // Screen-space ambient light (look-ao.slang aoBitmaskMain; s.ao is the material's
@@ -294,12 +296,12 @@ float3 ibl(Frame f,Look l,Surface s,float3 world,float3 v,int2 p,bool gathered,b
         float3 bounce;float visible=screenAmbient(f,l,p,bounce),ao=min(s.ao,visible);
         float so=specularOcclusion(nv,ao,s.roughness),screenSo=specularOcclusion(nv,visible,s.roughness);
         incident=(ambient*visible+bounce)*multiBounce(min(1,ao/max(visible,1e-4)),s.albedo);
-        specular=(spec*screenSo+bounce*((1-screenSo)/(PI*max(1-visible,0.05))))*multiBounce(min(1,so/max(screenSo,1e-4)),f0);
+        specular=lerp((spec*screenSo+bounce*((1-screenSo)/(PI*max(1-visible,0.05))))*multiBounce(min(1,so/max(screenSo,1e-4)),f0),r.rgb,r.a);
     }else{
         // Multi-bounce for both lobes (Jimenez et al. 2016; F0 for the specular): occluded
         // cavities inter-reflect, so rough metals are not darkened twice (probe lobes
         // already see their surroundings, then ambient occlusion again).
-        incident=ambient*multiBounce(s.ao,s.albedo);specular=spec*multiBounce(specularOcclusion(nv,s.ao,s.roughness),f0);
+        incident=ambient*multiBounce(s.ao,s.albedo);specular=lerp(spec*multiBounce(specularOcclusion(nv,s.ao,s.roughness),f0),r.rgb,gathered?r.a:0);
     }
     float3 diffuse=incident*s.albedo*(1-s.metal)*(1-s.transmission)*(1-specularAlbedo-scattered)/PI;
     return diffuse+specular*specularAlbedo+incident*scattered/PI;
