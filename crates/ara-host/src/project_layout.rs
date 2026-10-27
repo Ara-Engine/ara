@@ -4,6 +4,7 @@ mod migrate;
 mod references;
 
 pub use ara_doc::AUTHORING_ROOT;
+pub use crate::project_policy::{PREFERENCES, PREFERENCES_ID, policy};
 pub use migrate::{Migration, MigrationOp};
 
 use std::{fs, io, path::Path};
@@ -14,10 +15,6 @@ pub const CONTENT: &str = AUTHORING_ROOT;
 pub const MAIN_SCENE: &str = "scenes/main.scene";
 /// Authored project configuration and store-agnostic export presets.
 pub const SETTINGS: &str = "settings";
-/// Flat canonical policy document, authored through ordinary `property.set` commands.
-pub const PREFERENCES: &str = "settings/project.json";
-/// Synthetic identity of the policy document in the host workspace.
-pub const PREFERENCES_ID: &str = "pj_preferences";
 pub(crate) const POLICY_KEYS: &[&str] = &[
     "settings",
     "rendering",
@@ -142,17 +139,6 @@ fn read_object(path: &Path) -> Result<serde_json::Value, ara_diag::Diagnostic> {
         .file(path.display().to_string()));
     }
     Ok(value)
-}
-
-/// Reads a policy container from the current transactional workspace, before disk saves.
-pub fn policy<'a>(workspace: &'a ara_doc::Workspace, key: &str) -> Option<&'a serde_json::Value> {
-    [PREFERENCES_ID, "pj_project"].into_iter().find_map(|id| {
-        workspace
-            .doc(id)
-            .and_then(|doc| doc.record("p_settings"))
-            .and_then(|record| record.get("settings"))
-            .and_then(|settings| settings.get(key))
-    })
 }
 
 /// Initial store-agnostic desktop preset; runtime pins are supplied by an engine release.

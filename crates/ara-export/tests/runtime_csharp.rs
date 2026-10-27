@@ -22,8 +22,16 @@ fn pin(path: &Path) -> Value {
 /// Launch the named application from an unrelated working directory with only
 /// OS runtime paths available; the shipped binary must find its own data.
 fn deployed_command(game: &Path, report: &Path) -> Command {
-    let windows = PathBuf::from(std::env::var_os("SystemRoot").expect("Windows system root"));
     let mut command = Command::new(game.join("ShippingGame.exe"));
+    deployed_environment(&mut command, report);
+    command
+}
+
+fn deployed_environment(command: &mut Command, report: &Path) {
+    let windows = PathBuf::from(std::env::var_os("SystemRoot").expect("Windows system root"));
+    for name in ["profile", "crashes", "temp", "local", "roaming"] {
+        std::fs::create_dir_all(report.join(name)).unwrap();
+    }
     command
         .current_dir(report)
         .env(
@@ -32,6 +40,10 @@ fn deployed_command(game: &Path, report: &Path) -> Command {
         )
         .env("ARA_CONFIG_DIR", report.join("profile"))
         .env("ARA_CRASH_DIR", report.join("crashes"))
+        .env("LOCALAPPDATA", report.join("local"))
+        .env("APPDATA", report.join("roaming"))
+        .env("TEMP", report.join("temp"))
+        .env("TMP", report.join("temp"))
         .env("ARA_DOTNET_SDK", report.join("unavailable-sdk"))
         .env("ARA_DOTNET_ARTIFACTS", report.join("unavailable-sdk"))
         .env("DOTNET_ROOT", report.join("unavailable-dotnet"))
@@ -41,7 +53,6 @@ fn deployed_command(game: &Path, report: &Path) -> Command {
         .env_remove("ARA_SHADER_PACKAGE")
         .env_remove("VULKAN_SDK")
         .env_remove("SLANGC");
-    command
 }
 
 #[test]
@@ -121,14 +132,6 @@ public sealed partial class Spinner : Behaviour
 "#,
     )
     .unwrap();
-    write(
-        &module.join("Gameplay.types.json"),
-        json!({"$schema":"ara://schema/types/1","types":{
-        "Spinner":{"kind":"component","module":"Gameplay","doc":"Counts fixed ticks and rotates its object.",
-        "fields":{"ticks":{"type":"i32","doc":"Completed fixed ticks.","default":0},
-        "owner":{"type":"u64","doc":"Owner sampled through the shipping callback table.","default":0},
-        "targets":{"type":"i32","doc":"Number of renderable targets found through the shipping query.","default":0}}}}}),
-    );
     write(
         &authored.join("prefabs/anchor.prefab"),
         json!({"$schema":"ara://schema/prefab/1","id":"pf_shippinganchor","records":{
@@ -317,6 +320,118 @@ public sealed partial class Spinner : Behaviour
     assert_eq!(windowed["reads"]["e_spinner.Spinner.owner"], json!(7));
     assert_eq!(windowed["reads"]["e_spinner.Spinner.targets"], json!(1));
     write(&scratch.join("continuous-ui.json"), windowed);
+    let powershell = PathBuf::from(std::env::var_os("SystemRoot").unwrap())
+        .join("System32/WindowsPowerShell/v1.0/powershell.exe");
+    let no_arguments = deployed_report.join("no-arguments.json");
+    // Windows PowerShell's legacy C# compiler cannot encode a Unicode TEMP
+    // response path. Keep its scratch ASCII; the game and working dir stay Unicode.
+    let compiler_temp = scratch.join("powershell-temp");
+    std::fs::create_dir_all(&compiler_temp).unwrap();
+    let mut launch = Command::new(powershell);
+    deployed_environment(&mut launch, &deployed_report);
+    launch
+        .env("TEMP", &compiler_temp)
+        .env("TMP", &compiler_temp)
+        .args([
+            "-NoProfile",
+            "-NonInteractive",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-File",
+        ])
+        .arg(engine.join("release/test-isolated-game-launch.ps1"))
+        .arg("-Exe")
+        .arg(moved.join("ShippingGame.exe"))
+        .arg("-WorkingDirectory")
+        .arg(&deployed_report)
+        .arg("-Report")
+        .arg(&no_arguments)
+        .args(["-ExpectedTitle", "ShippingGame"]);
+    tools::run(
+        &mut launch,
+        &scratch.join("no-arguments.log"),
+        Duration::from_secs(120),
+    )
+    .unwrap();
+    let launched: Value = serde_json::from_slice(&std::fs::read(no_arguments).unwrap()).unwrap();
+    assert_eq!(launched["passed"], true);
+    assert_eq!(launched["arguments"], json!([]));
+    assert_eq!(launched["visibleDesktopUsed"], false);
+    assert_eq!(launched["doubleClickVerified"], false);
+    assert_eq!(launched["title"], "ShippingGame");
+    assert_eq!(launched["windowMessageBoundMs"], 1500);
+    assert_eq!(launched["probeGuardMs"], 5000);
+    for field in ["maxPumpLatencyMs", "maxProbeDurationMs"] {
+        assert!(
+            launched[field]
+                .as_f64()
+                .is_some_and(|ms| ms.is_finite() && ms >= 0.0),
+            "invalid {field}: {}",
+            launched[field]
+        );
+    }
+    let iterations = launched["iterations"]
+        .as_array()
+        .expect("per-iteration probe evidence");
+    assert!(
+        !iterations.is_empty(),
+        "launch proof must contain observed probes"
+    );
+    let mut latencies = Vec::new();
+    let mut responsive_sample = false;
+    for sample in iterations {
+        assert!(
+            sample["probeDurationMs"]
+                .as_f64()
+                .is_some_and(|ms| ms.is_finite() && ms >= 0.0),
+            "invalid probe duration: {sample}"
+        );
+        let titles = sample["windowTitles"]
+            .as_array()
+            .expect("observed window titles");
+        let messages = sample["messages"].as_u64().expect("message count");
+        let responsive = sample["responsive"].as_bool().expect("response state");
+        if messages > 0 {
+            let latency = sample["pumpLatencyMs"]
+                .as_f64()
+                .expect("sent WM_NULL has a latency sample");
+            assert!(
+                latency.is_finite() && latency >= 0.0,
+                "invalid message latency: {sample}"
+            );
+            assert!(
+                titles
+                    .iter()
+                    .any(|title| title.as_str() == Some("ShippingGame")),
+                "message response must belong to ShippingGame: {sample}"
+            );
+            latencies.push(latency);
+            responsive_sample |= responsive;
+        } else {
+            assert!(
+                !responsive,
+                "responsiveness requires an observed message: {sample}"
+            );
+            assert!(
+                sample["pumpLatencyMs"].is_null(),
+                "unprobed windows have no message latency: {sample}"
+            );
+        }
+    }
+    assert!(
+        !latencies.is_empty(),
+        "launch proof must contain finite message latency observations"
+    );
+    assert!(
+        responsive_sample,
+        "ShippingGame must answer an observed WM_NULL probe"
+    );
+    assert!(
+        launched["desktop"]
+            .as_str()
+            .unwrap()
+            .starts_with("ara-export-")
+    );
     let manifest_path = moved.join("data/game/scripts.json");
     let manifest: Value = serde_json::from_slice(&std::fs::read(&manifest_path).unwrap()).unwrap();
     let mut stale = manifest.clone();

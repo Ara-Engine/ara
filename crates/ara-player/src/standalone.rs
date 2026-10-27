@@ -48,6 +48,7 @@ pub(super) struct Options {
 #[derive(Deserialize)]
 struct Launch {
     contract: String,
+    name: Option<String>,
     pack: String,
     encryption_key_env: Option<String>,
 }
@@ -150,7 +151,11 @@ pub(super) fn run(args: Args, began: Instant) -> Result<()> {
             Arc::clone(&scene),
             source,
             startup::Settings {
-                name: &args.name,
+                name: launch
+                    .name
+                    .as_deref()
+                    .filter(|name| !name.trim().is_empty())
+                    .unwrap_or(&args.name),
                 size,
                 cache: &args.gpu_cache,
                 quality,
