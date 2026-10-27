@@ -1228,7 +1228,7 @@ Fixes:
 owner: ara-crash, ara-export
 shown as: ARA-EXP-CRASH-004
 
-Native capture could not install its handler or start the out-of-process monitor. Doctor also uses this code to describe Windows/Linux capture support and the disabled-by-default upload policy.
+Native capture could not install its handler or start the out-of-process monitor. Doctor also uses this code to describe Windows/Linux/macOS capture support and the disabled-by-default upload policy.
 
 Causes:
 - A crash handler is already installed in the process.
@@ -1238,7 +1238,7 @@ Causes:
 Fixes:
 - Install capture once and retain its guard for the player lifetime; release the previous guard before reinstalling.
 - Keep monitor argument dispatch in the shipped executable and inspect process-launch permissions and the reported startup error.
-- Use the native capture implementation on Windows or Linux.
+- Use the native capture implementation on Windows, Linux or macOS.
 
 ## ARA8100 crash::CRASH_005: Matching debug symbols unavailable
 owner: ara-crash, ara-export

@@ -11,6 +11,13 @@ pub fn directory() -> Result<PathBuf> {
             std::env::var_os("LOCALAPPDATA").map(|dir| PathBuf::from(dir).join("Ara/crashes"))
         })
         .or_else(|| {
+            // macOS keeps per-user application data under Library, beside Ara's settings.
+            cfg!(target_os = "macos")
+                .then(|| std::env::var_os("HOME"))
+                .flatten()
+                .map(|dir| PathBuf::from(dir).join("Library/Application Support/Ara/crashes"))
+        })
+        .or_else(|| {
             std::env::var_os("XDG_STATE_HOME").map(|dir| PathBuf::from(dir).join("ara/crashes"))
         })
         .or_else(|| {

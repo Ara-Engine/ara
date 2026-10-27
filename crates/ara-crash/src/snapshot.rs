@@ -1,12 +1,17 @@
-//! Panic snapshots use ordinary IPC: minidumper's fatal request closes its client.
+//! Panic snapshots: a minidump paired with a panic record while the process may keep
+//! running. minidumper's dump request ends its client, so Windows and Linux send the
+//! crash context as an ordinary message, and macOS (whose context is Mach ports that
+//! only a Mach message can carry) dumps through a second, short-lived client.
 use anyhow::{Context, Result};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 pub(crate) fn thread(context: &crash_handler::CrashContext) -> u32 {
     #[cfg(windows)]
     return context.thread_id;
     #[cfg(target_os = "linux")]
     return context.tid as u32;
+    #[cfg(target_os = "macos")]
+    return context.thread;
 }
 
 pub(crate) fn current_thread() -> u32 {
@@ -24,8 +29,15 @@ pub(crate) fn current_thread() -> u32 {
         // SAFETY: gettid takes no arguments and returns this calling thread's ID.
         unsafe { libc::syscall(libc::SYS_gettid) as u32 }
     }
+    #[cfg(target_os = "macos")]
+    {
+        // SAFETY: pthread_self is this live thread's handle; the lookup adds no port
+        // reference. The name matches the thread port the exception message carries.
+        unsafe { libc::pthread_mach_thread_np(libc::pthread_self()) }
+    }
 }
 
+#[cfg(any(windows, target_os = "linux"))]
 pub(crate) fn request(client: &minidumper::Client, context: &crash_handler::CrashContext) -> bool {
     #[cfg(windows)]
     let bytes = {
@@ -43,7 +55,9 @@ pub(crate) fn request(client: &minidumper::Client, context: &crash_handler::Cras
     client.send_message(2, bytes).is_ok() && client.ping().is_ok()
 }
 
-pub(crate) fn write(directory: &Path, name: &str, bytes: &[u8]) -> Result<()> {
+/// The dump path paired with panic record `name` (`<stem>.crash.json` -> `<stem>.dmp`),
+/// which `symbols::symbolize` finds beside the record.
+pub(crate) fn path(directory: &Path, name: &str) -> Result<PathBuf> {
     anyhow::ensure!(
         !name.contains(['/', '\\', ':']) && name.ends_with(".crash.json"),
         "invalid panic snapshot name"
@@ -57,7 +71,12 @@ pub(crate) fn write(directory: &Path, name: &str, bytes: &[u8]) -> Result<()> {
             && stem.bytes().all(|b| b.is_ascii_digit() || b == b'-'),
         "invalid panic snapshot identifier"
     );
-    let path = directory.join(format!("{stem}.dmp"));
+    Ok(directory.join(format!("{stem}.dmp")))
+}
+
+#[cfg(any(windows, target_os = "linux"))]
+pub(crate) fn write(directory: &Path, name: &str, bytes: &[u8]) -> Result<()> {
+    let path = path(directory, name)?;
     let mut file = std::fs::OpenOptions::new()
         .create_new(true)
         .write(true)
@@ -96,4 +115,58 @@ fn dump(bytes: &[u8], file: &mut std::fs::File) -> Result<()> {
     writer.set_crash_context(minidump_writer::CrashContextExt { inner: context });
     writer.write(file)?;
     Ok(())
+}
+
+/// A macOS panic snapshot: the panic hook arms a connected client, raises a simulated
+/// exception and waits; the crash callback dumps through that client and wakes it.
+/// crash-handler delivers macOS exceptions on its own thread, never in a signal
+/// handler, so the callback may lock here.
+#[cfg(target_os = "macos")]
+#[derive(Default)]
+pub(crate) struct Pending {
+    client: std::sync::Mutex<Option<minidumper::Client>>,
+    done: std::sync::Mutex<bool>,
+    finished: std::sync::Condvar,
+}
+
+#[cfg(target_os = "macos")]
+impl Pending {
+    /// Hold the client the next simulated exception dumps through.
+    pub(crate) fn arm(&self, client: minidumper::Client) {
+        if let Ok(mut done) = self.done.lock() {
+            *done = false;
+        }
+        if let Ok(mut slot) = self.client.lock() {
+            *slot = Some(client);
+        }
+    }
+    /// Crash-callback side: dump through the armed client (the monitor then drops
+    /// it), and wake the waiting panic hook either way.
+    pub(crate) fn request(&self, context: &crash_handler::CrashContext) -> bool {
+        let client = self.client.try_lock().ok().and_then(|mut slot| slot.take());
+        let dumped = client.is_some_and(|client| client.request_dump(context).is_ok());
+        if let Ok(mut done) = self.done.lock() {
+            *done = true;
+            self.finished.notify_all();
+        }
+        dumped
+    }
+    /// Panic-hook side: wait up to `timeout` for the callback, then drop an unused
+    /// client. True when the snapshot request ran.
+    pub(crate) fn wait(&self, timeout: std::time::Duration) -> bool {
+        let done = self
+            .done
+            .lock()
+            .ok()
+            .and_then(|done| {
+                self.finished
+                    .wait_timeout_while(done, timeout, |done| !*done)
+                    .ok()
+            })
+            .is_some_and(|(done, _)| *done);
+        if let Ok(mut slot) = self.client.lock() {
+            slot.take();
+        }
+        done
+    }
 }

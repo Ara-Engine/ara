@@ -4,7 +4,7 @@
 mod capture;
 pub mod desktop;
 mod report;
-#[cfg(any(windows, target_os = "linux"))]
+#[cfg(any(windows, target_os = "linux", target_os = "macos"))]
 mod snapshot;
 #[cfg(feature = "symbols")]
 pub mod symbols;
