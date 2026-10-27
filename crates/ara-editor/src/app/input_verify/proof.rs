@@ -31,7 +31,7 @@ pub(super) fn snapshot(shell: &Shell) -> Value {
         })
         .map(|node| json!({"id":node.element.id,"rect":node.rect,"clip":node.clip}))
         .collect();
-    json!({"host":host(shell),"focus":shell.input.focused().and_then(|id|shell.ui.by_id(id)).map(|i|shell.ui.nodes[i].element.id.as_str()),"capture":shell.input.captured(),"focusGraph":shell.input.focus_graph(&shell.ui),"composing":shell.native_input.composing(),"modifiers":format!("{:?}",shell.native_input.modifiers()),"fields":fields,"bounds":bounds})
+    json!({"host":host(shell),"focus":shell.input.focused().and_then(|id|shell.ui.by_id(id)).map(|i|shell.ui.nodes[i].element.id.as_str()),"capture":shell.input.captured(),"focusGraph":shell.input.focus_graph(&shell.ui),"composing":shell.native_input_state().composing(),"modifiers":format!("{:?}",shell.native_input_state().modifiers()),"fields":fields,"bounds":bounds})
 }
 
 pub(super) fn frame_checks(act: Act, age: u32, shell: &Shell) -> Vec<Value> {
@@ -52,7 +52,7 @@ pub(super) fn frame_checks(act: Act, age: u32, shell: &Shell) -> Vec<Value> {
         (Act::FocusLoss, 1) => Some((
             "the pending button genuinely held capture and right Shift",
             shell.input.captured() == Some(stable_id("kit-open-prompt"))
-                && shell.native_input.modifiers().shift,
+                && shell.native_input_state().modifiers().shift,
         )),
         (Act::FocusLoss, 2) => Some((
             "native focus-loss immediately clears capture without closing the scope",
@@ -114,7 +114,7 @@ pub(super) fn checks(
             );
             check(
                 "Unicode preedit is displayed and tracked",
-                shell.native_input.composing()
+                shell.native_input_state().composing()
                     && field(shell, "kit-text").is_some_and(|text| {
                         text.display().contains(PREEDIT) && text.preedit_range().is_some()
                     }),
@@ -123,7 +123,7 @@ pub(super) fn checks(
         Act::Cancel => {
             check(
                 "Escape cancels composition and restores committed display",
-                !shell.native_input.composing()
+                !shell.native_input_state().composing()
                     && field(shell, "kit-text")
                         .is_some_and(|text| text.value() == "Stable" && text.display() == "Stable"),
             );
@@ -139,7 +139,7 @@ pub(super) fn checks(
             );
             check(
                 "lost modifiers make Tab forward",
-                shell.native_input.modifiers() == Default::default()
+                shell.native_input_state().modifiers() == Default::default()
                     && shell.input.focused() == Some(stable_id("kit-text")),
             );
             check(

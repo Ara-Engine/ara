@@ -83,6 +83,10 @@ impl Host {
         Ok(())
     }
 
+    #[allow(
+        clippy::too_many_arguments,
+        reason = "acceptance host borrows the production owners without copying them"
+    )]
     pub fn key(
         &mut self,
         ui: &mut Ui,

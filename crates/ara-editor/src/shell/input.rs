@@ -2,6 +2,10 @@ use super::*;
 use ara_ui::input::InputEvent;
 use ara_ui_text::Clipboard;
 impl Shell {
+    /// Read-only native semantic state for diagnostics and offscreen verification.
+    pub(crate) fn native_input_state(&self) -> &ara_ui::native_input::Router {
+        &self.native_input
+    }
     /// SDL is the editor's sole committed-text ingress on every native surface.
     pub(crate) fn native_text(
         &mut self,
