@@ -40,9 +40,9 @@ pub(super) fn create(root: &Path, base: &Path, reference: &str) -> Result<String
         );
         Ok(String::from_utf8(result.stdout)?.trim().to_owned())
     };
-    // One-tree merge preserves stat entries for unchanged blobs. A plain read-tree
-    // discarded them and made every shader-only notification rehash cooked archives.
-    git(&["read-tree", "-m", "HEAD"], None)?;
+    // Index-only merge keeps cached stats without comparing a private snapshot's
+    // old HEAD to the caller's working files. No worktree update is requested.
+    git(&["read-tree", "-m", "-i", "HEAD"], None)?;
     let mut args = vec!["add", "-A", "--"];
     for item in [
         "Cargo.toml",
@@ -123,6 +123,36 @@ mod tests {
             "live work\n"
         );
         assert_eq!(create(&root, &base, "refs/ara-lab/test")?, commit);
+        // Commits outside the staged source roots and deleted experiments must
+        // not make the next private-index reset reject the real working tree.
+        std::fs::write(root.join(".gitignore"), "target/\nignored/\n")?;
+        git(&[
+            "commit",
+            "--quiet",
+            "--only",
+            "-m",
+            "Ignore cache",
+            ".gitignore",
+        ])?;
+        std::fs::remove_file(root.join("crates/fixture/sibling.slang"))?;
+        let index = std::fs::read(root.join(".git/index"))?;
+        let head = git(&["rev-parse", "HEAD"])?;
+        let next = create(&root, &base, "refs/ara-lab/test")?;
+        assert_eq!(
+            git(&["show", &format!("{next}:.gitignore")])?,
+            "target/\nignored/\n"
+        );
+        assert!(
+            git(&["ls-tree", "-r", "--name-only", &next])?
+                .lines()
+                .all(|path| !path.ends_with("sibling.slang"))
+        );
+        assert_eq!(std::fs::read(root.join(".git/index"))?, index);
+        assert_eq!(git(&["rev-parse", "HEAD"])?, head);
+        assert_eq!(
+            std::fs::read_to_string(root.join("crates/fixture/lib.rs"))?,
+            "live work\n"
+        );
         std::fs::remove_dir_all(root)?;
         Ok(())
     }

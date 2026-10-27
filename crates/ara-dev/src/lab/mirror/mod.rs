@@ -232,17 +232,24 @@ fn sync(
     if let Some(pending) = super::session::read(&base.join("mirror/selections.json"))
         && let Some(pending) = pending.as_object()
     {
+        let mut remaining = pending.clone();
+        let variants = super::variants::Variants::load(base);
         for (track, name) in pending {
             let name = name.as_str().context("pending variant name")?;
-            super::variants::Variants::load(base).ready(name)?;
+            // Registration can precede its cook. Publication notifies us again;
+            // pending or failed experiments must not force a Rust source sync.
+            if variants.ready(name).is_err() {
+                continue;
+            }
             transport::rpc(
                 &config,
                 base,
                 "lab_variant",
                 json!({"session":track,"name":name}),
             )?;
+            remaining.remove(track);
         }
-        super::session::write(&base.join("mirror/selections.json"), &json!({}))?;
+        super::session::write(&base.join("mirror/selections.json"), &remaining)?;
     }
     super::session::write(
         &base.join("mirror/peer.json"),

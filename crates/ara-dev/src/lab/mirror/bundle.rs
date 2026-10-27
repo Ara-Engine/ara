@@ -201,6 +201,10 @@ pub(super) fn push(
         names.push(name.as_str());
     }
     drop(_snapshot);
+    // A claim/recipe-only publication still needs a valid, empty archive.
+    if names.is_empty() {
+        names.push(".");
+    }
     fs::write(job.join("files.txt"), names.join("\n") + "\n")?;
     let archive = job.join("changed.tar");
     let mut tar = Command::new("tar");
