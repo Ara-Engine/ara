@@ -27,14 +27,14 @@ internal sealed class CompileClient : IDisposable
         // exceeds the 104-byte socket path limit, so other platforms use a short rooted
         // path, which .NET takes verbatim on both ends.
         var name = OperatingSystem.IsWindows()
-            ? $"ara-compile-{Environment.ProcessId}-{Guid.NewGuid():N}"
-            : $"/tmp/ara-{Environment.ProcessId}-{Guid.NewGuid():N}";
+            ? $"ara-compile-{System.Environment.ProcessId}-{Guid.NewGuid():N}"
+            : $"/tmp/ara-{System.Environment.ProcessId}-{Guid.NewGuid():N}";
         _pipe = new NamedPipeServerStream(name, PipeDirection.InOut, 1, PipeTransmissionMode.Byte, PipeOptions.Asynchronous);
         var appHost = Path.ChangeExtension(serverDll, RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? ".exe" : null);
         var psi = File.Exists(appHost)
             ? new ProcessStartInfo(appHost)
             : new ProcessStartInfo("dotnet") { ArgumentList = { "exec", serverDll } };
-        foreach (var arg in new[] { "--pipe", name, "--parent", Environment.ProcessId.ToString() }) psi.ArgumentList.Add(arg);
+        foreach (var arg in new[] { "--pipe", name, "--parent", System.Environment.ProcessId.ToString() }) psi.ArgumentList.Add(arg);
         psi.UseShellExecute = false;
         psi.RedirectStandardOutput = false;
         psi.RedirectStandardError = false;
@@ -45,7 +45,7 @@ internal sealed class CompileClient : IDisposable
         if (!connect.Wait(TimeSpan.FromSeconds(30)))
             throw new TimeoutException("the compile server did not connect within 30 s");
         Protocol.Send(_pipe, MessageKind.Hello, new Protocol.Writer()
-            .U32(Protocol.Version).U32((uint)Environment.ProcessId).Bool(MetadataUpdater.IsSupported).Str(Capabilities()).ToArray());
+            .U32(Protocol.Version).U32((uint)System.Environment.ProcessId).Bool(MetadataUpdater.IsSupported).Str(Capabilities()).ToArray());
         _reader = new Thread(ReadLoop) { Name = "ara-compile-client", IsBackground = true };
         _reader.Start();
     }
@@ -93,6 +93,7 @@ internal sealed class CompileClient : IDisposable
 
     void ReadLoop()
     {
+        using var binding = _loader.Activate();
         try
         {
             while (Protocol.Receive(_pipe) is { } msg)
@@ -121,9 +122,9 @@ internal sealed class CompileClient : IDisposable
                 }
             }
         }
-        catch (Exception e) when (!_closing)
+        catch (Exception e)
         {
-            Diag.Report(AraCodes.CompileServer, "error", $"compile server connection failed: {e.Message}");
+            if (!_closing) Diag.Report(AraCodes.CompileServer, "error", $"compile server connection failed: {e.Message}");
         }
         finally
         {
@@ -139,7 +140,7 @@ internal sealed class CompileClient : IDisposable
         try { Protocol.Send(_pipe, MessageKind.Shutdown, []); } catch (IOException) { }
         if (!_server.WaitForExit(2000))
         {
-            try { _server.Kill(entireProcessTree: true); } catch (InvalidOperationException) { }
+            try { _server.Kill(); } catch (InvalidOperationException) { }
         }
         _pipe.Dispose();
         _reader.Join(2000);

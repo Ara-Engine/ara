@@ -1,19 +1,16 @@
-//! `Components.g.cs` and `Units.g.cs`: blittable C# views of the engine components in
+//! `Components.g.cs` and `Units.g.cs`: typed C# views of the engine components in
 //! the Schema DB. Units, ranges, replication, defaults and docs become attributes and
 //! XML docs, so the inspector, agents and IntelliSense read the same metadata.
 
-use std::collections::BTreeSet;
 use std::fmt::Write as _;
 
-use ara_schema::{
-    Audience, FieldDesc, Interpolate, SchemaDb, Shape, StructLayout, TypeDesc, Unit, ValueType,
-};
+use ara_schema::{Audience, FieldDesc, Interpolate, SchemaDb, TypeDesc, Unit, ValueType};
 use serde_json::Value;
 
-use super::cs::{HEADER, doc, doc_tag, literal, number, pascal_camel};
+use super::cs::{HEADER, doc, literal, number, pascal_camel};
 
-/// The C# type of a blittable schema type.
-fn cs_type(db: &SchemaDb, ty: &ValueType) -> Result<String, String> {
+/// The C# storage type of a reflected engine value.
+pub(super) fn cs_type(db: &SchemaDb, ty: &ValueType) -> Result<String, String> {
     Ok(match ty {
         ValueType::Bool => "bool".into(),
         ValueType::U8 => "byte".into(),
@@ -29,9 +26,13 @@ fn cs_type(db: &SchemaDb, ty: &ValueType) -> Result<String, String> {
         ValueType::Vec4 => "Vector4".into(),
         ValueType::Quat => "Quaternion".into(),
         ValueType::Color => "Color".into(),
-        ValueType::Entity => "Entity".into(),
+        ValueType::Entity | ValueType::String | ValueType::Asset(_) => "string?".into(),
+        ValueType::Json => "JsonElement".into(),
+        ValueType::Option(t) => format!("{}?", cs_type(db, t)?.trim_end_matches('?')),
+        ValueType::List(t) | ValueType::Keyed(t) => format!("{}[]", cs_type(db, t)?),
+        ValueType::Map(t) => format!("Dictionary<string, {}>", cs_type(db, t)?),
         ValueType::Named(n) if db.get(n).is_some() => n.clone(),
-        other => return Err(format!("`{other}` has no blittable C# view")),
+        other => return Err(format!("`{other}` has no generated C# type")),
     })
 }
 
@@ -39,6 +40,12 @@ fn cs_type(db: &SchemaDb, ty: &ValueType) -> Result<String, String> {
 fn default_args(v: &Value) -> Option<String> {
     match v {
         Value::Bool(b) => Some(b.to_string()),
+        Value::Number(n)
+            if n.as_u64().is_some_and(|n| n > (1 << 53))
+                || n.as_i64().is_some_and(|n| n < -(1 << 53)) =>
+        {
+            None
+        }
         Value::Number(n) => n.as_f64().map(number),
         Value::String(s) => Some(literal(s)),
         Value::Array(items) => items
@@ -50,8 +57,22 @@ fn default_args(v: &Value) -> Option<String> {
     }
 }
 
-fn field_attributes(f: &FieldDesc) -> Vec<String> {
+pub(super) fn field_attributes(db: &SchemaDb, f: &FieldDesc) -> Vec<String> {
     let mut attrs = Vec::new();
+    if f.editor.color || f.editor.hdr || f.editor.temperature {
+        let mut args = Vec::new();
+        if f.editor.hdr {
+            args.push("Hdr = true");
+        }
+        if f.editor.temperature {
+            args.push("Temperature = true");
+        }
+        attrs.push(if args.is_empty() {
+            "ColorPicker".into()
+        } else {
+            format!("ColorPicker({})", args.join(", "))
+        });
+    }
     if let Some(u) = f.unit {
         attrs.push(format!("Unit({})", literal(u.symbol())));
     }
@@ -77,8 +98,24 @@ fn field_attributes(f: &FieldDesc) -> Vec<String> {
         }
         attrs.push(format!("Replicate({})", args.join(", ")));
     }
-    if let Some(args) = f.default.as_ref().and_then(default_args) {
-        attrs.push(format!("Default({args})"));
+    if !f.required {
+        let default = db.field_default(f);
+        let args = if matches!(
+            f.ty,
+            ValueType::Option(_)
+                | ValueType::List(_)
+                | ValueType::Keyed(_)
+                | ValueType::Map(_)
+                | ValueType::Json
+        ) {
+            None
+        } else {
+            default_args(&default)
+        };
+        attrs.push(match args {
+            Some(args) => format!("Default({args})"),
+            None => format!("Default(Json = {})", literal(&ara_json_text(&default))),
+        });
     }
     for alias in &f.aliases {
         attrs.push(format!("FormerlySerializedAs({})", literal(alias)));
@@ -90,8 +127,14 @@ fn field_attributes(f: &FieldDesc) -> Vec<String> {
 }
 
 /// The `<remarks>` line: what the attributes say, in words, for tooltips.
-fn field_remarks(db: &SchemaDb, f: &FieldDesc) -> String {
+pub(super) fn field_remarks(db: &SchemaDb, f: &FieldDesc) -> String {
     let mut parts = Vec::new();
+    if f.editor.hdr {
+        parts.push("HDR colour; values may exceed one.".into());
+    }
+    if f.editor.temperature {
+        parts.push("Colour picker supports temperature in Kelvin.".into());
+    }
     if let Some(u) = f.unit {
         parts.push(format!("Unit: {}.", u.symbol()));
     }
@@ -99,7 +142,9 @@ fn field_remarks(db: &SchemaDb, f: &FieldDesc) -> String {
         parts.push(format!("Range: {r}."));
     }
     let default = db.field_default(f);
-    if !default.is_object() {
+    if f.required {
+        parts.push("Required.".into());
+    } else {
         parts.push(format!("Default: {}.", ara_json_text(&default)));
     }
     match f.replicate.audience {
@@ -114,7 +159,7 @@ fn ara_json_text(v: &Value) -> String {
     serde_json::to_string(v).unwrap_or_default()
 }
 
-fn write_enum(o: &mut String, t: &TypeDesc) {
+pub(super) fn write_enum(o: &mut String, t: &TypeDesc) {
     doc(o, "", &t.doc);
     let _ = writeln!(o, "public enum {} : uint\n{{", t.name);
     for (i, v) in t.variants().iter().enumerate() {
@@ -124,112 +169,9 @@ fn write_enum(o: &mut String, t: &TypeDesc) {
     o.push_str("}\n\n");
 }
 
-/// Writes one blittable struct. `index` is the script component index for engine
-/// components, `None` for nested value structs.
-fn write_struct(
-    o: &mut String,
-    db: &SchemaDb,
-    t: &TypeDesc,
-    layout: &StructLayout,
-    index: Option<usize>,
-) -> Result<(), String> {
-    doc(o, "", &t.doc);
-    let _ = writeln!(
-        o,
-        "[StructLayout(LayoutKind.Explicit, Size = {})]",
-        layout.size
-    );
-    match index {
-        Some(_) => {
-            let _ = writeln!(
-                o,
-                "[EngineComponent({}, Module = {})]",
-                literal(&t.name),
-                literal(&t.module)
-            );
-            let _ = writeln!(o, "public partial struct {0} : IComponent<{0}>\n{{", t.name);
-        }
-        None => {
-            let _ = writeln!(o, "public partial struct {}\n{{", t.name);
-        }
-    }
-    for (f, fl) in t.fields().iter().zip(&layout.fields) {
-        doc(o, "    ", &f.doc);
-        doc_tag(o, "    ", "remarks", &field_remarks(db, f));
-        let mut attrs = vec![format!("FieldOffset({})", fl.offset)];
-        attrs.extend(field_attributes(f));
-        let _ = writeln!(
-            o,
-            "    [{}] public {} {};",
-            attrs.join(", "),
-            cs_type(db, &f.ty)?,
-            pascal_camel(&f.name)
-        );
-    }
-    if let Some(i) = index {
-        let _ = writeln!(
-            o,
-            "\n    /// <summary>Script component index: engine components are numbered in binding order.</summary>\n    public static uint TypeIndex => {i};"
-        );
-    }
-    o.push_str("}\n\n");
-    Ok(())
-}
-
-/// Named types reachable from `layouts` (nested structs and enums), sorted by name.
-fn nested_types(db: &SchemaDb, layouts: &[StructLayout]) -> BTreeSet<String> {
-    let mut seen = BTreeSet::new();
-    let mut stack: Vec<String> = layouts
-        .iter()
-        .flat_map(|l| l.fields.iter().flat_map(|f| f.ty.named()))
-        .map(str::to_owned)
-        .collect();
-    while let Some(n) = stack.pop() {
-        if !seen.insert(n.clone()) {
-            continue;
-        }
-        if let Some(t) = db.get(&n) {
-            stack.extend(
-                t.fields()
-                    .iter()
-                    .flat_map(|f| f.ty.named())
-                    .map(str::to_owned),
-            );
-        }
-    }
-    seen
-}
-
-/// Renders `Components.g.cs` for the engine components (`layouts`, in binding order).
-pub fn render(db: &SchemaDb, layouts: &[StructLayout]) -> Result<String, String> {
-    let mut o = String::from(HEADER);
-    o.push_str(
-        "using System.Numerics;\nusing System.Runtime.InteropServices;\n\nnamespace Ara;\n\n",
-    );
-    for (i, l) in layouts.iter().enumerate() {
-        let t = db
-            .get(&l.name)
-            .ok_or_else(|| format!("unknown type `{}`", l.name))?;
-        write_struct(&mut o, db, t, l, Some(i))?;
-    }
-    for name in nested_types(db, layouts) {
-        let t = db
-            .get(&name)
-            .ok_or_else(|| format!("unknown type `{name}`"))?;
-        match &t.shape {
-            Shape::Enum { .. } => write_enum(&mut o, t),
-            Shape::Struct { .. } => {
-                let l = db.struct_layout(&name)?;
-                write_struct(&mut o, db, t, &l, None)?;
-            }
-        }
-    }
-    o.push_str("/// <summary>Engine component names in binding order (index = <c>TypeIndex</c>).</summary>\n");
-    o.push_str("public static class EngineComponents\n{\n    /// <summary>Schema names, by script component index.</summary>\n    public static readonly string[] Names = [");
-    let names: Vec<String> = layouts.iter().map(|l| literal(&l.name)).collect();
-    o.push_str(&names.join(", "));
-    o.push_str("];\n}\n");
-    Ok(o)
+/// Renders every engine component and its reachable value types.
+pub fn render(db: &SchemaDb, native: &[&str]) -> Result<String, String> {
+    super::values::render(db, native)
 }
 
 /// Renders `Units.g.cs`: the unit symbols `[Unit]` accepts.

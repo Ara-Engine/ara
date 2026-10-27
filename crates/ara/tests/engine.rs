@@ -307,6 +307,11 @@ fn docs_llms_writes_versioned_pages() {
     let (code, out, _) = ara_in(&root, &["docs", "--llms", "--json"]);
     assert_eq!(code, 0, "{out}");
     let docs = root.join(".ara/docs");
+    let reference: Value =
+        serde_json::from_str(&fs::read_to_string(docs.join("docs.json")).expect("structured docs"))
+            .expect("docs JSON");
+    assert_eq!(reference["format"], "ara.docs/1");
+    assert!(reference["types"]["Light"]["csharpExamples"].is_array());
     let llms = fs::read_to_string(docs.join("llms.txt")).expect("llms.txt");
     assert!(llms.starts_with("# Ara · "));
     assert!(llms.contains(&format!(

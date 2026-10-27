@@ -3,21 +3,20 @@
 The C# host (D11, A13): C# gameplay code (components, systems, behaviours, commands)
 on the Rust engine, with layered hot reload (L1-L4), cross-module references, NativeAOT for
 shipping and the `ara_run` agent worker. The C# side lives in `dotnet/` (see `dotnet/AGENTS.md`).
-Depends on ara-schema, ara-diag, ara-components, bevy_ecs 0.20, netcorehost, libloading, windows-sys.
+Depends on ara-schema, ara-diag, ara-components, ara-runtime, ara-sim, bevy_ecs, netcorehost, libloading, windows-sys.
 
 ## Public API
 
 - `engine_bindings()`: the canonical ordered engine columns exposed to C# (currently
-  `Transform`), shared by the runtime, export hash and checked-in binding generation.
-  A new schema does not expose Rust storage until it has an explicit checked binding.
-
-- `abi` (ABI v2): `HostInit` (+ `HostApi`, Rust → C#) and `ScriptApi` (C# → Rust), `Tick`,
+  checked native `Transform`), shared by the runtime, export hash and checked-in binding generation.
+  A direct pointer view requires an explicit checked binding; other components use codecs.
+- `abi` (ABI v3): `HostInit` (+ `HostApi`, Rust → C#) and `ScriptApi` (C# → Rust), `Tick`,
   `Frame`, `SystemCall`, `BehaviourCall`, `CommandCall`, `ReloadReport` (kind, escalation,
   origin, cascade size, per-phase µs), the `ABI_CONSTS` (`RELOAD_*`, `ESC_*`, `ORIGIN_*`) and
   `layout_hash(engine_layouts)`. Entry point: `ara_script_init(*const HostInit, *mut ScriptApi)`.
 - `csgen`: Rust → C# (`csharp(db, engine)`, `write`, `stale`, `blittable_components`):
   `Abi.g.cs`, `Components.g.cs`, `Units.g.cs`, `Codes.g.cs`.
-- `ScriptHost` (per process; one .NET runtime):
+- `ScriptHost` (per world; simultaneous hosts share one process-level CLR):
   - `start(ScriptConfig, SchemaDb, &EngineBindings, &mut World)`;
     `ScriptConfig::jit(ara_host_dir)` (+ `compile_server`) or `::native_aot(lib)`.
   - `shipping::ScriptManifest`: portable NativeAOT library, ABI/layout identity and
@@ -34,8 +33,18 @@ Depends on ara-schema, ara-diag, ara-components, bevy_ecs 0.20, netcorehost, lib
     `modules` (heat), `set_heat`, `compiling()`, `diag(DIAG_*)`, `shutdown() -> leaked generations`.
 - `ModuleSpec { name, dir, assembly, watch, hot, references, profile }` from `ara.module.toml`
   (`references = ["Core"]`, `profile = "gameplay" | "editor"`: the API allowlist, ARA05xx).
-- `EngineBindings::builtin()` shares Ara.Runtime's native view list with codegen;
-  schema blittability alone does not establish a Rust component's native layout.
+- Binding design: native `Transform` keeps its checked pointer view. Every other engine
+  component gets a generated typed struct and AOT-safe JSON codec. `World.Get/Read/Set`
+  dispatch through `IComponent<T>`; callback-local copies flush in first-access order
+  before returning to Rust. `HostApi.component_json` uses `SimRegistry`'s typed/dynamic
+  ECS codecs, including default materialization and validation; no shadow gameplay store.
+  Strings/assets/entity references use schema text, lists use arrays, maps use ordinal
+  dictionaries, nested records/enums have generated codecs. `Commands.Add/Remove` share
+  the normal deterministic command buffer, journaling, rejection rollback and undo.
+  Raw `[Query]` columns still require validated native views; accessor components use
+  World access in behaviours/commands. Schema blittability alone never proves Rust layout.
+  `layout_hash` includes all engine fields and nested records/enums; project/module
+  types do not change the engine ABI. L3 column migration keeps engine storage intact.
 - `EngineBindings` + `bind_component!`, `run` (`RunPool`/`RunWorker`), `value`, `codes`
   (`ARA0900`–`ARA0999`), `register_tick_thread()`.
 
@@ -70,8 +79,9 @@ Depends on ara-schema, ara-diag, ara-components, bevy_ecs 0.20, netcorehost, lib
 - Behaviours and commands run with exclusive world access published to C# as a `Scope`
   (`host/ctx.rs`). Commands journal first-seen bytes; rejection or a fault restores them;
   `undo` is all or nothing and converts saved bytes across layout migrations.
-- Rust never holds pointers into module code: ids (`slot << 16 | index`) into C# tables
-  swapped at tick boundaries.
+- Every `ScriptApi` call carries `HostInit.ctx` as a host handle. C# owns per-host
+  loaders, slots, pending queues, faults and type indexes; scoped thread bindings route
+  callbacks (including compiler-reader threads). Shutdown removes only that handle.
 
 ## Integration (ara-runtime-script)
 
@@ -96,7 +106,8 @@ Depends on ara-schema, ara-diag, ara-components, bevy_ecs 0.20, netcorehost, lib
 
 ## Testing
 
-- `cargo test -p ara-script` builds `dotnet/Ara.slnx` (Release) once per test binary.
+- `cargo test -p ara-script` builds `dotnet/Ara.slnx` (Release) per test binary;
+  `ARA_DOTNET_PREBUILT=1` reuses one explicit solution build for a focused batch.
   - `generated`: generator snapshot, checked-in bindings fresh (`ARA_UPDATE_GENERATED=1`).
   - `host`: registration, systems over chunks, behaviours, commands + undo, faults (prebuilt).
   - `reload`: v1 L1/L3 path. `levels`: L1/L2/L3 edits against a running game.
@@ -109,7 +120,6 @@ Depends on ara-schema, ara-diag, ara-components, bevy_ecs 0.20, netcorehost, lib
   prints a p50/p95 phase table per level and the system CPU load during the run.
 
 ## Gotchas
-
 - One .NET runtime per process. `DOTNET_MODIFIABLE_ASSEMBLIES=debug` (EnC) is set before
   it starts; on non-Windows, start the host before other threads read the environment.
 - bevy stores entity indexes complemented (`NonMaxU32`): raw bits 0 are never valid.
@@ -120,15 +130,13 @@ Depends on ara-schema, ara-diag, ara-components, bevy_ecs 0.20, netcorehost, lib
   relink of the same bytes: ~1 ms). Loading from a file pays Defender's on-access scan
   instead (same cost). Only smaller modules, L1/L2, or a Defender exclusion (the user's call) avoid it.
 - NativeAOT publish needs `vswhere.exe` on PATH (`tests/support::publish_aot` adds it).
-- `HostCtx` is leaked (one per process): C# threads may call back after `shutdown`.
-- Tags (empty structs) are 1 byte in C#; per-frame code must not allocate or lock.
-
+- `HostCtx` is leaked per host for late callback safety; CLR/images remain mapped.
+- Tags are 1 byte in C#. Native chunk loops stay allocation-free; variable-value access
+  allocates callback-local copies. Keep bulk hot loops in native views.
 ## Measurements (`reload_bench`, 7800X3D shared with other agents' builds)
-
 5.2k-line module, 20k entities, 60 Hz; edits rotate L1, L2 (a new method), L3 (a signature
 change). v1 = `218d449` measured with the same bench (its additive edits take L3). Two
 interleaved rounds; system CPU busy during each run in brackets. p50 / p95, ms:
-
 | | v1 [48%, 28%] | v2 [35%, 39%] |
 |---|---|---|
 | L3 save→visible | 313 / 386, 265 / 334 | 282 / 299, 285 / 334 |
@@ -138,6 +146,5 @@ interleaved rounds; system CPU busy during each run in brackets. p50 / p95, ms:
 | L3 load (AMSI) | 143 / 178, 136 / 144 | 134 / 144, 137 / 162 |
 | L3 generators | 13 / 33, 11 / 28 | 18 / 47, 16 / 41 |
 | L3 rest: detect, parse, transfer, pre-JIT, register, boundary, first tick (p50 sum) | 33, 25 | 20, 24 |
-
 The L3 floor here is emit (~100 ms) plus the AMSI scan (~140 ms). Earlier v1 runs at 61–71%
 CPU measured L3 427 / 614. Tick p99 2.5 ms during reloads; no leaked generations.

@@ -10,6 +10,8 @@
     <Project Path="src/Ara.RunWorker/Ara.RunWorker.csproj" />
   </Folder>
   <Folder Name="/samples/">
+    <Project Path="examples/Ara.Examples/Ara.Examples.csproj" />
+    <Project Path="examples/Ara.CommandExamples/Ara.CommandExamples.csproj" />
     <Project Path="samples/Outpost.Sample/Outpost.Sample.csproj" />
     <Project Path="samples/Outpost.Sample.Aot/Outpost.Sample.Aot.csproj" />
   </Folder>

@@ -1,5 +1,6 @@
 using System.Runtime.InteropServices;
 using System.Text;
+using System.Collections.Concurrent;
 
 namespace Ara.Hosting;
 
@@ -10,6 +11,11 @@ namespace Ara.Hosting;
 /// </summary>
 internal static unsafe class Exports
 {
+    // Routing infrastructure only; each entry owns one world's dispatch and callbacks.
+    static readonly ConcurrentDictionary<nint, ScriptRuntime> Runtimes = new();
+    internal static bool Register(void* handle, ScriptRuntime runtime) => Runtimes.TryAdd((nint)handle, runtime);
+    static ScriptRuntime Resolve(void* handle) => Runtimes.TryGetValue((nint)handle, out var runtime)
+        ? runtime : throw new InvalidOperationException("script host is stopped or unknown");
     internal static void Fill(ScriptApi* api)
     {
         api->LoadModules = &LoadModules;
@@ -25,72 +31,77 @@ internal static unsafe class Exports
     }
 
     [UnmanagedCallersOnly]
-    static int LoadModules(byte* json, uint len)
+    static int LoadModules(void* host, byte* json, uint len)
     {
-        try { return ScriptRuntime.LoadModules(Encoding.UTF8.GetString(json, (int)len)); }
-        catch (Exception e) { Report(e); return 99; }
+        try { var runtime = Resolve(host); using var binding = runtime.Activate(); return runtime.LoadModules(Encoding.UTF8.GetString(json, (int)len)); }
+        catch (Exception e) { Report(host, e); return 99; }
     }
 
     [UnmanagedCallersOnly]
-    static uint TickBoundary(Tick* tick)
+    static uint TickBoundary(void* host, Tick* tick)
     {
-        try { return ScriptRuntime.ApplyPending(); }
-        catch (Exception e) { Report(e); return 0; }
+        try { var runtime = Resolve(host); using var binding = runtime.Activate(); return runtime.ApplyPending(); }
+        catch (Exception e) { Report(host, e); return 0; }
     }
 
     [UnmanagedCallersOnly]
-    static uint HasPending() => ScriptRuntime.HasPending ? 1u : 0u;
+    static uint HasPending(void* host)
+    {
+        try { return Resolve(host).HasPending ? 1u : 0u; }
+        catch { return 0; }
+    }
 
     /// <summary>One boundary crossing per chunk; faults are contained in <see cref="ScriptRuntime.RunSystem"/>.</summary>
     [UnmanagedCallersOnly]
-    static int RunSystem(SystemCall* call)
+    static int RunSystem(void* host, SystemCall* call)
     {
-        try { return ScriptRuntime.RunSystem(call); }
+        try { var runtime = Resolve(host); using var binding = runtime.Activate(); return runtime.RunSystem(call); }
         catch { return AbiConst.RunFaulted; }
     }
 
     [UnmanagedCallersOnly]
-    static int RunBehaviours(BehaviourCall* call)
+    static int RunBehaviours(void* host, BehaviourCall* call)
     {
-        try { return ScriptRuntime.RunBehaviours(call); }
+        try { var runtime = Resolve(host); using var binding = runtime.Activate(); return runtime.RunBehaviours(call); }
         catch { return AbiConst.RunFaulted; }
     }
 
     [UnmanagedCallersOnly]
-    static int RunCommand(CommandCall* call)
+    static int RunCommand(void* host, CommandCall* call)
     {
-        try { return ScriptRuntime.RunCommand(call); }
+        try { var runtime = Resolve(host); using var binding = runtime.Activate(); return runtime.RunCommand(call); }
         catch { return AbiConst.RunFaulted; }
     }
 
     [UnmanagedCallersOnly]
-    static int SetHeat(uint module, uint hot)
+    static int SetHeat(void* host, uint module, uint hot)
     {
-        try { return ScriptRuntime.Loader?.SetHeat(module, hot != 0) ?? -1; }
-        catch (Exception e) { Report(e); return 99; }
+        try { var runtime = Resolve(host); using var binding = runtime.Activate(); return runtime.Loader.SetHeat(module, hot != 0); }
+        catch (Exception e) { Report(host, e); return 99; }
     }
 
     [UnmanagedCallersOnly]
-    static int RequestCompile(byte* json, uint len)
+    static int RequestCompile(void* host, byte* json, uint len)
     {
-        try { return ScriptRuntime.Loader?.RequestCompile(Encoding.UTF8.GetString(json, (int)len)) ?? -1; }
-        catch (Exception e) { Report(e); return 99; }
+        try { var runtime = Resolve(host); using var binding = runtime.Activate(); return runtime.Loader.RequestCompile(Encoding.UTF8.GetString(json, (int)len)); }
+        catch (Exception e) { Report(host, e); return 99; }
     }
 
     [UnmanagedCallersOnly]
-    static ulong DiagCounter(uint key)
+    static ulong DiagCounter(void* host, uint key)
     {
         try
         {
+            var runtime = Resolve(host);
             return key switch
             {
-                AbiConst.DiagThreadsSeen => (ulong)ScriptRuntime.ThreadsSeen,
-                AbiConst.DiagAlcsAlive => (ulong)(ScriptRuntime.Loader?.AlcsAlive ?? 0),
-                AbiConst.DiagAlcsCreated => (ulong)(ScriptRuntime.Loader?.AlcsCreated ?? 0),
-                AbiConst.DiagFaults => (ulong)ScriptRuntime.Faults,
+                AbiConst.DiagThreadsSeen => (ulong)runtime.ThreadsSeen,
+                AbiConst.DiagAlcsAlive => (ulong)runtime.Loader.AlcsAlive,
+                AbiConst.DiagAlcsCreated => (ulong)runtime.Loader.AlcsCreated,
+                AbiConst.DiagFaults => (ulong)runtime.Faults,
                 AbiConst.DiagManagedHeap => (ulong)GC.GetTotalMemory(false),
                 AbiConst.DiagGcPauseUs => (ulong)GC.GetTotalPauseDuration().TotalMicroseconds,
-                AbiConst.DiagCanReload => ScriptRuntime.Loader?.CanReload == true ? 1UL : 0UL,
+                AbiConst.DiagCanReload => runtime.Loader.CanReload ? 1UL : 0UL,
                 _ => 0,
             };
         }
@@ -98,11 +109,21 @@ internal static unsafe class Exports
     }
 
     [UnmanagedCallersOnly]
-    static int Shutdown()
+    static int Shutdown(void* host)
     {
-        try { return ScriptRuntime.Shutdown(); }
-        catch (Exception e) { Report(e); return -1; }
+        try
+        {
+            if (!Runtimes.TryRemove((nint)host, out var runtime)) return 0;
+            using var binding = runtime.Activate();
+            return runtime.Shutdown();
+        }
+        catch (Exception e) { Report(host, e); return -1; }
     }
 
-    static void Report(Exception e) => Diag.Report(AraCodes.RuntimeStart, "error", e.ToString());
+    static void Report(void* handle, Exception e)
+    {
+        if (!Runtimes.TryGetValue((nint)handle, out var runtime)) return;
+        using var binding = runtime.Activate();
+        Diag.Report(AraCodes.RuntimeStart, "error", e.ToString());
+    }
 }

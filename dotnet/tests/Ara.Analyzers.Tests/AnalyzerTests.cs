@@ -149,7 +149,7 @@ public class DeterminismTests
     [Fact]
     public void Assembly_level_simulation_covers_every_type()
     {
-        var d = Verify.Analyze("[assembly: Simulation]\nstatic class A { static long T() => Environment.TickCount64; }", new DeterminismAnalyzer());
+        var d = Verify.Analyze("[assembly: Simulation]\nstatic class A { static long T() => System.Environment.TickCount64; }", new DeterminismAnalyzer());
         Assert.Single(d, x => x.Id == "ARA0200");
     }
 }

@@ -59,12 +59,40 @@ fn engine_binding_changes_request_a_restart_and_keep_the_game_running() {
     let e = s.spawn(&[("Dial", json!({}))]);
     s.until("the initial code", |s| s.int(e, "Dial", "ticks") > 0);
 
+    let peer_root = Live::write("restart-peer", &[("Dials", DIAL, &[])]);
+    let mut peer_world = bevy_ecs::world::World::new();
+    let (peer_db, peer_engine) = support::engine();
+    let mut peer_config = ara_script::ScriptConfig::jit(&host_dir);
+    peer_config.compile_server =
+        Some(support::bin("Ara.CompileServer").join("Ara.CompileServer.dll"));
+    let peer_host =
+        ara_script::ScriptHost::start(peer_config, peer_db, &peer_engine, &mut peer_world)
+            .expect("peer starts in the shared CLR");
+    let mut peer = Live {
+        host: peer_host,
+        world: peer_world,
+        root: peer_root,
+        frame: 0,
+        reports: Vec::new(),
+        diagnostics: Vec::new(),
+    };
+    let peer_spec =
+        ara_script::ModuleSpec::from_dir(&peer.root.join("Dials")).expect("peer module");
+    peer.host
+        .load_modules(&mut peer.world, &[peer_spec])
+        .expect("peer modules");
+    let peer_entity = peer.spawn(&[("Dial", json!({}))]);
+    peer.run();
+
     // The loaded file cannot be overwritten on Windows, but it can be moved aside.
     let runtime = host_dir.join("Ara.Runtime.dll");
     std::fs::rename(&runtime, host_dir.join("Ara.Runtime.old")).expect("move the runtime aside");
     std::fs::copy(support::bin("Ara.Host").join("Ara.Host.dll"), &runtime)
         .expect("a different assembly");
     s.until("the L4 report", |s| s.count(RELOAD_L4) > 0);
+    peer.until("the peer's independent L4 report", |s| {
+        s.count(RELOAD_L4) > 0
+    });
     assert!(
         s.diagnostics
             .iter()
@@ -79,5 +107,17 @@ fn engine_binding_changes_request_a_restart_and_keep_the_game_running() {
         ticks + 1,
         "the last good code keeps running"
     );
-    s.finish();
+    let root = s.root.clone();
+    assert_eq!(s.host.shutdown(), 0);
+    drop(s.world);
+    let before = peer.int(peer_entity, "Dial", "ticks");
+    peer.run();
+    assert_eq!(peer.int(peer_entity, "Dial", "ticks"), before + 1);
+    assert!(
+        peer.diagnostics
+            .iter()
+            .any(|d| d.code == codes::RESTART_REQUIRED)
+    );
+    assert_eq!(peer.finish(), 0);
+    let _ = std::fs::remove_dir_all(root);
 }

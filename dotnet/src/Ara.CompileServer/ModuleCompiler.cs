@@ -69,7 +69,7 @@ internal sealed class ModuleCompiler
     {
         var runtimeDir = Path.GetDirectoryName(typeof(object).Assembly.Location)!; // ...\shared\Microsoft.NETCore.App\10.0.x
         var refRoot = Path.GetFullPath(Path.Combine(runtimeDir, "..", "..", "..", "packs", "Microsoft.NETCore.App.Ref"));
-        var major = Environment.Version.Major;
+        var major = System.Environment.Version.Major;
         var refDir = Directory.Exists(refRoot)
             ? Directory.GetDirectories(refRoot, $"{major}.*")
                 .OrderByDescending(d => Version.TryParse(Path.GetFileName(d), out var v) ? v : new Version())

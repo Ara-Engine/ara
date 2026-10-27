@@ -294,7 +294,7 @@ namespace Ara.Hosting
     /// <summary>
     /// Passed to <c>ara_script_init</c>: ABI identity, the host context and the host table.
     /// </summary>
-    [StructLayout(LayoutKind.Explicit, Size = 112)]
+    [StructLayout(LayoutKind.Explicit, Size = 120)]
     public unsafe partial struct HostInit
     {
         /// <summary>
@@ -322,7 +322,7 @@ namespace Ara.Hosting
     /// <summary>
     /// Functions the Rust host offers C#. Each takes the opaque <c>ctx</c> from <c>HostInit</c>.
     /// </summary>
-    [StructLayout(LayoutKind.Explicit, Size = 88)]
+    [StructLayout(LayoutKind.Explicit, Size = 96)]
     public unsafe partial struct HostApi
     {
         /// <summary>
@@ -383,10 +383,18 @@ namespace Ara.Hosting
         /// </summary>
         // (void* ctx, uint active)
         [FieldOffset(80)] public delegate* unmanaged<void*, uint, void> CompileState;
+        /// <summary>
+        /// Reads (op 0), writes (op 1), or checks presence (op 2) through a reflected ECS codec.
+        /// Read returns the UTF-8 byte count, negative required capacity, or zero if absent.
+        /// Write returns 1 on success, 0 on failure. Spans are borrowed only for this call.
+        /// </summary>
+        // (void* ctx, ulong entity, uint component, uint op, byte* data, uint len, byte* out, uint cap)
+        [FieldOffset(88)] public delegate* unmanaged<void*, ulong, uint, uint, byte*, uint, byte*, uint, int> ComponentJson;
     }
 
     /// <summary>
-    /// Functions the C# runtime fills in for the host. Exceptions never cross them.
+    /// Functions the C# runtime fills in for the host. Every call takes the unique
+    /// host handle (<c>HostInit.ctx</c>); exceptions never cross them.
     /// </summary>
     [StructLayout(LayoutKind.Explicit, Size = 80)]
     public unsafe partial struct ScriptApi
@@ -394,59 +402,71 @@ namespace Ara.Hosting
         /// <summary>
         /// Loads modules described by UTF-8 JSON (dev: starts the compile server; AOT: the linked modules).
         /// </summary>
-        // (byte* json, uint len)
-        [FieldOffset(0)] public delegate* unmanaged<byte*, uint, int> LoadModules;
+        // (void* host, byte* json, uint len)
+        [FieldOffset(0)] public delegate* unmanaged<void*, byte*, uint, int> LoadModules;
         /// <summary>
         /// Applies staged reloads at a tick boundary. Returns <c>BOUNDARY_*</c> bits.
         /// </summary>
-        // (global::Ara.Tick* tick)
-        [FieldOffset(8)] public delegate* unmanaged<global::Ara.Tick*, uint> TickBoundary;
+        // (void* host, global::Ara.Tick* tick)
+        [FieldOffset(8)] public delegate* unmanaged<void*, global::Ara.Tick*, uint> TickBoundary;
         /// <summary>
         /// Non-zero if a staged reload is waiting for the next boundary.
         /// </summary>
-        // ()
-        [FieldOffset(16)] public delegate* unmanaged<uint> HasPending;
+        // (void* host)
+        [FieldOffset(16)] public delegate* unmanaged<void*, uint> HasPending;
         /// <summary>
         /// Runs one system over one chunk. Returns <c>RUN_*</c>.
         /// </summary>
-        // (global::Ara.Hosting.SystemCall* call)
-        [FieldOffset(24)] public delegate* unmanaged<global::Ara.Hosting.SystemCall*, int> RunSystem;
+        // (void* host, global::Ara.Hosting.SystemCall* call)
+        [FieldOffset(24)] public delegate* unmanaged<void*, global::Ara.Hosting.SystemCall*, int> RunSystem;
         /// <summary>
         /// Runs one behaviour type over one chunk for one phase. Returns <c>RUN_*</c>.
         /// </summary>
-        // (global::Ara.Hosting.BehaviourCall* call)
-        [FieldOffset(32)] public delegate* unmanaged<global::Ara.Hosting.BehaviourCall*, int> RunBehaviours;
+        // (void* host, global::Ara.Hosting.BehaviourCall* call)
+        [FieldOffset(32)] public delegate* unmanaged<void*, global::Ara.Hosting.BehaviourCall*, int> RunBehaviours;
         /// <summary>
         /// Runs one command. Returns <c>RUN_*</c>.
         /// </summary>
-        // (global::Ara.Hosting.CommandCall* call)
-        [FieldOffset(40)] public delegate* unmanaged<global::Ara.Hosting.CommandCall*, int> RunCommand;
+        // (void* host, global::Ara.Hosting.CommandCall* call)
+        [FieldOffset(40)] public delegate* unmanaged<void*, global::Ara.Hosting.CommandCall*, int> RunCommand;
         /// <summary>
         /// Recompiles a module hot (1: Debug IL, EnC) or cold (0: optimized).
         /// </summary>
-        // (uint module, uint hot)
-        [FieldOffset(48)] public delegate* unmanaged<uint, uint, int> SetHeat;
+        // (void* host, uint module, uint hot)
+        [FieldOffset(48)] public delegate* unmanaged<void*, uint, uint, int> SetHeat;
         /// <summary>
         /// Asks for a compile of changed files (UTF-8 JSON <c>{"module", "paths", "origin"}</c>). Agent edits
         /// are coalesced and run behind human ones. Never blocks: the result arrives as a staged reload.
         /// </summary>
-        // (byte* json, uint len)
-        [FieldOffset(56)] public delegate* unmanaged<byte*, uint, int> RequestCompile;
+        // (void* host, byte* json, uint len)
+        [FieldOffset(56)] public delegate* unmanaged<void*, byte*, uint, int> RequestCompile;
         /// <summary>
         /// Diagnostics counters (<c>DIAG_*</c>).
         /// </summary>
-        // (uint key)
-        [FieldOffset(64)] public delegate* unmanaged<uint, ulong> Diag;
+        // (void* host, uint key)
+        [FieldOffset(64)] public delegate* unmanaged<void*, uint, ulong> Diag;
         /// <summary>
         /// Stops the compile client, unloads every module and returns the leaked-ALC count.
         /// </summary>
-        // ()
-        [FieldOffset(72)] public delegate* unmanaged<int> Shutdown;
+        // (void* host)
+        [FieldOffset(72)] public delegate* unmanaged<void*, int> Shutdown;
     }
 
     /// <summary>Constants shared with the Rust host (`ara_script::abi`).</summary>
     public static class AbiConst
     {
+        /// <summary>
+        /// <c>HostApi::component_json</c>: read a component as schema JSON.
+        /// </summary>
+        public const uint ComponentRead = 0u;
+        /// <summary>
+        /// <c>HostApi::component_json</c>: replace an existing component from schema JSON.
+        /// </summary>
+        public const uint ComponentWrite = 1u;
+        /// <summary>
+        /// <c>HostApi::component_json</c>: check presence without serializing the value.
+        /// </summary>
+        public const uint ComponentHas = 2u;
         /// <summary>
         /// <c>HostInit::flags</c>: the runtime was started with EnC enabled (<c>DOTNET_MODIFIABLE_ASSEMBLIES=debug</c>).
         /// </summary>
@@ -634,9 +654,9 @@ namespace Ara.Hosting
     public static class AbiInfo
     {
         /// <summary>Must equal the host's <c>ABI_VERSION</c>.</summary>
-        public const uint Version = 2;
+        public const uint Version = 3;
         /// <summary>Hash of every ABI layout and the engine components this file was generated from.</summary>
-        public const ulong LayoutHash = 0x7A85E63E68A33AF0UL;
+        public const ulong LayoutHash = 0x517207C4DD9A6A3EUL;
 
         /// <summary>Checks that the C# layouts agree with the generated sizes; returns an error or null.</summary>
         public static string? VerifySizes()
@@ -647,7 +667,7 @@ namespace Ara.Hosting
             if (Unsafe.SizeOf<global::Ara.Hosting.BehaviourCall>() != 56) return "global::Ara.Hosting.BehaviourCall: expected 56 bytes, got " + Unsafe.SizeOf<global::Ara.Hosting.BehaviourCall>();
             if (Unsafe.SizeOf<global::Ara.Hosting.CommandCall>() != 112) return "global::Ara.Hosting.CommandCall: expected 112 bytes, got " + Unsafe.SizeOf<global::Ara.Hosting.CommandCall>();
             if (Unsafe.SizeOf<global::Ara.Hosting.ReloadReport>() != 120) return "global::Ara.Hosting.ReloadReport: expected 120 bytes, got " + Unsafe.SizeOf<global::Ara.Hosting.ReloadReport>();
-            if (Unsafe.SizeOf<global::Ara.Hosting.HostInit>() != 112) return "global::Ara.Hosting.HostInit: expected 112 bytes, got " + Unsafe.SizeOf<global::Ara.Hosting.HostInit>();
+            if (Unsafe.SizeOf<global::Ara.Hosting.HostInit>() != 120) return "global::Ara.Hosting.HostInit: expected 120 bytes, got " + Unsafe.SizeOf<global::Ara.Hosting.HostInit>();
             if (Unsafe.SizeOf<global::Ara.Transform>() != 36) return "global::Ara.Transform: expected 36 bytes, got " + Unsafe.SizeOf<global::Ara.Transform>();
             return null;
         }

@@ -21,6 +21,15 @@ namespace Ara.Hosting;
 /// </remarks>
 public sealed class DevModuleLoader : IModuleLoader
 {
+    ScriptRuntime? _runtime;
+
+    /// <inheritdoc/>
+    public void Attach(ScriptRuntime runtime) => _runtime = runtime;
+
+    internal Host.Binding Activate() => (_runtime ?? throw new InvalidOperationException("loader is not attached")).Activate();
+
+    void Enqueue(PendingUpdate update) => (_runtime ?? throw new InvalidOperationException("loader is not attached")).Enqueue(update);
+
     sealed class Module(uint slot, string name, IReadOnlyList<string> references)
     {
         public readonly uint Slot = slot;
@@ -226,7 +235,7 @@ public sealed class DevModuleLoader : IModuleLoader
                     s.M.Chain.Clear();
                 }
             }
-        ScriptRuntime.Enqueue(new SwapUpdate { Modules = [.. staged.Select(s => s.Swap)] });
+        Enqueue(new SwapUpdate { Modules = [.. staged.Select(s => s.Swap)] });
         foreach (var s in staged) s.M.Ready.Set();
         CheckLeaks();
     }
@@ -289,7 +298,7 @@ public sealed class DevModuleLoader : IModuleLoader
         {
             Diag.Report(AraCodes.GenerationLeaked, "warning",
                 $"module `{r.Name}`: a retired generation is still alive after two full collections; something pins its types (static events, caches). Restart the play process (L4) to reclaim it");
-            ScriptRuntime.Enqueue(new ErrorUpdate { Slot = r.Slot, Report = new ReloadReport { Kind = AbiConst.ReloadL4, TReceived = Host.Now(), TStaged = Host.Now() } });
+            Enqueue(new ErrorUpdate { Slot = r.Slot, Report = new ReloadReport { Kind = AbiConst.ReloadL4, TReceived = Host.Now(), TStaged = Host.Now() } });
         }
     }
 
@@ -306,7 +315,7 @@ public sealed class DevModuleLoader : IModuleLoader
         var entries = generated.Concat(lambdas).ToArray();
         // The JIT is thread-safe: spread the entry points over a few pool threads (the
         // boosted tick threads keep priority).
-        Parallel.ForEach(entries, new ParallelOptions { MaxDegreeOfParallelism = Math.Max(1, Environment.ProcessorCount / 4) },
+        Parallel.ForEach(entries, new ParallelOptions { MaxDegreeOfParallelism = Math.Max(1, System.Environment.ProcessorCount / 4) },
             m => RuntimeHelpers.PrepareMethod(m.MethodHandle));
     }
 
@@ -366,7 +375,7 @@ public sealed class DevModuleLoader : IModuleLoader
         report.ChangedMembers = changed;
         report.Bytes = (ulong)(md.Length + il.Length + pdb.Length);
         report.TStaged = received;
-        ScriptRuntime.Enqueue(new DeltaUpdate
+        Enqueue(new DeltaUpdate
         {
             Slot = slot,
             Report = report,
@@ -399,7 +408,7 @@ public sealed class DevModuleLoader : IModuleLoader
             m.Ready.Set();
             return;
         }
-        ScriptRuntime.Enqueue(new ErrorUpdate
+        Enqueue(new ErrorUpdate
         {
             Slot = slot,
             Report = new ReloadReport { Kind = AbiConst.ReloadError, ErrorCount = errors, ServerUs = serverUs, Origin = origin, TReceived = Host.Now(), TStaged = Host.Now() },
@@ -414,7 +423,7 @@ public sealed class DevModuleLoader : IModuleLoader
         List<Module> affected;
         lock (_lock) affected = _modules.Where(m => slot == uint.MaxValue || m.Slot == slot).ToList();
         foreach (var m in affected)
-            ScriptRuntime.Enqueue(new ErrorUpdate { Slot = m.Slot, Report = new ReloadReport { Kind = AbiConst.ReloadL4, TReceived = Host.Now(), TStaged = Host.Now() } });
+            Enqueue(new ErrorUpdate { Slot = m.Slot, Report = new ReloadReport { Kind = AbiConst.ReloadL4, TReceived = Host.Now(), TStaged = Host.Now() } });
     }
 
     /// <inheritdoc/>

@@ -59,6 +59,11 @@ fn dry_run_publishes_manifest_the_hub_verifies_without_gh_or_network() {
             "ara-0.0.1-alpha-windows-x64"
         };
         fs::create_dir(root.join(prefix)).unwrap();
+        fs::write(
+            root.join(prefix).join("docs.json"),
+            br#"{"format":"ara.docs/1","engineVersion":"0.0.1-alpha"}"#,
+        )
+        .unwrap();
         fs::write(root.join(prefix).join("hub.json"), br#"{"format":"ara.hub/1","version":"0.0.1-alpha","build":{"commit":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","generation":1}}"#).unwrap();
         fs::write(root.join(prefix).join("engine.json"), br#"{"format":"ara.engine/1","version":"0.0.1-alpha","sourceCommit":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}"#).unwrap();
         fs::write(
@@ -115,6 +120,18 @@ fn dry_run_publishes_manifest_the_hub_verifies_without_gh_or_network() {
         let signature = fs::read(folder.join("release.json.sig")).unwrap();
         let release = verify(&manifest, &signature, &[testing::test_public_key()]).unwrap();
         assert_eq!(release.manifest().kind.name(), kind);
+        if kind == "engine" {
+            let asset = release
+                .manifest()
+                .assets
+                .iter()
+                .find(|a| a.name == "docs.json")
+                .expect("signed docs asset");
+            assert_eq!(
+                asset.sha256,
+                ara_update::sha256_file(&folder.join("docs.json")).unwrap()
+            );
+        }
         assert!(release.manifest().notes.contains("Authenticode"));
         assert!(release.manifest().assets.iter().all(|a| {
             a.url

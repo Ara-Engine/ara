@@ -153,6 +153,33 @@ pub fn package(root: &Path, version: &str) -> Result<()> {
     }
     bundle_dotnet(root, &stage, &symbols, &dist)?;
     templates(root, &stage, &dist)?;
+    // Generate with the packaged CLI, so docs describe the exact shipped schema
+    // and command registry. The scratch project lives only in the staging tree.
+    let docs_project = stage.join(".docs-project");
+    fs::create_dir(&docs_project)?;
+    fs::write(
+        docs_project.join("ara.project.json"),
+        "{\"name\":\"Ara engine reference\"}",
+    )?;
+    fs::create_dir_all(dist.join("docs-profile"))?;
+    run(
+        Command::new(stage.join("ara.exe"))
+            .current_dir(&stage)
+            .env("ARA_CONFIG_DIR", dist.join("docs-profile"))
+            .args(["--root"])
+            .arg(&docs_project)
+            .args(["docs", "--llms", "--out"])
+            .arg(stage.join("docs")),
+        &dist.join("logs/docs.log"),
+    )?;
+    copy(&stage.join("docs/docs.json"), &stage.join("docs.json"))?;
+    ensure!(
+        docs_project
+            .canonicalize()?
+            .starts_with(stage.canonicalize()?),
+        "docs scratch escaped the package stage"
+    );
+    fs::remove_dir_all(&docs_project)?;
     notices::generate(root, &stage, &dist)?;
     support::json(
         &stage.join("engine.json"),

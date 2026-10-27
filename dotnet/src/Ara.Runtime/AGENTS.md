@@ -17,13 +17,18 @@ linked into the NativeAOT image (shipping). AOT-safe: `IsAotCompatible`, no refl
   `ctx.Reject("reason")`, `ctx.Cue(...)`, `ctx.Commands`, `ctx.Rng`, `ctx.Caller`. `[Expose]`, `[Example]`.
 - `World.Get/Read/Has/Resource` (behaviours and commands only), `Commands` (spawn,
   despawn, add, remove, cue; applied at the next sync point), `Log`.
-- Metadata attributes: `Unit`, `Range`/`Min`/`Max`, `Default`, `Replicate`, `Tooltip`,
+- Metadata attributes: `Unit`, `Range`/`Min`/`Max`, `Default`, `Replicate`, `Tooltip`, `ColorPicker` (HDR/temperature),
   `Header`, `FormerlySerializedAs`, `Simulation`.
 - Hosting (for loaders and generated code): `ScriptRuntime.Init/Enqueue`, `IModuleLoader`
   (`Load`, `SetHeat`, `RequestCompile`, ...), `StaticModuleLoader` (linked modules, dependencies
   first, as one swap), updates: `SwapUpdate` (one or more `ModuleSwap`s registered together
   through `Host.RegisterModules`, all or none), `DeltaUpdate` (L1/L2), `ErrorUpdate` (errors,
   L4), `ModuleBuilder`, `AraModuleAttribute`, `Host`, `Diag`.
+
+- `ScriptRuntime` is an instance per Rust host. `Init` registers it by `HostInit.ctx`;
+  every `ScriptApi` entry takes that handle. `Activate()` binds callbacks on one thread
+  and restores its previous binding. No current host flows implicitly to async work.
+  Loaders capture their owner with `Attach(runtime)` and enqueue directly to it.
 
 ## Gotchas
 
@@ -35,6 +40,10 @@ linked into the NativeAOT image (shipping). AOT-safe: `IsAotCompatible`, no refl
   concurrently on task-pool threads and must stay lock-free.
 - A fault disables the system/behaviour/command until the next reload (ARA0910–0912).
   A re-enabled behaviour keeps its objects (`BehaviourEntry.Resume`): no second `OnSpawn`.
+
+- NativeAOT module types are shared: generated type indexes resolve through the active
+  host's registration map. Engine indexes remain constant. Accessor scratch is scoped
+  to each host entry, including nested bindings; shutdown never clears another host.
 
 ## Testing
 

@@ -10,7 +10,6 @@
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
-use ara_schema::SchemaDb;
 use ara_script::abi::Tick;
 use ara_script::{EngineBindings, ModuleSpec, ScriptConfig, ScriptHost, bind_component, value};
 use bevy_ecs::component::Component;
@@ -42,8 +41,7 @@ fn main() {
         .unwrap_or(60);
     let sample = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../dotnet/samples/Outpost.Sample");
 
-    let mut db = SchemaDb::new();
-    ara_components::register(&mut db);
+    let db = ara_runtime::schema(&[]).expect("engine schema");
     let engine = bind_component!(EngineBindings::new(), EcsTransform as "Transform" { position, rotation, scale });
     let mut world = World::new();
     let mut config = ScriptConfig::jit(bin("Ara.Host"));
@@ -75,7 +73,7 @@ fn main() {
     )
     .expect("vitality");
     let body = world.spawn(EcsTransform::default()).id();
-    host.insert_component(&mut world, body, "Velocity", &json!({}))
+    host.insert_component(&mut world, body, "SampleVelocity", &json!({}))
         .expect("velocity");
     host.insert_component(&mut world, body, "Mass", &json!({ "value": 80 }))
         .expect("mass");

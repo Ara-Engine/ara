@@ -94,6 +94,11 @@ pub fn number(v: f64) -> String {
     if v.is_finite() && v.fract() == 0.0 && v.abs() < 1e15 {
         format!("{v:.0}")
     } else {
-        format!("{v}")
+        let text = format!("{v}");
+        if v.is_finite() && !text.contains(['.', 'e', 'E']) {
+            format!("{text}.0")
+        } else {
+            text
+        }
     }
 }

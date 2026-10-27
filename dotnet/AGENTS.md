@@ -17,6 +17,8 @@ the ABI and the host API. Design: `docs/research/10-csharp-scripting.md` (R10 D1
 | `src/Ara.RunWorker` | The `ara_run` worker: compile, IL whitelist, run | its own process |
 | `samples/Outpost.Sample` | R10 §D3 sample: Door behaviour, UseMedkit command, Gravity/Movement systems | host |
 | `samples/Outpost.Sample.Aot` | The sample as one NativeAOT library exporting `ara_script_init` | host (AOT) |
+| `examples/Ara.Examples` | Compiled gameplay regions for every engine component. | .NET and Rust tests |
+| `examples/Ara.CommandExamples` | Authoring command regions; `--trace-commands` feeds Rust schema validation. Kept separate from gameplay's allowed references. | .NET and Rust tests |
 | `tests/*` | xunit tests, plus `Ara.TestModule` (a module the Rust tests load) | `dotnet test` |
 
 ## Commands

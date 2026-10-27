@@ -6,6 +6,7 @@ default ALC and calls `Ara.Hosting.DevExports.Init`. Never part of a NativeAOT i
 ## Pieces
 
 - `DevExports.Init`: `ScriptRuntime.Init(host, api, new DevModuleLoader())`.
+  Each call creates its own runtime/loader; the CLR and Ara.Runtime assembly are shared.
   `ModuleLoadContext`: one collectible ALC per module generation; `Ara.Runtime` resolves to
   the default copy, referenced modules to the generations staged when the context was made
   (only the module's reference closure, so unrelated old generations are not pinned).
@@ -27,6 +28,8 @@ default ALC and calls `Ara.Hosting.DevExports.Init`. Never part of a NativeAOT i
   named pipe, sends `Hello` with the runtime's EnC capabilities (`MetadataUpdater.GetCapabilities`),
   `Watch` (with module references and profile), `Change` (`request_compile`), `SetHeat`,
   `Rebuild`; forwards compile state for tick-thread priority.
+  Its reader explicitly binds the owning runtime, so logs, diagnostics and staged
+  updates cannot route to another world. Shutdown joins only this loader's reader.
 
 ## Runtime config (S2 findings, keep them)
 
