@@ -13,7 +13,6 @@ use sdl3_sys::{keyboard::*, stdinc::SDL_free, video::*};
 use std::ffi::CStr;
 
 /// Native event failures belong in diagnostics, never the window's fatal path.
-#[cfg(windows)]
 fn recover_input<T>(result: ara_ui::Result<T>) -> Option<T> {
     result
         .map_err(|error| {

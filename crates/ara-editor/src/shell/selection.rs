@@ -1,6 +1,7 @@
 //! Hierarchy and Assets adapters over the shared stable-key selection model.
 use super::*;
 use ara_ui::selection::{Modifiers, Navigation};
+use ara_ui::{paint::Draw, source::stable_id};
 use std::collections::HashSet;
 
 fn modifiers(value: [bool; 3]) -> Modifiers {

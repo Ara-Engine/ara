@@ -75,6 +75,12 @@ impl Command for Edit {
     const SUMMARY: &'static str =
         "Edit one nested value on each object's current collection, preserving unrelated data.";
 
+    fn examples() -> Vec<Value> {
+        vec![
+            json!({"entity":"e_crate001","path":"Transform.position","pointer":"/0","operation":"set","value":2.}),
+        ]
+    }
+
     fn run(cx: &mut EditCtx<'_, '_>, params: Params) -> Result<Value, Diagnostic> {
         let read = cx.read();
         let path: FieldPath = params.path.parse().map_err(crate::invalid)?;

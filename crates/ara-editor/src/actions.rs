@@ -735,7 +735,15 @@ impl EditorService {
                         .find(&doc)
                         .ok_or_else(|| vec![crate::invalid("document not found")])?
                         .to_string();
-                    open_scene(&mut state, cx, &mut self.resolver, d, agent.is_none())?;
+                    open_scene(
+                        &mut state,
+                        cx,
+                        &mut self.resolver,
+                        &self.bounds,
+                        self.frame_aspect,
+                        d,
+                        agent.is_none(),
+                    )?;
                 }
                 let resolved = self.resolver.resolve(cx.store(), &state.doc)?;
                 for entity in &p.entities {

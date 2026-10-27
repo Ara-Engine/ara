@@ -144,7 +144,9 @@ fn remap(db: &SchemaDb, record: &mut ara_doc::Record, ids: &BTreeMap<String, ara
             let Ok(path) = path.parse::<ara_schema::FieldPath>() else {
                 continue;
             };
-            if let Ok(resolved) = db.resolve_path("Entity", &path) {
+            if let Some(entity) = db.get("Entity")
+                && let Ok(resolved) = db.resolve_path(entity, &path)
+            {
                 visit(db, &resolved.ty, value, ids);
             }
         }

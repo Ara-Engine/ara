@@ -1,5 +1,6 @@
 //! A failed panel is quarantined without discarding the other panels or their input.
 use super::{Editor, Shell, escape};
+use ara_ui::source::stable_id;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 
 /// The first failed render of a panel, retained until the user retries it.
@@ -61,7 +62,7 @@ impl Shell {
         if let Some(failure) = self.panel_failures.get(panel) {
             out.push_str(&failure.markup(panel));
             self.bindings.insert(
-                super::stable_id(&format!("panel-error-{panel}-retry")),
+                stable_id(&format!("panel-error-{panel}-retry")),
                 super::Binding::PanelRetry(panel.to_owned()),
             );
             return;
@@ -98,7 +99,7 @@ impl Shell {
         );
         out.push_str(&failure.markup(panel));
         self.bindings.insert(
-            super::stable_id(&format!("panel-error-{panel}-retry")),
+            stable_id(&format!("panel-error-{panel}-retry")),
             super::Binding::PanelRetry(panel.to_owned()),
         );
         self.panel_failures.insert(panel.to_owned(), failure);
