@@ -436,10 +436,15 @@ impl Ui {
         };
         let live_input = keep && matches!(widget, Some(Widget::Input(_)));
         let mut relayout = false;
-        match (element.attrs.get("text"), &mut node.text) {
+        let display_text = element
+            .attrs
+            .get("text")
+            .map(String::as_str)
+            .or_else(|| matches!(element.tag.as_str(), "field" | "input").then_some(""));
+        match (display_text, &mut node.text) {
             (Some(value), Some(text)) => relayout = !live_input && text.set(value),
             (Some(value), None) => {
-                node.text = Some(ara_ui_text::Text::new(value.clone()));
+                node.text = Some(ara_ui_text::Text::new(value.to_owned()));
                 relayout = true;
             }
             (None, Some(_)) => {
@@ -452,6 +457,22 @@ impl Ui {
             node.dirty.layout = true;
             node.dirty.paint = true;
             self.tree.mark_dirty(node.layout_id)?;
+        }
+        let hint = matches!(element.tag.as_str(), "field" | "input")
+            .then(|| element.attrs.get("placeholder"))
+            .flatten()
+            .filter(|hint| !hint.is_empty());
+        match (hint, &mut node.placeholder) {
+            (Some(value), Some(text)) => node.dirty.paint |= text.set(value),
+            (Some(value), None) => {
+                node.placeholder = Some(ara_ui_text::Text::new(value.clone()));
+                node.dirty.paint = true;
+            }
+            (None, Some(_)) => {
+                node.placeholder = None;
+                node.dirty.paint = true;
+            }
+            (None, None) => {}
         }
         if let Some(widget) = widget {
             widgets.insert(stable_id(&element.id), widget);

@@ -81,6 +81,19 @@ impl Ui {
         }
         self.sync_choices()?;
         self.prepare_popovers()?;
+        // Hints share font caches but never take part in Taffy measurement.
+        // A color-only restyle repaints their cached glyphs without reshaping.
+        for node in &mut self.nodes {
+            if let Some(hint) = &mut node.placeholder
+                && (node.dirty.paint || node.dirty.layout || hint.dirty)
+            {
+                if hint.family != node.computed.font_family {
+                    hint.family.clone_from(&node.computed.font_family);
+                    hint.dirty = true;
+                }
+                text_system.measure(hint, None, node.computed.font_size);
+            }
+        }
         let layout = self.nodes.iter().any(|n| n.dirty.layout);
         let paint = layout || self.nodes.iter().any(|n| n.dirty.paint);
         if layout {
