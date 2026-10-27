@@ -79,6 +79,13 @@ Set-Content -LiteralPath (Join-Path $hubSource 'hub.json') -Value '{"format":"ar
 & ('\\?\' + $hubSource + '\install.ps1') -Destination ('\\?\' + $hubDestination) -Silent -NoSystemIntegration
 if (-not (Test-Path -LiteralPath (Join-Path $hubDestination 'hub.json'))) { throw 'Hub not installed' }
 
+# Hub shortcuts take the icon embedded in ara-hub.exe, never the legacy assets\brand\ara.ico.
+. (Join-Path $Release 'hub-installation.ps1')
+$hubLink = Join-Path $Root 'Ara Hub.lnk'
+New-AraHubShortcut $hubLink $hubDestination
+$hubIcon = (New-Object -ComObject WScript.Shell).CreateShortcut($hubLink).IconLocation
+if ($hubIcon -ne ((Join-Path $hubDestination 'ara-hub.exe') + ',0')) { throw "Hub shortcut uses the wrong icon: $hubIcon" }
+
 # These conversions are lexical: no SMB connection or share is needed.
 . $helper
 foreach ($pair in @(
@@ -88,4 +95,4 @@ foreach ($pair in @(
 )) {
     if ((ConvertTo-AraPath $pair[0]) -ne $pair[1]) { throw "Incorrect Windows path normalization: $($pair[0])" }
 }
-Write-Host 'Verbatim install, uninstall, standalone Hub and UNC normalization passed.'
+Write-Host 'Verbatim install, uninstall, standalone Hub, Hub shortcut icon and UNC normalization passed.'
