@@ -29,12 +29,15 @@ float4x4 shadowMatrix(Frame f,uint cascade){
     if(cascade>=VSM_PAGE_DRAWS)return buffers[NonUniformResourceIndex(look(f).vsm.z)].Load<float4x4>((cascade-VSM_PAGE_DRAWS)*64);
     return buffers[NonUniformResourceIndex(look(f).localShadows.x)].Load<float4x4>(LOCAL_FACES+(cascade-4)*64);
 }
-Varying nativeVertex(uint vertex,uint instance,bool shadow) {
+// `vertex` is the index itself in indexed draws (Command::DrawIndexedProcedural,
+// so the post-transform cache shades shared vertices once); non-indexed draws (the
+// wire PSO, which needs each triangle's own corners) pass the corner and load it.
+Varying nativeVertex(uint vertex,uint instance,bool shadow,bool indexed) {
     uint2 draw=buffers[NonUniformResourceIndex(root.flags)].Load2((root.entity+instance)*8);
     Instance i=buffers[NonUniformResourceIndex(root.material)].Load<Instance>(128+draw.x*192);
     uint4 g=buffers[NonUniformResourceIndex(root.mode)].Load4(draw.y*32);
     uint4 previous=buffers[NonUniformResourceIndex(root.mode)].Load4(draw.y*32+16);
-    uint index=buffers[NonUniformResourceIndex(g.z)].Load(g.w+vertex*4);
+    uint index=indexed?vertex:buffers[NonUniformResourceIndex(g.z)].Load(g.w+vertex*4);
     NativeVertex v=buffers[NonUniformResourceIndex(g.x)].Load<NativeVertex>(g.y+index*64);
     NativeVertex p=i.meta.y!=0?buffers[NonUniformResourceIndex(previous.x)].Load<NativeVertex>(previous.y+index*64):v;
     Frame f=frame();Varying o;
@@ -52,7 +55,7 @@ Varying nativeVertex(uint vertex,uint instance,bool shadow) {
     o.material=i.meta.x;o.id=draw.x+1;return o;
 }
 [shader("vertex")]
-Varying nativeGeometryVertex(uint vertex:SV_VertexID,uint instance:SV_InstanceID){return nativeVertex(vertex,instance,false);}
+Varying nativeGeometryVertex(uint vertex:SV_VertexID,uint instance:SV_InstanceID){return nativeVertex(vertex,instance,false,true);}
 // Wireframe view modes (Renderer `Wire.Draw`): the camera's draws again, with the same
 // clip position as the G-buffer (so the depth test against it passes on visible
 // surfaces). Draws are procedural over each triangle's corners in order, so a vertex's
@@ -60,7 +63,7 @@ Varying nativeGeometryVertex(uint vertex:SV_VertexID,uint instance:SV_InstanceID
 struct WireVarying {float4 clip:SV_Position;float3 bary:TEXCOORD0;};
 [shader("vertex")]
 WireVarying nativeWireVertex(uint vertex:SV_VertexID,uint instance:SV_InstanceID){
-    Varying v=nativeVertex(vertex,instance,false);WireVarying o;o.clip=v.clip;
+    Varying v=nativeVertex(vertex,instance,false,false);WireVarying o;o.clip=v.clip;
     uint corner=vertex%3;o.bary=float3(corner==0,corner==1,corner==2);return o;
 }
 // Edge coverage: the distance to the nearest edge in pixels, antialiased over 1.5.
@@ -71,7 +74,7 @@ float4 nativeWireFragment(WireVarying v):SV_Target0{
 }
 struct ShadowVarying {float4 clip:SV_Position;float2 uv:TEXCOORD0;float2 uv1:TEXCOORD1;nointerpolation uint material:TEXCOORD2;};
 [shader("vertex")]
-ShadowVarying nativeShadowVertex(uint vertex:SV_VertexID,uint instance:SV_InstanceID){Varying v=nativeVertex(vertex,instance,true);ShadowVarying s;s.clip=v.clip;s.uv=v.uv;s.uv1=v.uv1;s.material=v.material;return s;}
+ShadowVarying nativeShadowVertex(uint vertex:SV_VertexID,uint instance:SV_InstanceID){Varying v=nativeVertex(vertex,instance,true,true);ShadowVarying s;s.clip=v.clip;s.uv=v.uv;s.uv1=v.uv1;s.material=v.material;return s;}
 NativeMaterial material(uint id){return buffers[NonUniformResourceIndex(root.materials)].Load<NativeMaterial>(id*320);}
 float2 coordinates(NativeUv transform,Varying v){float2 p=(transform.set==0?v.uv:v.uv1)*transform.scale;float s,c;sincos(transform.rotation,s,c);return transform.offset+float2(c*p.x-s*p.y,s*p.x+c*p.y);}
 // Texture footprint scale of the pass (Frame.upscale.z, root word 4): surface()

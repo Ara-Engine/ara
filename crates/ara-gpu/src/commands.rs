@@ -94,6 +94,20 @@ pub enum Command {
         /// Number of instances; nonzero.
         instances: u32,
     },
+    /// Indexed procedural instanced draw without vertex input: `count` u32 indices
+    /// from `first_index` of `indices` (INDEX_BUFFER usage) per instance. The vertex
+    /// shader fetches vertex data from storage by SV_VertexID, which is the index,
+    /// so the post-transform cache shades each shared vertex once.
+    DrawIndexedProcedural {
+        /// Index buffer.
+        indices: Buffer,
+        /// First index, in u32 elements.
+        first_index: u32,
+        /// Indices per instance; nonzero.
+        count: u32,
+        /// Number of instances; nonzero.
+        instances: u32,
+    },
     /// End dynamic rendering.
     EndRendering,
     /// Buffer-to-image upload with tightly packed pixels.

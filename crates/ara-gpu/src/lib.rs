@@ -182,6 +182,9 @@ pub enum Access {
     Vertex,
     /// Index input buffer.
     Index,
+    /// Index input and readonly shader storage at once: a geometry pool that an
+    /// indexed draw reads indices from while its vertex shader pulls vertices.
+    Geometry,
     /// GPU-generated dispatch/draw arguments, also readable by shaders.
     Indirect,
     /// Sampled image / readonly shader storage.

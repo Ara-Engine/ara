@@ -28,6 +28,11 @@ pub(super) fn access(
             L::GENERAL,
         ),
         Access::Index => (S::INDEX_INPUT, A::INDEX_READ, L::GENERAL),
+        Access::Geometry => (
+            S::INDEX_INPUT | shader,
+            A::INDEX_READ | A::SHADER_READ,
+            L::GENERAL,
+        ),
         Access::Indirect => (
             S::DRAW_INDIRECT | shader,
             A::INDIRECT_COMMAND_READ | A::SHADER_READ,
@@ -574,6 +579,29 @@ impl VulkanDevice {
                         || bound.is_some_and(|h| self.pipelines.get(h).is_ok_and(|p| p.mesh))
                     {
                         return Err(GpuError::Contract("Draw outside graphics scope".into()));
+                    }
+                }
+                Command::DrawIndexedProcedural {
+                    indices,
+                    first_index,
+                    count,
+                    instances,
+                } => {
+                    self.validate_attachment_formats(bound, &color_formats, depth_format)?;
+                    let native = self
+                        .pipelines
+                        .get(bound.expect("attachment validation requires a bound pipeline"))?;
+                    let i = self.buffers.get(*indices)?;
+                    if !rendering
+                        || pipeline != Some(false)
+                        || native.vertex_stride != 0
+                        || native.mesh
+                        || *count == 0
+                        || *instances == 0
+                        || !i.raw.usage.contains(vk::BufferUsageFlags::INDEX_BUFFER)
+                        || (u64::from(*first_index) + u64::from(*count)) * 4 > i.raw.size
+                    {
+                        return Err(GpuError::Contract("Invalid indexed procedural draw".into()));
                     }
                 }
                 Command::DrawProcedural {

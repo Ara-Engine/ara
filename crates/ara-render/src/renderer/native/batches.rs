@@ -6,17 +6,22 @@ pub(super) fn is_transparent(material: &crate::instanced::Material) -> bool {
     material.pbr.flags[0] == 2 || material.extras.transmission_factor > 0.
 }
 
+/// One instanced draw: `count` visible rows from `first`, all of one LOD entry,
+/// `vertices` indices from `first_index` of the geometry pool each.
 #[derive(Clone, Copy, Default)]
 pub(super) struct Batch {
     pub first: u32,
     pub count: u32,
     pub vertices: u32,
+    pub first_index: u32,
 }
 pub(super) struct Group {
     pub geometry: usize,
     pub material: usize,
     pub first: u32,
     pub counts: Vec<u32>,
+    /// Per LOD, its first index in the geometry pool (`GeometryGpu::first_index`).
+    pub first_indices: Vec<u32>,
     pub errors: Vec<f32>,
     pub instances: Vec<usize>,
     pub transparent: bool,
@@ -62,6 +67,12 @@ impl Groups {
                     counts: (0..range.count)
                         .map(|lod| {
                             pool.index_count(range.first + lod)
+                                .expect("uploaded LOD has indices")
+                        })
+                        .collect(),
+                    first_indices: (0..range.count)
+                        .map(|lod| {
+                            pool.first_index(range.first + lod)
                                 .expect("uploaded LOD has indices")
                         })
                         .collect(),

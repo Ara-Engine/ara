@@ -104,6 +104,7 @@ impl GeometryGpu {
             return Ok((result, None));
         }
         let usage = vk::BufferUsageFlags::STORAGE_BUFFER
+            | vk::BufferUsageFlags::INDEX_BUFFER
             | if rt {
                 vk::BufferUsageFlags::SHADER_DEVICE_ADDRESS
                     | vk::BufferUsageFlags::ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_KHR
@@ -235,7 +236,7 @@ impl GeometryGpu {
                 Resource::Buffer(
                     resident.ok_or_else(|| anyhow::anyhow!("missing resident geometry source"))?,
                 ),
-                Access::ShaderRead,
+                Access::Geometry,
                 Access::CopySource,
             )]);
         }
@@ -261,14 +262,15 @@ impl GeometryGpu {
                     resident.ok_or_else(|| anyhow::anyhow!("missing resident geometry source"))?,
                 ),
                 Access::CopySource,
-                Access::ShaderRead,
+                Access::Geometry,
             )]);
         }
-        // Both shader reads and AS-build reads consume the original transfer write.
+        // Index and shader reads (Geometry) and AS-build reads consume the
+        // original transfer write.
         commands.barriers([edge(
             Resource::Buffer(pool),
             Access::CopyDestination,
-            Access::ShaderRead,
+            Access::Geometry,
         )]);
         if rt {
             commands.barriers([edge(

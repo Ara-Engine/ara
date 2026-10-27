@@ -488,7 +488,14 @@ impl Renderer {
                         queue: Queue::Graphics,
                     },
                 );
-                graphics.push((id, Access::ShaderRead));
+                // The geometry pool stays in Geometry: indexed draws read it as
+                // their index buffer as well as through shader storage.
+                let read = if access == Access::Geometry {
+                    access
+                } else {
+                    Access::ShaderRead
+                };
+                graphics.push((id, read));
             });
         }
         let mut frame_input = None;
