@@ -65,7 +65,8 @@ fn configured_feature_paths_package_ui_short_references_and_exclude_project_poli
     )?;
     let policy = ara_asset::ProjectImportSettings::default().canonical_text()?;
     fs::write(
-        root.path().join(ara_asset::LEGACY_PROJECT_IMPORT_SETTINGS_FILE),
+        root.path()
+            .join(ara_asset::LEGACY_PROJECT_IMPORT_SETTINGS_FILE),
         &policy,
     )?;
     fs::write(
