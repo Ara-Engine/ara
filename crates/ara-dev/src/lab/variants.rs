@@ -1,0 +1,265 @@
+//! Published variant snapshots are separate from cooks and every resident player's view.
+use super::{session, watch};
+use anyhow::{Context, Result, ensure};
+use serde::{Deserialize, Serialize};
+use serde_json::{Value, json};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    fs,
+    path::{Path, PathBuf},
+};
+
+#[derive(Default, Deserialize, Serialize)]
+pub(super) struct Recipe {
+    pub packages: BTreeMap<PathBuf, Value>,
+}
+#[derive(Deserialize, Serialize)]
+struct Definition {
+    recipe: Recipe,
+    #[serde(default)]
+    pending: BTreeSet<PathBuf>,
+    #[serde(default)]
+    results: BTreeMap<PathBuf, bool>,
+    #[serde(default)]
+    published: bool,
+}
+#[derive(Default, Deserialize, Serialize)]
+pub(super) struct Variants(BTreeMap<String, Definition>);
+
+impl Variants {
+    pub fn load(base: &Path) -> Self {
+        session::read(&base.join("variants.json"))
+            .and_then(|v| serde_json::from_value(v).ok())
+            .unwrap_or_default()
+    }
+    pub fn save(&self, base: &Path) -> Result<()> {
+        session::write(&base.join("variants.json"), self)
+    }
+    pub fn remove(&mut self, base: &Path, name: &str) -> Result<()> {
+        ensure!(name != "baseline", "baseline is reserved");
+        self.0.remove(name).context("unknown variant")?;
+        self.save(base)
+    }
+    pub fn status(&self) -> Value {
+        json!(self)
+    }
+    pub fn register(
+        &mut self,
+        base: &Path,
+        name: &str,
+        recipe: Value,
+        manifests: &[PathBuf],
+        root: &Path,
+    ) -> Result<Vec<PathBuf>> {
+        session::name(name)?;
+        ensure!(name != "baseline", "baseline is reserved");
+        let recipe: Recipe = serde_json::from_value(recipe)?;
+        ensure!(!recipe.packages.is_empty(), "variant recipe needs packages");
+        let mut paths = Vec::new();
+        for (manifest, value) in &recipe.packages {
+            ensure!(
+                manifest.is_relative()
+                    && !manifest
+                        .components()
+                        .any(|p| !matches!(p, std::path::Component::Normal(_))),
+                "variant manifests must be workspace-relative"
+            );
+            let path = root.join(manifest);
+            ensure!(
+                manifests.contains(&path),
+                "{} is not a watched shader package",
+                manifest.display()
+            );
+            ensure!(
+                value["pipelines"]
+                    .as_object()
+                    .is_some_and(|p| !p.is_empty()),
+                "package override needs pipelines"
+            );
+            paths.push(path);
+        }
+        let published = self.0.get(name).is_some_and(|v| v.published);
+        self.0.insert(
+            name.into(),
+            Definition {
+                recipe,
+                pending: Default::default(),
+                results: Default::default(),
+                published,
+            },
+        );
+        self.save(base)?;
+        Ok(paths)
+    }
+    pub fn affected(&self, relative: &Path) -> Vec<String> {
+        self.0
+            .iter()
+            .filter(|(_, v)| v.recipe.packages.contains_key(relative))
+            .map(|(k, _)| k.clone())
+            .collect()
+    }
+    pub fn queued(&mut self, name: &str, relative: &Path) {
+        if let Some(v) = self.0.get_mut(name) {
+            v.pending.insert(relative.into());
+            v.results.remove(relative);
+        }
+    }
+    pub fn recipe_path(&self, base: &Path, name: &str, relative: &Path) -> Result<PathBuf> {
+        let value = &self
+            .0
+            .get(name)
+            .context("unknown variant")?
+            .recipe
+            .packages
+            .get(relative)
+            .context("variant package")?;
+        let path = base
+            .join("variants")
+            .join(name)
+            .join("recipes")
+            .join(relative);
+        fs::create_dir_all(path.parent().context("recipe parent")?)?;
+        session::write(&path, value)?;
+        Ok(path)
+    }
+    pub fn completed(
+        &mut self,
+        base: &Path,
+        name: &str,
+        relative: &Path,
+        success: bool,
+    ) -> Result<bool> {
+        let Some(v) = self.0.get_mut(name) else {
+            return Ok(false);
+        };
+        v.pending.remove(relative);
+        v.results.insert(relative.into(), success);
+        let ready = v.pending.is_empty()
+            && v.results.len() == v.recipe.packages.len()
+            && v.results.values().all(|v| *v);
+        self.save(base)?;
+        Ok(ready)
+    }
+    pub fn ready(&self, name: &str) -> Result<()> {
+        if name == "baseline" {
+            return Ok(());
+        }
+        let v = self
+            .0
+            .get(name)
+            .context("unknown variant; supply a recipe first")?;
+        ensure!(
+            v.published && v.pending.is_empty() && v.results.values().all(|v| *v),
+            "variant is cooking or has errors; inspect lab_status"
+        );
+        Ok(())
+    }
+    pub fn publish(&mut self, root: &Path, base: &Path, name: &str) -> Result<()> {
+        let v = self.0.get_mut(name).context("unknown variant")?;
+        let destination = profile(base, name);
+        publish_tree(&profile(base, "baseline"), &destination)?;
+        for manifest in v.recipe.packages.keys() {
+            let source = watch::output(root, &cache(base, name), &root.join(manifest))?;
+            let relative = source.strip_prefix(cache(base, name).join("shaders"))?;
+            publish_tree(&source, &destination.join(relative))?;
+        }
+        v.published = true;
+        self.save(base)
+    }
+    pub fn baseline_changed(
+        &self,
+        base: &Path,
+        manifest: &Path,
+        relative_output: &Path,
+    ) -> Result<()> {
+        for (name, v) in &self.0 {
+            if v.published && !v.recipe.packages.contains_key(manifest) {
+                publish_tree(
+                    &profile(base, "baseline").join(relative_output),
+                    &profile(base, name).join(relative_output),
+                )?;
+            }
+        }
+        Ok(())
+    }
+    pub fn packages(&self, name: &str) -> Result<Vec<PathBuf>> {
+        Ok(self
+            .0
+            .get(name)
+            .context("unknown variant")?
+            .recipe
+            .packages
+            .keys()
+            .cloned()
+            .collect())
+    }
+    pub fn outstanding(&self) -> Vec<(String, PathBuf)> {
+        self.0
+            .iter()
+            .flat_map(|(name, v)| {
+                v.recipe
+                    .packages
+                    .keys()
+                    .filter(|path| v.pending.contains(*path) || v.results.get(*path) != Some(&true))
+                    .map(|path| (name.clone(), path.clone()))
+            })
+            .collect()
+    }
+}
+pub(super) fn cache(base: &Path, name: &str) -> PathBuf {
+    base.join("cook-cache").join(name)
+}
+pub(super) fn profile(base: &Path, name: &str) -> PathBuf {
+    if name == "baseline" {
+        base.join("shaders")
+    } else {
+        base.join("variants").join(name).join("shaders")
+    }
+}
+pub(super) fn view(base: &Path, name: &str) -> PathBuf {
+    base.join("views").join(name).join("shaders")
+}
+
+/// Copy immutable artifacts before metadata and the cohort signal. Preserve mtimes
+/// so a warm publication only copies changed files. Never modify a tracked output.
+pub(super) fn publish_tree(source: &Path, destination: &Path) -> Result<()> {
+    fs::create_dir_all(destination)?;
+    let mut entries = fs::read_dir(source)?.collect::<std::io::Result<Vec<_>>>()?;
+    entries.sort_by_key(|e| {
+        let p = e.path();
+        if p.is_dir() {
+            0
+        } else if p.file_name().is_some_and(|n| n == ".ara-shader-reload") {
+            3
+        } else if p.extension().is_some_and(|e| e == "json") {
+            2
+        } else {
+            1
+        }
+    });
+    for entry in entries {
+        let ty = entry.file_type()?;
+        if ty.is_symlink() {
+            continue;
+        }
+        let target = destination.join(entry.file_name());
+        if ty.is_dir() {
+            publish_tree(&entry.path(), &target)?;
+            continue;
+        }
+        let meta = entry.metadata()?;
+        if fs::metadata(&target)
+            .is_ok_and(|old| old.len() == meta.len() && old.modified().ok() == meta.modified().ok())
+        {
+            continue;
+        }
+        let temporary = target.with_extension(format!("{}.tmp", session::id()));
+        fs::copy(entry.path(), &temporary)?;
+        fs::File::options()
+            .write(true)
+            .open(&temporary)?
+            .set_times(fs::FileTimes::new().set_modified(meta.modified()?))?;
+        fs::rename(temporary, target)?;
+    }
+    Ok(())
+}

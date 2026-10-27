@@ -303,6 +303,212 @@ Evidence is retained under `target/ara-dev/infra-round/` (`infra-batch-before.js
 The inherited fidelity shader cohort was re-cooked after the main merge: all 48 pipelines,
 296.63s, with no tracked output changes. No GPU timing run was needed for this round.
 
+## Fidelity Lab
+
+`ara-dev lab start` starts one checkout-owned daemon. Its shared build directory is
+selected by `--build-dir PATH`, then `ARA_LAB_BUILD_DIR`, then the saved workspace
+choice, then the checkout's `target/`. No drive is baked into the code. On the shared
+PC use the NVMe directory `C:\AraBuild\lab-target`; set `CARGO_TARGET_DIR` and
+`CARGO_BUILD_BUILD_DIR` to the same directory for focused checks. The lab remembers
+the directory after startup. It uses four Cargo jobs on PC, direct rustc, rust-lld
+and BelowNormal priority. The CLI returns its endpoint while the initial build
+runs; `lab status` reports build progress and owner-attributed compiler errors.
+Every child is hidden/offscreen and uses a fresh profile under `target/ara-dev/lab`.
+Stopping the daemon closes only the process trees it started.
+
+```powershell
+ara-dev lab start
+ara-dev lab status
+ara-dev lab claim --agent reflections shaders/look-ssr.slang
+ara-dev lab session --session reflections --scene showcase
+ara-dev lab capture --session reflections
+ara-dev lab measure --session reflections --preset high --frames 120 --no-wait
+ara-dev lab logs
+ara-dev lab release --agent reflections
+ara-dev lab stop
+```
+
+`ara-dev lab mcp` is a stdio MCP endpoint for the same daemon: `lab_status`,
+`lab_claim`, `lab_release`, `lab_session`, `lab_reload`, `lab_rebuild`,
+`lab_capture`, `lab_measure`, `lab_variant`, `lab_ab`, `lab_set`, `lab_reference`,
+`lab_logs`, `lab_stop`. MCP stdout contains only
+JSON-RPC. All CLI results are JSON. Track names are independent of agent claims;
+claim overlaps warn and retain both owners. Claims never prevent an edit.
+
+The daemon watches every `pipelines.json` (including generated VFX), with a
+400 ms source debounce. Cooks publish under `target/ara-dev/lab/shaders`, leaving
+tracked cooked files untouched. Existing cooked outputs seed the cache. Rust
+edits queue a single incremental build. Successful binaries are copied to a new
+generation before starting replacements, avoiding Windows executable locking.
+Each replacement answers a control before the previous process is retired.
+Compile/cook failures retain last-good players and artifacts. The scene, camera,
+preset, params and variant belong to a track selection and survive restarts.
+Idle tracks retain their GPU resources and submit no frames.
+
+Track work runs on independent workers. Visual jobs share the machine GPU lock;
+queued timing tickets block new visual jobs and wait for active ones to finish.
+Status and claims remain responsive during capture/restart work. Players use normal
+CPU priority, as does the control service; Cargo and cooks use BelowNormal. Scene simulation is frozen
+for reproducible rendering. Startup waits for renderer/GI readiness before idling.
+
+Showcase uses the benchmark export when present at
+`D:/AraBench/builds/ara/showcase/build`; pass `--pack` to select another frozen
+export. Outpost and Hangar reuse perf packs or export scratch sample copies once.
+Showcase's fixed cameras are stage, materials and props, using the sample look's
+matching transforms. Captures and comparisons go under `target/ara-dev/lab/captures`.
+`ARA_LAB_REFERENCES` overrides the reference root (default `D:/AraBench/report/images`);
+each scene has a `cycles/<camera>.png` reference. Missing references are reported.
+The seven Showcase regions are normalized in `crates/ara-dev/src/lab/quality/showcase.json`
+with their original 4K pixels and legacy LDR baselines. Crop LDR FLIP and
+8x8-window RGB SSIM are secondary numbers; they never satisfy the E0 gate.
+The resident-session limit defaults to three; Windows also requires 2 GiB free
+VRAM before admitting a new player. Use fewer tracks for large scenes.
+`lab session --session NAME --close` retires that player's exact process tree.
+
+E0 captures use unexposed scene-linear Rec.709 Cycles EXRs, scaled by the reference
+policy and passed through the active Ara manual exposure, grading, vignette,
+tone mapper, lift/gamma/gain, sRGB transfer and colour LUT. This is the
+matched-display-transform route; it is labelled separately from HDR-FLIP. EXRs,
+display-transform caches and image crops live under `target/`. `lab reference`
+optionally invokes Blender 5.1 in background mode, with an isolated Blender profile,
+to render Showcase's three cameras using the benchmark script. Missing Blender or
+Blender sources are diagnosed runtime requirements, never build prerequisites.
+`ARA_LAB_LINEAR_REFERENCES` overrides the root (default the lab's `references/`),
+with `<scene>/cycles/<camera>.exr` and `linear-reference.json`. The policy must state
+`colour_space: "scene_linear_rec709"`, `exposure_baked: false` and its radiance scale.
+The existing benchmark uses 683 lm/W. Reference reports also record samples,
+denoising and the source-manifest hash; this rendering is not claimed to be an
+independently converged ground truth.
+
+`lab capture` runs three sweeps and reports every region's run scores, mean,
+maximum deviation and the ±0.002 repeatability gate. Static and 2 degree/s slow-pan
+sequences report successive scene-linear luminance RMS and actual display-frame
+FLIP in every 16x16 block, with the simulation frozen, at every preset. The static
+FLIP gate is mean ≤0.01 and every block ≤0.03; RMS remains a separate noise
+diagnostic. The slow pan is informational motion evidence. Region baseline limits
+are calibrated per preset and resolution; other profiles retain scores and report
+uncalibrated limits. Missing EXRs,
+automatic exposure, missing calibration, fewer than three repeats, and stale or
+failed source builds cannot produce a passing E0 result. `--quick` selects one
+sweep without temporal sampling for the visual inner loop. MCP exposes the same
+choice as `runs: 1, temporal: false`. `capture.json` retains exact selection, PID,
+executable and published shader cohorts.
+
+Shader experiments are offline PSO permutations, never hot-shader runtime branches.
+Register a JSON recipe under `target/`, for example:
+
+```json
+{"packages":{"shaders/pipelines.json":{"pipelines":{"look_post":{"source":"experimental-post.slang","defines":{"EXPERIMENT":"1"}}}}}}
+```
+
+```powershell
+ara-dev lab variant --session reflections --name reflection-v2 --recipe target/recipe.json
+ara-dev lab status
+ara-dev lab ab --session reflections --variant reflection-v2 --windows 4 --frames 120 --no-wait
+ara-dev lab variant --session reflections --name baseline
+# Explicitly promote only after reviewing captures and A/B evidence:
+ara-dev lab variant --session reflections --name reflection-v2 --promote
+```
+
+Sibling sources stay inside the package's source directory; unchanged baseline
+pipelines use reachable source fingerprints, so an unfinished unused sibling does
+not change their cook keys. Each recipe has a private cook cache, a last-good
+published snapshot, and a separate view per player. Failed recipes publish nothing.
+Promotion uses the cook's canonical manifest writer after successful compilation.
+`--remove` forgets an unused recipe and keeps its artifacts for audit.
+
+A/B alternates AB, BA pairs in one PID, always baseline A against experimental B.
+It records each window and paired B−A deltas, standard deviation, standard error
+and a 95% Student-t interval, including per-pass results. The previous variant is
+restored even on failure. CPU/GPU background samples and partial windows survive
+a refused or contaminated run. Uniform background load is visible even when the
+paired result is stable; changing thresholds is recorded and is not a clean result
+under the default policy. Temporal sequences run after timing windows under the
+same exclusive GPU lease.
+Their temporal evidence is reused only for the same Rust generation, native
+content generation, camera, preset, parameters and published shader cohorts. The
+report marks reuse and retains the original timestamp and per-block artifacts.
+A changed generation or missing artifact triggers a fresh temporal sequence;
+`lab capture` always performs its requested fresh quality checks.
+
+`lab set` discovers typed parameters; `--values` accepts a JSON object of
+`name: {"type":"f32"|"int"|"bool"|"vec", "value":...}` entries. Updates validate
+the whole batch before applying anything. `--camera stage|materials|props` changes
+the fixed Showcase view. Parameters and the camera survive Rust warm restarts.
+The `ara-player/fidelity-lab` feature supplies the registry and render hooks;
+shipping builds contain neither. Render code declares typed keys once and reads
+owned slots without locks, clones, allocation or string lookup per frame. Changes
+upload a bounded uniform table once; `shaders/lab-params.slangh` documents optional
+compile-time access for experimental passes. `post.exposure_stops`, `post.curve`,
+`post.bloom_enabled`, `post.gain_scale`, `post.saturation_scale`, `post.manual_exposure`,
+`post.ev100`, `ao.intensity_scale` and `ssr.intensity_scale` are available initially.
+
+Timing uses the existing machine GPU FIFO, with GPU **and CPU** foreign-load
+monitoring. CPU occupancy is normalized over all logical processors and subtracts
+only the protected PID/creation-identity tree. BelowNormal foreign builds count.
+`--foreign-cpu-percent` (default 10) and `--foreign-cpu-samples` (default 3) configure
+the CPU guard. `gpu` and D26 wait for quiet by default; `--no-wait` refuses a busy
+baseline. Sustained contamination during a window makes it INVALID; raw CPU
+samples, top background processes and intervals remain in the timing evidence.
+Saved D26 readings reclassify CPU and GPU intervals per source window.
+
+Measured M1 turnaround on the shared 7800X3D/4070 SUPER PC (2026-10-27):
+
+| Path | Measured | Target |
+|---|---:|---:|
+| One-line `ara-render` incremental build/relink, C: NVMe | 22.68 s | ~60 s including restart |
+| Source save to replacement player ready, same track selection | 29.10 s | ~60 s |
+| Post shader save to new warm frame (four affected pipelines) | 11.92 s | 2 s |
+| Warm three-camera 2560x1440 capture, seven region crops + FLIP/SSIM | 7.81 s | 5 s |
+
+The build measurements include concurrent machine load; a separate pre-lab
+incremental relink measured 23.02 s with 82% total CPU before launch. The existing
+perf profile already uses incremental compilation, rust-lld and 256 codegen units.
+Capture render/readback totalled 1.12 s; parallel CPU analysis dominated the rest.
+The M1 shader cook compiled four pipelines sequentially; M2 uses four offline
+compiler workers. These are turnaround measurements, not accepted GPU
+performance readings. A native `lab measure --no-wait` correctly refused 85.24%
+foreign CPU, preserving its raw samples and process list under `gpu-load/` and
+`lab/measurements/`. Compile-error injection retained the same running player and
+routed its shader error to the claimant.
+
+The native crop evaluator was checked against the benchmark's installed
+`flip_evaluator` on the exact same seven crop pairs: maximum mean difference
+0.00000781 at 67 ppd. Three repeated LDR sweeps differed by at most 0.000000425
+from their region means. This verifies the secondary evaluator and frozen rig;
+M2 also checks matched-transform repeatability as a separate E0 gate.
+
+Measured M2 on the same PC, 2026-10-27: three-camera quick sweeps took 3.64–5.84 s
+(4.00 s in the final native run). A fresh three-run E0 sweep with static/pan FLIP
+took 55.93 s under shared load. All seven matched regions passed their calibrated
+High 1440p limits and had zero deviation across the three deterministic captures.
+The stability gate correctly failed: static mean FLIP was 0.00493–0.00688, but the
+worst 16x16 blocks reached 0.098–0.199, above the 0.03 limit. This is exposed as a
+renderer issue; the lab does not relax the gate to accept its baseline.
+
+Live gain changed the native image in 0.347 s including a BelowNormal test client
+under load; discovery does not render, and a live update repaints one frame rather
+than running the perf warmup. Wrong-type batches leave the previous values active.
+The same player PID survived an invalid experimental shader, baseline tracks kept
+their original cohort key, and the error was attributed to the shader claimant.
+
+Two A/B pairs of 30 frames took 47.64 s with fresh temporal sequences and 12.13 s
+with matching temporal evidence cached. The default four pairs of 120 frames took
+23.32 s with cached evidence. That run had 45.4% mean foreign CPU (80.5% peak),
+used an explicitly relaxed guard, and reported an inconclusive GPU-span delta
+with a ±0.399 ms 95% interval. These are functional/turnaround results, not a clean
+performance baseline; the normal CPU policy refused the loaded machine. The
+sampler runs at Normal-equivalent thread priority so BelowNormal builds cannot
+starve monitoring into accepting an unobserved interval.
+
+The hotpatch integration seam is `lab::run_with_strategy` and
+`lab::build::ReloadStrategy`: `command` supplies the build, `stage` reads its artifacts
+(override this for patch-only builds), then `publish` receives
+successful binaries and exact player PIDs/control directories. Return true for
+the lab's warm restart, false after successfully patching those players. An error
+keeps the current players. The default is `WarmRestart`. The hotpatch owner can
+enter this seam from its own CLI subcommand without accessing daemon internals.
+
 ## Performance iteration
 
 Choose a target directory unique to this worktree, for example:
@@ -531,7 +737,8 @@ The initial fat build is expensive. Subsequent edits use Subsecond's thin linkin
 and hot function table; the `hotpatch` profile favors compiler latency. The driver
 isolates Cargo outputs, config and crash files under `<CARGO_TARGET_DIR>/ara-hotpatch`
 (the checkout's `target/ara-hotpatch` when unset), uses
-four BelowNormal build jobs on Windows (two jobs on Mac), and binds dx to loopback.
+the caller's `CARGO_BUILD_JOBS` budget (two when unset), runs build children
+BelowNormal on Windows, and binds dx to loopback.
 It forwards native arguments as data, without shell execution.
 
 Windows uses an MSVC-shaped facade over the pinned rust-lld plus the installed
@@ -555,8 +762,15 @@ The optional native watcher patch bypasses RSX diffing only when Ara sets
 `ARA_NATIVE_RUST_PATCH`. Stock alpha.3 can silently miss an undo/redo save after a
 multi-file patch because its file snapshots become stale. The prepared CLI
 replays every native Rust save, including saves queued during compilation.
-Native capability v2 also drains queued saves after a failed compile; upstream
-only drains them after a successful build.
+Native capability v4 drains queued saves after failed compilation, deduplicates
+identical file notifications, and supports lab-admitted patch requests. It also
+selects Ara's explicit `RUSTC` facade for dependency replay and prevents a custom
+workspace linker from doing a redundant executable link before the real patch
+link. Windows snapshots wait for an active writer to close, including the gap
+between truncating a file and writing its new contents. Upstream only drains
+pending changes after successful builds. Reused compiler invocations take their
+Ara contract and settings from the current session. Native build-input changes
+retain the running process and request an explicit rebuild.
 
 The CLI prerelease is required for its fix to uncaptured workspace replay (#5903).
 Ara keeps Bevy's Subsecond 0.7.10 runtime; the prerelease's patch-table schema is
@@ -602,10 +816,31 @@ which older readers refuse; unpatched artifacts retain format 1. Release hosts f
 enabled, and ara-export rejects a marked development executable both when making
 and when unpacking a runtime template.
 
-`ara-dev lab` can call `hotpatch::available` before choosing its Rust reload
-strategy; a missing/incompatible tool selects its existing warm-restart path.
-ARA7602 requires rebuilding/restarting rather than retrying an incompatible patch.
-No lab state or file-control protocol is owned by the hotpatch module.
+`ara-dev hotpatch -- lab` selects the lab's Rust reload strategy seam. This
+experimental adapter supports one shared player; ordinary `ara-dev lab` retains
+its multi-track warm restart behavior. Missing or incompatible dx selects warm
+restart with ARA7600. Body patches are built under lab admission, bound to the
+exact source revision and player PID, and acknowledged after frame-boundary
+publication. Incompatible source/layout edits establish a new baseline and use
+the existing rebuild and warm restart strategy. The lab owns sessions and GPU
+admission; the adapter owns its dx baseline and Rust publication handshake.
+
+For manual latency investigations, `ARA_HOTPATCH_TRACE_DIR` writes timestamped
+events off the idle frame path. The opt-in scripts `measure-latency.ps1` and
+`analyze-latency.ps1` in S11 separate watching, compiler work, links, validation,
+publication and observed output. `ARA_HOTPATCH_EXPERIMENT` selects per-crate
+codegen-unit/incremental and lld-thread experiments. These settings never affect
+ordinary Cargo commands. For example, point it at a JSON file containing
+`{"crates":{"ara_render_fidelity":{"codegen_units":64}}}` to tune that crate
+alone. Optional `--cranelift-crate <name>` requires an explicitly
+selected nightly with `rustc-codegen-cranelift-preview`; it uses panic=abort in
+the isolated hotpatch profile. It does not change the pinned stable toolchain.
+
+`ARA_HOTPATCH_LATENCY=1` lets the hidden render/editor proof admit concurrent CPU
+work while retaining the GPU-load check. It measures the shared development
+workflow, not quiet-machine frame performance or D26 acceptance. Defaults retain
+the ordinary foreign-CPU guard. No latency capture should be cited as a renderer
+performance benchmark.
 
 For a windowless real-renderer proof without game imports:
 

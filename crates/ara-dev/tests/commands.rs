@@ -873,7 +873,9 @@ fn compiler_cache_bypass_preserves_clippy_and_records_total_time() {
     let binary = env!("CARGO_BIN_EXE_ara-dev");
     assert!(
         !configured_command(&root, binary, &["check", "--json"])
-            .env_remove("RUSTC_WRAPPER")
+            // An installed optional sccache can override Cargo's project wrapper;
+            // an explicit caller wrapper always wins and makes this probe portable.
+            .env("RUSTC_WRAPPER", "missing-compiler-cache-for-test")
             .output()
             .unwrap()
             .status

@@ -4,10 +4,14 @@
 
 mod contract;
 pub use contract::Contract;
+mod timing;
+pub use timing::{timestamp_us, trace_event};
 
 #[cfg(all(feature = "runtime", not(debug_assertions)))]
 compile_error!("Ara Rust hotpatch is development-only; rebuild without the hotpatch feature");
 
+#[cfg(feature = "runtime")]
+mod gate;
 #[cfg(feature = "runtime")]
 mod runtime;
 #[cfg(feature = "runtime")]

@@ -1,6 +1,6 @@
 //! One host owns patch publication; websocket workers only prepare deliveries.
 use crate::Contract;
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, ensure};
 use ara_diag::{Code, Diagnostic};
 use serde::{Deserialize, Serialize};
 use std::{
@@ -113,7 +113,7 @@ pub struct Status {
 }
 
 enum Delivery {
-    Ready(subsecond::JumpTable, u64),
+    Ready(subsecond::JumpTable, u64, Option<crate::gate::Staged>),
     Rejected(String),
 }
 
@@ -197,14 +197,23 @@ impl Hotpatch {
         while let Ok(delivery) = self.receiver.try_recv() {
             match delivery {
                 Delivery::Rejected(reason) => self.reject(reason),
-                Delivery::Ready(table, compile_ms) => {
+                Delivery::Ready(table, compile_ms, staged) => {
+                    let began = std::time::Instant::now();
+                    crate::trace_event("apply_start", serde_json::json!({}));
                     // SAFETY: Only our local dx connection supplies tables, checked for this
                     // PID/build and body-only source compatibility before delivery. All hot
                     // calls are quiescent under Publish. Subsecond retains old code libraries;
                     // no live object, vtable, resource layout or GPU handle is replaced here.
                     match unsafe { subsecond::apply_patch(table) } {
                         Ok(()) => {
+                            crate::trace_event(
+                                "apply_end",
+                                serde_json::json!({"apply_us":began.elapsed().as_micros()}),
+                            );
                             self.status.generation = GENERATION.fetch_add(1, Ordering::Release) + 1;
+                            if let Some(staged) = staged {
+                                staged.applied(self.status.generation);
+                            }
                             self.status.last_patch_ms = SystemTime::now()
                                 .duration_since(UNIX_EPOCH)
                                 .ok()
@@ -273,6 +282,8 @@ fn receive(endpoint: &str, sender: &mpsc::Sender<Delivery>, ready: &AtomicBool) 
             .context("ARA7600: launch with ara-dev hotpatch; source contract is missing")?,
     );
     let contract = Contract::read(&path)?;
+    let mut gate = crate::gate::Gate::connect(&path, &contract)?;
+    let mut started_revision = None;
     let build = dioxus_cli_config::build_id();
     let uri = format!(
         "{endpoint}?aslr_reference={}&build_id={build}&pid={}",
@@ -280,14 +291,46 @@ fn receive(endpoint: &str, sender: &mpsc::Sender<Delivery>, ready: &AtomicBool) 
         std::process::id()
     );
     let (mut socket, _) = tungstenite::connect(uri)?;
-    while let Ok(message) = socket.read() {
+    if gate.is_some()
+        && let tungstenite::stream::MaybeTlsStream::Plain(stream) = socket.get_mut()
+    {
+        stream.set_read_timeout(Some(std::time::Duration::from_millis(50)))?;
+    }
+    loop {
+        if gate.as_mut().is_some_and(|gate| gate.request()) {
+            socket.send(tungstenite::Message::Text("\"AraNativePatch\"".into()))?;
+        }
+        let message = match socket.read() {
+            Ok(message) => message,
+            Err(tungstenite::Error::Io(error))
+                if gate.is_some()
+                    && matches!(
+                        error.kind(),
+                        std::io::ErrorKind::WouldBlock | std::io::ErrorKind::TimedOut
+                    ) =>
+            {
+                continue;
+            }
+            Err(_) => break,
+        };
         let tungstenite::Message::Text(text) = message else {
             continue;
         };
         let reload = match serde_json::from_str(&text) {
             Ok(Message::HotReload(reload)) => reload,
             Ok(Message::HotPatchStart) => {
-                if let Err(error) = contract.validate() {
+                started_revision = None;
+                let valid = if gate.is_some() {
+                    contract.revision().map(|revision| {
+                        started_revision = Some(revision);
+                    })
+                } else {
+                    contract.validate()
+                };
+                if let Err(error) = valid {
+                    if let Some(gate) = &gate {
+                        gate.rejected(None, &error.to_string());
+                    }
                     if sender.send(Delivery::Rejected(error.to_string())).is_err() {
                         return Ok(());
                     }
@@ -298,11 +341,14 @@ fn receive(endpoint: &str, sender: &mpsc::Sender<Delivery>, ready: &AtomicBool) 
             Ok(Message::FullReloadFailed) => {
                 let reason = contract.validate().err().map_or_else(
                     || {
-                        "Rust compilation failed; last-good code retained (see ara-dev output)"
+                        "Rust patch build or symbol extraction failed; last-good code retained (see ara-dev output)"
                             .into()
                     },
                     |e| e.to_string(),
                 );
+                if let Some(gate) = &gate {
+                    gate.rejected(started_revision.as_deref(), &reason);
+                }
                 if sender.send(Delivery::Rejected(reason)).is_err() {
                     return Ok(());
                 }
@@ -317,14 +363,44 @@ fn receive(endpoint: &str, sender: &mpsc::Sender<Delivery>, ready: &AtomicBool) 
         let Some(table) = reload.jump_table else {
             continue;
         };
-        let delivery = match contract.validate() {
-            Ok(()) => Delivery::Ready(table, reload.ms_elapsed),
-            Err(error) => Delivery::Rejected(error.to_string()),
+        let validating = std::time::Instant::now();
+        crate::trace_event(
+            "patch_received",
+            serde_json::json!({"compile_ms":reload.ms_elapsed}),
+        );
+        let validated = (|| -> Result<_> {
+            let revision = contract.revision()?;
+            let Some(gate) = &gate else { return Ok(None) };
+            ensure!(
+                started_revision.as_ref() == Some(&revision),
+                "Rust source revision changed while compiling; last good retained"
+            );
+            let staged = gate
+                .stage(revision.to_owned())?
+                .context("lab publication permit expired; last good retained")?;
+            ensure!(
+                contract.revision()? == revision,
+                "Rust sources superseded the lab publication permit; last good retained"
+            );
+            Ok(Some(staged))
+        })();
+        let delivery = match validated {
+            Ok(staged) => Delivery::Ready(table, reload.ms_elapsed, staged),
+            Err(error) => {
+                if let Some(gate) = &gate {
+                    gate.rejected(started_revision.as_deref(), &error.to_string());
+                }
+                Delivery::Rejected(error.to_string())
+            }
         };
         if sender.send(delivery).is_err() {
             return Ok(());
         }
         ready.store(true, Ordering::Release);
+        crate::trace_event(
+            "patch_queued",
+            serde_json::json!({"validation_us":validating.elapsed().as_micros()}),
+        );
     }
     Ok(())
 }

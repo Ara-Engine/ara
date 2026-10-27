@@ -28,6 +28,12 @@ pub(crate) struct Policy {
     /// DWM's allowance for the reading's own presentation; only excess is foreign.
     #[arg(long="dwm-allowance-percent",default_value_t=3.,value_parser=percent)]
     pub dwm_allowance_percent: f64,
+    /// Foreign CPU occupancy, normalized over all logical processors, including BelowNormal work.
+    #[arg(long="foreign-cpu-percent",default_value_t=10.,value_parser=percent)]
+    pub cpu_threshold_percent: f64,
+    /// Consecutive one-second CPU samples above threshold before a reading is invalid.
+    #[arg(long="foreign-cpu-samples",default_value_t=3,value_parser=clap::value_parser!(u32).range(1..=3600))]
+    pub cpu_sustained_samples: u32,
 }
 impl Default for Policy {
     fn default() -> Self {
@@ -35,11 +41,22 @@ impl Default for Policy {
             threshold_percent: 10.,
             sustained_samples: 5,
             dwm_allowance_percent: 3.,
+            cpu_threshold_percent: 10.,
+            cpu_sustained_samples: 3,
         }
     }
 }
 impl Policy {
     pub fn validate(self) -> Result<Self> {
+        ensure!(
+            self.cpu_threshold_percent.is_finite()
+                && (0. ..=100.).contains(&self.cpu_threshold_percent),
+            "invalid foreign CPU threshold (0..100)"
+        );
+        ensure!(
+            (1..=3600).contains(&self.cpu_sustained_samples),
+            "invalid sustained CPU sample count"
+        );
         ensure!(
             self.threshold_percent.is_finite() && self.threshold_percent >= 0.,
             "invalid foreign GPU threshold"
@@ -128,10 +145,22 @@ pub(crate) struct Report {
     pub classification_version: u32,
     #[serde(default)]
     pub monitoring: super::monitor::Monitoring,
+    #[serde(default)]
+    pub cpu: super::cpu::Report,
 }
 impl Report {
+    pub fn diagnostic(&self) -> Option<&'static str> {
+        if self.cpu.invalid() {
+            Some(super::CPU_CODE)
+        } else if self.invalid() {
+            Some(super::CODE)
+        } else {
+            None
+        }
+    }
     pub fn invalid(&self) -> bool {
         !self.intervals.is_empty()
+            || self.cpu.invalid()
             || !self.monitoring.gaps.is_empty()
             || !self.errors.is_empty()
             || self.classification_version == 0 && !self.contaminants.is_empty()
@@ -146,7 +175,7 @@ impl Report {
         }
     }
     pub fn overlaps(&self, window: Interval) -> bool {
-        self.intervals.iter().any(|span| span.overlaps(window))
+        self.intervals.iter().any(|span| span.overlaps(window)) || self.cpu.overlaps(window)
     }
     pub fn detail(&self) -> String {
         let mut result: Vec<_> = self
@@ -160,6 +189,9 @@ impl Report {
             })
             .collect();
         result.extend(self.errors.clone());
+        if self.cpu.invalid() {
+            result.push(self.cpu.detail());
+        }
         result.extend(self.monitoring.gaps.iter().map(|gap| {
             format!(
                 "unmonitored {}..{} UTC epoch ms: {}",
@@ -225,6 +257,14 @@ impl Report {
             classification_version: 2,
             ..Default::default()
         };
+        result.cpu.errors = self.cpu.errors.clone();
+        for sample in &self.cpu.samples {
+            result.cpu.observe(
+                sample.clone(),
+                policy.cpu_threshold_percent,
+                policy.cpu_sustained_samples,
+            );
+        }
         for sample in &self.samples {
             classifier.observe(sample.clone(), &mut result);
         }

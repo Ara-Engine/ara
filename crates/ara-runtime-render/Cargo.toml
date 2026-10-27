@@ -8,6 +8,7 @@ publish.workspace = true
 
 [features]
 hotpatch = ["ara-runtime/hotpatch", "ara-render/hotpatch", "ara-render-fidelity/hotpatch"]
+fidelity-lab = ["ara-render/fidelity-lab"]
 
 [dependencies]
 ara-asset = { path = "../ara-asset" }

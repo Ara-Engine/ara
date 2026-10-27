@@ -10,6 +10,7 @@ workspace = true
 
 [features]
 hotpatch = ["dep:ara-hotpatch"]
+fidelity-lab = ["ara-gpu/fidelity-lab"]
 profiling = ["dep:ara-profile"]
 
 [dependencies]

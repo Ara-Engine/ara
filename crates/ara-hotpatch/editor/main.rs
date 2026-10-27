@@ -20,8 +20,14 @@ fn main() -> ara_ui::Result<()> {
     {
         // SAFETY: First operation at process entry, before any threads/runtimes.
         let arguments = unsafe { ara_hotpatch::args_os()? };
-        let status = std::process::Command::new(driver)
-            .args(["gpu", "--timeout", "1200", "--wait-for-quiet", "--"])
+        let mut command = std::process::Command::new(driver);
+        command.args(["gpu", "--timeout", "1200", "--wait-for-quiet"]);
+        if std::env::var_os("ARA_HOTPATCH_LATENCY").is_some() {
+            // Reload captures intentionally include background compilation.
+            command.args(["--foreign-cpu-percent", "100"]);
+        }
+        let status = command
+            .arg("--")
             .arg(std::env::current_exe()?)
             .args(arguments.iter().skip(1))
             .env("ARA_HOTPATCH_GPU_CHILD", "1")

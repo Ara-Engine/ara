@@ -7,6 +7,11 @@ use std::{
 
 const REVISION: &str = "cb27832398e8a3fa30a0fc8d6917c6d8a86fa71a";
 
+/// Preserve the caller's shared-machine budget; normal focused builds default to two.
+pub(super) fn build_jobs() -> std::ffi::OsString {
+    std::env::var_os("CARGO_BUILD_JOBS").unwrap_or_else(|| "2".into())
+}
+
 pub(super) fn binary(root: &Path) -> PathBuf {
     super::output_root(root)
         .join("ara-hotpatch/dx/bin")
@@ -41,7 +46,10 @@ pub(super) fn capability(dx: &Path) -> Result<()> {
         .arg("--ara-native-rust-patch-version")
         .output()?;
     ensure!(
-        output.status.success() && output.stdout.trim_ascii() == b"2",
+        output.status.success()
+            && (output.stdout.trim_ascii() == b"4"
+                || (matches!(output.stdout.trim_ascii(), b"2" | b"3")
+                    && std::env::var_os("ARA_HOTPATCH_ALLOW_NATIVE_V2").is_some())),
         "ARA7600: dx lacks Ara's native Rust save fix; run ara-dev hotpatch --install-dx, or set ARA_DX to the prepared tool"
     );
     Ok(())
@@ -58,7 +66,7 @@ fn run(command: &mut Command) -> Result<()> {
 pub(super) fn install(root: &Path, plan: bool) -> Result<bool> {
     if plan {
         println!(
-            "optional dx {}; upstream={REVISION}; native Rust save/recovery fix v2; output={}",
+            "optional dx {}; upstream={REVISION}; native Rust save/recovery/dedup/admission fix v4; output={}",
             super::DX_VERSION,
             binary(root).display()
         );
@@ -156,10 +164,7 @@ pub(super) fn install(root: &Path, plan: bool) -> Result<bool> {
             "dx",
         ])
         .env("RUSTUP_TOOLCHAIN", channel)
-        .env(
-            "CARGO_BUILD_JOBS",
-            if cfg!(target_os = "macos") { "2" } else { "4" },
-        )
+        .env("CARGO_BUILD_JOBS", build_jobs())
         .env("CARGO_TARGET_DIR", &build_dir)
         .env("CARGO_BUILD_BUILD_DIR", &build_dir)
         .env("CARGO_PROFILE_RELEASE_DEBUG", "0")

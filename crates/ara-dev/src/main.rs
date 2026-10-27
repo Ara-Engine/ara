@@ -16,6 +16,7 @@ mod history;
 mod hotpatch;
 mod hygiene;
 mod known;
+mod lab;
 mod manifest;
 mod merge;
 mod perf;
@@ -62,6 +63,8 @@ enum Command {
     Perf(perf::Options),
     /// Run a development player/editor under the optional Rust patch driver.
     Hotpatch(hotpatch::Options),
+    /// Shared Fidelity Lab: warm players, shader watching and agent controls.
+    Lab(lab::Options),
     /// Prepare signed local Hub/engine previews; --publish explicitly uploads them.
     Preview(preview::Options),
     /// Measure every D26/D27 release target; writes target/d26/<timestamp>/report.html.
@@ -111,6 +114,9 @@ enum Command {
         /// Wait for foreign games/GPU work to clear instead of refusing the timed run.
         #[arg(long)]
         wait_for_quiet: bool,
+        /// Refuse a busy CPU/GPU baseline instead of waiting for a quiet window.
+        #[arg(long, conflicts_with = "wait_for_quiet")]
+        no_wait: bool,
         #[command(flatten)]
         gpu_policy: gpu_guard::Policy,
         #[arg(last = true, required = true, num_args = 1..)]
@@ -154,11 +160,12 @@ fn run() -> Result<bool> {
     if let Command::Gpu {
         timeout,
         wait_for_quiet,
+        no_wait,
         gpu_policy,
         command,
     } = cli.command
     {
-        return gpu::run(timeout, wait_for_quiet, gpu_policy, &command);
+        return gpu::run(timeout, wait_for_quiet || !no_wait, gpu_policy, &command);
     }
     let root = PathBuf::from(git::text(
         std::path::Path::new("."),
@@ -169,6 +176,7 @@ fn run() -> Result<bool> {
         Command::Cargo { args } => compile_cache::cargo(&root, &args),
         Command::Perf(options) => perf::run(&root, options),
         Command::Hotpatch(options) => hotpatch::run(&root, options),
+        Command::Lab(options) => lab::run(&root, options),
         Command::Preview(options) => preview::run(&root, options),
         Command::D26(options) => d26::run(&root, options),
         Command::Check {

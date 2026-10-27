@@ -3,6 +3,21 @@
 `ara-gpu` reports problems with named codes. They keep their names on the bus;
 the numbers are internal slots.
 
+## ARA6091 CPU_FOREIGN_LOAD: Invalid timing under background CPU load
+owner: ara-dev
+shown as: ARA_CPU_FOREIGN_LOAD
+
+The GPU queue, timing guard, Fidelity Lab and D26 share this accounting.
+
+Causes:
+- Machine-normalized total CPU occupancy minus the protected process tree exceeded the configured threshold for a sustained sampling window. BelowNormal builds still consume CPU and are counted.
+- CPU sampling failed, so the measurement cannot be certified.
+
+Fixes:
+- Wait for other builds and jobs to finish, or use `--wait-for-quiet`.
+- Use `--no-wait` to refuse a busy baseline. Configure `--foreign-cpu-percent` and `--foreign-cpu-samples` deliberately; recorded samples retain the original load.
+- Rerun contaminated timing windows; do not interpret their tails or startup as a regression.
+
 ## ARA6090 GPU_FOREIGN_LOAD: Invalid GPU timing reading
 owner: ara-dev
 shown as: ARA_GPU_FOREIGN_LOAD
