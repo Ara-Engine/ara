@@ -89,12 +89,7 @@ pub(super) fn run(args: Args, began: Instant) -> Result<()> {
     // Include crash-monitor setup and executable hashing in launch latency.
     phases.insert("bootstrap_ms", began.elapsed().as_millis());
     let root = args.standalone.root.as_ref().map_or_else(
-        || {
-            std::env::current_exe()?
-                .parent()
-                .map(PathBuf::from)
-                .context("player executable folder")
-        },
+        || ara_gpu::cooked::install_root().context("player install folder"),
         |root| Ok(root.to_owned()),
     )?;
     let launch: Launch = serde_json::from_slice(&std::fs::read(root.join("ara-launch.json"))?)?;
