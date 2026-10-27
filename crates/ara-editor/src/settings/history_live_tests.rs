@@ -47,7 +47,7 @@ fn unrelated_canonical_changes_survive_human_settings_undo_redo_and_keep_its_lab
             .action("editor.settings.undo", json!({"redo":redo}))
             .unwrap();
         ticks(&mut editor);
-        assert_eq!(editor.state.settings["play.clients"], clients);
+        assert_eq!(editor.state.settings["play.clients"].as_f64(), Some(f64::from(clients)));
         assert_eq!(editor.state.settings["build.profile"], "agent shipping");
         assert_eq!(editor.state.settings["rendering.quality"], "medium");
         assert_eq!(
@@ -156,33 +156,45 @@ fn recorded_same_value_policy_ops_override_local_values_only_from_the_effective_
         "human private value"
     );
     let revision = editor.host.store().revision();
+    let canonical_before = policy(editor.host.store().workspace(), "settings")
+        .unwrap()["build.profile"]
+        .clone();
     apply(
         &mut editor,
         &session,
-        &[("settings.settings[build.profile]", json!("initial"))],
+        &[
+            ("settings.settings[build.profile]", json!("initial")),
+            ("settings.settings[build.profile]", json!("initial")),
+        ],
     );
-    let repeated = editor
+    let target: FieldPath = "settings.settings[build.profile]".parse().unwrap();
+    let recorded: Vec<_> = editor
         .host
         .store()
         .since(revision)
         .iter()
         .flat_map(|txn| &txn.ops)
-        .any(|op| {
-            matches!(op,
-                ara_doc::Op::Set { value:Some(value),prev:Some(previous),.. }
-                    if value==previous && value=="initial"
-            )
-        });
+        .filter(|op| matches!(op, ara_doc::Op::Set { doc,id,path,.. }
+            if doc.as_str()==PREFERENCES_ID && id.as_str()=="p_settings" && path==&target))
+        .collect();
+    let recorded_intent = !recorded.is_empty();
+    let evidence = format!("canonical before {canonical_before}; recorded Ops {recorded:?}");
+    if recorded.len() == 2 {
+        assert!(recorded.iter().any(|op|matches!(op,
+            ara_doc::Op::Set { value:Some(value),prev:Some(previous),.. }
+                if value==previous && value=="initial"
+        )), "consecutive identical Sets must include an equal-value recorded Op: {evidence}");
+    }
     ticks(&mut editor);
-    if repeated {
+    if recorded_intent {
         assert_eq!(
             editor.state.settings["build.profile"], "initial",
-            "a recorded equal-value Set is an explicit canonical override"
+            "a recorded Set is an explicit canonical override: {evidence}"
         );
     } else {
         assert_eq!(
             editor.state.settings["build.profile"], "human private value",
-            "an elided no-op RPC must not invent authoring intent"
+            "an elided no-op RPC must not invent authoring intent: {evidence}"
         );
     }
     editor
