@@ -167,8 +167,9 @@ impl ara_gpu::shared::SurfaceProducer for ChildHandle {
 }
 #[cfg(windows)]
 fn raw_status(status: ExitStatus) -> u32 {
-    use std::os::windows::process::ExitStatusExt;
-    status.into_raw()
+    // Windows exposes a 32-bit exit code through code(); its signed Rust
+    // representation still retains native exception codes such as 0xC0000005.
+    status.code().unwrap_or(1) as u32
 }
 #[cfg(unix)]
 fn raw_status(status: ExitStatus) -> u32 {
@@ -187,4 +188,12 @@ fn status_from_raw(raw: u32) -> ExitStatus {
 }
 fn failure_status() -> ExitStatus {
     status_from_raw(if cfg!(unix) { 1 << 8 } else { 1 })
+}
+
+#[cfg(all(test, windows))]
+#[test]
+fn native_exit_status_preserves_exception_codes() {
+    for code in [0, 1, 259, 0xc0000005, u32::MAX] {
+        assert_eq!(raw_status(status_from_raw(code)), code);
+    }
 }
