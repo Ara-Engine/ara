@@ -72,3 +72,65 @@ pub struct QueueInfo {
     /// Supported timestamp representation.
     pub timestamps: TimestampCaps,
 }
+
+impl Format {
+    /// The ash format both backends use as their shared resource vocabulary.
+    pub fn vk(self) -> ash::vk::Format {
+        use ash::vk::Format as F;
+        match self {
+            Self::Rgba8 => F::R8G8B8A8_UNORM,
+            Self::Rgba8Srgb => F::R8G8B8A8_SRGB,
+            Self::Rgba32Float => F::R32G32B32A32_SFLOAT,
+            Self::Rgba16Float => F::R16G16B16A16_SFLOAT,
+            Self::Rgb10A2 => F::A2B10G10R10_UNORM_PACK32,
+            Self::R32Float => F::R32_SFLOAT,
+            Self::Depth32Float => F::D32_SFLOAT,
+        }
+    }
+}
+
+impl BufferDesc {
+    /// Declared uses as ash buffer usage flags.
+    pub fn vk_usage(&self) -> ash::vk::BufferUsageFlags {
+        use ash::vk::BufferUsageFlags as U;
+        [
+            (self.vertex, U::VERTEX_BUFFER),
+            (self.device_address, U::SHADER_DEVICE_ADDRESS),
+            (
+                self.acceleration_input,
+                U::ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_KHR,
+            ),
+            (self.index, U::INDEX_BUFFER),
+            (self.storage, U::STORAGE_BUFFER),
+            (self.copy_source, U::TRANSFER_SRC),
+            (self.copy_destination, U::TRANSFER_DST),
+        ]
+        .into_iter()
+        .filter(|(enabled, _)| *enabled)
+        .fold(U::empty(), |usage, (_, flag)| usage | flag)
+    }
+}
+
+impl ImageDesc {
+    /// Declared uses as ash image usage flags; attachments follow the format.
+    pub fn vk_usage(&self) -> ash::vk::ImageUsageFlags {
+        use ash::vk::ImageUsageFlags as U;
+        let mut usage = [
+            (self.sampled, U::SAMPLED),
+            (self.storage, U::STORAGE),
+            (self.copy_source, U::TRANSFER_SRC),
+            (self.copy_destination, U::TRANSFER_DST),
+        ]
+        .into_iter()
+        .filter(|(enabled, _)| *enabled)
+        .fold(U::empty(), |usage, (_, flag)| usage | flag);
+        if self.attachment {
+            usage |= if matches!(self.format, Format::Depth32Float) {
+                U::DEPTH_STENCIL_ATTACHMENT
+            } else {
+                U::COLOR_ATTACHMENT
+            };
+        }
+        usage
+    }
+}

@@ -20,6 +20,10 @@ impl Drop for Release {
 }
 
 #[test]
+#[cfg_attr(
+    target_os = "macos",
+    ignore = "Vulkan GPU test; macOS runs the Metal backend"
+)]
 fn completed_images_release_heap_slots_while_driver_destruction_is_blocked() -> anyhow::Result<()> {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../target/ara-gpu/async-disposal");

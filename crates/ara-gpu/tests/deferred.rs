@@ -12,6 +12,10 @@ struct Gate {
 }
 
 #[test]
+#[cfg_attr(
+    target_os = "macos",
+    ignore = "Vulkan GPU test; macOS runs the Metal backend"
+)]
 fn current_queue_scope_preserves_phase_timings_and_waits_only_at_its_tail() -> anyhow::Result<()> {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../target/ara-gpu/deferred-frame");
@@ -70,6 +74,10 @@ impl Drop for Gate {
 }
 
 #[test]
+#[cfg_attr(
+    target_os = "macos",
+    ignore = "Vulkan GPU test; macOS runs the Metal backend"
+)]
 fn deferred_frame_polls_without_waiting_and_orders_constant_writes() -> anyhow::Result<()> {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../target/gpu/deferred")

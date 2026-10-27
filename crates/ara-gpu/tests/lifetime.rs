@@ -7,6 +7,10 @@ use ara_gpu::{
 };
 
 #[test]
+#[cfg_attr(
+    target_os = "macos",
+    ignore = "Vulkan GPU test; macOS runs the Metal backend"
+)]
 fn raster_only_device_omits_ray_tracing_and_keeps_normal_gpu_work_valid() -> Result<()> {
     let cache =
         std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/ara-gpu/raster-device");
@@ -53,6 +57,10 @@ fn raster_only_device_omits_ray_tracing_and_keeps_normal_gpu_work_valid() -> Res
 }
 
 #[test]
+#[cfg_attr(
+    target_os = "macos",
+    ignore = "Vulkan GPU test; macOS runs the Metal backend"
+)]
 fn retired_buffer_memory_can_back_fresh_buffers_on_either_queue() -> Result<()> {
     let cache =
         std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/ara-gpu/buffer-reuse");
@@ -99,6 +107,10 @@ fn retired_buffer_memory_can_back_fresh_buffers_on_either_queue() -> Result<()> 
 }
 
 #[test]
+#[cfg_attr(
+    target_os = "macos",
+    ignore = "Vulkan GPU test; macOS runs the Metal backend"
+)]
 fn static_acceleration_lifetime_and_copy_contracts() -> Result<()> {
     let cache = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../.sn/test-gpu");
     let mut gpu = VulkanDevice::new(&[], cache)?;

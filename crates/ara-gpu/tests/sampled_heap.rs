@@ -18,6 +18,10 @@ fn edge(resource: Resource, before: Access, after: Access) -> Barrier {
 }
 
 #[test]
+#[cfg_attr(
+    target_os = "macos",
+    ignore = "Vulkan GPU test; macOS runs the Metal backend"
+)]
 fn variable_heap_samples_high_slots_and_filters_native_mips() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let mut gpu = VulkanDevice::new(&[], root.join("../../target/ara-gpu/sampled-heap")).unwrap();

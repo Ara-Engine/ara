@@ -199,9 +199,22 @@ fn main() -> Result<(), Box<dyn Error>> {
         // System frameworks used by the Cocoa, CoreAudio, IOKit/GameController,
         // haptics, dialog and Metal-view backends; all ship with macOS.
         for framework in [
-            "AppKit", "AudioToolbox", "AVFoundation", "Carbon", "Cocoa", "CoreAudio",
-            "CoreFoundation", "CoreHaptics", "CoreVideo", "ForceFeedback", "Foundation",
-            "GameController", "IOKit", "Metal", "QuartzCore", "UniformTypeIdentifiers",
+            "AppKit",
+            "AudioToolbox",
+            "AVFoundation",
+            "Carbon",
+            "Cocoa",
+            "CoreAudio",
+            "CoreFoundation",
+            "CoreHaptics",
+            "CoreVideo",
+            "ForceFeedback",
+            "Foundation",
+            "GameController",
+            "IOKit",
+            "Metal",
+            "QuartzCore",
+            "UniformTypeIdentifiers",
         ] {
             println!("cargo:rustc-link-lib=framework={framework}");
         }

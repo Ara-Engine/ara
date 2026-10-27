@@ -64,6 +64,10 @@ fn wait(gpu: &mut VulkanDevice, id: PreparationId) -> Result<PreparedResources> 
 }
 
 #[test]
+#[cfg_attr(
+    target_os = "macos",
+    ignore = "Vulkan GPU test; macOS runs the Metal backend"
+)]
 fn preparation_is_bounded_nonblocking_and_adopts_initialized_resources_once() -> anyhow::Result<()>
 {
     let root =
