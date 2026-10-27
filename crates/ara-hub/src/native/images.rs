@@ -1,4 +1,4 @@
-//! UI images: pinned Lucide icons (white, tinted by CSS color), the Ara wordmark,
+//! UI images: pinned Lucide icons (white, tinted by CSS color), Hub/engine brands,
 //! and project/template previews decoded off the UI thread.
 use ara_ui::source::stable_id;
 use ara_ui_render::gpu::{Image, Renderer};

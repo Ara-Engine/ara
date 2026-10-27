@@ -1,6 +1,7 @@
 //! The setup window. [`View`] is everything it can show, built from the install
 //! transaction's progress; [`paint`] draws a view into an offscreen bitmap (the
 //! window blits it, tests save it as PNG); [`window`] runs the Win32 window.
+mod brand;
 mod canvas;
 pub mod paint;
 pub mod window;
@@ -42,6 +43,8 @@ pub struct Button {
 /// Progress while setup works; nothing to click.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Busy {
+    /// Verified payload identity; absent while the shared setup checks its archive.
+    pub kind: Option<Kind>,
     /// `Installing Ara 0.0.1-alpha`.
     pub title: String,
     /// The destination, or what setup is checking.
@@ -63,6 +66,8 @@ pub enum View {
     Busy(Busy),
     /// A same-kind installation exists.
     Confirm {
+        /// Product whose existing installation is being replaced.
+        kind: Kind,
         /// `Replace Ara 0.0.1-alpha?`
         title: String,
         /// Installed versus this setup's version.
@@ -98,6 +103,8 @@ pub enum View {
     },
     /// Installed.
     Done {
+        /// Product whose installation finished.
+        kind: Kind,
         /// `Ara 0.0.1-alpha installed`.
         title: String,
         /// Installation directory.
@@ -120,9 +127,18 @@ const fn button(action: Action, label: &'static str, primary: bool) -> Button {
 }
 
 impl View {
+    /// Verified product identity for header artwork and the native window icon.
+    pub fn kind(&self) -> Option<Kind> {
+        match self {
+            Self::Busy(busy) => busy.kind,
+            Self::Confirm { kind, .. } | Self::Done { kind, .. } => Some(*kind),
+            Self::Blocked { .. } | Self::Error { .. } => None,
+        }
+    }
     /// Before the payload is verified.
     pub fn preparing() -> View {
         View::Busy(Busy {
+            kind: None,
             title: "Ara Setup".into(),
             subtitle: "Checking the installer".into(),
             label: "Preparing".into(),
@@ -189,6 +205,7 @@ impl View {
             },
         };
         View::Busy(Busy {
+            kind: plan.map(|plan| plan.kind),
             title,
             subtitle,
             label,
@@ -205,6 +222,7 @@ impl View {
             Kind::Hub => format!("Ara Hub {installed}"),
         };
         View::Confirm {
+            kind: plan.kind,
             title: if installed == VERSION {
                 format!("Replace {}?", plan.kind.product())
             } else {
@@ -278,6 +296,7 @@ impl View {
             Kind::Hub => "Open Ara Hub to install an engine version and create a project.",
         };
         View::Done {
+            kind: installed.plan.kind,
             title: format!("{} installed", installed.plan.kind.product()),
             destination: installed.plan.destination.display().to_string(),
             note: if installed.replaced {

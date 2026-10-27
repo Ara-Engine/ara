@@ -54,6 +54,54 @@ pub(super) fn run(
     );
     seed(&mut hub);
     settle(host, app, &mut hub)?;
+    click(app, &mut hub, "search")?;
+    let mut composing = false;
+    let mut clipboard = crate::native::OsClipboard;
+    anyhow::ensure!(
+        app.edit(
+            &mut composing,
+            ara_ui_text::EditEvent::Insert("cour".into()),
+            &mut clipboard
+        ),
+        "search input reaches native field"
+    );
+    for intent in app.actions() {
+        hub.intent(intent);
+    }
+    settle(host, app, &mut hub)?;
+    click(app, &mut hub, "new-project")?;
+    anyhow::ensure!(
+        hub.view == View::Create && app.ui.find("nav-projects").is_none(),
+        "New project opens a dedicated full page"
+    );
+    anyhow::ensure!(
+        hub.engines.len() >= 2,
+        "engine choice fixture needs multiple installed versions"
+    );
+    save(host, app, folder, &format!("{theme}-create-fullpage"))?;
+    click(app, &mut hub, "create-engine")?;
+    anyhow::ensure!(
+        app.select("create-engine")
+            .is_some_and(|select| select.is_open()),
+        "engine versions use the shared Select popup"
+    );
+    save(host, app, folder, &format!("{theme}-create-engine-options"))?;
+    for intent in app
+        .key(&hub, 41, true)
+        .map_err(|error| anyhow::anyhow!("{error}"))?
+    {
+        hub.intent(intent);
+    }
+    app.rebuild(&mut hub, NOW)
+        .map_err(|error| anyhow::anyhow!("{error}"))?;
+    click(app, &mut hub, "create-back")?;
+    anyhow::ensure!(
+        hub.view == View::Projects && hub.search == "cour",
+        "Back restores the Projects query"
+    );
+    save(host, app, folder, &format!("{theme}-create-back-projects"))?;
+    hub.intent(Intent::Search(String::new()));
+    settle(host, app, &mut hub)?;
     click(app, &mut hub, "more-project-3")?;
     anyhow::ensure!(
         app.ui.find("menu-rename").is_some(),

@@ -69,6 +69,7 @@ fn states() -> Vec<(&'static str, View, Pointer)> {
         (
             "done",
             View::Done {
+                kind: Kind::Engine,
                 title: "Ara 0.0.1-alpha installed".into(),
                 destination: INSTALLED.into(),
                 note: "Replaced the previous installation. Open Ara Hub to create a project or try a sample.".into(),

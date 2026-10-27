@@ -399,6 +399,14 @@ fn interactive(
                         intents.push(crate::model::Intent::RenameCommit);
                     }
                 }
+                Event::MouseButton {
+                    button: 4,
+                    pressed: true,
+                } => {
+                    if let Some(actions) = input::recover(app.back(hub)) {
+                        intents.extend(actions);
+                    }
+                }
                 Event::MouseButton { .. } => {}
                 Event::Wheel(delta) => {
                     if hub.menu.is_some() {

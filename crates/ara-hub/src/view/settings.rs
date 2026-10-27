@@ -17,7 +17,10 @@ pub(super) fn channels(p: &mut Page, hub: &Hub) {
 }
 pub(super) fn body(p: &mut Page, hub: &Hub) {
     p.panel("panel-card", |p| {
-        p.text("section-title", "Ara Hub updates");
+        p.panel("row", |p| {
+            p.image("brand-hub", "brand-icon");
+            p.text("section-title", "Ara Hub updates");
+        });
         p.text(
             "section-copy",
             &format!(

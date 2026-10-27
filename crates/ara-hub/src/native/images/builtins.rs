@@ -11,6 +11,7 @@ macro_rules! icons {
 /// Lucide subset (ISC, `assets/icons/LICENSE`), shared revision with the editor.
 const ICONS: &[(&str, &str)] = icons![
     "activity",
+    "arrow-left",
     "arrow-up-down",
     "book-open",
     "bot",
@@ -60,8 +61,9 @@ const ICONS: &[(&str, &str)] = icons![
     "x",
     "file",
 ];
-const WORDMARK: &str = include_str!("../../../../../assets/brand/ara-wordmark.svg");
-const WORDMARK_LIGHT: &str = include_str!("../../../../../assets/brand/ara-wordmark-light.svg");
+const HUB_ICON: &str = include_str!("../../../../../assets/brand/icons/hub/ara-hub-small.svg");
+const ENGINE_ICON: &str =
+    include_str!("../../../../../assets/brand/icons/engine/ara-engine-small.svg");
 
 /// The texture ID `ara_ui` derives from an image `src`.
 pub fn texture(src: &str) -> u32 {
@@ -100,7 +102,7 @@ fn rasterize(svg: &str, size: [u32; 2]) -> anyhow::Result<Image> {
 /// Static image sources are cheap; decoding and GPU uploads happen only on first use.
 enum Source {
     Icon(&'static str),
-    Wordmark(&'static str),
+    Brand(&'static str),
     Starter,
 }
 
@@ -115,11 +117,8 @@ impl Builtins {
             .iter()
             .map(|(name, svg)| (texture(&format!("icon-{name}")), Source::Icon(svg)))
             .collect();
-        sources.insert(texture("brand-wordmark"), Source::Wordmark(WORDMARK));
-        sources.insert(
-            texture("brand-wordmark-light"),
-            Source::Wordmark(WORDMARK_LIGHT),
-        );
+        sources.insert(texture("brand-hub"), Source::Brand(HUB_ICON));
+        sources.insert(texture("brand-engine"), Source::Brand(ENGINE_ICON));
         sources.insert(texture("template-starter"), Source::Starter);
         Self {
             sources,
@@ -154,11 +153,11 @@ impl Builtins {
                     let size = (16. * self.dpi.max(2.)).ceil() as u32;
                     rasterize(&svg.replace("currentColor", "#ffffff"), [size, size])?
                 }
-                Source::Wordmark(svg) => {
+                Source::Brand(svg) => {
                     let scale = self.dpi.max(1.) * 2.;
                     rasterize(
                         svg,
-                        [(64. * scale).round() as u32, (30. * scale).round() as u32],
+                        [(40. * scale).round() as u32, (40. * scale).round() as u32],
                     )?
                 }
                 Source::Starter => {
@@ -201,8 +200,8 @@ mod tests {
         assets
             .prepare(&mut renderer, &app.ui.display)
             .expect("first images");
-        assert!(assets.loaded.contains(&texture("brand-wordmark")));
-        assert!(!assets.loaded.contains(&texture("brand-wordmark-light")));
+        assert!(assets.loaded.contains(&texture("brand-hub")));
+        assert!(!assets.loaded.contains(&texture("brand-engine")));
         assert!(!assets.loaded.contains(&texture("template-starter")));
         assert!(
             assets.loaded.len() < assets.sources.len() / 2,
@@ -233,6 +232,6 @@ mod tests {
             }
         }
         assert!(assets.loaded.contains(&texture("template-starter")));
-        assert!(assets.loaded.contains(&texture("brand-wordmark-light")));
+        assert!(assets.loaded.contains(&texture("brand-engine")));
     }
 }
