@@ -134,6 +134,8 @@ fn unrelated_source_rename_survives_alt_duplicate_without_interrupting_the_gestu
     assert_eq!(after["e_gesturea1"], current["e_gesturea1"]);
     assert!(
         after
+            .as_object()
+            .unwrap()
             .values()
             .any(|record| record["name"] == "Renamed during gesture copy")
     );
