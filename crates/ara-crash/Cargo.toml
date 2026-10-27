@@ -41,6 +41,9 @@ minidump-writer = "0.13"
 [target.'cfg(any(target_os = "linux", target_os = "macos"))'.dependencies]
 libc.workspace = true
 
+[target.'cfg(windows)'.dependencies]
+windows-sys = { workspace = true, features = ["Win32_Foundation", "Win32_Security_Authorization", "Win32_Storage_FileSystem"] }
+
 [dev-dependencies]
 tempfile = { workspace = true }
 debugid = "0.8"

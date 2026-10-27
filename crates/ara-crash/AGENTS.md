@@ -18,9 +18,14 @@ with the image's unwind tables. Symbolization falls back to the debug ID when na
 differ (minidump-writer may leave the main executable unnamed).
 
 `monitor_from_args` must run before any application initialization. `Capture`
-owns the child process and native handler; drop detaches and reaps it. The crash
-callback only requests a dump over preconnected IPC. Never allocate, symbolize
-or upload from that callback. Rust's panic hook writes a local JSON report and
+owns the child process and native handler; drop detaches and reaps it. Isolated
+launches set `ARA_CRASH_IPC_DIR` to a short base under target/; this strict override
+never falls back to the profile. The final socket must fit 103 UTF-8 bytes. See
+`src/capture/ipc.rs` for platform fallbacks, permissions and shared cleanup.
+Startup failures retain monitor stderr in ARA-EXP-CRASH-004; export verification
+rejects that coded failure. The crash callback only requests a dump over
+preconnected IPC. Never allocate, symbolize or upload from that callback.
+Rust's panic hook writes a local JSON report and
 requests a paired native snapshot using ordinary messages, preserving the fatal
 client connection for a later crash after a caught panic. Ping pins exception
 context until the monitor finishes writing. Snapshot requests are thread-scoped.
