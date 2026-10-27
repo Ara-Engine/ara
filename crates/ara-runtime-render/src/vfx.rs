@@ -97,6 +97,15 @@ impl Effects {
                     target: *target - offset,
                     vertical_fov: *vertical_fov,
                 },
+                CameraSpec::OrthographicLookAt {
+                    position,
+                    target,
+                    vertical_size,
+                } => CameraSpec::OrthographicLookAt {
+                    position: *position - offset,
+                    target: *target - offset,
+                    vertical_size: *vertical_size,
+                },
                 CameraSpec::Orthographic { centre, world_size } => CameraSpec::Orthographic {
                     centre: *centre,
                     world_size: *world_size,

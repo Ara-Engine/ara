@@ -10,6 +10,7 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 use std::sync::mpsc::Sender;
 
+mod camera_bookmarks;
 mod framing;
 mod params;
 pub(crate) use framing::PendingFrame;
@@ -124,8 +125,10 @@ impl Service for EditorService {
             Method::new::<EditorCamera>(
                 db,
                 "editor.camera",
-                "Read or set the Scene view camera: orbit pose and vertical field of view, or look through a scene Camera entity (`entity`). Returns `camera`.",
+                "Read or set the Scene camera: orbit pose, perspective/orthographic projection and lens, or look through a scene Camera entity. Returns `camera`.",
             ),
+            Method::new::<EditorCameraBookmark>(db,"editor.camera.bookmark",
+                "List, save, recall or delete named per-scene camera views through attributed navigation ops; agent recall leaves the human's view alone."),
             Method::new::<EditorSceneOpen>(
                 db,
                 "editor.scene.open",
@@ -396,7 +399,11 @@ impl EditorService {
         let separate = agent.is_some()
             && matches!(
                 method,
-                "editor.select" | "editor.camera" | "editor.frame" | "editor.scene.open"
+                "editor.select"
+                    | "editor.camera"
+                    | "editor.camera.bookmark"
+                    | "editor.frame"
+                    | "editor.scene.open"
             );
         let human = separate.then(|| (state.doc.clone(), state.selection.clone(), state.camera));
         if separate
@@ -408,6 +415,7 @@ impl EditorService {
             state.camera = presence.camera;
         }
         let mut framing_pending = false;
+        let mut bookmark_result = None;
         match method {
             "editor.canvas" => {
                 let p: EditorCanvas = parse(params)?;
@@ -652,20 +660,39 @@ impl EditorService {
                     }
                     "editor.layout.close" => {
                         if p.panel == "scene" {
-                            return Err(vec![crate::invalid("the Scene view cannot be closed")]);
+                            fn contains(node: &DockNode, panel: &str) -> bool {
+                                match node {
+                                    DockNode::Area { tabs, .. } => {
+                                        tabs.iter().any(|tab| tab == panel)
+                                    }
+                                    DockNode::Split { first, second, .. } => {
+                                        contains(first, panel) || contains(second, panel)
+                                    }
+                                }
+                            }
+                            if !dock
+                                .floating()
+                                .iter()
+                                .any(|window| contains(&window.root, "scene"))
+                            {
+                                return Err(vec![crate::invalid(
+                                    "the main Scene view cannot be closed",
+                                )]);
+                            }
+                            crate::state::move_panel(&mut dock, "scene", "view")
+                                .map_err(ui_error)?;
+                            dock.expand_panel("scene");
+                            dock.activate("scene").map_err(ui_error)?;
+                            state.focus = "scene".into();
+                        } else {
+                            dock.close(&p.panel).map_err(ui_error)?;
                         }
-                        dock.close(&p.panel).map_err(ui_error)?;
                         if state.maximized.as_deref() == Some(p.panel.as_str()) {
                             state.maximized = None;
                         }
                     }
                     _ => match p.slot.as_deref() {
                         Some("float") => {
-                            if p.panel == "scene" {
-                                return Err(vec![crate::invalid(
-                                    "the Scene viewport stays in the main window",
-                                )]);
-                            }
                             dock_float(
                                 &mut dock,
                                 &p.panel,
@@ -773,16 +800,25 @@ impl EditorService {
             "editor.camera" => {
                 let p: EditorCamera = parse(params)?;
                 let numbers = p.target.into_iter().flatten().chain(
-                    [p.yaw, p.pitch, p.distance, p.fov_y_degrees]
-                        .into_iter()
-                        .flatten(),
+                    [
+                        p.yaw,
+                        p.pitch,
+                        p.distance,
+                        p.fov_y_degrees,
+                        p.orthographic_height,
+                    ]
+                    .into_iter()
+                    .flatten(),
                 );
-                if numbers.clone().any(|x| !x.is_finite()) || p.distance.is_some_and(|d| d <= 0.) {
+                if numbers.clone().any(|x| !x.is_finite())
+                    || p.distance.is_some_and(|d| d <= 0.)
+                    || p.orthographic_height.is_some_and(|height| height <= 0.)
+                {
                     return Err(vec![crate::invalid(
-                        "camera values must be finite; distance must be positive",
+                        "camera values must be finite; distance and orthographic height must be positive",
                     )]);
                 }
-                if p.entity.is_none() && numbers.count() == 0 {
+                if p.entity.is_none() && p.projection.is_none() && numbers.count() == 0 {
                     return Ok(json!({"camera": state.camera}));
                 }
                 let camera = &mut state.camera;
@@ -807,6 +843,26 @@ impl EditorService {
                 if let Some(fov) = p.fov_y_degrees {
                     camera.set_fov(fov);
                 }
+                if let Some(projection) = p.projection {
+                    camera.set_projection(projection);
+                }
+                if let Some(height) = p.orthographic_height {
+                    camera.orthographic_height = height.clamp(0.01, 1_000_000.);
+                }
+                if !camera.is_valid() {
+                    return Err(vec![crate::invalid(
+                        "Camera pose cannot produce a finite, nonzero view",
+                    )]);
+                }
+            }
+            "editor.camera.bookmark" => {
+                let p: EditorCameraBookmark = parse(params)?;
+                let read = matches!(p.action, CameraBookmarkAction::List);
+                let result = camera_bookmarks::run(&mut state, cx, p, agent.is_none())?;
+                if read {
+                    return Ok(result);
+                }
+                bookmark_result = Some(result);
             }
             "editor.frame" => {
                 let p: EditorFrame = parse(params)?;
@@ -1039,6 +1095,10 @@ impl EditorService {
             .unwrap_or(ara_ops::Author::Human);
         let mut result = self.navigation.commit(state, author, method)?;
         if method == "editor.camera" {
+            result["camera"] = json!(viewed);
+        }
+        if let Some(bookmark) = bookmark_result {
+            result["bookmark"] = bookmark;
             result["camera"] = json!(viewed);
         }
         if method == "editor.frame" {

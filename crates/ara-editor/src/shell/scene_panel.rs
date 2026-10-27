@@ -143,12 +143,40 @@ impl Shell {
                 "view-camera",
                 Context::Camera,
                 "video",
-                if narrow { "" } else { "Perspective" },
-                "Camera views, field of view and speed",
+                if narrow {
+                    ""
+                } else if editor.state.camera.projection
+                    == crate::state::CameraProjection::Orthographic
+                {
+                    "Orthographic"
+                } else {
+                    "Perspective"
+                },
+                "Camera views, projection, lens, bookmarks and speed",
             );
+            let orthographic =
+                editor.state.camera.projection == crate::state::CameraProjection::Orthographic;
+            self.bind_command("view-projection", "view.camera.perspective", Target::None);
+            out.push_str(&format!("<button id='view-projection' class='viewport-button{}' label='Toggle orthographic projection' description='{} projection; click to switch · Num5' action='Dispatch'>{}</button>",if orthographic {" viewport-button-on"} else {""},if orthographic {"Orthographic"} else {"Perspective"},icons::icon_in("view-projection","box","viewport-icon")));
+            self.bind_command(
+                "view-bookmark-save",
+                "view.camera.bookmark.save",
+                Target::None,
+            );
+            self.bind_command("view-bookmarks", "view.camera.bookmarks", Target::None);
+            for (id, icon, label) in [
+                ("view-bookmark-save", "save", "Save camera bookmark"),
+                ("view-bookmarks", "camera", "Recall camera bookmark"),
+            ] {
+                out.push_str(&format!("<button id='{id}' class='viewport-button' label='{label}' description='{label}' action='Dispatch'>{}</button>",icons::icon_in(id,icon,"viewport-icon")));
+            }
             self.bindings
                 .insert(ara_ui::source::stable_id("view-fov"), Binding::CameraFov);
-            out.push_str(&format!("<field id='view-fov' class='number viewport-fov' min='10' max='120' step='1' text='{}' label='Field of view' description='Vertical field of view in degrees (10–120)' action='Dispatch' />",editor.state.camera.fov_label()));
+            if orthographic {
+                out.push_str(&format!("<field id='view-fov' class='number viewport-fov' min='0.01' max='1000000' step='0.1' text='{}' label='Orthographic height' description='Visible vertical span in metres; drag the field grip to zoom' action='Dispatch' />",editor.state.camera.orthographic_height));
+            } else {
+                out.push_str(&format!("<field id='view-fov' class='number viewport-fov' min='10' max='120' step='1' text='{}' label='Field of view' description='Vertical field of view in degrees (10–120)' action='Dispatch' />",editor.state.camera.fov_label()));
+            }
             self.viewport_menu(
                 out,
                 "view-speed",

@@ -155,6 +155,7 @@ impl Editor {
         let mut state = EditorState {
             camera: cameras.saved.get(&doc).copied().unwrap_or_default(),
             scene_cameras: cameras.saved.clone(),
+            camera_bookmarks: cameras.bookmarks.clone(),
             doc,
             ..Default::default()
         };

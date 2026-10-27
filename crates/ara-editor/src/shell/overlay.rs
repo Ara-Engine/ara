@@ -130,6 +130,7 @@ impl Outlines {
 }
 /// Project a world point into a logical UI viewport, rejecting points behind the camera.
 pub fn project(camera: &Camera, rect: Box2, point: Vec3) -> Option<[f32; 2]> {
+    let orthographic = camera.projection == crate::state::CameraProjection::Orthographic;
     let camera = camera
         .spec()
         .resolve([rect.w.max(1.) as u32, rect.h.max(1.) as u32])
@@ -139,6 +140,9 @@ pub fn project(camera: &Camera, rect: Box2, point: Vec3) -> Option<[f32; 2]> {
         return None;
     }
     let ndc = clip.truncate() / clip.w;
+    if !ndc.is_finite() || (orthographic && !(0. ..=1.).contains(&ndc.z)) {
+        return None;
+    }
     Some([
         rect.x + (ndc.x + 1.) * 0.5 * rect.w,
         rect.y + (1. - ndc.y) * 0.5 * rect.h,
@@ -146,21 +150,17 @@ pub fn project(camera: &Camera, rect: Box2, point: Vec3) -> Option<[f32; 2]> {
 }
 /// Intersect a pointer ray with the ground plane for drag-to-place.
 pub fn ground_point(camera: &Camera, rect: Box2, point: [f32; 2]) -> Option<Vec3> {
-    let c = camera
-        .spec()
-        .resolve([rect.w.max(1.) as u32, rect.h.max(1.) as u32])
-        .ok()?;
-    let inverse = (c.projection * c.view).inverse();
+    if !rect.w.is_finite() || !rect.h.is_finite() || rect.w <= 0. || rect.h <= 0. {
+        return None;
+    }
     let x = (point[0] - rect.x) / rect.w * 2. - 1.;
     let y = 1. - (point[1] - rect.y) / rect.h * 2.;
-    let near = inverse * glam::Vec4::new(x, y, 1., 1.);
-    let near = near.truncate() / near.w;
-    let direction = (near - c.position).normalize();
+    let (origin, direction) = camera.ray([rect.w.max(1.) as u32, rect.h.max(1.) as u32], [x, y])?;
     if direction.y.abs() < 0.00001 {
         return None;
     }
-    let t = -c.position.y / direction.y;
-    (t > 0.).then_some(c.position + direction * t)
+    let t = -origin.y / direction.y;
+    (t.is_finite() && t > 0.).then_some(origin + direction * t)
 }
 /// One grabbable part of the transform gizmo.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -291,25 +291,28 @@ pub fn plane_point(
     pivot: Vec3,
     normal: Vec3,
 ) -> Option<Vec3> {
-    let c = camera
-        .spec()
-        .resolve([rect.w.max(1.) as u32, rect.h.max(1.) as u32])
-        .ok()?;
-    let inverse = (c.projection * c.view).inverse();
-    let near = inverse
-        * glam::Vec4::new(
+    if !rect.w.is_finite()
+        || !rect.h.is_finite()
+        || rect.w <= 0.
+        || rect.h <= 0.
+        || !pivot.is_finite()
+        || !normal.is_finite()
+    {
+        return None;
+    }
+    let (origin, direction) = camera.ray(
+        [rect.w.max(1.) as u32, rect.h.max(1.) as u32],
+        [
             (pointer[0] - rect.x) / rect.w * 2. - 1.,
             1. - (pointer[1] - rect.y) / rect.h * 2.,
-            1.,
-            1.,
-        );
-    let direction = (near.truncate() / near.w - c.position).normalize_or_zero();
+        ],
+    )?;
     let denominator = direction.dot(normal);
     if denominator.abs() < 0.0001 {
         return None;
     }
-    let t = (pivot - c.position).dot(normal) / denominator;
-    (t > 0.).then_some(c.position + direction * t)
+    let t = (pivot - origin).dot(normal) / denominator;
+    (t.is_finite() && t > 0.).then_some(origin + direction * t)
 }
 /// Resolve the selected pivot and orientation into image-space transform handles.
 pub fn handles(view: &DocumentView, state: &EditorState, rect: Box2) -> Option<Handles> {
@@ -331,8 +334,7 @@ pub fn handles(view: &DocumentView, state: &EditorState, rect: Box2) -> Option<H
         matrix.transform_point3(Vec3::ZERO)
     };
     // Constant screen size: convert the arm's pixels to metres at the pivot's depth.
-    let depth = (pivot - state.camera.position()).length().max(0.01);
-    let per_pixel = 2. * depth * (50f32.to_radians() * 0.5).tan() / rect.h.max(1.);
+    let per_pixel = state.camera.world_per_pixel(pivot, rect.h)?;
     let size = state.number("viewport.gizmoSize", 100.) as f32 / 100.;
     let length = ARM * size * per_pixel;
     let origin = project(&state.camera, rect, pivot)?;

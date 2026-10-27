@@ -1176,15 +1176,7 @@ impl Shell {
                 }
             }
         }
-        if let (Some(cube), Some(rect)) = (self.ui.find("view-cube"), self.viewport()) {
-            let r = self.ui.nodes[cube].rect;
-            let offset = [rect.x + rect.w - axis::SIZE - 12. - r.x, rect.y + 12. - r.y];
-            // Only a moved cube repaints: marking it every rebuild repainted the whole UI.
-            if self.ui.nodes[cube].paint_offset != offset {
-                self.ui.nodes[cube].paint_offset = offset;
-                self.ui.nodes[cube].dirty.paint = true;
-            }
-        }
+        self.position_axis();
         self.stats.work += self.ui.frame(&mut self.text)?;
         if self.frame_new_graphs(editor)? {
             self.stats.work += self.ui.frame(&mut self.text)?;
@@ -1282,6 +1274,8 @@ impl Shell {
     }
     /// Run after every mount: decorations, a pending Inspector field reveal, motion.
     fn after_mount(&mut self, editor: &Editor) -> ara_ui::Result<()> {
+        self.position_axis();
+        self.stats.work += self.ui.frame(&mut self.text)?;
         self.position_asset_rename()?;
         if let Some(grid) = self.shown_node("asset-grid") {
             let width = self.ui.nodes[grid].rect.w;
@@ -1530,14 +1524,47 @@ impl Shell {
         }
         Ok(changed)
     }
-    /// Current scene image rectangle in the main window; also the picking boundary.
+    /// Visible scene rectangle in the current native surface; also the picking boundary.
     pub fn viewport(&self) -> Option<Box2> {
-        if self.current.is_some() {
-            return None;
-        }
         self.ui
             .find("viewport-image")
+            .filter(|index| self.ui.shown(*index))
             .map(|i| self.ui.nodes[i].rect)
+            .filter(|rect| {
+                [rect.x, rect.y, rect.w, rect.h]
+                    .into_iter()
+                    .all(f32::is_finite)
+                    && rect.w > 1.
+                    && rect.h > 1.
+            })
+    }
+    /// The one visible Scene view's native owner and logical rectangle, independent of the current surface.
+    pub(crate) fn scene_host(&self) -> Option<(Option<&str>, Box2)> {
+        if let Some(rect) = self.viewport() {
+            return Some((self.current.as_deref(), rect));
+        }
+        self.floats.iter().find_map(|surface| {
+            let index = surface
+                .ui
+                .find("viewport-image")
+                .filter(|index| surface.ui.shown(*index))?;
+            let rect = surface.ui.nodes[index].rect;
+            if ![rect.x, rect.y, rect.w, rect.h]
+                .into_iter()
+                .all(f32::is_finite)
+                || rect.w <= 1.
+                || rect.h <= 1.
+            {
+                return None;
+            }
+            // enter() parks the main tree in the selected floating slot.
+            let host = if self.current.as_deref() == Some(surface.id.as_str()) {
+                None
+            } else {
+                Some(surface.id.as_str())
+            };
+            Some((host, rect))
+        })
     }
     /// Compact agent layout report; glyph shaping internals stay out of capture jobs.
     pub fn layout_report(&self) -> Value {

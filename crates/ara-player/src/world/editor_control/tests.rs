@@ -5,13 +5,7 @@ use crate::input::Navigation;
 fn world() -> World {
     let target = std::env::var_os("CARGO_TARGET_DIR")
         .map(PathBuf::from)
-        .unwrap_or_else(|| {
-            if cfg!(windows) {
-                PathBuf::from(r"D:\AraBuild\ux-editor-target")
-            } else {
-                PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../target")
-            }
-        });
+        .unwrap_or_else(|| PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../target"));
     let cache = target.join("ara-player/navigation-test-cache");
     let scene:PlayScene=serde_json::from_value(json!({
         "format":1,"scene":"sc_navtest","seed":901,"tick_hz":60,"assets":{},"cache":cache,"nav_cache":null,"types":[],
@@ -25,6 +19,7 @@ fn world() -> World {
 }
 fn view(speed: f32) -> View {
     View {
+        inspect: false,
         camera: Some(ViewCamera {
             position: [2., 3., 4.],
             target: [2., 3., 3.],
@@ -103,8 +98,22 @@ fn spectator_fixed_clock_speed_and_look_preserve_gameplay_and_source_camera() {
         before,
         "navigation must not mutate gameplay ECS or authored camera values"
     );
+    let query = View {
+        inspect: true,
+        camera: None,
+        capture_current: false,
+        navigation_speed: None,
+    };
+    let first = world.set_editor_view(query.clone()).unwrap();
+    let second = world.set_editor_view(query).unwrap();
+    assert_eq!(
+        first, second,
+        "read-only queries must not increment typed navigation revision"
+    );
+    assert_eq!(world.editor_view.pose(), Some(turned));
     world
         .set_editor_view(View {
+            inspect: false,
             camera: None,
             capture_current: false,
             navigation_speed: None,

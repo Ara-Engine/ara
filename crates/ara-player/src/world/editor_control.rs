@@ -125,6 +125,24 @@ impl World {
     }
     /// Navigation-only typed ops change extraction, never an authored Camera or Transform.
     pub(crate) fn set_editor_view(&mut self, view: View) -> Result<Value> {
+        if view.inspect {
+            let camera = self.editor_view.pose().map(|pose| {
+                let rotation = Quat::from_euler(
+                    EulerRot::XYZ,
+                    pose.rotation[0].to_radians(),
+                    pose.rotation[1].to_radians(),
+                    pose.rotation[2].to_radians(),
+                );
+                ViewCamera {
+                    position: pose.position,
+                    target: (Vec3::from_array(pose.position) + rotation * Vec3::NEG_Z).to_array(),
+                    fov_y_degrees: pose.fov_y_degrees,
+                }
+            });
+            return Ok(
+                json!({"mode":if camera.is_some(){"spectator"}else{"gameplay"},"revision":self.editor_view.revision(),"camera":camera,"navigationSpeed":self.editor_view.navigation_speed()}),
+            );
+        }
         if let Some(speed) = view.navigation_speed {
             self.editor_view
                 .set_navigation_speed(speed)

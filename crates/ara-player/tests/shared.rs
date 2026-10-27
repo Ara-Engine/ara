@@ -11,13 +11,7 @@ use std::{
 fn output() -> PathBuf {
     let target = std::env::var_os("CARGO_TARGET_DIR")
         .map(PathBuf::from)
-        .unwrap_or_else(|| {
-            if cfg!(windows) {
-                PathBuf::from(r"D:\AraBuild\ux-editor-target")
-            } else {
-                PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../target")
-            }
-        });
+        .unwrap_or_else(|| PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../target"));
     target.join("ara-player/shared").join(format!(
         "{}-{}",
         std::process::id(),

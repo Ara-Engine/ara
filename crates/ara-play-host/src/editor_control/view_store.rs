@@ -42,6 +42,10 @@ pub struct ViewStore {
 const DOC: &str = "sc_editorview";
 const ENTITY: &str = "e_editorview";
 impl ViewStore {
+    /// Monotonic navigation document revision, including retained history epochs.
+    pub fn revision(&self) -> u64 {
+        self.epoch + self.store.revision()
+    }
     /// The view's own navigation speed; it never changes gameplay movement settings.
     pub fn navigation_speed(&self) -> f32 {
         self.store

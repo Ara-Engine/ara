@@ -303,13 +303,12 @@ impl Shell {
                 )?;
             }
             DropTarget::Float => {
-                if panel == "scene" {
-                    return Err(
-                        "The Scene viewport stays in the main window; float tool panels and graphs"
-                            .into(),
-                    );
-                }
-                let rect = rect.unwrap_or_else(|| self.float_rect([420, 560]));
+                let size = if panel == "scene" {
+                    [960, 640]
+                } else {
+                    [420, 560]
+                };
+                let rect = rect.unwrap_or_else(|| self.float_rect(size));
                 editor.action(
                     "editor.layout.move",
                     json!({"panel": panel, "slot": "float", "rect": rect}),
@@ -450,6 +449,9 @@ impl Shell {
     }
 }
 
+#[cfg(test)]
+#[path = "scene_detach_tests.rs"]
+mod scene_detach_tests;
 #[cfg(test)]
 #[path = "dock_drag_tests.rs"]
 mod tests;

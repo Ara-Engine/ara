@@ -27,6 +27,51 @@ pub(super) struct Floats {
     next_key: u32,
     light: Option<bool>,
 }
+/// The one native window displaying the retained Scene view.
+#[derive(Clone, Copy)]
+pub(super) struct SceneHost<'a> {
+    /// Floating window identity; `None` denotes the main window.
+    pub surface: Option<&'a str>,
+    /// Image and picking rectangle in the host's logical coordinates.
+    pub viewport: ara_ui::paint::Box2,
+    /// Native UI target sharing the Scene's registered image.
+    pub target: u32,
+    /// Physical pixels per logical pixel on the owning display.
+    pub dpi: f32,
+}
+
+/// Resolve the Scene's owning UI to its native target and display scale.
+/// The returned identity borrows the native windows, so the shell can be entered
+/// mutably while rendering overlays or forwarding input without copying an ID.
+pub(super) fn resolve_scene_host<'a>(
+    editor: &Editor,
+    shell: &Shell,
+    floats: &'a Floats,
+    main_dpi: f32,
+) -> Option<SceneHost<'a>> {
+    let (surface, viewport) = shell.scene_host()?;
+    match surface {
+        None => Some(SceneHost {
+            surface: None,
+            viewport,
+            target: 0,
+            dpi: main_dpi,
+        }),
+        Some(id) => {
+            let float = floats.windows.iter().find(|float| float.id == id)?;
+            if float.window.size().ok()?.contains(&0) {
+                return None;
+            }
+            Some(SceneHost {
+                surface: Some(float.id.as_str()),
+                viewport,
+                target: float.key,
+                dpi: float.window.display_scale().max(0.25) * ui_scale(editor),
+            })
+        }
+    }
+}
+
 /// Keep a rectangle reachable: if it does not overlap any display, centre it on `fallback`.
 pub(super) fn recover(rect: [i32; 4], displays: &[[i32; 4]], fallback: [i32; 4]) -> [i32; 4] {
     let visible = displays.iter().any(|d| {

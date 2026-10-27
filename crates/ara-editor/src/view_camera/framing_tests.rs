@@ -55,3 +55,49 @@ fn framing_invalid_bounds_or_aspect_keeps_the_last_camera() {
     fit_aspect(&mut camera, (Vec3::splat(f32::NAN), Vec3::ONE), 1.);
     assert_eq!(camera, original);
 }
+
+#[test]
+fn orthographic_framing_fits_all_corners_at_top_front_and_side_views() {
+    let bounds = (Vec3::new(-80., -3., -10.), Vec3::new(80., 3., 10.));
+    for (yaw, pitch) in [(0., 0.), (std::f32::consts::FRAC_PI_2, 0.), (0., 1.54)] {
+        for size in [[400, 1400], [1600, 900]] {
+            let mut camera = Camera {
+                projection: crate::state::CameraProjection::Orthographic,
+                yaw,
+                pitch,
+                ..Camera::default()
+            };
+            fit_aspect(&mut camera, bounds, size[0] as f32 / size[1] as f32);
+            let view = camera.spec().resolve(size).unwrap();
+            let vp = view.projection * view.view;
+            for index in 0..8 {
+                let point = Vec3::new(
+                    if index & 1 == 0 {
+                        bounds.0.x
+                    } else {
+                        bounds.1.x
+                    },
+                    if index & 2 == 0 {
+                        bounds.0.y
+                    } else {
+                        bounds.1.y
+                    },
+                    if index & 4 == 0 {
+                        bounds.0.z
+                    } else {
+                        bounds.1.z
+                    },
+                );
+                let clip = vp * point.extend(1.);
+                let ndc = clip.truncate() / clip.w;
+                assert!(
+                    ndc.is_finite()
+                        && ndc.x.abs() <= 0.92
+                        && ndc.y.abs() <= 0.92
+                        && (0.0..=1.).contains(&ndc.z),
+                    "{size:?} {yaw}/{pitch}: {ndc:?}"
+                );
+            }
+        }
+    }
+}

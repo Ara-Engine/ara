@@ -56,7 +56,7 @@ struct Runtime {
     entity: String,
     tick: u64,
     components: Value,
-    local: bool,
+    editable: bool,
     drafts: BTreeMap<String, Draft>,
 }
 /// Transient presentation state; authored values are changed only by play.keep's typed batch.
@@ -194,7 +194,7 @@ impl Shell {
     }
     /// The explicit inspection snapshot and live tile metadata, used by native acceptance evidence.
     pub(crate) fn play_runtime_report(&self) -> Value {
-        json!({"controlledPlayer":self.game_client,"captured":self.game_captured,"pending":self.play_controls.pending.is_some(),"players":self.play_controls.players.iter().map(|(player,info)|json!({"player":player,"live":info.live,"size":info.size,"fps":info.fps})).collect::<Vec<_>>(),"inspection":self.play_controls.runtime.as_ref().map(|runtime|json!({"world":runtime.world,"player":runtime.player,"entity":runtime.entity,"tick":runtime.tick,"components":runtime.components,"drafts":runtime.drafts.len(),"editable":runtime.local})),"message":self.play_controls.message})
+        json!({"controlledPlayer":self.game_client,"spectator":self.play_controls.spectators.contains(&self.game_client),"captured":self.game_captured,"pending":self.play_controls.pending.is_some(),"players":self.play_controls.players.iter().map(|(player,info)|json!({"player":player,"live":info.live,"size":info.size,"fps":info.fps})).collect::<Vec<_>>(),"inspection":self.play_controls.runtime.as_ref().map(|runtime|json!({"world":runtime.world,"player":runtime.player,"entity":runtime.entity,"tick":runtime.tick,"components":runtime.components,"drafts":runtime.drafts.len(),"editable":runtime.editable})),"message":self.play_controls.message})
     }
     /// Each visible tile owns its own capture rectangle; changing focus never swaps images.
     pub(crate) fn game_input_rect(&self) -> Option<Box2> {

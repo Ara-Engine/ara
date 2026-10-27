@@ -2,7 +2,7 @@
 use super::SceneView;
 use ara_render::instanced::Scene;
 use ara_ui::paint::Box2;
-use glam::{Vec3, Vec4};
+use glam::Vec3;
 
 /// A native geometry hit and its source draw, borrowed from the presented scene snapshot.
 pub(in crate::app) struct SurfaceHit<'a> {
@@ -45,26 +45,14 @@ impl SceneView {
             .as_ref()
             .and_then(ara_runtime_render::RasterView::scene)
             .or_else(|| self.prepared.as_ref().map(|prepared| &prepared.scene))?;
-        let camera = camera
-            .spec()
-            .resolve([rect.w.max(1.) as u32, rect.h.max(1.) as u32])
-            .ok()?;
-        let inverse = (camera.projection * camera.view).inverse();
-        if !inverse.is_finite() {
-            return None;
-        }
-        let near = inverse
-            * Vec4::new(
+        let (origin, direction) = camera.ray(
+            [rect.w.max(1.) as u32, rect.h.max(1.) as u32],
+            [
                 (pointer[0] - rect.x) / rect.w * 2. - 1.,
                 1. - (pointer[1] - rect.y) / rect.h * 2.,
-                1.,
-                1.,
-            );
-        if !near.is_finite() || near.w.abs() <= f32::EPSILON {
-            return None;
-        }
-        let direction = (near.truncate() / near.w - camera.position).normalize_or_zero();
-        let hit = pick(scene, camera.position, direction)?;
+            ],
+        )?;
+        let hit = pick(scene, origin, direction)?;
         let draw = self
             .raster_frame
             .as_ref()
@@ -266,6 +254,35 @@ mod tests {
         assert!(pick(&scene, Vec3::Z, Vec3::ZERO).is_none());
     }
     #[test]
+    fn orthographic_pointer_rays_pick_off_centre_triangles_at_near_and_far_depths() {
+        let camera = crate::state::Camera {
+            target: Vec3::ZERO,
+            yaw: 0.,
+            pitch: 0.,
+            distance: 5.,
+            projection: crate::state::CameraProjection::Orthographic,
+            orthographic_height: 4.,
+            ..Default::default()
+        };
+        let geometry = scene(&[
+            Mat4::from_translation(Vec3::new(0., 0., -20.)),
+            Mat4::IDENTITY,
+        ]);
+        let (origin, direction) = camera.ray([400, 400], [0.2, 0.]).unwrap();
+        let hit = pick(&geometry, origin, direction).unwrap();
+        assert_eq!(hit.entity, 1);
+        assert!((hit.position - Vec3::new(0.4, 0., 0.)).length() < 1e-4);
+        let far = pick(
+            &scene(&[Mat4::from_translation(Vec3::new(0., 0., -20.))]),
+            origin,
+            direction,
+        )
+        .unwrap();
+        assert!((far.position - Vec3::new(0.4, 0., -20.)).length() < 1e-4);
+        let (miss, direction) = camera.ray([400, 400], [0.9, 0.]).unwrap();
+        assert!(pick(&geometry, miss, direction).is_none());
+    }
+    #[test]
     #[ignore = "explicit surface-picking CPU benchmark; writes only target/ evidence"]
     fn surface_pick_10000_instances_benchmark() {
         let transforms: Vec<_> = (0..10_000)
@@ -288,8 +305,7 @@ mod tests {
         }
         samples.sort_by(f64::total_cmp);
         let report = serde_json::json!({"instances":10_000,"queries":samples.len(),"p50Ms":samples[samples.len()/2],"p95Ms":samples[samples.len()*95/100],"maxMs":samples.last()});
-        let output = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../target/ux-picking-bench.json");
+        let output = crate::test_target().join("ux-picking-bench.json");
         std::fs::create_dir_all(output.parent().unwrap()).unwrap();
         std::fs::write(output, ara_json::to_canonical_string(&report)).unwrap();
         println!("{}", ara_json::to_canonical_string(&report));

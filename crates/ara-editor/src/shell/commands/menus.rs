@@ -263,6 +263,8 @@ pub(crate) const MENUS: &[Menu] = &[
                     C("view.camera.speed_up"),
                     C("view.camera.speed_down"),
                     C("view.camera.bookmarks"),
+                    C("view.camera.bookmark.save"),
+                    C("view.camera.bookmark.delete"),
                     C("view.camera.pilot"),
                 ],
             ),

@@ -755,7 +755,10 @@ fn build() -> Vec<Spec> {
     ]);
     // View
     c.extend([
-        later("view.camera.perspective", "Perspective / Orthographic", "camera", "Num5", "The renderer's camera is perspective-only; orthographic projection needs ara-render support."),
+        cmd("view.camera.perspective", "Perspective / Orthographic", "camera", "Num5", "Toggle parallel projection while retaining the current framing.",|_,e,_| {
+            let projection=if e.state.camera.projection==crate::state::CameraProjection::Perspective {"orthographic"}else{"perspective"};
+            act(e,"editor.camera",json!({"projection":projection}))
+        }).when(|c|Avail::Checked(c.state.camera.projection==crate::state::CameraProjection::Orthographic)),
         cmd("view.camera.default", "Default View", "video", "", "Return to the default three-quarter perspective.", |_, e, _| camera(e, 0.6, 0.4)),
         cmd("view.camera.fov", "Field of View…", "scan-eye", "", "Choose the Scene view's vertical field of view.", |s, _, _| { s.open_value_menu("fov"); Ok(()) })
             .labelled(|c| format!("Field of View ({})…", c.state.camera.fov_label())),
@@ -791,7 +794,10 @@ fn build() -> Vec<Spec> {
         cmd("view.camera.speed.slow", "Slow · 1 m/s", "", "", "Precise close-up camera movement.", |_, e, _| set(e,"viewport.cameraSpeed",json!(1.))).when(|c| Avail::Checked(c.state.number("viewport.cameraSpeed",4.) == 1.)),
         cmd("view.camera.speed.normal", "Normal · 4 m/s", "", "", "Default camera movement speed.", |_, e, _| set(e,"viewport.cameraSpeed",json!(4.))).when(|c| Avail::Checked(c.state.number("viewport.cameraSpeed",4.) == 4.)),
         cmd("view.camera.speed.fast", "Fast · 16 m/s", "", "", "Navigate large scenes quickly.", |_, e, _| set(e,"viewport.cameraSpeed",json!(16.))).when(|c| Avail::Checked(c.state.number("viewport.cameraSpeed",4.) == 16.)),
-        later("view.camera.bookmarks", "Bookmarks", "", "", "Camera bookmarks need a per-scene editor sidecar; they are not built yet."),
+        cmd("view.camera.bookmarks", "Camera Bookmarks…", "", "", "Recall a named camera view from this scene.",|s,e,_|s.choose_camera_bookmark(e,false)),
+        cmd("view.camera.bookmark.save", "Save Camera Bookmark…", "save", "", "Name and save this camera view in the scene.",|s,e,t|match t {Target::Text(name)=>act(e,"editor.camera.bookmark",json!({"action":"save","name":name})),_=>s.name_camera_bookmark(e)}),
+        cmd("view.camera.bookmark.recall", "Recall Camera Bookmark…", "camera", "", "Choose a named camera view in the scene.",|s,e,t|match t {Target::Text(name)=>act(e,"editor.camera.bookmark",json!({"action":"recall","name":name})),_=>s.choose_camera_bookmark(e,false)}),
+        cmd("view.camera.bookmark.delete", "Delete Camera Bookmark…", "trash", "", "Remove a saved view from this scene.",|s,e,t|match t {Target::Text(name)=>act(e,"editor.camera.bookmark",json!({"action":"delete","name":name})),_=>s.choose_camera_bookmark(e,true)}),
         later("view.camera.pilot", "Pilot Selected Camera", "camera", "", "Piloting (moving the scene camera with the view) is not built yet; Align View to Selected Camera copies its pose and field of view."),
     ]);
     c.extend([
@@ -1925,13 +1931,7 @@ fn build() -> Vec<Spec> {
             "",
             "Tear the panel off into its own OS window.",
             |s, e, t| move_panel(s, e, t, "float"),
-        )
-        .when(|c| match c.target {
-            Target::Panel(p) if p == "scene" => Avail::Blocked(
-                "The Scene viewport stays in the main window; float tool panels and graphs".into(),
-            ),
-            _ => Avail::Ready,
-        }),
+        ),
         cmd(
             "window.move.left",
             "Left",

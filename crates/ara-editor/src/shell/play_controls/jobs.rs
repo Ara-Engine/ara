@@ -104,7 +104,7 @@ impl Shell {
         else {
             return Ok(false);
         };
-        if !runtime.local {
+        if !runtime.editable {
             return Err("Only the authority's runtime values can be edited".into());
         }
         validate_target(editor, self, runtime)?;
@@ -204,21 +204,27 @@ impl Shell {
                     .ok_or("Inspection returned no component values")?
                     .clone();
                 let status = editor.action("play.status", json!({}))?;
-                let local = status["worlds"]
-                    .as_array()
-                    .into_iter()
-                    .flatten()
-                    .find(|row| row["world"] == pending.world)
-                    .and_then(|row| row["players"].as_array())
-                    .and_then(|players| players.first())
-                    .is_some_and(|player| player["role"] == "local");
+                let editable = player == 0
+                    && status["worlds"]
+                        .as_array()
+                        .into_iter()
+                        .flatten()
+                        .find(|row| row["world"] == pending.world)
+                        .and_then(|row| row["players"].as_array())
+                        .and_then(|players| players.first())
+                        .is_some_and(|player| {
+                            matches!(
+                                player["role"].as_str(),
+                                Some("local" | "host" | "dedicated")
+                            )
+                        });
                 self.play_controls.runtime = Some(Runtime {
                     world: pending.world,
                     player,
                     entity,
                     tick: value["tick"].as_u64().unwrap_or(0),
                     components,
-                    local,
+                    editable,
                     drafts: BTreeMap::new(),
                 });
                 self.play_controls.message = None;
@@ -286,7 +292,7 @@ impl Shell {
                 self.play_job(
                     editor,
                     "play.view",
-                    json!({"player":player,"camera":null,"captureCurrent":spectator}),
+                    json!({"player":player,"camera":null,"captureCurrent":spectator,"navigationSpeed":editor.state.number("viewport.cameraSpeed",4.)}),
                     Phase::View {
                         player,
                         spectator,

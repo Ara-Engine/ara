@@ -366,10 +366,25 @@ impl Shell {
                         rebuild = true;
                     }
                     Binding::CameraFov => {
-                        self.drafts.insert(
-                            "@camera|fov".into(),
-                            action.value.as_str().unwrap_or("").into(),
-                        );
+                        let orthographic = editor.state.camera.projection
+                            == crate::state::CameraProjection::Orthographic;
+                        let field = if orthographic {
+                            "orthographicHeight"
+                        } else {
+                            "fovYDegrees"
+                        };
+                        if let Some(value) = action.value.as_f64() {
+                            editor.action("editor.camera", json!({(field):value}))?;
+                            rebuild = true;
+                        } else {
+                            let draft = if orthographic {
+                                "@camera|orthographicHeight"
+                            } else {
+                                "@camera|fov"
+                            };
+                            self.drafts
+                                .insert(draft.into(), action.value.as_str().unwrap_or("").into());
+                        }
                     }
                     Binding::Setting(key) => {
                         if let Some(v) = action.value.as_bool() {
@@ -856,6 +871,17 @@ impl Shell {
         }
         if let Some(text) = self.drafts.remove("@camera|fov") {
             self.execute(editor, "view.camera.fov.set", &commands::Target::Text(text))?;
+            if self.drafts.is_empty() {
+                self.rebuild(editor)?;
+                return Ok(true);
+            }
+        }
+        if let Some(text) = self.drafts.remove("@camera|orthographicHeight") {
+            let height: f32 = text
+                .trim()
+                .parse()
+                .map_err(|_| "Orthographic height needs a number of metres")?;
+            editor.action("editor.camera", json!({"orthographicHeight":height}))?;
             if self.drafts.is_empty() {
                 self.rebuild(editor)?;
                 return Ok(true);

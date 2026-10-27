@@ -11,9 +11,78 @@ pub(super) enum Pending {
     Quit(DialogFuture<bool>),
     SavingQuit,
     Alert(DialogFuture<()>),
+    Bookmark {
+        scene: String,
+        names: Vec<String>,
+        action: &'static str,
+        selected: Option<usize>,
+        response: DialogFuture<Option<usize>>,
+    },
+    BookmarkName {
+        scene: String,
+        name: Option<String>,
+        response: DialogFuture<Option<String>>,
+    },
 }
 
 impl Shell {
+    /// Name the current view before saving it through the navigation command.
+    pub(crate) fn name_camera_bookmark(&mut self, editor: &mut Editor) -> ara_ui::Result<()> {
+        let options = DialogOptions::new(
+            "Save camera bookmark",
+            "Name this view for the current scene.",
+        );
+        let response = self.confirmations.prompt(options, String::new());
+        self.pending_dialogs.push(Pending::BookmarkName {
+            scene: editor.state.doc.clone(),
+            name: None,
+            response,
+        });
+        self.menu = None;
+        self.rebuild(editor)
+    }
+    /// Choose a saved view in the shared native dialog, then apply its typed navigation action.
+    pub(crate) fn choose_camera_bookmark(
+        &mut self,
+        editor: &mut Editor,
+        delete: bool,
+    ) -> ara_ui::Result<()> {
+        let result = editor.action("editor.camera.bookmark", json!({"action":"list"}))?;
+        let names = result["bookmarks"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(|bookmark| bookmark["name"].as_str().map(str::to_owned))
+            .collect::<Vec<_>>();
+        if names.is_empty() {
+            self.status_note =
+                Some("No saved views in this scene. Save a camera bookmark first.".into());
+            return Ok(());
+        }
+        let scene = result["scene"]
+            .as_str()
+            .unwrap_or(&editor.state.doc)
+            .to_owned();
+        let action = if delete { "delete" } else { "recall" };
+        let options = DialogOptions::new(
+            if delete {
+                "Delete camera bookmark"
+            } else {
+                "Recall camera bookmark"
+            },
+            "Choose a saved view from this scene.",
+        );
+        let response = self.confirmations.choose(options, names.clone(), 0);
+        self.pending_dialogs.push(Pending::Bookmark {
+            scene,
+            names,
+            action,
+            selected: None,
+            response,
+        });
+        self.menu = None;
+        self.rebuild(editor)
+    }
     /// Whether native viewport, context-menu and drag handlers must yield input
     /// to a modal before interpreting it as an editor gesture.
     pub(crate) fn modal_active(&self) -> bool {
@@ -205,6 +274,16 @@ impl Shell {
             let accepted = match pending {
                 Pending::Command { response, .. } | Pending::Quit(response) => response.try_take(),
                 Pending::Alert(response) => response.try_take().map(|()| true),
+                Pending::Bookmark {
+                    response, selected, ..
+                } => response.try_take().map(|choice| {
+                    *selected = choice;
+                    choice.is_some()
+                }),
+                Pending::BookmarkName { response, name, .. } => response.try_take().map(|value| {
+                    *name = value;
+                    name.is_some()
+                }),
                 Pending::SavingQuit => {
                     if editor.host.unsaved() {
                         break;
@@ -220,6 +299,44 @@ impl Shell {
             };
             changed = true;
             match pending {
+                Pending::BookmarkName {
+                    scene,
+                    name: Some(name),
+                    ..
+                } if accepted => {
+                    if editor.state.doc == scene {
+                        if let Err(error) = editor.action(
+                            "editor.camera.bookmark",
+                            json!({"action":"save","scene":scene,"name":name}),
+                        ) {
+                            self.alert_error(editor, &error);
+                        }
+                    } else {
+                        self.status_note = Some(
+                            "The active scene changed; save its camera bookmark again.".into(),
+                        );
+                    }
+                }
+                Pending::Bookmark {
+                    scene,
+                    names,
+                    action,
+                    selected: Some(index),
+                    ..
+                } if accepted => {
+                    if editor.state.doc != scene {
+                        self.status_note = Some(
+                            "The active scene changed; choose its camera bookmark again.".into(),
+                        );
+                    } else if let Some(name) = names.get(index) {
+                        if let Err(error) = editor.action(
+                            "editor.camera.bookmark",
+                            json!({"action":action,"scene":scene,"name":name}),
+                        ) {
+                            self.alert_error(editor, &error);
+                        }
+                    }
+                }
                 Pending::Command { id, target, .. } if accepted => {
                     self.confirmation_bypass = true;
                     let result = self.execute(editor, &id, &target);

@@ -186,6 +186,8 @@ pub struct PlayViewParams {
     pub world: Option<String>,
     /// Rendering player index (0 local/listen host, 1+ clients).
     pub player: u32,
+    /// Read the current typed navigation state; performs no navigation mutation.
+    pub inspect: Option<bool>,
     /// Editor spectator camera; null restores this player's gameplay camera.
     pub camera: Option<ara_play::ViewCamera>,
     /// Start spectator mode from this player's current gameplay camera.

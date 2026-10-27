@@ -5,6 +5,7 @@ use ara_ui::{
     docking::{Axis, DockNode},
     paint::Box2,
 };
+mod scene;
 
 #[derive(Clone, Copy, Debug)]
 enum Zone {
@@ -27,6 +28,7 @@ enum Act {
         zone: Zone,
     },
     Cancel(&'static str),
+    Scene(scene::Act),
 }
 const SETTLE: u32 = 12;
 const SPLIT_DRAG: f32 = 48.;
@@ -42,6 +44,16 @@ pub(super) struct DragCheck {
     trace: Vec<Value>,
     failed: bool,
     results: Vec<Value>,
+    scene: scene::Check,
+}
+fn scene_action(act: &Act) -> bool {
+    matches!(
+        act,
+        Act::Scene(_)
+            | Act::TearOff("scene")
+            | Act::Cancel("scene")
+            | Act::Place { panel: "scene", .. }
+    )
 }
 fn tab_rect(shell: &Shell, panel: &str) -> Option<Box2> {
     [format!("tab-{panel}"), format!("header-{panel}")]
@@ -146,6 +158,19 @@ impl DragCheck {
                     zone: Zone::Bottom,
                 },
                 Act::Cancel("assets"),
+                Act::Scene(scene::Act::Prepare),
+                Act::Cancel("scene"),
+                Act::TearOff("scene"),
+                Act::Scene(scene::Act::Resize),
+                Act::Scene(scene::Act::Orbit),
+                Act::Scene(scene::Act::Pick),
+                Act::Scene(scene::Act::CancelMarquee),
+                Act::Place {
+                    panel: "scene",
+                    onto: "game",
+                    zone: Zone::After,
+                },
+                Act::Scene(scene::Act::Main),
             ]);
         }
         acts.push(Act::Scale(1.));
@@ -160,6 +185,7 @@ impl DragCheck {
             trace: Vec::new(),
             failed: false,
             results: Vec::new(),
+            scene: scene::Check::default(),
         }
     }
     pub fn finished(&self) -> bool {
@@ -188,6 +214,7 @@ impl DragCheck {
         if let Err(error) = self.input(&act, editor, shell, window, floats, scale, events) {
             shell.leave();
             events.retain(|(_, e)| !matches!(e, Event::MouseButton { .. }));
+            events.push((0, Event::FocusLost));
             events.push((
                 0,
                 Event::Key {
@@ -294,6 +321,16 @@ impl DragCheck {
         events: &mut Vec<(u32, Event)>,
     ) -> ara_ui::Result<()> {
         let main = window.rect()?;
+        if self.age == 0 && scene_action(act) {
+            shell.leave();
+            self.scene.begin(editor, shell)?;
+        }
+        if let Act::Scene(act) = act {
+            return self
+                .scene
+                .inject(*act, self.age, editor, shell, floats, events);
+        }
+        let injected = events.len();
         let motion = |sdl: u32, p: [f32; 2], s: f32| {
             (
                 sdl,
@@ -392,6 +429,13 @@ impl DragCheck {
             }
             _ => {}
         }
+        if scene_action(act) {
+            // Scene tab journeys also traverse SDL_PushEvent/poll_tagged, with the
+            // synthetic desktop pointer retained only for cross-window tab routing.
+            for (sdl, event) in events.split_off(injected) {
+                scene::native(if sdl == 0 { window.id() } else { sdl }, event, events)?;
+            }
+        }
         Ok(())
     }
     fn across(&self, shell: &Shell, id: &str) -> bool {
@@ -429,18 +473,36 @@ impl DragCheck {
                 _ => "after",
             };
             gpu.select_target(0);
-            gpu.pixels()?.save(
+            let image = gpu.pixels()?;
+            if scene_action(&act) {
+                self.scene.capture(editor, shell, floats, 0, &image, stage);
+            }
+            image.save(
                 self.output
                     .join(format!("dock-{:02}-{stage}.png", self.index)),
             )?;
             for float in &floats.windows {
                 gpu.select_target(float.key);
-                gpu.pixels()?.save(
+                let image = gpu.pixels()?;
+                if scene_action(&act) {
+                    self.scene
+                        .capture(editor, shell, floats, float.key, &image, stage);
+                }
+                image.save(
                     self.output
                         .join(format!("dock-{:02}-{stage}-{}.png", self.index, float.id)),
                 )?;
             }
             gpu.select_target(0);
+        }
+        // A resized/detached host may present before the async Scene has a color
+        // frame. Wait only here, with a bound, instead of accepting a placeholder.
+        if scene_action(&act)
+            && self.age == 6 + SETTLE
+            && !self.scene.ready()
+            && self.scene.wait_for_frame()
+        {
+            return Ok(());
         }
         self.age += 1;
         if self.age < 7 + SETTLE {
@@ -454,7 +516,7 @@ impl DragCheck {
                 .iter()
                 .find(|f| area(&f.root, panel).is_some())
         };
-        let ok = match &act {
+        let mut ok = match &act {
             Act::Splitter(id) => (self.extent(shell, id)? - self.before - SPLIT_DRAG).abs() < 8.,
             Act::Scale(value) => (f64::from(windows::ui_scale(editor)) - value).abs() < 1e-3,
             Act::TearOff(panel) => floating(panel).is_some(),
@@ -478,9 +540,22 @@ impl DragCheck {
                     _ => split(destination, panel, onto, *zone),
                 }
             }
+            Act::Scene(_) => true,
+        };
+        let scene = if scene_action(&act) {
+            let scene_act = if let Act::Scene(scene_act) = &act {
+                Some(*scene_act)
+            } else {
+                None
+            };
+            let (scene_ok, detail) = self.scene.result(scene_act, editor, shell)?;
+            ok &= scene_ok;
+            Some(detail)
+        } else {
+            None
         };
         self.results.push(json!({"drag":format!("{act:?}"),"capturePrefix":format!("dock-{:02}",self.index),"ok":ok,"trace":self.trace,
-            "layout":editor.state.layout,"floating":editor.state.floating,"scale":windows::ui_scale(editor)}));
+            "layout":editor.state.layout,"floating":editor.state.floating,"scale":windows::ui_scale(editor),"scene":scene}));
         self.advance();
         Ok(())
     }

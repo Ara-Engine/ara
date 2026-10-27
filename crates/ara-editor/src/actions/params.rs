@@ -178,6 +178,39 @@ pub(super) struct EditorCamera {
     /// Vertical field of view, in degrees; clamped to 10–120.
     #[ara(unit=Degrees)]
     pub fov_y_degrees: Option<f32>,
+    /// Perspective or parallel orthographic projection.
+    pub projection: Option<crate::state::CameraProjection>,
+    /// Positive visible vertical span for orthographic projection, in metres.
+    #[ara(unit=Meters)]
+    pub orthographic_height: Option<f32>,
+}
+/// Operation on named scene camera views.
+#[derive(Clone, Copy, Schema, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(super) enum CameraBookmarkAction {
+    /// Read the chosen scene's named views without changing navigation.
+    List,
+    /// Save the caller's current view; an omitted name creates a unique View N.
+    Save,
+    /// Restore the named view for this caller, opening its scene if requested.
+    Recall,
+    /// Remove a named view without moving the camera.
+    Delete,
+}
+/// Read or edit per-scene named camera views through navigation ops.
+#[derive(Schema, Deserialize)]
+#[ara(params)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(super) struct EditorCameraBookmark {
+    /// Live protocol session, validated by the host.
+    #[expect(dead_code, reason = "Host validates sessions before dispatch")]
+    pub session: String,
+    /// List, save, recall or delete a named camera view.
+    pub action: CameraBookmarkAction,
+    /// View name; save generates View N when omitted.
+    pub name: Option<String>,
+    /// Scene path or identity; omitted uses this caller's current scene.
+    pub scene: Option<String>,
 }
 /// Parameters for a theme switch.
 #[derive(Schema, Deserialize)]

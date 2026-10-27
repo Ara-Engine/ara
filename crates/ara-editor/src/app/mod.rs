@@ -1044,7 +1044,8 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
             }
             drop(authority_scope);
             let physical = window.size()?;
-            if physical.contains(&0) {
+            let main_drawable = !physical.contains(&0);
+            if !main_drawable && floats.windows.is_empty() {
                 drop(profile_scope);
                 if profile_frame.is_some() {
                     let _ = editor
@@ -1055,8 +1056,13 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
                 std::thread::sleep(Duration::from_millis(20));
                 continue;
             }
+            let physical = if main_drawable {
+                physical
+            } else {
+                last_physical
+            };
             let dpi = options.dpi.unwrap_or_else(|| native.dpi()) * windows::ui_scale(&editor);
-            if physical != last_physical || dpi != last_dpi {
+            if main_drawable && (physical != last_physical || dpi != last_dpi) {
                 // SAFETY: Wait before destroying a swapchain referenced by the presentation queue.
                 unsafe {
                     renderer.gpu().wait_idle()?;
@@ -1092,7 +1098,21 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
                 shell.native_maximized = window.maximized();
                 shell.rebuild(&mut editor)?;
             }
-            let work = shell.frame()?;
+            let mut work = shell.frame()?;
+            // Resolve Scene geometry only after every native surface has settled.
+            // A detached Scene shares the existing scene/render authority.
+            for float in &mut floats.windows {
+                if shell.enter(&float.id) {
+                    let frame = shell.frame()?;
+                    shell.orient_axis(editor.state.camera);
+                    work += frame;
+                    work += shell.frame()?;
+                    shell.leave();
+                    float.dirty |=
+                        frame.paint_nodes > 0 || frame.layout_passes > 0 || frame.restyled > 0;
+                }
+            }
+            let scene_host = windows::resolve_scene_host(&editor, &shell, &floats, dpi);
             if let Some(button) = shell.update_chrome(&mut window, dpi) {
                 caption.update(button);
             }
@@ -1126,7 +1146,7 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
             let converging = renderer.scene_frame_async()
                 && !scene_view.preview_needs_frame()
                 && last_navigation.is_some_and(|t| t.elapsed() < INTERACTION_PAUSE);
-            if shell.viewport().is_some()
+            if scene_host.is_some()
                 && scene_view.needs_frame(editor.state.quality)
                 && (scene_dirty
                     || converging
@@ -1146,13 +1166,15 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
                 && (editor.host.store().revision() != edit_before.0
                     || shell.drafts() != &edit_before.1);
             dirty |= scene_dirty;
+            let mut scene_overlays = None;
             if dirty {
                 let _render_scope = profile_frame.map(|_| ara_profile::scope("editor.render"));
-                profile_gpu = shell.viewport().is_some() && scene_dirty;
+                profile_gpu = scene_host.is_some() && scene_dirty;
                 let render_start = Instant::now();
                 let scene_at = Instant::now();
-                if let Some(rect) = shell.viewport() {
-                    renderer.resize(extent_scaled(rect, dpi))?;
+                if let Some(host) = &scene_host {
+                    let rect = host.viewport;
+                    renderer.resize(extent_scaled(rect, host.dpi))?;
                     // A Scene that cannot render yet (models still publishing, a missing
                     // source) keeps its last frame and is reported; the next change or
                     // publication retries. It never closes the editor.
@@ -1164,6 +1186,9 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
                     }
                     scene_view.attach(&mut gpu, &renderer, editor.state.quality)?;
                     if renderer.presentation_ready() {
+                        if let Some(surface) = host.surface {
+                            shell.enter(surface);
+                        }
                         let mut changed = editor.agent_tints();
                         for id in view.ghosts().keys() {
                             changed.insert(crate::world::render_id(id), "destructive-foreground");
@@ -1206,12 +1231,9 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
                                 ],
                             });
                         }
-                        gpu.overlays(rect, overlay::ENTITY_IMAGE, overlays);
-                    } else {
-                        gpu.overlays(Default::default(), overlay::ENTITY_IMAGE, Vec::new());
+                        scene_overlays = Some((host.target, rect, overlays));
+                        shell.leave();
                     }
-                } else {
-                    gpu.overlays(Default::default(), overlay::ENTITY_IMAGE, Vec::new());
                 }
                 // Outside Play the Game view shows the gameplay camera; its image is
                 // attached (and the panel rebuilt when it appears) before the UI draws.
@@ -1234,6 +1256,16 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
                 }
                 gpu.select_target(0);
                 gpu.set_dpi(dpi)?;
+                if scene_overlays
+                    .as_ref()
+                    .is_some_and(|(target, _, _)| *target == 0)
+                {
+                    if let Some((_, rect, overlays)) = scene_overlays.take() {
+                        gpu.overlays(rect, overlay::ENTITY_IMAGE, overlays);
+                    }
+                } else {
+                    gpu.overlays(Default::default(), overlay::ENTITY_IMAGE, Vec::new());
+                }
                 let render_at = Instant::now();
                 {
                     ara_gpu::cpu_scope!("UI.render");
@@ -1248,12 +1280,14 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
                 render_ms = render_at.elapsed().as_secs_f64() * 1000.;
                 let graph_gpu = graph_start.map(|start| start.elapsed().as_secs_f64() * 1000.);
                 let present_at = Instant::now();
-                // SAFETY: UI submission is complete, image is CopySource and all native owners are live.
-                unsafe {
-                    gpu.present(crate::gpu::ui_device(renderer.gpu()), &mut present)?;
+                if main_drawable {
+                    // SAFETY: UI submission is complete, image is CopySource and all native owners are live.
+                    unsafe {
+                        gpu.present(crate::gpu::ui_device(renderer.gpu()), &mut present)?;
+                    }
                 }
                 present_ms = present_at.elapsed().as_secs_f64() * 1000.;
-                presented = true;
+                presented = main_drawable;
                 if let Some(splash) = splash.take() {
                     splash.hand_over(&window);
                 }
@@ -1308,6 +1342,9 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
             }
             // Floating windows render after the main window, each into its own target.
             for float in &mut floats.windows {
+                if float.window.size()?.contains(&0) {
+                    continue;
+                }
                 let work = shell.frame_surface(&float.id)?;
                 if !(float.dirty || work.paint_nodes > 0 || work.layout_passes > 0) {
                     continue;
@@ -1319,6 +1356,16 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
                 };
                 gpu.select_target(float.key);
                 gpu.set_dpi(float_dpi)?;
+                if scene_overlays
+                    .as_ref()
+                    .is_some_and(|(target, _, _)| *target == float.key)
+                {
+                    if let Some((_, rect, overlays)) = scene_overlays.take() {
+                        gpu.overlays(rect, overlay::ENTITY_IMAGE, overlays);
+                    }
+                } else {
+                    gpu.overlays(Default::default(), overlay::ENTITY_IMAGE, Vec::new());
+                }
                 ui_renderer.render(
                     &mut gpu,
                     &surface.ui.display,
@@ -1758,7 +1805,7 @@ fn set_camera(
     editor: &mut Editor,
     camera: &crate::state::Camera,
 ) -> Result<(), crate::EditorError> {
-    editor.action("editor.camera",json!({"target":camera.target.to_array(),"yaw":camera.yaw,"pitch":camera.pitch,"distance":camera.distance}))?;
+    editor.action("editor.camera",json!({"target":camera.target.to_array(),"yaw":camera.yaw,"pitch":camera.pitch,"distance":camera.distance,"fovYDegrees":camera.fov_y_degrees,"projection":camera.projection,"orthographicHeight":camera.orthographic_height}))?;
     Ok(())
 }
 fn attach(gpu: &mut NativeUi, renderer: &Renderer) -> anyhow::Result<()> {

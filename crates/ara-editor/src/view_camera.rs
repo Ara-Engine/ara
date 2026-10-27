@@ -150,13 +150,10 @@ pub(crate) fn fit_aspect(camera: &mut Camera, (min, max): Bounds, aspect: f32) {
         return;
     }
     let centre = min * 0.5 + max * 0.5;
-    let back = Vec3::new(
-        camera.yaw.sin() * camera.pitch.cos(),
-        camera.pitch.sin(),
-        camera.yaw.cos() * camera.pitch.cos(),
-    );
-    let right = Vec3::new(camera.yaw.cos(), 0., -camera.yaw.sin());
-    let up = back.cross(right);
+    let Some((right, up, forward)) = camera.basis() else {
+        return;
+    };
+    let back = -forward;
     if !back.is_finite() || !right.is_finite() || !up.is_finite() || !centre.is_finite() {
         return;
     }
@@ -166,6 +163,7 @@ pub(crate) fn fit_aspect(camera: &mut Camera, (min, max): Bounds, aspect: f32) {
         return;
     }
     let mut distance = 0.5_f64;
+    let mut vertical_span = 0.01_f64;
     for index in 0..8 {
         let corner = Vec3::new(
             if index & 1 == 0 { min.x } else { max.x },
@@ -174,6 +172,9 @@ pub(crate) fn fit_aspect(camera: &mut Camera, (min, max): Bounds, aspect: f32) {
         );
         let offset = corner.as_dvec3() - centre.as_dvec3();
         let depth = offset.dot(back.as_dvec3());
+        vertical_span = vertical_span
+            .max(2.2 * offset.dot(up.as_dvec3()).abs())
+            .max(2.2 * offset.dot(right.as_dvec3()).abs() / f64::from(aspect));
         distance = distance
             .max(
                 depth
@@ -185,6 +186,9 @@ pub(crate) fn fit_aspect(camera: &mut Camera, (min, max): Bounds, aspect: f32) {
     if distance.is_finite() {
         camera.target = centre;
         camera.distance = distance.clamp(0.05, 100_000.) as f32;
+        if camera.projection == crate::state::CameraProjection::Orthographic {
+            camera.orthographic_height = vertical_span.clamp(0.01, 1_000_000.) as f32;
+        }
     }
 }
 
@@ -231,9 +235,18 @@ fn content(entity: &ResolvedEntity, (min, max): (Vec3, Vec3)) -> bool {
 pub(crate) struct SavedCameras {
     /// Scene document → last camera, as last written or loaded.
     pub saved: BTreeMap<String, Camera>,
+    /// Scene document to named camera views, shared with attributed navigation ops.
+    pub bookmarks: BTreeMap<String, BTreeMap<String, Camera>>,
     dirty: bool,
     written: Option<Instant>,
-    writer: Option<crate::persist::BackgroundWriter<BTreeMap<String, Camera>>>,
+    writer: Option<crate::persist::BackgroundWriter<SavedViews>>,
+}
+
+#[derive(Default, serde::Serialize, serde::Deserialize)]
+#[serde(default)]
+struct SavedViews {
+    cameras: BTreeMap<String, Camera>,
+    bookmarks: BTreeMap<String, BTreeMap<String, Camera>>,
 }
 
 impl SavedCameras {
@@ -246,31 +259,46 @@ impl SavedCameras {
             .unwrap_or_else(|_| root.into())
             .to_string_lossy()
             .into_owned();
-        let saved = path
+        let mut views = path
             .as_ref()
             .and_then(|p| std::fs::read(p).ok())
             .and_then(|bytes| serde_json::from_slice::<Value>(&bytes).ok())
-            .and_then(|file| serde_json::from_value(file["projects"][&project].clone()).ok())
+            .and_then(|file| {
+                let value = file["projects"][&project].clone();
+                if value.get("cameras").is_some() || value.get("bookmarks").is_some() {
+                    serde_json::from_value::<SavedViews>(value).ok()
+                } else {
+                    serde_json::from_value(value)
+                        .ok()
+                        .map(|cameras| SavedViews {
+                            cameras,
+                            ..SavedViews::default()
+                        })
+                }
+            })
             .unwrap_or_default();
+        views.cameras.retain(|_, camera| camera.is_valid());
+        for bookmarks in views.bookmarks.values_mut() {
+            bookmarks.retain(|name, camera| !name.trim().is_empty() && camera.is_valid());
+        }
+        views.bookmarks.retain(|_, bookmarks| !bookmarks.is_empty());
         // The file holds every project's cameras: the writer re-reads it and replaces
         // only this project's entry.
         let writer = path.map(|path| {
-            crate::persist::BackgroundWriter::new(
-                "cameras-writer",
-                move |saved: BTreeMap<String, Camera>| {
-                    let mut file = std::fs::read(&path)
-                        .ok()
-                        .and_then(|bytes| serde_json::from_slice::<Value>(&bytes).ok())
-                        .filter(Value::is_object)
-                        .unwrap_or_else(|| json!({}));
-                    file["projects"][&project] = json!(saved);
-                    crate::persist::write_text(&path, &ara_json::to_canonical_string(&file))
-                        .map_err(|e| e.to_string())
-                },
-            )
+            crate::persist::BackgroundWriter::new("cameras-writer", move |saved: SavedViews| {
+                let mut file = std::fs::read(&path)
+                    .ok()
+                    .and_then(|bytes| serde_json::from_slice::<Value>(&bytes).ok())
+                    .filter(Value::is_object)
+                    .unwrap_or_else(|| json!({}));
+                file["projects"][&project] = json!(saved);
+                crate::persist::write_text(&path, &ara_json::to_canonical_string(&file))
+                    .map_err(|e| e.to_string())
+            })
         });
         Self {
-            saved,
+            saved: views.cameras,
+            bookmarks: views.bookmarks,
             dirty: false,
             written: None,
             writer,
@@ -280,12 +308,16 @@ impl SavedCameras {
     /// Remember `state`'s cameras (the open scene's and those it kept for others);
     /// writes when changed, at most once a second unless `now` (closing).
     pub fn observe(&mut self, state: &EditorState, now: bool) {
+        if self.bookmarks != state.camera_bookmarks {
+            self.bookmarks.clone_from(&state.camera_bookmarks);
+            self.dirty = true;
+        }
         for (doc, camera) in state
             .scene_cameras
             .iter()
             .chain([(&state.doc, &state.camera)])
         {
-            if self.saved.get(doc) != Some(camera) {
+            if camera.is_valid() && self.saved.get(doc) != Some(camera) {
                 self.saved.insert(doc.clone(), *camera);
                 self.dirty = true;
             }
@@ -304,7 +336,10 @@ impl SavedCameras {
         self.written = Some(Instant::now());
         // Best effort: a lost camera only means the scene opens framed next time.
         if let Some(writer) = &self.writer {
-            writer.save(self.saved.clone());
+            writer.save(SavedViews {
+                cameras: self.saved.clone(),
+                bookmarks: self.bookmarks.clone(),
+            });
         }
     }
 }

@@ -11,8 +11,8 @@ impl Shell {
             return;
         };
         out.push_str(&format!("<text id='runtime-inspection-title' class='heading' text='Runtime · {} · {} · tick {}' /><text id='runtime-inspection-hint' class='caption' text='Values refresh on Inspect. Apply edits at a tick boundary; Keep saves selected changes to the scene.' />",escape(&runtime.entity),escape(&player_label(runtime.player,self.game_players.len())),runtime.tick));
-        if !runtime.local {
-            out.push_str("<text id='runtime-network-scope' class='caption' text='Network runtime values are read only. Keep saves the authority’s selected changes.' />");
+        if !runtime.editable {
+            out.push_str("<text id='runtime-network-scope' class='caption' text='Mirror values are read only. Select the authority to edit; Keep saves authority changes.' />");
         }
         if let Some(components) = runtime.components.as_object() {
             let db = editor.host.store().schema();
@@ -28,7 +28,8 @@ impl Shell {
                 let value = db.canonical_value(&ValueType::Named(component.clone()), value);
                 for desc in ty.fields().iter().filter(|desc| !desc.editor.hidden) {
                     let mut desc = desc.clone();
-                    desc.editor.read_only |= !runtime.local || self.play_controls.pending.is_some();
+                    desc.editor.read_only |=
+                        !runtime.editable || self.play_controls.pending.is_some();
                     let path = format!("{component}.{}", desc.name);
                     let field = value
                         .get(&desc.name)

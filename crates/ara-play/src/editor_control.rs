@@ -21,6 +21,9 @@ pub struct ViewCamera {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct View {
+    /// Read the current typed navigation state without applying camera or speed changes.
+    #[serde(default)]
+    pub inspect: bool,
     /// Spectator camera; absent/null restores the gameplay camera.
     pub camera: Option<ViewCamera>,
     /// Start spectator mode from the current gameplay camera when no camera is supplied.
