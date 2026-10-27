@@ -180,6 +180,35 @@ fn apple_unified_memory_is_the_device_local_quality_budget() {
 }
 
 #[test]
+fn a_resolve_inside_a_deferred_scope_leaves_its_timings_to_the_completion() {
+    let mut gpu = device();
+    let fill = gpu.msl_pipeline(
+        &[(Stage::Compute, "fill")],
+        &RenderState::default(),
+        Some([64, 1, 1]),
+    );
+    let buffer = storage(&mut gpu, 64);
+    let slot = gpu.storage_buffer(buffer).expect("slot");
+    gpu.begin_deferred_completion().expect("scope");
+    let mut rec = gpu.begin(Queue::Graphics);
+    rec.push(Command::BeginPass("fill".into()));
+    rec.push(Command::Pipeline(fill));
+    rec.push(Command::Constants(RootConstants {
+        words: [slot.index, 0, 64, 0, 0, 0, 0, 0],
+    }));
+    rec.push(Command::Dispatch([1, 1, 1]));
+    rec.push(Command::EndPass);
+    let point = gpu.submit(rec.finish(), &[]).expect("submit");
+    assert!(gpu.resolve(point).expect("scoped resolve").is_empty());
+    let mut completion = gpu.end_deferred_completion().expect("end");
+    let timings = gpu.wait_completion(&mut completion).expect("wait");
+    assert_eq!(
+        timings.iter().map(|t| t.pass.as_str()).collect::<Vec<_>>(),
+        ["fill"]
+    );
+}
+
+#[test]
 fn graphics_waits_on_the_compute_timeline_and_encoder_barriers_order_dispatches() {
     let mut gpu = device();
     let fill = gpu.msl_pipeline(

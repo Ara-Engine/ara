@@ -620,8 +620,18 @@ impl MetalDevice {
         Ok(point)
     }
     /// Wait for a submission, release its recording storage and return its pass
-    /// timings (GPU timestamps on the shared device clock).
+    /// timings (GPU timestamps on the shared device clock). Inside a deferred scope it
+    /// neither waits nor takes the timings, like Vulkan: later scoped submissions wait
+    /// for the point on the GPU, and the scope's completion delivers its timings.
     pub fn resolve(&mut self, point: TimelinePoint) -> Result<Vec<PassTiming>> {
+        if let Some(scope) = &self.deferred {
+            if !scope.contains(&point) && !self.pending.iter().any(|p| p.point == point) {
+                return Err(GpuError::Contract("Unknown deferred submission".into()));
+            }
+            let wait = &mut self.deferred_waits[point.queue.index()];
+            *wait = (*wait).max(point.value);
+            return Ok(Vec::new());
+        }
         Device::wait(self, point)?;
         self.reclaim()?;
         Ok(self.take_timings(point))
