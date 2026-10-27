@@ -6,6 +6,13 @@
     {
       "dxil": "d2dea5981ce625a9e55c9fe40c483a8247f2102b575d84cc0486a579eee127c3/reservoirShade.dxil",
       "dxil_hash": "7119102b07460c6b9a2e6712da748c7cc6ea6ecbb1e3cccadc4c3e6d5f912992",
+      "metal": {
+        "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
+        "metallib": "d2dea5981ce625a9e55c9fe40c483a8247f2102b575d84cc0486a579eee127c3/reservoirShade.metallib",
+        "metallib_hash": "84c8c5e28319a8877502146d631874a8cf3eca9d6cea79c21f80346b73d4610a",
+        "reflection": "d2dea5981ce625a9e55c9fe40c483a8247f2102b575d84cc0486a579eee127c3/reservoirShade.metal.json",
+        "root_signature_hash": "1cc11e518b14c2b24e05fc30812bfd2b87e0a9c313ea79a4620a443a723525ef"
+      },
       "source_entry": "reservoirShade",
       "spirv": "d2dea5981ce625a9e55c9fe40c483a8247f2102b575d84cc0486a579eee127c3/reservoirShade.spv",
       "spirv_entry": "main",

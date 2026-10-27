@@ -6,6 +6,13 @@
     {
       "dxil": "0c978acb756a9d0808740708bfa8ff2ed6b74995d9a94b58baabc3293d49bccc/prepareMain.dxil",
       "dxil_hash": "2f480de0d3a71d763f2cfb86661603421b8dd39457095512e2c4a115e839dcfa",
+      "metal": {
+        "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
+        "metallib": "0c978acb756a9d0808740708bfa8ff2ed6b74995d9a94b58baabc3293d49bccc/prepareMain.metallib",
+        "metallib_hash": "0689e7122ab866fe825df7fd93d3f5e2ca2b5359a812c51ebdf2ac0f7e93b106",
+        "reflection": "0c978acb756a9d0808740708bfa8ff2ed6b74995d9a94b58baabc3293d49bccc/prepareMain.metal.json",
+        "root_signature_hash": "1cc11e518b14c2b24e05fc30812bfd2b87e0a9c313ea79a4620a443a723525ef"
+      },
       "source_entry": "prepareMain",
       "spirv": "0c978acb756a9d0808740708bfa8ff2ed6b74995d9a94b58baabc3293d49bccc/prepareMain.spv",
       "spirv_entry": "main",

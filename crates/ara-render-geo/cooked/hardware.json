@@ -6,6 +6,13 @@
     {
       "dxil": "218e387f9612e4b9194444c304b0007b424e55c1299aa24107ac14981be9879e/hardwareFragment.dxil",
       "dxil_hash": "be09e5298a66f828ae0d8509b5f352bb453fc7163d423a426680605d7a504281",
+      "metal": {
+        "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
+        "metallib": "218e387f9612e4b9194444c304b0007b424e55c1299aa24107ac14981be9879e/hardwareFragment.metallib",
+        "metallib_hash": "6951986d9798489aa214f38822f6b753816346a42fede2a5c977f3bbc5787140",
+        "reflection": "218e387f9612e4b9194444c304b0007b424e55c1299aa24107ac14981be9879e/hardwareFragment.metal.json",
+        "root_signature_hash": "1cc11e518b14c2b24e05fc30812bfd2b87e0a9c313ea79a4620a443a723525ef"
+      },
       "source_entry": "hardwareFragment",
       "spirv": "218e387f9612e4b9194444c304b0007b424e55c1299aa24107ac14981be9879e/hardwareFragment.spv",
       "spirv_entry": "main",
@@ -15,6 +22,13 @@
     {
       "dxil": "218e387f9612e4b9194444c304b0007b424e55c1299aa24107ac14981be9879e/hardwareVertex.dxil",
       "dxil_hash": "829dc6a811944763f8aea75a43c17ff67d9b530aef094cfcb9f6b4995bc9e681",
+      "metal": {
+        "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
+        "metallib": "218e387f9612e4b9194444c304b0007b424e55c1299aa24107ac14981be9879e/hardwareVertex.metallib",
+        "metallib_hash": "e3f0122d30792fd7d20b7c035d2ac4b6b76fcbf95806d8775ba9c6721525640c",
+        "reflection": "218e387f9612e4b9194444c304b0007b424e55c1299aa24107ac14981be9879e/hardwareVertex.metal.json",
+        "root_signature_hash": "1cc11e518b14c2b24e05fc30812bfd2b87e0a9c313ea79a4620a443a723525ef"
+      },
       "source_entry": "hardwareVertex",
       "spirv": "218e387f9612e4b9194444c304b0007b424e55c1299aa24107ac14981be9879e/hardwareVertex.spv",
       "spirv_entry": "main",

@@ -6,6 +6,13 @@
     {
       "dxil": "dab7c9847a446e9ca6888589e5ffe683902497b66b9c26bd5173a41bbad87f26/nativeProbe.dxil",
       "dxil_hash": "056d9c12ff14d03e13945cade38d37407e790732e50cdb28f87ddd81dfa013d7",
+      "metal": {
+        "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
+        "metallib": "dab7c9847a446e9ca6888589e5ffe683902497b66b9c26bd5173a41bbad87f26/nativeProbe.metallib",
+        "metallib_hash": "d123258c9521c6173b11a460ca6ce57b2e53fd5b26186454ba9b8e61098a6915",
+        "reflection": "dab7c9847a446e9ca6888589e5ffe683902497b66b9c26bd5173a41bbad87f26/nativeProbe.metal.json",
+        "root_signature_hash": "1cc11e518b14c2b24e05fc30812bfd2b87e0a9c313ea79a4620a443a723525ef"
+      },
       "source_entry": "nativeProbe",
       "spirv": "dab7c9847a446e9ca6888589e5ffe683902497b66b9c26bd5173a41bbad87f26/nativeProbe.spv",
       "spirv_entry": "main",

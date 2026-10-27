@@ -6,6 +6,13 @@
     {
       "dxil": "18b2b4b9f049dde1669d5ac2979968226e9a86e34c0c5ae47aa32c8119236c71/skyViewMain.dxil",
       "dxil_hash": "471eb0d0fcd351ec08f8be24e12ec9b2067ef86ce7f58bc0ed4054735840fe3f",
+      "metal": {
+        "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
+        "metallib": "18b2b4b9f049dde1669d5ac2979968226e9a86e34c0c5ae47aa32c8119236c71/skyViewMain.metallib",
+        "metallib_hash": "143f0b0e387b701619d73662c3bd0e6d3f4ccb098f0b9b39f2342198942c6f93",
+        "reflection": "18b2b4b9f049dde1669d5ac2979968226e9a86e34c0c5ae47aa32c8119236c71/skyViewMain.metal.json",
+        "root_signature_hash": "1cc11e518b14c2b24e05fc30812bfd2b87e0a9c313ea79a4620a443a723525ef"
+      },
       "source_entry": "skyViewMain",
       "spirv": "18b2b4b9f049dde1669d5ac2979968226e9a86e34c0c5ae47aa32c8119236c71/skyViewMain.spv",
       "spirv_entry": "main",

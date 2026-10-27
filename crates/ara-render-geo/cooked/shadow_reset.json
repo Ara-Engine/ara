@@ -6,6 +6,13 @@
     {
       "dxil": "218e387f9612e4b9194444c304b0007b424e55c1299aa24107ac14981be9879e/shadowReset.dxil",
       "dxil_hash": "dcb863adf88925f4c7a6c93aebd47c087c1ca9ba3352eabcef2934e4ae7fc618",
+      "metal": {
+        "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
+        "metallib": "218e387f9612e4b9194444c304b0007b424e55c1299aa24107ac14981be9879e/shadowReset.metallib",
+        "metallib_hash": "c8ba905d2803172b95ed9512cb9129f8d6f45bbc5678afddb492ce65ae40922d",
+        "reflection": "218e387f9612e4b9194444c304b0007b424e55c1299aa24107ac14981be9879e/shadowReset.metal.json",
+        "root_signature_hash": "1cc11e518b14c2b24e05fc30812bfd2b87e0a9c313ea79a4620a443a723525ef"
+      },
       "source_entry": "shadowReset",
       "spirv": "218e387f9612e4b9194444c304b0007b424e55c1299aa24107ac14981be9879e/shadowReset.spv",
       "spirv_entry": "main",

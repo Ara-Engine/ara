@@ -6,6 +6,13 @@
     {
       "dxil": "02de6ca38eea6bf26f1a5913aef52099c8f9aff84daaad2520d55eae70b2e16a/backdropFragment.dxil",
       "dxil_hash": "727a9fb35be4de6cf3040882562bf23b0470a9f01038bb6ff20d92c4fa4a8fc3",
+      "metal": {
+        "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
+        "metallib": "02de6ca38eea6bf26f1a5913aef52099c8f9aff84daaad2520d55eae70b2e16a/backdropFragment.metallib",
+        "metallib_hash": "f0fc6fd3f537744197cd1a25da28274ceb2eb9260c66d24f94a65507b837f9bb",
+        "reflection": "02de6ca38eea6bf26f1a5913aef52099c8f9aff84daaad2520d55eae70b2e16a/backdropFragment.metal.json",
+        "root_signature_hash": "1cc11e518b14c2b24e05fc30812bfd2b87e0a9c313ea79a4620a443a723525ef"
+      },
       "source_entry": "backdropFragment",
       "spirv": "02de6ca38eea6bf26f1a5913aef52099c8f9aff84daaad2520d55eae70b2e16a/backdropFragment.spv",
       "spirv_entry": "main",
@@ -15,6 +22,13 @@
     {
       "dxil": "02de6ca38eea6bf26f1a5913aef52099c8f9aff84daaad2520d55eae70b2e16a/screenVertex.dxil",
       "dxil_hash": "b9e64d59497ad3f256cef5a57e9b679e98c1a935fbfd9d8610b6789cdda2eafe",
+      "metal": {
+        "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
+        "metallib": "02de6ca38eea6bf26f1a5913aef52099c8f9aff84daaad2520d55eae70b2e16a/screenVertex.metallib",
+        "metallib_hash": "70f87ed06281f8cd83c9dfbf66982589d84d2d85ca4a11fe6bfd802edfd5db7c",
+        "reflection": "02de6ca38eea6bf26f1a5913aef52099c8f9aff84daaad2520d55eae70b2e16a/screenVertex.metal.json",
+        "root_signature_hash": "1cc11e518b14c2b24e05fc30812bfd2b87e0a9c313ea79a4620a443a723525ef"
+      },
       "source_entry": "screenVertex",
       "spirv": "02de6ca38eea6bf26f1a5913aef52099c8f9aff84daaad2520d55eae70b2e16a/screenVertex.spv",
       "spirv_entry": "main",

@@ -6,6 +6,13 @@
     {
       "dxil": "3c841d93da2afa4c0c075d2b9865ecde13098dec1c8f1e194347cd1b51e131cc/terrainColor.dxil",
       "dxil_hash": "8379a150f798eee63ecc96b27688e4ca6000e6dcf9feaeed354526907c181d64",
+      "metal": {
+        "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
+        "metallib": "3c841d93da2afa4c0c075d2b9865ecde13098dec1c8f1e194347cd1b51e131cc/terrainColor.metallib",
+        "metallib_hash": "bdf0a3ded0ed8616190c396393b4127d3b6ec71ff5ef770e92b32c03497a8df9",
+        "reflection": "3c841d93da2afa4c0c075d2b9865ecde13098dec1c8f1e194347cd1b51e131cc/terrainColor.metal.json",
+        "root_signature_hash": "1cc11e518b14c2b24e05fc30812bfd2b87e0a9c313ea79a4620a443a723525ef"
+      },
       "source_entry": "terrainColor",
       "spirv": "3c841d93da2afa4c0c075d2b9865ecde13098dec1c8f1e194347cd1b51e131cc/terrainColor.spv",
       "spirv_entry": "main",
@@ -15,6 +22,13 @@
     {
       "dxil": "3c841d93da2afa4c0c075d2b9865ecde13098dec1c8f1e194347cd1b51e131cc/terrainVertex.dxil",
       "dxil_hash": "10e6872a14e82c7acade1fee026dcc912ea019694f4a6cb79c758bb4f3ac6553",
+      "metal": {
+        "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
+        "metallib": "3c841d93da2afa4c0c075d2b9865ecde13098dec1c8f1e194347cd1b51e131cc/terrainVertex.metallib",
+        "metallib_hash": "0b461e349ef9d29bb4b5427b393be53f8097db68dc378b136fa427936c1d04b8",
+        "reflection": "3c841d93da2afa4c0c075d2b9865ecde13098dec1c8f1e194347cd1b51e131cc/terrainVertex.metal.json",
+        "root_signature_hash": "1cc11e518b14c2b24e05fc30812bfd2b87e0a9c313ea79a4620a443a723525ef"
+      },
       "source_entry": "terrainVertex",
       "spirv": "3c841d93da2afa4c0c075d2b9865ecde13098dec1c8f1e194347cd1b51e131cc/terrainVertex.spv",
       "spirv_entry": "main",

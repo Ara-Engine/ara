@@ -6,6 +6,13 @@
     {
       "dxil": "218e387f9612e4b9194444c304b0007b424e55c1299aa24107ac14981be9879e/shadowFragment.dxil",
       "dxil_hash": "b749e14221e796fd93670a5bdc19d445a692f3d4cb3eacdfbc4250a7e0ed9054",
+      "metal": {
+        "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
+        "metallib": "218e387f9612e4b9194444c304b0007b424e55c1299aa24107ac14981be9879e/shadowFragment.metallib",
+        "metallib_hash": "d9840e188150b3cc145829b1ca89eca37f6f5ca67d3f1e8eda8e09260d99d3c9",
+        "reflection": "218e387f9612e4b9194444c304b0007b424e55c1299aa24107ac14981be9879e/shadowFragment.metal.json",
+        "root_signature_hash": "1cc11e518b14c2b24e05fc30812bfd2b87e0a9c313ea79a4620a443a723525ef"
+      },
       "source_entry": "shadowFragment",
       "spirv": "218e387f9612e4b9194444c304b0007b424e55c1299aa24107ac14981be9879e/shadowFragment.spv",
       "spirv_entry": "main",
@@ -15,6 +22,13 @@
     {
       "dxil": "218e387f9612e4b9194444c304b0007b424e55c1299aa24107ac14981be9879e/shadowVertex.dxil",
       "dxil_hash": "bbd8894f02859c85ed3ffe4a829ca9f18cc95b1baa12e2a74043ee15c6b2fffa",
+      "metal": {
+        "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
+        "metallib": "218e387f9612e4b9194444c304b0007b424e55c1299aa24107ac14981be9879e/shadowVertex.metallib",
+        "metallib_hash": "e4810a11d8c6244766a1ffb83037e19d9bcfa5985d3061f242ea68b38ab8ed56",
+        "reflection": "218e387f9612e4b9194444c304b0007b424e55c1299aa24107ac14981be9879e/shadowVertex.metal.json",
+        "root_signature_hash": "1cc11e518b14c2b24e05fc30812bfd2b87e0a9c313ea79a4620a443a723525ef"
+      },
       "source_entry": "shadowVertex",
       "spirv": "218e387f9612e4b9194444c304b0007b424e55c1299aa24107ac14981be9879e/shadowVertex.spv",
       "spirv_entry": "main",

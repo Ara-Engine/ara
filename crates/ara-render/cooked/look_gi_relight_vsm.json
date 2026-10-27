@@ -6,6 +6,13 @@
     {
       "dxil": "18b2b4b9f049dde1669d5ac2979968226e9a86e34c0c5ae47aa32c8119236c71/giRelightVsmMain.dxil",
       "dxil_hash": "cfb68b4284192822bcefa2e42b80f6e0ebb803532e38036f000eff5462e4d4be",
+      "metal": {
+        "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
+        "metallib": "18b2b4b9f049dde1669d5ac2979968226e9a86e34c0c5ae47aa32c8119236c71/giRelightVsmMain.metallib",
+        "metallib_hash": "90d75ed41a75feac9ad885010ef6579d49be3e8931575968dbf7dc9b3f982ad4",
+        "reflection": "18b2b4b9f049dde1669d5ac2979968226e9a86e34c0c5ae47aa32c8119236c71/giRelightVsmMain.metal.json",
+        "root_signature_hash": "1cc11e518b14c2b24e05fc30812bfd2b87e0a9c313ea79a4620a443a723525ef"
+      },
       "source_entry": "giRelightVsmMain",
       "spirv": "18b2b4b9f049dde1669d5ac2979968226e9a86e34c0c5ae47aa32c8119236c71/giRelightVsmMain.spv",
       "spirv_entry": "main",
