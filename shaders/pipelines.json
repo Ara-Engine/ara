@@ -73,6 +73,23 @@
       "vertex_stride": 0
     }
   },
+  "lighting_high": {
+    "entries": {
+      "fullscreenVertex": "vertex",
+      "lightingHighFragment": "fragment"
+    },
+    "source": "baseline.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [
+        109
+      ],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
   "look_ao_denoise": {
     "entries": {
       "aoDenoiseMain": "compute"
@@ -412,6 +429,29 @@
   "native_forward": {
     "entries": {
       "nativeForwardFragment": "fragment",
+      "nativeGeometryVertex": "vertex"
+    },
+    "source": "native-raster.slang",
+    "state": {
+      "blend": true,
+      "color_formats": [
+        109,
+        100,
+        43,
+        77,
+        37,
+        122,
+        83
+      ],
+      "depth_format": 126,
+      "depth_test": true,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
+  "native_forward_high": {
+    "entries": {
+      "nativeForwardHighFragment": "fragment",
       "nativeGeometryVertex": "vertex"
     },
     "source": "native-raster.slang",

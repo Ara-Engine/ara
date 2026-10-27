@@ -43,13 +43,17 @@ void shadowFragment(Varying v) {Surface s=surface(v);}
 struct FullscreenVarying {float4 clip:SV_Position;};
 [shader("vertex")]
 FullscreenVarying fullscreenVertex(uint id:SV_VertexID){FullscreenVarying o;float2 uv=float2((id<<1)&2,id&2);o.clip=float4(uv*2-1,0,1);return o;}
-[shader("fragment")]
-float4 lightingFragment(FullscreenVarying v):SV_Target0 {
+// Deferred lighting; `high` selects the High/Epic tier's code at compile time.
+float4 lighting(FullscreenVarying v,bool high){
     Frame f=frame();Look l=look(f);int2 p=int2(v.clip.xy);float2 uv=(float2(p)+0.5)/float2(f.extent.xy);bool covered;float3 world=gbufferWorld(f,p,covered);
     if(!covered)return float4(background(f,l,viewRay(f,float2(p)+0.5),uv),1);
     Surface s;float4 a=gbufferAlbedo(f,p);float2 m=gbufferMaterial(f,p);s.albedo=a.rgb;s.alpha=1;s.transmission=0;s.ao=min(a.a,screenOcclusion(f,l,p,length(world-f.camera.xyz)));s.normal=gbufferNormal(f,p);s.roughness=m.x;s.metal=m.y;s.emissive=gbufferEmissive(f,p);
-    return float4(applyFog(f,l,shade(f,l,s,world,p,true),world,uv),1);
+    return float4(applyFog(f,l,shade(f,l,s,world,p,true,high),world,uv),1);
 }
+[shader("fragment")]
+float4 lightingFragment(FullscreenVarying v):SV_Target0 {return lighting(v,false);}
+[shader("fragment")]
+float4 lightingHighFragment(FullscreenVarying v):SV_Target0 {return lighting(v,true);}
 struct ForwardOut {float4 color:SV_Target0;float id:SV_Target1;float4 albedo:SV_Target2;float4 normal:SV_Target3;float4 material:SV_Target4;float4 emissive:SV_Target5;};
 [shader("fragment")]
 ForwardOut forwardFragment(Varying v){Frame f=frame();Surface s=surface(v);ForwardOut o;Look l=look(f);o.color=forwardColour(f,l,s,v.world,int2(v.clip.xy));o.id=float(root.entity);o.albedo=float4(s.albedo,s.alpha);o.normal=gbufferEncodeNormal(s.normal,s.alpha);o.material=gbufferEncodeMaterial(s.roughness,s.metal,1,s.alpha);o.emissive=gbufferEncodeEmissive(s.emissive,s.alpha);return o;}

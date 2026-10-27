@@ -75,6 +75,8 @@ struct Pipelines {
     gbuffer: Pipeline,
     tile: Pipeline,
     lighting: Pipeline,
+    /// Deferred lighting with the High/Epic tier's code (`Quality::high_tier`).
+    lighting_high: Pipeline,
     forward: Pipeline,
     taa: Pipeline,
     tonemap: Pipeline,
@@ -212,6 +214,7 @@ impl Renderer {
             gbuffer: load("gbuffer")?,
             tile: load("tile")?,
             lighting: load("lighting")?,
+            lighting_high: load("lighting_high")?,
             forward: load("forward")?,
             taa: load("taa")?,
             tonemap: load("tonemap")?,

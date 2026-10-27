@@ -46,6 +46,11 @@ pub struct Quality {
     pub lod_pixels: f32,
     /// Projected bound radius, in pixels, below which an instance is culled.
     pub min_pixels: f32,
+    /// The High/Epic tier's lighting and forward PSOs (`lighting_high`,
+    /// `native_forward_high`): tier-only shading (reflection captures, soft shadows,
+    /// ambient bounce) is compiled into those variants alone, so lower presets pay
+    /// nothing for its code.
+    pub high_tier: bool,
     /// Cached shadows for the brightest local lights in view; `None` leaves
     /// local lights unshadowed.
     pub local_shadows: Option<LocalShadows>,
@@ -93,6 +98,7 @@ impl Default for Quality {
             emitter_lights: 8,
             lod_pixels: 1.,
             min_pixels: 1.5,
+            high_tier: false,
             terrain_detail: 150.,
             local_shadows: None,
             horizon: None,

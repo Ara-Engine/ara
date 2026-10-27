@@ -1,4 +1,4 @@
-//! Five native PSOs are retained by the renderer across content generations.
+//! Six native PSOs are retained by the renderer across content generations.
 use super::*;
 use ara_gpu::vulkan::{PipelinePreparation, PipelinePreparationId};
 
@@ -18,6 +18,8 @@ pub(in crate::renderer) struct NativePipelines {
     /// Triangle edges for the wireframe view modes (`ViewMode::wire`): the camera
     /// draws again into the wire mask, depth-tested against the frame's depth.
     pub wire: Pipeline,
+    /// The forward pass with the High/Epic tier's code (`Quality::high_tier`).
+    pub forward_high: Pipeline,
 }
 
 impl NativePipelines {
@@ -33,12 +35,13 @@ impl NativePipelines {
 }
 
 /// Cooked recipe names, in `NativePipelines` field order.
-const RECIPES: [&str; 5] = [
+const RECIPES: [&str; 6] = [
     "native_shadow",
     "native_gbuffer",
     "native_forward",
     "native_gbuffer_top",
     "native_wire",
+    "native_forward_high",
 ];
 
 #[derive(Default)]
@@ -77,7 +80,8 @@ impl Renderer {
                 self.native_pipelines = Pipelines::Empty;
             }
             if let Some(handles) = result? {
-                let [shadow, gbuffer, forward, gbuffer_top, wire]: [Pipeline; RECIPES.len()] =
+                let [shadow, gbuffer, forward, gbuffer_top, wire, forward_high]: [Pipeline;
+                    RECIPES.len()] =
                     handles
                         .try_into()
                         .map_err(|_| anyhow::anyhow!("native PSO count differs"))?;
@@ -87,6 +91,7 @@ impl Renderer {
                     forward,
                     gbuffer_top,
                     wire,
+                    forward_high,
                 });
             }
         }

@@ -182,7 +182,10 @@ float4 screenReflection(Frame f,Look l,int2 p){
 // (look-horizon.slangh) occludes the sky's light instead.
 // `gathered` reads the half-resolution gather at pixel `p` (deferred lighting);
 // forward surfaces search the probes directly.
-float3 ibl(Frame f,Look l,Surface s,float3 world,float3 v,int2 p,bool gathered) {
+// `high`: the High/Epic tier's PSO variant (Quality::high_tier; lighting_high and
+// native_forward_high). Always a compile-time constant at the entry point, so
+// tier-only code costs other presets nothing.
+float3 ibl(Frame f,Look l,Surface s,float3 world,float3 v,int2 p,bool gathered,bool high=false) {
     uint irradiance=physicalSky(l)?l.sampled1.x:f.lighting.x,prefilter=physicalSky(l)?l.sampled1.y:f.lighting.y;
     float nv=saturate(dot(s.normal,v));float3 f0=lerp(float3(0.04),s.albedo,s.metal);
     float3 reflected=reflect(-v,s.normal);float2 uv=environmentUv(reflected);float level=s.roughness*4;float low=floor(level);float high=min(low+1,4);
@@ -216,8 +219,8 @@ float3 ibl(Frame f,Look l,Surface s,float3 world,float3 v,int2 p,bool gathered) 
 }
 // Linear HDR radiance leaving `world` towards the camera (before fog and exposure).
 // `gathered`: deferred G-buffer pixels read the half-resolution probe gather.
-float3 shade(Frame f,Look l,Surface s,float3 world,int2 p,bool gathered) {
-    float3 v=normalize(f.camera.xyz-world);float3 result=s.emissive+ibl(f,l,s,world,v,p,gathered);
+float3 shade(Frame f,Look l,Surface s,float3 world,int2 p,bool gathered,bool high=false) {
+    float3 v=normalize(f.camera.xyz-world);float3 result=s.emissive+ibl(f,l,s,world,v,p,gathered,high);
     // The sun lights front faces only (brdf ends in N.L): back faces skip its shadows.
     if(dot(s.normal,f.sunDirection.xyz)>0)result+=brdf(s,v,f.sunDirection.xyz)*sunAt(f,l,world)*visibility(f,l,world,s.normal,gathered?vsmMask(l,p):-1);
     uint tilesX=(f.extent.x+15)/16;uint tile=(uint(p.y)/16*tilesX+uint(p.x)/16)*TILE_STRIDE;
@@ -240,9 +243,9 @@ float3 shade(Frame f,Look l,Surface s,float3 world,int2 p,bool gathered) {
 // Premultiplied forward colour of a transparent or transmissive surface: alpha is
 // coverage times the share of light it stops; reflections keep full strength
 // over what it transmits (blending ONE, ONE_MINUS_SRC_ALPHA).
-float4 forwardColour(Frame f,Look l,Surface s,float3 world,int2 p){
+float4 forwardColour(Frame f,Look l,Surface s,float3 world,int2 p,bool high=false){
     float2 uv=(float2(p)+0.5)/float2(f.extent.xy);
-    return float4(applyFog(f,l,shade(f,l,s,world,p,false),world,uv)*s.alpha,s.alpha*(1-s.transmission));
+    return float4(applyFog(f,l,shade(f,l,s,world,p,false,high),world,uv)*s.alpha,s.alpha*(1-s.transmission));
 }
 // World-space view ray through pixel centre `p`.
 float3 viewRay(Frame f,float2 p){

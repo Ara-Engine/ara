@@ -848,6 +848,17 @@ impl Native {
         }
     }
 
+    /// Records the camera's forward draws (pass 5) through the High/Epic tier's PSO
+    /// when `high` (`Quality::high_tier`).
+    pub(super) fn record_forward(&self, recorder: &mut Recorder, root: RootConstants, high: bool) {
+        let pipeline = if high {
+            self.pipelines.forward_high
+        } else {
+            self.pipelines.forward
+        };
+        self.record_with(recorder, root, 5, pipeline);
+    }
+
     /// Records the G-buffer draws (pass 4) through the PSO for the preset's
     /// `terrain_detail` (`NativePipelines::gbuffer_for`).
     pub(super) fn record_gbuffer(

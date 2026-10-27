@@ -325,6 +325,7 @@ impl QualityPreset {
                 emitter_lights: 4,
                 lod_pixels: 6.,
                 min_pixels: 6.,
+                high_tier: false,
                 terrain_detail: 0.,
                 local_shadows: None,
                 horizon: Some(1024),
@@ -341,6 +342,7 @@ impl QualityPreset {
                 emitter_lights: 6,
                 lod_pixels: 3.,
                 min_pixels: 3.,
+                high_tier: false,
                 terrain_detail: 40.,
                 local_shadows: Some(LocalShadows {
                     lights: 2,
@@ -362,6 +364,7 @@ impl QualityPreset {
                 emitter_lights: 8,
                 lod_pixels: 1.,
                 min_pixels: 1.5,
+                high_tier: true,
                 terrain_detail: 150.,
                 local_shadows: Some(LocalShadows {
                     lights: 4,
@@ -387,6 +390,7 @@ impl QualityPreset {
                 emitter_lights: 16,
                 lod_pixels: 1.,
                 min_pixels: 1.,
+                high_tier: true,
                 terrain_detail: 300.,
                 local_shadows: Some(LocalShadows {
                     lights: 8,

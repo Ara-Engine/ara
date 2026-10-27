@@ -1172,7 +1172,11 @@ impl Renderer {
                         ]));
                     }
                     Recipe::Lighting => {
-                        recorder.push(Command::Pipeline(self.pipelines.lighting));
+                        recorder.push(Command::Pipeline(if self.look.quality.high_tier {
+                            self.pipelines.lighting_high
+                        } else {
+                            self.pipelines.lighting
+                        }));
                         recorder.push(Command::Constants(root));
                         recorder.push(Command::BeginRendering {
                             colors: vec![Attachment {
@@ -1227,7 +1231,11 @@ impl Renderer {
                             size: self.render,
                         });
                         if let Some(native) = &self.native {
-                            native.record(&mut recorder, footprint, 5);
+                            native.record_forward(
+                                &mut recorder,
+                                footprint,
+                                self.look.quality.high_tier,
+                            );
                         }
                         let mut transparent = self
                             .content
