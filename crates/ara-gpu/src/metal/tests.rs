@@ -127,6 +127,37 @@ fn compute_writes_through_the_converter_tables_and_top_level_buffer() {
 }
 
 #[test]
+fn a_pipeline_is_rebound_on_each_encoder_a_pass_timestamp_opens() {
+    let mut gpu = device();
+    let fill = gpu.msl_pipeline(
+        &[(Stage::Compute, "fill")],
+        &RenderState::default(),
+        Some([64, 1, 1]),
+    );
+    let buffers = [storage(&mut gpu, 64), storage(&mut gpu, 64)];
+    let slots = buffers.map(|b| gpu.storage_buffer(b).expect("slot"));
+    let mut rec = gpu.begin(Queue::Compute);
+    rec.push(Command::Pipeline(fill));
+    for (index, slot) in slots.iter().enumerate() {
+        // Pass timestamps close the compute encoder, so the second dispatch of the same
+        // pipeline runs on a new encoder that must have it set again.
+        rec.push(Command::BeginPass(format!("pass {index}")));
+        rec.push(Command::Constants(RootConstants {
+            words: [slot.index, 100 * index as u32, 64, 0, 0, 0, 0, 0],
+        }));
+        rec.push(Command::Dispatch([1, 1, 1]));
+        rec.push(Command::EndPass);
+    }
+    let point = gpu.submit(rec.finish(), &[]).expect("submit");
+    gpu.resolve(point).expect("resolve");
+    for (index, buffer) in buffers.iter().enumerate() {
+        let data = words(&gpu.read(*buffer).expect("read"));
+        let base = 100 * index as u32;
+        assert_eq!(data, (0..64).map(|i| base + i).collect::<Vec<_>>());
+    }
+}
+
+#[test]
 fn graphics_waits_on_the_compute_timeline_and_encoder_barriers_order_dispatches() {
     let mut gpu = device();
     let fill = gpu.msl_pipeline(

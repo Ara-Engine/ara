@@ -56,6 +56,7 @@ struct Recording<'a> {
     /// A graph barrier (or the submission start) awaits the next encoder.
     barrier: bool,
     pipeline: Option<Pipeline>,
+    /// The pipeline set on the open encoder; a new encoder starts with none.
     bound: Option<Pipeline>,
     root: [u32; 8],
     /// Color and depth formats of the open rendering scope.
@@ -750,6 +751,7 @@ impl Recording<'_> {
         }
     }
     fn end(&mut self) {
+        self.bound = None;
         match std::mem::replace(&mut self.active, Active::None) {
             Active::Compute(encoder) => encoder.endEncoding(),
             Active::Render(encoder) => encoder.endEncoding(),
