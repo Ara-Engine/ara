@@ -821,12 +821,14 @@ impl Renderer {
         for (id, pass) in self.look.gather_passes(&mut graph, &look, &gather_reads) {
             declare(id, Recipe::Look(pass));
         }
-        // Hybrid ray-traced reflections (renderer::rt) read what lighting reads.
+        // Hybrid ray-traced reflections (renderer::rt) read what lighting reads, and
+        // the exposure state (the rough lobes' radiance ceiling).
         if self.rays.active() {
             let reflected =
                 self.look.quality.reflections.is_some() && self.targets.history.is_some();
             let mut ray_reads = gather_reads.clone();
             ray_reads.push((ids[MATERIAL], Access::ShaderRead));
+            ray_reads.push((look.state, Access::ShaderRead));
             ray_reads.extend(self.look.lighting_reads(&look, reflected));
             for (id, pass) in self.rays.declare(&mut graph, gbuffer, &ray_reads)? {
                 declare(id, Recipe::Rays(pass));

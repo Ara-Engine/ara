@@ -72,6 +72,9 @@ void rtReflectMain(uint3 tid:SV_DispatchThreadID){
 // output (storage): rgb blocked radiance (premultiplied), a the blocked share (-1
 // where nothing was traced). RT.Rough.X/Y then widen it (rtRoughFilterMain).
 static const uint RT_ROUGH_RAYS=4;
+// Rough rays' hit-surface roughness floor and radiance ceiling (exposed luminance;
+// 8 is about five and a half stops over mid-grey before the display curve).
+static const float RT_ROUGH_HIT_ROUGHNESS=0.7,RT_ROUGH_CLAMP=8;
 [shader("compute")][numthreads(8,8,1)]
 void rtRoughMain(uint3 tid:SV_DispatchThreadID){
     Frame f=frame();Look l=look(f);uint2 half=(f.extent.xy+1)/2;if(any(tid.xy>=half))return;
@@ -88,6 +91,9 @@ void rtRoughMain(uint3 tid:SV_DispatchThreadID){
         float cone=min(1.3*alpha,1.2),sub=cone/3;uint phase=(tid.x&1)+2*(tid.y&1);
         float radius=tan(cone*sqrt((float(phase)+0.5)/4)*0.9);
         float3 blocked=0;float share=0,valid=0;
+        // The linear exposure multiplier readers before this frame's metering decode with
+        // (look.slangh exposureState).
+        float exposure=exposureScale(f,exposureState(l).y);
         for(uint i=0;i<RT_ROUGH_RAYS;i++){
             float phi=(float(i)+float(phase)*0.25)*(2*PI/RT_ROUGH_RAYS);
             float3 dir=normalize(d+radius*(cos(phi)*t1+sin(phi)*t2));
@@ -99,8 +105,16 @@ void rtRoughMain(uint3 tid:SV_DispatchThreadID){
                 float width=spread*(distance+hit.distance)+2*tan(sub)*hit.distance;
                 float3 position,geometric;Surface s=rtSurface(l,hit,dir,width,position,geometric);
                 s.ao=min(s.ao,rtScreenVisibility(f,l,position,geometric));
+                // Rough lobes carry low-frequency light only: hits shade as rough
+                // surfaces (no sun or light highlights, which a few rays would
+                // under-sample), and a ray's radiance stops at RT_ROUGH_CLAMP times
+                // the exposed mid-grey, so a small emitter one ray finds never pops.
+                s.roughness=max(s.roughness,RT_ROUGH_HIT_ROUGHNESS);
+                float3 radiance=rtShadeHit(f,l,s,position,geometric,-dir);
+                float exposed=luminance(radiance)*exposure;
+                if(exposed>RT_ROUGH_CLAMP)radiance*=RT_ROUGH_CLAMP/exposed;
                 float c=0.5+0.5*saturate(asin(saturate(dot(-dir,geometric)))/sub);
-                blocked+=rtShadeHit(f,l,s,position,geometric,-dir)*c;share+=c;
+                blocked+=radiance*c;share+=c;
             }
         }
         result=valid>0?float4(min(blocked/valid,float3(60000)),share/valid):float4(0);
