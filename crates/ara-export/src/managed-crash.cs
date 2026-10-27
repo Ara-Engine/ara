@@ -38,7 +38,7 @@ internal static class CrashCapture
             var exception = args.ExceptionObject as Exception;
             var message = exception?.Message ?? args.ExceptionObject.ToString() ?? "Unhandled managed exception";
             var stack = exception?.ToString() ?? message;
-            var path = Path.Combine(directory, $"{global::System.Environment.ProcessId}-{Guid.NewGuid():N}.managed");
+            var path = Path.Combine(directory, $"{(global::System.Environment.ProcessId)}-{Guid.NewGuid():N}.managed");
             using var stream = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.Read);
             using var writer = new BinaryWriter(stream, Encoding.UTF8, leaveOpen: true);
             writer.Write(Encoding.ASCII.GetBytes("ARAMCS1\0"));
