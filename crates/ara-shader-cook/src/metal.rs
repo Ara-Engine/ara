@@ -4,8 +4,9 @@
 //! canonical cook host (Windows) when the converter is installed; without it the cook
 //! still succeeds and reports `ARA_GPU_METAL_COOK_SKIPPED` once per process.
 //!
-//! Converter flags follow Apple's guides and the S1 handoff; re-check them against
-//! `metal-shaderconverter --help` whenever the converter is upgraded.
+//! Flags, root-signature format and reflection were checked against converter 4.0.3
+//! (`metal-shaderconverter --help`, its headers and manual); re-check them whenever
+//! the converter is upgraded.
 use anyhow::{Context, Result, ensure};
 use ara_gpu::cooked::{CookedMetalStage, CookedStage};
 use sha2::{Digest, Sha256};
