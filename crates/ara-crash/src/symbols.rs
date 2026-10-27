@@ -138,8 +138,7 @@ pub fn symbolize(dump: &Path, store: &Path) -> Result<crate::CrashReport> {
         return Ok(report);
     }
     let md = minidump::Minidump::read_path(dump).context("ARA-EXP-CRASH-006: reading minidump")?;
-    let supplier = breakpad_symbols::SimpleSymbolSupplier::new(vec![store.to_path_buf()]);
-    let symbolizer = breakpad_symbols::Symbolizer::new(supplier);
+    let symbolizer = breakpad_symbols::Symbolizer::new(StoreSupplier::new(store));
     let state = futures_executor::block_on(minidump_processor::process_minidump(&md, &symbolizer))?;
     let mut stack = Vec::new();
     state.print(&mut stack)?;
@@ -156,4 +155,112 @@ pub fn symbolize(dump: &Path, store: &Path) -> Result<crate::CrashReport> {
     report.stack = String::from_utf8(stack)?;
     report.diagnostic().emit();
     Ok(report)
+}
+
+/// Symbols from a local store: the standard `<name>/<id>/<name>.sym` layout, plus a
+/// debug-ID-only match for a module the dump left unnamed (minidump-writer cannot
+/// always read a macOS main executable's path; its LC_UUID is still recorded).
+struct StoreSupplier {
+    store: std::path::PathBuf,
+    simple: breakpad_symbols::SimpleSymbolSupplier,
+}
+
+impl StoreSupplier {
+    fn new(store: &Path) -> Self {
+        Self {
+            store: store.to_path_buf(),
+            simple: breakpad_symbols::SimpleSymbolSupplier::new(vec![store.to_path_buf()]),
+        }
+    }
+    /// The one `<any name>/<debug id>/*.sym` in the store for an unnamed module.
+    fn by_debug_id(
+        &self,
+        module: &(dyn breakpad_symbols::Module + Sync),
+    ) -> Option<std::path::PathBuf> {
+        if !module.code_file().is_empty() {
+            return None;
+        }
+        let id = breakpad_symbols::breakpad_sym_lookup(module)?.debug_id;
+        std::fs::read_dir(&self.store)
+            .ok()?
+            .flatten()
+            .map(|entry| entry.path().join(&id))
+            .filter(|dir| dir.is_dir())
+            .find_map(|dir| {
+                std::fs::read_dir(dir)
+                    .ok()?
+                    .flatten()
+                    .map(|entry| entry.path())
+                    .find(|path| path.extension().is_some_and(|ext| ext == "sym"))
+            })
+    }
+}
+
+#[async_trait::async_trait]
+impl breakpad_symbols::SymbolSupplier for StoreSupplier {
+    async fn locate_symbols(
+        &self,
+        module: &(dyn breakpad_symbols::Module + Sync),
+    ) -> Result<breakpad_symbols::LocateSymbolsResult, breakpad_symbols::SymbolError> {
+        match self.simple.locate_symbols(module).await {
+            Err(breakpad_symbols::SymbolError::NotFound) => {
+                let path = self
+                    .by_debug_id(module)
+                    .ok_or(breakpad_symbols::SymbolError::NotFound)?;
+                Ok(breakpad_symbols::LocateSymbolsResult {
+                    symbols: breakpad_symbols::SymbolFile::from_file(&path)?,
+                    extra_debug_info: None,
+                })
+            }
+            located => located,
+        }
+    }
+    async fn locate_file(
+        &self,
+        module: &(dyn breakpad_symbols::Module + Sync),
+        file_kind: breakpad_symbols::FileKind,
+    ) -> Result<std::path::PathBuf, breakpad_symbols::FileError> {
+        self.simple.locate_file(module, file_kind).await
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #![allow(clippy::unwrap_used)]
+    use super::*;
+    use breakpad_symbols::{SimpleModule, SymbolError, SymbolSupplier};
+
+    #[test]
+    fn an_unnamed_module_finds_its_symbols_by_debug_id_alone() {
+        let store = tempfile::tempdir().unwrap();
+        let id = debugid::DebugId::from_breakpad("90DD4992B59E3FEE93FFF8F1A2D32F210").unwrap();
+        let dir = store
+            .path()
+            .join("ara-player")
+            .join(id.breakpad().to_string());
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join("ara-player.sym"),
+            format!(
+                "MODULE mac arm64 {} ara-player
+",
+                id.breakpad()
+            ),
+        )
+        .unwrap();
+        let supplier = StoreSupplier::new(store.path());
+        // minidump-writer names a macOS main executable it cannot read `<Unknown>`.
+        let unnamed = SimpleModule::new("<Unknown>", id);
+        let found = futures_executor::block_on(supplier.locate_symbols(&unnamed)).unwrap();
+        assert_eq!(found.symbols.module_id, id.breakpad().to_string());
+        // A named module is matched by name and ID only, as before.
+        let named = SimpleModule {
+            code_file: Some("libother.dylib".into()),
+            ..SimpleModule::new("libother.dylib", id)
+        };
+        assert!(matches!(
+            futures_executor::block_on(supplier.locate_symbols(&named)),
+            Err(SymbolError::NotFound)
+        ));
+    }
 }

@@ -8,7 +8,7 @@ publish.workspace = true
 
 [features]
 default = []
-symbols = ["dep:dump_syms", "dep:minidump", "dep:minidump-processor", "dep:breakpad-symbols", "dep:futures-executor", "dep:goblin"]
+symbols = ["dep:dump_syms", "dep:minidump", "dep:minidump-processor", "dep:breakpad-symbols", "dep:futures-executor", "dep:goblin", "dep:async-trait"]
 explain = ["dep:ara-why"]
 
 [[bin]]
@@ -30,6 +30,7 @@ minidump = { version = "0.27", optional = true }
 minidump-processor = { version = "0.27", default-features = false, optional = true }
 breakpad-symbols = { version = "0.27", default-features = false, optional = true }
 futures-executor = { version = "0.3", optional = true }
+async-trait = { version = "0.1", optional = true }
 goblin = { version = "0.10", optional = true }
 
 [target.'cfg(any(windows, target_os = "linux", target_os = "macos"))'.dependencies]
@@ -42,6 +43,7 @@ libc.workspace = true
 
 [dev-dependencies]
 tempfile = { workspace = true }
+debugid = "0.8"
 
 [lints]
 workspace = true
